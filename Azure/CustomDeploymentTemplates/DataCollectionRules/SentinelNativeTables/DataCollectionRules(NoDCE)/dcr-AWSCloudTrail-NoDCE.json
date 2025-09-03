@@ -1,0 +1,258 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "dataCollectionRuleName": {
+            "type": "string",
+            "metadata": {
+                "description": "Specifies the name of the Data Collection Rule to create."
+            }
+        },
+        "location": {
+            "defaultValue": "[resourceGroup().location]",
+            "type": "string",
+            "metadata": {
+                "description": "Specifies the location in which to create the Data Collection Rule."
+            }
+        },
+        "workspaceResourceId": {
+            "type": "string",
+            "metadata": {
+                "description": "Specifies the Azure resource ID of the Log Analytics workspace to use."
+            }
+        }
+    },
+    "resources": [{
+        "type": "Microsoft.Insights/dataCollectionRules",
+        "apiVersion": "2023-03-11",
+        "name": "[parameters('dataCollectionRuleName')]",
+        "location": "[parameters('location')]",
+        "kind": "Direct",
+        "properties": {
+            "streamDeclarations": {
+                "Custom-AWSCloudTrail": {
+                    "columns": [{
+                            "name": "AdditionalEventData",
+                            "type": "string"
+                        },
+                        {
+                            "name": "APIVersion",
+                            "type": "string"
+                        },
+                        {
+                            "name": "AwsEventId",
+                            "type": "string"
+                        },
+                        {
+                            "name": "AWSRegion",
+                            "type": "string"
+                        },
+                        {
+                            "name": "AwsRequestId",
+                            "type": "string"
+                        },
+                        {
+                            "name": "AwsRequestId_",
+                            "type": "string"
+                        },
+                        {
+                            "name": "Category",
+                            "type": "string"
+                        },
+                        {
+                            "name": "CidrIp",
+                            "type": "string"
+                        },
+                        {
+                            "name": "CipherSuite",
+                            "type": "string"
+                        },
+                        {
+                            "name": "ClientProvidedHostHeader",
+                            "type": "string"
+                        },
+                        {
+                            "name": "DestinationPort",
+                            "type": "string"
+                        },
+                        {
+                            "name": "EC2RoleDelivery",
+                            "type": "string"
+                        },
+                        {
+                            "name": "ErrorCode",
+                            "type": "string"
+                        },
+                        {
+                            "name": "ErrorMessage",
+                            "type": "string"
+                        },
+                        {
+                            "name": "EventName",
+                            "type": "string"
+                        },
+                        {
+                            "name": "EventSource",
+                            "type": "string"
+                        },
+                        {
+                            "name": "EventTypeName",
+                            "type": "string"
+                        },
+                        {
+                            "name": "EventVersion",
+                            "type": "string"
+                        },
+                        {
+                            "name": "IpProtocol",
+                            "type": "string"
+                        },
+                        {
+                            "name": "ManagementEvent",
+                            "type": "boolean"
+                        },
+                        {
+                            "name": "OperationName",
+                            "type": "string"
+                        },
+                        {
+                            "name": "ReadOnly",
+                            "type": "boolean"
+                        },
+                        {
+                            "name": "RecipientAccountId",
+                            "type": "string"
+                        },
+                        {
+                            "name": "RequestParameters",
+                            "type": "string"
+                        },
+                        {
+                            "name": "Resources",
+                            "type": "string"
+                        },
+                        {
+                            "name": "ResponseElements",
+                            "type": "string"
+                        },
+                        {
+                            "name": "ServiceEventDetails",
+                            "type": "string"
+                        },
+                        {
+                            "name": "SessionCreationDate",
+                            "type": "datetime"
+                        },
+                        {
+                            "name": "SessionIssuerAccountId",
+                            "type": "string"
+                        },
+                        {
+                            "name": "SessionIssuerArn",
+                            "type": "string"
+                        },
+                        {
+                            "name": "SessionIssuerPrincipalId",
+                            "type": "string"
+                        },
+                        {
+                            "name": "SessionIssuerType",
+                            "type": "string"
+                        },
+                        {
+                            "name": "SessionIssuerUserName",
+                            "type": "string"
+                        },
+                        {
+                            "name": "SessionMfaAuthenticated",
+                            "type": "boolean"
+                        },
+                        {
+                            "name": "SharedEventId",
+                            "type": "string"
+                        },
+                        {
+                            "name": "SourceIpAddress",
+                            "type": "string"
+                        },
+                        {
+                            "name": "SourcePort",
+                            "type": "string"
+                        },
+                        {
+                            "name": "SourceSystem",
+                            "type": "string"
+                        },
+                        {
+                            "name": "TimeGenerated",
+                            "type": "datetime"
+                        },
+                        {
+                            "name": "TlsVersion",
+                            "type": "string"
+                        },
+                        {
+                            "name": "UserAgent",
+                            "type": "string"
+                        },
+                        {
+                            "name": "UserIdentityAccessKeyId",
+                            "type": "string"
+                        },
+                        {
+                            "name": "UserIdentityAccountId",
+                            "type": "string"
+                        },
+                        {
+                            "name": "UserIdentityArn",
+                            "type": "string"
+                        },
+                        {
+                            "name": "UserIdentityInvokedBy",
+                            "type": "string"
+                        },
+                        {
+                            "name": "UserIdentityPrincipalid",
+                            "type": "string"
+                        },
+                        {
+                            "name": "UserIdentityType",
+                            "type": "string"
+                        },
+                        {
+                            "name": "UserIdentityUserName",
+                            "type": "string"
+                        },
+                        {
+                            "name": "VpcEndpointId",
+                            "type": "string"
+                        }
+                    ]
+                }
+            },
+            "destinations": {
+                "logAnalytics": [{
+                    "workspaceResourceId": "[parameters('workspaceResourceId')]",
+                    "name": "logAnalyticsWorkspace"
+                }]
+            },
+            "dataFlows": [{
+                    "streams": [
+                        "Custom-AWSCloudTrail"
+                    ],
+                    "destinations": [
+                        "logAnalyticsWorkspace"
+                    ],
+                    "transformKql": "source",
+                    "outputStream": "Microsoft-AWSCloudTrail"
+                }
+            ]
+        }
+    }],
+    "outputs": {
+        "dataCollectionRuleId": {
+            "type": "string",
+            "value": "[resourceId('Microsoft.Insights/dataCollectionRules', parameters('dataCollectionRuleName'))]"
+        }
+    }
+}

@@ -1,0 +1,174 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "dataCollectionRuleName": {
+            "type": "string",
+            "metadata": {
+                "description": "Specifies the name of the Data Collection Rule to create."
+            }
+        },
+        "location": {
+            "defaultValue": "[resourceGroup().location]",
+            "type": "string",
+            "metadata": {
+                "description": "Specifies the location in which to create the Data Collection Rule."
+            }
+        },
+        "workspaceResourceId": {
+            "type": "string",
+            "metadata": {
+                "description": "Specifies the Azure resource ID of the Log Analytics workspace to use."
+            }
+        }
+    },
+    "resources": [{
+        "type": "Microsoft.Insights/dataCollectionRules",
+        "apiVersion": "2023-03-11",
+        "name": "[parameters('dataCollectionRuleName')]",
+        "location": "[parameters('location')]",
+        "kind": "Direct",
+        "properties": {
+            "streamDeclarations": {
+                "Custom-AuditLogs": {
+                    "columns": [{
+                            "name": "AADOperationType",
+                            "type": "string"
+                        },
+                        {
+                            "name": "AADTenantId",
+                            "type": "string"
+                        },
+                        {
+                            "name": "ActivityDateTime",
+                            "type": "datetime"
+                        },
+                        {
+                            "name": "ActivityDisplayName",
+                            "type": "string"
+                        },
+                        {
+                            "name": "AdditionalDetails",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "Category",
+                            "type": "string"
+                        },
+                        {
+                            "name": "CorrelationId",
+                            "type": "string"
+                        },
+                        {
+                            "name": "DurationMs",
+                            "type": "long"
+                        },
+                        {
+                            "name": "Id",
+                            "type": "string"
+                        },
+                        {
+                            "name": "Identity",
+                            "type": "string"
+                        },
+                        {
+                            "name": "InitiatedBy",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "Level",
+                            "type": "string"
+                        },
+                        {
+                            "name": "Location",
+                            "type": "string"
+                        },
+                        {
+                            "name": "LoggedByService",
+                            "type": "string"
+                        },
+                        {
+                            "name": "OperationName",
+                            "type": "string"
+                        },
+                        {
+                            "name": "OperationVersion",
+                            "type": "string"
+                        },
+                        {
+                            "name": "Resource",
+                            "type": "string"
+                        },
+                        {
+                            "name": "ResourceGroup",
+                            "type": "string"
+                        },
+                        {
+                            "name": "ResourceId",
+                            "type": "string"
+                        },
+                        {
+                            "name": "ResourceProvider",
+                            "type": "string"
+                        },
+                        {
+                            "name": "Result",
+                            "type": "string"
+                        },
+                        {
+                            "name": "ResultDescription",
+                            "type": "string"
+                        },
+                        {
+                            "name": "ResultReason",
+                            "type": "string"
+                        },
+                        {
+                            "name": "ResultSignature",
+                            "type": "string"
+                        },
+                        {
+                            "name": "ResultType",
+                            "type": "string"
+                        },
+                        {
+                            "name": "SourceSystem",
+                            "type": "string"
+                        },
+                        {
+                            "name": "TargetResources",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "TimeGenerated",
+                            "type": "datetime"
+                        }
+                    ]
+                }
+            },
+            "destinations": {
+                "logAnalytics": [{
+                    "workspaceResourceId": "[parameters('workspaceResourceId')]",
+                    "name": "logAnalyticsWorkspace"
+                }]
+            },
+            "dataFlows": [{
+                    "streams": [
+                        "Custom-AuditLogs"
+                    ],
+                    "destinations": [
+                        "logAnalyticsWorkspace"
+                    ],
+                    "transformKql": "source",
+                    "outputStream": "Microsoft-AuditLogs"
+                }
+            ]
+        }
+    }],
+    "outputs": {
+        "dataCollectionRuleId": {
+            "type": "string",
+            "value": "[resourceId('Microsoft.Insights/dataCollectionRules', parameters('dataCollectionRuleName'))]"
+        }
+    }
+}

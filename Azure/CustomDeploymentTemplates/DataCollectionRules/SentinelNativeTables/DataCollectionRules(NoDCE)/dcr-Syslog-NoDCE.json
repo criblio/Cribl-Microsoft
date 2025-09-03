@@ -1,0 +1,110 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "dataCollectionRuleName": {
+            "type": "string",
+            "metadata": {
+                "description": "Specifies the name of the Data Collection Rule to create."
+            }
+        },
+        "location": {
+            "defaultValue": "[resourceGroup().location]",
+            "type": "string",
+            "metadata": {
+                "description": "Specifies the location in which to create the Data Collection Rule."
+            }
+        },
+        "workspaceResourceId": {
+            "type": "string",
+            "metadata": {
+                "description": "Specifies the Azure resource ID of the Log Analytics workspace to use."
+            }
+        }
+    },
+    "resources": [{
+        "type": "Microsoft.Insights/dataCollectionRules",
+        "apiVersion": "2023-03-11",
+        "name": "[parameters('dataCollectionRuleName')]",
+        "location": "[parameters('location')]",
+        "kind": "Direct",
+        "properties": {
+            "streamDeclarations": {
+                "Custom-Syslog": {
+                    "columns": [{
+                            "name": "CollectorHostName",
+                            "type": "string"
+                        },
+                        {
+                            "name": "Computer",
+                            "type": "string"
+                        },
+                        {
+                            "name": "EventTime",
+                            "type": "datetime"
+                        },
+                        {
+                            "name": "Facility",
+                            "type": "string"
+                        },
+                        {
+                            "name": "HostIP",
+                            "type": "string"
+                        },
+                        {
+                            "name": "HostName",
+                            "type": "string"
+                        },
+                        {
+                            "name": "ProcessID",
+                            "type": "int"
+                        },
+                        {
+                            "name": "ProcessName",
+                            "type": "string"
+                        },
+                        {
+                            "name": "SeverityLevel",
+                            "type": "string"
+                        },
+                        {
+                            "name": "SourceSystem",
+                            "type": "string"
+                        },
+                        {
+                            "name": "SyslogMessage",
+                            "type": "string"
+                        },
+                        {
+                            "name": "TimeGenerated",
+                            "type": "datetime"
+                        }
+                    ]
+                }
+            },
+            "destinations": {
+                "logAnalytics": [{
+                    "workspaceResourceId": "[parameters('workspaceResourceId')]",
+                    "name": "logAnalyticsWorkspace"
+                }]
+            },
+            "dataFlows": [{
+                    "streams": [
+                        "Custom-Syslog"
+                    ],
+                    "destinations": [
+                        "logAnalyticsWorkspace"
+                    ],
+                    "transformKql": "source",
+                    "outputStream": "Microsoft-Syslog"
+                }
+            ]
+        }
+    }],
+    "outputs": {
+        "dataCollectionRuleId": {
+            "type": "string",
+            "value": "[resourceId('Microsoft.Insights/dataCollectionRules', parameters('dataCollectionRuleName'))]"
+        }
+    }
+}

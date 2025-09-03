@@ -1,0 +1,122 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "dataCollectionRuleName": {
+            "type": "string",
+            "metadata": {
+                "description": "Specifies the name of the Data Collection Rule to create."
+            }
+        },
+        "location": {
+            "defaultValue": "[resourceGroup().location]",
+            "type": "string",
+            "metadata": {
+                "description": "Specifies the location in which to create the Data Collection Rule."
+            }
+        },
+        "workspaceResourceId": {
+            "type": "string",
+            "metadata": {
+                "description": "Specifies the Azure resource ID of the Log Analytics workspace to use."
+            }
+        }
+    },
+    "resources": [{
+        "type": "Microsoft.Insights/dataCollectionRules",
+        "apiVersion": "2023-03-11",
+        "name": "[parameters('dataCollectionRuleName')]",
+        "location": "[parameters('location')]",
+        "kind": "Direct",
+        "properties": {
+            "streamDeclarations": {
+                "Custom-AWSGuardDuty": {
+                    "columns": [{
+                            "name": "AccountId",
+                            "type": "string"
+                        },
+                        {
+                            "name": "ActivityType",
+                            "type": "string"
+                        },
+                        {
+                            "name": "Arn",
+                            "type": "string"
+                        },
+                        {
+                            "name": "Description",
+                            "type": "string"
+                        },
+                        {
+                            "name": "Id",
+                            "type": "string"
+                        },
+                        {
+                            "name": "Partition",
+                            "type": "string"
+                        },
+                        {
+                            "name": "Region",
+                            "type": "string"
+                        },
+                        {
+                            "name": "ResourceDetails",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "SchemaVersion",
+                            "type": "string"
+                        },
+                        {
+                            "name": "ServiceDetails",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "Severity",
+                            "type": "int"
+                        },
+                        {
+                            "name": "SourceSystem",
+                            "type": "string"
+                        },
+                        {
+                            "name": "TimeCreated",
+                            "type": "datetime"
+                        },
+                        {
+                            "name": "TimeGenerated",
+                            "type": "datetime"
+                        },
+                        {
+                            "name": "Title",
+                            "type": "string"
+                        }
+                    ]
+                }
+            },
+            "destinations": {
+                "logAnalytics": [{
+                    "workspaceResourceId": "[parameters('workspaceResourceId')]",
+                    "name": "logAnalyticsWorkspace"
+                }]
+            },
+            "dataFlows": [{
+                    "streams": [
+                        "Custom-AWSGuardDuty"
+                    ],
+                    "destinations": [
+                        "logAnalyticsWorkspace"
+                    ],
+                    "transformKql": "source",
+                    "outputStream": "Microsoft-AWSGuardDuty"
+                }
+            ]
+        }
+    }],
+    "outputs": {
+        "dataCollectionRuleId": {
+            "type": "string",
+            "value": "[resourceId('Microsoft.Insights/dataCollectionRules', parameters('dataCollectionRuleName'))]"
+        }
+    }
+}

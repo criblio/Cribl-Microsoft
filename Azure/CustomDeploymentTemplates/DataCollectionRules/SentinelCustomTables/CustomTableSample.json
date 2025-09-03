@@ -1,0 +1,82 @@
+[
+  {
+    "Field1": "Server01",
+    "Field2": true,
+    "Field3": 42,
+    "Field4": 3.14159,
+    "Field5": 1234567890123,
+    "TimeGenerated": "2024-01-15T09:30:00.000Z"
+  },
+  {
+    "Field1": "Database02",
+    "Field2": false,
+    "Field3": 128,
+    "Field4": 99.99,
+    "Field5": 9876543210987,
+    "TimeGenerated": "2024-01-15T09:31:15.500Z"
+  },
+  {
+    "Field1": "WebApp03",
+    "Field2": true,
+    "Field3": 256,
+    "Field4": 0.001,
+    "Field5": 5555555555555,
+    "TimeGenerated": "2024-01-15T09:32:30.750Z"
+  },
+  {
+    "Field1": "Cache04",
+    "Field2": false,
+    "Field3": 64,
+    "Field4": 1000.50,
+    "Field5": 1111111111111,
+    "TimeGenerated": "2024-01-15T09:33:45.250Z"
+  },
+  {
+    "Field1": "LoadBalancer05",
+    "Field2": true,
+    "Field3": 512,
+    "Field4": 25.75,
+    "Field5": 3333333333333,
+    "TimeGenerated": "2024-01-15T09:35:00.000Z"
+  },
+  {
+    "Field1": "Monitor06",
+    "Field2": false,
+    "Field3": 1024,
+    "Field4": 456.789,
+    "Field5": 7777777777777,
+    "TimeGenerated": "2024-01-15T09:36:12.125Z"
+  },
+  {
+    "Field1": "Backup07",
+    "Field2": true,
+    "Field3": 2048,
+    "Field4": 0.0001,
+    "Field5": 2222222222222,
+    "TimeGenerated": "2024-01-15T09:37:30.875Z"
+  },
+  {
+    "Field1": "Analytics08",
+    "Field2": false,
+    "Field3": 4096,
+    "Field4": 12345.67,
+    "Field5": 8888888888888,
+    "TimeGenerated": "2024-01-15T09:38:45.000Z"
+  },
+  {
+    "Field1": "Storage09",
+    "Field2": true,
+    "Field3": 8192,
+    "Field4": 2.71828,
+    "Field5": 4444444444444,
+    "TimeGenerated": "2024-01-15T09:40:00.333Z"
+  },
+  {
+    "Field1": "Gateway10",
+    "Field2": false,
+    "Field3": 16384,
+    "Field4": 999.001,
+    "Field5": 6666666666666,
+    "TimeGenerated": "2024-01-15T09:41:15.666Z"
+  }
+]
