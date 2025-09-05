@@ -1,0 +1,8 @@
+{
+  "resourceGroupName": "rg-jpederson-eastus",
+  "workspaceName": "la-jpederson-00",
+  "retentionDays": 30,
+  "dcrPrefix": "dcr-",
+  "dcrSuffix": "",
+  "location": "eastus"
+}

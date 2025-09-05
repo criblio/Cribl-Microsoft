@@ -30,26 +30,47 @@
         "kind": "Direct",
         "properties": {
             "streamDeclarations": {
-                "Custom-<tablename>_CL": {
-                    "columns": [{
-                            "name": "Field1",
+                "Custom-Syslog": {
+                    "columns": [
+                        {
+                            "name": "CollectorHostName",
                             "type": "string"
                         },
                         {
-                            "name": "Field2",
-                            "type": "boolean"
+                            "name": "Computer",
+                            "type": "string"
                         },
                         {
-                            "name": "Field3",
+                            "name": "EventTime",
+                            "type": "datetime"
+                        },
+                        {
+                            "name": "Facility",
+                            "type": "string"
+                        },
+                        {
+                            "name": "HostIP",
+                            "type": "string"
+                        },
+                        {
+                            "name": "HostName",
+                            "type": "string"
+                        },
+                        {
+                            "name": "ProcessID",
                             "type": "int"
                         },
                         {
-                            "name": "Field4",
-                            "type": "real"
+                            "name": "ProcessName",
+                            "type": "string"
                         },
                         {
-                            "name": "Field5",
-                            "type": "long"
+                            "name": "SeverityLevel",
+                            "type": "string"
+                        },
+                        {
+                            "name": "SyslogMessage",
+                            "type": "string"
                         },
                         {
                             "name": "TimeGenerated",
@@ -66,13 +87,13 @@
             },
             "dataFlows": [{
                     "streams": [
-                        "Custom-<tablename>_CL"
+                        "Custom-Syslog"
                     ],
                     "destinations": [
                         "logAnalyticsWorkspace"
                     ],
                     "transformKql": "source",
-                    "outputStream": "Custom-<tablename>_CL"
+                    "outputStream": "Microsoft-Syslog"
                 }
             ]
         }
