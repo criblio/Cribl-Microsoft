@@ -1,0 +1,26 @@
+{
+  "templateManagement": {
+    "cleanupOldTemplates": true,
+    "keepTemplateVersions": 1,
+    "preserveLargeTemplates": false
+  },
+  "scriptBehavior": {
+    "skipKnownIssues": false,
+    "validateTablesOnly": false,
+    "verboseOutput": true,
+    "templateOnly": false
+  },
+  "deployment": {
+    "createDCE": false,
+    "skipExistingDCRs": true,
+    "skipExistingDCEs": true,
+    "deploymentTimeout": 600
+  },
+  "_comments": {
+    "createDCE": "When true, creates DCE-based DCRs using dcr-template-with-dce.json. When false, creates Direct DCRs using dcr-template-direct.json",
+    "keepTemplateVersions": "Number of timestamped backup templates to keep per table. The *-latest.json files are NEVER deleted.",
+    "cleanupOldTemplates": "When true, removes old timestamped templates but always preserves the *-latest.json files",
+    "skipExistingDCEs": "Only applies when createDCE=true. When true, skips DCE creation if DCE already exists.",
+    "templateOnly": "When true, connects to Azure to retrieve actual table schemas and generates ARM templates but does NOT deploy any resources (DCEs or DCRs). Templates are saved for manual deployment. Requires Azure authentication and workspace access."
+  }
+}
