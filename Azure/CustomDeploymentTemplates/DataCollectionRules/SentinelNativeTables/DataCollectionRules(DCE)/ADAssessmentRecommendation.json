@@ -44,7 +44,7 @@
               },
               {
                 "name": "ActionAreaId",
-                "type": "string"
+                "type": "guid"
               },
               {
                 "name": "AffectedObjectName",
@@ -56,7 +56,7 @@
               },
               {
                 "name": "AssessmentId",
-                "type": "string"
+                "type": "guid"
               },
               {
                 "name": "Computer",
@@ -84,7 +84,7 @@
               },
               {
                 "name": "FocusAreaId",
-                "type": "string"
+                "type": "guid"
               },
               {
                 "name": "Forest",
@@ -96,7 +96,7 @@
               },
               {
                 "name": "RecommendationId",
-                "type": "string"
+                "type": "guid"
               },
               {
                 "name": "RecommendationResult",

@@ -41,7 +41,7 @@
                         },
                         {
                             "name": "AwsEventId",
-                            "type": "string"
+                            "type": "guid"
                         },
                         {
                             "name": "AWSRegion",
@@ -49,7 +49,7 @@
                         },
                         {
                             "name": "AwsRequestId",
-                            "type": "string"
+                            "type": "guid"
                         },
                         {
                             "name": "AwsRequestId_",
@@ -169,7 +169,7 @@
                         },
                         {
                             "name": "SharedEventId",
-                            "type": "string"
+                            "type": "guid"
                         },
                         {
                             "name": "SourceIpAddress",
