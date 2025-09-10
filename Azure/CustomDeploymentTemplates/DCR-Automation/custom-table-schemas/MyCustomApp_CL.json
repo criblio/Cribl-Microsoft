@@ -1,0 +1,77 @@
+{
+  "description": "Custom table for MyCustomApp application logs",
+  "retentionInDays": 30,
+  "totalRetentionInDays": 90,
+  "columns": [
+    {
+      "name": "TimeGenerated",
+      "type": "datetime",
+      "description": "Timestamp when the record was generated"
+    },
+    {
+      "name": "Computer",
+      "type": "string",
+      "description": "Name of the computer that generated the event"
+    },
+    {
+      "name": "ApplicationName",
+      "type": "string",
+      "description": "Name of the application"
+    },
+    {
+      "name": "EventID",
+      "type": "int",
+      "description": "Unique identifier for the event type"
+    },
+    {
+      "name": "EventCategory",
+      "type": "string",
+      "description": "Category of the event (Info, Warning, Error, Critical)"
+    },
+    {
+      "name": "Message",
+      "type": "string",
+      "description": "Detailed event message"
+    },
+    {
+      "name": "UserName",
+      "type": "string",
+      "description": "User associated with the event"
+    },
+    {
+      "name": "ProcessID",
+      "type": "int",
+      "description": "Process ID that generated the event"
+    },
+    {
+      "name": "ThreadID",
+      "type": "int",
+      "description": "Thread ID within the process"
+    },
+    {
+      "name": "ExecutionTime",
+      "type": "real",
+      "description": "Time taken to execute the operation in milliseconds"
+    },
+    {
+      "name": "RequestID",
+      "type": "string",
+      "description": "Unique request identifier for correlation"
+    },
+    {
+      "name": "SourceIP",
+      "type": "string",
+      "description": "Source IP address if applicable"
+    },
+    {
+      "name": "AdditionalData",
+      "type": "dynamic",
+      "description": "Additional JSON data for extended properties"
+    },
+    {
+      "name": "IsError",
+      "type": "boolean",
+      "description": "Indicates if this is an error event"
+    }
+  ]
+}
