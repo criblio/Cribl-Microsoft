@@ -1,0 +1,10 @@
+{
+  "IDprefix": "MS-Sentinel-",
+  "IDsuffix": "-dest",
+  "description": "Parameters for Cribl destination ID naming convention",
+  "notes": {
+    "IDprefix": "Prefix for the Cribl destination ID (e.g., 'azure_sentinel_')",
+    "IDsuffix": "Suffix for the Cribl destination ID (e.g., '_dest')",
+    "authentication": "Azure AD authentication details (tenantId, clientId, clientSecret) are stored in azure-parameters.json"
+  }
+}

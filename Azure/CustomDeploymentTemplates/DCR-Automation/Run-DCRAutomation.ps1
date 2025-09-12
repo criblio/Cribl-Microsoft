@@ -23,6 +23,55 @@ param(
     [switch]$SkipCriblExport = $false
 )
 
+
+# Function to display combined summary for Both modes
+function Show-CombinedSummary {
+    param(
+        [hashtable]$NativeSummary,
+        [hashtable]$CustomSummary,
+        [string]$DCRMode
+    )
+    
+    Write-Host "`n$('='*80)" -ForegroundColor Cyan
+    Write-Host "COMBINED EXECUTION SUMMARY ($DCRMode DCRs - Native + Custom Tables)" -ForegroundColor Cyan
+    Write-Host "$('='*80)" -ForegroundColor Cyan
+    
+    if ($NativeSummary) {
+        Write-Host "`n📊 Native Tables Results:" -ForegroundColor White
+        Write-Host "  DCRs Processed: $($NativeSummary.DCRsProcessed)" -ForegroundColor Gray
+        Write-Host "  DCRs Created: $($NativeSummary.DCRsCreated)" -ForegroundColor Green
+        Write-Host "  DCRs Already Existed: $($NativeSummary.DCRsExisted)" -ForegroundColor Yellow
+        Write-Host "  Tables Validated: $($NativeSummary.TablesValidated)" -ForegroundColor Gray
+        Write-Host "  Tables Not Found: $($NativeSummary.TablesNotFound)" -ForegroundColor $(if ($NativeSummary.TablesNotFound -gt 0) { "Red" } else { "Gray" })
+    }
+    
+    if ($CustomSummary) {
+        Write-Host "`n📦 Custom Tables Results:" -ForegroundColor White
+        Write-Host "  DCRs Processed: $($CustomSummary.DCRsProcessed)" -ForegroundColor Gray
+        Write-Host "  DCRs Created: $($CustomSummary.DCRsCreated)" -ForegroundColor Green
+        Write-Host "  DCRs Already Existed: $($CustomSummary.DCRsExisted)" -ForegroundColor Yellow
+        Write-Host "  Tables Created: $($CustomSummary.CustomTablesCreated)" -ForegroundColor Green
+        Write-Host "  Tables Already Existed: $($CustomSummary.CustomTablesExisted)" -ForegroundColor Yellow
+        Write-Host "  Tables Skipped: $($CustomSummary.TablesSkipped)" -ForegroundColor Yellow
+        Write-Host "  Tables Failed: $($CustomSummary.CustomTablesFailed)" -ForegroundColor $(if ($CustomSummary.CustomTablesFailed -gt 0) { "Red" } else { "Gray" })
+    }
+    
+    Write-Host "`n🔢 Combined Totals:" -ForegroundColor Cyan
+    $totalDCRsProcessed = $(if ($NativeSummary) { $NativeSummary.DCRsProcessed } else { 0 }) + $(if ($CustomSummary) { $CustomSummary.DCRsProcessed } else { 0 })
+    $totalDCRsCreated = $(if ($NativeSummary) { $NativeSummary.DCRsCreated } else { 0 }) + $(if ($CustomSummary) { $CustomSummary.DCRsCreated } else { 0 })
+    $totalDCRsExisted = $(if ($NativeSummary) { $NativeSummary.DCRsExisted } else { 0 }) + $(if ($CustomSummary) { $CustomSummary.DCRsExisted } else { 0 })
+    $totalDCEsCreated = $(if ($NativeSummary) { $NativeSummary.DCEsCreated } else { 0 }) + $(if ($CustomSummary) { $CustomSummary.DCEsCreated } else { 0 })
+    $totalDCEsExisted = $(if ($NativeSummary) { $NativeSummary.DCEsExisted } else { 0 }) + $(if ($CustomSummary) { $CustomSummary.DCEsExisted } else { 0 })
+    
+    Write-Host "  Total DCRs Processed: $totalDCRsProcessed" -ForegroundColor White
+    Write-Host "  Total DCRs Created: $totalDCRsCreated" -ForegroundColor Green
+    Write-Host "  Total DCRs Already Existed: $totalDCRsExisted" -ForegroundColor Yellow
+    Write-Host "  Total DCEs Created: $totalDCEsCreated" -ForegroundColor Green
+    Write-Host "  Total DCEs Already Existed: $totalDCEsExisted" -ForegroundColor Yellow
+    Write-Host "  DCR Mode: $DCRMode" -ForegroundColor Cyan
+    
+    Write-Host "`n✅ Combined processing complete!" -ForegroundColor Green
+}
 $ScriptPath = Join-Path $PSScriptRoot "Create-TableDCRs.ps1"
 
 # Helper function to display DCR mode status
@@ -230,24 +279,25 @@ switch ($Mode) {
         Write-Host "="*50 -ForegroundColor Magenta
         Write-Host "DCR Mode: $dcrModeDisplay" -ForegroundColor Cyan
         
-        # First process native tables
+        # First process native tables and capture summary
         Write-Host "`n📌 Step 1: Processing Native Tables..." -ForegroundColor Yellow
         $exportCribl = -not $SkipCriblExport
         if ($dcrModeParam) {
-            & $ScriptPath -CustomTableMode:$false $dcrModeParam -ShowCriblConfig:$ShowCriblConfig -ExportCriblConfig:$exportCribl -SkipCriblExport:$SkipCriblExport
+            $nativeSummary = & $ScriptPath -CustomTableMode:$false $dcrModeParam -ShowCriblConfig:$ShowCriblConfig -ExportCriblConfig:$exportCribl -SkipCriblExport:$SkipCriblExport
         } else {
-            & $ScriptPath -CustomTableMode:$false -ShowCriblConfig:$ShowCriblConfig -ExportCriblConfig:$exportCribl -SkipCriblExport:$SkipCriblExport
+            $nativeSummary = & $ScriptPath -CustomTableMode:$false -ShowCriblConfig:$ShowCriblConfig -ExportCriblConfig:$exportCribl -SkipCriblExport:$SkipCriblExport
         }
         
-        # Then process custom tables
+        # Then process custom tables and capture summary
         Write-Host "`n📌 Step 2: Processing Custom Tables..." -ForegroundColor Yellow
         if ($dcrModeParam) {
-            & $ScriptPath -CustomTableMode -CustomTableListFile "CustomTableList.json" $dcrModeParam -ShowCriblConfig:$ShowCriblConfig -ExportCriblConfig:$exportCribl -SkipCriblExport:$SkipCriblExport
+            $customSummary = & $ScriptPath -CustomTableMode -CustomTableListFile "CustomTableList.json" $dcrModeParam -ShowCriblConfig:$ShowCriblConfig -ExportCriblConfig:$exportCribl -SkipCriblExport:$SkipCriblExport
         } else {
-            & $ScriptPath -CustomTableMode -CustomTableListFile "CustomTableList.json" -ShowCriblConfig:$ShowCriblConfig -ExportCriblConfig:$exportCribl -SkipCriblExport:$SkipCriblExport
+            $customSummary = & $ScriptPath -CustomTableMode -CustomTableListFile "CustomTableList.json" -ShowCriblConfig:$ShowCriblConfig -ExportCriblConfig:$exportCribl -SkipCriblExport:$SkipCriblExport
         }
         
-        Write-Host "`n✅ Completed processing all tables with $dcrModeDisplay DCRs!" -ForegroundColor Green
+        # Display combined summary
+        Show-CombinedSummary -NativeSummary $nativeSummary -CustomSummary $customSummary -DCRMode $dcrModeDisplay
     }
     
     # Direct DCR modes
@@ -288,12 +338,13 @@ switch ($Mode) {
         
         Write-Host "`n📌 Step 1: Processing Native Tables with Direct DCRs..." -ForegroundColor Yellow
         $exportCribl = -not $SkipCriblExport
-        & $ScriptPath -CustomTableMode:$false -CreateDCE:$false -ShowCriblConfig:$ShowCriblConfig -ExportCriblConfig:$exportCribl -SkipCriblExport:$SkipCriblExport
+        $nativeSummary = & $ScriptPath -CustomTableMode:$false -CreateDCE:$false -ShowCriblConfig:$ShowCriblConfig -ExportCriblConfig:$exportCribl -SkipCriblExport:$SkipCriblExport
         
         Write-Host "`n📌 Step 2: Processing Custom Tables with Direct DCRs..." -ForegroundColor Yellow
-        & $ScriptPath -CustomTableMode -CustomTableListFile "CustomTableList.json" -CreateDCE:$false -ShowCriblConfig:$ShowCriblConfig -ExportCriblConfig:$exportCribl -SkipCriblExport:$SkipCriblExport
+        $customSummary = & $ScriptPath -CustomTableMode -CustomTableListFile "CustomTableList.json" -CreateDCE:$false -ShowCriblConfig:$ShowCriblConfig -ExportCriblConfig:$exportCribl -SkipCriblExport:$SkipCriblExport
         
-        Write-Host "`n✅ Completed processing all tables with Direct DCRs!" -ForegroundColor Green
+        # Display combined summary
+        Show-CombinedSummary -NativeSummary $nativeSummary -CustomSummary $customSummary -DCRMode "Direct"
     }
     
     # DCE-based DCR modes
@@ -334,12 +385,13 @@ switch ($Mode) {
         
         Write-Host "`n📌 Step 1: Processing Native Tables with DCE-based DCRs..." -ForegroundColor Yellow
         $exportCribl = -not $SkipCriblExport
-        & $ScriptPath -CustomTableMode:$false -CreateDCE -ShowCriblConfig:$ShowCriblConfig -ExportCriblConfig:$exportCribl -SkipCriblExport:$SkipCriblExport
+        $nativeSummary = & $ScriptPath -CustomTableMode:$false -CreateDCE -ShowCriblConfig:$ShowCriblConfig -ExportCriblConfig:$exportCribl -SkipCriblExport:$SkipCriblExport
         
         Write-Host "`n📌 Step 2: Processing Custom Tables with DCE-based DCRs..." -ForegroundColor Yellow
-        & $ScriptPath -CustomTableMode -CustomTableListFile "CustomTableList.json" -CreateDCE -ShowCriblConfig:$ShowCriblConfig -ExportCriblConfig:$exportCribl -SkipCriblExport:$SkipCriblExport
+        $customSummary = & $ScriptPath -CustomTableMode -CustomTableListFile "CustomTableList.json" -CreateDCE -ShowCriblConfig:$ShowCriblConfig -ExportCriblConfig:$exportCribl -SkipCriblExport:$SkipCriblExport
         
-        Write-Host "`n✅ Completed processing all tables with DCE-based DCRs!" -ForegroundColor Green
+        # Display combined summary
+        Show-CombinedSummary -NativeSummary $nativeSummary -CustomSummary $customSummary -DCRMode "DCE-based"
     }
     
     "CollectCribl" {
@@ -465,8 +517,51 @@ switch ($Mode) {
             
             # Get ingestion endpoint
             if ($dcr.Kind -eq "Direct") {
-                $location = $dcr.Location.Replace(' ', '').ToLower()
-                $config.IngestionEndpoint = "https://${location}.ingest.monitor.azure.com"
+                Write-Host "    🔍 Direct DCR - retrieving actual ingestion endpoint..." -ForegroundColor Cyan
+                
+                # Build resource ID
+                $resourceId = $dcr.Id
+                if (-not $resourceId) {
+                    $context = Get-AzContext
+                    if ($context) {
+                        $resourceId = "/subscriptions/$($context.Subscription.Id)/resourceGroups/$ResourceGroupName/providers/Microsoft.Insights/dataCollectionRules/$($dcr.Name)"
+                    }
+                }
+                
+                # Use Invoke-AzRestMethod to get the full DCR details
+                $actualEndpoint = $null
+                if ($resourceId) {
+                    try {
+                        $restPath = "$resourceId`?api-version=2023-03-11"
+                        $restResponse = Invoke-AzRestMethod -Path $restPath -Method GET
+                        
+                        if ($restResponse.StatusCode -eq 200) {
+                            $dcrData = $restResponse.Content | ConvertFrom-Json
+                            
+                            # For Direct DCRs, the endpoint is in properties.logsIngestion.endpoint
+                            if ($dcrData.properties.logsIngestion.endpoint) {
+                                $actualEndpoint = $dcrData.properties.logsIngestion.endpoint
+                                Write-Host "      ✓ Retrieved actual endpoint: $actualEndpoint" -ForegroundColor Green
+                            } else {
+                                Write-Host "      ⚠ Endpoint not found in DCR properties" -ForegroundColor Yellow
+                            }
+                        } else {
+                            Write-Host "      ⚠ REST API returned status: $($restResponse.StatusCode)" -ForegroundColor Yellow
+                        }
+                    } catch {
+                        Write-Host "      ⚠ REST API failed: $($_.Exception.Message)" -ForegroundColor Yellow
+                    }
+                }
+                
+                # Use actual endpoint if found, otherwise fallback to regional
+                if ($actualEndpoint) {
+                    $config.IngestionEndpoint = $actualEndpoint
+                } else {
+                    # Fallback to regional endpoint
+                    $location = $dcr.Location.Replace(' ', '').ToLower()
+                    $config.IngestionEndpoint = "https://${location}.ingest.monitor.azure.com"
+                    Write-Host "      ⚠ Using fallback regional endpoint (may not work for Direct DCRs)" -ForegroundColor Yellow
+                }
             } else {
                 # Try to get DCE endpoint
                 $dceId = $null
@@ -709,7 +804,6 @@ switch ($Mode) {
 $criblConfigPath = Join-Path $PSScriptRoot "cribl-dcr-configs" "cribl-dcr-config.json"
 if (-not $SkipCriblExport -and (Test-Path $criblConfigPath)) {
     Write-Host "`n📦 Cribl configuration automatically exported to: cribl-dcr-configs\cribl-dcr-config.json" -ForegroundColor Green
-    Write-Host "Use .\Get-CriblDCRInfo.ps1 to retrieve additional DCR information" -ForegroundColor Cyan
     Write-Host "(Use -SkipCriblExport to disable automatic export in future runs)" -ForegroundColor Gray
 } elseif ($SkipCriblExport) {
     Write-Host "`n⏭️ Cribl configuration export was skipped" -ForegroundColor Yellow
@@ -720,3 +814,5 @@ $tempMarkerFile = Join-Path $PSScriptRoot ".cribl-collection-in-progress"
 if (Test-Path $tempMarkerFile) {
     Remove-Item $tempMarkerFile -Force -ErrorAction SilentlyContinue
 }
+
+

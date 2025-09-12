@@ -1,15 +1,19 @@
 {
-  "resourceGroupName": "rg-jpederson-eastus",
-  "workspaceName": "la-jpederson-00",
-  "dceResourceGroupName": "rg-jpederson-eastus",
+  "resourceGroupName": "<resourceGroupName>",
+  "workspaceName": "<Log Analytics Workspace Name>",
+  "dceResourceGroupName": "<DCE Resource Group Name>",
   "dcePrefix": "dce-jp-",
   "dceSuffix": "",
   "dcrPrefix": "dcr-jp-",
   "dcrSuffix": "",
-  "location": "eastus",
+  "location": "<Azure Region>",
+  "tenantId": "<YOUR-TENANT-ID-HERE>",
+  "clientId": "<YOUR-CLIENT-ID-HERE>",
+  "clientSecret": "<YOUR-CLIENT-SECRET-HERE>",
   "_comments": {
     "dce_parameters": "DCE-related parameters (dceResourceGroupName, dcePrefix, dceSuffix) are only used when createDCE=true in operation-parameters.json",
     "dcr_naming": "Script will automatically abbreviate table names if the full DCR name exceeds length limits (30 chars for Direct DCRs, 64 chars for DCE-based DCRs)",
-    "naming_limits": "Direct DCRs: 30 chars max, DCE-based DCRs: 64 chars max. Prefix and suffix are preserved, only table names are abbreviated."
+    "naming_limits": "Direct DCRs: 30 chars max, DCE-based DCRs: 64 chars max. Prefix and suffix are preserved, only table names are abbreviated.",
+    "azure_ad_auth": "tenantId, clientId, and clientSecret are used for Azure AD authentication in Cribl Stream destinations"
   }
 }

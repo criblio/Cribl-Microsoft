@@ -860,10 +860,80 @@ function Get-CriblConfigFromDCR {
         
         # Get ingestion endpoint
         if ($dcr.Kind -eq "Direct") {
-            # For Direct DCRs, construct the ingestion endpoint from location
-            $location = $dcr.Location.Replace(' ', '').ToLower()
-            $criblConfig.IngestionEndpoint = "https://${location}.ingest.monitor.azure.com"
-            Write-Host "    Direct DCR - Ingestion Endpoint: $($criblConfig.IngestionEndpoint)" -ForegroundColor Gray
+            # For Direct DCRs, extract the logsIngestion endpoint from the DCR itself
+            Write-Host "    Direct DCR - Extracting logsIngestion endpoint from DCR..." -ForegroundColor Gray
+            
+            $endpoint = $null
+            
+            # Try different property paths for logsIngestion
+            if ($dcr.LogsIngestion) {
+                if ($dcr.LogsIngestion.Endpoint) {
+                    $endpoint = $dcr.LogsIngestion.Endpoint
+                    Write-Host "    Found at LogsIngestion.Endpoint" -ForegroundColor DarkGray
+                } elseif ($dcr.LogsIngestion.endpoint) {
+                    $endpoint = $dcr.LogsIngestion.endpoint
+                    Write-Host "    Found at LogsIngestion.endpoint" -ForegroundColor DarkGray
+                }
+            } elseif ($dcr.Properties -and $dcr.Properties.LogsIngestion) {
+                if ($dcr.Properties.LogsIngestion.Endpoint) {
+                    $endpoint = $dcr.Properties.LogsIngestion.Endpoint
+                    Write-Host "    Found at Properties.LogsIngestion.Endpoint" -ForegroundColor DarkGray
+                } elseif ($dcr.Properties.LogsIngestion.endpoint) {
+                    $endpoint = $dcr.Properties.LogsIngestion.endpoint
+                    Write-Host "    Found at Properties.LogsIngestion.endpoint" -ForegroundColor DarkGray
+                }
+            } elseif ($dcr.Properties -and $dcr.Properties.logsIngestion) {
+                if ($dcr.Properties.logsIngestion.endpoint) {
+                    $endpoint = $dcr.Properties.logsIngestion.endpoint
+                    Write-Host "    Found at Properties.logsIngestion.endpoint" -ForegroundColor DarkGray
+                }
+            }
+            
+            # Check via PSObject properties
+            if (-not $endpoint) {
+                $propNames = @('LogsIngestion', 'logsIngestion')
+                foreach ($prop in $propNames) {
+                    if ($dcr.PSObject.Properties[$prop]) {
+                        $logsIngestion = $dcr.PSObject.Properties[$prop].Value
+                        if ($logsIngestion.endpoint) {
+                            $endpoint = $logsIngestion.endpoint
+                            Write-Host "    Found at PSObject.$prop.endpoint" -ForegroundColor DarkGray
+                            break
+                        } elseif ($logsIngestion.Endpoint) {
+                            $endpoint = $logsIngestion.Endpoint
+                            Write-Host "    Found at PSObject.$prop.Endpoint" -ForegroundColor DarkGray
+                            break
+                        }
+                    }
+                }
+            }
+            
+            # Last resort: parse from JSON
+            if (-not $endpoint) {
+                try {
+                    $dcrJson = $dcr | ConvertTo-Json -Depth 10 | ConvertFrom-Json
+                    if ($dcrJson.properties.logsIngestion.endpoint) {
+                        $endpoint = $dcrJson.properties.logsIngestion.endpoint
+                        Write-Host "    Found via JSON parsing at properties.logsIngestion.endpoint" -ForegroundColor DarkGray
+                    } elseif ($dcrJson.logsIngestion.endpoint) {
+                        $endpoint = $dcrJson.logsIngestion.endpoint
+                        Write-Host "    Found via JSON parsing at logsIngestion.endpoint" -ForegroundColor DarkGray
+                    }
+                } catch {
+                    Write-Host "    Could not parse JSON: $($_.Exception.Message)" -ForegroundColor DarkGray
+                }
+            }
+            
+            if ($endpoint) {
+                $criblConfig.IngestionEndpoint = $endpoint
+                Write-Host "    Direct DCR - LogsIngestion Endpoint: $endpoint" -ForegroundColor Gray
+            } else {
+                # Fallback to location-based construction if we can't find the logsIngestion endpoint
+                Write-Warning "    Could not extract logsIngestion endpoint from Direct DCR, using location-based fallback"
+                $location = $dcr.Location.Replace(' ', '').ToLower()
+                $criblConfig.IngestionEndpoint = "https://${location}.ingest.monitor.azure.com"
+                Write-Host "    Direct DCR - Fallback Ingestion Endpoint: $($criblConfig.IngestionEndpoint)" -ForegroundColor Yellow
+            }
         } else {
             # For DCE-based DCRs, check different possible property names
             $dceId = $null
@@ -1974,6 +2044,18 @@ if (-not $SkipCriblExport -and $script:allCriblConfigs -and $script:allCriblConf
     Write-Host "`n📦 Cribl configuration automatically exported to: cribl-dcr-configs\cribl-dcr-config.json" -ForegroundColor Green
     Write-Host "   Total unique DCRs in config: $($finalDCRs.Count)" -ForegroundColor Gray
     Write-Host "   (Use -SkipCriblExport to disable automatic export)" -ForegroundColor Gray
+    
+    # Generate Cribl destination configuration files
+    Write-Host "`n🔧 Generating Cribl Sentinel destination configurations..." -ForegroundColor Cyan
+    $genScript = Join-Path $ScriptDirectory "Generate-CriblDestinations.ps1"
+    if (Test-Path $genScript) {
+        try {
+            & $genScript -CriblConfigFile "cribl-dcr-configs\cribl-dcr-config.json" | Out-Null
+            Write-Host "✅ Cribl destination configs generated in: cribl-dcr-configs\destinations\" -ForegroundColor Green
+        } catch {
+            Write-Warning "Could not generate Cribl destination configs: $($_.Exception.Message)"
+        }
+    }
 } elseif ($SkipCriblExport) {
     Write-Host "`n⏭️ Cribl configuration export skipped (as requested)" -ForegroundColor Yellow
 } elseif ($script:allCriblConfigs.Count -eq 0) {
@@ -1991,7 +2073,7 @@ if ($summary.ManualDeploymentRecommended -gt 0) {
 }
 
 Write-Host "`n🔗 Cribl Integration:" -ForegroundColor Cyan
-Write-Host "1. Retrieve DCR configuration: from cribl-dcr-configs directory or run .\Get-CriblDCRInfo.ps1" -ForegroundColor Gray
+Write-Host "1. Retrieve DCR configuration: from cribl-dcr-configs directory" -ForegroundColor Gray
 Write-Host "2. Configure Cribl Sentinel destination with DCR immutable ID and ingestion URL" -ForegroundColor Gray
 Write-Host "3. Set up Azure AD App Registration for authentication" -ForegroundColor Gray
 Write-Host "4. Grant 'Monitoring Metrics Publisher' role to App on DCRs" -ForegroundColor Gray
@@ -2023,5 +2105,3 @@ Write-Host "`nScript completed! 🎉" -ForegroundColor Cyan
 # .\Create-TableDCRs.ps1 -CleanupOldTemplates -KeepTemplateVersions 3     # Override: cleanup old templates
 # .\Create-TableDCRs.ps1 -AzureParametersFile "prod-azure.json"          # Use custom Azure parameters file
 # .\Create-TableDCRs.ps1 -OperationParametersFile "custom-ops.json"      # Use custom operation parameters file
-
-

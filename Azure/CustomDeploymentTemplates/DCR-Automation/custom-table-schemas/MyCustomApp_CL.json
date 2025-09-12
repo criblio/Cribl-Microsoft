@@ -1,5 +1,5 @@
 {
-  "description": "Custom table for MyCustomApp application logs",
+  "description": "Custom application logs",
   "retentionInDays": 30,
   "totalRetentionInDays": 90,
   "columns": [
@@ -11,7 +11,32 @@
     {
       "name": "Computer",
       "type": "string",
-      "description": "Name of the computer that generated the event"
+      "description": "Computer name where the event occurred"
+    },
+    {
+      "name": "EventID",
+      "type": "int",
+      "description": "Event identifier"
+    },
+    {
+      "name": "EventCategory",
+      "type": "string",
+      "description": "Category of the event"
+    },
+    {
+      "name": "Message",
+      "type": "string",
+      "description": "Event message"
+    },
+    {
+      "name": "Severity",
+      "type": "string",
+      "description": "Event severity level (Info, Warning, Error, Critical)"
+    },
+    {
+      "name": "User",
+      "type": "string",
+      "description": "User associated with the event"
     },
     {
       "name": "ApplicationName",
@@ -19,59 +44,14 @@
       "description": "Name of the application"
     },
     {
-      "name": "EventID",
+      "name": "ApplicationVersion",
+      "type": "string",
+      "description": "Version of the application"
+    },
+    {
+      "name": "ProcessId",
       "type": "int",
-      "description": "Unique identifier for the event type"
-    },
-    {
-      "name": "EventCategory",
-      "type": "string",
-      "description": "Category of the event (Info, Warning, Error, Critical)"
-    },
-    {
-      "name": "Message",
-      "type": "string",
-      "description": "Detailed event message"
-    },
-    {
-      "name": "UserName",
-      "type": "string",
-      "description": "User associated with the event"
-    },
-    {
-      "name": "ProcessID",
-      "type": "int",
-      "description": "Process ID that generated the event"
-    },
-    {
-      "name": "ThreadID",
-      "type": "int",
-      "description": "Thread ID within the process"
-    },
-    {
-      "name": "ExecutionTime",
-      "type": "real",
-      "description": "Time taken to execute the operation in milliseconds"
-    },
-    {
-      "name": "RequestID",
-      "type": "string",
-      "description": "Unique request identifier for correlation"
-    },
-    {
-      "name": "SourceIP",
-      "type": "string",
-      "description": "Source IP address if applicable"
-    },
-    {
-      "name": "AdditionalData",
-      "type": "dynamic",
-      "description": "Additional JSON data for extended properties"
-    },
-    {
-      "name": "IsError",
-      "type": "boolean",
-      "description": "Indicates if this is an error event"
+      "description": "Process ID"
     }
   ]
 }

@@ -1,375 +1,362 @@
-# Azure Data Collection Rules - Unified Solution (DCE or Direct)
+# Azure Data Collection Rules Automation for Cribl Integration
 
-This unified PowerShell script automates the deployment of Azure Data Collection Rules (DCRs) for native tables, supporting **both DCE-based and Direct DCRs** through a single script with external ARM templates and operation parameters.
+This PowerShell automation system streamlines the deployment of Azure Data Collection Rules (DCRs) for integrating Cribl Stream with Azure Log Analytics/Microsoft Sentinel. It supports both native and custom tables, with automatic Cribl configuration export.
 
 ## 🚀 Key Features
 
-- **Unified Solution**: Single script handles both DCE-based and Direct DCRs
+- **Unified Solution**: Single system handles both DCE-based and Direct DCRs
+- **Dual Table Support**: Processes both native Azure tables and custom tables (_CL suffix)
+- **Automatic Cribl Export**: By default, exports configuration for Cribl Stream integration
 - **Template-Only Mode**: Generate ARM templates without deploying resources
-- **External Templates**: Modular ARM templates for easy customization
-- **Operation Parameter Control**: Switch between modes via configuration
-- **Smart Schema Retrieval**: Automatically gets current table schemas from Azure
-- **Enhanced DCR Naming**: Intelligent abbreviation for Azure naming limits
-- **Template Complexity Analysis**: Recommends deployment approach based on complexity
-- **Comprehensive Error Handling**: Detailed guidance for manual deployment scenarios
+- **Smart Schema Management**: Automatically retrieves schemas from Azure or uses local definitions
+- **Intelligent Naming**: Auto-abbreviates names for Azure's 30-character limit on Direct DCRs
+- **Cribl Destination Generation**: Creates ready-to-import Cribl Stream destination configs
 
 ## 📁 File Structure
 
 ```
-CreateNativeTableDCRs/
-├── Create-NativeTableDCRs.ps1              # Main unified script
-├── azure-parameters.json                   # Azure resource configuration
-├── operation-parameters.json               # Script behavior & DCR mode control
-├── TableList.json                          # List of tables to process
-├── dcr-template-with-dce.json             # ARM template for DCE-based DCRs
-├── dcr-template-direct.json               # ARM template for Direct DCRs
-├── README.md                              # This documentation
-├── TLDR_readme.md                         # Quick start guide
-└── generated-templates/                   # Generated templates (created during execution)
-    ├── SecurityEvent-latest.json
-    ├── SecurityEvent-20250906-143022.json
-    └── ...
+DCR-Automation/
+├── Run-DCRAutomation.ps1              # Main entry point with simplified commands
+├── Create-TableDCRs.ps1               # Core engine for DCR creation
+├── Generate-CriblDestinations.ps1     # Generates Cribl destination configs
+├── azure-parameters.json              # Azure resources & authentication (CONFIGURE THIS)
+├── cribl-parameters.json              # Cribl naming conventions
+├── operation-parameters.json          # Script behavior settings
+├── NativeTableList.json               # Native tables to process
+├── CustomTableList.json               # Custom tables to process
+├── dcr-template-direct.json           # ARM template for Direct DCRs
+├── dcr-template-with-dce.json         # ARM template for DCE-based DCRs
+├── dst-cribl-template.json            # Template for Cribl destinations
+├── custom-table-schemas/              # Schema definitions for custom tables
+│   ├── CloudFlare_CL.json
+│   ├── MyCustomApp_CL.json
+│   └── README.md
+├── generated-templates/               # Generated ARM templates (auto-created)
+├── cribl-dcr-configs/                 # Cribl configurations (auto-created)
+│   ├── cribl-dcr-config.json         # Main DCR configuration
+│   └── destinations/                  # Individual destination configs
+├── README.md                          # This documentation
+├── QUICK_START.md                     # Quick setup guide
+└── CRIBL_DESTINATIONS_README.md      # Cribl destination details
 ```
 
 ## ⚙️ Configuration Files
 
-### 1. operation-parameters.json (DCR Mode Control)
+### 1. azure-parameters.json (MUST CONFIGURE)
 ```json
 {
-  "templateManagement": {
-    "cleanupOldTemplates": true,
-    "keepTemplateVersions": 1
+  "resourceGroupName": "your-rg-name",
+  "workspaceName": "your-la-workspace",
+  "location": "eastus",
+  "dcrPrefix": "dcr-",
+  "dcrSuffix": "",
+  "dceResourceGroupName": "your-rg-name",
+  "dcePrefix": "dce-",
+  "dceSuffix": "",
+  "tenantId": "your-tenant-id",
+  "clientId": "your-app-client-id",
+  "clientSecret": "your-app-secret"
+}
+```
+
+**Important:**
+- `tenantId`, `clientId`, `clientSecret` are for Azure AD authentication in Cribl
+- DCE parameters only used when `createDCE=true`
+- Direct DCRs have 30-character name limit (auto-abbreviated)
+
+### 2. operation-parameters.json
+```json
+{
+  "deployment": {
+    "createDCE": false              // false = Direct DCRs, true = DCE-based
   },
   "scriptBehavior": {
-    "skipKnownIssues": false,
-    "validateTablesOnly": false,
-    "verboseOutput": true,
-    "templateOnly": false
+    "templateOnly": false           // true = generate templates only
   },
-  "deployment": {
-    "createDCE": false,
-    "skipExistingDCRs": true,
-    "skipExistingDCEs": true,
-    "deploymentTimeout": 600
+  "customTableSettings": {
+    "enabled": false                // true = process custom tables
   }
 }
 ```
 
-**Key Parameters:**
-- **`createDCE`**: `false` = Direct DCRs, `true` = DCE-based DCRs
-- **`templateOnly`**: `true` = Generate templates only (no deployment)
+### 3. Table Lists
+- **NativeTableList.json**: Native Azure tables (SecurityEvent, Syslog, etc.)
+- **CustomTableList.json**: Custom tables with _CL suffix
 
-### 2. azure-parameters.json (Azure Resources)
-```json
-{
-  "resourceGroupName": "rg-jpederson-eastus",
-  "workspaceName": "la-jpederson-00",
-  "dceResourceGroupName": "rg-jpederson-eastus",
-  "dcePrefix": "dce-jp-",
-  "dceSuffix": "",
-  "dcrPrefix": "dcr-jp-",
-  "dcrSuffix": "",
-  "location": "eastus"
-}
-```
+## 🔄 DCR Modes
 
-**DCR Naming Limits:**
-- **Direct DCRs**: 30 characters max (script auto-abbreviates table names)
-- **DCE-based DCRs**: 64 characters max
-- **Note**: DCE parameters are only used when `createDCE=true`
-
-### 3. TableList.json (Tables to Process)
-```json
-[
-    "CommonSecurityLog",
-    "SecurityEvent",
-    "Syslog",
-    "WindowsEvent"
-]
-```
-
-## 🔄 DCR Mode Comparison
-
-| Feature | Direct DCR (`createDCE=false`) | DCE-based DCR (`createDCE=true`) |
-|---------|--------------------------------|----------------------------------|
+| Feature | Direct DCR | DCE-based DCR |
+|---------|------------|---------------|
 | **Architecture** | Data → Log Analytics | Data → DCE → Log Analytics |
-| **Resources Created** | DCR only | DCR + DCE |
-| **ARM Template** | `dcr-template-direct.json` | `dcr-template-with-dce.json` |
+| **Resources** | DCR only | DCR + DCE |
 | **Name Limit** | 30 characters | 64 characters |
-| **Cost** | Lower (no DCE costs) | Higher (DCE + DCR costs) |
-| **Management** | Simpler (single resource) | More complex (multiple resources) |
-| **Use Case** | Simple ingestion scenarios | Advanced scenarios requiring DCE features |
+| **Cost** | Lower | Higher (DCE costs) |
+| **Complexity** | Simple | Advanced routing |
+| **Use Case** | Most scenarios | Private endpoints, advanced routing |
 
-## 🎯 Template-Only Mode
+## 🎯 Quick Start
 
-**Perfect for CI/CD pipelines, template review, and staged deployments:**
-
+### 1. Configure Azure Settings
 ```powershell
-# Generate templates with real Azure schemas (no deployment)
-.\Create-NativeTableDCRs.ps1 -TemplateOnly
-
-# Or set in operation-parameters.json
-"templateOnly": true
+# Edit azure-parameters.json with your values
 ```
 
-**What Template-Only Mode Does:**
-- ✅ Connects to Azure and retrieves actual table schemas
-- ✅ Generates ARM templates with real column definitions
-- ✅ Performs all schema filtering and template validation
-- ✅ Saves templates for manual deployment
-- ❌ Does NOT create or deploy any Azure resources
+### 2. Connect to Azure
+```powershell
+Connect-AzAccount
+```
+
+### 3. View Available Commands
+```powershell
+.\Run-DCRAutomation.ps1
+```
+
+### 4. Deploy DCRs
+```powershell
+# Test with templates first
+.\Run-DCRAutomation.ps1 -Mode TemplateOnly -DCRMode Direct
+
+# Deploy Direct DCRs (recommended)
+.\Run-DCRAutomation.ps1 -Mode DirectBoth
+
+# Or deploy DCE-based DCRs
+.\Run-DCRAutomation.ps1 -Mode DCEBoth
+```
 
 ## 🚀 Usage Examples
 
-### Basic Usage
+### Basic Commands
 ```powershell
-# Uses createDCE setting from operation-parameters.json
-.\Create-NativeTableDCRs.ps1
+# View status and available commands
+.\Run-DCRAutomation.ps1
 
-# Template generation only (no deployment)
-.\Create-NativeTableDCRs.ps1 -TemplateOnly
+# Deploy native tables with Direct DCRs
+.\Run-DCRAutomation.ps1 -Mode DirectNative
 
-# Force Direct DCRs (override operation parameters)
-.\Create-NativeTableDCRs.ps1 -CreateDCE:$false
+# Deploy custom tables with Direct DCRs
+.\Run-DCRAutomation.ps1 -Mode DirectCustom
 
-# Force DCE-based DCRs (override operation parameters)
-.\Create-NativeTableDCRs.ps1 -CreateDCE
+# Deploy all tables
+.\Run-DCRAutomation.ps1 -Mode DirectBoth
 
-# Deploy specific table
-.\Create-NativeTableDCRs.ps1 -SpecificDCR "SecurityEvent"
+# Generate templates only (no deployment)
+.\Run-DCRAutomation.ps1 -Mode TemplateOnly
 ```
 
 ### Advanced Usage
 ```powershell
-# Complete override of operation parameters
-.\Create-NativeTableDCRs.ps1 -IgnoreOperationParameters -CreateDCE -CleanupOldTemplates -KeepTemplateVersions 3
+# Deploy specific table
+.\Create-TableDCRs.ps1 -SpecificDCR "SecurityEvent"
 
-# Template-only for specific table
-.\Create-NativeTableDCRs.ps1 -TemplateOnly -SpecificDCR "CommonSecurityLog"
+# Custom table with schema
+.\Create-TableDCRs.ps1 -CustomTableMode -SpecificDCR "MyApp_CL"
 
-# Validation only (no deployment)
-.\Create-NativeTableDCRs.ps1 -ValidateTablesOnly
+# Template generation for CI/CD
+.\Create-TableDCRs.ps1 -TemplateOnly
 
-# Use different configuration files
-.\Create-NativeTableDCRs.ps1 -AzureParametersFile "prod-azure.json" -OperationParametersFile "prod-ops.json"
+# With Cribl config display
+.\Run-DCRAutomation.ps1 -Mode DirectBoth -ShowCriblConfig
+```
+
+### Cribl Configuration
+```powershell
+# Collect configuration from existing DCRs
+.\Run-DCRAutomation.ps1 -Mode CollectCribl
+
+# Validate Cribl configuration
+.\Run-DCRAutomation.ps1 -Mode ValidateCribl
+
+# Generate individual destination configs
+.\Generate-CriblDestinations.ps1
 ```
 
 ## 📋 Script Parameters
 
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `CreateDCE` | Switch | `$false` | **Override**: Force DCE-based DCRs (ignores operation-parameters.json) |
-| `TemplateOnly` | Switch | `$false` | **Override**: Generate templates only (ignores operation-parameters.json) |
-| `AzureParametersFile` | String | "azure-parameters.json" | Azure configuration file |
-| `OperationParametersFile` | String | "operation-parameters.json" | Operation configuration file |
-| `TableListFile` | String | "TableList.json" | Table list file |
-| `DCRTemplateWithDCEFile` | String | "dcr-template-with-dce.json" | ARM template for DCE-based DCRs |
-| `DCRTemplateDirectFile` | String | "dcr-template-direct.json" | ARM template for Direct DCRs |
-| `SpecificDCR` | String | "" | Process only specified table |
-| `CleanupOldTemplates` | Switch | `$false` | Remove old template versions |
-| `KeepTemplateVersions` | Int | 5 | Number of template versions to keep |
-| `IgnoreOperationParameters` | Switch | `$false` | Use only command-line parameters |
+### Run-DCRAutomation.ps1
+| Parameter | Options | Description |
+|-----------|---------|-------------|
+| Mode | Status, Native, Custom, Both, TemplateOnly, DirectNative, DirectCustom, DirectBoth, DCENative, DCECustom, DCEBoth, CollectCribl, ValidateCribl | Operation mode |
+| DCRMode | Direct, DCE, Current | Override DCR type |
+| ShowCriblConfig | Switch | Display Cribl config during deployment |
+| SkipCriblExport | Switch | Skip automatic config export |
 
-## 🎯 Expected Output
+### Create-TableDCRs.ps1
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| CreateDCE | Switch | Create DCE-based DCRs |
+| TemplateOnly | Switch | Generate templates without deployment |
+| CustomTableMode | Switch | Process custom tables |
+| SpecificDCR | String | Process only specified table |
+| ShowCriblConfig | Switch | Display Cribl configuration |
+| ExportCriblConfig | Switch | Export to JSON (default: true) |
 
-### Script Startup
-```
-Starting Azure Data Collection Rules (Unified - DCE or Direct) deployment process...
-Loading operation parameters from: operation-parameters.json
-Operation parameters loaded successfully
-  Create DCE: False
-  Template Only Mode: False
-DCR Mode: Direct
-Template file: C:\...\dcr-template-direct.json
-DCR template loaded successfully (Direct)
-```
+## 🔗 Cribl Integration
 
-### Processing Tables (Regular Mode)
-```
-================================================================================
-PROCESSING TABLES (Direct DCRs)
-================================================================================
+### Automatic Configuration Export
+By default, the system exports Cribl configuration to `cribl-dcr-configs\cribl-dcr-config.json` containing:
+- DCR Immutable IDs
+- Ingestion Endpoints
+- Stream Names
+- Table Names
 
---- Processing: CommonSecurityLog ---
-  Warning: DCR name 'dcr-jp-CommonSecurityLog-eastus' (35 chars) exceeds 30 character limit for Direct DCRs
-  DCR name shortened to: dcr-jp-CSL-eastus (18 chars)
-  DCR Name: dcr-jp-CSL-eastus
-  DCR Mode: Direct
-  ✅ Table found: Microsoft-CommonSecurityLog
-  Schema Analysis:
-    Total columns from Azure: 45
-    System columns filtered: 8
-    GUID columns filtered: 2
-    Columns to include in DCR: 35
-  Template Analysis:
-    Size: 12.3 KB
-    Columns: 35
-    Complexity: Low
-  ✅ Template validation passed
-  ✅ Direct DCR deployed successfully!
+### Generate Destination Configs
+```powershell
+# Creates individual Cribl destination files
+.\Generate-CriblDestinations.ps1
 ```
 
-### Processing Tables (Template-Only Mode)
-```
-================================================================================
-GENERATING TEMPLATES (Direct DCRs)
-================================================================================
+Output in `cribl-dcr-configs\destinations\`:
+- Individual JSON configs for each DCR
+- Ready to import into Cribl Stream
+- Includes authentication from azure-parameters.json
 
---- Processing: CommonSecurityLog ---
-  DCR name shortened to: dcr-jp-CSL-eastus (18 chars)
-  DCR Name: dcr-jp-CSL-eastus
-  DCR Mode: Direct
-  Template-only mode: Skipping Azure resource checks
-  Template-only mode: Still retrieving actual schema from Azure
-  ✅ Table found: Microsoft-CommonSecurityLog
-  Schema Analysis:
-    Total columns from Azure: 45
-    System columns filtered: 8
-    GUID columns filtered: 2
-    Columns to include in DCR: 35
-  ✅ Template validation passed
-  Template saved: CommonSecurityLog-20250906-143022.json
-  Latest template: CommonSecurityLog-latest.json
-  Stream names hardcoded:
-    Input stream: Custom-CommonSecurityLog
-    Output stream: Microsoft-CommonSecurityLog
-  Template is standalone: columns embedded, resource IDs blank by default
-  ✅ Template generated successfully (template-only mode)
-  Template location: C:\...\generated-templates\CommonSecurityLog-latest.json
+### Required Azure AD Permissions
+Grant **Monitoring Metrics Publisher** role to your Azure AD app on each DCR:
+```powershell
+$dcrResourceId = "/subscriptions/{sub}/resourceGroups/{rg}/providers/Microsoft.Insights/dataCollectionRules/{dcr}"
+New-AzRoleAssignment -ObjectId "app-object-id" -RoleDefinitionName "Monitoring Metrics Publisher" -Scope $dcrResourceId
 ```
 
-## 🏗️ External ARM Templates
+## 📊 Custom Tables
 
-### dcr-template-direct.json (Direct DCRs)
-- **Features**: `kind = "Direct"`, no DCE reference
-- **Parameters**: `dataCollectionRuleName`, `location`, `workspaceResourceId`, `tableName`, `columns`
-- **Use Case**: Simple, cost-effective data ingestion
-- **Name Limit**: 30 characters (script auto-abbreviates)
+### Creating Custom Table Schemas
+Place schema files in `custom-table-schemas\`:
 
-### dcr-template-with-dce.json (DCE-based DCRs)
-- **Features**: `dataCollectionEndpointId` reference, DCE integration
-- **Parameters**: Same as Direct + `endpointResourceId`
-- **Use Case**: Advanced scenarios requiring DCE features
-- **Name Limit**: 64 characters
-
-### Generated Templates Enhancement
-**Important**: The script now generates templates with **hardcoded stream names** instead of using ARM template variables. This makes the templates more portable and easier to use:
-- **Input Stream**: Hardcoded as `Custom-{TableName}` (e.g., `Custom-SecurityEvent`)
-- **Output Stream**: Hardcoded as `Microsoft-{TableName}` (e.g., `Microsoft-SecurityEvent`)
-- **Columns**: Embedded directly in the template with filtered schema from Azure
-- **Benefits**: Templates are fully standalone and don't require `tableName` or `columns` parameters
-
-## 📊 Intelligent DCR Naming
-
-The script automatically handles Azure naming limits:
-
-### Direct DCRs (30-character limit)
-- `CommonSecurityLog` → `CSL`
-- `SecurityEvent` → `SecEvt`
-- `WindowsEvent` → `WinEvt`
-- `DeviceEvents` → `DevEvt`
-- Generic tables → First 6 characters
-
-### Example Transformations
+```json
+{
+  "description": "My custom application logs",
+  "retentionInDays": 30,
+  "totalRetentionInDays": 90,
+  "columns": [
+    {
+      "name": "TimeGenerated",
+      "type": "datetime",
+      "description": "Timestamp"
+    },
+    {
+      "name": "Message",
+      "type": "string",
+      "description": "Log message"
+    }
+  ]
+}
 ```
-Original: dcr-jp-CommonSecurityLog-eastus (35 chars - too long)
-Abbreviated: dcr-jp-CSL-eastus (18 chars - ✅ fits)
 
-Original: dcr-jp-SecurityEvent-eastus (29 chars - ✅ fits)
-No change needed
+### Supported Column Types
+- `string`, `int`, `long`, `real`, `boolean`, `datetime`, `dynamic`
+
+### Processing Custom Tables
+```powershell
+# Enable in operation-parameters.json
+"customTableSettings": { "enabled": true }
+
+# Or via command
+.\Run-DCRAutomation.ps1 -Mode DirectCustom
+```
+
+## 🎯 Template-Only Mode
+
+Perfect for CI/CD pipelines and review:
+```powershell
+# Generate templates with real schemas from Azure
+.\Run-DCRAutomation.ps1 -Mode TemplateOnly
+
+# Templates saved to generated-templates/
+# - {TableName}-latest.json (current version)
+# - {TableName}-{timestamp}.json (versioned)
 ```
 
 ## 📈 Best Practices
 
-### Development Workflow
-1. **Template Generation**: Use `-TemplateOnly` to generate templates
-2. **Template Review**: Review generated templates in `generated-templates/`
-3. **Test Deployment**: Deploy single table with `-SpecificDCR`
-4. **Full Deployment**: Deploy all tables after validation
+1. **Start with Direct DCRs** - Simpler and more cost-effective
+2. **Test with templates first** - Use `-Mode TemplateOnly`
+3. **Deploy single table first** - Use `-SpecificDCR "TableName"`
+4. **Review Cribl configs** - Check `cribl-dcr-configs\` before importing
+5. **Protect credentials** - Never commit azure-parameters.json with real values
+6. **Monitor costs** - DCEs incur additional charges
 
-### Template Management
-- Use `*-latest.json` files for current deployments
-- Keep timestamped versions for rollback capability
-- Enable automatic cleanup via operation parameters
-
-### Deployment Strategy
-- Start with Direct DCRs for cost optimization
-- Use DCE-based DCRs only when advanced features are needed
-- Use template-only mode for CI/CD pipelines
-- Monitor Azure Portal for deployment progress
-
-### Cost Optimization
-- **Direct DCRs**: Lower cost, suitable for most scenarios
-- **DCE-based DCRs**: Higher cost, use only when necessary
-- Clean up unused DCEs when switching from DCE-based to Direct
-
-## 🚨 Manual Deployment Scenarios
-
-The script automatically detects when manual deployment is recommended:
-
-- **Large schemas** (>300 columns)
-- **Complex data types** (many dynamic/object columns)
-- **Template size** (>4MB ARM limit)
-- **Deployment failures** (timeout, validation errors)
-
-### Manual Deployment Process
-1. Script generates templates in `generated-templates/`
-2. Use `*-latest.json` files for current deployments
-3. Deploy via Azure Portal → "Deploy a custom template"
-4. Copy template content from generated files
-5. Fill in required parameters (DCR name, location, workspace ID, etc.)
-
-## 🔍 Troubleshooting
+## 🚨 Troubleshooting
 
 ### Common Issues
-- **"DCR name too long"**: Script auto-abbreviates, check output for shortened name
-- **"Table not found"**: Verify table name spelling in TableList.json
-- **"Authentication error"**: Run `Connect-AzAccount` first
-- **"Template too large"**: Use manual deployment with Azure Portal
 
-### Quick Fixes
-- **Switch DCR mode**: Change `createDCE` in operation-parameters.json
-- **Template-only mode**: Use `-TemplateOnly` for template generation
-- **Manual deployment**: Use generated templates with Azure Portal
-- **Name conflicts**: Check shortened DCR names in output
+| Issue | Solution |
+|-------|----------|
+| "Table not found" | Check spelling in TableList.json files |
+| "DCR name too long" | Script auto-abbreviates, check output |
+| "Authentication error" | Run `Connect-AzAccount` |
+| "Template too large" | Use manual deployment via Azure Portal |
+| "Custom table missing" | Create schema in `custom-table-schemas\` |
 
-## 🎯 CI/CD Integration
+### Validation Commands
+```powershell
+# Check current configuration
+.\Run-DCRAutomation.ps1 -Mode Status
 
-### Pipeline Example
-```yaml
-# Stage 1: Generate Templates
-- task: PowerShell@2
-  displayName: 'Generate DCR Templates'
-  inputs:
-    targetType: 'filePath'
-    filePath: 'Create-NativeTableDCRs.ps1'
-    arguments: '-TemplateOnly'
-    
-# Stage 2: Review Templates (manual gate)
-# Stage 3: Deploy Templates
-- task: AzureResourceManagerTemplateDeployment@3
-  displayName: 'Deploy DCRs'
-  inputs:
-    azureResourceManagerConnection: '$(serviceConnection)'
-    subscriptionId: '$(subscriptionId)'
-    resourceGroupName: '$(resourceGroupName)'
-    location: '$(location)'
-    templateLocation: 'Linked artifact'
-    csmFile: 'generated-templates/$(tableName)-latest.json'
+# Validate tables exist
+.\Create-TableDCRs.ps1 -ValidateTablesOnly
+
+# Test single table
+.\Create-TableDCRs.ps1 -SpecificDCR "SecurityEvent" -TemplateOnly
+```
+
+## 🔐 Security Recommendations
+
+1. **Protect sensitive files**:
+```bash
+# Add to .gitignore
+azure-parameters.json
+cribl-dcr-configs/
+*.backup.json
+```
+
+2. **Use environment variables** for secrets:
+```powershell
+$env:AZURE_CLIENT_SECRET = "your-secret"
+```
+
+3. **Minimum Azure AD permissions**:
+- `Microsoft.Insights/dataCollectionRules/*`
+- `Microsoft.OperationalInsights/workspaces/read`
+- `Microsoft.Insights/dataCollectionEndpoints/*` (if using DCEs)
+
+## 📊 Expected Output
+
+### Successful Deployment
+```
+🚀 Processing NATIVE Tables with DIRECT DCRs...
+==================================================
+
+--- Processing: SecurityEvent ---
+  DCR Name: dcr-SecEvt-eastus
+  ✅ Table found: Microsoft-SecurityEvent
+  Schema Analysis:
+    Total columns: 45
+    Columns in DCR: 37
+  ✅ Direct DCR deployed successfully!
+  
+🔗 CRIBL INTEGRATION CONFIGURATION
+═══════════════════════════════════
+  DCR Immutable ID: abc123-def456-...
+  Ingestion Endpoint: https://eastus.ingest.monitor.azure.com
+  Stream Name: Custom-SecurityEvent
+  Target Table: SecurityEvent
+═══════════════════════════════════
+
+📦 Cribl configuration exported to: cribl-dcr-configs\cribl-dcr-config.json
 ```
 
 ## 🎉 Summary
 
-This unified solution provides:
+This automation system provides:
+- ✅ **Unified approach** for both DCE and Direct DCRs
+- ✅ **Automatic Cribl integration** with configuration export
+- ✅ **Custom table support** with schema management
+- ✅ **Template generation** for CI/CD pipelines
+- ✅ **Intelligent handling** of Azure naming limits
+- ✅ **Comprehensive error handling** and user guidance
 
-✅ **Single Script**: Handles both DCE-based and Direct DCRs  
-✅ **Template-Only Mode**: Generate templates without deployment  
-✅ **External Templates**: Easy customization without script changes  
-✅ **Intelligent Naming**: Auto-abbreviation for Azure limits  
-✅ **Operation Control**: Switch modes via configuration  
-✅ **Cost Flexibility**: Choose between cost-effective Direct or feature-rich DCE-based  
-✅ **Template Management**: Automated versioning and cleanup  
-✅ **Error Handling**: Comprehensive guidance for complex scenarios  
-✅ **CI/CD Ready**: Perfect for automated deployment pipelines  
+---
 
-The unified approach eliminates code duplication while providing maximum flexibility for different deployment scenarios and requirements.
+**Getting Started:** Run `.\Run-DCRAutomation.ps1` to see all options and begin deployment.
+
+For quick setup, see `QUICK_START.md`. For Cribl destination details, see `CRIBL_DESTINATIONS_README.md`.
