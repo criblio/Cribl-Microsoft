@@ -6,7 +6,7 @@ All releases for the Cribl-Microsoft integration repository are documented here.
 
 | Version | Release Date | Highlights |
 |---------|--------------|------------|
-| [v1.0.0](v1.0.0.md) | December 2024 | Initial release - DCR Automation, 50 ARM templates, Cribl integration |
+| [v1.0.0](v1.0.0.md) | 2025/09/12 | Initial release - DCR Automation, DCR ARM templates, Cribl integration |
 
 ## Release Types
 
