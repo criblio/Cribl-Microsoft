@@ -1,77 +1,62 @@
-# Cribl-Microsoft
+# Cribl-Microsoft Integration
 
-A comprehensive repository for Cribl integration artifacts with Microsoft Azure and related Microsoft ecosystem technologies. This repository provides templates, configurations, and resources to streamline data ingestion, processing, and analysis workflows between Cribl and Microsoft services.
+Automation tools and templates for integrating Cribl Stream with Microsoft Azure Log Analytics and Sentinel.
 
-## Overview
+## 📁 Repository Contents
 
-This repository serves as a centralized hub for organizations looking to integrate Cribl with Microsoft Azure services, including Azure Sentinel, Log Analytics workspaces, and various Azure data services. The artifacts contained here help accelerate deployment and configuration of Cribl in Microsoft environments.
+### [DCR-Automation](Azure/CustomDeploymentTemplates/DCR-Automation/) 
+**PowerShell automation for Azure Data Collection Rules**
+- Automated DCR creation for native and custom tables
+- Automatic Cribl Stream configuration export
+- Supports both Direct and DCE-based deployments
+- [Quick Start Guide](Azure/CustomDeploymentTemplates/DCR-Automation/QUICK_START.md)
 
-## Repository Structure
+### [DCR-Templates](Azure/CustomDeploymentTemplates/DCR-Templates/)
+**Pre-built ARM templates for manual deployment**
+- Templates for Sentinel native tables
+- DCE and non-DCE configurations
+- Ready-to-deploy JSON templates
 
-### Azure Directory
-Contains Microsoft Azure-specific integration artifacts:
+## 🚀 Quick Start
 
-- **CustomDeploymentTemplates/**: Ready-to-use deployment templates for various Azure services
-  - **DataCollectionRules/**: Azure Data Collection Rules (DCR) templates
-    - **SentinelCustomTables/**: Templates for custom tables in Azure Sentinel
-    - **SentinelNativeTables/**: Templates for native Azure Sentinel tables
-      - Support for both Data Collection Endpoint (DCE) and non-DCE configurations
-      - Comprehensive coverage of Azure native tables including Security Events, Common Security Log, Azure Activity, and more
+### For Automated Deployment
+```powershell
+cd Azure/CustomDeploymentTemplates/DCR-Automation
+.\Run-DCRAutomation.ps1
+```
+See [DCR-Automation Quick Start](Azure/CustomDeploymentTemplates/DCR-Automation/QUICK_START.md)
 
-- **Diagrams/**: Architecture and integration diagrams (planned)
+### For Manual Templates
+Browse templates in `Azure/CustomDeploymentTemplates/DCR-Templates/`
 
-## Key Features
+## 📋 Prerequisites
 
-- **Azure Sentinel Integration**: Pre-configured templates for seamless data ingestion into Azure Sentinel
-- **Data Collection Rules**: Comprehensive DCR templates for various Azure native and custom tables
-- **Flexible Deployment Options**: Support for both DCE and non-DCE configurations
-- **Multi-Service Support**: Templates covering a wide range of Azure services and log types
-- **Security-Focused**: Templates optimized for security monitoring and compliance use cases
+- Azure subscription with Log Analytics workspace
+- PowerShell with Azure modules (for automation)
+- Cribl Stream instance
+- Azure AD app registration (for Cribl authentication)
 
-## Supported Azure Services
+## 🔗 Key Features
 
-The repository includes templates and configurations for:
+- **Automated DCR Creation**: PowerShell scripts handle complex DCR deployments
+- **Cribl Integration**: Auto-generates Cribl Stream destination configurations
+- **Template Library**: Pre-built templates for common scenarios
+- **Multi-Mode Support**: Direct DCRs (simple) or DCE-based (advanced routing)
 
-- Azure Sentinel (Microsoft Sentinel)
-- Azure Log Analytics
-- Azure Security Center
-- Azure Active Directory
-- Azure Activity Logs
-- Azure Diagnostics
-- Microsoft Defender services
-- Cloud security posture management
-- And many more Azure native services
+## 📚 Documentation
 
-## Getting Started
+- [DCR-Automation README](Azure/CustomDeploymentTemplates/DCR-Automation/README.md) - Detailed automation documentation
+- [Cribl Destinations Guide](Azure/CustomDeploymentTemplates/DCR-Automation/CRIBL_DESTINATIONS_README.md) - Cribl configuration details
+- [Custom Tables Guide](Azure/CustomDeploymentTemplates/DCR-Automation/custom-table-schemas/README.md) - Creating custom table schemas
 
-1. Clone this repository to your local environment
-2. Navigate to the appropriate directory for your use case (e.g., `Azure/CustomDeploymentTemplates/`)
-3. Select the appropriate template based on your deployment requirements
-4. Customize the template parameters as needed for your environment
-5. Deploy using Azure CLI, PowerShell, or Azure Portal
+## 🤝 Contributing
 
-## Prerequisites
+See [CONTRIBUTORS.md](CONTRIBUTORS.md) for contribution guidelines.
 
-- Active Azure subscription
-- Appropriate permissions for Azure resource deployment
-- Cribl Stream or Cribl Edge instance
-- Understanding of Azure Data Collection Rules (for DCR templates)
+## 📄 License
 
-## Contributing
+MIT License - see [LICENSE](LICENSE) file.
 
-We welcome contributions from the community! Please see our [Contributors Guide](CONTRIBUTORS.md) for information on how to contribute to this project.
+---
 
-## Support
-
-For issues related to these templates and configurations:
-- Check existing GitHub issues
-- Create a new issue with detailed information about your problem
-- Include relevant Azure service information and error messages
-
-## License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## Disclaimer
-
-The templates and configurations in this repository are provided as-is and should be thoroughly tested in non-production environments before deployment to production systems.
+**Need help?** Start with the [Quick Start Guide](Azure/CustomDeploymentTemplates/DCR-Automation/QUICK_START.md) or create an issue.
