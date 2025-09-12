@@ -5,6 +5,7 @@ Thank you for your interest in contributing to the Cribl-Microsoft integration r
 ## 📋 Table of Contents
 
 - [What We're Building](#what-were-building)
+- [Branching Policy](#branching-policy)
 - [How to Contribute](#how-to-contribute)
 - [Contribution Guidelines](#contribution-guidelines)
 - [Testing Requirements](#testing-requirements)
@@ -19,6 +20,90 @@ This repository provides tools for integrating Cribl Stream with Azure Log Analy
 - **DCR-Templates**: Pre-built ARM templates for Sentinel native tables
 - **Cribl Configurations**: Auto-generated destination configs for Cribl Stream
 - **Future Content**: TBD
+
+## 🔒 Branching Policy
+
+### Protected Branches
+
+**The `main` branch is protected and requires:**
+- ❌ **NO direct commits** - all changes must come through pull requests
+- ✅ At least one reviewer approval before merging
+- ✅ All status checks must pass
+- ✅ Branch must be up to date with main before merging
+
+### Branching Best Practices
+
+#### Branch Naming Convention
+
+Use descriptive branch names with the following prefixes:
+
+- `feature/` - New features or enhancements
+  - Example: `feature/add-custom-table-support`
+- `fix/` - Bug fixes
+  - Example: `fix/dcr-deployment-timeout`
+- `docs/` - Documentation updates
+  - Example: `docs/update-setup-guide`
+- `refactor/` - Code refactoring without functional changes
+  - Example: `refactor/improve-error-handling`
+- `test/` - Test additions or updates
+  - Example: `test/add-integration-tests`
+
+#### Workflow Requirements
+
+1. **Never work directly on main**
+   ```bash
+   # ❌ NEVER DO THIS
+   git checkout main
+   git add .
+   git commit -m "My changes"
+   git push  # This will be rejected!
+   ```
+
+2. **Always create a feature branch**
+   ```bash
+   # ✅ ALWAYS DO THIS
+   git checkout main
+   git pull origin main  # Get latest changes
+   git checkout -b feature/your-feature-name
+   # Make your changes
+   git add .
+   git commit -m "Descriptive commit message"
+   git push origin feature/your-feature-name
+   # Then create a Pull Request on GitHub
+   ```
+
+3. **Keep your branch up to date**
+   ```bash
+   # Regularly sync with main
+   git checkout main
+   git pull origin main
+   git checkout your-branch
+   git merge main  # or git rebase main
+   ```
+
+4. **One feature per branch**
+   - Keep branches focused on a single feature or fix
+   - Create separate branches for unrelated changes
+   - Delete branches after merging
+
+#### Commit Message Guidelines
+
+- Use clear, descriptive commit messages
+- Start with a verb in present tense
+- Keep the first line under 50 characters
+- Add detailed description if needed
+
+```bash
+# Good examples
+git commit -m "Add support for custom table schemas"
+git commit -m "Fix timeout issue in DCR deployment"
+git commit -m "Update README with troubleshooting guide"
+
+# Bad examples
+git commit -m "Fixed stuff"
+git commit -m "Updates"
+git commit -m "WIP"
+```
 
 ## 🤝 How to Contribute
 
@@ -52,20 +137,43 @@ This repository provides tools for integrating Cribl Stream with Azure Log Analy
 
 1. **Fork the repository**
    ```bash
+   # Fork via GitHub UI first, then:
    git clone https://github.com/your-username/Cribl-Microsoft.git
    cd Cribl-Microsoft
    ```
 
-2. **Create a feature branch**
+2. **Add upstream remote**
    ```bash
+   git remote add upstream https://github.com/original-org/Cribl-Microsoft.git
+   git fetch upstream
+   ```
+
+3. **Create a feature branch from main**
+   ```bash
+   # IMPORTANT: Always branch from latest main
+   git checkout main
+   git pull upstream main
    git checkout -b feature/your-feature-name
    ```
 
-3. **Make your changes following our guidelines**
+4. **Make your changes following our guidelines**
+   ```bash
+   # Make changes
+   git add .
+   git commit -m "Clear description of changes"
+   ```
 
-4. **Test thoroughly in Azure**
+5. **Push to your fork**
+   ```bash
+   git push origin feature/your-feature-name
+   ```
 
-5. **Submit a pull request**
+6. **Test thoroughly in Azure**
+
+7. **Submit a pull request**
+   - Go to GitHub and create a PR from your branch to `main`
+   - Fill out the PR template completely
+   - Wait for review and address feedback
 
 ## 📁 Contribution Guidelines
 
@@ -163,6 +271,16 @@ Every contribution must include:
 
 ## 🔄 Pull Request Process
 
+### Before Creating a PR
+
+**Ensure you:**
+- ✅ Created your changes in a feature branch (NOT main)
+- ✅ Tested your changes thoroughly
+- ✅ Updated documentation if needed
+- ✅ Followed the coding standards
+- ✅ Rebased or merged latest main into your branch
+- ✅ Resolved any conflicts
+
 ### PR Template
 
 ```markdown
@@ -190,13 +308,31 @@ Brief description of changes
 
 ### Review Process
 
-1. All PRs require one maintainer review
-2. Focus areas:
-   - Security (no credentials)
-   - Functionality
+1. **All PRs require:**
+   - At least one maintainer review and approval
+   - All CI/CD checks to pass
+   - No merge conflicts with main
+   - Up-to-date with latest main branch
+
+2. **Review focus areas:**
+   - Security (no credentials or sensitive data)
+   - Functionality and testing
    - Documentation quality
    - Backward compatibility
-3. Address feedback before merge
+   - Adherence to branching policies
+
+3. **After approval:**
+   - Maintainer will merge using "Squash and merge" or "Merge commit"
+   - Your feature branch will be automatically deleted after merge
+   - Changes will be reflected in main branch
+
+### Why These Policies?
+
+- **Protect production code**: Main branch should always be stable
+- **Enable collaboration**: Multiple people can review and improve code
+- **Maintain history**: Clear record of what changed and why
+- **Prevent accidents**: No accidental commits to production
+- **Quality assurance**: All code is reviewed before merging
 
 ## 🐛 Issue Reporting
 
