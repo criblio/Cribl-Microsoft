@@ -57,6 +57,10 @@ See [CONTRIBUTORS.md](CONTRIBUTORS.md) for contribution guidelines.
 
 MIT License - see [LICENSE](LICENSE) file.
 
+## 📝 Release Notes
+
+See [RELEASE_NOTES](RELEASE_NOTES/) for version history and updates.
+
 ---
 
 **Need help?** Start with the [Quick Start Guide](Azure/CustomDeploymentTemplates/DCR-Automation/QUICK_START.md) or create an issue.

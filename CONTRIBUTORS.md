@@ -1,254 +1,275 @@
 # Contributing to Cribl-Microsoft
 
-We appreciate your interest in contributing to the Cribl-Microsoft repository! This guide will help you understand how to contribute effectively to this project.
+Thank you for your interest in contributing to the Cribl-Microsoft integration repository! This guide will help you contribute effectively to our Azure Data Collection Rules automation and templates.
 
-## Table of Contents
+## 📋 Table of Contents
 
-- [Code of Conduct](#code-of-conduct)
-- [Getting Started](#getting-started)
+- [What We're Building](#what-were-building)
 - [How to Contribute](#how-to-contribute)
 - [Contribution Guidelines](#contribution-guidelines)
-- [Template Standards](#template-standards)
 - [Testing Requirements](#testing-requirements)
 - [Pull Request Process](#pull-request-process)
 - [Issue Reporting](#issue-reporting)
-- [Community Guidelines](#community-guidelines)
 
-## Code of Conduct
+## 🎯 What We're Building
 
-By participating in this project, you agree to abide by our code of conduct. We expect all contributors to:
+This repository provides tools for integrating Cribl Stream with Azure Log Analytics/Sentinel:
 
-- Be respectful and inclusive
-- Focus on constructive feedback
-- Help create a welcoming environment for all skill levels
-- Respect differing viewpoints and experiences
+- **DCR-Automation**: PowerShell scripts that automate DCR creation
+- **DCR-Templates**: Pre-built ARM templates for Sentinel native tables
+- **Cribl Configurations**: Auto-generated destination configs for Cribl Stream
+- **Future Content**: TBD
 
-## Getting Started
+## 🤝 How to Contribute
 
-### Prerequisites
+### Types of Contributions Welcome
 
-Before contributing, ensure you have:
+#### 1. DCR Automation Enhancements
+- New features for the PowerShell automation
+- Support for additional table types
+- Performance improvements
+- Bug fixes in schema retrieval or deployment
 
-- A GitHub account
-- Basic knowledge of Git and GitHub workflows
-- Understanding of Microsoft Azure services
-- Experience with Cribl Stream or Cribl Edge
-- Familiarity with JSON and Azure Resource Manager (ARM) templates
+#### 2. Template Contributions
+- ARM templates for new Azure tables
+- Custom table schema definitions
+- Improved column mappings
+- Template optimizations
 
-### Development Environment
+#### 3. Cribl Integration
+- Destination configuration improvements
+- Authentication enhancements
+- Stream routing optimizations
+- Documentation for Cribl setup
 
-1. Fork the repository on GitHub
-2. Clone your fork locally:
+#### 4. Documentation
+- Setup guides and tutorials
+- Troubleshooting guides
+- Architecture diagrams
+- Video walkthroughs
+
+### Getting Started
+
+1. **Fork the repository**
    ```bash
    git clone https://github.com/your-username/Cribl-Microsoft.git
    cd Cribl-Microsoft
    ```
-3. Create a feature branch:
+
+2. **Create a feature branch**
    ```bash
    git checkout -b feature/your-feature-name
    ```
 
-## How to Contribute
+3. **Make your changes following our guidelines**
 
-### Types of Contributions
+4. **Test thoroughly in Azure**
 
-We welcome several types of contributions:
+5. **Submit a pull request**
 
-- **New Templates**: Azure deployment templates, Data Collection Rules, or configuration files
-- **Documentation**: Improvements to README files, guides, or inline documentation
-- **Bug Fixes**: Corrections to existing templates or configurations
-- **Feature Enhancements**: Improvements to existing templates or new functionality
-- **Examples**: Sample configurations or use case demonstrations
-- **Architecture Diagrams**: Visual representations of integration patterns
+## 📁 Contribution Guidelines
 
-### Contribution Areas
-
-#### Azure Templates
-- Data Collection Rules (DCR) for new Azure services
-- Custom table definitions for Azure Sentinel
-- PowerShell or CLI deployment scripts
-- ARM templates for Azure resource provisioning
-
-#### Documentation
-- Usage guides and tutorials
-- Best practices documentation
-- Troubleshooting guides
-- Architecture documentation
-
-## Contribution Guidelines
-
-### File Organization
-
-When adding new content, follow the established directory structure:
+### Repository Structure
 
 ```
-Azure/
-├── CustomDeploymentTemplates/
-│   ├── DataCollectionRules/
-│   │   ├── SentinelCustomTables/
-│   │   └── SentinelNativeTables/
-│   └── [YourNewCategory]/
-└── Diagrams/
+Azure/CustomDeploymentTemplates/
+├── DCR-Automation/              # PowerShell automation scripts
+│   ├── *.ps1                   # Core scripts
+│   ├── *.json                  # Configuration files
+│   ├── custom-table-schemas/   # Custom table definitions
+│   └── generated-templates/    # Auto-generated (don't commit)
+└── DCR-Templates/               # Static ARM templates
+    └── SentinelNativeTables/
+        ├── DataCollectionRules(DCE)/    # DCE-based templates
+        └── DataCollectionRules(NoDCE)/  # Direct DCR templates
 ```
 
-### Naming Conventions
+### Code Standards
 
-- **Files**: Use descriptive, kebab-case names (e.g., `dcr-custom-security-log.json`)
-- **Directories**: Use PascalCase for directory names (e.g., `CustomDeploymentTemplates`)
-- **Variables**: Follow Azure naming conventions for resource names
+#### PowerShell Scripts
+```powershell
+# Use clear function names
+function New-LogAnalyticsCustomTable {
+    param(
+        [Parameter(Mandatory=$true)]
+        [string]$TableName
+    )
+    # Include proper error handling
+    try {
+        # Implementation
+    } catch {
+        Write-Error "Failed to create table: $_"
+    }
+}
+```
+
+#### JSON Templates
+```json
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "parameterName": {
+      "type": "string",
+      "metadata": {
+        "description": "Clear description of parameter"
+      }
+    }
+  }
+}
+```
+
+#### Configuration Files
+- Never commit real credentials in `azure-parameters.json`
+- Use placeholder values like `<YOUR-TENANT-ID-HERE>`
+- Document all configuration options
 
 ### Documentation Requirements
 
-Every contribution must include appropriate documentation:
+Every contribution must include:
 
-1. **README Files**: Each new directory must contain a README.md explaining its purpose
-2. **Inline Comments**: JSON templates should include comments where applicable
-3. **Parameter Descriptions**: All configurable parameters must be documented
-4. **Examples**: Provide usage examples for complex templates
+1. **Updated README**: If adding new features
+2. **Inline Comments**: For complex logic
+3. **Parameter Descriptions**: For all configurable options
+4. **Usage Examples**: For new functionality
 
-## Template Standards
-
-### JSON Templates
-
-- Use proper JSON formatting with consistent indentation (2 spaces)
-- Include parameter descriptions and default values where appropriate
-- Use meaningful parameter names that clearly indicate their purpose
-- Include validation rules for parameters when possible
-
-### Azure DCR Templates
-
-- Follow Azure Data Collection Rules schema requirements
-- Include both endpoint and non-endpoint configurations where applicable
-- Provide clear data transformation rules
-- Document any custom KQL queries used
-
-### Security Considerations
-
-- Never include sensitive information (passwords, keys, connection strings)
-- Use Azure Key Vault references for secrets
-- Implement least-privilege access principles
-- Document security implications in template descriptions
-
-## Testing Requirements
-
-### Validation Steps
-
-Before submitting a contribution:
-
-1. **Syntax Validation**: Ensure all JSON files are valid
-2. **Template Testing**: Test templates in a non-production Azure environment
-3. **Documentation Review**: Verify all documentation is accurate and complete
-4. **Link Checking**: Ensure all internal and external links work correctly
-
-### Test Environments
-
-- Test templates in isolated Azure subscriptions
-- Verify compatibility with supported Azure regions
-- Test with different Cribl deployment scenarios
-- Validate data flow from source to destination
-
-## Pull Request Process
+## 🧪 Testing Requirements
 
 ### Before Submitting
 
-1. Ensure your branch is up to date with the main branch
-2. Run all validation checks
-3. Update documentation as needed
-4. Add or update tests for your changes
+1. **Script Testing**
+   - Test with both Direct and DCE-based DCRs
+   - Verify custom table creation works
+   - Ensure Cribl config export is accurate
 
-### PR Description Template
+2. **Template Validation**
+   - Deploy templates in test environment
+   - Verify schema completeness
+   - Check parameter validation
 
-Please include the following in your pull request description:
+3. **Integration Testing**
+   - Confirm data flows to Log Analytics
+   - Validate Cribl destination configs work
+   - Test with different Azure regions
+
+### Test Checklist
+```markdown
+- [ ] Scripts run without errors
+- [ ] Templates deploy successfully
+- [ ] Documentation is updated
+- [ ] No sensitive data in commits
+- [ ] Backward compatibility maintained
+```
+
+## 🔄 Pull Request Process
+
+### PR Template
 
 ```markdown
 ## Summary
-Brief description of the changes
+Brief description of changes
 
 ## Type of Change
-- [ ] New template/configuration
 - [ ] Bug fix
+- [ ] New feature
 - [ ] Documentation update
-- [ ] Feature enhancement
+- [ ] Template addition
+- [ ] Performance improvement
 
-## Testing
+## Testing Done
 - [ ] Tested in Azure environment
+- [ ] Verified Cribl integration
 - [ ] Documentation reviewed
-- [ ] JSON syntax validated
 
 ## Checklist
-- [ ] My code follows the project's style guidelines
-- [ ] I have performed a self-review of my changes
-- [ ] I have commented my code where necessary
-- [ ] I have made corresponding changes to documentation
-- [ ] My changes generate no new warnings
+- [ ] No real credentials in code
+- [ ] Scripts follow style guidelines
+- [ ] README updated if needed
+- [ ] Tests pass successfully
 ```
 
 ### Review Process
 
-1. All pull requests require review from at least one maintainer
-2. Reviews will focus on functionality, security, and documentation quality
-3. Address all feedback before the PR can be merged
-4. Once approved, a maintainer will merge your contribution
+1. All PRs require one maintainer review
+2. Focus areas:
+   - Security (no credentials)
+   - Functionality
+   - Documentation quality
+   - Backward compatibility
+3. Address feedback before merge
 
-## Issue Reporting
+## 🐛 Issue Reporting
 
-### Bug Reports
+### Bug Reports Should Include
+- Script/template that failed
+- Error messages
+- Azure region and subscription type
+- PowerShell version
+- Steps to reproduce
 
-When reporting bugs, please include:
+### Feature Requests Should Include
+- Use case description
+- Expected behavior
+- Why it's valuable
+- Proposed implementation (optional)
 
-- Clear description of the issue
-- Steps to reproduce the problem
-- Expected vs. actual behavior
-- Environment details (Azure region, Cribl version, etc.)
-- Relevant error messages or logs
+### Good Issue Example
+```markdown
+**Title**: DCR creation fails for tables with >300 columns
 
-### Feature Requests
+**Description**: 
+When running Create-TableDCRs.ps1 for tables with more than 300 columns, 
+the deployment times out.
 
-For new features, provide:
+**Environment**:
+- PowerShell: 7.3.0
+- Azure Region: East US
+- Table: CustomLargeTable_CL
 
-- Clear description of the requested functionality
-- Use case and business justification
-- Proposed implementation approach (if applicable)
-- Any relevant examples or references
+**Error**: 
+"Deployment failed. Correlation ID: xxx-xxx-xxx"
 
-### Issue Templates
+**Expected**: 
+Script should handle large tables or provide clear guidance
+```
 
-Use the appropriate issue template when creating new issues:
+## 💡 Contribution Ideas
 
-- **Bug Report**: For reporting problems with existing templates
-- **Feature Request**: For suggesting new functionality
-- **Documentation**: For documentation improvements
-- **Question**: For general questions about the project
+Looking for ways to contribute? Consider:
 
-## Community Guidelines
+1. **Add support for new table types**
+   - Microsoft 365 Defender tables
+   - Azure Monitor metrics tables
+   - Third-party security solutions
 
-### Communication Channels
+2. **Enhance automation features**
+   - Batch processing improvements
+   - Parallel deployment support
+   - Rollback capabilities
 
-- **GitHub Issues**: Primary channel for bug reports and feature requests
-- **Pull Requests**: For code contributions and technical discussions
-- **Discussions**: For general questions and community interaction
+3. **Improve Cribl integration**
+   - Support for Cribl Cloud
+   - Advanced routing rules
+   - Performance tuning guides
 
-### Best Practices
+4. **Create tutorials**
+   - Video walkthroughs
+   - Step-by-step guides
+   - Troubleshooting scenarios
 
-- Search existing issues before creating new ones
-- Provide clear, detailed descriptions in all communications
-- Be patient and respectful in all interactions
-- Help others when possible
+## 🙏 Recognition
 
-### Recognition
+Contributors are recognized through:
+- GitHub contributor stats
+- Acknowledgment in release notes
+- Credit in documentation updates
 
-Contributors will be recognized through:
+## ❓ Questions?
 
-- Acknowledgment in release notes for significant contributions
-- Contributor listings in project documentation
-- GitHub contributor statistics
+- Check existing [issues](https://github.com/your-org/Cribl-Microsoft/issues)
+- Review the [documentation](./Azure/CustomDeploymentTemplates/DCR-Automation/README.md)
+- Create a new issue with the "question" label
 
-## Questions and Support
+---
 
-If you have questions about contributing:
-
-1. Check the existing documentation and issues
-2. Create a new issue with the "question" label
-3. Reach out through GitHub discussions
-
-Thank you for your interest in contributing to Cribl-Microsoft! Your contributions help make this project better for the entire community.
+Thank you for contributing to Cribl-Microsoft! Your contributions help organizations efficiently integrate Cribl Stream with Azure Log Analytics.
