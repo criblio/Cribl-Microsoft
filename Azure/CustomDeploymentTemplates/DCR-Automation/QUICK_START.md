@@ -27,7 +27,7 @@ Edit `azure-parameters.json` with your Azure details:
 
 **Note:** The `tenantId`, `clientId`, and `clientSecret` are for Cribl Stream destination creation.
 
-## 2️⃣ Review Table Lists
+## 2️⃣ Review and Update Table Lists
 
 **Native Tables** (`NativeTableList.json`):
 ```json
