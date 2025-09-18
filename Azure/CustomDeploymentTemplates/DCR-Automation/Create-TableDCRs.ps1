@@ -491,8 +491,9 @@ function Get-LogAnalyticsTableSchema {
             # For custom tables, check _CL variant first
             $tableVariants = @("${TableName}_CL", $TableName, "Microsoft-$TableName")
         } else {
-            # For native tables, check Microsoft- prefix first
-            $tableVariants = @("Microsoft-$TableName", "${TableName}_CL", $TableName)
+            # For native tables, ONLY check Microsoft- prefix and exact name
+            # DO NOT check _CL variant to avoid collision with custom tables
+            $tableVariants = @("Microsoft-$TableName", $TableName)
         }
         
         foreach ($variant in $tableVariants) {
@@ -502,6 +503,12 @@ function Get-LogAnalyticsTableSchema {
             try {
                 $response = Invoke-RestMethod -Uri $uri -Method GET -Headers $headers -ErrorAction Stop
                 if ($response) {
+                    # Check for potential collision
+                    if (-not $CustomTableMode -and $variant -ne $TableName -and $variant.EndsWith("_CL")) {
+                        Write-Warning "  Potential collision: Found custom table '$variant' while looking for native table '$TableName'"
+                        Write-Warning "  This should not happen - native table mode should not find _CL tables"
+                        continue  # Skip this variant and continue looking
+                    }
                     Write-Host "  Debug: Found table schema for $variant" -ForegroundColor Gray
                     
                     # Debug the schema structure
@@ -531,6 +538,14 @@ function Get-LogAnalyticsTableSchema {
                 # Table variant doesn't exist, continue checking
                 continue
             }
+        }
+        
+        # If we get here, no table was found
+        if (-not $CustomTableMode) {
+            Write-Host "  Debug: Native table not found. Checked variants: $($tableVariants -join ', ')" -ForegroundColor Yellow
+            Write-Host "  Note: Custom table with similar name (${TableName}_CL) will NOT be used for native table processing" -ForegroundColor Yellow
+        } else {
+            Write-Host "  Debug: Custom table not found. Checked variants: $($tableVariants -join ', ')" -ForegroundColor Yellow
         }
         
         return @{
@@ -624,8 +639,18 @@ function Get-TableColumns {
     } else {
         # For native tables, try standardColumns first, then columns
         if ($TableSchema -and $TableSchema.standardColumns) {
-            Write-Host "  Debug: Native table - using .standardColumns property" -ForegroundColor Magenta
-            $schemaColumns = $TableSchema.standardColumns
+            # Additional safety check: if standardColumns only has TenantId, this might be a custom table
+            $standardColCount = @($TableSchema.standardColumns).Count
+            if ($standardColCount -eq 1 -and $TableSchema.standardColumns[0].name -eq "TenantId" -and $TableSchema.columns) {
+                Write-Warning "  Detected possible custom table schema (only TenantId in standardColumns)"
+                Write-Warning "  This might indicate the wrong table was retrieved. Verify table name."
+                # Use columns instead for native tables if standardColumns seems wrong
+                Write-Host "  Debug: Native table - using .columns property due to suspicious standardColumns" -ForegroundColor Yellow
+                $schemaColumns = $TableSchema.columns
+            } else {
+                Write-Host "  Debug: Native table - using .standardColumns property" -ForegroundColor Magenta
+                $schemaColumns = $TableSchema.standardColumns
+            }
         } elseif ($TableSchema -and $TableSchema.columns) {
             Write-Host "  Debug: Native table - using .columns property (fallback)" -ForegroundColor Magenta
             $schemaColumns = $TableSchema.columns
