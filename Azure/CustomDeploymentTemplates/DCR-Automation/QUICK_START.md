@@ -15,21 +15,124 @@ Edit `azure-parameters.json` with your Azure details:
   "workspaceName": "your-workspace-name",
   "location": "eastus",
   "dcrPrefix": "dcr-",
-  "dcrSuffix": "",
-  "dceResourceGroupName": "your-rg-name",
-  "dcePrefix": "dce-",
-  "dceSuffix": "",
   "tenantId": "your-tenant-id",
   "clientId": "your-app-client-id",
   "clientSecret": "your-app-secret"
 }
 ```
 
-**Note:** The `tenantId`, `clientId`, and `clientSecret` are for Cribl Stream destination creation.
+**Note:** The `tenantId`, `clientId`, and `clientSecret` are required for Cribl Stream integration.
 
-## 2️⃣ Review and Update Table Lists
+## 2️⃣ Connect to Azure
 
-**Native Tables** (`NativeTableList.json`):
+```powershell
+Connect-AzAccount
+Set-AzContext -Subscription "Your-Subscription-Name"  # If multiple subscriptions
+```
+
+## 3️⃣ Launch the Interactive Menu
+
+```powershell
+.\Run-DCRAutomation.ps1
+```
+
+You'll see an interactive menu like this:
+
+```
+============================================================
+         DCR AUTOMATION DEPLOYMENT MENU
+============================================================
+⚠️  IMPORTANT: Ensure azure-parameters.json is updated!
+
+📍 Current Configuration:
+   Workspace: your-workspace-name
+   Resource Group: your-rg-name
+   DCR Mode: Direct
+
+📋 DEPLOYMENT OPTIONS:
+
+  [1] ⚡ Quick Deploy (Operational Parameters)
+      ➤ Deploy both Native + Custom tables using current settings
+  --------------------------------------------------------
+  [2] Deploy DCR (Native Direct)
+  [3] Deploy DCR (Native w/DCE)
+  [4] Deploy DCR (Custom Direct)
+  [5] Deploy DCR (Custom w/DCE)
+  --------------------------------------------------------
+  [Q] Quit
+============================================================
+
+Select an option:
+```
+
+## 4️⃣ Menu Options Explained
+
+### Option 1: Quick Deploy ⚡ (Recommended for First Time)
+- Deploys BOTH native and custom tables
+- Uses settings from `operation-parameters.json`
+- Default: Direct DCRs (simpler, cost-effective)
+- **Best for:** Getting started quickly
+
+### Option 2: Native Tables - Direct DCRs
+- Deploys: CommonSecurityLog, SecurityEvent, Syslog, WindowsEvent
+- Creates Direct DCRs (no DCE required)
+- **Best for:** Standard Sentinel tables
+
+### Option 3: Native Tables - DCE-based DCRs
+- Same tables as Option 2
+- Creates DCE + DCRs (for private endpoints)
+- **Best for:** Private network scenarios
+
+### Option 4: Custom Tables - Direct DCRs
+- Deploys custom tables from `CustomTableList.json`
+- Tables must end with `_CL` suffix
+- **Best for:** Custom application logs
+
+### Option 5: Custom Tables - DCE-based DCRs
+- Same as Option 4 but with DCE
+- **Best for:** Custom tables with private endpoints
+
+## 5️⃣ Deployment Workflow
+
+1. **Select an option** (e.g., press `1` for Quick Deploy)
+2. **Review confirmation** showing what will be deployed
+3. **Type `Y`** to proceed or `N` to cancel
+4. **Watch progress** as DCRs are created
+5. **Cribl config automatically exported** to `cribl-dcr-configs\`
+
+## 6️⃣ After Deployment
+
+### View Cribl Configuration
+The menu automatically exports configuration. To generate individual Cribl destinations:
+
+```powershell
+.\Generate-CriblDestinations.ps1
+```
+
+### Files Created
+- `cribl-dcr-configs\cribl-dcr-config.json` - Main configuration
+- `cribl-dcr-configs\destinations\*.json` - Individual Cribl destinations
+- `generated-templates\*.json` - ARM templates (for reference)
+
+## 7️⃣ Advanced Usage (Command-Line Mode)
+
+For automation/scripting, bypass the menu:
+
+```powershell
+# Deploy without menu interaction
+.\Run-DCRAutomation.ps1 -NonInteractive -Mode DirectBoth
+
+# Generate templates only
+.\Run-DCRAutomation.ps1 -NonInteractive -Mode TemplateOnly
+
+# Deploy specific table type
+.\Run-DCRAutomation.ps1 -NonInteractive -Mode DirectNative
+```
+
+## 📝 Table Configuration
+
+### Native Tables (Pre-configured)
+Edit `NativeTableList.json`:
 ```json
 [
     "CommonSecurityLog",
@@ -39,105 +142,65 @@ Edit `azure-parameters.json` with your Azure details:
 ]
 ```
 
-**Custom Tables** (`CustomTableList.json`):
+### Custom Tables (Your Applications)
+Edit `CustomTableList.json`:
 ```json
 [
     "CloudFlare_CL",
     "MyCustomApp_CL"
 ]
 ```
+**Important:** Custom tables must end with `_CL` suffix
 
-## 3️⃣ Connect to Azure
+### Custom Table Schemas
+If a custom table doesn't exist in Azure, create a schema file:
+`custom-table-schemas\MyCustomApp_CL.json`
 
-```powershell
-Connect-AzAccount
-Set-AzContext -Subscription "Your-Subscription-Name"  # If multiple subscriptions
+```json
+{
+  "description": "My application logs",
+  "retentionInDays": 30,
+  "columns": [
+    {"name": "TimeGenerated", "type": "datetime"},
+    {"name": "Message", "type": "string"},
+    {"name": "Level", "type": "string"}
+  ]
+}
 ```
 
-## 4️⃣ View Available Commands
+## 🎯 Quick Decision Guide
 
-```powershell
-.\Run-DCRAutomation.ps1
-```
+| Scenario | Choose Option |
+|----------|--------------|
+| **First time setup** | Option 1 (Quick Deploy) |
+| **Just need Sentinel tables** | Option 2 (Native Direct) |
+| **Have custom applications** | Option 4 (Custom Direct) |
+| **Need private endpoints** | Options 3 or 5 (with DCE) |
+| **Want to review first** | Run with `-NonInteractive -Mode TemplateOnly` |
 
-This displays:
-- Current configuration status
-- Available deployment modes
-- All command options
-
-## 5️⃣ Common Commands
-
-### Test First (Recommended)
-```powershell
-# Generate templates without deploying
-.\Run-DCRAutomation.ps1 -Mode TemplateOnly -DCRMode Direct
-```
-
-### Deploy Direct DCRs (Simple & Cost-Effective)
-```powershell
-# Native tables only
-.\Run-DCRAutomation.ps1 -Mode DirectNative
-
-# Custom tables only
-.\Run-DCRAutomation.ps1 -Mode DirectCustom
-
-# Both native and custom
-.\Run-DCRAutomation.ps1 -Mode DirectBoth
-```
-
-### Deploy DCE-based DCRs (Private End-Points)
-```powershell
-# Native tables with DCE
-.\Run-DCRAutomation.ps1 -Mode DCENative
-
-# Custom tables with DCE
-.\Run-DCRAutomation.ps1 -Mode DCECustom
-
-# Both with DCE
-.\Run-DCRAutomation.ps1 -Mode DCEBoth
-```
-
-### Cribl Configuration Management
-```powershell
-# Collect config from existing DCRs
-.\Run-DCRAutomation.ps1 -Mode CollectCribl
-
-# Validate Cribl configuration
-.\Run-DCRAutomation.ps1 -Mode ValidateCribl
-```
-
-## 6️⃣ Cribl Integration
-
-After deployment, Cribl configuration is **automatically exported** to:
-`cribl-dcr-configs\cribl-dcr-config.json`
-
-To generate individual Cribl destination configs:
-```powershell
-.\Generate-CriblDestinations.ps1
-```
-
-## 📝 Key Notes
-
-- **Direct DCRs**: 30-character name limit (auto-abbreviated)
-- **DCE-based DCRs**: 64-character name limit
-- **Custom tables**: Need schema files in `custom-table-schemas\` if not in Azure
-- **Default behavior**: Automatically exports Cribl config after deployment
-
-## ❓ Help
-
-For detailed documentation, see:
-- `README.md` - Full documentation
-- `CRIBL_DESTINATIONS_README.md` - Cribl destination configuration
-
-## 🔧 Quick Troubleshooting
+## 🔧 Troubleshooting
 
 | Issue | Solution |
 |-------|----------|
-| "Table not found" | Check table name spelling in list files |
-| "DCR name too long" | Script auto-abbreviates, check output |
-| "Authentication failed" | Run `Connect-AzAccount` |
-| "Custom table missing" | Create schema in `custom-table-schemas\` |
+| **Menu doesn't appear** | Check PowerShell execution policy: `Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser` |
+| **"Table not found"** | Verify table exists in Azure or create schema file |
+| **"DCR name too long"** | Script auto-abbreviates names |
+| **"Access denied"** | Check Azure permissions and `Connect-AzAccount` |
+| **Custom table collision** | Rename custom table to avoid native table names |
+
+## ✅ Success Indicators
+
+After successful deployment, you'll see:
+- ✅ **DCRs created** message for each table
+- 📦 **Cribl configuration exported** notification
+- 🔗 **Integration details** (DCR IDs, endpoints, stream names)
+
+## 📚 Additional Resources
+
+- **Full Documentation:** `README.md`
+- **Cribl Setup:** `CRIBL_DESTINATIONS_README.md`
+- **Direct Support:** Check script output for specific error messages
 
 ---
 
-**Start here:** `.\Run-DCRAutomation.ps1` to see all options and current configuration
+**🎉 Ready to start?** Run `.\Run-DCRAutomation.ps1` and select Option 1 for Quick Deploy!

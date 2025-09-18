@@ -1,9 +1,10 @@
 # Azure Data Collection Rules Automation for Cribl Integration
 
-This PowerShell automation system streamlines the deployment of Azure Data Collection Rules (DCRs) for integrating Cribl Stream with Azure Log Analytics/Microsoft Sentinel. It supports both native and custom tables, with automatic Cribl configuration export.
+This PowerShell automation system streamlines the deployment of Azure Data Collection Rules (DCRs) for integrating Cribl Stream with Azure Log Analytics/Microsoft Sentinel. Features an **interactive menu interface** for easy deployment, supporting both native and custom tables with automatic Cribl configuration export.
 
 ## 🚀 Key Features
 
+- **Interactive Menu System**: User-friendly interface with deployment confirmations
 - **Unified Solution**: Single system handles both DCE-based and Direct DCRs
 - **Dual Table Support**: Processes both native Azure tables and custom tables (_CL suffix)
 - **Automatic Cribl Export**: By default, exports configuration for Cribl Stream integration
@@ -11,6 +12,7 @@ This PowerShell automation system streamlines the deployment of Azure Data Colle
 - **Smart Schema Management**: Automatically retrieves schemas from Azure or uses local definitions
 - **Intelligent Naming**: Auto-abbreviates names for Azure's 30-character limit on Direct DCRs
 - **Cribl Destination Generation**: Creates ready-to-import Cribl Stream destination configs
+- **Table Collision Detection**: Prevents conflicts between native and custom tables with similar names
 
 ## 📁 File Structure
 
@@ -99,6 +101,7 @@ DCR-Automation/
 ### 1. Configure Azure Settings
 ```powershell
 # Edit azure-parameters.json with your values
+notepad azure-parameters.json
 ```
 
 ### 2. Connect to Azure
@@ -106,41 +109,71 @@ DCR-Automation/
 Connect-AzAccount
 ```
 
-### 3. View Available Commands
+### 3. Launch Interactive Menu
 ```powershell
 .\Run-DCRAutomation.ps1
 ```
 
-### 4. Deploy DCRs
-```powershell
-# Test with templates first
-.\Run-DCRAutomation.ps1 -Mode TemplateOnly -DCRMode Direct
-
-# Deploy Direct DCRs (recommended)
-.\Run-DCRAutomation.ps1 -Mode DirectBoth
-
-# Or deploy DCE-based DCRs
-.\Run-DCRAutomation.ps1 -Mode DCEBoth
+### 4. Interactive Menu Options
+The script presents an easy-to-use menu:
 ```
+============================================================
+         DCR AUTOMATION DEPLOYMENT MENU
+============================================================
+⚠️  IMPORTANT: Ensure azure-parameters.json is updated!
+
+📍 Current Configuration:
+   Workspace: your-workspace
+   Resource Group: your-rg
+   DCR Mode: Direct
+
+📋 DEPLOYMENT OPTIONS:
+
+  [1] ⚡ Quick Deploy (Operational Parameters)
+      ➤ Deploy both Native + Custom tables using current settings
+  --------------------------------------------------------
+  [2] Deploy DCR (Native Direct)
+  [3] Deploy DCR (Native w/DCE)
+  [4] Deploy DCR (Custom Direct)
+  [5] Deploy DCR (Custom w/DCE)
+  --------------------------------------------------------
+  [Q] Quit
+============================================================
+
+Select an option: _
+```
+
+### 5. Deployment Options
+- **Option 1**: Quick deploy using settings from operation-parameters.json
+- **Options 2-5**: Targeted deployment for specific table types and DCR modes
+- The menu will confirm your selection before deployment
 
 ## 🚀 Usage Examples
 
-### Basic Commands
+### Interactive Menu (Recommended)
 ```powershell
-# View status and available commands
+# Launch interactive menu
 .\Run-DCRAutomation.ps1
 
+# Menu will display:
+# - Current configuration
+# - Available deployment options
+# - Confirmation prompts before deployment
+```
+
+### Command-Line Mode (Advanced)
+```powershell
+# Bypass menu for automation/scripting
+.\Run-DCRAutomation.ps1 -NonInteractive -Mode DirectBoth
+
 # Deploy native tables with Direct DCRs
-.\Run-DCRAutomation.ps1 -Mode DirectNative
+.\Run-DCRAutomation.ps1 -NonInteractive -Mode DirectNative
 
 # Deploy custom tables with Direct DCRs
-.\Run-DCRAutomation.ps1 -Mode DirectCustom
-
-# Deploy all tables
-.\Run-DCRAutomation.ps1 -Mode DirectBoth
+.\Run-DCRAutomation.ps1 -NonInteractive -Mode DirectCustom
 
 # Generate templates only (no deployment)
-.\Run-DCRAutomation.ps1 -Mode TemplateOnly
+.\Run-DCRAutomation.ps1 -NonInteractive -Mode TemplateOnly
 ```
 
 ### Advanced Usage
@@ -173,12 +206,26 @@ Connect-AzAccount
 ## 📋 Script Parameters
 
 ### Run-DCRAutomation.ps1
-| Parameter | Options | Description |
-|-----------|---------|-------------|
-| Mode | Status, Native, Custom, Both, TemplateOnly, DirectNative, DirectCustom, DirectBoth, DCENative, DCECustom, DCEBoth, CollectCribl, ValidateCribl | Operation mode |
-| DCRMode | Direct, DCE, Current | Override DCR type |
-| ShowCriblConfig | Switch | Display Cribl config during deployment |
-| SkipCriblExport | Switch | Skip automatic config export |
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| -NonInteractive | Switch | Bypass menu for automation/scripting |
+| -Mode | String | Operation mode (required with NonInteractive) |
+| -ShowCriblConfig | Switch | Display Cribl config during deployment |
+| -ExportCriblConfig | Switch | Export Cribl config (default: true) |
+| -SkipCriblExport | Switch | Skip automatic config export |
+
+**Mode Options:**
+- `DirectNative` - Deploy native tables with Direct DCRs
+- `DirectCustom` - Deploy custom tables with Direct DCRs
+- `DirectBoth` - Deploy all tables with Direct DCRs
+- `DCENative` - Deploy native tables with DCE-based DCRs
+- `DCECustom` - Deploy custom tables with DCE-based DCRs
+- `DCEBoth` - Deploy all tables with DCE-based DCRs
+- `TemplateOnly` - Generate templates without deployment
+- `Status` - Show current configuration
+- `CollectCribl` - Collect config from existing DCRs
+- `ValidateCribl` - Validate Cribl configuration
+- `ResetCribl` - Reset Cribl configuration
 
 ### Create-TableDCRs.ps1
 | Parameter | Type | Description |
@@ -348,15 +395,20 @@ $env:AZURE_CLIENT_SECRET = "your-secret"
 ## 🎉 Summary
 
 This automation system provides:
+- ✅ **Interactive menu interface** for guided deployment (default behavior)
 - ✅ **Unified approach** for both DCE and Direct DCRs
 - ✅ **Automatic Cribl integration** with configuration export
 - ✅ **Custom table support** with schema management
 - ✅ **Template generation** for CI/CD pipelines
 - ✅ **Intelligent handling** of Azure naming limits
 - ✅ **Comprehensive error handling** and user guidance
+- ✅ **Table collision prevention** for native/custom conflicts
 
 ---
 
-**Getting Started:** Run `.\Run-DCRAutomation.ps1` to see all options and begin deployment.
+**Getting Started:** Simply run `.\Run-DCRAutomation.ps1` to launch the interactive menu.
+
+- **Interactive Mode (Default):** `.\Run-DCRAutomation.ps1` - Opens menu interface
+- **Command-Line Mode:** `.\Run-DCRAutomation.ps1 -NonInteractive -Mode [option]` - For automation
 
 For quick setup, see `QUICK_START.md`. For Cribl destination details, see `CRIBL_DESTINATIONS_README.md`.
