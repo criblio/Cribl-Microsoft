@@ -1,249 +1,102 @@
-# Migrating Custom Tables from Cribl Azure Monitor Destination to Cribl Sentinel Destination
+# Migrating Cribl from Azure Monitor to Sentinel Destination
 
 ## Executive Summary
 
-Microsoft is retiring the HTTP Data Collector API on **September 14, 2026**. This API is used by Cribl's Azure Monitor destination to send data to custom tables (_CL suffix) in Log Analytics workspaces. This guide provides a streamlined migration path to transition custom tables to the modern Azure Logs Ingestion API via the Sentinel destination.
+Microsoft is retiring the HTTP Data Collector API on **September 14, 2026**. This affects custom tables (_CL suffix) using the Cribl Azure Monitor destination. This guide provides a step-by-step guide with **DCR Automation solution** as the primary migration path to the modern Sentinel destination using Azure Logs Ingestion API.
+
+## 🚀 Quick Migration Path
+
+ Use the **DCR Automation Tool**
+
+```bash
+# 1. Get the automation tool
+git clone https://github.com/criblio/Cribl-Microsoft.git
+cd Cribl-Microsoft/Azure/CustomDeploymentTemplates/DCR-Automation
+
+# 2. Important: Read the QUICK_START.md file first and Configure files
+Cribl-Microsoft/Azure/CustomDeploymentTemplates/DCR-Automation/QUICK_START.md
+#Update/Review
+azure-parameters.json
+NativeTableList.json
+CustomTableList.json
+
+# 3. Run
+.\Run-DCRAutomation.ps1
+# Select [4] for Custom Tables with Direct DCRs
+
+# 4. Review and copy Cribl configs from cribl-dcr-configs/destinations/
+```
 
 ## Why This Migration is Required
 
-**This migration only affects custom tables** (those ending with _CL) that were created using the deprecated HTTP Data Collector API. The new Logs Ingestion API provides:
-
-- **Enhanced Security**: OAuth-based authentication replaces shared keys
-- **Data Transformations**: Filter and modify data before ingestion using KQL
-- **Granular RBAC**: Fine-grained access control with Azure AD
-- **Schema Control**: Prevents accidental column creation
-- **Better Performance**: Optimized data ingestion pipeline
+**Custom Type**: `Custom table (Classic)` need migration prior to the retirement of the HTTP Log Ingestion API. The new Logs Ingestion API provides:
+- **Enhanced Security**: OAuth-based authentication vs shared keys
+- **Data Transformations**: KQL-based filtering and modification
+- **Granular RBAC**: Fine-grained access control
+- **Schema Control**: Prevents uncontrolled column creation
+- **Better Performance**: Optimized ingestion pipeline
 
 ## Prerequisites
 
-Before starting:
-1. **Log Analytics workspace** with contributor rights
-2. **Azure permissions** to create Data Collection Rules (DCRs)
-3. **PowerShell 5.1+** with Azure PowerShell modules
-4. **Cribl Stream** with existing Azure Monitor destinations sending to custom tables
-5. **Clone the automation repository**:
+1. **Azure Environment**:
+   - Log Analytics workspace with contributor rights
+   - Permissions to create Data Collection Rules (DCRs)
+   - PowerShell 5.1+ with Az PowerShell modules
+   - Ability to execute Powershell (Exceution Policy Override) to interact with Azure objects
+
+2. **Cribl Environment**:
+   - Cribl Stream with existing Azure Monitor destinations
+   - Custom tables using Azure Monitor Tile
+
+3. **DCR Automation Tool**:
    ```bash
    git clone https://github.com/criblio/Cribl-Microsoft.git
    cd Cribl-Microsoft/Azure/CustomDeploymentTemplates/DCR-Automation
    ```
 
-## Critical Understanding: MMA Tables vs DCR-Based Tables
+## How DCR Automation Handles Table Migration
 
-### The Two-Step Process
+**✅ AUTOMATED**: The DCR Automation tool now automatically handles table migration!
 
-**IMPORTANT:** You cannot create DCRs for MMA-based custom tables directly. The migration requires two steps:
+### What the Automation Does
+1. **Detects table types** automatically (Classic vs Modern)
+2. **Migrates Classic tables to DCR-based** when needed
+3. **Creates DCRs** for all compatible tables
+4. **Exports Cribl configurations** ready for import
 
-1. **Convert MMA tables to DCR-based tables** (enables dual API support)
-2. **Create DCRs for the converted tables** (using the automation)
+### Table Types (Handled Automatically)
+| Type | Old API | New API | Automation Action |
+|------|---------|---------|-------------------|
+| **Custom Table (Classic)** | ✅ | ❌ | ✅ Auto-migrates to DCR-based |
+| **Custom Table** | ✅ (until 2026) | ✅ | ✅ Creates DCRs directly |
 
-### Table Types Explained
+## Step-by-Step Migration
 
-| Table Type | Description | Accepts Old API | Accepts New API | Can Create DCR |
-|------------|-------------|-----------------|-----------------|----------------|
-| **MMA-Only** | Original custom tables | ✅ Yes | ❌ No | ❌ No |
-| **DCR-Based** | Converted/new tables | ✅ Yes (until 2026) | ✅ Yes | ✅ Yes |
+### Step 1: Inventory Custom Tables
 
-### Migration Options
-
-**Option 1: Convert Existing Tables (In-Place)**
-- Convert existing MMA tables to DCR-based
-- Keep same table names
-- No query/dashboard updates needed
-- Both APIs work during transition
-
-**Option 2: Create New Tables (Side-by-Side)**
-- Create new DCR-based tables with different names
-- Run both old and new tables in parallel
-- Requires updating all queries/dashboards
-- Cleaner migration but more work
-
-## Step-by-Step Migration Guide
-
-### Step 1: Inventory Your Custom Tables
-
-Identify which custom tables need migration:
-
-1. **Navigate to Azure Portal** → Search for "Log Analytics workspaces"
-2. **Select your workspace**
-3. **Click on "Tables"** in the left menu
-4. **Identify MMA custom tables**:
-   - Type = "Custom table (classic)"
-   - Names ending with "_CL"
-   - Plan = "Basic" or missing (these are MMA-only)
-
-**PowerShell to check table status:**
-```powershell
-Connect-AzAccount
-Set-AzContext -SubscriptionId "your-subscription-id"
-
-# Check which tables are MMA-only
-$tables = Get-AzOperationalInsightsTable `
-    -ResourceGroupName "your-resource-group" `
-    -WorkspaceName "your-workspace"
-
-$customTables = $tables | Where-Object { $_.Name -like "*_CL" }
-
-foreach ($table in $customTables) {
-    $status = if ($table.Properties.plan -eq "Analytics") { 
-        "DCR-Ready" 
-    } else { 
-        "MMA-Only (needs conversion)" 
-    }
-    Write-Host "$($table.Name): $status"
-}
-```
+In Azure Portal → Log Analytics → Tables:
+- Filter by `_CL` or Custom type
+- Note table names for configuration
+- **Type** column reference:
+  - **"Custom Table"** = ✅ Ready for DCR creation
+  - **"Custom Table (Classic)"** = ✅ Will be auto-migrated by automation
 
 ### Step 2: Create Azure App Registration
 
-Create an app registration for authentication:
-
-1. **Navigate to Azure Active Directory** in Azure Portal
-2. **Click "App registrations"** → **"+ New registration"**
-3. **Configure:**
+1. **Azure Active Directory** → **App registrations** → **New registration**
+2. Configure:
    - Name: `cribl-sentinel-connector`
-   - Account types: "Single tenant"
-4. **Save these values:**
-   - Application (client) ID
-   - Directory (tenant) ID
-5. **Create secret:**
-   - Click "Certificates & secrets" → "+ New client secret"
-   - **COPY THE SECRET VALUE IMMEDIATELY**
+   - Single tenant
+3. Save: Application ID, Directory ID
+4. Create client secret and **copy immediately**
 
-### Step 3: Convert MMA Tables to DCR-Based Tables
-
-**⚠️ CRITICAL STEP: This must be done BEFORE creating DCRs**
-
-Create and run this PowerShell script to convert your MMA tables:
-
-```powershell
-function Convert-MMATableToDCRBased {
-    param(
-        [Parameter(Mandatory=$true)]
-        [ValidatePattern(".*_CL$")]
-        [string]$TableName,
-        
-        [Parameter(Mandatory=$true)]
-        [string]$WorkspaceName,
-        
-        [Parameter(Mandatory=$true)]
-        [string]$ResourceGroupName
-    )
-    
-    Write-Host "Converting $TableName to DCR-based..." -ForegroundColor Yellow
-    
-    try {
-        # Get workspace
-        $workspace = Get-AzOperationalInsightsWorkspace `
-            -ResourceGroupName $ResourceGroupName `
-            -Name $WorkspaceName
-        
-        # Get existing table
-        $table = Get-AzOperationalInsightsTable `
-            -ResourceGroupName $ResourceGroupName `
-            -WorkspaceName $WorkspaceName `
-            -TableName $TableName
-        
-        if ($table.Properties.plan -eq "Analytics") {
-            Write-Host "✅ $TableName is already DCR-based" -ForegroundColor Green
-            return
-        }
-        
-        # Query schema
-        $schemaQuery = "$TableName | getschema | project ColumnName, DataType"
-        $schema = Invoke-AzOperationalInsightsQuery `
-            -WorkspaceId $workspace.CustomerId `
-            -Query $schemaQuery
-        
-        # Build columns
-        $columns = @()
-        foreach ($col in $schema.Results) {
-            $type = switch ($col.DataType) {
-                'System.String' { 'string' }
-                'System.Int32' { 'int' }
-                'System.Int64' { 'long' }
-                'System.Double' { 'real' }
-                'System.Boolean' { 'boolean' }
-                'System.DateTime' { 'datetime' }
-                default { 'string' }
-            }
-            $columns += @{
-                name = $col.ColumnName
-                type = $type
-            }
-        }
-        
-        # Update table to DCR-based
-        $tableUpdate = @{
-            properties = @{
-                schema = @{
-                    name = $TableName
-                    columns = $columns
-                }
-                retentionInDays = $table.Properties.retentionInDays
-                plan = "Analytics"  # This makes it DCR-based
-            }
-        }
-        
-        # Apply update via REST API
-        $subscriptionId = (Get-AzContext).Subscription.Id
-        $resourceId = "/subscriptions/$subscriptionId/resourceGroups/$ResourceGroupName/providers/Microsoft.OperationalInsights/workspaces/$WorkspaceName/tables/$TableName"
-        
-        $token = (Get-AzAccessToken -ResourceUrl "https://management.azure.com/").Token
-        $headers = @{
-            'Authorization' = "Bearer $token"
-            'Content-Type' = 'application/json'
-        }
-        
-        $uri = "https://management.azure.com$resourceId`?api-version=2022-10-01"
-        $body = $tableUpdate | ConvertTo-Json -Depth 10
-        
-        Invoke-RestMethod -Uri $uri -Method PUT -Headers $headers -Body $body
-        
-        Write-Host "✅ $TableName converted to DCR-based successfully!" -ForegroundColor Green
-        Write-Host "   - Can now accept both old and new API" -ForegroundColor Gray
-        Write-Host "   - Schema is now fixed" -ForegroundColor Gray
-        
-    } catch {
-        Write-Error "Failed to convert $TableName : $_"
-    }
-}
-
-# Convert your tables
-$tablesToConvert = @(
-    "FirewallLogs_CL",
-    "ApplicationMetrics_CL",
-    "CloudFlare_CL"
-)
-
-foreach ($table in $tablesToConvert) {
-    Convert-MMATableToDCRBased `
-        -TableName $table `
-        -WorkspaceName "your-workspace" `
-        -ResourceGroupName "your-resource-group"
-    
-    Start-Sleep -Seconds 2  # Avoid throttling
-}
-```
-
-**What this conversion does:**
-- ✅ Enables the table to accept DCR-based ingestion
-- ✅ Maintains compatibility with old HTTP Data Collector API
-- ✅ Preserves all existing data
-- ✅ Fixes the schema (no more dynamic columns)
-
-### Step 4: Configure Automation Parameters
-
-After converting tables, configure the automation:
-
-```powershell
-cd Cribl-Microsoft/Azure/CustomDeploymentTemplates/DCR-Automation
-```
+### Step 3: Configure DCR Automation
 
 Edit `azure-parameters.json`:
 ```json
 {
   "resourceGroupName": "your-rg-name",
-  "workspaceName": "your-la-workspace",
+  "workspaceName": "your-workspace",
   "location": "eastus",
   "dcrPrefix": "dcr-cribl-",
   "tenantId": "your-tenant-id",
@@ -252,231 +105,125 @@ Edit `azure-parameters.json`:
 }
 ```
 
-### Step 5: Configure Table Lists
-
-Update `CustomTableList.json` with your **custom DCR based** table names:
+Edit `CustomTableList.json` with **your custom tables** (automation handles migration):
 ```json
 [
     "FirewallLogs_CL",
-    "ApplicationMetrics_CL",
+    "ApplicationLogs_CL",
     "CloudFlare_CL"
 ]
 ```
 
-**IMPORTANT:** Only include tables that already are or have been converted to DCR-based in Step 3.
-
-### Step 6: Define Schemas (Only for NEW Tables)
-
-The automation automatically captures schemas for:
--  **Converted DCR-based tables** (from Step 3)
--  **Existing DCR-based tables**
-
-You only need to create schema files for:
--  **Brand new tables** that don't exist yet
-
-If creating new tables, add schema files to `custom-table-schemas/NewTableName_CL.json`
-
-### Step 7: Create DCRs Using Automation
-
-Now that tables are DCR-based, create the DCRs:
+### Step 4: Run DCR Automation (Handles Migration + DCR Creation)
 
 ```powershell
 # Connect to Azure
 Connect-AzAccount
-Set-AzContext -SubscriptionId "your-subscription-id"
 
-# Run automation to create DCRs
+# Option 1: Interactive Menu (Recommended)
+.\Run-DCRAutomation.ps1
+# Select [4] "Deploy DCR (Custom Direct)"
+
+# Option 2: Command Line
 .\Run-DCRAutomation.ps1 -Mode DirectCustom
-
-# This will:
-# 1. Detect the DCR-based tables
-# 2. Capture their schemas automatically
-# 3. Create DCRs for each table
-# 4. Automatically export Cribl configurations to cribl-dcr-configs/
-# 5. Generate individual destination files in cribl-dcr-configs/destinations/
 ```
 
-**Verify DCR creation:**
-```powershell
-# Check created DCRs
-Get-AzDataCollectionRule -ResourceGroupName "your-resource-group" | 
-    Where-Object { $_.Name -like "dcr-cribl-*" } | 
-    Format-Table Name, Location, ProvisioningState
-```
+**What this does automatically**:
+- ✅ Detects table types (Classic vs Modern)
+- ✅ Migrates Classic tables to DCR-based format
+- ✅ Captures schemas from Azure
+- ✅ Creates DCRs for each table
+- ✅ Exports Cribl configurations to `cribl-dcr-configs/`
+- ✅ Generates individual destination files
 
-### Step 8: Assign Permissions
+### Step 5: Assign DCR Permissions
 
-Grant your app registration permissions on each DCR:
+Grant app registration access to each DCR from the portal or through your standard change process.
 
-**Via Portal:**
-1. Navigate to each DCR in Azure Portal
-2. Click "Access control (IAM)"
-3. Add role assignment: "Monitoring Metrics Publisher"
-4. Assign to your app registration
+### Step 6: Configure Cribl Stream
 
-**Via PowerShell:**
-```powershell
-$appId = "your-app-client-id"
-$sp = Get-AzADServicePrincipal -ApplicationId $appId
+1. **Import Destination Configs**:
+   - Navigate to **Manage** → **Data** → **Destinations**
+   - Add **Microsoft Sentinel** destination for each table
+   - Use configs from `cribl-dcr-configs/destinations/`
+   - Update secret in Authorization section with your App registration secret
 
-$dcrs = Get-AzDataCollectionRule -ResourceGroupName "your-resource-group" | 
-        Where-Object { $_.Name -like "dcr-cribl-*" }
+2. **Update Pipelines**: 
+**Critical Step**: The output from Cribl must match the DCR schema for data to be accepted
+   - Review Cribl Packs Dispensary for Examples to get started
+   - Ensure pipeline output matches DCR schema
+   - Review Cribl Packs Dispensary for Sentinel content
 
-foreach ($dcr in $dcrs) {
-    New-AzRoleAssignment `
-        -ObjectId $sp.Id `
-        -RoleDefinitionName "Monitoring Metrics Publisher" `
-        -Scope $dcr.Id
-}
-```
-
-### Step 9: Configure Cribl Stream
-
-The automation has already generated Cribl configurations in `cribl-dcr-configs/` directory.
-
-**Import configurations to Cribl Stream:**
-
-1. Navigate to **Manage** → **Data** → **Destinations**
-2. Add **Microsoft Sentinel** destination for each table
-3. Use the configuration values from:
-   - Individual destinations: `cribl-dcr-configs/destinations`
-
-### Step 10: Update Pipelines
-
-Ensure your Cribl pipelines match the DCR schema. Review the Cribl Packs Dispensary for Sentinel related content or build your own.
-
-
-### Step 11: Test and Validate
-
-Test both APIs work with your converted tables:
+### Step 7: Test and Validate
 
 ```kusto
 // Check data flow
-YourTableName_CL
+YourTable_CL
 | where TimeGenerated > ago(1h)
-| summarize 
-    EventCount = count(),
-    FirstEvent = min(TimeGenerated),
-    LastEvent = max(TimeGenerated)
-| extend Status = iff(EventCount > 0, "✅ Data flowing", "❌ No data")
+| summarize Count = count(),
+            LastRecord = max(TimeGenerated)
+| extend Status = iff(Count > 0, "✅ Data flowing", "❌ No data")
 ```
 
-### Step 12: Migration Cutover
+### Step 8: Gradual Cutover
 
-Gradually shift traffic from old to new API validating each new data source:
+- **Week 1**: Test with 10% traffic
+- **Week 2**: Increase to 50%
+- **Week 3**: Full cutover to Sentinel destinations
+- **Week 4**: Remove old Azure Monitor destinations
 
-**Week 1:** Test with 5% traffic
-**Week 2:** Increase to 50%
-**Week 3:** Full cutover to DCR-based ingestion
-**Week 4:** Remove old Azure Monitor destinations
+## DCR Automation Menu Options
+
+When running `.\Run-DCRAutomation.ps1`:
+
+```
+📋 DEPLOYMENT OPTIONS:
+  [1] ⚡ Quick Deploy (both Native + Custom)
+  [2] Deploy DCR (Native Direct)
+  [3] Deploy DCR (Native w/DCE)
+  [4] Deploy DCR (Custom Direct)     ← For custom table migration
+  [5] Deploy DCR (Custom w/DCE)      
+```
+
+**For most migrations**: Choose **[4] Custom Direct** - simplest architecture
 
 ## Troubleshooting
 
-### Common Issues
+| Issue | Solution |
+|-------|----------|
+| **"Cannot create DCR"** | Check table exists and automation has proper permissions |
+| **"Table migration failed"** | Automation will retry; ensure workspace contributor access |
+| **"No data via new API"** | Check IAM roles on DCR and app registration |
+| **"Schema mismatch"** | Update pipeline to match DCR schema |
+| **"Classic table detected"** | ✅ Normal - automation will migrate automatically |
 
-| Issue | Cause | Solution |
-|-------|-------|----------|
-| **"Cannot create DCR for table"** | Table is still MMA-only | Run conversion script from Step 3 |
-| **"Table not found"** | Table doesn't exist or wrong name | Verify table name ends with _CL |
-| **"Schema query failed"** | Table is empty | Add sample data before conversion |
-| **"No data via new API"** | Permissions missing | Check IAM roles on DCR |
-| **"Schema mismatch"** | Pipeline output doesn't match DCR | Review and update pipeline function |
 
-### Validation Checklist
+## Timeline for Migration
 
-```powershell
-# Complete validation script
-function Test-MigrationReadiness {
-    param(
-        [string]$WorkspaceName,
-        [string]$ResourceGroupName,
-        [string]$TableName
-    )
-    
-    Write-Host "Checking $TableName..." -ForegroundColor Yellow
-    
-    # 1. Check if table is DCR-based
-    $table = Get-AzOperationalInsightsTable `
-        -ResourceGroupName $ResourceGroupName `
-        -WorkspaceName $WorkspaceName `
-        -TableName $TableName
-    
-    if ($table.Properties.plan -eq "Analytics") {
-        Write-Host "✅ Table is DCR-based" -ForegroundColor Green
-    } else {
-        Write-Host "❌ Table is MMA-only - needs conversion" -ForegroundColor Red
-        return $false
-    }
-    
-    # 2. Check if DCR exists
-    $dcr = Get-AzDataCollectionRule -ResourceGroupName $ResourceGroupName | 
-           Where-Object { $_.Name -like "*$($TableName -replace '_CL','')*" }
-    
-    if ($dcr) {
-        Write-Host "✅ DCR exists: $($dcr.Name)" -ForegroundColor Green
-    } else {
-        Write-Host "❌ No DCR found - run automation" -ForegroundColor Red
-        return $false
-    }
-    
-    # 3. Check recent data
-    $query = "$TableName | where TimeGenerated > ago(1h) | count"
-    $result = Invoke-AzOperationalInsightsQuery `
-        -WorkspaceId (Get-AzOperationalInsightsWorkspace -ResourceGroupName $ResourceGroupName -Name $WorkspaceName).CustomerId `
-        -Query $query
-    
-    if ($result.Results[0].'count_' -gt 0) {
-        Write-Host "✅ Recent data found: $($result.Results[0].'count_') events" -ForegroundColor Green
-    } else {
-        Write-Host "⚠️ No recent data" -ForegroundColor Yellow
-    }
-    
-    return $true
-}
+- **Week 1**: 
+  -  Inventory tables and create app registration
+  - Run DCR automation (handles table migration + DCR creation)
+  -  Configure Cribl and test with limited traffic
+     -  Note: Pipelines will need to transform Cribl output to match table schema
+- **Week 2-3**: Gradual cutover to new destinations
+- **Before Sept 2026**: Complete migration before API retirement
 
-# Test your table
-Test-MigrationReadiness `
-    -WorkspaceName "your-workspace" `
-    -ResourceGroupName "your-resource-group" `
-    -TableName "FirewallLogs_CL"
-```
+## Key Benefits of DCR Automation
 
-## Timeline
-
-- **Step 1-3**: Convert MMA tables to DCR-based (Day 1)
-- **Step 4-9**: Create DCRs and configure Cribl (Day 2-3)
-- **Step 10-11**: Test with small traffic percentage (Week 1)
-- **Step 12**: Gradual cutover (Weeks 2-4)
-- **Complete by September 2026**: Full migration before API retirement
-
-## Quick Reference
-
-| Step | Action | Required For |
-|------|--------|--------------|
-| 1 | Inventory tables | All migrations |
-| 2 | Create app registration | All migrations |
-| **3** | **Convert MMA tables to DCR-based** | **Existing MMA tables only** |
-| 4-6 | Configure automation | All migrations |
-| 7 | Create DCRs | All migrations |
-| 8 | Assign permissions | All migrations |
-| 9-12 | Configure Cribl and test | All migrations |
-
-## Critical Points
-
-⚠️ **You CANNOT create DCRs for MMA-only tables - they must be converted first**
-⚠️ **Conversion is one-way - tables cannot be reverted to MMA-only**
-⚠️ **Schema becomes fixed after conversion - no dynamic columns**
-✅ **Both APIs work after conversion until September 2026**
-✅ **All existing data is preserved during conversion**
-
-## Additional Resources
-
-- [Cribl-Microsoft GitHub Repository](https://github.com/criblio/Cribl-Microsoft)
-- [Microsoft Custom Logs Migration Guide](https://learn.microsoft.com/en-us/azure/azure-monitor/logs/custom-logs-migrate)
-- [Cribl Sentinel Destination Documentation](https://docs.cribl.io/stream/destinations-sentinel/)
+✅ **Fully Automated Migration**: Automatically migrates Classic tables to DCR-based
+✅ **Single Solution**: Handles table migration, DCR creation, and Cribl config export
+✅ **Automatic Schema Detection**: No manual schema definition needed
+✅ **Cribl Integration**: Exports ready-to-use destination configurations
+✅ **Interactive Menu**: Guided deployment with confirmation prompts
+✅ **Template Generation**: Creates ARM templates for CI/CD scenarios
+✅ **Error Handling**: Comprehensive validation and user guidance
+✅ **Smart Detection**: Identifies table types and applies appropriate migration strategy
 
 ## Support
+- **Pipeline Transformation Support**: Reach out to your account team
+- **Tool Issues**: James Pederson jpederson@cribl.io
+- **Community**: [Cribl Slack](https://cribl.io/community)
 
-For assistance:
-- **Knowledge Article Author**: James Pederson jpederson@cribl.io
-- **Cribl Community**: [Cribl Slack](https://cribl.io/community)
+---
+
+**🎯 Summary**: The DCR Automation tool is your complete migration solution. It handles the complexity of Azure API interactions and provides ready-to-use Cribl configurations, making the migration from Azure Monitor to Sentinel destinations straightforward and reliable.

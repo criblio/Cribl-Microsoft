@@ -222,7 +222,7 @@ function New-CriblDestinationConfig {
     # Handle authentication parameters from Azure parameters
     # Client ID
     if ($AzureParams.clientId -and $AzureParams.clientId -ne "YOUR-CLIENT-ID-HERE") {
-        $configContent = $configContent -replace "'replaceme'", $AzureParams.clientId
+        $configContent = $configContent -replace "'replaceme'", "'$($AzureParams.clientId)'"
     }
     
     # Client Secret

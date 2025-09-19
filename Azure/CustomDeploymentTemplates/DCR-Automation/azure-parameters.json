@@ -11,6 +11,7 @@
   "clientId": "<YOUR-CLIENT-ID-HERE>",
   "clientSecret": "<YOUR-CLIENT-SECRET-HERE>",
   "_comments": {
+    "WARNING: clientSecret should be stored securely, not in plain text": "Consider using environment variables or secure vaults to manage sensitive information.",
     "dce_parameters": "DCE-related parameters (dceResourceGroupName, dcePrefix, dceSuffix) are only used when createDCE=true in operation-parameters.json",
     "dcr_naming": "Script will automatically abbreviate table names if the full DCR name exceeds length limits (30 chars for Direct DCRs, 64 chars for DCE-based DCRs)",
     "naming_limits": "Direct DCRs: 30 chars max, DCE-based DCRs: 64 chars max. Prefix and suffix are preserved, only table names are abbreviated.",

@@ -2,6 +2,13 @@
 
 This PowerShell automation system streamlines the deployment of Azure Data Collection Rules (DCRs) for integrating Cribl Stream with Azure Log Analytics/Microsoft Sentinel. Features an **interactive menu interface** for easy deployment, supporting both native and custom tables with automatic Cribl configuration export.
 
+## 🆕 Latest Updates (v1.0.1)
+- ✅ **Schema Processing Fix**: Resolved MMA (legacy) table processing with nested schema structure
+- ✅ **Cribl Export Enhancement**: Fixed ClientId quoting in exported configurations
+- ✅ **Table Type Detection**: Enhanced support for both DCR-based and MMA legacy tables
+- ✅ **Authentication Handling**: Improved Azure context detection and token refresh
+
+
 ## 🚀 Key Features
 
 - **Interactive Menu System**: User-friendly interface with deployment confirmations
@@ -65,6 +72,7 @@ DCR-Automation/
 - `tenantId`, `clientId`, `clientSecret` are for Azure AD authentication in Cribl
 - DCE parameters only used when `createDCE=true`
 - Direct DCRs have 30-character name limit (auto-abbreviated)
+- ✅ **ClientId Quoting**: Now properly quoted in Cribl exports
 
 ### 2. operation-parameters.json
 ```json
@@ -339,11 +347,11 @@ Perfect for CI/CD pipelines and review:
 # Check current configuration
 .\Run-DCRAutomation.ps1 -Mode Status
 
-# Validate tables exist
-.\Create-TableDCRs.ps1 -ValidateTablesOnly
-
 # Test single table
 .\Create-TableDCRs.ps1 -SpecificDCR "SecurityEvent" -TemplateOnly
+
+# Template-only mode for validation
+.\Run-DCRAutomation.ps1 -Mode TemplateOnly
 ```
 
 ## 🔐 Security Recommendations
@@ -403,6 +411,9 @@ This automation system provides:
 - ✅ **Intelligent handling** of Azure naming limits
 - ✅ **Comprehensive error handling** and user guidance
 - ✅ **Table collision prevention** for native/custom conflicts
+- ✅ **Enhanced schema processing** for both modern and legacy table types
+- ✅ **Improved Cribl export** with proper authentication formatting
+
 
 ---
 

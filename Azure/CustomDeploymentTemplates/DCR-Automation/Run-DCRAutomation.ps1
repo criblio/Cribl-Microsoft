@@ -19,7 +19,13 @@ param(
     [switch]$ExportCriblConfig = $true,
     
     [Parameter(Mandatory=$false)]
-    [switch]$SkipCriblExport = $false
+    [switch]$SkipCriblExport = $false,
+    
+    [Parameter(Mandatory=$false)]
+    [switch]$MigrateCustomTablesToDCR = $false,
+    
+    [Parameter(Mandatory=$false)]
+    [switch]$AutoMigrateCustomTables = $false
 )
 
 $ScriptPath = Join-Path $PSScriptRoot "Create-TableDCRs.ps1"
@@ -52,6 +58,9 @@ function Show-CombinedSummary {
         Write-Host "  DCRs Already Existed: $($CustomSummary.DCRsExisted)" -ForegroundColor Yellow
         Write-Host "  Tables Created: $($CustomSummary.CustomTablesCreated)" -ForegroundColor Green
         Write-Host "  Tables Already Existed: $($CustomSummary.CustomTablesExisted)" -ForegroundColor Yellow
+        if ($CustomSummary.CustomTablesMigrated -gt 0) {
+            Write-Host "  Tables Migrated to DCR-based: $($CustomSummary.CustomTablesMigrated)" -ForegroundColor Magenta
+        }
         Write-Host "  Tables Skipped: $($CustomSummary.TablesSkipped)" -ForegroundColor Yellow
         Write-Host "  Tables Failed: $($CustomSummary.CustomTablesFailed)" -ForegroundColor $(if ($CustomSummary.CustomTablesFailed -gt 0) { "Red" } else { "Gray" })
     }
@@ -165,7 +174,9 @@ function Execute-Mode {
             Write-Host ""
             
             $exportCribl = -not $SkipCriblExport
-            & $ScriptPath -CustomTableMode:$false -CreateDCE:$false -ShowCriblConfig:$ShowCriblConfig -ExportCriblConfig:$exportCribl -SkipCriblExport:$SkipCriblExport
+
+            & $ScriptPath -CustomTableMode:$false -CreateDCE:$false -ShowCriblConfig:$ShowCriblConfig -ExportCriblConfig:$exportCribl -SkipCriblExport:$SkipCriblExport -MigrateCustomTablesToDCR:$MigrateCustomTablesToDCR -AutoMigrateCustomTables:$AutoMigrateCustomTables
+
         }
         
         "DirectCustom" {
@@ -184,7 +195,8 @@ function Execute-Mode {
             Write-Host ""
             
             $exportCribl = -not $SkipCriblExport
-            & $ScriptPath -CustomTableMode -CustomTableListFile "CustomTableList.json" -CreateDCE:$false -ShowCriblConfig:$ShowCriblConfig -ExportCriblConfig:$exportCribl -SkipCriblExport:$SkipCriblExport
+            & $ScriptPath -CustomTableMode -CustomTableListFile "CustomTableList.json" -CreateDCE:$false -ShowCriblConfig:$ShowCriblConfig -ExportCriblConfig:$exportCribl -SkipCriblExport:$SkipCriblExport -MigrateCustomTablesToDCR:$MigrateCustomTablesToDCR -AutoMigrateCustomTables:$AutoMigrateCustomTables
+
         }
         
         "DirectBoth" {
@@ -194,10 +206,11 @@ function Execute-Mode {
             
             Write-Host "`n📌 Step 1: Processing Native Tables with Direct DCRs..." -ForegroundColor Yellow
             $exportCribl = -not $SkipCriblExport
-            $nativeSummary = & $ScriptPath -CustomTableMode:$false -CreateDCE:$false -ShowCriblConfig:$ShowCriblConfig -ExportCriblConfig:$exportCribl -SkipCriblExport:$SkipCriblExport
+
+            $nativeSummary = & $ScriptPath -CustomTableMode:$false -CreateDCE:$false -ShowCriblConfig:$ShowCriblConfig -ExportCriblConfig:$exportCribl -SkipCriblExport:$SkipCriblExport -MigrateCustomTablesToDCR:$MigrateCustomTablesToDCR -AutoMigrateCustomTables:$AutoMigrateCustomTables
             
             Write-Host "`n📌 Step 2: Processing Custom Tables with Direct DCRs..." -ForegroundColor Yellow
-            $customSummary = & $ScriptPath -CustomTableMode -CustomTableListFile "CustomTableList.json" -CreateDCE:$false -ShowCriblConfig:$ShowCriblConfig -ExportCriblConfig:$exportCribl -SkipCriblExport:$SkipCriblExport
+            $customSummary = & $ScriptPath -CustomTableMode -CustomTableListFile "CustomTableList.json" -CreateDCE:$false -ShowCriblConfig:$ShowCriblConfig -ExportCriblConfig:$exportCribl -SkipCriblExport:$SkipCriblExport -MigrateCustomTablesToDCR:$MigrateCustomTablesToDCR -AutoMigrateCustomTables:$AutoMigrateCustomTables
             
             Show-CombinedSummary -NativeSummary $nativeSummary -CustomSummary $customSummary -DCRMode "Direct"
         }
@@ -210,7 +223,9 @@ function Execute-Mode {
             Write-Host ""
             
             $exportCribl = -not $SkipCriblExport
-            & $ScriptPath -CustomTableMode:$false -CreateDCE -ShowCriblConfig:$ShowCriblConfig -ExportCriblConfig:$exportCribl -SkipCriblExport:$SkipCriblExport
+
+            & $ScriptPath -CustomTableMode:$false -CreateDCE -ShowCriblConfig:$ShowCriblConfig -ExportCriblConfig:$exportCribl -SkipCriblExport:$SkipCriblExport -MigrateCustomTablesToDCR:$MigrateCustomTablesToDCR -AutoMigrateCustomTables:$AutoMigrateCustomTables
+
         }
         
         "DCECustom" {
@@ -229,7 +244,9 @@ function Execute-Mode {
             Write-Host ""
             
             $exportCribl = -not $SkipCriblExport
-            & $ScriptPath -CustomTableMode -CustomTableListFile "CustomTableList.json" -CreateDCE -ShowCriblConfig:$ShowCriblConfig -ExportCriblConfig:$exportCribl -SkipCriblExport:$SkipCriblExport
+
+            & $ScriptPath -CustomTableMode -CustomTableListFile "CustomTableList.json" -CreateDCE -ShowCriblConfig:$ShowCriblConfig -ExportCriblConfig:$exportCribl -SkipCriblExport:$SkipCriblExport -MigrateCustomTablesToDCR:$MigrateCustomTablesToDCR -AutoMigrateCustomTables:$AutoMigrateCustomTables
+
         }
         
         "DCEBoth" {
@@ -239,10 +256,12 @@ function Execute-Mode {
             
             Write-Host "`n📌 Step 1: Processing Native Tables with DCE-based DCRs..." -ForegroundColor Yellow
             $exportCribl = -not $SkipCriblExport
-            $nativeSummary = & $ScriptPath -CustomTableMode:$false -CreateDCE -ShowCriblConfig:$ShowCriblConfig -ExportCriblConfig:$exportCribl -SkipCriblExport:$SkipCriblExport
+
+            $nativeSummary = & $ScriptPath -CustomTableMode:$false -CreateDCE -ShowCriblConfig:$ShowCriblConfig -ExportCriblConfig:$exportCribl -SkipCriblExport:$SkipCriblExport -MigrateCustomTablesToDCR:$MigrateCustomTablesToDCR -AutoMigrateCustomTables:$AutoMigrateCustomTables
             
             Write-Host "`n📌 Step 2: Processing Custom Tables with DCE-based DCRs..." -ForegroundColor Yellow
-            $customSummary = & $ScriptPath -CustomTableMode -CustomTableListFile "CustomTableList.json" -CreateDCE -ShowCriblConfig:$ShowCriblConfig -ExportCriblConfig:$exportCribl -SkipCriblExport:$SkipCriblExport
+            $customSummary = & $ScriptPath -CustomTableMode -CustomTableListFile "CustomTableList.json" -CreateDCE -ShowCriblConfig:$ShowCriblConfig -ExportCriblConfig:$exportCribl -SkipCriblExport:$SkipCriblExport -MigrateCustomTablesToDCR:$MigrateCustomTablesToDCR -AutoMigrateCustomTables:$AutoMigrateCustomTables
+
             
             Show-CombinedSummary -NativeSummary $nativeSummary -CustomSummary $customSummary -DCRMode "DCE-based"
         }
@@ -344,10 +363,11 @@ function Execute-Mode {
             Write-Host "DCR Mode: $currentDCRMode" -ForegroundColor Cyan
             
             Write-Host "`n📌 Generating Native Table Templates..." -ForegroundColor Yellow
-            & $ScriptPath -CustomTableMode:$false -TemplateOnly
+
+            & $ScriptPath -CustomTableMode:$false -TemplateOnly -MigrateCustomTablesToDCR:$MigrateCustomTablesToDCR -AutoMigrateCustomTables:$AutoMigrateCustomTables
             
             Write-Host "`n📌 Generating Custom Table Templates..." -ForegroundColor Yellow
-            & $ScriptPath -CustomTableMode -CustomTableListFile "CustomTableList.json" -TemplateOnly
+            & $ScriptPath -CustomTableMode -CustomTableListFile "CustomTableList.json" -TemplateOnly -MigrateCustomTablesToDCR:$MigrateCustomTablesToDCR -AutoMigrateCustomTables:$AutoMigrateCustomTables
             
             Write-Host "`n✅ Templates generated in: generated-templates\" -ForegroundColor Green
         }
@@ -583,6 +603,7 @@ if ($NonInteractive -or $Mode) {
             "Q" {
                 Write-Host "`n👋 Exiting DCR Automation Tool. Goodbye!" -ForegroundColor Cyan
                 $continue = $false
+
             }
             default {
                 Write-Host "`n❌ Invalid choice. Please select 1-5 or Q to quit." -ForegroundColor Red

@@ -1,4 +1,196 @@
-# Create Azure Data Collection Rules for Tables (Native and Custom) - For Cribl Integration
+# Create Azure Data Collection Rules for Tables (Native and Custom)
+
+param(
+    [Parameter(Mandatory=$false)]
+    [string]$AzureParametersFile = "azure-parameters.json",
+
+    [Parameter(Mandatory=$false)]
+    [string]$OperationParametersFile = "operation-parameters.json",
+
+    [Parameter(Mandatory=$false)]
+    [string]$TableListFile = "NativeTableList.json",
+
+    [Parameter(Mandatory=$false)]
+    [string]$DCRTemplateWithDCEFile = "dcr-template-with-dce.json",
+
+    [Parameter(Mandatory=$false)]
+    [string]$DCRTemplateDirectFile = "dcr-template-direct.json",
+
+    [Parameter(Mandatory=$false)]
+    [string]$SpecificDCR = "",
+
+    [Parameter(Mandatory=$false)]
+    [switch]$SkipKnownIssues = $false,
+
+    [Parameter(Mandatory=$false)]
+    [switch]$ValidateTablesOnly = $false,
+
+    [Parameter(Mandatory=$false)]
+    [switch]$TemplateOnly = $false,
+
+    [Parameter(Mandatory=$false)]
+    [switch]$PreserveLargeTemplates = $false,
+
+    [Parameter(Mandatory=$false)]
+    [int]$KeepTemplateVersions = 5,
+
+    [Parameter(Mandatory=$false)]
+    [switch]$CleanupOldTemplates = $false,
+
+    [Parameter(Mandatory=$false)]
+    [switch]$CreateDCE = $false,
+
+    [Parameter(Mandatory=$false)]
+    [switch]$IgnoreOperationParameters = $false,
+
+    [Parameter(Mandatory=$false)]
+    [switch]$CustomTableMode = $false,
+
+    [Parameter(Mandatory=$false)]
+    [string]$CustomTableSchemasDirectory = "custom-table-schemas",
+
+    [Parameter(Mandatory=$false)]
+    [string]$CustomTableListFile = "",
+
+    [Parameter(Mandatory=$false)]
+    [int]$CustomTableRetentionDays = 30,
+
+    [Parameter(Mandatory=$false)]
+    [int]$CustomTableTotalRetentionDays = 90,
+
+    [Parameter(Mandatory=$false)]
+    [switch]$MigrateCustomTablesToDCR = $false,
+
+    [Parameter(Mandatory=$false)]
+    [switch]$AutoMigrateCustomTables = $false,
+
+    [Parameter(Mandatory=$false)]
+    [switch]$ShowCriblConfig = $false,
+
+    [Parameter(Mandatory=$false)]
+    [switch]$ExportCriblConfig = $true,
+
+    [Parameter(Mandatory=$false)]
+    [switch]$SkipCriblExport = $false
+)
+
+# Function to verify Azure connection using existing session only
+function Ensure-AzureConnection {
+    param(
+        [switch]$Silent = $false
+    )
+
+    try {
+        # Get current context
+        $context = Get-AzContext -ErrorAction SilentlyContinue
+
+        if (-not $context) {
+            if (-not $Silent) {
+                Write-Host "  ❌ No Azure context found. Please run 'Connect-AzAccount' first." -ForegroundColor Red
+            }
+            return $false
+        }
+
+        # Test if the token is still valid by making a simple API call
+        # Suppress warnings about token expiration
+        try {
+            $testResult = Get-AzSubscription -SubscriptionId $context.Subscription.Id -ErrorAction Stop -WarningAction SilentlyContinue 2>$null | Out-Null
+
+            if (-not $Silent) {
+                # Only show this on initial check, not during processing
+                Write-Host "  Azure connection verified" -ForegroundColor Green -NoNewline
+                Write-Host " (Token valid)" -ForegroundColor DarkGray
+            }
+            return $true
+        }
+        catch {
+            # Token is expired or invalid - try to refresh it
+            if (-not $Silent) {
+                Write-Host "  Token expired. Attempting automatic refresh..." -ForegroundColor Yellow
+            }
+
+            try {
+                # Try to refresh using existing context info without interactive prompts
+                if ($context -and $context.Account -and $context.Account.Id) {
+                    # For user accounts, try silent refresh
+                    if ($context.Account.Type -ne 'ServicePrincipal') {
+                        try {
+                            # Try to get a new access token using the existing context
+                            $token = Get-AzAccessToken -ResourceUrl "https://management.azure.com/" -ErrorAction Stop
+                            if ($token -and $token.Token) {
+                                if (-not $Silent) {
+                                    Write-Host "  ✓ Token refreshed successfully" -ForegroundColor Green
+                                }
+                                return $true
+                            }
+                        }
+                        catch {
+                            # Try Connect-AzAccount with account ID (should use cached credentials)
+                            try {
+                                $connectResult = Connect-AzAccount -AccountId $context.Account.Id -TenantId $context.Tenant.Id -Force -ErrorAction Stop -WarningAction SilentlyContinue
+                                if ($connectResult) {
+                                    # Ensure we're in the right subscription
+                                    if ($context.Subscription.Id) {
+                                        Set-AzContext -SubscriptionId $context.Subscription.Id -ErrorAction SilentlyContinue | Out-Null
+                                    }
+                                    if (-not $Silent) {
+                                        Write-Host "  ✓ Azure connection refreshed successfully" -ForegroundColor Green
+                                    }
+                                    return $true
+                                }
+                            }
+                            catch {
+                                if (-not $Silent) {
+                                    Write-Host "  ❌ Failed to refresh token automatically" -ForegroundColor Red
+                                    Write-Host "     Please run 'Connect-AzAccount' to refresh your session" -ForegroundColor Yellow
+                                }
+                                return $false
+                            }
+                        }
+                    } else {
+                        # Service Principal - cannot refresh automatically
+                        if (-not $Silent) {
+                            Write-Host "  ❌ Service Principal session expired. Please re-authenticate." -ForegroundColor Red
+                        }
+                        return $false
+                    }
+                } else {
+                    if (-not $Silent) {
+                        Write-Host "  ❌ Cannot refresh - insufficient context information" -ForegroundColor Red
+                    }
+                    return $false
+                }
+            }
+            catch {
+                if (-not $Silent) {
+                    Write-Host "  ❌ Token refresh failed: $($_.Exception.Message)" -ForegroundColor Red
+                    Write-Host "     Please run 'Connect-AzAccount' to refresh your session" -ForegroundColor Yellow
+                }
+                return $false
+            }
+        }
+
+    } catch {
+        # General error with Azure connection
+        if (-not $Silent) {
+            Write-Host "  ❌ Failed to verify Azure connection: $($_.Exception.Message)" -ForegroundColor Red
+        }
+        return $false
+    }
+}
+
+# Function to periodically check and refresh token during long operations
+function Test-TokenRefresh {
+    param(
+        [int]$Counter,
+        [int]$CheckInterval = 5  # Check every N operations
+    )
+    
+    if ($Counter -gt 0 -and ($Counter % $CheckInterval) -eq 0) {
+        # Silently check and refresh if needed
+        Ensure-AzureConnection -Silent | Out-Null
+    }
+} # For Cribl Integration
 # Run this script from VSCode terminal or PowerShell
 # This script processes tables from NativeTableList.json (native) or CustomTableList.json (custom)
 # Supports both DCE-based and Direct DCRs based on operation parameters
@@ -6,73 +198,6 @@
 # DEFAULT BEHAVIOR: Automatically exports Cribl configuration to cribl-dcr-config.json
 # Outputs DCR immutable IDs and ingestion endpoints for Cribl configuration
 
-param(
-    [Parameter(Mandatory=$false)]
-    [string]$AzureParametersFile = "azure-parameters.json",
-    
-    [Parameter(Mandatory=$false)]
-    [string]$OperationParametersFile = "operation-parameters.json",
-    
-    [Parameter(Mandatory=$false)]
-    [string]$TableListFile = "NativeTableList.json",
-    
-    [Parameter(Mandatory=$false)]
-    [string]$DCRTemplateWithDCEFile = "dcr-template-with-dce.json",
-    
-    [Parameter(Mandatory=$false)]
-    [string]$DCRTemplateDirectFile = "dcr-template-direct.json",
-    
-    [Parameter(Mandatory=$false)]
-    [string]$SpecificDCR = "",
-    
-    [Parameter(Mandatory=$false)]
-    [switch]$SkipKnownIssues = $false,
-    
-    [Parameter(Mandatory=$false)]
-    [switch]$ValidateTablesOnly = $false,
-    
-    [Parameter(Mandatory=$false)]
-    [switch]$TemplateOnly = $false,
-    
-    [Parameter(Mandatory=$false)]
-    [switch]$PreserveLargeTemplates = $false,
-    
-    [Parameter(Mandatory=$false)]
-    [int]$KeepTemplateVersions = 5,
-    
-    [Parameter(Mandatory=$false)]
-    [switch]$CleanupOldTemplates = $false,
-    
-    [Parameter(Mandatory=$false)]
-    [switch]$CreateDCE = $false,
-    
-    [Parameter(Mandatory=$false)]
-    [switch]$IgnoreOperationParameters = $false,
-    
-    [Parameter(Mandatory=$false)]
-    [switch]$CustomTableMode = $false,
-    
-    [Parameter(Mandatory=$false)]
-    [string]$CustomTableSchemasDirectory = "custom-table-schemas",
-    
-    [Parameter(Mandatory=$false)]
-    [string]$CustomTableListFile = "",
-    
-    [Parameter(Mandatory=$false)]
-    [int]$CustomTableRetentionDays = 30,
-    
-    [Parameter(Mandatory=$false)]
-    [int]$CustomTableTotalRetentionDays = 90,
-    
-    [Parameter(Mandatory=$false)]
-    [switch]$ShowCriblConfig = $false,
-    
-    [Parameter(Mandatory=$false)]
-    [switch]$ExportCriblConfig = $true,
-    
-    [Parameter(Mandatory=$false)]
-    [switch]$SkipCriblExport = $false
-)
 
 # Function to map Azure Log Analytics column types to valid DCR types
 function ConvertTo-DCRColumnType {
@@ -208,6 +333,141 @@ function New-LogAnalyticsCustomTable {
     }
 }
 
+# Function to migrate custom table from classic to DCR-based ingestion
+function Convert-CustomTableToDCRBased {
+    param(
+        [string]$WorkspaceResourceId,
+        [string]$TableName,
+        [switch]$Force = $false
+    )
+    
+    try {
+        # Ensure table name has _CL suffix
+        if (-not $TableName.EndsWith("_CL")) {
+            $TableName = "${TableName}_CL"
+        }
+        
+        Write-Host "  🔄 Attempting to migrate custom table to DCR-based ingestion: $TableName" -ForegroundColor Cyan
+        
+        # Get access token
+        $context = Get-AzContext
+        $token = [Microsoft.Azure.Commands.Common.Authentication.AzureSession]::Instance.AuthenticationFactory.Authenticate(
+            $context.Account, 
+            $context.Environment, 
+            $context.Tenant.Id, 
+            $null, 
+            [Microsoft.Azure.Commands.Common.Authentication.ShowDialog]::Never, 
+            $null, 
+            "https://management.azure.com/"
+        ).AccessToken
+        
+        $headers = @{
+            'Authorization' = "Bearer $token"
+            'Content-Type' = 'application/json'
+        }
+        
+        # Extract subscription ID and resource group from workspace resource ID
+        $resourceIdParts = $WorkspaceResourceId -split '/'
+        $subscriptionId = $resourceIdParts[2]
+        $resourceGroupName = $resourceIdParts[4]
+        $workspaceName = $resourceIdParts[8]
+        
+        # First, check if table is already DCR-based
+        $checkUri = "https://management.azure.com/subscriptions/$subscriptionId/resourceGroups/$resourceGroupName/providers/Microsoft.OperationalInsights/workspaces/$workspaceName/tables/$TableName"
+        $checkUri += "?api-version=2022-10-01"
+        
+        Write-Host "  Checking current ingestion mode..." -ForegroundColor Gray
+        $tableInfo = Invoke-RestMethod -Uri $checkUri -Method GET -Headers $headers -ErrorAction Stop
+        
+        # Check if already DCR-based (plan property indicates ingestion type)
+        if ($tableInfo.properties.plan -eq "Analytics") {
+            # Check for ingestion type indicators
+            if ($tableInfo.properties.ingestionType -eq "DCRBased" -or 
+                $tableInfo.properties.schema.tableType -eq "Microsoft" -or
+                $tableInfo.properties.provisioningState -match "DCR") {
+                Write-Host "  ✅ Table is already configured for DCR-based ingestion" -ForegroundColor Green
+                return @{
+                    Success = $true
+                    AlreadyMigrated = $true
+                    TableName = $TableName
+                    Message = "Table already uses DCR-based ingestion"
+                }
+            }
+        }
+        
+        # Build the migration URI
+        $migrateUri = "https://management.azure.com/subscriptions/$subscriptionId/resourcegroups/$resourceGroupName/providers/Microsoft.OperationalInsights/workspaces/$workspaceName/tables/$TableName/migrate"
+        $migrateUri += "?api-version=2021-12-01-preview"
+        
+        Write-Host "  Sending migration request..." -ForegroundColor Gray
+        Write-Host "    URI: $migrateUri" -ForegroundColor DarkGray
+        
+        # Send migration request (POST with empty body)
+        $response = Invoke-RestMethod -Uri $migrateUri -Method POST -Headers $headers -Body "{}" -ErrorAction Stop
+        
+        Write-Host "  ✅ Migration initiated successfully for table: $TableName" -ForegroundColor Green
+        Write-Host "    Status: Table will now accept data through DCR-based ingestion" -ForegroundColor Gray
+        
+        # Wait a moment for migration to propagate
+        Write-Host "  Waiting for migration to complete..." -ForegroundColor Gray
+        Start-Sleep -Seconds 5
+        
+        return @{
+            Success = $true
+            AlreadyMigrated = $false
+            TableName = $TableName
+            Response = $response
+            Message = "Successfully migrated to DCR-based ingestion"
+        }
+        
+    } catch {
+        $errorMessage = $_.Exception.Message
+        $statusCode = $null
+        
+        # Try to extract status code from error
+        if ($_.Exception.Response) {
+            $statusCode = [int]$_.Exception.Response.StatusCode
+        }
+        
+        # Handle specific error cases
+        if ($statusCode -eq 409 -or $errorMessage -like "*Conflict*" -or $errorMessage -like "*already migrated*") {
+            Write-Host "  ℹ️ Table is already migrated or in process: $TableName" -ForegroundColor Yellow
+            return @{
+                Success = $true
+                AlreadyMigrated = $true
+                TableName = $TableName
+                Message = "Table already migrated or migration in progress"
+            }
+        } elseif ($statusCode -eq 404) {
+            Write-Host "  ❌ Table not found for migration: $TableName" -ForegroundColor Red
+            return @{
+                Success = $false
+                TableName = $TableName
+                Error = "Table not found"
+            }
+        } elseif ($statusCode -eq 400 -or $errorMessage -like "*not eligible*" -or $errorMessage -like "*cannot be migrated*") {
+            Write-Host "  ⚠️ Table not eligible for DCR-based migration: $TableName" -ForegroundColor Yellow
+            Write-Host "    This table type may not support DCR-based ingestion" -ForegroundColor Gray
+            return @{
+                Success = $false
+                TableName = $TableName
+                Error = "Table not eligible for DCR-based ingestion"
+                NotEligible = $true
+            }
+        } else {
+            Write-Host "  ❌ Failed to migrate table: $errorMessage" -ForegroundColor Red
+            if ($statusCode) {
+                Write-Host "    Status Code: $statusCode" -ForegroundColor Gray
+            }
+            return @{
+                Success = $false
+                TableName = $TableName
+                Error = $errorMessage
+            }
+        }
+    }
+}
+
 # Function to load custom table schema from JSON file
 function Get-CustomTableSchemaFromFile {
     param(
@@ -294,7 +554,9 @@ function Process-CustomTable {
         [string]$WorkspaceResourceId,
         [string]$SchemaDirectory,
         [int]$RetentionDays,
-        [int]$TotalRetentionDays
+        [int]$TotalRetentionDays,
+        [bool]$MigrateExistingToDCR = $false,
+        [bool]$AutoMigrate = $false
     )
     
     # Ensure table name has _CL suffix
@@ -314,12 +576,87 @@ function Process-CustomTable {
         Write-Host "  ✅ Custom table exists in Azure: $($existingTable.TableName)" -ForegroundColor Green
         Write-Host "    Using existing schema from Azure (same as native table processing)" -ForegroundColor Gray
         
-        # Get column count for informational purposes
+        # Detect table type and get column count for informational purposes
+        $isMMATable = $false
         if ($existingTable.Schema -and $existingTable.Schema.columns) {
             $columnCount = $existingTable.Schema.columns.Count
             Write-Host "    Azure schema has $columnCount total columns" -ForegroundColor Gray
+        } elseif ($existingTable.Schema -and $existingTable.Schema.standardColumns) {
+            $columnCount = $existingTable.Schema.standardColumns.Count
+            Write-Host "    ⚠️  MMA (legacy) table detected - has $columnCount columns in standardColumns only" -ForegroundColor Yellow
+            $isMMATable = $true
         }
-        
+
+        # Auto-enable migration for MMA tables
+        $shouldAttemptMigration = $MigrateExistingToDCR -or $AutoMigrate
+        if ($isMMATable -and -not $shouldAttemptMigration) {
+            Write-Host "  📊 MMA table detected - automatic migration recommended" -ForegroundColor Cyan
+            Write-Host "    MMA tables should be migrated to DCR-based format for better performance" -ForegroundColor Gray
+            $shouldAttemptMigration = $true
+        }
+
+        # Attempt to migrate existing table to DCR-based if requested or if MMA table detected
+        # ONLY apply to existing tables, not newly created ones
+        if ($shouldAttemptMigration) {
+            Write-Host "  📊 DCR-based ingestion migration check for existing table" -ForegroundColor Cyan
+            
+            $shouldMigrate = $false
+            if ($AutoMigrate) {
+                # Auto-migrate without prompting
+                $shouldMigrate = $true
+                Write-Host "    Auto-migration enabled" -ForegroundColor Gray
+            } else {
+                # Prompt user for confirmation with different messages based on table type
+                if ($isMMATable) {
+                    Write-Host "  ⚠️  MMA table detected. Migration to DCR-based format is REQUIRED for DCR creation." -ForegroundColor Yellow
+                    Write-Host "  Migrate this MMA table to DCR-based ingestion? (Y/N): " -NoNewline -ForegroundColor Yellow
+                } else {
+                    Write-Host "  Migrate this existing table to DCR-based ingestion? (Y/N): " -NoNewline -ForegroundColor Yellow
+                }
+                $response = Read-Host
+                $shouldMigrate = ($response -eq 'Y' -or $response -eq 'y')
+
+                if (-not $shouldMigrate -and $isMMATable) {
+                    Write-Host "  ❌ Cannot create DCR for MMA table without migration. Skipping table." -ForegroundColor Red
+                }
+            }
+            
+            if ($shouldMigrate) {
+                $migrationResult = Convert-CustomTableToDCRBased `
+                    -WorkspaceResourceId $WorkspaceResourceId `
+                    -TableName $existingTable.TableName
+                    
+                if ($migrationResult.Success) {
+                    if ($migrationResult.AlreadyMigrated) {
+                        Write-Host "  ℹ️ Table already uses DCR-based ingestion" -ForegroundColor Cyan
+                    } else {
+                        Write-Host "  ✅ Successfully migrated existing table to DCR-based ingestion" -ForegroundColor Green
+                        # Update summary if tracking migrations
+                        if ($summary.CustomTablesMigrated) {
+                            $summary.CustomTablesMigrated++
+                        }
+                    }
+                } elseif ($migrationResult.NotEligible) {
+                    Write-Host "  ℹ️ Continuing with classic ingestion mode" -ForegroundColor Yellow
+                }
+            } else {
+                Write-Host "  Skipping migration - table will use classic ingestion" -ForegroundColor Yellow
+
+                # If this is an MMA table and migration was declined, mark as not processable for DCR
+                if ($isMMATable) {
+                    return @{
+                        Success = $false
+                        TableExists = $true
+                        TableName = $existingTable.TableName
+                        Schema = $existingTable.Schema
+                        Source = "Azure"
+                        Error = "MMA table requires migration to DCR-based format before DCR creation"
+                        SkipReason = "MMA migration declined"
+                    }
+                }
+            }
+        }
+
         return @{
             Success = $true
             TableExists = $true
@@ -433,6 +770,157 @@ function Process-CustomTable {
     }
 }
 
+# Function to verify Azure connection using existing session only
+function Ensure-ValidAzureConnection {
+    param(
+        [switch]$Silent = $false
+    )
+
+    try {
+        $context = Get-AzContext
+        if (-not $context) {
+            if (-not $Silent) {
+                Write-Host "  ❌ No Azure context found. Please run 'Connect-AzAccount' first." -ForegroundColor Red
+            }
+            return $false
+        }
+
+        # Test if the context is still valid with a lightweight operation
+        try {
+            $null = Get-AzSubscription -SubscriptionId $context.Subscription.Id -ErrorAction Stop -WarningAction SilentlyContinue
+            if (-not $Silent) {
+                Write-Host "  ✓ Azure connection verified" -ForegroundColor Green
+            }
+            return $true
+        } catch {
+            # Token is expired or invalid - try to refresh it
+            if (-not $Silent) {
+                Write-Host "  Token expired. Attempting automatic refresh..." -ForegroundColor Yellow
+            }
+
+            try {
+                # Try to refresh using existing context info without interactive prompts
+                if ($context -and $context.Account -and $context.Account.Id) {
+                    # For user accounts, try silent refresh
+                    if ($context.Account.Type -ne 'ServicePrincipal') {
+                        try {
+                            # Try to get a new access token using the existing context
+                            $token = Get-AzAccessToken -ResourceUrl "https://management.azure.com/" -ErrorAction Stop
+                            if ($token -and $token.Token) {
+                                if (-not $Silent) {
+                                    Write-Host "  ✓ Token refreshed successfully" -ForegroundColor Green
+                                }
+                                return $true
+                            }
+                        }
+                        catch {
+                            # Try Connect-AzAccount with account ID (should use cached credentials)
+                            try {
+                                $connectResult = Connect-AzAccount -AccountId $context.Account.Id -TenantId $context.Tenant.Id -Force -ErrorAction Stop -WarningAction SilentlyContinue
+                                if ($connectResult) {
+                                    # Ensure we're in the right subscription
+                                    if ($context.Subscription.Id) {
+                                        Set-AzContext -SubscriptionId $context.Subscription.Id -ErrorAction SilentlyContinue | Out-Null
+                                    }
+                                    if (-not $Silent) {
+                                        Write-Host "  ✓ Azure connection refreshed successfully" -ForegroundColor Green
+                                    }
+                                    return $true
+                                }
+                            }
+                            catch {
+                                if (-not $Silent) {
+                                    Write-Host "  ❌ Failed to refresh token automatically" -ForegroundColor Red
+                                    Write-Host "     Please run 'Connect-AzAccount' to refresh your session" -ForegroundColor Yellow
+                                }
+                                return $false
+                            }
+                        }
+                    } else {
+                        # Service Principal - cannot refresh automatically
+                        if (-not $Silent) {
+                            Write-Host "  ❌ Service Principal session expired. Please re-authenticate." -ForegroundColor Red
+                        }
+                        return $false
+                    }
+                } else {
+                    if (-not $Silent) {
+                        Write-Host "  ❌ Cannot refresh - insufficient context information" -ForegroundColor Red
+                    }
+                    return $false
+                }
+            }
+            catch {
+                if (-not $Silent) {
+                    Write-Host "  ❌ Token refresh failed: $($_.Exception.Message)" -ForegroundColor Red
+                    Write-Host "     Please run 'Connect-AzAccount' to refresh your session" -ForegroundColor Yellow
+                }
+                return $false
+            }
+        }
+    } catch {
+        if (-not $Silent) {
+            Write-Host "  ❌ Failed to verify Azure connection: $($_.Exception.Message)" -ForegroundColor Red
+        }
+        return $false
+    }
+}
+
+# Function to wrap Azure operations with automatic token refresh
+function Invoke-AzureOperationWithRetry {
+    param(
+        [ScriptBlock]$Operation,
+        [string]$OperationName = "Azure operation",
+        [int]$MaxRetries = 2
+    )
+    
+    $retryCount = 0
+    $lastError = $null
+    
+    while ($retryCount -le $MaxRetries) {
+        try {
+            # Try the operation
+            $result = & $Operation
+            return $result
+        } catch {
+            $lastError = $_
+            
+            # Check if it's an authentication error
+            $errorMessage = $_.Exception.Message
+            if ($errorMessage -match "(expired|unauthorized|forbidden|401|403|credentials|acquire token|task was canceled)" -or 
+                $_.Exception.GetType().Name -match "(Authentication|Authorization)") {
+                
+                if ($retryCount -lt $MaxRetries) {
+                    Write-Host "  Authentication error detected. Refreshing token (attempt $($retryCount + 1) of $MaxRetries)..." -ForegroundColor Yellow
+                    
+                    # Try to refresh the connection
+                    $refreshed = Ensure-ValidAzureConnection -Silent:$false
+                    
+                    if ($refreshed) {
+                        $retryCount++
+                        # Small delay before retry
+                        Start-Sleep -Milliseconds 500
+                        continue
+                    } else {
+                        throw $lastError
+                    }
+                } else {
+                    Write-Host "  Maximum retry attempts reached for $OperationName" -ForegroundColor Red
+                    throw $lastError
+                }
+            } else {
+                # Not an auth error, throw immediately
+                throw
+            }
+        }
+    }
+    
+    # If we get here, all retries failed
+    if ($lastError) {
+        throw $lastError
+    }
+}
+
 # Get the directory where this script is located
 $ScriptDirectory = Split-Path -Parent $MyInvocation.MyCommand.Definition
 
@@ -525,10 +1013,22 @@ function Get-LogAnalyticsTableSchema {
                         }
                     }
                     
+                    # Flatten schema for backward compatibility
+                    $flattenedSchema = $response.properties.schema
+                    if ($flattenedSchema.schema) {
+                        # Copy nested schema properties to top level for backward compatibility
+                        if ($flattenedSchema.schema.columns) {
+                            $flattenedSchema.columns = $flattenedSchema.schema.columns
+                        }
+                        if ($flattenedSchema.schema.standardColumns) {
+                            $flattenedSchema.standardColumns = $flattenedSchema.schema.standardColumns
+                        }
+                    }
+
                     return @{
                         Exists = $true
                         TableName = $variant
-                        Schema = $response.properties.schema
+                        Schema = $flattenedSchema
                         RetentionInDays = $response.properties.retentionInDays
                         TotalRetentionInDays = $response.properties.totalRetentionInDays
                         RawResponse = $response
@@ -628,13 +1128,16 @@ function Get-TableColumns {
     $schemaColumns = $null
     
     if ($CustomTableMode) {
-        # For custom tables, ALWAYS use .columns (contains user-defined columns)
-        # Never use .standardColumns (only has system columns like TenantId)
+        # For custom tables, prefer .columns (DCR-based) but fall back to .standardColumns (MMA legacy)
         if ($TableSchema -and $TableSchema.columns) {
-            Write-Host "  Debug: Custom table - using .columns property (user columns)" -ForegroundColor Magenta
+            Write-Host "  Debug: Custom table - using .columns property (DCR-based table)" -ForegroundColor Magenta
             $schemaColumns = $TableSchema.columns
+        } elseif ($TableSchema -and $TableSchema.standardColumns) {
+            Write-Host "  Debug: Custom table - using .standardColumns property (MMA legacy table)" -ForegroundColor Yellow
+            Write-Host "  ⚠️  Note: This appears to be an MMA (legacy) table. Consider migrating to DCR-based format." -ForegroundColor Yellow
+            $schemaColumns = $TableSchema.standardColumns
         } else {
-            Write-Host "  Debug: Custom table - no .columns property found!" -ForegroundColor Red
+            Write-Host "  Debug: Custom table - no .columns or .standardColumns property found!" -ForegroundColor Red
         }
     } else {
         # For native tables, try standardColumns first, then columns
@@ -1136,6 +1639,12 @@ if (-not $IgnoreOperationParameters -and (Test-Path $FullOperationParametersPath
         }
         if (-not $PSBoundParameters.ContainsKey('CustomTableRetentionDays')) { $CustomTableRetentionDays = $operationParams.customTableSettings.defaultRetentionDays }
         if (-not $PSBoundParameters.ContainsKey('CustomTableTotalRetentionDays')) { $CustomTableTotalRetentionDays = $operationParams.customTableSettings.defaultTotalRetentionDays }
+        if (-not $PSBoundParameters.ContainsKey('MigrateCustomTablesToDCR') -and $operationParams.customTableSettings.migrateExistingTablesToDCRBased) { 
+            $MigrateCustomTablesToDCR = $operationParams.customTableSettings.migrateExistingTablesToDCRBased 
+        }
+        if (-not $PSBoundParameters.ContainsKey('AutoMigrateCustomTables') -and $operationParams.customTableSettings.autoMigrateExistingTables) { 
+            $AutoMigrateCustomTables = $operationParams.customTableSettings.autoMigrateExistingTables 
+        }
         
         Write-Host "Operation parameters loaded successfully" -ForegroundColor Green
         Write-Host "  Create DCE: $CreateDCE" -ForegroundColor Cyan
@@ -1307,38 +1816,156 @@ try {
     exit 1
 }
 
-# Login to Azure (required even in template-only mode for schema retrieval)
+# Check for existing Azure session (required even in template-only mode for schema retrieval)
 Write-Host "Checking Azure connection..." -ForegroundColor Yellow
 try {
-    $context = Get-AzContext
+    $context = Get-AzContext -ErrorAction SilentlyContinue
     if (!$context) {
-        Connect-AzAccount
-        Write-Host "Successfully logged into Azure" -ForegroundColor Green
+        Write-Host "❌ No Azure context found. Please run 'Connect-AzAccount' first." -ForegroundColor Red
+        Write-Host "   This script requires an existing Azure session to proceed." -ForegroundColor Yellow
+        exit 1
     } else {
-        Write-Host "Already logged into Azure as: $($context.Account.Id)" -ForegroundColor Green
+        Write-Host "Found Azure context for: $($context.Account.Id)" -ForegroundColor Green
+        Write-Host "  Subscription: $($context.Subscription.Name) ($($context.Subscription.Id))" -ForegroundColor Gray
+
+        # Test if the context is still valid by making a simple API call
+        Write-Host "  Testing context validity..." -ForegroundColor Gray
+        try {
+            $testSubscription = Get-AzSubscription -SubscriptionId $context.Subscription.Id -ErrorAction Stop | Out-Null
+            Write-Host "  ✓ Context is valid" -ForegroundColor Green
+        } catch {
+            # Token is expired or invalid - try to refresh it
+            Write-Host "  Token expired. Attempting automatic refresh..." -ForegroundColor Yellow
+
+            try {
+                # Try to refresh using existing context info without interactive prompts
+                if ($context -and $context.Account -and $context.Account.Id) {
+                    # For user accounts, try silent refresh
+                    if ($context.Account.Type -ne 'ServicePrincipal') {
+                        try {
+                            # Try to get a new access token using the existing context
+                            $token = Get-AzAccessToken -ResourceUrl "https://management.azure.com/" -ErrorAction Stop
+                            if ($token -and $token.Token) {
+                                Write-Host "  ✓ Token refreshed successfully" -ForegroundColor Green
+                                # Test again to confirm
+                                $testSubscription = Get-AzSubscription -SubscriptionId $context.Subscription.Id -ErrorAction Stop | Out-Null
+                                Write-Host "  ✓ Context is now valid" -ForegroundColor Green
+                            }
+                        }
+                        catch {
+                            # Try Connect-AzAccount with account ID (should use cached credentials)
+                            try {
+                                $connectResult = Connect-AzAccount -AccountId $context.Account.Id -TenantId $context.Tenant.Id -Force -ErrorAction Stop -WarningAction SilentlyContinue
+                                if ($connectResult) {
+                                    # Ensure we're in the right subscription
+                                    if ($context.Subscription.Id) {
+                                        Set-AzContext -SubscriptionId $context.Subscription.Id -ErrorAction SilentlyContinue | Out-Null
+                                    }
+                                    Write-Host "  ✓ Azure connection refreshed successfully" -ForegroundColor Green
+                                }
+                            }
+                            catch {
+                                Write-Host "  ❌ Failed to refresh token automatically" -ForegroundColor Red
+                                Write-Host "     Please run 'Connect-AzAccount' to refresh your session" -ForegroundColor Yellow
+                                Write-Host "     Error: $($_.Exception.Message)" -ForegroundColor DarkGray
+                                exit 1
+                            }
+                        }
+                    } else {
+                        # Service Principal - cannot refresh automatically
+                        Write-Host "  ❌ Service Principal session expired. Please re-authenticate." -ForegroundColor Red
+                        exit 1
+                    }
+                } else {
+                    Write-Host "  ❌ Cannot refresh - insufficient context information" -ForegroundColor Red
+                    Write-Host "     Please run 'Connect-AzAccount' to refresh your session" -ForegroundColor Yellow
+                    exit 1
+                }
+            }
+            catch {
+                Write-Host "  ❌ Token refresh failed: $($_.Exception.Message)" -ForegroundColor Red
+                Write-Host "     Please run 'Connect-AzAccount' to refresh your session" -ForegroundColor Yellow
+                exit 1
+            }
+        }
     }
-    
+
     if ($TemplateOnly) {
-        Write-Host "Template-only mode: Azure connection required for schema retrieval" -ForegroundColor Yellow
+        Write-Host "Template-only mode: Using existing Azure session for schema retrieval" -ForegroundColor Yellow
     }
 } catch {
-    Write-Host "Failed to login to Azure: $($_.Exception.Message)" -ForegroundColor Red
+    Write-Host "❌ Error checking Azure session: $($_.Exception.Message)" -ForegroundColor Red
+    Write-Host "   Please ensure you have an active Azure session by running 'Connect-AzAccount'" -ForegroundColor Yellow
     exit 1
 }
 
 # Verify workspace (required even in template-only mode for schema retrieval)
 Write-Host "Verifying Log Analytics workspace..." -ForegroundColor Yellow
+Write-Host "  Resource Group: $ResourceGroupName" -ForegroundColor Gray
+Write-Host "  Workspace Name: $WorkspaceName" -ForegroundColor Gray
+
+# First check if the resource group exists
 try {
+    Write-Host "  Checking if resource group exists..." -ForegroundColor Gray
+    $rg = Get-AzResourceGroup -Name $ResourceGroupName -ErrorAction Stop
+    Write-Host "  ✓ Resource group found: $($rg.Location)" -ForegroundColor Green
+} catch {
+    Write-Host "  ✗ Resource group not found: $ResourceGroupName" -ForegroundColor Red
+    Write-Host "  Error: $($_.Exception.Message)" -ForegroundColor Red
+    Write-Host "" -ForegroundColor Red
+    Write-Host "  Please verify your azure-parameters.json file contains the correct:" -ForegroundColor Yellow
+    Write-Host "    - resourceGroupName" -ForegroundColor Yellow
+    Write-Host "    - Ensure you're in the correct subscription" -ForegroundColor Yellow
+    
+    # List available resource groups
+    Write-Host "" -ForegroundColor Yellow
+    Write-Host "  Available resource groups in current subscription:" -ForegroundColor Yellow
+    $availableRGs = Get-AzResourceGroup | Select-Object -First 10
+    foreach ($availRg in $availableRGs) {
+        Write-Host "    - $($availRg.ResourceGroupName)" -ForegroundColor Gray
+    }
+    if ((Get-AzResourceGroup).Count -gt 10) {
+        Write-Host "    ... and $((Get-AzResourceGroup).Count - 10) more" -ForegroundColor DarkGray
+    }
+    exit 1
+}
+
+# Now check for the workspace
+try {
+    Write-Host "  Checking for workspace '$WorkspaceName' in resource group..." -ForegroundColor Gray
     $workspace = Get-AzOperationalInsightsWorkspace -ResourceGroupName $ResourceGroupName -Name $WorkspaceName -ErrorAction Stop
-    Write-Host "Workspace found: $($workspace.Name)" -ForegroundColor Green
+    Write-Host "  ✓ Workspace found: $($workspace.Name)" -ForegroundColor Green
     $workspaceResourceId = $workspace.ResourceId
-    Write-Host "Workspace ID: $workspaceResourceId" -ForegroundColor Gray
+    Write-Host "  Workspace ID: $workspaceResourceId" -ForegroundColor Gray
     
     if ($TemplateOnly) {
         Write-Host "Template-only mode: Workspace verified for schema retrieval" -ForegroundColor Yellow
     }
 } catch {
-    Write-Host "Workspace not found: $($_.Exception.Message)" -ForegroundColor Red
+    Write-Host "  ✗ Workspace not found: '$WorkspaceName' in resource group '$ResourceGroupName'" -ForegroundColor Red
+    Write-Host "  Error: $($_.Exception.Message)" -ForegroundColor Red
+    
+    # List available workspaces in the resource group
+    Write-Host "" -ForegroundColor Yellow
+    Write-Host "  Checking for available workspaces in resource group '$ResourceGroupName':" -ForegroundColor Yellow
+    try {
+        $availableWorkspaces = Get-AzOperationalInsightsWorkspace -ResourceGroupName $ResourceGroupName -ErrorAction Stop
+        if ($availableWorkspaces) {
+            Write-Host "  Found $($availableWorkspaces.Count) workspace(s):" -ForegroundColor Yellow
+            foreach ($ws in $availableWorkspaces) {
+                Write-Host "    - $($ws.Name)" -ForegroundColor Gray
+            }
+        } else {
+            Write-Host "  No workspaces found in this resource group" -ForegroundColor Red
+        }
+    } catch {
+        Write-Host "  Could not list workspaces: $($_.Exception.Message)" -ForegroundColor Red
+    }
+    
+    Write-Host "" -ForegroundColor Yellow
+    Write-Host "  Please verify your azure-parameters.json file contains the correct:" -ForegroundColor Yellow
+    Write-Host "    - resourceGroupName: $ResourceGroupName" -ForegroundColor Yellow  
+    Write-Host "    - workspaceName: $WorkspaceName" -ForegroundColor Yellow
     exit 1
 }
 
@@ -1349,7 +1976,7 @@ $summary = @{
     TablesNotFound = 0; SchemasRetrieved = 0; ManualDeploymentRecommended = 0
     ProcessingFailures = @(); ManualDeploymentCases = @()
     CustomTablesCreated = 0; CustomTablesExisted = 0; CustomTablesFailed = 0
-    TablesSkipped = 0
+    CustomTablesMigrated = 0; TablesSkipped = 0
 }
 
 # Initialize Cribl configs collection - load existing if present
@@ -1399,7 +2026,9 @@ foreach ($tableName in $tableList) {
                 -WorkspaceResourceId $workspaceResourceId `
                 -SchemaDirectory $FullCustomTableSchemasPath `
                 -RetentionDays $CustomTableRetentionDays `
-                -TotalRetentionDays $CustomTableTotalRetentionDays
+                -TotalRetentionDays $CustomTableTotalRetentionDays `
+                -MigrateExistingToDCR $MigrateCustomTablesToDCR `
+                -AutoMigrate $AutoMigrateCustomTables
             
             if (-not $customTableResult.Success) {
                 if ($customTableResult.Skipped) {
