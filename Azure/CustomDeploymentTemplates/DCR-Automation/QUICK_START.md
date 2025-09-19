@@ -1,7 +1,7 @@
 # 🚀 DCR Automation Quick Start
 
 ## Prerequisites
-- PowerShell 5.1+ with Azure PowerShell modules
+- PowerShell 5.1+ with Azure PowerShell modules (Az.Accounts, Az.Resources, Az.OperationalInsights)
 - Azure subscription with appropriate permissions
 - Log Analytics Workspace already created
 
@@ -67,14 +67,14 @@ Select an option:
 
 ## 4️⃣ Menu Options Explained
 
-### Option 1: Quick Deploy ⚡ (Recommended for First Time)
+### Option 1: Quick Deploy ⚡ 
 - Deploys BOTH native and custom tables
 - Uses settings from `operation-parameters.json`
 - Default: Direct DCRs (simpler, cost-effective)
 - **Best for:** Getting started quickly
 
 ### Option 2: Native Tables - Direct DCRs
-- Deploys: CommonSecurityLog, SecurityEvent, Syslog, WindowsEvent
+- Deploys tables listed in `NativeTablesLIst.json`
 - Creates Direct DCRs (no DCE required)
 - **Best for:** Standard Sentinel tables
 
@@ -89,7 +89,7 @@ Select an option:
 - **Best for:** Custom application logs
 
 ### Option 5: Custom Tables - DCE-based DCRs
-- Same as Option 4 but with DCE
+- Same as Option 4 but with a DCE
 - **Best for:** Custom tables with private endpoints
 
 ## 5️⃣ Deployment Workflow
@@ -103,35 +103,16 @@ Select an option:
 ## 6️⃣ After Deployment
 
 ### View Cribl Configuration
-The menu automatically exports configuration. To generate individual Cribl destinations:
-
-```powershell
-.\Generate-CriblDestinations.ps1
-```
+The menu automatically exports configuration. To generate individual Cribl destinations to: `cribl-dcr-configs\destinations`
 
 ### Files Created
 - `cribl-dcr-configs\cribl-dcr-config.json` - Main configuration
 - `cribl-dcr-configs\destinations\*.json` - Individual Cribl destinations
-- `generated-templates\*.json` - ARM templates (for reference)
-
-## 7️⃣ Advanced Usage (Command-Line Mode)
-
-For automation/scripting, bypass the menu:
-
-```powershell
-# Deploy without menu interaction
-.\Run-DCRAutomation.ps1 -NonInteractive -Mode DirectBoth
-
-# Generate templates only
-.\Run-DCRAutomation.ps1 -NonInteractive -Mode TemplateOnly
-
-# Deploy specific table type
-.\Run-DCRAutomation.ps1 -NonInteractive -Mode DirectNative
-```
+- `generated-templates\*.json` - ARM templates (for reference or manual deployment from the Azure `Deploy a custom template` wizard)
 
 ## 📝 Table Configuration
 
-### Native Tables (Pre-configured)
+### Native Tables (Update for your use case)
 Edit `NativeTableList.json`:
 ```json
 [
@@ -142,7 +123,7 @@ Edit `NativeTableList.json`:
 ]
 ```
 
-### Custom Tables (Your Applications)
+### Custom Tables (Update for Custom tables that you need created or already exist)
 Edit `CustomTableList.json`:
 ```json
 [

@@ -23,7 +23,9 @@
     "nativeTableListFile": "NativeTableList.json",
     "defaultRetentionDays": 30,
     "defaultTotalRetentionDays": 90,
-    "autoCreateTables": true
+    "autoCreateTables": true,
+    "migrateExistingTablesToDCRBased": true,
+    "autoMigrateExistingTables": true
   },
   "_comments": {
     "createDCE": "When true, creates DCE-based DCRs using dcr-template-with-dce.json. When false, creates Direct DCRs using dcr-template-direct.json",
@@ -38,7 +40,9 @@
       "nativeTableListFile": "Table list file for native tables. Default is NativeTableList.json.",
       "defaultRetentionDays": "Default retention period in days for custom tables (can be overridden in schema files).",
       "defaultTotalRetentionDays": "Default total retention period in days including archive (can be overridden in schema files).",
-      "autoCreateTables": "When true, automatically creates custom tables if they don't exist and schema files are found."
+      "autoCreateTables": "When true, automatically creates custom tables if they don't exist and schema files are found.",
+      "migrateExistingTablesToDCRBased": "When true, prompts to migrate EXISTING custom tables from classic to DCR-based ingestion. Does NOT affect newly created tables.",
+      "autoMigrateExistingTables": "When true, automatically migrates EXISTING custom tables to DCR-based ingestion without prompting. Only applies to already existing tables, not newly created ones."
     }
   }
 }
