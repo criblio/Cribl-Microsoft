@@ -6,9 +6,6 @@
 *-backup.json
 *.bak
 
-# Cribl configuration exports
-cribl-dcr-configs/
-cribl-configs/
 
 # Test output and results
 test-results/
@@ -131,21 +128,6 @@ pip-delete-this-directory.txt
 *.rar
 *.7z
 
-# =======================
-# Custom Cribl-Microsoft Specific
-# =======================
-# User-specific table lists (keep templates)
-CustomTableList.json
-NativeTableList.json
-
-# User-specific schema files
-custom-table-schemas/*.json
-!custom-table-schemas/README.md
-!custom-table-schemas/*.example.json
-
-# Deployment artifacts
-*.deployed
-deployment-*.json
 
 # User modifications to templates
 *-customized.*
@@ -174,11 +156,6 @@ ConsoleHost_history.txt
 # Azure Resource Manager cache
 .azure-cache/
 
-# ARM template parameter files with secrets
-*parameters*.json
-!*parameters*.template.json
-!*parameters*.example.json
-
 # =======================
 # Git Specific
 # =======================
@@ -192,15 +169,6 @@ ConsoleHost_history.txt
 *.LOCAL.*
 *.REMOTE.*
 
-# =======================
-# Special Cases - ALWAYS IGNORE
-# =======================
-# Security-sensitive files regardless of name
-*client-secret*
-*tenant-id*
-*subscription-id*
-*access-token*
-*refresh-token*
 
 # API keys and endpoints
 *api-key*
