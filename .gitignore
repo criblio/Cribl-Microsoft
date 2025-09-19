@@ -1,0 +1,234 @@
+# Cribl-Microsoft Repository .gitignore
+# ===========================================
+
+# Backup configuration files
+*.backup.json
+*-backup.json
+*.bak
+
+
+# Test output and results
+test-results/
+regression-test-results/
+*-test-output/
+
+# =======================
+# Temporary and Cache Files
+# =======================
+# Temporary PowerShell files
+*.tmp
+*.temp
+*.cache
+
+# PowerShell execution logs
+*.log
+*.out
+
+# Temporary marker files
+.cribl-collection-in-progress
+.automation-in-progress
+.*-marker
+
+# =======================
+# Dot Directories (Hidden)
+# =======================
+# All hidden directories starting with dot
+.*/
+.vscode/
+.vs/
+.idea/
+
+# PowerShell module cache
+.psmodules/
+
+# Azure CLI cache
+.azure/
+
+# Configuration directories
+.config/
+.settings/
+
+# =======================
+# Platform-Specific Files
+# =======================
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+*.lnk
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon?
+._*
+.Spotlight-V100
+.Trashes
+
+# Linux
+*~
+.nfs*
+
+# =======================
+# Development Tools
+# =======================
+# Visual Studio Code
+.vscode/
+*.code-workspace
+
+# Visual Studio
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# JetBrains IDEs
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# PowerShell ISE
+*.psprojects
+
+# =======================
+# Documentation Build
+# =======================
+# Documentation generators
+_site/
+.jekyll-cache/
+.sass-cache/
+
+# =======================
+# Package Managers
+# =======================
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json
+yarn.lock
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+pip-log.txt
+pip-delete-this-directory.txt
+
+# =======================
+# Archive and Compressed Files
+# =======================
+*.zip
+*.tar.gz
+*.rar
+*.7z
+
+
+# User modifications to templates
+*-customized.*
+*-modified.*
+
+# Test files and data
+test-data/
+sample-data/
+mock-data/
+
+# =======================
+# PowerShell Specific
+# =======================
+# PowerShell Gallery modules
+PSGetModuleInfo.xml
+
+# PowerShell transcripts
+PowerShell_transcript.*
+
+# PowerShell history
+ConsoleHost_history.txt
+
+# =======================
+# Azure Specific
+# =======================
+# Azure Resource Manager cache
+.azure-cache/
+
+# =======================
+# Git Specific
+# =======================
+# Git backup files
+*.orig
+*.rej
+
+# Merge conflict files
+*.BACKUP.*
+*.BASE.*
+*.LOCAL.*
+*.REMOTE.*
+
+
+# API keys and endpoints
+*api-key*
+*endpoint*
+*connection-string*
+
+# Personal notes and scratch files
+notes.txt
+scratch.*
+todo.txt
+personal-*
+
+# =======================
+# Directory-Specific Ignores
+# =======================
+# Ignore everything in these directories except README files
+/private/
+/local/
+/user-configs/
+
+# But keep README files in ignored directories
+!README.md
+!readme.md
+!README.txt
+
+# =======================
+# File Size Limits
+# =======================
+# Large files that shouldn't be in git
+*.iso
+*.dmg
+*.vhd
+*.vmdk
+
+# =======================
+# Runtime and Execution
+# =======================
+# PowerShell execution policy bypass artifacts
+*.ps1.bak
+*.bat.bak
+
+# Execution logs
+execution-*.log
+run-*.log
+deploy-*.log
+
+# Error dumps
+*.dmp
+*.crash
+
+# =======================
+# Comments for Maintainers
+# =======================
+# This .gitignore is designed to protect:
+# 1. Sensitive authentication data
+# 2. User-specific configurations
+# 3. Generated output files
+# 4. Development environment files
+# 5. Platform-specific artifacts
+# 6. All hidden dot directories
+#
+# Always review before committing configuration files
+# Use template files (.template.json, .example.json) for examples
