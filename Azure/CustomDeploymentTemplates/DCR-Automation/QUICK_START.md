@@ -67,6 +67,7 @@ Select an option:
 
 ## 4️⃣ Menu Options Explained
 
+
 ### Option 1: Quick Deploy ⚡ 
 - Deploys BOTH native and custom tables
 - Uses settings from `operation-parameters.json`
@@ -122,6 +123,7 @@ Edit `NativeTableList.json`:
     "WindowsEvent"
 ]
 ```
+**Important:** Custom tables must end with `_CL` suffix
 
 ### Custom Tables (Update for Custom tables that you need created or already exist)
 Edit `CustomTableList.json`:

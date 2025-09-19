@@ -8,6 +8,7 @@ This PowerShell automation system streamlines the deployment of Azure Data Colle
 - ✅ **Table Type Detection**: Enhanced support for both DCR-based and MMA legacy tables
 - ✅ **Authentication Handling**: Improved Azure context detection and token refresh
 
+
 ## 🚀 Key Features
 
 - **Interactive Menu System**: User-friendly interface with deployment confirmations
@@ -412,6 +413,7 @@ This automation system provides:
 - ✅ **Table collision prevention** for native/custom conflicts
 - ✅ **Enhanced schema processing** for both modern and legacy table types
 - ✅ **Improved Cribl export** with proper authentication formatting
+
 
 ---
 

@@ -174,7 +174,9 @@ function Execute-Mode {
             Write-Host ""
             
             $exportCribl = -not $SkipCriblExport
+
             & $ScriptPath -CustomTableMode:$false -CreateDCE:$false -ShowCriblConfig:$ShowCriblConfig -ExportCriblConfig:$exportCribl -SkipCriblExport:$SkipCriblExport -MigrateCustomTablesToDCR:$MigrateCustomTablesToDCR -AutoMigrateCustomTables:$AutoMigrateCustomTables
+
         }
         
         "DirectCustom" {
@@ -194,6 +196,7 @@ function Execute-Mode {
             
             $exportCribl = -not $SkipCriblExport
             & $ScriptPath -CustomTableMode -CustomTableListFile "CustomTableList.json" -CreateDCE:$false -ShowCriblConfig:$ShowCriblConfig -ExportCriblConfig:$exportCribl -SkipCriblExport:$SkipCriblExport -MigrateCustomTablesToDCR:$MigrateCustomTablesToDCR -AutoMigrateCustomTables:$AutoMigrateCustomTables
+
         }
         
         "DirectBoth" {
@@ -203,6 +206,7 @@ function Execute-Mode {
             
             Write-Host "`n📌 Step 1: Processing Native Tables with Direct DCRs..." -ForegroundColor Yellow
             $exportCribl = -not $SkipCriblExport
+
             $nativeSummary = & $ScriptPath -CustomTableMode:$false -CreateDCE:$false -ShowCriblConfig:$ShowCriblConfig -ExportCriblConfig:$exportCribl -SkipCriblExport:$SkipCriblExport -MigrateCustomTablesToDCR:$MigrateCustomTablesToDCR -AutoMigrateCustomTables:$AutoMigrateCustomTables
             
             Write-Host "`n📌 Step 2: Processing Custom Tables with Direct DCRs..." -ForegroundColor Yellow
@@ -219,7 +223,9 @@ function Execute-Mode {
             Write-Host ""
             
             $exportCribl = -not $SkipCriblExport
+
             & $ScriptPath -CustomTableMode:$false -CreateDCE -ShowCriblConfig:$ShowCriblConfig -ExportCriblConfig:$exportCribl -SkipCriblExport:$SkipCriblExport -MigrateCustomTablesToDCR:$MigrateCustomTablesToDCR -AutoMigrateCustomTables:$AutoMigrateCustomTables
+
         }
         
         "DCECustom" {
@@ -238,7 +244,9 @@ function Execute-Mode {
             Write-Host ""
             
             $exportCribl = -not $SkipCriblExport
+
             & $ScriptPath -CustomTableMode -CustomTableListFile "CustomTableList.json" -CreateDCE -ShowCriblConfig:$ShowCriblConfig -ExportCriblConfig:$exportCribl -SkipCriblExport:$SkipCriblExport -MigrateCustomTablesToDCR:$MigrateCustomTablesToDCR -AutoMigrateCustomTables:$AutoMigrateCustomTables
+
         }
         
         "DCEBoth" {
@@ -248,10 +256,12 @@ function Execute-Mode {
             
             Write-Host "`n📌 Step 1: Processing Native Tables with DCE-based DCRs..." -ForegroundColor Yellow
             $exportCribl = -not $SkipCriblExport
+
             $nativeSummary = & $ScriptPath -CustomTableMode:$false -CreateDCE -ShowCriblConfig:$ShowCriblConfig -ExportCriblConfig:$exportCribl -SkipCriblExport:$SkipCriblExport -MigrateCustomTablesToDCR:$MigrateCustomTablesToDCR -AutoMigrateCustomTables:$AutoMigrateCustomTables
             
             Write-Host "`n📌 Step 2: Processing Custom Tables with DCE-based DCRs..." -ForegroundColor Yellow
             $customSummary = & $ScriptPath -CustomTableMode -CustomTableListFile "CustomTableList.json" -CreateDCE -ShowCriblConfig:$ShowCriblConfig -ExportCriblConfig:$exportCribl -SkipCriblExport:$SkipCriblExport -MigrateCustomTablesToDCR:$MigrateCustomTablesToDCR -AutoMigrateCustomTables:$AutoMigrateCustomTables
+
             
             Show-CombinedSummary -NativeSummary $nativeSummary -CustomSummary $customSummary -DCRMode "DCE-based"
         }
@@ -353,6 +363,7 @@ function Execute-Mode {
             Write-Host "DCR Mode: $currentDCRMode" -ForegroundColor Cyan
             
             Write-Host "`n📌 Generating Native Table Templates..." -ForegroundColor Yellow
+
             & $ScriptPath -CustomTableMode:$false -TemplateOnly -MigrateCustomTablesToDCR:$MigrateCustomTablesToDCR -AutoMigrateCustomTables:$AutoMigrateCustomTables
             
             Write-Host "`n📌 Generating Custom Table Templates..." -ForegroundColor Yellow
@@ -592,6 +603,7 @@ if ($NonInteractive -or $Mode) {
             "Q" {
                 Write-Host "`n👋 Exiting DCR Automation Tool. Goodbye!" -ForegroundColor Cyan
                 $continue = $false
+
             }
             default {
                 Write-Host "`n❌ Invalid choice. Please select 1-5 or Q to quit." -ForegroundColor Red
