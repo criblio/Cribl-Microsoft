@@ -103,6 +103,121 @@ function Set-DCRModeParameter {
     }
 }
 
+# Function to validate azure-parameters.json configuration
+function Test-AzureParametersConfiguration {
+    $azureParamsFile = Join-Path $PSScriptRoot "azure-parameters.json"
+
+    if (-not (Test-Path $azureParamsFile)) {
+        Write-Host "`n❌ ERROR: azure-parameters.json file not found!" -ForegroundColor Red
+        Write-Host "   Please ensure the file exists in the script directory." -ForegroundColor Yellow
+        return $false
+    }
+
+    try {
+        $azParams = Get-Content $azureParamsFile | ConvertFrom-Json
+    } catch {
+        Write-Host "`n❌ ERROR: azure-parameters.json is not valid JSON!" -ForegroundColor Red
+        Write-Host "   Error: $($_.Exception.Message)" -ForegroundColor Yellow
+        return $false
+    }
+
+    # Define required fields and their default placeholder values
+    $requiredFields = @{
+        "resourceGroupName" = @("<YOUR-RG-NAME-HERE>", "your-rg-name", "")
+        "workspaceName" = @("<YOUR-LOG-ANALYTICS-WORKSPACE-NAME-HERE>", "your-la-workspace", "your-workspace", "")
+        "location" = @("<YOUR-AZURE-REGION-HERE>", "eastus", "")
+        "tenantId" = @("<YOUR-TENANT-ID-HERE>", "your-tenant-id", "")
+        "clientId" = @("<YOUR-CLIENT-ID-HERE>", "your-app-client-id", "your-client-id", "")
+    }
+
+    $missingFields = @()
+    $defaultFields = @()
+
+    foreach ($field in $requiredFields.Keys) {
+        $value = $azParams.$field
+
+        if (-not $value -or [string]::IsNullOrWhiteSpace($value)) {
+            $missingFields += $field
+        } elseif ($requiredFields[$field] -contains $value) {
+            $defaultFields += $field
+        }
+    }
+
+    if ($missingFields.Count -gt 0 -or $defaultFields.Count -gt 0) {
+        Write-Host "`n⚠️  CONFIGURATION REQUIRED" -ForegroundColor Yellow
+        Write-Host "$('='*60)" -ForegroundColor Yellow
+        Write-Host "The azure-parameters.json file needs to be updated before proceeding." -ForegroundColor White
+        Write-Host ""
+
+        if ($missingFields.Count -gt 0) {
+            Write-Host "❌ Missing required fields:" -ForegroundColor Red
+            foreach ($field in $missingFields) {
+                Write-Host "   - $field" -ForegroundColor Red
+            }
+            Write-Host ""
+        }
+
+        if ($defaultFields.Count -gt 0) {
+            Write-Host "⚠️  Fields still have default/placeholder values:" -ForegroundColor Yellow
+            foreach ($field in $defaultFields) {
+                $currentValue = $azParams.$field
+                Write-Host "   - $field`: '$currentValue'" -ForegroundColor Yellow
+            }
+            Write-Host ""
+        }
+
+        Write-Host "📝 Please update the following fields in azure-parameters.json:" -ForegroundColor Cyan
+        Write-Host "   • resourceGroupName: Your Azure resource group name" -ForegroundColor Gray
+        Write-Host "   • workspaceName: Your Log Analytics workspace name" -ForegroundColor Gray
+        Write-Host "   • location: Your Azure region (e.g., 'eastus', 'westus2')" -ForegroundColor Gray
+        Write-Host "   • tenantId: Your Azure tenant ID (GUID)" -ForegroundColor Gray
+        Write-Host "   • clientId: Your Azure app registration client ID (GUID)" -ForegroundColor Gray
+        Write-Host ""
+        Write-Host "💡 Note: clientSecret can remain as placeholder for now if not using Cribl export." -ForegroundColor DarkGray
+        Write-Host "$('='*60)" -ForegroundColor Yellow
+
+        return $false
+    }
+
+    return $true
+}
+
+# Function to wait for configuration update
+function Wait-ForConfigurationUpdate {
+    Write-Host "`n🔧 CONFIGURATION UPDATE REQUIRED" -ForegroundColor Cyan
+    Write-Host "$('-'*50)" -ForegroundColor Gray
+    Write-Host "Please edit the azure-parameters.json file with your Azure details." -ForegroundColor White
+    Write-Host ""
+    Write-Host "You can:" -ForegroundColor Yellow
+    Write-Host "1. Open azure-parameters.json in your preferred editor" -ForegroundColor Gray
+    Write-Host "2. Update the required fields listed above" -ForegroundColor Gray
+    Write-Host "3. Save the file" -ForegroundColor Gray
+    Write-Host "4. Return here and press Enter to continue" -ForegroundColor Gray
+    Write-Host ""
+
+    do {
+        $continue = Read-Host "Press Enter after updating azure-parameters.json (or 'q' to quit)"
+
+        if ($continue.ToLower() -eq 'q') {
+            Write-Host "`nExiting... Please update azure-parameters.json and run the script again." -ForegroundColor Yellow
+            exit 0
+        }
+
+        Write-Host "`n🔍 Checking configuration..." -ForegroundColor Cyan
+
+        if (Test-AzureParametersConfiguration) {
+            Write-Host "✅ Configuration validated successfully!" -ForegroundColor Green
+            Write-Host ""
+            Start-Sleep -Seconds 1
+            return $true
+        } else {
+            Write-Host "`n❌ Configuration still needs updates. Please check the fields above." -ForegroundColor Red
+            Write-Host ""
+        }
+
+    } while ($true)
+}
+
 # Function to execute a mode
 function Execute-Mode {
     param([string]$ExecutionMode)
@@ -392,16 +507,15 @@ function Show-MainMenu {
     Write-Host "`n$('='*60)" -ForegroundColor Cyan
     Write-Host "         DCR AUTOMATION DEPLOYMENT MENU" -ForegroundColor White
     Write-Host "$('='*60)" -ForegroundColor Cyan
-    
-    # Warning about configuration
-    Write-Host "`n⚠️  IMPORTANT: Ensure azure-parameters.json is updated before deployment!" -ForegroundColor Yellow
-    Write-Host "   This file must contain your workspace name, resource group, location (Azure Region), TenantId, and ClientId." -ForegroundColor DarkGray
-    
-    # Display current configuration
+
+    # Display current configuration (validated)
     $azParams = Get-Content (Join-Path $PSScriptRoot "azure-parameters.json") | ConvertFrom-Json
     Write-Host "`n📍 Current Configuration:" -ForegroundColor Cyan
     Write-Host "   Workspace: $($azParams.workspaceName)" -ForegroundColor Gray
     Write-Host "   Resource Group: $($azParams.resourceGroupName)" -ForegroundColor Gray
+    Write-Host "   Location: $($azParams.location)" -ForegroundColor Gray
+    Write-Host "   Tenant ID: $($azParams.tenantId)" -ForegroundColor Gray
+    Write-Host "   Client ID: $($azParams.clientId)" -ForegroundColor Gray
     
     # Get current DCR mode
     $currentDCRMode = Get-DCRModeStatus
@@ -459,6 +573,12 @@ function Wait-ForUser {
 if ($NonInteractive -or $Mode) {
     # Non-interactive mode - execute the specified mode and exit
     if ($Mode) {
+        # Validate configuration before executing in non-interactive mode
+        if (-not (Test-AzureParametersConfiguration)) {
+            Write-Host "`n❌ Configuration validation failed in non-interactive mode!" -ForegroundColor Red
+            Write-Host "Please update azure-parameters.json with valid values before running in non-interactive mode." -ForegroundColor Yellow
+            exit 1
+        }
         Execute-Mode -ExecutionMode $Mode
     } else {
         Write-Host "❌ Non-interactive mode requires -Mode parameter" -ForegroundColor Red
@@ -467,11 +587,24 @@ if ($NonInteractive -or $Mode) {
 } else {
     # Interactive menu mode
     $continue = $true
-    
+
     # Initialize script-level variables for settings
     $script:ShowCriblConfig = $ShowCriblConfig
     $script:SkipCriblExport = $SkipCriblExport
-    
+
+    # Validate configuration before showing menu
+    Write-Host "`n🔍 Validating azure-parameters.json configuration..." -ForegroundColor Cyan
+    if (-not (Test-AzureParametersConfiguration)) {
+        # Configuration needs updates - wait for user to fix it
+        if (-not (Wait-ForConfigurationUpdate)) {
+            Write-Host "`nExiting due to configuration issues." -ForegroundColor Red
+            exit 1
+        }
+    } else {
+        Write-Host "✅ Configuration validated successfully!" -ForegroundColor Green
+        Start-Sleep -Seconds 1
+    }
+
     while ($continue) {
         Show-MainMenu
         $choice = Read-Host "`nSelect an option"
