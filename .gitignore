@@ -1,6 +1,11 @@
 # Cribl-Microsoft Repository .gitignore
 # ===========================================
 
+Testing files to ignore
+# ============================================
+*_test.json
+
+
 # Backup configuration files
 *.backup.json
 *-backup.json

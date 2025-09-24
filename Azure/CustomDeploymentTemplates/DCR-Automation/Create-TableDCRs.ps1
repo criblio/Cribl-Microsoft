@@ -1776,10 +1776,25 @@ $WorkspaceName = $azureParameters.workspaceName
 $DCRPrefix = $azureParameters.dcrPrefix
 $DCRSuffix = $azureParameters.dcrSuffix
 $Location = $azureParameters.location
+$SubscriptionId = $azureParameters.subscriptionId
+
+# Set Azure subscription context
+if ($SubscriptionId -and $SubscriptionId -ne "<YOUR-SUBSCRIPTION-ID-HERE>") {
+    try {
+        Write-Host "Setting Azure subscription context to: $SubscriptionId" -ForegroundColor Cyan
+        Set-AzContext -SubscriptionId $SubscriptionId -ErrorAction Stop | Out-Null
+        Write-Host "✓ Azure subscription context set successfully" -ForegroundColor Green
+    } catch {
+        Write-Host "⚠️ Warning: Failed to set subscription context. Using current subscription." -ForegroundColor Yellow
+        Write-Host "  Error: $($_.Exception.Message)" -ForegroundColor Yellow
+    }
+} else {
+    Write-Host "⚠️ No subscription ID configured in azure-parameters.json. Using current Azure context subscription." -ForegroundColor Yellow
+}
 
 # DCE parameters (only used if CreateDCE is true)
 if ($CreateDCE) {
-    $DCEResourceGroupName = $azureParameters.dceResourceGroupName
+    $DCEResourceGroupName = $azureParameters.resourceGroupName
     $DCEPrefix = $azureParameters.dcePrefix
     $DCESuffix = $azureParameters.dceSuffix
 }
