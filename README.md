@@ -17,6 +17,12 @@ Automation tools and templates for integrating Cribl Stream with Microsoft Azure
 - DCE and non-DCE configurations
 - Ready-to-deploy JSON templates
 
+### [Lookups](Lookups/)
+**Lookup tables and enrichment data for Cribl Stream**
+- Static lookup tables for data enrichment
+- Dynamic lookups including Active Directory integration
+- Reference data for log processing workflows
+
 ## 🚀 Quick Start
 
 ### For Automated Deployment
@@ -48,6 +54,8 @@ Browse templates in `Azure/CustomDeploymentTemplates/DCR-Templates/`
 - [DCR-Automation README](Azure/CustomDeploymentTemplates/DCR-Automation/README.md) - Detailed automation documentation
 - [Cribl Destinations Guide](Azure/CustomDeploymentTemplates/DCR-Automation/CRIBL_DESTINATIONS_README.md) - Cribl configuration details
 - [Custom Tables Guide](Azure/CustomDeploymentTemplates/DCR-Automation/custom-table-schemas/README.md) - Creating custom table schemas
+- [Static Lookups Guide](Lookups/StaticLookups/README.md) - Static lookup table reference
+- [Active Directory Lookups Guide](Lookups/DynamicLookups/ActiveDirectory/README.md) - Dynamic AD lookup integration
 
 ## 🤝 Contributing
 
