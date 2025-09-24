@@ -125,7 +125,7 @@ function Test-AzureParametersConfiguration {
     $requiredFields = @{
         "resourceGroupName" = @("<YOUR-RG-NAME-HERE>", "your-rg-name", "")
         "workspaceName" = @("<YOUR-LOG-ANALYTICS-WORKSPACE-NAME-HERE>", "your-la-workspace", "your-workspace", "")
-        "location" = @("<YOUR-AZURE-REGION-HERE>", "eastus", "")
+        "location" = @("<YOUR-AZURE-REGION-HERE>", "")
         "tenantId" = @("<YOUR-TENANT-ID-HERE>", "your-tenant-id", "")
         "clientId" = @("<YOUR-CLIENT-ID-HERE>", "your-app-client-id", "your-client-id", "")
     }
