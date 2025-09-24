@@ -1,7 +1,7 @@
 {
+  "subscriptionId": "<YOUR-SUBSCRIPTION-ID-HERE>",
   "resourceGroupName": "<YOUR-RG-NAME-HERE>",
   "workspaceName": "<YOUR-LOG-ANALYTICS-WORKSPACE-NAME-HERE>",
-  "dceResourceGroupName": "<YOUR-DCE-RG-NAME-HERE>",
   "dcePrefix": "dce-",
   "dceSuffix": "",
   "dcrPrefix": "dcr-",
@@ -9,12 +9,11 @@
   "location": "<YOUR-AZURE-REGION-HERE>",
   "tenantId": "<YOUR-TENANT-ID-HERE>",
   "clientId": "<YOUR-CLIENT-ID-HERE>",
-  "clientSecret": "<YOUR-CLIENT-SECRET-HERE>",
   "_comments": {
-    "WARNING: clientSecret should be stored securely, not in plain text": "Consider using environment variables or secure vaults to manage sensitive information.",
-    "dce_parameters": "DCE-related parameters (dceResourceGroupName, dcePrefix, dceSuffix) are only used when createDCE=true in operation-parameters.json",
+    "dce_parameters": "DCE-related parameters (dcePrefix, dceSuffix) are only used when createDCE=true in operation-parameters.json. DCEs are created in the same resource group as the DCRs.",
     "dcr_naming": "Script will automatically abbreviate table names if the full DCR name exceeds length limits (30 chars for Direct DCRs, 64 chars for DCE-based DCRs)",
     "naming_limits": "Direct DCRs: 30 chars max, DCE-based DCRs: 64 chars max. Prefix and suffix are preserved, only table names are abbreviated.",
-    "azure_ad_auth": "tenantId, clientId, and clientSecret are used for Azure AD authentication in Cribl Stream destinations"
+    "azure_ad_auth": "tenantId and clientId are used for Azure AD authentication in Cribl Stream destinations. Client secret will be set to '<replace me>' placeholder for manual configuration in Cribl Stream.",
+    "subscription": "subscriptionId is used to automatically set the Azure subscription context when running the scripts"
   }
 }

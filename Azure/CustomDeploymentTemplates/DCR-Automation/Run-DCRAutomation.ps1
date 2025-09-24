@@ -123,6 +123,7 @@ function Test-AzureParametersConfiguration {
 
     # Define required fields and their default placeholder values
     $requiredFields = @{
+        "subscriptionId" = @("<YOUR-SUBSCRIPTION-ID-HERE>", "your-subscription-id", "")
         "resourceGroupName" = @("<YOUR-RG-NAME-HERE>", "your-rg-name", "")
         "workspaceName" = @("<YOUR-LOG-ANALYTICS-WORKSPACE-NAME-HERE>", "your-la-workspace", "your-workspace", "")
         "location" = @("<YOUR-AZURE-REGION-HERE>", "")
@@ -167,13 +168,14 @@ function Test-AzureParametersConfiguration {
         }
 
         Write-Host "📝 Please update the following fields in azure-parameters.json:" -ForegroundColor Cyan
+        Write-Host "   • subscriptionId: Your Azure subscription ID (GUID)" -ForegroundColor Gray
         Write-Host "   • resourceGroupName: Your Azure resource group name" -ForegroundColor Gray
         Write-Host "   • workspaceName: Your Log Analytics workspace name" -ForegroundColor Gray
         Write-Host "   • location: Your Azure region (e.g., 'eastus', 'westus2')" -ForegroundColor Gray
         Write-Host "   • tenantId: Your Azure tenant ID (GUID)" -ForegroundColor Gray
         Write-Host "   • clientId: Your Azure app registration client ID (GUID)" -ForegroundColor Gray
         Write-Host ""
-        Write-Host "💡 Note: clientSecret can remain as placeholder for now if not using Cribl export." -ForegroundColor DarkGray
+        Write-Host "💡 Note: Client secret will be set to '<replace me>' in Cribl destinations for manual configuration." -ForegroundColor DarkGray
         Write-Host "$('='*60)" -ForegroundColor Yellow
 
         return $false
@@ -267,7 +269,7 @@ function Execute-Mode {
             Write-Host "  Location: $($azParams.location)" -ForegroundColor Gray
             Write-Host "  DCR Prefix: $($azParams.dcrPrefix)" -ForegroundColor Gray
             if ($currentDCRMode -eq "DCE-based") {
-                Write-Host "  DCE Resource Group: $($azParams.dceResourceGroupName)" -ForegroundColor Gray
+                Write-Host "  DCE Resource Group: $($azParams.resourceGroupName)" -ForegroundColor Gray
                 Write-Host "  DCE Prefix: $($azParams.dcePrefix)" -ForegroundColor Gray
             }
             
@@ -511,6 +513,7 @@ function Show-MainMenu {
     # Display current configuration (validated)
     $azParams = Get-Content (Join-Path $PSScriptRoot "azure-parameters.json") | ConvertFrom-Json
     Write-Host "`n📍 Current Configuration:" -ForegroundColor Cyan
+    Write-Host "   Subscription ID: $($azParams.subscriptionId)" -ForegroundColor Gray
     Write-Host "   Workspace: $($azParams.workspaceName)" -ForegroundColor Gray
     Write-Host "   Resource Group: $($azParams.resourceGroupName)" -ForegroundColor Gray
     Write-Host "   Location: $($azParams.location)" -ForegroundColor Gray

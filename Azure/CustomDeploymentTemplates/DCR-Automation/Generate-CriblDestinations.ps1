@@ -225,10 +225,8 @@ function New-CriblDestinationConfig {
         $configContent = $configContent -replace "'replaceme'", "'$($AzureParams.clientId)'"
     }
     
-    # Client Secret
-    if ($AzureParams.clientSecret -and $AzureParams.clientSecret -ne "YOUR-CLIENT-SECRET-HERE") {
-        $configContent = $configContent -replace '"secret":\s*"replaceme"', "`"secret`": `"$($AzureParams.clientSecret)`""
-    }
+    # Client Secret - Always use <replace me> placeholder
+    $configContent = $configContent -replace '"secret":\s*"replaceme"', '"secret": "<replace me>"'
     
     # Tenant ID
     if ($AzureParams.tenantId -and $AzureParams.tenantId -ne "YOUR-TENANT-ID-HERE") {
@@ -308,7 +306,7 @@ Write-Host "    Workspace: $($azureParams.workspaceName)" -ForegroundColor Gray
 Write-Host "    Location: $($azureParams.location)" -ForegroundColor Gray
 Write-Host "    Tenant ID: $(if ($azureParams.tenantId -and $azureParams.tenantId -ne 'YOUR-TENANT-ID-HERE') { "Configured ✓" } else { 'Not configured ⚠️' })" -ForegroundColor Gray
 Write-Host "    Client ID: $(if ($azureParams.clientId -and $azureParams.clientId -ne 'YOUR-CLIENT-ID-HERE') { "Configured ✓" } else { 'Not configured ⚠️' })" -ForegroundColor Gray
-Write-Host "    Client Secret: $(if ($azureParams.clientSecret -and $azureParams.clientSecret -ne 'YOUR-CLIENT-SECRET-HERE') { 'Configured ✓' } else { 'Not configured ⚠️' })" -ForegroundColor Gray
+Write-Host "    Client Secret: <replace me> placeholder (configured in Cribl Stream)" -ForegroundColor Gray
 
 # Check for required authentication parameters
 $authWarning = $false
@@ -320,10 +318,8 @@ if ($azureParams.clientId -eq "YOUR-CLIENT-ID-HERE" -or [string]::IsNullOrWhiteS
     Write-Host "⚠️  Client ID not configured in azure-parameters.json" -ForegroundColor Yellow
     $authWarning = $true
 }
-if ($azureParams.clientSecret -eq "YOUR-CLIENT-SECRET-HERE" -or [string]::IsNullOrWhiteSpace($azureParams.clientSecret)) {
-    Write-Host "⚠️  Client Secret not configured in azure-parameters.json" -ForegroundColor Yellow
-    $authWarning = $true
-}
+# Client Secret is now always set to <replace me> placeholder
+Write-Host "ℹ️  Client Secret will be set to '<replace me>' placeholder for manual configuration in Cribl Stream" -ForegroundColor Cyan
 
 # Create output directories
 $outputPath = Join-Path $ScriptDirectory $OutputDirectory
@@ -499,7 +495,7 @@ $metadataContent = @{
         IDSuffix = $criblParams.IDsuffix
         TenantConfigured = ($azureParams.tenantId -ne "YOUR-TENANT-ID-HERE")
         ClientIdConfigured = ($azureParams.clientId -ne "YOUR-CLIENT-ID-HERE")
-        ClientSecretConfigured = ($azureParams.clientSecret -ne "YOUR-CLIENT-SECRET-HERE")
+        ClientSecretConfigured = $true  # Always true since we use <replace me> placeholder
     }
     Destinations = $allMetadata
 }
