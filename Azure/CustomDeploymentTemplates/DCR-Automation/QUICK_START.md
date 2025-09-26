@@ -1,7 +1,7 @@
 # 🚀 DCR Automation Quick Start
 
 ## Prerequisites
-- DCR or Kind:Direct require Cribl Stream 4.14+
+- DCR of Kind:Direct require Cribl Stream 4.14+
 - PowerShell 5.1+ with Azure PowerShell modules (Az.Accounts, Az.Resources, Az.OperationalInsights)
 - Azure subscription with appropriate permissions
 - Log Analytics Workspace already created
