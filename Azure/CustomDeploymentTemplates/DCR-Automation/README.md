@@ -2,11 +2,11 @@
 
 This PowerShell automation system streamlines the deployment of Azure Data Collection Rules (DCRs) for integrating Cribl Stream with Azure Log Analytics/Microsoft Sentinel. Features an **interactive menu interface** for easy deployment, supporting both native and custom tables with automatic Cribl configuration export.
 
-## 🆕 Latest Updates (v1.0.1)
-- ✅ **Schema Processing Fix**: Resolved MMA (legacy) table processing with nested schema structure
-- ✅ **Cribl Export Enhancement**: Fixed ClientId quoting in exported configurations
-- ✅ **Table Type Detection**: Enhanced support for both DCR-based and MMA legacy tables
-- ✅ **Authentication Handling**: Improved Azure context detection and token refresh
+## 🆕 Latest Updates (v1.1.0)
+- ✅ **Directory Structure Reorganization**: Streamlined project layout with organized configuration directories
+- ✅ **Enhanced Documentation**: Updated all file path references for new structure
+- ✅ **Improved Maintainability**: Separated entry points from working configurations
+- ✅ **Backward Compatibility**: All existing workflows continue unchanged
 
 
 ## 🚀 Key Features
@@ -51,7 +51,7 @@ DCR-Automation/
 
 ## ⚙️ Configuration Files
 
-### 1. azure-parameters.json (MUST CONFIGURE)
+### 1. prod/azure-parameters.json (MUST CONFIGURE)
 ```json
 {
   "resourceGroupName": "your-rg-name",
@@ -74,7 +74,7 @@ DCR-Automation/
 - Direct DCRs have 30-character name limit (auto-abbreviated)
 - ✅ **ClientId Quoting**: Now properly quoted in Cribl exports
 
-### 2. operation-parameters.json
+### 2. prod/operation-parameters.json
 ```json
 {
   "deployment": {
@@ -90,8 +90,8 @@ DCR-Automation/
 ```
 
 ### 3. Table Lists
-- **NativeTableList.json**: Native Azure tables (SecurityEvent, Syslog, etc.)
-- **CustomTableList.json**: Custom tables with _CL suffix
+- **prod/NativeTableList.json**: Native Azure tables (SecurityEvent, Syslog, etc.)
+- **prod/CustomTableList.json**: Custom tables with _CL suffix
 
 ## 🔄 DCR Modes
 
@@ -109,7 +109,7 @@ DCR-Automation/
 ### 1. Configure Azure Settings
 ```powershell
 # Edit azure-parameters.json with your values
-notepad azure-parameters.json
+notepad prod/azure-parameters.json
 ```
 
 ### 2. Connect to Azure
@@ -248,7 +248,7 @@ Select an option: _
 ## 🔗 Cribl Integration
 
 ### Automatic Configuration Export
-By default, the system exports Cribl configuration to `cribl-dcr-configs\cribl-dcr-config.json` containing:
+By default, the system exports Cribl configuration to `prod/cribl-dcr-configs\cribl-dcr-config.json` containing:
 - DCR Immutable IDs
 - Ingestion Endpoints
 - Stream Names
@@ -260,7 +260,7 @@ By default, the system exports Cribl configuration to `cribl-dcr-configs\cribl-d
 .\Generate-CriblDestinations.ps1
 ```
 
-Output in `cribl-dcr-configs\destinations\`:
+Output in `prod/cribl-dcr-configs\destinations\`:
 - Individual JSON configs for each DCR
 - Ready to import into Cribl Stream
 - Includes authentication from azure-parameters.json
@@ -275,7 +275,7 @@ New-AzRoleAssignment -ObjectId "app-object-id" -RoleDefinitionName "Monitoring M
 ## 📊 Custom Tables
 
 ### Creating Custom Table Schemas
-Place schema files in `custom-table-schemas\`:
+Place schema files in `prod/custom-table-schemas\`:
 
 ```json
 {
@@ -302,7 +302,7 @@ Place schema files in `custom-table-schemas\`:
 
 ### Processing Custom Tables
 ```powershell
-# Enable in operation-parameters.json
+# Enable in prod/operation-parameters.json
 "customTableSettings": { "enabled": true }
 
 # Or via command
@@ -316,7 +316,7 @@ Perfect for CI/CD pipelines and review:
 # Generate templates with real schemas from Azure
 .\Run-DCRAutomation.ps1 -Mode TemplateOnly
 
-# Templates saved to generated-templates/
+# Templates saved to prod/generated-templates/
 # - {TableName}-latest.json (current version)
 # - {TableName}-{timestamp}.json (versioned)
 ```
@@ -326,8 +326,8 @@ Perfect for CI/CD pipelines and review:
 1. **Start with Direct DCRs** - Simpler and more cost-effective
 2. **Test with templates first** - Use `-Mode TemplateOnly`
 3. **Deploy single table first** - Use `-SpecificDCR "TableName"`
-4. **Review Cribl configs** - Check `cribl-dcr-configs\` before importing
-5. **Protect credentials** - Never commit azure-parameters.json with real values
+4. **Review Cribl configs** - Check `prod/cribl-dcr-configs\` before importing
+5. **Protect credentials** - Never commit prod/azure-parameters.json with real values
 6. **Monitor costs** - DCEs incur additional charges
 
 ## 🚨 Troubleshooting
@@ -340,7 +340,7 @@ Perfect for CI/CD pipelines and review:
 | "DCR name too long" | Script auto-abbreviates, check output |
 | "Authentication error" | Run `Connect-AzAccount` |
 | "Template too large" | Use manual deployment via Azure Portal |
-| "Custom table missing" | Create schema in `custom-table-schemas\` |
+| "Custom table missing" | Create schema in `prod/custom-table-schemas\` |
 
 ### Validation Commands
 ```powershell
@@ -359,8 +359,8 @@ Perfect for CI/CD pipelines and review:
 1. **Protect sensitive files**:
 ```bash
 # Add to .gitignore
-azure-parameters.json
-cribl-dcr-configs/
+prod/azure-parameters.json
+prod/cribl-dcr-configs/
 *.backup.json
 ```
 
@@ -397,7 +397,7 @@ $env:AZURE_CLIENT_SECRET = "your-secret"
   Target Table: SecurityEvent
 ═══════════════════════════════════
 
-📦 Cribl configuration exported to: cribl-dcr-configs\cribl-dcr-config.json
+📦 Cribl configuration exported to: prod/cribl-dcr-configs\cribl-dcr-config.json
 ```
 
 ## 🎉 Summary

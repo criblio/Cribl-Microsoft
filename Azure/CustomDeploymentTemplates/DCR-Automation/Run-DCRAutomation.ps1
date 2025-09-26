@@ -28,7 +28,10 @@ param(
     [switch]$AutoMigrateCustomTables = $false
 )
 
-$ScriptPath = Join-Path $PSScriptRoot "Create-TableDCRs.ps1"
+# Check for dev mode flag file (hidden from users)
+$DevModeFlag = Join-Path $PSScriptRoot ".dev-mode"
+$Environment = if (Test-Path $DevModeFlag) { "dev" } else { "prod" }
+$ScriptPath = Join-Path $PSScriptRoot $Environment "Create-TableDCRs.ps1"
 
 # Function to display combined summary for Both modes
 function Show-CombinedSummary {
@@ -84,7 +87,7 @@ function Show-CombinedSummary {
 
 # Helper function to display DCR mode status
 function Get-DCRModeStatus {
-    $opParams = Get-Content (Join-Path $PSScriptRoot "operation-parameters.json") | ConvertFrom-Json
+    $opParams = Get-Content (Join-Path $PSScriptRoot $Environment "operation-parameters.json") | ConvertFrom-Json
     if ($opParams.deployment.createDCE) {
         return "DCE-based"
     } else {
@@ -105,7 +108,7 @@ function Set-DCRModeParameter {
 
 # Function to validate azure-parameters.json configuration
 function Test-AzureParametersConfiguration {
-    $azureParamsFile = Join-Path $PSScriptRoot "azure-parameters.json"
+    $azureParamsFile = Join-Path $PSScriptRoot $Environment "azure-parameters.json"
 
     if (-not (Test-Path $azureParamsFile)) {
         Write-Host "`n❌ ERROR: azure-parameters.json file not found!" -ForegroundColor Red
@@ -226,11 +229,11 @@ function Execute-Mode {
     
     # Clear any existing configuration if this is first call
     if ($ExecutionMode -ne "Status") {
-        $tempMarkerFile = Join-Path $PSScriptRoot ".cribl-collection-in-progress"
+        $tempMarkerFile = Join-Path $PSScriptRoot $Environment ".cribl-collection-in-progress"
         if (-not (Test-Path $tempMarkerFile)) {
             New-Item -ItemType File -Path $tempMarkerFile -Force | Out-Null
             Register-EngineEvent -SourceIdentifier PowerShell.Exiting -Action {
-                $tempFile = Join-Path $PSScriptRoot ".cribl-collection-in-progress"
+                $tempFile = Join-Path $PSScriptRoot $Environment ".cribl-collection-in-progress"
                 if (Test-Path $tempFile) {
                     Remove-Item $tempFile -Force -ErrorAction SilentlyContinue
                 }
@@ -244,8 +247,8 @@ function Execute-Mode {
             Write-Host "="*50 -ForegroundColor Cyan
             
             # Read current settings
-            $opParams = Get-Content (Join-Path $PSScriptRoot "operation-parameters.json") | ConvertFrom-Json
-            $azParams = Get-Content (Join-Path $PSScriptRoot "azure-parameters.json") | ConvertFrom-Json
+            $opParams = Get-Content (Join-Path $PSScriptRoot $Environment "operation-parameters.json") | ConvertFrom-Json
+            $azParams = Get-Content (Join-Path $PSScriptRoot $Environment "azure-parameters.json") | ConvertFrom-Json
             
             $currentDCRMode = Get-DCRModeStatus
             
@@ -255,11 +258,11 @@ function Execute-Mode {
             Write-Host "  Template Only: $($opParams.scriptBehavior.templateOnly)" -ForegroundColor Gray
             
             Write-Host "`n📁 Table Lists:" -ForegroundColor Yellow
-            $nativeTables = Get-Content (Join-Path $PSScriptRoot "NativeTableList.json") | ConvertFrom-Json
+            $nativeTables = Get-Content (Join-Path $PSScriptRoot $Environment "NativeTableList.json") | ConvertFrom-Json
             Write-Host "  Native Tables: $($nativeTables -join ', ')" -ForegroundColor Gray
             
-            if (Test-Path (Join-Path $PSScriptRoot "CustomTableList.json")) {
-                $customTables = Get-Content (Join-Path $PSScriptRoot "CustomTableList.json") | ConvertFrom-Json
+            if (Test-Path (Join-Path $PSScriptRoot $Environment "CustomTableList.json")) {
+                $customTables = Get-Content (Join-Path $PSScriptRoot $Environment "CustomTableList.json") | ConvertFrom-Json
                 Write-Host "  Custom Tables: $($customTables -join ', ')" -ForegroundColor Gray
             }
             
@@ -300,8 +303,8 @@ function Execute-Mode {
             Write-Host "`n🚀 Processing CUSTOM Tables with DIRECT DCRs..." -ForegroundColor Blue
             Write-Host "="*50 -ForegroundColor Blue
             
-            if (Test-Path (Join-Path $PSScriptRoot "CustomTableList.json")) {
-                $customTables = Get-Content (Join-Path $PSScriptRoot "CustomTableList.json") | ConvertFrom-Json
+            if (Test-Path (Join-Path $PSScriptRoot $Environment "CustomTableList.json")) {
+                $customTables = Get-Content (Join-Path $PSScriptRoot $Environment "CustomTableList.json") | ConvertFrom-Json
                 Write-Host "Tables to process: $($customTables -join ', ')" -ForegroundColor Cyan
             } else {
                 Write-Host "❌ CustomTableList.json not found!" -ForegroundColor Red
@@ -349,8 +352,8 @@ function Execute-Mode {
             Write-Host "`n🚀 Processing CUSTOM Tables with DCE-based DCRs..." -ForegroundColor Blue
             Write-Host "="*50 -ForegroundColor Blue
             
-            if (Test-Path (Join-Path $PSScriptRoot "CustomTableList.json")) {
-                $customTables = Get-Content (Join-Path $PSScriptRoot "CustomTableList.json") | ConvertFrom-Json
+            if (Test-Path (Join-Path $PSScriptRoot $Environment "CustomTableList.json")) {
+                $customTables = Get-Content (Join-Path $PSScriptRoot $Environment "CustomTableList.json") | ConvertFrom-Json
                 Write-Host "Tables to process: $($customTables -join ', ')" -ForegroundColor Cyan
             } else {
                 Write-Host "❌ CustomTableList.json not found!" -ForegroundColor Red
@@ -388,7 +391,7 @@ function Execute-Mode {
             Write-Host "="*50 -ForegroundColor Cyan
             
             # Load Azure parameters
-            $azParams = Get-Content (Join-Path $PSScriptRoot "azure-parameters.json") | ConvertFrom-Json
+            $azParams = Get-Content (Join-Path $PSScriptRoot $Environment "azure-parameters.json") | ConvertFrom-Json
             $ResourceGroupName = $azParams.resourceGroupName
             $WorkspaceName = $azParams.workspaceName
             $DCRPrefix = $azParams.dcrPrefix
@@ -410,7 +413,7 @@ function Execute-Mode {
             Write-Host "`n📊 Validating Cribl Configuration..." -ForegroundColor Cyan
             Write-Host "="*50 -ForegroundColor Cyan
             
-            $criblConfigDir = Join-Path $PSScriptRoot "cribl-dcr-configs"
+            $criblConfigDir = Join-Path $PSScriptRoot $Environment "cribl-dcr-configs"
             $configPath = Join-Path $criblConfigDir "cribl-dcr-config.json"
             
             if (Test-Path $configPath) {
@@ -457,7 +460,7 @@ function Execute-Mode {
             Write-Host "`n🔄 Reset Cribl Configuration" -ForegroundColor Cyan
             Write-Host "="*50 -ForegroundColor Cyan
             
-            $criblConfigDir = Join-Path $PSScriptRoot "cribl-dcr-configs"
+            $criblConfigDir = Join-Path $PSScriptRoot $Environment "cribl-dcr-configs"
             $configPath = Join-Path $criblConfigDir "cribl-dcr-config.json"
             
             if (Test-Path $configPath) {
@@ -491,13 +494,13 @@ function Execute-Mode {
     }
     
     # Check if Cribl config was exported
-    $criblConfigPath = Join-Path $PSScriptRoot "cribl-dcr-configs" "cribl-dcr-config.json"
+    $criblConfigPath = Join-Path $PSScriptRoot $Environment "cribl-dcr-configs" "cribl-dcr-config.json"
     if (-not $SkipCriblExport -and (Test-Path $criblConfigPath) -and $ExecutionMode -notmatch "Status|CollectCribl|ValidateCribl|ResetCribl") {
         Write-Host "`n📦 Cribl configuration automatically exported to: cribl-dcr-configs\cribl-dcr-config.json" -ForegroundColor Green
     }
     
     # Clean up temp marker file
-    $tempMarkerFile = Join-Path $PSScriptRoot ".cribl-collection-in-progress"
+    $tempMarkerFile = Join-Path $PSScriptRoot $Environment ".cribl-collection-in-progress"
     if (Test-Path $tempMarkerFile) {
         Remove-Item $tempMarkerFile -Force -ErrorAction SilentlyContinue
     }
@@ -511,7 +514,7 @@ function Show-MainMenu {
     Write-Host "$('='*60)" -ForegroundColor Cyan
 
     # Display current configuration (validated)
-    $azParams = Get-Content (Join-Path $PSScriptRoot "azure-parameters.json") | ConvertFrom-Json
+    $azParams = Get-Content (Join-Path $PSScriptRoot $Environment "azure-parameters.json") | ConvertFrom-Json
     Write-Host "`n📍 Current Configuration:" -ForegroundColor Cyan
     Write-Host "   Subscription ID: $($azParams.subscriptionId)" -ForegroundColor Gray
     Write-Host "   Workspace: $($azParams.workspaceName)" -ForegroundColor Gray
@@ -526,8 +529,8 @@ function Show-MainMenu {
     
     # Check for custom tables
     $customTableCount = 0
-    if (Test-Path (Join-Path $PSScriptRoot "CustomTableList.json")) {
-        $customTables = Get-Content (Join-Path $PSScriptRoot "CustomTableList.json") | ConvertFrom-Json
+    if (Test-Path (Join-Path $PSScriptRoot $Environment "CustomTableList.json")) {
+        $customTables = Get-Content (Join-Path $PSScriptRoot $Environment "CustomTableList.json") | ConvertFrom-Json
         $customTableCount = $customTables.Count
     }
     
@@ -622,8 +625,8 @@ if ($NonInteractive -or $Mode) {
                 
                 # Check for custom tables
                 $customTables = @()
-                if (Test-Path (Join-Path $PSScriptRoot "CustomTableList.json")) {
-                    $customTables = Get-Content (Join-Path $PSScriptRoot "CustomTableList.json") | ConvertFrom-Json
+                if (Test-Path (Join-Path $PSScriptRoot $Environment "CustomTableList.json")) {
+                    $customTables = Get-Content (Join-Path $PSScriptRoot $Environment "CustomTableList.json") | ConvertFrom-Json
                 }
                 
                 $nativeTables = @("CommonSecurityLog", "SecurityEvent", "Syslog", "WindowsEvent")
@@ -694,8 +697,8 @@ if ($NonInteractive -or $Mode) {
                 Write-Host "`n🚀 Custom Tables with Direct DCRs" -ForegroundColor Green
                 Write-Host "$('-'*40)" -ForegroundColor Gray
                 
-                if (Test-Path (Join-Path $PSScriptRoot "CustomTableList.json")) {
-                    $customTables = Get-Content (Join-Path $PSScriptRoot "CustomTableList.json") | ConvertFrom-Json
+                if (Test-Path (Join-Path $PSScriptRoot $Environment "CustomTableList.json")) {
+                    $customTables = Get-Content (Join-Path $PSScriptRoot $Environment "CustomTableList.json") | ConvertFrom-Json
                     if ($customTables.Count -gt 0) {
                         if (Confirm-Deployment -TableType "Custom" -DCRType "Direct (no DCE)" -Tables $customTables) {
                             Write-Host "`nStarting deployment..." -ForegroundColor Cyan
@@ -717,8 +720,8 @@ if ($NonInteractive -or $Mode) {
                 Write-Host "`n🚀 Custom Tables with DCE-based DCRs" -ForegroundColor Blue
                 Write-Host "$('-'*40)" -ForegroundColor Gray
                 
-                if (Test-Path (Join-Path $PSScriptRoot "CustomTableList.json")) {
-                    $customTables = Get-Content (Join-Path $PSScriptRoot "CustomTableList.json") | ConvertFrom-Json
+                if (Test-Path (Join-Path $PSScriptRoot $Environment "CustomTableList.json")) {
+                    $customTables = Get-Content (Join-Path $PSScriptRoot $Environment "CustomTableList.json") | ConvertFrom-Json
                     if ($customTables.Count -gt 0) {
                         if (Confirm-Deployment -TableType "Custom" -DCRType "DCE-based" -Tables $customTables) {
                             Write-Host "`nStarting deployment..." -ForegroundColor Cyan

@@ -194,6 +194,9 @@ personal-*
 /local/
 /user-configs/
 
+# DCR-Automation dev directory (for testing)
+Azure/CustomDeploymentTemplates/DCR-Automation/dev/
+
 # But keep README files in ignored directories
 !README.md
 !readme.md

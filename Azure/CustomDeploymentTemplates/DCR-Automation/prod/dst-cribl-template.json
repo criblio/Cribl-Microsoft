@@ -1,0 +1,33 @@
+{
+  "id": "<CriblSentinelDestinationName>",
+  "systemFields": [
+  ],
+  "streamtags": [],
+  "keepAlive": true,
+  "concurrency": 5,
+  "maxPayloadSizeKB": 1000,
+  "maxPayloadEvents": 0,
+  "compress": true,
+  "rejectUnauthorized": true,
+  "timeoutSec": 30,
+  "flushPeriodSec": 1,
+  "useRoundRobinDns": false,
+  "failedRequestLoggingMode": "none",
+  "safeHeaders": [],
+  "responseRetrySettings": [],
+  "timeoutRetrySettings": {
+    "timeoutRetry": false
+  },
+  "responseHonorRetryAfterHeader": false,
+  "onBackpressure": "drop",
+  "scope": "https://monitor.azure.com/.default",
+  "endpointURLConfiguration": "ID",
+  "type": "sentinel",
+  "dceEndpoint": "<Ingestion URL>",
+  "dcrID": "<dcr Immutable ID>",
+  "streamName": "<Stream Name>",
+  "client_id": "'replaceme'",
+  "secret": "replaceme",
+  "loginUrl": "https://login.microsoftonline.com/<TenantID>/oauth2/v2.0/token",
+  "url": "https://<dce ingestion url>/dataCollectionRules/<dcr immutable id>/streams/<stream name>?api-version=2021-11-01-preview"
+}

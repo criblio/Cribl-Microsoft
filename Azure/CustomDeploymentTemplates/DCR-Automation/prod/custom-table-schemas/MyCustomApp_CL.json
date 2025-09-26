@@ -1,0 +1,57 @@
+{
+  "description": "Custom application logs",
+  "retentionInDays": 30,
+  "totalRetentionInDays": 90,
+  "columns": [
+    {
+      "name": "TimeGenerated",
+      "type": "datetime",
+      "description": "Timestamp when the record was generated"
+    },
+    {
+      "name": "Computer",
+      "type": "string",
+      "description": "Computer name where the event occurred"
+    },
+    {
+      "name": "EventID",
+      "type": "int",
+      "description": "Event identifier"
+    },
+    {
+      "name": "EventCategory",
+      "type": "string",
+      "description": "Category of the event"
+    },
+    {
+      "name": "Message",
+      "type": "string",
+      "description": "Event message"
+    },
+    {
+      "name": "Severity",
+      "type": "string",
+      "description": "Event severity level (Info, Warning, Error, Critical)"
+    },
+    {
+      "name": "User",
+      "type": "string",
+      "description": "User associated with the event"
+    },
+    {
+      "name": "ApplicationName",
+      "type": "string",
+      "description": "Name of the application"
+    },
+    {
+      "name": "ApplicationVersion",
+      "type": "string",
+      "description": "Version of the application"
+    },
+    {
+      "name": "ProcessId",
+      "type": "int",
+      "description": "Process ID"
+    }
+  ]
+}
