@@ -3,7 +3,8 @@
 
 Testing files to ignore
 # ============================================
-*_test.json
+dev*
+dev-mode
 
 
 # Backup configuration files
