@@ -8,7 +8,7 @@
 
 ## 1️⃣ Configure Azure Settings
 
-Edit `azure-parameters.json` with your Azure details:
+Edit `prod/azure-parameters.json` with your Azure details:
 
 ```json
 {
@@ -71,12 +71,12 @@ Select an option:
 
 ### Option 1: Quick Deploy ⚡ 
 - Deploys BOTH native and custom tables
-- Uses settings from `operation-parameters.json`
+- Uses settings from `prod/operation-parameters.json`
 - Default: Direct DCRs (simpler, cost-effective)
 - **Best for:** Getting started quickly
 
 ### Option 2: Native Tables - Direct DCRs
-- Deploys tables listed in `NativeTablesLIst.json`
+- Deploys tables listed in `prod/NativeTableList.json`
 - Creates Direct DCRs (no DCE required)
 - **Best for:** Standard Sentinel tables
 
@@ -86,7 +86,7 @@ Select an option:
 - **Best for:** Private network scenarios
 
 ### Option 4: Custom Tables - Direct DCRs
-- Deploys custom tables from `CustomTableList.json`
+- Deploys custom tables from `prod/CustomTableList.json`
 - Tables must end with `_CL` suffix
 - **Best for:** Custom application logs
 
@@ -100,7 +100,7 @@ Select an option:
 2. **Review confirmation** showing what will be deployed
 3. **Type `Y`** to proceed or `N` to cancel
 4. **Watch progress** as DCRs are created
-5. **Cribl config automatically exported** to `cribl-dcr-configs\`
+5. **Cribl config automatically exported** to `prod/cribl-dcr-configs\`
 
 ## 6️⃣ After Deployment
 
@@ -108,14 +108,14 @@ Select an option:
 The menu automatically exports configuration. To generate individual Cribl destinations to: `cribl-dcr-configs\destinations`
 
 ### Files Created
-- `cribl-dcr-configs\cribl-dcr-config.json` - Main configuration
-- `cribl-dcr-configs\destinations\*.json` - Individual Cribl destinations
-- `generated-templates\*.json` - ARM templates (for reference or manual deployment from the Azure `Deploy a custom template` wizard)
+- `prod/cribl-dcr-configs\cribl-dcr-config.json` - Main configuration
+- `prod/cribl-dcr-configs\destinations\*.json` - Individual Cribl destinations
+- `prod/generated-templates\*.json` - ARM templates (for reference or manual deployment from the Azure `Deploy a custom template` wizard)
 
 ## 📝 Table Configuration
 
 ### Native Tables (Update for your use case)
-Edit `NativeTableList.json`:
+Edit `prod/NativeTableList.json`:
 ```json
 [
     "CommonSecurityLog",
@@ -127,7 +127,7 @@ Edit `NativeTableList.json`:
 **Important:** Custom tables must end with `_CL` suffix
 
 ### Custom Tables (Update for Custom tables that you need created or already exist)
-Edit `CustomTableList.json`:
+Edit `prod/CustomTableList.json`:
 ```json
 [
     "CloudFlare_CL",
@@ -138,7 +138,7 @@ Edit `CustomTableList.json`:
 
 ### Custom Table Schemas
 If a custom table doesn't exist in Azure, create a schema file:
-`custom-table-schemas\MyCustomApp_CL.json`
+`prod/custom-table-schemas\MyCustomApp_CL.json`
 
 ```json
 {
