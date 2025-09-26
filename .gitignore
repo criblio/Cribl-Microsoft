@@ -4,7 +4,7 @@
 Testing files to ignore
 # ============================================
 dev*
-dev-mode
+.dev-mode
 
 
 # Backup configuration files
