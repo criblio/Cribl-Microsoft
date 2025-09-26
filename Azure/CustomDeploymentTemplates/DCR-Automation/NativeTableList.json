@@ -1,3 +1,6 @@
 [
-    "CommonSecurityLog"
+    "CommonSecurityLog",
+    "SecurityEvent",
+    "WindowsEvent",
+    "Syslog"
 ]
