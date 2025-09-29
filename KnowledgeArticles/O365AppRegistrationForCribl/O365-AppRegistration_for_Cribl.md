@@ -1,10 +1,3 @@
----
-slug: /sources-office-365-activity
-description: Create and configure Azure App registration for use with O365 Cribl sources
-title: Office 365 Activity App Registration
-navTitle: Office 365 Activity App Registration
----
-
 # Office 365 App Registration for Cribl Sources
 
 Complete guide for creating and configuring Azure App Registration to integrate Office 365 services with Cribl Stream.
@@ -126,4 +119,4 @@ Add-RoleGroupMember -Identity "Cribl-O365MessageTrace" -Member <Application (Cli
 
 ---
 
-**Need help?** Refer to the [Cribl documentation](https://docs.cribl.io) for Office 365 source configuration details.
+**Need help?** reach out to the Cribl Community Slack channel [#azure-everything](https://cribl-community.slack.com/archives/C089V3GCFV0)
