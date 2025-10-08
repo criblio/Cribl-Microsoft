@@ -1,0 +1,9 @@
+{
+  "tenantId": "<YOUR-TENANT-ID-HERE>",
+  "clientId": "<YOUR-CLIENT-ID-HERE>",
+  "_comments": {
+    "azure_ad_auth": "tenantId and clientId are used for Azure AD authentication in Cribl Stream destinations. Client secret is referenced via Cribl secret name configured in CriblDestinationExample.json.",
+    "discovery_scope": "The script will scan all subscriptions accessible by your current Azure session for storage accounts containing vNet Flow Log containers (insights-logs-flowlogflowevent)",
+    "required_permissions": "Your Azure App Registration needs 'Storage Blob Data Reader' role on each storage account to access vNet Flow Logs from Cribl"
+  }
+}
