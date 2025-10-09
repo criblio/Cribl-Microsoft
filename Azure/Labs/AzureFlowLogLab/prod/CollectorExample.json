@@ -1,0 +1,69 @@
+{
+  "type": "collection",
+  "ttl": "4h",
+  "ignoreGroupJobsLimit": false,
+  "removeFields": [],
+  "resumeOnBoot": false,
+  "schedule": {
+    "cronSchedule": "15 * * * *",
+    "maxConcurrentRuns": 10,
+    "skippable": false,
+    "resumeMissed": true,
+    "run": {
+      "rescheduleDroppedTasks": true,
+      "maxTaskReschedule": 1,
+      "logLevel": "info",
+      "jobTimeout": "0",
+      "mode": "run",
+      "timeRangeType": "relative",
+      "timeWarning": {},
+      "expression": "true",
+      "minTaskSize": "1MB",
+      "maxTaskSize": "10MB",
+      "timestampTimezone": "UTC",
+      "earliest": "-75m",
+      "latest": "-15m"
+    },
+    "enabled": false
+  },
+  "streamtags": [],
+  "workerAffinity": false,
+  "collector": {
+    "conf": {
+      "authType": "clientSecret",
+      "recurse": true,
+      "includeMetadata": true,
+      "includeTags": false,
+      "maxBatchSize": 10,
+      "parquetChunkSizeMB": 5,
+      "parquetChunkDownloadTimeout": 600,
+      "azureCloud": "azure",
+      "containerName": "insights-logs-flowlogflowevent",
+      "path": "flowLogResourceID=/${*}/${*}/${_time:y=%Y}/${_time:m=%m}/${_time:d=%d}/${_time:h=%H}",
+      "textSecret": "Azure_vNet_Flowlogs_Secret",
+      "extractors": [],
+      "clientId": "<replace me>",
+      "tenantId": "<replace me>",
+      "storageAccountName": "<replace me>",
+      "clientTextSecret": "Azure_vNet_Flowlogs_Secret"
+    },
+    "destructive": false,
+    "type": "azure_blob",
+    "encoding": "utf8"
+  },
+  "input": {
+    "type": "collection",
+    "staleChannelFlushMs": 10000,
+    "sendToRoutes": true,
+    "preprocess": {
+      "disabled": true
+    },
+    "throttleRatePerSec": "0",
+    "breakerRulesets": [
+      "Azure_vNet_FlowLogs"
+    ],
+    "pipeline": "Azure_vNet_FlowLogs_PreProcessing"
+  },
+  "savedState": {},
+  "id": "Azure_vNet_FlowLogs_Hourly_v2"
+}
