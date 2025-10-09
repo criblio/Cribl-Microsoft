@@ -1,0 +1,171 @@
+<mxfile host="app.diagrams.net">
+  <diagram name="Azure Flow Log Lab - Data Flow" id="flowlog-dataflow">
+    <mxGraphModel dx="1434" dy="844" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1400" pageHeight="850" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <!-- Title -->
+        <mxCell id="title" value="Azure vNet Flow Logs Lab - Data Flow Architecture" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=20;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="300" y="30" width="800" height="40" as="geometry" />
+        </mxCell>
+
+        <!-- Azure Network Sources -->
+        <mxCell id="network-sources" value="Azure Network Sources" style="swimlane;whiteSpace=wrap;html=1;fontSize=14;fontStyle=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="80" y="120" width="280" height="480" as="geometry" />
+        </mxCell>
+
+        <mxCell id="vnet" value="[ICON: vNet]&lt;br&gt;&lt;br&gt;Virtual Network&lt;br&gt;&lt;br&gt;10.198.30.0/24&lt;br&gt;Flow Logs: 7 days" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontSize=12;align=center;" vertex="1" parent="network-sources">
+          <mxGeometry x="20" y="50" width="240" height="100" as="geometry" />
+        </mxCell>
+
+        <mxCell id="subnet-security" value="[ICON: Subnet]&lt;br&gt;&lt;br&gt;Security Subnet&lt;br&gt;&lt;br&gt;10.198.30.64/27&lt;br&gt;Flow Logs: 30 days" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontSize=12;align=center;" vertex="1" parent="network-sources">
+          <mxGeometry x="20" y="180" width="240" height="100" as="geometry" />
+        </mxCell>
+
+        <mxCell id="subnet-o11y" value="[ICON: Subnet]&lt;br&gt;&lt;br&gt;O11y Subnet&lt;br&gt;&lt;br&gt;10.198.30.96/27&lt;br&gt;Flow Logs: 90 days" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontSize=12;align=center;" vertex="1" parent="network-sources">
+          <mxGeometry x="20" y="310" width="240" height="100" as="geometry" />
+        </mxCell>
+
+        <mxCell id="vms" value="[ICON: VMs]&lt;br&gt;&lt;br&gt;Test VMs&lt;br&gt;Generate Traffic" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontSize=12;align=center;" vertex="1" parent="network-sources">
+          <mxGeometry x="20" y="430" width="240" height="40" as="geometry" />
+        </mxCell>
+
+        <!-- Storage & Network Watcher -->
+        <mxCell id="azure-services" value="Azure Services" style="swimlane;whiteSpace=wrap;html=1;fontSize=14;fontStyle=1;fillColor=#e1d5e7;strokeColor=#9673a6;" vertex="1" parent="1">
+          <mxGeometry x="440" y="120" width="280" height="480" as="geometry" />
+        </mxCell>
+
+        <mxCell id="network-watcher" value="[ICON: Network Watcher]&lt;br&gt;&lt;br&gt;Network Watcher&lt;br&gt;&lt;br&gt;• Flow Log Engine&lt;br&gt;• Version 2 Format&lt;br&gt;• NSG Flow Logs" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#9673a6;fontSize=12;align=center;" vertex="1" parent="azure-services">
+          <mxGeometry x="20" y="50" width="240" height="120" as="geometry" />
+        </mxCell>
+
+        <mxCell id="storage" value="[ICON: Storage Account]&lt;br&gt;&lt;br&gt;Storage Account&lt;br&gt;&lt;br&gt;• insights-logs-flowlogflowevent&lt;br&gt;• Hourly JSON Files&lt;br&gt;• Time-based Partitioning" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#9673a6;fontSize=12;align=center;" vertex="1" parent="azure-services">
+          <mxGeometry x="20" y="210" width="240" height="130" as="geometry" />
+        </mxCell>
+
+        <mxCell id="paths" value="Blob Path Structure:&lt;br&gt;&lt;br&gt;/flowlogResourceId=/.../&lt;br&gt;/y=YYYY/m=MM/d=DD/h=HH/&lt;br&gt;PT1H.json" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#9673a6;fontSize=10;align=left;" vertex="1" parent="azure-services">
+          <mxGeometry x="20" y="360" width="240" height="100" as="geometry" />
+        </mxCell>
+
+        <!-- Cribl Stream -->
+        <mxCell id="cribl" value="Cribl Stream" style="swimlane;whiteSpace=wrap;html=1;fontSize=14;fontStyle=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="800" y="120" width="280" height="480" as="geometry" />
+        </mxCell>
+
+        <mxCell id="collector-vnet" value="[ICON: Collector]&lt;br&gt;&lt;br&gt;vNet Flow Log Collector&lt;br&gt;&lt;br&gt;• Real-time Hourly&lt;br&gt;• 7-day Retention&lt;br&gt;• All Subnets" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d6b656;fontSize=12;align=center;" vertex="1" parent="cribl">
+          <mxGeometry x="20" y="50" width="240" height="110" as="geometry" />
+        </mxCell>
+
+        <mxCell id="collector-security" value="[ICON: Collector]&lt;br&gt;&lt;br&gt;Security Subnet Collector&lt;br&gt;&lt;br&gt;• 30-day Retention&lt;br&gt;• High Priority" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d6b656;fontSize=12;align=center;" vertex="1" parent="cribl">
+          <mxGeometry x="20" y="190" width="240" height="100" as="geometry" />
+        </mxCell>
+
+        <mxCell id="collector-o11y" value="[ICON: Collector]&lt;br&gt;&lt;br&gt;O11y Subnet Collector&lt;br&gt;&lt;br&gt;• 90-day Retention&lt;br&gt;• Long-term Analysis" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d6b656;fontSize=12;align=center;" vertex="1" parent="cribl">
+          <mxGeometry x="20" y="320" width="240" height="100" as="geometry" />
+        </mxCell>
+
+        <mxCell id="pipeline" value="[ICON: Pipeline]&lt;br&gt;&lt;br&gt;Flow Log Parser&lt;br&gt;AzureFlowLogs Breaker" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d6b656;fontSize=12;align=center;" vertex="1" parent="cribl">
+          <mxGeometry x="20" y="440" width="240" height="30" as="geometry" />
+        </mxCell>
+
+        <!-- Destinations -->
+        <mxCell id="destinations" value="Destinations" style="swimlane;whiteSpace=wrap;html=1;fontSize=14;fontStyle=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1">
+          <mxGeometry x="1160" y="120" width="180" height="480" as="geometry" />
+        </mxCell>
+
+        <mxCell id="dest-siem" value="[ICON: SIEM]&lt;br&gt;&lt;br&gt;SIEM" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#82b366;fontSize=12;align=center;" vertex="1" parent="destinations">
+          <mxGeometry x="20" y="70" width="140" height="80" as="geometry" />
+        </mxCell>
+
+        <mxCell id="dest-lake" value="[ICON: Lake]&lt;br&gt;&lt;br&gt;Data Lake" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#82b366;fontSize=12;align=center;" vertex="1" parent="destinations">
+          <mxGeometry x="20" y="190" width="140" height="80" as="geometry" />
+        </mxCell>
+
+        <mxCell id="dest-analytics" value="[ICON: Analytics]&lt;br&gt;&lt;br&gt;Analytics" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#82b366;fontSize=12;align=center;" vertex="1" parent="destinations">
+          <mxGeometry x="20" y="310" width="140" height="80" as="geometry" />
+        </mxCell>
+
+        <!-- Data Flow Arrows -->
+        <mxCell id="flow1" value="Flow Logs" style="endArrow=classic;html=1;strokeWidth=3;strokeColor=#0066cc;fontSize=12;exitX=1;exitY=0.3;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="network-sources" target="network-watcher">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="400" y="300" as="sourcePoint" />
+            <mxPoint x="450" y="250" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+
+        <mxCell id="flow2" value="Write JSON" style="endArrow=classic;html=1;strokeWidth=3;strokeColor=#ff6600;fontSize=12;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="network-watcher" target="storage">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="600" y="300" as="sourcePoint" />
+            <mxPoint x="650" y="250" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+
+        <mxCell id="flow3" value="Collect Blobs" style="endArrow=classic;html=1;strokeWidth=3;strokeColor=#9900cc;fontSize=12;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.3;entryDx=0;entryDy=0;" edge="1" parent="1" source="storage" target="cribl">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="750" y="360" as="sourcePoint" />
+            <mxPoint x="800" y="310" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+
+        <mxCell id="flow4" value="Route & Transform" style="endArrow=classic;html=1;strokeWidth=3;strokeColor=#00cc00;fontSize=12;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="cribl" target="destinations">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="1100" y="360" as="sourcePoint" />
+            <mxPoint x="1150" y="310" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+
+        <!-- Legend -->
+        <mxCell id="legend-title" value="Data Flow Legend" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=16;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="80" y="650" width="180" height="30" as="geometry" />
+        </mxCell>
+
+        <mxCell id="legend1" value="" style="endArrow=classic;html=1;strokeWidth=3;strokeColor=#0066cc;" edge="1" parent="1">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="80" y="700" as="sourcePoint" />
+            <mxPoint x="180" y="700" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="leg1-label" value="Network to Flow Logs" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="200" y="685" width="150" height="30" as="geometry" />
+        </mxCell>
+
+        <mxCell id="legend2" value="" style="endArrow=classic;html=1;strokeWidth=3;strokeColor=#ff6600;" edge="1" parent="1">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="380" y="700" as="sourcePoint" />
+            <mxPoint x="480" y="700" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="leg2-label" value="Write to Blob Storage" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="500" y="685" width="150" height="30" as="geometry" />
+        </mxCell>
+
+        <mxCell id="legend3" value="" style="endArrow=classic;html=1;strokeWidth=3;strokeColor=#9900cc;" edge="1" parent="1">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="80" y="740" as="sourcePoint" />
+            <mxPoint x="180" y="740" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="leg3-label" value="Cribl Collection" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="200" y="725" width="150" height="30" as="geometry" />
+        </mxCell>
+
+        <mxCell id="legend4" value="" style="endArrow=classic;html=1;strokeWidth=3;strokeColor=#00cc00;" edge="1" parent="1">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="380" y="740" as="sourcePoint" />
+            <mxPoint x="480" y="740" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="leg4-label" value="To Destinations" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="500" y="725" width="150" height="30" as="geometry" />
+        </mxCell>
+
+        <!-- Notes -->
+        <mxCell id="notes" value="Key Points:&lt;br&gt;&lt;br&gt;• Dual-level flow logging: vNet (7 days) + Subnet overrides (30/90 days)&lt;br&gt;• Flow logs written hourly to blob storage in JSON format&lt;br&gt;• Cribl collectors poll storage accounts for new blobs&lt;br&gt;• 5-10 minute latency from traffic to blob availability&lt;br&gt;• Auto-shutdown VMs at 7 PM Eastern to save costs" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;align=left;verticalAlign=top;fontSize=11;fontColor=#333333;" vertex="1" parent="1">
+          <mxGeometry x="700" y="650" width="640" height="140" as="geometry" />
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

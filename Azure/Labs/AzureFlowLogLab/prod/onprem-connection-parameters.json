@@ -1,0 +1,67 @@
+{
+  "localNetworkGateway": {
+    "name": "lng-jpederson",
+    "gatewayIpAddress": "70.63.82.233",
+    "addressSpace": [
+      "192.168.1.0/24"
+    ],
+    "description": "On-premises network gateway configuration"
+  },
+  "vpnConnection": {
+    "name": "conn-azure-to-onprem",
+    "connectionType": "IPsec",
+    "sharedKey": "74e1736fe62147d3a5599e18982100d5a46e8c969289d5cf501c40cb",
+    "enableBgp": false,
+    "usePolicyBasedTrafficSelectors": false,
+    "ipsecPolicies": {
+      "enabled": false,
+      "saLifeTimeSeconds": 27000,
+      "saDataSizeKilobytes": 102400000,
+      "ipsecEncryption": "AES256",
+      "ipsecIntegrity": "SHA256",
+      "ikeEncryption": "AES256",
+      "ikeIntegrity": "SHA256",
+      "dhGroup": "DHGroup2",
+      "pfsGroup": "PFS2"
+    }
+  },
+  "_comments": {
+    "localNetworkGateway": {
+      "name": "Name for the Local Network Gateway resource in Azure",
+      "gatewayIpAddress": "Public IP address of your on-premises VPN device (e.g., '203.0.113.10')",
+      "addressSpace": "Array of on-premises network CIDR blocks that will be accessible through the VPN (e.g., ['10.0.0.0/16', '172.16.0.0/12'])",
+      "description": "Human-readable description of the on-premises network"
+    },
+    "vpnConnection": {
+      "name": "Name for the VPN connection resource in Azure",
+      "connectionType": "Connection type - use 'IPsec' for site-to-site VPN",
+      "sharedKey": "Pre-shared key (PSK) for IPsec tunnel - must match the key configured on your on-premises VPN device. Use a strong, random string (recommended: 32+ characters)",
+      "enableBgp": "Set to true to enable BGP routing (requires BGP ASN configuration on both sides)",
+      "usePolicyBasedTrafficSelectors": "Set to true for policy-based VPN devices (older Cisco ASA, etc.)",
+      "ipsecPolicies": {
+        "enabled": "Set to true to use custom IPsec/IKE policies (required for some VPN devices)",
+        "saLifeTimeSeconds": "Security Association lifetime in seconds (default: 27000 = 7.5 hours)",
+        "saDataSizeKilobytes": "Security Association data size in KB (default: 102400000 = ~100GB)",
+        "ipsecEncryption": "IPsec encryption algorithm: AES256, AES192, AES128, GCMAES256, GCMAES192, GCMAES128",
+        "ipsecIntegrity": "IPsec integrity algorithm: SHA256, SHA1, GCMAES256, GCMAES192, GCMAES128",
+        "ikeEncryption": "IKE encryption algorithm: AES256, AES192, AES128, GCMAES256, GCMAES128",
+        "ikeIntegrity": "IKE integrity algorithm: SHA384, SHA256, SHA1, GCMAES256, GCMAES128",
+        "dhGroup": "Diffie-Hellman group: DHGroup24, DHGroup14, DHGroup2, ECP384, ECP256",
+        "pfsGroup": "Perfect Forward Secrecy group: PFS24, PFS14, PFS2, ECP384, ECP256, None"
+      }
+    },
+    "quickStart": {
+      "step1": "Replace <YOUR-ONPREM-PUBLIC-IP> with your on-premises VPN device's public IP address",
+      "step2": "Replace <YOUR-SHARED-KEY-HERE> with a strong pre-shared key (PSK) - save this securely!",
+      "step3": "Update addressSpace array with your actual on-premises network CIDR blocks",
+      "step4": "Run the deployment script with connection mode to create the VPN connection",
+      "step5": "Configure your on-premises VPN device with the matching settings and Azure VPN Gateway public IP"
+    },
+    "exampleConfiguration": {
+      "fortinet": "For FortiGate: Use IKEv2, AES256-SHA256, DH Group 14, PFS enabled",
+      "cisco": "For Cisco ASA: May require usePolicyBasedTrafficSelectors=true",
+      "paloAlto": "For Palo Alto: Use IKEv2, AES256-SHA256, DH Group 14",
+      "sonicwall": "For SonicWall: Use IKEv2, AES256-SHA256, PFS Group 14"
+    }
+  }
+}

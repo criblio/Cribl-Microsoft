@@ -1,0 +1,97 @@
+{
+  "vmConfiguration": {
+    "deployVMs": true,
+    "vmSize": "Standard_B1s",
+    "publisher": "Canonical",
+    "offer": "0001-com-ubuntu-server-jammy",
+    "sku": "22_04-lts-gen2",
+    "version": "latest",
+    "osDiskType": "Standard_LRS",
+    "adminUsername": "localadmin",
+    "authenticationType": "password",
+    "sshPublicKey": ""
+  },
+  "vmDeployment": {
+    "bastion": {
+      "deploy": true,
+      "vmName": "vm-bastion",
+      "enablePublicIP": false,
+      "description": "Test VM in Bastion subnet to generate flow logs"
+    },
+    "security": {
+      "deploy": true,
+      "vmName": "vm-security",
+      "enablePublicIP": false,
+      "description": "Test VM in Security subnet to generate flow logs"
+    },
+    "o11y": {
+      "deploy": true,
+      "vmName": "vm-o11y",
+      "enablePublicIP": false,
+      "description": "Test VM in O11y subnet to generate flow logs"
+    }
+  },
+  "_comments": {
+    "vmConfiguration": {
+      "deployVMs": "Set to true to deploy test VMs in subnets (generates flow logs)",
+      "vmSize": "VM size - Standard_B1s is cheapest (~$7.59/month, 1 vCPU, 1GB RAM)",
+      "publisher": "OS publisher - Canonical (Ubuntu), MicrosoftWindowsServer, etc.",
+      "offer": "OS offer - 0001-com-ubuntu-server-jammy (Ubuntu 22.04 LTS)",
+      "sku": "OS SKU - 22_04-lts-gen2 (Ubuntu 22.04 Gen2)",
+      "version": "OS version - 'latest' recommended",
+      "osDiskType": "Disk type - Standard_LRS (cheapest), Premium_LRS, StandardSSD_LRS",
+      "adminUsername": "Administrator username for VMs",
+      "authenticationType": "Authentication type: 'password' or 'sshPublicKey'",
+      "sshPublicKey": "SSH public key (required if authenticationType is 'sshPublicKey')"
+    },
+    "vmDeployment": {
+      "deploy": "Set to true to deploy VM in this subnet",
+      "vmName": "Name for the VM (will be prefixed with baseObjectName)",
+      "enablePublicIP": "Set to true to create a public IP for the VM (increases cost)",
+      "description": "Human-readable description of the VM's purpose"
+    },
+    "pricing": {
+      "Standard_B1s": "$7.59/month (1 vCPU, 1GB RAM) - Cheapest option",
+      "Standard_B1ls": "$3.80/month (1 vCPU, 0.5GB RAM) - Ultra cheap but limited",
+      "Standard_B2s": "$30.37/month (2 vCPU, 4GB RAM)",
+      "note": "Prices are approximate for East US region. Stop VMs when not needed to save costs."
+    },
+    "osOptions": {
+      "ubuntu2204": {
+        "publisher": "Canonical",
+        "offer": "0001-com-ubuntu-server-jammy",
+        "sku": "22_04-lts-gen2",
+        "description": "Ubuntu 22.04 LTS (recommended)"
+      },
+      "ubuntu2004": {
+        "publisher": "Canonical",
+        "offer": "0001-com-ubuntu-server-focal",
+        "sku": "20_04-lts-gen2",
+        "description": "Ubuntu 20.04 LTS"
+      },
+      "windowsServer2022": {
+        "publisher": "MicrosoftWindowsServer",
+        "offer": "WindowsServer",
+        "sku": "2022-datacenter-azure-edition",
+        "description": "Windows Server 2022 (more expensive)"
+      },
+      "debian11": {
+        "publisher": "Debian",
+        "offer": "debian-11",
+        "sku": "11-gen2",
+        "description": "Debian 11"
+      }
+    },
+    "security": {
+      "password": "Password will be prompted during deployment (not stored in file)",
+      "recommendation": "Use SSH keys for production, passwords for quick testing",
+      "sshKeyGeneration": "Generate SSH key: ssh-keygen -t rsa -b 4096 -C 'azure-vm-key'"
+    },
+    "costSaving": {
+      "tip1": "Stop VMs when not needed: az vm deallocate --resource-group <rg> --name <vm-name>",
+      "tip2": "Start VMs: az vm start --resource-group <rg> --name <vm-name>",
+      "tip3": "Delete VMs after testing: Set deployVMs to false and re-run",
+      "tip4": "Use Standard_B1ls for absolute minimum cost ($3.80/month)"
+    }
+  }
+}

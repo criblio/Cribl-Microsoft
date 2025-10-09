@@ -1,0 +1,174 @@
+{
+  "subscriptionId": "a64acbf7-dd9b-49d0-a538-315a1b63fae6",
+  "resourceGroupName": "rg-jpederson-eastus-flowLab",
+  "location": "eastus",
+  "baseObjectName": "jpederson",
+  "naming": {
+    "vnet": {
+      "prefix": "vnet-",
+      "suffix": "-eastus"
+    },
+    "subnet": {
+      "prefix": "snet-",
+      "suffix": "-eastus"
+    },
+    "publicIp": {
+      "prefix": "pip-",
+      "suffix": "-eastus"
+    },
+    "vpnGateway": {
+      "prefix": "vpngw-",
+      "suffix": "-eastus"
+    },
+    "bastion": {
+      "prefix": "bas-",
+      "suffix": "-eastus"
+    },
+    "nsg": {
+      "prefix": "nsg-",
+      "suffix": "-eastus"
+    },
+    "storageAccount": {
+      "prefix": "sa",
+      "suffix": "flowlogs"
+    },
+    "networkWatcher": {
+      "prefix": "nw-",
+      "suffix": "-eastus"
+    },
+    "logAnalyticsWorkspace": {
+      "prefix": "law-",
+      "suffix": "-eastus"
+    }
+  },
+  "vnetAddressPrefix": "10.198.30.0/24",
+  "subnets": {
+    "gateway": {
+      "name": "GatewaySubnet",
+      "addressPrefix": "10.198.30.0/27",
+      "description": "VPN Gateway subnet (required name)"
+    },
+    "bastion": {
+      "name": "BastionSubnet",
+      "addressPrefix": "10.198.30.32/27",
+      "description": "Bastion subnet for user services"
+    },
+    "security": {
+      "name": "SecuritySubnet",
+      "addressPrefix": "10.198.30.64/27",
+      "description": "Security services subnet"
+    },
+    "o11y": {
+      "name": "O11ySubnet",
+      "addressPrefix": "10.198.30.96/27",
+      "description": "Observability services subnet"
+    }
+  },
+  "vpnGateway": {
+    "sku": "Basic",
+    "type": "RouteBased",
+    "generation": "Generation1"
+  },
+  "bastion": {
+    "deploy": false,
+    "sku": "Basic"
+  },
+  "flowLogging": {
+    "vnetLevel": {
+      "enabled": true,
+      "retentionDays": 1,
+      "description": "VNet-level flow log - acts as default/fallback for all subnets"
+    },
+    "subnetLevel": {
+      "gateway": {
+        "enabled": true,
+        "retentionDays": 1,
+        "description": "GatewaySubnet flow log - overrides vNet-level if enabled"
+      },
+      "bastion": {
+        "enabled": true,
+        "retentionDays": 1,
+        "description": "AzureBastionSubnet flow log - overrides vNet-level if enabled"
+      },
+      "security": {
+        "enabled": true,
+        "retentionDays": 1,
+        "description": "SecuritySubnet flow log - enhanced retention for security compliance"
+      },
+      "o11y": {
+        "enabled": true,
+        "retentionDays": 1,
+        "description": "O11ySubnet flow log - long retention for observability/audit"
+      }
+    }
+  },
+  "networkWatcherResourceGroup": "USE_MAIN_RG",
+  "_comments": {
+    "subscriptionId": "Your Azure subscription ID (GUID)",
+    "resourceGroupName": "Resource group where resources will be created. If it doesn't exist, it will be created.",
+    "location": "Azure region for deployment (e.g., eastus, westus2, centralus)",
+    "baseObjectName": "Base name used across all resources. Combined with prefixes/suffixes to create unique resource names.",
+    "naming": "Prefix and suffix for each resource type. Combined as: prefix + baseObjectName + suffix",
+    "vnetAddressPrefix": "Address space for vNet in CIDR notation. Using /24 provides 256 addresses.",
+    "subnets": {
+      "gateway": "GatewaySubnet is a required name for VPN Gateway. /27 provides 32 addresses (27 usable).",
+      "bastion": "AzureBastionSubnet is a required name for Azure Bastion. /27 provides 32 addresses (27 usable).",
+      "security": "Custom subnet for security services (firewalls, IDS/IPS, etc.). /27 provides 32 addresses.",
+      "o11y": "Custom subnet for observability services (monitoring, logging, etc.). /27 provides 32 addresses.",
+      "sizing": "Total used: 4 subnets × /27 = 128 addresses out of 256 available in /24"
+    },
+    "vpnGateway": {
+      "sku": "VPN Gateway SKU - Options: Basic, VpnGw1, VpnGw2, VpnGw3, VpnGw1AZ, VpnGw2AZ, VpnGw3AZ",
+      "type": "VPN type - Options: RouteBased (recommended) or PolicyBased",
+      "generation": "Gateway generation - Generation1 or Generation2 (Basic only supports Generation1)",
+      "basicSkuLimitations": "Basic SKU: 10 tunnels max, 100 Mbps throughput, no BGP, cannot be upgraded."
+    },
+    "bastion": {
+      "deploy": "Set to true to deploy Azure Bastion host for secure RDP/SSH access",
+      "sku": "Bastion SKU - Options: Basic, Standard"
+    },
+    "flowLogging": {
+      "overview": "VNet Flow Logs support both vNet-level and subnet-level configuration. Hierarchy: NIC > Subnet > VNet (most specific wins).",
+      "vnetLevel": {
+        "enabled": "When true, enables flow logging at the virtual network level (covers all subnets by default)",
+        "retentionDays": "Default retention period for vNet-level flow logs",
+        "purpose": "Acts as fallback for subnets without their own flow log configuration"
+      },
+      "subnetLevel": {
+        "overview": "Subnet-level flow logs OVERRIDE vNet-level for specific subnets. Set enabled:true to override.",
+        "enabled": "When true for a subnet, that subnet's flow log overrides the vNet-level configuration",
+        "retentionDays": "Retention period specific to this subnet (can differ from vNet-level)",
+        "useCase": "Enable for subnets requiring different retention (compliance, security, cost optimization)"
+      },
+      "hierarchy": "If both vNet and subnet flow logs are enabled, subnet-level takes precedence for that subnet only",
+      "noDuplicates": "Azure ensures no duplicate logging - only the most specific level is active per resource",
+      "trafficAnalyticsEnabled": "Enable Traffic Analytics for insights and visualization (applies to all flow logs)",
+      "trafficAnalyticsInterval": "Traffic Analytics processing interval in minutes (10 or 60)",
+      "examples": {
+        "scenario1": "vNet-level only: All subnets use same retention (simple)",
+        "scenario2": "vNet + selective subnet overrides: Default 7 days, but SecuritySubnet gets 30 days (recommended)",
+        "scenario3": "Subnet-level only: Granular control, only specific subnets logged (cost optimization)"
+      }
+    },
+    "networkWatcherResourceGroup": "Resource group for Network Watcher and Flow Logs. Use 'USE_MAIN_RG' to keep everything in your main resource group, or specify a different RG name like 'NetworkWatcherRG'",
+    "resourceNaming": {
+      "examples": {
+        "vnet": "vnet-vpnlab",
+        "gateway": "vpngw-vpnlab",
+        "subnet": "snet-vpnlab-bastion",
+        "publicIp": "pip-vpnlab-gateway",
+        "nsg": "nsg-vpnlab-security",
+        "storage": "savpnlabflowlogs (storage accounts cannot have hyphens)",
+        "logAnalytics": "law-vpnlab"
+      }
+    },
+    "addressSpaceUtilization": {
+      "total": "10.198.30.0/24 = 256 addresses",
+      "gatewaySubnet": "10.198.30.0/27 = 32 addresses (10.198.30.0 - 10.198.30.31)",
+      "bastionSubnet": "10.198.30.32/27 = 32 addresses (10.198.30.32 - 10.198.30.63)",
+      "securitySubnet": "10.198.30.64/27 = 32 addresses (10.198.30.64 - 10.198.30.95)",
+      "o11ySubnet": "10.198.30.96/27 = 32 addresses (10.198.30.96 - 10.198.30.127)",
+      "available": "10.198.30.128/25 = 128 addresses available for future use"
+    }
+  }
+}

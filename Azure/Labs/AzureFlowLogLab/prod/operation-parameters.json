@@ -1,0 +1,80 @@
+{
+  "deployment": {
+    "deployVNet": true,
+    "deployVPNGateway": true,
+    "deployBastion": true,
+    "deployNSGs": true,
+    "deployFlowLogs": true,
+    "deploymentTimeout": 3600
+  },
+  "scriptBehavior": {
+    "templateOnly": false,
+    "verboseOutput": true,
+    "skipConfirmation": false
+  },
+  "validation": {
+    "skipExistingResources": true,
+    "validateBeforeDeploy": true,
+    "checkAddressSpaceOverlap": true
+  },
+  "flowLogging": {
+    "createStorageAccount": true,
+    "createLogAnalyticsWorkspace": false,
+    "enableVNetFlowLogs": true,
+    "enableTrafficAnalytics": false
+  },
+  "networkSecurity": {
+    "createNSGPerSubnet": true,
+    "allowAzureServices": true,
+    "denyInternetByDefault": false
+  },
+  "templateManagement": {
+    "saveTemplates": true,
+    "templatesDirectory": "generated-templates",
+    "keepTemplateVersions": 3
+  },
+  "_comments": {
+    "deployment": {
+      "deployVNet": "When true, deploys the virtual network with all defined subnets.",
+      "deployVPNGateway": "When true, deploys VPN Gateway. Set to false for vNet-only deployment.",
+      "deployBastion": "When true, deploys Azure Bastion host for secure VM access. Requires AzureBastionSubnet.",
+      "deployNSGs": "When true, creates Network Security Groups for each subnet with baseline rules.",
+      "deployFlowLogs": "When true, configures VNet Flow Logs for network monitoring (NSG Flow Logs are deprecated).",
+      "deploymentTimeout": "Maximum time in seconds to wait for deployment (default: 3600 = 1 hour)"
+    },
+    "scriptBehavior": {
+      "templateOnly": "When true, generates ARM templates but does NOT deploy resources. Templates saved for manual deployment or CI/CD.",
+      "verboseOutput": "When true, displays detailed output during execution.",
+      "skipConfirmation": "When true, skips deployment confirmation prompts (use with caution)."
+    },
+    "validation": {
+      "skipExistingResources": "When true, skips creation if resource already exists instead of failing.",
+      "validateBeforeDeploy": "When true, validates configuration before attempting deployment.",
+      "checkAddressSpaceOverlap": "When true, validates that subnets don't overlap and are within vNet address space."
+    },
+    "flowLogging": {
+      "createStorageAccount": "When true, creates a storage account for flow log retention.",
+      "createLogAnalyticsWorkspace": "When true, creates Log Analytics workspace for Traffic Analytics.",
+      "enableVNetFlowLogs": "When true, enables VNet Flow Logs at the virtual network level (requires Azure Network Watcher). VNet Flow Logs replace the deprecated NSG Flow Logs.",
+      "enableTrafficAnalytics": "When true, enables Traffic Analytics for visualization and insights.",
+      "deprecationNote": "NSG Flow Logs are deprecated as of 2024. Use VNet Flow Logs instead, which provide comprehensive network traffic visibility at the virtual network level."
+    },
+    "networkSecurity": {
+      "createNSGPerSubnet": "When true, creates a dedicated NSG for each subnet.",
+      "allowAzureServices": "When true, allows Azure platform services to access resources.",
+      "denyInternetByDefault": "When true, blocks outbound internet access by default (may break some services)."
+    },
+    "templateManagement": {
+      "saveTemplates": "When true, saves generated ARM templates to disk.",
+      "templatesDirectory": "Directory where ARM templates are saved.",
+      "keepTemplateVersions": "Number of timestamped template versions to retain."
+    },
+    "deploymentNotes": {
+      "vpnGateway": "VPN Gateway deployment takes 30-45 minutes.",
+      "bastion": "Azure Bastion deployment takes 10-15 minutes.",
+      "flowLogs": "Flow Logs require Network Watcher to be enabled in the region.",
+      "vnetFlowLogs": "VNet Flow Logs replace deprecated NSG Flow Logs and provide network-wide traffic visibility.",
+      "storageAccount": "Storage account name will be derived from baseObjectName (e.g., savpnlabflowlogs)."
+    }
+  }
+}
