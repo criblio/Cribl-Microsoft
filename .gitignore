@@ -5,7 +5,9 @@ Testing files to ignore
 # ============================================
 dev*
 .dev-mode
-
+*claude*
+*Cluade*
+*CLAUDE*
 
 # Backup configuration files
 *.backup.json
