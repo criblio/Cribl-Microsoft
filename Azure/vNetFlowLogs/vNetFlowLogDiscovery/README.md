@@ -2,7 +2,7 @@
 
 This PowerShell automation tool discovers Azure Storage Accounts containing vNet Flow Logs and automatically generates Cribl Stream destination configurations for each discovered storage account.
 
-## 🚀 Overview
+## Overview
 
 Azure vNet Flow Logs are stored in blob storage containers with the name `insights-logs-flowlogflowevent`. This tool:
 
@@ -11,21 +11,21 @@ Azure vNet Flow Logs are stored in blob storage containers with the name `insigh
 3. **Generates** ready-to-import Cribl Stream destination configurations
 4. **Reminds** you to assign required permissions
 
-## 📁 File Structure
+## File Structure
 
 ```
 vNetFlowLogDiscovery/
-├── Run-vNetFlowLogDiscovery.ps1       # Main entry point with interactive menu
-├── Discover-vNetFlowLogs.ps1          # Core discovery and generation engine
-├── azure-parameters.json              # Azure AD authentication config (CONFIGURE THIS)
-├── CriblDestinationExample.json       # Template for Cribl destinations
-├── cribl-destinations/                # Generated configurations (auto-created)
-│   ├── Azure_vNet_FlowLogs_<StorageAccount>.json
-│   └── discovery-summary.json
-└── README.md                          # This documentation
+ Run-vNetFlowLogDiscovery.ps1 # Main entry point with interactive menu
+ Discover-vNetFlowLogs.ps1 # Core discovery and generation engine
+ azure-parameters.json # Azure AD authentication config (CONFIGURE THIS)
+ CriblDestinationExample.json # Template for Cribl destinations
+ cribl-destinations/ # Generated configurations (auto-created)
+ Azure_vNet_FlowLogs_<StorageAccount>.json
+ discovery-summary.json
+ README.md # This documentation
 ```
 
-## ⚙️ Configuration
+## Configuration
 
 ### azure-parameters.json (REQUIRED)
 
@@ -33,8 +33,8 @@ Update this file with your Azure AD app registration details:
 
 ```json
 {
-  "tenantId": "your-tenant-id-guid",
-  "clientId": "your-client-id-guid"
+ "tenantId": "your-tenant-id-guid",
+ "clientId": "your-client-id-guid"
 }
 ```
 
@@ -53,7 +53,7 @@ This file serves as the template for all generated destinations. Key settings:
 
 **To customize:** Edit this template before running discovery. All generated destinations will inherit these settings.
 
-## 🔐 Required Permissions
+## Required Permissions
 
 ### For Running the Discovery Script
 
@@ -66,9 +66,9 @@ Your Azure account needs:
 Your App Registration must have:
 - **Storage Blob Data Reader** role assigned to **each storage account** containing vNet Flow Logs
 
-⚠️ **The script will remind you to assign these permissions after discovery**
+ **The script will remind you to assign these permissions after discovery**
 
-## 🎯 Usage
+## Usage
 
 ### Interactive Mode (Recommended)
 
@@ -97,7 +97,7 @@ Runs discovery automatically without prompts (useful for automation).
 
 Runs the core discovery script directly.
 
-## 📋 What Gets Generated
+## What Gets Generated
 
 For each storage account with vNet Flow Logs, the script creates:
 
@@ -122,44 +122,44 @@ Contains:
 - Generated destination IDs
 - Authentication configuration used
 
-## 🔄 Workflow
+## Workflow
 
 1. **Configure azure-parameters.json**
-   - Add your tenant ID
-   - Add your client ID
+ - Add your tenant ID
+ - Add your client ID
 
 2. **Run the discovery tool**
-   ```powershell
-   .\Run-vNetFlowLogDiscovery.ps1
-   ```
+ ```powershell
+ .\Run-vNetFlowLogDiscovery.ps1
+ ```
 
-   **✨ Interactive Authentication:**
-   - The script will automatically detect if you need to authenticate
-   - It will prompt you to sign in to the correct tenant if needed
-   - Alternatively, you can authenticate manually beforehand:
-     ```powershell
-     Connect-AzAccount -TenantId <your-tenant-id>
-     ```
+ ** Interactive Authentication:**
+ - The script will automatically detect if you need to authenticate
+ - It will prompt you to sign in to the correct tenant if needed
+ - Alternatively, you can authenticate manually beforehand:
+ ```powershell
+ Connect-AzAccount -TenantId <your-tenant-id>
+ ```
 
 3. **Review discovered storage accounts**
-   - The script will list all storage accounts with vNet Flow Logs
-   - Check the console output for details
+ - The script will list all storage accounts with vNet Flow Logs
+ - Check the console output for details
 
 4. **Assign Storage Blob Data Reader permissions**
-   - For EACH storage account discovered
-   - Assign the role to your App Registration
-   - See "Assigning Permissions" section below
+ - For EACH storage account discovered
+ - Assign the role to your App Registration
+ - See "Assigning Permissions" section below
 
 5. **Configure Cribl secret**
-   - The generated destinations reference a Cribl secret (e.g., `Azure_vNet_Flowlogs_Secret`)
-   - Create this secret in Cribl Stream with your Azure App Registration client secret
-   - The secret name is defined in `CriblDestinationExample.json` template
+ - The generated destinations reference a Cribl secret (e.g., `Azure_vNet_Flowlogs_Secret`)
+ - Create this secret in Cribl Stream with your Azure App Registration client secret
+ - The secret name is defined in `CriblDestinationExample.json` template
 
 6. **Import to Cribl Stream**
-   - Import the destination configurations
-   - Test connectivity
+ - Import the destination configurations
+ - Test connectivity
 
-## 🔑 Assigning Permissions
+## Assigning Permissions
 
 For each storage account discovered, you need to assign the **Storage Blob Data Reader** role:
 
@@ -180,74 +180,74 @@ For each storage account discovered, you need to assign the **Storage Blob Data 
 
 ```bash
 az role assignment create \
-  --role "Storage Blob Data Reader" \
-  --assignee <your-client-id> \
-  --scope /subscriptions/<subscription-id>/resourceGroups/<rg-name>/providers/Microsoft.Storage/storageAccounts/<storage-account-name>
+ --role "Storage Blob Data Reader" \
+ --assignee <your-client-id> \
+ --scope /subscriptions/<subscription-id>/resourceGroups/<rg-name>/providers/Microsoft.Storage/storageAccounts/<storage-account-name>
 ```
 
 ### Via PowerShell
 
 ```powershell
 New-AzRoleAssignment `
-  -ApplicationId "<your-client-id>" `
-  -RoleDefinitionName "Storage Blob Data Reader" `
-  -Scope "/subscriptions/<subscription-id>/resourceGroups/<rg-name>/providers/Microsoft.Storage/storageAccounts/<storage-account-name>"
+ -ApplicationId "<your-client-id>" `
+ -RoleDefinitionName "Storage Blob Data Reader" `
+ -Scope "/subscriptions/<subscription-id>/resourceGroups/<rg-name>/providers/Microsoft.Storage/storageAccounts/<storage-account-name>"
 ```
 
-## 📊 Example Output
+## Example Output
 
 ```
-🔍 Discovering vNet Flow Log Storage Accounts...
+ Discovering vNet Flow Log Storage Accounts...
 ======================================================================
 
-📋 Found 3 subscription(s) to scan
+ Found 3 subscription(s) to scan
 
-📦 Scanning subscription: Production (12345678-1234-1234-1234-123456789abc)
-   Found 5 storage account(s) to check
-   Checking: stprodvnetlogs001... ✅ Found vNet Flow Logs!
-   Checking: stprodgeneral001... ⏭️  No Flow Logs
-
-======================================================================
-📊 DISCOVERY SUMMARY
-======================================================================
-
-✅ Found 2 storage account(s) with vNet Flow Logs
-
-   📦 stprodvnetlogs001
-      Subscription: Production
-      Resource Group: rg-networking-prod
-      Location: eastus
-
-   📦 stdevvnetlogs001
-      Subscription: Development
-      Resource Group: rg-networking-dev
-      Location: westus2
-
-🔧 Generating Cribl Destination Configurations...
-======================================================================
-
-📝 Generating destination for: stprodvnetlogs001
-   ✅ Saved: Azure_vNet_FlowLogs_stprodvnetlogs001.json
-
-📝 Generating destination for: stdevvnetlogs001
-   ✅ Saved: Azure_vNet_FlowLogs_stdevvnetlogs001.json
+ Scanning subscription: Production (12345678-1234-1234-1234-123456789abc)
+ Found 5 storage account(s) to check
+ Checking: stprodvnetlogs001... Found vNet Flow Logs!
+ Checking: stprodgeneral001... ⏭ No Flow Logs
 
 ======================================================================
-✅ CRIBL DESTINATION GENERATION COMPLETE
+ DISCOVERY SUMMARY
 ======================================================================
 
-⚠️  IMPORTANT - REQUIRED PERMISSIONS
+ Found 2 storage account(s) with vNet Flow Logs
+
+ stprodvnetlogs001
+ Subscription: Production
+ Resource Group: rg-networking-prod
+ Location: eastus
+
+ stdevvnetlogs001
+ Subscription: Development
+ Resource Group: rg-networking-dev
+ Location: westus2
+
+ Generating Cribl Destination Configurations...
+======================================================================
+
+ Generating destination for: stprodvnetlogs001
+ Saved: Azure_vNet_FlowLogs_stprodvnetlogs001.json
+
+ Generating destination for: stdevvnetlogs001
+ Saved: Azure_vNet_FlowLogs_stdevvnetlogs001.json
+
+======================================================================
+ CRIBL DESTINATION GENERATION COMPLETE
+======================================================================
+
+ IMPORTANT - REQUIRED PERMISSIONS
 ======================================================================
 
 Before using these Cribl destinations, ensure your App Registration has:
 
-  🔑 'Storage Blob Data Reader' role
-     assigned to EACH storage account listed above
+ 'Storage Blob Data Reader' role
+ assigned to EACH storage account listed above
 
 Without this permission, Cribl will not be able to read the vNet Flow Logs.
 ```
 
-## 🛠️ Customizing the Template
+## Customizing the Template
 
 The `CriblDestinationExample.json` file serves as the template for all generated destinations.
 
@@ -260,7 +260,7 @@ Common customizations:
 - Pipeline configurations
 - Breakpoint rulesets
 
-## 🔍 Troubleshooting
+## Troubleshooting
 
 ### "No Azure context found" or "Connected to wrong tenant!"
 
@@ -308,7 +308,7 @@ Connect-AzAccount -TenantId <your-tenant-id-from-config>
 4. Is the App Registration enabled and not expired?
 5. Are the tenant ID and client ID correct in the destination files?
 
-## 📝 Notes
+## Notes
 
 - The script scans **all subscriptions** your Azure account can access in the specified tenant
 - Discovery is read-only and makes no changes to Azure resources
@@ -317,7 +317,7 @@ Connect-AzAccount -TenantId <your-tenant-id-from-config>
 - Secret references (not actual secrets) are included - configure the secret in Cribl Stream
 - All destinations inherit settings from `CriblDestinationExample.json` template
 
-## 🤝 Integration with Cribl Stream
+## Integration with Cribl Stream
 
 The generated destination configurations are designed to work with Cribl Stream's Azure Blob Storage collector. Each destination:
 
@@ -329,21 +329,21 @@ The generated destination configurations are designed to work with Cribl Stream'
 ### Setting Up in Cribl Stream
 
 1. **Create the secret** referenced in destinations (default: `Azure_vNet_Flowlogs_Secret`):
-   - In Cribl Stream, go to **Settings → Secrets**
-   - Create a new secret with the name from your template
-   - Set the value to your Azure App Registration client secret
+ - In Cribl Stream, go to **Settings → Secrets**
+ - Create a new secret with the name from your template
+ - Set the value to your Azure App Registration client secret
 
 2. **Import destinations**:
-   - Go to **Data → Sources → Add Source → Azure Blob Storage**
-   - Import the generated JSON files
-   - Or manually create sources using the configuration values
+ - Go to **Data → Sources → Add Source → Azure Blob Storage**
+ - Import the generated JSON files
+ - Or manually create sources using the configuration values
 
 3. **Verify prerequisites**:
-   - Pipeline exists: `Azure_vNet_FlowLogs_PreProcessing`
-   - Breaker ruleset exists: `Azure_vNet_FlowLogs`
-   - If not, create or update the template before regenerating
+ - Pipeline exists: `Azure_vNet_FlowLogs_PreProcessing`
+ - Breaker ruleset exists: `Azure_vNet_FlowLogs`
+ - If not, create or update the template before regenerating
 
-## 📚 Additional Resources
+## Additional Resources
 
 - [Azure vNet Flow Logs Documentation](https://docs.microsoft.com/azure/network-watcher/network-watcher-nsg-flow-logging-overview)
 - [Cribl Azure Blob Storage Collector](https://docs.cribl.io/stream/sources-azure-blob/)

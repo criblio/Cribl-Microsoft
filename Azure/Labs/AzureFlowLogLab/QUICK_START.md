@@ -1,4 +1,4 @@
-# 🚀 Azure Flow Log Lab - Quick Start
+# Azure Flow Log Lab - Quick Start
 
 ## Prerequisites
 - PowerShell 5.1+ with Azure PowerShell modules (Az.Network, Az.Resources, Az.Compute, Az.Storage)
@@ -6,68 +6,68 @@
 - Network Contributor role or higher
 - Valid CIDR blocks planned for your network (avoid overlap with on-prem)
 
-## 1️⃣ Configure Azure Settings
+## 1⃣ Configure Azure Settings
 
 Edit configuration files in the `prod/` directory:
 
 ### prod/azure-parameters.json
 ```json
 {
-  "subscriptionId": "your-subscription-id",
-  "resourceGroupName": "rg-flowloglab-eastus",
-  "location": "eastus",
-  "baseObjectName": "jpederson",
-  "vnetAddressPrefix": "10.198.30.0/24",
-  "subnets": {
-    "gateway": {
-      "name": "GatewaySubnet",
-      "addressPrefix": "10.198.30.0/27"
-    },
-    "bastion": {
-      "name": "BastionSubnet",
-      "addressPrefix": "10.198.30.32/27"
-    },
-    "security": {
-      "name": "SecuritySubnet",
-      "addressPrefix": "10.198.30.64/27"
-    },
-    "o11y": {
-      "name": "O11ySubnet",
-      "addressPrefix": "10.198.30.96/27"
-    }
-  }
+ "subscriptionId": "your-subscription-id",
+ "resourceGroupName": "rg-flowloglab-eastus",
+ "location": "eastus",
+ "baseObjectName": "jpederson",
+ "vnetAddressPrefix": "10.198.30.0/24",
+ "subnets": {
+ "gateway": {
+ "name": "GatewaySubnet",
+ "addressPrefix": "10.198.30.0/27"
+ },
+ "bastion": {
+ "name": "BastionSubnet",
+ "addressPrefix": "10.198.30.32/27"
+ },
+ "security": {
+ "name": "SecuritySubnet",
+ "addressPrefix": "10.198.30.64/27"
+ },
+ "o11y": {
+ "name": "O11ySubnet",
+ "addressPrefix": "10.198.30.96/27"
+ }
+ }
 }
 ```
 
 ### prod/onprem-connection-parameters.json
 ```json
 {
-  "localNetworkGateway": {
-    "name": "lng-onprem",
-    "gatewayIpAddress": "YOUR-ONPREM-PUBLIC-IP",
-    "addressSpace": ["192.168.1.0/24"]
-  },
-  "vpnConnection": {
-    "name": "conn-azure-to-onprem",
-    "connectionType": "IPsec",
-    "sharedKey": "your-shared-key-here"
-  }
+ "localNetworkGateway": {
+ "name": "lng-onprem",
+ "gatewayIpAddress": "YOUR-ONPREM-PUBLIC-IP",
+ "addressSpace": ["192.168.1.0/24"]
+ },
+ "vpnConnection": {
+ "name": "conn-azure-to-onprem",
+ "connectionType": "IPsec",
+ "sharedKey": "your-shared-key-here"
+ }
 }
 ```
 
 ### prod/vm-parameters.json
 ```json
 {
-  "vmConfiguration": {
-    "deployVMs": true,
-    "vmSize": "Standard_B1s",
-    "adminUsername": "azureuser"
-  },
-  "vmDeployment": {
-    "bastion": { "deploy": true, "vmName": "vm-bastion" },
-    "security": { "deploy": true, "vmName": "vm-security" },
-    "o11y": { "deploy": true, "vmName": "vm-o11y" }
-  }
+ "vmConfiguration": {
+ "deployVMs": true,
+ "vmSize": "Standard_B1s",
+ "adminUsername": "azureuser"
+ },
+ "vmDeployment": {
+ "bastion": { "deploy": true, "vmName": "vm-bastion" },
+ "security": { "deploy": true, "vmName": "vm-security" },
+ "o11y": { "deploy": true, "vmName": "vm-o11y" }
+ }
 }
 ```
 
@@ -77,14 +77,14 @@ Edit configuration files in the `prod/` directory:
 - Avoid overlap between Azure vNet and on-prem networks
 - `baseObjectName` is used to generate all resource names
 
-## 2️⃣ Connect to Azure
+## 2⃣ Connect to Azure
 
 ```powershell
 Connect-AzAccount
-Set-AzContext -Subscription "Your-Subscription-Name"  # If multiple subscriptions
+Set-AzContext -Subscription "Your-Subscription-Name" # If multiple subscriptions
 ```
 
-## 3️⃣ Launch the Interactive Menu
+## 3⃣ Launch the Interactive Menu
 
 ```powershell
 .\Run-AzureFlowLogLab.ps1
@@ -94,33 +94,33 @@ You'll see an interactive menu like this:
 
 ```
 ============================================================
-         AZURE VNET & VPN DEPLOYMENT MENU
+ AZURE VNET & VPN DEPLOYMENT MENU
 ============================================================
-📍 Current Configuration:
-   Subscription: your-subscription-id
-   Resource Group: rg-flowloglab-eastus
-   Location: eastus
-   vNet: vnet-jpederson (10.198.30.0/24)
-   VPN Gateway: vpngw-jpederson (Basic)
+ Current Configuration:
+ Subscription: your-subscription-id
+ Resource Group: rg-flowloglab-eastus
+ Location: eastus
+ vNet: vnet-jpederson (10.198.30.0/24)
+ VPN Gateway: vpngw-jpederson (Basic)
 
-📋 DEPLOYMENT OPTIONS:
+ DEPLOYMENT OPTIONS:
 
-  [1] ⚡ Full Deployment (vNet + VPN + VMs + Flow Logs)
-  [2] Deploy vNet Only
-  [3] Deploy VPN Gateway Only
-  [4] Deploy Flow Logs Only
-  [5] Check Deployment Status
-  [6] Validate Configuration
-  --------------------------------------------------------
-  [Q] Quit
+ [1] Full Deployment (vNet + VPN + VMs + Flow Logs)
+ [2] Deploy vNet Only
+ [3] Deploy VPN Gateway Only
+ [4] Deploy Flow Logs Only
+ [5] Check Deployment Status
+ [6] Validate Configuration
+ --------------------------------------------------------
+ [Q] Quit
 ============================================================
 
 Select an option:
 ```
 
-## 4️⃣ Menu Options Explained
+## 4⃣ Menu Options Explained
 
-### Option 1: Full Deployment ⚡
+### Option 1: Full Deployment 
 - Creates vNet with 4 subnets (Gateway, Bastion, Security, O11y)
 - Creates Network Security Groups for each subnet
 - Deploys Storage Account for flow logs
@@ -167,7 +167,7 @@ Select an option:
 - **Best for:** Pre-deployment validation
 - **Time:** < 1 minute
 
-## 5️⃣ Deployment Workflow
+## 5⃣ Deployment Workflow
 
 1. **Select an option** (e.g., press `1` for Full Deployment)
 2. **Review confirmation** showing what will be deployed
@@ -176,30 +176,30 @@ Select an option:
 5. **Review output** for connection details and VM IPs
 6. **Wait for Cribl collectors** (optional - can skip and regenerate later)
 
-## 6️⃣ After Deployment
+## 6⃣ After Deployment
 
 ### Deployment Summary
 You'll see a summary like this:
 ```
-📊 Deployment Summary
+ Deployment Summary
 ==================================================
-✅ Resource Group: rg-flowloglab-eastus
-✅ Virtual Network: vnet-jpederson (10.198.30.0/24)
-✅ VPN Gateway: vpngw-jpederson (Basic)
-✅ VPN Gateway Public IP: 40.117.XXX.XXX
-✅ Storage Account: sajpedersoneastusflowlogs
+ Resource Group: rg-flowloglab-eastus
+ Virtual Network: vnet-jpederson (10.198.30.0/24)
+ VPN Gateway: vpngw-jpederson (Basic)
+ VPN Gateway Public IP: 40.117.XXX.XXX
+ Storage Account: sajpedersoneastusflowlogs
 
-📱 Deployed VMs (Auto-shutdown: 7 PM Eastern):
-   vm-bastion: 10.198.30.36
-   vm-security: 10.198.30.68
-   vm-o11y: 10.198.30.100
+ Deployed VMs (Auto-shutdown: 7 PM Eastern):
+ vm-bastion: 10.198.30.36
+ vm-security: 10.198.30.68
+ vm-o11y: 10.198.30.100
 
-🌊 Flow Logs:
-   vNet-level: 7 days retention
-   SecuritySubnet: 30 days retention
-   O11ySubnet: 90 days retention
+ Flow Logs:
+ vNet-level: 7 days retention
+ SecuritySubnet: 30 days retention
+ O11ySubnet: 90 days retention
 
-📁 Cribl Collectors: prod/cribl-collectors/
+ Cribl Collectors: prod/cribl-collectors/
 ```
 
 ### Configure pfSense VPN
@@ -248,10 +248,10 @@ Get-AzStorageBlob -Container "insights-logs-flowlogflowevent" -Context $ctx | Se
 Get-AzVirtualNetworkGatewayConnection -Name "conn-azure-to-onprem" -ResourceGroupName "rg-flowloglab-eastus"
 
 # Ping Azure VM from on-prem (after VPN connects)
-ping 10.198.30.68  # Security subnet VM
+ping 10.198.30.68 # Security subnet VM
 ```
 
-## 🌊 Flow Log Container Creation
+## Flow Log Container Creation
 
 ### Important: Flow logs take time to start!
 - **Container creation**: 5-10 minutes after VMs begin generating traffic
@@ -262,12 +262,12 @@ ping 10.198.30.68  # Security subnet VM
 ### If you skip the wait:
 1. Wait 10-15 minutes for flow logs to start
 2. Run the script again in FlowLogsOnly mode:
-   ```powershell
-   .\Run-AzureFlowLogLab.ps1 -NonInteractive -Mode FlowLogsOnly
-   ```
+ ```powershell
+ .\Run-AzureFlowLogLab.ps1 -NonInteractive -Mode FlowLogsOnly
+ ```
 3. Cribl collectors will be regenerated with correct paths
 
-## 💰 Cost Management
+## Cost Management
 
 ### Auto-Shutdown Schedule
 - All VMs automatically shut down at **7 PM Eastern** (11 PM UTC)
@@ -290,25 +290,25 @@ Stop-AzVM -ResourceGroupName "rg-flowloglab-eastus" -Name "vm-security" -Force
 - **Public IP**: ~$3/month
 - **Total**: ~$46/month
 
-## 📝 Network Planning
+## Network Planning
 
 ### Example Layout (10.198.30.0/24)
 ```
 vNet: 10.198.30.0/24
-├── GatewaySubnet: 10.198.30.0/27     (VPN Gateway)
-├── BastionSubnet: 10.198.30.32/27    (Admin access, 7-day logs)
-├── SecuritySubnet: 10.198.30.64/27   (Security tools, 30-day logs)
-└── O11ySubnet: 10.198.30.96/27       (Observability, 90-day logs)
+ GatewaySubnet: 10.198.30.0/27 (VPN Gateway)
+ BastionSubnet: 10.198.30.32/27 (Admin access, 7-day logs)
+ SecuritySubnet: 10.198.30.64/27 (Security tools, 30-day logs)
+ O11ySubnet: 10.198.30.96/27 (Observability, 90-day logs)
 ```
 
 ### Dual-Level Flow Logging
 - **vNet-level**: Default 7-day retention for all subnets
 - **Subnet overrides**:
-  - SecuritySubnet: 30 days (compliance)
-  - O11ySubnet: 90 days (long-term analysis)
-  - BastionSubnet: Inherits vNet-level (7 days)
+ - SecuritySubnet: 30 days (compliance)
+ - O11ySubnet: 90 days (long-term analysis)
+ - BastionSubnet: Inherits vNet-level (7 days)
 
-## 🔧 Troubleshooting
+## Troubleshooting
 
 | Issue | Solution |
 |-------|----------|
@@ -320,19 +320,19 @@ vNet: 10.198.30.0/24
 | **VPN Gateway slow** | Normal! Takes 30-45 minutes to provision |
 | **VM can't SSH** | VMs have no public IPs; use VPN or Azure Bastion service |
 
-## ✅ Success Indicators
+## Success Indicators
 
 After successful deployment, you'll have:
-- ✅ **vNet created** with 4 subnets
-- ✅ **NSGs created** with on-prem traffic rules
-- ✅ **Storage Account created** for flow logs
-- ✅ **Flow logs enabled** at vNet and subnet levels
-- ✅ **VPN Gateway deployed** (30-45 minutes)
-- ✅ **VPN connection created** to on-premises
-- ✅ **3 VMs deployed** with auto-shutdown schedules
-- ✅ **Cribl collectors generated** (if flow logs started)
+- **vNet created** with 4 subnets
+- **NSGs created** with on-prem traffic rules
+- **Storage Account created** for flow logs
+- **Flow logs enabled** at vNet and subnet levels
+- **VPN Gateway deployed** (30-45 minutes)
+- **VPN connection created** to on-premises
+- **3 VMs deployed** with auto-shutdown schedules
+- **Cribl collectors generated** (if flow logs started)
 
-## 🎯 Quick Decision Guide
+## Quick Decision Guide
 
 | Goal | Choose Option | Time |
 |------|--------------|------|
@@ -344,7 +344,7 @@ After successful deployment, you'll have:
 | **Check what's deployed** | Option 5 (Status) | < 1 min |
 | **Validate before deploy** | Option 6 (Validate) | < 1 min |
 
-## 🚨 Important Notes
+## Important Notes
 
 ### VPN Gateway Deployment Time
 - **Normal deployment time:** 30-45 minutes
@@ -370,7 +370,7 @@ After successful deployment, you'll have:
 - Access via VPN connection or Azure Bastion service
 - SSH after VPN is connected: `ssh azureuser@10.198.30.68`
 
-## 📚 Next Steps
+## Next Steps
 
 After deployment:
 1. **Configure pfSense** with the VPN settings from script output
@@ -380,7 +380,7 @@ After deployment:
 5. **Configure Cribl routes** to process Azure flow logs
 6. **Verify flow log data** in Cribl Stream
 
-## 📖 Additional Resources
+## Additional Resources
 
 - **Full Documentation:** [README.md](README.md)
 - **Azure VNet Flow Logs:** https://learn.microsoft.com/azure/network-watcher/vnet-flow-logs-overview
@@ -389,9 +389,9 @@ After deployment:
 
 ---
 
-**🎉 Ready to start?** Run `.\Run-AzureFlowLogLab.ps1` and select Option 1 for Full Deployment!
+** Ready to start?** Run `.\Run-AzureFlowLogLab.ps1` and select Option 1 for Full Deployment!
 
-**⚠️ Remember:**
+** Remember:**
 - VPN Gateway deployment takes 30-45 minutes
 - Flow log container creation takes 5-10 minutes after VMs start
 - You can skip the wait and regenerate Cribl collectors later

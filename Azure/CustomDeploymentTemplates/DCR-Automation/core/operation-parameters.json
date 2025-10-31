@@ -16,6 +16,13 @@
     "skipExistingDCEs": true,
     "deploymentTimeout": 600
   },
+  "privateLink": {
+    "enabled": false,
+    "dcePublicNetworkAccess": "Enabled",
+    "amplsResourceId": "",
+    "amplsResourceGroupName": "",
+    "amplsName": ""
+  },
   "customTableSettings": {
     "enabled": false,
     "schemasDirectory": "custom-table-schemas",
@@ -33,6 +40,13 @@
     "cleanupOldTemplates": "When true, removes old timestamped templates but always preserves the *-latest.json files",
     "skipExistingDCEs": "Only applies when createDCE=true. When true, skips DCE creation if DCE already exists.",
     "templateOnly": "When true, connects to Azure to retrieve actual table schemas and generates ARM templates but does NOT deploy any resources (DCEs or DCRs). Templates are saved for manual deployment. Requires Azure authentication and workspace access.",
+    "privateLink": {
+      "enabled": "When true, enables Private Link configuration for DCEs. Requires privateLink settings to be properly configured.",
+      "dcePublicNetworkAccess": "Controls public network access for DCEs. Values: 'Enabled' (default, allows public access) or 'Disabled' (Private Link only). Only applies when createDCE=true.",
+      "amplsResourceId": "Full Azure resource ID of the Azure Monitor Private Link Scope (AMPLS). Example: /subscriptions/{sub-id}/resourceGroups/{rg}/providers/Microsoft.Insights/privateLinkScopes/{ampls-name}. Required when privateLink.enabled=true.",
+      "amplsResourceGroupName": "Resource group containing the Azure Monitor Private Link Scope. Used if amplsResourceId is not provided.",
+      "amplsName": "Name of the Azure Monitor Private Link Scope to associate DCE with. Used if amplsResourceId is not provided."
+    },
     "customTableSettings": {
       "enabled": "When true, enables custom table mode. The script will create custom tables (_CL suffix) if they don't exist, using schemas from the schemasDirectory.",
       "schemasDirectory": "Directory containing JSON schema files for custom tables. Each file should be named TableName_CL.json or TableName.json.",

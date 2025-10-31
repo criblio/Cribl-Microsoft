@@ -2,14 +2,14 @@
 
 Complete guide for creating and configuring Azure App Registration to integrate Office 365 services with Cribl Stream.
 
-## 📋 Prerequisites
+## Prerequisites
 
 - Access to Azure Portal with permissions to create App Registrations
 - Global Administrator or appropriate Entra ID role
 - Exchange Administrator role (for Message Trace configuration)
 - PowerShell with ExchangeOnlineManagement module (for Message Trace)
 
-## 🚀 Initial App Registration Setup
+## Initial App Registration Setup
 
 ### Step 1: Create App Registration
 
@@ -22,7 +22,7 @@ Complete guide for creating and configuring Azure App Registration to integrate 
 4. From the app blade, expand ![manage](images/manage.png) and select ![api permissions](images/API_Permissions.png)
 5. Click the ![Add a permission](images/add_permission.png) button and configure the required permissions based on the Office 365 source you plan to use
 
-## 🔐 Permission Configuration by Source Type
+## Permission Configuration by Source Type
 
 ### Office 365 Activity
 
@@ -59,7 +59,7 @@ Complete guide for creating and configuring Azure App Registration to integrate 
 5. Search for and select the permission shown above
 6. Click ![add permission](images/add_permission.png)
 
-## ✅ Grant Admin Consent and Create Secret
+## Grant Admin Consent and Create Secret
 
 ### Grant Admin Consent
 
@@ -71,9 +71,9 @@ Complete guide for creating and configuring Azure App Registration to integrate 
 3. Click ![new secret](images/newSecret.png)
 4. Add a description and expiration timeframe and click ![add](images/add.png), something like this ![cribl office secret](images/criblOfficeSecret.png)
 
-> **⚠️ Important:** Take note of the secret value immediately. The secret is only exposed upon creation. This is what you capture for use in the Cribl UI.
+> ** Important:** Take note of the secret value immediately. The secret is only exposed upon creation. This is what you capture for use in the Cribl UI.
 
-## 🔧 Exchange Admin Portal Configuration
+## Exchange Admin Portal Configuration
 
 **Required for Office 365 Message Trace only**
 
@@ -86,7 +86,7 @@ Complete guide for creating and configuring Azure App Registration to integrate 
 5. Search for and select ![EAC Message Tracking](images/EAC_MessageTracking.png) and ![EAC View-Only Recipients](images/EAC_ViewOnlyrecipients.png), then click ![EAC Next](images/next.png)
 6. Click ![EAC Next](images/next.png) again and then ![EAC Add Group](images/EAC_AddGroup.png)
 
-## 💻 PowerShell Configuration
+## PowerShell Configuration
 
 **Required for Office 365 Message Trace only**
 
@@ -110,7 +110,7 @@ Add-RoleGroupMember -Identity "Cribl-O365MessageTrace" -Member <Application (Cli
 
 > **Note:** Ensure you use the Object ID of the Enterprise App Service Principal associated with your App Registration.
 
-## 🎯 Best Practices
+## Best Practices
 
 - **Unique Secrets**: Create a unique secret for each Cribl Office 365 source for better security and least privilege access
 - **Secret Rotation**: Set appropriate expiration timeframes and establish a secret rotation schedule

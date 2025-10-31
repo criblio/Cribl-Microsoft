@@ -2,7 +2,7 @@
 
 Automation tools and templates for integrating Cribl Stream with Microsoft Azure Log Analytics and Sentinel.
 
-## 📁 Repository Contents
+## Repository Contents
 
 ### [DCR-Automation](Azure/CustomDeploymentTemplates/DCR-Automation/) 
 **PowerShell automation for Azure Data Collection Rules**
@@ -23,7 +23,7 @@ Automation tools and templates for integrating Cribl Stream with Microsoft Azure
 - Dynamic lookups including Active Directory integration
 - Reference data for log processing workflows
 
-## 🚀 Quick Start
+## Quick Start
 
 ### For Automated Deployment
 ```powershell
@@ -35,21 +35,21 @@ See [DCR-Automation Quick Start](Azure/CustomDeploymentTemplates/DCR-Automation/
 ### For Manual Templates
 Browse templates in `Azure/CustomDeploymentTemplates/DCR-Templates/`
 
-## 📋 Prerequisites
+## Prerequisites
 
 - Azure subscription with Log Analytics workspace
 - PowerShell with Azure modules (for automation)
 - Cribl Stream instance
 - Azure AD app registration (for Cribl authentication)
 
-## 🔗 Key Features
+## Key Features
 
 - **Automated DCR Creation**: PowerShell scripts handle complex DCR deployments
 - **Cribl Integration**: Auto-generates Cribl Stream destination configurations
 - **Template Library**: Pre-built templates for common scenarios
 - **Multi-Mode Support**: Direct DCRs (simple) or DCE-based (advanced routing)
 
-## 📚 Documentation
+## Documentation
 
 - [DCR-Automation README](Azure/CustomDeploymentTemplates/DCR-Automation/README.md) - Detailed automation documentation
 - [Cribl Destinations Guide](Azure/CustomDeploymentTemplates/DCR-Automation/CRIBL_DESTINATIONS_README.md) - Cribl configuration details
@@ -57,15 +57,15 @@ Browse templates in `Azure/CustomDeploymentTemplates/DCR-Templates/`
 - [Static Lookups Guide](Lookups/StaticLookups/README.md) - Static lookup table reference
 - [Active Directory Lookups Guide](Lookups/DynamicLookups/ActiveDirectory/README.md) - Dynamic AD lookup integration
 
-## 🤝 Contributing
+## Contributing
 
 See [CONTRIBUTORS.md](CONTRIBUTORS.md) for contribution guidelines.
 
-## 📄 License
+## License
 
 MIT License - see [LICENSE](LICENSE) file.
 
-## 📝 Release Notes
+## Release Notes
 
 See [RELEASE_NOTES](RELEASE_NOTES/) for version history and updates.
 

@@ -1,4 +1,4 @@
-# 🚀 DCR Automation Quick Start
+# DCR Automation Quick Start
 
 ## Prerequisites
 - DCR of Kind:Direct require Cribl Stream 4.14+
@@ -6,32 +6,32 @@
 - Azure subscription with appropriate permissions
 - Log Analytics Workspace already created
 
-## 1️⃣ Configure Azure Settings
+## 1⃣ Configure Azure Settings
 
-Edit `prod/azure-parameters.json` with your Azure details:
+Edit `core/azure-parameters.json` with your Azure details:
 
 ```json
 {
-  "resourceGroupName": "your-rg-name",
-  "workspaceName": "your-workspace-name",
-  "location": "eastus",
-  "dcrPrefix": "dcr-",
-  "tenantId": "your-tenant-id",
-  "clientId": "your-app-client-id",
-  "clientSecret": "your-app-secret"
+ "resourceGroupName": "your-rg-name",
+ "workspaceName": "your-workspace-name",
+ "location": "eastus",
+ "dcrPrefix": "dcr-",
+ "tenantId": "your-tenant-id",
+ "clientId": "your-app-client-id",
+ "clientSecret": "your-app-secret"
 }
 ```
 
 **Note:** The `tenantId`, `clientId`, and `clientSecret` are required for Cribl Stream integration.
 
-## 2️⃣ Connect to Azure
+## 2⃣ Connect to Azure
 
 ```powershell
 Connect-AzAccount
-Set-AzContext -Subscription "Your-Subscription-Name"  # If multiple subscriptions
+Set-AzContext -Subscription "Your-Subscription-Name" # If multiple subscriptions
 ```
 
-## 3️⃣ Launch the Interactive Menu
+## 3⃣ Launch the Interactive Menu
 
 ```powershell
 .\Run-DCRAutomation.ps1
@@ -41,42 +41,42 @@ You'll see an interactive menu like this:
 
 ```
 ============================================================
-         DCR AUTOMATION DEPLOYMENT MENU
+ DCR AUTOMATION DEPLOYMENT MENU
 ============================================================
-⚠️  IMPORTANT: Ensure azure-parameters.json is updated!
+ IMPORTANT: Ensure azure-parameters.json is updated!
 
-📍 Current Configuration:
-   Workspace: your-workspace-name
-   Resource Group: your-rg-name
-   DCR Mode: Direct
+ Current Configuration:
+ Workspace: your-workspace-name
+ Resource Group: your-rg-name
+ DCR Mode: Direct
 
-📋 DEPLOYMENT OPTIONS:
+ DEPLOYMENT OPTIONS:
 
-  [1] ⚡ Quick Deploy (Operational Parameters)
-      ➤ Deploy both Native + Custom tables using current settings
-  --------------------------------------------------------
-  [2] Deploy DCR (Native Direct)
-  [3] Deploy DCR (Native w/DCE)
-  [4] Deploy DCR (Custom Direct)
-  [5] Deploy DCR (Custom w/DCE)
-  --------------------------------------------------------
-  [Q] Quit
+ [1] Quick Deploy (Operational Parameters)
+ Deploy both Native + Custom tables using current settings
+ --------------------------------------------------------
+ [2] Deploy DCR (Native Direct)
+ [3] Deploy DCR (Native w/DCE)
+ [4] Deploy DCR (Custom Direct)
+ [5] Deploy DCR (Custom w/DCE)
+ --------------------------------------------------------
+ [Q] Quit
 ============================================================
 
 Select an option:
 ```
 
-## 4️⃣ Menu Options Explained
+## 4⃣ Menu Options Explained
 
 
-### Option 1: Quick Deploy ⚡ 
+### Option 1: Quick Deploy 
 - Deploys BOTH native and custom tables
-- Uses settings from `prod/operation-parameters.json`
+- Uses settings from `core/operation-parameters.json`
 - Default: Direct DCRs (simpler, cost-effective)
 - **Best for:** Getting started quickly
 
 ### Option 2: Native Tables - Direct DCRs
-- Deploys tables listed in `prod/NativeTableList.json`
+- Deploys tables listed in `core/NativeTableList.json`
 - Creates Direct DCRs (no DCE required)
 - **Best for:** Standard Sentinel tables
 
@@ -86,7 +86,7 @@ Select an option:
 - **Best for:** Private network scenarios
 
 ### Option 4: Custom Tables - Direct DCRs
-- Deploys custom tables from `prod/CustomTableList.json`
+- Deploys custom tables from `core/CustomTableList.json`
 - Tables must end with `_CL` suffix
 - **Best for:** Custom application logs
 
@@ -94,65 +94,65 @@ Select an option:
 - Same as Option 4 but with a DCE
 - **Best for:** Custom tables with private endpoints
 
-## 5️⃣ Deployment Workflow
+## 5⃣ Deployment Workflow
 
 1. **Select an option** (e.g., press `1` for Quick Deploy)
 2. **Review confirmation** showing what will be deployed
 3. **Type `Y`** to proceed or `N` to cancel
 4. **Watch progress** as DCRs are created
-5. **Cribl config automatically exported** to `prod/cribl-dcr-configs\`
+5. **Cribl config automatically exported** to `core/cribl-dcr-configs\`
 
-## 6️⃣ After Deployment
+## 6⃣ After Deployment
 
 ### View Cribl Configuration
 The menu automatically exports configuration. To generate individual Cribl destinations to: `cribl-dcr-configs\destinations`
 
 ### Files Created
-- `prod/cribl-dcr-configs\cribl-dcr-config.json` - Main configuration
-- `prod/cribl-dcr-configs\destinations\*.json` - Individual Cribl destinations
-- `prod/generated-templates\*.json` - ARM templates (for reference or manual deployment from the Azure `Deploy a custom template` wizard)
+- `core/cribl-dcr-configs\cribl-dcr-config.json` - Main configuration
+- `core/cribl-dcr-configs\destinations\*.json` - Individual Cribl destinations
+- `core/generated-templates\*.json` - ARM templates (for reference or manual deployment from the Azure `Deploy a custom template` wizard)
 
-## 📝 Table Configuration
+## Table Configuration
 
 ### Native Tables (Update for your use case)
-Edit `prod/NativeTableList.json`:
+Edit `core/NativeTableList.json`:
 ```json
 [
-    "CommonSecurityLog",
-    "SecurityEvent",
-    "Syslog",
-    "WindowsEvent"
+ "CommonSecurityLog",
+ "SecurityEvent",
+ "Syslog",
+ "WindowsEvent"
 ]
 ```
 **Important:** Custom tables must end with `_CL` suffix
 
 ### Custom Tables (Update for Custom tables that you need created or already exist)
-Edit `prod/CustomTableList.json`:
+Edit `core/CustomTableList.json`:
 ```json
 [
-    "CloudFlare_CL",
-    "MyCustomApp_CL"
+ "CloudFlare_CL",
+ "MyCustomApp_CL"
 ]
 ```
 **Important:** Custom tables must end with `_CL` suffix
 
 ### Custom Table Schemas
 If a custom table doesn't exist in Azure, create a schema file:
-`prod/custom-table-schemas\MyCustomApp_CL.json`
+`core/custom-table-schemas\MyCustomApp_CL.json`
 
 ```json
 {
-  "description": "My application logs",
-  "retentionInDays": 30,
-  "columns": [
-    {"name": "TimeGenerated", "type": "datetime"},
-    {"name": "Message", "type": "string"},
-    {"name": "Level", "type": "string"}
-  ]
+ "description": "My application logs",
+ "retentionInDays": 30,
+ "columns": [
+ {"name": "TimeGenerated", "type": "datetime"},
+ {"name": "Message", "type": "string"},
+ {"name": "Level", "type": "string"}
+ ]
 }
 ```
 
-## 🎯 Quick Decision Guide
+## Quick Decision Guide
 
 | Scenario | Choose Option |
 |----------|--------------|
@@ -162,7 +162,7 @@ If a custom table doesn't exist in Azure, create a schema file:
 | **Need private endpoints** | Options 3 or 5 (with DCE) |
 | **Want to review first** | Run with `-NonInteractive -Mode TemplateOnly` |
 
-## 🔧 Troubleshooting
+## Troubleshooting
 
 | Issue | Solution |
 |-------|----------|
@@ -172,14 +172,14 @@ If a custom table doesn't exist in Azure, create a schema file:
 | **"Access denied"** | Check Azure permissions and `Connect-AzAccount` |
 | **Custom table collision** | Rename custom table to avoid native table names |
 
-## ✅ Success Indicators
+## Success Indicators
 
 After successful deployment, you'll see:
-- ✅ **DCRs created** message for each table
-- 📦 **Cribl configuration exported** notification
-- 🔗 **Integration details** (DCR IDs, endpoints, stream names)
+- **DCRs created** message for each table
+- **Cribl configuration exported** notification
+- **Integration details** (DCR IDs, endpoints, stream names)
 
-## 📚 Additional Resources
+## Additional Resources
 
 - **Full Documentation:** `README.md`
 - **Cribl Setup:** `CRIBL_DESTINATIONS_README.md`
@@ -187,4 +187,4 @@ After successful deployment, you'll see:
 
 ---
 
-**🎉 Ready to start?** Run `.\Run-DCRAutomation.ps1` and select Option 1 for Quick Deploy!
+** Ready to start?** Run `.\Run-DCRAutomation.ps1` and select Option 1 for Quick Deploy!

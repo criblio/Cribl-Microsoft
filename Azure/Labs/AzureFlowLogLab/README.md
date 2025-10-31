@@ -2,16 +2,16 @@
 
 This PowerShell automation system streamlines the deployment of Azure Virtual Networks (vNets) with VPN Gateway, test VMs, and comprehensive flow logging for Cribl Stream integration. Features an **interactive menu interface** for easy deployment with automatic Cribl collector configuration generation.
 
-## 🆕 Latest Updates (v1.0.0)
-- ✅ **Initial Release**: Complete automation for Azure Flow Log Lab infrastructure
-- ✅ **Interactive Menu**: User-friendly deployment interface
-- ✅ **Dual-Level Flow Logs**: vNet-level and subnet-level flow logging with different retention periods
-- ✅ **Cribl Integration**: Automatic generation of Cribl collector configurations
-- ✅ **VPN Gateway Support**: Site-to-site VPN with on-premises network integration
-- ✅ **Test VM Deployment**: Automated VM creation for flow log generation
-- ✅ **Auto-Shutdown**: VMs automatically shut down at 7 PM Eastern to save costs
+## Latest Updates (v1.0.0)
+- **Initial Release**: Complete automation for Azure Flow Log Lab infrastructure
+- **Interactive Menu**: User-friendly deployment interface
+- **Dual-Level Flow Logs**: vNet-level and subnet-level flow logging with different retention periods
+- **Cribl Integration**: Automatic generation of Cribl collector configurations
+- **VPN Gateway Support**: Site-to-site VPN with on-premises network integration
+- **Test VM Deployment**: Automated VM creation for flow log generation
+- **Auto-Shutdown**: VMs automatically shut down at 7 PM Eastern to save costs
 
-## 🚀 Key Features
+## Key Features
 
 - **Interactive Menu System**: User-friendly interface with deployment confirmations
 - **Dual-Level Flow Logging**: vNet-level (7 days) + subnet-level overrides (Security: 30 days, O11y: 90 days)
@@ -22,69 +22,69 @@ This PowerShell automation system streamlines the deployment of Azure Virtual Ne
 - **Smart Validation**: Pre-deployment validation and resource reuse (Network Watcher)
 - **Multi-Environment Support**: Separate dev and prod configurations
 
-## 📁 File Structure
+## File Structure
 
 ```
 AzureFlowLogLab/
-├── Run-AzureFlowLogLab.ps1           # Main entry point with interactive menu
-├── README.md                          # This documentation
-├── QUICK_START.md                     # Quick setup guide
-├── RELEASE_NOTES/                     # Version history
-│   └── v1.0.0.md
-└── prod/                              # Production configuration and scripts
-    ├── Deploy-AzureFlowLogLab.ps1    # Core deployment engine
-    ├── azure-parameters.json          # Azure resource configuration
-    ├── operation-parameters.json      # Deployment behavior settings
-    ├── onprem-connection-parameters.json  # VPN connection details
-    ├── vm-parameters.json             # VM deployment settings
-    ├── CollectorExample.json          # Cribl collector template reference
-    └── cribl-collectors/              # Generated Cribl collector configs (created by script)
+ Run-AzureFlowLogLab.ps1 # Main entry point with interactive menu
+ README.md # This documentation
+ QUICK_START.md # Quick setup guide
+ RELEASE_NOTES/ # Version history
+ v1.0.0.md
+ prod/ # Production configuration and scripts
+ Deploy-AzureFlowLogLab.ps1 # Core deployment engine
+ azure-parameters.json # Azure resource configuration
+ operation-parameters.json # Deployment behavior settings
+ onprem-connection-parameters.json # VPN connection details
+ vm-parameters.json # VM deployment settings
+ CollectorExample.json # Cribl collector template reference
+ cribl-collectors/ # Generated Cribl collector configs (created by script)
 ```
 
-## ⚙️ Configuration Files
+## Configuration Files
 
 ### 1. azure-parameters.json (MUST CONFIGURE)
 ```json
 {
-  "subscriptionId": "your-subscription-id",
-  "resourceGroupName": "rg-flowloglab-eastus",
-  "location": "eastus",
-  "baseObjectName": "jpederson",
-  "vnetAddressPrefix": "10.198.30.0/24",
-  "subnets": {
-    "gateway": {
-      "name": "GatewaySubnet",
-      "addressPrefix": "10.198.30.0/27"
-    },
-    "bastion": {
-      "name": "BastionSubnet",
-      "addressPrefix": "10.198.30.32/27"
-    },
-    "security": {
-      "name": "SecuritySubnet",
-      "addressPrefix": "10.198.30.64/27"
-    },
-    "o11y": {
-      "name": "O11ySubnet",
-      "addressPrefix": "10.198.30.96/27"
-    }
-  },
-  "flowLogging": {
-    "vnetLevel": {
-      "enabled": true,
-      "retentionDays": 7
-    },
-    "subnetLevel": {
-      "security": {
-        "enabled": true,
-        "retentionDays": 30
-      },
-      "o11y": {
-        "enabled": true,
-        "retentionDays": 90
-      }
-    }
-  }
+ "subscriptionId": "your-subscription-id",
+ "resourceGroupName": "rg-flowloglab-eastus",
+ "location": "eastus",
+ "baseObjectName": "jpederson",
+ "vnetAddressPrefix": "10.198.30.0/24",
+ "subnets": {
+ "gateway": {
+ "name": "GatewaySubnet",
+ "addressPrefix": "10.198.30.0/27"
+ },
+ "bastion": {
+ "name": "BastionSubnet",
+ "addressPrefix": "10.198.30.32/27"
+ },
+ "security": {
+ "name": "SecuritySubnet",
+ "addressPrefix": "10.198.30.64/27"
+ },
+ "o11y": {
+ "name": "O11ySubnet",
+ "addressPrefix": "10.198.30.96/27"
+ }
+ },
+ "flowLogging": {
+ "vnetLevel": {
+ "enabled": true,
+ "retentionDays": 7
+ },
+ "subnetLevel": {
+ "security": {
+ "enabled": true,
+ "retentionDays": 30
+ },
+ "o11y": {
+ "enabled": true,
+ "retentionDays": 90
+ }
+ }
+ }
 }
 ```
 
@@ -97,56 +97,56 @@ AzureFlowLogLab/
 ### 2. onprem-connection-parameters.json
 ```json
 {
-  "localNetworkGateway": {
-    "name": "lng-sitename",
-    "gatewayIpAddress": "YOUR-ONPREM-PUBLIC-IP",
-    "addressSpace": ["192.168.1.0/24"]
-  },
-  "vpnConnection": {
-    "name": "conn-azure-to-onprem",
-    "connectionType": "IPsec",
-    "sharedKey": "your-shared-key-here"
-  }
+ "localNetworkGateway": {
+ "name": "lng-sitename",
+ "gatewayIpAddress": "YOUR-ONPREM-PUBLIC-IP",
+ "addressSpace": ["192.168.1.0/24"]
+ },
+ "vpnConnection": {
+ "name": "conn-azure-to-onprem",
+ "connectionType": "IPsec",
+ "sharedKey": "your-shared-key-here"
+ }
 }
 ```
 
 ### 3. vm-parameters.json
 ```json
 {
-  "vmConfiguration": {
-    "deployVMs": true,
-    "vmSize": "Standard_B1s",
-    "publisher": "Canonical",
-    "offer": "0001-com-ubuntu-server-jammy",
-    "sku": "22_04-lts-gen2",
-    "osDiskType": "Standard_LRS",
-    "adminUsername": "azureuser"
-  },
-  "vmDeployment": {
-    "bastion": { "deploy": true, "vmName": "vm-bastion" },
-    "security": { "deploy": true, "vmName": "vm-security" },
-    "o11y": { "deploy": true, "vmName": "vm-o11y" }
-  }
+ "vmConfiguration": {
+ "deployVMs": true,
+ "vmSize": "Standard_B1s",
+ "publisher": "Canonical",
+ "offer": "0001-com-ubuntu-server-jammy",
+ "sku": "22_04-lts-gen2",
+ "osDiskType": "Standard_LRS",
+ "adminUsername": "azureuser"
+ },
+ "vmDeployment": {
+ "bastion": { "deploy": true, "vmName": "vm-bastion" },
+ "security": { "deploy": true, "vmName": "vm-security" },
+ "o11y": { "deploy": true, "vmName": "vm-o11y" }
+ }
 }
 ```
 
 ### 4. operation-parameters.json
 ```json
 {
-  "deployment": {
-    "deployVNet": true,
-    "deployVPNGateway": true,
-    "deployFlowLogs": true,
-    "deployBastion": false
-  },
-  "scriptBehavior": {
-    "templateOnly": false,
-    "verboseOutput": true
-  }
+ "deployment": {
+ "deployVNet": true,
+ "deployVPNGateway": true,
+ "deployFlowLogs": true,
+ "deployBastion": false
+ },
+ "scriptBehavior": {
+ "templateOnly": false,
+ "verboseOutput": true
+ }
 }
 ```
 
-## 🎯 Quick Start
+## Quick Start
 
 ### 1. Configure Azure Settings
 ```powershell
@@ -170,28 +170,28 @@ Set-AzContext -Subscription "Your-Subscription-Name"
 ### 4. Interactive Menu Options
 ```
 ============================================================
-         AZURE VNET & VPN DEPLOYMENT MENU
+ AZURE VNET & VPN DEPLOYMENT MENU
 ============================================================
-📍 Current Configuration:
-   Subscription: your-subscription-id
-   Resource Group: rg-flowloglab-eastus
-   Location: eastus
-   vNet: vnet-jpederson (10.198.30.0/24)
-   VPN Gateway: vpngw-jpederson (Basic)
+ Current Configuration:
+ Subscription: your-subscription-id
+ Resource Group: rg-flowloglab-eastus
+ Location: eastus
+ vNet: vnet-jpederson (10.198.30.0/24)
+ VPN Gateway: vpngw-jpederson (Basic)
 
-📋 DEPLOYMENT OPTIONS:
+ DEPLOYMENT OPTIONS:
 
-  [1] ⚡ Full Deployment (vNet + VPN + VMs + Flow Logs)
-  [2] Deploy vNet Only
-  [3] Deploy VPN Gateway Only
-  [4] Deploy Flow Logs Only
-  [5] Check Deployment Status
-  [6] Validate Configuration
-  [Q] Quit
+ [1] Full Deployment (vNet + VPN + VMs + Flow Logs)
+ [2] Deploy vNet Only
+ [3] Deploy VPN Gateway Only
+ [4] Deploy Flow Logs Only
+ [5] Check Deployment Status
+ [6] Validate Configuration
+ [Q] Quit
 ============================================================
 ```
 
-## 🚀 Usage Examples
+## Usage Examples
 
 ### Interactive Menu (Recommended)
 ```powershell
@@ -211,14 +211,14 @@ Set-AzContext -Subscription "Your-Subscription-Name"
 .\Run-AzureFlowLogLab.ps1 -NonInteractive -Mode VNetOnly
 ```
 
-## 🌊 Flow Logging Architecture
+## Flow Logging Architecture
 
 ### Dual-Level Flow Logging
 - **vNet-level**: Captures all traffic in the vNet (7-day retention)
 - **Subnet-level overrides**:
-  - SecuritySubnet: 30-day retention (compliance)
-  - O11ySubnet: 90-day retention (observability)
-  - BastionSubnet: Inherits vNet-level (7 days)
+ - SecuritySubnet: 30-day retention (compliance)
+ - O11ySubnet: 90-day retention (observability)
+ - BastionSubnet: Inherits vNet-level (7 days)
 
 ### Flow Log Hierarchy
 Azure enforces: **NIC > Subnet > vNet** (most specific wins)
@@ -228,16 +228,16 @@ Azure enforces: **NIC > Subnet > vNet** (most specific wins)
 - Container: `insights-logs-flowlogflowevent`
 - Path pattern: `/flowLogResourceID=/{SUBSCRIPTION}/{RESOURCEGROUP}/{FLOWLOGNAME}/`
 
-## 🎨 Cribl Collector Generation
+## Cribl Collector Generation
 
 The script automatically generates Cribl Stream collector configurations after deployment:
 
 ### Generated Files
 ```
 prod/cribl-collectors/
-├── Azure_VNet_vnet-jpederson_FlowLogs.json
-├── Azure_Subnet_Security_FlowLogs.json
-└── Azure_Subnet_O11y_FlowLogs.json
+ Azure_VNet_vnet-jpederson_FlowLogs.json
+ Azure_Subnet_Security_FlowLogs.json
+ Azure_Subnet_O11y_FlowLogs.json
 ```
 
 ### Collector Features
@@ -251,7 +251,7 @@ prod/cribl-collectors/
 - **Interactive wait**: Script prompts every 60 seconds to continue waiting or skip
 - **Re-run option**: Use FlowLogsOnly mode to regenerate collectors later
 
-## 💰 Cost Optimization Features
+## Cost Optimization Features
 
 1. **VM Auto-Shutdown**: All VMs shut down at 7 PM Eastern (saves ~50% on VM costs)
 2. **No Public IPs**: VMs use private IPs only (saves ~$11/month per VM)
@@ -265,7 +265,7 @@ prod/cribl-collectors/
 - Public IP (VPN Gateway): ~$3/month
 - **Total**: ~$46/month
 
-## 🔐 VPN Gateway Configuration
+## VPN Gateway Configuration
 
 ### Azure Side (Automated)
 - Public IP: Zone-redundant (zones 1,2,3)
@@ -297,14 +297,14 @@ Phase 2 (IPsec):
 - PFS Group: None
 ```
 
-## 📋 Network Security Groups
+## Network Security Groups
 
 Automatically created for each subnet with rules:
 - **AllowOnPremisesGateway**: Inbound from on-prem public IP (Priority 100)
 - **AllowOnPremisesNetwork**: Inbound from on-prem network (Priority 110)
 - **AllowVNetInbound**: Inbound from Azure vNet (Priority 120)
 
-## 📈 Best Practices
+## Best Practices
 
 1. **Start with Template Mode** - Validate configuration before deployment
 2. **Use Proper CIDR Planning** - Avoid overlap with on-premises networks
@@ -313,7 +313,7 @@ Automatically created for each subnet with rules:
 5. **Protect Credentials** - Never commit real values to git
 6. **Review Cribl Collectors** - Verify paths before importing to Cribl Stream
 
-## 🚨 Troubleshooting
+## Troubleshooting
 
 | Issue | Solution |
 |-------|----------|
@@ -335,60 +335,60 @@ Automatically created for each subnet with rules:
 .\Run-AzureFlowLogLab.ps1 -Mode FlowLogsOnly
 ```
 
-## 📊 Expected Output
+## Expected Output
 
 ### Successful Deployment
 ```
-🚀 Deploying Azure Flow Log Lab Infrastructure...
+ Deploying Azure Flow Log Lab Infrastructure...
 ==================================================
 
 --- Step 1: Creating Virtual Network ---
-  vNet Name: vnet-jpederson
-  Address Space: 10.198.30.0/24
-  ✅ vNet created successfully!
+ vNet Name: vnet-jpederson
+ Address Space: 10.198.30.0/24
+ vNet created successfully!
 
 --- Step 2: Creating Network Security Groups ---
-  ✅ NSG created: nsg-SecuritySubnet
-  ✅ NSG created: nsg-O11ySubnet
-  ✅ NSG created: nsg-BastionSubnet
+ NSG created: nsg-SecuritySubnet
+ NSG created: nsg-O11ySubnet
+ NSG created: nsg-BastionSubnet
 
 --- Step 3: Deploying Storage Account ---
-  ✅ Storage Account: sajpedersoneastusflowlogs
+ Storage Account: sajpedersoneastusflowlogs
 
 --- Step 4: Deploying VNet Flow Logs ---
-  ✅ vNet-level flow log enabled (7 days)
-  ✅ Subnet-level flow log: SecuritySubnet (30 days)
-  ✅ Subnet-level flow log: O11ySubnet (90 days)
+ vNet-level flow log enabled (7 days)
+ Subnet-level flow log: SecuritySubnet (30 days)
+ Subnet-level flow log: O11ySubnet (90 days)
 
 --- Step 5: Deploying VPN Gateway ---
-  ⏳ Gateway deployment started (30-45 minutes)...
-  ✅ VPN Gateway deployed!
+ ⏳ Gateway deployment started (30-45 minutes)...
+ VPN Gateway deployed!
 
 --- Step 6: Deploying Test VMs ---
-  ✅ VM deployed: vm-bastion (10.198.30.36)
-  ✅ VM deployed: vm-security (10.198.30.68)
-  ✅ VM deployed: vm-o11y (10.198.30.100)
-  ℹ️  Auto-shutdown configured: 7 PM Eastern
+ VM deployed: vm-bastion (10.198.30.36)
+ VM deployed: vm-security (10.198.30.68)
+ VM deployed: vm-o11y (10.198.30.100)
+ ℹ Auto-shutdown configured: 7 PM Eastern
 
 --- Step 7: Generating Cribl Collectors ---
-  ⚠️  Flow logs typically take 5-10 minutes to start
-  ⏳ Waiting for flow log container...
-  ✅ Flow log container found!
-  📝 Generated: Azure_VNet_vnet-jpederson_FlowLogs.json
-  📝 Generated: Azure_Subnet_Security_FlowLogs.json
-  📝 Generated: Azure_Subnet_O11y_FlowLogs.json
+ Flow logs typically take 5-10 minutes to start
+ ⏳ Waiting for flow log container...
+ Flow log container found!
+ Generated: Azure_VNet_vnet-jpederson_FlowLogs.json
+ Generated: Azure_Subnet_Security_FlowLogs.json
+ Generated: Azure_Subnet_O11y_FlowLogs.json
 ```
 
-## 🎉 Summary
+## Summary
 
 This automation system provides:
-- ✅ **Complete flow log lab** with vNet, VPN, VMs, and flow logging
-- ✅ **Cribl integration** with automatic collector generation
-- ✅ **Cost optimization** with auto-shutdown and minimal resources
-- ✅ **Dual-level flow logging** for different retention requirements
-- ✅ **VPN connectivity** for on-premises integration
-- ✅ **Interactive deployment** with guided menu interface
-- ✅ **Smart resource reuse** (Network Watcher per region)
+- **Complete flow log lab** with vNet, VPN, VMs, and flow logging
+- **Cribl integration** with automatic collector generation
+- **Cost optimization** with auto-shutdown and minimal resources
+- **Dual-level flow logging** for different retention requirements
+- **VPN connectivity** for on-premises integration
+- **Interactive deployment** with guided menu interface
+- **Smart resource reuse** (Network Watcher per region)
 
 ---
 

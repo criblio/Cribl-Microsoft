@@ -9,11 +9,13 @@
   "location": "<YOUR-AZURE-REGION-HERE>",
   "tenantId": "<YOUR-TENANT-ID-HERE>",
   "clientId": "<YOUR-CLIENT-ID-HERE>",
+  "ownerTag": "<YOUR-EMAIL-OR-NAME-HERE>",
   "_comments": {
     "dce_parameters": "DCE-related parameters (dcePrefix, dceSuffix) are only used when createDCE=true in operation-parameters.json. DCEs are created in the same resource group as the DCRs.",
     "dcr_naming": "Script will automatically abbreviate table names if the full DCR name exceeds length limits (30 chars for Direct DCRs, 64 chars for DCE-based DCRs)",
     "naming_limits": "Direct DCRs: 30 chars max, DCE-based DCRs: 64 chars max. Prefix and suffix are preserved, only table names are abbreviated.",
     "azure_ad_auth": "tenantId and clientId are used for Azure AD authentication in Cribl Stream destinations. Client secret will be set to '<replace me>' placeholder for manual configuration in Cribl Stream.",
-    "subscription": "subscriptionId is used to automatically set the Azure subscription context when running the scripts"
+    "subscription": "subscriptionId is used to automatically set the Azure subscription context when running the scripts",
+    "owner_tag": "ownerTag is applied to all DCRs and DCEs created by this automation. Useful for tracking resource ownership and cost allocation."
   }
 }

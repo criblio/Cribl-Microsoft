@@ -2,14 +2,14 @@
 
 This PowerShell automation system streamlines the deployment of Azure Data Collection Rules (DCRs) for integrating Cribl Stream with Azure Log Analytics/Microsoft Sentinel. Features an **interactive menu interface** for easy deployment, supporting both native and custom tables with automatic Cribl configuration export.
 
-## 🆕 Latest Updates (v1.1.0)
-- ✅ **Directory Structure Reorganization**: Streamlined project layout with organized configuration directories
-- ✅ **Enhanced Documentation**: Updated all file path references for new structure
-- ✅ **Improved Maintainability**: Separated entry points from working configurations
-- ✅ **Backward Compatibility**: All existing workflows continue unchanged
+## Latest Updates (v1.1.0)
+- **Directory Structure Reorganization**: Streamlined project layout with organized configuration directories
+- **Enhanced Documentation**: Updated all file path references for new structure
+- **Improved Maintainability**: Separated entry points from working configurations
+- **Backward Compatibility**: All existing workflows continue unchanged
 
 
-## 🚀 Key Features
+## Key Features
 
 - **Interactive Menu System**: User-friendly interface with deployment confirmations
 - **Unified Solution**: Single system handles both DCE-based and Direct DCRs
@@ -21,50 +21,50 @@ This PowerShell automation system streamlines the deployment of Azure Data Colle
 - **Cribl Destination Generation**: Creates ready-to-import Cribl Stream destination configs
 - **Table Collision Detection**: Prevents conflicts between native and custom tables with similar names
 
-## 📁 File Structure
+## File Structure
 
 ```
 DCR-Automation/
-├── Run-DCRAutomation.ps1              # Main entry point with simplified commands
-├── Create-TableDCRs.ps1               # Core engine for DCR creation
-├── Generate-CriblDestinations.ps1     # Generates Cribl destination configs
-├── azure-parameters.json              # Azure resources & authentication (CONFIGURE THIS)
-├── cribl-parameters.json              # Cribl naming conventions
-├── operation-parameters.json          # Script behavior settings
-├── NativeTableList.json               # Native tables to process
-├── CustomTableList.json               # Custom tables to process
-├── dcr-template-direct.json           # ARM template for Direct DCRs
-├── dcr-template-with-dce.json         # ARM template for DCE-based DCRs
-├── dst-cribl-template.json            # Template for Cribl destinations
-├── custom-table-schemas/              # Schema definitions for custom tables
-│   ├── CloudFlare_CL.json
-│   ├── MyCustomApp_CL.json
-│   └── README.md
-├── generated-templates/               # Generated ARM templates (auto-created)
-├── cribl-dcr-configs/                 # Cribl configurations (auto-created)
-│   ├── cribl-dcr-config.json         # Main DCR configuration
-│   └── destinations/                  # Individual destination configs
-├── README.md                          # This documentation
-├── QUICK_START.md                     # Quick setup guide
-└── CRIBL_DESTINATIONS_README.md      # Cribl destination details
+ Run-DCRAutomation.ps1 # Main entry point with simplified commands
+ Create-TableDCRs.ps1 # Core engine for DCR creation
+ Generate-CriblDestinations.ps1 # Generates Cribl destination configs
+ azure-parameters.json # Azure resources & authentication (CONFIGURE THIS)
+ cribl-parameters.json # Cribl naming conventions
+ operation-parameters.json # Script behavior settings
+ NativeTableList.json # Native tables to process
+ CustomTableList.json # Custom tables to process
+ dcr-template-direct.json # ARM template for Direct DCRs
+ dcr-template-with-dce.json # ARM template for DCE-based DCRs
+ dst-cribl-template.json # Template for Cribl destinations
+ custom-table-schemas/ # Schema definitions for custom tables
+ CloudFlare_CL.json
+ MyCustomApp_CL.json
+ README.md
+ generated-templates/ # Generated ARM templates (auto-created)
+ cribl-dcr-configs/ # Cribl configurations (auto-created)
+ cribl-dcr-config.json # Main DCR configuration
+ destinations/ # Individual destination configs
+ README.md # This documentation
+ QUICK_START.md # Quick setup guide
+ CRIBL_DESTINATIONS_README.md # Cribl destination details
 ```
 
-## ⚙️ Configuration Files
+## Configuration Files
 
-### 1. prod/azure-parameters.json (MUST CONFIGURE)
+### 1. core/azure-parameters.json (MUST CONFIGURE)
 ```json
 {
-  "resourceGroupName": "your-rg-name",
-  "workspaceName": "your-la-workspace",
-  "location": "eastus",
-  "dcrPrefix": "dcr-",
-  "dcrSuffix": "",
-  "dceResourceGroupName": "your-rg-name",
-  "dcePrefix": "dce-",
-  "dceSuffix": "",
-  "tenantId": "your-tenant-id",
-  "clientId": "your-app-client-id",
-  "clientSecret": "your-app-secret"
+ "resourceGroupName": "your-rg-name",
+ "workspaceName": "your-la-workspace",
+ "location": "eastus",
+ "dcrPrefix": "dcr-",
+ "dcrSuffix": "",
+ "dceResourceGroupName": "your-rg-name",
+ "dcePrefix": "dce-",
+ "dceSuffix": "",
+ "tenantId": "your-tenant-id",
+ "clientId": "your-app-client-id",
+ "clientSecret": "your-app-secret"
 }
 ```
 
@@ -72,28 +72,28 @@ DCR-Automation/
 - `tenantId`, `clientId`, `clientSecret` are for Azure AD authentication in Cribl
 - DCE parameters only used when `createDCE=true`
 - Direct DCRs have 30-character name limit (auto-abbreviated)
-- ✅ **ClientId Quoting**: Now properly quoted in Cribl exports
+- **ClientId Quoting**: Now properly quoted in Cribl exports
 
-### 2. prod/operation-parameters.json
+### 2. core/operation-parameters.json
 ```json
 {
-  "deployment": {
-    "createDCE": false              // false = Direct DCRs, true = DCE-based
-  },
-  "scriptBehavior": {
-    "templateOnly": false           // true = generate templates only
-  },
-  "customTableSettings": {
-    "enabled": false                // true = process custom tables
-  }
+ "deployment": {
+ "createDCE": false // false = Direct DCRs, true = DCE-based
+ },
+ "scriptBehavior": {
+ "templateOnly": false // true = generate templates only
+ },
+ "customTableSettings": {
+ "enabled": false // true = process custom tables
+ }
 }
 ```
 
 ### 3. Table Lists
-- **prod/NativeTableList.json**: Native Azure tables (SecurityEvent, Syslog, etc.)
-- **prod/CustomTableList.json**: Custom tables with _CL suffix
+- **core/NativeTableList.json**: Native Azure tables (SecurityEvent, Syslog, etc.)
+- **core/CustomTableList.json**: Custom tables with _CL suffix
 
-## 🔄 DCR Modes
+## DCR Modes
 
 | Feature | Direct DCR | DCE-based DCR |
 |---------|------------|---------------|
@@ -104,12 +104,12 @@ DCR-Automation/
 | **Complexity** | Simple | Advanced routing |
 | **Use Case** | Most scenarios | Private endpoints, advanced routing |
 
-## 🎯 Quick Start
+## Quick Start
 
 ### 1. Configure Azure Settings
 ```powershell
 # Edit azure-parameters.json with your values
-notepad prod/azure-parameters.json
+notepad core/azure-parameters.json
 ```
 
 ### 2. Connect to Azure
@@ -126,26 +126,26 @@ Connect-AzAccount
 The script presents an easy-to-use menu:
 ```
 ============================================================
-         DCR AUTOMATION DEPLOYMENT MENU
+ DCR AUTOMATION DEPLOYMENT MENU
 ============================================================
-⚠️  IMPORTANT: Ensure azure-parameters.json is updated!
+ IMPORTANT: Ensure azure-parameters.json is updated!
 
-📍 Current Configuration:
-   Workspace: your-workspace
-   Resource Group: your-rg
-   DCR Mode: Direct
+ Current Configuration:
+ Workspace: your-workspace
+ Resource Group: your-rg
+ DCR Mode: Direct
 
-📋 DEPLOYMENT OPTIONS:
+ DEPLOYMENT OPTIONS:
 
-  [1] ⚡ Quick Deploy (Operational Parameters)
-      ➤ Deploy both Native + Custom tables using current settings
-  --------------------------------------------------------
-  [2] Deploy DCR (Native Direct)
-  [3] Deploy DCR (Native w/DCE)
-  [4] Deploy DCR (Custom Direct)
-  [5] Deploy DCR (Custom w/DCE)
-  --------------------------------------------------------
-  [Q] Quit
+ [1] Quick Deploy (Operational Parameters)
+ Deploy both Native + Custom tables using current settings
+ --------------------------------------------------------
+ [2] Deploy DCR (Native Direct)
+ [3] Deploy DCR (Native w/DCE)
+ [4] Deploy DCR (Custom Direct)
+ [5] Deploy DCR (Custom w/DCE)
+ --------------------------------------------------------
+ [Q] Quit
 ============================================================
 
 Select an option: _
@@ -156,7 +156,7 @@ Select an option: _
 - **Options 2-5**: Targeted deployment for specific table types and DCR modes
 - The menu will confirm your selection before deployment
 
-## 🚀 Usage Examples
+## Usage Examples
 
 ### Interactive Menu (Recommended)
 ```powershell
@@ -211,7 +211,7 @@ Select an option: _
 .\Generate-CriblDestinations.ps1
 ```
 
-## 📋 Script Parameters
+## Script Parameters
 
 ### Run-DCRAutomation.ps1
 | Parameter | Type | Description |
@@ -245,10 +245,10 @@ Select an option: _
 | ShowCriblConfig | Switch | Display Cribl configuration |
 | ExportCriblConfig | Switch | Export to JSON (default: true) |
 
-## 🔗 Cribl Integration
+## Cribl Integration
 
 ### Automatic Configuration Export
-By default, the system exports Cribl configuration to `prod/cribl-dcr-configs\cribl-dcr-config.json` containing:
+By default, the system exports Cribl configuration to `core/cribl-dcr-configs\cribl-dcr-config.json` containing:
 - DCR Immutable IDs
 - Ingestion Endpoints
 - Stream Names
@@ -260,7 +260,7 @@ By default, the system exports Cribl configuration to `prod/cribl-dcr-configs\cr
 .\Generate-CriblDestinations.ps1
 ```
 
-Output in `prod/cribl-dcr-configs\destinations\`:
+Output in `core/cribl-dcr-configs\destinations\`:
 - Individual JSON configs for each DCR
 - Ready to import into Cribl Stream
 - Includes authentication from azure-parameters.json
@@ -272,28 +272,28 @@ $dcrResourceId = "/subscriptions/{sub}/resourceGroups/{rg}/providers/Microsoft.I
 New-AzRoleAssignment -ObjectId "app-object-id" -RoleDefinitionName "Monitoring Metrics Publisher" -Scope $dcrResourceId
 ```
 
-## 📊 Custom Tables
+## Custom Tables
 
 ### Creating Custom Table Schemas
-Place schema files in `prod/custom-table-schemas\`:
+Place schema files in `core/custom-table-schemas\`:
 
 ```json
 {
-  "description": "My custom application logs",
-  "retentionInDays": 30,
-  "totalRetentionInDays": 90,
-  "columns": [
-    {
-      "name": "TimeGenerated",
-      "type": "datetime",
-      "description": "Timestamp"
-    },
-    {
-      "name": "Message",
-      "type": "string",
-      "description": "Log message"
-    }
-  ]
+ "description": "My custom application logs",
+ "retentionInDays": 30,
+ "totalRetentionInDays": 90,
+ "columns": [
+ {
+ "name": "TimeGenerated",
+ "type": "datetime",
+ "description": "Timestamp"
+ },
+ {
+ "name": "Message",
+ "type": "string",
+ "description": "Log message"
+ }
+ ]
 }
 ```
 
@@ -302,35 +302,35 @@ Place schema files in `prod/custom-table-schemas\`:
 
 ### Processing Custom Tables
 ```powershell
-# Enable in prod/operation-parameters.json
+# Enable in core/operation-parameters.json
 "customTableSettings": { "enabled": true }
 
 # Or via command
 .\Run-DCRAutomation.ps1 -Mode DirectCustom
 ```
 
-## 🎯 Template-Only Mode
+## Template-Only Mode
 
 Perfect for CI/CD pipelines and review:
 ```powershell
 # Generate templates with real schemas from Azure
 .\Run-DCRAutomation.ps1 -Mode TemplateOnly
 
-# Templates saved to prod/generated-templates/
+# Templates saved to core/generated-templates/
 # - {TableName}-latest.json (current version)
 # - {TableName}-{timestamp}.json (versioned)
 ```
 
-## 📈 Best Practices
+## Best Practices
 
 1. **Start with Direct DCRs** - Simpler and more cost-effective
 2. **Test with templates first** - Use `-Mode TemplateOnly`
 3. **Deploy single table first** - Use `-SpecificDCR "TableName"`
-4. **Review Cribl configs** - Check `prod/cribl-dcr-configs\` before importing
-5. **Protect credentials** - Never commit prod/azure-parameters.json with real values
+4. **Review Cribl configs** - Check `core/cribl-dcr-configs\` before importing
+5. **Protect credentials** - Never commit core/azure-parameters.json with real values
 6. **Monitor costs** - DCEs incur additional charges
 
-## 🚨 Troubleshooting
+## Troubleshooting
 
 ### Common Issues
 
@@ -340,7 +340,7 @@ Perfect for CI/CD pipelines and review:
 | "DCR name too long" | Script auto-abbreviates, check output |
 | "Authentication error" | Run `Connect-AzAccount` |
 | "Template too large" | Use manual deployment via Azure Portal |
-| "Custom table missing" | Create schema in `prod/custom-table-schemas\` |
+| "Custom table missing" | Create schema in `core/custom-table-schemas\` |
 
 ### Validation Commands
 ```powershell
@@ -354,13 +354,13 @@ Perfect for CI/CD pipelines and review:
 .\Run-DCRAutomation.ps1 -Mode TemplateOnly
 ```
 
-## 🔐 Security Recommendations
+## Security Recommendations
 
 1. **Protect sensitive files**:
 ```bash
 # Add to .gitignore
-prod/azure-parameters.json
-prod/cribl-dcr-configs/
+core/azure-parameters.json
+core/cribl-dcr-configs/
 *.backup.json
 ```
 
@@ -374,45 +374,45 @@ $env:AZURE_CLIENT_SECRET = "your-secret"
 - `Microsoft.OperationalInsights/workspaces/read`
 - `Microsoft.Insights/dataCollectionEndpoints/*` (if using DCEs)
 
-## 📊 Expected Output
+## Expected Output
 
 ### Successful Deployment
 ```
-🚀 Processing NATIVE Tables with DIRECT DCRs...
+ Processing NATIVE Tables with DIRECT DCRs...
 ==================================================
 
 --- Processing: SecurityEvent ---
-  DCR Name: dcr-SecEvt-eastus
-  ✅ Table found: Microsoft-SecurityEvent
-  Schema Analysis:
-    Total columns: 45
-    Columns in DCR: 37
-  ✅ Direct DCR deployed successfully!
-  
-🔗 CRIBL INTEGRATION CONFIGURATION
-═══════════════════════════════════
-  DCR Immutable ID: abc123-def456-...
-  Ingestion Endpoint: https://eastus.ingest.monitor.azure.com
-  Stream Name: Custom-SecurityEvent
-  Target Table: SecurityEvent
-═══════════════════════════════════
+ DCR Name: dcr-SecEvt-eastus
+ Table found: Microsoft-SecurityEvent
+ Schema Analysis:
+ Total columns: 45
+ Columns in DCR: 37
+ Direct DCR deployed successfully!
+ 
+ CRIBL INTEGRATION CONFIGURATION
 
-📦 Cribl configuration exported to: prod/cribl-dcr-configs\cribl-dcr-config.json
+ DCR Immutable ID: abc123-def456-...
+ Ingestion Endpoint: https://eastus.ingest.monitor.azure.com
+ Stream Name: Custom-SecurityEvent
+ Target Table: SecurityEvent
+
+
+ Cribl configuration exported to: core/cribl-dcr-configs\cribl-dcr-config.json
 ```
 
-## 🎉 Summary
+## Summary
 
 This automation system provides:
-- ✅ **Interactive menu interface** for guided deployment (default behavior)
-- ✅ **Unified approach** for both DCE and Direct DCRs
-- ✅ **Automatic Cribl integration** with configuration export
-- ✅ **Custom table support** with schema management
-- ✅ **Template generation** for CI/CD pipelines
-- ✅ **Intelligent handling** of Azure naming limits
-- ✅ **Comprehensive error handling** and user guidance
-- ✅ **Table collision prevention** for native/custom conflicts
-- ✅ **Enhanced schema processing** for both modern and legacy table types
-- ✅ **Improved Cribl export** with proper authentication formatting
+- **Interactive menu interface** for guided deployment (default behavior)
+- **Unified approach** for both DCE and Direct DCRs
+- **Automatic Cribl integration** with configuration export
+- **Custom table support** with schema management
+- **Template generation** for CI/CD pipelines
+- **Intelligent handling** of Azure naming limits
+- **Comprehensive error handling** and user guidance
+- **Table collision prevention** for native/custom conflicts
+- **Enhanced schema processing** for both modern and legacy table types
+- **Improved Cribl export** with proper authentication formatting
 
 
 ---
