@@ -1,4 +1,4 @@
-# Azure Data Collection Rules Automation for Cribl Integration
+#  Azure Data Collection Rules Automation for Cribl Integration
 
 This PowerShell automation system streamlines the deployment of Azure Data Collection Rules (DCRs) for integrating Cribl Stream with Azure Log Analytics/Microsoft Sentinel. Features an **interactive menu interface** for easy deployment, supporting both native and custom tables with automatic Cribl configuration export.
 
