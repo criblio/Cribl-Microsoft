@@ -27,7 +27,10 @@ param(
  [switch]$MigrateCustomTablesToDCR = $false,
 
  [Parameter(Mandatory=$false)]
- [switch]$AutoMigrateCustomTables = $false
+ [switch]$AutoMigrateCustomTables = $false,
+
+ [Parameter(Mandatory=$false)]
+ [switch]$ConfirmDCRNames = $true
 )
 
 # Check for dev mode flag file (hidden from users)
@@ -312,7 +315,7 @@ function Execute-Mode {
  
  $exportCribl = -not $SkipCriblExport
 
- & $ScriptPath -CustomTableMode:$false -CreateDCE:$false -ShowCriblConfig:$ShowCriblConfig -ExportCriblConfig:$exportCribl -SkipCriblExport:$SkipCriblExport -MigrateCustomTablesToDCR:$MigrateCustomTablesToDCR -AutoMigrateCustomTables:$AutoMigrateCustomTables
+ & $ScriptPath -CustomTableMode:$false -CreateDCE:$false -ShowCriblConfig:$ShowCriblConfig -ExportCriblConfig:$exportCribl -SkipCriblExport:$SkipCriblExport -MigrateCustomTablesToDCR:$MigrateCustomTablesToDCR -AutoMigrateCustomTables:$AutoMigrateCustomTables -ConfirmDCRNames:$ConfirmDCRNames
 
  }
  
@@ -332,7 +335,7 @@ function Execute-Mode {
  Write-Host ""
  
  $exportCribl = -not $SkipCriblExport
- & $ScriptPath -CustomTableMode -CustomTableListFile "CustomTableList.json" -CreateDCE:$false -ShowCriblConfig:$ShowCriblConfig -ExportCriblConfig:$exportCribl -SkipCriblExport:$SkipCriblExport -MigrateCustomTablesToDCR:$MigrateCustomTablesToDCR -AutoMigrateCustomTables:$AutoMigrateCustomTables
+ & $ScriptPath -CustomTableMode -CustomTableListFile "CustomTableList.json" -CreateDCE:$false -ShowCriblConfig:$ShowCriblConfig -ExportCriblConfig:$exportCribl -SkipCriblExport:$SkipCriblExport -MigrateCustomTablesToDCR:$MigrateCustomTablesToDCR -AutoMigrateCustomTables:$AutoMigrateCustomTables -ConfirmDCRNames:$ConfirmDCRNames
 
  }
  
@@ -344,10 +347,10 @@ function Execute-Mode {
  Write-DCRWarning "`n Step 1: Processing Native Tables with Direct DCRs..."
  $exportCribl = -not $SkipCriblExport
 
- $nativeSummary = & $ScriptPath -CustomTableMode:$false -CreateDCE:$false -ShowCriblConfig:$ShowCriblConfig -ExportCriblConfig:$exportCribl -SkipCriblExport:$SkipCriblExport -MigrateCustomTablesToDCR:$MigrateCustomTablesToDCR -AutoMigrateCustomTables:$AutoMigrateCustomTables
- 
+ $nativeSummary = & $ScriptPath -CustomTableMode:$false -CreateDCE:$false -ShowCriblConfig:$ShowCriblConfig -ExportCriblConfig:$exportCribl -SkipCriblExport:$SkipCriblExport -MigrateCustomTablesToDCR:$MigrateCustomTablesToDCR -AutoMigrateCustomTables:$AutoMigrateCustomTables -ConfirmDCRNames:$ConfirmDCRNames
+
  Write-DCRWarning "`n Step 2: Processing Custom Tables with Direct DCRs..."
- $customSummary = & $ScriptPath -CustomTableMode -CustomTableListFile "CustomTableList.json" -CreateDCE:$false -ShowCriblConfig:$ShowCriblConfig -ExportCriblConfig:$exportCribl -SkipCriblExport:$SkipCriblExport -MigrateCustomTablesToDCR:$MigrateCustomTablesToDCR -AutoMigrateCustomTables:$AutoMigrateCustomTables
+ $customSummary = & $ScriptPath -CustomTableMode -CustomTableListFile "CustomTableList.json" -CreateDCE:$false -ShowCriblConfig:$ShowCriblConfig -ExportCriblConfig:$exportCribl -SkipCriblExport:$SkipCriblExport -MigrateCustomTablesToDCR:$MigrateCustomTablesToDCR -AutoMigrateCustomTables:$AutoMigrateCustomTables -ConfirmDCRNames:$ConfirmDCRNames
  
  Show-CombinedSummary -NativeSummary $nativeSummary -CustomSummary $customSummary -DCRMode "Direct"
  }
@@ -361,7 +364,7 @@ function Execute-Mode {
  
  $exportCribl = -not $SkipCriblExport
 
- & $ScriptPath -CustomTableMode:$false -CreateDCE -ShowCriblConfig:$ShowCriblConfig -ExportCriblConfig:$exportCribl -SkipCriblExport:$SkipCriblExport -MigrateCustomTablesToDCR:$MigrateCustomTablesToDCR -AutoMigrateCustomTables:$AutoMigrateCustomTables
+ & $ScriptPath -CustomTableMode:$false -CreateDCE -ShowCriblConfig:$ShowCriblConfig -ExportCriblConfig:$exportCribl -SkipCriblExport:$SkipCriblExport -MigrateCustomTablesToDCR:$MigrateCustomTablesToDCR -AutoMigrateCustomTables:$AutoMigrateCustomTables -ConfirmDCRNames:$ConfirmDCRNames
 
  }
  
@@ -382,7 +385,7 @@ function Execute-Mode {
  
  $exportCribl = -not $SkipCriblExport
 
- & $ScriptPath -CustomTableMode -CustomTableListFile "CustomTableList.json" -CreateDCE -ShowCriblConfig:$ShowCriblConfig -ExportCriblConfig:$exportCribl -SkipCriblExport:$SkipCriblExport -MigrateCustomTablesToDCR:$MigrateCustomTablesToDCR -AutoMigrateCustomTables:$AutoMigrateCustomTables
+ & $ScriptPath -CustomTableMode -CustomTableListFile "CustomTableList.json" -CreateDCE -ShowCriblConfig:$ShowCriblConfig -ExportCriblConfig:$exportCribl -SkipCriblExport:$SkipCriblExport -MigrateCustomTablesToDCR:$MigrateCustomTablesToDCR -AutoMigrateCustomTables:$AutoMigrateCustomTables -ConfirmDCRNames:$ConfirmDCRNames
 
  }
  
@@ -394,12 +397,12 @@ function Execute-Mode {
  Write-DCRWarning "`n Step 1: Processing Native Tables with DCE-based DCRs..."
  $exportCribl = -not $SkipCriblExport
 
- $nativeSummary = & $ScriptPath -CustomTableMode:$false -CreateDCE -ShowCriblConfig:$ShowCriblConfig -ExportCriblConfig:$exportCribl -SkipCriblExport:$SkipCriblExport -MigrateCustomTablesToDCR:$MigrateCustomTablesToDCR -AutoMigrateCustomTables:$AutoMigrateCustomTables
- 
- Write-DCRWarning "`n Step 2: Processing Custom Tables with DCE-based DCRs..."
- $customSummary = & $ScriptPath -CustomTableMode -CustomTableListFile "CustomTableList.json" -CreateDCE -ShowCriblConfig:$ShowCriblConfig -ExportCriblConfig:$exportCribl -SkipCriblExport:$SkipCriblExport -MigrateCustomTablesToDCR:$MigrateCustomTablesToDCR -AutoMigrateCustomTables:$AutoMigrateCustomTables
+ $nativeSummary = & $ScriptPath -CustomTableMode:$false -CreateDCE -ShowCriblConfig:$ShowCriblConfig -ExportCriblConfig:$exportCribl -SkipCriblExport:$SkipCriblExport -MigrateCustomTablesToDCR:$MigrateCustomTablesToDCR -AutoMigrateCustomTables:$AutoMigrateCustomTables -ConfirmDCRNames:$ConfirmDCRNames
 
- 
+ Write-DCRWarning "`n Step 2: Processing Custom Tables with DCE-based DCRs..."
+ $customSummary = & $ScriptPath -CustomTableMode -CustomTableListFile "CustomTableList.json" -CreateDCE -ShowCriblConfig:$ShowCriblConfig -ExportCriblConfig:$exportCribl -SkipCriblExport:$SkipCriblExport -MigrateCustomTablesToDCR:$MigrateCustomTablesToDCR -AutoMigrateCustomTables:$AutoMigrateCustomTables -ConfirmDCRNames:$ConfirmDCRNames
+
+
  Show-CombinedSummary -NativeSummary $nativeSummary -CustomSummary $customSummary -DCRMode "DCE-based"
  }
 
@@ -703,11 +706,11 @@ function Execute-Mode {
  
  Write-DCRWarning "`n Generating Native Table Templates..."
 
- & $ScriptPath -CustomTableMode:$false -TemplateOnly -MigrateCustomTablesToDCR:$MigrateCustomTablesToDCR -AutoMigrateCustomTables:$AutoMigrateCustomTables
- 
+ & $ScriptPath -CustomTableMode:$false -TemplateOnly -MigrateCustomTablesToDCR:$MigrateCustomTablesToDCR -AutoMigrateCustomTables:$AutoMigrateCustomTables -ConfirmDCRNames:$ConfirmDCRNames
+
  Write-DCRWarning "`n Generating Custom Table Templates..."
- & $ScriptPath -CustomTableMode -CustomTableListFile "CustomTableList.json" -TemplateOnly -MigrateCustomTablesToDCR:$MigrateCustomTablesToDCR -AutoMigrateCustomTables:$AutoMigrateCustomTables
- 
+ & $ScriptPath -CustomTableMode -CustomTableListFile "CustomTableList.json" -TemplateOnly -MigrateCustomTablesToDCR:$MigrateCustomTablesToDCR -AutoMigrateCustomTables:$AutoMigrateCustomTables -ConfirmDCRNames:$ConfirmDCRNames
+
  Write-DCRSuccess "`n Templates generated in: generated-templates\"
  }
  }

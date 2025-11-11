@@ -72,7 +72,10 @@ param(
  [switch]$ExportCriblConfig = $true,
 
  [Parameter(Mandatory=$false)]
- [switch]$SkipCriblExport = $false
+ [switch]$SkipCriblExport = $false,
+
+ [Parameter(Mandatory=$false)]
+ [switch]$ConfirmDCRNames = $true
 )
 
 # Import Output-Helper for consistent verbosity control
@@ -1108,6 +1111,138 @@ function Invoke-AzureOperationWithRetry {
  # If we get here, all retries failed
  if ($lastError) {
  throw $lastError
+ }
+}
+
+# Function to confirm DCR/DCE name with user and allow custom override
+function Confirm-ResourceName {
+ param(
+ [string]$ResourceType, # "DCR" or "DCE"
+ [string]$ProposedName,
+ [string]$TableName,
+ [int]$MaxLength,
+ [bool]$WasAbbreviated = $false
+ )
+
+ # Display the proposed name
+ Write-Host ""
+ Write-DCRProgress " $ResourceType Name Proposed: $ProposedName"
+ if ($WasAbbreviated) {
+ Write-DCRWarning " Note: Table name was abbreviated to meet $MaxLength character limit"
+ }
+ Write-DCRVerbose " Table: $TableName"
+ Write-DCRVerbose " Length: $($ProposedName.Length) characters (max: $MaxLength)"
+
+ # Prompt user for confirmation
+ Write-Host " Accept this $ResourceType name? [Y]es / [N]o (skip) / [E]dit: " -NoNewline -ForegroundColor Yellow
+ $response = Read-Host
+
+ switch ($response.ToUpper()) {
+ 'Y' {
+ # Accept the proposed name
+ Write-DCRSuccess " Name accepted: $ProposedName"
+ return @{
+ Action = 'Accept'
+ Name = $ProposedName
+ }
+ }
+ 'N' {
+ # Skip this DCR/DCE
+ Write-DCRWarning " Skipping $ResourceType creation for $TableName"
+ return @{
+ Action = 'Skip'
+ Name = $null
+ }
+ }
+ { $_ -in @('E', 'C') } {
+ # Allow custom name entry with validation loop - start with proposed name
+ $validCustomName = $false
+ $customName = $ProposedName
+
+ while (-not $validCustomName) {
+ Write-Host "`n Edit $ResourceType name (max $MaxLength chars)" -ForegroundColor Cyan
+ Write-Host " Current value: " -NoNewline -ForegroundColor Yellow
+ Write-Host "$customName" -ForegroundColor White
+ Write-Host " Enter new name (or press Enter to keep current): " -NoNewline -ForegroundColor Yellow
+ $userInput = Read-Host
+
+ # If user just presses Enter, keep the current/proposed name
+ if ([string]::IsNullOrWhiteSpace($userInput)) {
+ $customName = $customName.Trim()
+ $validCustomName = $true
+ break
+ }
+
+ # User provided new input
+ $customName = $userInput
+
+ # Validate custom name
+ if ([string]::IsNullOrWhiteSpace($customName)) {
+ Write-DCRError " Custom name cannot be empty."
+ Write-Host " Try again? [Y]es / [N]o (use proposed name): " -NoNewline -ForegroundColor Yellow
+ $retry = Read-Host
+ if ($retry.ToUpper() -ne 'Y') {
+ Write-DCRInfo " Using proposed name: $ProposedName" -Color Cyan
+ return @{
+ Action = 'Accept'
+ Name = $ProposedName
+ }
+ }
+ continue
+ }
+
+ # Trim and validate length
+ $customName = $customName.Trim()
+ if ($customName.Length -gt $MaxLength) {
+ Write-DCRError " Custom name exceeds maximum length of $MaxLength characters (provided: $($customName.Length) chars)."
+ Write-Host " Try again? [Y]es / [N]o (use proposed name): " -NoNewline -ForegroundColor Yellow
+ $retry = Read-Host
+ if ($retry.ToUpper() -ne 'Y') {
+ Write-DCRInfo " Using proposed name: $ProposedName" -Color Cyan
+ return @{
+ Action = 'Accept'
+ Name = $ProposedName
+ }
+ }
+ continue
+ }
+
+ # Validate minimum length
+ if ($customName.Length -lt 3) {
+ Write-DCRError " Custom name too short (minimum 3 characters, provided: $($customName.Length) chars)."
+ Write-Host " Try again? [Y]es / [N]o (use proposed name): " -NoNewline -ForegroundColor Yellow
+ $retry = Read-Host
+ if ($retry.ToUpper() -ne 'Y') {
+ Write-DCRInfo " Using proposed name: $ProposedName" -Color Cyan
+ return @{
+ Action = 'Accept'
+ Name = $ProposedName
+ }
+ }
+ continue
+ }
+
+ # Clean up name (remove leading/trailing hyphens)
+ $customName = $customName.Trim('-')
+
+ # Name is valid
+ $validCustomName = $true
+ }
+
+ Write-DCRSuccess " Custom name accepted: $customName"
+ return @{
+ Action = 'Accept'
+ Name = $customName
+ }
+ }
+ default {
+ # Default to accepting the proposed name
+ Write-DCRInfo " No valid option selected. Accepting proposed name: $ProposedName" -Color Cyan
+ return @{
+ Action = 'Accept'
+ Name = $ProposedName
+ }
+ }
  }
 }
 
@@ -2370,10 +2505,11 @@ foreach ($tableName in $tableList) {
  # Build DCR name using the appropriate table name
  $DCRName = "${DCRPrefix}${dcrTableName}-${Location}"
  if (![string]::IsNullOrWhiteSpace($DCRSuffix)) { $DCRName = "${DCRName}-${DCRSuffix}" }
- 
+
  # Validate DCR name length (Azure limits differ by DCR type)
  $maxDCRNameLength = if ($CreateDCE) { 64 } else { 30 } # Direct DCRs have stricter 30-char limit
- 
+ $originalDCRNameLength = $DCRName.Length # Store original length before abbreviation
+
  if ($DCRName.Length -gt $maxDCRNameLength) {
  Write-DCRWarning " Warning: DCR name '$DCRName' ($($DCRName.Length) chars) exceeds $maxDCRNameLength character limit for $dcrMode DCRs"
  
@@ -2425,7 +2561,27 @@ foreach ($tableName in $tableList) {
  if ($DCRName.Length -lt 3) {
  throw "DCR name '$DCRName' is too short (minimum 3 characters required)"
  }
- 
+
+ # Track if name was abbreviated for confirmation prompt
+ $wasAbbreviated = ($originalDCRNameLength -gt $maxDCRNameLength)
+
+ # Confirmation prompt if ConfirmDCRNames is enabled
+ if ($ConfirmDCRNames) {
+ $confirmation = Confirm-ResourceName -ResourceType "DCR" `
+ -ProposedName $DCRName `
+ -TableName $dcrTableName `
+ -MaxLength $maxDCRNameLength `
+ -WasAbbreviated $wasAbbreviated
+
+ if ($confirmation.Action -eq 'Skip') {
+ Write-DCRWarning " Skipping DCR for table: $dcrTableName"
+ continue
+ }
+
+ # Use confirmed or custom name
+ $DCRName = $confirmation.Name
+ }
+
  Write-DCRProgress " DCR Name: $DCRName"
  Write-DCRInfo " DCR Mode: $dcrMode" -Color Cyan
  Write-DCRInfo " Table Type: $(if ($CustomTableMode) { 'Custom' } else { 'Native' })" -Color Cyan
@@ -2442,9 +2598,26 @@ foreach ($tableName in $tableList) {
  if ($CreateDCE) {
  $DCEName = "${DCEPrefix}${dcrTableName}-${Location}"
  if (![string]::IsNullOrWhiteSpace($DCESuffix)) { $DCEName = "${DCEName}-${DCESuffix}" }
- 
+
+ # Confirmation prompt for DCE name if ConfirmDCRNames is enabled
+ if ($ConfirmDCRNames) {
+ $dceConfirmation = Confirm-ResourceName -ResourceType "DCE" `
+ -ProposedName $DCEName `
+ -TableName $dcrTableName `
+ -MaxLength 64 `
+ -WasAbbreviated $false
+
+ if ($dceConfirmation.Action -eq 'Skip') {
+ Write-DCRWarning " Skipping DCE for table: $dcrTableName (DCR will also be skipped)"
+ continue
+ }
+
+ # Use confirmed or custom name
+ $DCEName = $dceConfirmation.Name
+ }
+
  Write-DCRProgress " DCE Name: $DCEName"
- 
+
  if ($TemplateOnly) {
  # For template-only mode, create placeholder DCE resource ID
  $subscriptionId = "00000000-0000-0000-0000-000000000000"

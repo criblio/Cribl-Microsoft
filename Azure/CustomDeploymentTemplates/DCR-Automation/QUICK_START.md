@@ -100,7 +100,39 @@ Select an option:
 2. **Review confirmation** showing what will be deployed
 3. **Type `Y`** to proceed or `N` to cancel
 4. **Watch progress** as DCRs are created
-5. **Cribl config automatically exported** to `core/cribl-dcr-configs\`
+5. **NEW: Review and confirm DCR/DCE names** (see Name Confirmation below)
+6. **Cribl config automatically exported** to `core/cribl-dcr-configs\`
+
+### Name Confirmation (NEW in v1.2.0)
+
+During deployment, you'll be prompted to confirm each DCR/DCE name:
+
+```
+DCR Name Proposed: dcr-CSL-eastus
+Note: Table name was abbreviated to meet 30 character limit
+Table: CommonSecurityLog
+Length: 17 characters (max: 30)
+
+Accept this DCR name? [Y]es / [N]o (skip) / [E]dit:
+```
+
+**Your Options:**
+- **[Y]es** - Accept the name and continue
+- **[N]o** - Skip this DCR (it won't be created)
+- **[E]dit** - Customize the name
+
+**Edit Mode Example:**
+```
+Edit DCR name (max 30 chars)
+Current value: dcr-CSL-eastus
+Enter new name (or press Enter to keep current): dcr-prod-CSL-eastus
+```
+
+**Tips:**
+- Press **Enter** to keep the suggested name
+- Names are validated automatically (length, format)
+- Direct DCRs: 30 char max, DCE-based: 64 char max
+- To disable prompts for automation: Add `-ConfirmDCRNames:$false`
 
 ## 6⃣ After Deployment
 
@@ -168,9 +200,10 @@ If a custom table doesn't exist in Azure, create a schema file:
 |-------|----------|
 | **Menu doesn't appear** | Check PowerShell execution policy: `Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser` |
 | **"Table not found"** | Verify table exists in Azure or create schema file |
-| **"DCR name too long"** | Script auto-abbreviates names |
+| **"DCR name too long"** | Script auto-abbreviates names, or edit during confirmation prompt |
 | **"Access denied"** | Check Azure permissions and `Connect-AzAccount` |
 | **Custom table collision** | Rename custom table to avoid native table names |
+| **Don't want name prompts** | Use `-ConfirmDCRNames:$false` parameter |
 
 ## Success Indicators
 

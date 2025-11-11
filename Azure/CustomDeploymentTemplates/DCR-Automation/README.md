@@ -2,15 +2,17 @@
 
 This PowerShell automation system streamlines the deployment of Azure Data Collection Rules (DCRs) for integrating Cribl Stream with Azure Log Analytics/Microsoft Sentinel. Features an **interactive menu interface** for easy deployment, supporting both native and custom tables with automatic Cribl configuration export.
 
-## Latest Updates (v1.1.0)
-- **Directory Structure Reorganization**: Streamlined project layout with organized configuration directories
-- **Enhanced Documentation**: Updated all file path references for new structure
-- **Improved Maintainability**: Separated entry points from working configurations
-- **Backward Compatibility**: All existing workflows continue unchanged
+## Latest Updates (v1.2.0)
+- **Interactive Name Confirmation**: Review and customize DCR/DCE names before deployment
+- **Smart Edit Mode**: Modify suggested names with pre-filled values and validation
+- **Skip Option**: Opt out of creating specific DCRs/DCEs during execution
+- **Enabled by Default**: Improved safety and naming control for interactive sessions
+- **Automation Compatible**: Disable with single parameter for unattended execution
 
 
 ## Key Features
 
+- **Interactive Name Confirmation** (NEW in v1.2.0): Review, accept, or customize DCR/DCE names before deployment
 - **Interactive Menu System**: User-friendly interface with deployment confirmations
 - **Unified Solution**: Single system handles both DCE-based and Direct DCRs
 - **Dual Table Support**: Processes both native Azure tables and custom tables (_CL suffix)
@@ -156,6 +158,34 @@ Select an option: _
 - **Options 2-5**: Targeted deployment for specific table types and DCR modes
 - The menu will confirm your selection before deployment
 
+### 6. Name Confirmation (NEW in v1.2.0)
+During deployment, you'll be prompted to review each DCR/DCE name:
+```
+DCR Name Proposed: dcr-CSL-eastus
+Note: Table name was abbreviated to meet 30 character limit
+Table: CommonSecurityLog
+Length: 17 characters (max: 30)
+
+Accept this DCR name? [Y]es / [N]o (skip) / [E]dit:
+```
+
+**Options:**
+- **[Y]es** - Accept the suggested name and continue
+- **[N]o** - Skip this DCR (won't create it)
+- **[E]dit** - Customize the name with validation
+
+**Edit Mode:**
+```
+Edit DCR name (max 30 chars)
+Current value: dcr-CSL-eastus
+Enter new name (or press Enter to keep current): _
+```
+
+**To disable prompts for automation:**
+```powershell
+.\Run-DCRAutomation.ps1 -ConfirmDCRNames:$false
+```
+
 ## Usage Examples
 
 ### Interactive Menu (Recommended)
@@ -182,6 +212,9 @@ Select an option: _
 
 # Generate templates only (no deployment)
 .\Run-DCRAutomation.ps1 -NonInteractive -Mode TemplateOnly
+
+# Disable name confirmation for automation
+.\Run-DCRAutomation.ps1 -NonInteractive -Mode DirectBoth -ConfirmDCRNames:$false
 ```
 
 ### Advanced Usage
@@ -218,6 +251,7 @@ Select an option: _
 |-----------|------|-------------|
 | -NonInteractive | Switch | Bypass menu for automation/scripting |
 | -Mode | String | Operation mode (required with NonInteractive) |
+| -ConfirmDCRNames | Switch | Enable/disable name confirmation prompts (default: true) |
 | -ShowCriblConfig | Switch | Display Cribl config during deployment |
 | -ExportCriblConfig | Switch | Export Cribl config (default: true) |
 | -SkipCriblExport | Switch | Skip automatic config export |
@@ -242,6 +276,7 @@ Select an option: _
 | TemplateOnly | Switch | Generate templates without deployment |
 | CustomTableMode | Switch | Process custom tables |
 | SpecificDCR | String | Process only specified table |
+| ConfirmDCRNames | Switch | Enable/disable name confirmation prompts (default: true) |
 | ShowCriblConfig | Switch | Display Cribl configuration |
 | ExportCriblConfig | Switch | Export to JSON (default: true) |
 
