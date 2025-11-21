@@ -1,6 +1,6 @@
 # Cribl-Microsoft Integration
 
-Enterprise-grade automation toolkit for integrating Cribl Stream with Microsoft Azure services. This repository provides production-ready PowerShell automation for data collection, infrastructure provisioning, and configuration management.
+Automation toolkit for integrating Cribl Stream with Microsoft Azure services. This repository provides PowerShell automation and testing environments for data collection, infrastructure provisioning, and configuration management.
 
 ## Repository Contents
 
@@ -21,10 +21,10 @@ Enterprise-grade automation toolkit for integrating Cribl Stream with Microsoft 
 - DCE and non-DCE configurations
 - SecurityEvent, CommonSecurityLog, DeviceEvents, ASim tables, and more
 
-### Lab Environments
+### Testing Environments
 
 #### [Azure Flow Log Lab](Azure/Labs/AzureFlowLogLab/)
-**Standalone lab for Azure Flow Log infrastructure**
+**Lab environment for Azure Flow Log testing and development**
 - VNet with dual-level flow logging (vNet-level + subnet-level)
 - VPN Gateway for site-to-site VPN connectivity
 - Test VM deployment with auto-shutdown schedules
@@ -65,11 +65,11 @@ cd Azure/Labs/AzureFlowLogLab
 
 ## Key Features
 
-- **Automated DCR Creation**: PowerShell scripts handle complex DCR deployments
+- **Automated DCR Creation**: PowerShell scripts to simplify DCR deployments
 - **Cribl Integration**: Auto-generates Cribl Stream source and destination configurations
 - **Template Library**: Pre-built ARM templates for common scenarios
 - **Multi-Mode Support**: Direct DCRs (simple) or DCE-based (advanced routing)
-- **Lab Environments**: Complete testing environments deployable in hours
+- **Testing Environments**: Lab environments for development and testing
 - **Menu-Driven Interfaces**: Interactive menus with non-interactive CI/CD modes
 - **Configuration-Driven**: JSON-based configuration files separate from code
 
@@ -150,9 +150,9 @@ All major components follow consistent design patterns:
 See [CONTRIBUTORS.md](CONTRIBUTORS.md) for contribution guidelines.
 
 Before submitting changes:
-1. Test with both Direct and DCE-based configurations (for Azure DCR changes)
-2. Verify configuration files are valid JSON
-3. Deploy in test environment first
+1. Test thoroughly in lab/development environments first
+2. Test with both Direct and DCE-based configurations (for Azure DCR changes)
+3. Verify configuration files are valid JSON
 4. Update documentation for new features
 5. Follow existing architecture patterns
 
@@ -170,4 +170,4 @@ MIT License - see [LICENSE](LICENSE) file.
 
 **Getting Started?**
 - For Azure Log Analytics ingestion: [DCR-Automation Quick Start](Azure/CustomDeploymentTemplates/DCR-Automation/QUICK_START.md)
-- For lab environments: [Azure Flow Log Lab](Azure/Labs/AzureFlowLogLab/)
+- For testing and development: [Azure Flow Log Lab](Azure/Labs/AzureFlowLogLab/)
