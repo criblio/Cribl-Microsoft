@@ -168,6 +168,8 @@ Edit `core/CustomTableList.json`:
 ```
 **Important:** Custom tables must end with `_CL` suffix
 
+**Looking for Microsoft Sentinel Custom Table schemas?** See the official repository: [Azure-Sentinel Custom Tables](https://github.com/Azure/Azure-Sentinel/tree/master/.script/tests/KqlvalidationsTests/CustomTables)
+
 ### Custom Table Schemas
 If a custom table doesn't exist in Azure, create a schema file:
 `core/custom-table-schemas\MyCustomApp_CL.json`

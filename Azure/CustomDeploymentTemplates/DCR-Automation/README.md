@@ -309,6 +309,8 @@ New-AzRoleAssignment -ObjectId "app-object-id" -RoleDefinitionName "Monitoring M
 
 ## Custom Tables
 
+**Looking for Microsoft Sentinel Custom Table schemas?** See the official repository: [Azure-Sentinel Custom Tables](https://github.com/Azure/Azure-Sentinel/tree/master/.script/tests/KqlvalidationsTests/CustomTables)
+
 ### Creating Custom Table Schemas
 Place schema files in `core/custom-table-schemas\`:
 
