@@ -1,7 +1,7 @@
 {
   "localNetworkGateway": {
     "name": "lng-onprem",
-    "gatewayIpAddress": "70.63.82.233",
+    "gatewayIpAddress": "<public-ip-here>",
     "addressSpace": [
       "10.198.32.0/24"
     ],
@@ -10,7 +10,7 @@
   "vpnConnection": {
     "name": "conn-azure-to-onprem",
     "connectionType": "IPsec",
-    "sharedKey": "74e1736fe62147d3a5599e18982100d5a46e8c969289d5cf501c40cb",
+    "sharedKey": "<shared-key-here>",
     "enableBgp": false,
     "usePolicyBasedTrafficSelectors": false,
     "ipsecPolicies": {
