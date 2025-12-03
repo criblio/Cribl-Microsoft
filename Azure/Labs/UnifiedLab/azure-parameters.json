@@ -1,0 +1,724 @@
+{
+  "subscriptionId": "<YOUR-SUBSCRIPTION-ID>",
+  "tenantId": "<YOUR-TENANT-ID>",
+  "clientId": "<YOUR-CLIENT-ID>",
+  "_authComment": "tenantId and clientId are used for Azure AD authentication in Cribl Stream destinations. These will be passed to DCR-Automation for generating Cribl configs. Client secret is set to '<replace me>' placeholder for manual configuration.",
+  "ownerTag": "<YOUR-EMAIL>",
+  "_ownerTagComment": "Owner tag applied to all DCRs and DCEs created by DCR-Automation. Useful for tracking resource ownership and cost allocation.",
+  "resourceGroupName": "rg-cribllab-eastus",
+  "location": "eastus",
+  "baseObjectName": "cribllab",
+  "labMode": "public",
+  "_labModeComment": "Set to 'private' for private endpoints on all resources, or 'public' for public access. Private mode requires DNS configuration.",
+  "timeToLive": {
+    "enabled": true,
+    "_enabledComment": "When true, tags resource group with expiration time for automated cleanup",
+    "hours": 72,
+    "_hoursComment": "Lab will be automatically deleted after this many hours (default: 72 = 3 days)",
+    "userEmail": "<YOUR-EMAIL>",
+    "_userEmailComment": "Email address to receive TTL warnings 24 hours before deletion",
+    "warningHours": 24,
+    "_warningHoursComment": "Send warning email this many hours before deletion (default: 24)"
+  },
+  "naming": {
+    "_namingComment": "Suffixes are auto-generated from the 'location' field above. Location-based suffixes will be updated at runtime.",
+    "vnet": {
+      "prefix": "vnet-",
+      "suffix": "",
+      "_suffixComment": "Auto-set to '-{location}' (e.g., -eastus)"
+    },
+    "subnet": {
+      "prefix": "snet-",
+      "suffix": "",
+      "_suffixComment": "Auto-set to '-{location}'"
+    },
+    "nsg": {
+      "prefix": "nsg-",
+      "suffix": "",
+      "_suffixComment": "Auto-set to '-{location}'"
+    },
+    "vpnGateway": {
+      "prefix": "vpngw-",
+      "suffix": "",
+      "_suffixComment": "Auto-set to '-{location}'"
+    },
+    "bastion": {
+      "prefix": "bas-",
+      "suffix": "",
+      "_suffixComment": "Auto-set to '-{location}'"
+    },
+    "publicIp": {
+      "prefix": "pip-",
+      "suffix": "",
+      "_suffixComment": "Auto-set to '-{location}'"
+    },
+    "storageAccount": {
+      "prefix": "sa",
+      "suffix": "cribl",
+      "_suffixComment": "Custom suffix (not location-based). No hyphens allowed."
+    },
+    "logAnalyticsWorkspace": {
+      "prefix": "law-",
+      "suffix": "",
+      "_suffixComment": "Auto-set to '-{location}'"
+    },
+    "networkWatcher": {
+      "prefix": "nw-",
+      "suffix": "",
+      "_suffixComment": "Auto-set to '-{location}'"
+    },
+    "eventHubNamespace": {
+      "prefix": "evhns-",
+      "suffix": "",
+      "_suffixComment": "Auto-set to '-{location}'"
+    },
+    "eventHub": {
+      "prefix": "evh-",
+      "suffix": "",
+      "_suffixComment": "No location suffix for Event Hubs"
+    },
+    "adxCluster": {
+      "prefix": "adx",
+      "suffix": "",
+      "_suffixComment": "Auto-set to '{location}' without hyphen (e.g., eastus). ADX names: alphanumeric only."
+    },
+    "adxDatabase": {
+      "prefix": "db-",
+      "suffix": "",
+      "_suffixComment": "No location suffix for databases"
+    },
+    "diagnosticSettings": {
+      "prefix": "diag-",
+      "suffix": "",
+      "_suffixComment": "No location suffix for diagnostic settings"
+    }
+  },
+  "infrastructure": {
+    "vnetAddressPrefix": "10.198.30.0/24",
+    "subnets": {
+      "gateway": {
+        "name": "GatewaySubnet",
+        "addressPrefix": "10.198.30.0/27",
+        "description": "VPN Gateway subnet (required name) - 32 addresses"
+      },
+      "bastion": {
+        "name": "AzureBastionSubnet",
+        "addressPrefix": "10.198.30.32/27",
+        "description": "Azure Bastion subnet for secure VM access - 32 addresses"
+      },
+      "security": {
+        "name": "SecuritySubnet",
+        "addressPrefix": "10.198.30.64/27",
+        "description": "Security services and workload VMs - 32 addresses"
+      },
+      "o11y": {
+        "name": "O11ySubnet",
+        "addressPrefix": "10.198.30.96/27",
+        "description": "Observability services (monitoring, logging, analytics) - 32 addresses"
+      },
+      "privatelink": {
+        "name": "PrivateLinkSubnet",
+        "addressPrefix": "10.198.30.128/27",
+        "description": "Private endpoints for storage, Event Hub, ADX, and other Azure services - 32 addresses"
+      }
+    },
+    "_subnetComments": {
+      "total": "5 subnets using 160 addresses out of 256 available in /24",
+      "gateway": "Required name for VPN Gateway. Cannot be renamed.",
+      "bastion": "Required name for Azure Bastion. Must be AzureBastionSubnet (not BastionSubnet).",
+      "security": "Security services, firewalls, test VMs for traffic generation",
+      "o11y": "Observability: Monitoring, logging, Sentinel, ADX, Event Hub, storage services",
+      "privatelink": "Private endpoints for secure connectivity to Azure PaaS services when lab is in private mode",
+      "expansion": "96 addresses remain available (10.198.30.160/27 through 10.198.30.255) for future subnets"
+    },
+    "vpnGateway": {
+      "enabled": true,
+      "sku": "Basic",
+      "type": "RouteBased",
+      "generation": "Generation1",
+      "description": "VPN Gateway for on-premises connectivity",
+      "_vpnConnectionNote": "VPN Connection configuration moved to onprem-connection-parameters.json (optional file)"
+    },
+    "bastion": {
+      "enabled": false,
+      "sku": "Basic",
+      "description": "Azure Bastion for secure VM access"
+    },
+    "onPremisesNetwork": {
+      "addressSpaces": [
+        "10.198.32.0/24"
+      ],
+      "_addressSpacesComment": "On-premises network ranges that will be allowed through NSG rules. Add all on-prem subnets here.",
+      "vpnDevicePublicIp": "<YOUR-VPN-DEVICE-PUBLIC-IP>",
+      "_vpnDevicePublicIpComment": "Public IP of on-premises VPN device for NSG rules",
+      "managementSubnets": [
+        "<YOUR-MANAGEMENT-SUBNET-CIDR>"
+      ],
+      "_managementSubnetsComment": "On-premises management subnets for administrative access (RDP, SSH, etc.)"
+    },
+    "networkSecurity": {
+      "deployNSGs": true,
+      "allowAzureServices": true,
+      "denyInternetByDefault": false,
+      "allowOnPremisesTraffic": true,
+      "_allowOnPremisesTrafficComment": "When true, NSG rules will allow traffic from on-premises networks defined above",
+      "onPremisesNetworks": []
+    }
+  },
+  "monitoring": {
+    "logAnalyticsWorkspace": {
+      "sku": "PerGB2018",
+      "retentionInDays": 90,
+      "dailyQuotaGb": -1,
+      "description": "Shared workspace for Sentinel, Flow Logs, and diagnostics"
+    },
+    "sentinel": {
+      "enabled": true,
+      "dataRetentionDays": 90,
+      "dataConnectors": {
+        "azureActivity": {
+          "enabled": true,
+          "name": "AzureActivity"
+        },
+        "securityEvents": {
+          "enabled": true,
+          "name": "SecurityEvents"
+        },
+        "azureActiveDirectory": {
+          "enabled": false,
+          "name": "AzureActiveDirectory"
+        },
+        "office365": {
+          "enabled": false,
+          "name": "Office365"
+        }
+      }
+    },
+    "flowLogging": {
+      "enabled": true,
+      "vnetLevel": {
+        "enabled": true,
+        "retentionDays": 7,
+        "trafficAnalyticsEnabled": true,
+        "trafficAnalyticsInterval": 60,
+        "description": "VNet-level flow log - acts as default/fallback for all subnets"
+      },
+      "subnetLevel": {
+        "gateway": {
+          "enabled": true,
+          "retentionDays": 1,
+          "description": "GatewaySubnet flow log - minimal retention for VPN traffic"
+        },
+        "bastion": {
+          "enabled": true,
+          "retentionDays": 7,
+          "description": "AzureBastionSubnet flow log - standard retention for admin access"
+        },
+        "security": {
+          "enabled": true,
+          "retentionDays": 30,
+          "description": "SecuritySubnet flow log - enhanced retention for security compliance"
+        },
+        "o11y": {
+          "enabled": true,
+          "retentionDays": 90,
+          "description": "O11ySubnet flow log - long retention for observability/audit compliance"
+        },
+        "privatelink": {
+          "enabled": true,
+          "retentionDays": 30,
+          "description": "PrivateLinkSubnet flow log - enhanced retention for private endpoint traffic monitoring"
+        }
+      },
+      "_comments": {
+        "overview": "VNet Flow Logs support both vNet-level and subnet-level configuration. Hierarchy: NIC > Subnet > VNet (most specific wins).",
+        "vnetLevel": "Acts as fallback for subnets without their own flow log configuration. 7 days is a good default.",
+        "subnetLevel": "Subnet-level flow logs OVERRIDE vNet-level for specific subnets. Use longer retention for security/compliance.",
+        "retentionGuidance": {
+          "1day": "Gateway subnet (high volume, low value)",
+          "7days": "Bastion subnet (standard retention for admin access)",
+          "30days": "Security and PrivateLink subnets (security compliance, incident investigation)",
+          "90days": "O11y subnet (long-term observability, audit compliance)"
+        }
+      }
+    },
+    "privateLink": {
+      "enabled": false,
+      "_enabledComment": "Automatically set to true when labMode is 'private'",
+      "deploymentMode": "Public",
+      "ampls": {
+        "create": true,
+        "name": ""
+      },
+      "privateEndpoint": {
+        "create": true,
+        "name": "",
+        "subnetName": "PrivateLinkSubnet"
+      },
+      "privateDnsZones": {
+        "createZones": true,
+        "linkToVNet": true,
+        "_comment": "Private DNS zones for all Azure services - auto-created in private lab mode",
+        "zones": {
+          "monitor": "privatelink.monitor.azure.com",
+          "oms": "privatelink.oms.opinsights.azure.com",
+          "ods": "privatelink.ods.opinsights.azure.com",
+          "agentsvc": "privatelink.agentsvc.azure-automation.net",
+          "blob": "privatelink.blob.core.windows.net",
+          "queue": "privatelink.queue.core.windows.net",
+          "table": "privatelink.table.core.windows.net",
+          "file": "privatelink.file.core.windows.net",
+          "eventHub": "privatelink.servicebus.windows.net",
+          "adx": "privatelink.{region}.kusto.windows.net"
+        },
+        "activeDirectoryIntegration": {
+          "_comment": "For hybrid environments with on-premises Active Directory DNS",
+          "required": true,
+          "forwardingRules": {
+            "description": "Configure conditional forwarders on AD DNS servers to Azure Private DNS",
+            "targetServers": "168.63.129.16 (Azure DNS)"
+          }
+        }
+      }
+    },
+    "diagnosticSettings": {
+      "subscription": {
+        "enabled": true,
+        "name": "subscription-diagnostics",
+        "categories": ["Administrative", "Security", "ServiceHealth", "Alert", "Recommendation", "Policy"]
+      },
+      "storageAccount": {
+        "enabled": true,
+        "name": "storage-diagnostics",
+        "metrics": ["Transaction"],
+        "logs": ["StorageRead", "StorageWrite", "StorageDelete"]
+      }
+    }
+  },
+  "virtualMachines": {
+    "enabled": true,
+    "_enabledComment": "Set to true to deploy test VMs for traffic generation. VMs create flow logs for testing.",
+    "configuration": {
+      "vmSize": "Standard_B1s",
+      "publisher": "Canonical",
+      "offer": "0001-com-ubuntu-server-jammy",
+      "sku": "22_04-lts-gen2",
+      "version": "latest",
+      "osDiskType": "Standard_LRS",
+      "adminUsername": "localadmin",
+      "authenticationType": "password",
+      "sshPublicKey": "",
+      "autoShutdownEnabled": true,
+      "autoShutdownTime": "1900",
+      "autoShutdownTimeZone": "Eastern Standard Time",
+      "_configComments": {
+        "vmSize": "Standard_B1s (~$0.25/day, 1 vCPU, 1GB RAM). Use Standard_B1ls for minimum cost ($0.13/day)",
+        "publisher": "Canonical (Ubuntu), MicrosoftWindowsServer, Debian",
+        "offer": "0001-com-ubuntu-server-jammy = Ubuntu 22.04 LTS",
+        "sku": "22_04-lts-gen2 = Ubuntu 22.04 Gen2",
+        "osDiskType": "Standard_LRS (cheapest), Premium_LRS, StandardSSD_LRS",
+        "authenticationType": "password (prompted during deployment) or sshPublicKey",
+        "autoShutdownEnabled": "Auto-shutdown VMs at specified time to save costs",
+        "autoShutdownTime": "Time in HHmm format (24-hour). 1900 = 7:00 PM",
+        "autoShutdownTimeZone": "Timezone for auto-shutdown. Examples: 'Eastern Standard Time', 'Pacific Standard Time', 'UTC'"
+      }
+    },
+    "deployment": {
+      "bastion": {
+        "enabled": false,
+        "vmName": "vm-bastion",
+        "enablePublicIP": false,
+        "description": "Test VM in Bastion subnet - admin/management access testing"
+      },
+      "security": {
+        "enabled": true,
+        "vmName": "vm-security",
+        "enablePublicIP": false,
+        "description": "Test VM in Security subnet - security services and workload testing"
+      },
+      "o11y": {
+        "enabled": true,
+        "vmName": "vm-o11y",
+        "enablePublicIP": false,
+        "description": "Test VM in O11y subnet - monitoring and observability services testing"
+      }
+    },
+    "_comments": {
+      "overview": "VMs generate network traffic for flow log testing. Deploy in subnets where you want to see flow logs.",
+      "costSaving": {
+        "tip1": "Auto-shutdown enabled by default at 7 PM Eastern to save costs",
+        "tip2": "Stop VMs manually: az vm deallocate --resource-group <rg> --name <vm-name>",
+        "tip3": "Start VMs: az vm start --resource-group <rg> --name <vm-name>",
+        "tip4": "Standard_B1s: $0.25/day per VM. 2 VMs = ~$0.50/day",
+        "tip5": "Set virtualMachines.enabled to false and redeploy to remove VMs"
+      },
+      "vmSizes": {
+        "Standard_B1ls": "$0.13/day (1 vCPU, 0.5GB RAM) - Ultra cheap but very limited",
+        "Standard_B1s": "$0.25/day (1 vCPU, 1GB RAM) - Recommended for testing",
+        "Standard_B1ms": "$0.51/day (1 vCPU, 2GB RAM)",
+        "Standard_B2s": "$1.01/day (2 vCPU, 4GB RAM)"
+      },
+      "osOptions": {
+        "ubuntu2204": "Canonical, 0001-com-ubuntu-server-jammy, 22_04-lts-gen2 (recommended)",
+        "ubuntu2004": "Canonical, 0001-com-ubuntu-server-focal, 20_04-lts-gen2",
+        "windowsServer2022": "MicrosoftWindowsServer, WindowsServer, 2022-datacenter-azure-edition (more expensive)",
+        "debian11": "Debian, debian-11, 11-gen2"
+      },
+      "security": {
+        "password": "Password will be prompted during deployment (not stored in config file)",
+        "sshKeys": "For SSH key auth, generate key: ssh-keygen -t rsa -b 4096 -C 'azure-vm-key'",
+        "recommendation": "Use password for quick testing, SSH keys for production"
+      }
+    }
+  },
+  "analytics": {
+    "adx": {
+      "enabled": true,
+      "cluster": {
+        "sku": {
+          "name": "Dev(No SLA)_Standard_E2a_v4",
+          "tier": "Basic",
+          "capacity": 1
+        },
+        "enableStreamingIngest": true,
+        "enableAutoStop": true,
+        "description": "Azure Data Explorer cluster (WARNING: ~$8/day even for Dev SKU)"
+      },
+      "database": {
+        "name": "CriblLogs",
+        "hotCachePeriod": "P7D",
+        "softDeletePeriod": "P30D"
+      },
+      "tables": {
+        "rawEvents": {
+          "name": "RawEvents",
+          "columns": [
+            {"name": "Timestamp", "type": "datetime"},
+            {"name": "EventId", "type": "string"},
+            {"name": "Source", "type": "string"},
+            {"name": "Message", "type": "dynamic"}
+          ]
+        }
+      },
+      "dataConnections": {
+        "eventHub": {
+          "enabled": true,
+          "consumerGroup": "adx-consumer-group",
+          "tableName": "RawEvents",
+          "mappingName": "RawEventsMapping",
+          "dataFormat": "JSON"
+        },
+        "blobStorage": {
+          "enabled": true,
+          "containerName": "adx-ingestion",
+          "blobPathPattern": "logs/{Year}/{Month}/{Day}/*.json",
+          "tableName": "RawEvents",
+          "mappingName": "RawEventsMapping",
+          "dataFormat": "JSON"
+        }
+      }
+    },
+    "eventHub": {
+      "enabled": true,
+      "namespace": {
+        "sku": "Standard",
+        "capacity": 1,
+        "autoInflateEnabled": false,
+        "maximumThroughputUnits": 0
+      },
+      "hubs": {
+        "logs": {
+          "name": "logs-hub",
+          "partitionCount": 4,
+          "messageRetentionInDays": 1,
+          "consumerGroups": ["cribl"]
+        },
+        "metrics": {
+          "name": "metrics-hub",
+          "partitionCount": 2,
+          "messageRetentionInDays": 1,
+          "consumerGroups": ["cribl"]
+        },
+        "events": {
+          "name": "events-hub",
+          "partitionCount": 8,
+          "messageRetentionInDays": 7,
+          "consumerGroups": ["cribl"]
+        }
+      },
+      "sharedAccessPolicies": {
+        "send": {
+          "rights": ["Send"]
+        },
+        "listen": {
+          "rights": ["Listen"]
+        },
+        "manage": {
+          "rights": ["Send", "Listen", "Manage"]
+        }
+      }
+    },
+    "privateEndpoints": {
+      "enabled": false,
+      "_enabledComment": "Automatically set to true when labMode is 'private'",
+      "subnetName": "PrivateLinkSubnet",
+      "eventHub": {
+        "enabled": true,
+        "groupId": "namespace",
+        "dnsZone": "privatelink.servicebus.windows.net"
+      },
+      "adx": {
+        "enabled": true,
+        "groupId": "cluster",
+        "dnsZone": "privatelink.{region}.kusto.windows.net"
+      }
+    }
+  },
+  "storage": {
+    "accounts": {
+      "primary": {
+        "sku": "Standard_LRS",
+        "kind": "StorageV2",
+        "accessTier": "Hot",
+        "enableBlobVersioning": false,
+        "enableBlobChangeFeed": false,
+        "description": "Primary shared storage for Flow Logs, Event Hub Capture, ADX ingestion, and general blob data"
+      }
+    },
+    "containers": {
+      "criblqueuesource": {
+        "name": "criblqueuesource",
+        "publicAccess": "None",
+        "description": "Container for exercising Cribl Queue Source functionality"
+      }
+    },
+    "queues": {
+      "enabled": true,
+      "definitions": {
+        "blobNotifications": {
+          "name": "blob-notifications",
+          "messageTTL": 604800,
+          "description": "Queue for blob creation/deletion notifications"
+        },
+        "eventProcessing": {
+          "name": "event-processing",
+          "messageTTL": 86400,
+          "description": "Queue for event processing pipeline"
+        }
+      }
+    },
+    "eventGrid": {
+      "enabled": true,
+      "subscriptions": {
+        "blobCreated": {
+          "eventTypes": ["Microsoft.Storage.BlobCreated"],
+          "destination": "blob-notifications",
+          "filters": {
+            "subjectBeginsWith": "/blobServices/default/containers/criblqueuesource/",
+            "subjectEndsWith": ""
+          }
+        }
+      }
+    },
+    "sampleData": {
+      "generate": false,
+      "recordCount": 1000,
+      "formats": ["json", "csv", "text"],
+      "timePeriodDays": 7
+    },
+    "privateEndpoints": {
+      "enabled": false,
+      "_enabledComment": "Automatically set to true when labMode is 'private'",
+      "subnetName": "PrivateLinkSubnet",
+      "endpoints": {
+        "blob": {
+          "enabled": true,
+          "groupId": "blob",
+          "dnsZone": "privatelink.blob.core.windows.net"
+        },
+        "queue": {
+          "enabled": true,
+          "groupId": "queue",
+          "dnsZone": "privatelink.queue.core.windows.net"
+        },
+        "table": {
+          "enabled": true,
+          "groupId": "table",
+          "dnsZone": "privatelink.table.core.windows.net"
+        },
+        "file": {
+          "enabled": true,
+          "groupId": "file",
+          "dnsZone": "privatelink.file.core.windows.net"
+        }
+      }
+    }
+  },
+  "criblIntegration": {
+    "generateCollectors": true,
+    "outputDirectory": "cribl-configs",
+    "includeWorkspaceCollector": true,
+    "includeStorageCollector": true,
+    "includeEventHubCollector": true,
+    "includeQueueCollector": true,
+    "_dcrNote": "DCR configuration is managed in Azure/CustomDeploymentTemplates/DCR-Automation/prod/azure-parameters.json"
+  },
+  "_comments": {
+    "overview": "This is the Unified Azure Lab configuration - deploys comprehensive Cribl integration environment",
+    "subscriptionId": "Your Azure subscription ID (GUID)",
+    "resourceGroupName": "Resource group for all lab resources (will be created if doesn't exist)",
+    "location": "Azure region for deployment (e.g., eastus, westus2)",
+    "baseObjectName": "Base name for all resources - combined with prefixes/suffixes",
+    "infrastructure": {
+      "vnetAddressPrefix": "Currently configured as /24 (256 addresses). Original design used /16 for larger deployments.",
+      "subnets": {
+        "gateway": "GatewaySubnet is required name for VPN Gateway. /27 = 32 addresses (10.198.30.0-31)",
+        "bastion": "AzureBastionSubnet is required name. /27 = 32 addresses (10.198.30.32-63)",
+        "privatelink": "Dedicated subnet for Private Link endpoints. /27 = 32 addresses (10.198.30.64-95)",
+        "compute": "General VMs and containers. /27 = 32 addresses (10.198.30.96-127)",
+        "data": "ADX and other data services. /26 = 64 addresses (10.198.30.128-191)",
+        "monitoring": "Sentinel and monitoring tools. /26 = 64 addresses (10.198.30.192-255)",
+        "total": "6 subnets using all 256 addresses in 10.198.30.0/24 - efficient packing with no waste"
+      },
+      "vpnGateway": {
+        "sku": "Basic SKU: 10 tunnels max, 100 Mbps, no BGP, cannot be upgraded. Use VpnGw1+ for production.",
+        "deployTime": "VPN Gateway takes 30-45 minutes to deploy",
+        "vpnConnection": "VPN Connection configuration is now in separate onprem-connection-parameters.json file (optional). If file exists with valid config, Local Network Gateway and VPN Connection are created automatically."
+      },
+      "onPremisesNetwork": {
+        "purpose": "Defines on-premises networks for NSG rules to allow hybrid connectivity",
+        "addressSpaces": "All on-premises subnets that should be allowed through NSGs",
+        "managementSubnets": "Specific on-prem subnets for admin access (RDP/SSH/HTTPS)",
+        "nsgRules": "When allowOnPremisesTraffic=true, NSG rules automatically created for these networks"
+      },
+      "networkSecurity": {
+        "nsgNaming": "NSGs are named after their associated subnets (e.g., nsg-PrivateLinkSubnet-eastus)",
+        "allowOnPremisesTraffic": "Automatically creates NSG rules (priority 100+) to allow traffic from on-premises networks",
+        "ruleOrder": "Priority 100-119: On-premises networks, 120: Azure services, 65000+: Azure defaults"
+      }
+    },
+    "monitoring": {
+      "logAnalytics": "Shared workspace reduces costs - one workspace for Sentinel, Flow Logs, and diagnostics",
+      "sentinel": "First 90 days retention free. Additional retention: $0.0007/GB/day",
+      "flowLogging": "vNet Flow Logs are newer than NSG Flow Logs. Traffic Analytics requires Log Analytics.",
+      "privateLink": "Enable for on-premises Cribl workers. Requires VNet, subnet, and DNS configuration."
+    },
+    "analytics": {
+      "adx": {
+        "warning": "ADX costs ~$8/day minimum even with Dev SKU. Enable autoStop to reduce costs.",
+        "sku": "Dev(No SLA) for testing only. Use Standard_D11_v2 or higher for production.",
+        "streamingIngest": "Required for low-latency Cribl integration",
+        "dataConnections": "ADX can ingest from Event Hub (streaming) and Blob Storage (batch)"
+      },
+      "eventHub": {
+        "partitions": "More partitions = higher throughput but higher cost. 2-8 partitions typical.",
+        "capture": "Capture to blob storage enables batch ingestion and replay scenarios",
+        "consumerGroups": "Each application reading from Event Hub should use dedicated consumer group",
+        "cost": "Standard tier: $0.028/TU/hour = ~$0.73/day + ingress/egress charges"
+      }
+    },
+    "storage": {
+      "strategy": "Single shared storage account reduces costs. LRS for dev/test, GRS for production.",
+      "containers": "Pre-created containers for different data types and Azure service outputs",
+      "eventGrid": "Event-driven notifications eliminate polling. Queue-based for reliable delivery.",
+      "queues": "Message TTL in seconds: 604800 = 7 days, 86400 = 1 day"
+    },
+    "resourceSharing": {
+      "logAnalytics": "Shared by Sentinel, Flow Logs, Traffic Analytics, Diagnostic Settings",
+      "storage": "Shared by Flow Logs, Event Hub Capture, ADX batch ingestion, general logs",
+      "vnet": "Shared by VPN Gateway, Bastion, Private Endpoints, VMs",
+      "eventHub": "Can feed Sentinel, ADX, external systems simultaneously via consumer groups"
+    },
+    "deploymentStrategy": {
+      "incremental": "Each component checks for existing resources and reuses them",
+      "idempotent": "Safe to run multiple times - won't create duplicates",
+      "modular": "Deploy infrastructure first, then add monitoring, analytics, storage as needed"
+    },
+    "estimatedCosts": {
+      "_note": "All costs are estimates in USD per day. Actual costs vary by region and usage patterns.",
+      "infrastructure": {
+        "vnet": "$0/day - Virtual Networks are free",
+        "vpnGateway": "$1-1.20/day - Basic SKU (enabled by default). VpnGw1: ~$4.67/day, VpnGw2: ~$12.17/day",
+        "bastion": "$4.67/day - Basic SKU (disabled by default). Standard: ~$6.67/day",
+        "nsg": "$0/day - Network Security Groups are free",
+        "publicIp": "$0.10-0.13/day per IP - Basic SKU. Standard: ~$0.13-0.17/day",
+        "privateEndpoints": "$0.23-0.27/day per endpoint - Only applies in private lab mode"
+      },
+      "monitoring": {
+        "logAnalytics": "$2.30/GB ingested - First 5GB/day free (150GB/month). Retention: 30 days free, 31-730 days: $0.0033/GB/day",
+        "sentinel": "$2.46/GB/day ingested - First 10GB/day free for 31 days (new workspaces). Commitment tiers available.",
+        "flowLogs": "$0.50/GB processed + storage costs - vNet Flow Logs with Traffic Analytics (enabled by default)",
+        "trafficAnalytics": "Included with Flow Logs - No additional charge beyond processing",
+        "dce": "$0.50/GB ingested - Data Collection Endpoint (only in private mode)",
+        "ampls": "$0/day - Azure Monitor Private Link Scope is free (only in private mode)",
+        "totalMonitoring": "~$0.67-1.33/day for basic monitoring (5-10GB/day without Sentinel data)"
+      },
+      "analytics": {
+        "adx": "$8-8.67/day - Dev(No SLA)_Standard_E2a_v4 SKU (disabled by default). Production SKUs start at ~$24.33/day",
+        "adxStorage": "$0.0007/GB/day - Hot cache storage included in compute. Cold cache extra.",
+        "eventHub": "$0.73-0.83/day - Standard tier, 1 throughput unit base. Each additional TU: ~$0.73/day",
+        "eventHubIngress": "$0.028 per million events - Included: 1M events/TU/day",
+        "eventHubCapture": "Storage costs only - Avro files written to blob storage",
+        "totalAnalytics": "~$0.73-0.83/day (Event Hub only). ~$8.67-9.50/day if ADX enabled"
+      },
+      "storage": {
+        "storageAccount": "$0/day - Account itself is free",
+        "blobStorage": "$0.0006/GB/day - Hot tier (LRS). Cool: $0.00033/GB/day, Archive: $0.00007/GB/day",
+        "blobOperations": "$0.004 per 10,000 read operations, $0.05 per 10,000 write operations",
+        "queueStorage": "$0.0012/GB/day - Queue messages stored",
+        "queueOperations": "$0.036 per 10,000 operations",
+        "tableStorage": "$0.0015/GB/day - If used",
+        "eventGrid": "$0.60 per million operations - First 100,000/day free (3M/month)",
+        "totalStorage": "~$0.17-0.50/day for typical lab usage (50-100GB storage, moderate operations)"
+      },
+      "dataTransfer": {
+        "ingress": "$0/GB - All inbound data transfer to Azure is free",
+        "egress": "$0.087/GB - First 5GB/day free (150GB/month). Up to 10TB: $0.087/GB, 10-50TB: $0.083/GB",
+        "vnetPeering": "$0.01/GB - Only if using VNet peering (not included in this lab)"
+      },
+      "costScenarios": {
+        "minimalLab": {
+          "description": "VPN + Log Analytics + Event Hub + Storage (no Sentinel, no ADX)",
+          "breakdown": "VPN: $1 + Log Analytics: $0.33 + Event Hub: $0.73 + Storage: $0.17 + Flow Logs: $0.10 = ~$2.33/day",
+          "dataIngestion": "Assumes 5GB/day ingestion"
+        },
+        "sentinelLab": {
+          "description": "VPN + Log Analytics + Sentinel + Event Hub + Storage + Flow Logs",
+          "breakdown": "VPN: $1 + Log Analytics: $0.50 + Sentinel: $5 (10GB/day) + Event Hub: $0.73 + Storage: $0.33 + Flow Logs: $0.17 = ~$7.67/day",
+          "dataIngestion": "Assumes 10GB/day ingestion. Cost scales with data volume."
+        },
+        "fullLabWithADX": {
+          "description": "All services enabled including ADX cluster",
+          "breakdown": "VPN: $1 + Log Analytics: $0.50 + Sentinel: $5 + ADX: $8 + Event Hub: $0.73 + Storage: $0.50 + Flow Logs: $0.17 = ~$16/day",
+          "dataIngestion": "Assumes 10GB/day + ADX processing. ADX is the largest cost component."
+        },
+        "privateMode": {
+          "description": "Add these costs when deploying in private mode",
+          "additionalCosts": "Private Endpoints: $0.27 per endpoint (x5-8 endpoints) = $1.33-2.13/day. AMPLS: Free. DCE: $0.50/GB = ~$0.17/day",
+          "totalAdditional": "~$1.50-2.33/day additional for private mode vs public mode"
+        }
+      },
+      "costOptimization": {
+        "recommendations": [
+          "Use Basic VPN SKU for testing ($1/day vs $4.67/day for VpnGw1)",
+          "Disable Bastion if not needed (saves $4.67/day)",
+          "Use Dev SKU for ADX during testing ($8/day vs $24.33/day for production)",
+          "Enable ADX auto-stop to pause cluster when not in use (saves compute costs)",
+          "Use Event Hub capture sparingly - only enable for data retention scenarios",
+          "Implement data retention policies - delete old logs to reduce storage costs",
+          "Use Log Analytics commitment tiers if ingesting >100GB/day (saves 15-30%)",
+          "Consider Sentinel commitment tiers for predictable workloads (saves 15-50%)",
+          "Use cool/archive blob tiers for infrequently accessed data",
+          "Enable TTL auto-cleanup to delete forgotten test labs (this lab supports TTL tags)"
+        ]
+      },
+      "billingNotes": {
+        "hourlyCharges": "VPN Gateway, ADX, and Event Hub are charged hourly (prorated for partial months)",
+        "dataCharges": "Log Analytics, Sentinel, and Flow Logs charge based on data volume ingested",
+        "storageCharges": "Blob storage charges based on data stored (not ingested)",
+        "minimumCharges": "Some resources have minimum charges even if unused (e.g., ADX cluster)",
+        "freeServices": "VNet, NSG, AMPLS, and Event Grid (first 100K ops) are free"
+      }
+    }
+  }
+}

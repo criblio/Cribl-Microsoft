@@ -803,6 +803,9 @@ function Wait-ForUser {
 # Main script logic
 if ($NonInteractive -or $Mode) {
  # Non-interactive mode - execute the specified mode and exit
+ # Disable DCR name confirmations in non-interactive mode to prevent blocking
+ $ConfirmDCRNames = $false
+
  if ($Mode) {
  # Validate configuration before executing in non-interactive mode
  if (-not (Test-AzureParametersConfiguration)) {

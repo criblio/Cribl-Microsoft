@@ -168,11 +168,6 @@ ConsoleHost_history.txt
 # Azure Resource Manager cache
 .azure-cache/
 
-# VPN connection parameters (contains sensitive shared keys and IP addresses)
-# Keep the template version in git, ignore configured versions
-**/onprem-connection-parameters.json
-!**/onprem-connection-parameters.json.template
-
 # =======================
 # Git Specific
 # =======================

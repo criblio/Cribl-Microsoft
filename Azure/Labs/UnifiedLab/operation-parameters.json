@@ -1,0 +1,162 @@
+{
+  "deployment": {
+    "infrastructure": {
+      "deployVNet": true,
+      "deploySubnets": true,
+      "deployNSGs": true,
+      "deployVPNGateway": true,
+      "deployBastion": false
+    },
+    "monitoring": {
+      "deployLogAnalytics": true,
+      "deploySentinel": true,
+      "deployFlowLogs": true,
+      "deployPrivateLink": false,
+      "deployDiagnosticSettings": true,
+      "deployDCRs": true,
+      "_dcrComment": "Deploy Data Collection Rules for native Sentinel tables. Mode determined by labMode (public=Direct, private=DCE)"
+    },
+    "analytics": {
+      "deployADX": true,
+      "deployEventHub": true
+    },
+    "storage": {
+      "deployStorageAccount": true,
+      "deployContainers": true,
+      "deployQueues": true,
+      "deployEventGrid": true,
+      "generateSampleData": false,
+      "deployPrivateEndpoints": false
+    },
+    "virtualMachines": {
+      "deployVMs": false,
+      "_comment": "Deploy test VMs for traffic generation. VMs generate flow logs for testing. Controlled by virtualMachines.enabled in azure-parameters.json"
+    },
+    "privateEndpoints": {
+      "_comment": "Automatically set when labMode is 'private' in azure-parameters.json",
+      "deployAll": false,
+      "storage": {
+        "deployBlob": true,
+        "deployQueue": true,
+        "deployTable": true,
+        "deployFile": true
+      },
+      "analytics": {
+        "deployEventHub": true,
+        "deployADX": true
+      },
+      "monitoring": {
+        "deployAMPLS": true
+      },
+      "dns": {
+        "createPrivateDnsZones": true,
+        "linkToVNet": true,
+        "configureConditionalForwarders": false
+      }
+    }
+  },
+  "scriptBehavior": {
+    "templateOnly": false,
+    "verboseOutput": false,
+    "skipConfirmation": false
+  },
+  "validation": {
+    "skipExistingResources": true,
+    "validateBeforeDeploy": true,
+    "skipPermissionsCheck": true,
+    "checkAddressSpaceOverlap": true,
+    "checkResourceQuotas": false
+  },
+  "criblIntegration": {
+    "generateCollectors": true,
+    "collectorsDirectory": "cribl-configs",
+    "includeWorkspaceCollector": true,
+    "includeStorageCollector": true,
+    "includeEventHubCollector": true,
+    "includeQueueCollector": true,
+    "includeFlowLogCollector": true,
+    "includeADXDestination": false
+  },
+  "_comments": {
+    "overview": "Operation parameters control what gets deployed and how scripts behave",
+    "deployment": {
+      "infrastructure": {
+        "deployVNet": "Create Virtual Network and subnets (required for most components)",
+        "deploySubnets": "Create all subnets defined in azure-parameters.json",
+        "deployNSGs": "Create Network Security Groups for each subnet (except Gateway/Bastion)",
+        "deployVPNGateway": "Deploy VPN Gateway (takes 30-45 minutes, ~$30/month)",
+        "deployBastion": "Deploy Azure Bastion for secure VM access (~$140/month)"
+      },
+      "monitoring": {
+        "deployLogAnalytics": "Create shared Log Analytics workspace (required for Sentinel, Flow Logs)",
+        "deploySentinel": "Enable Microsoft Sentinel on Log Analytics workspace",
+        "deployFlowLogs": "Enable VNet Flow Logs for network monitoring",
+        "deployPrivateLink": "Deploy AMPLS and Private Endpoint for on-premises connectivity",
+        "deployDiagnosticSettings": "Configure diagnostic settings for subscription and resources"
+      },
+      "analytics": {
+        "deployADX": "Deploy Azure Data Explorer cluster (WARNING: ~$240/month minimum cost)",
+        "deployEventHub": "Deploy Event Hub namespace and hubs for streaming data"
+      },
+      "storage": {
+        "deployStorageAccount": "Create shared storage account for all lab components",
+        "deployContainers": "Create blob containers (flowlogs, eventhub-capture, logs, etc.)",
+        "deployQueues": "Create storage queues for event-driven architectures",
+        "deployEventGrid": "Create Event Grid subscriptions for blob notifications",
+        "generateSampleData": "Generate sample JSON/CSV/text files for testing"
+      }
+    },
+    "scriptBehavior": {
+      "templateOnly": "Generate ARM templates without deploying (useful for review/CI-CD)",
+      "verboseOutput": "Show detailed output from Azure commands",
+      "skipConfirmation": "Skip confirmation prompts (useful for automation)"
+    },
+    "validation": {
+      "skipExistingResources": "If true, reuse existing resources instead of failing. Enables incremental deployment.",
+      "validateBeforeDeploy": "Validate all configurations before starting deployment",
+      "checkAddressSpaceOverlap": "Validate subnet CIDR ranges don't overlap",
+      "checkResourceQuotas": "Check if subscription has sufficient quotas (VPN Gateway, ADX, etc.)"
+    },
+    "criblIntegration": {
+      "generateCollectors": "Auto-generate Cribl Stream collector/destination configurations",
+      "collectorsDirectory": "Directory where Cribl configs will be saved (relative to prod/)",
+      "includeWorkspaceCollector": "Generate Log Analytics workspace collector for Sentinel data",
+      "includeStorageCollector": "Generate blob storage collector with SAS token",
+      "includeEventHubCollector": "Generate Event Hub source configurations",
+      "includeQueueCollector": "Generate storage queue source configurations",
+      "includeFlowLogCollector": "Generate Flow Log blob collector",
+      "includeADXDestination": "Generate ADX destination configuration (requires ADX cluster)"
+    },
+    "deploymentModes": {
+      "Full": "Deploy all enabled components in proper dependency order",
+      "Infrastructure": "Deploy only VNet, VPN, Bastion, NSGs",
+      "Monitoring": "Deploy Log Analytics, Sentinel, Flow Logs, Private Link",
+      "Analytics": "Deploy ADX, Event Hub",
+      "Storage": "Deploy Storage Account, containers, queues, Event Grid",
+      "Custom": "Interactive selection of specific components to deploy",
+      "Status": "Display current configuration and deployed resources",
+      "Validate": "Validate configuration without deploying"
+    },
+    "incrementalDeployment": {
+      "description": "This lab supports incremental deployment - you can run it multiple times",
+      "example1": "First run: Deploy infrastructure (VNet + VPN)",
+      "example2": "Second run: Add monitoring (Sentinel + Flow Logs) - will reuse existing VNet",
+      "example3": "Third run: Add analytics (Event Hub + ADX) - will reuse existing VNet and Log Analytics",
+      "benefit": "Allows gradual lab build-up without recreating shared resources"
+    },
+    "resourceSharing": {
+      "logAnalytics": "Single workspace shared by Sentinel, Flow Logs, diagnostics",
+      "storage": "Single account shared by Flow Logs, Event Hub Capture, ADX, logs",
+      "vnet": "Single VNet shared by VPN, Bastion, Private Endpoints, compute",
+      "eventHub": "Single namespace with multiple hubs for different data types"
+    },
+    "costOptimization": {
+      "tip1": "Start with infrastructure + monitoring (~$50/month) before adding ADX (~$240/month)",
+      "tip2": "Use ADX autoStop feature to pause cluster when not in use",
+      "tip3": "Set Log Analytics daily quota to prevent runaway costs",
+      "tip4": "Disable Bastion if not needed for VM access (~$140/month savings)",
+      "tip5": "Use Standard Event Hub tier (not Premium) for dev/test",
+      "tip6": "Enable Event Grid only for containers you need notifications from"
+    }
+  }
+}
