@@ -266,7 +266,7 @@ function New-CriblDestinationConfig {
 }
 
 Write-DCRInfo "Starting Cribl Sentinel Destination Configuration Generation (FIXED VERSION)..." -Color Cyan
-Write-Host $("="*60) -ForegroundColor Cyan
+Write-DCRHeader "CRIBL DESTINATION GENERATION" -Width 60
 
 if ($ShowDebug) {
  Write-DCRInfo "Debug mode enabled" -Color Magenta
@@ -319,8 +319,8 @@ Write-DCRProgress " Azure Parameters:"
 Write-DCRVerbose " Resource Group: $($azureParams.resourceGroupName)"
 Write-DCRVerbose " Workspace: $($azureParams.workspaceName)"
 Write-DCRVerbose " Location: $($azureParams.location)"
-Write-Host " Tenant ID: $(if ($azureParams.tenantId -and $azureParams.tenantId -ne 'YOUR-TENANT-ID-HERE') { "Configured " } else { 'Not configured ' })" -ForegroundColor Gray
-Write-Host " Client ID: $(if ($azureParams.clientId -and $azureParams.clientId -ne 'YOUR-CLIENT-ID-HERE') { "Configured " } else { 'Not configured ' })" -ForegroundColor Gray
+Write-DCRVerbose " Tenant ID: $(if ($azureParams.tenantId -and $azureParams.tenantId -ne 'YOUR-TENANT-ID-HERE') { "Configured " } else { 'Not configured ' })"
+Write-DCRVerbose " Client ID: $(if ($azureParams.clientId -and $azureParams.clientId -ne 'YOUR-CLIENT-ID-HERE') { "Configured " } else { 'Not configured ' })"
 Write-DCRVerbose " Client Secret: <replace me> placeholder (configured in Cribl Stream)"
 
 # Check for required authentication parameters
@@ -350,7 +350,7 @@ if (-not (Test-Path $destConfigPath)) {
 }
 
 Write-DCRInfo "`nGenerating Cribl destination configurations..." -Color Cyan
-Write-Host $("-"*60) -ForegroundColor Gray
+Write-DCRSubHeader $("-"*60)
 
 # Check Azure context
 $context = Get-AzContext
@@ -559,10 +559,7 @@ $summary = @{
 
 $summary | ConvertTo-Json -Depth 10 | Set-Content $summaryPath -Encoding UTF8
 
-Write-Host "`n"
-Write-Host $("="*60) -ForegroundColor Cyan
-Write-DCRInfo "SUMMARY" -Color Cyan
-Write-Host $("="*60) -ForegroundColor Cyan
+Write-DCRHeader "SUMMARY" -Width 60
 Write-DCRSuccess " Successfully generated: $successCount configuration(s)"
 if ($skipCount -gt 0) {
  Write-DCRWarning "⏭ Skipped: $skipCount configuration(s)"

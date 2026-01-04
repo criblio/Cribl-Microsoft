@@ -7,6 +7,9 @@
 if (-not (Get-Variable -Name DCRVerboseOutputEnabled -Scope Global -ErrorAction SilentlyContinue)) {
     $global:DCRVerboseOutputEnabled = $false
 }
+if (-not (Get-Variable -Name DCRQuietModeEnabled -Scope Global -ErrorAction SilentlyContinue)) {
+    $global:DCRQuietModeEnabled = $false
+}
 if (-not (Get-Variable -Name DCRLogFilePath -Scope Global -ErrorAction SilentlyContinue)) {
     $global:DCRLogFilePath = $null
 }
@@ -23,6 +26,17 @@ if (-not (Get-Variable -Name DCRLogToFileEnabled -Scope Global -ErrorAction Sile
 function Set-DCRVerboseOutput {
     param([bool]$Enabled)
     $global:DCRVerboseOutputEnabled = $Enabled
+}
+
+<#
+.SYNOPSIS
+ Sets the global quiet mode setting (suppresses all console output except errors)
+.PARAMETER Enabled
+ Whether quiet mode should be enabled
+#>
+function Set-DCRQuietMode {
+    param([bool]$Enabled)
+    $global:DCRQuietModeEnabled = $Enabled
 }
 
 <#
@@ -62,9 +76,13 @@ function Initialize-DCRLogging {
         $global:DCRLogFilePath = $LogPath
         $global:DCRLogToFileEnabled = $true
 
-        Write-Host "  Log file initialized: $LogPath" -ForegroundColor Cyan
+        if (-not $global:DCRQuietModeEnabled) {
+            Write-Host "  Log file initialized: $LogPath" -ForegroundColor Cyan
+        }
     } catch {
-        Write-Host "  Warning: Could not initialize log file: $($_.Exception.Message)" -ForegroundColor Yellow
+        if (-not $global:DCRQuietModeEnabled) {
+            Write-Host "  Warning: Could not initialize log file: $($_.Exception.Message)" -ForegroundColor Yellow
+        }
         $global:DCRLogToFileEnabled = $false
     }
 }
@@ -80,6 +98,7 @@ function Initialize-DCRLogging {
 function Write-ToLog {
     param(
         [Parameter(Mandatory=$true)]
+        [AllowEmptyString()]
         [string]$Message,
 
         [Parameter(Mandatory=$false)]
@@ -117,6 +136,7 @@ function Write-ToLog {
 function Write-DCRMessage {
     param(
         [Parameter(Mandatory=$true)]
+        [AllowEmptyString()]
         [string]$Message,
 
         [Parameter(Mandatory=$false)]
@@ -157,6 +177,7 @@ function Write-DCRMessage {
 function Write-DCRHeader {
     param(
         [Parameter(Mandatory=$true)]
+        [AllowEmptyString()]
         [string]$Message,
 
         [Parameter(Mandatory=$false)]
@@ -175,9 +196,11 @@ function Write-DCRHeader {
     Write-ToLog -Message $Message -Level "HEADER"
     Write-ToLog -Message ($SeparatorChar * $Width) -Level "INFO"
 
-    Write-Host "`n$($SeparatorChar * $Width)" -ForegroundColor $Color
-    Write-Host $Message -ForegroundColor $Color
-    Write-Host "$($SeparatorChar * $Width)" -ForegroundColor $Color
+    if (-not $global:DCRQuietModeEnabled) {
+        Write-Host "`n$($SeparatorChar * $Width)" -ForegroundColor $Color
+        Write-Host $Message -ForegroundColor $Color
+        Write-Host "$($SeparatorChar * $Width)" -ForegroundColor $Color
+    }
 }
 
 <#
@@ -187,6 +210,7 @@ function Write-DCRHeader {
 function Write-DCRSubHeader {
     param(
         [Parameter(Mandatory=$true)]
+        [AllowEmptyString()]
         [string]$Message,
 
         [Parameter(Mandatory=$false)]
@@ -197,7 +221,9 @@ function Write-DCRSubHeader {
     Write-ToLog -Message "" -Level "INFO"
     Write-ToLog -Message $Message -Level "SUBHEADER"
 
-    Write-Host "`n$Message" -ForegroundColor $Color
+    if (-not $global:DCRQuietModeEnabled) {
+        Write-Host "`n$Message" -ForegroundColor $Color
+    }
 }
 
 <#
@@ -207,10 +233,13 @@ function Write-DCRSubHeader {
 function Write-DCRSuccess {
     param(
         [Parameter(Mandatory=$true)]
+        [AllowEmptyString()]
         [string]$Message
     )
 
-    Write-Host " $Message" -ForegroundColor Cyan
+    if (-not $global:DCRQuietModeEnabled) {
+        Write-Host " $Message" -ForegroundColor Cyan
+    }
     Write-ToLog -Message $Message -Level "SUCCESS"
 }
 
@@ -221,9 +250,11 @@ function Write-DCRSuccess {
 function Write-DCRError {
     param(
         [Parameter(Mandatory=$true)]
+        [AllowEmptyString()]
         [string]$Message
     )
 
+    # Errors are always shown, even in quiet mode
     Write-Host " $Message" -ForegroundColor Red
     Write-ToLog -Message $Message -Level "ERROR"
 }
@@ -235,10 +266,13 @@ function Write-DCRError {
 function Write-DCRWarning {
     param(
         [Parameter(Mandatory=$true)]
+        [AllowEmptyString()]
         [string]$Message
     )
 
-    Write-Host " $Message" -ForegroundColor Yellow
+    if (-not $global:DCRQuietModeEnabled) {
+        Write-Host " $Message" -ForegroundColor Yellow
+    }
     Write-ToLog -Message $Message -Level "WARNING"
 }
 
@@ -257,7 +291,9 @@ function Write-DCRInfo {
     )
 
     if ($Message) {
-        Write-Host "   $Message" -ForegroundColor $Color
+        if (-not $global:DCRQuietModeEnabled) {
+            Write-Host "   $Message" -ForegroundColor $Color
+        }
         Write-ToLog -Message $Message -Level "INFO"
     }
 }
@@ -269,6 +305,7 @@ function Write-DCRInfo {
 function Write-DCRVerbose {
     param(
         [Parameter(Mandatory=$true)]
+        [AllowEmptyString()]
         [string]$Message,
 
         [Parameter(Mandatory=$false)]
@@ -278,8 +315,8 @@ function Write-DCRVerbose {
     # Always write to log file
     Write-ToLog -Message $Message -Level "VERBOSE"
 
-    # Only show in console if verbose is enabled
-    if ($global:DCRVerboseOutputEnabled) {
+    # Only show in console if verbose is enabled and not in quiet mode
+    if ($global:DCRVerboseOutputEnabled -and -not $global:DCRQuietModeEnabled) {
         Write-Host "   $Message" -ForegroundColor $Color
     }
 }
@@ -291,6 +328,7 @@ function Write-DCRVerbose {
 function Write-DCRProgress {
     param(
         [Parameter(Mandatory=$true)]
+        [AllowEmptyString()]
         [string]$Message,
 
         [Parameter(Mandatory=$false)]
@@ -303,6 +341,11 @@ function Write-DCRProgress {
     # Always write to log file
     $logLevel = if ($Minor) { "DEBUG" } else { "PROGRESS" }
     Write-ToLog -Message $Message -Level $logLevel
+
+    # Don't show console output in quiet mode
+    if ($global:DCRQuietModeEnabled) {
+        return
+    }
 
     # Only show minor progress if verbose is enabled
     if ($Minor -and -not $global:DCRVerboseOutputEnabled) {
@@ -320,9 +363,11 @@ function Write-DCRProgress {
 function Write-DCRStatus {
     param(
         [Parameter(Mandatory=$true)]
+        [AllowEmptyString()]
         [string]$Property,
 
         [Parameter(Mandatory=$true)]
+        [AllowEmptyString()]
         [string]$Value,
 
         [Parameter(Mandatory=$false)]
@@ -335,8 +380,8 @@ function Write-DCRStatus {
     # Always write to log file
     Write-ToLog -Message "${Property}: ${Value}" -Level "STATUS"
 
-    # Only show in console if verbose is enabled
-    if ($global:DCRVerboseOutputEnabled) {
+    # Only show in console if verbose is enabled and not in quiet mode
+    if ($global:DCRVerboseOutputEnabled -and -not $global:DCRQuietModeEnabled) {
         Write-Host "   $Property`: " -ForegroundColor $PropertyColor -NoNewline
         Write-Host $Value -ForegroundColor $ValueColor
     }

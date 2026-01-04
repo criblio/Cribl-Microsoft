@@ -76,7 +76,6 @@ These resources automatically get `-{location}` appended:
 | Subnet | `snet-` | `snet-cribllab-eastus` |
 | Network Security Group | `nsg-` | `nsg-cribllab-eastus` |
 | VPN Gateway | `vpngw-` | `vpngw-cribllab-eastus` |
-| Bastion | `bas-` | `bas-cribllab-eastus` |
 | Public IP | `pip-` | `pip-cribllab-eastus` |
 | Log Analytics Workspace | `law-` | `law-cribllab-eastus` |
 | Network Watcher | `nw-` | `nw-cribllab-eastus` |

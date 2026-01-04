@@ -27,7 +27,7 @@ function Update-NamingSuffixes {
 
  # Resource types that should automatically get location suffix (with hyphen)
  $resourceTypesWithLocationSuffix = @(
- 'vnet', 'subnet', 'nsg', 'vpnGateway', 'bastion', 'publicIp',
+ 'vnet', 'subnet', 'nsg', 'vpnGateway', 'publicIp',
  'logAnalyticsWorkspace', 'networkWatcher', 'eventHubNamespace'
  )
 
@@ -139,9 +139,7 @@ function Get-AllResourceNames {
  # Infrastructure
  VNet = Get-ResourceName -AzureParams $AzureParams -ResourceType "vnet"
  VPNGateway = Get-ResourceName -AzureParams $AzureParams -ResourceType "vpnGateway"
- Bastion = Get-ResourceName -AzureParams $AzureParams -ResourceType "bastion"
  VPNPublicIP = Get-ResourceName -AzureParams $AzureParams -ResourceType "publicIp" -Suffix "vpn"
- BastionPublicIP = Get-ResourceName -AzureParams $AzureParams -ResourceType "publicIp" -Suffix "bastion"
 
  # Monitoring
  LogAnalytics = Get-ResourceName -AzureParams $AzureParams -ResourceType "logAnalyticsWorkspace"
@@ -161,7 +159,7 @@ function Get-AllResourceNames {
  $subnet = $AzureParams.infrastructure.subnets.$subnetKey
 
  # Skip special subnets that don't support NSGs
- if ($subnet.name -notin @("GatewaySubnet", "AzureBastionSubnet")) {
+ if ($subnet.name -notin @("GatewaySubnet")) {
  # Use subnet name as suffix (e.g., nsg-PrivateLinkSubnet-eastus, nsg-ComputeSubnet-eastus)
  $nsgName = Get-ResourceName -AzureParams $AzureParams -ResourceType "nsg" -Suffix $subnet.name
  $names["NSG_$subnetKey"] = $nsgName
@@ -194,7 +192,6 @@ function Show-ResourceNames {
  Write-Host "`n Infrastructure:" -ForegroundColor Yellow
  if ($Names.VNet) { Write-Host " VNet: $($Names.VNet)" -ForegroundColor White }
  if ($Names.VPNGateway) { Write-Host " VPN Gateway: $($Names.VPNGateway)" -ForegroundColor White }
- if ($Names.Bastion) { Write-Host " Bastion: $($Names.Bastion)" -ForegroundColor White }
 
  Write-Host "`n Monitoring:" -ForegroundColor Yellow
  if ($Names.LogAnalytics) { Write-Host " Log Analytics: $($Names.LogAnalytics)" -ForegroundColor White }

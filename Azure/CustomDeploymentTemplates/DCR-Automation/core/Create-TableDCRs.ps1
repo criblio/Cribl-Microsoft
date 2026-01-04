@@ -1611,13 +1611,29 @@ function Get-CriblConfigFromDCR {
  try {
  $subscriptionId = (Get-AzContext).Subscription.Id
  $dcrResourceId = "/subscriptions/$subscriptionId/resourceGroups/$ResourceGroupName/providers/Microsoft.Insights/dataCollectionRules/$DCRName"
- $apiVersion = "2023-03-11"
+ # Use API version 2023-03-11 which supports endpoints.logsIngestion for Direct DCRs (March 2024 update)
+		$apiVersion = "2023-03-11"
 
  $restResult = Invoke-AzRestMethod -Method GET -Path "$dcrResourceId`?api-version=$apiVersion" -ErrorAction Stop
 
  if ($restResult.StatusCode -eq 200) {
  $dcrResource = $restResult.Content | ConvertFrom-Json
- Write-DCRVerbose " Retrieved full DCR resource via REST API"
+ Write-DCRVerbose " Retrieved full DCR resource via REST API (api-version=$apiVersion)"
+
+ # Debug: Log the structure of the response to help diagnose endpoint extraction
+ if ($dcrResource.properties) {
+  $propNames = $dcrResource.properties.PSObject.Properties.Name -join ', '
+  Write-DCRVerbose " REST API properties available: $propNames"
+  if ($dcrResource.properties.endpoints) {
+   $endpointsProps = $dcrResource.properties.endpoints.PSObject.Properties.Name -join ', '
+   Write-DCRVerbose " endpoints properties: $endpointsProps"
+   if ($dcrResource.properties.endpoints.logsIngestion) {
+    Write-DCRVerbose " logsIngestion URL: $($dcrResource.properties.endpoints.logsIngestion)"
+   }
+  } else {
+   Write-DCRVerbose " endpoints property NOT present in REST response (DCR may not be fully provisioned)"
+  }
+ }
  } else {
  Write-DCRVerbose " REST API returned status: $($restResult.StatusCode)"
  }
@@ -1739,15 +1755,20 @@ function Get-CriblConfigFromDCR {
 
  # Try REST API response first (most reliable for ARM properties)
  if ($dcrResource) {
- # Try properties.logsIngestion.endpoint (standard ARM path)
- if ($dcrResource.properties -and $dcrResource.properties.logsIngestion -and $dcrResource.properties.logsIngestion.endpoint) {
- $endpoint = $dcrResource.properties.logsIngestion.endpoint
- Write-DCRSuccess " Found at dcrResource.properties.logsIngestion.endpoint (REST API)"
+ # Try properties.endpoints.logsIngestion (correct ARM path for Direct DCRs - March 2024 update)
+ if ($dcrResource.properties -and $dcrResource.properties.endpoints -and $dcrResource.properties.endpoints.logsIngestion) {
+ $endpoint = $dcrResource.properties.endpoints.logsIngestion
+ Write-DCRSuccess " Found at dcrResource.properties.endpoints.logsIngestion (REST API)"
  }
- # Try direct logsIngestion.endpoint
- elseif ($dcrResource.logsIngestion -and $dcrResource.logsIngestion.endpoint) {
- $endpoint = $dcrResource.logsIngestion.endpoint
- Write-DCRSuccess " Found at dcrResource.logsIngestion.endpoint (REST API)"
+ # Try direct endpoints.logsIngestion
+ elseif ($dcrResource.endpoints -and $dcrResource.endpoints.logsIngestion) {
+ $endpoint = $dcrResource.endpoints.logsIngestion
+ Write-DCRSuccess " Found at dcrResource.endpoints.logsIngestion (REST API)"
+ }
+ # Legacy path: properties.logsIngestion.endpoint (older API versions)
+ elseif ($dcrResource.properties -and $dcrResource.properties.logsIngestion -and $dcrResource.properties.logsIngestion.endpoint) {
+ $endpoint = $dcrResource.properties.logsIngestion.endpoint
+ Write-DCRSuccess " Found at dcrResource.properties.logsIngestion.endpoint (REST API - legacy)"
  }
  }
  # Try different property paths for logsIngestion from Get-AzDataCollectionRule
@@ -1813,11 +1834,8 @@ function Get-CriblConfigFromDCR {
  $criblConfig.IngestionEndpoint = $endpoint
  Write-DCRVerbose " Direct DCR - LogsIngestion Endpoint: $endpoint"
  } else {
- # Fallback to location-based construction if we can't find the logsIngestion endpoint
- Write-Warning " Could not extract logsIngestion endpoint from Direct DCR, using location-based fallback"
- $location = $dcr.Location.Replace(' ', '').ToLower()
- $criblConfig.IngestionEndpoint = "https://${location}.ingest.monitor.azure.com"
- Write-DCRWarning " Direct DCR - Fallback Ingestion Endpoint: $($criblConfig.IngestionEndpoint)"
+ # No fallback - throw error if logsIngestion endpoint cannot be extracted from Direct DCR
+ throw "Could not extract logsIngestion endpoint from Direct DCR '$DCRName'. The DCR may not have been created correctly or the Kind may not be 'Direct'."
  }
  } else {
  # For DCE-based DCRs, check different possible property names
@@ -1973,18 +1991,11 @@ function Show-CriblConfiguration {
  )
  
  Write-DCRInfo "`n CRIBL INTEGRATION CONFIGURATION" -Color Magenta
- Write-DCRInfo " " -Color Magenta
- Write-Host " DCR Immutable ID: " -NoNewline -ForegroundColor White
- Write-DCRWarning "$($CriblConfig.DCRImmutableId)"
- Write-Host " Ingestion Endpoint: " -NoNewline -ForegroundColor White
- Write-DCRWarning "$($CriblConfig.IngestionEndpoint)"
- Write-Host " Stream Name: " -NoNewline -ForegroundColor White
- Write-DCRWarning "$($CriblConfig.StreamName)"
- Write-Host " Target Table: " -NoNewline -ForegroundColor White
- Write-DCRWarning "$($CriblConfig.TableName)"
- Write-Host " DCR Type: " -NoNewline -ForegroundColor White
- Write-DCRInfo "$($CriblConfig.Type)" -Color Cyan
- Write-DCRInfo " " -Color Magenta
+ Write-DCRVerbose " DCR Immutable ID: $($CriblConfig.DCRImmutableId)"
+ Write-DCRVerbose " Ingestion Endpoint: $($CriblConfig.IngestionEndpoint)"
+ Write-DCRVerbose " Stream Name: $($CriblConfig.StreamName)"
+ Write-DCRVerbose " Target Table: $($CriblConfig.TableName)"
+ Write-DCRVerbose " DCR Type: $($CriblConfig.Type)"
 }
 
 # Function to cleanup old template versions
@@ -2056,7 +2067,7 @@ if (-not $IgnoreOperationParameters -and (Test-Path $FullOperationParametersPath
 
  if ($CreateDCE -and $script:PrivateLinkEnabled) {
  Write-DCRInfo " Private Link: ENABLED" -Color Magenta
- Write-Host " DCE Public Network Access: $script:DCEPublicNetworkAccess" -ForegroundColor $(if ($script:DCEPublicNetworkAccess -eq "Disabled") { "Green" } else { "Yellow" })
+ Write-DCRVerbose " DCE Public Network Access: $script:DCEPublicNetworkAccess"
  if ($script:AMPLSResourceId) {
  Write-DCRVerbose " AMPLS Resource ID: $script:AMPLSResourceId"
  } elseif ($script:AMPLSName) {
@@ -2647,7 +2658,7 @@ foreach ($tableName in $tableList) {
  NetworkAclsPublicNetworkAccess = $networkAccess
  }
 
- Write-Host " DCE Network Access: $networkAccess" -ForegroundColor $(if ($networkAccess -eq "Disabled") { "Green" } else { "Cyan" })
+ Write-DCRVerbose " DCE Network Access: $networkAccess"
 
  $dce = New-AzDataCollectionEndpoint @dceParams -ErrorAction Stop
  Write-DCRSuccess " DCE created: $($dce.Name)"

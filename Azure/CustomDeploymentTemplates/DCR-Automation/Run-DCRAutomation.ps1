@@ -30,7 +30,13 @@ param(
  [switch]$AutoMigrateCustomTables = $false,
 
  [Parameter(Mandatory=$false)]
- [switch]$ConfirmDCRNames = $true
+ [switch]$ConfirmDCRNames = $true,
+
+ [Parameter(Mandatory=$false)]
+ [switch]$Quiet = $false,
+
+ [Parameter(Mandatory=$false)]
+ [string]$LogPath = ""
 )
 
 # Check for dev mode flag file (hidden from users)
@@ -40,16 +46,32 @@ $Environment = if (Test-Path $DevModeFlag) { "dev" } else { "core" }
 # Import Output-Helper for consistent verbosity control
 . (Join-Path $PSScriptRoot $Environment "Output-Helper.ps1")
 
+# Set quiet mode if specified (suppresses all console output except errors)
+if ($Quiet) {
+    Set-DCRQuietMode -Enabled $true
+}
+
 # Set verbose output mode based on PowerShell's built-in VerbosePreference
 $isVerbose = ($VerbosePreference -eq 'Continue') -or ($PSBoundParameters.ContainsKey('Verbose'))
 Set-DCRVerboseOutput -Enabled $isVerbose
 
 # Initialize logging to file
+# If LogPath is provided (e.g., from UnifiedLab), use that; otherwise use default DCR-Automation logs directory
 $timestamp = Get-Date -Format "yyyy-MM-dd_HHmmss"
-$logFileName = "DCR_Automation_$timestamp.log"
-$logFilePath = Join-Path $PSScriptRoot "logs\$logFileName"
-Initialize-DCRLogging -LogPath $logFilePath
-Write-Host "  Detailed logs will be written to: $logFileName" -ForegroundColor Cyan
+if ([string]::IsNullOrEmpty($LogPath)) {
+    # Default: use DCR-Automation's logs directory
+    $logFileName = "DCR_Automation_$timestamp.log"
+    $logFilePath = Join-Path $PSScriptRoot "logs\$logFileName"
+    Initialize-DCRLogging -LogPath $logFilePath -Append $false
+} else {
+    # External caller provided a log path - append to existing log file
+    $logFilePath = $LogPath
+    $logFileName = Split-Path -Leaf $LogPath
+    Initialize-DCRLogging -LogPath $logFilePath -Append $true
+}
+if (-not $Quiet) {
+    Write-Host "  Detailed logs will be written to: $logFileName" -ForegroundColor Cyan
+}
 
 $ScriptPath = Join-Path $PSScriptRoot $Environment "Create-TableDCRs.ps1"
 
@@ -264,7 +286,7 @@ function Execute-Mode {
  switch ($ExecutionMode) {
  "Status" {
  Write-DCRInfo "`n Current Configuration Status" -Color Cyan
- Write-Host "="*50 -ForegroundColor Cyan
+ Write-Host "$('='*50)" -ForegroundColor Cyan
  
  # Read current settings
  $opParams = Get-Content (Join-Path $PSScriptRoot $Environment "operation-parameters.json") | ConvertFrom-Json
@@ -308,7 +330,7 @@ function Execute-Mode {
  
  "DirectNative" {
  Write-DCRSuccess "`n Processing NATIVE Tables with DIRECT DCRs..."
- Write-Host "="*50 -ForegroundColor Green
+ Write-Host "$('='*50)" -ForegroundColor Green
  Write-DCRInfo "Tables: CommonSecurityLog, SecurityEvent, Syslog, WindowsEvent" -Color Cyan
  Write-DCRSuccess "DCR Mode: Direct (no DCE required)"
  Write-Host ""
@@ -321,7 +343,7 @@ function Execute-Mode {
  
  "DirectCustom" {
  Write-DCRInfo "`n Processing CUSTOM Tables with DIRECT DCRs..." -Color Blue
- Write-Host "="*50 -ForegroundColor Blue
+ Write-Host "$('='*50)" -ForegroundColor Blue
  
  if (Test-Path (Join-Path $PSScriptRoot $Environment "CustomTableList.json")) {
  $customTables = Get-Content (Join-Path $PSScriptRoot $Environment "CustomTableList.json") | ConvertFrom-Json
@@ -341,7 +363,7 @@ function Execute-Mode {
  
  "DirectBoth" {
  Write-DCRInfo "`n Processing ALL Tables with DIRECT DCRs..." -Color Magenta
- Write-Host "="*50 -ForegroundColor Magenta
+ Write-Host "$('='*50)" -ForegroundColor Magenta
  Write-DCRSuccess "DCR Mode: Direct (no DCE required)"
  
  Write-DCRWarning "`n Step 1: Processing Native Tables with Direct DCRs..."
@@ -357,7 +379,7 @@ function Execute-Mode {
  
  "DCENative" {
  Write-DCRSuccess "`n Processing NATIVE Tables with DCE-based DCRs..."
- Write-Host "="*50 -ForegroundColor Green
+ Write-Host "$('='*50)" -ForegroundColor Green
  Write-DCRInfo "Tables: CommonSecurityLog, SecurityEvent, Syslog, WindowsEvent" -Color Cyan
  Write-DCRInfo "DCR Mode: DCE-based (creates DCEs)" -Color Blue
  Write-Host ""
@@ -370,7 +392,7 @@ function Execute-Mode {
  
  "DCECustom" {
  Write-DCRInfo "`n Processing CUSTOM Tables with DCE-based DCRs..." -Color Blue
- Write-Host "="*50 -ForegroundColor Blue
+ Write-Host "$('='*50)" -ForegroundColor Blue
  
  if (Test-Path (Join-Path $PSScriptRoot $Environment "CustomTableList.json")) {
  $customTables = Get-Content (Join-Path $PSScriptRoot $Environment "CustomTableList.json") | ConvertFrom-Json
@@ -391,7 +413,7 @@ function Execute-Mode {
  
  "DCEBoth" {
  Write-DCRInfo "`n Processing ALL Tables with DCE-based DCRs..." -Color Magenta
- Write-Host "="*50 -ForegroundColor Magenta
+ Write-Host "$('='*50)" -ForegroundColor Magenta
  Write-DCRInfo "DCR Mode: DCE-based (creates DCEs)" -Color Blue
  
  Write-DCRWarning "`n Step 1: Processing Native Tables with DCE-based DCRs..."
@@ -408,7 +430,7 @@ function Execute-Mode {
 
  "PrivateLinkNative" {
  Write-DCRInfo "`n Processing NATIVE Tables with PRIVATE LINK DCE..." -Color Cyan
- Write-Host "="*50 -ForegroundColor Cyan
+ Write-Host "$('='*50)" -ForegroundColor Cyan
  Write-DCRProgress "Tables: CommonSecurityLog, SecurityEvent, Syslog, WindowsEvent"
  Write-DCRInfo "DCR Mode: DCE-based with Private Link (Private Endpoint required)" -Color Magenta
  Write-Host ""
@@ -444,7 +466,7 @@ function Execute-Mode {
  . $ScriptPath
 
  Write-DCRInfo "`n Setting up Azure Monitor Private Link Scope..." -Color Cyan
- Write-Host "="*50 -ForegroundColor Cyan
+ Write-Host "$('='*50)" -ForegroundColor Cyan
 
  try {
  # Create or get existing AMPLS
@@ -505,7 +527,7 @@ function Execute-Mode {
 
  "PrivateLinkCustom" {
  Write-DCRInfo "`n Processing CUSTOM Tables with PRIVATE LINK DCE..." -Color Cyan
- Write-Host "="*50 -ForegroundColor Cyan
+ Write-Host "$('='*50)" -ForegroundColor Cyan
 
  if (Test-Path (Join-Path $PSScriptRoot $Environment "CustomTableList.json")) {
  $customTables = Get-Content (Join-Path $PSScriptRoot $Environment "CustomTableList.json") | ConvertFrom-Json
@@ -549,7 +571,7 @@ function Execute-Mode {
  . $ScriptPath
 
  Write-DCRInfo "`n Setting up Azure Monitor Private Link Scope..." -Color Cyan
- Write-Host "="*50 -ForegroundColor Cyan
+ Write-Host "$('='*50)" -ForegroundColor Cyan
 
  try {
  # Create or get existing AMPLS
@@ -610,7 +632,7 @@ function Execute-Mode {
 
  "CollectCribl" {
  Write-DCRInfo "`n Collecting Cribl Configuration from Templates and DCRs..." -Color Cyan
- Write-Host "="*50 -ForegroundColor Cyan
+ Write-Host "$('='*50)" -ForegroundColor Cyan
  
  # Load Azure parameters
  $azParams = Get-Content (Join-Path $PSScriptRoot $Environment "azure-parameters.json") | ConvertFrom-Json
@@ -633,7 +655,7 @@ function Execute-Mode {
  
  "ValidateCribl" {
  Write-DCRInfo "`n Validating Cribl Configuration..." -Color Cyan
- Write-Host "="*50 -ForegroundColor Cyan
+ Write-Host "$('='*50)" -ForegroundColor Cyan
  
  $criblConfigDir = Join-Path $PSScriptRoot $Environment "cribl-dcr-configs"
  $configPath = Join-Path $criblConfigDir "cribl-dcr-config.json"
@@ -680,7 +702,7 @@ function Execute-Mode {
  
  "ResetCribl" {
  Write-DCRInfo "`n Reset Cribl Configuration" -Color Cyan
- Write-Host "="*50 -ForegroundColor Cyan
+ Write-Host "$('='*50)" -ForegroundColor Cyan
  
  $criblConfigDir = Join-Path $PSScriptRoot $Environment "cribl-dcr-configs"
  $configPath = Join-Path $criblConfigDir "cribl-dcr-config.json"
@@ -699,7 +721,7 @@ function Execute-Mode {
  
  "TemplateOnly" {
  Write-DCRInfo "`n Generating Templates Only (No Deployment)..." -Color Cyan
- Write-Host "="*50 -ForegroundColor Cyan
+ Write-Host "$('='*50)" -ForegroundColor Cyan
  
  $currentDCRMode = Get-DCRModeStatus
  Write-DCRInfo "DCR Mode: $currentDCRMode" -Color Cyan

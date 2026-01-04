@@ -4,8 +4,7 @@
       "deployVNet": true,
       "deploySubnets": true,
       "deployNSGs": true,
-      "deployVPNGateway": true,
-      "deployBastion": false
+      "deployVPNGateway": true
     },
     "monitoring": {
       "deployLogAnalytics": true,
@@ -83,9 +82,8 @@
       "infrastructure": {
         "deployVNet": "Create Virtual Network and subnets (required for most components)",
         "deploySubnets": "Create all subnets defined in azure-parameters.json",
-        "deployNSGs": "Create Network Security Groups for each subnet (except Gateway/Bastion)",
-        "deployVPNGateway": "Deploy VPN Gateway (takes 30-45 minutes, ~$30/month)",
-        "deployBastion": "Deploy Azure Bastion for secure VM access (~$140/month)"
+        "deployNSGs": "Create Network Security Groups for each subnet (except GatewaySubnet)",
+        "deployVPNGateway": "Deploy VPN Gateway (takes 30-45 minutes, ~$30/month)"
       },
       "monitoring": {
         "deployLogAnalytics": "Create shared Log Analytics workspace (required for Sentinel, Flow Logs)",
@@ -129,7 +127,7 @@
     },
     "deploymentModes": {
       "Full": "Deploy all enabled components in proper dependency order",
-      "Infrastructure": "Deploy only VNet, VPN, Bastion, NSGs",
+      "Infrastructure": "Deploy only VNet, VPN, NSGs",
       "Monitoring": "Deploy Log Analytics, Sentinel, Flow Logs, Private Link",
       "Analytics": "Deploy ADX, Event Hub",
       "Storage": "Deploy Storage Account, containers, queues, Event Grid",
@@ -147,15 +145,14 @@
     "resourceSharing": {
       "logAnalytics": "Single workspace shared by Sentinel, Flow Logs, diagnostics",
       "storage": "Single account shared by Flow Logs, Event Hub Capture, ADX, logs",
-      "vnet": "Single VNet shared by VPN, Bastion, Private Endpoints, compute",
+      "vnet": "Single VNet shared by VPN, Private Endpoints, compute",
       "eventHub": "Single namespace with multiple hubs for different data types"
     },
     "costOptimization": {
       "tip1": "Start with infrastructure + monitoring (~$50/month) before adding ADX (~$240/month)",
       "tip2": "Use ADX autoStop feature to pause cluster when not in use",
       "tip3": "Set Log Analytics daily quota to prevent runaway costs",
-      "tip4": "Disable Bastion if not needed for VM access (~$140/month savings)",
-      "tip5": "Use Standard Event Hub tier (not Premium) for dev/test",
+      "tip4": "Use Standard Event Hub tier (not Premium) for dev/test",
       "tip6": "Enable Event Grid only for containers you need notifications from"
     }
   }

@@ -27,7 +27,6 @@ This unified system replaces and combines:
 **Component-Specific Resources:**
 - ADX Cluster (if enabled)
 - VPN Gateway (if enabled)
-- Azure Bastion (if enabled)
 - AMPLS + Private Endpoint (if Private Link mode)
 
 ### Directory Structure
@@ -55,7 +54,7 @@ UnifiedLab/
 ### Available Modes
 
 1. **Full** - Deploy all enabled components (respects operation-parameters.json flags)
-2. **Infrastructure** - VNet + VPN + Bastion + NSGs only
+2. **Infrastructure** - VNet + VPN + NSGs only
 3. **Monitoring** - Log Analytics + Sentinel + Flow Logs + Private Link
 4. **Analytics** - ADX + Event Hub
 5. **Storage** - Storage Account + Containers + Queues + Event Grid
@@ -111,8 +110,7 @@ The lab supports running multiple times to build incrementally:
  "deployment": {
  "infrastructure": {
  "deployVNet": true,
- "deployVPNGateway": false, // Takes 30-45 min, ~$30/month
- "deployBastion": false // ~$140/month
+ "deployVPNGateway": false // Takes 30-45 min, ~$30/month
  },
  "monitoring": {
  "deployLogAnalytics": true,
@@ -165,7 +163,6 @@ The lab supports running multiple times to build incrementally:
 - **Total: ~$350-400/month**
 
 ### Optional Components
-- Azure Bastion: ~$140/month
 - VPN Gateway VpnGw1: ~$140/month (vs $30 for Basic)
 - ADX Standard_D11_v2: ~$730/month (vs $240 for Dev)
 
@@ -173,10 +170,9 @@ The lab supports running multiple times to build incrementally:
 
 ### Infrastructure
 - **VNet**: 10.0.0.0/16 address space
-- **6 Subnets**: Gateway, Bastion, PrivateLink, Compute, Data, Monitoring
+- **4 Subnets**: Gateway, PrivateLink, Security, O11y
 - **NSGs**: Per-subnet security policies
 - **VPN Gateway**: Optional site-to-site connectivity
-- **Azure Bastion**: Optional secure VM access
 
 ### Monitoring
 - **Log Analytics Workspace**: Shared workspace (PerGB2018 SKU, 90-day retention)
@@ -219,13 +215,11 @@ The lab supports running multiple times to build incrementally:
 | Subnet | CIDR | Size | Purpose |
 |--------|------|------|---------|
 | GatewaySubnet | 10.0.0.0/27 | 32 | VPN Gateway (required name) |
-| AzureBastionSubnet | 10.0.0.32/27 | 32 | Azure Bastion (required name) |
-| PrivateLinkSubnet | 10.0.0.64/27 | 32 | Private Link endpoints |
-| ComputeSubnet | 10.0.1.0/24 | 256 | VMs and containers |
-| DataSubnet | 10.0.2.0/24 | 256 | ADX and data services |
-| MonitoringSubnet | 10.0.3.0/24 | 256 | Sentinel and monitoring |
+| PrivateLinkSubnet | 10.0.0.32/27 | 32 | Private Link endpoints |
+| SecuritySubnet | 10.0.0.64/27 | 32 | Security and workload testing |
+| O11ySubnet | 10.0.0.96/27 | 32 | Observability and monitoring |
 
-**Total Used**: ~900 addresses out of 65,536 available
+**Total Used**: 128 addresses
 
 ### Naming Conventions
 
@@ -250,7 +244,6 @@ Resource Group
  NSGs (per subnet)
  Private Endpoints (if Private Link enabled)
  VPN Gateway (optional)
- Azure Bastion (optional)
  Log Analytics Workspace
  Sentinel Solution
  Diagnostic Settings

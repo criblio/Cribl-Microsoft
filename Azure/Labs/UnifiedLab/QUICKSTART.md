@@ -54,8 +54,7 @@ Set-AzContext -Subscription "<your-subscription-id>"
   "deployment": {
     "infrastructure": {
       "deployVNet": true,
-      "deployVPNGateway": false,
-      "deployBastion": false
+      "deployVPNGateway": false
     },
     "monitoring": {
       "deployLogAnalytics": true,
@@ -120,7 +119,7 @@ The deployment runs in 6 phases:
 | Mode | Description | Components |
 |------|-------------|------------|
 | **Full** | All enabled components | Everything in operation-parameters.json |
-| **Infrastructure** | Networking only | VNet, Subnets, NSGs, VPN, Bastion |
+| **Infrastructure** | Networking only | VNet, Subnets, NSGs, VPN |
 | **Storage** | Storage services | Storage Account, Containers, Queues, Event Grid |
 | **Monitoring** | Logging and security | Log Analytics, Sentinel, Flow Logs, Private Link |
 | **Analytics** | Data analytics | Event Hub, ADX |
@@ -154,9 +153,8 @@ Total: ~$80-120/month
 ```
 Above +
 ADX Dev SKU           : ~$240/month
-Azure Bastion         : ~$140/month
 
-Total: ~$450-500/month
+Total: ~$320-360/month
 ```
 
 ## Common Scenarios
@@ -165,7 +163,6 @@ Total: ~$450-500/month
 ```powershell
 # 1. Edit configs to disable expensive components
 # - deployVPNGateway: false
-# - deployBastion: false
 # - deployADX: false
 
 # 2. Deploy core components
@@ -230,13 +227,11 @@ See the [DCR-Automation README](../../CustomDeploymentTemplates/DCR-Automation/R
 ### Infrastructure
 - **VNet**: 10.0.0.0/16 with multiple subnets
   - GatewaySubnet (for VPN Gateway)
-  - AzureBastionSubnet (for Azure Bastion)
   - SecuritySubnet (for security services)
   - O11ySubnet (for observability)
   - PrivateLinkSubnet (for private endpoints)
-- **NSGs**: One per subnet (except Gateway and Bastion)
+- **NSGs**: One per subnet (except GatewaySubnet)
 - **VPN Gateway**: Optional site-to-site connectivity (30-45 min deploy)
-- **Azure Bastion**: Optional secure VM access
 
 ### Storage
 - **Storage Account**: StorageV2, Standard_LRS, Hot tier
