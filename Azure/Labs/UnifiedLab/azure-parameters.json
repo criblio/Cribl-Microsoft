@@ -1,13 +1,13 @@
 {
-  "subscriptionId": "fe6f9921-9c88-4a6d-a144-8e1935c05bf2",
-  "tenantId": "fa882ef2-67af-42c1-80e4-62e2735043d2",
-  "clientId": "8a4b13ab-f1c5-498c-a4ae-85f220a0439b",
+  "subscriptionId": "<YOUR-SUBSCRIPTION-ID>",
+  "tenantId": "<YOUR-TENANT-ID>",
+  "clientId": "<YOUR-CLIENT-ID>",
   "_authComment": "tenantId and clientId are used for Azure AD authentication in Cribl Stream destinations. These will be passed to DCR-Automation for generating Cribl configs. Client secret is set to '<replace me>' placeholder for manual configuration.",
-  "ownerTag": "jpederson@cribl.io",
+  "ownerTag": "<YOUR-EMAIL>",
   "_ownerTagComment": "Owner tag applied to all DCRs and DCEs created by DCR-Automation. Useful for tracking resource ownership and cost allocation.",
-  "resourceGroupName": "rg-jpederson-WindowsEventSchemaLab",
+  "resourceGroupName": "rg-<YOUR-NAME>-UnifiedLab",
   "location": "eastus",
-  "baseObjectName": "jpederson",
+  "baseObjectName": "<YOUR-NAME>",
   "labMode": "public",
   "_labModeComment": "Set to 'private' for private endpoints on all resources, or 'public' for public access. Private mode requires DNS configuration.",
   "timeToLive": {
@@ -15,7 +15,7 @@
     "_enabledComment": "When true, tags resource group with expiration time for automated cleanup",
     "hours": 72,
     "_hoursComment": "Lab will be automatically deleted after this many hours (default: 72 = 3 days)",
-    "userEmail": "jpederson@cribl.io",
+    "userEmail": "<YOUR-EMAIL>",
     "_userEmailComment": "Email address to receive TTL warnings 24 hours before deletion",
     "warningHours": 24,
     "_warningHoursComment": "Send warning email this many hours before deletion (default: 24)"
@@ -130,13 +130,13 @@
     },
     "onPremisesNetwork": {
       "addressSpaces": [
-        "10.198.32.0/24"
+        "<YOUR-ONPREM-CIDR>"
       ],
       "_addressSpacesComment": "On-premises network ranges that will be allowed through NSG rules. Add all on-prem subnets here.",
-      "vpnDevicePublicIp": "70.63.82.233",
+      "vpnDevicePublicIp": "<YOUR-ONPREM-VPN-PUBLIC-IP>",
       "_vpnDevicePublicIpComment": "Public IP of on-premises VPN device for NSG rules",
       "managementSubnets": [
-        "10.198.32.0/24"
+        "<YOUR-ONPREM-MGMT-CIDR>"
       ],
       "_managementSubnetsComment": "On-premises management subnets for administrative access (RDP, SSH, etc.)"
     },

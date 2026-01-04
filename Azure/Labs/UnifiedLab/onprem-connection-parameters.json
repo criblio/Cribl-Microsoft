@@ -1,16 +1,16 @@
 {
   "localNetworkGateway": {
     "name": "lng-onprem",
-    "gatewayIpAddress": "70.63.82.233",
+    "gatewayIpAddress": "<YOUR-ONPREM-VPN-PUBLIC-IP>",
     "addressSpace": [
-      "10.198.32.0/24"
+      "<YOUR-ONPREM-CIDR>"
     ],
     "description": "On-premises network gateway configuration"
   },
   "vpnConnection": {
     "name": "conn-azure-to-onprem",
     "connectionType": "IPsec",
-    "sharedKey": "4ca362a75ef34a60412ab3657178169600a16787b808730464634286",
+    "sharedKey": "<YOUR-VPN-SHARED-KEY>",
     "enableBgp": false,
     "usePolicyBasedTrafficSelectors": false,
     "ipsecPolicies": {
