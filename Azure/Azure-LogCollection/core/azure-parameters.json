@@ -1,0 +1,27 @@
+{
+  "tenantId": "",
+  "managementGroupId": "your-management-group-id",
+  "eventHubSubscriptionId": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+  "eventHubResourceGroup": "rg-cribl-logging",
+  "eventHubNamespacePrefix": "cribl-diag",
+  "eventHubSku": "Standard",
+  "eventHubCapacity": 1,
+  "useExistingNamespaces": false,
+  "centralizedRegion": "eastus",
+  "centralizedNamespace": "",
+  "diagnosticSettingName": "setbycriblpolicy",
+  "_comments": {
+    "tenantId": "Azure AD Tenant ID. If specified, ensures connection to correct tenant. Leave empty to skip tenant validation.",
+    "managementGroupId": "The Management Group ID where policy initiatives will be assigned.",
+    "eventHubSubscriptionId": "Subscription ID where Event Hub Namespaces are located (or will be created).",
+    "eventHubResourceGroup": "Resource Group for Event Hub Namespaces.",
+    "eventHubNamespacePrefix": "Prefix for auto-generated namespace names: {prefix}-{subscriptionId8chars}-{region}",
+    "eventHubSku": "Event Hub SKU for new namespaces: Basic, Standard, or Premium.",
+    "eventHubCapacity": "Throughput units for Standard (1-20) or Processing units for Premium (1-10).",
+    "useExistingNamespaces": "Set to true to use pre-existing Event Hub Namespaces instead of creating new ones.",
+    "centralizedRegion": "For CENTRALIZED mode: The region where the single namespace is located.",
+    "centralizedNamespace": "For CENTRALIZED mode with useExistingNamespaces=true: Name of existing namespace.",
+    "diagnosticSettingName": "Unique name for diagnostic settings created by this solution. Used by cleanup function and avoids conflicts with other Azure Policies. Default: setbycriblpolicy",
+    "multiRegionNote": "For MULTI-REGION mode: Run Inventory first to discover regions. Results are saved to region-inventory/inventory-latest.json"
+  }
+}

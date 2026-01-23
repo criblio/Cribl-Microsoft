@@ -1947,19 +1947,38 @@ function Get-CriblConfigFromDCR {
  if (-not $criblConfig.StreamName -or -not $criblConfig.TableName) {
  Write-DCRWarning " Generating fallback stream/table names from DCR name..."
 
- # Extract table name from DCR name (e.g., "dcr-jp-SecurityEvent-eastus" -> "SecurityEvent")
- # Pattern: dcr-<prefix>-<TableName>-<location>
- if ($DCRName -match '^dcr-[^-]+-([^-]+)-[^-]+$') {
+ # Extract table name from DCR name
+ # Supported patterns:
+ # 3-part: dcr-<TableName>-<location> (e.g., "dcr-SecurityEvent-eastus")
+ # 4-part: dcr-<prefix>-<TableName>-<location> (e.g., "dcr-jp-SecurityEvent-eastus")
+ $tableName = $null
+
+ # Try 3-part pattern first (most common): dcr-TableName-location
+ if ($DCRName -match '^dcr-([^-]+)-[^-]+$') {
  $tableName = $matches[1]
- Write-DCRVerbose " Extracted table name: $tableName"
- } elseif ($DCRName -match '^dcr-[^-]+-(.+)-[^-]+$') {
- # Handle abbreviated names like CSL
+ Write-DCRVerbose " Extracted table name (3-part pattern): $tableName"
+ }
+ # Try 4-part pattern with simple table name: dcr-prefix-TableName-location
+ elseif ($DCRName -match '^dcr-[^-]+-([^-]+)-[^-]+$') {
+ $tableName = $matches[1]
+ Write-DCRVerbose " Extracted table name (4-part pattern): $tableName"
+ }
+ # Try 4-part pattern with complex table name (e.g., abbreviated): dcr-prefix-TableName-location
+ elseif ($DCRName -match '^dcr-[^-]+-(.+)-[^-]+$') {
  $tableName = $matches[1]
  Write-DCRVerbose " Extracted abbreviated table name: $tableName"
+ }
+ # Last resort: extract middle portion
+ else {
+ # Split by dash and take the middle part(s)
+ $parts = $DCRName -split '-'
+ if ($parts.Count -ge 3) {
+ # Remove 'dcr' prefix and location suffix, join remaining parts
+ $tableName = ($parts[1..($parts.Count - 2)]) -join '-'
  } else {
- # Last resort: use the full DCR name minus prefix/suffix
- $tableName = $DCRName -replace '^dcr-[^-]+-', '' -replace '-[^-]+$', ''
- Write-DCRVerbose " Using DCR-based table name: $tableName"
+ $tableName = $DCRName -replace '^dcr-', '' -replace '-[^-]+$', ''
+ }
+ Write-DCRVerbose " Using DCR-based table name (fallback): $tableName"
  }
 
  if (-not $criblConfig.StreamName) {
@@ -3279,6 +3298,9 @@ if ($CustomTableMode) {
 
 Write-DCRInfo " To switch DCR modes, change 'createDCE' in operation-parameters.json" -Color Cyan
 Write-DCRInfo "`nScript completed! " -Color Cyan
+
+# Explicitly exit with success code to prevent false failures
+exit 0
 
 # Usage examples for Cribl integration:
 # .\Create-TableDCRs.ps1 # Default: Auto-exports Cribl config

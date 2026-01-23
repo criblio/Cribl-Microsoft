@@ -1,0 +1,171 @@
+{
+  "$schema": "./resource-coverage.schema.json",
+  "_comment": "Configure which Azure resources to enable logging for. Set 'enabled' to true/false for each category.",
+
+  "deploymentSettings": {
+    "mode": "Centralized",
+    "_modeOptions": ["Centralized", "MultiRegion"]
+  },
+
+  "builtInPolicies": {
+    "_description": "Resources covered by Microsoft's built-in diagnostic settings initiatives",
+
+    "diagnosticSettingsInitiative": {
+      "enabled": true,
+      "method": "built-in-policy",
+      "description": "69 resource types via Microsoft Audit initiative",
+      "resourceCount": "69 resource types"
+    }
+  },
+
+  "communityPolicyInitiative": {
+    "_description": "Custom initiative bundling 44 community policies (includes Storage + 39 additional resource types)",
+
+    "enabled": true,
+    "method": "custom-initiative",
+    "description": "44 resource types: Storage (Blob, File, Queue, Table, Accounts) + 39 additional types (Firewall, Synapse, AVD, etc.)",
+    "resourceCount": "44 resource types",
+    "note": "Single initiative assignment instead of individual policies. Activity Log handled separately (subscription-level).",
+
+    "tiers": {
+      "_description": "Policy tiers for selective deployment. Set to 'All' to deploy all tiers.",
+      "selected": ["All"],
+      "_options": ["Storage", "Security", "Data", "Compute", "Integration", "Networking", "AVD", "Other", "All"],
+      "tierDetails": {
+        "Storage": "Blob, File, Queue, Table, Storage Accounts",
+        "Security": "AKS, Firewall, NSG, Application Gateway, ExpressRoute, VirtualNetwork",
+        "Data": "CosmosDB, Data Factory, MySQL, PostgreSQL, MariaDB, Synapse, Databricks, etc.",
+        "Compute": "App Service, Function App, Batch, Machine Learning, Application Insights, etc.",
+        "Integration": "Logic Apps, Event Grid, Relay",
+        "Networking": "Load Balancer, Traffic Manager, CDN Endpoint",
+        "AVD": "Host Pool, Application Group, Workspace, Scaling Plan",
+        "Other": "Recovery Services, Healthcare APIs, IoT Hub, Cognitive Services, etc."
+      }
+    }
+  },
+
+  "supplementalPolicies": {
+    "_description": "Activity Log policy (subscription-level, cannot be in resource-type initiative)",
+
+    "activityLog": {
+      "enabled": true,
+      "method": "built-in-policy",
+      "policyId": "/providers/Microsoft.Authorization/policyDefinitions/4dabf6eb-0764-4049-82c1-c6d5d781e739",
+      "description": "Azure Activity Log - Control plane operations (ARM operations, RBAC changes)",
+      "note": "Subscription-level policy, deployed separately from resource-type initiatives"
+    }
+  },
+
+  "scriptBasedDeployment": {
+    "_description": "Resources configured via direct API/script (not policy-based)",
+
+    "entraId": {
+      "enabled": true,
+      "method": "script",
+      "profile": "Standard",
+      "_profileOptions": ["Standard", "HighVolume"],
+      "description": "Entra ID (Azure AD) - AuditLogs, SignInLogs, ServicePrincipal, ManagedIdentity, RiskyUsers",
+      "note": "HighVolume includes NonInteractiveUserSignInLogs (5-10x more volume)"
+    },
+    "defenderExport": {
+      "enabled": false,
+      "method": "script",
+      "description": "Microsoft Defender for Cloud - Security alerts from enabled Defender plans",
+      "note": "Only exports alerts from already-enabled Defender plans (does not enable plans)"
+    }
+  },
+
+  "defenderXDR": {
+    "_description": "Microsoft Defender XDR Streaming API - requires portal configuration after Event Hub setup",
+
+    "xdrStreaming": {
+      "enabled": false,
+      "method": "guided-portal",
+      "description": "Defender XDR Streaming API - Endpoint, Identity, Office 365, Cloud Apps telemetry",
+      "note": "Script creates Event Hub and validates licenses; portal configuration required for streaming",
+
+      "exportTiers": {
+        "_description": "Tables are organized by export priority - start with Tier 1, expand based on needs",
+        "tier1_essential": {
+          "description": "Always export - high value, foundation for detection",
+          "tables": ["AlertInfo", "AlertEvidence", "DeviceProcessEvents", "DeviceNetworkEvents", "DeviceLogonEvents", "IdentityLogonEvents", "EmailEvents"]
+        },
+        "tier2_recommended": {
+          "description": "High value for comprehensive visibility",
+          "tables": ["DeviceFileEvents", "DeviceRegistryEvents", "DeviceEvents", "EmailAttachmentInfo", "EmailUrlInfo", "UrlClickEvents", "IdentityDirectoryEvents", "CloudAppEvents"]
+        },
+        "tier3_situational": {
+          "description": "Evaluate based on specific use cases - often high volume",
+          "tables": ["DeviceImageLoadEvents", "IdentityQueryEvents", "DeviceInfo", "DeviceNetworkInfo", "DeviceFileCertificateInfo", "EmailPostDeliveryEvents"],
+          "warnings": {
+            "DeviceImageLoadEvents": "CAUTION: ~100+ GB/day per 1K endpoints. Consider filtering in Cribl.",
+            "IdentityQueryEvents": "CAUTION: High volume from normal AD operations. Valuable but noisy."
+          }
+        }
+      },
+
+      "products": {
+        "defenderForEndpoint": {
+          "description": "Device telemetry - DeviceEvents, DeviceInfo, DeviceLogonEvents, etc.",
+          "tables": ["DeviceEvents", "DeviceInfo", "DeviceLogonEvents", "DeviceNetworkEvents", "DeviceProcessEvents", "DeviceFileEvents", "DeviceRegistryEvents", "DeviceImageLoadEvents", "DeviceFileCertificateInfo", "DeviceNetworkInfo"]
+        },
+        "defenderForIdentity": {
+          "description": "Identity monitoring - IdentityLogonEvents, IdentityQueryEvents, IdentityDirectoryEvents",
+          "tables": ["IdentityLogonEvents", "IdentityQueryEvents", "IdentityDirectoryEvents"]
+        },
+        "defenderForOffice365": {
+          "description": "Email security - EmailEvents, EmailAttachmentInfo, EmailUrlInfo, EmailPostDeliveryEvents",
+          "tables": ["EmailEvents", "EmailAttachmentInfo", "EmailUrlInfo", "EmailPostDeliveryEvents"]
+        },
+        "defenderForCloudApps": {
+          "description": "SaaS monitoring - CloudAppEvents",
+          "tables": ["CloudAppEvents"]
+        },
+        "xdrAlerts": {
+          "description": "Unified alerts - AlertInfo, AlertEvidence, UrlClickEvents",
+          "tables": ["AlertInfo", "AlertEvidence", "UrlClickEvents"]
+        }
+      },
+
+      "tablesNotSupported": {
+        "_note": "These tables are NOT available in the Streaming API",
+        "tables": ["BehaviorEntities", "BehaviorInfo"],
+        "reason": "Not yet supported in Streaming API. TVM tables (vulnerability/software inventory) also not available."
+      },
+
+      "eventHubSettings": {
+        "_namespaceMode": "Centralized mode uses shared namespace from azure-parameters.json; Multi-Region mode uses dedicated 'cribl-xdr' prefix",
+        "multiRegionPrefix": "cribl-xdr"
+      }
+    }
+  },
+
+  "notSupported": {
+    "_description": "Resources that cannot stream to Event Hub (for reference only)",
+
+    "vnetFlowLogs": {
+      "enabled": false,
+      "method": "none",
+      "description": "VNet Flow Logs - Storage Account only, use Cribl Azure Blob source",
+      "alternative": "Use Azure/dev/vNetFlowLogDiscovery for Cribl Blob source configuration"
+    },
+    "nsgFlowLogs": {
+      "enabled": false,
+      "method": "none",
+      "description": "NSG Flow Logs - Storage Account only, use Cribl Azure Blob source",
+      "alternative": "Use Cribl Azure Blob source with NSG flow log storage account"
+    },
+    "resourceChangeTracking": {
+      "enabled": false,
+      "method": "none",
+      "description": "Azure Resource Graph Change Analysis - Query-based only, no streaming",
+      "alternative": "Use scheduled Azure Resource Graph queries for change history"
+    },
+    "vmGuestLogs": {
+      "enabled": false,
+      "method": "none",
+      "description": "VM Guest OS Logs - Requires Azure Monitor Agent + DCR (not policy-based)",
+      "alternative": "Use DCR-Automation solution in this repository for AMA-based collection"
+    }
+  }
+}

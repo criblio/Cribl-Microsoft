@@ -187,13 +187,27 @@ function New-CriblDestinationConfig {
  
  # Generate the destination ID using Cribl parameters
  # Extract actual table name from DCR name (format: dcr-<TableName>-<Location>)
- $actualTableName = if ($DCRInfo.TableName -and $DCRInfo.TableName -ne '') {
+
+ # Common Azure regions to detect if TableName is incorrectly set to a location
+ $azureRegions = @('eastus', 'eastus2', 'westus', 'westus2', 'westus3', 'centralus', 'northcentralus',
+ 'southcentralus', 'westcentralus', 'canadacentral', 'canadaeast', 'brazilsouth',
+ 'northeurope', 'westeurope', 'uksouth', 'ukwest', 'francecentral', 'francesouth',
+ 'switzerlandnorth', 'switzerlandwest', 'germanywestcentral', 'norwayeast', 'norwaywest',
+ 'swedencentral', 'eastasia', 'southeastasia', 'japaneast', 'japanwest', 'australiaeast',
+ 'australiasoutheast', 'australiacentral', 'koreacentral', 'koreasouth', 'southafricanorth',
+ 'uaenorth', 'uaecentral', 'centralindia', 'westindia', 'southindia')
+
+ $actualTableName = if ($DCRInfo.TableName -and $DCRInfo.TableName -ne '' -and $DCRInfo.TableName -notin $azureRegions) {
  $DCRInfo.TableName -replace '_CL$', '' -replace '[^a-zA-Z0-9]', '_'
  } else {
- # Extract from DCR name if table name not available
+ # Extract from DCR name if table name not available or incorrectly set to a location
  $parts = $DCRInfo.DCRName -split '-'
- if ($parts.Count -ge 2) {
- # For dcr-SecurityEvent-eastus, extract SecurityEvent
+ if ($parts.Count -ge 3) {
+ # For dcr-SecurityEvent-eastus (3-part), extract SecurityEvent (index 1)
+ # For dcr-prefix-SecurityEvent-eastus (4-part), extract SecurityEvent (index 2)
+ # Use second-to-last part as table name (before location)
+ $parts[$parts.Count - 2]
+ } elseif ($parts.Count -ge 2) {
  $parts[1]
  } else {
  $DCRInfo.DCRName
@@ -579,3 +593,6 @@ Write-DCRVerbose " - Removes handler.control from endpoints"
 Write-DCRVerbose " - Constructs correct ingest.monitor.azure.com URLs"
 
 Write-DCRSuccess "`n Done!"
+
+# Explicitly exit with success code to prevent false failures
+exit 0
