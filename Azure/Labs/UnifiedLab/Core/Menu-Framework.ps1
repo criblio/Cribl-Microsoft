@@ -26,7 +26,7 @@ function Show-ConfigurationSummary {
 
     Write-Host "`n Current Configuration:" -ForegroundColor Cyan
     Write-Host "   Subscription: $($AzureParams.subscriptionId)" -ForegroundColor Gray
-    Write-Host "   Resource Group: $($AzureParams.resourceGroupName)" -ForegroundColor Gray
+    Write-Host "   Resource Group Prefix: $($AzureParams.resourceGroupNamePrefix)" -ForegroundColor Gray
     Write-Host "   Location: $($AzureParams.location)" -ForegroundColor Gray
     Write-Host "   Base Name: $($AzureParams.baseObjectName)" -ForegroundColor Gray
 
@@ -231,6 +231,7 @@ function Get-LabDeploymentConfig {
     switch ($LabType) {
         "CompleteLab" {
             return @{
+                ResourceGroupSuffix = "CompleteLab"
                 Infrastructure = @{ DeployVNet = $true; DeployNSGs = $true; DeployVPN = $true }
                 Storage = @{ Deploy = $true; DeployContainers = $true; DeployQueues = $true; DeployEventGrid = $true; DeployPrivateEndpoints = $isPrivate }
                 Monitoring = @{ DeployLogAnalytics = $true; DeploySentinel = $true; DeployFlowLogs = $true; DeployPrivateLink = $isPrivate; DeployDCRs = $true }
@@ -240,6 +241,7 @@ function Get-LabDeploymentConfig {
         }
         "SentinelLab" {
             return @{
+                ResourceGroupSuffix = "SentinelLab"
                 Infrastructure = @{ DeployVNet = $isPrivate; DeployNSGs = $isPrivate; DeployVPN = $isPrivate }
                 Storage = @{ Deploy = $false; DeployContainers = $false; DeployQueues = $false; DeployEventGrid = $false; DeployPrivateEndpoints = $false }
                 Monitoring = @{ DeployLogAnalytics = $true; DeploySentinel = $true; DeployFlowLogs = $false; DeployPrivateLink = $isPrivate; DeployDCRs = $true }
@@ -248,6 +250,7 @@ function Get-LabDeploymentConfig {
         }
         "ADXLab" {
             return @{
+                ResourceGroupSuffix = "ADXLab"
                 Infrastructure = @{ DeployVNet = $isPrivate; DeployNSGs = $isPrivate; DeployVPN = $isPrivate }
                 Storage = @{ Deploy = $isPrivate; DeployContainers = $isPrivate; DeployQueues = $false; DeployEventGrid = $false; DeployPrivateEndpoints = $isPrivate }
                 Monitoring = @{ DeployLogAnalytics = $false; DeploySentinel = $false; DeployFlowLogs = $false; DeployPrivateLink = $false; DeployDCRs = $false }
@@ -256,6 +259,7 @@ function Get-LabDeploymentConfig {
         }
         "FlowLogLab" {
             return @{
+                ResourceGroupSuffix = "FlowLogLab"
                 Infrastructure = @{ DeployVNet = $true; DeployNSGs = $true; DeployVPN = $false }
                 Storage = @{ Deploy = $true; DeployContainers = $false; DeployQueues = $false; DeployEventGrid = $false; DeployPrivateEndpoints = $isPrivate }
                 Monitoring = @{ DeployLogAnalytics = $false; DeploySentinel = $false; DeployFlowLogs = $true; DeployPrivateLink = $false; DeployDCRs = $false }
@@ -265,6 +269,7 @@ function Get-LabDeploymentConfig {
         }
         "EventHubLab" {
             return @{
+                ResourceGroupSuffix = "EventHubLab"
                 Infrastructure = @{ DeployVNet = $isPrivate; DeployNSGs = $isPrivate; DeployVPN = $isPrivate }
                 Storage = @{ Deploy = $false; DeployContainers = $false; DeployQueues = $false; DeployEventGrid = $false; DeployPrivateEndpoints = $false }
                 Monitoring = @{ DeployLogAnalytics = $false; DeploySentinel = $false; DeployFlowLogs = $false; DeployPrivateLink = $false; DeployDCRs = $false }
@@ -273,6 +278,7 @@ function Get-LabDeploymentConfig {
         }
         "BlobQueueLab" {
             return @{
+                ResourceGroupSuffix = "BlobQueueLab"
                 Infrastructure = @{ DeployVNet = $isPrivate; DeployNSGs = $isPrivate; DeployVPN = $isPrivate }
                 Storage = @{ Deploy = $true; DeployContainers = $true; DeployQueues = $true; DeployEventGrid = $true; DeployPrivateEndpoints = $isPrivate }
                 Monitoring = @{ DeployLogAnalytics = $false; DeploySentinel = $false; DeployFlowLogs = $false; DeployPrivateLink = $false; DeployDCRs = $false }
@@ -281,6 +287,7 @@ function Get-LabDeploymentConfig {
         }
         "BlobCollectorLab" {
             return @{
+                ResourceGroupSuffix = "BlobCollectorLab"
                 Infrastructure = @{ DeployVNet = $isPrivate; DeployNSGs = $isPrivate; DeployVPN = $isPrivate }
                 Storage = @{ Deploy = $true; DeployContainers = $true; DeployQueues = $false; DeployEventGrid = $false; DeployPrivateEndpoints = $isPrivate; GenerateSampleData = $true }
                 Monitoring = @{ DeployLogAnalytics = $false; DeploySentinel = $false; DeployFlowLogs = $false; DeployPrivateLink = $false; DeployDCRs = $false }
@@ -289,6 +296,7 @@ function Get-LabDeploymentConfig {
         }
         "BasicInfrastructure" {
             return @{
+                ResourceGroupSuffix = "BasicInfrastructure"
                 Infrastructure = @{ DeployVNet = $true; DeployNSGs = $true; DeployVPN = $true }
                 Storage = @{ Deploy = $false; DeployContainers = $false; DeployQueues = $false; DeployEventGrid = $false; DeployPrivateEndpoints = $false }
                 Monitoring = @{ DeployLogAnalytics = $false; DeploySentinel = $false; DeployFlowLogs = $false; DeployPrivateLink = $false; DeployDCRs = $false }
@@ -331,13 +339,19 @@ function Confirm-Deployment {
         [hashtable]$Components,
 
         [Parameter(Mandatory=$false)]
-        [int]$EstimatedMinutes = 10
+        [int]$EstimatedMinutes = 10,
+
+        [Parameter(Mandatory=$false)]
+        [string]$ResourceGroupName = ""
     )
 
     Write-Host "`n Deployment Confirmation" -ForegroundColor Yellow
     Write-Host "$('=' * 80)" -ForegroundColor Yellow
     Write-Host ""
     Write-Host "   Mode: $Mode" -ForegroundColor Cyan
+    if (-not [string]::IsNullOrWhiteSpace($ResourceGroupName)) {
+        Write-Host "   Resource Group: $ResourceGroupName" -ForegroundColor Cyan
+    }
     Write-Host ""
     Write-Host "Components to deploy:" -ForegroundColor White
 

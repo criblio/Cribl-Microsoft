@@ -167,8 +167,27 @@ try {
 $script:resourceNames = Get-AllResourceNames -AzureParams $script:azureParams
 
 # Extract common parameters
-$script:resourceGroupName = $script:azureParams.resourceGroupName
+$script:resourceGroupNamePrefix = $script:azureParams.resourceGroupNamePrefix
 $script:location = $script:azureParams.location
+# Resource group name is built dynamically per lab type: prefix + "-" + suffix
+# Default to prefix only until a lab type is selected
+$script:resourceGroupName = $script:resourceGroupNamePrefix
+
+# Helper function to build resource group name from prefix and lab config suffix
+function Get-ResourceGroupName {
+    param(
+        [Parameter(Mandatory=$true)]
+        [string]$Prefix,
+
+        [Parameter(Mandatory=$false)]
+        [string]$Suffix
+    )
+
+    if ([string]::IsNullOrWhiteSpace($Suffix)) {
+        return $Prefix
+    }
+    return "$Prefix-$Suffix"
+}
 
 # Azure authentication check
 function Test-AzureAuthentication {
@@ -438,6 +457,11 @@ function Start-PhaseDeployment {
     # Apply lab configuration if provided
     if ($null -ne $LabConfig) {
         $script:operationParams = Set-LabConfiguration -LabConfig $LabConfig -LabMode $LabMode
+
+        # Build lab-type-specific resource group name from prefix + suffix
+        if ($LabConfig.ResourceGroupSuffix) {
+            $script:resourceGroupName = Get-ResourceGroupName -Prefix $script:resourceGroupNamePrefix -Suffix $LabConfig.ResourceGroupSuffix
+        }
     }
 
     # Store VM password for Phase 7
@@ -639,21 +663,29 @@ function Show-Status {
     Show-ConfigurationSummary -AzureParams $script:azureParams -OperationParams $script:operationParams
 
     Write-Host "`n Checking deployed resources..." -ForegroundColor Cyan
+    Write-Host " Resource Group Prefix: $script:resourceGroupNamePrefix" -ForegroundColor Gray
 
-    # Check for existing resources
-    $rg = Get-AzResourceGroup -Name $script:resourceGroupName -ErrorAction SilentlyContinue
-    if ($null -ne $rg) {
-        Write-Host "`n Resource Group exists: $script:resourceGroupName" -ForegroundColor Green
+    # Check all possible lab-type resource groups
+    $labSuffixes = @("CompleteLab", "SentinelLab", "ADXLab", "FlowLogLab", "EventHubLab", "BlobQueueLab", "BlobCollectorLab", "BasicInfrastructure")
+    $foundAny = $false
 
-        $resources = Get-AzResource -ResourceGroupName $script:resourceGroupName
-        Write-Host "`n Deployed Resources ($($resources.Count)):" -ForegroundColor Cyan
+    foreach ($suffix in $labSuffixes) {
+        $rgName = Get-ResourceGroupName -Prefix $script:resourceGroupNamePrefix -Suffix $suffix
+        $rg = Get-AzResourceGroup -Name $rgName -ErrorAction SilentlyContinue
+        if ($null -ne $rg) {
+            $foundAny = $true
+            $resources = Get-AzResource -ResourceGroupName $rgName
+            Write-Host "`n Resource Group: $rgName ($($resources.Count) resources)" -ForegroundColor Green
 
-        foreach ($resource in $resources | Sort-Object ResourceType) {
-            Write-Host "   $($resource.ResourceType): $($resource.Name)" -ForegroundColor White
+            foreach ($resource in $resources | Sort-Object ResourceType) {
+                Write-Host "   $($resource.ResourceType): $($resource.Name)" -ForegroundColor White
+            }
         }
-    } else {
-        Write-Host "`n Resource Group does not exist: $script:resourceGroupName" -ForegroundColor Yellow
-        Write-Host "   Run deployment to create resources" -ForegroundColor Gray
+    }
+
+    if (-not $foundAny) {
+        Write-Host "`n No lab resource groups found with prefix: $script:resourceGroupNamePrefix" -ForegroundColor Yellow
+        Write-Host "   Run a deployment to create resources" -ForegroundColor Gray
     }
 }
 
@@ -667,6 +699,7 @@ function Main {
     # Non-interactive mode
     if ($NonInteractive -or $Phase -gt 0) {
         if ($Phase -gt 0) {
+            # Single-phase mode uses the prefix as-is (caller must know what RG they target)
             Start-PhaseDeployment -SpecificPhase $Phase -LabMode $script:azureParams.labMode
         } elseif ([string]::IsNullOrWhiteSpace($Mode)) {
             Write-Host "  Mode parameter is required in non-interactive mode" -ForegroundColor Red
@@ -677,7 +710,21 @@ function Main {
         } elseif ($Mode -eq "Validate") {
             Write-Host "`n Configuration validation passed!" -ForegroundColor Green
         } else {
-            Start-PhaseDeployment -LabMode $script:azureParams.labMode
+            # Map non-interactive modes to lab configs with proper RG suffixes
+            $modeLabTypeMap = @{
+                "Full"           = "CompleteLab"
+                "Infrastructure" = "BasicInfrastructure"
+                "Monitoring"     = "SentinelLab"
+                "Analytics"      = "ADXLab"
+                "Storage"        = "BlobQueueLab"
+            }
+            $labType = $modeLabTypeMap[$Mode]
+            if ($labType) {
+                $labConfig = Get-LabDeploymentConfig -LabType $labType -LabMode $script:azureParams.labMode
+                Start-PhaseDeployment -LabConfig $labConfig -LabMode $script:azureParams.labMode
+            } else {
+                Start-PhaseDeployment -LabMode $script:azureParams.labMode
+            }
         }
         exit 0
     }
@@ -712,8 +759,9 @@ function Main {
             "1" {
                 # Complete Lab Deployment
                 $labConfig = Get-LabDeploymentConfig -LabType "CompleteLab" -LabMode $labMode
+                $targetRG = Get-ResourceGroupName -Prefix $script:resourceGroupNamePrefix -Suffix $labConfig.ResourceGroupSuffix
 
-                if (Confirm-Deployment -Mode "Complete Lab Deployment" -Components $labConfig -EstimatedMinutes 45) {
+                if (Confirm-Deployment -Mode "Complete Lab Deployment" -Components $labConfig -EstimatedMinutes 45 -ResourceGroupName $targetRG) {
                     $vmPassword = Get-VMPasswordIfNeeded -LabConfig $labConfig
                     Start-PhaseDeployment -LabConfig $labConfig -LabMode $labMode -VMPassword $vmPassword
                     Wait-ForUser
@@ -722,8 +770,9 @@ function Main {
             "2" {
                 # Sentinel Lab Deployment
                 $labConfig = Get-LabDeploymentConfig -LabType "SentinelLab" -LabMode $labMode
+                $targetRG = Get-ResourceGroupName -Prefix $script:resourceGroupNamePrefix -Suffix $labConfig.ResourceGroupSuffix
 
-                if (Confirm-Deployment -Mode "Sentinel Lab" -Components $labConfig -EstimatedMinutes 20) {
+                if (Confirm-Deployment -Mode "Sentinel Lab" -Components $labConfig -EstimatedMinutes 20 -ResourceGroupName $targetRG) {
                     Start-PhaseDeployment -LabConfig $labConfig -LabMode $labMode
                     Wait-ForUser
                 }
@@ -739,8 +788,9 @@ function Main {
 
                 if ($confirmADX -eq "y" -or $confirmADX -eq "Y") {
                     $labConfig = Get-LabDeploymentConfig -LabType "ADXLab" -LabMode $labMode
+                    $targetRG = Get-ResourceGroupName -Prefix $script:resourceGroupNamePrefix -Suffix $labConfig.ResourceGroupSuffix
 
-                    if (Confirm-Deployment -Mode "ADX Lab" -Components $labConfig -EstimatedMinutes 30) {
+                    if (Confirm-Deployment -Mode "ADX Lab" -Components $labConfig -EstimatedMinutes 30 -ResourceGroupName $targetRG) {
                         Start-PhaseDeployment -LabConfig $labConfig -LabMode $labMode
                         Wait-ForUser
                     }
@@ -749,8 +799,9 @@ function Main {
             "4" {
                 # vNet Flow Log Lab
                 $labConfig = Get-LabDeploymentConfig -LabType "FlowLogLab" -LabMode $labMode
+                $targetRG = Get-ResourceGroupName -Prefix $script:resourceGroupNamePrefix -Suffix $labConfig.ResourceGroupSuffix
 
-                if (Confirm-Deployment -Mode "vNet Flow Log Lab" -Components $labConfig -EstimatedMinutes 20) {
+                if (Confirm-Deployment -Mode "vNet Flow Log Lab" -Components $labConfig -EstimatedMinutes 20 -ResourceGroupName $targetRG) {
                     $vmPassword = Get-VMPasswordIfNeeded -LabConfig $labConfig
                     Start-PhaseDeployment -LabConfig $labConfig -LabMode $labMode -VMPassword $vmPassword
                     Wait-ForUser
@@ -759,8 +810,9 @@ function Main {
             "5" {
                 # Event Hub Lab
                 $labConfig = Get-LabDeploymentConfig -LabType "EventHubLab" -LabMode $labMode
+                $targetRG = Get-ResourceGroupName -Prefix $script:resourceGroupNamePrefix -Suffix $labConfig.ResourceGroupSuffix
 
-                if (Confirm-Deployment -Mode "Event Hub Lab" -Components $labConfig -EstimatedMinutes 15) {
+                if (Confirm-Deployment -Mode "Event Hub Lab" -Components $labConfig -EstimatedMinutes 15 -ResourceGroupName $targetRG) {
                     Start-PhaseDeployment -LabConfig $labConfig -LabMode $labMode
                     Wait-ForUser
                 }
@@ -768,8 +820,9 @@ function Main {
             "6" {
                 # Blob Queue Lab
                 $labConfig = Get-LabDeploymentConfig -LabType "BlobQueueLab" -LabMode $labMode
+                $targetRG = Get-ResourceGroupName -Prefix $script:resourceGroupNamePrefix -Suffix $labConfig.ResourceGroupSuffix
 
-                if (Confirm-Deployment -Mode "Blob Queue Lab" -Components $labConfig -EstimatedMinutes 12) {
+                if (Confirm-Deployment -Mode "Blob Queue Lab" -Components $labConfig -EstimatedMinutes 12 -ResourceGroupName $targetRG) {
                     Start-PhaseDeployment -LabConfig $labConfig -LabMode $labMode
                     Wait-ForUser
                 }
@@ -777,8 +830,9 @@ function Main {
             "7" {
                 # Blob Collector Lab
                 $labConfig = Get-LabDeploymentConfig -LabType "BlobCollectorLab" -LabMode $labMode
+                $targetRG = Get-ResourceGroupName -Prefix $script:resourceGroupNamePrefix -Suffix $labConfig.ResourceGroupSuffix
 
-                if (Confirm-Deployment -Mode "Blob Collector Lab" -Components $labConfig -EstimatedMinutes 12) {
+                if (Confirm-Deployment -Mode "Blob Collector Lab" -Components $labConfig -EstimatedMinutes 12 -ResourceGroupName $targetRG) {
                     Start-PhaseDeployment -LabConfig $labConfig -LabMode $labMode
                     Wait-ForUser
                 }
@@ -786,8 +840,9 @@ function Main {
             "8" {
                 # Basic Infrastructure
                 $labConfig = Get-LabDeploymentConfig -LabType "BasicInfrastructure" -LabMode $labMode
+                $targetRG = Get-ResourceGroupName -Prefix $script:resourceGroupNamePrefix -Suffix $labConfig.ResourceGroupSuffix
 
-                if (Confirm-Deployment -Mode "Basic Infrastructure" -Components $labConfig -EstimatedMinutes 10) {
+                if (Confirm-Deployment -Mode "Basic Infrastructure" -Components $labConfig -EstimatedMinutes 10 -ResourceGroupName $targetRG) {
                     Start-PhaseDeployment -LabConfig $labConfig -LabMode $labMode
                     Wait-ForUser
                 }

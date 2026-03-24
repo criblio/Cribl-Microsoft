@@ -128,6 +128,17 @@ try {
                     workspaceResourceId = $Workspace.ResourceId
                 }
             }
+            @{
+                type = "Microsoft.OperationalInsights/workspaces/providers/onboardingStates"
+                apiVersion = "2024-03-01"
+                name = "$lawName/Microsoft.SecurityInsights/default"
+                dependsOn = @(
+                    "[resourceId('Microsoft.OperationsManagement/solutions', 'SecurityInsights($lawName)')]"
+                )
+                properties = @{
+                    customerManagedKey = $false
+                }
+            }
         )
     }
 

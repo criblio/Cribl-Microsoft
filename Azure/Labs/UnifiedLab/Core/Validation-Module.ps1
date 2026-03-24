@@ -266,7 +266,7 @@ function Test-AzureParametersConfiguration {
  # Define required fields and their placeholder values
  $requiredFields = @{
  "subscriptionId" = @("<YOUR-SUBSCRIPTION-ID-HERE>", "your-subscription-id", "")
- "resourceGroupName" = @("<YOUR-RG-NAME-HERE>", "your-rg-name", "")
+ "resourceGroupNamePrefix" = @("<YOUR-RG-PREFIX-HERE>", "your-rg-prefix", "")
  "location" = @("<YOUR-AZURE-REGION-HERE>")
  "baseObjectName" = @("", "cribllab")
  }
@@ -274,7 +274,7 @@ function Test-AzureParametersConfiguration {
  if (-not (Test-RequiredFields -Config $azParams -RequiredFields $requiredFields)) {
  Write-Host "`n Please update azure-parameters.json with your values:" -ForegroundColor Cyan
  Write-Host " subscriptionId: Your Azure subscription ID (GUID)" -ForegroundColor Gray
- Write-Host " resourceGroupName: Your resource group name" -ForegroundColor Gray
+ Write-Host " resourceGroupNamePrefix: Your resource group name prefix (lab type appended automatically)" -ForegroundColor Gray
  Write-Host " location: Azure region (eg eastus, westus2)" -ForegroundColor Gray
  Write-Host " baseObjectName: Base name for resources (eg cribllab, prod)" -ForegroundColor Gray
  $separator = '=' * 60
@@ -346,7 +346,7 @@ function Test-AzureParametersConfiguration {
  }
 
  if (-not $skipPermissions) {
- if (-not (Test-AzurePermissions -SubscriptionId $azParams.subscriptionId -ResourceGroupName $azParams.resourceGroupName -AzureParams $azParams)) {
+ if (-not (Test-AzurePermissions -SubscriptionId $azParams.subscriptionId -ResourceGroupName $azParams.resourceGroupNamePrefix -AzureParams $azParams)) {
  return $false
  }
  }

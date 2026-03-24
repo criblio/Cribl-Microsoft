@@ -448,7 +448,19 @@ function New-LogAnalyticsCustomTable {
  }
  
  Write-DCRInfo " Creating custom table: $TableName" -Color Cyan
- 
+
+ # Filter out reserved column names that Azure manages automatically
+ # TimeGenerated is required and allowed; these others are system-managed and will cause 400 errors
+ $reservedColumns = @('Type', 'ItemCount', 'SourceSystem', 'ManagementGroupName',
+ 'Computer', 'RawData', 'TenantId', '_ResourceId', '_SubscriptionId',
+ '_ItemId', '_IsBillable', '_BilledSize', '_TimeReceived')
+ $originalCount = $Columns.Count
+ $Columns = @($Columns | Where-Object { $_.name -notin $reservedColumns })
+ $removedCount = $originalCount - $Columns.Count
+ if ($removedCount -gt 0) {
+ Write-DCRWarning " Removed $removedCount reserved column(s) from schema (managed by Azure automatically)"
+ }
+
  # Get access token
  $context = Get-AzContext
  $token = [Microsoft.Azure.Commands.Common.Authentication.AzureSession]::Instance.AuthenticationFactory.Authenticate(
@@ -491,6 +503,7 @@ function New-LogAnalyticsCustomTable {
  $body = $tableSchema | ConvertTo-Json -Depth 10
  
  Write-DCRVerbose " Sending table creation request..."
+ Write-DCRInfo " Table: $TableName | Columns: $($Columns.Count) | Retention: $RetentionInDays days | Body size: $($body.Length) bytes"
  $response = Invoke-RestMethod -Uri $uri -Method PUT -Headers $headers -Body $body -ErrorAction Stop
  
  Write-DCRSuccess " Custom table created successfully: $TableName"
@@ -504,7 +517,32 @@ function New-LogAnalyticsCustomTable {
  
  } catch {
  $errorMessage = $_.Exception.Message
- 
+
+ # Extract detailed error response body from PowerShell error record
+ $responseBody = $null
+ if ($_.ErrorDetails.Message) {
+ $responseBody = $_.ErrorDetails.Message
+ }
+ if (-not $responseBody -and $_.Exception.Response) {
+ try {
+ $responseStream = $_.Exception.Response.GetResponseStream()
+ if ($responseStream) {
+ $reader = New-Object System.IO.StreamReader($responseStream)
+ $responseBody = $reader.ReadToEnd()
+ $reader.Close()
+ $responseStream.Close()
+ }
+ } catch { }
+ }
+
+ Write-DCRWarning " HTTP Status: $($_.Exception.Response.StatusCode) ($([int]$_.Exception.Response.StatusCode))"
+ Write-DCRWarning " Error Details: $errorMessage"
+ if ($responseBody) {
+ Write-DCRWarning " Response Body: $responseBody"
+ }
+ Write-DCRWarning " Request URI: $uri"
+ Write-DCRWarning " Column count sent: $($Columns.Count)"
+
  # Check if table already exists
  if ($errorMessage -like "*already exists*" -or $errorMessage -like "*Conflict*") {
  Write-DCRWarning " Table already exists: $TableName"
