@@ -496,18 +496,13 @@ function SetupWizard({ onComplete }: SetupWizardProps) {
               </div>
             ) : (
               <div style={{ marginBottom: '16px' }}>
-                <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '12px' }}>
-                  The app uses your current Azure PowerShell session (Connect-AzAccount).
-                  Sign in below or skip to work in air-gapped mode.
+                <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '12px', lineHeight: 1.5 }}>
+                  The app uses your existing Azure PowerShell session. Run <code style={{ fontFamily: 'var(--font-mono)', background: 'var(--bg-input)', padding: '1px 6px', borderRadius: '3px' }}>Connect-AzAccount</code> in a PowerShell terminal first, then click Detect Session below.
                 </div>
                 <div style={{ display: 'flex', gap: '8px' }}>
                   <button className="btn-primary" style={{ fontSize: '12px', padding: '8px 16px' }}
-                    onClick={loginAzure} disabled={azureChecking}>
-                    {azureChecking ? 'Signing in...' : 'Sign In to Azure'}
-                  </button>
-                  <button className="btn-secondary" style={{ fontSize: '12px', padding: '8px 16px' }}
                     onClick={checkAzure} disabled={azureChecking}>
-                    Detect Existing Session
+                    {azureChecking ? 'Detecting...' : 'Detect Existing Session'}
                   </button>
                 </div>
               </div>

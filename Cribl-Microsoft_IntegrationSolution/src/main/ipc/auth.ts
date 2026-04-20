@@ -1191,10 +1191,21 @@ function azureLogin(sender: Electron.WebContents): Promise<AzureAuth> {
       sender.send('ps:output', { id, stream: 'stdout', data: '> Connect-AzAccount (browser login)\n' });
     }
 
+    // Open a visible PowerShell window for interactive login.
+    // The user completes auth in the browser, then the PS window closes automatically.
+    // We poll for a valid session after launching.
     const proc = spawn('powershell.exe', [
-      '-NoProfile', '-Command', 'Connect-AzAccount | Out-Null; $ctx = Get-AzContext; ' +
-      '$ctx.Account.Id + "|" + $ctx.Subscription.Id + "|" + $ctx.Subscription.Name + "|" + $ctx.Tenant.Id',
-    ], { windowsHide: false }); // Show window for browser auth
+      '-NoProfile', '-NoExit', '-Command',
+      "$WarningPreference = 'SilentlyContinue'; " +
+      "Write-Host 'Logging in to Azure... Complete the sign-in in your browser.' -ForegroundColor Cyan; " +
+      'Connect-AzAccount | Out-Null; ' +
+      "$ctx = Get-AzContext; " +
+      "if ($ctx -and $ctx.Account) { " +
+      "  Write-Host ('Logged in as ' + $ctx.Account.Id) -ForegroundColor Green; " +
+      "  $ctx.Account.Id + '|' + $ctx.Subscription.Id + '|' + $ctx.Subscription.Name + '|' + $ctx.Tenant.Id; " +
+      "} else { Write-Host 'Login failed' -ForegroundColor Red; 'LOGIN_FAILED' }; " +
+      "exit",
+    ], { windowsHide: false, detached: false, stdio: ['pipe', 'pipe', 'pipe'] });
 
     let output = '';
     proc.stdout?.on('data', (data: Buffer) => {
@@ -1204,25 +1215,28 @@ function azureLogin(sender: Electron.WebContents): Promise<AzureAuth> {
       }
     });
     proc.stderr?.on('data', (data: Buffer) => {
-      if (!sender.isDestroyed()) {
-        sender.send('ps:output', { id, stream: 'stderr', data: data.toString() });
-      }
+      // Ignore stderr (MFA warnings)
     });
 
     proc.on('close', () => {
       if (!sender.isDestroyed()) {
         sender.send('ps:exit', { id, code: 0 });
       }
-      const parts = output.trim().split('|');
-      if (parts.length >= 4) {
-        resolve({
-          loggedIn: true,
-          accountId: parts[0], subscriptionId: parts[1],
-          subscriptionName: parts[2], tenantId: parts[3],
-        });
-      } else {
-        resolve({ loggedIn: false, accountId: '', subscriptionId: '', subscriptionName: '', tenantId: '' });
+      // Find the pipe-delimited line in output (skip any warning text that leaked through)
+      const lines = output.trim().split('\n');
+      const accountLine = lines.find((l) => l.includes('|') && !l.startsWith('WARNING'));
+      if (accountLine) {
+        const parts = accountLine.trim().split('|');
+        if (parts.length >= 4) {
+          resolve({
+            loggedIn: true,
+            accountId: parts[0], subscriptionId: parts[1],
+            subscriptionName: parts[2], tenantId: parts[3],
+          });
+          return;
+        }
       }
+      resolve({ loggedIn: false, accountId: '', subscriptionId: '', subscriptionName: '', tenantId: '' });
     });
   });
 }
@@ -1246,25 +1260,23 @@ export function registerAuthHandlers(ipcMain: any) {
     const skipCribl = mode === 'air-gapped' || mode === 'azure-only';
     const skipAzure = mode === 'air-gapped' || mode === 'cribl-only';
 
-    // Run Azure and Cribl checks in parallel to avoid sequential delays
-    const azurePromise = skipAzure
-      ? Promise.resolve({ loggedIn: false, accountId: '', subscriptionId: '', subscriptionName: '', tenantId: '' })
-      : checkAzureSession();
+    const azure = skipAzure
+      ? { loggedIn: false, accountId: '', subscriptionId: '', subscriptionName: '', tenantId: '' }
+      : await checkAzureSession();
 
-    const criblPromise = (async () => {
-      if (skipCribl) return { connected: false, baseUrl: '', error: '' } as { connected: boolean; baseUrl: string; deploymentType?: string; error: string };
+    let criblStatus: { connected: boolean; baseUrl: string; deploymentType?: string; error: string } = { connected: false, baseUrl: '', error: '' };
+    if (!skipCribl) {
       const criblAuth = loadCriblAuth();
-      if (!criblAuth) return { connected: false, baseUrl: '', error: '' } as { connected: boolean; baseUrl: string; deploymentType?: string; error: string };
-      const test = await testCriblConnection(criblAuth);
-      return {
-        connected: test.ok,
-        baseUrl: criblAuth.baseUrl,
-        deploymentType: criblAuth.deploymentType,
-        error: test.error || '',
-      };
-    })();
-
-    const [azure, criblStatus] = await Promise.all([azurePromise, criblPromise]);
+      if (criblAuth) {
+        const test = await testCriblConnection(criblAuth);
+        criblStatus = {
+          connected: test.ok,
+          baseUrl: criblAuth.baseUrl,
+          deploymentType: criblAuth.deploymentType,
+          error: test.error || '',
+        };
+      }
+    }
 
     return { cribl: criblStatus, azure: { ...azure, error: '' } } as AuthStatus;
   });

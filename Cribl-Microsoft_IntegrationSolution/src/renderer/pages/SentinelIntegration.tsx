@@ -1,7 +1,7 @@
 // Cribl Sentinel Integration - Unified page for the complete integration workflow
 // All sections on one page: Solution, Samples, Azure Resources, Config, Deploy
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import DataFlowView from '../components/DataFlowView';
 import InfoTip from '../components/InfoTip';
 
@@ -169,17 +169,6 @@ function SentinelIntegration() {
   const [analyses, setAnalyses] = useState<SampleAnalysis[]>([]);
   const [analyzing, setAnalyzing] = useState(false);
   const [tableResolution, setTableResolution] = useState<{ tables: string[]; source: string } | null>(null);
-  // Cache vendor research per solution to avoid duplicate API calls
-  const vendorResearchCache = useRef<{ solution: string; data: any } | null>(null);
-  const getVendorResearch = async (solution: string) => {
-    if (vendorResearchCache.current?.solution === solution) return vendorResearchCache.current.data;
-    if (!window.api) return null;
-    try {
-      const data = await window.api.vendorResearch.research(solution);
-      vendorResearchCache.current = { solution, data };
-      return data;
-    } catch { return null; }
-  };
   // User overrides to field mappings (keyed by tableName)
   const [mappingEdits, setMappingEdits] = useState<Record<string, FieldMappingEntry[]>>({});
   // Track which tables have had their mappings approved (keyed by tableName)
@@ -331,38 +320,72 @@ function SentinelIntegration() {
     return () => { unsubStatus?.(); unsubProgress?.(); unsubElastic?.(); };
   }, []);
 
-  // Single useEffect for loading workspaces + resource groups.
-  // Consolidates all Azure data loading to avoid duplicate PowerShell calls.
-  const [azureLoading, setAzureLoading] = useState(false);
+  // Load workspaces and resource groups when subscription changes
   useEffect(() => {
-    if (!window.api || !state.subscription || azureLoading) return;
-    // Skip if already loaded for this subscription
-    if (workspaces.length > 0 && resourceGroups.length > 0) return;
-    setAzureLoading(true);
+    if (!window.api || !state.subscription) return;
     const load = async () => {
-      try {
-        const [wsResult, rgResult] = await Promise.all([
-          window.api.auth.azureWorkspaces(state.subscription),
-          window.api.auth.azureResourceGroups(state.subscription).catch(() => ({ success: false, resourceGroups: [] as Array<{name: string; location: string}> })),
-        ]);
-        if (wsResult.success) {
-          setWorkspaces(wsResult.workspaces);
-          if (!rgResult.success || rgResult.resourceGroups.length === 0) {
-            // Derive RGs from workspace metadata as fallback
-            const wsRgs = new Map<string, string>();
-            for (const ws of wsResult.workspaces) {
-              if (ws.resourceGroup) wsRgs.set(ws.resourceGroup, ws.location);
+      const [wsResult, rgResult] = await Promise.all([
+        window.api.auth.azureWorkspaces(state.subscription),
+        window.api.auth.azureResourceGroups(state.subscription).catch(() => ({ success: false, resourceGroups: [] })),
+      ]);
+      if (wsResult.success) {
+        setWorkspaces(wsResult.workspaces);
+        // If RG call failed, derive resource groups from workspace metadata
+        if (!rgResult.success || rgResult.resourceGroups.length === 0) {
+          const wsRgs = new Map<string, string>();
+          for (const ws of wsResult.workspaces) {
+            if (ws.resourceGroup && !wsRgs.has(ws.resourceGroup)) {
+              wsRgs.set(ws.resourceGroup, ws.location);
             }
-            if (wsRgs.size > 0) setResourceGroups([...wsRgs.entries()].map(([name, location]) => ({ name, location })));
-          } else {
-            setResourceGroups(rgResult.resourceGroups);
           }
+          if (wsRgs.size > 0) {
+            setResourceGroups([...wsRgs.entries()].map(([name, location]) => ({ name, location })));
+          }
+        } else {
+          setResourceGroups(rgResult.resourceGroups);
         }
-      } catch { /* skip */ }
-      setAzureLoading(false);
+      } else if (rgResult.success) {
+        setResourceGroups(rgResult.resourceGroups);
+      }
     };
     load();
   }, [state.subscription]);
+
+  // Re-check Azure auth and load subscriptions/RGs when azureConnected changes
+  // or when subscription changes but RGs are still empty.
+  useEffect(() => {
+    if (!window.api || !azureConnected) return;
+    const reload = async () => {
+      try {
+        // If no subscription set yet, fetch from Azure context
+        if (!state.subscription) {
+          const auth = await window.api.auth.azureStatus();
+          if (auth.loggedIn && auth.subscriptionId) {
+            const subs = await window.api.auth.azureSubscriptions();
+            if (subs.success) setSubscriptions(subs.subscriptions);
+            update({ subscription: auth.subscriptionId });
+            // Load RGs immediately
+            const [wsResult, rgResult] = await Promise.all([
+              window.api.auth.azureWorkspaces(auth.subscriptionId),
+              window.api.auth.azureResourceGroups(auth.subscriptionId),
+            ]);
+            if (wsResult.success) setWorkspaces(wsResult.workspaces);
+            if (rgResult.success) setResourceGroups(rgResult.resourceGroups);
+          }
+        }
+        // If subscription is set but RGs are empty, load them
+        if (state.subscription && resourceGroups.length === 0) {
+          const [wsResult, rgResult] = await Promise.all([
+            window.api.auth.azureWorkspaces(state.subscription),
+            window.api.auth.azureResourceGroups(state.subscription),
+          ]);
+          if (wsResult.success && wsResult.workspaces.length > 0) setWorkspaces(wsResult.workspaces);
+          if (rgResult.success && rgResult.resourceGroups.length > 0) setResourceGroups(rgResult.resourceGroups);
+        }
+      } catch { /* skip */ }
+    };
+    reload();
+  }, [azureConnected, state.subscription]);
 
   // Check Azure permissions when workspace is selected
   useEffect(() => {
@@ -409,7 +432,7 @@ function SentinelIntegration() {
         // Normalize by stripping "Microsoft-" prefix to avoid duplicates.
         let destTables: string[] = [];
         try {
-          const research = await getVendorResearch(state.selectedSolution) as any;
+          const research = await window.api.vendorResearch.research(state.selectedSolution) as any;
           if (research?.logTypes?.length > 0) {
             destTables = [...new Set(
               research.logTypes
@@ -481,7 +504,7 @@ function SentinelIntegration() {
       setTableResolution(null);
       try {
         // Get destination tables from vendor research (sourced from Sentinel Content Hub)
-        const research = await getVendorResearch(state.selectedSolution) as any;
+        const research = await window.api.vendorResearch.research(state.selectedSolution) as any;
         const researchLogTypes: any[] = research?.logTypes || [];
 
         // Collect all unique destination tables from vendor research.
@@ -964,7 +987,7 @@ function SentinelIntegration() {
       let destTables: string[] = [];
       let defaultDestTable = 'CommonSecurityLog';
       try {
-        const research = await getVendorResearch(state.selectedSolution) as any;
+        const research = await window.api.vendorResearch.research(state.selectedSolution) as any;
         if (research?.logTypes?.length > 0) {
           // Collect all unique destination tables from vendor research.
           // Normalize by stripping "Microsoft-" prefix to avoid duplicates.
@@ -1048,7 +1071,7 @@ function SentinelIntegration() {
       // Each gets its own pipeline name but all target the same destination table
       const tables: Array<{ sentinelTable: string; criblStream: string; fields: never[] }> = [];
       let research: any = null;
-      try { research = await getVendorResearch(state.selectedSolution); } catch { /* skip */ }
+      try { research = await window.api.vendorResearch.research(state.selectedSolution); } catch { /* skip */ }
 
       // Build table entries from loaded samples first, then supplement from vendor research.
       // Sample log types drive pipeline naming (firewall, WEB, tunnel, dns).
