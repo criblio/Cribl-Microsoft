@@ -1,0 +1,13 @@
+appId: com.cribl.soc-toolkit
+productName: Cribl SOC Optimization Toolkit
+directories:
+  buildResources: build
+  output: release
+files:
+  - dist-electron
+  - dist
+win:
+  target: nsis
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true

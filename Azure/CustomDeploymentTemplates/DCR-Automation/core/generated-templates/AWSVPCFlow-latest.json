@@ -1,0 +1,241 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "dataCollectionRuleName": {
+      "type": "string",
+      "metadata": {
+        "description": "Specifies the name of the Data Collection Rule to create."
+      }
+    },
+    "location": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Specifies the location in which to create the Data Collection Rule."
+      }
+    },
+    "workspaceResourceId": {
+      "type": "string",
+      "metadata": {
+        "description": "Specifies the Azure resource ID of the Log Analytics workspace to use."
+      }
+    }
+  },
+  "variables": {
+    "streamName": "Custom-AWSVPCFlow",
+    "_comment": "These values are hardcoded in the template",
+    "outputStreamName": "Microsoft-AWSVPCFlow"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Insights/dataCollectionRules",
+      "apiVersion": "2023-03-11",
+      "name": "[parameters('dataCollectionRuleName')]",
+      "location": "[parameters('location')]",
+      "kind": "Direct",
+      "properties": {
+        "streamDeclarations": {
+          "Custom-AWSVPCFlow": {
+            "columns": [
+              {
+                "name": "TimeGenerated",
+                "type": "datetime"
+              },
+              {
+                "name": "Version",
+                "type": "int"
+              },
+              {
+                "name": "AccountId",
+                "type": "string"
+              },
+              {
+                "name": "InterfaceId",
+                "type": "string"
+              },
+              {
+                "name": "SrcAddr",
+                "type": "string"
+              },
+              {
+                "name": "DstAddr",
+                "type": "string"
+              },
+              {
+                "name": "SrcPort",
+                "type": "int"
+              },
+              {
+                "name": "DstPort",
+                "type": "int"
+              },
+              {
+                "name": "Protocol",
+                "type": "int"
+              },
+              {
+                "name": "Packets",
+                "type": "int"
+              },
+              {
+                "name": "Bytes",
+                "type": "long"
+              },
+              {
+                "name": "End",
+                "type": "datetime"
+              },
+              {
+                "name": "Action",
+                "type": "string"
+              },
+              {
+                "name": "LogStatus",
+                "type": "string"
+              },
+              {
+                "name": "VpcId",
+                "type": "string"
+              },
+              {
+                "name": "SubnetId",
+                "type": "string"
+              },
+              {
+                "name": "InstanceId",
+                "type": "string"
+              },
+              {
+                "name": "TcpFlags",
+                "type": "int"
+              },
+              {
+                "name": "TrafficType",
+                "type": "string"
+              },
+              {
+                "name": "PktSrcAddr",
+                "type": "string"
+              },
+              {
+                "name": "PktDstAddr",
+                "type": "string"
+              },
+              {
+                "name": "Region",
+                "type": "string"
+              },
+              {
+                "name": "AzId",
+                "type": "string"
+              },
+              {
+                "name": "SublocationType",
+                "type": "string"
+              },
+              {
+                "name": "SublocationId",
+                "type": "string"
+              },
+              {
+                "name": "PktSrcAwsService",
+                "type": "string"
+              },
+              {
+                "name": "PktDstAwsService",
+                "type": "string"
+              },
+              {
+                "name": "FlowDirection",
+                "type": "string"
+              },
+              {
+                "name": "TrafficPath",
+                "type": "string"
+              },
+              {
+                "name": "Start",
+                "type": "datetime"
+              },
+              {
+                "name": "EcsClusterArn",
+                "type": "string"
+              },
+              {
+                "name": "EcsClusterName",
+                "type": "string"
+              },
+              {
+                "name": "EcsContainerInstanceArn",
+                "type": "string"
+              },
+              {
+                "name": "EcsContainerInstanceId",
+                "type": "string"
+              },
+              {
+                "name": "EcsContainerId",
+                "type": "string"
+              },
+              {
+                "name": "EcsSecondContainerId",
+                "type": "string"
+              },
+              {
+                "name": "EcsServiceName",
+                "type": "string"
+              },
+              {
+                "name": "EcsTaskDefinitionArn",
+                "type": "string"
+              },
+              {
+                "name": "EcsTaskArn",
+                "type": "string"
+              },
+              {
+                "name": "EcsTaskId",
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "destinations": {
+          "logAnalytics": [
+            {
+              "workspaceResourceId": "[parameters('workspaceResourceId')]",
+              "name": "logAnalyticsWorkspace"
+            }
+          ]
+        },
+        "dataFlows": [
+          {
+            "streams": [
+              "Custom-AWSVPCFlow"
+            ],
+            "destinations": [
+              "logAnalyticsWorkspace"
+            ],
+            "transformKql": "source",
+            "outputStream": "Microsoft-AWSVPCFlow"
+          }
+        ]
+      }
+    }
+  ],
+  "outputs": {
+    "dataCollectionRuleId": {
+      "type": "string",
+      "value": "[resourceId('Microsoft.Insights/dataCollectionRules', parameters('dataCollectionRuleName'))]"
+    }
+  },
+  "metadata": {
+    "tableName": "AWSVPCFlow",
+    "generatedOn": "2026-04-20 12:53:42",
+    "outputStreamName": "Microsoft-AWSVPCFlow",
+    "tableType": "Native",
+    "streamName": "Custom-AWSVPCFlow",
+    "deploymentMode": "Direct"
+  }
+}

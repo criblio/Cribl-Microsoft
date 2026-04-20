@@ -1,0 +1,85 @@
+{
+  "TotalConfigs": 11,
+  "SkippedConfigs": 0,
+  "GeneratedAt": "2026-04-20 12:56:07",
+  "ConfiguredAuthentication": true,
+  "Destinations": [
+    {
+      "FileName": "MS-Sentinel-AWSCloudTrail-dest.json",
+      "DCRName": "dcr-AWSCloudTrail-eastus",
+      "TableName": "AWSCloudTrail",
+      "Endpoint": "https://dcr-awscloudtrail-eastus-v0gk-eastus.logs.z1.ingest.monitor.azure.com",
+      "DestinationId": "MS-Sentinel-AWSCloudTrail-dest"
+    },
+    {
+      "FileName": "MS-Sentinel-AWSCloudWatch-dest.json",
+      "DCRName": "dcr-AWSCloudWatch-eastus",
+      "TableName": "AWSCloudWatch",
+      "Endpoint": "https://dcr-awscloudwatch-eastus-4fy1-eastus.logs.z1.ingest.monitor.azure.com",
+      "DestinationId": "MS-Sentinel-AWSCloudWatch-dest"
+    },
+    {
+      "FileName": "MS-Sentinel-AWSGuardDuty-dest.json",
+      "DCRName": "dcr-AWSGuardDuty-eastus",
+      "TableName": "AWSGuardDuty",
+      "Endpoint": "https://dcr-awsguardduty-eastus-0wld-eastus.logs.z1.ingest.monitor.azure.com",
+      "DestinationId": "MS-Sentinel-AWSGuardDuty-dest"
+    },
+    {
+      "FileName": "MS-Sentinel-AWSVPCFlow-dest.json",
+      "DCRName": "dcr-AWSVPCFlow-eastus",
+      "TableName": "AWSVPCFlow",
+      "Endpoint": "https://dcr-awsvpcflow-eastus-yney-eastus.logs.z1.ingest.monitor.azure.com",
+      "DestinationId": "MS-Sentinel-AWSVPCFlow-dest"
+    },
+    {
+      "FileName": "MS-Sentinel-AWSWAF-dest.json",
+      "DCRName": "dcr-AWSWAF-eastus",
+      "TableName": "AWSWAF",
+      "Endpoint": "https://dcr-awswaf-eastus-l2hg-eastus.logs.z1.ingest.monitor.azure.com",
+      "DestinationId": "MS-Sentinel-AWSWAF-dest"
+    },
+    {
+      "FileName": "MS-Sentinel-CloudflareV2-dest.json",
+      "DCRName": "dcr-CloudflareV2-eastus",
+      "TableName": "CloudflareV2",
+      "Endpoint": "https://dcr-cloudflarev2-eastus-pjx8-eastus.logs.z1.ingest.monitor.azure.com",
+      "DestinationId": "MS-Sentinel-CloudflareV2-dest"
+    },
+    {
+      "FileName": "MS-Sentinel-CommonSecurityLog-dest.json",
+      "DCRName": "dcr-CommonSecurityLog-eastus",
+      "TableName": "CommonSecurityLog",
+      "Endpoint": "https://dcr-commonsecuritylog-eastus-egla-eastus.logs.z1.ingest.monitor.azure.com",
+      "DestinationId": "MS-Sentinel-CommonSecurityLog-dest"
+    },
+    {
+      "FileName": "MS-Sentinel-CrowdStrike_Process_Events-dest.json",
+      "DCRName": "dcr-CrowdS-eastus",
+      "TableName": "CrowdStrike_Process_Events_CL",
+      "Endpoint": "https://dcr-crowds-eastus-mp0u-eastus.logs.z1.ingest.monitor.azure.com",
+      "DestinationId": "MS-Sentinel-CrowdStrike_Process_Events-dest"
+    },
+    {
+      "FileName": "MS-Sentinel-SecurityEvent-dest.json",
+      "DCRName": "dcr-SecurityEvent-eastus",
+      "TableName": "SecurityEvent",
+      "Endpoint": "https://dcr-securityevent-eastus-o3lg-eastus.logs.z1.ingest.monitor.azure.com",
+      "DestinationId": "MS-Sentinel-SecurityEvent-dest"
+    },
+    {
+      "FileName": "MS-Sentinel-Syslog-dest.json",
+      "DCRName": "dcr-Syslog-eastus",
+      "TableName": "Syslog",
+      "Endpoint": "https://dcr-syslog-eastus-2c5y-eastus.logs.z1.ingest.monitor.azure.com",
+      "DestinationId": "MS-Sentinel-Syslog-dest"
+    },
+    {
+      "FileName": "MS-Sentinel-WindowsEvent-dest.json",
+      "DCRName": "dcr-WindowsEvent-eastus",
+      "TableName": "WindowsEvent",
+      "Endpoint": "https://dcr-windowsevent-eastus-ovda-eastus.logs.z1.ingest.monitor.azure.com",
+      "DestinationId": "MS-Sentinel-WindowsEvent-dest"
+    }
+  ]
+}

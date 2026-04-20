@@ -1,15 +1,7 @@
 {
-  "subscriptionId": "<YOUR-SUBSCRIPTION-ID-HERE>",
-  "resourceGroupName": "<YOUR-RG-NAME-HERE>",
-  "workspaceName": "<YOUR-LOG-ANALYTICS-WORKSPACE-NAME-HERE>",
   "dcePrefix": "dce-",
   "dceSuffix": "",
-  "dcrPrefix": "dcr-",
   "dcrSuffix": "",
-  "location": "<YOUR-AZURE-REGION-HERE>",
-  "tenantId": "<YOUR-TENANT-ID-HERE>",
-  "clientId": "<YOUR-CLIENT-ID-HERE>",
-  "ownerTag": "<YOUR-EMAIL-OR-NAME-HERE>",
   "_comments": {
     "dce_parameters": "DCE-related parameters (dcePrefix, dceSuffix) are only used when createDCE=true in operation-parameters.json. DCEs are created in the same resource group as the DCRs.",
     "dcr_naming": "Script will automatically abbreviate table names if the full DCR name exceeds length limits (30 chars for Direct DCRs, 64 chars for DCE-based DCRs)",
@@ -17,5 +9,13 @@
     "azure_ad_auth": "tenantId and clientId are used for Azure AD authentication in Cribl Stream destinations. Client secret will be set to '<replace me>' placeholder for manual configuration in Cribl Stream.",
     "subscription": "subscriptionId is used to automatically set the Azure subscription context when running the scripts",
     "owner_tag": "ownerTag is applied to all DCRs and DCEs created by this automation. Useful for tracking resource ownership and cost allocation."
-  }
+  },
+  "tenantId": "fa882ef2-67af-42c1-80e4-62e2735043d2",
+  "location": "eastus",
+  "subscriptionId": "fe6f9921-9c88-4a6d-a144-8e1935c05bf2",
+  "workspaceName": "law-jpederson-eastus",
+  "dcrPrefix": "dcr-",
+  "ownerTag": "jpederson@cribl.io",
+  "resourceGroupName": "rg-jpederson-quickstartlab",
+  "clientId": "8a4b13ab-f1c5-498c-a4ae-85f220a0439b"
 }

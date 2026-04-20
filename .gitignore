@@ -8,6 +8,7 @@ dev*
 *claude*
 *Cluade*
 *CLAUDE*
+knowledge.md
 
 # Backup configuration files
 *.backup.json
@@ -203,6 +204,12 @@ personal-*
 
 # DCR-Automation dev directory (for testing)
 Azure/CustomDeploymentTemplates/DCR-Automation/dev/
+
+# Integration Solution build artifacts
+Cribl-Microsoft_IntegrationSolution/dist/
+Cribl-Microsoft_IntegrationSolution/dist-electron/
+Cribl-Microsoft_IntegrationSolution/node_modules/
+Cribl-Microsoft_IntegrationSolution/packs/
 
 # But keep README files in ignored directories
 !README.md

@@ -1,173 +1,133 @@
-# Cribl-Microsoft Integration
+# Cribl SOC Optimization Toolkit for Microsoft Sentinel
 
-Automation toolkit for integrating Cribl Stream with Microsoft Azure services. This repository provides PowerShell automation and testing environments for data collection, infrastructure provisioning, and configuration management.
-
-## Repository Contents
-
-### Core Automation Tools
-
-#### [DCR-Automation](Azure/CustomDeploymentTemplates/DCR-Automation/)
-**PowerShell automation for Azure Data Collection Rules**
-- Automated DCR creation for 50+ native Azure tables and custom tables
-- Automatic Cribl Stream destination configuration export
-- Supports Direct DCRs (30-char limit) and DCE-based DCRs (64-char limit)
-- Interactive menu interface with non-interactive CI/CD mode
-- Name abbreviation intelligence for Azure limits
-- [Quick Start Guide](Azure/CustomDeploymentTemplates/DCR-Automation/QUICK_START.md)
-
-#### [DCR-Templates](Azure/CustomDeploymentTemplates/DCR-Templates/)
-**Pre-built ARM templates for manual deployment**
-- 100+ ready-to-deploy ARM templates for Sentinel native tables
-- DCE and non-DCE configurations
-- SecurityEvent, CommonSecurityLog, DeviceEvents, ASim tables, and more
-
-### Testing Environments
-
-#### [Azure Flow Log Lab](Azure/Labs/AzureFlowLogLab/)
-**Lab environment for Azure Flow Log testing and development**
-- VNet with dual-level flow logging (vNet-level + subnet-level)
-- VPN Gateway for site-to-site VPN connectivity
-- Test VM deployment with auto-shutdown schedules
-- Automatic Cribl collector configuration generation
-
-### Additional Resources
-
-#### [Lookups](Lookups/)
-**Lookup tables and enrichment data for Cribl Stream**
-- Static lookup tables for data enrichment
-- Dynamic lookups with Active Directory integration (Python-based LDAP)
-- Reference data for log processing workflows
+A desktop application for building Cribl Stream integration packs that transform vendor log data for ingestion into Microsoft Sentinel via Azure Data Collection Rules (DCRs).
 
 ## Quick Start
 
-### DCR Automation (Azure Log Analytics)
+```batch
+# Windows
+Start-App-Windows.bat
+
+# macOS / Linux
+./Start-App-macOS.sh
+```
+
+On first run the app will prompt to install Node.js dependencies. See the [Integration Solution README](Cribl-Microsoft_IntegrationSolution/README.md) for full details.
+
+## What the App Does
+
+The Integration Solution is a desktop application (Electron + React) that guides you through the full workflow for onboarding vendor data to Microsoft Sentinel via Cribl Stream:
+
+1. **SIEM Migration Analysis** -- Upload Splunk or QRadar detection rule exports to identify data sources and map them to Sentinel solutions
+2. **Sentinel Integration** -- For each vendor data source:
+   - Browse and select sample data from Elastic integrations (434+ vendors) or the Azure-Sentinel repo
+   - Run DCR gap analysis comparing source fields against the destination schema
+   - Review field mappings (passthrough, DCR-handled, Cribl-handled, overflow)
+   - Build a Cribl pack with transformation pipelines, lookup tables, and sample data
+   - Deploy DCRs to Azure and upload the pack to Cribl Stream
+   - Wire Cribl sources to the pack via routes
+3. **Lab Environments** -- Deploy pre-configured Azure lab environments for testing (9 lab types from Sentinel Quick Start to full infrastructure)
+4. **DCR Automation** -- PowerShell-based DCR creation for bulk table deployments
+
+## App Features
+
+- **Sample Browser**: Fetches vendor sample data from Elastic integrations with log-type detection, format filtering, and event unwrapping (Zscaler, CrowdStrike, Fortinet, PAN-OS, etc.)
+- **Multi-Format Support**: JSON, KV, CEF, LEEF, syslog, CSV (with header mapping for headerless CSV via feed config parsing)
+- **DCR Schema Resolution**: Finds destination schemas from DCR templates, Sentinel repo CustomTables, or native table definitions
+- **Pack Builder**: Generates Cribl packs with succinct naming, per-log-type pipelines, field mapping lookups, reduction pipelines, and sample data
+- **EDR Resilience**: Two-layer blocklist system prevents CrowdStrike/EDR from killing the app during Sentinel repo fetch
+- **Four Modes**: Full (Cribl + Azure), Azure Only, Cribl Only, Air-Gapped (offline artifact generation)
+
+## Platform Support
+
+This application has been developed and tested on **Windows 11** only. Other operating systems (macOS, Linux) may work but have not been validated and may have issues with PowerShell-based features (DCR deployment, lab automation, Azure authentication).
+
+## Prerequisites
+
+- **Windows 11** (tested platform)
+- **Node.js 18+** ([nodejs.org](https://nodejs.org/))
+- **Azure subscription** with Log Analytics workspace
+- **Cribl Stream** 4.14+ (for Direct DCR support)
+- **PowerShell 5.1+** with Azure modules (for DCR deployment and lab automation)
+- **GitHub Personal Access Token** (for fetching Sentinel Solutions and Elastic sample data)
+
+## Repository Structure
+
+```
+Cribl-Microsoft_IntegrationSolution/     <-- Desktop app (start here)
+  src/
+    main/                                <-- Electron main process (IPC handlers)
+    renderer/                            <-- React UI (pages, components)
+  Start-App-Windows.bat                  <-- Windows launcher
+  Start-App-macOS.sh                     <-- macOS/Linux launcher
+
+Azure/                                  <-- Legacy PowerShell automation
+  Labs/
+    UnifiedLab/                          <-- Lab automation (9 lab types)
+  CustomDeploymentTemplates/
+    DCR-Automation/                      <-- PowerShell DCR creation
+    DCR-Templates/                       <-- Pre-built ARM templates (100+)
+
+KnowledgeArticles/                       <-- Reference documentation
+Lookups/                                 <-- Cribl lookup tables and enrichment data
+```
+
+## Legacy Tools
+
+The following PowerShell tools are the original automation scripts that preceded the desktop app. They are still functional but the desktop app provides a more integrated experience.
+
+### [DCR-Automation](Azure/CustomDeploymentTemplates/DCR-Automation/)
+PowerShell automation for bulk DCR creation. Supports 50+ native Azure tables and custom tables. The desktop app uses these scripts internally for DCR deployment.
+
 ```powershell
 cd Azure/CustomDeploymentTemplates/DCR-Automation
 .\Run-DCRAutomation.ps1
 ```
-See [DCR-Automation Quick Start](Azure/CustomDeploymentTemplates/DCR-Automation/QUICK_START.md)
 
-### Manual Template Deployment
-Browse templates in `Azure/CustomDeploymentTemplates/DCR-Templates/`
+### [DCR-Templates](Azure/CustomDeploymentTemplates/DCR-Templates/)
+100+ pre-built ARM templates for Sentinel native tables. Used by both the desktop app and the PowerShell scripts for DCR schema resolution.
 
-### Azure Flow Log Lab
+### [Lab Automation](Azure/Labs/UnifiedLab/)
+PowerShell-based lab deployment with 8 lab types (Complete, Sentinel, ADX, Flow Log, Event Hub, Blob Queue, Blob Collector, Basic Infrastructure). The desktop app provides a GUI wizard for these same labs plus a Sentinel Quick Start option.
+
 ```powershell
-cd Azure/Labs/AzureFlowLogLab
-.\Run-AzureFlowLogLab.ps1
+cd Azure/Labs/UnifiedLab
+.\Run-AzureUnifiedLab.ps1
 ```
 
-## Prerequisites
-
-- Azure subscription with Log Analytics workspace
-- PowerShell 5.1+ with Azure modules (Az.Accounts, Az.Resources, Az.OperationalInsights)
-- Cribl Stream instance (4.14+ for Direct DCRs)
-- Azure AD app registration (for Cribl authentication)
-
-## Key Features
-
-- **Automated DCR Creation**: PowerShell scripts to simplify DCR deployments
-- **Cribl Integration**: Auto-generates Cribl Stream source and destination configurations
-- **Template Library**: Pre-built ARM templates for common scenarios
-- **Multi-Mode Support**: Direct DCRs (simple) or DCE-based (advanced routing)
-- **Testing Environments**: Lab environments for development and testing
-- **Menu-Driven Interfaces**: Interactive menus with non-interactive CI/CD modes
-- **Configuration-Driven**: JSON-based configuration files separate from code
-
-## Architecture Patterns
-
-All major components follow consistent design patterns:
-
-1. **Interactive Menu Pattern**: `Run-*.ps1` main entry points with menu interfaces
-2. **Configuration-Driven Design**: Separate `azure-parameters.json` and `operation-parameters.json` files
-3. **Template-Based Generation**: Automated generation of ARM templates and Cribl configurations
-4. **Modular Script Design**: Helper functions and reusable components
-5. **Documentation-First Approach**: Comprehensive README, Quick Start, and Architecture guides
+### [Lookups](Lookups/)
+Static and dynamic lookup tables for Cribl Stream, including Active Directory integration via Python LDAP.
 
 ## Documentation
 
-### Automation Guides
-- [DCR-Automation README](Azure/CustomDeploymentTemplates/DCR-Automation/README.md) - Detailed DCR automation
-
-### Configuration Guides
-- [Cribl Destinations Guide](Azure/CustomDeploymentTemplates/DCR-Automation/CRIBL_DESTINATIONS_README.md) - Cribl configuration details
-- [Custom Tables Guide](Azure/CustomDeploymentTemplates/DCR-Automation/custom-table-schemas/README.md) - Creating custom table schemas
-- [Active Directory Lookups Guide](Lookups/DynamicLookups/ActiveDirectory/README.md) - Dynamic AD lookup integration
+- [Integration Solution README](Cribl-Microsoft_IntegrationSolution/README.md) -- Desktop app setup and usage
+- [DCR-Automation README](Azure/CustomDeploymentTemplates/DCR-Automation/README.md) -- PowerShell DCR automation
+- [CLAUDE.md](CLAUDE.md) -- Project architecture and development guide
 
 ### Knowledge Articles
-- [Azure Monitor Migration](KnowledgeArticles/AzureMonitorMigration/Cribl_Azure_Monitor_to_Sentinel_Migration.md) - Migration guidance
-- [Private Link Configuration](KnowledgeArticles/PrivateLinkConfiguration/Private-Link-Configuration-for-Cribl.md) - Detailed Private Link setup
-- [O365 App Registration](KnowledgeArticles/O365AppRegistrationForCribl/O365-AppRegistration_for_Cribl.md) - Office 365 app setup
+- [Azure Monitor Migration](KnowledgeArticles/AzureMonitorMigration/Cribl_Azure_Monitor_to_Sentinel_Migration.md)
+- [Private Link Configuration](KnowledgeArticles/PrivateLinkConfiguration/Private-Link-Configuration-for-Cribl.md)
+- [O365 App Registration](KnowledgeArticles/O365AppRegistrationForCribl/O365-AppRegistration_for_Cribl.md)
 
-### Project Documentation
-- [CLAUDE.md](CLAUDE.md) - Comprehensive project guidance and architecture (for AI assistants)
-- [PROJECT_REVIEW_2025-10-27.md](PROJECT_REVIEW_2025-10-27.md) - Detailed project review
+## Security
 
-## Technology Stack
-
-**PowerShell:** 5.1+
-- Az.Accounts, Az.Resources, Az.OperationalInsights, Az.EventHub, Az.Monitor
-
-**Infrastructure-as-Code:**
-- ARM Templates (Azure)
-
-**Cloud Platform:**
-- Microsoft Azure
-
-**Integrations:**
-- Cribl Stream 4.14+
-- Microsoft Sentinel
-- Azure Log Analytics
-- Azure Event Hub
-- Azure Data Explorer
-- Active Directory (LDAP)
-
-## Security Considerations
-
-- Azure AD credentials managed via app registrations
-- Role-based access control (RBAC) for all cloud resources
-- Secure credential storage recommendations in documentation
+- Credentials encrypted at rest using OS keychain (Windows DPAPI / macOS Keychain)
+- GitHub PATs stored via Electron safeStorage, never written to disk in plaintext
+- Azure AD app registrations for Cribl authentication
 - Never commit real credentials to version control
-- Support for Cribl secrets management
 
 ## Git Workflow
 
-**The `main` branch is protected** - all changes must come through pull requests.
+The `main` branch is protected -- all changes must come through pull requests.
 
-### Branch Naming Convention
-- `feature/` - New features or enhancements
-- `fix/` - Bug fixes
-- `docs/` - Documentation updates
-- `refactor/` - Code refactoring
-- `test/` - Test additions or updates
-
-### Commit Message Guidelines
-- Use present tense verbs ("Add" not "Added")
-- Keep first line under 50 characters
-- Be descriptive and specific
-
-## Contributing
-
-See [CONTRIBUTORS.md](CONTRIBUTORS.md) for contribution guidelines.
-
-Before submitting changes:
-1. Test thoroughly in lab/development environments first
-2. Test with both Direct and DCE-based configurations (for Azure DCR changes)
-3. Verify configuration files are valid JSON
-4. Update documentation for new features
-5. Follow existing architecture patterns
+- `feature/` -- New features
+- `fix/` -- Bug fixes
+- `docs/` -- Documentation updates
 
 ## License
 
-MIT License - see [LICENSE](LICENSE) file.
+MIT License -- see [LICENSE](LICENSE) file.
 
-## Support
+## Trademarks
 
-- **Documentation**: Start with Quick Start guides for each component
-- **Issues**: Create an issue in the repository
-- **Questions**: Check component-specific README files for troubleshooting sections
-
----
-
-**Getting Started?**
-- For Azure Log Analytics ingestion: [DCR-Automation Quick Start](Azure/CustomDeploymentTemplates/DCR-Automation/QUICK_START.md)
-- For testing and development: [Azure Flow Log Lab](Azure/Labs/AzureFlowLogLab/)
+Microsoft, Azure, Microsoft Sentinel, and Microsoft Defender are trademarks of Microsoft Corporation. Cribl and Cribl Stream are trademarks of Cribl, Inc. This project is not endorsed by or affiliated with Microsoft Corporation.

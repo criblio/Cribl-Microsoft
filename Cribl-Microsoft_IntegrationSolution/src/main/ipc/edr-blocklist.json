@@ -1,0 +1,22 @@
+{
+  "description": "Solutions known to trigger EDR false positives (CrowdStrike Falcon, SentinelOne, Carbon Black etc.). These contain adversary simulation, red team, or pentesting content whose analytics rules reference known malicious tool names, hashes, or attack patterns that EDR products flag as threat indicators.",
+  "version": 1,
+  "solutions": [
+    {
+      "name": "BloodHound Enterprise",
+      "reason": "AD attack-path recon tool -- analytics rules reference BloodHound tool hashes and attack patterns"
+    },
+    {
+      "name": "FalconFriday",
+      "reason": "Red team detection content -- references offensive security tool signatures"
+    },
+    {
+      "name": "Attacker Tools Threat Protection",
+      "reason": "References known offensive tools (Mimikatz, Cobalt Strike, etc.) by name and hash"
+    },
+    {
+      "name": "MITRE ATT&CK",
+      "reason": "May reference known tool hashes and attack technique indicators"
+    }
+  ]
+}

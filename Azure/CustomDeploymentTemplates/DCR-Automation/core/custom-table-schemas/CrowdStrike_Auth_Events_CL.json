@@ -1,0 +1,318 @@
+{
+  "name": "CrowdStrike_Auth_Events_CL",
+  "description": "Auto-generated from Sentinel Content Hub for CrowdStrike_Auth_Events_CL",
+  "retentionInDays": 30,
+  "totalRetentionInDays": 90,
+  "columns": [
+    {
+      "name": "TimeGenerated",
+      "type": "datetime",
+      "description": "The timestamp (UTC) reflecting the time in which the event was generated."
+    },
+    {
+      "name": "event_simpleName",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "timestamp",
+      "type": "long",
+      "description": ""
+    },
+    {
+      "name": "aip",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "aid",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "UserName",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "event_platform",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ContextTimeStamp",
+      "type": "real",
+      "description": ""
+    },
+    {
+      "name": "name",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ConfigBuild",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "CrowdStrikeId",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ConfigStateHash",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ContextProcessId",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ContextThreadId",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "BoundingLimitCount",
+      "type": "long",
+      "description": ""
+    },
+    {
+      "name": "BoundingLimitDuration",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "Entitlements",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "EffectiveTransmissionClass",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "cid",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "OciContainerId",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "TreeId",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "LogonType",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "LogonTime",
+      "type": "real",
+      "description": ""
+    },
+    {
+      "name": "UserIsAdmin",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "LogonDomain",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "RemoteAccount",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ClientComputerName",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "UserPrincipal",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "RawProcessId",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "UserSid",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "LogonServer",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "AuthenticationPackage",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "AuthenticationId",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "UserLogonFlags",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "RemoteAddressIP4",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "RemoteAddressIP6",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "UserLogoffType",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "LogoffTime",
+      "type": "real",
+      "description": ""
+    },
+    {
+      "name": "SessionId",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "UserFlags",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "PrivilegesBitmask",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "PasswordLastSet",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "EventOrigin",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "TargetProcessId",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "Status",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "EtwRawProcessId",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "EtwRawThreadId",
+      "type": "long",
+      "description": ""
+    },
+    {
+      "name": "SubStatus",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "LocalSession",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "EnabledPrivilegesBitmask",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "UserGroupsBitmask",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "LinkedAuthenticationId",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "UserCanonical",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "LoginSessionId",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "AuthenticationUuidAsString",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "UID",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "AuthenticationUuid",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "AuthenticationIdMac",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ResendToCloud",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "LogonId",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ConfigStateHashA1",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "AdditionalFields",
+      "type": "dynamic",
+      "description": ""
+    }
+  ]
+}

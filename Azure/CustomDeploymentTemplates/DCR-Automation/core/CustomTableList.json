@@ -1,3 +1,12 @@
 [
-    "CloudflareV2_CL"
+    "CrowdStrike_Process_Events_CL",
+    "CrowdStrike_Network_Events_CL",
+    "CrowdStrike_DNS_Events_CL",
+    "CrowdStrike_File_Events_CL",
+    "CrowdStrike_Auth_Events_CL",
+    "CrowdStrike_Registry_Events_CL",
+    "CrowdStrike_Audit_Events_CL",
+    "CrowdStrike_User_Events_CL",
+    "CrowdStrike_Additional_Events_CL",
+    "CrowdStrike_Secondary_Data_CL"
 ]

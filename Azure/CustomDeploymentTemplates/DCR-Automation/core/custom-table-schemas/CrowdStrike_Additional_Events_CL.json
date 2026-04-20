@@ -1,0 +1,2313 @@
+{
+  "name": "CrowdStrike_Additional_Events_CL",
+  "description": "Auto-generated from Sentinel Content Hub for CrowdStrike_Additional_Events_CL",
+  "retentionInDays": 30,
+  "totalRetentionInDays": 90,
+  "columns": [
+    {
+      "name": "TimeGenerated",
+      "type": "datetime",
+      "description": "The timestamp (UTC) reflecting the time in which the event was generated."
+    },
+    {
+      "name": "event_simpleName",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "timestamp",
+      "type": "long",
+      "description": ""
+    },
+    {
+      "name": "aip",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "aid",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "event_platform",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ConfigStateHash",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ContextProcessId",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "BoundingLimitCount",
+      "type": "long",
+      "description": ""
+    },
+    {
+      "name": "ConfigBuild",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "Entitlements",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "name",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "CrowdStrikeId",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "EffectiveTransmissionClass",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "cid",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "SystemUptimeSeconds",
+      "type": "long",
+      "description": ""
+    },
+    {
+      "name": "ContextTimeStamp",
+      "type": "real",
+      "description": ""
+    },
+    {
+      "name": "TamperFilterFlags",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "LogonType",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "UserPrincipal",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "UserIsAdmin",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "LogonTime",
+      "type": "real",
+      "description": ""
+    },
+    {
+      "name": "LogonDomain",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "RemoteAccount",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "UserName",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "UserCanonical",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ContextThreadId",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "UserSid",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "UserFlags",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "LogonServer",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "LogonId",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "SessionId",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "AuthenticationPackage",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "AuthenticationId",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "PasswordLastSet",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "UserLogonFlags",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "LoginSessionId",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "AuthenticationUuidAsString",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "UID",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "AuthenticationUuid",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "AuthenticationIdMac",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "CommandLine",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ClientComputerName",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "WmiConsumerType",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "WmiFilterType",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "EtwRawProcessId",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ImageFileName",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "OriginalParentAuthenticationId",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ParentAuthenticationId",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "OriginalUserSid",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "SHA256HashData",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "TargetFileName",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "Status",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ErrorText",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "CloudErrorCode",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "EtwEventCount",
+      "type": "long",
+      "description": ""
+    },
+    {
+      "name": "WmiProviderType",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "RawProcessId",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "UmppaInjectionType",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ErrorStatus",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "TotalCount",
+      "type": "long",
+      "description": ""
+    },
+    {
+      "name": "BoundingLimitDuration",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "EventOrigin",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "SourceFileName",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "WmiQuery",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "WmiNamespaceName",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "AntiTamperStateFlag",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ServiceDisplayName",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ErrorCode",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "TargetProcessId",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "TokenType",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "InterfaceGuid",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "RpcClientProcessId",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "InterfaceVersion",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "RpcClientThreadId",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "RpcOpNum",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "RpcNestingLevel",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "EventMax",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "SourceProcessId",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "EtwRawThreadId",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "SourceThreadId",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "RawThreadId",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "OriginalContentLength",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ContentSHA256HashData",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ScriptContentName",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "OciContainerId",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "HostProcessType",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ParentCommandLine",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ParentImageFileName",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "GrandparentImageFileName",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "GrandparentCommandLine",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "SuspectStackFlag",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ScriptContentBytes",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ExecutableBytes",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "CallStackModuleNames",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "KernelTime",
+      "type": "real",
+      "description": ""
+    },
+    {
+      "name": "ScriptControlErrorCode",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ScriptContentSource",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "OriginalFilename",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ScreenshotType",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "TaskName",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "TaskExecCommand",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "TaskXml",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "TaskAuthor",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "TaskExecArguments",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "KeyObject",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "PublicKeys",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "RegPostObjectName",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "RegKeyName",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "RegRootObjectName",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ExtendedKeyUsages",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "RegCreateDisposition",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "FileSigningTime",
+      "type": "real",
+      "description": ""
+    },
+    {
+      "name": "DesiredAccess",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "RegCreateOptions",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "SignInfoFlags",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "Certificate",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "OdsActionType",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "PatternHandlingErrorType",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "FileSubType",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "Object1Type",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "TargetAddress",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "Size",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "OciContainersStoppedCount",
+      "type": "long",
+      "description": ""
+    },
+    {
+      "name": "OciContainersStartedCount",
+      "type": "long",
+      "description": ""
+    },
+    {
+      "name": "VersionInfo",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "CompanyName",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "FixedFileVersion",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "FileVersion",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ProductSku",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "PointerSize",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ProductName",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "SubBuildNumber",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "PlatformId",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "BuildType",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "MajorVersion",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ProductType",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "MinorVersion",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "CheckedBuild",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "BuildNumber",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "OSVersionFileData",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "OSVersionString",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "OSVersionFileName",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "IntegrityLevel",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "RemotePort",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "Protocol",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "VolumeDeviceType",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "VolumeName",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "VolumeDeviceObjectFlags",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ByteOffset",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "VolumeDeviceCharacteristics",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "VolumeSectorSize",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "PatternDisposition",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "VolumeFileSystemType",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "Length",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "TreeId",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ServiceObjectName",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ServiceDescription",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ServiceSecurity",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ServiceImagePath",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ServiceStart",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ServiceType",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ServiceFailureActions",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ServiceErrorControl",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ServiceGroup",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ProcessIntegrityLevel",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "MD5HashData",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "NamedPipeOperationType",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "PhysicalCoreCount",
+      "type": "long",
+      "description": ""
+    },
+    {
+      "name": "LfoUploadFlags",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "AttemptNumber",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "CloudRequestId",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "VolumeSessionUUID",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "VolumeFileSystemDevice",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "VolumeSnapshotName",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "VolumeIsEncrypted",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "VolumeFileSystemDriver",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "VolumeSnapshotTimeStamp",
+      "type": "real",
+      "description": ""
+    },
+    {
+      "name": "VolumeRealDeviceName",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "VolumeEncryptionStatus",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "RemoteAddressIP4",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "IsOnRemovableDisk",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "QuarantinedFileExtendedState",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "PrimaryModule",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "DeviceId",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "LocalAddressIP4",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ValidLifetime",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "MaxReassemblySize",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "NetworkGuid",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "InterfaceAlias",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "InterfaceIndex",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "InterfaceFlags",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "PermanentPhysicalAddress",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "InterfaceType",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "MediaType",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "AccessType",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "IpEntryFlags",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "PreferredLifetime",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ConnectionType",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "PhysicalAddress",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "DirectionType",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "IfType",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "RetransmitTime",
+      "type": "long",
+      "description": ""
+    },
+    {
+      "name": "CreationTimeStamp",
+      "type": "real",
+      "description": ""
+    },
+    {
+      "name": "BaseReachableTime",
+      "type": "long",
+      "description": ""
+    },
+    {
+      "name": "PhysicalAddressLength",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "TunnelType",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "NetworkInterfaceGuid",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "PhysicalMediumType",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "TotalDiskSpace",
+      "type": "int",
+      "description": ""
+    },
+    {
+      "name": "LocalAddressIP6",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "DefaultGatewayIP6",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ModuleNativePath",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "DotnetModuleFlags",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "AssemblyFlags",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "FirmwareSize",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ImageAnalysisRequestTimestamp",
+      "type": "real",
+      "description": ""
+    },
+    {
+      "name": "FirmwareType",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "MeasurementType",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "Timeout",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "SuppressType",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ProcessCount",
+      "type": "long",
+      "description": ""
+    },
+    {
+      "name": "EtwTargetRawProcessId",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "MinorFunction",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "FileObject",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "IrpFlags",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "MajorFunction",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "OperationFlags",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "SignatureErrorState",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "SHA1HashData",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "SignatureState",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "AuthenticodeHashData",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ToBeSignedAlgorithm",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ToBeSignedHash",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "SignInfoRequestFlags",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "SignerInfoCount",
+      "type": "long",
+      "description": ""
+    },
+    {
+      "name": "HashAlgorithm",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "RegObjectName",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "RegValueName",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "RegType",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "RegClassificationIndex",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "RegClassificationFlags",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "RegOperationType",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "RegClassification",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "RegStringValue",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "Facility",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "File",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "BatchTimestamp",
+      "type": "real",
+      "description": ""
+    },
+    {
+      "name": "SpotlightBatchType",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "LastUpdateInstalledTime",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "PendingUpdateIds",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "LastPendingUpdateInstalledTime",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "InstalledUpdateIds",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "InstalledUpdateExtendedStatus",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "UninstallPendingUpdateIds",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "RawTargetProcessId",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "TargetThreadId",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ApcContextFileName",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "RawTargetThreadId",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "FirmwareAnalysisErrorLocation",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "FirmwareAnalysisErrorSource",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "FirmwareAnalysisErrorReason",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "InjectedThreadFlag",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ApcFlags",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "DownloadServer",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "DownloadPath",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "DownloadPort",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "RemediationTriggerTimeStamp",
+      "type": "real",
+      "description": ""
+    },
+    {
+      "name": "VolumeMountPoint",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "VolumeDriveLetter",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "DiskParentDeviceInstanceId",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "PtStatusFlags",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "PtCompatibilityFlags",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "TargetDirectoryName",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ThreadStartBytes",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "MaxUsedRam",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "UsedDiskSpace",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "AverageUsedRam",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "AverageCpuUsage",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "AvailableDiskSpace",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "MaxCpuUsage",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ReflectivePeTimestamp",
+      "type": "real",
+      "description": ""
+    },
+    {
+      "name": "ProcessExecuteFlags",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "DriverPreventionStatusFlags",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "TargetIntegrityLevel",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "TargetAuthenticationId",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ImageBaseName",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ConnectionDirection",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ConnectionFlags",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "LocalPort",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "MemoryDescriptionFlags",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "AppName",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "AppVersion",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "UpdateFlag",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "AppPathFlag",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "AppUpdateIds",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "AppProductId",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "AppPath",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "InstallDate",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "AppType",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "AppSource",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "AppProvider",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "AppIdentificationData",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "AppArchitecture",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "CommandCloudTimeStamp",
+      "type": "real",
+      "description": ""
+    },
+    {
+      "name": "CommandSequenceTotal",
+      "type": "int",
+      "description": ""
+    },
+    {
+      "name": "CommandCode",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "CommandEndTimeStamp",
+      "type": "real",
+      "description": ""
+    },
+    {
+      "name": "CommandStartTimeStamp",
+      "type": "real",
+      "description": ""
+    },
+    {
+      "name": "CommandSequenceNumber",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "CommandName",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "CommandStdOut",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "CommandStdErr",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "QuarantinedFileState",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "QuarantinedFileName",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "FileSystemOperationType",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "FsOperationClassificationFlags",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "TargetSHA256HashData",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "TargetCommandLineParameters",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "RegConfigValueType",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "RegConfigFlags",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "RegConfigClass",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "RegConfigIndex",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "RegKeyChangeType",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "Options",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "Information",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "FileIdentifier",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ShareAccess",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "FileAttributes",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "HandleCreateAuthenticationId",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "FileEcpBitmask",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ProvisioningDuration",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "AgentLoadFlags",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "EtwProvidersError",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "EtwProvidersEnabled",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "EtwProviders",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "DriverLoadFlags",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ImageTimeStamp",
+      "type": "real",
+      "description": ""
+    },
+    {
+      "name": "ExclusionType",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "CommandHistory",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "FirstCommand",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "CommandCountMax",
+      "type": "long",
+      "description": ""
+    },
+    {
+      "name": "CommandCount",
+      "type": "long",
+      "description": ""
+    },
+    {
+      "name": "DeviceProductId",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "BluetoothDeviceType",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "BluetoothDeviceAddressType",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "BluetoothDeviceAddress",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "BluetoothDeviceName",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "DeviceVendorId",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "AmsiStatusCode",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "AmsiRegistrationState",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "SourceEndpointNetworkType",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "TargetAccountObjectGuid",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "SourceAccountUserPrincipal",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "SourceEndpointAccountObjectSid",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ActiveDirectoryAuthenticationMethod",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "SourceAccountType",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "AggregationEarliestTimestamp",
+      "type": "real",
+      "description": ""
+    },
+    {
+      "name": "TargetAccountObjectSid",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "SourceAccountObjectSid",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "AggregationWindowTimestamp",
+      "type": "real",
+      "description": ""
+    },
+    {
+      "name": "SourceAccountDomain",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "TargetAccountType",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "NtlmAvFlags",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "SourceAccountObjectGuid",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "AggregationLatestTimestamp",
+      "type": "real",
+      "description": ""
+    },
+    {
+      "name": "DeviceTimeStamp",
+      "type": "real",
+      "description": ""
+    },
+    {
+      "name": "ParentHubInstanceId",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "DeviceProduct",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ParentHubPort",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "DeviceProtocol",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "DcPolicyFlags",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "DeviceVersion",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "DeviceInstanceId",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "DeviceUserSid",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "DeviceUserAuthenticationId",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "SocketType",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "SourceAccountSamAccountName",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "KerberosRequestTicketValidityPeriod",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "DelegatorAccountObjectSid",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "DelegatorAccountObjectGuid",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "DelegatorAccountSamAccountName",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "DesiredKerberosEncryptionTypes",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "DcPropertyIdInterfaceType",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "DcSensorInterfaceType",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "DomainName",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "AmsScanTypeId",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "AmsStatus",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "AmsScanSubtypeId",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "VnodeModificationType",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "LdapSecurityType",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "StackLimit",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ObjectTypeEtw",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "SessionProcessId",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ModuleCharacteristics",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "HostUrl",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "FileFormatString",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "MemoryScanFlags",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "AmsDeviceType",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "AsepFlags",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "AsepValueType",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "AuthenticationFailureMsErrorCode",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "SourceAccountBadPasswordCount",
+      "type": "long",
+      "description": ""
+    },
+    {
+      "name": "SourceAccountBadPasswordTime",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "EndpointDescriptorInterval",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "EndpointDescriptorMaxPacketSize",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "EndpointDescriptorAddress",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "EndpointDescriptorAttributes",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ConfigurationDescriptorValue",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ConfigurationDescriptorAttributes",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ConfigurationDescriptorName",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ConfigurationDescriptorNumInterfaces",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ConfigurationDescriptorMaxPowerDraw",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "InterfaceDescriptorNumber",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "InterfaceDescriptorAlternateSetting",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "InterfaceDescriptorNumEndpoints",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "InterfaceDescriptorName",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "DcTypeOrLocation",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "SideChannelMitigationFlags",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "AgentLocalTime",
+      "type": "real",
+      "description": ""
+    },
+    {
+      "name": "ComputerName",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ChassisType",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "TpmFirmwareVersion",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "BaseTime",
+      "type": "real",
+      "description": ""
+    },
+    {
+      "name": "TpmType",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "SignInfoFlagUnknownError",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "UTCTimestamp",
+      "type": "real",
+      "description": ""
+    },
+    {
+      "name": "SubjectDN",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "SignatureDigestEncryptAlg",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "SignInfoFlagSignHashMismatch",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "SubjectSerialNumber",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "IssuerDN",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "SubjectCN",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ExternalApiType",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "SignInfoFlagSelfSigned",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "product_type_desc",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "event_type",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "StartTimestamp",
+      "type": "real",
+      "description": ""
+    },
+    {
+      "name": "HostnameField",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "OriginSourceIpAddress",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "SHA1String",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ProcessStartTime",
+      "type": "real",
+      "description": ""
+    },
+    {
+      "name": "ProcessEndTime",
+      "type": "real",
+      "description": ""
+    },
+    {
+      "name": "DnsRequests",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "PatternDispositionFlags",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "FileName",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "LocalIP",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "FilePath",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "EventUUID",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "MD5String",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "SeverityName",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "Severity",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "SHA256String",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "NetworkAccesses",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "MACAddress",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ProcessId",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "BillingType",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "RegNumericValue",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "RegBinaryValue",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "RpcOpClassification",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "AdditionalFields",
+      "type": "dynamic",
+      "description": ""
+    }
+  ]
+}

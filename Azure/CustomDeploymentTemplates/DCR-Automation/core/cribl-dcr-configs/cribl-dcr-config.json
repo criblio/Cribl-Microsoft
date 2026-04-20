@@ -1,0 +1,97 @@
+{
+  "DCRs": [
+    {
+      "DCRName": "dcr-AWSCloudTrail-eastus",
+      "DCRImmutableId": "dcr-c1407c95c6e244938e8e82a1bebfe38a",
+      "IngestionEndpoint": "https://dcr-awscloudtrail-eastus-v0gk-eastus.logs.z1.ingest.monitor.azure.com",
+      "StreamName": "Custom-AWSCloudTrail",
+      "TableName": "AWSCloudTrail",
+      "Type": "Direct"
+    },
+    {
+      "IngestionEndpoint": "https://dcr-awscloudwatch-eastus-4fy1-eastus.logs.z1.ingest.monitor.azure.com",
+      "StreamName": "Custom-AWSCloudWatch",
+      "DCRName": "dcr-AWSCloudWatch-eastus",
+      "Type": "Direct",
+      "TableName": "AWSCloudWatch",
+      "DCRImmutableId": "dcr-1a5d7971bbc74177a9b73a2b8772656d"
+    },
+    {
+      "IngestionEndpoint": "https://dcr-awsguardduty-eastus-0wld-eastus.logs.z1.ingest.monitor.azure.com",
+      "DCRName": "dcr-AWSGuardDuty-eastus",
+      "StreamName": "Custom-AWSGuardDuty",
+      "TableName": "AWSGuardDuty",
+      "DCRImmutableId": "dcr-aaf80f0d2122436c897b4c9a09bdc3e1",
+      "Type": "Direct"
+    },
+    {
+      "TableName": "AWSVPCFlow",
+      "StreamName": "Custom-AWSVPCFlow",
+      "DCRImmutableId": "dcr-cef7864a02344ae29ab58ba6c80ce10d",
+      "Type": "Direct",
+      "DCRName": "dcr-AWSVPCFlow-eastus",
+      "IngestionEndpoint": "https://dcr-awsvpcflow-eastus-yney-eastus.logs.z1.ingest.monitor.azure.com"
+    },
+    {
+      "StreamName": "Custom-AWSWAF",
+      "DCRImmutableId": "dcr-67eeb03517184afca6c86e7bb90da76f",
+      "DCRName": "dcr-AWSWAF-eastus",
+      "TableName": "AWSWAF",
+      "Type": "Direct",
+      "IngestionEndpoint": "https://dcr-awswaf-eastus-l2hg-eastus.logs.z1.ingest.monitor.azure.com"
+    },
+    {
+      "Type": "Direct",
+      "StreamName": "Custom-CloudflareV2",
+      "DCRName": "dcr-CloudflareV2-eastus",
+      "IngestionEndpoint": "https://dcr-cloudflarev2-eastus-pjx8-eastus.logs.z1.ingest.monitor.azure.com",
+      "TableName": "CloudflareV2",
+      "DCRImmutableId": "dcr-0cebf564d9b446688fcbcfb752d7242d"
+    },
+    {
+      "TableName": "CommonSecurityLog",
+      "StreamName": "Custom-CommonSecurityLog",
+      "DCRName": "dcr-CommonSecurityLog-eastus",
+      "DCRImmutableId": "dcr-3d12c2b7e3b549a480f8a942133ab530",
+      "IngestionEndpoint": "https://dcr-commonsecuritylog-eastus-gtzl-eastus.logs.z1.ingest.monitor.azure.com",
+      "Type": "Direct"
+    },
+    {
+      "TableName": "CrowdStrike_Process_Events_CL",
+      "DCRImmutableId": "dcr-6708c53ae65949d1b1652083470e35f1",
+      "DCRName": "dcr-CrowdS-eastus",
+      "IngestionEndpoint": "https://dcr-crowds-eastus-mp0u-eastus.logs.z1.ingest.monitor.azure.com",
+      "Type": "Direct",
+      "StreamName": "Custom-CrowdStrike_Process_Events_CL"
+    },
+    {
+      "TableName": "SecurityEvent",
+      "StreamName": "Custom-SecurityEvent",
+      "DCRName": "dcr-SecurityEvent-eastus",
+      "DCRImmutableId": "dcr-d9f60c67e8944e4490bd4accc75f55a1",
+      "IngestionEndpoint": "https://dcr-securityevent-eastus-o3lg-eastus.logs.z1.ingest.monitor.azure.com",
+      "Type": "Direct"
+    },
+    {
+      "TableName": "Syslog",
+      "StreamName": "Custom-Syslog",
+      "DCRName": "dcr-Syslog-eastus",
+      "DCRImmutableId": "dcr-5e798576369045d785a09e5db3510760",
+      "IngestionEndpoint": "https://dcr-syslog-eastus-2c5y-eastus.logs.z1.ingest.monitor.azure.com",
+      "Type": "Direct"
+    },
+    {
+      "TableName": "WindowsEvent",
+      "StreamName": "Custom-WindowsEvent",
+      "DCRName": "dcr-WindowsEvent-eastus",
+      "DCRImmutableId": "dcr-a6dd898ade9142cab76be7a60bc33f40",
+      "IngestionEndpoint": "https://dcr-windowsevent-eastus-ovda-eastus.logs.z1.ingest.monitor.azure.com",
+      "Type": "Direct"
+    }
+  ],
+  "DCRCount": 11,
+  "Purpose": "Cribl Stream Integration with Azure Log Analytics",
+  "GeneratedAt": "2026-04-20 12:56:01",
+  "Workspace": "law-jpederson-eastus",
+  "ResourceGroup": "rg-jpederson-quickstartlab"
+}

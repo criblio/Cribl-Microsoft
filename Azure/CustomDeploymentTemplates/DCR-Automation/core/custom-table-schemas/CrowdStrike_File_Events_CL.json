@@ -1,0 +1,363 @@
+{
+  "name": "CrowdStrike_File_Events_CL",
+  "description": "Auto-generated from Sentinel Content Hub for CrowdStrike_File_Events_CL",
+  "retentionInDays": 30,
+  "totalRetentionInDays": 90,
+  "columns": [
+    {
+      "name": "TimeGenerated",
+      "type": "datetime",
+      "description": "The timestamp (UTC) reflecting the time in which the event was generated."
+    },
+    {
+      "name": "event_simpleName",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "timestamp",
+      "type": "long",
+      "description": ""
+    },
+    {
+      "name": "aip",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "aid",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "event_platform",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ContextTimeStamp",
+      "type": "real",
+      "description": ""
+    },
+    {
+      "name": "name",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ConfigBuild",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ContextProcessId",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "CrowdStrikeId",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "UserName",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "TargetFileName",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "FileOperatorSid",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "Size",
+      "type": "long",
+      "description": ""
+    },
+    {
+      "name": "FileWrittenFlags",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "OperationFlags",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "SHA256HashData",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "SourceFileName",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "CommandLine",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "OriginalFilename",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ClientId",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "TargetDirectoryName",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "UID",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "Status",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ImageFileName",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "IsOnRemovableDisk",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "MinorFunction",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "IsOnNetwork",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "FileIdentifier",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "TokenType",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "DiskParentDeviceInstanceId",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "FileObject",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "IrpFlags",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "AuthenticationId",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "FileEcpBitmask",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "MajorFunction",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "TemporaryFileName",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "VolumeSessionUUID",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "PatternId",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "EventOrigin",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "MSOfficeSubType",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "GID",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "UnixMode",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "USN",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "FileCategory",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ShareAccess",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "DesiredAccess",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ELFSubType",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "IsTransactedFile",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "MachOSubType",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "VnodeModificationType",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "NewFileIdentifier",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "Options",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "Information",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "FileAttributes",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "Tags",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "FixedFileVersion",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "HandleCreateAuthenticationId",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "FileFlags",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "VnodeType",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ConfigStateHash",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ContextThreadId",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "BoundingLimitCount",
+      "type": "long",
+      "description": ""
+    },
+    {
+      "name": "BoundingLimitDuration",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "Entitlements",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "EffectiveTransmissionClass",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "cid",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "OciContainerId",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "TreeId",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "AdditionalFields",
+      "type": "dynamic",
+      "description": ""
+    }
+  ]
+}

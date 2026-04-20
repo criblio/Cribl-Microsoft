@@ -1,0 +1,33 @@
+{
+  "id": "MS-Sentinel-CrowdStrike_Process_Events-dest",
+  "systemFields": [
+  ],
+  "streamtags": [],
+  "keepAlive": true,
+  "concurrency": 5,
+  "maxPayloadSizeKB": 1000,
+  "maxPayloadEvents": 0,
+  "compress": true,
+  "rejectUnauthorized": true,
+  "timeoutSec": 30,
+  "flushPeriodSec": 1,
+  "useRoundRobinDns": false,
+  "failedRequestLoggingMode": "none",
+  "safeHeaders": [],
+  "responseRetrySettings": [],
+  "timeoutRetrySettings": {
+    "timeoutRetry": false
+  },
+  "responseHonorRetryAfterHeader": false,
+  "onBackpressure": "drop",
+  "scope": "https://monitor.azure.com/.default",
+  "endpointURLConfiguration": "ID",
+  "type": "sentinel",
+  "dceEndpoint": "https://dcr-crowds-eastus-mp0u-eastus.logs.z1.ingest.monitor.azure.com",
+  "dcrID": "dcr-6708c53ae65949d1b1652083470e35f1",
+  "streamName": "Custom-CrowdStrike_Process_Events_CL",
+  "client_id": "'8a4b13ab-f1c5-498c-a4ae-85f220a0439b'",
+  "secret": "<replace me>",
+  "loginUrl": "https://login.microsoftonline.com/fa882ef2-67af-42c1-80e4-62e2735043d2/oauth2/v2.0/token",
+  "url": "https://dcr-crowds-eastus-mp0u-eastus.logs.z1.ingest.monitor.azure.com/dataCollectionRules/dcr-6708c53ae65949d1b1652083470e35f1/streams/Custom-CrowdStrike_Process_Events_CL?api-version=2021-11-01-preview"
+}

@@ -1,6 +1,3 @@
 [
-    "CommonSecurityLog",
-    "SecurityEvent",
-    "WindowsEvent",
-    "Syslog"
+    "AWSWAF"
 ]

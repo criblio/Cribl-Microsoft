@@ -1,0 +1,33 @@
+{
+  "id": "MS-Sentinel-SecurityEvent-dest",
+  "systemFields": [
+  ],
+  "streamtags": [],
+  "keepAlive": true,
+  "concurrency": 5,
+  "maxPayloadSizeKB": 1000,
+  "maxPayloadEvents": 0,
+  "compress": true,
+  "rejectUnauthorized": true,
+  "timeoutSec": 30,
+  "flushPeriodSec": 1,
+  "useRoundRobinDns": false,
+  "failedRequestLoggingMode": "none",
+  "safeHeaders": [],
+  "responseRetrySettings": [],
+  "timeoutRetrySettings": {
+    "timeoutRetry": false
+  },
+  "responseHonorRetryAfterHeader": false,
+  "onBackpressure": "drop",
+  "scope": "https://monitor.azure.com/.default",
+  "endpointURLConfiguration": "ID",
+  "type": "sentinel",
+  "dceEndpoint": "https://dcr-securityevent-eastus-o3lg-eastus.logs.z1.ingest.monitor.azure.com",
+  "dcrID": "dcr-d9f60c67e8944e4490bd4accc75f55a1",
+  "streamName": "Custom-SecurityEvent",
+  "client_id": "'8a4b13ab-f1c5-498c-a4ae-85f220a0439b'",
+  "secret": "<replace me>",
+  "loginUrl": "https://login.microsoftonline.com/fa882ef2-67af-42c1-80e4-62e2735043d2/oauth2/v2.0/token",
+  "url": "https://dcr-securityevent-eastus-o3lg-eastus.logs.z1.ingest.monitor.azure.com/dataCollectionRules/dcr-d9f60c67e8944e4490bd4accc75f55a1/streams/Custom-SecurityEvent?api-version=2021-11-01-preview"
+}

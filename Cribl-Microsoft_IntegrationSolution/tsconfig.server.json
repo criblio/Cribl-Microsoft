@@ -1,0 +1,13 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "esModuleInterop": true,
+    "outDir": "dist-server",
+    "paths": {
+      "electron": ["./src/server/electron-stub"]
+    }
+  },
+  "include": ["src/server/**/*", "src/main/**/*"]
+}
