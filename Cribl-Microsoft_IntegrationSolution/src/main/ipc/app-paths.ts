@@ -152,7 +152,7 @@ export function getLinkedRepo(): string | null {
   while (dir !== root) {
     if (
       fs.existsSync(path.join(dir, 'Azure', 'CustomDeploymentTemplates')) &&
-      fs.existsSync(path.join(dir, 'CLAUDE.md'))
+      fs.existsSync(path.join(dir, 'README.md'))
     ) {
       _linkedRepoPath = dir;
       // Save for next time
