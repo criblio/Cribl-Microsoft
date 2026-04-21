@@ -123,7 +123,9 @@ node_modules/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-package-lock.json
+# package-lock.json must be committed so all users get identical dependency versions.
+# Without it, npm install resolves latest-compatible versions which can produce
+# different build output (especially for vite-plugin-electron and esbuild).
 yarn.lock
 
 # Python

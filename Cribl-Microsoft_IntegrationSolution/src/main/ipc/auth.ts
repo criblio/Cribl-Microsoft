@@ -18,7 +18,7 @@ try {
 } catch (err) {
   logger.warn('auth', 'Electron not available, using fallbacks', err);
 }
-import { azureParametersPath as appAzureParamsPath, authDir as appAuthDir } from './app-paths';
+import { azureParametersPath as appAzureParamsPath, authDir as appAuthDir, configDir } from './app-paths';
 import { execFile, spawn } from 'child_process';
 import https from 'https';
 import http from 'http';
