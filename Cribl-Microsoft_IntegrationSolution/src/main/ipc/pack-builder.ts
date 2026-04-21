@@ -8,6 +8,7 @@ import { OverflowConfig } from './field-matcher';
 import { SOURCE_TYPES, VENDOR_SOURCE_HINTS, suggestSourceType, generateInputsYml, SourceConfig, SourceTypeDefinition } from './source-types';
 import { performVendorResearch, VendorResearchResult, FieldMapping as VendorFieldMapping } from './vendor-research';
 import { captureSnapshot } from './change-detection';
+import logger from './logger';
 import { findDestinationForTable, readAzureParameters, generateOutputsYmlFromDestinations, DeployedDestination } from './azure-deploy';
 import {
   packsDir as appPacksDir, dcrTemplatesDir as appDcrTemplatesDir,
@@ -114,8 +115,8 @@ function loadDcrTemplateSchema(tableName: string): DcrSchemaColumn[] {
             }
           }
         }
-      } catch (e) {
-        // Skip parse errors
+      } catch (err) {
+        logger.warn('pack-builder', `Failed to parse DCR template at ${templatePath}`, err);
       }
     }
   }
@@ -131,8 +132,8 @@ function loadDcrTemplateSchema(tableName: string): DcrSchemaColumn[] {
             type: c.type || 'string',
           }));
         }
-      } catch (e) {
-        // Skip
+      } catch (err) {
+        logger.warn('pack-builder', `Failed to parse custom table schema at ${customSchemaPath}`, err);
       }
     }
   }
@@ -167,7 +168,7 @@ function loadDcrTemplateSchema(tableName: string): DcrSchemaColumn[] {
                   }
                 }
               }
-            } catch { /* skip */ }
+            } catch (err) { logger.warn('pack-builder', `Failed to read directory ${dir} while searching for CustomTables`, err); }
             return results;
           };
           const tableFiles = findCustomTables(connDir);
@@ -182,12 +183,12 @@ function loadDcrTemplateSchema(tableName: string): DcrSchemaColumn[] {
                   type: c.type || 'string',
                 }));
               }
-            } catch { /* skip */ }
+            } catch (err) { logger.warn('pack-builder', `Failed to parse CustomTables file ${tableFile}`, err); }
           }
         }
       }
     }
-  } catch { /* sentinel repo not available */ }
+  } catch (err) { logger.warn('pack-builder', `Sentinel repo not available for schema lookup of table '${tableName}'`, err); }
 
   return [];
 }
@@ -1216,8 +1217,8 @@ function generateRawVendorEvent(
   if (vendorSampleRaw) {
     try {
       return JSON.parse(vendorSampleRaw);
-    } catch (e) {
-      // Not valid JSON, ignore and generate
+    } catch (err) {
+      logger.warn('pack-builder', 'Failed to parse vendor sample as JSON, generating synthetic event', err);
     }
   }
 
@@ -1280,7 +1281,7 @@ function generateSampleFile(
             }
             continue;
           }
-        } catch (e) { /* not a JSON array, use as-is */ }
+        } catch (err) { logger.warn('pack-builder', 'Raw event starts with [ but is not a valid JSON array, using as-is', err); }
       }
       allRawEvents.push(rawStr);
     }
@@ -1323,7 +1324,7 @@ function generateSampleFile(
             }
             rawValue = header + '|' + extParts.join(' ');
           }
-        } catch { /* not JSON, use as-is */ }
+        } catch (err) { logger.warn('pack-builder', 'Failed to parse raw event as JSON for CEF reconstruction, using as-is', err); }
       }
 
       events.push({
@@ -1390,6 +1391,7 @@ async function runDcrGapAnalysis(
       try {
         parsed = kqlParser.parseDcrJson(content);
       } catch (parseErr) {
+        logger.warn('pack-builder', `Failed to parse DCR JSON from ${dcrFile.name}`, parseErr);
         continue;
       }
       if (!parsed) continue;
@@ -1422,7 +1424,7 @@ async function runDcrGapAnalysis(
                     fieldMap.set(k, t);
                   }
                 }
-              } catch (jsonErr) { /* skip */ }
+              } catch (jsonErr) { logger.warn('pack-builder', 'Failed to parse sample event JSON during gap analysis field extraction', jsonErr); }
             }
           }
           sourceFields = Array.from(fieldMap.entries()).map(([name, type]) => ({ name, type }));
@@ -1567,7 +1569,7 @@ function packagePack(packDir: string, sender: Electron.WebContents): Promise<str
           if (pkg.name && pkg.version) {
             crblName = `${pkg.name}_${pkg.version}`.replace(/[^a-zA-Z0-9_.-]/g, '-');
           }
-        } catch (e) { /* use directory name */ }
+        } catch (err) { logger.warn('pack-builder', `Failed to parse package.json at ${pkgPath}, using directory name`, err); }
       }
 
       const crblPath = path.join(path.dirname(packDir), `${crblName}.crbl`);
@@ -1808,8 +1810,8 @@ export function registerPackBuilderHandlers(ipcMain: IpcMain) {
     let vendorData: VendorResearchResult | null = null;
     try {
       vendorData = await performVendorResearch(options.solutionName);
-    } catch (e) {
-      // Research failure is non-fatal -- pipelines fall back to user-provided fields
+    } catch (err) {
+      logger.warn('pack-builder', `Vendor research failed for '${options.solutionName}', falling back to user-provided fields`, err);
     }
 
     if (vendorData) {
@@ -1919,7 +1921,7 @@ export function registerPackBuilderHandlers(ipcMain: IpcMain) {
                   sampleValue: typeof value === 'object' ? JSON.stringify(value) : String(value),
                 });
               }
-            } catch (e) { /* skip unparseable events */ }
+            } catch (err) { logger.warn('pack-builder', `Failed to parse sample event for source field enrichment on table '${table.sentinelTable}'`, err); }
           }
         }
 
@@ -1936,7 +1938,8 @@ export function registerPackBuilderHandlers(ipcMain: IpcMain) {
               try {
                 const testEvt = JSON.parse(sample.rawEvents[0]);
                 if (testEvt.CEFVersion !== undefined && testEvt.DeviceVendor) { isSampleCef = true; break; }
-              } catch {
+              } catch (err) {
+                logger.warn('pack-builder', 'Failed to JSON-parse sample event during CEF detection, checking raw string', err);
                 if (sample.rawEvents[0].includes('CEF:')) { isSampleCef = true; break; }
               }
             }
@@ -2053,7 +2056,7 @@ export function registerPackBuilderHandlers(ipcMain: IpcMain) {
                   sampleValue: typeof value === 'object' ? JSON.stringify(value) : String(value),
                 });
               }
-            } catch (e) { /* skip */ }
+            } catch (err) { logger.warn('pack-builder', `Failed to parse sample event for field extraction on table '${table.sentinelTable}'`, err); }
           }
         }
 
@@ -2115,7 +2118,7 @@ export function registerPackBuilderHandlers(ipcMain: IpcMain) {
     try {
       const { getTableRoutingForSolution } = await import('./kql-parser');
       tableRouting = await getTableRoutingForSolution(options.solutionName);
-    } catch (e) { /* non-fatal */ }
+    } catch (err) { logger.warn('pack-builder', `Failed to resolve table routing for solution '${options.solutionName}'`, err); }
 
     // Apply route conditions to tables
     if (tableRouting.length > 0) {
@@ -2249,7 +2252,7 @@ export function registerPackBuilderHandlers(ipcMain: IpcMain) {
             if (evt.CEFVersion !== undefined && evt.DeviceVendor) sourceFormat = 'cef';
             else if (evt.LEEFVersion !== undefined) sourceFormat = 'leef';
             else sourceFormat = 'json';
-          } catch { /* not valid JSON */ }
+          } catch (err) { logger.warn('pack-builder', 'Sample event starts with { but failed JSON parse during format detection', err); }
         } else if (/^\w+=/.test(firstRaw)) {
           // Key-value pairs (e.g., Fortinet: date=2019-05-10 type="traffic")
           sourceFormat = 'kv';
@@ -2292,7 +2295,7 @@ export function registerPackBuilderHandlers(ipcMain: IpcMain) {
               ];
               tableOverflowConfigs.set(table.sentinelTable, mr.overflowConfig);
             }
-          } catch { /* non-fatal */ }
+          } catch (err) { logger.warn('pack-builder', `CEF/LEEF/KV field matcher failed for table '${table.sentinelTable}'`, err); }
         }
       }
 
@@ -2391,7 +2394,7 @@ export function registerPackBuilderHandlers(ipcMain: IpcMain) {
         if (csvRows.length > 0) {
           fs.writeFileSync(path.join(lookupsDir, lookupFileName), [csvHeader, ...csvRows].join('\n') + '\n');
         }
-      } catch { /* non-fatal */ }
+      } catch (err) { logger.warn('pack-builder', `Failed to generate lookup CSV for table '${table.sentinelTable}'`, err); }
     }
 
     // Generate default/lookups.yml registry for the lookup CSV files.
@@ -2639,16 +2642,16 @@ export function registerPackBuilderHandlers(ipcMain: IpcMain) {
         fields: t.fields.map((f) => ({ name: f.target || f.source, type: f.type })),
       }));
       await captureSnapshot(options.packName, options.solutionName, logTypesForSnapshot);
-    } catch (e) {
-      // Snapshot failure is non-fatal
+    } catch (err) {
+      logger.warn('pack-builder', `Build snapshot capture failed for pack '${options.packName}'`, err);
     }
 
     // Always package the .crbl file after scaffold creation
     let crblPath = '';
     try {
       crblPath = await packagePack(packDir, event.sender);
-    } catch (e) {
-      // Packaging failure is non-fatal - pack directory was still created
+    } catch (err) {
+      logger.warn('pack-builder', `Packaging .crbl failed for pack '${options.packName}', pack directory was still created`, err);
     }
 
     return { packDir, crblPath };
@@ -2838,7 +2841,8 @@ export function registerPackBuilderHandlers(ipcMain: IpcMain) {
           crblFiles: matchingCrbls,
           tables,
         });
-      } catch (e) {
+      } catch (err) {
+        logger.warn('pack-builder', `Failed to read package.json for pack '${entry.name}'`, err);
         packs.push({
           name: entry.name,
           version: '0.0.0',
@@ -2985,7 +2989,7 @@ export function registerPackBuilderHandlers(ipcMain: IpcMain) {
           return size;
         };
         totalSize += walk(dirPath);
-      } catch { /* skip */ }
+      } catch (err) { logger.warn('pack-builder', `Failed to calculate size of pack directory '${dir}'`, err); }
     }
 
     return { packsDir: pd, totalSize, packCount: packDirs.size, crblCount: crblFiles.length, orphanedCrblCount, oldVersionCount };
@@ -3063,7 +3067,7 @@ export function registerPackBuilderHandlers(ipcMain: IpcMain) {
         try {
           const parsed = analyzeParser(sample.rawEvents.join('\n'), 'sample');
           sourceFields = parsed.fields.map((f: any) => ({ name: f.name, type: f.type }));
-        } catch { /* skip */ }
+        } catch (err) { logger.warn('pack-builder', `Sample parser failed for table '${sample.tableName}', falling back to JSON parse`, err); }
 
         // Fallback: try JSON.parse for pre-parsed events (e.g., Cribl captures)
         if (sourceFields.length === 0) {
@@ -3079,7 +3083,7 @@ export function registerPackBuilderHandlers(ipcMain: IpcMain) {
                   fieldMap.set(k, t);
                 }
               }
-            } catch { /* skip */ }
+            } catch (err) { logger.warn('pack-builder', `Failed to JSON-parse fallback sample event for table '${sample.tableName}'`, err); }
           }
           sourceFields = Array.from(fieldMap.entries()).map(([name, type]) => ({ name, type }));
         }
@@ -3108,10 +3112,10 @@ export function registerPackBuilderHandlers(ipcMain: IpcMain) {
                 const parsed = kqlParser.parseDcrJson(content);
                 const match = parsed.flows.find((fl) => fl.tableName.toLowerCase() === sample.tableName.toLowerCase());
                 if (match) return match;
-              } catch (parseErr) { continue; }
+              } catch (parseErr) { logger.warn('pack-builder', `Failed to parse DCR JSON during analyze-samples for '${dcrFile.name}'`, parseErr); continue; }
             }
             return null;
-          } catch { return null; }
+          } catch (err) { logger.warn('pack-builder', `Sentinel repo lookup failed during analyze-samples for '${solutionName}'`, err); return null; }
         })();
 
         const routeInfo = routing.find((r) => r.tableName.toLowerCase() === sample.tableName.toLowerCase());
@@ -3144,7 +3148,7 @@ export function registerPackBuilderHandlers(ipcMain: IpcMain) {
                 sampleValue: o.sampleValue,
               })),
             ];
-          } catch { /* non-fatal */ }
+          } catch (err) { logger.warn('pack-builder', `Field matching failed during analyze-samples for table '${sample.tableName}'`, err); }
         }
 
         // Derive summary counts from the field matcher results (fieldMappings)
@@ -3173,7 +3177,7 @@ export function registerPackBuilderHandlers(ipcMain: IpcMain) {
             dcrRenames = gap.dcrHandles.renames;
             dcrCoercions = gap.dcrHandles.coercions;
             dcrHandledCount = gap.dcrHandledCount;
-          } catch { /* non-fatal */ }
+          } catch (err) { logger.warn('pack-builder', `DCR gap analysis failed for table '${sample.tableName}'`, err); }
         }
 
         results.push({
@@ -3234,7 +3238,7 @@ export function registerPackBuilderHandlers(ipcMain: IpcMain) {
           if (allFields.length > 0) {
             rules.push({ name, severity, requiredFields: allFields, fileName });
           }
-        } catch { /* skip unparseable */ }
+        } catch (err) { logger.warn('pack-builder', `Failed to parse analytics rule YAML from '${fileName}'`, err); }
       }
 
       return { success: true, rules };

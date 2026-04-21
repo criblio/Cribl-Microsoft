@@ -13,6 +13,7 @@ import {
   configDir as appConfigDir, azureParametersPath,
   dcrAutomationScript, dcrAutomationCwd,
 } from './app-paths';
+import logger from './logger';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -101,7 +102,7 @@ export function readAzureParameters(): AzureParameters | null {
           dceSuffix: raw.dceSuffix || '',
           ownerTag: raw.ownerTag || '',
         };
-      } catch { continue; }
+      } catch (err) { logger.warn('azure-deploy', 'Failed to parse azure parameters file: ' + p, err); continue; }
     }
   }
   return null;
@@ -136,7 +137,7 @@ export function readGeneratedDestinations(): DeployedDestination[] {
           tableName: extractTableFromStreamName(raw.streamName || ''),
         });
       }
-    } catch { continue; }
+    } catch (err) { logger.warn('azure-deploy', 'Failed to parse destination config: ' + file, err); continue; }
   }
 
   return destinations;
@@ -241,7 +242,7 @@ interface DeployOptions {
 
 async function generateCustomTableSchemas(tables: string[]): Promise<number> {
   let sentinelRepo: typeof import('./sentinel-repo') | null = null;
-  try { sentinelRepo = await import('./sentinel-repo'); } catch { return 0; }
+  try { sentinelRepo = await import('./sentinel-repo'); } catch (err) { logger.error('azure-deploy', 'Failed to import sentinel-repo module', err); return 0; }
   if (!sentinelRepo.isRepoReady()) return 0;
 
   // Determine where to write schema files
@@ -284,7 +285,7 @@ async function generateCustomTableSchemas(tables: string[]): Promise<number> {
           }));
           break;
         }
-      } catch { continue; }
+      } catch (err) { logger.warn('azure-deploy', 'Failed to parse table definition JSON', err); continue; }
     }
 
     if (!columns || columns.length === 0) continue;
@@ -506,7 +507,7 @@ export function registerAzureDeployHandlers(ipcMain: IpcMain) {
             const [immId, ep] = (detailResult || '').trim().split('|');
             if (immId) dcrImmutableId = immId.trim();
             if (ep) ingestionEndpoint = ep.trim().replace(/handler\.control\.monitor/, 'ingest.monitor');
-          } catch { /* endpoint resolution failed */ }
+          } catch (err) { logger.error('azure-deploy', 'DCR endpoint resolution failed for: ' + match.name, err); }
 
           const streamName = `Custom-${table}`;
           const dcrId = dcrImmutableId || match.resourceId || match.name;
@@ -530,7 +531,8 @@ export function registerAzureDeployHandlers(ipcMain: IpcMain) {
           results[table] = null;
         }
       }
-    } catch {
+    } catch (err) {
+      logger.error('azure-deploy', 'Azure resource check failed for resource group: ' + rg, err);
       // Azure check failed -- return null (no cached fallback)
       for (const table of tables) results[table] = null;
     }
@@ -559,7 +561,7 @@ export function registerAzureDeployHandlers(ipcMain: IpcMain) {
               data: `> Generated ${generated} custom table schema(s) from Sentinel Content Hub\n`,
             });
           }
-        } catch { /* non-fatal */ }
+        } catch (err) { logger.warn('azure-deploy', 'Custom table schema generation failed', err); }
 
         // Write custom tables to CustomTableList.json so the PS script processes them
         const customListPath = path.join(cwd, 'core', 'CustomTableList.json');
@@ -615,7 +617,7 @@ export function registerAzureDeployHandlers(ipcMain: IpcMain) {
             try {
               armTemplate = JSON.parse(fs.readFileSync(tplPath, 'utf8'));
               break;
-            } catch { /* skip */ }
+            } catch (err) { logger.warn('azure-deploy', 'Failed to parse ARM template: ' + tplPath, err); }
           }
         }
       }
@@ -625,7 +627,7 @@ export function registerAzureDeployHandlers(ipcMain: IpcMain) {
       if (isCustom && cwd) {
         const schemaPath = path.join(cwd, 'core', 'custom-table-schemas', `${table}.json`);
         if (fs.existsSync(schemaPath)) {
-          try { customSchema = JSON.parse(fs.readFileSync(schemaPath, 'utf8')); } catch { /* skip */ }
+          try { customSchema = JSON.parse(fs.readFileSync(schemaPath, 'utf8')); } catch (err) { logger.warn('azure-deploy', 'Failed to parse custom table schema: ' + schemaPath, err); }
         }
       }
 
@@ -857,7 +859,7 @@ export function registerAzureDeployHandlers(ipcMain: IpcMain) {
         let out = '';
         const proc = spawn('powershell.exe', ['-NoProfile', '-Command', ps], { windowsHide: true });
         proc.stdout?.on('data', (d: Buffer) => { out += d.toString(); });
-        proc.stderr?.on('data', (d: Buffer) => { /* ignore stderr */ });
+        proc.stderr?.on('data', (d: Buffer) => { logger.warn('azure-deploy', 'DCR list stderr: ' + d.toString().trim()); });
         proc.on('close', (code) => code === 0 ? resolve(out.trim()) : reject(new Error(out.trim())));
         proc.on('error', reject);
       });
@@ -873,7 +875,7 @@ export function registerAzureDeployHandlers(ipcMain: IpcMain) {
           }
         }
       }
-    } catch { /* non-fatal */ }
+    } catch (err) { logger.warn('azure-deploy', 'Failed to retrieve DCR IDs', err); }
     return dcrIds;
   });
 }

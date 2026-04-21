@@ -15,8 +15,8 @@ try {
     app = e.app;
     safeStorage = e.safeStorage || _safeStorageFallback;
   }
-} catch {
-  // Not in Electron -- use fallbacks
+} catch (err) {
+  logger.warn('auth', 'Electron not available, using fallbacks', err);
 }
 import { azureParametersPath as appAzureParamsPath, authDir as appAuthDir } from './app-paths';
 import { execFile, spawn } from 'child_process';
@@ -24,6 +24,7 @@ import https from 'https';
 import http from 'http';
 import fs from 'fs';
 import path from 'path';
+import logger from './logger';
 
 // Select http or https module based on URL protocol
 function httpModule(url: string): typeof https {
@@ -101,7 +102,7 @@ function saveCriblAuth(auth: CriblAuth, includeSecret: boolean): void {
       // Fallback to plaintext (web server mode)
       fs.writeFileSync(plainPath, json);
     }
-  } catch { /* non-fatal */ }
+  } catch (err) { logger.error('auth', 'Failed to save encrypted Cribl auth', err); }
 
   // Also save to legacy path so loadCriblAuth() (used for active connection) finds it
   try {
@@ -116,7 +117,7 @@ function saveCriblAuth(auth: CriblAuth, includeSecret: boolean): void {
     } else {
       fs.writeFileSync(plainPath, json);
     }
-  } catch { /* non-fatal */ }
+  } catch (err) { logger.error('auth', 'Failed to save legacy Cribl auth', err); }
 }
 
 function loadCriblAuthForType(deploymentType: 'cloud' | 'self-managed'): CriblAuth | null {
@@ -129,12 +130,12 @@ function loadCriblAuthForType(deploymentType: 'cloud' | 'self-managed'): CriblAu
       const encrypted = fs.readFileSync(encPath);
       const json = safeStorage.decryptString(encrypted);
       return JSON.parse(json) as CriblAuth;
-    } catch { /* decryption failed */ }
+    } catch (err) { logger.error('auth', 'Cribl auth decryption failed for type: ' + deploymentType, err); }
   }
   if (fs.existsSync(plainPath)) {
     try {
       return JSON.parse(fs.readFileSync(plainPath, 'utf-8')) as CriblAuth;
-    } catch { /* corrupt */ }
+    } catch (err) { logger.error('auth', 'Corrupt Cribl auth JSON for type: ' + deploymentType, err); }
   }
   return null;
 }
@@ -183,7 +184,7 @@ function loadCriblAuthFromPath(basePath: string): CriblAuth | null {
     try {
       const saved = JSON.parse(fs.readFileSync(plainPath, 'utf-8')) as CriblAuth;
       return saved;
-    } catch { /* corrupt */ }
+    } catch (err) { logger.error('auth', 'Corrupt plaintext Cribl auth file', err); }
   }
 
   return null;
@@ -210,7 +211,7 @@ function saveGitHubPat(pat: string): void {
     } else {
       fs.writeFileSync(plainPath, payload);
     }
-  } catch { /* non-fatal */ }
+  } catch (err) { logger.error('auth', 'Failed to save GitHub PAT', err); }
 }
 
 export function loadGitHubPat(): string | null {
@@ -222,13 +223,13 @@ export function loadGitHubPat(): string | null {
       const encrypted = fs.readFileSync(encPath);
       const json = safeStorage.decryptString(encrypted);
       return JSON.parse(json).pat || null;
-    } catch { /* fall through */ }
+    } catch (err) { logger.error('auth', 'GitHub PAT decryption failed', err); }
   }
 
   if (fs.existsSync(plainPath)) {
     try {
       return JSON.parse(fs.readFileSync(plainPath, 'utf-8')).pat || null;
-    } catch { /* corrupt */ }
+    } catch (err) { logger.error('auth', 'Corrupt GitHub PAT file', err); }
   }
 
   return null;
@@ -237,8 +238,8 @@ export function loadGitHubPat(): string | null {
 function clearGitHubPat(): void {
   const encPath = getGitHubAuthPath() + '.enc';
   const plainPath = getGitHubAuthPath() + '.json';
-  try { if (fs.existsSync(encPath)) fs.unlinkSync(encPath); } catch { /* skip */ }
-  try { if (fs.existsSync(plainPath)) fs.unlinkSync(plainPath); } catch { /* skip */ }
+  try { if (fs.existsSync(encPath)) fs.unlinkSync(encPath); } catch (err) { logger.warn('auth', 'Failed to delete encrypted GitHub PAT file', err); }
+  try { if (fs.existsSync(plainPath)) fs.unlinkSync(plainPath); } catch (err) { logger.warn('auth', 'Failed to delete plaintext GitHub PAT file', err); }
 }
 
 // Validate a PAT by calling the authenticated user endpoint
@@ -259,7 +260,8 @@ async function testGitHubPat(pat: string): Promise<{ ok: boolean; login?: string
           try {
             const parsed = JSON.parse(body);
             resolve({ ok: true, login: parsed.login });
-          } catch {
+          } catch (err) {
+            logger.error('auth', 'Failed to parse GitHub user response', err);
             resolve({ ok: false, error: 'Invalid response from GitHub' });
           }
         } else {
@@ -871,7 +873,8 @@ export async function criblCaptureSample(
                       try { return JSON.parse(line); } catch { return { _raw: line }; }
                     });
                   }
-                } catch {
+                } catch (err) {
+                  logger.warn('auth', 'Failed to parse capture response body', err);
                   // Treat entire body as a single raw event
                   events = [{ _raw: body.slice(0, 5000) }];
                 }
@@ -1090,7 +1093,7 @@ export async function criblListDatasets(
           })).filter((d) => d.id);
           if (datasets.length > 0) return { success: true, datasets };
         }
-      } catch { /* try next path */ }
+      } catch (err) { logger.warn('auth', 'Dataset endpoint failed: ' + url, err); }
     }
     return { success: true, datasets: [], error: 'No datasets found (Lake may not be configured)' };
   } catch (err) {
@@ -1125,7 +1128,7 @@ export async function criblCreateDataset(
         const resp = await httpsPost(url, body, headers);
         if (resp.status >= 200 && resp.status < 300) return { success: true };
         if (resp.status === 409) return { success: true, error: 'Dataset already exists' };
-      } catch { /* try next */ }
+      } catch (err) { logger.warn('auth', 'Dataset create endpoint failed: ' + url, err); }
     }
     return { success: false, error: 'Failed to create dataset (all endpoints failed)' };
   } catch (err) {
@@ -1214,9 +1217,7 @@ function azureLogin(sender: Electron.WebContents): Promise<AzureAuth> {
         sender.send('ps:output', { id, stream: 'stdout', data: data.toString() });
       }
     });
-    proc.stderr?.on('data', (data: Buffer) => {
-      // Ignore stderr (MFA warnings)
-    });
+    proc.stderr?.on('data', (data: Buffer) => { logger.warn('auth', 'Azure login stderr: ' + data.toString().trim()); });
 
     proc.on('close', () => {
       if (!sender.isDestroyed()) {
@@ -1255,7 +1256,7 @@ export function registerAuthHandlers(ipcMain: any) {
       if (fs.existsSync(modeFile)) {
         mode = JSON.parse(fs.readFileSync(modeFile, 'utf-8')).mode || 'full';
       }
-    } catch { /* default to full */ }
+    } catch (err) { logger.warn('auth', 'Failed to read integration mode config', err); }
 
     const skipCribl = mode === 'air-gapped' || mode === 'azure-only';
     const skipAzure = mode === 'air-gapped' || mode === 'cribl-only';
@@ -1630,7 +1631,7 @@ export function registerAuthHandlers(ipcMain: any) {
 
     let params: Record<string, unknown> = {};
     if (fs.existsSync(paramPath)) {
-      try { params = JSON.parse(fs.readFileSync(paramPath, 'utf-8')); } catch { /* fresh */ }
+      try { params = JSON.parse(fs.readFileSync(paramPath, 'utf-8')); } catch (err) { logger.warn('auth', 'Failed to parse existing azure parameters', err); }
     }
 
     params.workspaceName = workspaceName;
@@ -1924,7 +1925,7 @@ export function registerAuthHandlers(ipcMain: any) {
           const resp = await httpsPost(url, body, headers);
           if (resp.status >= 200 && resp.status < 300) return { success: true };
           if (resp.status === 409) return { success: true, error: 'No pending changes to commit' };
-        } catch { /* try next */ }
+        } catch (err) { logger.warn('auth', 'Commit endpoint failed: ' + url, err); }
       }
       // For Cribl Cloud, commit may not be needed (auto-commits on save)
       if (auth.deploymentType === 'cloud') {
@@ -1955,7 +1956,7 @@ export function registerAuthHandlers(ipcMain: any) {
         try {
           const resp = await httpsPost(url, body, headers);
           if (resp.status >= 200 && resp.status < 300) return { success: true };
-        } catch { /* try next */ }
+        } catch (err) { logger.warn('auth', 'Deploy endpoint failed: ' + url, err); }
       }
       // For Cribl Cloud, deploy may not be needed (auto-deploys)
       if (auth.deploymentType === 'cloud') {
@@ -2153,7 +2154,7 @@ export function registerAuthHandlers(ipcMain: any) {
     if (rowsIdx >= 0) {
       const rowsData = output.slice(rowsIdx + 5);
       const rowStrings = rowsData.split('|||').filter(Boolean);
-      const rows = rowStrings.map((r) => { try { return JSON.parse(r.trim()); } catch { return {}; } }).filter((r) => Object.keys(r).length > 0);
+      const rows = rowStrings.map((r) => { try { return JSON.parse(r.trim()); } catch (err) { logger.warn('auth', 'Failed to parse query result row', err); return {}; } }).filter((r) => Object.keys(r).length > 0);
       return { success: true, rows };
     }
     // No ROWS: found -- might be empty result set

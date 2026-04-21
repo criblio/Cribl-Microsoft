@@ -32,6 +32,7 @@ import path from 'path';
 import crypto from 'crypto';
 import { loadGitHubPat } from './auth';
 import builtinBlocklistData from './edr-blocklist.json';
+import logger from './logger';
 
 // ---------------------------------------------------------------------------
 // Configuration
@@ -89,7 +90,8 @@ function loadBuiltinBlocklist(): BlockedSolution[] {
       reason: s.reason,
       source: 'built-in' as const,
     }));
-  } catch {
+  } catch (err) {
+    logger.error('sentinel-repo', 'Failed to load built-in blocklist', err);
     return [];
   }
 }
@@ -105,7 +107,8 @@ function loadLocalBlocklist(): BlockedSolution[] {
       reason: s.reason,
       source: (s.source as BlockedSolution['source']) || 'auto-detected',
     }));
-  } catch {
+  } catch (err) {
+    logger.error('sentinel-repo', 'Failed to load local blocklist', err);
     return [];
   }
 }
@@ -117,7 +120,7 @@ function saveLocalBlocklist(solutions: BlockedSolution[]): void {
       description: 'Auto-populated EDR blocklist. Solutions added here were detected as causing process termination during fetch. You can manually add or remove entries.',
       solutions: solutions.map((s) => ({ name: s.name, reason: s.reason, source: s.source })),
     }, null, 2));
-  } catch { /* non-fatal */ }
+  } catch (err) { logger.error('sentinel-repo', 'Failed to save local blocklist', err); }
 }
 
 /** Add a solution to the local blocklist (deduplicates by name). */
@@ -171,14 +174,14 @@ function writeFetchingMarker(solutionName: string): void {
   try {
     const marker: FetchingMarker = { solution: solutionName, startedAt: Date.now() };
     fs.writeFileSync(getFetchingMarkerPath(), JSON.stringify(marker));
-  } catch { /* non-fatal */ }
+  } catch (err) { logger.warn('sentinel-repo', 'Failed to write fetching marker', err); }
 }
 
 function clearFetchingMarker(): void {
   try {
     const p = getFetchingMarkerPath();
     if (fs.existsSync(p)) fs.unlinkSync(p);
-  } catch { /* non-fatal */ }
+  } catch (err) { logger.warn('sentinel-repo', 'Failed to clear fetching marker', err); }
 }
 
 /** Check for a stale fetching marker on startup. Returns the solution name if found. */
@@ -206,8 +209,9 @@ function checkAndRecoverFetchingMarker(): string | null {
       console.log(`[sentinel-repo] Stale fetch marker found for "${marker.solution}" (${Math.round(ageMs / 1000)}s old) -- likely user restart, not EDR kill. Ignoring.`);
       return null;
     }
-  } catch {
-    try { fs.unlinkSync(getFetchingMarkerPath()); } catch { /* ignore */ }
+  } catch (err) {
+    logger.error('sentinel-repo', 'Crash recovery check failed', err);
+    try { fs.unlinkSync(getFetchingMarkerPath()); } catch (unlinkErr) { logger.warn('sentinel-repo', 'Failed to clean up fetching marker', unlinkErr); }
     return null;
   }
 }
@@ -256,7 +260,7 @@ function loadStatus(): void {
     try {
       const entries = fs.readdirSync(solDir, { withFileTypes: true }).filter((e) => e.isDirectory());
       hasFetchedContent = entries.length > 0;
-    } catch { /* ignore */ }
+    } catch (err) { logger.warn('sentinel-repo', 'Failed to read Solutions directory', err); }
   }
 
   const blockedCount = getBlockedSolutionNames().size;
@@ -272,7 +276,7 @@ function loadStatus(): void {
 
   let saved: StatusFile = { lastUpdated: 0, lastCommit: '', solutionCount: 0 };
   if (fs.existsSync(statusPath)) {
-    try { saved = JSON.parse(fs.readFileSync(statusPath, 'utf-8')); } catch { /* use defaults */ }
+    try { saved = JSON.parse(fs.readFileSync(statusPath, 'utf-8')); } catch (err) { logger.warn('sentinel-repo', 'Failed to parse status file', err); }
   }
 
   currentStatus = {
@@ -295,7 +299,7 @@ function saveStatus(): void {
       lastCommit: currentStatus.lastCommit,
       solutionCount: currentStatus.solutionCount,
     }, null, 2));
-  } catch { /* non-fatal */ }
+  } catch (err) { logger.error('sentinel-repo', 'Failed to save status file', err); }
 }
 
 function broadcast(): void {
@@ -399,7 +403,8 @@ async function githubJson<T = unknown>(url: string): Promise<T | null> {
     });
     if (!resp.ok) return null;
     return await resp.json() as T;
-  } catch {
+  } catch (err) {
+    logger.error('sentinel-repo', 'GitHub API request failed: ' + url, err);
     return null;
   }
 }
@@ -418,7 +423,8 @@ async function githubRaw(relativePath: string, commitSha: string): Promise<strin
     });
     if (!resp.ok) return null;
     return await resp.text();
-  } catch {
+  } catch (err) {
+    logger.warn('sentinel-repo', 'GitHub raw fetch failed: ' + relativePath, err);
     return null;
   }
 }
@@ -484,9 +490,9 @@ async function fetchFilesInParallel(
             fs.mkdirSync(path.dirname(fullPath), { recursive: true });
             fs.writeFileSync(fullPath, content, 'utf-8');
             written++;
-          } catch { /* skip write errors (EDR may block specific files) */ }
+          } catch (err) { logger.warn('sentinel-repo', 'File write blocked (possible EDR): ' + file.path, err); }
         }
-      } catch { /* skip individual fetch errors */ }
+      } catch (err) { logger.warn('sentinel-repo', 'Fetch failed for file: ' + file.path, err); }
       completed++;
       // Throttle progress emission to integer percentage changes (100 events max total)
       const pct = Math.floor((completed / files.length) * 100);
@@ -538,10 +544,10 @@ async function cloneRepo(): Promise<boolean> {
     try {
       for (const win of BrowserWindow.getAllWindows()) {
         if (!win.isDestroyed()) {
-          try { win.webContents.send(channel, data); } catch { /* window closed mid-send */ }
+          try { win.webContents.send(channel, data); } catch (err) { logger.warn('sentinel-repo', 'IPC send failed (window may be closed)', err); }
         }
       }
-    } catch { /* no windows */ }
+    } catch (err) { logger.warn('sentinel-repo', 'Broadcast failed', err); }
   };
   const sendPhase = (phase: string) => safeSend('sentinel-repo:progress', phase);
   const sendFetchProgress = (done: number, total: number) => safeSend('sentinel-repo:fetch-progress', {
@@ -721,7 +727,7 @@ export function isRepoReady(): boolean {
   try {
     const entries = fs.readdirSync(solDir, { withFileTypes: true }).filter((e) => e.isDirectory());
     return entries.length > 0;
-  } catch { return false; }
+  } catch (err) { logger.warn('sentinel-repo', 'Failed to check repo readiness', err); return false; }
 }
 
 // Get the local path to the Solutions directory
@@ -764,7 +770,7 @@ export function listSolutions(): Array<{ name: string; path: string; deprecated?
               return result;
             }
           }
-        } catch { /* skip unreadable */ }
+        } catch (err) { logger.warn('sentinel-repo', 'Failed to read solution data files for deprecation check: ' + e.name, err); }
       }
 
       // Check deprecation: Data Connectors with [Deprecated] tag
@@ -780,7 +786,7 @@ export function listSolutions(): Array<{ name: string; path: string; deprecated?
               const content = fs.readFileSync(path.join(connDir, f), 'utf8');
               if (content.includes('"title"')) totalConnectors++;
               if (content.includes('[Deprecated]')) deprecatedConnectors++;
-            } catch { /* skip */ }
+            } catch (err) { logger.warn('sentinel-repo', 'Failed to read connector file: ' + f, err); }
           }
           // Only flag if ALL connectors are deprecated (some solutions have both old and new)
           if (totalConnectors > 0 && deprecatedConnectors === totalConnectors) {
@@ -788,7 +794,7 @@ export function listSolutions(): Array<{ name: string; path: string; deprecated?
             result.deprecationReason = 'All connectors deprecated';
             return result;
           }
-        } catch { /* skip */ }
+        } catch (err) { logger.warn('sentinel-repo', 'Deprecation check failed for: ' + e.name, err); }
       }
 
       return result;
@@ -817,7 +823,7 @@ export function listSolutionFiles(
 export function readRepoFile(relativePath: string): string | null {
   const fullPath = path.join(getRepoDir(), relativePath);
   if (!fs.existsSync(fullPath)) return null;
-  try { return fs.readFileSync(fullPath, 'utf-8'); } catch { return null; }
+  try { return fs.readFileSync(fullPath, 'utf-8'); } catch (err) { logger.warn('sentinel-repo', 'Failed to read repo file: ' + relativePath, err); return null; }
 }
 
 // Get SHA hash of a file (for change detection)
@@ -827,7 +833,7 @@ export function getFileHash(relativePath: string): string {
   try {
     const content = fs.readFileSync(fullPath);
     return crypto.createHash('sha256').update(content).digest('hex').slice(0, 16);
-  } catch { return ''; }
+  } catch (err) { logger.warn('sentinel-repo', 'Failed to hash file: ' + relativePath, err); return ''; }
 }
 
 // Find Data Connectors directory for a solution (handles both naming conventions)
@@ -863,7 +869,7 @@ export function listConnectorFiles(solutionName: string): Array<{ name: string; 
       const subFiles = listSolutionFiles(solutionName, relPrefix)
         .filter((f) => f.name.toLowerCase().endsWith('.json'));
       files.push(...subFiles);
-    } catch { /* skip inaccessible dirs */ }
+    } catch (err) { logger.warn('sentinel-repo', 'Failed to scan directory: ' + dir, err); }
   };
 
   try {
@@ -872,7 +878,7 @@ export function listConnectorFiles(solutionName: string): Array<{ name: string; 
     for (const sub of subDirs) {
       scanDir(path.join(fullDir, sub.name), `${connDir}/${sub.name}`);
     }
-  } catch { /* skip */ }
+  } catch (err) { logger.warn('sentinel-repo', 'Failed to scan connector subdirectories', err); }
 
   return files;
 }
@@ -881,7 +887,7 @@ export function listConnectorFiles(solutionName: string): Array<{ name: string; 
 export function readConnectorJson(relativePath: string): Record<string, unknown> | null {
   const content = readRepoFile(relativePath);
   if (!content) return null;
-  try { return JSON.parse(content); } catch { return null; }
+  try { return JSON.parse(content); } catch (err) { logger.warn('sentinel-repo', 'Failed to parse connector JSON: ' + relativePath, err); return null; }
 }
 
 // ---------------------------------------------------------------------------
@@ -1072,7 +1078,7 @@ export function listAnalyticRules(
       if (requiredFields.length > 0) {
         rules.push({ id, name, severity, tactics, requiredFields, allExtractedFields: allExtracted, dataTypes, query, fileName });
       }
-    } catch { /* skip unparseable files */ }
+    } catch (err) { logger.warn('sentinel-repo', 'Failed to parse analytic rule: ' + fileName, err); }
   }
 
   return rules;

@@ -220,7 +220,7 @@ function SentinelIntegration() {
         try {
           const mc = await window.api.config.read('integration-mode.json') as any;
           mode = mc?.mode || 'full';
-        } catch { /* no config yet */ }
+        } catch (err) { console.warn('[SentinelIntegration] Failed to load integration mode config', err); }
         setIntegrationMode(mode);
 
         const skipAzure = mode === 'air-gapped' || mode === 'cribl-only';
@@ -251,7 +251,7 @@ function SentinelIntegration() {
                     ]);
                     if (wsResult.success) setWorkspaces(wsResult.workspaces);
                     if (rgResult.success) setResourceGroups(rgResult.resourceGroups);
-                  } catch { /* subscription useEffect will retry */ }
+                  } catch (err) { console.warn('[SentinelIntegration] Init auth/workspace load failed', err); }
                 }
               }
 
@@ -262,7 +262,7 @@ function SentinelIntegration() {
                   if (groups.groups.length > 0) update({ workerGroups: [groups.groups[0].id] });
                 }
               }
-            } catch { /* auth check failed -- user can reconnect manually */ }
+            } catch (err) { console.warn('[SentinelIntegration] Auth status check failed', err); }
           })();
         }
 
@@ -281,16 +281,17 @@ function SentinelIntegration() {
             setRepoState(repoStatus.state as typeof repoState);
           }
           // If cloning/updating, the status listener will handle it
-        } catch {
+        } catch (err) {
           // Fallback: try loading solutions directly (GitHub API)
+          console.warn('[SentinelIntegration] Repo status check failed, trying fallback', err);
           setRepoState('loading');
           try {
             const sols = await window.api.github.fetchSentinelSolutions();
             setSolutions(sols);
             setRepoState('ready');
-          } catch { setRepoState('error'); }
+          } catch (err2) { console.error('[SentinelIntegration] GitHub API fallback failed', err2); setRepoState('error'); }
         }
-      } catch { /* skip */ }
+      } catch (err) { console.error('[SentinelIntegration] Init failed', err); }
     };
     init();
   }, []);
@@ -382,7 +383,7 @@ function SentinelIntegration() {
           if (wsResult.success && wsResult.workspaces.length > 0) setWorkspaces(wsResult.workspaces);
           if (rgResult.success && rgResult.resourceGroups.length > 0) setResourceGroups(rgResult.resourceGroups);
         }
-      } catch { /* skip */ }
+      } catch (err) { console.warn('[SentinelIntegration] Workspace/RG reload failed', err); }
     };
     reload();
   }, [azureConnected, state.subscription]);
@@ -440,7 +441,7 @@ function SentinelIntegration() {
                 .map((t: any) => (t.destTable as string).replace(/^Microsoft-/, ''))
             )] as string[];
           }
-        } catch { /* skip */ }
+        } catch (err) { console.warn('[SentinelIntegration] Vendor research for preview failed', err); }
         if (destTables.length === 0) destTables = ['CommonSecurityLog'];
 
         const preview = await window.api.azureDeploy.previewResources({
@@ -451,7 +452,7 @@ function SentinelIntegration() {
           location: state.location,
         });
         setResourcePreview(preview);
-      } catch { /* non-fatal */ }
+      } catch (err) { console.warn('[SentinelIntegration] Resource preview load failed', err); }
     };
     loadPreview();
   }, [hasAzure, state.workspace, state.subscription, state.samples.length, state.selectedSolution]);
@@ -536,7 +537,7 @@ function SentinelIntegration() {
             if (destTables.size > 0) {
               tableSource = 'Sentinel repo (CustomTables definition)';
             }
-          } catch { /* skip */ }
+          } catch (err) { console.warn('[SentinelIntegration] CustomTables connector resolution failed', err); }
         }
 
         // If still no dest tables, use CommonSecurityLog as default.
@@ -633,7 +634,7 @@ function SentinelIntegration() {
         setPasteContent('');
         setPasteLogType('');
       }
-    } catch { /* skip */ }
+    } catch (err) { console.error('[SentinelIntegration] Paste sample processing failed', err); }
   };
 
   // Detect log type from filename or fields
@@ -694,7 +695,7 @@ function SentinelIntegration() {
               try {
                 const obj = JSON.parse(raw);
                 csvLines.push(Object.values(obj).join(','));
-              } catch { csvLines.push(raw); }
+              } catch (err) { console.warn('[SentinelIntegration] CSV row JSON parse failed, using raw', err); csvLines.push(raw); }
             }
             const columnCount = r.fields.length;
             setCsvHeaderDialog({
@@ -717,7 +718,7 @@ function SentinelIntegration() {
         const tagged = await window.api.sampleParser.getTagged(state.selectedSolution);
         update({ samples: tagged });
       }
-    } catch { /* skip */ }
+    } catch (err) { console.error('[SentinelIntegration] File upload processing failed', err); }
   };
 
   // Apply CSV headers from the dialog and re-parse the sample
@@ -740,7 +741,7 @@ function SentinelIntegration() {
         const tagged = await window.api.sampleParser.getTagged(state.selectedSolution);
         update({ samples: tagged });
       }
-    } catch { /* skip */ }
+    } catch (err) { console.error('[SentinelIntegration] CSV header apply failed', err); }
     setCsvHeaderDialog(null);
   };
 
@@ -765,7 +766,7 @@ function SentinelIntegration() {
           setCsvFeedVendor(`Header file (${headers.length} columns)`);
         }
       }
-    } catch { /* skip */ }
+    } catch (err) { console.error('[SentinelIntegration] Header file upload failed', err); }
   };
 
   // Parse a feed config and extract headers
@@ -779,7 +780,7 @@ function SentinelIntegration() {
       } else {
         setCsvFeedVendor('No fields detected -- check the config format');
       }
-    } catch { /* skip */ }
+    } catch (err) { console.error('[SentinelIntegration] Feed config parse failed', err); }
   };
 
   // Auto-load sample data from Sentinel repo + local vendor sample libraries
@@ -860,7 +861,8 @@ function SentinelIntegration() {
           (result as any).error || 'No sample data found for this solution. Upload samples manually.'
         );
       }
-    } catch {
+    } catch (err) {
+      console.error('[SentinelIntegration] Auto-load samples failed', err);
       setPreIngestedWarning('Failed to search for samples. Upload samples manually.');
     }
     setAutoLoading(false);
@@ -884,7 +886,8 @@ function SentinelIntegration() {
         }
       }
       setBrowseSelected(preSelected);
-    } catch {
+    } catch (err) {
+      console.error('[SentinelIntegration] Browse samples list failed', err);
       setBrowseItems([]);
     }
     setBrowseLoading(false);
@@ -933,7 +936,8 @@ function SentinelIntegration() {
       }
 
       setBrowseOpen(false);
-    } catch {
+    } catch (err) {
+      console.error('[SentinelIntegration] Commit browse selection failed', err);
       setPreIngestedWarning('Failed to load selected samples.');
     }
     setBrowseCommitting(false);
@@ -953,7 +957,7 @@ function SentinelIntegration() {
     try {
       const mc = await window.api.config.read('integration-mode.json') as any;
       deployMode = mc?.mode || 'full';
-    } catch { /* default full */ }
+    } catch (err) { console.warn('[SentinelIntegration] Deploy mode config read failed, defaulting to full', err); }
     const skipAzure = deployMode === 'air-gapped' || deployMode === 'cribl-only';
     const skipCribl = deployMode === 'air-gapped' || deployMode === 'azure-only';
     if (deployMode !== 'full') addLog(`Mode: ${deployMode}`);
@@ -1002,7 +1006,8 @@ function SentinelIntegration() {
             addLog(`  Using default table: ${defaultDestTable}`);
           }
         }
-      } catch {
+      } catch (err) {
+        console.warn('[SentinelIntegration] Vendor research during deploy failed', err);
         addLog('  Vendor research unavailable, using default table');
       }
       if (destTables.length === 0) destTables = [defaultDestTable];
@@ -1071,7 +1076,7 @@ function SentinelIntegration() {
       // Each gets its own pipeline name but all target the same destination table
       const tables: Array<{ sentinelTable: string; criblStream: string; fields: never[] }> = [];
       let research: any = null;
-      try { research = await window.api.vendorResearch.research(state.selectedSolution); } catch { /* skip */ }
+      try { research = await window.api.vendorResearch.research(state.selectedSolution); } catch (err) { console.warn('[SentinelIntegration] Vendor research for pack build failed', err); }
 
       // Build table entries from loaded samples first, then supplement from vendor research.
       // Sample log types drive pipeline naming (firewall, WEB, tunnel, dns).
@@ -1104,7 +1109,7 @@ function SentinelIntegration() {
                 if (evt[field] !== undefined && evt[field] !== null && String(evt[field]).trim()) {
                   fieldValues.set(sample.logType, String(evt[field]));
                 } else { found = false; break; }
-              } catch { found = false; break; }
+              } catch (err) { console.warn('[SentinelIntegration] Discriminator field parse failed', err); found = false; break; }
             }
             if (found && fieldValues.size === state.samples.length) {
               const uniqueValues = new Set(fieldValues.values());
@@ -1129,7 +1134,7 @@ function SentinelIntegration() {
                   if (evt[field] !== undefined && evt[field] !== null) {
                     fieldValues.set(sample.logType, String(evt[field]));
                   } else { partialMatch = false; break; }
-                } catch { partialMatch = false; break; }
+                } catch (err) { console.warn('[SentinelIntegration] Partial match field parse failed', err); partialMatch = false; break; }
               }
               // Accept even non-unique values as long as each sample has the field
               if (partialMatch && fieldValues.size === state.samples.length && fieldValues.size > 0) {
@@ -1205,7 +1210,7 @@ function SentinelIntegration() {
             const parsed = JSON.parse(firstRaw);
             if (parsed.CEFVersion !== undefined && parsed.DeviceVendor) detectedFormat = 'cef';
             else if (parsed.LEEFVersion !== undefined) detectedFormat = 'leef';
-          } catch { /* not JSON, check raw string */
+          } catch { /* not JSON, check raw string -- intentional fallthrough */
             if (firstRaw.includes('CEF:')) detectedFormat = 'cef';
             else if (firstRaw.includes('LEEF:')) detectedFormat = 'leef';
           }
@@ -1229,7 +1234,7 @@ function SentinelIntegration() {
           packVersion = parts.join('.');
           addLog(`  Incrementing version: ${existing.version} -> ${packVersion}`);
         }
-      } catch { /* first build */ }
+      } catch (err) { console.warn('[SentinelIntegration] Pack version check failed, using default', err); }
 
       const buildResult = await window.api.packBuilder.scaffold({
         solutionName: vendorName,
@@ -1396,7 +1401,7 @@ function SentinelIntegration() {
       try {
         const result = await window.api.auth.criblSources(state.workerGroups[0]);
         if (result.success) setWiringSources(result.sources.filter((s: any) => !s.disabled));
-      } catch { /* skip */ }
+      } catch (err) { console.warn('[SentinelIntegration] Cribl sources load failed', err); }
     };
     load();
   }, [state.deployComplete, state.workerGroups, criblConnected]);
@@ -1408,7 +1413,7 @@ function SentinelIntegration() {
       try {
         const result = await window.api.auth.criblDatasets();
         if (result.success) setLakeDatasets(result.datasets);
-      } catch { /* skip */ }
+      } catch (err) { console.warn('[SentinelIntegration] Lake datasets load failed', err); }
     };
     load();
   }, [state.enableLakeFederation, criblConnected]);
@@ -1619,7 +1624,7 @@ function SentinelIntegration() {
                   if (!window.api) return;
                   setRepoState('cloning');
                   setRepoProgress('Starting clone...');
-                  try { await window.api.sentinelRepo.sync(); } catch { setRepoState('error'); }
+                  try { await window.api.sentinelRepo.sync(); } catch (err) { console.error('[SentinelIntegration] Repo sync retry failed', err); setRepoState('error'); }
                 }}
               >
                 Retry Sync
@@ -1882,7 +1887,7 @@ function SentinelIntegration() {
                       <div style={{ maxHeight: '160px', overflow: 'auto', background: 'var(--bg-input)', borderRadius: '3px', padding: '8px' }}>
                         {sample.rawEvents.slice(0, 3).map((raw, i) => {
                           let display = raw;
-                          try { display = JSON.stringify(JSON.parse(raw), null, 2); } catch { /* keep original */ }
+                          try { display = JSON.stringify(JSON.parse(raw), null, 2); } catch { /* not JSON, keep original display string */ }
                           return (
                             <pre key={i} style={{
                               margin: 0, marginBottom: i < 2 ? '6px' : 0, padding: '6px',
@@ -2833,7 +2838,7 @@ function SentinelIntegration() {
                         } else if (rgResult.success) {
                           setResourceGroups(rgResult.resourceGroups);
                         }
-                      } catch { /* fallback */ }
+                      } catch (err) { console.warn('[SentinelIntegration] Subscription workspace/RG load failed', err); }
                     }
                   }}
                   disabled={!azureConnected}>
@@ -2994,7 +2999,7 @@ function SentinelIntegration() {
                               canReadWorkspace: az.canReadWorkspace, canDeploy: azCanDeploy,
                               roles, error: az.error,
                             });
-                          } catch { setAzurePermissions((p) => ({ ...p, checking: false, checked: true })); }
+                          } catch (err) { console.warn('[SentinelIntegration] Permission retry check failed', err); setAzurePermissions((p) => ({ ...p, checking: false, checked: true })); }
                         }}
                       >
                         Retry Check
@@ -3008,7 +3013,7 @@ function SentinelIntegration() {
                             await window.api.auth.azureLogin();
                             const auth = await window.api.auth.status();
                             setAzureConnected(auth.azure.loggedIn);
-                          } catch { /* skip */ }
+                          } catch (err) { console.warn('[SentinelIntegration] Azure account switch failed', err); }
                         }}
                       >
                         Switch Account

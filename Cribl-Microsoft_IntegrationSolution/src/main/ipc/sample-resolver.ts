@@ -9,6 +9,7 @@ import fs from 'fs';
 import path from 'path';
 import { BrowserWindow } from 'electron';
 import { loadGitHubPat } from './auth';
+import logger from './logger';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -282,7 +283,9 @@ async function fetchElasticPackageNames(): Promise<string[]> {
         packageNamesFetchedAt = cached.fetchedAt;
         return cachedPackageNames;
       }
-    } catch { /* re-fetch */ }
+    } catch (err) {
+      logger.warn('sample-resolver', 'Failed to read package index cache file', err);
+    }
   }
 
   // Fetch from GitHub API
@@ -307,10 +310,13 @@ async function fetchElasticPackageNames(): Promise<string[]> {
     packageNamesFetchedAt = Date.now();
     try {
       fs.writeFileSync(cacheFile, JSON.stringify({ names, fetchedAt: Date.now() }));
-    } catch { /* non-fatal */ }
+    } catch (err) {
+      logger.warn('sample-resolver', 'Failed to write package index cache file', err);
+    }
 
     return names;
-  } catch {
+  } catch (err) {
+    logger.warn('sample-resolver', 'Failed to fetch Elastic package names from GitHub API', err);
     return cachedPackageNames; // keep stale cache on error
   }
 }
@@ -333,7 +339,8 @@ async function discoverDataStreams(packageName: string): Promise<string[]> {
     const entries: Array<{ name: string; type: string }> = await resp.json() as any;
     const streams = entries.filter((e) => e.type === 'dir').map((e) => e.name);
     return streams.length > 0 ? streams : ['log'];
-  } catch {
+  } catch (err) {
+    logger.warn('sample-resolver', `Failed to discover data streams for package "${packageName}"`, err);
     return ['log'];
   }
 }
@@ -439,7 +446,9 @@ function loadElasticStatus(): void {
     try {
       const saved = JSON.parse(fs.readFileSync(statusPath, 'utf-8'));
       elasticStatus = { ...elasticStatus, ...saved, state: saved.packageCount > 0 ? 'ready' : 'not_cloned' };
-    } catch { /* defaults */ }
+    } catch (err) {
+      logger.warn('sample-resolver', 'Failed to load saved Elastic status from disk', err);
+    }
   }
 }
 
@@ -449,7 +458,9 @@ function saveElasticStatus(): void {
       lastUpdated: elasticStatus.lastUpdated,
       packageCount: elasticStatus.packageCount,
     }, null, 2));
-  } catch { /* non-fatal */ }
+  } catch (err) {
+    logger.warn('sample-resolver', 'Failed to save Elastic status to disk', err);
+  }
 }
 
 export function isElasticRepoReady(): boolean {
@@ -478,7 +489,9 @@ async function fetchElasticTestFiles(
           content: fs.readFileSync(path.join(cacheDir, f), 'utf-8'),
         }));
       }
-    } catch { /* re-fetch */ }
+    } catch (err) {
+      logger.warn('sample-resolver', `Cache check failed for ${packageName}/${dataStream}`, err);
+    }
   }
 
   // Fetch file listing from GitHub API
@@ -514,13 +527,16 @@ async function fetchElasticTestFiles(
           fs.writeFileSync(path.join(cacheDir, file.name), content);
           results.push({ fileName: file.name, content });
         }
-      } catch { /* skip individual file failures */ }
+      } catch (err) {
+        logger.warn('sample-resolver', `Failed to download Elastic test file "${file.name}" for ${packageName}/${dataStream}`, err);
+      }
     }
 
     // Update cache timestamp
     fs.writeFileSync(cacheMeta, new Date().toISOString());
     return results;
-  } catch {
+  } catch (err) {
+    logger.warn('sample-resolver', `Failed to fetch Elastic test files for ${packageName}/${dataStream}`, err);
     return [];
   }
 }
@@ -616,7 +632,9 @@ async function fetchCriblSamples(repoName: string, sentinelTable: string): Promi
           const content = await resp.text();
           fs.writeFileSync(path.join(repoCache, file.name), content);
         }
-      } catch { /* skip individual file failures */ }
+      } catch (err) {
+        logger.warn('sample-resolver', `Failed to download Cribl sample file "${file.name}" from ${repoName}`, err);
+      }
     }
 
     // Update cache timestamp
@@ -626,7 +644,8 @@ async function fetchCriblSamples(repoName: string, sentinelTable: string): Promi
     }
 
     return readCachedCriblSamples(repoCache, repoName, sentinelTable);
-  } catch {
+  } catch (err) {
+    logger.warn('sample-resolver', `Failed to fetch Cribl samples from repo "${repoName}"`, err);
     return [];
   }
 }
@@ -662,7 +681,9 @@ function readCachedCriblSamples(cacheDir: string, repoName: string, sentinelTabl
           logType: file.replace('.json', ''),
         });
       }
-    } catch { /* skip */ }
+    } catch (err) {
+      logger.warn('sample-resolver', `Failed to parse cached Cribl sample file "${file}" in ${cacheDir}`, err);
+    }
   }
 
   return results;
@@ -737,7 +758,8 @@ async function synthesizeSamples(
     try {
       const fm = await import('./field-matcher');
       reverseAlias = (fm as any).REVERSE_ALIAS || new Map();
-    } catch {
+    } catch (err) {
+      logger.warn('sample-resolver', 'Failed to load reverse alias map from field-matcher', err);
       reverseAlias = new Map();
     }
 
@@ -774,7 +796,8 @@ async function synthesizeSamples(
       source: `synthesized:${solutionName}`,
       tier: 'synthesized',
     }];
-  } catch {
+  } catch (err) {
+    logger.warn('sample-resolver', `Failed to synthesize samples for "${solutionName}"`, err);
     return [];
   }
 }
@@ -897,8 +920,9 @@ function splitSamplesByLogType(rawEvents: string[], fallbackLogType: string, for
   // Parse events into objects for field inspection
   const eventObjects: Array<Record<string, unknown>> = [];
   for (const raw of rawEvents) {
-    try { eventObjects.push(JSON.parse(raw)); } catch {
+    try { eventObjects.push(JSON.parse(raw)); } catch (err) {
       // Try KV parsing for formats like Fortinet (date=2019-05-10 type="traffic" ...)
+      logger.warn('sample-resolver', 'Event is not valid JSON, attempting KV parse fallback', err);
       if (/\w+=/.test(raw)) {
         const kvFields = parseKvLine(raw);
         if (Object.keys(kvFields).length >= 3) {
@@ -1198,7 +1222,8 @@ function hasNamedFields(rawEvents: string[], format: string): boolean {
       // If most keys are numeric indices (_0, _1) or just numbers, it's a headerless CSV parse
       const numericKeys = keys.filter((k) => /^_?\d+$/.test(k));
       return numericKeys.length < keys.length * 0.5; // less than half numeric = has named fields
-    } catch {
+    } catch (err) {
+      logger.warn('sample-resolver', 'Failed to parse JSON when checking for named fields', err);
       return false;
     }
   }
@@ -1280,7 +1305,8 @@ function unwrapElasticEvents(rawEvents: string[]): string[] {
       } else {
         unwrapped.push(raw);
       }
-    } catch {
+    } catch (err) {
+      logger.warn('sample-resolver', 'Event is not valid JSON during unwrap, keeping as-is', err);
       unwrapped.push(raw); // not JSON, keep as-is
     }
   }
@@ -1321,7 +1347,9 @@ function extractInnerEvent(obj: Record<string, unknown>): Record<string, unknown
       if (typeof parsed === 'object' && parsed !== null) {
         return parsed as Record<string, unknown>;
       }
-    } catch { /* not JSON -- it's a raw log line */ }
+    } catch (err) {
+      logger.warn('sample-resolver', 'Message field is not valid JSON, treating as raw log line', err);
+    }
     // Return null to signal the caller to use the raw message string directly
     return null;
   }
@@ -1365,7 +1393,9 @@ function parseElasticFileContent(content: string, fileName: string): string[] {
       if (Array.isArray(parsed)) {
         return parsed.map((e) => typeof e === 'string' ? e : JSON.stringify(e));
       }
-    } catch { /* not a valid JSON array */ }
+    } catch (err) {
+      logger.warn('sample-resolver', `File "${fileName}" starts with "[" but is not a valid JSON array`, err);
+    }
   }
 
   // Try 2: Single JSON object (may have wrapper like {"events":[...]} )
@@ -1376,7 +1406,9 @@ function parseElasticFileContent(content: string, fileName: string): string[] {
         return parsed.events.map((e: unknown) => typeof e === 'string' ? e : JSON.stringify(e));
       }
       return [JSON.stringify(parsed)];
-    } catch { /* not a single JSON object -- try other approaches */ }
+    } catch (err) {
+      logger.warn('sample-resolver', `File "${fileName}" is not a single valid JSON object, trying other approaches`, err);
+    }
   }
 
   // Try 3: NDJSON or concatenated pretty-printed JSON
@@ -1391,7 +1423,8 @@ function parseElasticFileContent(content: string, fileName: string): string[] {
       try {
         JSON.parse(l);
         ndjsonEvents.push(l);
-      } catch {
+      } catch (err) {
+        logger.warn('sample-resolver', `NDJSON line parse failed in "${fileName}", falling back to chunk splitting`, err);
         allJson = false;
         break;
       }
@@ -1406,7 +1439,9 @@ function parseElasticFileContent(content: string, fileName: string): string[] {
       try {
         const obj = JSON.parse(chunk.trim());
         prettyEvents.push(JSON.stringify(obj));
-      } catch { /* skip unparseable chunks */ }
+      } catch (err) {
+        logger.warn('sample-resolver', `Skipping unparseable JSON chunk in "${fileName}"`, err);
+      }
     }
     if (prettyEvents.length > 0) return prettyEvents;
   }
@@ -1472,7 +1507,9 @@ export async function listAvailableSamples(solutionName: string): Promise<Availa
         });
       }
     }
-  } catch { /* Sentinel repo not available or no samples -- continue with Elastic */ }
+  } catch (err) {
+    logger.warn('sample-resolver', `Sentinel repo not available or no samples for "${solutionName}"`, err);
+  }
 
   // Tier 1: Elastic integrations -- split each file by log type discriminator
   // Only include samples with self-describing formats (JSON, KV, CEF, LEEF, CSV with headers).
@@ -1500,7 +1537,9 @@ export async function listAvailableSamples(solutionName: string): Promise<Availa
           });
         }
       }
-    } catch (err) { console.error('[sample-resolver] Elastic fetch failed:', err instanceof Error ? err.message : err); }
+    } catch (err) {
+      logger.error('sample-resolver', `Elastic fetch failed for package "${entry.elasticPackage}"`, err);
+    }
   }
 
   return results;
@@ -1536,7 +1575,9 @@ export async function loadSelectedSamples(
           }
         }
       }
-    } catch { /* Sentinel repo not available */ }
+    } catch (err) {
+      logger.warn('sample-resolver', `Sentinel repo not available when loading selected samples for "${solutionName}"`, err);
+    }
   }
 
   // Collect Elastic samples -- split by log type discriminator to match browse IDs
@@ -1569,7 +1610,9 @@ export async function loadSelectedSamples(
           }
         }
       }
-    } catch { /* skip */ }
+    } catch (err) {
+      logger.warn('sample-resolver', `Failed to load Elastic samples for "${solutionName}"`, err);
+    }
   }
 
   // Collect Cribl samples
@@ -1581,7 +1624,9 @@ export async function loadSelectedSamples(
           results.push(s);
         }
       }
-    } catch { /* skip */ }
+    } catch (err) {
+      logger.warn('sample-resolver', `Failed to load Cribl samples from "${entry.criblPackRepo}" for "${solutionName}"`, err);
+    }
   }
 
   // Handle synthesized if selected
@@ -1613,7 +1658,8 @@ export async function resolveSamples(
           events = Array.isArray(parsed)
             ? parsed.map((e) => typeof e === 'string' ? e : JSON.stringify(e))
             : [sample.content.trim()];
-        } catch {
+        } catch (err) {
+          logger.warn('sample-resolver', `User-uploaded file "${sample.fileName}" detected as JSON but failed to parse, treating as line-delimited`, err);
           events = sample.content.trim().split('\n').filter(Boolean);
         }
       } else {
@@ -1719,7 +1765,9 @@ export async function prefetchElasticSamples(): Promise<boolean> {
           totalStreams++;
           totalSampleFiles += files.length;
         }
-      } catch { /* skip */ }
+      } catch (err) {
+        logger.warn('sample-resolver', `Prefetch failed for Elastic package "${pkg}" stream "${stream}"`, err);
+      }
       completed++;
       const pct = totalWork > 0 ? Math.floor((completed / totalWork) * 100) : 100;
       if (pct !== lastPct || completed === totalWork) {
@@ -1808,7 +1856,7 @@ export function registerSampleResolverHandlers(ipcMain: import('electron').IpcMa
     try {
       return await listAvailableSamples(solutionName);
     } catch (err) {
-      console.error('[sample-resolver] listAvailableSamples error:', err instanceof Error ? err.message : err);
+      logger.error('sample-resolver', `listAvailableSamples failed for "${solutionName}"`, err);
       return [];
     }
   });
