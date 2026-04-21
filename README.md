@@ -12,7 +12,7 @@ Start-App-Windows.bat
 ./Start-App-macOS.sh
 ```
 
-On first run the app will prompt to install Node.js dependencies. See the [Integration Solution README](Cribl-Microsoft_IntegrationSolution/README.md) for full details.
+On first run the app will prompt to install Node.js dependencies. See the **[Quick Start Guide](QUICK_START.md)** for step-by-step usage instructions.
 
 ## What the App Does
 
