@@ -26,12 +26,62 @@ import fs from 'fs';
 import path from 'path';
 import logger from './logger';
 
-// Select http or https module based on URL protocol
-function httpModule(url: string): typeof https {
-  return url.startsWith('http://') ? http as unknown as typeof https : https;
-}
-function defaultPort(url: string): number {
-  return url.startsWith('http://') ? 80 : 443;
+// ---------------------------------------------------------------------------
+// HTTP Client -- uses Electron net.fetch (trusts Windows cert store) with
+// Node.js https fallback for web server mode.
+// ---------------------------------------------------------------------------
+
+let _electronNet: { fetch: typeof globalThis.fetch } | null = null;
+try {
+  const e = eval("require")('electron');
+  if (e?.net?.fetch) _electronNet = e.net;
+} catch { /* web mode */ }
+
+async function electronFetch(
+  url: string,
+  options: { method: string; headers?: Record<string, string>; body?: string | Buffer; timeout?: number },
+): Promise<{ status: number; body: string }> {
+  const timeout = options.timeout || 90000;
+
+  // Electron net.fetch: uses Chromium networking, trusts OS certificate store
+  if (_electronNet) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeout);
+    try {
+      const resp = await _electronNet.fetch(url, {
+        method: options.method,
+        headers: options.headers,
+        body: options.body,
+        signal: controller.signal as any,
+      });
+      const body = await resp.text();
+      return { status: resp.status, body };
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  // Fallback: Node.js https (web server mode)
+  return new Promise((resolve, reject) => {
+    const parsed = new URL(url);
+    const mod = url.startsWith('http://') ? http as unknown as typeof https : https;
+    const req = mod.request({
+      hostname: parsed.hostname,
+      port: parsed.port || (url.startsWith('http://') ? 80 : 443),
+      path: parsed.pathname + parsed.search,
+      method: options.method,
+      headers: options.headers,
+      rejectUnauthorized: url.startsWith('https://'),
+      timeout,
+    }, (res) => {
+      let data = '';
+      res.on('data', (chunk) => { data += chunk; });
+      res.on('end', () => resolve({ status: res.statusCode || 0, body: data }));
+    });
+    req.on('error', reject);
+    if (options.body) req.write(options.body);
+    req.end();
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -244,34 +294,28 @@ function clearGitHubPat(): void {
 
 // Validate a PAT by calling the authenticated user endpoint
 async function testGitHubPat(pat: string): Promise<{ ok: boolean; login?: string; error?: string }> {
-  return new Promise((resolve) => {
-    const req = https.request('https://api.github.com/user', {
+  try {
+    const resp = await electronFetch('https://api.github.com/user', {
       method: 'GET',
       headers: {
         'Authorization': `Bearer ${pat}`,
         'Accept': 'application/vnd.github+json',
         'User-Agent': 'Cribl-Microsoft-Integration',
       },
-    }, (res) => {
-      let body = '';
-      res.on('data', (chunk) => { body += chunk; });
-      res.on('end', () => {
-        if (res.statusCode === 200) {
-          try {
-            const parsed = JSON.parse(body);
-            resolve({ ok: true, login: parsed.login });
-          } catch (err) {
-            logger.error('auth', 'Failed to parse GitHub user response', err);
-            resolve({ ok: false, error: 'Invalid response from GitHub' });
-          }
-        } else {
-          resolve({ ok: false, error: `GitHub returned ${res.statusCode}: ${body.slice(0, 200)}` });
-        }
-      });
     });
-    req.on('error', (err) => resolve({ ok: false, error: err.message }));
-    req.end();
-  });
+    if (resp.status === 200) {
+      try {
+        const parsed = JSON.parse(resp.body);
+        return { ok: true, login: parsed.login };
+      } catch (err) {
+        logger.error('auth', 'Failed to parse GitHub user response', err);
+        return { ok: false, error: 'Invalid response from GitHub' };
+      }
+    }
+    return { ok: false, error: `GitHub returned ${resp.status}: ${resp.body.slice(0, 200)}` };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
 }
 
 // In-memory auth (for sessions where user chose not to save)
@@ -289,34 +333,10 @@ function httpsPost(
   body: string,
   headers: Record<string, string>,
 ): Promise<{ status: number; body: string }> {
-  return new Promise((resolve, reject) => {
-    const parsed = new URL(url);
-    const mod = httpModule(url);
-    const options: https.RequestOptions = {
-      hostname: parsed.hostname,
-      port: parsed.port || defaultPort(url),
-      path: parsed.pathname + parsed.search,
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Content-Length': Buffer.byteLength(body),
-        ...headers,
-      },
-      rejectUnauthorized: url.startsWith('https://'),
-      timeout: 90000,
-    };
-
-    const req = mod.request(options, (res) => {
-      let data = '';
-      res.on('data', (chunk) => { data += chunk; });
-      res.on('end', () => {
-        resolve({ status: res.statusCode || 0, body: data });
-      });
-    });
-
-    req.on('error', reject);
-    req.write(body);
-    req.end();
+  return electronFetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...headers },
+    body,
   });
 }
 
@@ -325,22 +345,10 @@ function httpsPut(
   body: string,
   headers: Record<string, string>,
 ): Promise<{ status: number; body: string }> {
-  return new Promise((resolve, reject) => {
-    const parsed = new URL(url);
-    const mod = httpModule(url);
-    const req = mod.request({
-      hostname: parsed.hostname, port: parsed.port || defaultPort(url),
-      path: parsed.pathname + parsed.search, method: 'PUT',
-      headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body), ...headers },
-      rejectUnauthorized: url.startsWith('https://'), timeout: 90000,
-    }, (res) => {
-      let data = '';
-      res.on('data', (chunk) => { data += chunk; });
-      res.on('end', () => resolve({ status: res.statusCode || 0, body: data }));
-    });
-    req.on('error', reject);
-    req.write(body);
-    req.end();
+  return electronFetch(url, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...headers },
+    body,
   });
 }
 
@@ -349,22 +357,10 @@ function httpsPatch(
   body: string,
   headers: Record<string, string>,
 ): Promise<{ status: number; body: string }> {
-  return new Promise((resolve, reject) => {
-    const parsed = new URL(url);
-    const mod = httpModule(url);
-    const req = mod.request({
-      hostname: parsed.hostname, port: parsed.port || defaultPort(url),
-      path: parsed.pathname + parsed.search, method: 'PATCH',
-      headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body), ...headers },
-      rejectUnauthorized: url.startsWith('https://'), timeout: 90000,
-    }, (res) => {
-      let data = '';
-      res.on('data', (chunk) => { data += chunk; });
-      res.on('end', () => resolve({ status: res.statusCode || 0, body: data }));
-    });
-    req.on('error', reject);
-    req.write(body);
-    req.end();
+  return electronFetch(url, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...headers },
+    body,
   });
 }
 
@@ -372,32 +368,9 @@ function httpsGet(
   url: string,
   headers: Record<string, string>,
 ): Promise<{ status: number; body: string }> {
-  return new Promise((resolve, reject) => {
-    const parsed = new URL(url);
-    const mod = httpModule(url);
-    const options: https.RequestOptions = {
-      hostname: parsed.hostname,
-      port: parsed.port || defaultPort(url),
-      path: parsed.pathname + parsed.search,
-      method: 'GET',
-      headers: {
-        'Accept': 'application/json',
-        ...headers,
-      },
-      rejectUnauthorized: url.startsWith('https://'),
-      timeout: 90000,
-    };
-
-    const req = mod.request(options, (res) => {
-      let data = '';
-      res.on('data', (chunk) => { data += chunk; });
-      res.on('end', () => {
-        resolve({ status: res.statusCode || 0, body: data });
-      });
-    });
-
-    req.on('error', reject);
-    req.end();
+  return electronFetch(url, {
+    method: 'GET',
+    headers: { 'Accept': 'application/json', ...headers },
   });
 }
 
@@ -515,29 +488,13 @@ export async function criblUploadPack(
     const putUrl = `${auth.baseUrl}/api/v1/m/${workerGroup}/packs?filename=${encodeURIComponent(fileName)}`;
     const fileData = fs.readFileSync(crblPath);
 
-    const putResp = await new Promise<{ status: number; body: string }>((resolve, reject) => {
-      const parsed = new URL(putUrl);
-      const mod = httpModule(putUrl);
-      const req = mod.request({
-        hostname: parsed.hostname,
-        port: parsed.port || defaultPort(putUrl),
-        path: parsed.pathname + parsed.search,
-        method: 'PUT',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/octet-stream',
-          'Content-Length': fileData.length,
-        },
-        rejectUnauthorized: putUrl.startsWith('https://'),
-        timeout: 90000,
-      }, (res) => {
-        let data = '';
-        res.on('data', (chunk) => { data += chunk; });
-        res.on('end', () => resolve({ status: res.statusCode || 0, body: data }));
-      });
-      req.on('error', reject);
-      req.write(fileData);
-      req.end();
+    const putResp = await electronFetch(putUrl, {
+      method: 'PUT',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/octet-stream',
+      },
+      body: fileData as any,
     });
 
     if (putResp.status < 200 || putResp.status >= 300) {
@@ -579,26 +536,10 @@ export async function criblUploadPack(
       const packId = fileName.replace(/_[\d.]+\.crbl$/, '').replace(/\.[^.]+\.crbl$/, '');
 
       // Delete existing pack
-      const deleteResp = await new Promise<{ status: number; body: string }>((resolve, reject) => {
-        const delUrl = new URL(apiUrl(auth, workerGroup, `/packs/${encodeURIComponent(packId)}`));
-        const delUrlStr = delUrl.toString();
-        const mod = httpModule(delUrlStr);
-        const req = mod.request({
-          hostname: delUrl.hostname,
-          port: delUrl.port || defaultPort(delUrlStr),
-          path: delUrl.pathname,
-          method: 'DELETE',
-          headers: { Authorization: `Bearer ${token}` },
-          rejectUnauthorized: delUrlStr.startsWith('https://'),
-          timeout: 30000,
-        }, (res) => {
-          let data = '';
-          res.on('data', (chunk) => { data += chunk; });
-          res.on('end', () => resolve({ status: res.statusCode || 0, body: data }));
-        });
-        req.on('error', reject);
-        req.end();
-      });
+      const deleteResp = await electronFetch(
+        apiUrl(auth, workerGroup, `/packs/${encodeURIComponent(packId)}`),
+        { method: 'DELETE', headers: { Authorization: `Bearer ${token}` }, timeout: 30000 },
+      );
 
       if (deleteResp.status >= 200 && deleteResp.status < 300) {
         // Retry install after delete
@@ -1994,26 +1935,8 @@ export function registerAuthHandlers(ipcMain: any) {
       if (existing) {
         // Update existing breaker via PATCH
         const patchUrl = apiUrl(auth, workerGroup, `/lib/breakers/${encodeURIComponent(breakerId)}`);
-        const patchResp = await new Promise<{ status: number; body: string }>((resolve, reject) => {
-          const parsed = new URL(patchUrl);
-          const body = JSON.stringify(breakerConfig);
-          const mod = httpModule(patchUrl);
-          const req = mod.request({
-            hostname: parsed.hostname, port: parsed.port || defaultPort(patchUrl),
-            path: parsed.pathname + parsed.search, method: 'PATCH',
-            headers: {
-              Authorization: `Bearer ${token}`, 'Content-Type': 'application/json',
-              'Content-Length': Buffer.byteLength(body),
-            },
-            rejectUnauthorized: patchUrl.startsWith('https://'), timeout: 30000,
-          }, (res) => {
-            let data = '';
-            res.on('data', (chunk) => { data += chunk; });
-            res.on('end', () => resolve({ status: res.statusCode || 0, body: data }));
-          });
-          req.on('error', reject);
-          req.write(body);
-          req.end();
+        const patchResp = await httpsPatch(patchUrl, JSON.stringify(breakerConfig), {
+          Authorization: `Bearer ${token}`,
         });
         if (patchResp.status >= 200 && patchResp.status < 300) {
           return { success: true, action: 'updated' };
@@ -2067,25 +1990,8 @@ export function registerAuthHandlers(ipcMain: any) {
       if (exists) {
         // Update via PATCH
         const patchUrl = apiUrl(auth, workerGroup, '/system/secrets/' + encodeURIComponent(secretId));
-        const patchResp = await new Promise<{ status: number; body: string }>((resolve, reject) => {
-          const parsed = new URL(patchUrl);
-          const mod = httpModule(patchUrl);
-          const req = mod.request({
-            hostname: parsed.hostname, port: parsed.port || defaultPort(patchUrl),
-            path: parsed.pathname, method: 'PATCH',
-            headers: {
-              Authorization: `Bearer ${token}`, 'Content-Type': 'application/json',
-              'Content-Length': Buffer.byteLength(secretBody),
-            },
-            rejectUnauthorized: patchUrl.startsWith('https://'), timeout: 30000,
-          }, (res) => {
-            let data = '';
-            res.on('data', (chunk) => { data += chunk; });
-            res.on('end', () => resolve({ status: res.statusCode || 0, body: data }));
-          });
-          req.on('error', reject);
-          req.write(secretBody);
-          req.end();
+        const patchResp = await httpsPatch(patchUrl, secretBody, {
+          Authorization: `Bearer ${token}`,
         });
         return { success: patchResp.status >= 200 && patchResp.status < 300, action: 'updated' };
       }
