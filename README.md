@@ -12,7 +12,9 @@ Start-App-Windows.bat
 ./Start-App-macOS.sh
 ```
 
-On first run the app will prompt to install Node.js dependencies. See the **[Quick Start Guide](QUICK_START.md)** for step-by-step usage instructions.
+The app runs from source using Node.js and Electron -- no `.exe` packaging required. This avoids EDR false positives on corporate machines. On first run, the launcher prompts to install npm dependencies.
+
+See the **[Quick Start Guide](QUICK_START.md)** for step-by-step usage instructions.
 
 ## What the App Does
 
@@ -111,9 +113,12 @@ Static and dynamic lookup tables for Cribl Stream, including Active Directory in
 
 ## Security
 
-- Credentials encrypted at rest using OS keychain (Windows DPAPI / macOS Keychain)
+See the full **[Security Disclaimer](SECURITY_DISCLAIMER.md)** for details on credential storage, network communications, and known limitations.
+
+- Credentials encrypted at rest using OS keychain (Windows DPAPI)
 - GitHub PATs stored via Electron safeStorage, never written to disk in plaintext
-- Azure AD app registrations for Cribl authentication
+- Azure session managed by Az PowerShell module (no credentials stored by the app)
+- Acceptable Use agreement shown on first launch
 - Never commit real credentials to version control
 
 ## Git Workflow

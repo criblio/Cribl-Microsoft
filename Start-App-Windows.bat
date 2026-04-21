@@ -3,17 +3,14 @@ setlocal enabledelayedexpansion
 title Cribl SOC Optimization Toolkit for Microsoft Sentinel
 
 REM =================================================================
-REM  DEVELOPER MODE LAUNCHER
+REM  Cribl SOC Optimization Toolkit Launcher
 REM
-REM  This script runs the app from source using `npm run dev`.
-REM  It is intended for development and quick testing only.
+REM  Runs the app from source using Node.js and Electron.
+REM  Requires Node.js 18+ (https://nodejs.org/).
+REM  First run will prompt to install npm dependencies.
 REM
-REM  For distribution to other users, run:
-REM    cd Cribl-Microsoft_IntegrationSolution
-REM    npm run dist:win
-REM  This produces a proper installer in the `release/` directory
-REM  that does NOT trigger EDR alerts (CrowdStrike, SentinelOne etc.)
-REM  that the dev launcher may produce on strict corporate machines.
+REM  Running from source avoids EDR false positives that packaged
+REM  .exe files can trigger on corporate machines.
 REM =================================================================
 
 REM Clear ELECTRON_RUN_AS_NODE if inherited from parent (VSCode, Cursor, etc. set this)
@@ -25,7 +22,6 @@ cd /d "%~dp0Cribl-Microsoft_IntegrationSolution"
 
 echo ============================================================
 echo   Cribl SOC Optimization Toolkit for Microsoft Sentinel
-echo   (Developer Mode -- not for end-user distribution)
 echo ============================================================
 echo.
 
