@@ -1244,14 +1244,27 @@ function SentinelIntegration() {
 
       // 5. Refresh destination configs from Azure (skip in air-gapped/cribl-only)
       if (!skipAzure) {
-        addLog('Refreshing destination configs from Azure...');
+        addLog('Resolving DCR ingestion endpoints from Azure...');
         const refreshResult = await window.api.azureDeploy.refreshDestinations(destTables);
+        if (!refreshResult.success) {
+          addLog(`  ERROR: ${refreshResult.error || 'Failed to resolve destination endpoints'}`);
+          addLog('  Cannot embed Sentinel destination without a valid ingestion endpoint.');
+          addLog('  Verify the DCR exists and your Azure account has read access.');
+          update({ deploying: false });
+          return;
+        }
         addLog(`  ${refreshResult.total || 0} destination(s) resolved`);
+        if (refreshResult.error) addLog(`  Warnings: ${refreshResult.error}`);
 
         // 5b. Embed destinations
         addLog('Embedding destination configs...');
         const embedResult = await window.api.azureDeploy.embedDestinations(buildResult.packDir, destTables);
-        addLog(`  ${embedResult.message || embedResult.error || 'Done'}`);
+        if (!embedResult.success) {
+          addLog(`  ERROR: ${embedResult.error}`);
+          update({ deploying: false });
+          return;
+        }
+        addLog(`  ${embedResult.message || 'Done'}`);
       } else {
         addLog('Skipping Azure destination refresh (offline mode)');
       }

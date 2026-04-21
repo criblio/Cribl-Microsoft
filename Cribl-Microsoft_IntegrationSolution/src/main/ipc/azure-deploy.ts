@@ -180,6 +180,10 @@ export function generateOutputsYmlFromDestinations(
     const loginUrl = dest.loginUrl || (azureParams?.tenantId
       ? `https://login.microsoftonline.com/${azureParams.tenantId}/oauth2/v2.0/token`
       : 'https://login.microsoftonline.com/<YOUR-TENANT-ID>/oauth2/v2.0/token');
+    const dcrId = dest.dcrID || '';
+    const streamName = dest.streamName || `Custom-${dest.tableName}`;
+    const dceEndpoint = dest.dceEndpoint || '';
+    const destUrl = dest.url || (dceEndpoint ? `${dceEndpoint}/dataCollectionRules/${dcrId}/streams/${streamName}?api-version=2021-11-01-preview` : '');
 
     lines.push(
       `  ${dest.id}:`,
@@ -204,13 +208,13 @@ export function generateOutputsYmlFromDestinations(
       '    scope: https://monitor.azure.com/.default',
       '    endpointURLConfiguration: ID',
       '    type: sentinel',
-      `    dceEndpoint: ${dest.dceEndpoint}`,
-      `    dcrID: ${dest.dcrID}`,
-      `    streamName: ${dest.streamName}`,
+      `    dceEndpoint: ${dceEndpoint}`,
+      `    dcrID: ${dcrId}`,
+      `    streamName: ${streamName}`,
       `    client_id: ${clientId}`,
       '    secret: "!{sentinel_client_secret}"',
       `    loginUrl: "${loginUrl}"`,
-      `    url: "${dest.url}"`,
+      `    url: "${destUrl}"`,
       '',
     );
   }
@@ -479,15 +483,47 @@ export function registerAzureDeployHandlers(ipcMain: IpcMain) {
           d.name.toLowerCase().includes(stripped) || stripped.includes(d.name.toLowerCase().replace(/^dcr-/, ''))
         );
         if (match) {
+          // Resolve the full DCR details including ingestion endpoint via REST API
+          // (Get-AzDataCollectionRule doesn't expose the logsIngestion endpoint for Direct DCRs)
+          let dcrImmutableId = '';
+          let ingestionEndpoint = '';
+          try {
+            const detailCmd = `$r = Invoke-AzRestMethod -Path '${match.resourceId}?api-version=2023-03-11' -Method GET; ` +
+              `$d = $r.Content | ConvertFrom-Json; ` +
+              `$ep = ''; ` +
+              `if ($d.properties.endpoints.logsIngestion) { $ep = $d.properties.endpoints.logsIngestion } ` +
+              `elseif ($d.properties.logsIngestion.endpoint) { $ep = $d.properties.logsIngestion.endpoint } ` +
+              `elseif ($d.properties.dataCollectionEndpointId) { ` +
+              `  $dceId = $d.properties.dataCollectionEndpointId; ` +
+              `  $dce = Invoke-AzRestMethod -Path ($dceId + '?api-version=2022-06-01') -Method GET; ` +
+              `  $dceData = $dce.Content | ConvertFrom-Json; ` +
+              `  if ($dceData.properties.logsIngestion.endpoint) { $ep = $dceData.properties.logsIngestion.endpoint } ` +
+              `} ` +
+              `$d.properties.immutableId + '|' + $ep`;
+            const detailResult = execFileSync('powershell.exe', ['-NoProfile', '-Command',
+              `$WarningPreference = 'SilentlyContinue'; ${detailCmd}`],
+              { timeout: 60000, windowsHide: true, encoding: 'utf-8' });
+            const [immId, ep] = (detailResult || '').trim().split('|');
+            if (immId) dcrImmutableId = immId.trim();
+            if (ep) ingestionEndpoint = ep.trim().replace(/handler\.control\.monitor/, 'ingest.monitor');
+          } catch { /* endpoint resolution failed */ }
+
+          const streamName = `Custom-${table}`;
+          const dcrId = dcrImmutableId || match.resourceId || match.name;
+          const destUrl = ingestionEndpoint
+            ? `${ingestionEndpoint}/dataCollectionRules/${dcrImmutableId}/streams/${streamName}?api-version=2021-11-01-preview`
+            : '';
+
           results[table] = {
             id: match.name,
             type: 'sentinel',
-            dceEndpoint: '',
-            dcrID: match.resourceId || match.name,
-            streamName: `Custom-${table}`,
-            client_id: '',
-            loginUrl: '',
-            url: '',
+            dceEndpoint: ingestionEndpoint,
+            dcrID: dcrId,
+            streamName,
+            client_id: params.clientId || '',
+            loginUrl: params.tenantId
+              ? `https://login.microsoftonline.com/${params.tenantId}/oauth2/v2.0/token` : '',
+            url: destUrl,
             tableName: table,
           };
         } else {
@@ -641,73 +677,83 @@ export function registerAzureDeployHandlers(ipcMain: IpcMain) {
     if (!fs.existsSync(destsDir)) fs.mkdirSync(destsDir, { recursive: true });
 
     const saved: string[] = [];
+    const errors: string[] = [];
     for (const table of tables) {
-      // Check if destination file already exists
-      const existing = findDestinationForTable(table);
-      if (existing) { saved.push(table); continue; }
-
-      // Query Azure for the DCR
       const tableStripped = table.replace(/_CL$/i, '');
-      const streamName = `Custom-${tableStripped}`;
+      const streamName = `Custom-${table}`;
       try {
         const { execFileSync } = require('child_process');
-        // Find DCR by name pattern
-        const dcrListCmd = execFileSync('pwsh', [
-          '-NoProfile', '-Command',
-          `Get-AzDataCollectionRule -ResourceGroupName '${azParams.resourceGroupName}' | ` +
-          `Where-Object { $_.Name -like '*${tableStripped.substring(0, 20).toLowerCase()}*' } | ` +
-          `Select-Object -First 1 -Property Name,Id,ImmutableId,DataCollectionEndpointId | ConvertTo-Json -Compress`,
-        ], { timeout: 30000, windowsHide: true, encoding: 'utf-8' }) as string;
+        const rg = azParams.resourceGroupName;
+        const sub = azParams.subscriptionId || '';
 
-        const dcr = JSON.parse(dcrListCmd.trim());
-        if (!dcr || !dcr.ImmutableId) continue;
+        // Find DCR and resolve ingestion endpoint via REST API (same approach as Create-TableDCRs.ps1)
+        const resolveCmd = `$WarningPreference = 'SilentlyContinue'; ` +
+          (sub ? `Set-AzContext -Subscription '${sub}' | Out-Null; ` : '') +
+          `$dcrs = Get-AzResource -ResourceGroupName '${rg}' -ResourceType 'Microsoft.Insights/dataCollectionRules' | ` +
+          `Where-Object { $_.Name -like '*${tableStripped.substring(0, 20).toLowerCase()}*' }; ` +
+          `if (-not $dcrs -or $dcrs.Count -eq 0) { Write-Output 'NOT_FOUND'; exit }; ` +
+          `$dcrRes = $dcrs[0]; ` +
+          `$r = Invoke-AzRestMethod -Path ($dcrRes.ResourceId + '?api-version=2023-03-11') -Method GET; ` +
+          `$d = $r.Content | ConvertFrom-Json; ` +
+          `$ep = ''; ` +
+          `if ($d.properties.endpoints -and $d.properties.endpoints.logsIngestion) { $ep = $d.properties.endpoints.logsIngestion } ` +
+          `elseif ($d.properties.logsIngestion -and $d.properties.logsIngestion.endpoint) { $ep = $d.properties.logsIngestion.endpoint } ` +
+          `elseif ($d.properties.dataCollectionEndpointId) { ` +
+          `  $dce = Invoke-AzRestMethod -Path ($d.properties.dataCollectionEndpointId + '?api-version=2022-06-01') -Method GET; ` +
+          `  $dceData = $dce.Content | ConvertFrom-Json; ` +
+          `  if ($dceData.properties.logsIngestion.endpoint) { $ep = $dceData.properties.logsIngestion.endpoint } ` +
+          `}; ` +
+          `$ep = $ep -replace 'handler\\.control\\.monitor', 'ingest.monitor'; ` +
+          `$d.properties.immutableId + '|' + $ep + '|' + $dcrRes.ResourceId`;
 
-        // Get the DCE endpoint
-        let dceEndpoint = '';
-        if (dcr.DataCollectionEndpointId) {
-          try {
-            const dceCmd = execFileSync('pwsh', [
-              '-NoProfile', '-Command',
-              `Get-AzDataCollectionEndpoint -ResourceGroupName '${azParams.resourceGroupName}' | ` +
-              `Where-Object { $_.Id -eq '${dcr.DataCollectionEndpointId}' } | ` +
-              `Select-Object -First 1 -Property LogsIngestionEndpoint | ConvertTo-Json -Compress`,
-            ], { timeout: 15000, windowsHide: true, encoding: 'utf-8' }) as string;
-            const dce = JSON.parse(dceCmd.trim());
-            dceEndpoint = dce?.LogsIngestionEndpoint || '';
-          } catch { /* DCE lookup failed, use empty */ }
+        const output = execFileSync('powershell.exe', ['-NoProfile', '-Command', resolveCmd], {
+          timeout: 60000, windowsHide: true, encoding: 'utf-8',
+        }) as string;
+        const trimmed = (output || '').trim();
+        if (trimmed === 'NOT_FOUND' || !trimmed.includes('|')) {
+          errors.push(`${table}: DCR not found in ${rg}`);
+          continue;
         }
 
-        // If no DCE, try to find by resource group
-        if (!dceEndpoint) {
-          try {
-            const dceCmd = execFileSync('pwsh', [
-              '-NoProfile', '-Command',
-              `Get-AzDataCollectionEndpoint -ResourceGroupName '${azParams.resourceGroupName}' | ` +
-              `Select-Object -First 1 -Property LogsIngestionEndpoint | ConvertTo-Json -Compress`,
-            ], { timeout: 15000, windowsHide: true, encoding: 'utf-8' }) as string;
-            const dce = JSON.parse(dceCmd.trim());
-            dceEndpoint = dce?.LogsIngestionEndpoint || '';
-          } catch { /* fallback */ }
+        const [immutableId, endpoint, resourceId] = trimmed.split('|');
+        if (!endpoint || !endpoint.startsWith('https://')) {
+          errors.push(`${table}: Could not resolve ingestion endpoint for DCR ${immutableId || 'unknown'}`);
+          continue;
         }
 
+        const dcrId = (immutableId || '').trim();
+        const dceEndpoint = (endpoint || '').trim();
+        const destUrl = `${dceEndpoint}/dataCollectionRules/${dcrId}/streams/${streamName}?api-version=2021-11-01-preview`;
+        const clientId = azParams.clientId || '';
+        const loginUrl = azParams.tenantId
+          ? `https://login.microsoftonline.com/${azParams.tenantId}/oauth2/v2.0/token` : '';
+
+        // Save destination config
         const destConfig = {
           id: `MS-Sentinel-${tableStripped}-dest`,
           type: 'sentinel',
           dceEndpoint,
-          dcrID: dcr.ImmutableId,
+          dcrID: dcrId,
           streamName,
-          client_id: azParams.clientId || '',
-          loginUrl: `https://login.microsoftonline.com/${azParams.tenantId}/oauth2/v2.0/token`,
-          url: `${dceEndpoint}/dataCollectionRules/${dcr.ImmutableId}/streams/${streamName}?api-version=2021-11-01-preview`,
+          client_id: clientId,
+          loginUrl,
+          url: destUrl,
+          tableName: table,
         };
-
-        const destPath = path.join(destsDir, `${destConfig.id}.json`);
-        fs.writeFileSync(destPath, JSON.stringify(destConfig, null, 2));
+        fs.writeFileSync(
+          path.join(destsDir, `MS-Sentinel-${tableStripped}-dest.json`),
+          JSON.stringify(destConfig, null, 2),
+        );
         saved.push(table);
-      } catch { /* skip this table */ }
+      } catch (err) {
+        errors.push(`${table}: ${err instanceof Error ? err.message : String(err)}`);
+      }
     }
 
-    return { success: true, saved, total: saved.length };
+    if (errors.length > 0 && saved.length === 0) {
+      return { success: false, saved, total: saved.length, error: errors.join('; ') };
+    }
+    return { success: true, saved, total: saved.length, error: errors.length > 0 ? errors.join('; ') : undefined };
   });
 
   // Embed deployed destinations into a pack's outputs.yml and repackage

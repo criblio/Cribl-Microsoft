@@ -267,6 +267,13 @@ function generatePipelineConf(
 ): string {
   const functions: string[] = [];
 
+  // Group IDs for pipeline function grouping
+  const GID_EXTRACT = 'extract';
+  const GID_REDUCE = 'reduce';
+  const GID_ENRICH = 'enrich';
+  const GID_OVERFLOW = 'overflow';
+  const GID_CLEANUP = 'cleanup';
+
   // If vendor mappings exist, use them for authoritative source->dest transformation
   const hasVendorMappings = vendorMappings && vendorMappings.length > 0;
 
@@ -788,7 +795,7 @@ function generatePipelineConf(
     '    disabled: false',
     ...(hasOverflow ? [
     '  overflow:',
-    `    name: Overflow Collection`,
+    '    name: Overflow Collection',
     '    disabled: false',
     ] : []),
     '  cleanup:',
@@ -1702,7 +1709,7 @@ export function registerPackBuilderHandlers(ipcMain: IpcMain) {
       options.solutionName.toLowerCase().replace(/\s+/g, '-'),
       'sentinel',
     ];
-    const packageJson = {
+    const packageJson: Record<string, unknown> = {
       name: options.packName,
       version: options.version,
       author: 'Cribl SOC Toolkit',
@@ -2387,8 +2394,7 @@ export function registerPackBuilderHandlers(ipcMain: IpcMain) {
       } catch { /* non-fatal */ }
     }
 
-    // Generate default/lookups.yml registry so Cribl recognizes the lookup files.
-    // Cribl pack structure: CSV files in data/lookups/, registry at default/lookups.yml
+    // Generate default/lookups.yml registry for the lookup CSV files.
     const lookupFiles = fs.existsSync(lookupsDir)
       ? fs.readdirSync(lookupsDir).filter((f) => f.endsWith('.csv'))
       : [];
@@ -2396,31 +2402,13 @@ export function registerPackBuilderHandlers(ipcMain: IpcMain) {
       const lookupsYml = lookupFiles.map((f) => {
         const id = f.replace('.csv', '');
         const logType = id.replace('_field_mapping', '').replace(/_/g, ' ');
-        const filePath = path.join(lookupsDir, f);
-        const size = fs.existsSync(filePath) ? fs.statSync(filePath).size : 0;
-        const rowCount = fs.existsSync(filePath)
-          ? fs.readFileSync(filePath, 'utf-8').trim().split('\n').length - 1
-          : 0;
         return [
           `${id}:`,
           `  id: ${id}`,
           `  filename: ${f}`,
           `  description: "Field mapping lookup for ${logType}"`,
-          `  fileInfo:`,
-          `    size: ${size}`,
-          `    rows: ${rowCount}`,
-          `    header:`,
-          `      - source_field`,
-          `      - source_type`,
-          `      - dest_field`,
-          `      - dest_type`,
-          `      - confidence`,
-          `      - action`,
-          `      - needs_coercion`,
-          `      - description`,
         ].join('\n');
       }).join('\n');
-      // Registry goes at default/lookups.yml (not inside data/lookups/)
       fs.writeFileSync(path.join(packDir, 'default', 'lookups.yml'), lookupsYml + '\n');
     }
 

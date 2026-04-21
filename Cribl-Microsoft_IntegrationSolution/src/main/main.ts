@@ -1,7 +1,6 @@
 import { app, BrowserWindow, ipcMain } from 'electron';
 import path from 'path';
 import { registerIpcHandlers } from './ipc/index';
-import { startDevServer } from './dev-server';
 
 let mainWindow: BrowserWindow | null = null;
 
@@ -36,10 +35,11 @@ function createWindow() {
 
 app.whenReady().then(() => {
   registerIpcHandlers(ipcMain);
-  // Dev-only: start the localhost diagnostic HTTP server used by tests/debugging.
-  // Never runs in packaged builds (no need for a sidecar HTTP server in production).
   if (!app.isPackaged) {
-    startDevServer();
+    try {
+      const { startDevServer } = await import('./dev-server');
+      startDevServer();
+    } catch { /* dev-server.ts only exists on dev workstations */ }
   }
   createWindow();
 
