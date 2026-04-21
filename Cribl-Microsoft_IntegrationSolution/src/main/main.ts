@@ -33,7 +33,7 @@ function createWindow() {
   });
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   registerIpcHandlers(ipcMain);
   if (!app.isPackaged) {
     try {
