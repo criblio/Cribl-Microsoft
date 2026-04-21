@@ -1,73 +1,53 @@
 # Security Policy
 
-## Supported Versions
+## About This Application
 
-The following versions of the Cribl-Microsoft Integration project are currently being supported with security updates:
-
-| Version | Supported          |
-| ------- | ------------------ |
-| Latest release | :white_check_mark: |
-| Previous release | :white_check_mark: |
-| Older versions | :x: |
+This is a **local developer toolkit** that runs on the user's workstation. It is not a hosted service or production application. See [SECURITY_DISCLAIMER.md](SECURITY_DISCLAIMER.md) for full details on what the app can do, how credentials are stored, and the available operating modes (including Air-Gapped mode for offline-only operation).
 
 ## Reporting a Vulnerability
 
-We take the security of the Cribl-Microsoft Integration project seriously. If you believe you have found a security vulnerability in any part of our code, please report it to us as described below.
+If you believe you have found a security vulnerability, please report it responsibly.
 
-### Please DO NOT:
-- **Do not** report security vulnerabilities through public GitHub issues
-- **Do not** exploit the vulnerability beyond what is necessary to demonstrate it
+### Do NOT:
+- Report vulnerabilities through public GitHub issues
+- Exploit vulnerabilities beyond what is necessary to demonstrate them
 
-### How to Report a Security Vulnerability
+### How to Report
 
-Please report security vulnerabilities by emailing the project team at:
+1. **GitHub private reporting:** Go to the Security tab of this repository and click "Report a vulnerability"
+2. **Email:** [jpederson@cribl.io](mailto:jpederson@cribl.io)
 
-**[jpederson@cribl.io]**
+### What to Include
 
-Alternatively, you can use GitHub's private vulnerability reporting feature:
-1. Go to the Security tab of this repository
-2. Click on "Report a vulnerability"
-3. Fill out the form with details about the vulnerability
-
-### Information to Include
-
-Please include the following information in your report:
-- Type of issue (e.g., buffer overflow, SQL injection, cross-site scripting, credential exposure, etc.)
-- Full paths of source file(s) related to the manifestation of the issue
-- The location of the affected source code (tag/branch/commit or direct URL)
-- Any special configuration required to reproduce the issue
-- Step-by-step instructions to reproduce the issue
-- Proof-of-concept or exploit code (if possible)
-- Impact of the issue, including how an attacker might exploit it
+- Type of issue (e.g., credential exposure, command injection, path traversal)
+- Affected source file(s) and line numbers
+- Steps to reproduce
+- Potential impact
 
 ### What to Expect
 
-- **Acknowledgment**: We will acknowledge receipt of your vulnerability report within 48 hours
-- **Initial Assessment**: Within 5 business days, we will provide an initial assessment and expected timeline
-- **Updates**: We will keep you informed about the progress toward fixing the vulnerability
-- **Disclosure**: We will coordinate with you on the disclosure timeline and credit
+- **Acknowledgment** within 48 hours
+- **Initial assessment** within 5 business days
+- **Fix and disclosure** coordinated with the reporter
 
-### Disclosure Policy
+## Scope
 
-When we receive a security vulnerability report, we will:
+This toolkit interacts with external systems only when the user explicitly connects to them:
 
-1. Confirm the problem and determine the affected versions
-2. Audit code to find any similar problems
-3. Prepare fixes for all supported versions
-4. Release the fixes as soon as possible
+| System | How it connects | What it can do |
+|--------|----------------|----------------|
+| **Azure** | User's PowerShell session (`Connect-AzAccount`) | Create/modify resources with user's permissions |
+| **Cribl Stream** | OAuth or admin credentials provided by user | Upload packs, create routes, deploy configs |
+| **GitHub** | Personal Access Token (read-only) | Fetch public repo content |
 
-We appreciate your efforts to responsibly disclose your findings and will make every effort to acknowledge your contributions.
+In **Air-Gapped mode**, no external connections are made. All artifacts are generated locally.
 
-## Security Advisories
+## Credential Storage
 
-Security advisories will be published through:
-- [GitHub Security Advisories](https://github.com/[YOUR-ORG]/Cribl-Microsoft/security/advisories) 
-- Release notes for security patches
-
-## Comments on this Policy
-
-If you have suggestions on how this process could be improved, please submit a pull request or open an issue to discuss.
+- Cribl and GitHub credentials are encrypted using Windows DPAPI via Electron `safeStorage`
+- Azure credentials are not stored by this app (managed by the Az PowerShell module)
+- No credentials are transmitted to third parties
 
 ---
 
-**Thank you for helping keep the Cribl-Microsoft Integration and our users safe!**
+Thank you for helping keep this project safe.
