@@ -13,6 +13,7 @@ import {
   configDir as appConfigDir, azureParametersPath,
   dcrAutomationScript, dcrAutomationCwd,
 } from './app-paths';
+import * as sentinelRepo from './sentinel-repo';
 import logger from './logger';
 
 // ---------------------------------------------------------------------------
@@ -242,8 +243,6 @@ interface DeployOptions {
 // definition JSON files and converts them to the format the PS script expects.
 
 async function generateCustomTableSchemas(tables: string[]): Promise<number> {
-  let sentinelRepo: typeof import('./sentinel-repo') | null = null;
-  try { sentinelRepo = await import('./sentinel-repo'); } catch (err) { logger.error('azure-deploy', 'Failed to import sentinel-repo module', err); return 0; }
   if (!sentinelRepo.isRepoReady()) return 0;
 
   // Determine where to write schema files

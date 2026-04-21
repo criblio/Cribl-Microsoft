@@ -10,6 +10,8 @@ import { performVendorResearch, VendorResearchResult, FieldMapping as VendorFiel
 import { captureSnapshot } from './change-detection';
 import logger from './logger';
 import { findDestinationForTable, readAzureParameters, generateOutputsYmlFromDestinations, DeployedDestination } from './azure-deploy';
+import * as sentinelRepo from './sentinel-repo';
+import * as kqlParser from './kql-parser';
 import {
   packsDir as appPacksDir, dcrTemplatesDir as appDcrTemplatesDir,
   isRepoLinked, repoPath as getRepoPath, dcrAutomationCwd,
@@ -141,7 +143,7 @@ function loadDcrTemplateSchema(tableName: string): DcrSchemaColumn[] {
   // Try Sentinel repo CustomTables directories (for custom _CL tables defined in solutions).
   // These files use the format: { properties: { schema: { columns: [{name,type}] } } }
   try {
-    const { getSolutionsDir } = require('./sentinel-repo');
+    const { getSolutionsDir } = sentinelRepo;
     const solDir = getSolutionsDir();
     if (fs.existsSync(solDir)) {
       const solutions = fs.readdirSync(solDir, { withFileTypes: true }).filter((e: any) => e.isDirectory());
@@ -1334,8 +1336,6 @@ async function runDcrGapAnalysis(
   if (tableRouting.length === 0) return result;
 
   try {
-    const kqlParser = await import('./kql-parser');
-    const sentinelRepo = await import('./sentinel-repo');
     if (!sentinelRepo.isRepoReady()) return result;
 
     const solutions = sentinelRepo.listSolutions();
@@ -2082,7 +2082,7 @@ export function registerPackBuilderHandlers(ipcMain: IpcMain) {
     // This replaces the generic "true" condition with precise event routing.
     let tableRouting: import('./kql-parser').TableRoutingInfo[] = [];
     try {
-      const { getTableRoutingForSolution } = await import('./kql-parser');
+      const { getTableRoutingForSolution } = kqlParser;
       tableRouting = await getTableRoutingForSolution(options.solutionName);
     } catch (err) { logger.warn('pack-builder', `Failed to resolve table routing for solution '${options.solutionName}'`, err); }
 
@@ -2998,7 +2998,6 @@ export function registerPackBuilderHandlers(ipcMain: IpcMain) {
     samples: Array<{ logType: string; tableName: string; rawEvents: string[] }>;
   }) => {
     try {
-      const kqlParser = await import('./kql-parser');
       const routing = await kqlParser.getTableRoutingForSolution(solutionName);
 
       const { matchFields: autoMatch } = await import('./field-matcher');
@@ -3060,19 +3059,18 @@ export function registerPackBuilderHandlers(ipcMain: IpcMain) {
         // Find DCR flow for this table (always attempt, regardless of routing results)
         const flow = await (async () => {
           try {
-            const sentinelRepoSync = await import('./sentinel-repo');
-            if (!sentinelRepoSync.isRepoReady()) return null;
-            const solutions = sentinelRepoSync.listSolutions();
+            if (!sentinelRepo.isRepoReady()) return null;
+            const solutions = sentinelRepo.listSolutions();
             const lower = solutionName.toLowerCase().replace(/[^a-z0-9]/g, '');
             const solMatch = solutions.find((s: { name: string }) => {
               const k = s.name.toLowerCase().replace(/[^a-z0-9]/g, '');
               return k === lower || k.includes(lower) || lower.includes(k);
             });
             if (!solMatch) return null;
-            const connectors = sentinelRepoSync.listConnectorFiles(solMatch.name);
+            const connectors = sentinelRepo.listConnectorFiles(solMatch.name);
             const dcrFiles = connectors.filter((f: { name: string }) => f.name.toLowerCase().includes('dcr') && f.name.toLowerCase().endsWith('.json'));
             for (const dcrFile of dcrFiles) {
-              const content = sentinelRepoSync.readRepoFile(dcrFile.path);
+              const content = sentinelRepo.readRepoFile(dcrFile.path);
               if (!content) continue;
               try {
                 const parsed = kqlParser.parseDcrJson(content);
@@ -3182,7 +3180,6 @@ export function registerPackBuilderHandlers(ipcMain: IpcMain) {
     yamlContents: Array<{ fileName: string; content: string }>;
   }) => {
     try {
-      const sentinelRepo = await import('./sentinel-repo');
       const rules: Array<{ name: string; severity: string; requiredFields: string[]; fileName: string }> = [];
 
       for (const { fileName, content } of yamlContents) {
@@ -3225,7 +3222,6 @@ export function registerPackBuilderHandlers(ipcMain: IpcMain) {
     destTables?: string[];
   }) => {
     try {
-      const sentinelRepo = await import('./sentinel-repo');
 
       // Load schemas from ALL destination tables and union their columns.
       // This handles multi-table solutions (e.g., CrowdStrike with 10 custom tables)
