@@ -177,7 +177,8 @@ export function generateOutputsYmlFromDestinations(
   const lines: string[] = ['outputs:'];
 
   for (const dest of destinations) {
-    const clientId = dest.client_id || (azureParams?.clientId ? `'${azureParams.clientId}'` : "'<YOUR-CLIENT-ID>'");
+    const rawClientId = dest.client_id || azureParams?.clientId || '';
+    const clientId = rawClientId ? `'${rawClientId.replace(/^'+|'+$/g, '')}'` : "'<YOUR-CLIENT-ID>'";
     const loginUrl = dest.loginUrl || (azureParams?.tenantId
       ? `https://login.microsoftonline.com/${azureParams.tenantId}/oauth2/v2.0/token`
       : 'https://login.microsoftonline.com/<YOUR-TENANT-ID>/oauth2/v2.0/token');

@@ -37,9 +37,12 @@ app.whenReady().then(async () => {
   registerIpcHandlers(ipcMain);
   if (!app.isPackaged) {
     try {
-      const { startDevServer } = await import('./dev-server');
+      // Dynamic path prevents Vite from resolving at build time.
+      // dev-server.ts only exists on dev workstations (gitignored).
+      const mod = './dev-' + 'server';
+      const { startDevServer } = await import(/* @vite-ignore */ mod);
       startDevServer();
-    } catch { /* dev-server.ts only exists on dev workstations */ }
+    } catch { /* dev-server.ts not present -- skip */ }
   }
   createWindow();
 

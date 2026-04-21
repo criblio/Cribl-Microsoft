@@ -168,6 +168,8 @@ function SentinelIntegration() {
   const [pasteLogType, setPasteLogType] = useState('');
   const [analyses, setAnalyses] = useState<SampleAnalysis[]>([]);
   const [analyzing, setAnalyzing] = useState(false);
+  const [analysisProgress, setAnalysisProgress] = useState<{ phase: string; pct: number } | null>(null);
+  const [analysisStale, setAnalysisStale] = useState(false);
   const [tableResolution, setTableResolution] = useState<{ tables: string[]; source: string } | null>(null);
   // User overrides to field mappings (keyed by tableName)
   const [mappingEdits, setMappingEdits] = useState<Record<string, FieldMappingEntry[]>>({});
@@ -421,41 +423,41 @@ function SentinelIntegration() {
     check();
   }, [state.workspace, azureConnected]);
 
-  // Load Azure resource preview when workspace + samples are ready (only in Azure-connected modes)
-  useEffect(() => {
+  // Load Azure resource preview -- called as part of manual analysis, not on every sample change
+  const loadResourcePreview = async () => {
     if (!hasAzure || !window.api || !state.workspace || !state.subscription || state.samples.length === 0 || !state.selectedSolution) {
       setResourcePreview(null);
       return;
     }
-    const loadPreview = async () => {
+    try {
+      let destTables: string[] = [];
       try {
-        // Determine destination tables from vendor research or samples.
-        // Normalize by stripping "Microsoft-" prefix to avoid duplicates.
-        let destTables: string[] = [];
-        try {
-          const research = await window.api.vendorResearch.research(state.selectedSolution) as any;
-          if (research?.logTypes?.length > 0) {
-            destTables = [...new Set(
-              research.logTypes
-                .filter((t: any) => t.destTable)
-                .map((t: any) => (t.destTable as string).replace(/^Microsoft-/, ''))
-            )] as string[];
-          }
-        } catch (err) { console.warn('[SentinelIntegration] Vendor research for preview failed', err); }
-        if (destTables.length === 0) destTables = ['CommonSecurityLog'];
+        const research = await window.api.vendorResearch.research(state.selectedSolution) as any;
+        if (research?.logTypes?.length > 0) {
+          destTables = [...new Set(
+            research.logTypes
+              .filter((t: any) => t.destTable)
+              .map((t: any) => (t.destTable as string).replace(/^Microsoft-/, ''))
+          )] as string[];
+        }
+      } catch (err) { console.warn('[SentinelIntegration] Vendor research for preview failed', err); }
+      if (destTables.length === 0) destTables = ['CommonSecurityLog'];
 
-        const preview = await window.api.azureDeploy.previewResources({
-          tables: destTables,
-          subscription: state.subscription,
-          resourceGroup: state.resourceGroup,
-          workspace: state.workspace,
-          location: state.location,
-        });
-        setResourcePreview(preview);
-      } catch (err) { console.warn('[SentinelIntegration] Resource preview load failed', err); }
-    };
-    loadPreview();
-  }, [hasAzure, state.workspace, state.subscription, state.samples.length, state.selectedSolution]);
+      const preview = await window.api.azureDeploy.previewResources({
+        tables: destTables,
+        subscription: state.subscription,
+        resourceGroup: state.resourceGroup,
+        workspace: state.workspace,
+        location: state.location,
+      });
+      setResourcePreview(preview);
+    } catch (err) { console.warn('[SentinelIntegration] Resource preview load failed', err); }
+  };
+
+  // Reset resource preview when workspace changes
+  useEffect(() => {
+    setResourcePreview(null);
+  }, [state.workspace, state.subscription]);
 
   // Auto-generate pack name from solution
   // Accept pre-populated solution from SIEM Migration page via URL hash params
@@ -487,139 +489,138 @@ function SentinelIntegration() {
     }
   }, [state.selectedSolution]);
 
-  // Auto-analyze samples when they change -- runs gap analysis against DCR.
-  // The destination table(s) come from the Sentinel Content Hub solution's
-  // Data Connector definitions (via vendor research), NOT from sample log type
-  // names. All sample events are grouped by destination table and their fields
-  // are merged, so a vendor like Palo Alto that sends TRAFFIC, THREAT, CONFIG
-  // etc. all to CommonSecurityLog shows as one gap analysis row.
+  // Mark analysis as stale when samples or solution change so the user knows to re-analyze
   useEffect(() => {
-    if (!window.api || state.samples.length === 0 || !state.selectedSolution) {
+    if (state.samples.length > 0 && state.selectedSolution) {
+      setAnalysisStale(true);
+    } else {
       setAnalyses([]);
       setApprovedMappings(new Set());
       setRuleCoverage(null);
-      return;
+      setAnalysisStale(false);
     }
-    const runAnalysis = async () => {
-      setAnalyzing(true);
-      setTableResolution(null);
-      try {
-        // Get destination tables from vendor research (sourced from Sentinel Content Hub)
-        const research = await window.api.vendorResearch.research(state.selectedSolution) as any;
-        const researchLogTypes: any[] = research?.logTypes || [];
-
-        // Collect all unique destination tables from vendor research.
-        // Normalize by stripping the "Microsoft-" prefix that some Sentinel Content Hub
-        // entries use (e.g., "Microsoft-CommonSecurityLog" and "CommonSecurityLog" are the same table).
-        const destTables = new Set<string>();
-        let tableSource = '';
-        for (const lt of researchLogTypes) {
-          if (lt.destTable) {
-            const normalized = lt.destTable.replace(/^Microsoft-/, '');
-            destTables.add(normalized);
-          }
-        }
-        if (destTables.size > 0) {
-          tableSource = 'Vendor research (Sentinel Content Hub)';
-        }
-
-        // If no dest tables found in research, try to find the table from
-        // Sentinel repo connector definitions (CustomTables, DCR definitions).
-        if (destTables.size === 0) {
-          try {
-            const connectors = await window.api.sentinelRepo.connectors(state.selectedSolution);
-            for (const c of connectors) {
-              if (c.name.toLowerCase().includes('customtable') || c.path.includes('CustomTables')) {
-                const tableName = c.name.replace('.json', '');
-                if (tableName.endsWith('_CL')) destTables.add(tableName);
-              }
-            }
-            if (destTables.size > 0) {
-              tableSource = 'Sentinel repo (CustomTables definition)';
-            }
-          } catch (err) { console.warn('[SentinelIntegration] CustomTables connector resolution failed', err); }
-        }
-
-        // If still no dest tables, use CommonSecurityLog as default.
-        if (destTables.size === 0) {
-          destTables.add('CommonSecurityLog');
-          tableSource = 'Default (no DCR definition found in Sentinel solution)';
-        }
-
-        setTableResolution({ tables: [...destTables], source: tableSource });
-
-        // Build one analysis input per log type so each gets its own field mapping.
-        // Each log type (Traffic, Threat, AUTH) has different fields even if they
-        // all target the same destination table (CommonSecurityLog).
-        const sampleInputs: Array<{ logType: string; tableName: string; rawEvents: string[] }> = [];
-        const defaultTable = Array.from(destTables)[0] || 'CommonSecurityLog';
-
-        for (const s of state.samples as any[]) {
-          if (!s.rawEvents?.length) continue;
-          const sNorm = s.logType.toLowerCase().replace(/[_ \-]/g, '');
-
-          // Match sample to its destination table via vendor research
-          let matchedTable = defaultTable;
-          if (destTables.size > 1) {
-            for (const lt of researchLogTypes) {
-              if (!lt.destTable) continue;
-              const idNorm = (lt.id || '').toLowerCase().replace(/[_ \-]/g, '');
-              const nameNorm = (lt.name || '').toLowerCase().replace(/[_ \-]/g, '');
-              if (idNorm === sNorm || nameNorm === sNorm ||
-                  (idNorm.length > 3 && sNorm.includes(idNorm)) ||
-                  (sNorm.length > 3 && idNorm.includes(sNorm)) ||
-                  (nameNorm.length > 3 && sNorm.includes(nameNorm)) ||
-                  (sNorm.length > 3 && nameNorm.includes(sNorm))) {
-                matchedTable = lt.destTable;
-                break;
-              }
-            }
-          }
-
-          sampleInputs.push({
-            logType: s.logType,
-            tableName: matchedTable,
-            rawEvents: s.rawEvents,
-          });
-        }
-
-        const result = await window.api.packBuilder.analyzeSamples(state.selectedSolution, sampleInputs);
-        if (result.success) {
-          setAnalyses(result.analyses as SampleAnalysis[]);
-          setApprovedMappings(new Set());
-
-          // Run rule coverage analysis with discovered source + mapped dest fields
-          try {
-            // Collect fields that will exist in the destination table:
-            // - keep/rename/coerce: the dest field name will be a column
-            // - overflow: source name stored as key inside overflow field (extractable via parse_kv)
-            // - drop: removed entirely
-            const mappedDestFields = [...new Set(
-              (result.analyses as SampleAnalysis[]).flatMap((a) =>
-                (a.fieldMappings || []).flatMap((m) => {
-                  if (m.action === 'drop') return [];
-                  if (m.action === 'overflow') return [m.dest, m.source];
-                  return [m.dest];
-                })
-              )
-            )];
-            const allDestTables = [...new Set((result.analyses as SampleAnalysis[]).map((a) => a.tableName))];
-            // Always run coverage (even with empty fields) so the section shows rule status
-            const coverage = await window.api.packBuilder.ruleCoverage(
-              state.selectedSolution, mappedDestFields, undefined,
-              customRules.length > 0 ? customRules : undefined,
-              undefined, allDestTables,
-            );
-            setRuleCoverage(coverage);
-          } catch (coverageErr) {
-            console.warn('Rule coverage analysis failed:', coverageErr);
-          }
-        }
-      } catch (e) { /* non-fatal */ }
-      setAnalyzing(false);
-    };
-    runAnalysis();
   }, [state.samples, state.selectedSolution]);
+
+  // Manual analysis: triggered by the Analyze button.
+  // Runs DCR gap analysis, analytics rule coverage, and Azure resource preview.
+  const runFullAnalysis = async () => {
+    if (!window.api || state.samples.length === 0 || !state.selectedSolution) return;
+    setAnalyzing(true);
+    setAnalysisProgress({ phase: 'Resolving destination tables...', pct: 5 });
+    setTableResolution(null);
+    try {
+      // Phase 1: Vendor research to find destination tables
+      const research = await window.api.vendorResearch.research(state.selectedSolution) as any;
+      const researchLogTypes: any[] = research?.logTypes || [];
+
+      const destTables = new Set<string>();
+      let tableSource = '';
+      for (const lt of researchLogTypes) {
+        if (lt.destTable) {
+          destTables.add(lt.destTable.replace(/^Microsoft-/, ''));
+        }
+      }
+      if (destTables.size > 0) {
+        tableSource = 'Vendor research (Sentinel Content Hub)';
+      }
+
+      if (destTables.size === 0) {
+        setAnalysisProgress({ phase: 'Checking Sentinel repo for custom tables...', pct: 10 });
+        try {
+          const connectors = await window.api.sentinelRepo.connectors(state.selectedSolution);
+          for (const c of connectors) {
+            if (c.name.toLowerCase().includes('customtable') || c.path.includes('CustomTables')) {
+              const tableName = c.name.replace('.json', '');
+              if (tableName.endsWith('_CL')) destTables.add(tableName);
+            }
+          }
+          if (destTables.size > 0) {
+            tableSource = 'Sentinel repo (CustomTables definition)';
+          }
+        } catch (err) { console.warn('[SentinelIntegration] CustomTables connector resolution failed', err); }
+      }
+
+      if (destTables.size === 0) {
+        destTables.add('CommonSecurityLog');
+        tableSource = 'Default (no DCR definition found in Sentinel solution)';
+      }
+
+      setTableResolution({ tables: [...destTables], source: tableSource });
+
+      // Phase 2: Build sample inputs
+      setAnalysisProgress({ phase: 'Analyzing sample fields against DCR schema...', pct: 20 });
+      const sampleInputs: Array<{ logType: string; tableName: string; rawEvents: string[] }> = [];
+      const defaultTable = Array.from(destTables)[0] || 'CommonSecurityLog';
+
+      for (const sample of state.samples as any[]) {
+        if (!sample.rawEvents?.length) continue;
+        const sNorm = sample.logType.toLowerCase().replace(/[_ \-]/g, '');
+
+        let matchedTable = defaultTable;
+        if (destTables.size > 1) {
+          for (const lt of researchLogTypes) {
+            if (!lt.destTable) continue;
+            const idNorm = (lt.id || '').toLowerCase().replace(/[_ \-]/g, '');
+            const nameNorm = (lt.name || '').toLowerCase().replace(/[_ \-]/g, '');
+            if (idNorm === sNorm || nameNorm === sNorm ||
+                (idNorm.length > 3 && sNorm.includes(idNorm)) ||
+                (sNorm.length > 3 && idNorm.includes(sNorm)) ||
+                (nameNorm.length > 3 && sNorm.includes(nameNorm)) ||
+                (sNorm.length > 3 && nameNorm.includes(sNorm))) {
+              matchedTable = lt.destTable;
+              break;
+            }
+          }
+        }
+
+        sampleInputs.push({ logType: sample.logType, tableName: matchedTable, rawEvents: sample.rawEvents });
+      }
+
+      // Phase 3: Run DCR gap analysis
+      setAnalysisProgress({ phase: 'Running DCR gap analysis...', pct: 40 });
+      const result = await window.api.packBuilder.analyzeSamples(state.selectedSolution, sampleInputs);
+      if (result.success) {
+        setAnalyses(result.analyses as SampleAnalysis[]);
+        setApprovedMappings(new Set());
+
+        // Phase 4: Analytics rule coverage
+        setAnalysisProgress({ phase: 'Evaluating analytics rule coverage...', pct: 65 });
+        try {
+          const mappedDestFields = [...new Set(
+            (result.analyses as SampleAnalysis[]).flatMap((a) =>
+              (a.fieldMappings || []).flatMap((m) => {
+                if (m.action === 'drop') return [];
+                if (m.action === 'overflow') return [m.dest, m.source];
+                return [m.dest];
+              })
+            )
+          )];
+          const allDestTables = [...new Set((result.analyses as SampleAnalysis[]).map((a) => a.tableName))];
+          const coverage = await window.api.packBuilder.ruleCoverage(
+            state.selectedSolution, mappedDestFields, undefined,
+            customRules.length > 0 ? customRules : undefined,
+            undefined, allDestTables,
+          );
+          setRuleCoverage(coverage);
+        } catch (coverageErr) {
+          console.warn('[SentinelIntegration] Rule coverage analysis failed', coverageErr);
+        }
+
+        // Phase 5: Azure resource preview (if connected)
+        if (hasAzure && state.workspace && state.subscription) {
+          setAnalysisProgress({ phase: 'Loading Azure resource preview...', pct: 85 });
+          await loadResourcePreview();
+        }
+      }
+
+      setAnalysisProgress({ phase: 'Complete', pct: 100 });
+      setAnalysisStale(false);
+    } catch (err) {
+      console.error('[SentinelIntegration] Analysis failed', err);
+    }
+    setAnalyzing(false);
+    setAnalysisProgress(null);
+  };
 
   // Tag a sample
   const handleTagSample = async () => {
@@ -2226,6 +2227,48 @@ function SentinelIntegration() {
               </div>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Analyze Button + Progress */}
+      {state.samples.length > 0 && state.selectedSolution && (
+        <div style={{ ...s.section, borderLeft: analysisStale ? '3px solid var(--accent-orange)' : '3px solid var(--accent-green)', padding: '16px 20px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+            <button
+              className="btn-primary"
+              style={{ fontSize: '13px', padding: '8px 24px', minWidth: '160px', fontWeight: 600 }}
+              onClick={runFullAnalysis}
+              disabled={analyzing}
+            >
+              {analyzing ? 'Analyzing...' : analysisStale ? 'Analyze Samples' : 'Re-Analyze'}
+            </button>
+            <div style={{ flex: 1, fontSize: '12px', color: 'var(--text-secondary)' }}>
+              {analyzing && analysisProgress
+                ? analysisProgress.phase
+                : analysisStale
+                  ? `${state.samples.length} sample(s) ready -- click Analyze to run DCR gap analysis and analytics rule coverage`
+                  : analyses.length > 0
+                    ? 'Analysis complete. Click Re-Analyze after changing samples or solution.'
+                    : ''}
+            </div>
+          </div>
+          {analyzing && analysisProgress && (
+            <div style={{ marginTop: '12px' }}>
+              <div style={{
+                height: '4px', borderRadius: '2px', background: 'var(--bg-primary)', overflow: 'hidden',
+              }}>
+                <div style={{
+                  height: '100%', borderRadius: '2px',
+                  background: 'var(--accent-blue)',
+                  width: `${analysisProgress.pct}%`,
+                  transition: 'width 0.4s ease-out',
+                }} />
+              </div>
+              <div style={{ fontSize: '10px', color: 'var(--text-muted)', marginTop: '4px', fontFamily: 'var(--font-mono)' }}>
+                {analysisProgress.pct}%
+              </div>
+            </div>
+          )}
         </div>
       )}
 

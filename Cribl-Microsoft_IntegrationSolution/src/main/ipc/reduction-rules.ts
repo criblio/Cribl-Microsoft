@@ -38,42 +38,46 @@ export interface ReductionKnowledgeBase {
 // Native Sentinel Tables
 // ---------------------------------------------------------------------------
 
+// CEF raw field names: act=DeviceAction, src=SourceIP, dst=DestinationIP,
+// spt=SourcePort, dpt=DestinationPort, Name=Activity, Severity=LogSeverity,
+// type=DeviceEventClassID, cat=DeviceEventCategory, duser=DestinationUserName,
+// deviceProduct=DeviceProduct
 const commonSecurityLog: TableReductionRules = {
   keep: [
     {
       id: 'csl_denied_blocked',
       description: 'Blocked/denied traffic',
-      filter: "/deny|drop|block|reject|reset/i.test(DeviceAction || '')",
+      filter: "/deny|drop|block|reject|reset/i.test(act || '')",
       reason: 'Sentinel analytics rules for threat detection, lateral movement, and C2 depend on denied/blocked events',
     },
     {
       id: 'csl_high_severity',
       description: 'High/critical severity events',
-      filter: "(Number(LogSeverity) >= 7) || /high|critical|emergency|alert/i.test(LogSeverity || '')",
+      filter: "(Number(Severity) >= 7) || /high|critical|emergency|alert/i.test(Severity || '')",
       reason: 'High severity CEF events are queried by multiple threat detection and incident creation rules',
     },
     {
       id: 'csl_auth_events',
       description: 'Authentication events',
-      filter: "/auth|login|logon|logoff|logout|credential|password|sso|mfa/i.test(Activity || DeviceEventClassID || '')",
+      filter: "/auth|login|logon|logoff|logout|credential|password|sso|mfa/i.test(Name || type || '')",
       reason: 'Authentication analytics rules (brute force, impossible travel, credential stuffing) require all auth events',
     },
     {
       id: 'csl_malware_ids',
       description: 'Malware and IDS/IPS detections',
-      filter: "/malware|virus|trojan|exploit|intrusion|ips|ids|threat|apt|ransomware|botnet|c2|command.and.control/i.test(Activity || DeviceEventClassID || cat || '')",
+      filter: "/malware|virus|trojan|exploit|intrusion|ips|ids|threat|apt|ransomware|botnet|c2|command.and.control/i.test(Name || type || cat || '')",
       reason: 'Threat intelligence and malware detection analytics depend on these events',
     },
     {
       id: 'csl_policy_violation',
       description: 'Policy and compliance violations',
-      filter: "/policy|violation|compliance|unauthorized|forbidden/i.test(Activity || DeviceEventClassID || '')",
+      filter: "/policy|violation|compliance|unauthorized|forbidden/i.test(Name || type || '')",
       reason: 'Compliance and policy violation analytics rules require these events',
     },
     {
       id: 'csl_admin_activity',
       description: 'Administrative and configuration changes',
-      filter: "/admin|config|modify|change|update|create|delete|remove|install|uninstall/i.test(Activity || DeviceEventClassID || '')",
+      filter: "/admin|config|modify|change|update|create|delete|remove|install|uninstall/i.test(Name || type || '')",
       reason: 'Privileged activity monitoring and change detection rules query admin events',
     },
   ],
@@ -81,25 +85,25 @@ const commonSecurityLog: TableReductionRules = {
     {
       id: 'csl_routine_allow_443',
       description: 'Routine allowed HTTPS traffic',
-      filter: "/allow|permit|pass|accept/i.test(DeviceAction || '') && (DestinationPort == 443 || DestinationPort == 80) && !(/deny|drop|block/i.test(Activity || ''))",
+      filter: "/allow|permit|pass|accept/i.test(act || '') && (dpt == 443 || dpt == 80) && !(/deny|drop|block/i.test(Name || ''))",
       reason: 'No built-in analytics rule queries bulk allowed web traffic; threat rules focus on denied connections and specific indicators',
     },
     {
       id: 'csl_heartbeat_keepalive',
       description: 'Heartbeat and keepalive messages',
-      filter: "/heartbeat|keepalive|health.check|ping|status.check|monitor/i.test(Activity || DeviceEventClassID || '')",
+      filter: "/heartbeat|keepalive|health.check|ping|status.check|monitor/i.test(Name || type || '')",
       reason: 'Infrastructure monitoring heartbeats are not queried by any Sentinel analytics rule',
     },
     {
       id: 'csl_dns_routine',
       description: 'Routine DNS lookups (non-security)',
-      filter: "/dns/i.test(DeviceEventClassID || '') && /allow|permit|pass/i.test(DeviceAction || '') && !(/nxdomain|tunnel|exfil|dga|malware|threat|suspicious/i.test(Activity || cat || ''))",
+      filter: "/dns/i.test(type || '') && /allow|permit|pass/i.test(act || '') && !(/nxdomain|tunnel|exfil|dga|malware|threat|suspicious/i.test(Name || cat || ''))",
       reason: 'Routine successful DNS queries generate high volume with no analytics value; DNS analytics focus on NXDOMAIN, tunneling, and threat indicators',
     },
     {
       id: 'csl_nat_translation',
       description: 'NAT translation events',
-      filter: "/nat|translation|pat|snat|dnat/i.test(DeviceEventClassID || Activity || '') && !/fail|error|deny/i.test(DeviceAction || '')",
+      filter: "/nat|translation|pat|snat|dnat/i.test(type || Name || '') && !/fail|error|deny/i.test(act || '')",
       reason: 'NAT translation logs are purely operational; no Sentinel analytics rule queries them',
     },
   ],
@@ -107,18 +111,18 @@ const commonSecurityLog: TableReductionRules = {
     {
       id: 'csl_allowed_traffic_agg',
       description: 'Aggregate allowed traffic by source/dest/port',
-      filter: "/allow|permit|pass|accept/i.test(DeviceAction || '') && !(/deny|drop|block/i.test(Activity || ''))",
+      filter: "/allow|permit|pass|accept/i.test(act || '') && !(/deny|drop|block/i.test(Name || ''))",
       reason: 'Allowed traffic that passes keep rules can be aggregated to reduce volume while preserving connection metadata',
-      groupKey: "SourceIP + ':' + DestinationIP + ':' + DestinationPort + ':' + DeviceProduct",
+      groupKey: "src + ':' + dst + ':' + dpt + ':' + deviceProduct",
       windowSec: 300,
       maxEvents: 1,
     },
     {
       id: 'csl_vpn_session',
       description: 'Suppress repeated VPN session updates',
-      filter: "/vpn|tunnel|ipsec|ssl.vpn/i.test(DeviceEventClassID || Activity || '')",
+      filter: "/vpn|tunnel|ipsec|ssl.vpn/i.test(type || Name || '')",
       reason: 'VPN session keepalives generate many duplicate events; one per 5 minutes preserves session tracking',
-      groupKey: "SourceIP + ':' + DestinationUserName",
+      groupKey: "src + ':' + duser",
       windowSec: 300,
       maxEvents: 1,
     },
@@ -477,24 +481,26 @@ const cloudflare: TableReductionRules = {
   ],
 };
 
+// PAN-OS CSV raw field names: action, src, dst, sport, dport, type, subtype,
+// app, rule, srcuser, dstuser, proto, device_name
 const paloAlto: TableReductionRules = {
   keep: [
     {
       id: 'pa_threat_events',
       description: 'All threat log entries',
-      filter: "/threat|wildfire|virus|spyware|vulnerability|url-filtering|file-blocking/i.test(DeviceEventClassID || Activity || '')",
+      filter: "/threat|wildfire|virus|spyware|vulnerability|url-filtering|file-blocking/i.test(type || subtype || '')",
       reason: 'Palo Alto threat logs are core security telemetry for Sentinel analytics',
     },
     {
       id: 'pa_denied_traffic',
       description: 'Denied/dropped/reset traffic',
-      filter: "/deny|drop|reset-both|reset-client|reset-server|block/i.test(DeviceAction || '')",
+      filter: "/deny|drop|reset-both|reset-client|reset-server|block/i.test(action || '')",
       reason: 'Blocked traffic is queried by lateral movement, C2, and reconnaissance analytics rules',
     },
     {
       id: 'pa_config_changes',
       description: 'Configuration and system events',
-      filter: "/config|system/i.test(DeviceEventClassID || '') || /commit|admin|config/i.test(Activity || '')",
+      filter: "/config|system/i.test(type || '') || /commit|admin|config/i.test(subtype || '')",
       reason: 'Configuration change analytics require all admin and system events',
     },
   ],
@@ -502,7 +508,7 @@ const paloAlto: TableReductionRules = {
     {
       id: 'pa_traffic_allow_internal',
       description: 'Allowed internal-to-internal traffic',
-      filter: "/allow|permit/i.test(DeviceAction || '') && /^(10\\.|172\\.(1[6-9]|2[0-9]|3[0-1])\\.|192\\.168\\.)/i.test(SourceIP || '') && /^(10\\.|172\\.(1[6-9]|2[0-9]|3[0-1])\\.|192\\.168\\.)/i.test(DestinationIP || '') && (DestinationPort == 443 || DestinationPort == 80 || DestinationPort == 53)",
+      filter: "/allow|permit/i.test(action || '') && /^(10\\.|172\\.(1[6-9]|2[0-9]|3[0-1])\\.|192\\.168\\.)/i.test(src || '') && /^(10\\.|172\\.(1[6-9]|2[0-9]|3[0-1])\\.|192\\.168\\.)/i.test(dst || '') && (dport == 443 || dport == 80 || dport == 53)",
       reason: 'Allowed internal web/DNS traffic is extremely high volume; threat analytics focus on denied, external, and unusual port traffic',
     },
   ],
@@ -510,9 +516,9 @@ const paloAlto: TableReductionRules = {
     {
       id: 'pa_allowed_external_agg',
       description: 'Aggregate allowed external traffic per src/dst/port',
-      filter: "/allow|permit/i.test(DeviceAction || '') && !/^(10\\.|172\\.(1[6-9]|2[0-9]|3[0-1])\\.|192\\.168\\.)/i.test(DestinationIP || '')",
+      filter: "/allow|permit/i.test(action || '') && !/^(10\\.|172\\.(1[6-9]|2[0-9]|3[0-1])\\.|192\\.168\\.)/i.test(dst || '')",
       reason: 'Allowed external traffic can be aggregated to preserve connection patterns while reducing volume',
-      groupKey: "SourceIP + ':' + DestinationIP + ':' + DestinationPort",
+      groupKey: "src + ':' + dst + ':' + dport",
       windowSec: 300,
       maxEvents: 1,
     },

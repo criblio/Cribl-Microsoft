@@ -534,6 +534,70 @@ function generatePipelineConf(
     ].join('\n'));
   }
 
+  // Step 2.5 (reduce group): Volume reduction -- keep/drop/suppress.
+  // Runs BEFORE field rename so filters operate on raw vendor field names
+  // (e.g., act, src, dpt for CEF; action, srcip, dstip for FortiGate).
+  // Only present when reductionRules is provided.
+  if (reductionRules) {
+    // Keep: tag analytics-critical events
+    if (reductionRules.keep.length > 0) {
+      const keepConditions = reductionRules.keep.map((r) => `(${r.filter})`).join(' || ');
+      functions.push([
+        '  - id: eval',
+        `    filter: "${escapeYamlFilter(keepConditions)}"`,
+        '    disabled: false',
+        '    conf:',
+        '      add:',
+        "        - name: __keep",
+        "          value: \"true\"",
+        '      remove: []',
+        `    description: Tag analytics-critical events`,
+        '    groupId: reduce',
+      ].join('\n'));
+    }
+
+    // Drop: eliminate events with no analytics value
+    for (const rule of reductionRules.drop) {
+      functions.push([
+        '  - id: drop',
+        `    filter: "!__keep && (${escapeYamlFilter(rule.filter)})"`,
+        '    disabled: false',
+        '    conf: {}',
+        `    description: DROP ${rule.description || 'low-value events'}`,
+        '    groupId: reduce',
+      ].join('\n'));
+    }
+
+    // Suppress: aggregate noisy events
+    for (const rule of reductionRules.suppress) {
+      functions.push([
+        '  - id: suppress',
+        `    filter: "!__keep && (${escapeYamlFilter(rule.filter)})"`,
+        '    disabled: false',
+        '    conf:',
+        `      allow: ${rule.allow || 1}`,
+        `      suppressPeriodSec: ${rule.windowSec || 300}`,
+        `      keyExpr: "${escapeYamlFilter(rule.groupKey || 'SourceIP')}"`,
+        '      dropEventsMode: true',
+        `    description: SUPPRESS ${rule.description || 'noisy events'}`,
+        '    groupId: reduce',
+      ].join('\n'));
+    }
+
+    // Clean up __keep tag
+    functions.push([
+      '  - id: eval',
+      '    filter: "__keep"',
+      '    disabled: false',
+      '    conf:',
+      '      add: []',
+      '      remove:',
+      "        - __keep",
+      '    description: Remove internal __keep tag before enrichment',
+      '    groupId: reduce',
+    ].join('\n'));
+  }
+
   // Step 3 (enrich group): Rename source fields to destination names
   if (renameFields.length > 0) {
     let entries: string[];
@@ -579,69 +643,6 @@ function generatePipelineConf(
         '    groupId: enrich',
       ].join('\n'));
     }
-  }
-
-  // Step 3.5 (reduce group): Volume reduction -- keep/drop/suppress.
-  // Inserted AFTER field rename so filters reference Sentinel schema names (DeviceAction, etc.)
-  // Only present in reduction pipelines (when reductionRules is provided).
-  if (reductionRules) {
-    // Keep: tag analytics-critical events
-    if (reductionRules.keep.length > 0) {
-      const keepConditions = reductionRules.keep.map((r) => `(${r.filter})`).join(' || ');
-      functions.push([
-        '  - id: eval',
-        `    filter: "${escapeYamlFilter(keepConditions)}"`,
-        '    disabled: false',
-        '    conf:',
-        '      add:',
-        "        - name: __keep",
-        "          value: \"true\"",
-        '      remove: []',
-        `    description: Tag analytics-critical events`,
-        '    groupId: reduce',
-      ].join('\n'));
-    }
-
-    // Drop: eliminate events with no analytics value
-    for (const rule of reductionRules.drop) {
-      functions.push([
-        '  - id: drop',
-        `    filter: "!__keep && (${escapeYamlFilter(rule.filter)})"`,
-        '    disabled: false',
-        '    conf: {}',
-        `    description: DROP ${rule.description || 'low-value events'}`,
-        '    groupId: reduce',
-      ].join('\n'));
-    }
-
-    // Suppress: aggregate noisy events
-    for (const rule of reductionRules.suppress) {
-      functions.push([
-        '  - id: suppress',
-        `    filter: "!__keep && (${escapeYamlFilter(rule.filter)})"`,
-        '    disabled: false',
-        '    conf:',
-        `      allow: ${rule.allow || 1}`,
-        `      suppressPeriodSec: ${rule.windowSec || 300}`,
-        `      keyExpr: "${escapeYamlFilter(rule.keyExpr || 'SourceIP')}"`,
-        '      dropEventsMode: true',
-        `    description: SUPPRESS ${rule.description || 'noisy events'}`,
-        '    groupId: reduce',
-      ].join('\n'));
-    }
-
-    // Clean up __keep tag
-    functions.push([
-      '  - id: eval',
-      '    filter: "__keep"',
-      '    disabled: false',
-      '    conf:',
-      '      add: []',
-      '      remove:',
-      "        - __keep",
-      '    description: Remove internal __keep tag before enrichment.',
-      '    groupId: reduce',
-    ].join('\n'));
   }
 
   // Step 4 (enrich group): Type coercion for fields where source type != dest type
@@ -840,43 +841,8 @@ function generateReductionPipelineConf(
     '    groupId: triage',
   ].join('\n'));
 
-  // Phase 1b (triage group): For CEF/LEEF/KV sources, rename raw vendor fields
-  // to Sentinel schema names so the keep/drop/suppress filters can reference them.
-  // Without this, filters like `DeviceAction == 'deny'` fail because the raw field is `act`.
-  if (sourceFormat === 'cef' || sourceFormat === 'leef' || sourceFormat === 'kv') {
-    // Core CEF->CommonSecurityLog renames needed for reduction filters to work
-    const cefRenames = [
-      ['act', 'DeviceAction'],
-      ['src', 'SourceIP'],
-      ['dst', 'DestinationIP'],
-      ['spt', 'SourcePort'],
-      ['dpt', 'DestinationPort'],
-      ['proto', 'Protocol'],
-      ['app', 'ApplicationProtocol'],
-      ['Name', 'Activity'],
-      ['Severity', 'LogSeverity'],
-      ['type', 'DeviceEventClassID'],
-      ['cat', 'DeviceEventCategory'],
-      ['msg', 'Message'],
-      ['request', 'RequestURL'],
-      ['dvchost', 'DeviceName'],
-      ['duser', 'DestinationUserName'],
-      ['suser', 'SourceUserName'],
-      ['outcome', 'EventOutcome'],
-    ];
-    functions.push([
-      '  - id: rename',
-      '    filter: "true"',
-      '    disabled: false',
-      '    conf:',
-      '      rename:',
-      ...cefRenames.map(([src, dst]) =>
-        `        - currentName: ${src}\n          newName: ${dst}`
-      ),
-      `    description: Rename raw ${sourceFormat.toUpperCase()} fields to Sentinel schema names`,
-      '    groupId: triage',
-    ].join('\n'));
-  }
+  // Reduction filters now use raw vendor field names directly (act, src, dpt for CEF;
+  // action, srcip, dstip for FortiGate; etc.) so no rename step is needed here.
 
   // Phase 2 (keep group): Tag events that MUST be kept (analytics-critical)
   // We set __keep=true on these; later drop logic skips tagged events.
