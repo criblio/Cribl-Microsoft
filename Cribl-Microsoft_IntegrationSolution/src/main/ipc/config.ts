@@ -17,7 +17,8 @@ export function registerConfigHandlers(ipcMain: IpcMain) {
     }
 
     if (!fs.existsSync(fullPath)) {
-      throw new Error(`Config file not found: ${filePath}`);
+      // Missing file is normal on first run; do not throw — Electron logs IPC handler errors.
+      return null;
     }
 
     const content = fs.readFileSync(fullPath, 'utf-8');

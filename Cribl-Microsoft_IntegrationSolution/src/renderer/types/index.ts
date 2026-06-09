@@ -120,7 +120,7 @@ declare global {
         onExit: (callback: (event: PsExitEvent) => void) => () => void;
       };
       config: {
-        read: (filePath: string) => Promise<Record<string, unknown>>;
+        read: (filePath: string) => Promise<Record<string, unknown> | null>;
         write: (filePath: string, data: Record<string, unknown>) => Promise<void>;
         getRepoRoot: () => Promise<string>;
       };

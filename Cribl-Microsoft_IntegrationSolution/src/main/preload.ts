@@ -37,7 +37,7 @@ contextBridge.exposeInMainWorld('api', {
     },
   },
   config: {
-    read: (filePath: string): Promise<Record<string, unknown>> =>
+    read: (filePath: string): Promise<Record<string, unknown> | null> =>
       ipcRenderer.invoke('config:read', { filePath }),
     write: (filePath: string, data: Record<string, unknown>): Promise<void> =>
       ipcRenderer.invoke('config:write', { filePath, data }),
