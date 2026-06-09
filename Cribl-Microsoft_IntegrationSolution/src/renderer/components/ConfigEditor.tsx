@@ -81,7 +81,7 @@ function ConfigEditor({ configPath, label, onSaved }: ConfigEditorProps) {
     setError('');
     try {
       const data = await window.api.config.read(configPath);
-      const formatted = JSON.stringify(data, null, 2);
+      const formatted = JSON.stringify(data ?? {}, null, 2);
       setContent(formatted);
       setOriginalContent(formatted);
     } catch (err: unknown) {

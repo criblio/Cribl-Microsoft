@@ -22,7 +22,6 @@
     "dist:mac": "npm run build && electron-builder --mac"
   },
   "dependencies": {
-    "@rollup/rollup-win32-x64-msvc": "^4.60.0",
     "cors": "^2.8.6",
     "express": "^4.22.1",
     "multer": "^2.1.1",
