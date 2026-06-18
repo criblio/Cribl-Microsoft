@@ -1,11 +1,13 @@
 // API Client - Replaces window.api (Electron preload) with fetch() calls.
 // Every method matches the same signature as the preload bridge.
 
+import { channelToPath } from '../api/channels';
+
 const API_BASE = '/api';
 
 async function call(channel: string, args?: unknown): Promise<any> {
   // Convert colon-separated channel to URL path: auth:status -> auth/status
-  const urlPath = channel.replace(/:/g, '/');
+  const urlPath = channelToPath(channel);
   const resp = await fetch(`${API_BASE}/${urlPath}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

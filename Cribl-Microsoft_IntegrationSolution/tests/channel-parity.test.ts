@@ -67,14 +67,26 @@ const clientOnEvent = extract(/onEvent\(\s*'([^']+)'/, clientSrc);
 const BESPOKE_CLIENT_CHANNELS = ['samples:parse-files'];
 const clientInvoke = [...new Set([...clientCall, ...BESPOKE_CLIENT_CHANNELS])].sort();
 
-// Handler modules registered by each transport's registration list. Excludes the wrapper
-// (registerIpcHandlers) and the `registerXxxHandlers` placeholder that appears in a comment.
-const NON_MODULE_REGISTRARS = new Set(['registerIpcHandlers', 'registerXxxHandlers']);
-function registeredModules(src: string): string[] {
-  return extract(/\b(register\w+Handlers)\b/, src).filter((n) => !NON_MODULE_REGISTRARS.has(n));
+// Both transports now register handler modules by looping over the single shared registry
+// (src/api/registry.ts). The invariant is therefore: the registry lists every handler module,
+// and nothing more. Excludes the registerIpcHandlers wrapper.
+const registrySrc = read(path.join('api', 'registry.ts'));
+const NON_MODULE_REGISTRARS = new Set(['registerIpcHandlers']);
+
+// Every register*Handlers function exported by an IPC handler module.
+function allExportedRegistrars(): string[] {
+  const out = new Set<string>();
+  for (const file of fs.readdirSync(IPC_DIR)) {
+    if (!file.endsWith('.ts') || file.endsWith('.test.ts')) continue;
+    const src = fs.readFileSync(path.join(IPC_DIR, file), 'utf-8');
+    for (const n of extract(/export\s+(?:async\s+)?function\s+(register\w+Handlers)/, src)) out.add(n);
+  }
+  return [...out].filter((n) => !NON_MODULE_REGISTRARS.has(n)).sort();
 }
-const electronModules = registeredModules(indexSrc);
-const webModules = registeredModules(routerSrc);
+const exportedRegistrars = allExportedRegistrars();
+const registryRegistrars = extract(/\b(register\w+Handlers)\b/, registrySrc).filter(
+  (n) => !NON_MODULE_REGISTRARS.has(n),
+);
 
 // Handlers that exist but are intentionally not bridged to either renderer (internal/main-only).
 const UNEXPOSED_HANDLERS = new Set([
@@ -87,13 +99,19 @@ const UNEXPOSED_HANDLERS = new Set([
 ]);
 
 describe('Channel parity (dual-transport API surface)', () => {
-  it('registers the same handler modules in Electron (ipc/index.ts) and web (api-router.ts)', () => {
-    const { onlyA, onlyB } = setDiff(electronModules, webModules);
+  it('lists every IPC handler module in the shared registry (src/api/registry.ts)', () => {
+    const { onlyA, onlyB } = setDiff(exportedRegistrars, registryRegistrars);
     expect(
-      { electronOnly: onlyA, webOnly: onlyB },
-      `Handler module registration lists drifted. Electron-only: ${onlyA.join(', ') || '(none)'}; ` +
-        `web-only: ${onlyB.join(', ') || '(none)'}. Both ipc/index.ts and server/api-router.ts must register the same modules.`,
-    ).toEqual({ electronOnly: [], webOnly: [] });
+      { handlerModulesMissingFromRegistry: onlyA, registryEntriesWithoutAModule: onlyB },
+      `Registry drift. Handler modules not in registry.ts: ${onlyA.join(', ') || '(none)'}; ` +
+        `registry entries with no matching exported handler: ${onlyB.join(', ') || '(none)'}. ` +
+        `Add new handler modules to src/api/registry.ts exactly once.`,
+    ).toEqual({ handlerModulesMissingFromRegistry: [], registryEntriesWithoutAModule: [] });
+  });
+
+  it('drives both transports from the shared registry (no hand-maintained lists)', () => {
+    expect(indexSrc.includes('HANDLER_MODULES'), 'src/main/ipc/index.ts must register via HANDLER_MODULES').toBe(true);
+    expect(routerSrc.includes('HANDLER_MODULES'), 'src/server/api-router.ts must register via HANDLER_MODULES').toBe(true);
   });
 
   it('exposes identical invoke channels in preload (Electron) and api-client (web)', () => {
@@ -143,6 +161,7 @@ describe('Channel parity (dual-transport API surface)', () => {
     expect(clientInvoke.length).toBeGreaterThanOrEqual(130);
     expect(preloadOn.length).toBeGreaterThanOrEqual(10);
     expect(clientOnEvent.length).toBeGreaterThanOrEqual(10);
-    expect(electronModules.length).toBeGreaterThanOrEqual(20);
+    expect(registryRegistrars.length).toBeGreaterThanOrEqual(20);
+    expect(exportedRegistrars.length).toBeGreaterThanOrEqual(20);
   });
 });
