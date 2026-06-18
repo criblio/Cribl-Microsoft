@@ -63,6 +63,49 @@ export interface MatchResult {
   matchRate: number;          // 0-1, percentage of source fields matched or overflowed
 }
 
+// A field mapping projected for pipeline generation.
+export type ProjectedField = {
+  source: string;
+  target: string;
+  type: string;
+  action: 'rename' | 'keep' | 'coerce' | 'drop';
+};
+
+// Infer a Sentinel column type from a sample value. Mirrors the inline ladder used when
+// extracting source fields from sample events (string/int/real/boolean/dynamic/datetime/long).
+export function inferFieldTypeFromValue(value: unknown): string {
+  if (typeof value === 'number') return Number.isInteger(value) ? 'int' : 'real';
+  if (typeof value === 'boolean') return 'boolean';
+  if (typeof value === 'object' && value !== null) return 'dynamic';
+  if (typeof value === 'string') {
+    if (/^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}/.test(value)) return 'datetime';
+    if (/^\d+$/.test(value) && value.length < 16) return 'long';
+  }
+  return 'string';
+}
+
+// Project a MatchResult into pack-builder field mappings: matched fields become
+// rename/keep/coerce; overflow and unmatched-source fields become drop (overflow is emitted by
+// a separate serialize step, then the individual fields are dropped during cleanup).
+export function projectMatchResult(matchResult: MatchResult): ProjectedField[] {
+  return [
+    ...matchResult.matched.map((m) => ({
+      source: m.sourceName,
+      target: m.destName,
+      type: m.destType,
+      action: (m.action === 'keep' && !m.needsCoercion ? 'keep' :
+               m.action === 'keep' && m.needsCoercion ? 'coerce' :
+               m.needsCoercion ? 'rename' : m.action) as 'rename' | 'keep' | 'coerce' | 'drop',
+    })),
+    ...matchResult.overflow.map((o) => ({
+      source: o.sourceName, target: o.destName, type: o.destType, action: 'drop' as const,
+    })),
+    ...matchResult.unmatchedSource.map((s) => ({
+      source: s.name, target: s.name, type: s.type, action: 'drop' as const,
+    })),
+  ];
+}
+
 // ---------------------------------------------------------------------------
 // Known Abbreviation / Alias Table
 // Maps common short source field names to their standard long destination names.

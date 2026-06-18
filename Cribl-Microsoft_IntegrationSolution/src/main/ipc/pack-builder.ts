@@ -4,7 +4,7 @@ import path from 'path';
 import crypto from 'crypto';
 import zlib from 'zlib';
 import { findReductionRules, TableReductionRules, ReductionRule, SuppressRule } from './reduction-rules';
-import { matchFields, getOverflowConfig } from './field-mapping-engine';
+import { matchFields, getOverflowConfig, inferFieldTypeFromValue, projectMatchResult } from './field-mapping-engine';
 import type { OverflowConfig } from './field-mapping-engine';
 import { SOURCE_TYPES, VENDOR_SOURCE_HINTS, suggestSourceType, generateInputsYml, SourceConfig, SourceTypeDefinition } from './source-types';
 import { performVendorResearch, VendorResearchResult, FieldMapping as VendorFieldMapping } from './vendor-research';
@@ -1891,14 +1891,7 @@ export function registerPackBuilderHandlers(ipcMain: IpcMain) {
 
                 sampleFieldNamesLower.set(keyLower, key);
                 sampleFieldNames.add(key);
-                let inferredType = 'string';
-                if (typeof value === 'number') inferredType = Number.isInteger(value) ? 'int' : 'real';
-                else if (typeof value === 'boolean') inferredType = 'boolean';
-                else if (typeof value === 'object' && value !== null) inferredType = 'dynamic';
-                else if (typeof value === 'string') {
-                  if (/^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}/.test(value)) inferredType = 'datetime';
-                  else if (/^\d+$/.test(value) && value.length < 16) inferredType = 'long';
-                }
+                const inferredType = inferFieldTypeFromValue(value);
                 sourceFields.push({
                   name: key,
                   type: inferredType,
@@ -1939,26 +1932,7 @@ export function registerPackBuilderHandlers(ipcMain: IpcMain) {
           const matchResult = autoMatch(sourceFields, destSchema, vendorMaps, table.sentinelTable);
 
           // Convert match result to field mappings for pipeline generation
-          table.fields = [
-            // Matched fields: rename/keep/coerce
-            ...matchResult.matched.map((m) => ({
-              source: m.sourceName,
-              target: m.destName,
-              type: m.destType,
-              action: (m.action === 'keep' && !m.needsCoercion ? 'keep' :
-                       m.action === 'keep' && m.needsCoercion ? 'coerce' :
-                       m.needsCoercion ? 'rename' : m.action) as 'rename' | 'keep' | 'coerce' | 'drop',
-            })),
-            // Overflow fields: mark with overflow action
-            ...matchResult.overflow.map((o) => ({
-              source: o.sourceName, target: o.destName, type: o.destType,
-              action: 'drop' as const, // The overflow eval handles these; mark as drop so cleanup removes the individual fields
-            })),
-            // Unmatched source fields (Cribl internals): drop
-            ...matchResult.unmatchedSource.map((s) => ({
-              source: s.name, target: s.name, type: s.type, action: 'drop' as const,
-            })),
-          ];
+          table.fields = projectMatchResult(matchResult);
 
           // Store overflow config for pipeline generation
           tableOverflowConfigs.set(table.sentinelTable, matchResult.overflowConfig);
@@ -2027,14 +2001,7 @@ export function registerPackBuilderHandlers(ipcMain: IpcMain) {
               for (const [key, value] of Object.entries(evt)) {
                 if (fieldNames.has(key)) continue;
                 fieldNames.add(key);
-                let inferredType = 'string';
-                if (typeof value === 'number') inferredType = Number.isInteger(value) ? 'int' : 'real';
-                else if (typeof value === 'boolean') inferredType = 'boolean';
-                else if (typeof value === 'object' && value !== null) inferredType = 'dynamic';
-                else if (typeof value === 'string') {
-                  if (/^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}/.test(value)) inferredType = 'datetime';
-                  else if (/^\d+$/.test(value) && value.length < 16) inferredType = 'long';
-                }
+                const inferredType = inferFieldTypeFromValue(value);
                 sourceFields.push({
                   name: key, type: inferredType,
                   sampleValue: typeof value === 'object' ? JSON.stringify(value) : String(value),
@@ -2052,21 +2019,7 @@ export function registerPackBuilderHandlers(ipcMain: IpcMain) {
         if (destSchema.length > 0) {
           const matchResult = autoMatch(sourceFields, destSchema, undefined, table.sentinelTable);
 
-          table.fields = [
-            ...matchResult.matched.map((m) => ({
-              source: m.sourceName, target: m.destName, type: m.destType,
-              action: (m.action === 'keep' && !m.needsCoercion ? 'keep' :
-                       m.action === 'keep' && m.needsCoercion ? 'coerce' :
-                       m.needsCoercion ? 'rename' : m.action) as 'rename' | 'keep' | 'coerce' | 'drop',
-            })),
-            ...matchResult.overflow.map((o) => ({
-              source: o.sourceName, target: o.destName, type: o.destType,
-              action: 'drop' as const,
-            })),
-            ...matchResult.unmatchedSource.map((s) => ({
-              source: s.name, target: s.name, type: s.type, action: 'drop' as const,
-            })),
-          ];
+          table.fields = projectMatchResult(matchResult);
 
           tableOverflowConfigs.set(table.sentinelTable, matchResult.overflowConfig);
 
