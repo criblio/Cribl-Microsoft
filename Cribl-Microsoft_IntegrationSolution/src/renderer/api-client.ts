@@ -1,11 +1,13 @@
 // API Client - Replaces window.api (Electron preload) with fetch() calls.
 // Every method matches the same signature as the preload bridge.
 
+import { channelToPath } from '../api/channels';
+
 const API_BASE = '/api';
 
 async function call(channel: string, args?: unknown): Promise<any> {
   // Convert colon-separated channel to URL path: auth:status -> auth/status
-  const urlPath = channel.replace(/:/g, '/');
+  const urlPath = channelToPath(channel);
   const resp = await fetch(`${API_BASE}/${urlPath}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -83,8 +85,13 @@ export function createApiClient() {
       solutions: () => call('sentinel-repo:solutions'),
       connectors: (solutionName: string) => call('sentinel-repo:connectors', { solutionName }),
       readFile: (relativePath: string) => call('sentinel-repo:read-file', { relativePath }),
+      resetError: () => call('sentinel-repo:reset-error'),
+      blocklist: () => call('sentinel-repo:blocklist'),
+      blocklistRetry: (solutionName: string) => call('sentinel-repo:blocklist-retry', { solutionName }),
+      blocklistAdd: (solutionName: string, reason: string) => call('sentinel-repo:blocklist-add', { solutionName, reason }),
       onStatus: (cb: (status: any) => void) => onEvent('sentinel-repo:status', cb),
       onProgress: (cb: (data: string) => void) => onEvent('sentinel-repo:progress', cb),
+      onFetchProgress: (cb: (data: { done: number; total: number; pct: number }) => void) => onEvent('sentinel-repo:fetch-progress', cb),
     },
     packBuilder: {
       scaffold: (options: unknown) => call('pack:scaffold', options),
@@ -160,6 +167,8 @@ export function createApiClient() {
       azureSubscriptions: () => call('auth:azure-subscriptions'),
       azureWorkspaces: (subscriptionId?: string) => call('auth:azure-workspaces', { subscriptionId }),
       azureCreateResourceGroup: (name: string, location: string, subscriptionId?: string) => call('auth:azure-create-resource-group', { name, location, subscriptionId }),
+      azureCreateWorkspace: (name: string, resourceGroup: string, location: string, subscriptionId?: string) => call('auth:azure-create-workspace', { name, resourceGroup, location, subscriptionId }),
+      azureEnableSentinel: (workspaceName: string, resourceGroup: string, subscriptionId?: string) => call('auth:azure-enable-sentinel', { workspaceName, resourceGroup, subscriptionId }),
       azureResourceGroups: (subscriptionId?: string) => call('auth:azure-resource-groups', { subscriptionId }),
       azureSelectWorkspace: (workspace: any) => call('auth:azure-select-workspace', workspace),
       criblCreateDestination: (destination: Record<string, unknown>, workerGroup?: string) => call('auth:cribl-create-destination', { destination, workerGroup }),
@@ -210,6 +219,8 @@ export function createApiClient() {
         });
       },
       parseFeedConfig: (configText: string) => call('samples:parse-feed-config', { configText }),
+      parseCsvWithHeaders: (csvContent: string, headers: string[], skipFirstRow: boolean) =>
+        call('samples:parse-csv-with-headers', { csvContent, headers, skipFirstRow }),
       tagSample: (vendor: string, logType: string, content: string, sourceName?: string) =>
         call('samples:tag-sample', { vendor, logType, content, sourceName }),
       getTagged: (vendor: string) => call('samples:get-tagged', { vendor }),
@@ -240,5 +251,17 @@ export function createApiClient() {
       buildPack: (solutionName: string, packName?: string, userSamples?: Array<{ logType: string; content: string; fileName: string }>) => call('siem:build-pack', { solutionName, packName, userSamples }),
       exportReport: (plan: unknown) => call('siem:export-report', { plan }),
     },
+    sampleResolver: {
+      listAvailable: (solutionName: string) => call('samples:list-available', { solutionName }),
+      loadSelected: (solutionName: string, selectedIds: string[]) => call('samples:load-selected', { solutionName, selectedIds }),
+    },
+    elasticRepo: {
+      status: () => call('elastic-repo:status'),
+      clone: () => call('elastic-repo:clone'),
+      resetError: () => call('elastic-repo:reset-error'),
+      onStatus: (cb: (status: { state: string; packageCount: number; error: string }) => void) => onEvent('elastic-repo:status', cb),
+      onFetchProgress: (cb: (data: { done: number; total: number; pct: number }) => void) => onEvent('elastic-repo:fetch-progress', cb),
+    },
+    onStartupLog: (cb: (log: { message: string; level: string; timestamp: number }) => void) => onEvent('startup:log', cb),
   };
 }

@@ -138,11 +138,13 @@ declare global {
         solutions: () => Promise<Array<{ name: string; path: string }>>;
         connectors: (solutionName: string) => Promise<Array<{ name: string; path: string; size: number }>>;
         readFile: (relativePath: string) => Promise<string | null>;
+        resetError: () => Promise<unknown>;
         blocklist: () => Promise<Array<{ name: string; reason: string; source: string }>>;
         blocklistRetry: (solutionName: string) => Promise<{ removed: boolean; blocklist: Array<{ name: string; reason: string; source: string }> }>;
         blocklistAdd: (solutionName: string, reason: string) => Promise<{ added: boolean; blocklist: Array<{ name: string; reason: string; source: string }> }>;
         onStatus: (callback: (status: { state: string; solutionCount: number; error: string; blockedCount: number; fetchedCount: number }) => void) => () => void;
         onProgress: (callback: (data: string) => void) => () => void;
+        onFetchProgress: (callback: (data: { done: number; total: number; pct: number }) => void) => () => void;
       };
       packBuilder: {
         scaffold: (options: PackScaffoldOptions) => Promise<{ packDir: string; crblPath: string }>;
@@ -258,8 +260,8 @@ declare global {
           cloud: { clientId: string; organizationId: string; hasSecret: boolean } | null;
           selfManaged: { clientId: string; baseUrl: string; hasSecret: boolean } | null;
         } | null>;
-        azureStatus: () => Promise<{ loggedIn: boolean; accountId: string; subscriptionId: string; subscriptionName: string; tenantId: string }>;
-        azureLogin: () => Promise<{ loggedIn: boolean; accountId: string; subscriptionId: string; subscriptionName: string; tenantId: string }>;
+        azureStatus: () => Promise<{ loggedIn: boolean; accountId: string; subscriptionId: string; subscriptionName: string; tenantId: string; error?: string }>;
+        azureLogin: () => Promise<{ loggedIn: boolean; accountId: string; subscriptionId: string; subscriptionName: string; tenantId: string; error?: string }>;
         azureSetSubscription: (subscriptionId: string) => Promise<{ success: boolean }>;
         azureSubscriptions: () => Promise<{ success: boolean; subscriptions: Array<{ id: string; name: string; state: string }>; error?: string }>;
         azureWorkspaces: (subscriptionId?: string) => Promise<{ success: boolean; workspaces: Array<{ name: string; resourceGroup: string; location: string; customerId: string; sku: string }>; error?: string }>;
@@ -431,6 +433,24 @@ declare global {
           success: boolean; filePath: string; report: string; error?: string;
         }>;
       };
+      sampleResolver: {
+        listAvailable: (solutionName: string) => Promise<Array<{
+          id: string; tier: string; source: string; logType: string;
+          format: string; eventCount: number; fileName: string;
+        }>>;
+        loadSelected: (solutionName: string, selectedIds: string[]) => Promise<Array<{
+          tableName: string; format: string; rawEvents: string[];
+          source: string; tier: string; logType?: string;
+        }>>;
+      };
+      elasticRepo: {
+        status: () => Promise<{ state: string; packageCount: number; lastUpdated: number; error: string }>;
+        clone: () => Promise<boolean>;
+        resetError: () => Promise<unknown>;
+        onStatus: (callback: (status: { state: string; packageCount: number; error: string }) => void) => () => void;
+        onFetchProgress: (callback: (data: { done: number; total: number; pct: number }) => void) => () => void;
+      };
+      onStartupLog: (callback: (log: { message: string; level: string; timestamp: number }) => void) => () => void;
     };
   }
 }

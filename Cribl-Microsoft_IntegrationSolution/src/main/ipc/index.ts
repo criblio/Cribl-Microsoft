@@ -1,49 +1,20 @@
 import { IpcMain, BrowserWindow } from 'electron';
-import { initAppPaths, registerAppPathsHandlers } from './app-paths';
-import { registerPowerShellHandlers } from './powershell';
-import { registerConfigHandlers } from './config';
-import { registerGitHubHandlers } from './github';
-import { registerPackBuilderHandlers } from './pack-builder';
-import { registerDepsHandlers } from './deps';
-import { registerVendorResearchHandlers } from './vendor-research';
-import { registerRegistrySyncHandlers, performFullSync } from './registry-sync';
-import { registerChangeDetectionHandlers, runChangeDetection } from './change-detection';
-import { registerAzureDeployHandlers } from './azure-deploy';
-import { registerParamFormHandlers } from './param-forms';
-import { registerAuthHandlers } from './auth';
-import { registerE2EHandlers } from './e2e-orchestrator';
-import { registerSentinelRepoHandlers, autoUpdate as autoUpdateRepo } from './sentinel-repo';
-import { registerSampleParserHandlers } from './sample-parser';
-import { registerPermissionCheckHandlers } from './permission-check';
-import { registerDefaultSampleHandlers } from './default-samples';
-import { registerFieldMatcherHandlers } from './field-matcher';
-import { registerSiemMigrationHandlers } from './siem-migration';
-import { autoUpdateElasticRepo, registerSampleResolverHandlers } from './sample-resolver';
+import { HANDLER_MODULES } from '../../api/registry';
+import { initAppPaths } from './app-paths';
+import { performFullSync } from './registry-sync';
+import { runChangeDetection } from './change-detection';
+import { autoUpdate as autoUpdateRepo } from './sentinel-repo';
+import { autoUpdateElasticRepo } from './sample-resolver';
 
 export function registerIpcHandlers(ipcMain: IpcMain) {
   // Initialize app data directories and bundle templates if repo is detected
   initAppPaths();
 
-  registerAppPathsHandlers(ipcMain);
-  registerDepsHandlers(ipcMain);
-  registerPowerShellHandlers(ipcMain);
-  registerConfigHandlers(ipcMain);
-  registerGitHubHandlers(ipcMain);
-  registerPackBuilderHandlers(ipcMain);
-  registerVendorResearchHandlers(ipcMain);
-  registerRegistrySyncHandlers(ipcMain);
-  registerChangeDetectionHandlers(ipcMain);
-  registerAzureDeployHandlers(ipcMain);
-  registerParamFormHandlers(ipcMain);
-  registerAuthHandlers(ipcMain);
-  registerE2EHandlers(ipcMain);
-  registerSentinelRepoHandlers(ipcMain);
-  registerSampleParserHandlers(ipcMain);
-  registerPermissionCheckHandlers(ipcMain);
-  registerDefaultSampleHandlers(ipcMain);
-  registerFieldMatcherHandlers(ipcMain);
-  registerSiemMigrationHandlers(ipcMain);
-  registerSampleResolverHandlers(ipcMain);
+  // Register every handler module from the single shared registry (same list the web
+  // server uses in src/server/api-router.ts).
+  for (const mod of HANDLER_MODULES) {
+    mod.register(ipcMain);
+  }
 
   // Broadcast a startup log message to the renderer
   function startupLog(message: string, level: 'info' | 'error' = 'info') {

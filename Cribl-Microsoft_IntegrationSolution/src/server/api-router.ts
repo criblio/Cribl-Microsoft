@@ -4,6 +4,7 @@
 
 import { Router, Request, Response } from 'express';
 import { EventBus, createFakeEvent } from './event-bus';
+import { pathToChannel } from '../api/channels';
 
 // Collected handlers from the registration phase
 const handlers = new Map<string, (event: any, args: any) => Promise<any>>();
@@ -29,48 +30,15 @@ export function createApiRouter(eventBus: EventBus): Router {
   const router = Router();
   const fakeIpcMain = createFakeIpcMain();
 
-  // Register all IPC handler modules using the fake IpcMain.
-  // Each module's registerXxxHandlers(ipcMain) call will populate the handlers map.
-  // We do this synchronously during server startup.
-
-  // Import and register all modules
+  // Register all IPC handler modules from the single shared registry (the same list the
+  // Electron main process uses in src/main/ipc/index.ts), so the two transports cannot drift.
+  // Loaded lazily via dynamic import so the electron stub installed in server/index.ts is in
+  // place before the handler modules import 'electron'.
   const registerAll = async () => {
-    const { registerDepsHandlers } = await import('../main/ipc/deps');
-    const { registerConfigHandlers } = await import('../main/ipc/config');
-    const { registerGitHubHandlers } = await import('../main/ipc/github');
-    const { registerPackBuilderHandlers } = await import('../main/ipc/pack-builder');
-    const { registerVendorResearchHandlers } = await import('../main/ipc/vendor-research');
-    const { registerRegistrySyncHandlers } = await import('../main/ipc/registry-sync');
-    const { registerChangeDetectionHandlers } = await import('../main/ipc/change-detection');
-    const { registerAzureDeployHandlers } = await import('../main/ipc/azure-deploy');
-    const { registerParamFormHandlers } = await import('../main/ipc/param-forms');
-    const { registerAuthHandlers } = await import('../main/ipc/auth');
-    const { registerE2EHandlers } = await import('../main/ipc/e2e-orchestrator');
-    const { registerSentinelRepoHandlers } = await import('../main/ipc/sentinel-repo');
-    const { registerSampleParserHandlers } = await import('../main/ipc/sample-parser');
-    const { registerPermissionCheckHandlers } = await import('../main/ipc/permission-check');
-    const { registerDefaultSampleHandlers } = await import('../main/ipc/default-samples');
-    const { registerFieldMatcherHandlers } = await import('../main/ipc/field-matcher');
-    const { registerAppPathsHandlers } = await import('../main/ipc/app-paths');
-
-    registerAppPathsHandlers(fakeIpcMain as any);
-    registerDepsHandlers(fakeIpcMain as any);
-    registerConfigHandlers(fakeIpcMain as any);
-    registerGitHubHandlers(fakeIpcMain as any);
-    registerPackBuilderHandlers(fakeIpcMain as any);
-    registerVendorResearchHandlers(fakeIpcMain as any);
-    registerRegistrySyncHandlers(fakeIpcMain as any);
-    registerChangeDetectionHandlers(fakeIpcMain as any);
-    registerAzureDeployHandlers(fakeIpcMain as any);
-    registerParamFormHandlers(fakeIpcMain as any);
-    registerAuthHandlers(fakeIpcMain as any);
-    registerE2EHandlers(fakeIpcMain as any);
-    registerSentinelRepoHandlers(fakeIpcMain as any);
-    registerSampleParserHandlers(fakeIpcMain as any);
-    registerPermissionCheckHandlers(fakeIpcMain as any);
-    registerDefaultSampleHandlers(fakeIpcMain as any);
-    registerFieldMatcherHandlers(fakeIpcMain as any);
-
+    const { HANDLER_MODULES } = await import('../api/registry');
+    for (const mod of HANDLER_MODULES) {
+      mod.register(fakeIpcMain as any);
+    }
     console.log(`Registered ${handlers.size} API handlers`);
   };
 
@@ -83,7 +51,7 @@ export function createApiRouter(eventBus: EventBus): Router {
   // Channel derived from URL path: /auth/status -> auth:status
   router.use((req: Request, res: Response) => {
     const rawPath = req.path.replace(/^\/+/, '');
-    const channel = rawPath.replace(/\//g, ':');
+    const channel = pathToChannel(rawPath);
 
     // Root listing
     if (!channel) {
