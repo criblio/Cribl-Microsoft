@@ -52,6 +52,9 @@ export function createApiRouter(eventBus: EventBus): Router {
     const { registerDefaultSampleHandlers } = await import('../main/ipc/default-samples');
     const { registerFieldMatcherHandlers } = await import('../main/ipc/field-matcher');
     const { registerAppPathsHandlers } = await import('../main/ipc/app-paths');
+    const { registerPowerShellHandlers } = await import('../main/ipc/powershell');
+    const { registerSiemMigrationHandlers } = await import('../main/ipc/siem-migration');
+    const { registerSampleResolverHandlers } = await import('../main/ipc/sample-resolver');
 
     registerAppPathsHandlers(fakeIpcMain as any);
     registerDepsHandlers(fakeIpcMain as any);
@@ -70,6 +73,9 @@ export function createApiRouter(eventBus: EventBus): Router {
     registerPermissionCheckHandlers(fakeIpcMain as any);
     registerDefaultSampleHandlers(fakeIpcMain as any);
     registerFieldMatcherHandlers(fakeIpcMain as any);
+    registerPowerShellHandlers(fakeIpcMain as any);
+    registerSiemMigrationHandlers(fakeIpcMain as any);
+    registerSampleResolverHandlers(fakeIpcMain as any);
 
     console.log(`Registered ${handlers.size} API handlers`);
   };
