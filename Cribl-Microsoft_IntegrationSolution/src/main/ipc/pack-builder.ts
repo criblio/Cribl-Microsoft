@@ -196,8 +196,25 @@ function loadDcrTemplateSchema(tableName: string): DcrSchemaColumn[] {
   return [];
 }
 
+// Injectable DCR-schema resolver. Production uses the on-disk template loader; tests can
+// substitute a deterministic in-memory schema so scaffoldPack output is reproducible.
+type SchemaResolver = (tableName: string) => DcrSchemaColumn[];
+let _schemaResolverOverride: SchemaResolver | null = null;
+export function __setSchemaResolverForTests(resolver: SchemaResolver | null): void {
+  _schemaResolverOverride = resolver;
+}
+
+// Injectable vendor-research provider. Production performs live research; tests substitute a
+// fixed result (or null) so scaffoldPack does no network I/O.
+type VendorResearchProvider = (solutionName: string) => Promise<VendorResearchResult | null>;
+let _vendorResearchOverride: VendorResearchProvider | null = null;
+export function __setVendorResearchForTests(provider: VendorResearchProvider | null): void {
+  _vendorResearchOverride = provider;
+}
+
 // Public accessor for field-matcher to load DCR schemas
 export function loadDcrTemplateSchemaPublic(tableName: string): DcrSchemaColumn[] {
+  if (_schemaResolverOverride) return _schemaResolverOverride(tableName);
   const columns = loadDcrTemplateSchema(tableName);
   const systemCols = new Set([
     'TenantId', 'SourceSystem', 'MG', 'ManagementGroupName',
@@ -1776,7 +1793,7 @@ export function registerPackBuilderHandlers(ipcMain: IpcMain) {
     // field mappings between vendor source data and DCR destination schemas.
     let vendorData: VendorResearchResult | null = null;
     try {
-      vendorData = await performVendorResearch(options.solutionName);
+      vendorData = await (_vendorResearchOverride || performVendorResearch)(options.solutionName);
     } catch (err) {
       logger.warn('pack-builder', `Vendor research failed for '${options.solutionName}', falling back to user-provided fields`, err);
     }
