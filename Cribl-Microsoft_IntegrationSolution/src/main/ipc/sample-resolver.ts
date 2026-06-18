@@ -10,6 +10,7 @@ import path from 'path';
 import { BrowserWindow } from 'electron';
 import { loadGitHubPat } from './auth';
 import logger from './logger';
+import { REVERSE_ALIAS } from './field-mapping-engine';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -754,14 +755,7 @@ async function synthesizeSamples(
     if (kqlFields.size === 0) return [];
 
     // Reverse-map Sentinel field names to vendor field names
-    let reverseAlias: Map<string, Set<string>>;
-    try {
-      const fm = await import('./field-matcher');
-      reverseAlias = (fm as any).REVERSE_ALIAS || new Map();
-    } catch (err) {
-      logger.warn('sample-resolver', 'Failed to load reverse alias map from field-matcher', err);
-      reverseAlias = new Map();
-    }
+    const reverseAlias: Map<string, Set<string>> = REVERSE_ALIAS;
 
     // Build synthetic events using vendor field names
     const format = entry.sourceFormat || 'json';

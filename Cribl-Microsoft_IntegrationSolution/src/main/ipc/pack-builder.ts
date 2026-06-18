@@ -4,7 +4,8 @@ import path from 'path';
 import crypto from 'crypto';
 import zlib from 'zlib';
 import { findReductionRules, TableReductionRules, ReductionRule, SuppressRule } from './reduction-rules';
-import { OverflowConfig } from './field-matcher';
+import { matchFields, getOverflowConfig } from './field-mapping-engine';
+import type { OverflowConfig } from './field-mapping-engine';
 import { SOURCE_TYPES, VENDOR_SOURCE_HINTS, suggestSourceType, generateInputsYml, SourceConfig, SourceTypeDefinition } from './source-types';
 import { performVendorResearch, VendorResearchResult, FieldMapping as VendorFieldMapping } from './vendor-research';
 import { captureSnapshot } from './change-detection';
@@ -1801,7 +1802,7 @@ export function registerPackBuilderHandlers(ipcMain: IpcMain) {
 
       // Auto-match source fields to DCR destination schema for each table.
       // Uses the field matcher to produce a COMPLETE mapping for every field.
-      const { matchFields: autoMatch } = await import('./field-matcher');
+      const autoMatch = matchFields;
 
       for (const table of options.tables) {
         // Find matching vendor log type
@@ -1986,7 +1987,7 @@ export function registerPackBuilderHandlers(ipcMain: IpcMain) {
     // fields from samples and run auto-matching against the DCR destination schema.
     // This is the key path for vendors without static registry entries.
     if (!vendorData && vendorSamples.length > 0) {
-      const { matchFields: autoMatch } = await import('./field-matcher');
+      const autoMatch = matchFields;
 
       for (const table of options.tables) {
         if (table.fields.length > 0) continue; // Already has mappings
@@ -2151,7 +2152,6 @@ export function registerPackBuilderHandlers(ipcMain: IpcMain) {
           vs.tableName.toLowerCase() === table.sentinelTable.toLowerCase()
         ) || vendorSamples[0];
         if (sampleMatch?.rawEvents?.length > 0) {
-          const { matchFields, getOverflowConfig } = await import('./field-matcher');
           const { parseSampleContent } = await import('./sample-parser');
           const parsed = parseSampleContent(sampleMatch.rawEvents.join('\n'), 'sample');
           const sourceFields = parsed.fields.map((f: any) => ({ name: f.name, type: f.type, sampleValue: f.sampleValues?.[0] }));
@@ -2243,7 +2243,7 @@ export function registerPackBuilderHandlers(ipcMain: IpcMain) {
         ) || vendorSamples[0];
         if (sampleForMatcher?.rawEvents?.length > 0) {
           try {
-            const { matchFields: mf } = await import('./field-matcher');
+            const mf = matchFields;
             const { parseSampleContent: psc } = await import('./sample-parser');
             const parsedSample = psc(sampleForMatcher.rawEvents.join('\n'), 'sample');
             const srcFields = parsedSample.fields.map((f: any) => ({ name: f.name, type: f.type, sampleValue: f.sampleValues?.[0] }));
@@ -2312,7 +2312,7 @@ export function registerPackBuilderHandlers(ipcMain: IpcMain) {
     // Each log type gets its own lookup file so users can see per-pipeline mappings.
     const lookupsDir = path.join(packDir, 'data', 'lookups');
     fs.mkdirSync(lookupsDir, { recursive: true });
-    const { matchFields: lookupMatch } = await import('./field-matcher');
+    const lookupMatch = matchFields;
     const { parseSampleContent: lookupParse } = await import('./sample-parser');
     for (const table of options.tables) {
       const logTypeSuffix = (table.logType || table.sentinelTable).replace(/[^a-zA-Z0-9_-]/g, '_');
@@ -3000,7 +3000,7 @@ export function registerPackBuilderHandlers(ipcMain: IpcMain) {
     try {
       const routing = await kqlParser.getTableRoutingForSolution(solutionName);
 
-      const { matchFields: autoMatch } = await import('./field-matcher');
+      const autoMatch = matchFields;
 
       const results: Array<{
         tableName: string;
