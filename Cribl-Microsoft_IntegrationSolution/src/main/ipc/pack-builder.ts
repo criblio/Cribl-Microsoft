@@ -4,7 +4,9 @@ import path from 'path';
 import crypto from 'crypto';
 import zlib from 'zlib';
 import { findReductionRules, TableReductionRules, ReductionRule, SuppressRule } from './reduction-rules';
-import { OverflowConfig } from './field-matcher';
+import { matchFields, getOverflowConfig, inferFieldTypeFromValue, projectMatchResult, projectRenamesAndCoercions } from './field-mapping-engine';
+import type { OverflowConfig } from './field-mapping-engine';
+import { escapeYamlFilter, emitCriblFunction } from './yaml-builder';
 import { SOURCE_TYPES, VENDOR_SOURCE_HINTS, suggestSourceType, generateInputsYml, SourceConfig, SourceTypeDefinition } from './source-types';
 import { performVendorResearch, VendorResearchResult, FieldMapping as VendorFieldMapping } from './vendor-research';
 import { captureSnapshot } from './change-detection';
@@ -195,8 +197,25 @@ function loadDcrTemplateSchema(tableName: string): DcrSchemaColumn[] {
   return [];
 }
 
+// Injectable DCR-schema resolver. Production uses the on-disk template loader; tests can
+// substitute a deterministic in-memory schema so scaffoldPack output is reproducible.
+type SchemaResolver = (tableName: string) => DcrSchemaColumn[];
+let _schemaResolverOverride: SchemaResolver | null = null;
+export function __setSchemaResolverForTests(resolver: SchemaResolver | null): void {
+  _schemaResolverOverride = resolver;
+}
+
+// Injectable vendor-research provider. Production performs live research; tests substitute a
+// fixed result (or null) so scaffoldPack does no network I/O.
+type VendorResearchProvider = (solutionName: string) => Promise<VendorResearchResult | null>;
+let _vendorResearchOverride: VendorResearchProvider | null = null;
+export function __setVendorResearchForTests(provider: VendorResearchProvider | null): void {
+  _vendorResearchOverride = provider;
+}
+
 // Public accessor for field-matcher to load DCR schemas
 export function loadDcrTemplateSchemaPublic(tableName: string): DcrSchemaColumn[] {
+  if (_schemaResolverOverride) return _schemaResolverOverride(tableName);
   const columns = loadDcrTemplateSchema(tableName);
   const systemCols = new Set([
     'TenantId', 'SourceSystem', 'MG', 'ManagementGroupName',
@@ -342,32 +361,31 @@ function generatePipelineConf(
     ].join('\n'));
 
     // Parse CEF extension key=value pairs
-    functions.push([
-      '  - id: serde',
-      '    filter: "__cefExtension != undefined"',
-      '    disabled: false',
-      '    conf:',
-      '      mode: extract',
-      '      type: kvp',
-      '      srcField: __cefExtension',
-      '      delimChar: " "',
-      '      pairDelim: "="',
-      '    description: Parse CEF extension fields',
-      '    groupId: extract',
-    ].join('\n'));
+    functions.push(emitCriblFunction({
+      id: 'serde',
+      filter: '__cefExtension != undefined',
+      conf: [
+        '      mode: extract',
+        '      type: kvp',
+        '      srcField: __cefExtension',
+        '      delimChar: " "',
+        '      pairDelim: "="',
+      ],
+      description: 'Parse CEF extension fields',
+      groupId: 'extract',
+    }));
 
     // Clean up temporary __cefExtension field
-    functions.push([
-      '  - id: eval',
-      '    filter: "true"',
-      '    disabled: false',
-      '    conf:',
-      '      add: []',
-      '      remove:',
-      "        - __cefExtension",
-      '    description: Remove temporary parsing field',
-      '    groupId: extract',
-    ].join('\n'));
+    functions.push(emitCriblFunction({
+      id: 'eval',
+      conf: [
+        '      add: []',
+        '      remove:',
+        "        - __cefExtension",
+      ],
+      description: 'Remove temporary parsing field',
+      groupId: 'extract',
+    }));
   } else if (sourceFormat === 'leef') {
     // LEEF: similar to CEF but with different delimiter
     functions.push([
@@ -958,11 +976,6 @@ function generateReductionPipelineConf(
 }
 
 // Escape double quotes in filter expressions for YAML string embedding
-function escapeYamlFilter(expr: string | undefined | null): string {
-  if (!expr) return 'true';
-  return expr.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
-}
-
 // Generate a no-op reduction pipeline when no rules match the table/vendor
 function generateFallbackReductionConf(solutionName: string, tableName: string, sourceFormat?: string): string {
   const serdeType = sourceFormat === 'csv' ? 'csv' :
@@ -1775,7 +1788,7 @@ export function registerPackBuilderHandlers(ipcMain: IpcMain) {
     // field mappings between vendor source data and DCR destination schemas.
     let vendorData: VendorResearchResult | null = null;
     try {
-      vendorData = await performVendorResearch(options.solutionName);
+      vendorData = await (_vendorResearchOverride || performVendorResearch)(options.solutionName);
     } catch (err) {
       logger.warn('pack-builder', `Vendor research failed for '${options.solutionName}', falling back to user-provided fields`, err);
     }
@@ -1801,7 +1814,7 @@ export function registerPackBuilderHandlers(ipcMain: IpcMain) {
 
       // Auto-match source fields to DCR destination schema for each table.
       // Uses the field matcher to produce a COMPLETE mapping for every field.
-      const { matchFields: autoMatch } = await import('./field-matcher');
+      const autoMatch = matchFields;
 
       for (const table of options.tables) {
         // Find matching vendor log type
@@ -1873,14 +1886,7 @@ export function registerPackBuilderHandlers(ipcMain: IpcMain) {
 
                 sampleFieldNamesLower.set(keyLower, key);
                 sampleFieldNames.add(key);
-                let inferredType = 'string';
-                if (typeof value === 'number') inferredType = Number.isInteger(value) ? 'int' : 'real';
-                else if (typeof value === 'boolean') inferredType = 'boolean';
-                else if (typeof value === 'object' && value !== null) inferredType = 'dynamic';
-                else if (typeof value === 'string') {
-                  if (/^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}/.test(value)) inferredType = 'datetime';
-                  else if (/^\d+$/.test(value) && value.length < 16) inferredType = 'long';
-                }
+                const inferredType = inferFieldTypeFromValue(value);
                 sourceFields.push({
                   name: key,
                   type: inferredType,
@@ -1921,26 +1927,7 @@ export function registerPackBuilderHandlers(ipcMain: IpcMain) {
           const matchResult = autoMatch(sourceFields, destSchema, vendorMaps, table.sentinelTable);
 
           // Convert match result to field mappings for pipeline generation
-          table.fields = [
-            // Matched fields: rename/keep/coerce
-            ...matchResult.matched.map((m) => ({
-              source: m.sourceName,
-              target: m.destName,
-              type: m.destType,
-              action: (m.action === 'keep' && !m.needsCoercion ? 'keep' :
-                       m.action === 'keep' && m.needsCoercion ? 'coerce' :
-                       m.needsCoercion ? 'rename' : m.action) as 'rename' | 'keep' | 'coerce' | 'drop',
-            })),
-            // Overflow fields: mark with overflow action
-            ...matchResult.overflow.map((o) => ({
-              source: o.sourceName, target: o.destName, type: o.destType,
-              action: 'drop' as const, // The overflow eval handles these; mark as drop so cleanup removes the individual fields
-            })),
-            // Unmatched source fields (Cribl internals): drop
-            ...matchResult.unmatchedSource.map((s) => ({
-              source: s.name, target: s.name, type: s.type, action: 'drop' as const,
-            })),
-          ];
+          table.fields = projectMatchResult(matchResult);
 
           // Store overflow config for pipeline generation
           tableOverflowConfigs.set(table.sentinelTable, matchResult.overflowConfig);
@@ -1986,7 +1973,7 @@ export function registerPackBuilderHandlers(ipcMain: IpcMain) {
     // fields from samples and run auto-matching against the DCR destination schema.
     // This is the key path for vendors without static registry entries.
     if (!vendorData && vendorSamples.length > 0) {
-      const { matchFields: autoMatch } = await import('./field-matcher');
+      const autoMatch = matchFields;
 
       for (const table of options.tables) {
         if (table.fields.length > 0) continue; // Already has mappings
@@ -2009,14 +1996,7 @@ export function registerPackBuilderHandlers(ipcMain: IpcMain) {
               for (const [key, value] of Object.entries(evt)) {
                 if (fieldNames.has(key)) continue;
                 fieldNames.add(key);
-                let inferredType = 'string';
-                if (typeof value === 'number') inferredType = Number.isInteger(value) ? 'int' : 'real';
-                else if (typeof value === 'boolean') inferredType = 'boolean';
-                else if (typeof value === 'object' && value !== null) inferredType = 'dynamic';
-                else if (typeof value === 'string') {
-                  if (/^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}/.test(value)) inferredType = 'datetime';
-                  else if (/^\d+$/.test(value) && value.length < 16) inferredType = 'long';
-                }
+                const inferredType = inferFieldTypeFromValue(value);
                 sourceFields.push({
                   name: key, type: inferredType,
                   sampleValue: typeof value === 'object' ? JSON.stringify(value) : String(value),
@@ -2034,21 +2014,7 @@ export function registerPackBuilderHandlers(ipcMain: IpcMain) {
         if (destSchema.length > 0) {
           const matchResult = autoMatch(sourceFields, destSchema, undefined, table.sentinelTable);
 
-          table.fields = [
-            ...matchResult.matched.map((m) => ({
-              source: m.sourceName, target: m.destName, type: m.destType,
-              action: (m.action === 'keep' && !m.needsCoercion ? 'keep' :
-                       m.action === 'keep' && m.needsCoercion ? 'coerce' :
-                       m.needsCoercion ? 'rename' : m.action) as 'rename' | 'keep' | 'coerce' | 'drop',
-            })),
-            ...matchResult.overflow.map((o) => ({
-              source: o.sourceName, target: o.destName, type: o.destType,
-              action: 'drop' as const,
-            })),
-            ...matchResult.unmatchedSource.map((s) => ({
-              source: s.name, target: s.name, type: s.type, action: 'drop' as const,
-            })),
-          ];
+          table.fields = projectMatchResult(matchResult);
 
           tableOverflowConfigs.set(table.sentinelTable, matchResult.overflowConfig);
 
@@ -2151,7 +2117,6 @@ export function registerPackBuilderHandlers(ipcMain: IpcMain) {
           vs.tableName.toLowerCase() === table.sentinelTable.toLowerCase()
         ) || vendorSamples[0];
         if (sampleMatch?.rawEvents?.length > 0) {
-          const { matchFields, getOverflowConfig } = await import('./field-matcher');
           const { parseSampleContent } = await import('./sample-parser');
           const parsed = parseSampleContent(sampleMatch.rawEvents.join('\n'), 'sample');
           const sourceFields = parsed.fields.map((f: any) => ({ name: f.name, type: f.type, sampleValue: f.sampleValues?.[0] }));
@@ -2159,14 +2124,7 @@ export function registerPackBuilderHandlers(ipcMain: IpcMain) {
           if (sourceFields.length > 0 && destColumns.length > 0) {
             const destFields = destColumns.map((c: any) => ({ name: c.name, type: c.type }));
             const matchResult = matchFields(sourceFields, destFields, undefined, table.sentinelTable);
-            table.fields = [
-              ...matchResult.matched.filter((m: any) => m.action === 'rename').map((m: any) => ({
-                source: m.sourceName, target: m.destName, type: m.destType, action: 'rename' as const,
-              })),
-              ...matchResult.matched.filter((m: any) => m.action === 'coerce').map((m: any) => ({
-                source: m.sourceName, target: m.destName, type: m.destType, action: 'coerce' as const,
-              })),
-            ];
+            table.fields = projectRenamesAndCoercions(matchResult);
             // Update overflow config with field matcher results
             tableOverflowConfigs.set(table.sentinelTable, matchResult.overflowConfig);
           }
@@ -2243,7 +2201,7 @@ export function registerPackBuilderHandlers(ipcMain: IpcMain) {
         ) || vendorSamples[0];
         if (sampleForMatcher?.rawEvents?.length > 0) {
           try {
-            const { matchFields: mf } = await import('./field-matcher');
+            const mf = matchFields;
             const { parseSampleContent: psc } = await import('./sample-parser');
             const parsedSample = psc(sampleForMatcher.rawEvents.join('\n'), 'sample');
             const srcFields = parsedSample.fields.map((f: any) => ({ name: f.name, type: f.type, sampleValue: f.sampleValues?.[0] }));
@@ -2251,14 +2209,7 @@ export function registerPackBuilderHandlers(ipcMain: IpcMain) {
             if (srcFields.length > 0 && dstCols.length > 0) {
               const dstFields = dstCols.map((c: any) => ({ name: c.name, type: c.type }));
               const mr = mf(srcFields, dstFields, undefined, table.sentinelTable);
-              table.fields = [
-                ...mr.matched.filter((m: any) => m.action === 'rename').map((m: any) => ({
-                  source: m.sourceName, target: m.destName, type: m.destType, action: 'rename' as const,
-                })),
-                ...mr.matched.filter((m: any) => m.action === 'coerce').map((m: any) => ({
-                  source: m.sourceName, target: m.destName, type: m.destType, action: 'coerce' as const,
-                })),
-              ];
+              table.fields = projectRenamesAndCoercions(mr);
               tableOverflowConfigs.set(table.sentinelTable, mr.overflowConfig);
             }
           } catch (err) { logger.warn('pack-builder', `CEF/LEEF/KV field matcher failed for table '${table.sentinelTable}'`, err); }
@@ -2312,7 +2263,7 @@ export function registerPackBuilderHandlers(ipcMain: IpcMain) {
     // Each log type gets its own lookup file so users can see per-pipeline mappings.
     const lookupsDir = path.join(packDir, 'data', 'lookups');
     fs.mkdirSync(lookupsDir, { recursive: true });
-    const { matchFields: lookupMatch } = await import('./field-matcher');
+    const lookupMatch = matchFields;
     const { parseSampleContent: lookupParse } = await import('./sample-parser');
     for (const table of options.tables) {
       const logTypeSuffix = (table.logType || table.sentinelTable).replace(/[^a-zA-Z0-9_-]/g, '_');
@@ -3000,7 +2951,7 @@ export function registerPackBuilderHandlers(ipcMain: IpcMain) {
     try {
       const routing = await kqlParser.getTableRoutingForSolution(solutionName);
 
-      const { matchFields: autoMatch } = await import('./field-matcher');
+      const autoMatch = matchFields;
 
       const results: Array<{
         tableName: string;

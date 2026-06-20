@@ -334,9 +334,12 @@ describe('Sentinel Repo', () => {
     expect(content).toMatch(/^query:/m);
   });
 
-  it.skipIf(!exists)('CrowdStrike has Analytic Rules', () => {
-    const rulesDir = path.join(SENTINEL_REPO, 'CrowdStrike Falcon Endpoint Protection', 'Analytic Rules');
-    expect(fs.existsSync(rulesDir)).toBe(true);
+  // Skip when the CrowdStrike solution is not in the local clone (it may be absent or filtered
+  // by the EDR blocklist); when present, confirm it ships analytic rule YAML.
+  const crowdStrikeRulesDir = path.join(SENTINEL_REPO, 'CrowdStrike Falcon Endpoint Protection', 'Analytic Rules');
+  it.skipIf(!fs.existsSync(crowdStrikeRulesDir))('CrowdStrike has Analytic Rules', () => {
+    const files = fs.readdirSync(crowdStrikeRulesDir).filter((f) => f.endsWith('.yaml'));
+    expect(files.length).toBeGreaterThan(0);
   });
 });
 
