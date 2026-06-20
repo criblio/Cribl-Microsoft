@@ -6,6 +6,7 @@ import zlib from 'zlib';
 import { findReductionRules, TableReductionRules, ReductionRule, SuppressRule } from './reduction-rules';
 import { matchFields, getOverflowConfig, inferFieldTypeFromValue, projectMatchResult, projectRenamesAndCoercions } from './field-mapping-engine';
 import type { OverflowConfig } from './field-mapping-engine';
+import { escapeYamlFilter, emitCriblFunction } from './yaml-builder';
 import { SOURCE_TYPES, VENDOR_SOURCE_HINTS, suggestSourceType, generateInputsYml, SourceConfig, SourceTypeDefinition } from './source-types';
 import { performVendorResearch, VendorResearchResult, FieldMapping as VendorFieldMapping } from './vendor-research';
 import { captureSnapshot } from './change-detection';
@@ -360,32 +361,31 @@ function generatePipelineConf(
     ].join('\n'));
 
     // Parse CEF extension key=value pairs
-    functions.push([
-      '  - id: serde',
-      '    filter: "__cefExtension != undefined"',
-      '    disabled: false',
-      '    conf:',
-      '      mode: extract',
-      '      type: kvp',
-      '      srcField: __cefExtension',
-      '      delimChar: " "',
-      '      pairDelim: "="',
-      '    description: Parse CEF extension fields',
-      '    groupId: extract',
-    ].join('\n'));
+    functions.push(emitCriblFunction({
+      id: 'serde',
+      filter: '__cefExtension != undefined',
+      conf: [
+        '      mode: extract',
+        '      type: kvp',
+        '      srcField: __cefExtension',
+        '      delimChar: " "',
+        '      pairDelim: "="',
+      ],
+      description: 'Parse CEF extension fields',
+      groupId: 'extract',
+    }));
 
     // Clean up temporary __cefExtension field
-    functions.push([
-      '  - id: eval',
-      '    filter: "true"',
-      '    disabled: false',
-      '    conf:',
-      '      add: []',
-      '      remove:',
-      "        - __cefExtension",
-      '    description: Remove temporary parsing field',
-      '    groupId: extract',
-    ].join('\n'));
+    functions.push(emitCriblFunction({
+      id: 'eval',
+      conf: [
+        '      add: []',
+        '      remove:',
+        "        - __cefExtension",
+      ],
+      description: 'Remove temporary parsing field',
+      groupId: 'extract',
+    }));
   } else if (sourceFormat === 'leef') {
     // LEEF: similar to CEF but with different delimiter
     functions.push([
@@ -976,11 +976,6 @@ function generateReductionPipelineConf(
 }
 
 // Escape double quotes in filter expressions for YAML string embedding
-function escapeYamlFilter(expr: string | undefined | null): string {
-  if (!expr) return 'true';
-  return expr.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
-}
-
 // Generate a no-op reduction pipeline when no rules match the table/vendor
 function generateFallbackReductionConf(solutionName: string, tableName: string, sourceFormat?: string): string {
   const serdeType = sourceFormat === 'csv' ? 'csv' :
