@@ -768,3 +768,351 @@ routes:
 ",
 }
 `;
+
+exports[`scaffoldPack golden output (field-mapping -> pipelines) > produces stable pipelines from vendor research (vendor field mappings + alias path) 1`] = `
+{
+  "FIELD_MAPPING_CommonSecurityLog.txt": "# Field Mapping Report: CommonSecurityLog
+# Source: CommonSecurityLog (4 fields)
+# Destination: CommonSecurityLog DCR (7 fields)
+# Match rate: 100%
+#
+# Matched (1:1): 3
+#   [exact] srcIp (string) -> SourceIP (string) -- Vendor mapping: srcIp -> SourceIP
+#   [exact] srcPort (int) -> SourcePort (int) -- Vendor mapping: srcPort -> SourcePort
+#   [alias] action (string) -> DeviceAction (string) -- Known alias: action -> DeviceAction [+5 firewall context]
+#
+# Overflow (into AdditionalExtensions): 1
+#   extraField (string) -> AdditionalExtensions (string)
+#
+# Dropped (Cribl internals): 0
+#
+# Unmapped dest fields (not in source): 4
+#   DestinationIP (string)
+#   Message (string)
+#   TimeGenerated (datetime)
+#   AdditionalExtensions (string)
+",
+  "default/pipelines/Reduction_VendorGolden_json/conf.yml": "output: default
+streamtags: []
+groups:
+  extract:
+    name: Field Extraction
+    disabled: false
+  reduce:
+    name: Volume Reduction
+    disabled: false
+  enrich:
+    name: Enrich & Classify
+    disabled: false
+  overflow:
+    name: Overflow Collection
+    disabled: false
+  cleanup:
+    name: Sentinel Cleanup
+    disabled: false
+asyncFuncTimeout: 1000
+functions:
+  - id: serde
+    filter: "true"
+    disabled: false
+    conf:
+      mode: extract
+      type: json
+      srcField: _raw
+    description: Parse JSON from _raw
+    groupId: extract
+  - id: auto_timestamp
+    filter: "true"
+    disabled: false
+    conf:
+      srcField: TimeGenerated
+      dstField: _time
+      defaultTimezone: UTC
+      timeExpression: "time.getTime() / 1000"
+      offset: 0
+      maxLen: 150
+      defaultTime: now
+      latestDateAllowed: +1week
+      earliestDateAllowed: -420weeks
+    description: Extract _time from TimeGenerated
+    groupId: extract
+  - id: eval
+    filter: "(/deny|drop|block|reject|reset/i.test(act || '')) || ((Number(Severity) >= 7) || /high|critical|emergency|alert/i.test(Severity || '')) || (/auth|login|logon|logoff|logout|credential|password|sso|mfa/i.test(Name || type || '')) || (/malware|virus|trojan|exploit|intrusion|ips|ids|threat|apt|ransomware|botnet|c2|command.and.control/i.test(Name || type || cat || '')) || (/policy|violation|compliance|unauthorized|forbidden/i.test(Name || type || '')) || (/admin|config|modify|change|update|create|delete|remove|install|uninstall/i.test(Name || type || ''))"
+    disabled: false
+    conf:
+      add:
+        - name: __keep
+          value: "true"
+      remove: []
+    description: Tag analytics-critical events
+    groupId: reduce
+  - id: drop
+    filter: "!__keep && (/allow|permit|pass|accept/i.test(act || '') && (dpt == 443 || dpt == 80) && !(/deny|drop|block/i.test(Name || '')))"
+    disabled: false
+    conf: {}
+    description: DROP Routine allowed HTTPS traffic
+    groupId: reduce
+  - id: drop
+    filter: "!__keep && (/heartbeat|keepalive|health.check|ping|status.check|monitor/i.test(Name || type || ''))"
+    disabled: false
+    conf: {}
+    description: DROP Heartbeat and keepalive messages
+    groupId: reduce
+  - id: drop
+    filter: "!__keep && (/dns/i.test(type || '') && /allow|permit|pass/i.test(act || '') && !(/nxdomain|tunnel|exfil|dga|malware|threat|suspicious/i.test(Name || cat || '')))"
+    disabled: false
+    conf: {}
+    description: DROP Routine DNS lookups (non-security)
+    groupId: reduce
+  - id: drop
+    filter: "!__keep && (/nat|translation|pat|snat|dnat/i.test(type || Name || '') && !/fail|error|deny/i.test(act || ''))"
+    disabled: false
+    conf: {}
+    description: DROP NAT translation events
+    groupId: reduce
+  - id: suppress
+    filter: "!__keep && (/allow|permit|pass|accept/i.test(act || '') && !(/deny|drop|block/i.test(Name || '')))"
+    disabled: false
+    conf:
+      allow: 1
+      suppressPeriodSec: 300
+      keyExpr: "src + ':' + dst + ':' + dpt + ':' + deviceProduct"
+      dropEventsMode: true
+    description: SUPPRESS Aggregate allowed traffic by source/dest/port
+    groupId: reduce
+  - id: suppress
+    filter: "!__keep && (/vpn|tunnel|ipsec|ssl.vpn/i.test(type || Name || ''))"
+    disabled: false
+    conf:
+      allow: 1
+      suppressPeriodSec: 300
+      keyExpr: "src + ':' + duser"
+      dropEventsMode: true
+    description: SUPPRESS Suppress repeated VPN session updates
+    groupId: reduce
+  - id: eval
+    filter: "__keep"
+    disabled: false
+    conf:
+      add: []
+      remove:
+        - __keep
+    description: Remove internal __keep tag before enrichment
+    groupId: reduce
+  - id: rename
+    filter: "true"
+    disabled: false
+    description: Rename source fields to DCR schema
+    groupId: enrich
+    conf:
+      rename:
+        - currentName: srcIp
+          newName: SourceIP
+        - currentName: srcPort
+          newName: SourcePort
+        - currentName: action
+          newName: DeviceAction
+  - id: eval
+    filter: "true"
+    disabled: false
+    conf:
+      add:
+        - disabled: false
+          name: Type
+          value: "'CommonSecurityLog'"
+      remove: []
+    description: Set Type and classify for CommonSecurityLog
+    groupId: enrich
+  - id: serialize
+    filter: "true"
+    disabled: false
+    conf:
+      type: json
+      dstField: AdditionalExtensions
+      fields:
+        - "!__*"
+        - "!_raw"
+        - "!_time"
+        - "!source"
+        - "!sourcetype"
+        - "!host"
+        - "!index"
+        - "!cribl_breaker"
+        - "!SourceIP"
+        - "!SourcePort"
+        - "!DeviceAction"
+        - "!Type"
+        - "!TimeGenerated"
+        - "!AdditionalExtensions"
+        - "*"
+    description: Serialize unmapped fields into AdditionalExtensions as JSON
+    groupId: overflow
+  - id: eval
+    filter: "true"
+    disabled: false
+    conf:
+      add: []
+      remove:
+        - _raw
+        - _time
+        - cribl_*
+        - __header*
+        - __inputId
+        - __criblMetrics
+        - __final
+        - __channel
+        - __dest*
+        - __span*
+        - source
+        - host
+        - port
+        - index
+        - cribl_breaker
+        - sourcetype
+    description: Remove internal fields
+    groupId: cleanup
+",
+  "default/pipelines/VendorGolden_json/conf.yml": "output: default
+streamtags: []
+groups:
+  extract:
+    name: Field Extraction
+    disabled: false
+  enrich:
+    name: Enrich & Classify
+    disabled: false
+  overflow:
+    name: Overflow Collection
+    disabled: false
+  cleanup:
+    name: Sentinel Cleanup
+    disabled: false
+asyncFuncTimeout: 1000
+functions:
+  - id: serde
+    filter: "true"
+    disabled: false
+    conf:
+      mode: extract
+      type: json
+      srcField: _raw
+    description: Parse JSON from _raw
+    groupId: extract
+  - id: auto_timestamp
+    filter: "true"
+    disabled: false
+    conf:
+      srcField: TimeGenerated
+      dstField: _time
+      defaultTimezone: UTC
+      timeExpression: "time.getTime() / 1000"
+      offset: 0
+      maxLen: 150
+      defaultTime: now
+      latestDateAllowed: +1week
+      earliestDateAllowed: -420weeks
+    description: Extract _time from TimeGenerated
+    groupId: extract
+  - id: rename
+    filter: "true"
+    disabled: false
+    description: Rename source fields to DCR schema
+    groupId: enrich
+    conf:
+      rename:
+        - currentName: srcIp
+          newName: SourceIP
+        - currentName: srcPort
+          newName: SourcePort
+        - currentName: action
+          newName: DeviceAction
+  - id: eval
+    filter: "true"
+    disabled: false
+    conf:
+      add:
+        - disabled: false
+          name: Type
+          value: "'CommonSecurityLog'"
+      remove: []
+    description: Set Type and classify for CommonSecurityLog
+    groupId: enrich
+  - id: serialize
+    filter: "true"
+    disabled: false
+    conf:
+      type: json
+      dstField: AdditionalExtensions
+      fields:
+        - "!__*"
+        - "!_raw"
+        - "!_time"
+        - "!source"
+        - "!sourcetype"
+        - "!host"
+        - "!index"
+        - "!cribl_breaker"
+        - "!SourceIP"
+        - "!SourcePort"
+        - "!DeviceAction"
+        - "!Type"
+        - "!TimeGenerated"
+        - "!AdditionalExtensions"
+        - "*"
+    description: Serialize unmapped fields into AdditionalExtensions as JSON
+    groupId: overflow
+  - id: eval
+    filter: "true"
+    disabled: false
+    conf:
+      add: []
+      remove:
+        - _raw
+        - _time
+        - cribl_*
+        - __header*
+        - __inputId
+        - __criblMetrics
+        - __final
+        - __channel
+        - __dest*
+        - __span*
+        - source
+        - host
+        - port
+        - index
+        - cribl_breaker
+        - sourcetype
+    description: Remove internal fields
+    groupId: cleanup
+",
+  "default/pipelines/route.yml": "# Routes for VendorGolden
+# Generated by Cribl SOC Optimization Toolkit
+#
+# Each log type has two routes:
+#   1. Reduction + Transform (enabled): full pipeline with volume reduction
+#   2. Transform only (disabled): same pipeline without reduction
+# To skip reduction: disable the reduction route and enable the passthrough route.
+
+id: default
+groups: {}
+routes:
+  - id: reduction_VendorGolden_json
+    name: "Reduction + Transform: json"
+    pipeline: Reduction_VendorGolden_json
+    filter: "true"
+    output: MS-Sentinel-CommonSecurityLog-dest
+    final: true
+    disabled: false
+    description: Reduction + Transform for json events
+  - id: route_VendorGolden_json
+    name: "Transform: json"
+    pipeline: VendorGolden_json
+    filter: "true"
+    output: MS-Sentinel-CommonSecurityLog-dest
+    final: true
+    disabled: true
+    description: Transform only for json events
+",
+}
+`;

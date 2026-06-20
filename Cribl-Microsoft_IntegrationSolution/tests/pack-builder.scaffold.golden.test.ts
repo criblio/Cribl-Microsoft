@@ -38,6 +38,38 @@ const FIXTURE_SCHEMA: Record<string, Array<{ name: string; type: string }>> = {
   ],
 };
 
+// A fixed vendor-research result to exercise the vendor-research match path (block that builds
+// source fields from vendor log-type fields + fieldMappings). Cast at the call site to avoid
+// importing the full vendor-research types into the test.
+const VENDOR_RESULT = {
+  vendor: 'goldenvendor',
+  displayName: 'Golden Vendor',
+  description: 'fixture vendor',
+  sourceType: 'json',
+  documentationUrl: 'https://example.test/docs',
+  fetchedAt: 0,
+  fromCache: true,
+  logTypes: [
+    {
+      id: 'commonsecuritylog',
+      name: 'CommonSecurityLog',
+      description: 'fixture log type',
+      sourceFormat: 'json',
+      destTable: 'CommonSecurityLog',
+      fields: [
+        { name: 'srcIp', type: 'string', example: '10.0.0.1' },
+        { name: 'srcPort', type: 'int', example: '443' },
+        { name: 'action', type: 'string', example: 'blocked' },
+        { name: 'extraField', type: 'string', example: 'keep-me' },
+      ],
+      fieldMappings: [
+        { sourceName: 'srcIp', sourceType: 'string', destName: 'SourceIP', destType: 'string', action: 'map', description: '' },
+        { sourceName: 'srcPort', sourceType: 'int', destName: 'SourcePort', destType: 'int', action: 'map', description: '' },
+      ],
+    },
+  ],
+};
+
 // Capture the pack:scaffold handler the way the web router does, so we can invoke scaffoldPack
 // without exporting it.
 function captureScaffoldHandler(): (event: unknown, options: unknown) => Promise<any> {
@@ -146,6 +178,28 @@ describe('scaffoldPack golden output (field-mapping -> pipelines)', () => {
 
     const outputs = readDeterministicOutputs(result.packDir);
     expect(Object.keys(outputs).some((k) => k.startsWith('default/pipelines/'))).toBe(true);
+    expect(outputs).toMatchSnapshot();
+  });
+
+  it('produces stable pipelines from vendor research (vendor field mappings + alias path)', async () => {
+    __setVendorResearchForTests(async () => VENDOR_RESULT as any);
+    const scaffold = captureScaffoldHandler();
+    const options = {
+      solutionName: 'VendorGolden',
+      packName: 'vendor-golden-pack',
+      version: '1.0.0',
+      autoPackage: false,
+      vendorSamples: [],
+      tables: [
+        { sentinelTable: 'CommonSecurityLog', criblStream: 'vendor_json', fields: [], logType: 'json' },
+      ],
+    };
+
+    const result = await scaffold({}, options);
+    expect(result?.packDir, 'scaffold should return a packDir').toBeTruthy();
+
+    const outputs = readDeterministicOutputs(result.packDir);
+    expect(Object.keys(outputs).some((k) => k.startsWith('FIELD_MAPPING_'))).toBe(true);
     expect(outputs).toMatchSnapshot();
   });
 });
