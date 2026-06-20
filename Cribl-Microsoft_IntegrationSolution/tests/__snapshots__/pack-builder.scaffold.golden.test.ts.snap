@@ -353,3 +353,418 @@ routes:
 ",
 }
 `;
+
+exports[`scaffoldPack golden output (field-mapping -> pipelines) > produces stable pipelines for a raw CEF sample (alias/rename-coerce path) 1`] = `
+{
+  "default/pipelines/CefGoldenVendor_cef/conf.yml": "output: default
+streamtags: []
+groups:
+  extract:
+    name: Field Extraction
+    disabled: false
+  enrich:
+    name: Enrich & Classify
+    disabled: false
+  overflow:
+    name: Overflow Collection
+    disabled: false
+  cleanup:
+    name: Sentinel Cleanup
+    disabled: false
+asyncFuncTimeout: 1000
+functions:
+  - id: eval
+    filter: "true"
+    disabled: false
+    conf:
+      add:
+        - name: __cefParts
+          value: "(_raw || '').substring((_raw || '').indexOf('CEF:')).split('|')"
+        - name: CEFVersion
+          value: "(__cefParts && __cefParts.length > 0) ? __cefParts[0].replace('CEF:','') : undefined"
+        - name: DeviceVendor
+          value: "(__cefParts && __cefParts.length > 1) ? __cefParts[1] : undefined"
+        - name: DeviceProduct
+          value: "(__cefParts && __cefParts.length > 2) ? __cefParts[2] : undefined"
+        - name: DeviceVersion
+          value: "(__cefParts && __cefParts.length > 3) ? __cefParts[3] : undefined"
+        - name: DeviceEventClassID
+          value: "(__cefParts && __cefParts.length > 4) ? __cefParts[4] : undefined"
+        - name: Activity
+          value: "(__cefParts && __cefParts.length > 5) ? __cefParts[5] : undefined"
+        - name: LogSeverity
+          value: "(__cefParts && __cefParts.length > 6) ? __cefParts[6] : undefined"
+        - name: __cefExtension
+          value: "(__cefParts && __cefParts.length > 7) ? __cefParts.slice(7).join('|') : undefined"
+      remove:
+        - __cefParts
+    description: Parse CEF header from _raw
+    groupId: extract
+  - id: serde
+    filter: "__cefExtension != undefined"
+    disabled: false
+    conf:
+      mode: extract
+      type: kvp
+      srcField: __cefExtension
+      delimChar: " "
+      pairDelim: "="
+    description: Parse CEF extension fields
+    groupId: extract
+  - id: eval
+    filter: "true"
+    disabled: false
+    conf:
+      add: []
+      remove:
+        - __cefExtension
+    description: Remove temporary parsing field
+    groupId: extract
+  - id: auto_timestamp
+    filter: "true"
+    disabled: false
+    conf:
+      srcField: rt
+      dstField: _time
+      defaultTimezone: UTC
+      timeExpression: "time.getTime() / 1000"
+      offset: 0
+      maxLen: 150
+      defaultTime: now
+      latestDateAllowed: +1week
+      earliestDateAllowed: -420weeks
+    description: Extract _time from rt
+    groupId: extract
+  - id: rename
+    filter: "true"
+    disabled: false
+    description: Rename source fields to DCR schema
+    groupId: enrich
+    conf:
+      rename:
+        - currentName: src
+          newName: SourceIP
+        - currentName: spt
+          newName: SourcePort
+        - currentName: dst
+          newName: DestinationIP
+        - currentName: act
+          newName: DeviceAction
+        - currentName: msg
+          newName: Message
+  - id: eval
+    filter: "true"
+    disabled: false
+    conf:
+      add:
+        - disabled: false
+          name: Type
+          value: "'CommonSecurityLog'"
+      remove: []
+    description: Set Type and classify for CommonSecurityLog
+    groupId: enrich
+  - id: serialize
+    filter: "true"
+    disabled: false
+    conf:
+      type: json
+      dstField: AdditionalExtensions
+      fields:
+        - "!__*"
+        - "!_raw"
+        - "!_time"
+        - "!source"
+        - "!sourcetype"
+        - "!host"
+        - "!index"
+        - "!cribl_breaker"
+        - "!SourceIP"
+        - "!SourcePort"
+        - "!DestinationIP"
+        - "!DeviceAction"
+        - "!Message"
+        - "!Type"
+        - "!TimeGenerated"
+        - "!AdditionalExtensions"
+        - "*"
+    description: Serialize unmapped fields into AdditionalExtensions as JSON
+    groupId: overflow
+  - id: eval
+    filter: "true"
+    disabled: false
+    conf:
+      add: []
+      remove:
+        - _raw
+        - _time
+        - cribl_*
+        - __header*
+        - __inputId
+        - __criblMetrics
+        - __final
+        - __channel
+        - __dest*
+        - __span*
+        - source
+        - host
+        - port
+        - index
+        - cribl_breaker
+        - sourcetype
+    description: Remove internal fields
+    groupId: cleanup
+",
+  "default/pipelines/Reduction_CefGoldenVendor_cef/conf.yml": "output: default
+streamtags: []
+groups:
+  extract:
+    name: Field Extraction
+    disabled: false
+  reduce:
+    name: Volume Reduction
+    disabled: false
+  enrich:
+    name: Enrich & Classify
+    disabled: false
+  overflow:
+    name: Overflow Collection
+    disabled: false
+  cleanup:
+    name: Sentinel Cleanup
+    disabled: false
+asyncFuncTimeout: 1000
+functions:
+  - id: eval
+    filter: "true"
+    disabled: false
+    conf:
+      add:
+        - name: __cefParts
+          value: "(_raw || '').substring((_raw || '').indexOf('CEF:')).split('|')"
+        - name: CEFVersion
+          value: "(__cefParts && __cefParts.length > 0) ? __cefParts[0].replace('CEF:','') : undefined"
+        - name: DeviceVendor
+          value: "(__cefParts && __cefParts.length > 1) ? __cefParts[1] : undefined"
+        - name: DeviceProduct
+          value: "(__cefParts && __cefParts.length > 2) ? __cefParts[2] : undefined"
+        - name: DeviceVersion
+          value: "(__cefParts && __cefParts.length > 3) ? __cefParts[3] : undefined"
+        - name: DeviceEventClassID
+          value: "(__cefParts && __cefParts.length > 4) ? __cefParts[4] : undefined"
+        - name: Activity
+          value: "(__cefParts && __cefParts.length > 5) ? __cefParts[5] : undefined"
+        - name: LogSeverity
+          value: "(__cefParts && __cefParts.length > 6) ? __cefParts[6] : undefined"
+        - name: __cefExtension
+          value: "(__cefParts && __cefParts.length > 7) ? __cefParts.slice(7).join('|') : undefined"
+      remove:
+        - __cefParts
+    description: Parse CEF header from _raw
+    groupId: extract
+  - id: serde
+    filter: "__cefExtension != undefined"
+    disabled: false
+    conf:
+      mode: extract
+      type: kvp
+      srcField: __cefExtension
+      delimChar: " "
+      pairDelim: "="
+    description: Parse CEF extension fields
+    groupId: extract
+  - id: eval
+    filter: "true"
+    disabled: false
+    conf:
+      add: []
+      remove:
+        - __cefExtension
+    description: Remove temporary parsing field
+    groupId: extract
+  - id: auto_timestamp
+    filter: "true"
+    disabled: false
+    conf:
+      srcField: rt
+      dstField: _time
+      defaultTimezone: UTC
+      timeExpression: "time.getTime() / 1000"
+      offset: 0
+      maxLen: 150
+      defaultTime: now
+      latestDateAllowed: +1week
+      earliestDateAllowed: -420weeks
+    description: Extract _time from rt
+    groupId: extract
+  - id: eval
+    filter: "(/deny|drop|block|reject|reset/i.test(act || '')) || ((Number(Severity) >= 7) || /high|critical|emergency|alert/i.test(Severity || '')) || (/auth|login|logon|logoff|logout|credential|password|sso|mfa/i.test(Name || type || '')) || (/malware|virus|trojan|exploit|intrusion|ips|ids|threat|apt|ransomware|botnet|c2|command.and.control/i.test(Name || type || cat || '')) || (/policy|violation|compliance|unauthorized|forbidden/i.test(Name || type || '')) || (/admin|config|modify|change|update|create|delete|remove|install|uninstall/i.test(Name || type || ''))"
+    disabled: false
+    conf:
+      add:
+        - name: __keep
+          value: "true"
+      remove: []
+    description: Tag analytics-critical events
+    groupId: reduce
+  - id: drop
+    filter: "!__keep && (/allow|permit|pass|accept/i.test(act || '') && (dpt == 443 || dpt == 80) && !(/deny|drop|block/i.test(Name || '')))"
+    disabled: false
+    conf: {}
+    description: DROP Routine allowed HTTPS traffic
+    groupId: reduce
+  - id: drop
+    filter: "!__keep && (/heartbeat|keepalive|health.check|ping|status.check|monitor/i.test(Name || type || ''))"
+    disabled: false
+    conf: {}
+    description: DROP Heartbeat and keepalive messages
+    groupId: reduce
+  - id: drop
+    filter: "!__keep && (/dns/i.test(type || '') && /allow|permit|pass/i.test(act || '') && !(/nxdomain|tunnel|exfil|dga|malware|threat|suspicious/i.test(Name || cat || '')))"
+    disabled: false
+    conf: {}
+    description: DROP Routine DNS lookups (non-security)
+    groupId: reduce
+  - id: drop
+    filter: "!__keep && (/nat|translation|pat|snat|dnat/i.test(type || Name || '') && !/fail|error|deny/i.test(act || ''))"
+    disabled: false
+    conf: {}
+    description: DROP NAT translation events
+    groupId: reduce
+  - id: suppress
+    filter: "!__keep && (/allow|permit|pass|accept/i.test(act || '') && !(/deny|drop|block/i.test(Name || '')))"
+    disabled: false
+    conf:
+      allow: 1
+      suppressPeriodSec: 300
+      keyExpr: "src + ':' + dst + ':' + dpt + ':' + deviceProduct"
+      dropEventsMode: true
+    description: SUPPRESS Aggregate allowed traffic by source/dest/port
+    groupId: reduce
+  - id: suppress
+    filter: "!__keep && (/vpn|tunnel|ipsec|ssl.vpn/i.test(type || Name || ''))"
+    disabled: false
+    conf:
+      allow: 1
+      suppressPeriodSec: 300
+      keyExpr: "src + ':' + duser"
+      dropEventsMode: true
+    description: SUPPRESS Suppress repeated VPN session updates
+    groupId: reduce
+  - id: eval
+    filter: "__keep"
+    disabled: false
+    conf:
+      add: []
+      remove:
+        - __keep
+    description: Remove internal __keep tag before enrichment
+    groupId: reduce
+  - id: rename
+    filter: "true"
+    disabled: false
+    description: Rename source fields to DCR schema
+    groupId: enrich
+    conf:
+      rename:
+        - currentName: src
+          newName: SourceIP
+        - currentName: spt
+          newName: SourcePort
+        - currentName: dst
+          newName: DestinationIP
+        - currentName: act
+          newName: DeviceAction
+        - currentName: msg
+          newName: Message
+  - id: eval
+    filter: "true"
+    disabled: false
+    conf:
+      add:
+        - disabled: false
+          name: Type
+          value: "'CommonSecurityLog'"
+      remove: []
+    description: Set Type and classify for CommonSecurityLog
+    groupId: enrich
+  - id: serialize
+    filter: "true"
+    disabled: false
+    conf:
+      type: json
+      dstField: AdditionalExtensions
+      fields:
+        - "!__*"
+        - "!_raw"
+        - "!_time"
+        - "!source"
+        - "!sourcetype"
+        - "!host"
+        - "!index"
+        - "!cribl_breaker"
+        - "!SourceIP"
+        - "!SourcePort"
+        - "!DestinationIP"
+        - "!DeviceAction"
+        - "!Message"
+        - "!Type"
+        - "!TimeGenerated"
+        - "!AdditionalExtensions"
+        - "*"
+    description: Serialize unmapped fields into AdditionalExtensions as JSON
+    groupId: overflow
+  - id: eval
+    filter: "true"
+    disabled: false
+    conf:
+      add: []
+      remove:
+        - _raw
+        - _time
+        - cribl_*
+        - __header*
+        - __inputId
+        - __criblMetrics
+        - __final
+        - __channel
+        - __dest*
+        - __span*
+        - source
+        - host
+        - port
+        - index
+        - cribl_breaker
+        - sourcetype
+    description: Remove internal fields
+    groupId: cleanup
+",
+  "default/pipelines/route.yml": "# Routes for CefGoldenVendor
+# Generated by Cribl SOC Optimization Toolkit
+#
+# Each log type has two routes:
+#   1. Reduction + Transform (enabled): full pipeline with volume reduction
+#   2. Transform only (disabled): same pipeline without reduction
+# To skip reduction: disable the reduction route and enable the passthrough route.
+
+id: default
+groups: {}
+routes:
+  - id: reduction_CefGoldenVendor_cef
+    name: "Reduction + Transform: cef"
+    pipeline: Reduction_CefGoldenVendor_cef
+    filter: "true"
+    output: MS-Sentinel-CommonSecurityLog-dest
+    final: true
+    disabled: false
+    description: Reduction + Transform for cef events
+  - id: route_CefGoldenVendor_cef
+    name: "Transform: cef"
+    pipeline: CefGoldenVendor_cef
+    filter: "true"
+    output: MS-Sentinel-CommonSecurityLog-dest
+    final: true
+    disabled: true
+    description: Transform only for cef events
+",
+}
+`;

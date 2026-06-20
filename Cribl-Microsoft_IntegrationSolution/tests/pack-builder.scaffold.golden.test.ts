@@ -121,4 +121,31 @@ describe('scaffoldPack golden output (field-mapping -> pipelines)', () => {
 
     expect(outputs).toMatchSnapshot();
   });
+
+  it('produces stable pipelines for a raw CEF sample (alias/rename-coerce path)', async () => {
+    // A raw CEF string is not JSON, so the samples-only fallback skips it and the CEF/alias
+    // path (projectRenamesAndCoercions) handles the mapping instead.
+    const scaffold = captureScaffoldHandler();
+    const cefEvent =
+      'CEF:0|Security|Firewall|1.0|100|Traffic Allowed|5|src=10.0.0.1 spt=443 dst=8.8.8.8 dpt=80 act=blocked msg=connection denied';
+    const options = {
+      solutionName: 'CefGoldenVendor',
+      packName: 'cef-golden-pack',
+      version: '1.0.0',
+      autoPackage: false,
+      vendorSamples: [
+        { tableName: 'CommonSecurityLog', format: 'cef', source: 'cef-fixture', rawEvents: [cefEvent] },
+      ],
+      tables: [
+        { sentinelTable: 'CommonSecurityLog', criblStream: 'cef_raw', fields: [], logType: 'cef' },
+      ],
+    };
+
+    const result = await scaffold({}, options);
+    expect(result?.packDir, 'scaffold should return a packDir').toBeTruthy();
+
+    const outputs = readDeterministicOutputs(result.packDir);
+    expect(Object.keys(outputs).some((k) => k.startsWith('default/pipelines/'))).toBe(true);
+    expect(outputs).toMatchSnapshot();
+  });
 });

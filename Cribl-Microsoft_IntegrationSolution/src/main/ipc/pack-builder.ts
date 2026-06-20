@@ -4,7 +4,7 @@ import path from 'path';
 import crypto from 'crypto';
 import zlib from 'zlib';
 import { findReductionRules, TableReductionRules, ReductionRule, SuppressRule } from './reduction-rules';
-import { matchFields, getOverflowConfig, inferFieldTypeFromValue, projectMatchResult } from './field-mapping-engine';
+import { matchFields, getOverflowConfig, inferFieldTypeFromValue, projectMatchResult, projectRenamesAndCoercions } from './field-mapping-engine';
 import type { OverflowConfig } from './field-mapping-engine';
 import { SOURCE_TYPES, VENDOR_SOURCE_HINTS, suggestSourceType, generateInputsYml, SourceConfig, SourceTypeDefinition } from './source-types';
 import { performVendorResearch, VendorResearchResult, FieldMapping as VendorFieldMapping } from './vendor-research';
@@ -2129,14 +2129,7 @@ export function registerPackBuilderHandlers(ipcMain: IpcMain) {
           if (sourceFields.length > 0 && destColumns.length > 0) {
             const destFields = destColumns.map((c: any) => ({ name: c.name, type: c.type }));
             const matchResult = matchFields(sourceFields, destFields, undefined, table.sentinelTable);
-            table.fields = [
-              ...matchResult.matched.filter((m: any) => m.action === 'rename').map((m: any) => ({
-                source: m.sourceName, target: m.destName, type: m.destType, action: 'rename' as const,
-              })),
-              ...matchResult.matched.filter((m: any) => m.action === 'coerce').map((m: any) => ({
-                source: m.sourceName, target: m.destName, type: m.destType, action: 'coerce' as const,
-              })),
-            ];
+            table.fields = projectRenamesAndCoercions(matchResult);
             // Update overflow config with field matcher results
             tableOverflowConfigs.set(table.sentinelTable, matchResult.overflowConfig);
           }
@@ -2221,14 +2214,7 @@ export function registerPackBuilderHandlers(ipcMain: IpcMain) {
             if (srcFields.length > 0 && dstCols.length > 0) {
               const dstFields = dstCols.map((c: any) => ({ name: c.name, type: c.type }));
               const mr = mf(srcFields, dstFields, undefined, table.sentinelTable);
-              table.fields = [
-                ...mr.matched.filter((m: any) => m.action === 'rename').map((m: any) => ({
-                  source: m.sourceName, target: m.destName, type: m.destType, action: 'rename' as const,
-                })),
-                ...mr.matched.filter((m: any) => m.action === 'coerce').map((m: any) => ({
-                  source: m.sourceName, target: m.destName, type: m.destType, action: 'coerce' as const,
-                })),
-              ];
+              table.fields = projectRenamesAndCoercions(mr);
               tableOverflowConfigs.set(table.sentinelTable, mr.overflowConfig);
             }
           } catch (err) { logger.warn('pack-builder', `CEF/LEEF/KV field matcher failed for table '${table.sentinelTable}'`, err); }

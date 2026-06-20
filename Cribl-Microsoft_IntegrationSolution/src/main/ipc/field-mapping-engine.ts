@@ -106,6 +106,20 @@ export function projectMatchResult(matchResult: MatchResult): ProjectedField[] {
   ];
 }
 
+// Project only the rename and coerce matches. Used on the gap-analysis and CEF/LEEF/KV paths,
+// where the DCR already passes through unmapped fields, so Cribl supplements it with just the
+// renames and coercions the DCR itself does not perform (no drop/overflow entries).
+export function projectRenamesAndCoercions(matchResult: MatchResult): ProjectedField[] {
+  return [
+    ...matchResult.matched.filter((m) => m.action === 'rename').map((m) => ({
+      source: m.sourceName, target: m.destName, type: m.destType, action: 'rename' as const,
+    })),
+    ...matchResult.matched.filter((m) => m.action === 'coerce').map((m) => ({
+      source: m.sourceName, target: m.destName, type: m.destType, action: 'coerce' as const,
+    })),
+  ];
+}
+
 // ---------------------------------------------------------------------------
 // Known Abbreviation / Alias Table
 // Maps common short source field names to their standard long destination names.
