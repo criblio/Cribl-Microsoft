@@ -4,6 +4,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import DataFlowView from '../components/DataFlowView';
 import InfoTip from '../components/InfoTip';
+import { deriveResourceGroupsFromWorkspaces } from '../hooks/azure-resources';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -335,15 +336,8 @@ function SentinelIntegration() {
         setWorkspaces(wsResult.workspaces);
         // If RG call failed, derive resource groups from workspace metadata
         if (!rgResult.success || rgResult.resourceGroups.length === 0) {
-          const wsRgs = new Map<string, string>();
-          for (const ws of wsResult.workspaces) {
-            if (ws.resourceGroup && !wsRgs.has(ws.resourceGroup)) {
-              wsRgs.set(ws.resourceGroup, ws.location);
-            }
-          }
-          if (wsRgs.size > 0) {
-            setResourceGroups([...wsRgs.entries()].map(([name, location]) => ({ name, location })));
-          }
+          const derived = deriveResourceGroupsFromWorkspaces(wsResult.workspaces);
+          if (derived.length > 0) setResourceGroups(derived);
         } else {
           setResourceGroups(rgResult.resourceGroups);
         }
