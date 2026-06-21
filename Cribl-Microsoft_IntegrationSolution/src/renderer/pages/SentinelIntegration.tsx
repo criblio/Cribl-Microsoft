@@ -5,6 +5,7 @@ import { useState, useEffect, useCallback } from 'react';
 import DataFlowView from '../components/DataFlowView';
 import InfoTip from '../components/InfoTip';
 import { deriveResourceGroupsFromWorkspaces } from '../hooks/azure-resources';
+import { resolveDestinationTables, matchSampleToTable } from '../hooks/analyze-workflow';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -507,39 +508,20 @@ function SentinelIntegration() {
       const research = await window.api.vendorResearch.research(state.selectedSolution) as any;
       const researchLogTypes: any[] = research?.logTypes || [];
 
-      const destTables = new Set<string>();
-      let tableSource = '';
-      for (const lt of researchLogTypes) {
-        if (lt.destTable) {
-          destTables.add(lt.destTable.replace(/^Microsoft-/, ''));
-        }
-      }
-      if (destTables.size > 0) {
-        tableSource = 'Vendor research (Sentinel Content Hub)';
-      }
-
-      if (destTables.size === 0) {
-        setAnalysisProgress({ phase: 'Checking Sentinel repo for custom tables...', pct: 10 });
-        try {
-          const connectors = await window.api.sentinelRepo.connectors(state.selectedSolution);
-          for (const c of connectors) {
-            if (c.name.toLowerCase().includes('customtable') || c.path.includes('CustomTables')) {
-              const tableName = c.name.replace('.json', '');
-              if (tableName.endsWith('_CL')) destTables.add(tableName);
-            }
+      const { tables: destTableList, source: tableSource } = await resolveDestinationTables(
+        researchLogTypes,
+        async () => {
+          setAnalysisProgress({ phase: 'Checking Sentinel repo for custom tables...', pct: 10 });
+          try {
+            return await window.api.sentinelRepo.connectors(state.selectedSolution);
+          } catch (err) {
+            console.warn('[SentinelIntegration] CustomTables connector resolution failed', err);
+            return [];
           }
-          if (destTables.size > 0) {
-            tableSource = 'Sentinel repo (CustomTables definition)';
-          }
-        } catch (err) { console.warn('[SentinelIntegration] CustomTables connector resolution failed', err); }
-      }
-
-      if (destTables.size === 0) {
-        destTables.add('CommonSecurityLog');
-        tableSource = 'Default (no DCR definition found in Sentinel solution)';
-      }
-
-      setTableResolution({ tables: [...destTables], source: tableSource });
+        },
+      );
+      const destTables = new Set(destTableList);
+      setTableResolution({ tables: destTableList, source: tableSource });
 
       // Phase 2: Build sample inputs
       setAnalysisProgress({ phase: 'Analyzing sample fields against DCR schema...', pct: 20 });
@@ -548,25 +530,7 @@ function SentinelIntegration() {
 
       for (const sample of state.samples as any[]) {
         if (!sample.rawEvents?.length) continue;
-        const sNorm = sample.logType.toLowerCase().replace(/[_ \-]/g, '');
-
-        let matchedTable = defaultTable;
-        if (destTables.size > 1) {
-          for (const lt of researchLogTypes) {
-            if (!lt.destTable) continue;
-            const idNorm = (lt.id || '').toLowerCase().replace(/[_ \-]/g, '');
-            const nameNorm = (lt.name || '').toLowerCase().replace(/[_ \-]/g, '');
-            if (idNorm === sNorm || nameNorm === sNorm ||
-                (idNorm.length > 3 && sNorm.includes(idNorm)) ||
-                (sNorm.length > 3 && idNorm.includes(sNorm)) ||
-                (nameNorm.length > 3 && sNorm.includes(nameNorm)) ||
-                (sNorm.length > 3 && nameNorm.includes(sNorm))) {
-              matchedTable = lt.destTable;
-              break;
-            }
-          }
-        }
-
+        const matchedTable = matchSampleToTable(sample.logType, researchLogTypes, destTables.size, defaultTable);
         sampleInputs.push({ logType: sample.logType, tableName: matchedTable, rawEvents: sample.rawEvents });
       }
 
