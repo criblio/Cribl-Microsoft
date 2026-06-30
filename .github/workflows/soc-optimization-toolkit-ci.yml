@@ -1,0 +1,88 @@
+# CI for SOC-OptimizationToolkit.
+#
+# This file lives at the REPO ROOT because GitHub Actions only discovers workflows in
+# <repo>/.github/workflows/ — a workflow nested inside SOC-OptimizationToolkit/ would never run.
+# It is path-scoped to the toolkit and additive: it does not touch the existing trees.
+name: SOC-OptimizationToolkit CI
+
+on:
+  push:
+    paths:
+      - 'SOC-OptimizationToolkit/**'
+      - '.github/workflows/soc-optimization-toolkit-ci.yml'
+  pull_request:
+    paths:
+      - 'SOC-OptimizationToolkit/**'
+      - '.github/workflows/soc-optimization-toolkit-ci.yml'
+
+concurrency:
+  group: soc-toolkit-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: SOC-OptimizationToolkit
+
+jobs:
+  # Cheap gates run in parallel; build runs only after they pass.
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+          cache-dependency-path: SOC-OptimizationToolkit/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm format:check
+
+  typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+          cache-dependency-path: SOC-OptimizationToolkit/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+
+  unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+          cache-dependency-path: SOC-OptimizationToolkit/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm test
+
+  build:
+    needs: [lint, typecheck, unit]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+          cache-dependency-path: SOC-OptimizationToolkit/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build

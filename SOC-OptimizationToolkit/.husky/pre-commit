@@ -1,0 +1,10 @@
+#!/usr/bin/env sh
+# Pre-commit: Prettier + ESLint on staged files (lint-staged), scoped to the toolkit.
+#
+# Guard: only act when staged files are inside SOC-OptimizationToolkit/, so commits to the
+# rest of this shared repo (Azure/, the integration app) are never affected. Activation is
+# opt-in: it takes effect after you run `pnpm install` in the toolkit (which runs `prepare`).
+if git diff --cached --name-only | grep -q '^SOC-OptimizationToolkit/'; then
+  cd "$(git rev-parse --show-toplevel)/SOC-OptimizationToolkit" || exit 0
+  pnpm exec lint-staged
+fi
