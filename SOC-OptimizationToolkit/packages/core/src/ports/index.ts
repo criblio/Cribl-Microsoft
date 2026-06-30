@@ -22,6 +22,7 @@ export interface SentinelClient {
 
 /** Deploys ingestion to Sentinel (Data Collection Rules). */
 export interface DcrDeployer {
+  /** Deploy a Direct DCR by name; returns its resource id. */
   deployDirect(name: string): Promise<{ id: string }>;
 }
 
@@ -37,4 +38,24 @@ export interface SourceConnector {
 /** Cribl Stream control plane (the pipe between source and Sentinel). */
 export interface CriblClient {
   listDestinations(): Promise<readonly string[]>;
+  /** Create a Cribl destination that forwards to a Sentinel DCR; returns its id. */
+  createSentinelDestination(args: { name: string; dcrId: string }): Promise<{ id: string }>;
+}
+
+// --- onboarding usecase IO (the walking-skeleton thread) ---
+
+export interface OnboardInput {
+  /** Native Sentinel table to land in, e.g. 'CommonSecurityLog'. */
+  readonly sourceTable: string;
+  /** Azure region, e.g. 'eastus'. */
+  readonly location: string;
+  /** DCR name prefix; defaults to 'dcr'. */
+  readonly dcrPrefix?: string;
+}
+
+export interface OnboardResult {
+  readonly sourceType: string;
+  readonly dcrName: string;
+  readonly dcrId: string;
+  readonly criblDestinationId: string;
 }
