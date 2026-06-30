@@ -1,0 +1,15 @@
+{
+  "name": "service",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Optional local HTTP service over @soc/core usecases (the api-router + SSE seam). Phase 0: a health endpoint.",
+  "scripts": {
+    "dev": "tsx src/index.ts",
+    "start": "tsx src/index.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@soc/core": "workspace:*"
+  }
+}
