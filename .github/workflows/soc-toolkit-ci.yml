@@ -1,0 +1,43 @@
+name: SOC Toolkit CI
+
+on:
+  pull_request:
+    paths:
+      - 'soc-optimizationtoolkit/**'
+  push:
+    branches:
+      - main
+    paths:
+      - 'soc-optimizationtoolkit/**'
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: soc-optimizationtoolkit
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: soc-optimizationtoolkit/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Test
+        run: npm test
+
+      - name: Build
+        run: npm run build

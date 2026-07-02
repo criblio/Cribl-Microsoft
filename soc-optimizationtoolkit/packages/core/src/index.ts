@@ -1,7 +1,11 @@
 // @soc/core: pure domain logic and port interfaces. Zero IO, zero fetch, zero React.
-// Planned contents (see docs/feature-catalog.md, "Proposed architecture: dual-target"):
-//   ports/   CriblClient, AzureManagement, GraphClient, SecretsStore, JobStore,
-//            UserContext, ArtifactSink
-//   domain/  dcr-naming, schema-mapping, pipeline-generation, field-matcher,
-//            pack-assembly, reduction-rules, sample-parsing
-export {};
+//
+// Layout (see docs/feature-catalog.md, "Proposed architecture: dual-target"):
+//   ports/    port interfaces both app shells bind adapters against
+//   testing/  in-memory fakes for every port (unit tests only; never bind in a shell)
+//   domain/   pure domain modules (dcr-naming, schema-mapping; more per roadmap)
+
+export * from "./ports";
+export * from "./testing";
+export * from "./domain/dcr-naming";
+export * from "./domain/schema-mapping";

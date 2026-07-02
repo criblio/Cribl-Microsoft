@@ -17,6 +17,7 @@ npm-workspaces restructure (packages/core, packages/ui, apps/cribl-app, apps/loc
 
 Goal: the thinnest end-to-end slice that proves every architectural seam - ports, both shells, Azure auth, polled jobs, Cribl product API.
 
+- Test and CI foundation FIRST: vitest wired across the workspace (colocated *.test.ts), golden-vector characterization fixtures recorded by executing the legacy PowerShell logic, and a path-filtered GitHub Actions workflow (lint + typecheck + test + build) gating every PR from this phase onward.
 - Ports in packages/core: CriblClient, AzureManagement, SecretsStore, JobStore, UserContext, ArtifactSink; fakes for tests.
 - Domain: dcr-naming (port v1's TS implementation V1-30; characterization tests against legacy output - compatibility contract), column type mapping (DCR-08), DCR column-set generation (DCR-09).
 - Cloud shell adapters: platform fetch, KV store (encrypted secrets), ARM via proxies.yml; policies.yml first entries.
@@ -72,4 +73,4 @@ Exit: solution browsed -> samples -> pipeline -> pack -> installed destination e
 
 - SIEM migration analyzer (ENG-40, GUI-22), monitoring dashboard (GUI-18), guided-doc flows (DOC-02 through DOC-06 as in-app checklists), Power BI/Search connector story (DOC-07).
 - Parity audit against this catalog; mark every feature domain superseded or explicitly dropped.
-- Archival endgame: migrate remaining assets into packages/core, tag legacy-final, remove Cribl-Microsoft_IntegrationSolution/, Azure PowerShell trees, and SOC-OptimizationToolkit_v1/ from main; retire the stale v1 CI workflow and root launchers; stand up CI for this workspace.
+- Archival endgame: migrate remaining assets into packages/core, tag legacy-final, remove Cribl-Microsoft_IntegrationSolution/, Azure PowerShell trees, and SOC-OptimizationToolkit_v1/ from main; retire the stale v1 CI workflow and root launchers (workspace CI exists from Phase 1).
