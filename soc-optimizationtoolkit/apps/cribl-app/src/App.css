@@ -58,6 +58,23 @@ body {
   margin-bottom: 12px;
 }
 
+.path-options {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.path-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  line-height: 20px;
+  color: #262626;
+  cursor: pointer;
+}
+
 .setup-steps {
   font-size: 13px;
   line-height: 20px;

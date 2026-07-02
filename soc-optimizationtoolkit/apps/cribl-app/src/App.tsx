@@ -172,21 +172,38 @@ function KvStorePanel() {
 // assign, tiered so testers grant only what the capabilities they exercise
 // need. The inputs complete an az CLI script for the role assignments; blank
 // fields stay as <placeholders> so a partial copy is still visibly incomplete.
-function buildAzScript(clientId: string, subscriptionId: string, workspaceRg: string): string {
+type SetupPath = 'existing' | 'lab-new-rg' | 'lab-byo-rg';
+
+function buildAzScript(path: SetupPath, clientId: string, subscriptionId: string, rgName: string): string {
   const client = clientId.trim() === '' ? '<clientId>' : clientId.trim();
   const sub = subscriptionId.trim() === '' ? '<subscriptionId>' : subscriptionId.trim();
-  const rg = workspaceRg.trim() === '' ? '<workspaceRg>' : workspaceRg.trim();
+  const rg = rgName.trim() === '' ? (path === 'existing' ? '<workspaceRg>' : '<labRg>') : rgName.trim();
+  if (path === 'existing') {
+    return [
+      '# Existing workspace: least privilege, scoped to its resource group',
+      `az role assignment create --assignee ${client} --role "Reader" --scope /subscriptions/${sub}`,
+      `az role assignment create --assignee ${client} --role "Monitoring Contributor" --scope /subscriptions/${sub}/resourceGroups/${rg}`,
+      `az role assignment create --assignee ${client} --role "Log Analytics Contributor" --scope /subscriptions/${sub}/resourceGroups/${rg}`,
+    ].join('\n');
+  }
+  if (path === 'lab-new-rg') {
+    return [
+      '# Lab creates its own resource group and workspace: subscription Contributor',
+      '# covers RG creation plus all workspace/DCR operations inside the lab, so no',
+      '# workspace-scoped roles are needed on this path.',
+      `az role assignment create --assignee ${client} --role "Contributor" --scope /subscriptions/${sub}`,
+      '# Assign RBAC Administrator via the Azure portal so you can add the condition',
+      '# "Constrain roles and principal types": only Contributor and Monitoring',
+      '# Metrics Publisher, only to service principals (the lab TTL self-destruct',
+      '# assigns its delete role at deploy time).',
+    ].join('\n');
+  }
   return [
-    '# Core onboarding (token/ARM panels and DCR deployment)',
-    `az role assignment create --assignee ${client} --role "Reader" --scope /subscriptions/${sub}`,
-    `az role assignment create --assignee ${client} --role "Monitoring Contributor" --scope /subscriptions/${sub}/resourceGroups/${rg}`,
-    `az role assignment create --assignee ${client} --role "Log Analytics Contributor" --scope /subscriptions/${sub}/resourceGroups/${rg}`,
-    '',
-    '# Lab provisioning, create-new-RG mode (optional - only if testing labs)',
-    `az role assignment create --assignee ${client} --role "Contributor" --scope /subscriptions/${sub}`,
-    '# For RBAC Administrator, assign via the Azure portal so you can add the',
-    '# condition "Constrain roles and principal types": only Contributor and',
-    '# Monitoring Metrics Publisher, only to service principals.',
+    '# Pre-created lab resource group: least privilege for labs; the lab deploys',
+    '# its workspace and resources into this RG with no subscription-scope rights.',
+    `az role assignment create --assignee ${client} --role "Contributor" --scope /subscriptions/${sub}/resourceGroups/${rg}`,
+    '# An admin must pre-assign the TTL self-destruct identity its delete rights',
+    '# on this resource group (the app cannot assign roles on this path).',
   ].join('\n');
 }
 
@@ -196,10 +213,11 @@ interface AppRegistrationPanelProps {
 }
 
 function AppRegistrationPanel({ clientId, onClientIdChange }: AppRegistrationPanelProps) {
+  const [setupPath, setSetupPath] = useState<SetupPath>('existing');
   const [subscriptionId, setSubscriptionId] = useState('');
-  const [workspaceRg, setWorkspaceRg] = useState('');
+  const [rgName, setRgName] = useState('');
   const [status, output, run] = useRunner();
-  const script = buildAzScript(clientId, subscriptionId, workspaceRg);
+  const script = buildAzScript(setupPath, clientId, subscriptionId, rgName);
   const copyScript = () =>
     run(async () => {
       await navigator.clipboard.writeText(script);
@@ -231,29 +249,64 @@ function AppRegistrationPanel({ clientId, onClientIdChange }: AppRegistrationPan
           immediately - it is shown only once.
         </li>
         <li>
-          Assign Azure roles to the service principal: fill in the fields below to complete the
-          script, then copy and run it (or use the portal).
+          Choose your setup path, fill in the fields, then copy and run the completed script
+          (or use the portal).
         </li>
       </ol>
-      <ul className="perm-list">
-        <li>
-          Core onboarding (the token and ARM panels, DCR deployment): Monitoring Contributor and
-          Log Analytics Contributor on the target workspace resource group, plus Reader on the
-          subscription.
-        </li>
-        <li>
-          Lab provisioning (create-new-RG mode): <strong>Contributor at the subscription scope</strong>{' '}
-          and <strong>RBAC Administrator at the subscription scope</strong>. Resource group creation
-          is a subscription-level action, and the lab TTL self-destruct assigns its delete role at
-          deploy time. When assigning RBAC Administrator, add the condition &quot;Constrain roles and
-          principal types&quot;: allow assigning only Contributor and Monitoring Metrics Publisher, and
-          only to service principals.
-        </li>
-        <li>
-          Least-privilege alternative for labs: bring-your-own-RG mode needs only Contributor on an
-          admin-pre-created lab resource group.
-        </li>
-      </ul>
+      <div className="path-options">
+        <label className="path-option">
+          <input
+            type="radio"
+            name="setup-path"
+            checked={setupPath === 'existing'}
+            onChange={() => setSetupPath('existing')}
+          />
+          <span>I have an existing Log Analytics workspace to target</span>
+        </label>
+        <label className="path-option">
+          <input
+            type="radio"
+            name="setup-path"
+            checked={setupPath === 'lab-new-rg'}
+            onChange={() => setSetupPath('lab-new-rg')}
+          />
+          <span>No workspace yet - a lab will create its own resource group and workspace</span>
+        </label>
+        <label className="path-option">
+          <input
+            type="radio"
+            name="setup-path"
+            checked={setupPath === 'lab-byo-rg'}
+            onChange={() => setSetupPath('lab-byo-rg')}
+          />
+          <span>No workspace yet - deploy a lab into a pre-created resource group</span>
+        </label>
+      </div>
+      {setupPath === 'existing' && (
+        <p className="panel-desc">
+          Least privilege for an existing environment: Monitoring Contributor and Log Analytics
+          Contributor scoped to the workspace resource group, plus Reader on the subscription.
+          Nothing is granted subscription-wide beyond read.
+        </p>
+      )}
+      {setupPath === 'lab-new-rg' && (
+        <p className="panel-desc">
+          Requires <strong>Contributor at the subscription scope</strong> (resource group creation is
+          a subscription-level action, and it covers all workspace and DCR operations inside the lab,
+          so no workspace resource group is needed) and{' '}
+          <strong>RBAC Administrator at the subscription scope</strong> for the lab TTL self-destruct.
+          Assign RBAC Administrator in the portal with the condition &quot;Constrain roles and
+          principal types&quot;: only Contributor and Monitoring Metrics Publisher, only to service
+          principals.
+        </p>
+      )}
+      {setupPath === 'lab-byo-rg' && (
+        <p className="panel-desc">
+          Least privilege for labs: an admin pre-creates an empty lab resource group and grants
+          Contributor on it - the lab deploys its workspace there with no subscription-scope rights.
+          The admin also pre-assigns the TTL self-destruct identity its delete rights on that group.
+        </p>
+      )}
       <div className="form-grid">
         <label className="field">
           <span className="field-label">Application (client) ID</span>
@@ -275,16 +328,20 @@ function AppRegistrationPanel({ clientId, onClientIdChange }: AppRegistrationPan
             spellCheck={false}
           />
         </label>
-        <label className="field">
-          <span className="field-label">Workspace resource group</span>
-          <input
-            type="text"
-            value={workspaceRg}
-            onChange={(e) => setWorkspaceRg(e.target.value)}
-            autoComplete="off"
-            spellCheck={false}
-          />
-        </label>
+        {setupPath !== 'lab-new-rg' && (
+          <label className="field">
+            <span className="field-label">
+              {setupPath === 'existing' ? 'Workspace resource group' : 'Lab resource group (pre-created)'}
+            </span>
+            <input
+              type="text"
+              value={rgName}
+              onChange={(e) => setRgName(e.target.value)}
+              autoComplete="off"
+              spellCheck={false}
+            />
+          </label>
+        )}
       </div>
       <pre className="result">{script}</pre>
       <p className="panel-desc">
