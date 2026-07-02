@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import {
   allGranted,
+  deriveResourceGroup,
   EMPTY_AZURE_CONFIG,
   evaluatePermissions,
   parseAzureConfig,
@@ -585,10 +586,58 @@ async function validatePermissionsForPath(path: SetupPath, sub: string, rg: stri
   );
 }
 
+// Discovery option shapes populated from ARM list responses. Kept minimal - only
+// the fields the dropdowns render or use to derive shared config.
+interface SubscriptionOption {
+  subscriptionId: string;
+  displayName: string;
+}
+interface WorkspaceOption {
+  name: string;
+  id: string;
+}
+interface ResourceGroupOption {
+  name: string;
+}
+
+// GET an ARM list endpoint with no Authorization header (proxies.yml injects
+// Bearer ${kv.azureArmToken}). Returns the raw body on success, or an actionable
+// message for 401/403/other non-ok so each caller renders one clear line.
+type ArmGetResult = { ok: true; text: string } | { ok: false; message: string };
+
+async function armGetJson(url: string, label: string): Promise<ArmGetResult> {
+  const res = await fetch(url);
+  if (res.status === 401) {
+    return {
+      ok: false,
+      message:
+        `${label}: HTTP 401 - the ARM token was rejected (expired, or the proxy did not inject it). ` +
+        'Click Discover Azure resources again to acquire a fresh token, then retry.',
+    };
+  }
+  if (res.status === 403) {
+    return {
+      ok: false,
+      message:
+        `${label}: HTTP 403 - the service principal is not authorized at this scope. ` +
+        'Grant it at least Reader (run the panel 3 role script), wait for propagation, then retry.',
+    };
+  }
+  const text = await res.text();
+  if (!res.ok) {
+    return { ok: false, message: `${label}: HTTP ${res.status}\n${text}` };
+  }
+  return { ok: true, text };
+}
+
 // Panel 4: store Azure app registration credentials in the app KV store. The
 // Basic value (base64 of clientId:clientSecret) is written encrypted and is
 // only ever resolved server-side by proxies.yml header injection. The re-check
-// action also runs the permission preflight for the selected setup path.
+// action also runs the permission preflight for the selected setup path. This
+// panel also hosts resource discovery: it needs an ARM token (from the saved
+// secret), so the Discover Azure resources button and its dependent dropdowns
+// live here, writing into the same shared subscription/resource-group state the
+// panel-3 text inputs bind to.
 interface AzureCredentialsPanelProps {
   clientId: string;
   onClientIdChange: (value: string) => void;
@@ -596,7 +645,11 @@ interface AzureCredentialsPanelProps {
   onTenantIdChange: (value: string) => void;
   setupPath: SetupPath;
   subscriptionId: string;
+  onSubscriptionIdChange: (value: string) => void;
   rgName: string;
+  onRgNameChange: (value: string) => void;
+  workspaceName: string;
+  onWorkspaceNameChange: (value: string) => void;
 }
 
 function AzureCredentialsPanel({
@@ -606,13 +659,205 @@ function AzureCredentialsPanel({
   onTenantIdChange,
   setupPath,
   subscriptionId,
+  onSubscriptionIdChange,
   rgName,
+  onRgNameChange,
+  workspaceName,
+  onWorkspaceNameChange,
 }: AzureCredentialsPanelProps) {
   const [clientSecret, setClientSecret] = useState('');
   const [stored, setStored] = useState('checking stored credentials...');
   const [secretStored, setSecretStored] = useState(false);
   const [validating, setValidating] = useState(false);
   const [status, output, run] = useRunner();
+
+  // Resource discovery state. Each list is null until its query has run; an
+  // empty array means the query succeeded but returned nothing (rendered as a
+  // clear message, not a dropdown). Lists are cached in React state only - they
+  // are never persisted. The two status strings label the result areas so an
+  // empty or permission-denied outcome is obvious.
+  const [subscriptions, setSubscriptions] = useState<SubscriptionOption[] | null>(null);
+  const [workspaces, setWorkspaces] = useState<WorkspaceOption[] | null>(null);
+  const [resourceGroups, setResourceGroups] = useState<ResourceGroupOption[] | null>(null);
+  const [discovering, setDiscovering] = useState(false);
+  const [discoveryStatus, setDiscoveryStatus] = useState('');
+  const [dependentStatus, setDependentStatus] = useState('');
+
+  // Run the setup-path-dependent query for a chosen subscription:
+  //   existing   -> Log Analytics workspaces (selecting one also sets rgName)
+  //   lab-byo-rg -> resource groups
+  //   lab-new-rg -> nothing (the lab creates its own resource group)
+  // Clears the previous dependent lists first so stale options never linger.
+  const loadDependent = useCallback(async (sub: string, path: SetupPath) => {
+    setWorkspaces(null);
+    setResourceGroups(null);
+    if (sub === '') {
+      setDependentStatus('');
+      return;
+    }
+    if (path === 'lab-new-rg') {
+      setDependentStatus(
+        'This setup path creates its own resource group in the lab, so no resource selection is needed here.'
+      );
+      return;
+    }
+    if (path === 'existing') {
+      setDependentStatus('Listing Log Analytics workspaces...');
+      try {
+        const result = await armGetJson(
+          `https://management.azure.com/subscriptions/${encodeURIComponent(sub)}` +
+            '/providers/Microsoft.OperationalInsights/workspaces?api-version=2023-09-01',
+          'Workspaces'
+        );
+        if (!result.ok) {
+          setDependentStatus(result.message);
+          return;
+        }
+        const parsed = JSON.parse(result.text) as {
+          value?: Array<{ name?: string; id?: string }>;
+        };
+        const list: WorkspaceOption[] = (parsed.value ?? [])
+          .filter(
+            (w): w is { name: string; id: string } =>
+              typeof w.name === 'string' && w.name !== '' && typeof w.id === 'string' && w.id !== ''
+          )
+          .map((w) => ({ name: w.name, id: w.id }));
+        setWorkspaces(list);
+        setDependentStatus(
+          list.length === 0
+            ? 'No Log Analytics workspaces found in this subscription. Create one, or choose a different subscription.'
+            : `Found ${list.length} workspace(s). Selecting one sets the workspace and its resource group.`
+        );
+      } catch (err) {
+        setDependentStatus(`Workspace discovery error: ${String(err)}`);
+      }
+      return;
+    }
+    // lab-byo-rg: list the resource groups so the user can pick the pre-created one.
+    setDependentStatus('Listing resource groups...');
+    try {
+      const result = await armGetJson(
+        `https://management.azure.com/subscriptions/${encodeURIComponent(sub)}` +
+          '/resourcegroups?api-version=2021-04-01',
+        'Resource groups'
+      );
+      if (!result.ok) {
+        setDependentStatus(result.message);
+        return;
+      }
+      const parsed = JSON.parse(result.text) as { value?: Array<{ name?: string }> };
+      const list: ResourceGroupOption[] = (parsed.value ?? [])
+        .filter((g): g is { name: string } => typeof g.name === 'string' && g.name !== '')
+        .map((g) => ({ name: g.name }));
+      setResourceGroups(list);
+      setDependentStatus(
+        list.length === 0
+          ? 'No resource groups found in this subscription.'
+          : `Found ${list.length} resource group(s). Selecting one sets the resource group.`
+      );
+    } catch (err) {
+      setDependentStatus(`Resource group discovery error: ${String(err)}`);
+    }
+  }, []);
+
+  // Discover button: acquire an ARM token (needs the saved secret), store it so
+  // the proxy injects it as Bearer, then list subscriptions. 401/403/empty get
+  // actionable messages - empty means the service principal has no access yet,
+  // so point at the panel-3 role script.
+  const discoverResources = useCallback(async () => {
+    setDiscovering(true);
+    setDiscoveryStatus('Acquiring ARM token and listing subscriptions...');
+    setSubscriptions(null);
+    setWorkspaces(null);
+    setResourceGroups(null);
+    setDependentStatus('');
+    try {
+      const token = await acquireArmToken();
+      // Store the token BEFORE the ARM GET so proxies.yml can inject it as Bearer
+      // (the app sends no Authorization header), same as panel 5.
+      const putRes = await fetch(kvUrl('azureArmToken?encrypted=true'), {
+        method: 'PUT',
+        body: token.access_token,
+      });
+      if (!putRes.ok) {
+        throw new Error(`PUT azureArmToken: HTTP ${putRes.status}\n${await putRes.text()}`);
+      }
+      const result = await armGetJson(
+        'https://management.azure.com/subscriptions?api-version=2022-12-01',
+        'Subscriptions'
+      );
+      if (!result.ok) {
+        setDiscoveryStatus(result.message);
+        return;
+      }
+      const parsed = JSON.parse(result.text) as {
+        value?: Array<{ displayName?: string; subscriptionId?: string }>;
+      };
+      const list: SubscriptionOption[] = (parsed.value ?? [])
+        .filter(
+          (s): s is { subscriptionId: string; displayName?: string } =>
+            typeof s.subscriptionId === 'string' && s.subscriptionId !== ''
+        )
+        .map((s) => ({ subscriptionId: s.subscriptionId, displayName: s.displayName ?? '(no displayName)' }));
+      setSubscriptions(list);
+      if (list.length === 0) {
+        setDiscoveryStatus(
+          'No subscriptions returned. The service principal has no subscription access yet - run the ' +
+            'panel 3 role assignment script (it grants Reader), wait a couple of minutes for propagation, ' +
+            'then Discover Azure resources again.'
+        );
+        return;
+      }
+      setDiscoveryStatus(`Discovered ${list.length} subscription(s). Choose one below.`);
+      // If the already-selected subscription is among the discovered set, load its
+      // dependent list now so a returning user sees the dependent dropdown at once.
+      const current = subscriptionId.trim();
+      if (current !== '' && list.some((s) => s.subscriptionId === current)) {
+        await loadDependent(current, setupPath);
+      }
+    } catch (err) {
+      setDiscoveryStatus(`Discovery error: ${String(err)}`);
+    } finally {
+      setDiscovering(false);
+    }
+  }, [subscriptionId, setupPath, loadDependent]);
+
+  // Selecting a subscription sets the shared subscriptionId and re-runs the
+  // dependent query for the current setup path.
+  const onSubscriptionSelect = (value: string) => {
+    onSubscriptionIdChange(value);
+    void loadDependent(value, setupPath);
+  };
+
+  // Selecting a workspace sets the shared workspaceName and derives the resource
+  // group from the workspace's ARM id (via @soc/core) so the user never types it.
+  const onWorkspaceSelect = (name: string) => {
+    onWorkspaceNameChange(name);
+    const match = (workspaces ?? []).find((w) => w.name === name);
+    if (match) {
+      onRgNameChange(deriveResourceGroup(match.id));
+    }
+  };
+
+  // When the setup path changes, the dependent query type changes (workspaces vs
+  // resource groups vs none), so clear the now-irrelevant dependent lists; if a
+  // subscription has already been discovered and selected, re-run the query for
+  // the new path. The ref guard makes this fire ONLY on an actual setupPath
+  // change, never when discovery repopulates subscriptions.
+  const prevSetupPathRef = useRef(setupPath);
+  useEffect(() => {
+    if (prevSetupPathRef.current === setupPath) {
+      return;
+    }
+    prevSetupPathRef.current = setupPath;
+    setWorkspaces(null);
+    setResourceGroups(null);
+    setDependentStatus('');
+    const current = subscriptionId.trim();
+    if (subscriptions !== null && current !== '') {
+      void loadDependent(current, setupPath);
+    }
+  }, [setupPath, subscriptions, subscriptionId, loadDependent]);
 
   // Report what already exists in THIS app context's KV store. The store is
   // scoped per app ID: Live Preview (__dev__ prefix) and the installed app
@@ -798,6 +1043,83 @@ function AzureCredentialsPanel({
           />
         </label>
       </div>
+      <div className="discovery">
+        <h3 className="discovery-title">Discover Azure resources</h3>
+        <p className="panel-desc">
+          Acquires an ARM token from the saved secret, then lists the subscriptions the service
+          principal can see. Pick a subscription to load the Log Analytics workspace (existing path)
+          or resource group (bring-your-own-RG lab path) - these dropdowns fill in the same
+          Subscription ID and resource group fields you can also type in panel 3, so the manual
+          inputs and the dropdowns stay in sync. Use the manual inputs to bootstrap before the
+          service principal has Reader; use discovery once it does.
+        </p>
+        <div className="panel-controls">
+          <button
+            className="run-button"
+            onClick={() => void discoverResources()}
+            disabled={discovering}
+          >
+            Discover Azure resources
+          </button>
+        </div>
+        {discoveryStatus !== '' && (
+          <div className="discovery-result">
+            <span className="field-label">Discovery result</span>
+            <pre className="result">{discoveryStatus}</pre>
+          </div>
+        )}
+        {subscriptions !== null && subscriptions.length > 0 && (
+          <label className="field">
+            <span className="field-label">Subscription</span>
+            <select value={subscriptionId} onChange={(e) => onSubscriptionSelect(e.target.value)}>
+              <option value="">Select a subscription...</option>
+              {subscriptions.map((s) => (
+                <option key={s.subscriptionId} value={s.subscriptionId}>
+                  {s.displayName} ({s.subscriptionId})
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+        {setupPath === 'existing' && workspaces !== null && workspaces.length > 0 && (
+          <label className="field">
+            <span className="field-label">Log Analytics workspace</span>
+            <select value={workspaceName} onChange={(e) => onWorkspaceSelect(e.target.value)}>
+              <option value="">Select a workspace...</option>
+              {workspaces.map((w) => (
+                <option key={w.id} value={w.name}>
+                  {w.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+        {setupPath === 'lab-byo-rg' && resourceGroups !== null && resourceGroups.length > 0 && (
+          <label className="field">
+            <span className="field-label">Resource group</span>
+            <select value={rgName} onChange={(e) => onRgNameChange(e.target.value)}>
+              <option value="">Select a resource group...</option>
+              {resourceGroups.map((g) => (
+                <option key={g.name} value={g.name}>
+                  {g.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+        {dependentStatus !== '' && (
+          <div className="discovery-result">
+            <span className="field-label">
+              {setupPath === 'existing'
+                ? 'Workspace discovery'
+                : setupPath === 'lab-byo-rg'
+                  ? 'Resource group discovery'
+                  : 'Setup path'}
+            </span>
+            <pre className="result">{dependentStatus}</pre>
+          </div>
+        )}
+      </div>
     </Panel>
   );
 }
@@ -946,6 +1268,11 @@ function App() {
   const [setupPath, setSetupPath] = useState<SetupPath>('existing');
   const [subscriptionId, setSubscriptionId] = useState('');
   const [rgName, setRgName] = useState('');
+  // Selected Log Analytics workspace name (existing path). The AzureConfig codec
+  // has no workspaceName field, so this is IN-MEMORY / App-state ONLY - it is not
+  // persisted to azureConfig and does not survive a reload. Persisting it belongs
+  // to the later named-connection-profiles change, not this discovery spike.
+  const [workspaceName, setWorkspaceName] = useState('');
   // Gates the autosave effect: no write happens until the persisted config has
   // been loaded, so the initial empty state can never clobber stored values.
   const [hydrated, setHydrated] = useState(false);
@@ -1038,7 +1365,11 @@ function App() {
         onTenantIdChange={setTenantId}
         setupPath={setupPath}
         subscriptionId={subscriptionId}
+        onSubscriptionIdChange={setSubscriptionId}
         rgName={rgName}
+        onRgNameChange={setRgName}
+        workspaceName={workspaceName}
+        onWorkspaceNameChange={setWorkspaceName}
       />
       <TokenAcquisitionPanel />
       <ArmCallPanel />

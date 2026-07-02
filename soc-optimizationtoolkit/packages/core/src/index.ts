@@ -11,3 +11,4 @@ export * from "./domain/dcr-naming";
 export * from "./domain/schema-mapping";
 export * from "./domain/azure-permissions";
 export * from "./domain/azure-config";
+export * from "./domain/azure-resource-id";
