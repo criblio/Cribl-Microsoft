@@ -170,26 +170,43 @@ function KvStorePanel() {
 
 // Panel 3: how to create the Entra app registration and which Azure roles to
 // assign, tiered so testers grant only what the capabilities they exercise
-// need. The action copies an az CLI script for the role assignments.
-const AZ_SETUP_SCRIPT = [
-  '# Core onboarding (token/ARM panels and DCR deployment)',
-  'az role assignment create --assignee <clientId> --role "Reader" --scope /subscriptions/<subscriptionId>',
-  'az role assignment create --assignee <clientId> --role "Monitoring Contributor" --scope /subscriptions/<subscriptionId>/resourceGroups/<workspaceRg>',
-  'az role assignment create --assignee <clientId> --role "Log Analytics Contributor" --scope /subscriptions/<subscriptionId>/resourceGroups/<workspaceRg>',
-  '',
-  '# Lab provisioning, create-new-RG mode (optional - only if testing labs)',
-  'az role assignment create --assignee <clientId> --role "Contributor" --scope /subscriptions/<subscriptionId>',
-  '# For RBAC Administrator, assign via the Azure portal so you can add the',
-  '# condition "Constrain roles and principal types": only Contributor and',
-  '# Monitoring Metrics Publisher, only to service principals.',
-].join('\n');
+// need. The inputs complete an az CLI script for the role assignments; blank
+// fields stay as <placeholders> so a partial copy is still visibly incomplete.
+function buildAzScript(clientId: string, subscriptionId: string, workspaceRg: string): string {
+  const client = clientId.trim() === '' ? '<clientId>' : clientId.trim();
+  const sub = subscriptionId.trim() === '' ? '<subscriptionId>' : subscriptionId.trim();
+  const rg = workspaceRg.trim() === '' ? '<workspaceRg>' : workspaceRg.trim();
+  return [
+    '# Core onboarding (token/ARM panels and DCR deployment)',
+    `az role assignment create --assignee ${client} --role "Reader" --scope /subscriptions/${sub}`,
+    `az role assignment create --assignee ${client} --role "Monitoring Contributor" --scope /subscriptions/${sub}/resourceGroups/${rg}`,
+    `az role assignment create --assignee ${client} --role "Log Analytics Contributor" --scope /subscriptions/${sub}/resourceGroups/${rg}`,
+    '',
+    '# Lab provisioning, create-new-RG mode (optional - only if testing labs)',
+    `az role assignment create --assignee ${client} --role "Contributor" --scope /subscriptions/${sub}`,
+    '# For RBAC Administrator, assign via the Azure portal so you can add the',
+    '# condition "Constrain roles and principal types": only Contributor and',
+    '# Monitoring Metrics Publisher, only to service principals.',
+  ].join('\n');
+}
 
-function AppRegistrationPanel() {
+interface AppRegistrationPanelProps {
+  clientId: string;
+  onClientIdChange: (value: string) => void;
+}
+
+function AppRegistrationPanel({ clientId, onClientIdChange }: AppRegistrationPanelProps) {
+  const [subscriptionId, setSubscriptionId] = useState('');
+  const [workspaceRg, setWorkspaceRg] = useState('');
   const [status, output, run] = useRunner();
+  const script = buildAzScript(clientId, subscriptionId, workspaceRg);
   const copyScript = () =>
     run(async () => {
-      await navigator.clipboard.writeText(AZ_SETUP_SCRIPT);
-      return `Copied to clipboard:\n\n${AZ_SETUP_SCRIPT}`;
+      await navigator.clipboard.writeText(script);
+      const incomplete = script.includes('<');
+      return incomplete
+        ? 'Copied to clipboard - NOTE: some fields are blank, so the script still contains <placeholders>.'
+        : 'Copied to clipboard. Run it in a shell with az logged into the test tenant.';
     });
 
   return (
@@ -213,7 +230,10 @@ function AppRegistrationPanel() {
           Under Certificates and secrets, create a New client secret and copy its value
           immediately - it is shown only once.
         </li>
-        <li>Assign Azure roles to the service principal (script below, or the portal):</li>
+        <li>
+          Assign Azure roles to the service principal: fill in the fields below to complete the
+          script, then copy and run it (or use the portal).
+        </li>
       </ol>
       <ul className="perm-list">
         <li>
@@ -234,9 +254,42 @@ function AppRegistrationPanel() {
           admin-pre-created lab resource group.
         </li>
       </ul>
+      <div className="form-grid">
+        <label className="field">
+          <span className="field-label">Application (client) ID</span>
+          <input
+            type="text"
+            value={clientId}
+            onChange={(e) => onClientIdChange(e.target.value)}
+            autoComplete="off"
+            spellCheck={false}
+          />
+        </label>
+        <label className="field">
+          <span className="field-label">Subscription ID</span>
+          <input
+            type="text"
+            value={subscriptionId}
+            onChange={(e) => setSubscriptionId(e.target.value)}
+            autoComplete="off"
+            spellCheck={false}
+          />
+        </label>
+        <label className="field">
+          <span className="field-label">Workspace resource group</span>
+          <input
+            type="text"
+            value={workspaceRg}
+            onChange={(e) => setWorkspaceRg(e.target.value)}
+            autoComplete="off"
+            spellCheck={false}
+          />
+        </label>
+      </div>
+      <pre className="result">{script}</pre>
       <p className="panel-desc">
-        Role assignments can take a couple of minutes to propagate. Enter the recorded IDs and
-        secret in the next panel when done.
+        Role assignments can take a couple of minutes to propagate. The client ID entered here
+        pre-fills the credentials panel below; enter the tenant ID and secret there when done.
       </p>
     </Panel>
   );
@@ -245,9 +298,13 @@ function AppRegistrationPanel() {
 // Panel 4: store Azure app registration credentials in the app KV store. The
 // Basic value (base64 of clientId:clientSecret) is written encrypted and is
 // only ever resolved server-side by proxies.yml header injection.
-function AzureCredentialsPanel() {
+interface AzureCredentialsPanelProps {
+  clientId: string;
+  onClientIdChange: (value: string) => void;
+}
+
+function AzureCredentialsPanel({ clientId, onClientIdChange }: AzureCredentialsPanelProps) {
   const [tenantId, setTenantId] = useState('');
-  const [clientId, setClientId] = useState('');
   const [clientSecret, setClientSecret] = useState('');
   const [stored, setStored] = useState('checking stored credentials...');
   const [status, output, run] = useRunner();
@@ -347,7 +404,7 @@ function AzureCredentialsPanel() {
           <input
             type="text"
             value={clientId}
-            onChange={(e) => setClientId(e.target.value)}
+            onChange={(e) => onClientIdChange(e.target.value)}
             autoComplete="off"
             spellCheck={false}
           />
@@ -529,6 +586,9 @@ function ArtifactDownloadPanel() {
 }
 
 function App() {
+  // Shared between the app registration panel (az script) and the credentials
+  // panel (KV save) so the client ID is typed once.
+  const [clientId, setClientId] = useState('');
   return (
     <div className="harness">
       <header className="harness-header">
@@ -541,8 +601,8 @@ function App() {
       </header>
       <PlatformGlobalsPanel />
       <KvStorePanel />
-      <AppRegistrationPanel />
-      <AzureCredentialsPanel />
+      <AppRegistrationPanel clientId={clientId} onClientIdChange={setClientId} />
+      <AzureCredentialsPanel clientId={clientId} onClientIdChange={setClientId} />
       <TokenAcquisitionPanel />
       <ArmCallPanel />
       <ArtifactDownloadPanel />
