@@ -168,7 +168,81 @@ function KvStorePanel() {
   );
 }
 
-// Panel 3: store Azure app registration credentials in the app KV store. The
+// Panel 3: how to create the Entra app registration and which Azure roles to
+// assign, tiered so testers grant only what the capabilities they exercise
+// need. The action copies an az CLI script for the role assignments.
+const AZ_SETUP_SCRIPT = [
+  '# Core onboarding (token/ARM panels and DCR deployment)',
+  'az role assignment create --assignee <clientId> --role "Reader" --scope /subscriptions/<subscriptionId>',
+  'az role assignment create --assignee <clientId> --role "Monitoring Contributor" --scope /subscriptions/<subscriptionId>/resourceGroups/<workspaceRg>',
+  'az role assignment create --assignee <clientId> --role "Log Analytics Contributor" --scope /subscriptions/<subscriptionId>/resourceGroups/<workspaceRg>',
+  '',
+  '# Lab provisioning, create-new-RG mode (optional - only if testing labs)',
+  'az role assignment create --assignee <clientId> --role "Contributor" --scope /subscriptions/<subscriptionId>',
+  '# For RBAC Administrator, assign via the Azure portal so you can add the',
+  '# condition "Constrain roles and principal types": only Contributor and',
+  '# Monitoring Metrics Publisher, only to service principals.',
+].join('\n');
+
+function AppRegistrationPanel() {
+  const [status, output, run] = useRunner();
+  const copyScript = () =>
+    run(async () => {
+      await navigator.clipboard.writeText(AZ_SETUP_SCRIPT);
+      return `Copied to clipboard:\n\n${AZ_SETUP_SCRIPT}`;
+    });
+
+  return (
+    <Panel
+      index={3}
+      title="App registration setup"
+      status={status}
+      output={output}
+      actionLabel="Copy az CLI script"
+      onAction={() => void copyScript()}
+    >
+      <ol className="setup-steps">
+        <li>
+          In Entra ID, open App registrations and select New registration. Single tenant;
+          no redirect URI is needed (this is a daemon-style confidential client).
+        </li>
+        <li>
+          Record the Directory (tenant) ID and Application (client) ID from the Overview page.
+        </li>
+        <li>
+          Under Certificates and secrets, create a New client secret and copy its value
+          immediately - it is shown only once.
+        </li>
+        <li>Assign Azure roles to the service principal (script below, or the portal):</li>
+      </ol>
+      <ul className="perm-list">
+        <li>
+          Core onboarding (the token and ARM panels, DCR deployment): Monitoring Contributor and
+          Log Analytics Contributor on the target workspace resource group, plus Reader on the
+          subscription.
+        </li>
+        <li>
+          Lab provisioning (create-new-RG mode): <strong>Contributor at the subscription scope</strong>{' '}
+          and <strong>RBAC Administrator at the subscription scope</strong>. Resource group creation
+          is a subscription-level action, and the lab TTL self-destruct assigns its delete role at
+          deploy time. When assigning RBAC Administrator, add the condition &quot;Constrain roles and
+          principal types&quot;: allow assigning only Contributor and Monitoring Metrics Publisher, and
+          only to service principals.
+        </li>
+        <li>
+          Least-privilege alternative for labs: bring-your-own-RG mode needs only Contributor on an
+          admin-pre-created lab resource group.
+        </li>
+      </ul>
+      <p className="panel-desc">
+        Role assignments can take a couple of minutes to propagate. Enter the recorded IDs and
+        secret in the next panel when done.
+      </p>
+    </Panel>
+  );
+}
+
+// Panel 4: store Azure app registration credentials in the app KV store. The
 // Basic value (base64 of clientId:clientSecret) is written encrypted and is
 // only ever resolved server-side by proxies.yml header injection.
 function AzureCredentialsPanel() {
@@ -199,8 +273,8 @@ function AzureCredentialsPanel() {
             : '  azureBasic: MISSING - save credentials below',
           tenant !== '' ? `  azureTenantId: ${tenant}` : '  azureTenantId: MISSING - save credentials below',
           keysText.includes('azureArmToken')
-            ? '  azureArmToken: present (encrypted) - panel 4 has run in this context'
-            : '  azureArmToken: not yet acquired - run panel 4',
+            ? '  azureArmToken: present (encrypted) - the token panel has run in this context'
+            : '  azureArmToken: not yet acquired - run the token acquisition panel',
         ].join('\n')
       );
     } catch (err) {
@@ -235,7 +309,7 @@ function AzureCredentialsPanel() {
 
   return (
     <Panel
-      index={3}
+      index={4}
       title="Azure credentials"
       status={status}
       output={output}
@@ -249,30 +323,8 @@ function AzureCredentialsPanel() {
         The tenant ID is stored as a plain KV entry (key azureTenantId).
         Credentials persist server-side per app context: the Live Preview dev app and the
         installed app have separate KV stores, so save once in each context you test.
+        See panel 3 for creating the app registration and assigning its roles.
       </p>
-      <p className="panel-desc">
-        App registration setup: in Entra ID, create the registration under App registrations
-        (New registration), add a client secret under Certificates and secrets, then assign
-        these Azure roles to the service principal:
-      </p>
-      <ul className="perm-list">
-        <li>
-          Core onboarding (panels 4-5, DCR deployment): Monitoring Contributor and Log Analytics
-          Contributor on the target workspace resource group, plus Reader on the subscription.
-        </li>
-        <li>
-          Lab provisioning (create-new-RG mode): <strong>Contributor at the subscription scope</strong>{' '}
-          and <strong>RBAC Administrator at the subscription scope</strong>. Resource group creation
-          is a subscription-level action, and the lab TTL self-destruct assigns its delete role at
-          deploy time. When assigning RBAC Administrator, add the condition &quot;Constrain roles and
-          principal types&quot;: allow assigning only Contributor and Monitoring Metrics Publisher, and
-          only to service principals.
-        </li>
-        <li>
-          Least-privilege alternative for labs: bring-your-own-RG mode needs only Contributor on an
-          admin-pre-created lab resource group.
-        </li>
-      </ul>
       <pre className="result">{stored}</pre>
       <div className="panel-controls">
         <button className="run-button" onClick={() => void checkStored()}>
@@ -325,7 +377,7 @@ function TokenAcquisitionPanel() {
       const tenant = (await tenantRes.text()).trim();
       if (!tenantRes.ok || tenant === '') {
         throw new Error(
-          `GET azureTenantId: HTTP ${tenantRes.status} body=${JSON.stringify(tenant)} - save credentials in panel 3 first`
+          `GET azureTenantId: HTTP ${tenantRes.status} body=${JSON.stringify(tenant)} - save credentials in panel 4 first`
         );
       }
       const form = new URLSearchParams({
@@ -371,7 +423,7 @@ function TokenAcquisitionPanel() {
 
   return (
     <Panel
-      index={4}
+      index={5}
       title="Token acquisition (via proxy header injection)"
       status={status}
       output={output}
@@ -414,7 +466,7 @@ function ArmCallPanel() {
 
   return (
     <Panel
-      index={5}
+      index={6}
       title="ARM call (Bearer injected from KV)"
       status={status}
       output={output}
@@ -460,7 +512,7 @@ function ArtifactDownloadPanel() {
 
   return (
     <Panel
-      index={6}
+      index={7}
       title="Artifact download (iframe sandbox spike)"
       status={status}
       output={output}
@@ -489,6 +541,7 @@ function App() {
       </header>
       <PlatformGlobalsPanel />
       <KvStorePanel />
+      <AppRegistrationPanel />
       <AzureCredentialsPanel />
       <TokenAcquisitionPanel />
       <ArmCallPanel />

@@ -58,6 +58,18 @@ body {
   margin-bottom: 12px;
 }
 
+.setup-steps {
+  font-size: 13px;
+  line-height: 20px;
+  color: #595959;
+  margin: 0 0 12px;
+  padding-left: 20px;
+}
+
+.setup-steps li {
+  margin-bottom: 6px;
+}
+
 .perm-list {
   font-size: 13px;
   line-height: 20px;
