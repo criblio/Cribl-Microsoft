@@ -3,8 +3,8 @@
  *
  * The setup wizard persists the caller's Azure identity/config so it can be
  * rehydrated on the next launch. That persisted blob carries ONLY non-secret
- * fields: clientId, tenantId, subscriptionId, resourceGroup, and the chosen
- * setupPath. It NEVER carries the client secret.
+ * fields: clientId, tenantId, subscriptionId, resourceGroup, workspaceName, and
+ * the chosen setupPath. It NEVER carries the client secret.
  *
  * The client secret lives exclusively inside the encrypted, write-only
  * `azureBasic` secrets-store entry. It is never serialized here, never read
@@ -55,6 +55,11 @@ export interface AzureConfig {
   subscriptionId: string;
   /** Target resource group name. Non-secret. */
   resourceGroup: string;
+  /**
+   * Target Log Analytics workspace name. Non-secret. Primarily relevant to the
+   * `existing` full-deployment path, where the workspace must be pinned.
+   */
+  workspaceName: string;
   /** The coarse setup path the user selected. */
   setupPath: AzureSetupPath;
 }
@@ -69,11 +74,12 @@ export const EMPTY_AZURE_CONFIG: AzureConfig = {
   tenantId: "",
   subscriptionId: "",
   resourceGroup: "",
+  workspaceName: "",
   setupPath: "existing",
 };
 
 /**
- * Serialize exactly the five non-secret {@link AzureConfig} fields to JSON.
+ * Serialize exactly the six non-secret {@link AzureConfig} fields to JSON.
  *
  * Only the known fields are emitted - even if the caller's object carries extra
  * properties (a leaked secret, say), they are not written out.
@@ -84,6 +90,7 @@ export function serializeAzureConfig(config: AzureConfig): string {
     tenantId: config.tenantId,
     subscriptionId: config.subscriptionId,
     resourceGroup: config.resourceGroup,
+    workspaceName: config.workspaceName,
     setupPath: config.setupPath,
   };
   return JSON.stringify(canonical);
@@ -117,9 +124,10 @@ function asSetupPath(value: unknown): AzureSetupPath {
  *
  * For a valid plain object, each string field is copied only if it is actually
  * a string (otherwise ''), and setupPath is copied only if it is one of the
- * three valid values (otherwise 'existing'). Any unexpected extra keys - a
- * stray `clientSecret`, `accessToken`, or anything else - are ignored and never
- * appear on the returned config.
+ * three valid values (otherwise 'existing'). A stored config missing
+ * `workspaceName` (e.g. one written before this field existed) parses to ''.
+ * Any unexpected extra keys - a stray `clientSecret`, `accessToken`, or
+ * anything else - are ignored and never appear on the returned config.
  */
 export function parseAzureConfig(raw: string | null | undefined): AzureConfig {
   if (typeof raw !== "string" || raw.trim() === "") {
@@ -137,13 +145,14 @@ export function parseAzureConfig(raw: string | null | undefined): AzureConfig {
     return { ...EMPTY_AZURE_CONFIG };
   }
 
-  // Only the five known fields are read; every other key is dropped, so a
+  // Only the six known fields are read; every other key is dropped, so a
   // planted clientSecret/accessToken can never leak onto the result.
   return {
     clientId: asString(parsed.clientId),
     tenantId: asString(parsed.tenantId),
     subscriptionId: asString(parsed.subscriptionId),
     resourceGroup: asString(parsed.resourceGroup),
+    workspaceName: asString(parsed.workspaceName),
     setupPath: asSetupPath(parsed.setupPath),
   };
 }
@@ -159,6 +168,12 @@ export function parseAzureConfig(raw: string | null | undefined): AzureConfig {
  *
  * "Complete for a full deployment" (`forToken` false) additionally requires the
  * target to be pinned: `subscriptionId` and `resourceGroup` must also be set.
+ *
+ * NOTE: `workspaceName` is intentionally NOT required here. On the `existing`
+ * full-deployment path the workspace is the ingestion target and a caller may
+ * additionally gate on it, but that is a path-specific concern layered on top of
+ * this check; this function stays deliberately un-over-constrained so the lab
+ * paths (which mint their own workspace) are not blocked by a blank field.
  *
  * @param forToken - true (default) checks token-acquisition readiness; false
  *   checks full-deployment readiness.

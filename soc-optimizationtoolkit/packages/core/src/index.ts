@@ -12,3 +12,5 @@ export * from "./domain/schema-mapping";
 export * from "./domain/azure-permissions";
 export * from "./domain/azure-config";
 export * from "./domain/azure-resource-id";
+export * from "./domain/azure-profiles";
+export * from "./domain/connection-invalidation";

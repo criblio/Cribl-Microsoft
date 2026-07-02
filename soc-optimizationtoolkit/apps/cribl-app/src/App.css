@@ -242,3 +242,91 @@ body {
   flex-direction: column;
   gap: 4px;
 }
+
+.connection-bar {
+  border: 1px solid #d9d9d9;
+  background: #ffffff;
+  padding: 16px 24px;
+  margin-bottom: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.connection-bar-main {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.connection-select {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 220px;
+}
+
+.connection-select select,
+.connection-rename-input {
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 20px;
+  padding: 4px 8px;
+  border: 1px solid #d9d9d9;
+  background: #ffffff;
+  color: #262626;
+}
+
+.connection-select select:focus,
+.connection-rename-input:focus {
+  outline: none;
+  border-color: #1890ff;
+}
+
+.connection-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.secret-badge {
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 20px;
+  padding: 2px 10px;
+  border: 1px solid #d9d9d9;
+  white-space: nowrap;
+  margin-left: auto;
+}
+
+.secret-badge-stored {
+  color: #52c41a;
+  border-color: #b7eb8f;
+  background: #f6ffed;
+}
+
+.secret-badge-none {
+  color: #8c8c8c;
+  border-color: #d9d9d9;
+  background: #fafafa;
+}
+
+.connection-notice {
+  font-size: 13px;
+  line-height: 20px;
+  color: #d46b08;
+  background: #fff7e6;
+  border: 1px solid #ffd591;
+  padding: 8px 12px;
+}
+
+.connection-hint {
+  font-size: 13px;
+  line-height: 20px;
+  color: #cf1322;
+  background: #fff1f0;
+  border: 1px solid #ffa39e;
+  padding: 8px 12px;
+}

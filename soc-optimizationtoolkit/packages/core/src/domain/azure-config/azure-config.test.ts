@@ -27,6 +27,7 @@ const FULL_CONFIG: AzureConfig = {
   tenantId: "22222222-2222-2222-2222-222222222222",
   subscriptionId: "33333333-3333-3333-3333-333333333333",
   resourceGroup: "rg-soc-lab",
+  workspaceName: "law-soc-lab",
   setupPath: "lab-byo-rg",
 };
 
@@ -50,7 +51,7 @@ describe("serializeAzureConfig / parseAzureConfig round-trip", () => {
     }
   });
 
-  it("serializes exactly the five known fields and nothing else", () => {
+  it("serializes exactly the six known fields and nothing else", () => {
     const json = serializeAzureConfig(FULL_CONFIG);
     expect(Object.keys(JSON.parse(json)).sort()).toEqual([
       "clientId",
@@ -58,7 +59,27 @@ describe("serializeAzureConfig / parseAzureConfig round-trip", () => {
       "setupPath",
       "subscriptionId",
       "tenantId",
+      "workspaceName",
     ]);
+  });
+
+  it("round-trips the workspaceName field", () => {
+    const config: AzureConfig = { ...FULL_CONFIG, workspaceName: "law-prod" };
+    expect(parseAzureConfig(serializeAzureConfig(config)).workspaceName).toBe(
+      "law-prod",
+    );
+  });
+
+  it("parses a stored config that predates workspaceName to ''", () => {
+    // A blob written before workspaceName existed omits the key entirely.
+    const legacy = JSON.stringify({
+      clientId: FULL_CONFIG.clientId,
+      tenantId: FULL_CONFIG.tenantId,
+      subscriptionId: FULL_CONFIG.subscriptionId,
+      resourceGroup: FULL_CONFIG.resourceGroup,
+      setupPath: FULL_CONFIG.setupPath,
+    });
+    expect(parseAzureConfig(legacy).workspaceName).toBe("");
   });
 
   it("does not emit a stray secret even if one is attached to the input", () => {
@@ -144,6 +165,7 @@ describe("parseAzureConfig field-level coercion", () => {
         tenantId: { nested: true },
         subscriptionId: null,
         resourceGroup: ["a"],
+        workspaceName: false,
         setupPath: "existing",
       }),
     );
@@ -152,6 +174,7 @@ describe("parseAzureConfig field-level coercion", () => {
       tenantId: "",
       subscriptionId: "",
       resourceGroup: "",
+      workspaceName: "",
       setupPath: "existing",
     });
   });
@@ -165,6 +188,7 @@ describe("parseAzureConfig field-level coercion", () => {
       tenantId: "",
       subscriptionId: "",
       resourceGroup: "",
+      workspaceName: "",
       setupPath: "lab-new-rg",
     });
   });
@@ -196,6 +220,7 @@ describe("parseAzureConfig never surfaces secrets or unknown keys", () => {
       "setupPath",
       "subscriptionId",
       "tenantId",
+      "workspaceName",
     ]);
   });
 });

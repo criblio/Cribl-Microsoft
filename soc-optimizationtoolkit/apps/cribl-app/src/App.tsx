@@ -2,19 +2,43 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import {
   allGranted,
+  computeInvalidation,
   deriveResourceGroup,
   EMPTY_AZURE_CONFIG,
+  EMPTY_PROFILE_STORE,
   evaluatePermissions,
+  getActiveConfig,
+  getActiveProfile,
   parseAzureConfig,
+  parseProfileStore,
+  removeProfile,
+  renameProfile,
   REQUIRED_ACTIONS,
-  serializeAzureConfig,
+  serializeProfileStore,
+  setActiveProfile,
+  updateActiveConfig,
+  upsertProfile,
 } from '@soc/core';
-import type { AzureConfig, PermissionsResponse, RequiredAction } from '@soc/core';
+import type {
+  AzureConfig,
+  ConnectionProfile,
+  PermissionsResponse,
+  ProfileStore,
+  RequiredAction,
+} from '@soc/core';
 
-// Phase 1 spike harness: six sequential diagnostics panels that exercise the
-// Cribl App Platform surface (globals, KV store, proxy header injection,
-// Azure AD token flow, ARM calls, iframe download behavior). Each panel runs
-// independently and reports raw response details for the spike log.
+// Phase 1 harness: seven sequential diagnostics panels that exercise the Cribl
+// App Platform surface (globals, KV store, proxy header injection, Azure AD
+// token flow, ARM calls, iframe download behavior), now driven by named
+// connection profiles. A connection bar at the top selects the ACTIVE profile;
+// all config-bearing panels read and write the active profile's config.
+//
+// PLATFORM CONSTRAINT: proxies.yml injects auth from the FIXED keys
+// kv.azureBasic (Basic, the client secret) and kv.azureArmToken (Bearer), and
+// encrypted entries are write-only. Only ONE profile's secret can be live at
+// azureBasic at a time, so switching identities requires re-entering that
+// connection's secret. `liveSecretProfileId` tracks which profile's secret was
+// written this session; it is never persisted and resets to null on reload.
 
 type Status = 'idle' | 'running' | 'ok' | 'failed';
 
@@ -68,12 +92,45 @@ function kvUrl(key: string): string {
   return `${window.CRIBL_API_URL}/kvstore/${key}`;
 }
 
-// Load the persisted non-secret config from the single plain KV key 'azureConfig'
-// and normalize it through the pure @soc/core codec. Tolerant: a missing key, a
-// non-ok response, a network error, or an unparseable body all yield
-// EMPTY_AZURE_CONFIG. The client secret is NEVER carried here - it lives only in
-// the encrypted, write-only azureBasic entry and is never read back.
-async function loadAzureConfig(): Promise<AzureConfig> {
+// Result of loading the profile store, distinguishing a genuinely absent key
+// (safe to seed a Default profile) from a load FAILURE of unknown state (a
+// transient 5xx, an auth error, or a network throw). Seeding on a failure would
+// let autosave overwrite real profiles that are actually still there, so the
+// two cases must not be conflated.
+type ProfileLoad =
+  | { status: 'loaded'; store: ProfileStore }
+  | { status: 'absent' }
+  | { status: 'error'; message: string };
+
+// Load the persisted profile store from the plain KV key 'azureProfiles' and
+// normalize it through the pure @soc/core codec. A 404 or an ok-but-empty body
+// means the key does not exist yet (absent); any other non-ok status or a
+// network error is a failure we must not treat as "no data". No client secret
+// is ever carried here - secrets live only in the encrypted, write-only
+// azureBasic entry and are never read back.
+async function loadProfileStore(): Promise<ProfileLoad> {
+  try {
+    const res = await fetch(kvUrl('azureProfiles'));
+    if (res.status === 404) {
+      return { status: 'absent' };
+    }
+    if (!res.ok) {
+      return { status: 'error', message: `HTTP ${res.status} loading azureProfiles` };
+    }
+    const body = await res.text();
+    if (body.trim() === '') {
+      return { status: 'absent' };
+    }
+    return { status: 'loaded', store: parseProfileStore(body) };
+  } catch (err) {
+    return { status: 'error', message: String(err) };
+  }
+}
+
+// One-time migration read: the legacy single-config key 'azureConfig' from before
+// named connection profiles existed. Used only to seed a 'Default' profile when
+// no profile store is present yet. Tolerant, like loadProfileStore.
+async function loadLegacyAzureConfig(): Promise<AzureConfig> {
   try {
     const res = await fetch(kvUrl('azureConfig'));
     if (!res.ok) {
@@ -424,16 +481,16 @@ interface ArmTokenResult {
   expires_in?: number;
 }
 
-// Reads the tenant ID from the persisted azureConfig KV entry and runs the
-// client_credentials/ARM-scope token request. The app sets no Authorization
-// header: proxies.yml injects Basic ${kv.azureBasic} server-side. Returns the
-// parsed token (access_token plus type/expiry) so both the credentials
-// preflight (panel 4) and the token panel (panel 5) share one implementation.
-async function acquireArmToken(): Promise<ArmTokenResult> {
-  const tenant = (await loadAzureConfig()).tenantId.trim();
+// Run the client_credentials/ARM-scope token request for the given tenant. The
+// app sets no Authorization header: proxies.yml injects Basic ${kv.azureBasic}
+// server-side (the active connection's secret). Returns the parsed token so both
+// the credentials preflight (panel 4) and the token panel (panel 5) share one
+// implementation. The tenant comes from the ACTIVE connection's config.
+async function acquireArmToken(tenantId: string): Promise<ArmTokenResult> {
+  const tenant = tenantId.trim();
   if (tenant === '') {
     throw new Error(
-      'azureConfig has no tenant ID - enter the tenant ID in panel 4 (it is remembered automatically), then retry'
+      'The active connection has no tenant ID - enter the tenant ID in panel 4 (it is remembered per connection), then retry'
     );
   }
   const form = new URLSearchParams({
@@ -637,8 +694,12 @@ async function armGetJson(url: string, label: string): Promise<ArmGetResult> {
 // panel also hosts resource discovery: it needs an ARM token (from the saved
 // secret), so the Discover Azure resources button and its dependent dropdowns
 // live here, writing into the same shared subscription/resource-group state the
-// panel-3 text inputs bind to.
+// panel-3 text inputs bind to. The panel is keyed by the active profile id in
+// App, so switching connections remounts it and clears all cached discovery and
+// permission-validation state.
 interface AzureCredentialsPanelProps {
+  activeProfileId: string | null;
+  onSecretSaved: (profileId: string, tenantId: string, clientId: string) => void;
   clientId: string;
   onClientIdChange: (value: string) => void;
   tenantId: string;
@@ -653,6 +714,8 @@ interface AzureCredentialsPanelProps {
 }
 
 function AzureCredentialsPanel({
+  activeProfileId,
+  onSecretSaved,
   clientId,
   onClientIdChange,
   tenantId,
@@ -674,8 +737,9 @@ function AzureCredentialsPanel({
   // Resource discovery state. Each list is null until its query has run; an
   // empty array means the query succeeded but returned nothing (rendered as a
   // clear message, not a dropdown). Lists are cached in React state only - they
-  // are never persisted. The two status strings label the result areas so an
-  // empty or permission-denied outcome is obvious.
+  // are never persisted, and a connection switch remounts this panel (via its
+  // key), which discards them. The two status strings label the result areas so
+  // an empty or permission-denied outcome is obvious.
   const [subscriptions, setSubscriptions] = useState<SubscriptionOption[] | null>(null);
   const [workspaces, setWorkspaces] = useState<WorkspaceOption[] | null>(null);
   const [resourceGroups, setResourceGroups] = useState<ResourceGroupOption[] | null>(null);
@@ -772,7 +836,7 @@ function AzureCredentialsPanel({
     setResourceGroups(null);
     setDependentStatus('');
     try {
-      const token = await acquireArmToken();
+      const token = await acquireArmToken(tenantId);
       // Store the token BEFORE the ARM GET so proxies.yml can inject it as Bearer
       // (the app sends no Authorization header), same as panel 5.
       const putRes = await fetch(kvUrl('azureArmToken?encrypted=true'), {
@@ -820,7 +884,7 @@ function AzureCredentialsPanel({
     } finally {
       setDiscovering(false);
     }
-  }, [subscriptionId, setupPath, loadDependent]);
+  }, [tenantId, subscriptionId, setupPath, loadDependent]);
 
   // Selecting a subscription sets the shared subscriptionId and re-runs the
   // dependent query for the current setup path.
@@ -862,6 +926,8 @@ function AzureCredentialsPanel({
   // Report what already exists in THIS app context's KV store. The store is
   // scoped per app ID: Live Preview (__dev__ prefix) and the installed app
   // have separate stores, so credentials saved in one are absent in the other.
+  // The tenant ID reflects the ACTIVE connection's config (remembered in the
+  // azureProfiles entry), not a global key.
   const buildKvReport = useCallback(async (): Promise<{
     lines: string[];
     azureBasicPresent: boolean;
@@ -873,23 +939,22 @@ function AzureCredentialsPanel({
       body: JSON.stringify({ prefix: 'azure' }),
     });
     const keysText = await keysRes.text();
-    const config = await loadAzureConfig();
-    const tenant = config.tenantId.trim();
+    const tenant = tenantId.trim();
     const azureBasicPresent = keysText.includes('azureBasic');
     const lines = [
       `Stored in KV for app ID ${window.CRIBL_APP_ID ?? '(unknown)'}:`,
       azureBasicPresent
-        ? '  client secret: stored (encrypted, not shown)'
+        ? '  client secret: stored (encrypted, not shown) - NOTE this is a single shared slot, not per connection'
         : '  client secret: not saved - enter it below and Save client secret',
       tenant !== ''
-        ? `  tenant ID: ${tenant} (remembered in azureConfig)`
-        : '  tenant ID: not saved - enter it below (remembered automatically)',
+        ? `  tenant ID: ${tenant} (remembered in this connection)`
+        : '  tenant ID: not saved - enter it below (remembered per connection)',
       keysText.includes('azureArmToken')
         ? '  azureArmToken: present (encrypted) - a token has been acquired in this context'
         : '  azureArmToken: not yet acquired - run the token panel or re-check here',
     ];
     return { lines, azureBasicPresent, tenant };
-  }, []);
+  }, [tenantId]);
 
   // Auto-run on mount and after a save: report KV state only (no network to Azure).
   const checkStored = useCallback(async () => {
@@ -921,8 +986,8 @@ function AzureCredentialsPanel({
             ...baseLines,
             '',
             'Permission validation skipped: save the client secret below and enter the tenant ID',
-            '(it is remembered automatically). Validation acquires a token, which needs the encrypted',
-            'azureBasic entry plus a tenant ID persisted in azureConfig.',
+            '(it is remembered per connection). Validation acquires a token, which needs the encrypted',
+            'azureBasic entry plus a tenant ID on the active connection.',
           ].join('\n')
         );
         return;
@@ -930,7 +995,7 @@ function AzureCredentialsPanel({
       setStored([...baseLines, '', 'Permission validation: acquiring token and querying scopes...'].join('\n'));
       const validationLines: string[] = [];
       try {
-        const token = await acquireArmToken();
+        const token = await acquireArmToken(tenantId);
         // Store the token BEFORE the permissions GET so proxies.yml can inject
         // it as Bearer (the app sends no Authorization header), like panel 5.
         const putRes = await fetch(kvUrl('azureArmToken?encrypted=true'), {
@@ -952,12 +1017,13 @@ function AzureCredentialsPanel({
     } finally {
       setValidating(false);
     }
-  }, [buildKvReport, setupPath, subscriptionId, rgName]);
+  }, [buildKvReport, tenantId, setupPath, subscriptionId, rgName]);
 
   // Save ONLY the client secret: write the encrypted, write-only azureBasic
-  // entry (base64 of clientId:clientSecret). The non-secret config fields
-  // (client ID, tenant ID, subscription, resource group, setup path) are NOT
-  // written here - App autosaves them to the plain azureConfig entry.
+  // entry (base64 of clientId:clientSecret). The non-secret config fields are
+  // NOT written here - App autosaves the whole profile store to azureProfiles.
+  // On success, App is told which profile (and identity) the live secret now
+  // belongs to, so the connection badge and identity-drift hint stay accurate.
   const saveSecret = () =>
     run(async () => {
       if (clientId === '' || clientSecret === '') {
@@ -972,8 +1038,11 @@ function AzureCredentialsPanel({
         throw new Error(`PUT azureBasic?encrypted=true: HTTP ${res.status}\nbody: ${text}`);
       }
       setClientSecret('');
+      if (activeProfileId !== null) {
+        onSecretSaved(activeProfileId, tenantId, clientId);
+      }
       await checkStored();
-      return `PUT azureBasic?encrypted=true: HTTP ${res.status}\nSaved. Secret input cleared.`;
+      return `PUT azureBasic?encrypted=true: HTTP ${res.status}\nSaved for this connection. Secret input cleared.`;
     });
 
   return (
@@ -990,9 +1059,11 @@ function AzureCredentialsPanel({
         write-only encrypted in the app KV store (key azureBasic) when you click Save client secret. It
         is injected into outbound token requests server-side by the platform proxy and can never be
         read back or shown in the browser - if a secret is already stored the field stays blank, so
-        enter a new value only to replace it. The other fields (client ID, tenant ID, subscription,
-        resource group, setup path) are non-secret configuration and are remembered automatically in
-        the plain azureConfig KV entry, so they need no save button and reappear on the next load.
+        enter a new value only to replace it. azureBasic is a single shared slot, so only one
+        connection&apos;s secret is live at a time: switching connections clears it and you re-enter the
+        secret for the new connection. The other fields (client ID, tenant ID, subscription, resource
+        group, workspace, setup path) are non-secret configuration remembered per connection in the
+        plain azureProfiles KV entry, so they need no save button and reappear on the next load.
         Credentials persist server-side per app context: the Live Preview dev app and the installed app
         have separate KV stores, so save the secret once in each context you test. Re-check and
         validate permissions reports the stored KV state and then, if credentials are present, acquires
@@ -1124,15 +1195,16 @@ function AzureCredentialsPanel({
   );
 }
 
-// Panel 4: client_credentials token flow. The app never sets Authorization;
+// Panel 5: client_credentials token flow. The app never sets Authorization;
 // proxies.yml injects Basic ${kv.azureBasic} server-side (the proxy strips
-// any Authorization header the client sends).
-function TokenAcquisitionPanel() {
+// any Authorization header the client sends). The tenant is the ACTIVE
+// connection's tenant ID.
+function TokenAcquisitionPanel({ tenantId }: { tenantId: string }) {
   const [status, output, run] = useRunner();
   const acquire = () =>
     run(async () => {
       // Shared with panel 4's preflight so the token flow lives in one place.
-      const token = await acquireArmToken();
+      const token = await acquireArmToken(tenantId);
       const putRes = await fetch(kvUrl('azureArmToken?encrypted=true'), {
         method: 'PUT',
         body: token.access_token,
@@ -1160,7 +1232,7 @@ function TokenAcquisitionPanel() {
       onAction={() => void acquire()}
     >
       <p className="panel-desc">
-        Reads the tenant ID from the KV store, then POSTs grant_type=client_credentials with the
+        Uses the active connection&apos;s tenant ID, then POSTs grant_type=client_credentials with the
         ARM scope to login.microsoftonline.com. No Authorization header is set by the app - the
         proxy injects Basic auth from kv.azureBasic per proxies.yml. On success the access token
         is stored encrypted under azureArmToken.
@@ -1169,7 +1241,7 @@ function TokenAcquisitionPanel() {
   );
 }
 
-// Panel 5: ARM subscriptions list. Bearer token is injected server-side from
+// Panel 6: ARM subscriptions list. Bearer token is injected server-side from
 // kv.azureArmToken; the app sends no Authorization header.
 function ArmCallPanel() {
   const [status, output, run] = useRunner();
@@ -1211,7 +1283,7 @@ function ArmCallPanel() {
   );
 }
 
-// Panel 6: does the sandboxed iframe allow programmatic downloads? The only
+// Panel 7: does the sandboxed iframe allow programmatic downloads? The only
 // reliable signal is the file appearing in the browser's downloads.
 function ArtifactDownloadPanel() {
   const [status, output, run] = useRunner();
@@ -1257,74 +1329,108 @@ function ArtifactDownloadPanel() {
   );
 }
 
-function App() {
-  // Shared between the app registration panel (az script) and the credentials
-  // panel (secret save + permission preflight). These five non-secret fields ARE
-  // the AzureConfig: they are hydrated from, and debounce-autosaved to, the
-  // single plain 'azureConfig' KV entry. The client secret is never part of this
-  // state - it is handled write-only in panel 4.
-  const [clientId, setClientId] = useState('');
-  const [tenantId, setTenantId] = useState('');
-  const [setupPath, setSetupPath] = useState<SetupPath>('existing');
-  const [subscriptionId, setSubscriptionId] = useState('');
-  const [rgName, setRgName] = useState('');
-  // Selected Log Analytics workspace name (existing path). The AzureConfig codec
-  // has no workspaceName field, so this is IN-MEMORY / App-state ONLY - it is not
-  // persisted to azureConfig and does not survive a reload. Persisting it belongs
-  // to the later named-connection-profiles change, not this discovery spike.
-  const [workspaceName, setWorkspaceName] = useState('');
-  // Gates the autosave effect: no write happens until the persisted config has
-  // been loaded, so the initial empty state can never clobber stored values.
-  const [hydrated, setHydrated] = useState(false);
-  // The config we know is already persisted (serialized). Initialized when
-  // hydration completes so the just-loaded values are never redundantly written.
-  const lastPersistedRef = useRef<string | null>(null);
+// Normalize an identity field for comparison: trim then lowercase (Azure GUIDs
+// are case-insensitive and stray whitespace should not read as a real change).
+function normalizeIdentity(value: string): string {
+  return value.trim().toLowerCase();
+}
 
-  // Hydrate the non-secret config once on mount. The client secret is never
-  // loaded (it is write-only); only these five fields are restored.
+// The identity a saved secret was written under, snapshotted at save time so the
+// identity-drift hint can detect when the active connection's tenant/client has
+// been edited away from what the live secret authenticates.
+interface LiveSecretIdentity {
+  tenantId: string;
+  clientId: string;
+}
+
+function App() {
+  // The whole harness is now driven by a ProfileStore of named connections. The
+  // ACTIVE profile's non-secret config feeds every config-bearing panel. The
+  // store is hydrated from, and debounce-autosaved to, the plain 'azureProfiles'
+  // KV entry. Client secrets are NEVER part of this state - they are handled
+  // write-only in panel 4 and tracked per session by liveSecretProfileId.
+  const [store, setStore] = useState<ProfileStore>(EMPTY_PROFILE_STORE);
+  const [hydrated, setHydrated] = useState(false);
+
+  // Which profile's secret was last written to the single azureBasic slot THIS
+  // session, plus the identity it was written under. Non-persisted: both reset to
+  // null on reload (secrets are never remembered per profile across reloads).
+  const [liveSecretProfileId, setLiveSecretProfileId] = useState<string | null>(null);
+  const [liveSecretIdentity, setLiveSecretIdentity] = useState<LiveSecretIdentity | null>(null);
+
+  // A transient message surfaced after a switch / clear (e.g. "enter the secret
+  // for this connection"). Cleared once a secret is saved or a no-clear switch
+  // happens.
+  const [switchNotice, setSwitchNotice] = useState('');
+
+  // Inline rename state for the connection bar.
+  const [renaming, setRenaming] = useState(false);
+  const [renameValue, setRenameValue] = useState('');
+
+  // The serialized store we know is already persisted. Set at hydration to what
+  // azureProfiles actually held, so a just-loaded (or migrated) store is written
+  // exactly once and never redundantly.
+  const lastPersistedRef = useRef<string | null>(null);
+  const [loadError, setLoadError] = useState('');
+  const [loadAttempt, setLoadAttempt] = useState(0);
+
+  // Hydrate the profile store once on mount (and on an explicit retry). Only an
+  // absent key seeds a Default profile (first try the legacy 'azureConfig' key
+  // as a one-time migration, otherwise start blank). A LOAD ERROR does NOT seed
+  // and does NOT set hydrated, so autosave stays inert and cannot overwrite
+  // profiles that may still exist server-side; the user gets a retry instead.
+  // Secrets are never loaded.
   useEffect(() => {
     let cancelled = false;
     void (async () => {
-      const config = await loadAzureConfig();
+      const loaded = await loadProfileStore();
       if (cancelled) {
         return;
       }
-      setClientId(config.clientId);
-      setTenantId(config.tenantId);
-      setSubscriptionId(config.subscriptionId);
-      setRgName(config.resourceGroup);
-      setSetupPath(config.setupPath);
-      lastPersistedRef.current = serializeAzureConfig(config);
+      if (loaded.status === 'error') {
+        setLoadError(loaded.message);
+        return;
+      }
+      const persisted = loaded.status === 'loaded' ? loaded.store : EMPTY_PROFILE_STORE;
+      let next = persisted;
+      if (next.profiles.length === 0) {
+        const legacy = await loadLegacyAzureConfig();
+        if (cancelled) {
+          return;
+        }
+        const id = crypto.randomUUID();
+        next = { profiles: [{ id, name: 'Default', config: legacy }], activeProfileId: id };
+      } else if (next.activeProfileId === null) {
+        next = setActiveProfile(next, next.profiles[0].id);
+      }
+      // Record what was actually persisted; if we seeded or corrected the active
+      // profile, `next` differs and the autosave effect will write it.
+      lastPersistedRef.current = serializeProfileStore(persisted);
+      setLoadError('');
+      setStore(next);
       setHydrated(true);
     })();
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [loadAttempt]);
 
-  // Debounced autosave. Inert until hydrated. Once hydrated, if the current
-  // config differs from what is persisted, wait ~800ms then PUT the plain
-  // azureConfig entry and record it. The timeout is cleared on every change and
-  // on unmount, so only a settled edit is written and no redundant write of the
-  // just-hydrated values occurs.
+  // Debounced autosave of the whole store. Inert until hydrated. Once hydrated,
+  // if the current store differs from what is persisted, wait ~800ms then PUT the
+  // plain azureProfiles entry and record it. Editing any config field, switching,
+  // renaming, and creating/deleting connections all flow through here.
   useEffect(() => {
     if (!hydrated) {
       return;
     }
-    const current = serializeAzureConfig({
-      clientId,
-      tenantId,
-      subscriptionId,
-      resourceGroup: rgName,
-      setupPath,
-    });
+    const current = serializeProfileStore(store);
     if (current === lastPersistedRef.current) {
       return;
     }
     const timer = setTimeout(() => {
       void (async () => {
         try {
-          const res = await fetch(kvUrl('azureConfig'), { method: 'PUT', body: current });
+          const res = await fetch(kvUrl('azureProfiles'), { method: 'PUT', body: current });
           if (res.ok) {
             lastPersistedRef.current = current;
           }
@@ -1334,7 +1440,180 @@ function App() {
       })();
     }, 800);
     return () => clearTimeout(timer);
-  }, [hydrated, clientId, tenantId, subscriptionId, rgName, setupPath]);
+  }, [hydrated, store]);
+
+  const activeConfig = getActiveConfig(store);
+  const activeProfile = getActiveProfile(store);
+  const secretLive = liveSecretProfileId !== null && liveSecretProfileId === store.activeProfileId;
+  // The live secret is still marked stored, but the active connection's identity
+  // has been edited away from what that secret authenticates. Do NOT auto-clear;
+  // surface a hint telling the user to Clear stored secret and re-enter.
+  const identityDrifted =
+    secretLive &&
+    liveSecretIdentity !== null &&
+    (normalizeIdentity(activeConfig.tenantId) !== normalizeIdentity(liveSecretIdentity.tenantId) ||
+      normalizeIdentity(activeConfig.clientId) !== normalizeIdentity(liveSecretIdentity.clientId));
+
+  // Patch the active profile's config. Uses a functional update so it always
+  // reads the latest store, never a stale closure.
+  const updateField = useCallback((patch: Partial<AzureConfig>) => {
+    setStore((s) => updateActiveConfig(s, { ...getActiveConfig(s), ...patch }));
+  }, []);
+
+  // Apply a deliberate switch of the active profile: adopt the new store, then
+  // invalidate cached secrets/tokens per computeInvalidation AND the live-secret
+  // ownership rule (only one connection's secret can be live at azureBasic).
+  // Discovery lists and permission-validation output clear automatically because
+  // the credentials panel is keyed by the active profile id and remounts.
+  const applySwitch = useCallback(
+    (prevConfig: AzureConfig, nextConfig: AzureConfig, nextId: string | null, nextStore: ProfileStore) => {
+      setStore(nextStore);
+      setRenaming(false);
+      const inv = computeInvalidation(prevConfig, nextConfig);
+      const needSecretClear = inv.clearSecret || liveSecretProfileId !== nextId;
+      void (async () => {
+        if (inv.clearToken) {
+          try {
+            await fetch(kvUrl('azureArmToken'), { method: 'DELETE' });
+          } catch {
+            // Best-effort clear.
+          }
+        }
+        if (needSecretClear) {
+          try {
+            await fetch(kvUrl('azureBasic'), { method: 'DELETE' });
+          } catch {
+            // Best-effort clear.
+          }
+        }
+      })();
+      if (needSecretClear) {
+        setLiveSecretProfileId(null);
+        setLiveSecretIdentity(null);
+        setSwitchNotice(
+          'Switched connection - enter the client secret for this connection in panel 4 to authenticate.'
+        );
+      } else {
+        setSwitchNotice('');
+      }
+    },
+    [liveSecretProfileId]
+  );
+
+  // Connection <select>: the EXPLICIT switch. No-op when the selection is
+  // unchanged or blank.
+  const handleSelectProfile = (nextId: string) => {
+    if (nextId === '' || nextId === store.activeProfileId) {
+      return;
+    }
+    const prevConfig = getActiveConfig(store);
+    const nextStore = setActiveProfile(store, nextId);
+    applySwitch(prevConfig, getActiveConfig(nextStore), nextId, nextStore);
+  };
+
+  // New connection: a fresh blank profile with a shell-minted id, made active.
+  const handleNewConnection = () => {
+    const id = crypto.randomUUID();
+    const profile: ConnectionProfile = {
+      id,
+      name: `Connection ${store.profiles.length + 1}`,
+      config: { ...EMPTY_AZURE_CONFIG },
+    };
+    const prevConfig = getActiveConfig(store);
+    const nextStore = setActiveProfile(upsertProfile(store, profile), id);
+    applySwitch(prevConfig, getActiveConfig(nextStore), id, nextStore);
+  };
+
+  // Delete the active connection. Guard: never leave zero connections - deleting
+  // the last one replaces it with a fresh blank 'Default'.
+  const handleDeleteConnection = () => {
+    const activeId = store.activeProfileId;
+    if (activeId === null) {
+      return;
+    }
+    const prevConfig = getActiveConfig(store);
+    if (store.profiles.length <= 1) {
+      const id = crypto.randomUUID();
+      const nextStore: ProfileStore = {
+        profiles: [{ id, name: 'Default', config: { ...EMPTY_AZURE_CONFIG } }],
+        activeProfileId: id,
+      };
+      applySwitch(prevConfig, getActiveConfig(nextStore), id, nextStore);
+      return;
+    }
+    const nextStore = removeProfile(store, activeId);
+    applySwitch(prevConfig, getActiveConfig(nextStore), nextStore.activeProfileId, nextStore);
+  };
+
+  // Clear stored secret: the explicit way to force re-auth without switching
+  // connections (e.g. after editing the active connection's tenant/client id).
+  const handleClearSecret = () => {
+    void (async () => {
+      try {
+        await fetch(kvUrl('azureBasic'), { method: 'DELETE' });
+      } catch {
+        // Best-effort clear.
+      }
+      try {
+        await fetch(kvUrl('azureArmToken'), { method: 'DELETE' });
+      } catch {
+        // Best-effort clear.
+      }
+    })();
+    setLiveSecretProfileId(null);
+    setLiveSecretIdentity(null);
+    setSwitchNotice('Stored secret cleared - re-enter the client secret in panel 4 to re-authenticate.');
+  };
+
+  const startRename = () => {
+    setRenameValue(activeProfile?.name ?? '');
+    setRenaming(true);
+  };
+  const commitRename = () => {
+    const id = store.activeProfileId;
+    if (id !== null) {
+      const trimmed = renameValue.trim();
+      const name = trimmed === '' ? (activeProfile?.name ?? 'Connection') : trimmed;
+      setStore(renameProfile(store, id, name));
+    }
+    setRenaming(false);
+  };
+  const cancelRename = () => {
+    setRenaming(false);
+  };
+
+  // Save-secret success: record which connection (and identity) the live secret
+  // now belongs to, and clear any outstanding "enter the secret" notice.
+  const handleSecretSaved = (profileId: string, savedTenantId: string, savedClientId: string) => {
+    setLiveSecretProfileId(profileId);
+    setLiveSecretIdentity({ tenantId: savedTenantId, clientId: savedClientId });
+    setSwitchNotice('');
+  };
+
+  if (!hydrated) {
+    return (
+      <div className="harness">
+        <header className="harness-header">
+          <h1 className="harness-title">Phase 1 Spike Harness</h1>
+          {loadError === '' ? (
+            <p className="harness-subtitle">Loading connections...</p>
+          ) : (
+            <>
+              <p className="harness-subtitle">
+                Could not load saved connections: {loadError}. Not seeding a blank profile, to avoid
+                overwriting connections that may still be stored. Retry when the leader is reachable.
+              </p>
+              <div className="panel-controls">
+                <button className="run-button" onClick={() => setLoadAttempt((n) => n + 1)}>
+                  Retry loading connections
+                </button>
+              </div>
+            </>
+          )}
+        </header>
+      </div>
+    );
+  }
 
   return (
     <div className="harness">
@@ -1343,35 +1622,111 @@ function App() {
         <p className="harness-subtitle">
           Sequential diagnostics for the Cribl App Platform: globals, KV store semantics,
           proxy header injection, Azure AD token flow, ARM access, and iframe download behavior.
-          Run the panels top to bottom.
+          Pick or create a connection above, then run the panels top to bottom.
         </p>
       </header>
+
+      <div className="connection-bar">
+        <div className="connection-bar-main">
+          <label className="connection-select">
+            <span className="field-label">Connection</span>
+            {renaming ? (
+              <input
+                className="connection-rename-input"
+                type="text"
+                value={renameValue}
+                autoFocus
+                onChange={(e) => setRenameValue(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    commitRename();
+                  } else if (e.key === 'Escape') {
+                    cancelRename();
+                  }
+                }}
+              />
+            ) : (
+              <select
+                value={store.activeProfileId ?? ''}
+                onChange={(e) => handleSelectProfile(e.target.value)}
+              >
+                {store.profiles.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+            )}
+          </label>
+          <div className="connection-actions">
+            {renaming ? (
+              <>
+                <button className="run-button" onClick={commitRename}>
+                  Save name
+                </button>
+                <button className="run-button" onClick={cancelRename}>
+                  Cancel
+                </button>
+              </>
+            ) : (
+              <>
+                <button className="run-button" onClick={handleNewConnection}>
+                  New connection
+                </button>
+                <button className="run-button" onClick={startRename}>
+                  Rename
+                </button>
+                <button className="run-button" onClick={handleDeleteConnection}>
+                  Delete
+                </button>
+                <button className="run-button" onClick={handleClearSecret}>
+                  Clear stored secret
+                </button>
+              </>
+            )}
+          </div>
+          <span className={`secret-badge ${secretLive ? 'secret-badge-stored' : 'secret-badge-none'}`}>
+            secret: {secretLive ? 'stored (this session)' : 'not entered'}
+          </span>
+        </div>
+        {switchNotice !== '' && <p className="connection-notice">{switchNotice}</p>}
+        {identityDrifted && (
+          <p className="connection-hint">
+            identity changed - the stored secret was saved under a different tenant/client id. Use
+            Clear stored secret and re-enter the secret for this identity.
+          </p>
+        )}
+      </div>
+
       <PlatformGlobalsPanel />
       <KvStorePanel />
       <AppRegistrationPanel
-        clientId={clientId}
-        onClientIdChange={setClientId}
-        setupPath={setupPath}
-        onSetupPathChange={setSetupPath}
-        subscriptionId={subscriptionId}
-        onSubscriptionIdChange={setSubscriptionId}
-        rgName={rgName}
-        onRgNameChange={setRgName}
+        clientId={activeConfig.clientId}
+        onClientIdChange={(v) => updateField({ clientId: v })}
+        setupPath={activeConfig.setupPath}
+        onSetupPathChange={(v) => updateField({ setupPath: v })}
+        subscriptionId={activeConfig.subscriptionId}
+        onSubscriptionIdChange={(v) => updateField({ subscriptionId: v })}
+        rgName={activeConfig.resourceGroup}
+        onRgNameChange={(v) => updateField({ resourceGroup: v })}
       />
       <AzureCredentialsPanel
-        clientId={clientId}
-        onClientIdChange={setClientId}
-        tenantId={tenantId}
-        onTenantIdChange={setTenantId}
-        setupPath={setupPath}
-        subscriptionId={subscriptionId}
-        onSubscriptionIdChange={setSubscriptionId}
-        rgName={rgName}
-        onRgNameChange={setRgName}
-        workspaceName={workspaceName}
-        onWorkspaceNameChange={setWorkspaceName}
+        key={store.activeProfileId ?? 'none'}
+        activeProfileId={store.activeProfileId}
+        onSecretSaved={handleSecretSaved}
+        clientId={activeConfig.clientId}
+        onClientIdChange={(v) => updateField({ clientId: v })}
+        tenantId={activeConfig.tenantId}
+        onTenantIdChange={(v) => updateField({ tenantId: v })}
+        setupPath={activeConfig.setupPath}
+        subscriptionId={activeConfig.subscriptionId}
+        onSubscriptionIdChange={(v) => updateField({ subscriptionId: v })}
+        rgName={activeConfig.resourceGroup}
+        onRgNameChange={(v) => updateField({ resourceGroup: v })}
+        workspaceName={activeConfig.workspaceName}
+        onWorkspaceNameChange={(v) => updateField({ workspaceName: v })}
       />
-      <TokenAcquisitionPanel />
+      <TokenAcquisitionPanel tenantId={activeConfig.tenantId} />
       <ArmCallPanel />
       <ArtifactDownloadPanel />
     </div>
