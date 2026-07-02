@@ -1,0 +1,16 @@
+{
+  "name": "desktop",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Electron desktop shell. A thin frontend (composition root) over @soc/core usecases. Phase 0: a stub window.",
+  "main": "main.js",
+  "scripts": {
+    "dev": "electron ."
+  },
+  "dependencies": {
+    "@soc/core": "workspace:*"
+  },
+  "devDependencies": {
+    "electron": "^33.2.1"
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "name": "soc-optimization-toolkit",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace apps/cribl-app",
+    "build": "npm run build --workspaces --if-present",
+    "lint": "oxlint",
+    "package": "npm run package --workspace apps/cribl-app",
+    "local": "npm run start --workspace apps/local-app"
+  }
+}

@@ -1,0 +1,8 @@
+# Product API access declaration. Declare Cribl product API paths your app needs to access.
+# At install time, admins see exactly which platform resources the app will use.
+
+# policies:
+#   - object: '/system/lookups'
+#     actions: ['GET']
+#   - object: '/products/stream/groups'
+#     actions: ['GET']
