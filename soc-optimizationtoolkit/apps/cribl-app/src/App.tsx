@@ -1,7 +1,14 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import { allGranted, evaluatePermissions, REQUIRED_ACTIONS } from '@soc/core';
-import type { PermissionsResponse, RequiredAction } from '@soc/core';
+import {
+  allGranted,
+  EMPTY_AZURE_CONFIG,
+  evaluatePermissions,
+  parseAzureConfig,
+  REQUIRED_ACTIONS,
+  serializeAzureConfig,
+} from '@soc/core';
+import type { AzureConfig, PermissionsResponse, RequiredAction } from '@soc/core';
 
 // Phase 1 spike harness: six sequential diagnostics panels that exercise the
 // Cribl App Platform surface (globals, KV store, proxy header injection,
@@ -58,6 +65,23 @@ function Panel({ index, title, status, output, actionLabel, onAction, children }
 
 function kvUrl(key: string): string {
   return `${window.CRIBL_API_URL}/kvstore/${key}`;
+}
+
+// Load the persisted non-secret config from the single plain KV key 'azureConfig'
+// and normalize it through the pure @soc/core codec. Tolerant: a missing key, a
+// non-ok response, a network error, or an unparseable body all yield
+// EMPTY_AZURE_CONFIG. The client secret is NEVER carried here - it lives only in
+// the encrypted, write-only azureBasic entry and is never read back.
+async function loadAzureConfig(): Promise<AzureConfig> {
+  try {
+    const res = await fetch(kvUrl('azureConfig'));
+    if (!res.ok) {
+      return { ...EMPTY_AZURE_CONFIG };
+    }
+    return parseAzureConfig(await res.text());
+  } catch {
+    return { ...EMPTY_AZURE_CONFIG };
+  }
 }
 
 // Panel 1: report the platform-injected globals and the signed-in user.
@@ -399,17 +423,16 @@ interface ArmTokenResult {
   expires_in?: number;
 }
 
-// Reads the tenant ID from KV and runs the client_credentials/ARM-scope token
-// request. The app sets no Authorization header: proxies.yml injects Basic
-// ${kv.azureBasic} server-side. Returns the parsed token (access_token plus
-// type/expiry) so both the credentials preflight (panel 4) and the token panel
-// (panel 5) share one implementation of the flow.
+// Reads the tenant ID from the persisted azureConfig KV entry and runs the
+// client_credentials/ARM-scope token request. The app sets no Authorization
+// header: proxies.yml injects Basic ${kv.azureBasic} server-side. Returns the
+// parsed token (access_token plus type/expiry) so both the credentials
+// preflight (panel 4) and the token panel (panel 5) share one implementation.
 async function acquireArmToken(): Promise<ArmTokenResult> {
-  const tenantRes = await fetch(kvUrl('azureTenantId'));
-  const tenant = (await tenantRes.text()).trim();
-  if (!tenantRes.ok || tenant === '') {
+  const tenant = (await loadAzureConfig()).tenantId.trim();
+  if (tenant === '') {
     throw new Error(
-      `GET azureTenantId: HTTP ${tenantRes.status} body=${JSON.stringify(tenant)} - save credentials in panel 4 first`
+      'azureConfig has no tenant ID - enter the tenant ID in panel 4 (it is remembered automatically), then retry'
     );
   }
   const form = new URLSearchParams({
@@ -569,6 +592,8 @@ async function validatePermissionsForPath(path: SetupPath, sub: string, rg: stri
 interface AzureCredentialsPanelProps {
   clientId: string;
   onClientIdChange: (value: string) => void;
+  tenantId: string;
+  onTenantIdChange: (value: string) => void;
   setupPath: SetupPath;
   subscriptionId: string;
   rgName: string;
@@ -577,13 +602,15 @@ interface AzureCredentialsPanelProps {
 function AzureCredentialsPanel({
   clientId,
   onClientIdChange,
+  tenantId,
+  onTenantIdChange,
   setupPath,
   subscriptionId,
   rgName,
 }: AzureCredentialsPanelProps) {
-  const [tenantId, setTenantId] = useState('');
   const [clientSecret, setClientSecret] = useState('');
   const [stored, setStored] = useState('checking stored credentials...');
+  const [secretStored, setSecretStored] = useState(false);
   const [validating, setValidating] = useState(false);
   const [status, output, run] = useRunner();
 
@@ -601,15 +628,17 @@ function AzureCredentialsPanel({
       body: JSON.stringify({ prefix: 'azure' }),
     });
     const keysText = await keysRes.text();
-    const tenantRes = await fetch(kvUrl('azureTenantId'));
-    const tenant = tenantRes.ok ? (await tenantRes.text()).trim() : '';
+    const config = await loadAzureConfig();
+    const tenant = config.tenantId.trim();
     const azureBasicPresent = keysText.includes('azureBasic');
     const lines = [
       `Stored in KV for app ID ${window.CRIBL_APP_ID ?? '(unknown)'}:`,
       azureBasicPresent
-        ? '  azureBasic: present (encrypted, not readable back)'
-        : '  azureBasic: MISSING - save credentials below',
-      tenant !== '' ? `  azureTenantId: ${tenant}` : '  azureTenantId: MISSING - save credentials below',
+        ? '  client secret: stored (encrypted, not shown)'
+        : '  client secret: not saved - enter it below and Save client secret',
+      tenant !== ''
+        ? `  tenant ID: ${tenant} (remembered in azureConfig)`
+        : '  tenant ID: not saved - enter it below (remembered automatically)',
       keysText.includes('azureArmToken')
         ? '  azureArmToken: present (encrypted) - a token has been acquired in this context'
         : '  azureArmToken: not yet acquired - run the token panel or re-check here',
@@ -620,8 +649,9 @@ function AzureCredentialsPanel({
   // Auto-run on mount and after a save: report KV state only (no network to Azure).
   const checkStored = useCallback(async () => {
     try {
-      const { lines } = await buildKvReport();
+      const { lines, azureBasicPresent } = await buildKvReport();
       setStored(lines.join('\n'));
+      setSecretStored(azureBasicPresent);
     } catch (err) {
       setStored(`stored-credentials check failed: ${String(err)}`);
     }
@@ -645,8 +675,9 @@ function AzureCredentialsPanel({
           [
             ...baseLines,
             '',
-            'Permission validation skipped: save Azure credentials (client secret and tenant ID)',
-            'above first. Validation acquires a token, which needs azureBasic and azureTenantId in KV.',
+            'Permission validation skipped: save the client secret below and enter the tenant ID',
+            '(it is remembered automatically). Validation acquires a token, which needs the encrypted',
+            'azureBasic entry plus a tenant ID persisted in azureConfig.',
           ].join('\n')
         );
         return;
@@ -678,25 +709,26 @@ function AzureCredentialsPanel({
     }
   }, [buildKvReport, setupPath, subscriptionId, rgName]);
 
-  const save = () =>
+  // Save ONLY the client secret: write the encrypted, write-only azureBasic
+  // entry (base64 of clientId:clientSecret). The non-secret config fields
+  // (client ID, tenant ID, subscription, resource group, setup path) are NOT
+  // written here - App autosaves them to the plain azureConfig entry.
+  const saveSecret = () =>
     run(async () => {
-      if (tenantId === '' || clientId === '' || clientSecret === '') {
-        throw new Error('tenantId, clientId, and clientSecret are all required');
+      if (clientId === '' || clientSecret === '') {
+        throw new Error('clientId and clientSecret are both required to save the client secret');
       }
-      const lines: string[] = [];
-      const put = async (label: string, key: string, body: string) => {
-        const res = await fetch(kvUrl(key), { method: 'PUT', body });
-        const text = await res.text();
-        lines.push(`${label}: HTTP ${res.status}`);
-        if (!res.ok) {
-          throw new Error([...lines, `body: ${text}`].join('\n'));
-        }
-      };
-      await put('PUT azureBasic?encrypted=true', 'azureBasic?encrypted=true', btoa(`${clientId}:${clientSecret}`));
-      await put('PUT azureTenantId', 'azureTenantId', tenantId);
+      const res = await fetch(kvUrl('azureBasic?encrypted=true'), {
+        method: 'PUT',
+        body: btoa(`${clientId}:${clientSecret}`),
+      });
+      const text = await res.text();
+      if (!res.ok) {
+        throw new Error(`PUT azureBasic?encrypted=true: HTTP ${res.status}\nbody: ${text}`);
+      }
       setClientSecret('');
       await checkStored();
-      return [...lines, 'Saved. Secret input cleared.'].join('\n');
+      return `PUT azureBasic?encrypted=true: HTTP ${res.status}\nSaved. Secret input cleared.`;
     });
 
   return (
@@ -705,21 +737,24 @@ function AzureCredentialsPanel({
       title="Azure credentials"
       status={status}
       output={output}
-      actionLabel="Save credentials"
-      onAction={() => void save()}
+      actionLabel="Save client secret"
+      onAction={() => void saveSecret()}
     >
       <p className="panel-desc">
         The client secret is combined with the client ID as base64(clientId:clientSecret) and stored
-        write-only encrypted in the app KV store (key azureBasic). It is injected into outbound token
-        requests server-side by the platform proxy and can never be read back by the browser.
-        The tenant ID is stored as a plain KV entry (key azureTenantId).
-        Credentials persist server-side per app context: the Live Preview dev app and the
-        installed app have separate KV stores, so save once in each context you test.
-        Re-check and validate permissions reports the stored KV keys and then, if credentials
-        are present, acquires a token and checks the caller&apos;s EFFECTIVE Azure permissions for
-        the setup path selected in panel 3 - it evaluates the actions actually allowed (via the
-        RBAC permissions API), not role names, so custom or lookalike roles are handled correctly.
-        See panel 3 for creating the app registration and assigning its roles.
+        write-only encrypted in the app KV store (key azureBasic) when you click Save client secret. It
+        is injected into outbound token requests server-side by the platform proxy and can never be
+        read back or shown in the browser - if a secret is already stored the field stays blank, so
+        enter a new value only to replace it. The other fields (client ID, tenant ID, subscription,
+        resource group, setup path) are non-secret configuration and are remembered automatically in
+        the plain azureConfig KV entry, so they need no save button and reappear on the next load.
+        Credentials persist server-side per app context: the Live Preview dev app and the installed app
+        have separate KV stores, so save the secret once in each context you test. Re-check and
+        validate permissions reports the stored KV state and then, if credentials are present, acquires
+        a token and checks the caller&apos;s EFFECTIVE Azure permissions for the setup path selected in
+        panel 3 - it evaluates the actions actually allowed (via the RBAC permissions API), not role
+        names, so custom or lookalike roles are handled correctly. See panel 3 for creating the app
+        registration and assigning its roles.
       </p>
       <pre className="result">{stored}</pre>
       <div className="panel-controls">
@@ -737,7 +772,7 @@ function AzureCredentialsPanel({
           <input
             type="text"
             value={tenantId}
-            onChange={(e) => setTenantId(e.target.value)}
+            onChange={(e) => onTenantIdChange(e.target.value)}
             autoComplete="off"
             spellCheck={false}
           />
@@ -759,6 +794,7 @@ function AzureCredentialsPanel({
             value={clientSecret}
             onChange={(e) => setClientSecret(e.target.value)}
             autoComplete="new-password"
+            placeholder={secretStored ? 'stored - enter a new value to replace' : ''}
           />
         </label>
       </div>
@@ -901,13 +937,78 @@ function ArtifactDownloadPanel() {
 
 function App() {
   // Shared between the app registration panel (az script) and the credentials
-  // panel (KV save + permission preflight) so the client ID, setup path,
-  // subscription, and resource group are typed once in panel 3 and reused by
-  // panel 4's effective-permission validation.
+  // panel (secret save + permission preflight). These five non-secret fields ARE
+  // the AzureConfig: they are hydrated from, and debounce-autosaved to, the
+  // single plain 'azureConfig' KV entry. The client secret is never part of this
+  // state - it is handled write-only in panel 4.
   const [clientId, setClientId] = useState('');
+  const [tenantId, setTenantId] = useState('');
   const [setupPath, setSetupPath] = useState<SetupPath>('existing');
   const [subscriptionId, setSubscriptionId] = useState('');
   const [rgName, setRgName] = useState('');
+  // Gates the autosave effect: no write happens until the persisted config has
+  // been loaded, so the initial empty state can never clobber stored values.
+  const [hydrated, setHydrated] = useState(false);
+  // The config we know is already persisted (serialized). Initialized when
+  // hydration completes so the just-loaded values are never redundantly written.
+  const lastPersistedRef = useRef<string | null>(null);
+
+  // Hydrate the non-secret config once on mount. The client secret is never
+  // loaded (it is write-only); only these five fields are restored.
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const config = await loadAzureConfig();
+      if (cancelled) {
+        return;
+      }
+      setClientId(config.clientId);
+      setTenantId(config.tenantId);
+      setSubscriptionId(config.subscriptionId);
+      setRgName(config.resourceGroup);
+      setSetupPath(config.setupPath);
+      lastPersistedRef.current = serializeAzureConfig(config);
+      setHydrated(true);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Debounced autosave. Inert until hydrated. Once hydrated, if the current
+  // config differs from what is persisted, wait ~800ms then PUT the plain
+  // azureConfig entry and record it. The timeout is cleared on every change and
+  // on unmount, so only a settled edit is written and no redundant write of the
+  // just-hydrated values occurs.
+  useEffect(() => {
+    if (!hydrated) {
+      return;
+    }
+    const current = serializeAzureConfig({
+      clientId,
+      tenantId,
+      subscriptionId,
+      resourceGroup: rgName,
+      setupPath,
+    });
+    if (current === lastPersistedRef.current) {
+      return;
+    }
+    const timer = setTimeout(() => {
+      void (async () => {
+        try {
+          const res = await fetch(kvUrl('azureConfig'), { method: 'PUT', body: current });
+          if (res.ok) {
+            lastPersistedRef.current = current;
+          }
+        } catch {
+          // Best-effort autosave; the next edit retries.
+        }
+      })();
+    }, 800);
+    return () => clearTimeout(timer);
+  }, [hydrated, clientId, tenantId, subscriptionId, rgName, setupPath]);
+
   return (
     <div className="harness">
       <header className="harness-header">
@@ -933,6 +1034,8 @@ function App() {
       <AzureCredentialsPanel
         clientId={clientId}
         onClientIdChange={setClientId}
+        tenantId={tenantId}
+        onTenantIdChange={setTenantId}
         setupPath={setupPath}
         subscriptionId={subscriptionId}
         rgName={rgName}
