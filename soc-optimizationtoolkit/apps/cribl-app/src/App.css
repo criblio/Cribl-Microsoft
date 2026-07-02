@@ -58,6 +58,23 @@ body {
   margin-bottom: 12px;
 }
 
+.perm-list {
+  font-size: 13px;
+  line-height: 20px;
+  color: #595959;
+  margin: 0 0 12px;
+  padding-left: 20px;
+}
+
+.perm-list li {
+  margin-bottom: 6px;
+}
+
+.perm-list strong {
+  color: #262626;
+  font-weight: 600;
+}
+
 .panel-controls {
   display: flex;
   align-items: center;

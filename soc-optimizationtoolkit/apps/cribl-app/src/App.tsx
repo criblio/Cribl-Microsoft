@@ -250,6 +250,27 @@ function AzureCredentialsPanel() {
         Credentials persist server-side per app context: the Live Preview dev app and the
         installed app have separate KV stores, so save once in each context you test.
       </p>
+      <p className="panel-desc">
+        App registration setup: in Entra ID, create the registration under App registrations
+        (New registration), add a client secret under Certificates and secrets, then assign
+        these Azure roles to the service principal:
+      </p>
+      <ul className="perm-list">
+        <li>
+          Core onboarding (panels 4-5, DCR deployment): Monitoring Contributor and Log Analytics
+          Contributor on the target workspace resource group, plus Reader on the subscription.
+        </li>
+        <li>
+          Lab provisioning (create-new-RG mode): <strong>Contributor at the subscription scope</strong>{' '}
+          and <strong>RBAC Administrator at the subscription scope</strong>. Resource group creation
+          is a subscription-level action, and the lab TTL self-destruct assigns its delete role at
+          deploy time.
+        </li>
+        <li>
+          Least-privilege alternative for labs: bring-your-own-RG mode needs only Contributor on an
+          admin-pre-created lab resource group.
+        </li>
+      </ul>
       <pre className="result">{stored}</pre>
       <div className="panel-controls">
         <button className="run-button" onClick={() => void checkStored()}>
