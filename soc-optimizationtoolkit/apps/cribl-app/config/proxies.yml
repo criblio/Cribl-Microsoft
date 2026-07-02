@@ -25,3 +25,32 @@
 #   # endpoints. Set to `false` only when targeting trusted internal endpoints
 #   # that present self-signed or otherwise untrusted certificates.
 #   rejectUnauthorized: true
+
+# Azure AD token endpoint (client_credentials flow using client_secret_basic).
+# The proxy strips any Authorization header the browser sends, so the Basic
+# credential - base64(clientId:clientSecret), written encrypted to the app KV
+# store by the harness - is injected server-side at request time.
+# The headers allowlist forwards ONLY Content-Type/Accept: the browser's Origin
+# header must not reach Azure AD, or it rejects confidential-client token
+# redemption with AADSTS9002326 (cross-origin redemption is SPA-only).
+login.microsoftonline.com:
+  timeout: 30000
+  headers:
+    inject:
+      Authorization: '`Basic ${kv.azureBasic}`'
+    allowlist:
+      - Content-Type
+      - Accept
+
+# Azure Resource Manager. The ARM bearer token is stored encrypted in the app
+# KV store (azureArmToken) after the token flow above and injected here
+# server-side, because client-sent Authorization headers are stripped by the
+# proxy and must never be set in app code.
+management.azure.com:
+  timeout: 30000
+  headers:
+    inject:
+      Authorization: '`Bearer ${kv.azureArmToken}`'
+    allowlist:
+      - Content-Type
+      - Accept
