@@ -14,3 +14,5 @@ export * from "./domain/azure-config";
 export * from "./domain/azure-resource-id";
 export * from "./domain/azure-profiles";
 export * from "./domain/connection-invalidation";
+export * from "./domain/dataflow-diagram";
+export * from "./domain/change-request";

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import {
   allGranted,
+  appRegistrationRequest,
   computeInvalidation,
   deriveResourceGroup,
   EMPTY_AZURE_CONFIG,
@@ -14,6 +15,8 @@ import {
   removeProfile,
   renameProfile,
   REQUIRED_ACTIONS,
+  resourceCreationRequest,
+  roleAssignmentRequest,
   serializeProfileStore,
   setActiveProfile,
   updateActiveConfig,
@@ -21,11 +24,19 @@ import {
 } from '@soc/core';
 import type {
   AzureConfig,
+  ChangeRequestContext,
   ConnectionProfile,
+  DiagramFormat,
   PermissionsResponse,
   ProfileStore,
   RequiredAction,
 } from '@soc/core';
+
+// The app's display name, shown in generated change-request tickets and the
+// architecture diagrams embedded in them. The change-request text and diagrams
+// are produced entirely by @soc/core; the app only supplies this name and the
+// active connection's non-secret config.
+const APP_NAME = 'SOC Optimization Toolkit';
 
 // Phase 1 harness: seven sequential diagnostics panels that exercise the Cribl
 // App Platform surface (globals, KV store, proxy header injection, Azure AD
@@ -293,6 +304,112 @@ function buildAzScript(path: SetupPath, clientId: string, subscriptionId: string
   ].join('\n');
 }
 
+// Reusable "generate a change request" block for operators who must ASK another
+// team to perform a setup step (create the app registration, assign roles, or
+// create resources) rather than doing it themselves. The ticket body and the
+// architecture diagram embedded in it come entirely from @soc/core via the
+// `generate` closure; this component only offers the ASCII/Mermaid format
+// toggle and handles rendering, clipboard copy, and download. The generated
+// text is shown in a monospace <pre> so the embedded ASCII diagram lines up.
+interface ChangeRequestBlockProps {
+  title: string;
+  description: string;
+  // Downloaded filename; also namespaces this block's diagram-format radio group
+  // so multiple blocks on one page do not collide.
+  filename: string;
+  generate: (format: DiagramFormat) => string;
+}
+
+function ChangeRequestBlock({ title, description, filename, generate }: ChangeRequestBlockProps) {
+  const [format, setFormat] = useState<DiagramFormat>('ascii');
+  const [text, setText] = useState('');
+  const [feedback, setFeedback] = useState('');
+
+  // Regenerate immediately when the format toggles (only if already generated)
+  // so the embedded diagram matches where the user will paste the ticket.
+  const onFormatChange = (next: DiagramFormat) => {
+    setFormat(next);
+    if (text !== '') {
+      setText(generate(next));
+    }
+  };
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setFeedback('Copied to clipboard.');
+    } catch (err) {
+      setFeedback(`Copy failed: ${String(err)}`);
+    }
+  };
+
+  // Download the ticket as plain text so it can be attached or pasted into a
+  // ticketing system without the terminal multi-line paste prompt.
+  const download = () => {
+    const blob = new Blob([text], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = filename;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+    setFeedback(`Download dispatched (${filename}).`);
+  };
+
+  const groupName = `diagram-format-${filename}`;
+  return (
+    <div className="change-request">
+      <span className="field-label">{title}</span>
+      <p className="panel-desc">{description}</p>
+      <div className="path-options">
+        <label className="path-option">
+          <input
+            type="radio"
+            name={groupName}
+            checked={format === 'ascii'}
+            onChange={() => onFormatChange('ascii')}
+          />
+          <span>ASCII diagram (plain-text tickets or email)</span>
+        </label>
+        <label className="path-option">
+          <input
+            type="radio"
+            name={groupName}
+            checked={format === 'mermaid'}
+            onChange={() => onFormatChange('mermaid')}
+          />
+          <span>Mermaid diagram (Markdown that renders Mermaid)</span>
+        </label>
+      </div>
+      <div className="panel-controls">
+        <button
+          className="run-button"
+          onClick={() => {
+            setText(generate(format));
+            setFeedback('');
+          }}
+        >
+          Generate change request
+        </button>
+        {text !== '' && (
+          <>
+            <button className="run-button" onClick={() => void copy()}>
+              Copy
+            </button>
+            <button className="run-button" onClick={download}>
+              Download {filename}
+            </button>
+          </>
+        )}
+      </div>
+      {text !== '' && <pre className="result">{text}</pre>}
+      {feedback !== '' && <p className="panel-desc">{feedback}</p>}
+    </div>
+  );
+}
+
 // Panel 3: create the Entra app registration, then CONNECT this app to it. The
 // identity inputs (tenant ID, client ID, client secret) plus a single primary
 // action, Save and connect, write the encrypted write-only azureBasic entry
@@ -311,6 +428,9 @@ interface AppRegistrationConnectPanelProps {
   onTenantIdChange: (value: string) => void;
   setupPath: SetupPath;
   onSetupPathChange: (value: SetupPath) => void;
+  // The active connection's change-request context (app name + non-secret
+  // config), used to generate the app-registration ticket for the IAM team.
+  ctx: ChangeRequestContext;
 }
 
 function AppRegistrationConnectPanel({
@@ -324,6 +444,7 @@ function AppRegistrationConnectPanel({
   onTenantIdChange,
   setupPath,
   onSetupPathChange,
+  ctx,
 }: AppRegistrationConnectPanelProps) {
   const [clientSecret, setClientSecret] = useState('');
   const [status, output, run] = useRunner();
@@ -390,6 +511,17 @@ function AppRegistrationConnectPanel({
         Create the Entra app registration, then connect this app to it with the tenant ID, client ID,
         and a client secret. Azure roles are granted in panel 4, after you discover your subscription.
       </p>
+      <ChangeRequestBlock
+        title="Cannot create the app registration yourself? Generate a change request"
+        description={
+          'Produce a paste-ready ticket for the team that manages Entra ID. It asks them to create a ' +
+          'single-tenant daemon confidential client (no redirect URI), create a client secret, and ' +
+          'securely share the tenant id, client id, and secret. The current tenant/client ids are ' +
+          'included; blank fields appear as clear placeholders.'
+        }
+        filename="app-registration-request.txt"
+        generate={(format) => appRegistrationRequest(ctx, { diagramFormat: format })}
+      />
       <ol className="setup-steps">
         <li>
           In Entra ID, open App registrations and select New registration. Single tenant;
@@ -746,6 +878,9 @@ interface ResourceSelectionPanelProps {
   workspaceName: string;
   onWorkspaceNameChange: (value: string) => void;
   connectNonce: number;
+  // The active connection's change-request context (app name + non-secret
+  // config), used to generate the role-assignment and resource-creation tickets.
+  ctx: ChangeRequestContext;
 }
 
 function ResourceSelectionPanel({
@@ -759,6 +894,7 @@ function ResourceSelectionPanel({
   workspaceName,
   onWorkspaceNameChange,
   connectNonce,
+  ctx,
 }: ResourceSelectionPanelProps) {
   const [stored, setStored] = useState('checking stored credentials...');
   const [validating, setValidating] = useState(false);
@@ -912,18 +1048,6 @@ function ResourceSelectionPanel({
     [tenantId, subscriptionId, setupPath, loadDependent, runDiscover]
   );
 
-  // Auto-run discovery ONCE after a successful connect in panel 3. connectNonce
-  // increments on each connect; the ref guard fires the effect only on an actual
-  // increment, never on mount (prev === current) or on unrelated re-renders.
-  const prevConnectNonceRef = useRef(connectNonce);
-  useEffect(() => {
-    if (prevConnectNonceRef.current === connectNonce) {
-      return;
-    }
-    prevConnectNonceRef.current = connectNonce;
-    void discover();
-  }, [connectNonce, discover]);
-
   // Selecting a subscription sets the shared subscriptionId and re-runs the
   // dependent query for the current setup path.
   const onSubscriptionSelect = (value: string) => {
@@ -1007,6 +1131,23 @@ function ResourceSelectionPanel({
   useEffect(() => {
     void checkStored();
   }, [checkStored]);
+
+  // Auto-run discovery ONCE after a successful connect in panel 3, and refresh
+  // the stored-credentials KV report at the same time so it reflects the just-
+  // saved secret/token instead of staying stale until a manual Re-check.
+  // connectNonce increments on each connect; the ref guard fires only on an
+  // actual increment, never on mount (prev === current) or on unrelated
+  // re-renders (e.g. when checkStored's identity changes as tenantId changes).
+  // Declared AFTER discover and checkStored so both are in scope (no TDZ).
+  const prevConnectNonceRef = useRef(connectNonce);
+  useEffect(() => {
+    if (prevConnectNonceRef.current === connectNonce) {
+      return;
+    }
+    prevConnectNonceRef.current = connectNonce;
+    void discover();
+    void checkStored();
+  }, [connectNonce, discover, checkStored]);
 
   // Combined preflight: the KV report, then (if credentials are present) acquire
   // a token, store it so the proxy can inject it as Bearer, and validate the
@@ -1103,6 +1244,26 @@ function ResourceSelectionPanel({
         after you Save and connect in panel 3; use Discover / refresh from Azure to re-run it after
         granting roles.
       </p>
+      <ChangeRequestBlock
+        title="Cannot assign roles yourself? Generate a change request"
+        description={
+          'The human-readable companion to the az CLI script below: a paste-ready ticket asking a team ' +
+          'with RBAC rights to assign exactly the roles this setup path requires, at the named scopes, ' +
+          'with a justification per role. Blank fields appear as clear placeholders.'
+        }
+        filename="role-assignment-request.txt"
+        generate={(format) => roleAssignmentRequest(ctx, { diagramFormat: format })}
+      />
+      <ChangeRequestBlock
+        title="Need a resource group or Event Hub created? Generate a change request"
+        description={
+          'A paste-ready ticket asking for the Azure resources this app needs but you may lack rights ' +
+          'to create: for the new-lab-RG path a resource group with a mandatory TTL auto-delete, plus ' +
+          'an Event Hub namespace for the diagnostic-settings export path.'
+        }
+        filename="resource-creation-request.txt"
+        generate={(format) => resourceCreationRequest(ctx, { diagramFormat: format })}
+      />
       <div className="panel-controls">
         <button
           className="run-button"
@@ -1485,6 +1646,10 @@ function App() {
 
   const activeConfig = getActiveConfig(store);
   const activeProfile = getActiveProfile(store);
+  // The change-request context handed to panels 3 and 4: the fixed app name plus
+  // the active connection's non-secret config. Re-derived each render so the
+  // generated tickets and their embedded diagrams reflect the current inputs.
+  const changeRequestCtx: ChangeRequestContext = { appName: APP_NAME, config: activeConfig };
   const secretLive = liveSecretProfileId !== null && liveSecretProfileId === store.activeProfileId;
   // The live secret is still marked stored, but the active connection's identity
   // has been edited away from what that secret authenticates. Do NOT auto-clear;
@@ -1753,6 +1918,7 @@ function App() {
         onTenantIdChange={(v) => updateField({ tenantId: v })}
         setupPath={activeConfig.setupPath}
         onSetupPathChange={(v) => updateField({ setupPath: v })}
+        ctx={changeRequestCtx}
       />
       <ResourceSelectionPanel
         key={`resources-${store.activeProfileId ?? 'none'}`}
@@ -1766,6 +1932,7 @@ function App() {
         workspaceName={activeConfig.workspaceName}
         onWorkspaceNameChange={(v) => updateField({ workspaceName: v })}
         connectNonce={connectNonce}
+        ctx={changeRequestCtx}
       />
       <TokenAcquisitionPanel tenantId={activeConfig.tenantId} />
       <ArmCallPanel />
