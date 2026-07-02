@@ -9,6 +9,10 @@ Standing gates for every phase:
 - CONTEXT.md files and ADRs updated when boundaries or decisions change.
 - No emojis anywhere.
 
+## Flagship vertical: Azure Native Source Onboarding
+
+A content-preserving onboarding of Azure-native diagnostic sources (e.g. Entra Non-Interactive Sign-in logs) through Cribl into Sentinel. Full plan: [features/azure-native-onboarding.md](features/azure-native-onboarding.md). Slots as a dedicated vertical AFTER Phase 2 (needs the full DCR engine + custom tables) and pulls the LOG-07/03/16 Event Hub source path forward from Phase 4. Gate before its walking-skeleton slice: empirically validate the two live-Azure unknowns (do native Entra tables accept a Kind:Direct DCR at all; will a workspace register a function-alias equal to a native table name). Note: for the Entra flagship, Mode A (clean native-table ingestion) is NOT available today - no Entra identity table is on the Logs Ingestion API supported-tables list - so it is Mode B (custom _CL table + function-alias/ASIM) only, and UEBA cannot follow a rerouted table.
+
 ## Phase 0: Workspace foundation - DONE 2026-07-01
 
 npm-workspaces restructure (packages/core, packages/ui, apps/cribl-app, apps/local-app), CONTEXT.md per workspace, ADR-0001, build and .tgz packaging verified.
