@@ -151,6 +151,8 @@ A "Labs" feature module: provision disposable Azure test environments from the a
 
 Cost guardrails matter here: the TTL self-destruct pattern (LAB-02) should be mandatory, not optional, when deployed from the app.
 
+Permission design (2026-07-02): the lab wizard offers two modes because RG creation is subscription-scoped. Create-new-RG mode needs Contributor plus RBAC Administrator at the subscription (the TTL Logic App identity receives its RG-delete role at deploy time); bring-your-own-RG mode needs only Contributor on an admin-pre-created RG with the TTL identity rights pre-assigned - the least-privilege path for security-conscious customers.
+
 ### Drop (platform-provided or obsolete)
 
 All 21 platform-provided items: Azure/Cribl auth plumbing (DCR-23, ENG-27, LKP-03 — the platform proxy injects auth), Electron shell/IPC/file/log infra (ENG-44, ENG-47 through ENG-51, GUI-31), EDR blocklist and crash detection (ENG-22 — no local processes to block), console menu frameworks (VNF-04, PKG-03, LOG-17, LOG-18, LAB-15), CLI override shim (DCR-04), root launchers, and the stale v1 CI workflow.
@@ -183,6 +185,7 @@ Cribl Apps (Preview) run only on Cribl.Cloud leaders (docs.cribl.io/apps). Every
 - The proxy's SSRF protections block private and reserved IPs, and Cribl.Cloud has no route into customer networks. Anything private-only is unreachable from the app: on-prem LDAP (hence the Graph redesign for LKP-02), private-endpoint-only workspaces, internal Git servers. Note the AMPLS features (DCR-17, LAB-06) are unaffected: they configure Private Link through the public ARM management plane; the private data path belongs to Cribl workers, not the app.
 - Azure authentication works via standard OAuth2 client-credentials: the app POSTs to login.microsoftonline.com/{tenant}/oauth2/v2.0/token through the proxy using a service principal, holds the ~1-hour access token in memory, and calls management.azure.com with it. This is the same service principal model the repo already uses (azure-parameters.json tenant/client/secret, Monitoring Metrics Publisher role, KnowledgeArticles app-registration guides). The client secret is stored in the app's KV store with encrypted=true (PUT /kvstore/key?encrypted=true); encrypted entries are write-only from the client (reads return a redacted placeholder) and are resolved server-side only by proxies.yml header-injection expressions. Because of that write-only semantic, the token request must carry the credential in a header, not the POST body: store base64(clientId:clientSecret) encrypted in KV and inject Authorization: Basic ${kv.azureBasic} on login.microsoftonline.com requests (the Microsoft identity platform accepts client_secret_basic). The secret never exists in browser code; the app only ever handles short-lived access tokens. Device-code flow is the fallback if a customer requires delegated (per-user) permissions instead of a service principal.
 - Admins see and approve every proxies.yml domain and policies.yml path at install time, so the external surface (login.microsoftonline.com, management.azure.com, graph.microsoft.com, api.github.com, api.anthropic.com, raw.githubusercontent.com) is an explicit, reviewable contract.
+- Discovered in live testing (2026-07-02): the proxy forwards the browser's Origin header upstream by default. Azure AD rejects confidential-client token redemption on requests carrying an Origin (AADSTS9002326, SPA-only rule), so every Azure-facing proxies.yml entry must set a headers allowlist (Content-Type/Accept only) to keep Origin from reaching the upstream. Do NOT work around this by converting the app registration to SPA - client_credentials is not permitted cross-origin at all.
 
 ## Onboarding requirements (added per review, 2026-07-01)
 
@@ -210,7 +213,8 @@ The wizard shows only the rows for features the user enables (progressive, least
 | Policy initiatives, diagnostic settings at scale, remediation (LOG-02 through LOG-06, LOG-14) | Subscription or management group | Resource Policy Contributor + Monitoring Contributor |
 | Entra ID tenant diagnostic settings (LOG-07) | Tenant | Entra directory role: Security Administrator (elevated; keep as guided step) |
 | Defender for Cloud continuous export (LOG-08) | Subscription | Security Admin |
-| Lab provisioning (LAB-*) | Dedicated lab resource group | Contributor (TTL Logic App identity gets scoped delete rights) |
+| Lab provisioning, create-new-RG mode (LAB-01/02) | Subscription | Contributor (RG creation is subscription-scoped) + RBAC Administrator (the TTL self-destruct Logic App identity is granted its RG-delete role at deploy time, which needs roleAssignments/write) |
+| Lab provisioning, bring-your-own-RG mode | Pre-created lab resource group | Contributor on that RG only; the admin pre-assigns the TTL identity its delete rights, so no subscription-scope or RBAC rights are needed |
 | KQL validation and monitoring (ENG-32, GUI-17/18, SYN drift checks) | Workspace | Log Analytics Reader |
 | AD user lookups via Graph (LKP-02 redesign) | Tenant (Graph) | User.Read.All application permission, admin consent |
 | O365 app permission validation (DOC-02) | Tenant (Graph) | Application.Read.All application permission, admin consent |
