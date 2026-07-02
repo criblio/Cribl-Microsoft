@@ -175,7 +175,42 @@ function AzureCredentialsPanel() {
   const [tenantId, setTenantId] = useState('');
   const [clientId, setClientId] = useState('');
   const [clientSecret, setClientSecret] = useState('');
+  const [stored, setStored] = useState('checking stored credentials...');
   const [status, output, run] = useRunner();
+
+  // Report what already exists in THIS app context's KV store. The store is
+  // scoped per app ID: Live Preview (__dev__ prefix) and the installed app
+  // have separate stores, so credentials saved in one are absent in the other.
+  const checkStored = useCallback(async () => {
+    try {
+      const keysRes = await fetch(`${window.CRIBL_API_URL}/kvstore/keys`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prefix: 'azure' }),
+      });
+      const keysText = await keysRes.text();
+      const tenantRes = await fetch(kvUrl('azureTenantId'));
+      const tenant = tenantRes.ok ? (await tenantRes.text()).trim() : '';
+      setStored(
+        [
+          `Stored in KV for app ID ${window.CRIBL_APP_ID ?? '(unknown)'}:`,
+          keysText.includes('azureBasic')
+            ? '  azureBasic: present (encrypted, not readable back)'
+            : '  azureBasic: MISSING - save credentials below',
+          tenant !== '' ? `  azureTenantId: ${tenant}` : '  azureTenantId: MISSING - save credentials below',
+          keysText.includes('azureArmToken')
+            ? '  azureArmToken: present (encrypted) - panel 4 has run in this context'
+            : '  azureArmToken: not yet acquired - run panel 4',
+        ].join('\n')
+      );
+    } catch (err) {
+      setStored(`stored-credentials check failed: ${String(err)}`);
+    }
+  }, []);
+
+  useEffect(() => {
+    void checkStored();
+  }, [checkStored]);
 
   const save = () =>
     run(async () => {
@@ -194,6 +229,7 @@ function AzureCredentialsPanel() {
       await put('PUT azureBasic?encrypted=true', 'azureBasic?encrypted=true', btoa(`${clientId}:${clientSecret}`));
       await put('PUT azureTenantId', 'azureTenantId', tenantId);
       setClientSecret('');
+      await checkStored();
       return [...lines, 'Saved. Secret input cleared.'].join('\n');
     });
 
@@ -211,7 +247,15 @@ function AzureCredentialsPanel() {
         write-only encrypted in the app KV store (key azureBasic). It is injected into outbound token
         requests server-side by the platform proxy and can never be read back by the browser.
         The tenant ID is stored as a plain KV entry (key azureTenantId).
+        Credentials persist server-side per app context: the Live Preview dev app and the
+        installed app have separate KV stores, so save once in each context you test.
       </p>
+      <pre className="result">{stored}</pre>
+      <div className="panel-controls">
+        <button className="run-button" onClick={() => void checkStored()}>
+          Re-check stored
+        </button>
+      </div>
       <div className="form-grid">
         <label className="field">
           <span className="field-label">Tenant ID</span>
