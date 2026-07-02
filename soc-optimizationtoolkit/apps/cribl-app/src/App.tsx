@@ -226,6 +226,25 @@ function AppRegistrationPanel({ clientId, onClientIdChange }: AppRegistrationPan
         ? 'Copied to clipboard - NOTE: some fields are blank, so the script still contains <placeholders>.'
         : 'Copied to clipboard. Run it in a shell with az logged into the test tenant.';
     });
+  // Download avoids the terminal multi-line paste prompt and lets the script be
+  // reviewed and re-run: bash assign-roles.sh, or run the az lines in PowerShell.
+  const downloadScript = () =>
+    run(async () => {
+      const body = `#!/usr/bin/env bash\nset -euo pipefail\n\n${script}\n`;
+      const blob = new Blob([body], { type: 'application/x-sh' });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = 'assign-roles.sh';
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+      const incomplete = script.includes('<');
+      return incomplete
+        ? 'Download dispatched (assign-roles.sh) - NOTE: some fields are blank, so it still contains <placeholders>.'
+        : 'Download dispatched (assign-roles.sh). Run: bash assign-roles.sh (or run the az lines in PowerShell).';
+    });
 
   return (
     <Panel
@@ -344,9 +363,16 @@ function AppRegistrationPanel({ clientId, onClientIdChange }: AppRegistrationPan
         )}
       </div>
       <pre className="result">{script}</pre>
+      <div className="panel-controls">
+        <button className="run-button" onClick={() => void downloadScript()}>
+          Download assign-roles.sh
+        </button>
+      </div>
       <p className="panel-desc">
-        Role assignments can take a couple of minutes to propagate. The client ID entered here
-        pre-fills the credentials panel below; enter the tenant ID and secret there when done.
+        Copy or download the script - download avoids the terminal multi-line paste prompt and lets
+        you review it first. If you do paste, choose Paste (not Paste as one line, which would join
+        the commands). Role assignments can take a couple of minutes to propagate. The client ID
+        entered here pre-fills the credentials panel below; enter the tenant ID and secret there.
       </p>
     </Panel>
   );
