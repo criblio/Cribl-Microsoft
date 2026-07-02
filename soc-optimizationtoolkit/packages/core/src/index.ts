@@ -9,3 +9,4 @@ export * from "./ports";
 export * from "./testing";
 export * from "./domain/dcr-naming";
 export * from "./domain/schema-mapping";
+export * from "./domain/azure-permissions";

@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
+import { allGranted, evaluatePermissions, REQUIRED_ACTIONS } from '@soc/core';
+import type { PermissionsResponse, RequiredAction } from '@soc/core';
 
 // Phase 1 spike harness: six sequential diagnostics panels that exercise the
 // Cribl App Platform surface (globals, KV store, proxy header injection,
@@ -210,12 +212,24 @@ function buildAzScript(path: SetupPath, clientId: string, subscriptionId: string
 interface AppRegistrationPanelProps {
   clientId: string;
   onClientIdChange: (value: string) => void;
+  setupPath: SetupPath;
+  onSetupPathChange: (value: SetupPath) => void;
+  subscriptionId: string;
+  onSubscriptionIdChange: (value: string) => void;
+  rgName: string;
+  onRgNameChange: (value: string) => void;
 }
 
-function AppRegistrationPanel({ clientId, onClientIdChange }: AppRegistrationPanelProps) {
-  const [setupPath, setSetupPath] = useState<SetupPath>('existing');
-  const [subscriptionId, setSubscriptionId] = useState('');
-  const [rgName, setRgName] = useState('');
+function AppRegistrationPanel({
+  clientId,
+  onClientIdChange,
+  setupPath,
+  onSetupPathChange,
+  subscriptionId,
+  onSubscriptionIdChange,
+  rgName,
+  onRgNameChange,
+}: AppRegistrationPanelProps) {
   const [status, output, run] = useRunner();
   const script = buildAzScript(setupPath, clientId, subscriptionId, rgName);
   const copyScript = () =>
@@ -278,7 +292,7 @@ function AppRegistrationPanel({ clientId, onClientIdChange }: AppRegistrationPan
             type="radio"
             name="setup-path"
             checked={setupPath === 'existing'}
-            onChange={() => setSetupPath('existing')}
+            onChange={() => onSetupPathChange('existing')}
           />
           <span>I have an existing Log Analytics workspace to target</span>
         </label>
@@ -287,7 +301,7 @@ function AppRegistrationPanel({ clientId, onClientIdChange }: AppRegistrationPan
             type="radio"
             name="setup-path"
             checked={setupPath === 'lab-new-rg'}
-            onChange={() => setSetupPath('lab-new-rg')}
+            onChange={() => onSetupPathChange('lab-new-rg')}
           />
           <span>No workspace yet - a lab will create its own resource group and workspace</span>
         </label>
@@ -296,7 +310,7 @@ function AppRegistrationPanel({ clientId, onClientIdChange }: AppRegistrationPan
             type="radio"
             name="setup-path"
             checked={setupPath === 'lab-byo-rg'}
-            onChange={() => setSetupPath('lab-byo-rg')}
+            onChange={() => onSetupPathChange('lab-byo-rg')}
           />
           <span>No workspace yet - deploy a lab into a pre-created resource group</span>
         </label>
@@ -342,7 +356,7 @@ function AppRegistrationPanel({ clientId, onClientIdChange }: AppRegistrationPan
           <input
             type="text"
             value={subscriptionId}
-            onChange={(e) => setSubscriptionId(e.target.value)}
+            onChange={(e) => onSubscriptionIdChange(e.target.value)}
             autoComplete="off"
             spellCheck={false}
           />
@@ -355,7 +369,7 @@ function AppRegistrationPanel({ clientId, onClientIdChange }: AppRegistrationPan
             <input
               type="text"
               value={rgName}
-              onChange={(e) => setRgName(e.target.value)}
+              onChange={(e) => onRgNameChange(e.target.value)}
               autoComplete="off"
               spellCheck={false}
             />
@@ -378,53 +392,291 @@ function AppRegistrationPanel({ clientId, onClientIdChange }: AppRegistrationPan
   );
 }
 
+// Parsed subset of the Azure AD token endpoint response the harness consumes.
+interface ArmTokenResult {
+  access_token: string;
+  token_type?: string;
+  expires_in?: number;
+}
+
+// Reads the tenant ID from KV and runs the client_credentials/ARM-scope token
+// request. The app sets no Authorization header: proxies.yml injects Basic
+// ${kv.azureBasic} server-side. Returns the parsed token (access_token plus
+// type/expiry) so both the credentials preflight (panel 4) and the token panel
+// (panel 5) share one implementation of the flow.
+async function acquireArmToken(): Promise<ArmTokenResult> {
+  const tenantRes = await fetch(kvUrl('azureTenantId'));
+  const tenant = (await tenantRes.text()).trim();
+  if (!tenantRes.ok || tenant === '') {
+    throw new Error(
+      `GET azureTenantId: HTTP ${tenantRes.status} body=${JSON.stringify(tenant)} - save credentials in panel 4 first`
+    );
+  }
+  const form = new URLSearchParams({
+    grant_type: 'client_credentials',
+    scope: 'https://management.azure.com/.default',
+  });
+  const res = await fetch(
+    `https://login.microsoftonline.com/${encodeURIComponent(tenant)}/oauth2/v2.0/token`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: form.toString(),
+    }
+  );
+  const text = await res.text();
+  if (!res.ok) {
+    throw new Error(`token endpoint: HTTP ${res.status}\n${text}`);
+  }
+  const token = JSON.parse(text) as {
+    token_type?: string;
+    expires_in?: number;
+    access_token?: string;
+  };
+  if (typeof token.access_token !== 'string' || token.access_token === '') {
+    throw new Error(`token endpoint: HTTP ${res.status} but no access_token in body\n${text}`);
+  }
+  return { access_token: token.access_token, token_type: token.token_type, expires_in: token.expires_in };
+}
+
+// Permission preflight: the RBAC permissions API returns the caller's EFFECTIVE
+// allowed actions at a scope, which is the only sound signal (customers use
+// custom/lookalike roles, so role names cannot be trusted). @soc/core evaluates
+// the response against the actions each setup path actually performs.
+const PERMISSIONS_API_VERSION = '2022-04-01';
+
+function subscriptionScopeUrl(sub: string): string {
+  return (
+    `https://management.azure.com/subscriptions/${encodeURIComponent(sub)}` +
+    `/providers/Microsoft.Authorization/permissions?api-version=${PERMISSIONS_API_VERSION}`
+  );
+}
+
+function resourceGroupScopeUrl(sub: string, rg: string): string {
+  return (
+    `https://management.azure.com/subscriptions/${encodeURIComponent(sub)}` +
+    `/resourceGroups/${encodeURIComponent(rg)}` +
+    `/providers/Microsoft.Authorization/permissions?api-version=${PERMISSIONS_API_VERSION}`
+  );
+}
+
+// GET one scope's RBAC permissions (no Authorization header - the proxy injects
+// Bearer ${kv.azureArmToken}) and evaluate the required actions with the pure
+// @soc/core evaluator. Returns one summary line plus one line per required
+// action. 401 and 403 get actionable messages rather than raw bodies.
+async function checkScope(
+  scopeLabel: string,
+  url: string,
+  required: RequiredAction[]
+): Promise<string[]> {
+  const res = await fetch(url);
+  if (res.status === 401) {
+    return [
+      `${scopeLabel}: HTTP 401 - the ARM token was rejected (expired, or the proxy did not inject it).`,
+      '  Re-check here (or re-run panel 5) to acquire a fresh token, then retry.',
+    ];
+  }
+  if (res.status === 403) {
+    return [
+      `${scopeLabel}: HTTP 403 - the service principal cannot even read permissions at this scope.`,
+      '  Grant it at least Reader on this scope so the preflight can evaluate effective actions.',
+    ];
+  }
+  const text = await res.text();
+  if (!res.ok) {
+    return [`${scopeLabel}: HTTP ${res.status}\n${text}`];
+  }
+  let parsed: PermissionsResponse;
+  try {
+    const body = JSON.parse(text) as Partial<PermissionsResponse>;
+    parsed = { value: Array.isArray(body.value) ? body.value : [] };
+  } catch {
+    return [`${scopeLabel}: could not parse permissions response\n${text}`];
+  }
+  const results = evaluatePermissions(parsed, required);
+  const lines = [
+    `${scopeLabel}: ${allGranted(results) ? 'all required actions granted' : 'MISSING required actions'}`,
+  ];
+  for (const result of results) {
+    lines.push(`  [${result.granted ? 'ok' : 'missing'}] ${result.label} (${result.action})`);
+  }
+  return lines;
+}
+
+// Run the scope check(s) the selected panel-3 setup path requires, mapping the
+// panel-3 SetupPath to the @soc/core required-action set keys. A blank scope
+// input reports that the scope is needed for validation rather than failing.
+async function validatePermissionsForPath(path: SetupPath, sub: string, rg: string): Promise<string[]> {
+  if (path === 'existing') {
+    const lines: string[] = [];
+    if (sub === '') {
+      lines.push(
+        'Subscription scope: enter a Subscription ID in panel 3 to validate subscription-level reads (existing-subscription).'
+      );
+    } else {
+      lines.push(
+        ...(await checkScope(
+          'Subscription scope (existing-subscription)',
+          subscriptionScopeUrl(sub),
+          REQUIRED_ACTIONS['existing-subscription']
+        ))
+      );
+    }
+    if (sub === '' || rg === '') {
+      lines.push(
+        'Resource group scope: enter Subscription ID and Workspace resource group in panel 3 to validate RG-level writes (existing-rg).'
+      );
+    } else {
+      lines.push(
+        ...(await checkScope(
+          'Resource group scope (existing-rg)',
+          resourceGroupScopeUrl(sub, rg),
+          REQUIRED_ACTIONS['existing-rg']
+        ))
+      );
+    }
+    return lines;
+  }
+  if (path === 'lab-new-rg') {
+    if (sub === '') {
+      return [
+        'Subscription scope: enter a Subscription ID in panel 3 to validate subscription-level lab creation (lab-new-rg-subscription).',
+      ];
+    }
+    return checkScope(
+      'Subscription scope (lab-new-rg-subscription)',
+      subscriptionScopeUrl(sub),
+      REQUIRED_ACTIONS['lab-new-rg-subscription']
+    );
+  }
+  // lab-byo-rg: the pre-created lab resource group scope only.
+  if (sub === '' || rg === '') {
+    return [
+      'Resource group scope: enter Subscription ID and Lab resource group in panel 3 to validate RG-level lab deployment (lab-byo-rg).',
+    ];
+  }
+  return checkScope(
+    'Resource group scope (lab-byo-rg)',
+    resourceGroupScopeUrl(sub, rg),
+    REQUIRED_ACTIONS['lab-byo-rg']
+  );
+}
+
 // Panel 4: store Azure app registration credentials in the app KV store. The
 // Basic value (base64 of clientId:clientSecret) is written encrypted and is
-// only ever resolved server-side by proxies.yml header injection.
+// only ever resolved server-side by proxies.yml header injection. The re-check
+// action also runs the permission preflight for the selected setup path.
 interface AzureCredentialsPanelProps {
   clientId: string;
   onClientIdChange: (value: string) => void;
+  setupPath: SetupPath;
+  subscriptionId: string;
+  rgName: string;
 }
 
-function AzureCredentialsPanel({ clientId, onClientIdChange }: AzureCredentialsPanelProps) {
+function AzureCredentialsPanel({
+  clientId,
+  onClientIdChange,
+  setupPath,
+  subscriptionId,
+  rgName,
+}: AzureCredentialsPanelProps) {
   const [tenantId, setTenantId] = useState('');
   const [clientSecret, setClientSecret] = useState('');
   const [stored, setStored] = useState('checking stored credentials...');
+  const [validating, setValidating] = useState(false);
   const [status, output, run] = useRunner();
 
   // Report what already exists in THIS app context's KV store. The store is
   // scoped per app ID: Live Preview (__dev__ prefix) and the installed app
   // have separate stores, so credentials saved in one are absent in the other.
+  const buildKvReport = useCallback(async (): Promise<{
+    lines: string[];
+    azureBasicPresent: boolean;
+    tenant: string;
+  }> => {
+    const keysRes = await fetch(`${window.CRIBL_API_URL}/kvstore/keys`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prefix: 'azure' }),
+    });
+    const keysText = await keysRes.text();
+    const tenantRes = await fetch(kvUrl('azureTenantId'));
+    const tenant = tenantRes.ok ? (await tenantRes.text()).trim() : '';
+    const azureBasicPresent = keysText.includes('azureBasic');
+    const lines = [
+      `Stored in KV for app ID ${window.CRIBL_APP_ID ?? '(unknown)'}:`,
+      azureBasicPresent
+        ? '  azureBasic: present (encrypted, not readable back)'
+        : '  azureBasic: MISSING - save credentials below',
+      tenant !== '' ? `  azureTenantId: ${tenant}` : '  azureTenantId: MISSING - save credentials below',
+      keysText.includes('azureArmToken')
+        ? '  azureArmToken: present (encrypted) - a token has been acquired in this context'
+        : '  azureArmToken: not yet acquired - run the token panel or re-check here',
+    ];
+    return { lines, azureBasicPresent, tenant };
+  }, []);
+
+  // Auto-run on mount and after a save: report KV state only (no network to Azure).
   const checkStored = useCallback(async () => {
     try {
-      const keysRes = await fetch(`${window.CRIBL_API_URL}/kvstore/keys`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prefix: 'azure' }),
-      });
-      const keysText = await keysRes.text();
-      const tenantRes = await fetch(kvUrl('azureTenantId'));
-      const tenant = tenantRes.ok ? (await tenantRes.text()).trim() : '';
-      setStored(
-        [
-          `Stored in KV for app ID ${window.CRIBL_APP_ID ?? '(unknown)'}:`,
-          keysText.includes('azureBasic')
-            ? '  azureBasic: present (encrypted, not readable back)'
-            : '  azureBasic: MISSING - save credentials below',
-          tenant !== '' ? `  azureTenantId: ${tenant}` : '  azureTenantId: MISSING - save credentials below',
-          keysText.includes('azureArmToken')
-            ? '  azureArmToken: present (encrypted) - the token panel has run in this context'
-            : '  azureArmToken: not yet acquired - run the token acquisition panel',
-        ].join('\n')
-      );
+      const { lines } = await buildKvReport();
+      setStored(lines.join('\n'));
     } catch (err) {
       setStored(`stored-credentials check failed: ${String(err)}`);
     }
-  }, []);
+  }, [buildKvReport]);
 
   useEffect(() => {
     void checkStored();
   }, [checkStored]);
+
+  // Combined preflight: the KV report, then (if credentials are present) acquire
+  // a token, store it so the proxy can inject it as Bearer, and validate the
+  // caller's EFFECTIVE permissions at the scope(s) the selected setup path uses.
+  const recheckAndValidate = useCallback(async () => {
+    setValidating(true);
+    try {
+      const report = await buildKvReport();
+      const baseLines = report.lines;
+      const credsPresent = report.azureBasicPresent && report.tenant !== '';
+      if (!credsPresent) {
+        setStored(
+          [
+            ...baseLines,
+            '',
+            'Permission validation skipped: save Azure credentials (client secret and tenant ID)',
+            'above first. Validation acquires a token, which needs azureBasic and azureTenantId in KV.',
+          ].join('\n')
+        );
+        return;
+      }
+      setStored([...baseLines, '', 'Permission validation: acquiring token and querying scopes...'].join('\n'));
+      const validationLines: string[] = [];
+      try {
+        const token = await acquireArmToken();
+        // Store the token BEFORE the permissions GET so proxies.yml can inject
+        // it as Bearer (the app sends no Authorization header), like panel 5.
+        const putRes = await fetch(kvUrl('azureArmToken?encrypted=true'), {
+          method: 'PUT',
+          body: token.access_token,
+        });
+        if (!putRes.ok) {
+          throw new Error(`PUT azureArmToken: HTTP ${putRes.status}\n${await putRes.text()}`);
+        }
+        validationLines.push(
+          ...(await validatePermissionsForPath(setupPath, subscriptionId.trim(), rgName.trim()))
+        );
+      } catch (err) {
+        validationLines.push(`Permission validation error: ${String(err)}`);
+      }
+      setStored([...baseLines, '', 'Permission validation:', ...validationLines].join('\n'));
+    } catch (err) {
+      setStored(`stored-credentials check failed: ${String(err)}`);
+    } finally {
+      setValidating(false);
+    }
+  }, [buildKvReport, setupPath, subscriptionId, rgName]);
 
   const save = () =>
     run(async () => {
@@ -463,12 +715,20 @@ function AzureCredentialsPanel({ clientId, onClientIdChange }: AzureCredentialsP
         The tenant ID is stored as a plain KV entry (key azureTenantId).
         Credentials persist server-side per app context: the Live Preview dev app and the
         installed app have separate KV stores, so save once in each context you test.
+        Re-check and validate permissions reports the stored KV keys and then, if credentials
+        are present, acquires a token and checks the caller&apos;s EFFECTIVE Azure permissions for
+        the setup path selected in panel 3 - it evaluates the actions actually allowed (via the
+        RBAC permissions API), not role names, so custom or lookalike roles are handled correctly.
         See panel 3 for creating the app registration and assigning its roles.
       </p>
       <pre className="result">{stored}</pre>
       <div className="panel-controls">
-        <button className="run-button" onClick={() => void checkStored()}>
-          Re-check stored
+        <button
+          className="run-button"
+          onClick={() => void recheckAndValidate()}
+          disabled={validating}
+        >
+          Re-check and validate permissions
         </button>
       </div>
       <div className="form-grid">
@@ -513,43 +773,14 @@ function TokenAcquisitionPanel() {
   const [status, output, run] = useRunner();
   const acquire = () =>
     run(async () => {
-      const tenantRes = await fetch(kvUrl('azureTenantId'));
-      const tenant = (await tenantRes.text()).trim();
-      if (!tenantRes.ok || tenant === '') {
-        throw new Error(
-          `GET azureTenantId: HTTP ${tenantRes.status} body=${JSON.stringify(tenant)} - save credentials in panel 4 first`
-        );
-      }
-      const form = new URLSearchParams({
-        grant_type: 'client_credentials',
-        scope: 'https://management.azure.com/.default',
-      });
-      const res = await fetch(
-        `https://login.microsoftonline.com/${encodeURIComponent(tenant)}/oauth2/v2.0/token`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          body: form.toString(),
-        }
-      );
-      const text = await res.text();
-      if (!res.ok) {
-        throw new Error(`token endpoint: HTTP ${res.status}\n${text}`);
-      }
-      const token = JSON.parse(text) as {
-        token_type?: string;
-        expires_in?: number;
-        access_token?: string;
-      };
-      if (typeof token.access_token !== 'string' || token.access_token === '') {
-        throw new Error(`token endpoint: HTTP ${res.status} but no access_token in body\n${text}`);
-      }
+      // Shared with panel 4's preflight so the token flow lives in one place.
+      const token = await acquireArmToken();
       const putRes = await fetch(kvUrl('azureArmToken?encrypted=true'), {
         method: 'PUT',
         body: token.access_token,
       });
       const lines = [
-        `token endpoint: HTTP ${res.status}`,
+        'token endpoint: ok',
         `token_type: ${token.token_type ?? '(missing)'}`,
         `expires_in: ${token.expires_in ?? '(missing)'}`,
         `access_token (first 12 chars): ${token.access_token.slice(0, 12)}`,
@@ -670,8 +901,13 @@ function ArtifactDownloadPanel() {
 
 function App() {
   // Shared between the app registration panel (az script) and the credentials
-  // panel (KV save) so the client ID is typed once.
+  // panel (KV save + permission preflight) so the client ID, setup path,
+  // subscription, and resource group are typed once in panel 3 and reused by
+  // panel 4's effective-permission validation.
   const [clientId, setClientId] = useState('');
+  const [setupPath, setSetupPath] = useState<SetupPath>('existing');
+  const [subscriptionId, setSubscriptionId] = useState('');
+  const [rgName, setRgName] = useState('');
   return (
     <div className="harness">
       <header className="harness-header">
@@ -684,8 +920,23 @@ function App() {
       </header>
       <PlatformGlobalsPanel />
       <KvStorePanel />
-      <AppRegistrationPanel clientId={clientId} onClientIdChange={setClientId} />
-      <AzureCredentialsPanel clientId={clientId} onClientIdChange={setClientId} />
+      <AppRegistrationPanel
+        clientId={clientId}
+        onClientIdChange={setClientId}
+        setupPath={setupPath}
+        onSetupPathChange={setSetupPath}
+        subscriptionId={subscriptionId}
+        onSubscriptionIdChange={setSubscriptionId}
+        rgName={rgName}
+        onRgNameChange={setRgName}
+      />
+      <AzureCredentialsPanel
+        clientId={clientId}
+        onClientIdChange={setClientId}
+        setupPath={setupPath}
+        subscriptionId={subscriptionId}
+        rgName={rgName}
+      />
       <TokenAcquisitionPanel />
       <ArmCallPanel />
       <ArtifactDownloadPanel />
