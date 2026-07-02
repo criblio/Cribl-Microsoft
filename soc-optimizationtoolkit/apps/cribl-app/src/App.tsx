@@ -264,7 +264,9 @@ function AzureCredentialsPanel() {
           Lab provisioning (create-new-RG mode): <strong>Contributor at the subscription scope</strong>{' '}
           and <strong>RBAC Administrator at the subscription scope</strong>. Resource group creation
           is a subscription-level action, and the lab TTL self-destruct assigns its delete role at
-          deploy time.
+          deploy time. When assigning RBAC Administrator, add the condition &quot;Constrain roles and
+          principal types&quot;: allow assigning only Contributor and Monitoring Metrics Publisher, and
+          only to service principals.
         </li>
         <li>
           Least-privilege alternative for labs: bring-your-own-RG mode needs only Contributor on an

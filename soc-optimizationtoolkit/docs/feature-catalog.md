@@ -214,6 +214,8 @@ The wizard shows only the rows for features the user enables (progressive, least
 | Entra ID tenant diagnostic settings (LOG-07) | Tenant | Entra directory role: Security Administrator (elevated; keep as guided step) |
 | Defender for Cloud continuous export (LOG-08) | Subscription | Security Admin |
 | Lab provisioning, create-new-RG mode (LAB-01/02) | Subscription | Contributor (RG creation is subscription-scoped) + RBAC Administrator (the TTL self-destruct Logic App identity is granted its RG-delete role at deploy time, which needs roleAssignments/write) |
+
+RBAC Administrator assignments should carry a role-assignment condition (Azure portal: "Constrain roles and principal types"): allow assigning ONLY Contributor and Monitoring Metrics Publisher, ONLY to service principals. The app never assigns other roles or grants to users/groups, and the condition caps blast radius if the app credential is compromised. "Constrain roles and principals" cannot be used instead because the lab TTL Logic App managed identity does not exist until deploy time.
 | Lab provisioning, bring-your-own-RG mode | Pre-created lab resource group | Contributor on that RG only; the admin pre-assigns the TTL identity its delete rights, so no subscription-scope or RBAC rights are needed |
 | KQL validation and monitoring (ENG-32, GUI-17/18, SYN drift checks) | Workspace | Log Analytics Reader |
 | AD user lookups via Graph (LKP-02 redesign) | Tenant (Graph) | User.Read.All application permission, admin consent |
