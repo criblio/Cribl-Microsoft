@@ -252,10 +252,12 @@ function KvStorePanel() {
   );
 }
 
-// Panel 3: how to create the Entra app registration and which Azure roles to
-// assign, tiered so testers grant only what the capabilities they exercise
-// need. The inputs complete an az CLI script for the role assignments; blank
-// fields stay as <placeholders> so a partial copy is still visibly incomplete.
+// The coarse setup path shared by panel 3 (connect) and panel 4 (resource
+// selection and role assignment). buildAzScript below completes an az CLI role
+// script for the chosen path; it is now rendered in panel 4 from the SELECTED
+// (or bootstrap-typed) subscription and the derived/selected resource group.
+// Blank fields stay as <placeholders> so a partial copy is still visibly
+// incomplete.
 type SetupPath = 'existing' | 'lab-new-rg' | 'lab-byo-rg';
 
 function buildAzScript(path: SetupPath, clientId: string, subscriptionId: string, rgName: string): string {
@@ -291,66 +293,103 @@ function buildAzScript(path: SetupPath, clientId: string, subscriptionId: string
   ].join('\n');
 }
 
-interface AppRegistrationPanelProps {
+// Panel 3: create the Entra app registration, then CONNECT this app to it. The
+// identity inputs (tenant ID, client ID, client secret) plus a single primary
+// action, Save and connect, write the encrypted write-only azureBasic entry
+// (base64 of clientId:clientSecret), acquire an ARM token, and store it under
+// azureArmToken so proxies.yml can inject Bearer server-side. Resource selection
+// and role assignment moved to panel 4; this panel no longer takes a
+// subscription/resource group or renders the az script.
+interface AppRegistrationConnectPanelProps {
+  activeProfileId: string | null;
+  secretLive: boolean;
+  onSecretSaved: (profileId: string, tenantId: string, clientId: string) => void;
+  onConnected: () => void;
   clientId: string;
   onClientIdChange: (value: string) => void;
+  tenantId: string;
+  onTenantIdChange: (value: string) => void;
   setupPath: SetupPath;
   onSetupPathChange: (value: SetupPath) => void;
-  subscriptionId: string;
-  onSubscriptionIdChange: (value: string) => void;
-  rgName: string;
-  onRgNameChange: (value: string) => void;
 }
 
-function AppRegistrationPanel({
+function AppRegistrationConnectPanel({
+  activeProfileId,
+  secretLive,
+  onSecretSaved,
+  onConnected,
   clientId,
   onClientIdChange,
+  tenantId,
+  onTenantIdChange,
   setupPath,
   onSetupPathChange,
-  subscriptionId,
-  onSubscriptionIdChange,
-  rgName,
-  onRgNameChange,
-}: AppRegistrationPanelProps) {
+}: AppRegistrationConnectPanelProps) {
+  const [clientSecret, setClientSecret] = useState('');
   const [status, output, run] = useRunner();
-  const script = buildAzScript(setupPath, clientId, subscriptionId, rgName);
-  const copyScript = () =>
+
+  // Save and connect: write the encrypted, write-only azureBasic entry, then
+  // acquire an ARM token and store it encrypted under azureArmToken. The app
+  // sets no Authorization header - the proxy injects both server-side. Once
+  // azureBasic is written the secret is marked live for this connection (badge +
+  // identity tracking) even if the token step fails; a full success additionally
+  // tells the parent a connect happened so panel 4 can auto-run discovery.
+  const saveAndConnect = () =>
     run(async () => {
-      await navigator.clipboard.writeText(script);
-      const incomplete = script.includes('<');
-      return incomplete
-        ? 'Copied to clipboard - NOTE: some fields are blank, so the script still contains <placeholders>.'
-        : 'Copied to clipboard. Run it in a shell with az logged into the test tenant.';
-    });
-  // Download avoids the terminal multi-line paste prompt and lets the script be
-  // reviewed and re-run: bash assign-roles.sh, or run the az lines in PowerShell.
-  const downloadScript = () =>
-    run(async () => {
-      const body = `#!/usr/bin/env bash\nset -euo pipefail\n\n${script}\n`;
-      const blob = new Blob([body], { type: 'application/x-sh' });
-      const url = URL.createObjectURL(blob);
-      const anchor = document.createElement('a');
-      anchor.href = url;
-      anchor.download = 'assign-roles.sh';
-      document.body.appendChild(anchor);
-      anchor.click();
-      anchor.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 10000);
-      const incomplete = script.includes('<');
-      return incomplete
-        ? 'Download dispatched (assign-roles.sh) - NOTE: some fields are blank, so it still contains <placeholders>.'
-        : 'Download dispatched (assign-roles.sh). Run: bash assign-roles.sh (or run the az lines in PowerShell).';
+      if (clientId.trim() === '' || clientSecret === '') {
+        throw new Error('Client ID and client secret are both required to connect.');
+      }
+      if (tenantId.trim() === '') {
+        throw new Error('Tenant ID is required to acquire an ARM token - enter it above, then Save and connect.');
+      }
+      const basicRes = await fetch(kvUrl('azureBasic?encrypted=true'), {
+        method: 'PUT',
+        body: btoa(`${clientId}:${clientSecret}`),
+      });
+      const basicText = await basicRes.text();
+      if (!basicRes.ok) {
+        throw new Error(`PUT azureBasic?encrypted=true: HTTP ${basicRes.status}\nbody: ${basicText}`);
+      }
+      // The encrypted slot is populated now, so mark the secret live and clear
+      // the input regardless of whether the token step below succeeds.
+      setClientSecret('');
+      if (activeProfileId !== null) {
+        onSecretSaved(activeProfileId, tenantId, clientId);
+      }
+      const token = await acquireArmToken(tenantId);
+      const putRes = await fetch(kvUrl('azureArmToken?encrypted=true'), {
+        method: 'PUT',
+        body: token.access_token,
+      });
+      if (!putRes.ok) {
+        throw new Error(
+          'Client secret saved, but the ARM token could not be stored.\n' +
+            `PUT azureArmToken?encrypted=true: HTTP ${putRes.status}\n${await putRes.text()}`
+        );
+      }
+      onConnected();
+      return [
+        'Connected.',
+        '  client secret: saved (encrypted, write-only) for this connection',
+        `  ARM token: acquired and stored encrypted (expires_in ${token.expires_in ?? '(missing)'})`,
+        '',
+        'Next: panel 4 discovers subscriptions, selects your resources, and grants roles.',
+      ].join('\n');
     });
 
   return (
     <Panel
       index={3}
-      title="App registration setup"
+      title="App registration and connect"
       status={status}
       output={output}
-      actionLabel="Copy az CLI script"
-      onAction={() => void copyScript()}
+      actionLabel="Save and connect"
+      onAction={() => void saveAndConnect()}
     >
+      <p className="panel-desc">
+        Create the Entra app registration, then connect this app to it with the tenant ID, client ID,
+        and a client secret. Azure roles are granted in panel 4, after you discover your subscription.
+      </p>
       <ol className="setup-steps">
         <li>
           In Entra ID, open App registrations and select New registration. Single tenant;
@@ -364,8 +403,8 @@ function AppRegistrationPanel({
           immediately - it is shown only once.
         </li>
         <li>
-          Choose your setup path, fill in the fields, then copy and run the completed script
-          (or use the portal).
+          Enter the tenant ID, client ID, and client secret below, choose your setup path,
+          then Save and connect.
         </li>
       </ol>
       <div className="path-options">
@@ -424,6 +463,16 @@ function AppRegistrationPanel({
       )}
       <div className="form-grid">
         <label className="field">
+          <span className="field-label">Directory (tenant) ID</span>
+          <input
+            type="text"
+            value={tenantId}
+            onChange={(e) => onTenantIdChange(e.target.value)}
+            autoComplete="off"
+            spellCheck={false}
+          />
+        </label>
+        <label className="field">
           <span className="field-label">Application (client) ID</span>
           <input
             type="text"
@@ -434,41 +483,27 @@ function AppRegistrationPanel({
           />
         </label>
         <label className="field">
-          <span className="field-label">Subscription ID</span>
+          <span className="field-label">Client secret</span>
           <input
-            type="text"
-            value={subscriptionId}
-            onChange={(e) => onSubscriptionIdChange(e.target.value)}
-            autoComplete="off"
-            spellCheck={false}
+            type="password"
+            value={clientSecret}
+            onChange={(e) => setClientSecret(e.target.value)}
+            autoComplete="new-password"
+            placeholder={secretLive ? 'stored for this connection - enter a new value to replace' : ''}
           />
         </label>
-        {setupPath !== 'lab-new-rg' && (
-          <label className="field">
-            <span className="field-label">
-              {setupPath === 'existing' ? 'Workspace resource group' : 'Lab resource group (pre-created)'}
-            </span>
-            <input
-              type="text"
-              value={rgName}
-              onChange={(e) => onRgNameChange(e.target.value)}
-              autoComplete="off"
-              spellCheck={false}
-            />
-          </label>
-        )}
-      </div>
-      <pre className="result">{script}</pre>
-      <div className="panel-controls">
-        <button className="run-button" onClick={() => void downloadScript()}>
-          Download assign-roles.sh
-        </button>
       </div>
       <p className="panel-desc">
-        Copy or download the script - download avoids the terminal multi-line paste prompt and lets
-        you review it first. If you do paste, choose Paste (not Paste as one line, which would join
-        the commands). Role assignments can take a couple of minutes to propagate. The client ID
-        entered here pre-fills the credentials panel below; enter the tenant ID and secret there.
+        Save and connect combines the client secret with the client ID as base64(clientId:clientSecret)
+        and writes it to the encrypted, write-only KV entry azureBasic, then acquires an Azure AD ARM
+        token (grant_type=client_credentials, ARM scope) and stores it encrypted under azureArmToken.
+        The app never sets an Authorization header - the platform proxy injects the secret and token
+        server-side per proxies.yml, and the secret can never be read back. azureBasic is a single
+        shared slot, so only one connection&apos;s secret is live at a time: switching connections clears
+        it and you re-enter and reconnect here. If a secret is already stored the field stays blank -
+        enter a new value only to replace it. The client ID, tenant ID, and setup path are non-secret
+        configuration remembered per connection in the plain azureProfiles KV entry. The connection
+        badge above shows whether this connection&apos;s secret is live this session.
       </p>
     </Panel>
   );
@@ -483,14 +518,15 @@ interface ArmTokenResult {
 
 // Run the client_credentials/ARM-scope token request for the given tenant. The
 // app sets no Authorization header: proxies.yml injects Basic ${kv.azureBasic}
-// server-side (the active connection's secret). Returns the parsed token so both
-// the credentials preflight (panel 4) and the token panel (panel 5) share one
-// implementation. The tenant comes from the ACTIVE connection's config.
+// server-side (the active connection's secret). Returns the parsed token so the
+// connect action (panel 3), resource discovery and the permission preflight
+// (panel 4), and the token panel (panel 5) share one implementation. The tenant
+// comes from the ACTIVE connection's config.
 async function acquireArmToken(tenantId: string): Promise<ArmTokenResult> {
   const tenant = tenantId.trim();
   if (tenant === '') {
     throw new Error(
-      'The active connection has no tenant ID - enter the tenant ID in panel 4 (it is remembered per connection), then retry'
+      'The active connection has no tenant ID - enter the tenant ID in panel 3 (it is remembered per connection), then retry'
     );
   }
   const form = new URLSearchParams({
@@ -592,7 +628,7 @@ async function validatePermissionsForPath(path: SetupPath, sub: string, rg: stri
     const lines: string[] = [];
     if (sub === '') {
       lines.push(
-        'Subscription scope: enter a Subscription ID in panel 3 to validate subscription-level reads (existing-subscription).'
+        'Subscription scope: select a subscription above to validate subscription-level reads (existing-subscription).'
       );
     } else {
       lines.push(
@@ -605,7 +641,7 @@ async function validatePermissionsForPath(path: SetupPath, sub: string, rg: stri
     }
     if (sub === '' || rg === '') {
       lines.push(
-        'Resource group scope: enter Subscription ID and Workspace resource group in panel 3 to validate RG-level writes (existing-rg).'
+        'Resource group scope: select a subscription and workspace above to validate RG-level writes (existing-rg).'
       );
     } else {
       lines.push(
@@ -621,7 +657,7 @@ async function validatePermissionsForPath(path: SetupPath, sub: string, rg: stri
   if (path === 'lab-new-rg') {
     if (sub === '') {
       return [
-        'Subscription scope: enter a Subscription ID in panel 3 to validate subscription-level lab creation (lab-new-rg-subscription).',
+        'Subscription scope: select a subscription above to validate subscription-level lab creation (lab-new-rg-subscription).',
       ];
     }
     return checkScope(
@@ -633,7 +669,7 @@ async function validatePermissionsForPath(path: SetupPath, sub: string, rg: stri
   // lab-byo-rg: the pre-created lab resource group scope only.
   if (sub === '' || rg === '') {
     return [
-      'Resource group scope: enter Subscription ID and Lab resource group in panel 3 to validate RG-level lab deployment (lab-byo-rg).',
+      'Resource group scope: select a subscription and lab resource group above to validate RG-level lab deployment (lab-byo-rg).',
     ];
   }
   return checkScope(
@@ -669,7 +705,7 @@ async function armGetJson(url: string, label: string): Promise<ArmGetResult> {
       ok: false,
       message:
         `${label}: HTTP 401 - the ARM token was rejected (expired, or the proxy did not inject it). ` +
-        'Click Discover Azure resources again to acquire a fresh token, then retry.',
+        'Click Discover / refresh from Azure again to acquire a fresh token, then retry.',
     };
   }
   if (res.status === 403) {
@@ -677,7 +713,7 @@ async function armGetJson(url: string, label: string): Promise<ArmGetResult> {
       ok: false,
       message:
         `${label}: HTTP 403 - the service principal is not authorized at this scope. ` +
-        'Grant it at least Reader (run the panel 3 role script), wait for propagation, then retry.',
+        'Grant it at least Reader (run the role assignment script in panel 4), wait for propagation, then retry.',
     };
   }
   const text = await res.text();
@@ -687,23 +723,21 @@ async function armGetJson(url: string, label: string): Promise<ArmGetResult> {
   return { ok: true, text };
 }
 
-// Panel 4: store Azure app registration credentials in the app KV store. The
-// Basic value (base64 of clientId:clientSecret) is written encrypted and is
-// only ever resolved server-side by proxies.yml header injection. The re-check
-// action also runs the permission preflight for the selected setup path. This
-// panel also hosts resource discovery: it needs an ARM token (from the saved
-// secret), so the Discover Azure resources button and its dependent dropdowns
-// live here, writing into the same shared subscription/resource-group state the
-// panel-3 text inputs bind to. The panel is keyed by the active profile id in
-// App, so switching connections remounts it and clears all cached discovery and
-// permission-validation state.
-interface AzureCredentialsPanelProps {
-  activeProfileId: string | null;
-  onSecretSaved: (profileId: string, tenantId: string, clientId: string) => void;
+// Panel 4: discover the subscriptions this app registration can see, SELECT the
+// subscription (and, per setup path, the workspace or resource group), then
+// generate the az role-assignment script and validate the caller's EFFECTIVE
+// permissions. Discovery needs an ARM token, which the connect action in panel 3
+// acquires; this panel re-acquires one on demand too. It writes the shared
+// subscription/resource-group state and auto-runs discovery once after a
+// successful connect (connectNonce). When discovery returns ZERO subscriptions a
+// fresh service principal cannot list any, so a one-time bootstrap subscription
+// text input appears - the only place a subscription is typed - to scope the
+// role script until Reader is granted. The panel is keyed by the active profile
+// id in App, so switching connections remounts it and clears all cached
+// discovery and permission-validation state.
+interface ResourceSelectionPanelProps {
   clientId: string;
-  onClientIdChange: (value: string) => void;
   tenantId: string;
-  onTenantIdChange: (value: string) => void;
   setupPath: SetupPath;
   subscriptionId: string;
   onSubscriptionIdChange: (value: string) => void;
@@ -711,15 +745,12 @@ interface AzureCredentialsPanelProps {
   onRgNameChange: (value: string) => void;
   workspaceName: string;
   onWorkspaceNameChange: (value: string) => void;
+  connectNonce: number;
 }
 
-function AzureCredentialsPanel({
-  activeProfileId,
-  onSecretSaved,
+function ResourceSelectionPanel({
   clientId,
-  onClientIdChange,
   tenantId,
-  onTenantIdChange,
   setupPath,
   subscriptionId,
   onSubscriptionIdChange,
@@ -727,24 +758,21 @@ function AzureCredentialsPanel({
   onRgNameChange,
   workspaceName,
   onWorkspaceNameChange,
-}: AzureCredentialsPanelProps) {
-  const [clientSecret, setClientSecret] = useState('');
+  connectNonce,
+}: ResourceSelectionPanelProps) {
   const [stored, setStored] = useState('checking stored credentials...');
-  const [secretStored, setSecretStored] = useState(false);
   const [validating, setValidating] = useState(false);
-  const [status, output, run] = useRunner();
+  const [scriptFeedback, setScriptFeedback] = useState('');
+  const [discoverStatus, discoverOutput, runDiscover] = useRunner();
 
   // Resource discovery state. Each list is null until its query has run; an
-  // empty array means the query succeeded but returned nothing (rendered as a
-  // clear message, not a dropdown). Lists are cached in React state only - they
-  // are never persisted, and a connection switch remounts this panel (via its
-  // key), which discards them. The two status strings label the result areas so
-  // an empty or permission-denied outcome is obvious.
+  // empty array means the query succeeded but returned nothing. For subscriptions
+  // an empty array is the bootstrap signal (dropdown hidden, text input shown).
+  // Lists are cached in React state only - never persisted, and a connection
+  // switch remounts this panel (via its key), which discards them.
   const [subscriptions, setSubscriptions] = useState<SubscriptionOption[] | null>(null);
   const [workspaces, setWorkspaces] = useState<WorkspaceOption[] | null>(null);
   const [resourceGroups, setResourceGroups] = useState<ResourceGroupOption[] | null>(null);
-  const [discovering, setDiscovering] = useState(false);
-  const [discoveryStatus, setDiscoveryStatus] = useState('');
   const [dependentStatus, setDependentStatus] = useState('');
 
   // Run the setup-path-dependent query for a chosen subscription:
@@ -824,67 +852,77 @@ function AzureCredentialsPanel({
     }
   }, []);
 
-  // Discover button: acquire an ARM token (needs the saved secret), store it so
-  // the proxy injects it as Bearer, then list subscriptions. 401/403/empty get
-  // actionable messages - empty means the service principal has no access yet,
-  // so point at the panel-3 role script.
-  const discoverResources = useCallback(async () => {
-    setDiscovering(true);
-    setDiscoveryStatus('Acquiring ARM token and listing subscriptions...');
-    setSubscriptions(null);
-    setWorkspaces(null);
-    setResourceGroups(null);
-    setDependentStatus('');
-    try {
-      const token = await acquireArmToken(tenantId);
-      // Store the token BEFORE the ARM GET so proxies.yml can inject it as Bearer
-      // (the app sends no Authorization header), same as panel 5.
-      const putRes = await fetch(kvUrl('azureArmToken?encrypted=true'), {
-        method: 'PUT',
-        body: token.access_token,
-      });
-      if (!putRes.ok) {
-        throw new Error(`PUT azureArmToken: HTTP ${putRes.status}\n${await putRes.text()}`);
-      }
-      const result = await armGetJson(
-        'https://management.azure.com/subscriptions?api-version=2022-12-01',
-        'Subscriptions'
-      );
-      if (!result.ok) {
-        setDiscoveryStatus(result.message);
-        return;
-      }
-      const parsed = JSON.parse(result.text) as {
-        value?: Array<{ displayName?: string; subscriptionId?: string }>;
-      };
-      const list: SubscriptionOption[] = (parsed.value ?? [])
-        .filter(
-          (s): s is { subscriptionId: string; displayName?: string } =>
-            typeof s.subscriptionId === 'string' && s.subscriptionId !== ''
-        )
-        .map((s) => ({ subscriptionId: s.subscriptionId, displayName: s.displayName ?? '(no displayName)' }));
-      setSubscriptions(list);
-      if (list.length === 0) {
-        setDiscoveryStatus(
-          'No subscriptions returned. The service principal has no subscription access yet - run the ' +
-            'panel 3 role assignment script (it grants Reader), wait a couple of minutes for propagation, ' +
-            'then Discover Azure resources again.'
+  // Discover / refresh: acquire an ARM token (needs the connected secret), store
+  // it so the proxy injects it as Bearer, then list subscriptions. A 401/403
+  // returns an actionable message and leaves the dropdown hidden. An EMPTY list
+  // is NOT an error: it means the service principal has no role assignments yet,
+  // so the bootstrap subscription input is revealed (subscriptions === []).
+  const discover = useCallback(
+    () =>
+      runDiscover(async () => {
+        setSubscriptions(null);
+        setWorkspaces(null);
+        setResourceGroups(null);
+        setDependentStatus('');
+        const token = await acquireArmToken(tenantId);
+        // Store the token BEFORE the ARM GET so proxies.yml can inject it as
+        // Bearer (the app sends no Authorization header), same as panel 5.
+        const putRes = await fetch(kvUrl('azureArmToken?encrypted=true'), {
+          method: 'PUT',
+          body: token.access_token,
+        });
+        if (!putRes.ok) {
+          throw new Error(`PUT azureArmToken: HTTP ${putRes.status}\n${await putRes.text()}`);
+        }
+        const result = await armGetJson(
+          'https://management.azure.com/subscriptions?api-version=2022-12-01',
+          'Subscriptions'
         );
-        return;
-      }
-      setDiscoveryStatus(`Discovered ${list.length} subscription(s). Choose one below.`);
-      // If the already-selected subscription is among the discovered set, load its
-      // dependent list now so a returning user sees the dependent dropdown at once.
-      const current = subscriptionId.trim();
-      if (current !== '' && list.some((s) => s.subscriptionId === current)) {
-        await loadDependent(current, setupPath);
-      }
-    } catch (err) {
-      setDiscoveryStatus(`Discovery error: ${String(err)}`);
-    } finally {
-      setDiscovering(false);
+        if (!result.ok) {
+          // 401/403: a token/authorization problem, not an empty tenant. Leave
+          // subscriptions null so the bootstrap input does NOT appear.
+          return result.message;
+        }
+        const parsed = JSON.parse(result.text) as {
+          value?: Array<{ displayName?: string; subscriptionId?: string }>;
+        };
+        const list: SubscriptionOption[] = (parsed.value ?? [])
+          .filter(
+            (s): s is { subscriptionId: string; displayName?: string } =>
+              typeof s.subscriptionId === 'string' && s.subscriptionId !== ''
+          )
+          .map((s) => ({ subscriptionId: s.subscriptionId, displayName: s.displayName ?? '(no displayName)' }));
+        setSubscriptions(list);
+        if (list.length === 0) {
+          return (
+            'No subscriptions returned. This app registration has no role assignments yet, so it ' +
+            'cannot list any subscription. Enter your subscription ID below to scope the role ' +
+            'assignment script, run it (it grants Reader), wait a couple of minutes for propagation, ' +
+            'then Discover / refresh from Azure again.'
+          );
+        }
+        // If the already-selected subscription is among the discovered set, load
+        // its dependent list so a returning user sees the dependent dropdown now.
+        const current = subscriptionId.trim();
+        if (current !== '' && list.some((s) => s.subscriptionId === current)) {
+          await loadDependent(current, setupPath);
+        }
+        return `Discovered ${list.length} subscription(s). Choose one below.`;
+      }),
+    [tenantId, subscriptionId, setupPath, loadDependent, runDiscover]
+  );
+
+  // Auto-run discovery ONCE after a successful connect in panel 3. connectNonce
+  // increments on each connect; the ref guard fires the effect only on an actual
+  // increment, never on mount (prev === current) or on unrelated re-renders.
+  const prevConnectNonceRef = useRef(connectNonce);
+  useEffect(() => {
+    if (prevConnectNonceRef.current === connectNonce) {
+      return;
     }
-  }, [tenantId, subscriptionId, setupPath, loadDependent]);
+    prevConnectNonceRef.current = connectNonce;
+    void discover();
+  }, [connectNonce, discover]);
 
   // Selecting a subscription sets the shared subscriptionId and re-runs the
   // dependent query for the current setup path.
@@ -945,10 +983,10 @@ function AzureCredentialsPanel({
       `Stored in KV for app ID ${window.CRIBL_APP_ID ?? '(unknown)'}:`,
       azureBasicPresent
         ? '  client secret: stored (encrypted, not shown) - NOTE this is a single shared slot, not per connection'
-        : '  client secret: not saved - enter it below and Save client secret',
+        : '  client secret: not saved - Save and connect in panel 3 to store it',
       tenant !== ''
         ? `  tenant ID: ${tenant} (remembered in this connection)`
-        : '  tenant ID: not saved - enter it below (remembered per connection)',
+        : '  tenant ID: not saved - enter it in panel 3 (remembered per connection)',
       keysText.includes('azureArmToken')
         ? '  azureArmToken: present (encrypted) - a token has been acquired in this context'
         : '  azureArmToken: not yet acquired - run the token panel or re-check here',
@@ -959,9 +997,8 @@ function AzureCredentialsPanel({
   // Auto-run on mount and after a save: report KV state only (no network to Azure).
   const checkStored = useCallback(async () => {
     try {
-      const { lines, azureBasicPresent } = await buildKvReport();
+      const { lines } = await buildKvReport();
       setStored(lines.join('\n'));
-      setSecretStored(azureBasicPresent);
     } catch (err) {
       setStored(`stored-credentials check failed: ${String(err)}`);
     }
@@ -985,8 +1022,8 @@ function AzureCredentialsPanel({
           [
             ...baseLines,
             '',
-            'Permission validation skipped: save the client secret below and enter the tenant ID',
-            '(it is remembered per connection). Validation acquires a token, which needs the encrypted',
+            'Permission validation skipped: connect first in panel 3 (Save and connect stores the',
+            'client secret and tenant ID). Validation acquires a token, which needs the encrypted',
             'azureBasic entry plus a tenant ID on the active connection.',
           ].join('\n')
         );
@@ -1019,126 +1056,65 @@ function AzureCredentialsPanel({
     }
   }, [buildKvReport, tenantId, setupPath, subscriptionId, rgName]);
 
-  // Save ONLY the client secret: write the encrypted, write-only azureBasic
-  // entry (base64 of clientId:clientSecret). The non-secret config fields are
-  // NOT written here - App autosaves the whole profile store to azureProfiles.
-  // On success, App is told which profile (and identity) the live secret now
-  // belongs to, so the connection badge and identity-drift hint stay accurate.
-  const saveSecret = () =>
-    run(async () => {
-      if (clientId === '' || clientSecret === '') {
-        throw new Error('clientId and clientSecret are both required to save the client secret');
-      }
-      const res = await fetch(kvUrl('azureBasic?encrypted=true'), {
-        method: 'PUT',
-        body: btoa(`${clientId}:${clientSecret}`),
-      });
-      const text = await res.text();
-      if (!res.ok) {
-        throw new Error(`PUT azureBasic?encrypted=true: HTTP ${res.status}\nbody: ${text}`);
-      }
-      setClientSecret('');
-      if (activeProfileId !== null) {
-        onSecretSaved(activeProfileId, tenantId, clientId);
-      }
-      await checkStored();
-      return `PUT azureBasic?encrypted=true: HTTP ${res.status}\nSaved for this connection. Secret input cleared.`;
-    });
+  // The az role-assignment script for the selected setup path, built from the
+  // SELECTED (or bootstrap-typed) subscription and the derived/selected resource
+  // group. Blank fields stay as <placeholders> so a partial copy is visibly
+  // incomplete. Copy/download report via a small feedback line (no runner).
+  const script = buildAzScript(setupPath, clientId, subscriptionId, rgName);
+  const copyScript = async () => {
+    try {
+      await navigator.clipboard.writeText(script);
+      setScriptFeedback(
+        script.includes('<')
+          ? 'Copied - NOTE: some fields are blank, so the script still contains <placeholders>.'
+          : 'Copied to clipboard. Run it in a shell with az logged into the test tenant.'
+      );
+    } catch (err) {
+      setScriptFeedback(`Copy failed: ${String(err)}`);
+    }
+  };
+  // Download avoids the terminal multi-line paste prompt and lets the script be
+  // reviewed and re-run: bash assign-roles.sh, or run the az lines in PowerShell.
+  const downloadScript = () => {
+    const body = `#!/usr/bin/env bash\nset -euo pipefail\n\n${script}\n`;
+    const blob = new Blob([body], { type: 'application/x-sh' });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = 'assign-roles.sh';
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+    setScriptFeedback(
+      script.includes('<')
+        ? 'Download dispatched (assign-roles.sh) - NOTE: some fields are blank, so it still contains <placeholders>.'
+        : 'Download dispatched (assign-roles.sh). Run: bash assign-roles.sh (or run the az lines in PowerShell).'
+    );
+  };
 
   return (
-    <Panel
-      index={4}
-      title="Azure credentials"
-      status={status}
-      output={output}
-      actionLabel="Save client secret"
-      onAction={() => void saveSecret()}
-    >
+    <section className="panel">
+      <h2 className="panel-title">4. Select resources and grant permissions</h2>
       <p className="panel-desc">
-        The client secret is combined with the client ID as base64(clientId:clientSecret) and stored
-        write-only encrypted in the app KV store (key azureBasic) when you click Save client secret. It
-        is injected into outbound token requests server-side by the platform proxy and can never be
-        read back or shown in the browser - if a secret is already stored the field stays blank, so
-        enter a new value only to replace it. azureBasic is a single shared slot, so only one
-        connection&apos;s secret is live at a time: switching connections clears it and you re-enter the
-        secret for the new connection. The other fields (client ID, tenant ID, subscription, resource
-        group, workspace, setup path) are non-secret configuration remembered per connection in the
-        plain azureProfiles KV entry, so they need no save button and reappear on the next load.
-        Credentials persist server-side per app context: the Live Preview dev app and the installed app
-        have separate KV stores, so save the secret once in each context you test. Re-check and
-        validate permissions reports the stored KV state and then, if credentials are present, acquires
-        a token and checks the caller&apos;s EFFECTIVE Azure permissions for the setup path selected in
-        panel 3 - it evaluates the actions actually allowed (via the RBAC permissions API), not role
-        names, so custom or lookalike roles are handled correctly. See panel 3 for creating the app
-        registration and assigning its roles.
+        Discover the subscriptions this app registration can see, select the subscription and (for the
+        existing and bring-your-own-RG paths) the target resource, then generate and run the role
+        assignment script and validate the effective permissions. Discovery runs automatically once
+        after you Save and connect in panel 3; use Discover / refresh from Azure to re-run it after
+        granting roles.
       </p>
-      <pre className="result">{stored}</pre>
       <div className="panel-controls">
         <button
           className="run-button"
-          onClick={() => void recheckAndValidate()}
-          disabled={validating}
+          onClick={() => void discover()}
+          disabled={discoverStatus === 'running'}
         >
-          Re-check and validate permissions
+          Discover / refresh from Azure
         </button>
+        <span className={`status status-${discoverStatus}`}>{discoverStatus}</span>
       </div>
+      {discoverOutput !== '' && <pre className="result">{discoverOutput}</pre>}
       <div className="form-grid">
-        <label className="field">
-          <span className="field-label">Tenant ID</span>
-          <input
-            type="text"
-            value={tenantId}
-            onChange={(e) => onTenantIdChange(e.target.value)}
-            autoComplete="off"
-            spellCheck={false}
-          />
-        </label>
-        <label className="field">
-          <span className="field-label">Client ID</span>
-          <input
-            type="text"
-            value={clientId}
-            onChange={(e) => onClientIdChange(e.target.value)}
-            autoComplete="off"
-            spellCheck={false}
-          />
-        </label>
-        <label className="field">
-          <span className="field-label">Client secret</span>
-          <input
-            type="password"
-            value={clientSecret}
-            onChange={(e) => setClientSecret(e.target.value)}
-            autoComplete="new-password"
-            placeholder={secretStored ? 'stored - enter a new value to replace' : ''}
-          />
-        </label>
-      </div>
-      <div className="discovery">
-        <h3 className="discovery-title">Discover Azure resources</h3>
-        <p className="panel-desc">
-          Acquires an ARM token from the saved secret, then lists the subscriptions the service
-          principal can see. Pick a subscription to load the Log Analytics workspace (existing path)
-          or resource group (bring-your-own-RG lab path) - these dropdowns fill in the same
-          Subscription ID and resource group fields you can also type in panel 3, so the manual
-          inputs and the dropdowns stay in sync. Use the manual inputs to bootstrap before the
-          service principal has Reader; use discovery once it does.
-        </p>
-        <div className="panel-controls">
-          <button
-            className="run-button"
-            onClick={() => void discoverResources()}
-            disabled={discovering}
-          >
-            Discover Azure resources
-          </button>
-        </div>
-        {discoveryStatus !== '' && (
-          <div className="discovery-result">
-            <span className="field-label">Discovery result</span>
-            <pre className="result">{discoveryStatus}</pre>
-          </div>
-        )}
         {subscriptions !== null && subscriptions.length > 0 && (
           <label className="field">
             <span className="field-label">Subscription</span>
@@ -1150,6 +1126,25 @@ function AzureCredentialsPanel({
                 </option>
               ))}
             </select>
+          </label>
+        )}
+        {subscriptions !== null && subscriptions.length === 0 && (
+          <label className="field">
+            <span className="field-label">Subscription ID (one-time bootstrap)</span>
+            <input
+              type="text"
+              value={subscriptionId}
+              onChange={(e) => onSubscriptionIdChange(e.target.value)}
+              autoComplete="off"
+              spellCheck={false}
+              placeholder="find it via 'az account list' or the Azure portal"
+            />
+            <span className="field-hint">
+              Discovery found no subscriptions, so this app registration has no role assignments yet.
+              Type the subscription ID here to scope the role script below - this is the only place a
+              subscription is typed. After you grant Reader and Discover / refresh from Azure again,
+              the dropdown replaces it.
+            </span>
           </label>
         )}
         {setupPath === 'existing' && workspaces !== null && workspaces.length > 0 && (
@@ -1178,20 +1173,56 @@ function AzureCredentialsPanel({
             </select>
           </label>
         )}
-        {dependentStatus !== '' && (
-          <div className="discovery-result">
-            <span className="field-label">
-              {setupPath === 'existing'
-                ? 'Workspace discovery'
-                : setupPath === 'lab-byo-rg'
-                  ? 'Resource group discovery'
-                  : 'Setup path'}
-            </span>
-            <pre className="result">{dependentStatus}</pre>
-          </div>
-        )}
       </div>
-    </Panel>
+      {dependentStatus !== '' && (
+        <div className="discovery-result">
+          <span className="field-label">
+            {setupPath === 'existing'
+              ? 'Workspace discovery'
+              : setupPath === 'lab-byo-rg'
+                ? 'Resource group discovery'
+                : 'Setup path'}
+          </span>
+          <pre className="result">{dependentStatus}</pre>
+        </div>
+      )}
+      <div className="discovery-result">
+        <span className="field-label">Role assignment script</span>
+        <pre className="result">{script}</pre>
+      </div>
+      <div className="panel-controls">
+        <button className="run-button" onClick={() => void copyScript()}>
+          Copy az CLI script
+        </button>
+        <button className="run-button" onClick={downloadScript}>
+          Download assign-roles.sh
+        </button>
+      </div>
+      {scriptFeedback !== '' && <p className="panel-desc">{scriptFeedback}</p>}
+      <p className="panel-desc">
+        The script is generated from the selected (or bootstrap) subscription and the derived resource
+        group. Copy or download it - download avoids the terminal multi-line paste prompt and lets you
+        review it first. If you paste, choose Paste (not Paste as one line, which would join the
+        commands). Role assignments can take a couple of minutes to propagate; Discover / refresh from
+        Azure again afterward.
+      </p>
+      <pre className="result">{stored}</pre>
+      <div className="panel-controls">
+        <button
+          className="run-button"
+          onClick={() => void recheckAndValidate()}
+          disabled={validating}
+        >
+          Re-check and validate permissions
+        </button>
+      </div>
+      <p className="panel-desc">
+        Re-check and validate permissions reports the stored KV state and then, if the connection is
+        made, acquires a token and checks the caller&apos;s EFFECTIVE Azure permissions for the selected
+        setup path and resources - it evaluates the actions actually allowed (via the RBAC permissions
+        API), not role names, so custom or lookalike roles are handled correctly.
+      </p>
+    </section>
   );
 }
 
@@ -1203,7 +1234,8 @@ function TokenAcquisitionPanel({ tenantId }: { tenantId: string }) {
   const [status, output, run] = useRunner();
   const acquire = () =>
     run(async () => {
-      // Shared with panel 4's preflight so the token flow lives in one place.
+      // Shared with the panel 3 connect and panel 4 discovery/preflight so the
+      // token flow lives in one place.
       const token = await acquireArmToken(tenantId);
       const putRes = await fetch(kvUrl('azureArmToken?encrypted=true'), {
         method: 'PUT',
@@ -1232,10 +1264,11 @@ function TokenAcquisitionPanel({ tenantId }: { tenantId: string }) {
       onAction={() => void acquire()}
     >
       <p className="panel-desc">
-        Uses the active connection&apos;s tenant ID, then POSTs grant_type=client_credentials with the
-        ARM scope to login.microsoftonline.com. No Authorization header is set by the app - the
-        proxy injects Basic auth from kv.azureBasic per proxies.yml. On success the access token
-        is stored encrypted under azureArmToken.
+        Save and connect (panel 3) already acquires and stores a token; this panel is an explicit
+        re-acquire and diagnostic. Uses the active connection&apos;s tenant ID, then POSTs
+        grant_type=client_credentials with the ARM scope to login.microsoftonline.com. No Authorization
+        header is set by the app - the proxy injects Basic auth from kv.azureBasic per proxies.yml. On
+        success the access token is stored encrypted under azureArmToken.
       </p>
     </Panel>
   );
@@ -1348,7 +1381,8 @@ function App() {
   // ACTIVE profile's non-secret config feeds every config-bearing panel. The
   // store is hydrated from, and debounce-autosaved to, the plain 'azureProfiles'
   // KV entry. Client secrets are NEVER part of this state - they are handled
-  // write-only in panel 4 and tracked per session by liveSecretProfileId.
+  // write-only by the connect action in panel 3 and tracked per session by
+  // liveSecretProfileId.
   const [store, setStore] = useState<ProfileStore>(EMPTY_PROFILE_STORE);
   const [hydrated, setHydrated] = useState(false);
 
@@ -1362,6 +1396,13 @@ function App() {
   // for this connection"). Cleared once a secret is saved or a no-clear switch
   // happens.
   const [switchNotice, setSwitchNotice] = useState('');
+
+  // Bumped by panel 3 on a full successful connect (secret written + token
+  // acquired). Panel 4 watches this to auto-run resource discovery exactly once
+  // per connect. Non-persisted; survives panel-4 remounts so a connect made
+  // while panel 4 is mounted triggers its discovery effect.
+  const [connectNonce, setConnectNonce] = useState(0);
+  const handleConnected = useCallback(() => setConnectNonce((n) => n + 1), []);
 
   // Inline rename state for the connection bar.
   const [renaming, setRenaming] = useState(false);
@@ -1491,7 +1532,7 @@ function App() {
         setLiveSecretProfileId(null);
         setLiveSecretIdentity(null);
         setSwitchNotice(
-          'Switched connection - enter the client secret for this connection in panel 4 to authenticate.'
+          'Switched connection - enter the client secret for this connection in panel 3 and Save and connect to authenticate.'
         );
       } else {
         setSwitchNotice('');
@@ -1562,7 +1603,7 @@ function App() {
     })();
     setLiveSecretProfileId(null);
     setLiveSecretIdentity(null);
-    setSwitchNotice('Stored secret cleared - re-enter the client secret in panel 4 to re-authenticate.');
+    setSwitchNotice('Stored secret cleared - re-enter the client secret in panel 3 and Save and connect to re-authenticate.');
   };
 
   const startRename = () => {
@@ -1700,24 +1741,23 @@ function App() {
 
       <PlatformGlobalsPanel />
       <KvStorePanel />
-      <AppRegistrationPanel
-        clientId={activeConfig.clientId}
-        onClientIdChange={(v) => updateField({ clientId: v })}
-        setupPath={activeConfig.setupPath}
-        onSetupPathChange={(v) => updateField({ setupPath: v })}
-        subscriptionId={activeConfig.subscriptionId}
-        onSubscriptionIdChange={(v) => updateField({ subscriptionId: v })}
-        rgName={activeConfig.resourceGroup}
-        onRgNameChange={(v) => updateField({ resourceGroup: v })}
-      />
-      <AzureCredentialsPanel
+      <AppRegistrationConnectPanel
         key={store.activeProfileId ?? 'none'}
         activeProfileId={store.activeProfileId}
+        secretLive={secretLive}
         onSecretSaved={handleSecretSaved}
+        onConnected={handleConnected}
         clientId={activeConfig.clientId}
         onClientIdChange={(v) => updateField({ clientId: v })}
         tenantId={activeConfig.tenantId}
         onTenantIdChange={(v) => updateField({ tenantId: v })}
+        setupPath={activeConfig.setupPath}
+        onSetupPathChange={(v) => updateField({ setupPath: v })}
+      />
+      <ResourceSelectionPanel
+        key={`resources-${store.activeProfileId ?? 'none'}`}
+        clientId={activeConfig.clientId}
+        tenantId={activeConfig.tenantId}
         setupPath={activeConfig.setupPath}
         subscriptionId={activeConfig.subscriptionId}
         onSubscriptionIdChange={(v) => updateField({ subscriptionId: v })}
@@ -1725,6 +1765,7 @@ function App() {
         onRgNameChange={(v) => updateField({ resourceGroup: v })}
         workspaceName={activeConfig.workspaceName}
         onWorkspaceNameChange={(v) => updateField({ workspaceName: v })}
+        connectNonce={connectNonce}
       />
       <TokenAcquisitionPanel tenantId={activeConfig.tenantId} />
       <ArmCallPanel />

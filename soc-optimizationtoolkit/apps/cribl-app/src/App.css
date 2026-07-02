@@ -190,6 +190,13 @@ body {
   color: #595959;
 }
 
+.field-hint {
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 18px;
+  color: #8c8c8c;
+}
+
 .field input {
   font-family: inherit;
   font-size: 13px;
