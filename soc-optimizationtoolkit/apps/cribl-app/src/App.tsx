@@ -260,20 +260,43 @@ function KvStorePanel() {
         lines.push(
           secret.includes('topsecret')
             ? '  check: FAIL - plaintext came back; encrypted entries are NOT write-only here'
-            : '  check: redacted placeholder returned, plaintext not readable (expected)'
+            : '  check: plaintext not readable - write-only confirmed (observed: HTTP 403 "Cannot read encrypted value", not the redacted placeholder the docs describe)'
         );
-        const keys = await step("POST keys {prefix: 'spike-'}", `${window.CRIBL_API_URL}/kvstore/keys`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ prefix: 'spike-' }),
-        });
+        const listKeys = () =>
+          step("POST keys {prefix: 'spike-'}", `${window.CRIBL_API_URL}/kvstore/keys`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ prefix: 'spike-' }),
+          });
+        const keys = await listKeys();
         lines.push(
           keys.includes('spike-plain') && keys.includes('spike-secret')
             ? '  check: both keys listed as expected'
             : '  check: expected both spike-plain and spike-secret in the listing'
         );
-        await step('DELETE spike-plain', kvUrl('spike-plain'), { method: 'DELETE' });
-        await step('DELETE spike-secret', kvUrl('spike-secret'), { method: 'DELETE' });
+        // DELETE has been observed to hang in Live Preview (the bridge never
+        // returns a response). Time out fast, then verify via a key listing
+        // whether the delete actually took effect server-side - that
+        // distinguishes "response lost in the bridge" from "not processed".
+        const deleteStep = async (key: string) => {
+          const label = `DELETE ${key}`;
+          try {
+            setProgress([...lines, `${label}: waiting...`].join('\n'));
+            const res = await fetchWithTimeout(kvUrl(key), { method: 'DELETE' }, 8000);
+            lines.push(`${label}: HTTP ${res.status}`);
+          } catch (err) {
+            lines.push(`${label}: ${String(err)}`);
+            const after = await listKeys();
+            lines.push(
+              after.includes(key)
+                ? `  check: ${key} STILL PRESENT after the timed-out DELETE - the delete was NOT processed`
+                : `  check: ${key} is GONE despite the timeout - the delete WAS processed server-side but the bridge lost the response (platform finding)`
+            );
+          }
+          setProgress(lines.join('\n'));
+        };
+        await deleteStep('spike-plain');
+        await deleteStep('spike-secret');
       } catch (err) {
         throw new Error([...lines, `error: ${String(err)}`].join('\n'));
       }

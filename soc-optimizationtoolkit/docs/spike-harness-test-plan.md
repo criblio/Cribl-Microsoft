@@ -23,8 +23,9 @@ Record for each test: PASS / FAIL / result text. Anything unexpected is a findin
 This validates the single most load-bearing assumption: encrypted KV entries are write-only from the client.
 
 1. Run Panel 2's KV sequence.
-2. Expected: PUT/GET of the plain key returns `hello`; the encrypted key GET returns a REDACTED placeholder, NOT `topsecret`; the check line reads "redacted placeholder returned, plaintext not readable (expected)"; the key list includes both keys; deletes succeed.
-- CRITICAL FAIL if the encrypted GET returns `topsecret` - that would break the entire secret-handling model. Record the exact redacted value returned.
+2. Expected: PUT/GET of the plain key returns `hello`; the encrypted key GET must NOT return `topsecret` - observed live behavior (2026-07-02) is HTTP 403 `{"status":"error","message":"Cannot read encrypted value"}` rather than the redacted placeholder Cribl's Builder Guide describes (same guarantee, different wire behavior); the key list includes both keys.
+- CRITICAL FAIL if the encrypted GET returns `topsecret` - that would break the entire secret-handling model.
+- KNOWN ISSUE (observed 2026-07-02, Live Preview): the DELETE steps can hang - the bridge never returns a response. The harness times each DELETE out after 8s and then re-lists keys to report whether the delete actually took effect server-side. Record which case you see, and re-test DELETE in installed mode - if it only hangs in Live Preview it is a dev-mode bridge bug; if the key is also still present, kvstore DELETE itself is broken and our cleanup flows must not depend on it.
 
 ## 3. Create a connection profile (Connection bar)
 
