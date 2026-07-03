@@ -43,6 +43,7 @@ function summaryText(outcome: OnboardTableOutcome): string {
     `Ingestion endpoint:  ${outcome.logsIngestionEndpoint}`,
     `Stream name:         ${outcome.streamName}`,
     `Destination id:      ${outcome.destinationId}`,
+    `Worker group:        ${outcome.groupId}`,
     `Cribl commit:        ${commitLine}`,
   ].join("\n");
 }

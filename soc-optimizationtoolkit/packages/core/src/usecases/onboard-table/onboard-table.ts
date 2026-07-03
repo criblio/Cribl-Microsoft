@@ -126,6 +126,12 @@ export interface OnboardTableOutcome {
   streamName: string;
   destinationId: string;
   /**
+   * The Cribl worker group the destination was created in (and, when the
+   * commit-and-deploy step succeeded, deployed to). Carried in the outcome so
+   * on-screen summaries and persisted job records answer "where did this go".
+   */
+  groupId: string;
+  /**
    * The Cribl commit hash that was deployed, or null when the
    * commit-and-deploy step did not complete (recorded honestly; the
    * destination may need a manual commit/deploy in some Cribl modes).
@@ -542,6 +548,7 @@ export async function onboardTable(
       logsIngestionEndpoint: deployment.logsIngestionEndpoint,
       streamName: dcrRequest.streamName,
       destinationId,
+      groupId: input.groupId,
       commitVersion,
     };
     await jobs.update(job.id, { status: "succeeded", result: outcome });

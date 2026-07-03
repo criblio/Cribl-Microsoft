@@ -122,6 +122,7 @@ describe("onboardTable happy path", () => {
       logsIngestionEndpoint: INGESTION_ENDPOINT,
       streamName: "Custom-SecurityEvent",
       destinationId: "MS-Sentinel-SecurityEvent-dest",
+      groupId: "default",
       commitVersion: "abc123",
     });
 
