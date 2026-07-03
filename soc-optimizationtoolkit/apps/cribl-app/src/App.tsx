@@ -114,18 +114,29 @@ async function fetchWithTimeout(
   timeoutMs = 15000
 ): Promise<Response> {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    return await fetch(url, { ...init, signal: controller.signal });
-  } catch (err) {
-    if (controller.signal.aborted) {
-      throw new Error(
-        `timed out after ${timeoutMs / 1000}s - the platform bridge did not respond. ` +
-          'This usually means the Live Preview lost its connection to the Cribl page ' +
-          '(common after a hot reload). Reload the whole Cribl browser page and re-run.'
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => {
+      controller.abort();
+      reject(
+        new Error(
+          `timed out after ${timeoutMs / 1000}s - the platform bridge did not respond ` +
+            '(and its fetch implementation ignores abort signals, so the underlying ' +
+            'request may still be pending). If everything times out, reload the whole ' +
+            'Cribl browser page; if only specific verbs time out, that is a platform finding.'
+        )
       );
-    }
-    throw err;
+    }, timeoutMs);
+  });
+  // Promise.race, NOT AbortController alone: the platform's locked fetch bridge
+  // has been observed to ignore the abort signal, leaving the fetch promise
+  // pending forever. The race settles on our timer regardless. The no-op catch
+  // keeps an eventual late rejection of the losing fetch from surfacing as an
+  // unhandled rejection.
+  const request = fetch(url, { ...init, signal: controller.signal });
+  request.catch(() => undefined);
+  try {
+    return await Promise.race([request, timeout]);
   } finally {
     clearTimeout(timer);
   }
