@@ -103,6 +103,34 @@ function kvUrl(key: string): string {
   return `${window.CRIBL_API_URL}/kvstore/${key}`;
 }
 
+// fetch with a hard client-side timeout. Platform-bridged requests (KV store,
+// product API) are proxied through the parent Cribl window; if that bridge is
+// detached (typically after a dev-mode hot reload), the promise never settles
+// and there is no platform timeout to save us - so every harness call that
+// could hang must go through this wrapper and fail loudly instead.
+async function fetchWithTimeout(
+  url: string,
+  init?: RequestInit,
+  timeoutMs = 15000
+): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } catch (err) {
+    if (controller.signal.aborted) {
+      throw new Error(
+        `timed out after ${timeoutMs / 1000}s - the platform bridge did not respond. ` +
+          'This usually means the Live Preview lost its connection to the Cribl page ' +
+          '(common after a hot reload). Reload the whole Cribl browser page and re-run.'
+      );
+    }
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 // Result of loading the profile store, distinguishing a genuinely absent key
 // (safe to seed a Default profile) from a load FAILURE of unknown state (a
 // transient 5xx, an auth error, or a network throw). Seeding on a failure would
@@ -121,7 +149,7 @@ type ProfileLoad =
 // azureBasic entry and are never read back.
 async function loadProfileStore(): Promise<ProfileLoad> {
   try {
-    const res = await fetch(kvUrl('azureProfiles'));
+    const res = await fetchWithTimeout(kvUrl('azureProfiles'));
     if (res.status === 404) {
       return { status: 'absent' };
     }
@@ -143,7 +171,7 @@ async function loadProfileStore(): Promise<ProfileLoad> {
 // no profile store is present yet. Tolerant, like loadProfileStore.
 async function loadLegacyAzureConfig(): Promise<AzureConfig> {
   try {
-    const res = await fetch(kvUrl('azureConfig'));
+    const res = await fetchWithTimeout(kvUrl('azureConfig'));
     if (!res.ok) {
       return { ...EMPTY_AZURE_CONFIG };
     }
@@ -199,15 +227,21 @@ function PlatformGlobalsPanel() {
 
 // Panel 2: exercise KV store semantics, including the write-only behavior of
 // encrypted entries (GET must return a redacted placeholder, not plaintext).
+// Steps stream into a live progress area with a per-step timeout, so a hung
+// platform bridge shows exactly which step is stuck instead of spinning forever.
 function KvStorePanel() {
   const [status, output, run] = useRunner();
+  const [progress, setProgress] = useState('');
   const exercise = () =>
     run(async () => {
       const lines: string[] = [];
+      setProgress('');
       const step = async (label: string, url: string, init?: RequestInit) => {
-        const res = await fetch(url, init);
+        setProgress([...lines, `${label}: waiting...`].join('\n'));
+        const res = await fetchWithTimeout(url, init);
         const body = await res.text();
         lines.push(`${label}: HTTP ${res.status} body=${JSON.stringify(body)}`);
+        setProgress(lines.join('\n'));
         return body;
       };
       try {
@@ -251,7 +285,7 @@ function KvStorePanel() {
       index={2}
       title="KV store semantics"
       status={status}
-      output={output}
+      output={output !== '' ? output : progress}
       actionLabel="Run KV sequence"
       onAction={() => void exercise()}
     >
