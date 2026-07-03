@@ -74,6 +74,10 @@ KnowledgeArticles/                       <-- Reference documentation
 Lookups/                                 <-- Cribl lookup tables and enrichment data
 ```
 
+## SOC Optimization Toolkit (new)
+
+The next-generation TypeScript workspace lives in [soc-optimizationtoolkit/](soc-optimizationtoolkit/) -- a monorepo (shared core + UI packages, a Cribl App Platform target, and a zero-dependency local host in `apps/local-app`). All npm commands run from inside `soc-optimizationtoolkit/` (for example `npm install`, `npm run build`, `npm run local`); the repository root has no `package.json` by design. See [soc-optimizationtoolkit/README.md](soc-optimizationtoolkit/README.md) and the per-directory CONTEXT.md files for details.
+
 ## Legacy Tools
 
 The following PowerShell tools are the original automation scripts that preceded the desktop app. They are still functional but the desktop app provides a more integrated experience.

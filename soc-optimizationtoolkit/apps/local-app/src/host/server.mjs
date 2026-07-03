@@ -28,6 +28,7 @@ import http from 'node:http';
 import os from 'node:os';
 import { DATA_DIR, WEB_ROOT } from './config.mjs';
 import { createAzureProxy } from './azure.mjs';
+import { createCriblAuth } from './cribl-auth.mjs';
 import { createCriblProxy } from './cribl.mjs';
 import { createSecretsStore } from './secrets.mjs';
 import { createJobStore } from './jobs.mjs';
@@ -49,7 +50,8 @@ import {
  */
 export function createHostServer(config) {
   const azure = createAzureProxy(config.azure);
-  const cribl = createCriblProxy(config.cribl);
+  const criblAuth = createCriblAuth(config.cribl);
+  const cribl = createCriblProxy(config.cribl, criblAuth);
   const secrets = createSecretsStore(DATA_DIR);
   const jobs = createJobStore(DATA_DIR);
   const serveStatic = createStaticHandler(WEB_ROOT);
@@ -87,7 +89,7 @@ export function createHostServer(config) {
     // --- config -----------------------------------------------------------
     if (pathname === '/api/config' && method === 'GET') {
       // AzureConfig-shaped (see @soc/core azure-config): ONLY non-secret
-      // fields. The clientSecret and authToken NEVER leave the host.
+      // fields. The clientSecret and Cribl credentials NEVER leave the host.
       sendJson(res, 200, {
         clientId: config.azure.clientId,
         tenantId: config.azure.tenantId,

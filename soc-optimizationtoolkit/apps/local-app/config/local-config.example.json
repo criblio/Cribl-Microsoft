@@ -1,10 +1,14 @@
 {
   "_readme": [
     "Copy this file to config/local-config.json (gitignored) and fill in your values.",
-    "azure.clientSecret is read ONLY by the local host from that file; it is never exposed over HTTP.",
-    "cribl.leaderUrl: on-prem leader base URL (https://host:9000) or a Cribl.Cloud workspace URL.",
-    "cribl.authToken: a static bearer token - an on-prem login token or a Cribl.Cloud token (static per the Phase 1 roadmap; no login flow yet).",
-    "cribl.rejectUnauthorized: set false ONLY for self-signed on-prem leader certificates; applies to leader calls only.",
+    "azure.clientSecret and the cribl.auth credentials are read ONLY by the local host from that file; they are never exposed over HTTP.",
+    "cribl.leaderUrl: the leader base URL WITHOUT the /api/v1 suffix (the host appends it). Cribl.Cloud workspace: https://main-{orgId}.cribl.cloud (workspace name 'main' unless yours is renamed); on-prem leader: https://host:9000.",
+    "cribl.auth picks how the host authenticates to the leader. The 'cloud' example below is the primary path; the other two shapes are in _criblAuthVariants - copy the one you need over cribl.auth.",
+    "auth type 'cloud': OAuth client credentials created in the Cribl.Cloud UI under Organization > API Credentials. The host mints bearer tokens at login.cribl.cloud and refreshes them before expiry.",
+    "auth type 'onprem': self-managed leader username/password. The host logs in via {leaderUrl}/api/v1/auth/login and re-logs-in automatically when the leader returns 401. Not available against Cribl.Cloud.",
+    "auth type 'token': a static bearer token you minted yourself. The host cannot refresh it; when it expires, leader calls surface 401s until you update the config.",
+    "Back-compat: the legacy flat cribl.authToken string still works (treated as auth type 'token') but is deprecated and logs a startup note.",
+    "cribl.rejectUnauthorized: set false ONLY for self-signed on-prem leader certificates; applies to leader calls only (the Cribl.Cloud token mint always verifies TLS).",
     "port: the loopback port the host listens on (http://127.0.0.1:{port})."
   ],
   "port": 4600,
@@ -17,8 +21,17 @@
     "workspaceName": ""
   },
   "cribl": {
-    "leaderUrl": "https://localhost:9000",
-    "authToken": "",
+    "leaderUrl": "https://main-YOUR-ORG-ID.cribl.cloud",
+    "auth": {
+      "type": "cloud",
+      "clientId": "",
+      "clientSecret": ""
+    },
     "rejectUnauthorized": true
+  },
+  "_criblAuthVariants": {
+    "cloud": { "type": "cloud", "clientId": "", "clientSecret": "" },
+    "onprem": { "type": "onprem", "username": "admin", "password": "" },
+    "token": { "type": "token", "token": "" }
   }
 }
