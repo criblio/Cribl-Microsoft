@@ -1,0 +1,24 @@
+{
+  "_readme": [
+    "Copy this file to config/local-config.json (gitignored) and fill in your values.",
+    "azure.clientSecret is read ONLY by the local host from that file; it is never exposed over HTTP.",
+    "cribl.leaderUrl: on-prem leader base URL (https://host:9000) or a Cribl.Cloud workspace URL.",
+    "cribl.authToken: a static bearer token - an on-prem login token or a Cribl.Cloud token (static per the Phase 1 roadmap; no login flow yet).",
+    "cribl.rejectUnauthorized: set false ONLY for self-signed on-prem leader certificates; applies to leader calls only.",
+    "port: the loopback port the host listens on (http://127.0.0.1:{port})."
+  ],
+  "port": 4600,
+  "azure": {
+    "tenantId": "",
+    "clientId": "",
+    "clientSecret": "",
+    "subscriptionId": "",
+    "resourceGroup": "",
+    "workspaceName": ""
+  },
+  "cribl": {
+    "leaderUrl": "https://localhost:9000",
+    "authToken": "",
+    "rejectUnauthorized": true
+  }
+}

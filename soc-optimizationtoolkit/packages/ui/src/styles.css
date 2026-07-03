@@ -1,0 +1,229 @@
+/*
+ * Shared stylesheet for the @soc/ui screens: the single source of truth for
+ * the class conventions the shared components render against (panel, field,
+ * run-button, status, result, ...). Both shells import this BEFORE their own
+ * shell-specific stylesheet:
+ *
+ *   import "@soc/ui/styles.css";
+ *
+ * The rules below were moved VERBATIM from apps/cribl-app/src/App.css so the
+ * cloud app renders identically; shell-only chrome (harness header,
+ * connection bar, view tabs, ...) stays in each shell's own stylesheet.
+ */
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Open Sans', sans-serif;
+  color: #262626;
+  background: #fbfcfd;
+}
+
+.panel {
+  border: 1px solid #d9d9d9;
+  background: #ffffff;
+  padding: 20px 24px;
+  margin-bottom: 16px;
+}
+
+.panel-title {
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 24px;
+  color: rgba(0, 0, 0, 0.85);
+  margin-bottom: 8px;
+}
+
+.panel-desc {
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 20px;
+  color: #595959;
+  margin-bottom: 12px;
+}
+
+.path-options {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.path-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  line-height: 20px;
+  color: #262626;
+  cursor: pointer;
+}
+
+.setup-steps {
+  font-size: 13px;
+  line-height: 20px;
+  color: #595959;
+  margin: 0 0 12px;
+  padding-left: 20px;
+}
+
+.setup-steps li {
+  margin-bottom: 6px;
+}
+
+.perm-list {
+  font-size: 13px;
+  line-height: 20px;
+  color: #595959;
+  margin: 0 0 12px;
+  padding-left: 20px;
+}
+
+.perm-list li {
+  margin-bottom: 6px;
+}
+
+.perm-list strong {
+  color: #262626;
+  font-weight: 600;
+}
+
+.panel-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.run-button {
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 20px;
+  padding: 4px 14px;
+  border: 1px solid #d9d9d9;
+  background: #fafafa;
+  color: #262626;
+  cursor: pointer;
+}
+
+.run-button:hover:not(:disabled) {
+  border-color: #1890ff;
+  color: #1890ff;
+}
+
+.run-button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.status {
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 20px;
+}
+
+.status-idle {
+  color: #8c8c8c;
+}
+
+.status-running {
+  color: #1890ff;
+}
+
+.status-ok {
+  color: #52c41a;
+}
+
+.status-failed {
+  color: #f5222d;
+}
+
+.result {
+  font-family: 'Consolas', 'Menlo', 'Courier New', monospace;
+  font-size: 12px;
+  line-height: 18px;
+  color: #262626;
+  background: #fafafa;
+  border: 1px solid #d9d9d9;
+  padding: 12px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-x: auto;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.form-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 12px;
+  max-width: 480px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.field-label {
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 20px;
+  color: #595959;
+}
+
+.field-hint {
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 18px;
+  color: #8c8c8c;
+}
+
+.field input {
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 20px;
+  padding: 4px 8px;
+  border: 1px solid #d9d9d9;
+  background: #ffffff;
+  color: #262626;
+}
+
+.field input:focus {
+  outline: none;
+  border-color: #1890ff;
+}
+
+.field select {
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 20px;
+  padding: 4px 8px;
+  border: 1px solid #d9d9d9;
+  background: #ffffff;
+  color: #262626;
+}
+
+.field select:focus {
+  outline: none;
+  border-color: #1890ff;
+}
+
+.discovery-title {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 22px;
+  color: rgba(0, 0, 0, 0.85);
+}
+
+.discovery-result {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}

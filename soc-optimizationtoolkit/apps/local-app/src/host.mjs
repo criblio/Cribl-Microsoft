@@ -1,6 +1,8 @@
-// @soc/local-app host: serves the shared UI locally and fulfills the core port
-// contracts for customer-managed (on-prem) Cribl deployments. First run hosts the
-// onboarding GUI that guides setup of either target (Cribl-hosted vs local).
-// Not yet implemented; see docs/feature-catalog.md, "Proposed architecture: dual-target".
-console.log('SOC Optimization Toolkit local host: not yet implemented.');
-console.log('See soc-optimizationtoolkit/docs/feature-catalog.md for the plan.');
+// @soc/local-app host entry. Thin by design: all host logic lives in
+// src/host/ (config loading, API routing, Azure/leader proxies, file-backed
+// secrets and jobs, static UI serving). See src/host/server.mjs for the API
+// surface and apps/local-app/CONTEXT.md for status and security posture.
+
+import { main } from './host/main.mjs';
+
+await main();

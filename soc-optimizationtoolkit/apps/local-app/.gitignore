@@ -1,0 +1,4 @@
+# Operator-local files: real config (holds the Azure client secret and the
+# Cribl token) and on-disk state (secrets.json, jobs.json). Never commit.
+config/local-config.json
+data/
