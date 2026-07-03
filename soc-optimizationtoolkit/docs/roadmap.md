@@ -21,6 +21,8 @@ npm-workspaces restructure (packages/core, packages/ui, apps/cribl-app, apps/loc
 
 Goal: the thinnest end-to-end slice that proves every architectural seam - ports, both shells, Azure auth, polled jobs, Cribl product API.
 
+STATUS 2026-07-03: cloud-shell slice SHIPPED (commit 166deed) - core use-case (onboard-table with job-recorded steps), dcr-request + sentinel-destination builders, six real platform adapters, policies.yml contract, first @soc/ui screen behind a view switcher. All three risk spikes verified live earlier (KV write-only, token via proxy injection, iframe downloads). REMAINING for phase exit: the local-app shell (Node host + local adapters, parity gate), a live onboarding run against a real workspace, and the settings screen graduation from the spike harness.
+
 - Test and CI foundation FIRST: vitest wired across the workspace (colocated *.test.ts), golden-vector characterization fixtures recorded by executing the legacy PowerShell logic, and a path-filtered GitHub Actions workflow (lint + typecheck + test + build) gating every PR from this phase onward.
 - Ports in packages/core: CriblClient, AzureManagement, SecretsStore, JobStore, UserContext, ArtifactSink; fakes for tests.
 - Domain: dcr-naming (port v1's TS implementation V1-30; characterization tests against legacy output - compatibility contract), column type mapping (DCR-08), DCR column-set generation (DCR-09).
