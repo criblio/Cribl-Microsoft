@@ -20,6 +20,7 @@
  */
 
 import type { AzureConfig, AzureSetupPath } from "../azure-config";
+import { rolePlanForSetupPath } from "../role-plan";
 import {
   authFlowAscii,
   authFlowMermaid,
@@ -93,8 +94,12 @@ function resourceGroupScope(n: ResolvedNames): string {
 }
 
 /**
- * The RBAC roles a setup path requires, mirroring the setup wizard's az-CLI
- * script builder exactly:
+ * The RBAC roles a setup path requires, resolved into fully-qualified request
+ * rows for a ticket. The role model itself (which roles, at which scope LEVEL,
+ * with which justification and condition) is the single source of truth in
+ * {@link rolePlanForSetupPath}; this function only turns each abstract scope
+ * level into the concrete scope string for the resolved context, so the ticket
+ * and the setup wizard's az-CLI script can never drift.
  *
  * - `existing`   - Reader on the subscription, plus Monitoring Contributor and
  *   Log Analytics Contributor scoped to the workspace resource group.
@@ -108,55 +113,20 @@ function rolesForSetupPath(
   path: AzureSetupPath,
   n: ResolvedNames,
 ): RoleRequest[] {
-  if (path === "lab-new-rg") {
-    return [
-      {
-        role: "Contributor",
-        scope: subscriptionScope(n),
-        justification:
-          "Create the lab resource group and deploy the workspace, DCRs, and tables inside it (resource group creation is a subscription-level action, so no workspace-scoped roles are needed on this path).",
-      },
-      {
-        role: "RBAC Administrator",
-        scope: subscriptionScope(n),
-        justification:
-          "Assign the lab TTL self-destruct identity its delete role at deploy time.",
-        condition:
-          "Constrain roles and principal types: only Contributor and Monitoring Metrics Publisher, only to service principals.",
-      },
-    ];
-  }
-  if (path === "lab-byo-rg") {
-    return [
-      {
-        role: "Contributor",
-        scope: resourceGroupScope(n),
-        justification:
-          "Deploy the lab workspace, DCRs, and tables into the pre-created lab resource group; no subscription-scope rights are needed.",
-      },
-    ];
-  }
-  // "existing"
-  return [
-    {
-      role: "Reader",
-      scope: subscriptionScope(n),
-      justification:
-        "Discover subscriptions, resource groups, workspaces, and existing DCRs before deploying.",
-    },
-    {
-      role: "Monitoring Contributor",
-      scope: resourceGroupScope(n),
-      justification:
-        "Create and update Data Collection Rules in the workspace resource group.",
-    },
-    {
-      role: "Log Analytics Contributor",
-      scope: resourceGroupScope(n),
-      justification:
-        "Create custom Log Analytics tables and configure the workspace for ingestion.",
-    },
-  ];
+  return rolePlanForSetupPath(path).map((req) => {
+    const request: RoleRequest = {
+      role: req.role,
+      scope:
+        req.scopeLevel === "subscription"
+          ? subscriptionScope(n)
+          : resourceGroupScope(n),
+      justification: req.justification,
+    };
+    if (req.condition !== undefined) {
+      request.condition = req.condition;
+    }
+    return request;
+  });
 }
 
 /**

@@ -14,6 +14,7 @@ import {
   parseProfileStore,
   removeProfile,
   renameProfile,
+  renderRoleAssignmentCli,
   REQUIRED_ACTIONS,
   resourceCreationRequest,
   roleAssignmentRequest,
@@ -264,45 +265,13 @@ function KvStorePanel() {
 }
 
 // The coarse setup path shared by panel 3 (connect) and panel 4 (resource
-// selection and role assignment). buildAzScript below completes an az CLI role
-// script for the chosen path; it is now rendered in panel 4 from the SELECTED
-// (or bootstrap-typed) subscription and the derived/selected resource group.
-// Blank fields stay as <placeholders> so a partial copy is still visibly
+// selection and role assignment). The az CLI role-assignment script for the
+// chosen path is rendered in panel 4 by renderRoleAssignmentCli from @soc/core -
+// the single source of truth for the setup-path RBAC role model - from the
+// SELECTED (or bootstrap-typed) subscription and the derived/selected resource
+// group. Blank fields stay as <placeholders> so a partial copy is still visibly
 // incomplete.
 type SetupPath = 'existing' | 'lab-new-rg' | 'lab-byo-rg';
-
-function buildAzScript(path: SetupPath, clientId: string, subscriptionId: string, rgName: string): string {
-  const client = clientId.trim() === '' ? '<clientId>' : clientId.trim();
-  const sub = subscriptionId.trim() === '' ? '<subscriptionId>' : subscriptionId.trim();
-  const rg = rgName.trim() === '' ? (path === 'existing' ? '<workspaceRg>' : '<labRg>') : rgName.trim();
-  if (path === 'existing') {
-    return [
-      '# Existing workspace: least privilege, scoped to its resource group',
-      `az role assignment create --assignee ${client} --role "Reader" --scope /subscriptions/${sub}`,
-      `az role assignment create --assignee ${client} --role "Monitoring Contributor" --scope /subscriptions/${sub}/resourceGroups/${rg}`,
-      `az role assignment create --assignee ${client} --role "Log Analytics Contributor" --scope /subscriptions/${sub}/resourceGroups/${rg}`,
-    ].join('\n');
-  }
-  if (path === 'lab-new-rg') {
-    return [
-      '# Lab creates its own resource group and workspace: subscription Contributor',
-      '# covers RG creation plus all workspace/DCR operations inside the lab, so no',
-      '# workspace-scoped roles are needed on this path.',
-      `az role assignment create --assignee ${client} --role "Contributor" --scope /subscriptions/${sub}`,
-      '# Assign RBAC Administrator via the Azure portal so you can add the condition',
-      '# "Constrain roles and principal types": only Contributor and Monitoring',
-      '# Metrics Publisher, only to service principals (the lab TTL self-destruct',
-      '# assigns its delete role at deploy time).',
-    ].join('\n');
-  }
-  return [
-    '# Pre-created lab resource group: least privilege for labs; the lab deploys',
-    '# its workspace and resources into this RG with no subscription-scope rights.',
-    `az role assignment create --assignee ${client} --role "Contributor" --scope /subscriptions/${sub}/resourceGroups/${rg}`,
-    '# An admin must pre-assign the TTL self-destruct identity its delete rights',
-    '# on this resource group (the app cannot assign roles on this path).',
-  ].join('\n');
-}
 
 // Reusable "generate a change request" block for operators who must ASK another
 // team to perform a setup step (create the app registration, assign roles, or
@@ -1201,7 +1170,11 @@ function ResourceSelectionPanel({
   // SELECTED (or bootstrap-typed) subscription and the derived/selected resource
   // group. Blank fields stay as <placeholders> so a partial copy is visibly
   // incomplete. Copy/download report via a small feedback line (no runner).
-  const script = buildAzScript(setupPath, clientId, subscriptionId, rgName);
+  const script = renderRoleAssignmentCli(setupPath, {
+    clientId,
+    subscriptionId,
+    resourceGroup: rgName,
+  });
   const copyScript = async () => {
     try {
       await navigator.clipboard.writeText(script);
