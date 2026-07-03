@@ -87,6 +87,7 @@ This settles the open air-gap-export spike: does the sandboxed iframe allow Blob
 1. Live Preview: run Panel 7 (Download artifact); check your browser's downloads for `spike-artifact.json`.
 2. Deploy the app (Deploy in the Live Preview corner), stop the dev server, open the installed app under Apps > Installed, and run Panel 7 again.
 - Record for EACH mode: did the file actually download? Live Preview and installed can differ; the installed result is the one that matters for the product. If either blocks the download, that is the finding that decides the air-gap export mechanism.
+- RESULT (2026-07-02): PASS - spike-artifact.json downloaded with the expected payload (verified in the user's Downloads). Blob downloads work in the iframe, so the air-gap export design (generated artifacts as browser downloads) is viable. If this run was Live Preview, repeat once in installed mode after Deploy to close the spike completely.
 
 ## 11. Profile persistence and switching - CRITICAL
 
