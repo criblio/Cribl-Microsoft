@@ -125,6 +125,12 @@ export interface OnboardTableOutcome {
   logsIngestionEndpoint: string;
   streamName: string;
   destinationId: string;
+  /** Azure scope the DCR was deployed into - explicit so summaries and job
+   * records answer "where" without relying on the connection state at the
+   * time of the run. */
+  subscriptionId: string;
+  resourceGroup: string;
+  workspaceName: string;
   /**
    * The Cribl worker group the destination was created in (and, when the
    * commit-and-deploy step succeeded, deployed to). Carried in the outcome so
@@ -548,6 +554,9 @@ export async function onboardTable(
       logsIngestionEndpoint: deployment.logsIngestionEndpoint,
       streamName: dcrRequest.streamName,
       destinationId,
+      subscriptionId: input.subscriptionId,
+      resourceGroup: input.resourceGroup,
+      workspaceName: input.workspaceName,
       groupId: input.groupId,
       commitVersion,
     };

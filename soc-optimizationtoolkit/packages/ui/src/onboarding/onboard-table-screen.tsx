@@ -28,25 +28,10 @@ import type {
 } from "@soc/core";
 import { usePorts } from "../ports-context";
 import { formatStepLine } from "./step-line";
+import { RecentRuns } from "./recent-runs";
+import { summaryText } from "./summary";
 
 type RunStatus = "idle" | "running" | "ok" | "failed";
-
-/** Build the monospace summary block for a successful run. */
-function summaryText(outcome: OnboardTableOutcome): string {
-  const commitLine =
-    outcome.commitVersion !== null
-      ? `${outcome.commitVersion} (deployed)`
-      : "not deployed - commit and deploy manually in Cribl (see the commit-and-deploy step above)";
-  return [
-    `DCR name:            ${outcome.dcrName}`,
-    `DCR immutable id:    ${outcome.dcrImmutableId}`,
-    `Ingestion endpoint:  ${outcome.logsIngestionEndpoint}`,
-    `Stream name:         ${outcome.streamName}`,
-    `Destination id:      ${outcome.destinationId}`,
-    `Worker group:        ${outcome.groupId}`,
-    `Cribl commit:        ${commitLine}`,
-  ].join("\n");
-}
 
 /**
  * The walking-skeleton onboarding screen: table name + worker group +
@@ -69,6 +54,9 @@ export function OnboardTableScreen() {
   const [steps, setSteps] = useState<JobStep[]>([]);
   const [outcome, setOutcome] = useState<OnboardTableOutcome | null>(null);
   const [runError, setRunError] = useState("");
+  // Bumped after every run (success or failure) so the persisted-run history
+  // below reloads and shows the record that was just written.
+  const [historyToken, setHistoryToken] = useState(0);
 
   // Populate the worker-group dropdown from the CriblClient port. On failure
   // the raw error is shown with a retry button - no silent empty dropdown.
@@ -132,6 +120,7 @@ export function OnboardTableScreen() {
       // typed for (write-only storage means it could never be re-read).
       setIngestionClientSecret("");
       setRunning(false);
+      setHistoryToken((n) => n + 1);
     }
   };
 
@@ -262,6 +251,7 @@ export function OnboardTableScreen() {
         the role guidance in panel 4 (Select resources and grant permissions)
         of the Spike Harness view.
       </p>
+      <RecentRuns refreshToken={historyToken} />
     </section>
   );
 }
