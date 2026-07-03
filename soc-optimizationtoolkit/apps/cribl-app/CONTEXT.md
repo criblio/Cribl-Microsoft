@@ -8,4 +8,4 @@ Boundaries: binds platform adapters to @soc/core ports and renders @soc/ui. App-
 
 Key files: config/proxies.yml and config/policies.yml (admin-reviewed external surface - update in the same PR as the feature needing them), scripts/package.mjs (version bump + .tgz build), vite.config.ts (dev-mode config watcher + package endpoint).
 
-Status: stock scaffold; feature implementation follows the roadmap in ../../docs/feature-catalog.md.
+Status: Phase 1 spike harness plus the first shared screen. App.tsx now has a top-level view switcher (Spike Harness | Onboard walking skeleton, harness default); the Onboard view builds makeCloudPorts(activeTenant) and mounts @soc/ui's OnboardTableScreen inside PortsProvider with the active connection profile's config, gated behind a completeness check (tenantId/clientId/subscriptionId/resourceGroup/workspaceName). Harness panels are unchanged. Feature implementation follows the roadmap in ../../docs/feature-catalog.md.

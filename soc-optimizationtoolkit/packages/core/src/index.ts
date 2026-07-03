@@ -4,6 +4,7 @@
 //   ports/    port interfaces both app shells bind adapters against
 //   testing/  in-memory fakes for every port (unit tests only; never bind in a shell)
 //   domain/   pure domain modules (dcr-naming, schema-mapping; more per roadmap)
+//   usecases/ orchestration over the ports (onboard-table walking skeleton)
 
 export * from "./ports";
 export * from "./testing";
@@ -17,3 +18,6 @@ export * from "./domain/connection-invalidation";
 export * from "./domain/dataflow-diagram";
 export * from "./domain/change-request";
 export * from "./domain/role-plan";
+export * from "./domain/dcr-request";
+export * from "./domain/sentinel-destination";
+export * from "./usecases";

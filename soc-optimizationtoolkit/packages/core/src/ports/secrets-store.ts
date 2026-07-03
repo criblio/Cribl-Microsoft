@@ -10,8 +10,10 @@
 export interface SecretSetOptions {
   /**
    * When true the value is stored as a secret. On some platforms (notably the
-   * Cribl KV store) encrypted entries are WRITE-ONLY: reading them back yields
-   * a redacted placeholder instead of the plaintext. Defaults to false.
+   * Cribl KV store) encrypted entries are WRITE-ONLY: reading them back never
+   * yields the plaintext - `get` resolves a redacted placeholder or null
+   * (the Cribl platform rejects the read with 403 "Cannot read encrypted
+   * value", which adapters surface as null). Defaults to false.
    */
   encrypted?: boolean;
 }
@@ -33,10 +35,12 @@ export interface SecretsStore {
 
   /**
    * Read the value stored under `key`. Resolves null when the key does not
-   * exist. For entries written with `{ encrypted: true }`, some platforms
-   * return a redacted placeholder rather than the plaintext (Cribl KV
-   * write-only semantic) - callers must not assume an encrypted value can be
-   * read back and should re-`set` rather than read-modify-write secrets.
+   * exist. For entries written with `{ encrypted: true }`, the plaintext is
+   * never returned: platforms resolve a redacted placeholder or null - the
+   * present-but-unreadable case (the Cribl KV store refuses the read with
+   * 403 "Cannot read encrypted value"; adapters map that to null, not a
+   * rejection). Callers must not assume an encrypted value can be read back
+   * and should re-`set` rather than read-modify-write secrets.
    */
   get(key: string): Promise<string | null>;
 

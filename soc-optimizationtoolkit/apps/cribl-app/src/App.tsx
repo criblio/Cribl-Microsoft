@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
+import { OnboardTableScreen, PortsProvider } from '@soc/ui';
 import {
   allGranted,
   appRegistrationRequest,
@@ -31,6 +32,13 @@ import type {
   ProfileStore,
   RequiredAction,
 } from '@soc/core';
+// The proven platform primitives (bridge-safe fetch, KV helpers, ARM token
+// flow) live in platform/http.ts as the single source of truth, shared with
+// the port adapters in platform/adapters.ts.
+import { acquireArmToken, fetchWithTimeout, kvDelete, kvUrl } from './platform/http';
+// Cloud-shell port adapters for the shared @soc/ui screens: the six @soc/core
+// ports bound to the platform primitives (KV, proxy-injected auth, downloads).
+import { makeCloudPorts } from './platform/adapters';
 
 // The app's display name, shown in generated change-request tickets and the
 // architecture diagrams embedded in them. The change-request text and diagrams
@@ -52,6 +60,20 @@ const APP_NAME = 'SOC Optimization Toolkit';
 // written this session; it is never persisted and resets to null on reload.
 
 type Status = 'idle' | 'running' | 'ok' | 'failed';
+
+// Top-level views: the Phase 1 diagnostics harness (default, panels intact)
+// and the first shared feature screen from @soc/ui (onboard walking skeleton).
+type AppView = 'harness' | 'onboard';
+
+// The AzureConfig fields the Onboard screen cannot run without. tenantId
+// drives the ARM token flow; the rest address the workspace the DCR targets.
+const ONBOARD_REQUIRED_FIELDS = [
+  'tenantId',
+  'clientId',
+  'subscriptionId',
+  'resourceGroup',
+  'workspaceName',
+] as const;
 
 // Shared runner state for a panel: status line plus a monospace output area.
 // The task either resolves to the output text (status ok) or throws; thrown
@@ -97,63 +119,6 @@ function Panel({ index, title, status, output, actionLabel, onAction, children }
       {output !== '' && <pre className="result">{output}</pre>}
     </section>
   );
-}
-
-function kvUrl(key: string): string {
-  return `${window.CRIBL_API_URL}/kvstore/${key}`;
-}
-
-// KV DELETE with the platform quirk handled: the bridge processes the delete
-// server-side but has been observed to never return the response (verified
-// live 2026-07-02 - keys are gone despite the timeout). Fire with a short
-// race-timeout and treat a timeout as success. Callers must never sequence
-// follow-up work on this response - fire deletes independently.
-async function kvDelete(key: string): Promise<void> {
-  try {
-    await fetchWithTimeout(kvUrl(key), { method: 'DELETE' }, 5000);
-  } catch {
-    // Best-effort by design: the delete is processed even when the bridge
-    // loses the response.
-  }
-}
-
-// fetch with a hard client-side timeout. Platform-bridged requests (KV store,
-// product API) are proxied through the parent Cribl window; if that bridge is
-// detached (typically after a dev-mode hot reload), the promise never settles
-// and there is no platform timeout to save us - so every harness call that
-// could hang must go through this wrapper and fail loudly instead.
-async function fetchWithTimeout(
-  url: string,
-  init?: RequestInit,
-  timeoutMs = 15000
-): Promise<Response> {
-  const controller = new AbortController();
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const timeout = new Promise<never>((_, reject) => {
-    timer = setTimeout(() => {
-      controller.abort();
-      reject(
-        new Error(
-          `timed out after ${timeoutMs / 1000}s - the platform bridge did not respond ` +
-            '(and its fetch implementation ignores abort signals, so the underlying ' +
-            'request may still be pending). If everything times out, reload the whole ' +
-            'Cribl browser page; if only specific verbs time out, that is a platform finding.'
-        )
-      );
-    }, timeoutMs);
-  });
-  // Promise.race, NOT AbortController alone: the platform's locked fetch bridge
-  // has been observed to ignore the abort signal, leaving the fetch promise
-  // pending forever. The race settles on our timer regardless. The no-op catch
-  // keeps an eventual late rejection of the losing fetch from surfacing as an
-  // unhandled rejection.
-  const request = fetch(url, { ...init, signal: controller.signal });
-  request.catch(() => undefined);
-  try {
-    return await Promise.race([request, timeout]);
-  } finally {
-    clearTimeout(timer);
-  }
 }
 
 // Result of loading the profile store, distinguishing a genuinely absent key
@@ -658,53 +623,6 @@ function AppRegistrationConnectPanel({
       </p>
     </Panel>
   );
-}
-
-// Parsed subset of the Azure AD token endpoint response the harness consumes.
-interface ArmTokenResult {
-  access_token: string;
-  token_type?: string;
-  expires_in?: number;
-}
-
-// Run the client_credentials/ARM-scope token request for the given tenant. The
-// app sets no Authorization header: proxies.yml injects Basic ${kv.azureBasic}
-// server-side (the active connection's secret). Returns the parsed token so the
-// connect action (panel 3), resource discovery and the permission preflight
-// (panel 4), and the token panel (panel 5) share one implementation. The tenant
-// comes from the ACTIVE connection's config.
-async function acquireArmToken(tenantId: string): Promise<ArmTokenResult> {
-  const tenant = tenantId.trim();
-  if (tenant === '') {
-    throw new Error(
-      'The active connection has no tenant ID - enter the tenant ID in panel 3 (it is remembered per connection), then retry'
-    );
-  }
-  const form = new URLSearchParams({
-    grant_type: 'client_credentials',
-    scope: 'https://management.azure.com/.default',
-  });
-  const res = await fetch(
-    `https://login.microsoftonline.com/${encodeURIComponent(tenant)}/oauth2/v2.0/token`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: form.toString(),
-    }
-  );
-  const text = await res.text();
-  if (!res.ok) {
-    throw new Error(`token endpoint: HTTP ${res.status}\n${text}`);
-  }
-  const token = JSON.parse(text) as {
-    token_type?: string;
-    expires_in?: number;
-    access_token?: string;
-  };
-  if (typeof token.access_token !== 'string' || token.access_token === '') {
-    throw new Error(`token endpoint: HTTP ${res.status} but no access_token in body\n${text}`);
-  }
-  return { access_token: token.access_token, token_type: token.token_type, expires_in: token.expires_in };
 }
 
 // Permission preflight: the RBAC permissions API returns the caller's EFFECTIVE
@@ -1570,6 +1488,10 @@ function App() {
   const [store, setStore] = useState<ProfileStore>(EMPTY_PROFILE_STORE);
   const [hydrated, setHydrated] = useState(false);
 
+  // Which top-level view is showing. Defaults to the harness; the Onboard
+  // view mounts the shared @soc/ui screen against the cloud port adapters.
+  const [view, setView] = useState<AppView>('harness');
+
   // Which profile's secret was last written to the single azureBasic slot THIS
   // session, plus the identity it was written under. Non-persisted: both reset to
   // null on reload (secrets are never remembered per profile across reloads).
@@ -1669,6 +1591,17 @@ function App() {
 
   const activeConfig = getActiveConfig(store);
   const activeProfile = getActiveProfile(store);
+
+  // The six cloud port adapters for the @soc/ui screens, rebuilt when the
+  // ACTIVE connection's tenant changes (the ARM token flow is tenant-scoped;
+  // see makeCloudPorts). Construction is side-effect free.
+  const cloudPorts = useMemo(() => makeCloudPorts(activeConfig.tenantId), [activeConfig.tenantId]);
+
+  // Fields the Onboard screen still needs. Non-empty means the screen is
+  // replaced by a message pointing at panels 3 and 4 in the harness view.
+  const missingOnboardFields = ONBOARD_REQUIRED_FIELDS.filter(
+    (field) => activeConfig[field].trim() === ''
+  );
   // The change-request context handed to panels 3 and 4: the fixed app name plus
   // the active connection's non-secret config. Re-derived each render so the
   // generated tickets and their embedded diagrams reflect the current inputs.
@@ -1831,13 +1764,41 @@ function App() {
 
   return (
     <div className="harness">
+      <nav className="view-tabs">
+        <button
+          className={`view-tab${view === 'harness' ? ' view-tab-active' : ''}`}
+          onClick={() => setView('harness')}
+        >
+          Spike Harness
+        </button>
+        <button
+          className={`view-tab${view === 'onboard' ? ' view-tab-active' : ''}`}
+          onClick={() => setView('onboard')}
+        >
+          Onboard (walking skeleton)
+        </button>
+      </nav>
+
       <header className="harness-header">
-        <h1 className="harness-title">Phase 1 Spike Harness</h1>
-        <p className="harness-subtitle">
-          Sequential diagnostics for the Cribl App Platform: globals, KV store semantics,
-          proxy header injection, Azure AD token flow, ARM access, and iframe download behavior.
-          Pick or create a connection above, then run the panels top to bottom.
-        </p>
+        {view === 'harness' ? (
+          <>
+            <h1 className="harness-title">Phase 1 Spike Harness</h1>
+            <p className="harness-subtitle">
+              Sequential diagnostics for the Cribl App Platform: globals, KV store semantics,
+              proxy header injection, Azure AD token flow, ARM access, and iframe download behavior.
+              Pick or create a connection above, then run the panels top to bottom.
+            </p>
+          </>
+        ) : (
+          <>
+            <h1 className="harness-title">Onboard a native table</h1>
+            <p className="harness-subtitle">
+              The first walking-skeleton feature screen from the shared UI package: deploy a
+              Kind:Direct DCR for one native Log Analytics table and create the matching Cribl
+              Sentinel destination, end to end through the shared onboardTable use-case.
+            </p>
+          </>
+        )}
       </header>
 
       <div className="connection-bar">
@@ -1912,6 +1873,36 @@ function App() {
         )}
       </div>
 
+      {view === 'onboard' ? (
+        missingOnboardFields.length > 0 ? (
+          <section className="panel">
+            <h2 className="panel-title">Connection incomplete</h2>
+            <p className="panel-desc">
+              The active connection is missing required configuration:{' '}
+              {missingOnboardFields.join(', ')}. Switch to the Spike Harness view and complete
+              panel 3 (App registration and connect) and panel 4 (Select resources and grant
+              permissions) - connecting fills the tenant and client ids, and selecting a
+              subscription and workspace fills the rest. This screen unlocks once all five
+              fields are set.
+            </p>
+          </section>
+        ) : (
+          <>
+            {!secretLive && (
+              <p className="connection-notice">
+                This connection&apos;s client secret has not been entered this session. A secret
+                connected in an earlier session may still be live server-side; if the run fails
+                acquiring a token, re-enter the secret in panel 3 (Save and connect) of the
+                Spike Harness view first.
+              </p>
+            )}
+            <PortsProvider ports={cloudPorts} config={activeConfig}>
+              <OnboardTableScreen key={`onboard-${store.activeProfileId ?? 'none'}`} />
+            </PortsProvider>
+          </>
+        )
+      ) : (
+        <>
       <PlatformGlobalsPanel />
       <KvStorePanel />
       <AppRegistrationConnectPanel
@@ -1945,6 +1936,8 @@ function App() {
       <TokenAcquisitionPanel tenantId={activeConfig.tenantId} />
       <ArmCallPanel />
       <ArtifactDownloadPanel />
+        </>
+      )}
     </div>
   );
 }

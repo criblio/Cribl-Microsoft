@@ -1,8 +1,42 @@
 # Product API access declaration. Declare Cribl product API paths your app needs to access.
 # At install time, admins see exactly which platform resources the app will use.
+#
+# Same-PR contract: every product API path the code calls is declared here in
+# the same change that introduces the call, and nothing more (least
+# privilege). App-scoped paths (/a/{appId}/kvstore/*, /a/{appId}/proxy/*) are
+# granted automatically via the AppUser role and are NOT redeclared here.
+#
+# Current callers: src/platform/adapters.ts PlatformCriblClient, driving the
+# @soc/core onboardTable use-case. Path shapes match the vendored
+# packages/core/assets/cribl-openapi.json:
+#   /master/groups (get)               - listGroups() group picker
+#   /system/outputs (post)             - in /m/{groupId} context: create the
+#                                        Sentinel destination
+#   /system/outputs/{id} (get)         - in /m/{groupId} context: verify step
+#                                        reads the created destination back
+#   /version/commit (post)             - in /m/{groupId} context: commit the
+#                                        group's pending config
+#   /master/groups/{id}/deploy (patch) - leader-level deploy of the committed
+#                                        version to the group
 
-# policies:
-#   - object: '/system/lookups'
-#     actions: ['GET']
-#   - object: '/products/stream/groups'
-#     actions: ['GET']
+policies:
+  # List Worker Groups / Edge Fleets (CriblClient.listGroups group picker).
+  - object: '/master/groups'
+    actions: ['GET']
+  # Create the Sentinel destination in a Worker Group context (onboard-table
+  # step create-cribl-destination). Nothing lists the collection yet, so only
+  # POST is declared (least privilege).
+  - object: '/m/:gid/system/outputs'
+    actions: ['POST']
+  # Read an individual destination back (onboard-table verify step GETs
+  # /m/{groupId}/system/outputs/{id}).
+  - object: '/m/:gid/system/outputs/*'
+    actions: ['GET']
+  # Commit the group's pending config (onboard-table commit-and-deploy step;
+  # the top-level /version/commit route called in /m/{groupId} context).
+  - object: '/m/:gid/version/commit'
+    actions: ['POST']
+  # Deploy the committed version to the group. This is a LEADER route (no
+  # /m/ prefix), called as PATCH /master/groups/{groupId}/deploy.
+  - object: '/master/groups/:id/deploy'
+    actions: ['PATCH']

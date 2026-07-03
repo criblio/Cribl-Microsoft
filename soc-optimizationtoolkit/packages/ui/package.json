@@ -9,6 +9,9 @@
     "test": "vitest run --passWithNoTests",
     "typecheck": "tsc --noEmit"
   },
+  "dependencies": {
+    "@soc/core": "*"
+  },
   "peerDependencies": {
     "react": "^19.0.0"
   },

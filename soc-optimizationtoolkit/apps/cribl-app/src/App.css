@@ -351,3 +351,32 @@ body {
   border: 1px solid #ffa39e;
   padding: 8px 12px;
 }
+
+.view-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.view-tab {
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 20px;
+  padding: 6px 16px;
+  border: 1px solid #d9d9d9;
+  background: #fafafa;
+  color: #595959;
+  cursor: pointer;
+}
+
+.view-tab:hover {
+  border-color: #1890ff;
+  color: #1890ff;
+}
+
+.view-tab-active {
+  background: #ffffff;
+  border-color: #1890ff;
+  color: #1890ff;
+  font-weight: 600;
+}
