@@ -6,8 +6,8 @@
  *   - setupPath-driven role selection in roleAssignmentRequest (lab-new-rg
  *     carries RBAC Administrator + the "Constrain roles and principal types"
  *     condition; existing does not)
- *   - the includeDiagram / diagramFormat options
- *   - ASCII-only-ness of the full ticket body
+ *   - the includeDiagram option and the embedded Mermaid fenced block
+ *   - ASCII-only-ness of the full ticket body (the Mermaid SOURCE is 7-bit)
  */
 import { describe, expect, it } from "vitest";
 import {
@@ -191,25 +191,23 @@ describe("diagram options", () => {
       includeDiagram: false,
     });
     expect(out).not.toContain("Why (authentication flow)");
-    expect(out).not.toContain("+--");
     expect(out).not.toContain("```mermaid");
     // The rest of the ticket is still present.
     expect(out).toContain("What is requested");
   });
 
-  it("diagramFormat: mermaid embeds a fenced flowchart instead of ascii", () => {
+  it("includeDiagram: true (explicit) embeds the mermaid fenced block", () => {
     const out = roleAssignmentRequest(ctxFor("existing"), {
-      diagramFormat: "mermaid",
+      includeDiagram: true,
     });
     expect(out).toContain("```mermaid");
     expect(out).toContain("flowchart");
-    expect(out).not.toContain("+--");
   });
 
-  it("defaults to an ascii diagram, included", () => {
+  it("defaults to embedding the mermaid fenced block", () => {
     const out = appRegistrationRequest(ctxFor("existing"));
-    expect(out).toContain("+--");
-    expect(out).not.toContain("```mermaid");
+    expect(out).toContain("```mermaid");
+    expect(out).toContain("flowchart");
   });
 });
 
@@ -221,14 +219,12 @@ describe("byte-safety and determinism", () => {
   ] as const;
   const paths: AzureSetupPath[] = ["existing", "lab-new-rg", "lab-byo-rg"];
 
-  it("every ticket body is 7-bit ASCII with no emoji", () => {
+  it("every ticket body is 7-bit ASCII with no emoji (mermaid source included)", () => {
     for (const gen of generators) {
       for (const path of paths) {
-        for (const format of ["ascii", "mermaid"] as const) {
-          const out = gen(ctxFor(path), { diagramFormat: format });
-          expect(hasNonAscii(out)).toBe(false);
-          expect(hasEmoji(out)).toBe(false);
-        }
+        const out = gen(ctxFor(path));
+        expect(hasNonAscii(out)).toBe(false);
+        expect(hasEmoji(out)).toBe(false);
       }
     }
   });

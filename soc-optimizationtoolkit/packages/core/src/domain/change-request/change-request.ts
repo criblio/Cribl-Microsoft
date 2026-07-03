@@ -5,7 +5,11 @@
  * assignments themselves and must ask another team to do it. These generators
  * turn a {@link ChangeRequestContext} into a complete, paste-ready ticket body
  * (title + what is requested + justification + concrete specifics + an embedded
- * architecture diagram) so the request is unambiguous and self-justifying.
+ * Mermaid architecture diagram) so the request is unambiguous and
+ * self-justifying. The embedded diagram is a fenced ```mermaid block whose
+ * SOURCE text is plain 7-bit ASCII, so the whole ticket body pastes safely into
+ * any plain-text system and renders as a diagram wherever Markdown+Mermaid is
+ * supported.
  *
  * The RBAC role model in {@link roleAssignmentRequest} mirrors EXACTLY the role
  * logic the setup wizard's az-CLI script builder uses (roles, scopes, and the
@@ -22,11 +26,8 @@
 import type { AzureConfig, AzureSetupPath } from "../azure-config";
 import { rolePlanForSetupPath } from "../role-plan";
 import {
-  authFlowAscii,
   authFlowMermaid,
-  dataExportFlowAscii,
   dataExportFlowMermaid,
-  dcrDeployFlowAscii,
   dcrDeployFlowMermaid,
   resolveNames,
 } from "../dataflow-diagram";
@@ -44,15 +45,10 @@ export interface ChangeRequestContext {
   config: AzureConfig;
 }
 
-/** Which diagram rendering to embed in a ticket. */
-export type DiagramFormat = "ascii" | "mermaid";
-
-/** Per-generator options; both fields default to ascii + included. */
+/** Per-generator options. */
 export interface ChangeRequestOptions {
-  /** Embed the architecture diagram(s). Defaults to `true`. */
+  /** Embed the Mermaid architecture diagram(s). Defaults to `true`. */
   includeDiagram?: boolean;
-  /** Diagram rendering to embed. Defaults to `"ascii"`. */
-  diagramFormat?: DiagramFormat;
 }
 
 /** One requested role assignment: the role, its scope, and why it is needed. */
@@ -130,21 +126,15 @@ function rolesForSetupPath(
 }
 
 /**
- * Pick and render a diagram per options, or `null` when diagrams are suppressed.
- * Defaults to the ASCII variant, included.
+ * Render the Mermaid diagram, or `null` when diagrams are suppressed via
+ * `includeDiagram: false`. Included by default.
  */
 function diagramFor(
   ctx: DiagramContext,
   options: ChangeRequestOptions | undefined,
-  ascii: (c: DiagramContext) => string,
   mermaid: (c: DiagramContext) => string,
 ): string | null {
-  const include = options?.includeDiagram ?? true;
-  if (!include) {
-    return null;
-  }
-  const format = options?.diagramFormat ?? "ascii";
-  return format === "mermaid" ? mermaid(ctx) : ascii(ctx);
+  return (options?.includeDiagram ?? true) ? mermaid(ctx) : null;
 }
 
 /**
@@ -197,7 +187,7 @@ export function appRegistrationRequest(
       ].join("\n"),
     ),
   ];
-  const diagram = diagramFor(ctx, options, authFlowAscii, authFlowMermaid);
+  const diagram = diagramFor(ctx, options, authFlowMermaid);
   if (diagram !== null) {
     parts.push(section("Why (authentication flow)", diagram));
   }
@@ -256,18 +246,8 @@ export function roleAssignmentRequest(
     ),
   ];
 
-  const deploy = diagramFor(
-    ctx,
-    options,
-    dcrDeployFlowAscii,
-    dcrDeployFlowMermaid,
-  );
-  const exported = diagramFor(
-    ctx,
-    options,
-    dataExportFlowAscii,
-    dataExportFlowMermaid,
-  );
+  const deploy = diagramFor(ctx, options, dcrDeployFlowMermaid);
+  const exported = diagramFor(ctx, options, dataExportFlowMermaid);
   if (deploy !== null && exported !== null) {
     parts.push(
       section("Why (deploy and ingestion flows)", deploy + "\n\n" + exported),
@@ -330,12 +310,7 @@ export function resourceCreationRequest(
     ),
   ];
 
-  const diagram = diagramFor(
-    ctx,
-    options,
-    dataExportFlowAscii,
-    dataExportFlowMermaid,
-  );
+  const diagram = diagramFor(ctx, options, dataExportFlowMermaid);
   if (diagram !== null) {
     parts.push(section("Why (data export flow)", diagram));
   }

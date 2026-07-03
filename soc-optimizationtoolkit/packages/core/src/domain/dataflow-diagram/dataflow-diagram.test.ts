@@ -1,16 +1,13 @@
 /**
  * Characterization tests for the dataflow-diagram renderer. Output is
  * deterministic and pure, so these tests pin exact substrings, the placeholder
- * behaviour for blank fields, ASCII-only-ness (every byte < 128, no emoji), and
- * the Mermaid `flowchart` marker.
+ * behaviour for blank fields, ASCII-only-ness of the Mermaid source (every byte
+ * < 128, no emoji), and the Mermaid `flowchart` marker.
  */
 import { describe, expect, it } from "vitest";
 import {
-  authFlowAscii,
   authFlowMermaid,
-  dataExportFlowAscii,
   dataExportFlowMermaid,
-  dcrDeployFlowAscii,
   dcrDeployFlowMermaid,
   resolveNames,
 } from "./index";
@@ -65,12 +62,6 @@ function hasEmoji(s: string): boolean {
   return false;
 }
 
-const ASCII_DIAGRAMS = [
-  authFlowAscii,
-  dataExportFlowAscii,
-  dcrDeployFlowAscii,
-] as const;
-
 const MERMAID_DIAGRAMS = [
   authFlowMermaid,
   dataExportFlowMermaid,
@@ -100,89 +91,6 @@ describe("resolveNames", () => {
   });
 });
 
-describe("ascii diagrams: content", () => {
-  it("authFlowAscii names the app, tenant, client and emphasizes server-side secret", () => {
-    const out = authFlowAscii(FULL_CTX);
-    expect(out).toContain("Cribl app (browser)");
-    expect(out).toContain("app: Cribl SOC Toolkit");
-    expect(out).toContain("login.microsoftonline.com");
-    expect(out).toContain("tenant: 22222222-2222-2222-2222-222222222222");
-    expect(out).toContain("client: 11111111-1111-1111-1111-111111111111");
-    expect(out).toContain("Azure Resource Manager");
-    expect(out).toContain("injects client secret");
-    expect(out).toContain("never sent to or handled by the");
-    // ASCII box + arrow characters are present.
-    expect(out).toContain("+--");
-    expect(out).toContain("v");
-  });
-
-  it("dataExportFlowAscii names the workspace and resource group", () => {
-    const out = dataExportFlowAscii(FULL_CTX);
-    expect(out).toContain("Azure diagnostic settings");
-    expect(out).toContain("Event Hub");
-    expect(out).toContain("Cribl Stream");
-    expect(out).toContain("reduce / normalize");
-    expect(out).toContain("Logs Ingestion API (via DCR)");
-    expect(out).toContain("Microsoft Sentinel");
-    expect(out).toContain("workspace: law-soc-lab");
-    expect(out).toContain("resource group: rg-soc-lab");
-  });
-
-  it("dcrDeployFlowAscii names subscription, resource group and workspace", () => {
-    const out = dcrDeployFlowAscii(FULL_CTX);
-    expect(out).toContain("Cribl SOC Toolkit");
-    expect(out).toContain("Azure Resource Manager");
-    expect(out).toContain("subscription: 33333333-3333-3333-3333-333333333333");
-    expect(out).toContain("DCR + custom table");
-    expect(out).toContain("resource group: rg-soc-lab");
-    expect(out).toContain("workspace: law-soc-lab");
-  });
-
-  it("renders placeholders for a blank context", () => {
-    for (const render of ASCII_DIAGRAMS) {
-      const out = render(EMPTY_CTX);
-      expect(out).toContain("<");
-      expect(out).toContain(">");
-    }
-    expect(authFlowAscii(EMPTY_CTX)).toContain("tenant: <tenant id>");
-    expect(dataExportFlowAscii(EMPTY_CTX)).toContain(
-      "workspace: <workspace name>",
-    );
-    expect(dcrDeployFlowAscii(EMPTY_CTX)).toContain(
-      "resource group: <resource group>",
-    );
-  });
-});
-
-describe("ascii diagrams: byte-safety and determinism", () => {
-  it("contain only 7-bit ASCII and no emoji", () => {
-    for (const render of ASCII_DIAGRAMS) {
-      for (const ctx of [FULL_CTX, EMPTY_CTX]) {
-        const out = render(ctx);
-        expect(hasNonAscii(out)).toBe(false);
-        expect(hasEmoji(out)).toBe(false);
-        for (let i = 0; i < out.length; i++) {
-          expect(out.charCodeAt(i)).toBeLessThan(128);
-        }
-      }
-    }
-  });
-
-  it("are deterministic (same input -> identical output)", () => {
-    for (const render of ASCII_DIAGRAMS) {
-      expect(render(FULL_CTX)).toBe(render(FULL_CTX));
-    }
-  });
-
-  it("lay out ascii diagrams within roughly 72 columns", () => {
-    for (const render of ASCII_DIAGRAMS) {
-      for (const line of render(FULL_CTX).split("\n")) {
-        expect(line.length).toBeLessThanOrEqual(72);
-      }
-    }
-  });
-});
-
 describe("mermaid diagrams", () => {
   it("are fenced flowchart blocks", () => {
     for (const render of MERMAID_DIAGRAMS) {
@@ -199,6 +107,9 @@ describe("mermaid diagrams", () => {
         const out = render(ctx);
         expect(hasNonAscii(out)).toBe(false);
         expect(hasEmoji(out)).toBe(false);
+        for (let i = 0; i < out.length; i++) {
+          expect(out.charCodeAt(i)).toBeLessThan(128);
+        }
       }
     }
   });
@@ -209,10 +120,41 @@ describe("mermaid diagrams", () => {
     expect(out).not.toContain("<tenant id>");
   });
 
-  it("carry the real names when present", () => {
-    expect(dataExportFlowMermaid(FULL_CTX)).toContain("law-soc-lab");
-    expect(dcrDeployFlowMermaid(FULL_CTX)).toContain(
-      "33333333-3333-3333-3333-333333333333",
+  it("entity-encode a placeholder in every diagram for a blank context", () => {
+    for (const render of MERMAID_DIAGRAMS) {
+      const out = render(EMPTY_CTX);
+      expect(out).toContain("&lt;");
+      expect(out).toContain("&gt;");
+    }
+    expect(dataExportFlowMermaid(EMPTY_CTX)).toContain(
+      "workspace &lt;workspace name&gt;",
     );
+    expect(dcrDeployFlowMermaid(EMPTY_CTX)).toContain(
+      "resource group &lt;resource group&gt;",
+    );
+  });
+
+  it("carry the real names when present", () => {
+    const auth = authFlowMermaid(FULL_CTX);
+    expect(auth).toContain("Cribl SOC Toolkit");
+    expect(auth).toContain("login.microsoftonline.com");
+    expect(auth).toContain("tenant 22222222-2222-2222-2222-222222222222");
+    expect(auth).toContain("client 11111111-1111-1111-1111-111111111111");
+
+    const exported = dataExportFlowMermaid(FULL_CTX);
+    expect(exported).toContain("Event Hub");
+    expect(exported).toContain("law-soc-lab");
+    expect(exported).toContain("rg-soc-lab");
+
+    const deploy = dcrDeployFlowMermaid(FULL_CTX);
+    expect(deploy).toContain("DCR + custom table");
+    expect(deploy).toContain("33333333-3333-3333-3333-333333333333");
+  });
+
+  it("are deterministic (same input -> identical output)", () => {
+    for (const render of MERMAID_DIAGRAMS) {
+      expect(render(FULL_CTX)).toBe(render(FULL_CTX));
+      expect(render(EMPTY_CTX)).toBe(render(EMPTY_CTX));
+    }
   });
 });

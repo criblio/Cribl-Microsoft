@@ -1,7 +1,7 @@
 /**
  * Dataflow diagram renderer - PURE, DETERMINISTIC DIAGRAM CONTRACT.
  *
- * Renders ASCII and Mermaid diagrams of the app's Azure dataflows so they can be
+ * Renders Mermaid diagrams of the app's Azure dataflows so they can be
  * embedded in change-request tickets (see ../change-request). The diagrams are
  * parameterized with the caller's real names where present; any blank field
  * renders as a clear placeholder (for example `<tenant id>`) so a partially
@@ -9,8 +9,9 @@
  *
  * Pure: no IO, no fetch, no React, and no Date / Math.random / crypto. Given the
  * same context the output is byte-for-byte identical, so every function is
- * snapshot-testable. ASCII diagrams use ONLY 7-bit ASCII drawing characters
- * (- | + > < v ^ [ ] ( ) and text) and are laid out to fit roughly 72 columns.
+ * snapshot-testable. The Mermaid SOURCE text is plain 7-bit ASCII: angle
+ * brackets and quotes in labels are entity-encoded (see mermaidLabel) so
+ * placeholders survive rendering.
  */
 
 import type { AzureConfig } from "../azure-config";
@@ -61,38 +62,6 @@ export function resolveNames(ctx: DiagramContext): ResolvedNames {
 }
 
 /**
- * Render a bordered ASCII box sized to its widest line. Returns the box as an
- * array of lines (no trailing newline).
- */
-function box(lines: string[]): string[] {
-  const width = lines.reduce(
-    (max, line) => (line.length > max ? line.length : max),
-    0,
-  );
-  const border = "+" + "-".repeat(width + 2) + "+";
-  const body = lines.map(
-    (line) => "| " + line + " ".repeat(width - line.length) + " |",
-  );
-  return [border, ...body, border];
-}
-
-/**
- * Render a downward connector between two boxes, with an optional edge label.
- * Uses only ASCII `|` and `v`.
- */
-function arrowDown(label: string): string[] {
-  if (label === "") {
-    return ["     |", "     v"];
-  }
-  return ["     |", "     | " + label, "     v"];
-}
-
-/** Join a sequence of line-arrays into a single newline-delimited string. */
-function stack(parts: string[][]): string {
-  return parts.flat().join("\n");
-}
-
-/**
  * Escape a value for use inside a Mermaid double-quoted node label. Angle
  * brackets (which Mermaid would treat as HTML) and quotes are entity-encoded so
  * placeholders like `<tenant id>` survive rendering. Output stays 7-bit ASCII.
@@ -115,39 +84,10 @@ function fence(lines: string[]): string {
 // ---------------------------------------------------------------------------
 
 /**
- * ASCII auth flow. Emphasizes that the client secret is injected server-side by
- * the Cribl proxy from a write-only KV store and is never handled by the
+ * Mermaid auth flow. Emphasizes that the client secret is injected server-side
+ * by the Cribl proxy from a write-only KV store and is never handled by the
  * browser.
  */
-export function authFlowAscii(ctx: DiagramContext): string {
-  const n = resolveNames(ctx);
-  const diagram = stack([
-    box(["Cribl app (browser)", "app: " + n.appName]),
-    arrowDown("HTTPS call, no secret in the browser"),
-    box([
-      "Cribl proxy (server-side)",
-      "injects client secret",
-      "from write-only KV store",
-    ]),
-    arrowDown("POST client_credentials"),
-    box([
-      "Entra token endpoint",
-      "login.microsoftonline.com",
-      "tenant: " + n.tenantId,
-      "client: " + n.clientId,
-    ]),
-    arrowDown("access token (bearer)"),
-    box(["Azure Resource Manager", "management.azure.com"]),
-  ]);
-  const note = [
-    "Note: the client secret is injected server-side by the Cribl proxy",
-    "from a write-only KV store; it is never sent to or handled by the",
-    "browser.",
-  ].join("\n");
-  return diagram + "\n\n" + note;
-}
-
-/** Mermaid variant of the auth flow. */
 export function authFlowMermaid(ctx: DiagramContext): string {
   const n = resolveNames(ctx);
   return fence([
@@ -169,25 +109,7 @@ export function authFlowMermaid(ctx: DiagramContext): string {
 // Data export flow: diagnostic settings -> Event Hub -> Cribl -> Sentinel/DCR.
 // ---------------------------------------------------------------------------
 
-/** ASCII ingestion/export flow, naming the target workspace and resource group. */
-export function dataExportFlowAscii(ctx: DiagramContext): string {
-  const n = resolveNames(ctx);
-  return stack([
-    box(["Azure diagnostic settings", "subscription: " + n.subscriptionId]),
-    arrowDown("stream events"),
-    box(["Event Hub"]),
-    arrowDown("pull events"),
-    box(["Cribl Stream", "reduce / normalize"]),
-    arrowDown("Logs Ingestion API (via DCR)"),
-    box([
-      "Microsoft Sentinel",
-      "workspace: " + n.workspaceName,
-      "resource group: " + n.resourceGroup,
-    ]),
-  ]);
-}
-
-/** Mermaid variant of the ingestion/export flow. */
+/** Mermaid ingestion/export flow, naming the target workspace and resource group. */
 export function dataExportFlowMermaid(ctx: DiagramContext): string {
   const n = resolveNames(ctx);
   return fence([
@@ -211,23 +133,7 @@ export function dataExportFlowMermaid(ctx: DiagramContext): string {
 // DCR deploy flow: app -> ARM -> create DCR + table in the workspace.
 // ---------------------------------------------------------------------------
 
-/** ASCII DCR deployment flow, naming the subscription, resource group, workspace. */
-export function dcrDeployFlowAscii(ctx: DiagramContext): string {
-  const n = resolveNames(ctx);
-  return stack([
-    box([n.appName, "Cribl app"]),
-    arrowDown("deploy (ARM template)"),
-    box(["Azure Resource Manager", "subscription: " + n.subscriptionId]),
-    arrowDown("create resources"),
-    box([
-      "DCR + custom table",
-      "resource group: " + n.resourceGroup,
-      "workspace: " + n.workspaceName,
-    ]),
-  ]);
-}
-
-/** Mermaid variant of the DCR deployment flow. */
+/** Mermaid DCR deployment flow, naming the subscription, resource group, workspace. */
 export function dcrDeployFlowMermaid(ctx: DiagramContext): string {
   const n = resolveNames(ctx);
   return fence([

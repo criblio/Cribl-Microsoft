@@ -27,7 +27,6 @@ import type {
   AzureConfig,
   ChangeRequestContext,
   ConnectionProfile,
-  DiagramFormat,
   PermissionsResponse,
   ProfileStore,
   RequiredAction,
@@ -276,32 +275,22 @@ type SetupPath = 'existing' | 'lab-new-rg' | 'lab-byo-rg';
 // Reusable "generate a change request" block for operators who must ASK another
 // team to perform a setup step (create the app registration, assign roles, or
 // create resources) rather than doing it themselves. The ticket body and the
-// architecture diagram embedded in it come entirely from @soc/core via the
-// `generate` closure; this component only offers the ASCII/Mermaid format
-// toggle and handles rendering, clipboard copy, and download. The generated
-// text is shown in a monospace <pre> so the embedded ASCII diagram lines up.
+// Mermaid architecture diagram embedded in it come entirely from @soc/core via
+// the `generate` closure; this component only handles rendering, clipboard
+// copy, and download. The generated text is shown in a monospace <pre>; the
+// embedded diagram is a fenced mermaid block whose source is plain text, so it
+// pastes safely anywhere and renders wherever Markdown+Mermaid is supported.
 interface ChangeRequestBlockProps {
   title: string;
   description: string;
-  // Downloaded filename; also namespaces this block's diagram-format radio group
-  // so multiple blocks on one page do not collide.
+  // Downloaded filename.
   filename: string;
-  generate: (format: DiagramFormat) => string;
+  generate: () => string;
 }
 
 function ChangeRequestBlock({ title, description, filename, generate }: ChangeRequestBlockProps) {
-  const [format, setFormat] = useState<DiagramFormat>('ascii');
   const [text, setText] = useState('');
   const [feedback, setFeedback] = useState('');
-
-  // Regenerate immediately when the format toggles (only if already generated)
-  // so the embedded diagram matches where the user will paste the ticket.
-  const onFormatChange = (next: DiagramFormat) => {
-    setFormat(next);
-    if (text !== '') {
-      setText(generate(next));
-    }
-  };
 
   const copy = async () => {
     try {
@@ -327,36 +316,15 @@ function ChangeRequestBlock({ title, description, filename, generate }: ChangeRe
     setFeedback(`Download dispatched (${filename}).`);
   };
 
-  const groupName = `diagram-format-${filename}`;
   return (
     <div className="change-request">
       <span className="field-label">{title}</span>
       <p className="panel-desc">{description}</p>
-      <div className="path-options">
-        <label className="path-option">
-          <input
-            type="radio"
-            name={groupName}
-            checked={format === 'ascii'}
-            onChange={() => onFormatChange('ascii')}
-          />
-          <span>ASCII diagram (plain-text tickets or email)</span>
-        </label>
-        <label className="path-option">
-          <input
-            type="radio"
-            name={groupName}
-            checked={format === 'mermaid'}
-            onChange={() => onFormatChange('mermaid')}
-          />
-          <span>Mermaid diagram (Markdown that renders Mermaid)</span>
-        </label>
-      </div>
       <div className="panel-controls">
         <button
           className="run-button"
           onClick={() => {
-            setText(generate(format));
+            setText(generate());
             setFeedback('');
           }}
         >
@@ -489,7 +457,7 @@ function AppRegistrationConnectPanel({
           'included; blank fields appear as clear placeholders.'
         }
         filename="app-registration-request.txt"
-        generate={(format) => appRegistrationRequest(ctx, { diagramFormat: format })}
+        generate={() => appRegistrationRequest(ctx)}
       />
       <ol className="setup-steps">
         <li>
@@ -1225,7 +1193,7 @@ function ResourceSelectionPanel({
           'with a justification per role. Blank fields appear as clear placeholders.'
         }
         filename="role-assignment-request.txt"
-        generate={(format) => roleAssignmentRequest(ctx, { diagramFormat: format })}
+        generate={() => roleAssignmentRequest(ctx)}
       />
       <ChangeRequestBlock
         title="Need a resource group or Event Hub created? Generate a change request"
@@ -1235,7 +1203,7 @@ function ResourceSelectionPanel({
           'an Event Hub namespace for the diagnostic-settings export path.'
         }
         filename="resource-creation-request.txt"
-        generate={(format) => resourceCreationRequest(ctx, { diagramFormat: format })}
+        generate={() => resourceCreationRequest(ctx)}
       />
       <div className="panel-controls">
         <button

@@ -6,5 +6,4 @@ export {
 export type {
   ChangeRequestContext,
   ChangeRequestOptions,
-  DiagramFormat,
 } from "./change-request";
