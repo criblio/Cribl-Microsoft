@@ -1879,12 +1879,17 @@ function App() {
             <h2 className="panel-title">Connection incomplete</h2>
             <p className="panel-desc">
               The active connection is missing required configuration:{' '}
-              {missingOnboardFields.join(', ')}. Switch to the Spike Harness view and complete
-              panel 3 (App registration and connect) and panel 4 (Select resources and grant
-              permissions) - connecting fills the tenant and client ids, and selecting a
-              subscription and workspace fills the rest. This screen unlocks once all five
-              fields are set.
+              {missingOnboardFields.join(', ')}. Complete panel 3 (App registration and connect)
+              and panel 4 (Select resources and grant permissions): connecting fills the tenant
+              and client ids; in panel 4, Discover / refresh from Azure, then select a
+              subscription and workspace - the resource group derives from the workspace and
+              everything saves automatically. This screen unlocks once all five fields are set.
             </p>
+            <div className="panel-controls">
+              <button className="run-button" onClick={() => setView('harness')}>
+                Open the setup panels
+              </button>
+            </div>
           </section>
         ) : (
           <>
