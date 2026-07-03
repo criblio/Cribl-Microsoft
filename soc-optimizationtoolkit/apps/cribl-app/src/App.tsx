@@ -103,6 +103,20 @@ function kvUrl(key: string): string {
   return `${window.CRIBL_API_URL}/kvstore/${key}`;
 }
 
+// KV DELETE with the platform quirk handled: the bridge processes the delete
+// server-side but has been observed to never return the response (verified
+// live 2026-07-02 - keys are gone despite the timeout). Fire with a short
+// race-timeout and treat a timeout as success. Callers must never sequence
+// follow-up work on this response - fire deletes independently.
+async function kvDelete(key: string): Promise<void> {
+  try {
+    await fetchWithTimeout(kvUrl(key), { method: 'DELETE' }, 5000);
+  } catch {
+    // Best-effort by design: the delete is processed even when the bridge
+    // loses the response.
+  }
+}
+
 // fetch with a hard client-side timeout. Platform-bridged requests (KV store,
 // product API) are proxied through the parent Cribl window; if that bridge is
 // detached (typically after a dev-mode hot reload), the promise never settles
@@ -1686,22 +1700,15 @@ function App() {
       setRenaming(false);
       const inv = computeInvalidation(prevConfig, nextConfig);
       const needSecretClear = inv.clearSecret || liveSecretProfileId !== nextId;
-      void (async () => {
-        if (inv.clearToken) {
-          try {
-            await fetch(kvUrl('azureArmToken'), { method: 'DELETE' });
-          } catch {
-            // Best-effort clear.
-          }
-        }
-        if (needSecretClear) {
-          try {
-            await fetch(kvUrl('azureBasic'), { method: 'DELETE' });
-          } catch {
-            // Best-effort clear.
-          }
-        }
-      })();
+      // Independent fire-and-forget clears: DELETE responses are lost by the
+      // bridge, so sequencing the second delete after the first would mean it
+      // never runs (the old secret would stay live after an identity switch).
+      if (inv.clearToken) {
+        void kvDelete('azureArmToken');
+      }
+      if (needSecretClear) {
+        void kvDelete('azureBasic');
+      }
       if (needSecretClear) {
         setLiveSecretProfileId(null);
         setLiveSecretIdentity(null);
@@ -1763,18 +1770,10 @@ function App() {
   // Clear stored secret: the explicit way to force re-auth without switching
   // connections (e.g. after editing the active connection's tenant/client id).
   const handleClearSecret = () => {
-    void (async () => {
-      try {
-        await fetch(kvUrl('azureBasic'), { method: 'DELETE' });
-      } catch {
-        // Best-effort clear.
-      }
-      try {
-        await fetch(kvUrl('azureArmToken'), { method: 'DELETE' });
-      } catch {
-        // Best-effort clear.
-      }
-    })();
+    // Independent fire-and-forget clears (DELETE responses are lost by the
+    // bridge; sequenced awaits would strand the second delete).
+    void kvDelete('azureBasic');
+    void kvDelete('azureArmToken');
     setLiveSecretProfileId(null);
     setLiveSecretIdentity(null);
     setSwitchNotice('Stored secret cleared - re-enter the client secret in panel 3 and Save and connect to re-authenticate.');
