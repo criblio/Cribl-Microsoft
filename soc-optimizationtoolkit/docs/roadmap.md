@@ -44,6 +44,7 @@ Goal: the full DCR engine and deployment workflow at production quality.
 - Name confirmation UX (DCR-11), existing-resource preview (ENG-36), role assignment for the ingestion SP (ENG-37, RBAC Administrator path).
 - Template/asset library bundled into packages/core (AST-01/02, DCR-20, DCR-33); ARM template export as air-gap artifact (DCR-12 as ArtifactSink output, not deployment mechanism).
 - Azure targeting and RBAC preflight screens (GUI-10/11/12).
+- QUEUED (user request, 2026-07-03) - Logger port and in-app diagnostics: a Logger port in @soc/core (debug/info/warn/error with structured context; injected like other ports - pure domain modules stay log-free, use-cases and adapters log through it, entries tagged with the jobId where applicable so a run's diagnostics attach to its job record). Cloud adapter: bounded in-memory ring buffer mirrored to the console in dev, persisting only warn/error to KV (respect KV write volume); local-shell adapter: file log. UI: a log viewer alongside the RecentRuns history, plus a download-support-bundle action via ArtifactSink (logs + recent job records) for troubleshooting handoffs. Hard rule carried from the secret model: no secret or token value is ever loggable - the Logger port's context type excludes them by construction and review enforces it.
 
 Exit: DirectNative/DirectCustom/DCE/PrivateLink coverage on par with legacy Run-DCRAutomation modes, from both shells.
 
