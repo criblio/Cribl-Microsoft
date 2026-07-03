@@ -1217,6 +1217,17 @@ function ResourceSelectionPanel({
       </div>
       {discoverOutput !== '' && <pre className="result">{discoverOutput}</pre>}
       <div className="form-grid">
+        {subscriptions === null && (
+          <label className="field">
+            <span className="field-label">Subscription</span>
+            <select disabled value="">
+              <option value="">Click Discover / refresh from Azure above to load...</option>
+            </select>
+            <span className="field-hint">
+              The selectors fill from live discovery. Connect in panel 3 first, then Discover.
+            </span>
+          </label>
+        )}
         {subscriptions !== null && subscriptions.length > 0 && (
           <label className="field">
             <span className="field-label">Subscription</span>
@@ -1249,32 +1260,56 @@ function ResourceSelectionPanel({
             </span>
           </label>
         )}
-        {setupPath === 'existing' && workspaces !== null && workspaces.length > 0 && (
-          <label className="field">
-            <span className="field-label">Log Analytics workspace</span>
-            <select value={workspaceName} onChange={(e) => onWorkspaceSelect(e.target.value)}>
-              <option value="">Select a workspace...</option>
-              {workspaces.map((w) => (
-                <option key={w.id} value={w.name}>
-                  {w.name}
+        {setupPath === 'existing' &&
+          (workspaces !== null && workspaces.length > 0 ? (
+            <label className="field">
+              <span className="field-label">Log Analytics workspace</span>
+              <select value={workspaceName} onChange={(e) => onWorkspaceSelect(e.target.value)}>
+                <option value="">Select a workspace...</option>
+                {workspaces.map((w) => (
+                  <option key={w.id} value={w.name}>
+                    {w.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : (
+            <label className="field">
+              <span className="field-label">Log Analytics workspace</span>
+              <select disabled value="">
+                <option value="">
+                  {subscriptionId === ''
+                    ? 'Select a subscription first...'
+                    : 'Waiting for workspace discovery...'}
                 </option>
-              ))}
-            </select>
-          </label>
-        )}
-        {setupPath === 'lab-byo-rg' && resourceGroups !== null && resourceGroups.length > 0 && (
-          <label className="field">
-            <span className="field-label">Resource group</span>
-            <select value={rgName} onChange={(e) => onRgNameChange(e.target.value)}>
-              <option value="">Select a resource group...</option>
-              {resourceGroups.map((g) => (
-                <option key={g.name} value={g.name}>
-                  {g.name}
+              </select>
+            </label>
+          ))}
+        {setupPath === 'lab-byo-rg' &&
+          (resourceGroups !== null && resourceGroups.length > 0 ? (
+            <label className="field">
+              <span className="field-label">Resource group</span>
+              <select value={rgName} onChange={(e) => onRgNameChange(e.target.value)}>
+                <option value="">Select a resource group...</option>
+                {resourceGroups.map((g) => (
+                  <option key={g.name} value={g.name}>
+                    {g.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : (
+            <label className="field">
+              <span className="field-label">Resource group</span>
+              <select disabled value="">
+                <option value="">
+                  {subscriptionId === ''
+                    ? 'Select a subscription first...'
+                    : 'Waiting for resource group discovery...'}
                 </option>
-              ))}
-            </select>
-          </label>
-        )}
+              </select>
+            </label>
+          ))}
       </div>
       {dependentStatus !== '' && (
         <div className="discovery-result">
