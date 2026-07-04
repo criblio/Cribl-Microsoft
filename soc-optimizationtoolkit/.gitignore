@@ -1,5 +1,7 @@
-# Logs
-logs
+# Logs (root-anchored: source directories may legitimately be named "logs",
+# e.g. packages/ui/src/screens/logs; runtime log data lives under
+# apps/local-app/data/, ignored by that app's own .gitignore)
+/logs/
 *.log
 npm-debug.log*
 yarn-debug.log*

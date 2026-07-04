@@ -5,6 +5,7 @@ import {
   AuaGate,
   AzureTargetingScreen,
   EMPTY_MODE_RECORD,
+  LogsScreen,
   ModeSelect,
   OnboardTableScreen,
   PortsProvider,
@@ -65,9 +66,13 @@ import type {
 // flow) live in platform/http.ts as the single source of truth, shared with
 // the port adapters in platform/adapters.ts.
 import { acquireArmToken, fetchWithTimeout, kvDelete, kvUrl } from './platform/http';
-// Cloud-shell port adapters for the shared @soc/ui screens: the six @soc/core
+// Cloud-shell port adapters for the shared @soc/ui screens: the @soc/core
 // ports bound to the platform primitives (KV, proxy-injected auth, downloads).
 import { makeCloudPorts, PlatformSecretsStore } from './platform/adapters';
+// The app-lifetime Logger (porting-plan Unit 3): bounded in-memory ring with
+// warn/error mirrored to one rolling plain KV entry. Module scope so the
+// ring survives connection switches and ports-bundle rebuilds.
+import { PlatformLogger } from './platform/logger';
 
 // The app's display name, shown in generated change-request tickets and the
 // architecture diagrams embedded in them. The change-request text and diagrams
@@ -97,6 +102,7 @@ type Status = 'idle' | 'running' | 'ok' | 'failed';
 const AUA_ACCEPTANCE_KEY = 'auaAcceptance';
 const APP_MODE_KEY = 'appMode';
 const appStateStore = new PlatformSecretsStore();
+const appLogger = new PlatformLogger();
 
 // The AzureConfig fields the Onboard screen cannot run without. tenantId
 // drives the ARM token flow; the rest address the workspace the DCR targets.
@@ -1691,14 +1697,23 @@ function App() {
   const activeConfig = getActiveConfig(store);
   const activeProfile = getActiveProfile(store);
 
-  // The six cloud port adapters for the @soc/ui screens, rebuilt when the
+  // The cloud port adapters for the @soc/ui screens, rebuilt when the
   // ACTIVE connection's tenant changes (the ARM token flow is tenant-scoped;
-  // see makeCloudPorts). Construction is side-effect free.
-  const cloudPorts = useMemo(() => makeCloudPorts(activeConfig.tenantId), [activeConfig.tenantId]);
+  // see makeCloudPorts). Construction is side-effect free. The logger rides
+  // along BY REFERENCE (module-scoped), so its ring survives the rebuild and
+  // every usecase invoked with this bundle logs for free.
+  const cloudPorts = useMemo(
+    () => makeCloudPorts(activeConfig.tenantId, appLogger),
+    [activeConfig.tenantId]
+  );
 
   // Which top-level surface to show (loading / AUA gate / mode select /
   // frame). Computed every render from the two loadable states.
   const phase = resolveFramePhase(acceptance, mode);
+
+  // Stable accessor for the Logs screen: a fresh snapshot of the module-
+  // scoped logger ring on every call (mount and Refresh).
+  const getRecentLogs = useCallback(async () => appLogger.getRecent(), []);
 
   // The ONE budgeted status poller (@soc/ui hook over the @soc/core
   // poll-scheduler). For this unit only the connection-status poll registers:
@@ -1718,6 +1733,12 @@ function App() {
             setPlatformLink('ok');
           } catch (err) {
             setPlatformLink(`failed - ${String(err)}`);
+            // At most one warn per poll interval - well within the KV
+            // mirror's write budget, and exactly the event a support bundle
+            // should carry.
+            appLogger.warn('connection-status poll failed', {
+              error: String(err),
+            });
           }
         },
       },
@@ -2203,6 +2224,37 @@ function App() {
     </>
   );
 
+  // The Logs route (porting-plan Unit 3): the shared diagnostics viewer over
+  // the module-scoped PlatformLogger's ring, plus the support-bundle download
+  // (logs + recent job records + the platform facts below) through the
+  // ArtifactSink port. requires: 'none' - diagnostics must be reachable in
+  // every mode.
+  const logsView = (
+    <>
+      <header className="harness-header">
+        <h1 className="harness-title">Logs</h1>
+        <p className="harness-subtitle">
+          Diagnostics recorded by this session&apos;s logger (bounded in-memory
+          ring; warnings and errors also persist to one rolling KV entry).
+          Secrets and tokens are excluded by construction.
+        </p>
+      </header>
+      <PortsProvider ports={cloudPorts} config={activeConfig}>
+        <LogsScreen
+          getRecentLogs={getRecentLogs}
+          platformInfo={{
+            shell: 'cribl-cloud-app',
+            application: APP_NAME,
+            appId: window.CRIBL_APP_ID ?? null,
+            mode: phase.mode,
+            activeConnection: activeProfile?.name ?? null,
+            platformLink,
+          }}
+        />
+      </PortsProvider>
+    </>
+  );
+
   // Settings: the Phase 1 exit item graduated into a real screen - platform
   // info, current mode + Reconfigure, and the validate-before-save raw-JSON
   // editor over the active connection's non-secret config.
@@ -2255,6 +2307,7 @@ function App() {
     { id: 'onboard', label: 'Onboard', requires: 'both', render: renderOnboard },
     { id: 'azure-target', label: 'Azure Targeting', requires: 'azure', render: renderTargeting },
     { id: 'harness', label: 'Spike Harness', requires: 'none', render: () => harnessView },
+    { id: 'logs', label: 'Logs', requires: 'none', render: () => logsView },
     { id: 'settings', label: 'Settings', requires: 'none', render: () => settingsView },
   ];
 

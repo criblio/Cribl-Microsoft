@@ -16,3 +16,11 @@ export type {
   AzureManagementUrlRequest,
 } from './azure-management';
 export type { CriblClient, CriblRequest, CriblGroupSummary } from './cribl-client';
+export type {
+  Logger,
+  LogLevel,
+  LogContext,
+  LogContextValue,
+  LogEntry,
+} from './logger';
+export { redactedLength } from './logger';

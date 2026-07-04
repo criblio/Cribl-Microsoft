@@ -22,6 +22,7 @@ import type {
   CriblRequest,
   JobRecord,
   JobStore,
+  Logger,
   PortHttpResponse,
   SecretSetOptions,
   SecretsStore,
@@ -429,16 +430,21 @@ export interface LocalPorts {
   jobs: JobStore;
   user: UserContext;
   artifacts: ArtifactSink;
+  /** The shell's Logger (web/logger.ts HostLogger, batching to the host). */
+  logger: Logger;
 }
 
 /**
- * Build all six local-shell adapters. Unlike the cloud factory this takes no
- * tenant id: the host reads the Azure identity (tenant, client id, secret)
- * from its config file and owns the token flow end to end. Construction is
- * side-effect free; the shape satisfies @soc/ui's UiPorts and usecase port
- * bundles (e.g. OnboardTablePorts) structurally.
+ * Build the local-shell adapter bundle. Unlike the cloud factory this takes
+ * no tenant id: the host reads the Azure identity (tenant, client id,
+ * secret) from its config file and owns the token flow end to end. `logger`
+ * is the page-lifetime HostLogger instance (constructed by the shell root
+ * and passed in - keeping this module import-cycle-free with web/logger.ts,
+ * which imports fetchWithTimeout from here). Construction is side-effect
+ * free; the shape satisfies @soc/ui's UiPorts and usecase port bundles
+ * (e.g. OnboardTablePorts) structurally, so usecases log for free.
  */
-export function makeLocalPorts(): LocalPorts {
+export function makeLocalPorts(logger: Logger): LocalPorts {
   return {
     secrets: new LocalSecretsStore(),
     azure: new LocalAzureManagement(),
@@ -446,5 +452,6 @@ export function makeLocalPorts(): LocalPorts {
     jobs: new LocalJobStore(),
     user: new LocalUserContext(),
     artifacts: new LocalArtifactSink(),
+    logger,
   };
 }

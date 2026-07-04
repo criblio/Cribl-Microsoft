@@ -18,12 +18,14 @@ import {
   AuaGate,
   AzureTargetingScreen,
   EMPTY_MODE_RECORD,
+  LogsScreen,
   ModeSelect,
   OnboardTableScreen,
   PortsProvider,
   SettingsScreen,
   commitNoticeText,
   formatScopeChip,
+  logLineToEntry,
   parseTargetScope,
   resolveFramePhase,
   serializeTargetScope,
@@ -37,6 +39,7 @@ import type {
   PlatformInfoRow,
 } from '@soc/ui';
 import {
+  EMPTY_AZURE_CONFIG,
   computeInvalidation,
   hasAzure,
   parseAcceptanceRecord,
@@ -45,12 +48,33 @@ import {
   serializeAcceptanceRecord,
   serializeAppMode,
 } from '@soc/core';
-import type { AcceptanceRecord, AppMode, AzureConfig, TargetScope } from '@soc/core';
+import type { AcceptanceRecord, AppMode, AzureConfig, LogEntry, TargetScope } from '@soc/core';
 import { fetchWithTimeout, makeLocalPorts } from './local-adapters';
+import { HostLogger } from './logger';
 
 // Constructed once: the adapters are stateless over the host API, and a
-// stable identity keeps PortsProvider's memoized context value stable.
-const ports = makeLocalPorts();
+// stable identity keeps PortsProvider's memoized context value stable. The
+// logger (porting-plan Unit 3) batches entries to the host's POST /api/logs;
+// the host appends them to data/logs/app.log - the shell's one log truth.
+const hostLogger = new HostLogger();
+const ports = makeLocalPorts(hostLogger);
+
+// The Logs screen's data source: flush anything the browser logger still
+// holds, then read the host log tail back and re-parse the pinned line
+// format into entries (unparseable lines stay visible as info entries).
+async function getRecentLogs(): Promise<readonly LogEntry[]> {
+  hostLogger.flush();
+  const res = await fetchWithTimeout('/api/logs?tail=500', undefined, 10000);
+  const text = await res.text();
+  if (!res.ok) {
+    throw new Error(`GET /api/logs: HTTP ${res.status}${text === '' ? '' : `\n${text}`}`);
+  }
+  const parsed = JSON.parse(text) as { lines?: unknown };
+  const lines = Array.isArray(parsed.lines)
+    ? parsed.lines.filter((line): line is string => typeof line === 'string')
+    : [];
+  return lines.map(logLineToEntry);
+}
 
 // Acceptance + mode keys in the host secrets store (plain, not encrypted -
 // they must be readable back). Same key names as the cloud shell's KV.
@@ -179,8 +203,18 @@ export function LocalApp() {
           try {
             const res = await fetchWithTimeout('/api/config', undefined, 5000);
             setHostLink(res.ok ? 'ok' : `failed - GET /api/config: HTTP ${res.status}`);
+            if (!res.ok) {
+              hostLogger.warn('connection-status poll failed', {
+                status: res.status,
+              });
+            }
           } catch (err) {
             setHostLink(`failed - ${String(err)}`);
+            // Fire-and-forget by design: if the host is down this batch is
+            // dropped, and the host's own request log covers the gap.
+            hostLogger.warn('connection-status poll failed', {
+              error: String(err),
+            });
           }
         },
       },
@@ -361,6 +395,37 @@ export function LocalApp() {
     </>
   );
 
+  // The Logs route (porting-plan Unit 3): the shared diagnostics viewer over
+  // the host's log file tail (browser batches + the host's own server-side
+  // events in one greppable stream), plus the support-bundle download.
+  // requires: 'none' - diagnostics must be reachable in every mode, so the
+  // ports context falls back to an empty config while the host config is
+  // still loading or failed (the screen never reads the config).
+  const logsView = (
+    <>
+      <header className="local-header">
+        <h1 className="local-title">Logs</h1>
+        <p className="local-subtitle">
+          The host&apos;s log file (data/logs/app.log): entries from this
+          browser session batched to the host, alongside the host&apos;s own
+          API request, token refresh, and upstream failure events. Secrets
+          and tokens are excluded by construction.
+        </p>
+      </header>
+      <PortsProvider ports={ports} config={activeAzureConfig ?? EMPTY_AZURE_CONFIG}>
+        <LogsScreen
+          getRecentLogs={getRecentLogs}
+          platformInfo={{
+            shell: 'local-node-host',
+            mode: phase.mode,
+            hostLink,
+            criblLeader: load.state === 'loaded' ? load.config.criblLeaderUrl : null,
+          }}
+        />
+      </PortsProvider>
+    </>
+  );
+
   // Settings platform info: the local header's explanation plus the old
   // config-summary rows, graduated into the shared SettingsScreen. Secrets
   // never appear - the host only ever serves non-secret fields.
@@ -421,10 +486,11 @@ export function LocalApp() {
   );
 
   // Route table: Onboard needs BOTH live sides; Azure Targeting needs the
-  // live Azure side; Settings is always shown.
+  // live Azure side; Logs and Settings are always shown.
   const routes: AppRoute[] = [
     { id: 'onboard', label: 'Onboard', requires: 'both', render: () => onboardView },
     { id: 'azure-target', label: 'Azure Targeting', requires: 'azure', render: () => targetingView },
+    { id: 'logs', label: 'Logs', requires: 'none', render: () => logsView },
     { id: 'settings', label: 'Settings', requires: 'none', render: () => settingsView },
   ];
 

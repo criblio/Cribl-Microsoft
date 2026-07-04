@@ -67,9 +67,13 @@ const ONPREM_ASSUMED_LIFETIME_S = 3600;
  * Build the leader auth manager for the configured auth type.
  *
  * @param {import('./config.mjs').CriblSection} cribl
+ * @param {ReturnType<import('./logger.mjs').createFileLogger>} [logger]
+ *   Optional file logger for token mint/login events. Only token METADATA
+ *   (auth type, expiry seconds) and the curated failure messages are logged;
+ *   the token, client secret, and password never reach a log line.
  * @returns {CriblAuthManager}
  */
-export function createCriblAuth(cribl) {
+export function createCriblAuth(cribl, logger) {
   const auth = cribl.auth;
   /** @type {{ token: string, expiresAt: number } | null} */
   let cached = null;
@@ -145,6 +149,8 @@ export function createCriblAuth(cribl) {
     const expiresIn =
       isPlainObject(parsed) && typeof parsed.expires_in === 'number' ? parsed.expires_in : DEFAULT_CLOUD_LIFETIME_S;
     cached = { token, expiresAt: Date.now() + expiresIn * 1000 };
+    // Metadata only - never the token value.
+    logger?.info('cribl cloud token minted', { expiresInS: expiresIn });
     return token;
   }
 
@@ -199,6 +205,10 @@ export function createCriblAuth(cribl) {
       );
     }
     cached = { token, expiresAt: Date.now() + ONPREM_ASSUMED_LIFETIME_S * 1000 };
+    // Metadata only - never the token value.
+    logger?.info('cribl leader login succeeded', {
+      assumedLifetimeS: ONPREM_ASSUMED_LIFETIME_S,
+    });
     return token;
   }
 
@@ -212,7 +222,18 @@ export function createCriblAuth(cribl) {
       if (!force && cached !== null && Date.now() < cached.expiresAt - TOKEN_REFRESH_MARGIN_MS) {
         return cached.token;
       }
-      return auth.type === 'cloud' ? mintCloudToken() : loginOnprem();
+      try {
+        return auth.type === 'cloud' ? await mintCloudToken() : await loginOnprem();
+      } catch (err) {
+        // The curated auth errors name config fields and upstream failure
+        // text, never credentials.
+        logger?.error('cribl leader auth failed', {
+          authType: auth.type,
+          forced: force,
+          error: err instanceof Error ? err.message : String(err),
+        });
+        throw err;
+      }
     },
   };
 }

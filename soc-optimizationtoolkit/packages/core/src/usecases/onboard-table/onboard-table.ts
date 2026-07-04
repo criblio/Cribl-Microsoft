@@ -40,6 +40,8 @@
 import type { AzureManagement } from "../../ports/azure-management";
 import type { CriblClient } from "../../ports/cribl-client";
 import type { JobRecord, JobStep, JobStore } from "../../ports/job-store";
+import type { Logger } from "../../ports/logger";
+import { redactedLength } from "../../ports/logger";
 import { generateDcrName } from "../../domain/dcr-naming";
 import { selectSchemaColumns } from "../../domain/schema-mapping";
 import type { LogAnalyticsColumn } from "../../domain/schema-mapping";
@@ -84,6 +86,13 @@ export interface OnboardTablePorts {
   azure: AzureManagement;
   cribl: CriblClient;
   jobs: JobStore;
+  /**
+   * OPTIONAL diagnostics sink: step transitions and failures are logged
+   * through it, tagged with the job id. Absent logger = no-op, zero behavior
+   * change. Context values are primitives only (Logger hard rule); the
+   * ingestion client secret is referenced via redactedLength, never logged.
+   */
+  logger?: Logger;
 }
 
 /** Input for {@link onboardTable}. */
@@ -186,7 +195,7 @@ export async function onboardTable(
   ports: OnboardTablePorts,
   input: OnboardTableInput,
 ): Promise<JobRecord> {
-  const { azure, cribl, jobs } = ports;
+  const { azure, cribl, jobs, logger } = ports;
   const secretProvided =
     input.ingestionClientSecret != null && input.ingestionClientSecret !== "";
 
@@ -203,6 +212,23 @@ export async function onboardTable(
     ingestionClientSecretProvided: secretProvided,
     destinationId: input.destinationId ?? null,
   });
+
+  logger?.info(
+    "onboard-table: job started",
+    {
+      table: input.table,
+      subscriptionId: input.subscriptionId,
+      resourceGroup: input.resourceGroup,
+      workspaceName: input.workspaceName,
+      groupId: input.groupId,
+      // The one sanctioned reference to the secret: its shape, never its value.
+      ingestionClientSecret:
+        input.ingestionClientSecret != null && input.ingestionClientSecret !== ""
+          ? redactedLength(input.ingestionClientSecret)
+          : null,
+    },
+    job.id,
+  );
 
   const steps: JobStep[] = ONBOARD_TABLE_STEPS.map((name) => ({
     name,
@@ -229,6 +255,18 @@ export async function onboardTable(
     }
     await pushSteps();
     input.onProgress?.({ ...step });
+
+    // Step-boundary diagnostics through the OPTIONAL logger (no-op when
+    // absent). detail is safe by construction here: step details carry names,
+    // ids, counts, and raw HTTP error text - never secret values.
+    const stepContext = detail !== undefined ? { detail } : undefined;
+    if (status === "running") {
+      logger?.debug(`onboard-table: step ${name} running`, undefined, job.id);
+    } else if (status === "succeeded") {
+      logger?.info(`onboard-table: step ${name} succeeded`, stepContext, job.id);
+    } else if (status === "failed") {
+      logger?.error(`onboard-table: step ${name} failed`, stepContext, job.id);
+    }
   };
 
   await jobs.update(job.id, { status: "running" });
@@ -561,10 +599,20 @@ export async function onboardTable(
       commitVersion,
     };
     await jobs.update(job.id, { status: "succeeded", result: outcome });
+    logger?.info(
+      "onboard-table: job succeeded",
+      { table: input.table, dcrName, destinationId, groupId: input.groupId },
+      job.id,
+    );
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     await setStep(currentStep, "failed", message);
     await jobs.update(job.id, { status: "failed", error: message });
+    logger?.error(
+      "onboard-table: job failed",
+      { table: input.table, step: currentStep, error: message },
+      job.id,
+    );
   }
 
   const finalRecord = await jobs.get(job.id);

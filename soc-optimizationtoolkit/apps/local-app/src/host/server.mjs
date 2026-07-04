@@ -19,6 +19,10 @@
 //   GET    /api/jobs?kind=          newest-first list
 //   GET    /api/jobs/{id}           record or 404
 //   PATCH  /api/jobs/{id}           merge patch -> merged record or 404
+//   POST   /api/logs                { entries } batch from the browser logger
+//                                   (sanitized server-side, appended to
+//                                   data/logs/app.log with rotation)
+//   GET    /api/logs?tail=500       { lines } - the recent log tail
 //   GET    /api/user                { id, username } from the OS account
 //   *                               static UI from dist/web (SPA fallback)
 //
@@ -35,6 +39,12 @@ import { createCriblAuth } from './cribl-auth.mjs';
 import { createCriblProxy } from './cribl.mjs';
 import { createSecretsStore } from './secrets.mjs';
 import { createJobStore } from './jobs.mjs';
+import {
+  LOG_TAIL_DEFAULT,
+  LOG_TAIL_MAX,
+  createFileLogger,
+  sanitizeLogEntries,
+} from './logger.mjs';
 import { createStaticHandler } from './static.mjs';
 import {
   ALLOWED_PROXY_METHODS,
@@ -53,8 +63,13 @@ import {
  * @returns {import('node:http').Server}
  */
 export function createHostServer(config) {
-  const azure = createAzureProxy(config.azure);
-  const criblAuth = createCriblAuth(config.cribl);
+  // The one file logger (data/logs/app.log, rotated): browser batches and
+  // the host's own events (API requests, token refreshes, upstream
+  // failures) all land in the same greppable file. No secret or token value
+  // ever reaches a log call - context is primitives only.
+  const log = createFileLogger(DATA_DIR);
+  const azure = createAzureProxy(config.azure, log);
+  const criblAuth = createCriblAuth(config.cribl, log);
   const cribl = createCriblProxy(config.cribl, criblAuth);
   const secrets = createSecretsStore(DATA_DIR);
   const jobs = createJobStore(DATA_DIR);
@@ -260,6 +275,41 @@ export function createHostServer(config) {
       return;
     }
 
+    // --- logs ---------------------------------------------------------------
+    if (pathname === '/api/logs') {
+      if (method === 'POST') {
+        const payload = await readJsonBody(req);
+        // Server-side sanitation is the hard rule's enforcement point on
+        // this boundary: only primitive context values survive, sizes are
+        // capped, and anything else is dropped before touching disk.
+        const entries = sanitizeLogEntries(payload, () => new Date().toISOString());
+        if (entries === null) {
+          throw new HttpError(400, 'POST /api/logs: body must be { entries: [...] }');
+        }
+        for (const entry of entries) {
+          log.append(entry);
+        }
+        sendEmpty(res, 204);
+        return;
+      }
+      if (method === 'GET') {
+        const rawTail = url.searchParams.get('tail');
+        let maxLines = LOG_TAIL_DEFAULT;
+        if (rawTail !== null) {
+          const parsed = Number(rawTail);
+          if (!Number.isInteger(parsed) || parsed < 1) {
+            throw new HttpError(400, 'GET /api/logs: "tail" must be a positive integer');
+          }
+          maxLines = Math.min(parsed, LOG_TAIL_MAX);
+        }
+        sendJson(res, 200, { lines: await log.tail(maxLines) });
+        return;
+      }
+      res.writeHead(405, { Allow: 'GET, POST' });
+      res.end();
+      return;
+    }
+
     // --- user ---------------------------------------------------------------
     if (pathname === '/api/user' && method === 'GET') {
       const info = os.userInfo();
@@ -272,19 +322,61 @@ export function createHostServer(config) {
     throw new HttpError(404, `no API route ${method} ${pathname}`);
   }
 
+  /**
+   * Log one finished API exchange through the file logger. Static requests
+   * and /api/logs itself are skipped (logging the log traffic would feed
+   * back into the file it reports on). Paths may carry key/id NAMES, never
+   * values; request bodies are deliberately not logged.
+   *
+   * @param {import('node:http').IncomingMessage} req
+   * @param {import('node:http').ServerResponse} res
+   * @param {number} started
+   * @param {string | undefined} errorText
+   */
+  function logApiExchange(req, res, started, errorText) {
+    const pathOnly = (req.url ?? '/').split('?')[0];
+    if (!pathOnly.startsWith('/api') || pathOnly === '/api/logs') {
+      return;
+    }
+    const status = res.statusCode;
+    /** @type {Record<string, string | number | boolean | null>} */
+    const context = {
+      method: req.method ?? '',
+      path: pathOnly,
+      status,
+      ms: Date.now() - started,
+    };
+    if (errorText !== undefined) {
+      context.error = errorText;
+    }
+    if (status >= 500) {
+      log.error('api request failed', context);
+    } else if (status >= 400) {
+      log.warn('api request rejected', context);
+    } else {
+      log.info('api request', context);
+    }
+  }
+
   return http.createServer((req, res) => {
-    handle(req, res).catch((err) => {
-      const status = err instanceof HttpError ? err.status : 500;
-      const message = err instanceof Error ? err.message : String(err);
-      if (!(err instanceof HttpError)) {
-        console.error(`[host] ${req.method} ${req.url} failed:`, err);
-      }
-      if (res.headersSent) {
-        res.end();
-        return;
-      }
-      sendJson(res, status, { error: message });
-    });
+    const started = Date.now();
+    handle(req, res)
+      .then(() => {
+        logApiExchange(req, res, started, undefined);
+      })
+      .catch((err) => {
+        const status = err instanceof HttpError ? err.status : 500;
+        const message = err instanceof Error ? err.message : String(err);
+        if (!(err instanceof HttpError)) {
+          console.error(`[host] ${req.method} ${req.url} failed:`, err);
+        }
+        if (res.headersSent) {
+          res.end();
+        } else {
+          sendJson(res, status, { error: message });
+        }
+        logApiExchange(req, res, started, message);
+      });
   });
 }
 

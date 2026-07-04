@@ -17,12 +17,13 @@ import type {
   AzureManagement,
   CriblClient,
   JobStore,
+  Logger,
   SecretsStore,
   UserContext,
 } from "@soc/core";
 
 /**
- * The six @soc/core port instances a shell binds. Structurally compatible
+ * The @soc/core port instances a shell binds. Structurally compatible
  * with the shells' adapter factories (e.g. the cloud shell's CloudPorts) and
  * with usecase port bundles like OnboardTablePorts.
  */
@@ -33,6 +34,13 @@ export interface UiPorts {
   jobs: JobStore;
   user: UserContext;
   artifacts: ArtifactSink;
+  /**
+   * OPTIONAL diagnostics sink (porting-plan Unit 3). Carrying it in the
+   * ports bundle means every usecase invoked with the bundle logs for free
+   * (OnboardTablePorts.logger is picked up structurally); screens may also
+   * log sparingly through it. Absent logger = no-op, zero behavior change.
+   */
+  logger?: Logger;
 }
 
 /** What PortsContext carries: the ports plus the active connection config. */

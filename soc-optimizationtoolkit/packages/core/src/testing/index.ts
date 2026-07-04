@@ -10,3 +10,4 @@ export type { SavedArtifact } from './fake-artifact-sink';
 export { FakeJobStore } from './fake-job-store';
 export { FakeAzureManagement } from './fake-azure-management';
 export { FakeCriblClient } from './fake-cribl-client';
+export { FakeLogger } from './fake-logger';

@@ -34,6 +34,7 @@ import type {
   AzureManagement,
   AzureManagementRequest,
 } from "../../ports/azure-management";
+import type { LogContext, Logger } from "../../ports/logger";
 import { deriveResourceGroup } from "../../domain/azure-resource-id";
 import { updateActiveConfig, getActiveProfile } from "../../domain/azure-profiles";
 import type { ProfileStore } from "../../domain/azure-profiles";
@@ -109,6 +110,42 @@ function prop(value: unknown, key: string): unknown {
 /** Coerce an unknown field to a string, '' for anything not a string. */
 function asString(value: unknown): string {
   return typeof value === "string" ? value : "";
+}
+
+/** A thrown error's message, for log context (already raw greppable text). */
+function errorText(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+/**
+ * Log an operation's call boundaries through an OPTIONAL logger: debug on
+ * entry, info with a result summary on success, error with the failure text
+ * on throw. Absent logger = pure passthrough, zero behavior change. Context
+ * values are primitives only (Logger hard rule): names, ids, counts, flags -
+ * nothing here ever touches a secret.
+ */
+async function logged<T>(
+  logger: Logger | undefined,
+  operation: string,
+  context: LogContext,
+  run: () => Promise<T>,
+  summarize: (result: T) => LogContext,
+): Promise<T> {
+  logger?.debug(`azure-discovery: ${operation}`, context);
+  try {
+    const result = await run();
+    logger?.info(`azure-discovery: ${operation} succeeded`, {
+      ...context,
+      ...summarize(result),
+    });
+    return result;
+  } catch (error) {
+    logger?.error(`azure-discovery: ${operation} failed`, {
+      ...context,
+      error: errorText(error),
+    });
+    throw error;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -192,30 +229,39 @@ export interface AzureSubscription {
  */
 export async function listSubscriptions(
   azure: AzureManagement,
+  logger?: Logger,
 ): Promise<AzureSubscription[]> {
-  const items = await listAllPages(
-    azure,
-    { method: "GET", path: "/subscriptions", apiVersion: SUBSCRIPTIONS_API_VERSION },
+  return logged(
+    logger,
     "list subscriptions",
-  );
+    {},
+    async () => {
+      const items = await listAllPages(
+        azure,
+        { method: "GET", path: "/subscriptions", apiVersion: SUBSCRIPTIONS_API_VERSION },
+        "list subscriptions",
+      );
 
-  const subscriptions: AzureSubscription[] = [];
-  for (const item of items) {
-    if (asString(prop(item, "state")) !== "Enabled") {
-      continue;
-    }
-    const direct = asString(prop(item, "subscriptionId"));
-    const subscriptionId =
-      direct !== "" ? direct : parseSubscriptionIdFromResourceId(prop(item, "id"));
-    if (subscriptionId === "") {
-      continue;
-    }
-    subscriptions.push({
-      subscriptionId,
-      displayName: asString(prop(item, "displayName")),
-    });
-  }
-  return subscriptions;
+      const subscriptions: AzureSubscription[] = [];
+      for (const item of items) {
+        if (asString(prop(item, "state")) !== "Enabled") {
+          continue;
+        }
+        const direct = asString(prop(item, "subscriptionId"));
+        const subscriptionId =
+          direct !== "" ? direct : parseSubscriptionIdFromResourceId(prop(item, "id"));
+        if (subscriptionId === "") {
+          continue;
+        }
+        subscriptions.push({
+          subscriptionId,
+          displayName: asString(prop(item, "displayName")),
+        });
+      }
+      return subscriptions;
+    },
+    (subscriptions) => ({ count: subscriptions.length }),
+  );
 }
 
 /** `/subscriptions/{id}` -> `{id}`, '' when unparseable. */
@@ -259,33 +305,42 @@ export interface AzureWorkspace {
 export async function listWorkspaces(
   azure: AzureManagement,
   subscriptionId: string,
+  logger?: Logger,
 ): Promise<AzureWorkspace[]> {
-  const items = await listAllPages(
-    azure,
-    {
-      method: "GET",
-      path: `/subscriptions/${subscriptionId}/providers/Microsoft.OperationalInsights/workspaces`,
-      apiVersion: WORKSPACE_API_VERSION,
-    },
-    `list workspaces in subscription '${subscriptionId}'`,
-  );
+  return logged(
+    logger,
+    "list workspaces",
+    { subscriptionId },
+    async () => {
+      const items = await listAllPages(
+        azure,
+        {
+          method: "GET",
+          path: `/subscriptions/${subscriptionId}/providers/Microsoft.OperationalInsights/workspaces`,
+          apiVersion: WORKSPACE_API_VERSION,
+        },
+        `list workspaces in subscription '${subscriptionId}'`,
+      );
 
-  const workspaces: AzureWorkspace[] = [];
-  for (const item of items) {
-    const name = asString(prop(item, "name"));
-    if (name === "") {
-      continue;
-    }
-    const properties = prop(item, "properties");
-    workspaces.push({
-      name,
-      resourceGroup: deriveResourceGroup(asString(prop(item, "id"))),
-      location: asString(prop(item, "location")),
-      customerId: asString(prop(properties, "customerId")),
-      sku: asString(prop(prop(properties, "sku"), "name")),
-    });
-  }
-  return workspaces;
+      const workspaces: AzureWorkspace[] = [];
+      for (const item of items) {
+        const name = asString(prop(item, "name"));
+        if (name === "") {
+          continue;
+        }
+        const properties = prop(item, "properties");
+        workspaces.push({
+          name,
+          resourceGroup: deriveResourceGroup(asString(prop(item, "id"))),
+          location: asString(prop(item, "location")),
+          customerId: asString(prop(properties, "customerId")),
+          sku: asString(prop(prop(properties, "sku"), "name")),
+        });
+      }
+      return workspaces;
+    },
+    (workspaces) => ({ count: workspaces.length }),
+  );
 }
 
 /**
@@ -295,26 +350,35 @@ export async function listWorkspaces(
 export async function listResourceGroups(
   azure: AzureManagement,
   subscriptionId: string,
+  logger?: Logger,
 ): Promise<AzureResourceGroup[]> {
-  const items = await listAllPages(
-    azure,
-    {
-      method: "GET",
-      path: `/subscriptions/${subscriptionId}/resourcegroups`,
-      apiVersion: RESOURCE_GROUP_API_VERSION,
-    },
-    `list resource groups in subscription '${subscriptionId}'`,
-  );
+  return logged(
+    logger,
+    "list resource groups",
+    { subscriptionId },
+    async () => {
+      const items = await listAllPages(
+        azure,
+        {
+          method: "GET",
+          path: `/subscriptions/${subscriptionId}/resourcegroups`,
+          apiVersion: RESOURCE_GROUP_API_VERSION,
+        },
+        `list resource groups in subscription '${subscriptionId}'`,
+      );
 
-  const groups: AzureResourceGroup[] = [];
-  for (const item of items) {
-    const name = asString(prop(item, "name"));
-    if (name === "") {
-      continue;
-    }
-    groups.push({ name, location: asString(prop(item, "location")) });
-  }
-  return groups;
+      const groups: AzureResourceGroup[] = [];
+      for (const item of items) {
+        const name = asString(prop(item, "name"));
+        if (name === "") {
+          continue;
+        }
+        groups.push({ name, location: asString(prop(item, "location")) });
+      }
+      return groups;
+    },
+    (groups) => ({ count: groups.length }),
+  );
 }
 
 /** How {@link listResourceGroupChoices} obtained its groups. */
@@ -344,13 +408,14 @@ export async function listResourceGroupChoices(
   azure: AzureManagement,
   subscriptionId: string,
   workspaces: Array<{ resourceGroup: string; location: string }>,
+  logger?: Logger,
 ): Promise<ResourceGroupChoices> {
   let listed: AzureResourceGroup[] | null = null;
   let listError: string | null = null;
   try {
-    listed = await listResourceGroups(azure, subscriptionId);
+    listed = await listResourceGroups(azure, subscriptionId, logger);
   } catch (error) {
-    listError = error instanceof Error ? error.message : String(error);
+    listError = errorText(error);
   }
 
   if (listed !== null && listed.length > 0) {
@@ -359,6 +424,10 @@ export async function listResourceGroupChoices(
 
   const derived = deriveResourceGroupsFromWorkspaces(workspaces);
   if (derived.length > 0) {
+    logger?.warn(
+      "azure-discovery: resource-group list unavailable; derived choices from workspaces",
+      { subscriptionId, derivedCount: derived.length, listError },
+    );
     return { groups: derived, source: "workspaces", listError };
   }
 
@@ -386,28 +455,37 @@ export interface CreateResourceGroupInput {
 export async function createResourceGroup(
   azure: AzureManagement,
   input: CreateResourceGroupInput,
+  logger?: Logger,
 ): Promise<AzureResourceGroup> {
-  const response = await azure.request({
-    method: "PUT",
-    path: `/subscriptions/${input.subscriptionId}/resourcegroups/${input.name}`,
-    apiVersion: RESOURCE_GROUP_API_VERSION,
-    body: { location: input.location },
-  });
-  if (!is2xx(response.status)) {
-    throw new Error(
-      httpErrorText(
-        `create resource group '${input.name}'`,
-        response.status,
-        response.body,
-      ),
-    );
-  }
-  const name = asString(prop(response.body, "name"));
-  const location = asString(prop(response.body, "location"));
-  return {
-    name: name !== "" ? name : input.name,
-    location: location !== "" ? location : input.location,
-  };
+  return logged(
+    logger,
+    "create resource group",
+    { subscriptionId: input.subscriptionId, name: input.name, location: input.location },
+    async () => {
+      const response = await azure.request({
+        method: "PUT",
+        path: `/subscriptions/${input.subscriptionId}/resourcegroups/${input.name}`,
+        apiVersion: RESOURCE_GROUP_API_VERSION,
+        body: { location: input.location },
+      });
+      if (!is2xx(response.status)) {
+        throw new Error(
+          httpErrorText(
+            `create resource group '${input.name}'`,
+            response.status,
+            response.body,
+          ),
+        );
+      }
+      const name = asString(prop(response.body, "name"));
+      const location = asString(prop(response.body, "location"));
+      return {
+        name: name !== "" ? name : input.name,
+        location: location !== "" ? location : input.location,
+      };
+    },
+    (group) => ({ name: group.name, location: group.location }),
+  );
 }
 
 /** Input for {@link createWorkspace}. */
@@ -440,80 +518,94 @@ export interface CreatedWorkspace {
 export async function createWorkspace(
   azure: AzureManagement,
   input: CreateWorkspaceInput,
+  logger?: Logger,
 ): Promise<CreatedWorkspace> {
-  const path =
-    `/subscriptions/${input.subscriptionId}` +
-    `/resourceGroups/${input.resourceGroup}` +
-    `/providers/Microsoft.OperationalInsights/workspaces/${input.name}`;
-
-  const putResponse = await azure.request({
-    method: "PUT",
-    path,
-    apiVersion: WORKSPACE_API_VERSION,
-    body: {
+  return logged(
+    logger,
+    "create workspace",
+    {
+      subscriptionId: input.subscriptionId,
+      resourceGroup: input.resourceGroup,
+      name: input.name,
       location: input.location,
-      properties: {
-        sku: { name: WORKSPACE_DEFAULT_SKU },
-        retentionInDays: WORKSPACE_DEFAULT_RETENTION_DAYS,
-      },
     },
-  });
-  if (!is2xx(putResponse.status)) {
-    throw new Error(
-      httpErrorText(
-        `create workspace '${input.name}'`,
-        putResponse.status,
-        putResponse.body,
-      ),
-    );
-  }
+    async () => {
+      const path =
+        `/subscriptions/${input.subscriptionId}` +
+        `/resourceGroups/${input.resourceGroup}` +
+        `/providers/Microsoft.OperationalInsights/workspaces/${input.name}`;
 
-  const provisioningState = (body: unknown): string =>
-    asString(prop(prop(body, "properties"), "provisioningState"));
+      const putResponse = await azure.request({
+        method: "PUT",
+        path,
+        apiVersion: WORKSPACE_API_VERSION,
+        body: {
+          location: input.location,
+          properties: {
+            sku: { name: WORKSPACE_DEFAULT_SKU },
+            retentionInDays: WORKSPACE_DEFAULT_RETENTION_DAYS,
+          },
+        },
+      });
+      if (!is2xx(putResponse.status)) {
+        throw new Error(
+          httpErrorText(
+            `create workspace '${input.name}'`,
+            putResponse.status,
+            putResponse.body,
+          ),
+        );
+      }
 
-  let body: unknown = putResponse.body;
-  const maxAttempts = input.maxPollAttempts ?? DEFAULT_WORKSPACE_POLL_ATTEMPTS;
-  let attempts = 0;
-  while (provisioningState(body).toLowerCase() !== "succeeded") {
-    const state = provisioningState(body);
-    if (/^(failed|canceled)$/i.test(state)) {
-      throw new Error(
-        `workspace '${input.name}' provisioning ended in state '${state}'`,
-      );
-    }
-    if (attempts >= maxAttempts) {
-      throw new Error(
-        `workspace '${input.name}' did not reach provisioningState Succeeded ` +
-          `within ${maxAttempts} poll attempts (last state '${state || "unknown"}')`,
-      );
-    }
-    attempts++;
-    const pollResponse = await azure.request({
-      method: "GET",
-      path,
-      apiVersion: WORKSPACE_API_VERSION,
-    });
-    if (!is2xx(pollResponse.status)) {
-      throw new Error(
-        httpErrorText(
-          `poll workspace '${input.name}'`,
-          pollResponse.status,
-          pollResponse.body,
-        ),
-      );
-    }
-    body = pollResponse.body;
-  }
+      const provisioningState = (body: unknown): string =>
+        asString(prop(prop(body, "properties"), "provisioningState"));
 
-  const properties = prop(body, "properties");
-  const resourceGroup = deriveResourceGroup(asString(prop(body, "id")));
-  const location = asString(prop(body, "location"));
-  return {
-    name: input.name,
-    resourceGroup: resourceGroup !== "" ? resourceGroup : input.resourceGroup,
-    location: location !== "" ? location : input.location,
-    customerId: asString(prop(properties, "customerId")),
-  };
+      let body: unknown = putResponse.body;
+      const maxAttempts = input.maxPollAttempts ?? DEFAULT_WORKSPACE_POLL_ATTEMPTS;
+      let attempts = 0;
+      while (provisioningState(body).toLowerCase() !== "succeeded") {
+        const state = provisioningState(body);
+        if (/^(failed|canceled)$/i.test(state)) {
+          throw new Error(
+            `workspace '${input.name}' provisioning ended in state '${state}'`,
+          );
+        }
+        if (attempts >= maxAttempts) {
+          throw new Error(
+            `workspace '${input.name}' did not reach provisioningState Succeeded ` +
+              `within ${maxAttempts} poll attempts (last state '${state || "unknown"}')`,
+          );
+        }
+        attempts++;
+        const pollResponse = await azure.request({
+          method: "GET",
+          path,
+          apiVersion: WORKSPACE_API_VERSION,
+        });
+        if (!is2xx(pollResponse.status)) {
+          throw new Error(
+            httpErrorText(
+              `poll workspace '${input.name}'`,
+              pollResponse.status,
+              pollResponse.body,
+            ),
+          );
+        }
+        body = pollResponse.body;
+      }
+
+      const properties = prop(body, "properties");
+      const resourceGroup = deriveResourceGroup(asString(prop(body, "id")));
+      const location = asString(prop(body, "location"));
+      return {
+        name: input.name,
+        resourceGroup: resourceGroup !== "" ? resourceGroup : input.resourceGroup,
+        location: location !== "" ? location : input.location,
+        customerId: asString(prop(properties, "customerId")),
+      };
+    },
+    (created) => ({ resourceGroup: created.resourceGroup, location: created.location }),
+  );
 }
 
 /** Input for {@link enableSentinel}. */
@@ -555,78 +647,91 @@ export interface EnableSentinelResult {
 export async function enableSentinel(
   azure: AzureManagement,
   input: EnableSentinelInput,
+  logger?: Logger,
 ): Promise<EnableSentinelResult> {
-  const workspacePath =
-    `/subscriptions/${input.subscriptionId}` +
-    `/resourceGroups/${input.resourceGroup}` +
-    `/providers/Microsoft.OperationalInsights/workspaces/${input.workspaceName}`;
-
-  const workspaceResponse = await azure.request({
-    method: "GET",
-    path: workspacePath,
-    apiVersion: WORKSPACE_API_VERSION,
-  });
-  if (!is2xx(workspaceResponse.status)) {
-    throw new Error(
-      httpErrorText(
-        `fetch workspace '${input.workspaceName}'`,
-        workspaceResponse.status,
-        workspaceResponse.body,
-      ),
-    );
-  }
-  const workspaceResourceId =
-    asString(prop(workspaceResponse.body, "id")) !== ""
-      ? asString(prop(workspaceResponse.body, "id"))
-      : workspacePath;
-  const location = asString(prop(workspaceResponse.body, "location"));
-  if (location === "") {
-    throw new Error(
-      `workspace '${input.workspaceName}' reported no location; ` +
-        `cannot place the SecurityInsights solution`,
-    );
-  }
-
-  const solutionName = `SecurityInsights(${input.workspaceName})`;
-  const solutionPath =
-    `/subscriptions/${input.subscriptionId}` +
-    `/resourceGroups/${input.resourceGroup}` +
-    `/providers/Microsoft.OperationsManagement/solutions/${solutionName}`;
-
-  const preCheck = await azure.request({
-    method: "GET",
-    path: solutionPath,
-    apiVersion: SENTINEL_SOLUTION_API_VERSION,
-  });
-  if (is2xx(preCheck.status)) {
-    return { alreadyEnabled: true, location, solutionName };
-  }
-
-  const putResponse = await azure.request({
-    method: "PUT",
-    path: solutionPath,
-    apiVersion: SENTINEL_SOLUTION_API_VERSION,
-    body: {
-      location,
-      plan: {
-        name: solutionName,
-        publisher: "Microsoft",
-        product: "OMSGallery/SecurityInsights",
-        promotionCode: "",
-      },
-      properties: { workspaceResourceId },
+  return logged(
+    logger,
+    "enable Sentinel",
+    {
+      subscriptionId: input.subscriptionId,
+      resourceGroup: input.resourceGroup,
+      workspaceName: input.workspaceName,
     },
-  });
-  if (!is2xx(putResponse.status)) {
-    throw new Error(
-      httpErrorText(
-        `enable Sentinel on '${input.workspaceName}'`,
-        putResponse.status,
-        putResponse.body,
-      ),
-    );
-  }
-  return { alreadyEnabled: false, location, solutionName };
+    async () => {
+      const workspacePath =
+        `/subscriptions/${input.subscriptionId}` +
+        `/resourceGroups/${input.resourceGroup}` +
+        `/providers/Microsoft.OperationalInsights/workspaces/${input.workspaceName}`;
+
+      const workspaceResponse = await azure.request({
+        method: "GET",
+        path: workspacePath,
+        apiVersion: WORKSPACE_API_VERSION,
+      });
+      if (!is2xx(workspaceResponse.status)) {
+        throw new Error(
+          httpErrorText(
+            `fetch workspace '${input.workspaceName}'`,
+            workspaceResponse.status,
+            workspaceResponse.body,
+          ),
+        );
+      }
+      const workspaceResourceId =
+        asString(prop(workspaceResponse.body, "id")) !== ""
+          ? asString(prop(workspaceResponse.body, "id"))
+          : workspacePath;
+      const location = asString(prop(workspaceResponse.body, "location"));
+      if (location === "") {
+        throw new Error(
+          `workspace '${input.workspaceName}' reported no location; ` +
+            `cannot place the SecurityInsights solution`,
+        );
+      }
+
+      const solutionName = `SecurityInsights(${input.workspaceName})`;
+      const solutionPath =
+        `/subscriptions/${input.subscriptionId}` +
+        `/resourceGroups/${input.resourceGroup}` +
+        `/providers/Microsoft.OperationsManagement/solutions/${solutionName}`;
+
+      const preCheck = await azure.request({
+        method: "GET",
+        path: solutionPath,
+        apiVersion: SENTINEL_SOLUTION_API_VERSION,
+      });
+      if (is2xx(preCheck.status)) {
+        return { alreadyEnabled: true, location, solutionName };
+      }
+
+      const putResponse = await azure.request({
+        method: "PUT",
+        path: solutionPath,
+        apiVersion: SENTINEL_SOLUTION_API_VERSION,
+        body: {
+          location,
+          plan: {
+            name: solutionName,
+            publisher: "Microsoft",
+            product: "OMSGallery/SecurityInsights",
+            promotionCode: "",
+          },
+          properties: { workspaceResourceId },
+        },
+      });
+      if (!is2xx(putResponse.status)) {
+        throw new Error(
+          httpErrorText(
+            `enable Sentinel on '${input.workspaceName}'`,
+            putResponse.status,
+            putResponse.body,
+          ),
+        );
+      }
+      return { alreadyEnabled: false, location, solutionName };
+    },
+    (result) => ({ alreadyEnabled: result.alreadyEnabled, location: result.location }),
+  );
 }
 
 // ---------------------------------------------------------------------------

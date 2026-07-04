@@ -17,6 +17,7 @@ import type {
   CriblRequest,
   JobRecord,
   JobStore,
+  Logger,
   PortHttpResponse,
   SecretSetOptions,
   SecretsStore,
@@ -542,15 +543,21 @@ export interface CloudPorts {
   jobs: JobStore;
   user: UserContext;
   artifacts: ArtifactSink;
+  /** The shell's Logger (platform/logger.ts PlatformLogger instance). */
+  logger: Logger;
 }
 
 /**
- * Build all six cloud-shell adapters. `tenantId` is the ACTIVE connection's
- * Entra tenant, baked into the AzureManagement adapter's token flow - build
- * a fresh set when the active connection changes. The azure/cribl/jobs
- * fields satisfy usecase port bundles (e.g. OnboardTablePorts) structurally.
+ * Build the cloud-shell adapter bundle. `tenantId` is the ACTIVE
+ * connection's Entra tenant, baked into the AzureManagement adapter's token
+ * flow - build a fresh set when the active connection changes. `logger` is
+ * the app-lifetime PlatformLogger instance (passed BY REFERENCE so its ring
+ * survives connection switches; construction here would reset it). The
+ * azure/cribl/jobs/logger fields satisfy usecase port bundles (e.g.
+ * OnboardTablePorts) structurally, so usecases invoked with this bundle log
+ * for free.
  */
-export function makeCloudPorts(tenantId: string): CloudPorts {
+export function makeCloudPorts(tenantId: string, logger: Logger): CloudPorts {
   return {
     secrets: new PlatformSecretsStore(),
     azure: new PlatformAzureManagement(tenantId),
@@ -558,5 +565,6 @@ export function makeCloudPorts(tenantId: string): CloudPorts {
     jobs: new PlatformJobStore(),
     user: new PlatformUserContext(),
     artifacts: new PlatformArtifactSink(),
+    logger,
   };
 }

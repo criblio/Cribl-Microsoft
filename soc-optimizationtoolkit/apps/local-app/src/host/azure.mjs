@@ -43,12 +43,16 @@ const DEFAULT_TOKEN_LIFETIME_S = 3600;
  * Build the ARM proxy over the config's client-credentials identity.
  *
  * @param {import('./config.mjs').AzureSection} azure
+ * @param {ReturnType<import('./logger.mjs').createFileLogger>} [logger]
+ *   Optional file logger for token-refresh and 401-recovery events. Only
+ *   token METADATA is ever logged (expiry seconds, trigger); the token and
+ *   the client secret never reach a log line.
  * @returns {{
  *   request(opts: AzureProxyRequest): Promise<{ status: number, body: unknown }>,
  *   requestUrl(opts: AzureProxyUrlRequest): Promise<{ status: number, body: unknown }>,
  * }}
  */
-export function createAzureProxy(azure) {
+export function createAzureProxy(azure, logger) {
   /** @type {{ accessToken: string, expiresAt: number } | null} */
   let cached = null;
 
@@ -88,13 +92,17 @@ export function createAzureProxy(azure) {
     try {
       token = JSON.parse(text);
     } catch {
-      throw new Error(`Azure token endpoint returned HTTP ${res.status} but the body is not JSON\n${text}`);
+      // Deliberately do NOT echo a 2xx body: a token response must never
+      // reach a log line or HTTP response (same guard as cribl-auth.mjs).
+      throw new Error(`Azure token endpoint returned HTTP ${res.status} but the body is not JSON`);
     }
     if (typeof token.access_token !== 'string' || token.access_token === '') {
-      throw new Error(`Azure token endpoint returned HTTP ${res.status} but no access_token\n${text}`);
+      throw new Error(`Azure token endpoint returned HTTP ${res.status} but no access_token field in the response`);
     }
     const lifetimeS = typeof token.expires_in === 'number' ? token.expires_in : DEFAULT_TOKEN_LIFETIME_S;
     cached = { accessToken: token.access_token, expiresAt: Date.now() + lifetimeS * 1000 };
+    // Metadata only - never the token value.
+    logger?.info('azure arm token acquired', { expiresInS: lifetimeS });
     return cached.accessToken;
   }
 
@@ -106,7 +114,17 @@ export function createAzureProxy(azure) {
     if (!force && cached !== null && Date.now() < cached.expiresAt - TOKEN_REFRESH_MARGIN_MS) {
       return cached.accessToken;
     }
-    return acquireToken();
+    try {
+      return await acquireToken();
+    } catch (err) {
+      // The curated acquisition errors carry field names and upstream
+      // failure text, never credentials.
+      logger?.error('azure arm token acquisition failed', {
+        forced: force,
+        error: err instanceof Error ? err.message : String(err),
+      });
+      throw err;
+    }
   }
 
   /**
@@ -158,6 +176,10 @@ export function createAzureProxy(azure) {
       }
       // 401: the cached token was rejected (expired or revoked). Re-acquire
       // ONCE and retry ONCE; whatever comes back is the answer.
+      logger?.warn('arm request got 401 - re-acquiring token and retrying once', {
+        method: opts.method,
+        path: opts.path,
+      });
       const fresh = await ensureToken(true);
       return send(opts, fresh);
     },
@@ -178,6 +200,9 @@ export function createAzureProxy(azure) {
       if (first.status !== 401) {
         return first;
       }
+      logger?.warn('arm nextLink request got 401 - re-acquiring token and retrying once', {
+        method: opts.method,
+      });
       const fresh = await ensureToken(true);
       return sendUrl(opts, fresh);
     },

@@ -132,7 +132,7 @@ export function AzureTargetingScreen(props: AzureTargetingScreenProps) {
         loadedRef.current.subscriptionsKey = plan.subscriptionsKey;
         setSubsLoad({ status: "loading" });
         try {
-          const list = await listSubscriptions(ports.azure);
+          const list = await listSubscriptions(ports.azure, ports.logger);
           if (!cancelled) {
             setSubsLoad({ status: "loaded", list });
           }
@@ -149,11 +149,16 @@ export function AzureTargetingScreen(props: AzureTargetingScreenProps) {
         loadedRef.current.dependentsKey = plan.dependentsKey;
         setDepLoad({ status: "loading" });
         try {
-          const workspaces = await listWorkspaces(ports.azure, browseSub);
+          const workspaces = await listWorkspaces(
+            ports.azure,
+            browseSub,
+            ports.logger,
+          );
           const choices = await listResourceGroupChoices(
             ports.azure,
             browseSub,
             workspaces,
+            ports.logger,
           );
           if (!cancelled) {
             setDepLoad({ status: "loaded", workspaces, choices });
@@ -168,7 +173,7 @@ export function AzureTargetingScreen(props: AzureTargetingScreenProps) {
     return () => {
       cancelled = true;
     };
-  }, [ports.azure, offline, browseSub, reloadNonce]);
+  }, [ports.azure, ports.logger, offline, browseSub, reloadNonce]);
 
   const refresh = () => setReloadNonce((n) => n + 1);
 
@@ -246,11 +251,15 @@ export function AzureTargetingScreen(props: AzureTargetingScreenProps) {
         return;
       }
       push(`Creating resource group '${newRgName}' in ${location.trim()} (ARM PUT, idempotent)...`);
-      const rg = await createResourceGroup(ports.azure, {
-        subscriptionId: browseSub,
-        name: newRgName,
-        location: location.trim(),
-      });
+      const rg = await createResourceGroup(
+        ports.azure,
+        {
+          subscriptionId: browseSub,
+          name: newRgName,
+          location: location.trim(),
+        },
+        ports.logger,
+      );
       push(`Resource group '${rg.name}' is ready in ${rg.location}.`);
       setBrowseRg(rg.name);
       setNewRgName("");
@@ -279,12 +288,16 @@ export function AzureTargetingScreen(props: AzureTargetingScreenProps) {
       push(
         `Polling provisioning state (attempt-bounded, max ${DEFAULT_WORKSPACE_POLL_ATTEMPTS} polls)...`,
       );
-      const ws = await createWorkspace(ports.azure, {
-        subscriptionId: browseSub,
-        resourceGroup: browseRg,
-        name,
-        location: location.trim(),
-      });
+      const ws = await createWorkspace(
+        ports.azure,
+        {
+          subscriptionId: browseSub,
+          resourceGroup: browseRg,
+          name,
+          location: location.trim(),
+        },
+        ports.logger,
+      );
       push(
         `Workspace '${ws.name}' provisioned (resource group ${ws.resourceGroup}, ` +
           `location ${ws.location}, customerId ${ws.customerId === "" ? "(not yet reported)" : ws.customerId}).`,
@@ -305,11 +318,15 @@ export function AzureTargetingScreen(props: AzureTargetingScreenProps) {
           "(the legacy always-eastus defect is fixed), then checking for an " +
           "existing SecurityInsights solution...",
       );
-      const result = await enableSentinel(ports.azure, {
-        subscriptionId: browseSub,
-        resourceGroup: browseRg,
-        workspaceName: browseWs,
-      });
+      const result = await enableSentinel(
+        ports.azure,
+        {
+          subscriptionId: browseSub,
+          resourceGroup: browseRg,
+          workspaceName: browseWs,
+        },
+        ports.logger,
+      );
       if (result.alreadyEnabled) {
         push(
           `Sentinel is already enabled: ${result.solutionName} exists in ` +

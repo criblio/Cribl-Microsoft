@@ -58,6 +58,21 @@ export type {
   LoaderPlanInput,
 } from "./screens/azure-targeting/targeting-state";
 
+// Logs (porting-plan Unit 3): the diagnostics viewer over the shell's
+// Logger adapter, plus the pure line codec/filter glue behind it (the local
+// shell re-parses host log lines through parseLogLine/logLineToEntry).
+export { LogsScreen } from "./screens/logs/logs-screen";
+export type { LogsScreenProps } from "./screens/logs/logs-screen";
+export {
+  LEVEL_FILTER_OPTIONS,
+  RECENT_JOBS_LIMIT,
+  SUPPORT_BUNDLE_FILENAME,
+  buildLogFilter,
+  logLineToEntry,
+  parseLogLine,
+} from "./screens/logs/logs-state";
+export type { LogFilterInputs } from "./screens/logs/logs-state";
+
 // Settings.
 export { SettingsScreen } from "./screens/settings-screen";
 export type {
