@@ -8,6 +8,7 @@ import {
   BatchDeployScreen,
   EMPTY_MODE_RECORD,
   HomeScreen,
+  IntegrateScreen,
   LogsScreen,
   ModeSelect,
   OnboardTableScreen,
@@ -169,7 +170,28 @@ const SHELL_LINK_OVERRIDES: JourneyLinks = {
       'verifies it by acquiring an ARM token.',
   },
 };
-const JOURNEY_LINKS = mergeJourneyLinks(SHELL_LINK_OVERRIDES);
+// Full mode: the integrate-arc stages the single-page Integrate flagship
+// serves (choose-content / configure / deploy) cross-link to the 'integrate'
+// route - Home's Integrate rail opens the one page (legacy-flow-analysis.md).
+// 'review' stays bound to the dedicated Review screen (SHARED_JOURNEY_LINKS);
+// its Integrate-page section is coming-soon. In cribl-only / air-gapped these
+// stages render 'not-yet-available' (non-navigable), so the binding is inert
+// where the 'both'-gated route is hidden.
+const JOURNEY_LINKS = mergeJourneyLinks({
+  ...SHELL_LINK_OVERRIDES,
+  'choose-content': {
+    routeId: 'integrate',
+    hint: 'Start on the Integrate page - the single-page flow from Azure resources through deploy.',
+  },
+  configure: {
+    routeId: 'integrate',
+    hint: 'Configure Azure resources and Cribl on the Integrate page; saved defaults live in Options.',
+  },
+  deploy: {
+    routeId: 'integrate',
+    hint: 'Deploy the native table on the Integrate page. The Review stage previews what a run would create.',
+  },
+});
 
 // azure-only: the Onboard route requires a live Cribl side and is hidden, so
 // the integrate stages bind to Batch Onboard - the surface the relaxed
@@ -2364,6 +2386,50 @@ function App() {
     </>
   );
 
+  // The Integrate route (legacy-flow-analysis.md single-page decision): THE
+  // MVP centerpiece - the single-page Integrate flagship composing the built
+  // screens (Azure Targeting cascade + the operable native-table deploy) as
+  // numbered sections, with coming-soon sections rendered honestly and a
+  // persistent deploy-readiness footer. requires 'both' (it both targets
+  // Azure and deploys to Cribl in one page). No hard wall: controls stay
+  // visible and gate at the commit actions inside the composed screens
+  // (read-ahead). Keyed by the active profile so switching connections drops
+  // in-page deploy state. The standalone Onboard / Azure Targeting / Batch /
+  // Review routes stay registered - this page composes and supersedes them.
+  const renderIntegrate = (nav: AppFrameNav) => (
+    <>
+      <header className="harness-header">
+        <h1 className="harness-title">Integrate</h1>
+        <p className="harness-subtitle">
+          The single-page integration flow: Azure resources, Cribl
+          configuration, and the operable native-table deploy on one page, with
+          deploy readiness always visible. The solution, sample-data,
+          gap-analysis, and rule-coverage sections arrive in later units.
+        </p>
+      </header>
+      {!secretLive && (
+        <p className="connection-notice">
+          This connection&apos;s client secret has not been entered this
+          session. A secret connected in an earlier session may still be live
+          server-side; if the deploy fails acquiring a token, re-enter the
+          secret in panel 3 (Save and connect) of the Diagnostics view first.
+        </p>
+      )}
+      <PortsProvider ports={cloudPorts} config={activeConfig}>
+        <IntegrateScreen
+          key={`integrate-${store.activeProfileId ?? 'none'}`}
+          scopeCommitted={journeyFacts.scopeCommitted}
+          offline={!hasAzure(phase.mode)}
+          onCommitScope={handleCommitScope}
+          criblDefaults={appOptions.cribl}
+          operationDefaults={appOptions.operation}
+          onOpenOptions={() => nav.navigate('options')}
+          roleGuidance={ROLE_GUIDANCE}
+        />
+      </PortsProvider>
+    </>
+  );
+
   // The Azure Targeting route (Unit 2): the product path for choosing where
   // DCRs deploy. Keyed by the active profile so switching connections resets
   // all browse state. requires: 'azure' gates it to modes with a live Azure
@@ -2641,8 +2707,11 @@ function App() {
   );
 
   // The frame's route table, SECTIONED per ux-flow-plan 4.4: journey steps
-  // in dependency order (Home, Azure Targeting, Onboard, Batch Onboard),
-  // then tools (Options, Logs, Settings), then Diagnostics last (the Spike
+  // in dependency order - Home, then Integrate (the single-page flagship, the
+  // PRIMARY journey route), then the standalone Azure Targeting, Onboard,
+  // Batch Onboard, and Review screens the Integrate page composes and
+  // supersedes but which stay reachable during the transition - then tools
+  // (Options, Logs, Settings), then Diagnostics last (the Spike
   // Harness retitled; panel 4's discovery stays a diagnostic - the targeting
   // screen is the product path). Requirements still drive mode-aware
   // navigation via the ONE @soc/core filterNavItems pass; grouping is
@@ -2654,6 +2723,7 @@ function App() {
   // serving Choose/Configure, mirroring the integrate arc's stage order.
   const routes: AppRoute[] = [
     { id: 'home', label: 'Home', requires: 'none', section: 'journey', render: renderHome },
+    { id: 'integrate', label: 'Integrate', requires: 'both', section: 'journey', render: renderIntegrate },
     { id: 'azure-target', label: 'Azure Targeting', requires: 'azure', section: 'journey', render: renderTargeting },
     { id: 'onboard', label: 'Onboard', requires: 'both', section: 'journey', render: renderOnboard },
     { id: 'batch-onboard', label: 'Batch Onboard', requires: 'azure', section: 'journey', render: renderBatch },

@@ -14,6 +14,11 @@ import {
   readinessChips,
   FIRST_RUN_ARC,
   INTEGRATE_ARC,
+  // domain/integrate-arc
+  INTEGRATE_SECTIONS,
+  canDeploy,
+  deriveReadinessPills,
+  deriveSectionStatus,
   // domain/app-theme
   parseThemeChoice,
   resolveTheme,
@@ -126,6 +131,14 @@ describe("@soc/core root barrel", () => {
     expect(typeof readinessChips).toBe("function");
     expect(FIRST_RUN_ARC[0]).toBe("accept");
     expect(INTEGRATE_ARC).toHaveLength(6);
+  });
+
+  it("re-exports the integrate-arc domain module", () => {
+    expect(typeof deriveSectionStatus).toBe("function");
+    expect(typeof deriveReadinessPills).toBe("function");
+    expect(typeof canDeploy).toBe("function");
+    expect(INTEGRATE_SECTIONS).toHaveLength(7);
+    expect(INTEGRATE_SECTIONS.filter((s) => s.built)).toHaveLength(3);
   });
 
   it("re-exports the app-theme domain module", () => {

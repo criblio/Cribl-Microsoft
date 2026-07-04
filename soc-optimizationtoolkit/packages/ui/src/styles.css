@@ -1184,3 +1184,204 @@ button.journey-step-main:hover .journey-step-label {
   font-size: 14px;
   color: var(--text);
 }
+
+/* ---------------------------------------------------------------------------
+ * Integrate arc (legacy-flow-analysis.md single-page decision) - the reusable
+ * numbered-section vocabulary (NumberedSection) and the persistent
+ * deploy-readiness footer (ReadinessFooter). The badge palette mirrors the
+ * JourneyStepper circles; all colors are theme tokens (dark-mode ready).
+ * ------------------------------------------------------------------------ */
+
+.integrate-page {
+  display: flex;
+  flex-direction: column;
+}
+
+.numbered-section {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  padding: 16px 20px;
+  margin-bottom: 16px;
+}
+
+.numbered-section-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.numbered-section-title {
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 24px;
+  color: var(--text-strong);
+  margin: 0;
+}
+
+.numbered-section-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  font-size: 12px;
+  font-weight: 700;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-muted);
+}
+
+/* current / available: blue-filled circle with the section number. */
+.numbered-section-badge-current,
+.numbered-section-badge-available {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--on-accent);
+}
+
+/* complete: green circle with the CSS-drawn check (no emoji/symbol glyph). */
+.numbered-section-badge-complete {
+  background: var(--ok-bg);
+  border-color: var(--ok-border);
+  color: var(--ok-strong);
+}
+
+.numbered-section-check {
+  display: inline-block;
+  width: 6px;
+  height: 11px;
+  margin-top: -2px;
+  border: solid var(--ok-strong);
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+.numbered-section-badge-blocked {
+  color: var(--text-faint);
+}
+
+.numbered-section-badge-coming-soon {
+  border-style: dashed;
+  color: var(--text-faint);
+}
+
+.numbered-section-coming-soon {
+  opacity: 0.9;
+}
+
+.numbered-section-blocked-reason {
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--warn);
+  border: 1px solid var(--warn-border);
+  background: var(--warn-bg);
+  padding: 6px 10px;
+  margin: 0 0 10px;
+}
+
+.numbered-section-comingsoon {
+  margin-top: 2px;
+}
+
+.numbered-section-comingsoon-badge {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 18px;
+  padding: 1px 8px;
+  border: 1px dashed var(--border);
+  background: var(--surface-raised);
+  color: var(--text-faint);
+  margin-bottom: 6px;
+}
+
+.numbered-section-comingsoon-note {
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+/* Azure Resources capability checkboxes (DCE / metrics / role) - read-only
+ * honest reflections of what the deploy does, not editable controls. */
+.integrate-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 6px 0;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.integrate-check-text {
+  line-height: 20px;
+  color: var(--text-muted);
+}
+
+/* The persistent deploy-readiness footer: pills + the single Deploy action,
+ * sticky at the page bottom so readiness is auditable without scrolling. */
+.readiness-footer {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-top: 4px;
+  padding: 12px 16px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  box-shadow: 0 -2px 8px var(--shadow);
+}
+
+.readiness-footer-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.readiness-pill {
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 20px;
+  padding: 2px 10px;
+  border: 1px solid var(--border);
+  background: var(--surface-raised);
+  color: var(--text-faint);
+  white-space: nowrap;
+}
+
+.readiness-pill-ok {
+  color: var(--ok-strong);
+  border-color: var(--ok-border);
+  background: var(--ok-bg);
+}
+
+.readiness-pill-missing {
+  color: var(--warn);
+  border-color: var(--warn-border);
+  background: var(--warn-bg);
+}
+
+.readiness-pill-coming-soon {
+  color: var(--text-faint);
+  border-color: var(--border);
+  background: var(--surface-raised);
+}
+
+.readiness-footer-action {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-left: auto;
+}
+
+.readiness-footer-hint {
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--text-faint);
+  max-width: 360px;
+}

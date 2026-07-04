@@ -161,6 +161,28 @@ export type {
   ReviewVerdict,
 } from "./screens/review/review-state";
 
+// Integrate arc (legacy-flow-analysis.md single-page decision, ADOPTED
+// 2026-07-04): the MVP centerpiece - the single-page Integrate flagship
+// composing the built screens (Azure Targeting, the native onboardTable
+// deploy) as numbered sections over @soc/core integrate-arc, with the
+// coming-soon sections rendered honestly. Plus the REUSABLE numbered-section
+// vocabulary (NumberedSection, ReadinessFooter) later units reuse for their
+// own sections, and the pure screen-state binding layer.
+export { NumberedSection } from "./components/numbered-section";
+export type { NumberedSectionProps } from "./components/numbered-section";
+export { ReadinessFooter } from "./components/readiness-footer";
+export type { ReadinessFooterProps } from "./components/readiness-footer";
+export { IntegrateScreen } from "./screens/integrate/integrate-screen";
+export type { IntegrateScreenProps } from "./screens/integrate/integrate-screen";
+export {
+  FALLBACK_PACK_NAME,
+  INTEGRATE_DEFAULT_TABLE,
+  defaultPackName,
+  deployDisabledReason,
+  deriveSectionInputs,
+} from "./screens/integrate/integrate-screen-state";
+export type { IntegrateRawInputs } from "./screens/integrate/integrate-screen-state";
+
 // Azure targeting (Unit 2): the subscription -> workspace -> resource-group
 // cascade, create/enable actions, explicit scope commit, and the pure state
 // behind it (chip text, commit notice, RG name rules, scope codec).
