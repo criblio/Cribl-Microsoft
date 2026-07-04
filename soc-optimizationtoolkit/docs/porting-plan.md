@@ -76,6 +76,12 @@ Legacy source root abbreviations used below:
 - External surface: management.azure.com (existing).
 - Depends on: Units 2, 4.
 
+> DECISIONS RESOLVED (user, 2026-07-03, via multiple choice - all recommendations accepted):
+> (1) JobStatus/step status gains a first-class 'skipped' value (binds Units 6/20 and step-line rendering).
+> (2) Cribl destinations reference a named Cribl secret object (app ensures it via API); '<replace me>' survives only in air-gapped export artifacts (binds Unit 20).
+> (3) Suppress rules HONOR maxEvents - the legacy allow:1 defect is fixed and pinned; fielded packs emitting allow:1 get rebuild guidance (binds Units 13/18).
+> (4) Cloud pack artifacts REGENERATE deterministically from stored pack definitions; artifact bytes are never persisted in KV (binds the pack lifecycle units).
+
 #### Unit 6: Batch deployment queue and DCE/Private Link modes (L)
 
 - Covers: ENG-33 (delta), ENG-39 (inner multi-table batch loop; full multi-source orchestrator is Unit 20), roadmap DCR-16/17 + DCE naming.
