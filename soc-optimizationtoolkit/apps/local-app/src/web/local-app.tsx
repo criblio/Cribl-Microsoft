@@ -14,11 +14,13 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
+  APP_THEME_KEY,
   AppFrame,
   AuaGate,
   AzureTargetingScreen,
   BatchDeployScreen,
   EMPTY_MODE_RECORD,
+  HomeScreen,
   LogsScreen,
   ModeSelect,
   OnboardTableScreen,
@@ -28,6 +30,7 @@ import {
   commitNoticeText,
   formatScopeChip,
   logLineToEntry,
+  mergeJourneyLinks,
   parseTargetScope,
   resolveFramePhase,
   serializeTargetScope,
@@ -37,21 +40,28 @@ import type {
   AppFrameNav,
   AppRoute,
   CommitScopeOutcome,
+  JourneyLinks,
   LoadableAcceptance,
   LoadableMode,
   PlatformInfoRow,
+  ThemeControl,
 } from '@soc/ui';
 import {
   DEFAULT_APP_OPTIONS,
+  DEFAULT_THEME_CHOICE,
   EMPTY_AZURE_CONFIG,
   computeInvalidation,
   hasAzure,
+  hasCribl,
   parseAcceptanceRecord,
   parseAppMode,
   parseAppOptions,
   parseAzureConfig,
+  parseThemeChoice,
+  resolveTheme,
   serializeAcceptanceRecord,
   serializeAppMode,
+  serializeThemeChoice,
 } from '@soc/core';
 import type {
   AcceptanceRecord,
@@ -59,8 +69,10 @@ import type {
   AppOptions,
   AzureConfig,
   BatchPacing,
+  JourneyFacts,
   LogEntry,
   TargetScope,
+  ThemeChoice,
 } from '@soc/core';
 import { fetchWithTimeout, makeLocalPorts } from './local-adapters';
 import { HostLogger } from './logger';
@@ -114,6 +126,48 @@ const TARGET_SCOPE_KEY = 'azureTargetScope';
 // host secrets store, same key name as the cloud shell's KV entry. Saves go
 // through @soc/core applyOptionsPatch so unmanaged keys in the blob survive.
 const APP_OPTIONS_KEY = 'appOptions';
+
+// This shell's journey stage bindings (ux-flow-plan 4.4, Unit 6.5): the
+// shared bindings plus the LOCAL-specific connect guidance - this shell has
+// no in-app identity surface until Unit 22, so the connect stage renders the
+// config-file path as guidance text with no route. Cross-links are DATA
+// passed to the shared screens; shared prose never names shell-specific UI.
+const SHELL_LINK_OVERRIDES: JourneyLinks = {
+  connect: {
+    hint:
+      'The identity (tenant, client, secret) lives in config/local-config.json: edit the ' +
+      'file, restart the host, then reload this page. A guided connect step ships in a ' +
+      'later unit.',
+  },
+};
+const JOURNEY_LINKS = mergeJourneyLinks(SHELL_LINK_OVERRIDES);
+
+// azure-only: the Onboard route requires a live Cribl side and is hidden, so
+// the integrate stages bind to Batch Onboard - the surface the relaxed
+// 'azure' requirement actually exposes in this mode (templateOnly forced on;
+// the honest copy lives on the screen).
+const AZURE_ONLY_JOURNEY_LINKS = mergeJourneyLinks({
+  ...SHELL_LINK_OVERRIDES,
+  'choose-content': {
+    routeId: 'batch-onboard',
+    hint: 'Batch Onboard is this mode\'s onboarding surface; runs are template-only (no live Cribl connection).',
+  },
+  configure: {
+    routeId: 'batch-onboard',
+    hint: 'Per-run overrides live on Batch Onboard; saved defaults in Options.',
+  },
+  deploy: {
+    routeId: 'batch-onboard',
+    hint: 'Run on Batch Onboard - template-only in this mode; ARM bodies download as one artifact.',
+  },
+});
+
+// Where the operator grants the Monitoring Metrics Publisher role today
+// (shell-provided pointer for the shared Onboard footer - the cloud shell
+// passes its Diagnostics pointer instead).
+const ROLE_GUIDANCE =
+  'grant it out of band: az CLI, the Azure portal, or a change request to the team ' +
+  'holding RBAC rights. A guided role-assignment step ships in a later unit.';
 
 // What GET /api/config yields for the shell: the AzureConfig-shaped
 // non-secret fields plus the leader URL for display. Secrets (Azure client
@@ -176,6 +230,42 @@ export function LocalApp() {
   // callback. A failed read parses to the defaults.
   const [appOptions, setAppOptions] = useState<AppOptions>(DEFAULT_APP_OPTIONS);
 
+  // Theme (porting-plan dark-mode note, lands with Unit 6.5). The CHOICE
+  // (light | dark | system) persists as the plain appTheme host-secrets
+  // entry (the appMode pattern, same key name as the cloud shell's KV
+  // entry); the prefers-color-scheme signal is read live so a 'system'
+  // choice re-resolves the moment the OS preference changes.
+  const [themeChoice, setThemeChoice] = useState<ThemeChoice>(DEFAULT_THEME_CHOICE);
+  const [systemPrefersDark, setSystemPrefersDark] = useState(
+    () => window.matchMedia('(prefers-color-scheme: dark)').matches
+  );
+  useEffect(() => {
+    const mql = window.matchMedia('(prefers-color-scheme: dark)');
+    const onChange = (event: MediaQueryListEvent) => setSystemPrefersDark(event.matches);
+    mql.addEventListener('change', onChange);
+    return () => mql.removeEventListener('change', onChange);
+  }, []);
+  const resolvedTheme = resolveTheme(themeChoice, systemPrefersDark);
+  // data-theme goes on <html> so the tokens re-theme EVERYTHING - body
+  // background and the gate screens (AuaGate, ModeSelect, loading) that
+  // render outside the AppFrame wrapper.
+  useEffect(() => {
+    document.documentElement.dataset.theme = resolvedTheme;
+  }, [resolvedTheme]);
+  const handleThemeChange = useCallback(async (choice: ThemeChoice) => {
+    setThemeChoice(choice);
+    try {
+      await ports.secrets.set(APP_THEME_KEY, serializeThemeChoice(choice));
+    } catch {
+      // Non-fatal: the choice holds for this session and re-reads next launch.
+    }
+  }, []);
+  const themeControl: ThemeControl = {
+    theme: themeChoice,
+    resolvedTheme,
+    onThemeChange: handleThemeChange,
+  };
+
   // Status of the consolidated connection poll: is the loopback host up?
   const [hostLink, setHostLink] = useState('checking...');
 
@@ -198,11 +288,12 @@ export function LocalApp() {
   useEffect(() => {
     let cancelled = false;
     void (async () => {
-      const [accRaw, modeRaw, scopeRaw, optionsRaw] = await Promise.allSettled([
+      const [accRaw, modeRaw, scopeRaw, optionsRaw, themeRaw] = await Promise.allSettled([
         ports.secrets.get(AUA_ACCEPTANCE_KEY),
         ports.secrets.get(APP_MODE_KEY),
         ports.secrets.get(TARGET_SCOPE_KEY),
         ports.secrets.get(APP_OPTIONS_KEY),
+        ports.secrets.get(APP_THEME_KEY),
       ]);
       if (cancelled) {
         return;
@@ -216,6 +307,10 @@ export function LocalApp() {
       );
       setAppOptions(
         parseAppOptions(optionsRaw.status === 'fulfilled' ? optionsRaw.value : null)
+      );
+      // Theme: a failed read parses to 'system' - always renderable.
+      setThemeChoice(
+        parseThemeChoice(themeRaw.status === 'fulfilled' ? themeRaw.value : null)
       );
     })();
     return () => {
@@ -365,6 +460,56 @@ export function LocalApp() {
     return <ModeSelect onSelect={handleSelectMode} />;
   }
 
+  // The journey readiness FACTS (ux-flow-plan 4.1, Unit 6.5), composed from
+  // signals this shell already owns - nothing new is probed. Identity comes
+  // from the host config file's non-secret fields; the SECRET never leaves
+  // the host process and nothing this session has proven it works, so its
+  // liveness is honestly 'unknown' (never 'live', never silently ok) until a
+  // run or a later unit's probe makes it definite. Scope counts as committed
+  // when the effective config (file + committed override) addresses a full
+  // target. While the host config is still loading (or failed), identity and
+  // scope read false - the journey re-derives the moment it loads.
+  const journeyFacts: JourneyFacts = {
+    accepted: typeof acceptance === 'object' && acceptance !== null,
+    mode: phase.mode,
+    identityPresent:
+      activeAzureConfig !== null &&
+      activeAzureConfig.tenantId.trim() !== '' &&
+      activeAzureConfig.clientId.trim() !== '',
+    secretLive: 'unknown',
+    scopeCommitted:
+      activeAzureConfig !== null &&
+      activeAzureConfig.subscriptionId.trim() !== '' &&
+      activeAzureConfig.resourceGroup.trim() !== '' &&
+      activeAzureConfig.workspaceName.trim() !== '',
+  };
+
+  // The Home route (ux-flow-plan 4.3, Unit 6.5): the state-aware landing
+  // surface BOTH shells open on every launch. Facts in, rails and the single
+  // next action out - position is derived from persisted state on every
+  // render, so resume is automatic. Mounted in a PortsProvider for the
+  // embedded RecentRuns (falls back to the empty config while the host
+  // config loads; the runs list never reads the config).
+  const renderHome = (nav: AppFrameNav) => (
+    <>
+      <header className="local-header">
+        <h1 className="local-title">Home</h1>
+        <p className="local-subtitle">
+          Where this install is on the journey and the single next action.
+          Every stage is visible and navigable; commits stay gated inside
+          their screens.
+        </p>
+      </header>
+      <PortsProvider ports={ports} config={activeAzureConfig ?? EMPTY_AZURE_CONFIG}>
+        <HomeScreen
+          facts={journeyFacts}
+          links={phase.mode === 'azure-only' ? AZURE_ONLY_JOURNEY_LINKS : JOURNEY_LINKS}
+          onNavigate={nav.navigate}
+        />
+      </PortsProvider>
+    </>
+  );
+
   // The Onboard route: the shared walking-skeleton screen against the local
   // adapters, gated on the host config actually loading.
   const onboardView = (
@@ -397,6 +542,7 @@ export function LocalApp() {
           <OnboardTableScreen
             criblDefaults={appOptions.cribl}
             operationDefaults={appOptions.operation}
+            roleGuidance={ROLE_GUIDANCE}
           />
         </PortsProvider>
       )}
@@ -442,6 +588,7 @@ export function LocalApp() {
             operationDefaults={appOptions.operation}
             criblDefaults={appOptions.cribl}
             onOpenOptions={() => nav.navigate('options')}
+            forcedTemplateOnly={!hasCribl(phase.mode)}
           />
         </PortsProvider>
       )}
@@ -594,18 +741,24 @@ export function LocalApp() {
       }
       mode={phase.mode}
       onReconfigure={handleReconfigure}
+      themeControl={themeControl}
     />
   );
 
-  // Route table: Onboard needs BOTH live sides; Azure Targeting needs the
-  // live Azure side; Options, Logs, and Settings are always shown.
+  // Route table, SECTIONED per ux-flow-plan 4.4: journey steps in dependency
+  // order (Home, Azure Targeting, Onboard, Batch Onboard), then tools. This
+  // shell has no diagnostics section (the Spike Harness is cloud-only).
+  // Onboard needs BOTH live sides; batch-onboard relaxes to 'azure'
+  // (recorded Unit 6.5 decision) - in azure-only mode templateOnly is FORCED
+  // on because no live Cribl connection exists to deploy destinations to.
   const routes: AppRoute[] = [
-    { id: 'onboard', label: 'Onboard', requires: 'both', render: () => onboardView },
-    { id: 'batch-onboard', label: 'Batch Onboard', requires: 'both', render: renderBatch },
-    { id: 'azure-target', label: 'Azure Targeting', requires: 'azure', render: () => targetingView },
-    { id: 'options', label: 'Options', requires: 'none', render: () => optionsView },
-    { id: 'logs', label: 'Logs', requires: 'none', render: () => logsView },
-    { id: 'settings', label: 'Settings', requires: 'none', render: () => settingsView },
+    { id: 'home', label: 'Home', requires: 'none', section: 'journey', render: renderHome },
+    { id: 'azure-target', label: 'Azure Targeting', requires: 'azure', section: 'journey', render: () => targetingView },
+    { id: 'onboard', label: 'Onboard', requires: 'both', section: 'journey', render: () => onboardView },
+    { id: 'batch-onboard', label: 'Batch Onboard', requires: 'azure', section: 'journey', render: renderBatch },
+    { id: 'options', label: 'Options', requires: 'none', section: 'tools', render: () => optionsView },
+    { id: 'logs', label: 'Logs', requires: 'none', section: 'tools', render: () => logsView },
+    { id: 'settings', label: 'Settings', requires: 'none', section: 'tools', render: () => settingsView },
   ];
 
   // Frame topBar (GUI-28's Azure half): the committed target scope as a
@@ -637,8 +790,9 @@ export function LocalApp() {
       mode={phase.mode}
       routes={routes}
       topBar={topBar}
-      initialRouteId="onboard"
+      initialRouteId="home"
       footerNote="local host"
+      themeControl={themeControl}
     />
   );
 }

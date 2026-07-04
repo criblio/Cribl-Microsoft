@@ -9,7 +9,129 @@
  * The rules below were moved VERBATIM from apps/cribl-app/src/App.css so the
  * cloud app renders identically; shell-only chrome (harness header,
  * connection bar, view tabs, ...) stays in each shell's own stylesheet.
+ *
+ * THEMING (porting-plan dark-mode note, lands with Unit 6.5): every color is
+ * a CSS custom property defined on :root with the EXACT light values the
+ * sheet previously hardcoded - light mode computes identically to the
+ * pre-token sheet. [data-theme="dark"] overrides the same tokens; the
+ * AppFrame sets data-theme on its root wrapper from the shell-resolved
+ * theme (shells may additionally set it on <html> to cover the gate
+ * screens). Shell stylesheets should consume these tokens instead of
+ * duplicating hex values.
+ *
+ * Token -> legacy light value mapping (audit of the pre-token sheet):
+ *
+ *   --bg              #fbfcfd            body background
+ *   --surface         #ffffff            panel / sidebar / cards / inputs
+ *   --surface-raised  #fafafa            inset monospace blocks, run-button,
+ *                                        aua body, config textarea
+ *   --border          #d9d9d9            standard 1px borders
+ *   --border-subtle   #f0f0f0            hairline row/section separators
+ *   --border-focus    #1890ff            input/select focus border
+ *   --text            #262626            primary text
+ *   --text-strong     rgba(0,0,0,0.85)   headings (panel/gate/discovery)
+ *   --text-muted      #595959            secondary text, labels
+ *   --text-faint      #8c8c8c            hints, footers, idle status
+ *   --accent          #1890ff            links, active nav, running status
+ *   --on-accent       #ffffff            text on accent-filled elements
+ *   --accent-strong   #0958d9            text on accent tint chips
+ *   --accent-bg       #e6f4ff            accent tint background
+ *   --accent-border   #91caff            accent tint border
+ *   --ok              #52c41a            status-ok text
+ *   --ok-strong       #389e0d            ok chip text / saved note
+ *   --ok-bg           #f6ffed            ok tint background
+ *   --ok-border       #b7eb8f            ok tint border
+ *   --running         #1890ff            status-running text
+ *   --error           #f5222d            status-failed text
+ *   --error-strong    #cf1322            error note text
+ *   --error-bg        #fff1f0            error tint background (new tint,
+ *                                        Ant red-1; used by readiness chips)
+ *   --error-border    #ffa39e            error tint border (new tint, red-3)
+ *   --warn            #d46b08            warning text / notices
+ *   --warn-bg         #fff7e6            warning tint background
+ *   --warn-border     #ffd591            warning tint border
+ *   --purple          #531dab            air-gapped mode chip text
+ *   --purple-bg       #f9f0ff            air-gapped mode chip background
+ *   --purple-border   #d3adf7            air-gapped mode chip border
+ *   --shadow          rgba(0,0,0,0.15)   info-tip popover shadow
  */
+
+:root {
+  --bg: #fbfcfd;
+  --surface: #ffffff;
+  --surface-raised: #fafafa;
+  --border: #d9d9d9;
+  --border-subtle: #f0f0f0;
+  --border-focus: #1890ff;
+  --text: #262626;
+  --text-strong: rgba(0, 0, 0, 0.85);
+  --text-muted: #595959;
+  --text-faint: #8c8c8c;
+  --accent: #1890ff;
+  --on-accent: #ffffff;
+  --accent-strong: #0958d9;
+  --accent-bg: #e6f4ff;
+  --accent-border: #91caff;
+  --ok: #52c41a;
+  --ok-strong: #389e0d;
+  --ok-bg: #f6ffed;
+  --ok-border: #b7eb8f;
+  --running: #1890ff;
+  --error: #f5222d;
+  --error-strong: #cf1322;
+  --error-bg: #fff1f0;
+  --error-border: #ffa39e;
+  --warn: #d46b08;
+  --warn-bg: #fff7e6;
+  --warn-border: #ffd591;
+  --purple: #531dab;
+  --purple-bg: #f9f0ff;
+  --purple-border: #d3adf7;
+  --shadow: rgba(0, 0, 0, 0.15);
+}
+
+/*
+ * Dark theme: same tokens, dark values with accessible contrast - dark
+ * surfaces, readable muted text, and status colors brightened so ok/warn/
+ * error text stays legible on the dark surfaces. Monospace result blocks
+ * keep an inset raised surface; disabled states keep the opacity treatment
+ * over these higher-contrast base colors. color-scheme flips native form
+ * controls and scrollbars.
+ */
+[data-theme='dark'] {
+  color-scheme: dark;
+  --bg: #141414;
+  --surface: #1f1f1f;
+  --surface-raised: #262626;
+  --border: #424242;
+  --border-subtle: #303030;
+  --border-focus: #3c9ae8;
+  --text: #e6e6e6;
+  --text-strong: rgba(255, 255, 255, 0.88);
+  --text-muted: #b0b0b0;
+  --text-faint: #8c8c8c;
+  --accent: #3c9ae8;
+  --on-accent: #10171f;
+  --accent-strong: #8dc5f8;
+  --accent-bg: #111a2c;
+  --accent-border: #15395b;
+  --ok: #6abe39;
+  --ok-strong: #8fd460;
+  --ok-bg: #162312;
+  --ok-border: #274916;
+  --running: #3c9ae8;
+  --error: #e84749;
+  --error-strong: #f37370;
+  --error-bg: #2a1215;
+  --error-border: #58181c;
+  --warn: #e89a3c;
+  --warn-bg: #2b1d11;
+  --warn-border: #593815;
+  --purple: #b37feb;
+  --purple-bg: #1a1325;
+  --purple-border: #3e2069;
+  --shadow: rgba(0, 0, 0, 0.55);
+}
 
 * {
   margin: 0;
@@ -19,13 +141,13 @@
 
 body {
   font-family: 'Open Sans', sans-serif;
-  color: #262626;
-  background: #fbfcfd;
+  color: var(--text);
+  background: var(--bg);
 }
 
 .panel {
-  border: 1px solid #d9d9d9;
-  background: #ffffff;
+  border: 1px solid var(--border);
+  background: var(--surface);
   padding: 20px 24px;
   margin-bottom: 16px;
 }
@@ -34,7 +156,7 @@ body {
   font-size: 16px;
   font-weight: 600;
   line-height: 24px;
-  color: rgba(0, 0, 0, 0.85);
+  color: var(--text-strong);
   margin-bottom: 8px;
 }
 
@@ -42,7 +164,7 @@ body {
   font-size: 13px;
   font-weight: 400;
   line-height: 20px;
-  color: #595959;
+  color: var(--text-muted);
   margin-bottom: 12px;
 }
 
@@ -59,14 +181,14 @@ body {
   gap: 8px;
   font-size: 13px;
   line-height: 20px;
-  color: #262626;
+  color: var(--text);
   cursor: pointer;
 }
 
 .setup-steps {
   font-size: 13px;
   line-height: 20px;
-  color: #595959;
+  color: var(--text-muted);
   margin: 0 0 12px;
   padding-left: 20px;
 }
@@ -78,7 +200,7 @@ body {
 .perm-list {
   font-size: 13px;
   line-height: 20px;
-  color: #595959;
+  color: var(--text-muted);
   margin: 0 0 12px;
   padding-left: 20px;
 }
@@ -88,7 +210,7 @@ body {
 }
 
 .perm-list strong {
-  color: #262626;
+  color: var(--text);
   font-weight: 600;
 }
 
@@ -104,15 +226,15 @@ body {
   font-size: 13px;
   line-height: 20px;
   padding: 4px 14px;
-  border: 1px solid #d9d9d9;
-  background: #fafafa;
-  color: #262626;
+  border: 1px solid var(--border);
+  background: var(--surface-raised);
+  color: var(--text);
   cursor: pointer;
 }
 
 .run-button:hover:not(:disabled) {
-  border-color: #1890ff;
-  color: #1890ff;
+  border-color: var(--accent);
+  color: var(--accent);
 }
 
 .run-button:disabled {
@@ -127,28 +249,28 @@ body {
 }
 
 .status-idle {
-  color: #8c8c8c;
+  color: var(--text-faint);
 }
 
 .status-running {
-  color: #1890ff;
+  color: var(--running);
 }
 
 .status-ok {
-  color: #52c41a;
+  color: var(--ok);
 }
 
 .status-failed {
-  color: #f5222d;
+  color: var(--error);
 }
 
 .result {
   font-family: 'Consolas', 'Menlo', 'Courier New', monospace;
   font-size: 12px;
   line-height: 18px;
-  color: #262626;
-  background: #fafafa;
-  border: 1px solid #d9d9d9;
+  color: var(--text);
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
   padding: 12px;
   white-space: pre-wrap;
   word-break: break-word;
@@ -175,14 +297,14 @@ body {
   font-size: 13px;
   font-weight: 600;
   line-height: 20px;
-  color: #595959;
+  color: var(--text-muted);
 }
 
 .field-hint {
   font-size: 12px;
   font-weight: 400;
   line-height: 18px;
-  color: #8c8c8c;
+  color: var(--text-faint);
 }
 
 .field input {
@@ -190,14 +312,14 @@ body {
   font-size: 13px;
   line-height: 20px;
   padding: 4px 8px;
-  border: 1px solid #d9d9d9;
-  background: #ffffff;
-  color: #262626;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
 }
 
 .field input:focus {
   outline: none;
-  border-color: #1890ff;
+  border-color: var(--border-focus);
 }
 
 .field select {
@@ -205,21 +327,21 @@ body {
   font-size: 13px;
   line-height: 20px;
   padding: 4px 8px;
-  border: 1px solid #d9d9d9;
-  background: #ffffff;
-  color: #262626;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
 }
 
 .field select:focus {
   outline: none;
-  border-color: #1890ff;
+  border-color: var(--border-focus);
 }
 
 .discovery-title {
   font-size: 14px;
   font-weight: 600;
   line-height: 22px;
-  color: rgba(0, 0, 0, 0.85);
+  color: var(--text-strong);
 }
 
 .discovery-result {
@@ -236,6 +358,8 @@ body {
   display: flex;
   align-items: stretch;
   min-height: 100vh;
+  background: var(--bg);
+  color: var(--text);
 }
 
 .app-frame-sidebar {
@@ -243,8 +367,8 @@ body {
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  background: #ffffff;
-  border-right: 1px solid #d9d9d9;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
   position: sticky;
   top: 0;
   height: 100vh;
@@ -253,14 +377,14 @@ body {
 
 .app-frame-brand {
   padding: 20px 16px 16px;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid var(--border-subtle);
 }
 
 .app-frame-title {
   font-size: 15px;
   font-weight: 700;
   line-height: 20px;
-  color: #1890ff;
+  color: var(--accent);
   letter-spacing: 0.5px;
 }
 
@@ -268,7 +392,7 @@ body {
   margin-top: 4px;
   font-size: 11px;
   line-height: 16px;
-  color: #8c8c8c;
+  color: var(--text-faint);
 }
 
 .app-frame-nav {
@@ -276,6 +400,26 @@ body {
   padding: 8px 0;
   display: flex;
   flex-direction: column;
+}
+
+/* Grouped navigation (ux-flow-plan 4.4): journey steps first, then tools,
+ * then diagnostics, each under a small uppercase section header. Mode
+ * filtering is unchanged (one filterNavItems pass); only presentation order
+ * changes. */
+.app-frame-nav-section {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 8px;
+}
+
+.app-frame-nav-section-label {
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 16px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  padding: 8px 16px 4px;
 }
 
 .app-frame-nav-item {
@@ -287,24 +431,24 @@ body {
   border: none;
   border-left: 3px solid transparent;
   background: transparent;
-  color: #595959;
+  color: var(--text-muted);
   cursor: pointer;
 }
 
 .app-frame-nav-item:hover {
-  color: #1890ff;
+  color: var(--accent);
 }
 
 .app-frame-nav-item-active {
-  color: #1890ff;
+  color: var(--accent);
   font-weight: 600;
-  border-left-color: #1890ff;
-  background: #e6f4ff;
+  border-left-color: var(--accent);
+  background: var(--accent-bg);
 }
 
 .app-frame-footer {
   padding: 12px 16px;
-  border-top: 1px solid #f0f0f0;
+  border-top: 1px solid var(--border-subtle);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -314,7 +458,7 @@ body {
 .app-frame-footer-note {
   font-size: 11px;
   line-height: 16px;
-  color: #8c8c8c;
+  color: var(--text-faint);
 }
 
 .app-frame-main {
@@ -328,6 +472,31 @@ body {
   padding: 24px 16px 64px;
 }
 
+/* The topBar utility row the frame owns: the theme toggle, right-aligned
+ * above the shell's own topBar chrome so shell layouts are undisturbed. */
+.app-frame-theme-row {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 8px;
+}
+
+.theme-toggle {
+  font-family: inherit;
+  font-size: 11px;
+  line-height: 16px;
+  padding: 2px 10px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-muted);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.theme-toggle:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
 /* The mode chip: the frame's always-visible answer to "what may this app
  * touch right now". One color per mode. */
 .mode-chip {
@@ -335,32 +504,32 @@ body {
   font-weight: 600;
   line-height: 16px;
   padding: 2px 8px;
-  border: 1px solid #d9d9d9;
+  border: 1px solid var(--border);
   white-space: nowrap;
 }
 
 .mode-chip-full {
-  color: #389e0d;
-  border-color: #b7eb8f;
-  background: #f6ffed;
+  color: var(--ok-strong);
+  border-color: var(--ok-border);
+  background: var(--ok-bg);
 }
 
 .mode-chip-azure-only {
-  color: #0958d9;
-  border-color: #91caff;
-  background: #e6f4ff;
+  color: var(--accent-strong);
+  border-color: var(--accent-border);
+  background: var(--accent-bg);
 }
 
 .mode-chip-cribl-only {
-  color: #d46b08;
-  border-color: #ffd591;
-  background: #fff7e6;
+  color: var(--warn);
+  border-color: var(--warn-border);
+  background: var(--warn-bg);
 }
 
 .mode-chip-air-gapped {
-  color: #531dab;
-  border-color: #d3adf7;
-  background: #f9f0ff;
+  color: var(--purple);
+  border-color: var(--purple-border);
+  background: var(--purple-bg);
 }
 
 /* The committed Azure target scope, rendered as a compact chip in the frame
@@ -371,9 +540,9 @@ body {
   font-weight: 600;
   line-height: 20px;
   padding: 2px 10px;
-  border: 1px solid #91caff;
-  background: #e6f4ff;
-  color: #0958d9;
+  border: 1px solid var(--accent-border);
+  background: var(--accent-bg);
+  color: var(--accent-strong);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -397,9 +566,9 @@ body {
 .connection-notice {
   font-size: 13px;
   line-height: 20px;
-  color: #d46b08;
-  background: #fff7e6;
-  border: 1px solid #ffd591;
+  color: var(--warn);
+  background: var(--warn-bg);
+  border: 1px solid var(--warn-border);
   padding: 8px 12px;
 }
 
@@ -414,6 +583,8 @@ body {
   align-items: center;
   justify-content: center;
   padding: 40px 16px;
+  background: var(--bg);
+  color: var(--text);
 }
 
 .gate-card {
@@ -422,8 +593,8 @@ body {
   max-height: 80vh;
   display: flex;
   flex-direction: column;
-  background: #ffffff;
-  border: 1px solid #d9d9d9;
+  background: var(--surface);
+  border: 1px solid var(--border);
   padding: 32px;
 }
 
@@ -431,14 +602,14 @@ body {
   font-size: 20px;
   font-weight: 700;
   line-height: 28px;
-  color: rgba(0, 0, 0, 0.85);
+  color: var(--text-strong);
   margin-bottom: 4px;
 }
 
 .gate-sub {
   font-size: 12px;
   line-height: 18px;
-  color: #8c8c8c;
+  color: var(--text-faint);
   margin-bottom: 16px;
 }
 
@@ -446,11 +617,11 @@ body {
   flex: 1;
   overflow-y: auto;
   padding: 16px;
-  border: 1px solid #d9d9d9;
-  background: #fafafa;
+  border: 1px solid var(--border);
+  background: var(--surface-raised);
   font-size: 12px;
   line-height: 1.6;
-  color: #595959;
+  color: var(--text-muted);
   margin-bottom: 16px;
 }
 
@@ -469,14 +640,14 @@ body {
 
 .aua-heading {
   font-weight: 700;
-  color: #262626;
+  color: var(--text);
   margin-top: 14px;
 }
 
 .aua-footer-note {
   margin-top: 16px;
   font-style: italic;
-  color: #8c8c8c;
+  color: var(--text-faint);
 }
 
 .gate-actions {
@@ -489,7 +660,7 @@ body {
 .gate-hint {
   font-size: 11px;
   line-height: 16px;
-  color: #8c8c8c;
+  color: var(--text-faint);
 }
 
 .gate-accept {
@@ -511,13 +682,13 @@ body {
   gap: 4px;
   text-align: left;
   padding: 12px 16px;
-  border: 1px solid #d9d9d9;
-  background: #ffffff;
+  border: 1px solid var(--border);
+  background: var(--surface);
   cursor: pointer;
 }
 
 .mode-option:hover:not(:disabled) {
-  border-color: #1890ff;
+  border-color: var(--accent);
 }
 
 .mode-option:disabled {
@@ -529,13 +700,13 @@ body {
   font-size: 14px;
   font-weight: 600;
   line-height: 20px;
-  color: #262626;
+  color: var(--text);
 }
 
 .mode-option-desc {
   font-size: 12px;
   line-height: 18px;
-  color: #595959;
+  color: var(--text-muted);
 }
 
 /* ---------------------------------------------------------------------------
@@ -549,15 +720,15 @@ body {
 .settings-section-title {
   font-size: 13px;
   font-weight: 600;
-  color: #595959;
+  color: var(--text-muted);
   margin-bottom: 12px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
 
 .settings-card {
-  background: #ffffff;
-  border: 1px solid #d9d9d9;
+  background: var(--surface);
+  border: 1px solid var(--border);
   padding: 4px 16px;
 }
 
@@ -567,7 +738,7 @@ body {
   align-items: center;
   gap: 16px;
   padding: 8px 0;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid var(--border-subtle);
 }
 
 .settings-row:last-child {
@@ -577,7 +748,7 @@ body {
 .settings-row-label {
   font-size: 13px;
   line-height: 20px;
-  color: #595959;
+  color: var(--text-muted);
   display: inline-flex;
   align-items: center;
 }
@@ -586,7 +757,7 @@ body {
   font-family: 'Consolas', 'Menlo', 'Courier New', monospace;
   font-size: 12px;
   line-height: 18px;
-  color: #262626;
+  color: var(--text);
   text-align: right;
   word-break: break-all;
 }
@@ -594,6 +765,23 @@ body {
 .settings-note {
   margin-top: 8px;
   margin-bottom: 0;
+}
+
+/* The Settings theme select (same tokens as .field select, without the
+ * field wrapper). */
+.theme-select {
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 20px;
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+}
+
+.theme-select:focus {
+  outline: none;
+  border-color: var(--border-focus);
 }
 
 .config-editor {
@@ -618,18 +806,18 @@ body {
   font-family: 'Consolas', 'Menlo', 'Courier New', monospace;
   font-size: 12px;
   font-weight: 600;
-  color: #595959;
+  color: var(--text-muted);
 }
 
 .config-editor-modified {
   font-size: 11px;
   line-height: 16px;
-  color: #d46b08;
+  color: var(--warn);
 }
 
 .config-editor-body {
   padding: 12px 14px;
-  border-top: 1px solid #f0f0f0;
+  border-top: 1px solid var(--border-subtle);
 }
 
 .config-editor-textarea {
@@ -639,35 +827,35 @@ body {
   font-size: 12px;
   line-height: 1.5;
   padding: 10px;
-  border: 1px solid #d9d9d9;
-  background: #fafafa;
-  color: #262626;
+  border: 1px solid var(--border);
+  background: var(--surface-raised);
+  color: var(--text);
   resize: vertical;
   outline: none;
 }
 
 .config-editor-textarea:focus {
-  border-color: #1890ff;
+  border-color: var(--border-focus);
 }
 
 .config-editor-error {
   font-size: 12px;
   line-height: 18px;
-  color: #cf1322;
+  color: var(--error-strong);
   margin-top: 6px;
 }
 
 .config-editor-saved {
   font-size: 11px;
   line-height: 16px;
-  color: #389e0d;
+  color: var(--ok-strong);
   margin-top: 6px;
 }
 
 .config-editor-warning {
   font-size: 11px;
   line-height: 16px;
-  color: #d46b08;
+  color: var(--warn);
   margin-top: 6px;
 }
 
@@ -699,16 +887,16 @@ body {
   font-size: 9px;
   font-weight: 700;
   font-family: 'Consolas', 'Menlo', 'Courier New', monospace;
-  background: #e6f4ff;
-  color: #1890ff;
-  border: 1px solid #91caff;
+  background: var(--accent-bg);
+  color: var(--accent);
+  border: 1px solid var(--accent-border);
   flex-shrink: 0;
   line-height: 1;
   user-select: none;
 }
 
 .info-tip-icon:focus {
-  outline: 1px solid #1890ff;
+  outline: 1px solid var(--accent);
   outline-offset: 1px;
 }
 
@@ -719,15 +907,201 @@ body {
   left: 50%;
   transform: translateX(-50%);
   padding: 10px 12px;
-  background: #ffffff;
-  border: 1px solid #d9d9d9;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  box-shadow: 0 4px 16px var(--shadow);
   font-size: 11px;
   line-height: 1.5;
   font-weight: 400;
-  color: #595959;
+  color: var(--text-muted);
   white-space: pre-wrap;
   width: max-content;
   max-width: 320px;
   pointer-events: none;
+}
+
+/* ---------------------------------------------------------------------------
+ * Journey stepper (frame/journey-stepper.tsx, Unit 6.5) - the numbered
+ * progress rail over @soc/core deriveJourney output. Read-ahead contract:
+ * every stage renders; stages with a route target are clickable (including
+ * 'blocked' ones - their commit gates live inside the screens); only
+ * 'not-yet-available' stages are never clickable.
+ * ------------------------------------------------------------------------ */
+
+.journey-stepper {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0 0 12px;
+  padding: 0;
+}
+
+.journey-stepper-horizontal {
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.journey-step {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.journey-step-main {
+  font-family: inherit;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  line-height: 20px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+}
+
+button.journey-step-main {
+  cursor: pointer;
+}
+
+button.journey-step-main:hover .journey-step-label {
+  color: var(--accent);
+}
+
+.journey-step-circle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 700;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-muted);
+}
+
+.journey-step-label {
+  color: var(--text-muted);
+}
+
+.journey-step-complete .journey-step-circle {
+  background: var(--ok-bg);
+  border-color: var(--ok-border);
+  color: var(--ok-strong);
+}
+
+.journey-step-current .journey-step-circle {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--on-accent);
+}
+
+.journey-step-current .journey-step-label {
+  color: var(--text-strong);
+  font-weight: 600;
+}
+
+.journey-step-blocked .journey-step-circle {
+  color: var(--text-faint);
+}
+
+.journey-step-blocked .journey-step-label {
+  color: var(--text-faint);
+}
+
+.journey-step-not-yet-available .journey-step-circle {
+  border-style: dashed;
+  color: var(--text-faint);
+}
+
+.journey-step-not-yet-available .journey-step-label {
+  color: var(--text-faint);
+}
+
+.journey-step-hint {
+  font-size: 11px;
+  line-height: 16px;
+  color: var(--text-faint);
+  padding-left: 30px;
+}
+
+/* ---------------------------------------------------------------------------
+ * Home / Overview screen (screens/home/home-screen.tsx, Unit 6.5)
+ * ------------------------------------------------------------------------ */
+
+.home-arc-title {
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 18px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin: 12px 0 8px;
+}
+
+.home-arc-title:first-child {
+  margin-top: 0;
+}
+
+.next-action-button {
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 22px;
+  padding: 8px 24px;
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: var(--on-accent);
+  cursor: pointer;
+  align-self: flex-start;
+}
+
+.next-action-button:hover {
+  opacity: 0.85;
+}
+
+/* Readiness chips (identity / secret / scope): the legacy point-of-commit
+ * chip checklist promoted to the overview. 'unknown' is the honest hedge -
+ * warning tint, never ok. */
+.readiness-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.readiness-chip {
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 20px;
+  padding: 2px 10px;
+  border: 1px solid var(--border);
+  background: var(--surface-raised);
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.readiness-chip-ok {
+  color: var(--ok-strong);
+  border-color: var(--ok-border);
+  background: var(--ok-bg);
+}
+
+.readiness-chip-missing {
+  color: var(--error-strong);
+  border-color: var(--error-border);
+  background: var(--error-bg);
+}
+
+.readiness-chip-unknown {
+  color: var(--warn);
+  border-color: var(--warn-border);
+  background: var(--warn-bg);
 }

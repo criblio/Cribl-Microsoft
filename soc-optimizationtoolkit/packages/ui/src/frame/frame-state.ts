@@ -20,6 +20,10 @@
  *     ONE chooser list, both keyed by the core AppMode union (the legacy app
  *     had separate label maps in Settings and Sidebar that could drift).
  *   - {@link isScrolledToBottom}: the acceptance gate's scroll threshold.
+ *   - {@link groupNavSections}: the sidebar's section grouping (ux-flow-plan
+ *     4.4, Unit 6.5) - journey steps first, then tools, then diagnostics.
+ *     Grouping is PRESENTATION only, applied AFTER the one core
+ *     filterNavItems pass; mode filtering semantics are unchanged.
  *
  * Pure: no IO, no fetch, no React.
  */
@@ -135,6 +139,54 @@ export const MODE_OPTIONS: readonly ModeOption[] = [
 
 /** All modes the chooser must cover (re-exported for the coverage test). */
 export const CHOOSABLE_MODES: readonly AppMode[] = APP_MODES;
+
+/**
+ * The sidebar's nav sections (ux-flow-plan 4.4): journey steps in dependency
+ * order, standalone tools that feed or observe the journey, diagnostics
+ * last. Routes without a declared section default to 'tools'.
+ */
+export type NavSection = "journey" | "tools" | "diagnostics";
+
+/** Where an undeclared route lands. */
+export const DEFAULT_NAV_SECTION: NavSection = "tools";
+
+/** Fixed presentation order of the sections. */
+export const NAV_SECTION_ORDER: readonly NavSection[] = [
+  "journey",
+  "tools",
+  "diagnostics",
+];
+
+/** The one display label per section (rendered uppercase by the frame). */
+export const NAV_SECTION_LABELS: Readonly<Record<NavSection, string>> = {
+  journey: "Journey",
+  tools: "Tools",
+  diagnostics: "Diagnostics",
+};
+
+/** One rendered nav group: a section plus its visible routes, in order. */
+export interface NavSectionGroup<T> {
+  section: NavSection;
+  items: T[];
+}
+
+/**
+ * Group already-filtered nav items by section for rendering. Runs AFTER the
+ * one core filterNavItems pass (grouping never re-filters): sections come
+ * out in {@link NAV_SECTION_ORDER}, items keep their route-table order
+ * within each section, empty sections are omitted, and items without a
+ * section land in {@link DEFAULT_NAV_SECTION}.
+ */
+export function groupNavSections<T extends { section?: NavSection }>(
+  items: readonly T[],
+): NavSectionGroup<T>[] {
+  return NAV_SECTION_ORDER.map((section) => ({
+    section,
+    items: items.filter(
+      (item) => (item.section ?? DEFAULT_NAV_SECTION) === section,
+    ),
+  })).filter((group) => group.items.length > 0);
+}
 
 /**
  * Slack below which the acceptance gate counts the body as read: within this

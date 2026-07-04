@@ -159,10 +159,18 @@ function overridden(base: boolean, override: BatchRunOverride): boolean {
  * The EFFECTIVE options a run uses: the persisted OperationOptions with the
  * three per-run overrides applied. "default" passes the persisted value
  * through untouched; every other field is never modified here.
+ *
+ * `forcedTemplateOnly` (recorded Unit 6.5 decision: batch-onboard's route
+ * requirement relaxes to 'azure') outranks BOTH the persisted default and
+ * the per-run override: when the active mode has no live Cribl connection
+ * (azure-only), nothing can deploy, so templateOnly is FORCED on - the
+ * tri-state override deliberately cannot express "forced" (it is a user
+ * choice model; a mode fact is not a choice).
  */
 export function applyRunOverrides(
   base: OperationOptions,
   overrides: BatchRunOverrides,
+  forcedTemplateOnly = false,
 ): OperationOptions {
   return {
     ...base,
@@ -171,9 +179,21 @@ export function applyRunOverrides(
       base.skipExistingDCRs,
       overrides.skipExistingDCRs,
     ),
-    templateOnly: overridden(base.templateOnly, overrides.templateOnly),
+    templateOnly:
+      forcedTemplateOnly || overridden(base.templateOnly, overrides.templateOnly),
   };
 }
+
+/**
+ * The honest copy the batch screen shows when templateOnly is forced on -
+ * why the flag is not the user's to flip in this mode, and what a run
+ * produces instead. One constant so both shells (and the disabled controls'
+ * hints) can never drift.
+ */
+export const FORCED_TEMPLATE_ONLY_NOTICE =
+  "Template only is forced on: this mode has no live Cribl connection, so " +
+  "nothing can deploy to Cribl and no worker group is needed. The run " +
+  "collects every ARM request body as one downloadable artifact instead.";
 
 /**
  * The Unit 6 AMPLS cross-field rule re-checked over the EFFECTIVE options

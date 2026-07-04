@@ -10,6 +10,7 @@
 export * from "./ports";
 export * from "./testing";
 export * from "./domain/app-mode";
+export * from "./domain/app-theme";
 export * from "./domain/dcr-naming";
 export * from "./domain/poll-scheduler";
 export * from "./domain/schema-mapping";
@@ -27,5 +28,6 @@ export * from "./domain/dce-request";
 export * from "./domain/option-forms";
 export * from "./domain/sentinel-destination";
 export * from "./domain/custom-table";
+export * from "./domain/journey-state";
 export * from "./assets/vendor-schemas";
 export * from "./usecases";

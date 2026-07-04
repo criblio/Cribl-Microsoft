@@ -3,12 +3,17 @@ import { APP_MODES, parseAppMode } from "@soc/core";
 import type { AcceptanceRecord } from "@soc/core";
 import {
   AUA_SCROLL_SLACK_PX,
+  DEFAULT_NAV_SECTION,
   EMPTY_MODE_RECORD,
   MODE_LABELS,
   MODE_OPTIONS,
+  NAV_SECTION_LABELS,
+  NAV_SECTION_ORDER,
+  groupNavSections,
   isScrolledToBottom,
   resolveFramePhase,
 } from "./frame-state";
+import type { NavSection } from "./frame-state";
 
 const ACCEPTED: AcceptanceRecord = { acceptedAt: "2026-07-03T00:00:00.000Z" };
 
@@ -82,6 +87,65 @@ describe("MODE_OPTIONS", () => {
   it("labels every mode (MODE_LABELS is total over APP_MODES)", () => {
     for (const mode of APP_MODES) {
       expect(MODE_LABELS[mode].trim()).not.toBe("");
+    }
+  });
+});
+
+describe("groupNavSections", () => {
+  interface Item {
+    id: string;
+    section?: NavSection;
+  }
+
+  it("orders sections journey -> tools -> diagnostics regardless of input order", () => {
+    const items: Item[] = [
+      { id: "harness", section: "diagnostics" },
+      { id: "options", section: "tools" },
+      { id: "home", section: "journey" },
+    ];
+    expect(groupNavSections(items).map((g) => g.section)).toEqual([
+      "journey",
+      "tools",
+      "diagnostics",
+    ]);
+  });
+
+  it("defaults undeclared routes to the tools section", () => {
+    expect(DEFAULT_NAV_SECTION).toBe("tools");
+    const groups = groupNavSections<Item>([{ id: "settings" }]);
+    expect(groups).toEqual([
+      { section: "tools", items: [{ id: "settings" }] },
+    ]);
+  });
+
+  it("keeps route-table order within each section", () => {
+    const items: Item[] = [
+      { id: "home", section: "journey" },
+      { id: "options" },
+      { id: "azure-target", section: "journey" },
+      { id: "logs" },
+      { id: "onboard", section: "journey" },
+    ];
+    const groups = groupNavSections(items);
+    expect(groups[0]?.items.map((i) => i.id)).toEqual([
+      "home",
+      "azure-target",
+      "onboard",
+    ]);
+    expect(groups[1]?.items.map((i) => i.id)).toEqual(["options", "logs"]);
+  });
+
+  it("omits empty sections and never re-filters items", () => {
+    const groups = groupNavSections<Item>([{ id: "home", section: "journey" }]);
+    expect(groups).toEqual([
+      { section: "journey", items: [{ id: "home", section: "journey" }] },
+    ]);
+    expect(groupNavSections<Item>([])).toEqual([]);
+  });
+
+  it("labels every section (NAV_SECTION_LABELS is total over the order)", () => {
+    for (const section of NAV_SECTION_ORDER) {
+      expect(NAV_SECTION_LABELS[section].trim()).not.toBe("");
     }
   });
 });

@@ -40,6 +40,7 @@ export { BatchDeployScreen } from "./onboarding/batch/batch-deploy-screen";
 export type { BatchDeployScreenProps } from "./onboarding/batch/batch-deploy-screen";
 export {
   DEFAULT_BATCH_RUN_OVERRIDES,
+  FORCED_TEMPLATE_ONLY_NOTICE,
   amplsIssueFor,
   applyRunOverrides,
   batchRunDetail,
@@ -68,9 +69,13 @@ export { ModeSelect } from "./frame/mode-select";
 export type { ModeSelectProps } from "./frame/mode-select";
 export {
   AUA_SCROLL_SLACK_PX,
+  DEFAULT_NAV_SECTION,
   EMPTY_MODE_RECORD,
   MODE_LABELS,
   MODE_OPTIONS,
+  NAV_SECTION_LABELS,
+  NAV_SECTION_ORDER,
+  groupNavSections,
   isScrolledToBottom,
   resolveFramePhase,
 } from "./frame/frame-state";
@@ -79,7 +84,48 @@ export type {
   LoadableAcceptance,
   LoadableMode,
   ModeOption,
+  NavSection,
+  NavSectionGroup,
 } from "./frame/frame-state";
+
+// Theme (porting-plan dark-mode note, lands with Unit 6.5): the UI layer
+// over @soc/core's app-theme model (codec + resolveTheme live in core) -
+// the stylesheet's [data-theme] tokens, the frame topBar toggle, and the
+// Settings Appearance control. Shells own persistence (APP_THEME_KEY) and
+// the prefers-color-scheme media query.
+export { ThemeToggle } from "./frame/theme-toggle";
+export type { ThemeControl, ThemeToggleProps } from "./frame/theme-toggle";
+export {
+  APP_THEME_KEY,
+  THEME_LABELS,
+  nextThemeChoice,
+  themeToggleText,
+} from "./frame/theme-state";
+
+// Guided journey shell (ux-flow-plan, Unit 6.5): the JourneyStepper rail
+// over @soc/core deriveJourney, the pure stage->route binding layer
+// (cross-links are shell props, never shell-sniffing prose), and the
+// state-aware Home screen both shells land on every launch.
+export { JourneyStepper } from "./frame/journey-stepper";
+export type { JourneyStepperProps } from "./frame/journey-stepper";
+export {
+  SHARED_JOURNEY_LINKS,
+  buildStepperItems,
+  mergeJourneyLinks,
+} from "./frame/stepper-state";
+export type {
+  JourneyLink,
+  JourneyLinks,
+  StepperItem,
+} from "./frame/stepper-state";
+export { HomeScreen } from "./screens/home/home-screen";
+export type { HomeScreenProps } from "./screens/home/home-screen";
+export {
+  NO_ACTION_FALLBACK,
+  deriveNextActionView,
+  modeNoteFor,
+} from "./screens/home/home-state";
+export type { NextActionView } from "./screens/home/home-state";
 
 // Azure targeting (Unit 2): the subscription -> workspace -> resource-group
 // cascade, create/enable actions, explicit scope commit, and the pure state

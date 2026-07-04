@@ -42,6 +42,7 @@ import { formatStepLine } from "../step-line";
 import { RecentRuns } from "../recent-runs";
 import {
   DEFAULT_BATCH_RUN_OVERRIDES,
+  FORCED_TEMPLATE_ONLY_NOTICE,
   amplsIssueFor,
   applyRunOverrides,
   batchRunDetail,
@@ -87,6 +88,16 @@ export interface BatchDeployScreenProps {
   criblDefaults?: CriblOptions;
   /** Navigate to the Options screen (the frame owns navigation). */
   onOpenOptions?: () => void;
+  /**
+   * Recorded Unit 6.5 decision: when the active mode has no live Cribl
+   * connection (azure-only), the shell sets this and templateOnly is FORCED
+   * on - a mode FACT the tri-state override deliberately cannot express or
+   * undo. The screen keeps every affected control visible but disabled with
+   * the reason (keep-list: always-visible-disabled affordances), skips the
+   * worker-group discovery (there is no leader to ask), and does not accept
+   * an ingestion secret (no destination is created, so none is used).
+   */
+  forcedTemplateOnly?: boolean;
 }
 
 /** The tri-state override select, one per overridable flag. */
@@ -131,6 +142,7 @@ export function BatchDeployScreen({
   operationDefaults,
   criblDefaults,
   onOpenOptions,
+  forcedTemplateOnly = false,
 }: BatchDeployScreenProps) {
   const { ports, config } = usePorts();
 
@@ -152,8 +164,8 @@ export function BatchDeployScreen({
     DEFAULT_BATCH_RUN_OVERRIDES,
   );
   const effective = useMemo(
-    () => applyRunOverrides(persisted, overrides),
-    [persisted, overrides],
+    () => applyRunOverrides(persisted, overrides, forcedTemplateOnly),
+    [persisted, overrides, forcedTemplateOnly],
   );
   // The Unit 6 AMPLS cross-field rule over the EFFECTIVE options: a per-run
   // createDCE override can create the private-only combination the Options
@@ -189,8 +201,13 @@ export function BatchDeployScreen({
   }, [ports.cribl, preferredGroup]);
 
   useEffect(() => {
-    void loadGroups();
-  }, [loadGroups]);
+    // Forced templateOnly = no live Cribl connection in this mode: there is
+    // no leader to list worker groups from, and the run makes no Cribl
+    // calls, so discovery is skipped instead of failing noisily.
+    if (!forcedTemplateOnly) {
+      void loadGroups();
+    }
+  }, [loadGroups, forcedTemplateOnly]);
 
   // ---- Run state -----------------------------------------------------------
   const [running, setRunning] = useState(false);
@@ -295,11 +312,13 @@ export function BatchDeployScreen({
     }
   };
 
+  // Forced templateOnly runs make no Cribl calls, so no worker group is
+  // required (there is no live leader to pick one from in this mode).
   const canRun =
     !running &&
     selection.specs.length > 0 &&
     selection.errors.length === 0 &&
-    groupId !== "" &&
+    (forcedTemplateOnly || groupId !== "") &&
     ingestionClientId.trim() !== "" &&
     amplsIssue === null;
 
@@ -415,6 +434,11 @@ export function BatchDeployScreen({
           . The three flags below can be overridden for this run only; the
           saved options are not changed.
         </p>
+        {forcedTemplateOnly && (
+          <p className="panel-desc">
+            <strong>{FORCED_TEMPLATE_ONLY_NOTICE}</strong>
+          </p>
+        )}
         <pre className="result">
           {[
             `mode:                ${effective.createDCE ? "DCE-based DCRs (shared batch DCE, 64-char names)" : "Direct DCRs (30-char names, Cribl 4.14+)"}`,
@@ -441,13 +465,25 @@ export function BatchDeployScreen({
             value={overrides.skipExistingDCRs}
             onChange={(v) => setOverride("skipExistingDCRs", v)}
           />
-          <OverrideField
-            label="Template only (this run)"
-            hint="Collect every ARM request body as one JSON artifact instead of deploying."
-            persisted={persisted.templateOnly}
-            value={overrides.templateOnly}
-            onChange={(v) => setOverride("templateOnly", v)}
-          />
+          {forcedTemplateOnly ? (
+            // Visible but disabled with the reason (keep-list: affordances
+            // are never hidden): the force is a mode fact, not a choice.
+            <label className="field">
+              <span className="field-label">Template only (this run)</span>
+              <select value="on" disabled>
+                <option value="on">Forced on for this run</option>
+              </select>
+              <span className="field-hint">{FORCED_TEMPLATE_ONLY_NOTICE}</span>
+            </label>
+          ) : (
+            <OverrideField
+              label="Template only (this run)"
+              hint="Collect every ARM request body as one JSON artifact instead of deploying."
+              persisted={persisted.templateOnly}
+              value={overrides.templateOnly}
+              onChange={(v) => setOverride("templateOnly", v)}
+            />
+          )}
         </div>
         {amplsIssue !== null && (
           <p className="config-editor-error">
@@ -460,7 +496,18 @@ export function BatchDeployScreen({
       <div className="form-grid">
         <label className="field">
           <span className="field-label">Cribl worker group</span>
-          {groups !== null ? (
+          {forcedTemplateOnly ? (
+            <>
+              <select disabled value="">
+                <option value="">Not needed - template-only run</option>
+              </select>
+              <span className="field-hint">
+                This mode has no live Cribl connection, so there is no leader
+                to list worker groups from and the run creates no
+                destinations.
+              </span>
+            </>
+          ) : groups !== null ? (
             <select value={groupId} onChange={(e) => setGroupId(e.target.value)}>
               <option value="">Select a worker group...</option>
               {groups.map((g) => (
@@ -503,11 +550,12 @@ export function BatchDeployScreen({
             value={ingestionClientSecret}
             onChange={(e) => setIngestionClientSecret(e.target.value)}
             autoComplete="new-password"
+            disabled={forcedTemplateOnly}
           />
           <span className="field-hint">
-            Transient, used for this run only. Left blank, destinations are
-            created with the {SENTINEL_SECRET_PLACEHOLDER} placeholder to fill
-            in Cribl&apos;s UI.
+            {forcedTemplateOnly
+              ? "Not accepted in template-only runs: no destination is created, so no secret would ever be used (secrets are never collected without a purpose)."
+              : `Transient, used for this run only. Left blank, destinations are created with the ${SENTINEL_SECRET_PLACEHOLDER} placeholder to fill in Cribl's UI.`}
           </span>
         </label>
       </div>

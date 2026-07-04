@@ -5,6 +5,11 @@
  * "@soc/ui/styles.css", imported in main.tsx BEFORE this file. The old
  * config-summary bar graduated into the shared SettingsScreen's platform
  * info, so its styles left with it.
+ *
+ * THEMING (Unit 6.5): every color consumes the shared tokens styles.css
+ * defines on :root (same token -> legacy-hex mapping documented there), so
+ * this chrome re-themes with [data-theme='dark'] exactly like the shared
+ * screens - no hex value is duplicated here.
  */
 
 .local-shell {
@@ -21,7 +26,7 @@
   font-size: 22px;
   font-weight: 600;
   line-height: 28px;
-  color: rgba(0, 0, 0, 0.85);
+  color: var(--text-strong);
 }
 
 .local-subtitle {
@@ -29,15 +34,15 @@
   font-size: 14px;
   font-weight: 400;
   line-height: 22px;
-  color: #595959;
+  color: var(--text-muted);
 }
 
 .local-error {
   font-size: 13px;
   line-height: 20px;
-  color: #cf1322;
-  background: #fff1f0;
-  border: 1px solid #ffa39e;
+  color: var(--error-strong);
+  background: var(--error-bg);
+  border: 1px solid var(--error-border);
   padding: 8px 12px;
   margin-bottom: 16px;
   white-space: pre-wrap;

@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import {
+  APP_THEME_KEY,
   AppFrame,
   AuaGate,
   AzureTargetingScreen,
   BatchDeployScreen,
   EMPTY_MODE_RECORD,
+  HomeScreen,
   LogsScreen,
   ModeSelect,
   OnboardTableScreen,
@@ -14,6 +16,7 @@ import {
   SettingsScreen,
   commitNoticeText,
   formatScopeChip,
+  mergeJourneyLinks,
   resolveFramePhase,
   useConsolidatedPolling,
 } from '@soc/ui';
@@ -21,8 +24,10 @@ import type {
   AppFrameNav,
   AppRoute,
   CommitScopeOutcome,
+  JourneyLinks,
   LoadableAcceptance,
   LoadableMode,
+  ThemeControl,
 } from '@soc/ui';
 import {
   allGranted,
@@ -30,8 +35,10 @@ import {
   commitTargetScope,
   computeInvalidation,
   DEFAULT_APP_OPTIONS,
+  DEFAULT_THEME_CHOICE,
   deriveResourceGroup,
   hasAzure,
+  hasCribl,
   EMPTY_AZURE_CONFIG,
   EMPTY_PROFILE_STORE,
   evaluatePermissions,
@@ -42,6 +49,9 @@ import {
   parseAppOptions,
   parseAzureConfig,
   parseProfileStore,
+  parseThemeChoice,
+  resolveTheme,
+  serializeThemeChoice,
   removeProfile,
   renameProfile,
   renderRoleAssignmentCli,
@@ -63,10 +73,12 @@ import type {
   BatchPacing,
   ChangeRequestContext,
   ConnectionProfile,
+  JourneyFacts,
   PermissionsResponse,
   ProfileStore,
   RequiredAction,
   TargetScope,
+  ThemeChoice,
 } from '@soc/core';
 // The proven platform primitives (bridge-safe fetch, KV helpers, ARM token
 // flow) live in platform/http.ts as the single source of truth, shared with
@@ -134,6 +146,49 @@ const ONBOARD_REQUIRED_FIELDS = [
   'resourceGroup',
   'workspaceName',
 ] as const;
+
+// This shell's journey stage bindings (ux-flow-plan 4.4, Unit 6.5): the
+// shared bindings plus the CLOUD-specific connect cross-link - identity
+// entry lives in Diagnostics panel 3 (App registration and connect) until
+// Unit 9 promotes it to a product Connect step. Cross-links are DATA passed
+// to the shared screens; shared prose never names shell-specific UI.
+const SHELL_LINK_OVERRIDES: JourneyLinks = {
+  connect: {
+    routeId: 'harness',
+    hint:
+      'Identity entry lives in panel 3 (App registration and connect) of the Diagnostics ' +
+      'view until the product Connect step ships: Save and connect stores the secret and ' +
+      'verifies it by acquiring an ARM token.',
+  },
+};
+const JOURNEY_LINKS = mergeJourneyLinks(SHELL_LINK_OVERRIDES);
+
+// azure-only: the Onboard route requires a live Cribl side and is hidden, so
+// the integrate stages bind to Batch Onboard - the surface the relaxed
+// 'azure' requirement actually exposes in this mode (templateOnly forced on;
+// the honest copy lives on the screen).
+const AZURE_ONLY_JOURNEY_LINKS = mergeJourneyLinks({
+  ...SHELL_LINK_OVERRIDES,
+  'choose-content': {
+    routeId: 'batch-onboard',
+    hint: 'Batch Onboard is this mode\'s onboarding surface; runs are template-only (no live Cribl connection).',
+  },
+  configure: {
+    routeId: 'batch-onboard',
+    hint: 'Per-run overrides live on Batch Onboard; saved defaults in Options.',
+  },
+  deploy: {
+    routeId: 'batch-onboard',
+    hint: 'Run on Batch Onboard - template-only in this mode; ARM bodies download as one artifact.',
+  },
+});
+
+// Where the operator grants the Monitoring Metrics Publisher role today
+// (shell-provided pointer for the shared Onboard footer - the local shell
+// passes its own).
+const ROLE_GUIDANCE =
+  'grant it following the role guidance in panel 4 (Select resources and grant permissions) ' +
+  'of the Diagnostics view.';
 
 // Shared runner state for a panel: status line plus a monospace output area.
 // The task either resolves to the output text (status ok) or throws; thrown
@@ -1597,6 +1652,43 @@ function App() {
   // makes a failed read equal "defaults", never a crash.
   const [appOptions, setAppOptions] = useState<AppOptions>(DEFAULT_APP_OPTIONS);
 
+  // Theme (porting-plan dark-mode note, lands with Unit 6.5). The CHOICE
+  // (light | dark | system) persists as the plain appTheme KV entry (the
+  // appMode pattern); the prefers-color-scheme signal is read live so a
+  // 'system' choice re-resolves the moment the OS preference changes. Inside
+  // the Cribl iframe 'system' follows the OS, not Cribl's own UI theme (no
+  // platform theme signal exists).
+  const [themeChoice, setThemeChoice] = useState<ThemeChoice>(DEFAULT_THEME_CHOICE);
+  const [systemPrefersDark, setSystemPrefersDark] = useState(
+    () => window.matchMedia('(prefers-color-scheme: dark)').matches
+  );
+  useEffect(() => {
+    const mql = window.matchMedia('(prefers-color-scheme: dark)');
+    const onChange = (event: MediaQueryListEvent) => setSystemPrefersDark(event.matches);
+    mql.addEventListener('change', onChange);
+    return () => mql.removeEventListener('change', onChange);
+  }, []);
+  const resolvedTheme = resolveTheme(themeChoice, systemPrefersDark);
+  // data-theme goes on <html> so the tokens re-theme EVERYTHING - body
+  // background and the gate screens (AuaGate, ModeSelect, loading) that
+  // render outside the AppFrame wrapper.
+  useEffect(() => {
+    document.documentElement.dataset.theme = resolvedTheme;
+  }, [resolvedTheme]);
+  const handleThemeChange = useCallback(async (choice: ThemeChoice) => {
+    setThemeChoice(choice);
+    try {
+      await appStateStore.set(APP_THEME_KEY, serializeThemeChoice(choice));
+    } catch {
+      // Non-fatal: the choice holds for this session and re-reads next launch.
+    }
+  }, []);
+  const themeControl: ThemeControl = {
+    theme: themeChoice,
+    resolvedTheme,
+    onThemeChange: handleThemeChange,
+  };
+
   // Status of the consolidated connection poll (the one budgeted poller):
   // 'checking...' -> 'ok' | 'failed - <error>'.
   const [platformLink, setPlatformLink] = useState('checking...');
@@ -1608,10 +1700,11 @@ function App() {
   useEffect(() => {
     let cancelled = false;
     void (async () => {
-      const [accRaw, modeRaw, optionsRaw] = await Promise.allSettled([
+      const [accRaw, modeRaw, optionsRaw, themeRaw] = await Promise.allSettled([
         appStateStore.get(AUA_ACCEPTANCE_KEY),
         appStateStore.get(APP_MODE_KEY),
         appStateStore.get(APP_OPTIONS_KEY),
+        appStateStore.get(APP_THEME_KEY),
       ]);
       if (cancelled) {
         return;
@@ -1622,6 +1715,10 @@ function App() {
       setMode(parseAppMode(modeRaw.status === 'fulfilled' ? modeRaw.value : null));
       setAppOptions(
         parseAppOptions(optionsRaw.status === 'fulfilled' ? optionsRaw.value : null)
+      );
+      // Theme: a failed read parses to 'system' - always renderable.
+      setThemeChoice(
+        parseThemeChoice(themeRaw.status === 'fulfilled' ? themeRaw.value : null)
       );
     })();
     return () => {
@@ -2027,7 +2124,7 @@ function App() {
     return (
       <div className="harness">
         <header className="harness-header">
-          <h1 className="harness-title">Phase 1 Spike Harness</h1>
+          <h1 className="harness-title">{APP_NAME}</h1>
           {loadError === '' ? (
             <p className="harness-subtitle">Loading connections...</p>
           ) : (
@@ -2047,6 +2144,30 @@ function App() {
       </div>
     );
   }
+
+  // The journey readiness FACTS (ux-flow-plan 4.1, Unit 6.5), composed from
+  // signals this shell already owns - nothing new is probed. The split
+  // replaces the conflated five-field gate: identity (tenant + client ids on
+  // the active connection), secret liveness (SESSION-ONLY: live only when
+  // this session connected it under the current identity, else the honest
+  // 'unknown' - a secret from an earlier session may still be live
+  // server-side but nothing has proven it), and committed scope (the three
+  // scope fields the Azure Targeting commit writes). criblReachable maps the
+  // consolidated poll's platform-link status: this app runs inside the
+  // leader, so a healthy bridge IS Cribl reachability.
+  const journeyFacts: JourneyFacts = {
+    accepted: typeof acceptance === 'object' && acceptance !== null,
+    mode: phase.mode,
+    identityPresent:
+      activeConfig.tenantId.trim() !== '' && activeConfig.clientId.trim() !== '',
+    secretLive: secretLive && !identityDrifted ? 'live' : 'unknown',
+    scopeCommitted:
+      activeConfig.subscriptionId.trim() !== '' &&
+      activeConfig.resourceGroup.trim() !== '' &&
+      activeConfig.workspaceName.trim() !== '',
+    criblReachable:
+      platformLink === 'ok' ? true : platformLink === 'checking...' ? undefined : false,
+  };
 
   // The connection bar: shell chrome that stays visible within the frame,
   // above whatever screen is active. Connection select/create/rename/delete,
@@ -2143,15 +2264,21 @@ function App() {
       </div>
   );
 
-  // The Phase 1 diagnostics panels, intact, now living behind a frame route.
+  // The Phase 1 diagnostics panels, intact, now living behind the frame's
+  // Diagnostics route (retitled from Spike Harness and demoted below the
+  // journey and tools sections - ux-flow-plan 3.3). Panel 3 doubles as the
+  // journey's Connect surface until Unit 9 promotes it; panel 4's discovery
+  // stays a diagnostic (Azure Targeting is the product path).
   const harnessView = (
     <>
       <header className="harness-header">
-        <h1 className="harness-title">Phase 1 Spike Harness</h1>
+        <h1 className="harness-title">Diagnostics (Phase 1 Spike Harness)</h1>
         <p className="harness-subtitle">
           Sequential diagnostics for the Cribl App Platform: globals, KV store semantics,
           proxy header injection, Azure AD token flow, ARM access, and iframe download behavior.
-          Pick or create a connection above, then run the panels top to bottom.
+          Pick or create a connection above, then run the panels top to bottom. Panel 3
+          (App registration and connect) is also the journey&apos;s Connect step until a
+          dedicated Connect screen ships.
         </p>
       </header>
       <PlatformGlobalsPanel />
@@ -2187,6 +2314,31 @@ function App() {
       <TokenAcquisitionPanel tenantId={activeConfig.tenantId} />
       <ArmCallPanel />
       <ArtifactDownloadPanel />
+    </>
+  );
+
+  // The Home route (ux-flow-plan 4.3, Unit 6.5): the state-aware landing
+  // surface BOTH shells open on every launch. Facts in, rails and the single
+  // next action out - position is derived from persisted state on every
+  // render, so resume is automatic and there is no wizard-progress blob to
+  // drift. Mounted in a PortsProvider for the embedded RecentRuns.
+  const renderHome = (nav: AppFrameNav) => (
+    <>
+      <header className="harness-header">
+        <h1 className="harness-title">Home</h1>
+        <p className="harness-subtitle">
+          Where this install is on the journey and the single next action.
+          Every stage is visible and navigable; commits stay gated inside
+          their screens.
+        </p>
+      </header>
+      <PortsProvider ports={cloudPorts} config={activeConfig}>
+        <HomeScreen
+          facts={journeyFacts}
+          links={phase.mode === 'azure-only' ? AZURE_ONLY_JOURNEY_LINKS : JOURNEY_LINKS}
+          onNavigate={nav.navigate}
+        />
+      </PortsProvider>
     </>
   );
 
@@ -2233,18 +2385,22 @@ function App() {
           <h2 className="panel-title">Connection incomplete</h2>
           <p className="panel-desc">
             The active connection is missing required configuration:{' '}
-            {missingOnboardFields.join(', ')}. Connect first in panel 3 (App registration and
-            connect) of the Spike Harness - that fills the tenant and client ids. Then choose
-            WHERE to deploy on the Azure Targeting screen: browse the subscription, workspace,
-            and resource group cascade and click Use this target to commit the scope. This
-            screen unlocks once all five fields are set.
+            {missingOnboardFields.join(', ')}. Home shows the whole journey and names the
+            single next step. Connect first in panel 3 (App registration and connect) of the
+            Diagnostics view - that fills the tenant and client ids. Then choose WHERE to
+            deploy on the Azure Targeting screen: browse the subscription, workspace, and
+            resource group cascade and click Use this target to commit the scope. The Run
+            action unlocks once all five fields are set.
           </p>
           <div className="panel-controls">
+            <button className="run-button" onClick={() => nav.navigate('home')}>
+              Open Home
+            </button>
             <button className="run-button" onClick={() => nav.navigate('azure-target')}>
               Open Azure Targeting
             </button>
             <button className="run-button" onClick={() => nav.navigate('harness')}>
-              Open the Spike Harness
+              Open Diagnostics
             </button>
           </div>
         </section>
@@ -2255,7 +2411,7 @@ function App() {
               This connection&apos;s client secret has not been entered this session. A secret
               connected in an earlier session may still be live server-side; if the run fails
               acquiring a token, re-enter the secret in panel 3 (Save and connect) of the
-              Spike Harness view first.
+              Diagnostics view first.
             </p>
           )}
           <PortsProvider ports={cloudPorts} config={activeConfig}>
@@ -2263,6 +2419,7 @@ function App() {
               key={`onboard-${store.activeProfileId ?? 'none'}`}
               criblDefaults={appOptions.cribl}
               operationDefaults={appOptions.operation}
+              roleGuidance={ROLE_GUIDANCE}
             />
           </PortsProvider>
         </>
@@ -2293,16 +2450,20 @@ function App() {
           <h2 className="panel-title">Connection incomplete</h2>
           <p className="panel-desc">
             The active connection is missing required configuration:{' '}
-            {missingOnboardFields.join(', ')}. Connect first in panel 3 (App registration and
-            connect) of the Spike Harness, then commit a target scope on the Azure Targeting
-            screen. This screen unlocks once all five fields are set.
+            {missingOnboardFields.join(', ')}. Home shows the whole journey and names the
+            single next step: connect first in panel 3 (App registration and connect) of the
+            Diagnostics view, then commit a target scope on the Azure Targeting screen. The
+            Run action unlocks once all five fields are set.
           </p>
           <div className="panel-controls">
+            <button className="run-button" onClick={() => nav.navigate('home')}>
+              Open Home
+            </button>
             <button className="run-button" onClick={() => nav.navigate('azure-target')}>
               Open Azure Targeting
             </button>
             <button className="run-button" onClick={() => nav.navigate('harness')}>
-              Open the Spike Harness
+              Open Diagnostics
             </button>
           </div>
         </section>
@@ -2313,7 +2474,7 @@ function App() {
               This connection&apos;s client secret has not been entered this session. A secret
               connected in an earlier session may still be live server-side; if the run fails
               acquiring a token, re-enter the secret in panel 3 (Save and connect) of the
-              Spike Harness view first.
+              Diagnostics view first.
             </p>
           )}
           <PortsProvider ports={cloudPorts} config={activeConfig}>
@@ -2323,6 +2484,7 @@ function App() {
               operationDefaults={appOptions.operation}
               criblDefaults={appOptions.cribl}
               onOpenOptions={() => nav.navigate('options')}
+              forcedTemplateOnly={!hasCribl(phase.mode)}
             />
           </PortsProvider>
         </>
@@ -2418,23 +2580,29 @@ function App() {
         json: JSON.stringify(activeConfig, null, 2),
         onSave: (config) => updateField(config),
       }}
+      themeControl={themeControl}
     />
   );
 
-  // The frame's route table; requirements drive mode-aware navigation via
-  // @soc/core filterNavItems. Onboard needs BOTH live sides (it deploys to
-  // Azure and Cribl in one run); Azure Targeting needs the live Azure side;
-  // Options is app configuration and always available; the Spike Harness is
-  // diagnostics (panel 4's discovery stays as a diagnostic - the targeting
-  // screen is the product path) and always available; so is Settings.
+  // The frame's route table, SECTIONED per ux-flow-plan 4.4: journey steps
+  // in dependency order (Home, Azure Targeting, Onboard, Batch Onboard),
+  // then tools (Options, Logs, Settings), then Diagnostics last (the Spike
+  // Harness retitled; panel 4's discovery stays a diagnostic - the targeting
+  // screen is the product path). Requirements still drive mode-aware
+  // navigation via the ONE @soc/core filterNavItems pass; grouping is
+  // presentation only. Onboard needs BOTH live sides (it deploys to Azure
+  // and Cribl in one run); batch-onboard relaxes to 'azure' (recorded Unit
+  // 6.5 decision) - in azure-only mode templateOnly is FORCED on because no
+  // live Cribl connection exists to deploy destinations to.
   const routes: AppRoute[] = [
-    { id: 'onboard', label: 'Onboard', requires: 'both', render: renderOnboard },
-    { id: 'batch-onboard', label: 'Batch Onboard', requires: 'both', render: renderBatch },
-    { id: 'azure-target', label: 'Azure Targeting', requires: 'azure', render: renderTargeting },
-    { id: 'options', label: 'Options', requires: 'none', render: () => optionsView },
-    { id: 'harness', label: 'Spike Harness', requires: 'none', render: () => harnessView },
-    { id: 'logs', label: 'Logs', requires: 'none', render: () => logsView },
-    { id: 'settings', label: 'Settings', requires: 'none', render: () => settingsView },
+    { id: 'home', label: 'Home', requires: 'none', section: 'journey', render: renderHome },
+    { id: 'azure-target', label: 'Azure Targeting', requires: 'azure', section: 'journey', render: renderTargeting },
+    { id: 'onboard', label: 'Onboard', requires: 'both', section: 'journey', render: renderOnboard },
+    { id: 'batch-onboard', label: 'Batch Onboard', requires: 'azure', section: 'journey', render: renderBatch },
+    { id: 'options', label: 'Options', requires: 'none', section: 'tools', render: () => optionsView },
+    { id: 'logs', label: 'Logs', requires: 'none', section: 'tools', render: () => logsView },
+    { id: 'settings', label: 'Settings', requires: 'none', section: 'tools', render: () => settingsView },
+    { id: 'harness', label: 'Diagnostics', requires: 'none', section: 'diagnostics', render: () => harnessView },
   ];
 
   return (
@@ -2445,7 +2613,8 @@ function App() {
       routes={routes}
       topBar={connectionBar}
       footerNote="v1.0.0"
-      initialRouteId="onboard"
+      initialRouteId="home"
+      themeControl={themeControl}
     />
   );
 }

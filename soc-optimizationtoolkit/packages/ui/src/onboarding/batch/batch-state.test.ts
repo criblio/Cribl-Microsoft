@@ -146,6 +146,34 @@ describe("applyRunOverrides", () => {
     });
     expect(base).toEqual(snapshot);
   });
+
+  // Recorded Unit 6.5 decision: batch-onboard relaxes to 'azure', with
+  // templateOnly FORCED on when the mode has no live Cribl connection. The
+  // force is a mode FACT, not a user choice, so it outranks both the
+  // persisted default and the per-run override.
+  it("forcedTemplateOnly outranks the persisted default AND an 'off' override", () => {
+    const effective = applyRunOverrides(
+      base,
+      { ...DEFAULT_BATCH_RUN_OVERRIDES, templateOnly: "off" },
+      true,
+    );
+    expect(effective.templateOnly).toBe(true);
+  });
+
+  it("forcedTemplateOnly touches nothing but templateOnly", () => {
+    const effective = applyRunOverrides(
+      base,
+      DEFAULT_BATCH_RUN_OVERRIDES,
+      true,
+    );
+    expect(effective).toEqual({ ...base, templateOnly: true });
+  });
+
+  it("forcedTemplateOnly=false is the exact pre-existing behavior", () => {
+    expect(
+      applyRunOverrides(base, DEFAULT_BATCH_RUN_OVERRIDES, false),
+    ).toEqual(applyRunOverrides(base, DEFAULT_BATCH_RUN_OVERRIDES));
+  });
 });
 
 describe("amplsIssueFor", () => {

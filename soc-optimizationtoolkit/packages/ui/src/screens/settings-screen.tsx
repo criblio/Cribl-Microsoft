@@ -5,6 +5,10 @@
  *   - Platform: shell-provided info rows (shell name, versions, endpoints,
  *     connection summary) via a props bag - the screen renders whatever the
  *     shell can honestly report.
+ *   - Appearance (Unit 6.5): the theme choice (light/dark/system) over the
+ *     SAME ThemeControl wiring the frame's topBar toggle uses - one model,
+ *     two controls that cannot disagree. Optional: shells that do not wire
+ *     theming yet simply omit it.
  *   - Operating mode: the current mode (shared MODE_LABELS, so it can never
  *     disagree with the frame's chip) and Reconfigure. The Reconfigure
  *     contract is the legacy one: the shell writes an EMPTY mode record
@@ -19,8 +23,11 @@
  */
 
 import { useEffect, useState } from "react";
+import { THEME_CHOICES, parseThemeChoice } from "@soc/core";
 import type { AppMode, AzureConfig } from "@soc/core";
 import { MODE_LABELS } from "../frame/frame-state";
+import { THEME_LABELS } from "../frame/theme-state";
+import type { ThemeControl } from "../frame/theme-toggle";
 import { validateConfigJson } from "./config-json";
 import { InfoTip } from "../components/info-tip";
 
@@ -58,6 +65,11 @@ export interface SettingsScreenProps {
   onReconfigure: () => void | Promise<void>;
   /** The raw-JSON editor, where a JSON-editable surface exists. */
   configEditor?: SettingsConfigEditor;
+  /**
+   * The theme wiring (same ThemeControl the frame's toggle uses). Absent =
+   * the Appearance section is omitted.
+   */
+  themeControl?: ThemeControl;
 }
 
 export function SettingsScreen(props: SettingsScreenProps) {
@@ -68,6 +80,7 @@ export function SettingsScreen(props: SettingsScreenProps) {
     mode,
     onReconfigure,
     configEditor,
+    themeControl,
   } = props;
   const [reconfiguring, setReconfiguring] = useState(false);
 
@@ -105,6 +118,47 @@ export function SettingsScreen(props: SettingsScreenProps) {
           <p className="panel-desc settings-note">{platformNote}</p>
         )}
       </div>
+
+      {themeControl !== undefined && (
+        <div className="settings-section">
+          <div className="settings-section-title">Appearance</div>
+          <div className="settings-card">
+            <div className="settings-row">
+              <span className="settings-row-label">
+                Theme
+                <InfoTip
+                  text={
+                    "Light and Dark force a theme; System follows the operating\n" +
+                    "system's color-scheme preference, not the host UI's own\n" +
+                    "theme setting. The choice persists across sessions."
+                  }
+                />
+              </span>
+              <select
+                className="theme-select"
+                value={themeControl.theme}
+                onChange={(event) =>
+                  void themeControl.onThemeChange(
+                    parseThemeChoice(event.target.value),
+                  )
+                }
+              >
+                {THEME_CHOICES.map((choice) => (
+                  <option key={choice} value={choice}>
+                    {THEME_LABELS[choice]}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="settings-row">
+              <span className="settings-row-label">Resolved theme</span>
+              <span className="settings-row-value">
+                {themeControl.resolvedTheme}
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="settings-section">
         <div className="settings-section-title">Operating mode</div>

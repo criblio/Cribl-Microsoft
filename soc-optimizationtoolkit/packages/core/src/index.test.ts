@@ -8,6 +8,17 @@ import {
   pollAttemptsForTimeout,
   DEFAULT_BATCH_MAX_REQUESTS_PER_MINUTE,
   ONBOARD_BATCH_JOB_KIND,
+  // domain/journey-state
+  deriveJourney,
+  nextAction,
+  readinessChips,
+  FIRST_RUN_ARC,
+  INTEGRATE_ARC,
+  // domain/app-theme
+  parseThemeChoice,
+  resolveTheme,
+  serializeThemeChoice,
+  THEME_CHOICES,
   // usecases/azure-discovery
   commitTargetScope,
   deriveResourceGroupsFromWorkspaces,
@@ -99,6 +110,21 @@ describe("@soc/core root barrel", () => {
     expect(typeof commitTargetScope).toBe("function");
     expect(typeof deriveResourceGroupsFromWorkspaces).toBe("function");
     expect(SENTINEL_SOLUTION_API_VERSION).toBe("2015-11-01-preview");
+  });
+
+  it("re-exports the journey-state domain module", () => {
+    expect(typeof deriveJourney).toBe("function");
+    expect(typeof nextAction).toBe("function");
+    expect(typeof readinessChips).toBe("function");
+    expect(FIRST_RUN_ARC[0]).toBe("accept");
+    expect(INTEGRATE_ARC).toHaveLength(6);
+  });
+
+  it("re-exports the app-theme domain module", () => {
+    expect(typeof serializeThemeChoice).toBe("function");
+    expect(parseThemeChoice(null)).toBe("system");
+    expect(resolveTheme("system", true)).toBe("dark");
+    expect(THEME_CHOICES).toHaveLength(3);
   });
 
   it("re-exports a fake implementing each port interface", () => {

@@ -70,6 +70,15 @@ export interface OnboardTableScreenProps {
    * overridable per run). Absent, the 30-day contract default applies.
    */
   operationDefaults?: OperationOptions;
+  /**
+   * Shell-provided pointer to where the operator grants the Monitoring
+   * Metrics Publisher role (ux-flow-plan 4.4 cross-link fix): shared screens
+   * never name shell-specific UI in prose, so each shell states its own
+   * surface here - the cloud shell points at its Diagnostics view, the local
+   * shell at its change-request path. Absent, a shell-neutral sentence
+   * renders.
+   */
+  roleGuidance?: string;
 }
 
 /**
@@ -80,6 +89,7 @@ export interface OnboardTableScreenProps {
 export function OnboardTableScreen({
   criblDefaults,
   operationDefaults,
+  roleGuidance,
 }: OnboardTableScreenProps = {}) {
   const { ports, config } = usePorts();
 
@@ -490,9 +500,9 @@ export function OnboardTableScreen({
       <p className="panel-desc">
         Before events will ingest, the ingestion service principal (the client
         id above) needs the Monitoring Metrics Publisher role on the deployed
-        DCR. Phase 2 automates that assignment; until then, grant it following
-        the role guidance in panel 4 (Select resources and grant permissions)
-        of the Spike Harness view.
+        DCR. A later unit automates that assignment; until then,{" "}
+        {roleGuidance ??
+          "grant it out of band (az CLI, the portal, or a change request to the team holding RBAC rights)."}
       </p>
       <RecentRuns refreshToken={historyToken} />
     </section>
