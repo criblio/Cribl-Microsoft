@@ -21,6 +21,8 @@ import type {
   PortHttpResponse,
   SecretSetOptions,
   SecretsStore,
+  TaggedSample,
+  TaggedSampleStore,
   UserContext,
   UserIdentity,
 } from '@soc/core';
@@ -469,6 +471,143 @@ export class PlatformJobStore implements JobStore {
 }
 
 // ---------------------------------------------------------------------------
+// TaggedSampleStore
+// ---------------------------------------------------------------------------
+
+// Each tagged sample is one plain KV entry under tagged-samples/{encodedLogType}
+// (the 200-event rawEvents cap the core applies keeps each entry small); the
+// flat tagged-samples-index entry holds the JSON array of log types in insert
+// order. Kept outside the tagged-samples/ prefix so a prefix listing of records
+// never returns the index itself (same shape as PlatformJobStore).
+const TAGGED_SAMPLE_KEY_PREFIX = 'tagged-samples/';
+const TAGGED_SAMPLE_INDEX_KEY = 'tagged-samples-index';
+
+function taggedSampleKey(logType: string): string {
+  return `${TAGGED_SAMPLE_KEY_PREFIX}${encodeURIComponent(logType)}`;
+}
+
+// Sanity-check a KV-read value before trusting it as a TaggedSample. Entries
+// are written exclusively by this adapter as serialized TaggedSamples, so after
+// the shape check the cast is sound (same reasoning as the KV JobRecords).
+function asTaggedSample(label: string, parsed: unknown): TaggedSample {
+  if (
+    typeof prop(parsed, 'logType') !== 'string' ||
+    typeof prop(parsed, 'format') !== 'string' ||
+    !Array.isArray(prop(parsed, 'rawEvents')) ||
+    typeof prop(parsed, 'parsed') !== 'object' ||
+    prop(parsed, 'parsed') === null
+  ) {
+    throw new Error(`${label}: unexpected tagged-sample shape\n${bodyText(parsed)}`);
+  }
+  return parsed as TaggedSample;
+}
+
+/**
+ * TaggedSampleStore over plain KV entries (porting-plan Unit 11). Keyed by log
+ * type with replace-by-logType semantics: upsert PUTs the entry and appends the
+ * log type to the index only when new; remove deletes the entry and prunes the
+ * index. list() walks the index and GETs each entry, skipping any that 404
+ * (a delete whose response the bridge lost still removed the entry server-side).
+ * Last-writer-wins; the cloud shell is a single-operator UI so no locking.
+ */
+export class PlatformTaggedSampleStore implements TaggedSampleStore {
+  async upsert(sample: TaggedSample): Promise<void> {
+    if (sample.logType === '') {
+      throw new Error('PlatformTaggedSampleStore.upsert: logType must be non-empty');
+    }
+    const key = taggedSampleKey(sample.logType);
+    const res = await fetchWithTimeout(kvUrl(key), {
+      method: 'PUT',
+      body: JSON.stringify(sample),
+    });
+    if (!res.ok) {
+      throw new Error(`PUT kvstore/${key}: HTTP ${res.status}\n${await res.text()}`);
+    }
+    const index = await this.readIndex();
+    if (!index.includes(sample.logType)) {
+      index.push(sample.logType);
+      await this.writeIndex(index);
+    }
+  }
+
+  async get(logType: string): Promise<TaggedSample | null> {
+    const key = taggedSampleKey(logType);
+    const res = await fetchWithTimeout(kvUrl(key));
+    if (res.status === 404) {
+      return null;
+    }
+    if (!res.ok) {
+      throw new Error(`GET kvstore/${key}: HTTP ${res.status}\n${await res.text()}`);
+    }
+    const text = await res.text();
+    if (text === '') {
+      return null;
+    }
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(text);
+    } catch {
+      throw new Error(`tagged sample ${key} is not valid JSON`);
+    }
+    return asTaggedSample(`GET kvstore/${key}`, parsed);
+  }
+
+  async list(): Promise<TaggedSample[]> {
+    const index = await this.readIndex();
+    const samples: TaggedSample[] = [];
+    for (const logType of index) {
+      const sample = await this.get(logType);
+      if (sample !== null) {
+        samples.push(sample);
+      }
+    }
+    return samples;
+  }
+
+  async remove(logType: string): Promise<void> {
+    // kvDelete owns the platform quirk: the delete is processed server-side but
+    // its response may be lost by the bridge, so nothing is sequenced on it.
+    await kvDelete(taggedSampleKey(logType));
+    const index = await this.readIndex();
+    const next = index.filter((t) => t !== logType);
+    if (next.length !== index.length) {
+      await this.writeIndex(next);
+    }
+  }
+
+  private async readIndex(): Promise<string[]> {
+    const res = await fetchWithTimeout(kvUrl(TAGGED_SAMPLE_INDEX_KEY));
+    if (res.status === 404) {
+      return [];
+    }
+    if (!res.ok) {
+      throw new Error(`GET kvstore/${TAGGED_SAMPLE_INDEX_KEY}: HTTP ${res.status}\n${await res.text()}`);
+    }
+    const text = await res.text();
+    if (text === '') {
+      return [];
+    }
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(text);
+    } catch {
+      return [];
+    }
+    return Array.isArray(parsed) ? parsed.filter((t): t is string => typeof t === 'string') : [];
+  }
+
+  private async writeIndex(logTypes: string[]): Promise<void> {
+    const res = await fetchWithTimeout(kvUrl(TAGGED_SAMPLE_INDEX_KEY), {
+      method: 'PUT',
+      body: JSON.stringify(logTypes),
+    });
+    if (!res.ok) {
+      throw new Error(`PUT kvstore/${TAGGED_SAMPLE_INDEX_KEY}: HTTP ${res.status}\n${await res.text()}`);
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
 // UserContext
 // ---------------------------------------------------------------------------
 
@@ -543,6 +682,8 @@ export interface CloudPorts {
   jobs: JobStore;
   user: UserContext;
   artifacts: ArtifactSink;
+  /** Tagged-sample store over plain KV entries (porting-plan Unit 11). */
+  samples: TaggedSampleStore;
   /** The shell's Logger (platform/logger.ts PlatformLogger instance). */
   logger: Logger;
 }
@@ -565,6 +706,7 @@ export function makeCloudPorts(tenantId: string, logger: Logger): CloudPorts {
     jobs: new PlatformJobStore(),
     user: new PlatformUserContext(),
     artifacts: new PlatformArtifactSink(),
+    samples: new PlatformTaggedSampleStore(),
     logger,
   };
 }

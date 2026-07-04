@@ -19,6 +19,16 @@ import {
   canDeploy,
   deriveReadinessPills,
   deriveSectionStatus,
+  // domain/sample-parsing
+  DISCRIMINATOR_FIELDS,
+  HIGH_CONFIDENCE_DISCRIMINATOR_COUNT,
+  RAW_EVENTS_CAP,
+  autoDetectLogTypes,
+  detectCaptureInnerFormat,
+  detectSampleFormat,
+  parseSampleContent,
+  selectDiscriminatorField,
+  FakeTaggedSampleStore,
   // domain/app-theme
   parseThemeChoice,
   resolveTheme,
@@ -73,6 +83,7 @@ import type {
   JobStore,
   SecretsStore,
   UserContext,
+  TaggedSampleStore,
 } from "./index";
 
 describe("@soc/core root barrel", () => {
@@ -138,7 +149,21 @@ describe("@soc/core root barrel", () => {
     expect(typeof deriveReadinessPills).toBe("function");
     expect(typeof canDeploy).toBe("function");
     expect(INTEGRATE_SECTIONS).toHaveLength(7);
-    expect(INTEGRATE_SECTIONS.filter((s) => s.built)).toHaveLength(3);
+    // sample-data joined the built set when Unit 11 shipped (was 3).
+    expect(INTEGRATE_SECTIONS.filter((s) => s.built)).toHaveLength(4);
+  });
+
+  it("re-exports the sample-parsing domain module and store fake", () => {
+    expect(typeof parseSampleContent).toBe("function");
+    expect(typeof detectSampleFormat).toBe("function");
+    expect(typeof detectCaptureInnerFormat).toBe("function");
+    expect(typeof selectDiscriminatorField).toBe("function");
+    expect(typeof autoDetectLogTypes).toBe("function");
+    expect(RAW_EVENTS_CAP).toBe(200);
+    expect(HIGH_CONFIDENCE_DISCRIMINATOR_COUNT).toBe(6);
+    expect(DISCRIMINATOR_FIELDS.length).toBe(16);
+    const store: TaggedSampleStore = new FakeTaggedSampleStore();
+    expect(store).toBeDefined();
   });
 
   it("re-exports the app-theme domain module", () => {

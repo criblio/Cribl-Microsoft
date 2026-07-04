@@ -11,3 +11,4 @@ export { FakeJobStore } from './fake-job-store';
 export { FakeAzureManagement } from './fake-azure-management';
 export { FakeCriblClient } from './fake-cribl-client';
 export { FakeLogger } from './fake-logger';
+export { FakeTaggedSampleStore } from './fake-tagged-sample-store';

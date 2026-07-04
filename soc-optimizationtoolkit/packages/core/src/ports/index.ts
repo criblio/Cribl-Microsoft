@@ -16,6 +16,7 @@ export type {
   AzureManagementUrlRequest,
 } from './azure-management';
 export type { CriblClient, CriblRequest, CriblGroupSummary } from './cribl-client';
+export type { TaggedSampleStore } from './tagged-sample-store';
 export type {
   Logger,
   LogLevel,

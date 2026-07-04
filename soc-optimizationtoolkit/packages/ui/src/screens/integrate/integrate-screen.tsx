@@ -7,10 +7,13 @@
  * rather than scattering them across sidebar routes.
  *
  * The seven sections render in page order from @soc/core INTEGRATE_SECTIONS.
- * Three are BUILT and operable today; four are honest coming-soon:
+ * Four are BUILT and operable today; three are honest coming-soon:
  *
  *   1. Sentinel Solution   - coming-soon (Unit 14)
- *   2. Sample Data         - coming-soon (Unit 11)
+ *   2. Sample Data         - BUILT: the SampleIntakeSection - multi-file upload
+ *      + paste-and-tag, per-sample chips (detected format + field table + raw
+ *      preview), and a log-type rename that re-keys the tagged-sample store
+ *      (Unit 11).
  *   3. Azure Resources     - BUILT: the AzureTargetingScreen cascade + the
  *      DCE / metrics / role-assignment capability checkboxes (the role
  *      checkbox is Unit 8's target - rendered honestly with an
@@ -69,6 +72,7 @@ import type { CommitScopeOutcome } from "../azure-targeting/azure-targeting-scre
 import { formatStepLine } from "../../onboarding/step-line";
 import { summaryText } from "../../onboarding/summary";
 import { RecentRuns } from "../../onboarding/recent-runs";
+import { SampleIntakeSection } from "../samples/sample-intake-section";
 import {
   INTEGRATE_DEFAULT_TABLE,
   defaultPackName,
@@ -150,6 +154,25 @@ export function IntegrateScreen({
   const [deployCompleted, setDeployCompleted] = useState(false);
   const [historyToken, setHistoryToken] = useState(0);
 
+  // ---- Sample Data section (Unit 11) ------------------------------------
+  // The section owns its own store IO and reports the tagged-sample count so
+  // the arc can complete Sample Data and light the Samples pill. Samples never
+  // gate the native-table deploy below (the MVP-transition rule in @soc/core
+  // canDeploy), so this count is intentionally NOT part of the run gate.
+  const [sampleCount, setSampleCount] = useState(0);
+
+  // Rename contract (Unit 11 -> Unit 18): the Sample Data section re-keys the
+  // tagged-sample STORE entry itself; this handler is where downstream edits
+  // keyed by log type (Unit 18 mapping edits, via reKeyByLogType) will re-key
+  // so a rename never orphans them (the legacy bug). Until mappings ship there
+  // is nothing else to move, so the wired seam just records the rename.
+  const handleRenameLogType = useCallback(
+    (from: string, to: string) => {
+      ports.logger?.info("sample log type renamed", { from, to });
+    },
+    [ports],
+  );
+
   // Populate the worker-group dropdown from the CriblClient port (same
   // pattern as OnboardTableScreen: raw error + retry, no silent empty list).
   // The persisted worker-group default wins the initial selection when it
@@ -180,6 +203,7 @@ export function IntegrateScreen({
     workerGroup: groupId,
     packName,
     deployCompleted,
+    sampleCount,
   });
   const resolved = deriveSectionStatuses(sectionInputs);
   const pills = deriveReadinessPills(sectionInputs);
@@ -281,6 +305,14 @@ export function IntegrateScreen({
   const createDCE = (operationDefaults ?? DEFAULT_OPERATION_OPTIONS).createDCE;
 
   // ---- Section bodies (built sections only) -----------------------------
+
+  const sampleDataBody = (
+    <SampleIntakeSection
+      store={ports.samples}
+      onSamplesChange={(list) => setSampleCount(list.length)}
+      onRenameLogType={handleRenameLogType}
+    />
+  );
 
   const azureResourcesBody = (
     <>
@@ -474,6 +506,8 @@ export function IntegrateScreen({
 
   const sectionBody = (id: IntegrateSectionId): ReactNode => {
     switch (id) {
+      case "sample-data":
+        return sampleDataBody;
       case "azure-resources":
         return azureResourcesBody;
       case "cribl-config":

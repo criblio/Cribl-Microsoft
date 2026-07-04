@@ -183,6 +183,36 @@ export {
 } from "./screens/integrate/integrate-screen-state";
 export type { IntegrateRawInputs } from "./screens/integrate/integrate-screen-state";
 
+// Sample intake (porting-plan Unit 11 UI, ENG-14/15/18): the Integrate page's
+// Sample Data section - multi-file upload + paste-and-tag, per-sample chips with
+// the detected format, a field table, and a raw preview, and a log-type rename
+// that RE-KEYS the tagged-sample store entry and any downstream log-type-keyed
+// edits (the legacy orphaning-bug fix). Plus the pure decision layer behind it.
+export { SampleIntakeSection } from "./screens/samples/sample-intake-section";
+export type { SampleIntakeSectionProps } from "./screens/samples/sample-intake-section";
+export {
+  buildTaggedSample,
+  chipFromTagged,
+  dedupeByLogType,
+  fieldRows,
+  normalizeLogType,
+  rawPreviewLines,
+  reKeyByLogType,
+  removeByLogType,
+  renameInList,
+  suggestLogType,
+  tagFileContent,
+  tagSampleFromContent,
+  upsertSample,
+  validateLogType,
+  validateRename,
+} from "./screens/samples/sample-intake-state";
+export type {
+  RenameCheck,
+  SampleChip,
+  SampleFieldRow,
+} from "./screens/samples/sample-intake-state";
+
 // Azure targeting (Unit 2): the subscription -> workspace -> resource-group
 // cascade, create/enable actions, explicit scope commit, and the pure state
 // behind it (chip text, commit notice, RG name rules, scope codec).

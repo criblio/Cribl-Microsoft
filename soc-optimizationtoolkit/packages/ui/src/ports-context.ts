@@ -19,6 +19,7 @@ import type {
   JobStore,
   Logger,
   SecretsStore,
+  TaggedSampleStore,
   UserContext,
 } from "@soc/core";
 
@@ -34,6 +35,13 @@ export interface UiPorts {
   jobs: JobStore;
   user: UserContext;
   artifacts: ArtifactSink;
+  /**
+   * Tagged-sample persistence (porting-plan Unit 11): the Integrate page's
+   * Sample Data section reads and writes tagged samples through this store
+   * (cloud = KV entries, local = the Node host store). Keyed by log type with
+   * replace-by-logType semantics.
+   */
+  samples: TaggedSampleStore;
   /**
    * OPTIONAL diagnostics sink (porting-plan Unit 3). Carrying it in the
    * ports bundle means every usecase invoked with the bundle logs for free

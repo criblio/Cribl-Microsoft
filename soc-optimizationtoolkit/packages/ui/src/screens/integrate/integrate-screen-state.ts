@@ -53,6 +53,12 @@ export interface IntegrateRawInputs {
   packName: string;
   /** Set once a deploy run on this page has finished successfully. */
   deployCompleted: boolean;
+  /**
+   * How many samples the Sample Data section has tagged (Unit 11). Any positive
+   * count satisfies samplesProvided; it completes the Sample Data section and
+   * lights the Samples pill but never gates the native-table deploy.
+   */
+  sampleCount: number;
 }
 
 /**
@@ -67,6 +73,7 @@ export function deriveSectionInputs(raw: IntegrateRawInputs): SectionInputs {
     workerGroupSelected: raw.workerGroup.trim() !== "",
     packNameSet: raw.packName.trim() !== "",
     deployCompleted: raw.deployCompleted,
+    samplesProvided: raw.sampleCount > 0,
   };
 }
 

@@ -30,5 +30,6 @@ export * from "./domain/sentinel-destination";
 export * from "./domain/custom-table";
 export * from "./domain/journey-state";
 export * from "./domain/integrate-arc";
+export * from "./domain/sample-parsing";
 export * from "./assets/vendor-schemas";
 export * from "./usecases";

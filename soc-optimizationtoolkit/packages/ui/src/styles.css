@@ -1385,3 +1385,171 @@ button.journey-step-main:hover .journey-step-label {
   color: var(--text-faint);
   max-width: 360px;
 }
+
+/* ---------------------------------------------------------------------------
+ * Sample Data section (screens/samples/sample-intake-section.tsx, Unit 11):
+ * multi-file upload + paste-and-tag, per-sample chips with the detected format,
+ * a field table, and a raw preview, and log-type rename. Theme tokens only.
+ * ------------------------------------------------------------------------ */
+
+.sample-intake {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.sample-intake-input {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 0;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.sample-file-input {
+  font-family: inherit;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.sample-paste {
+  width: 100%;
+  max-width: 640px;
+  font-family: 'Consolas', 'Menlo', 'Courier New', monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  background: var(--surface-raised);
+  color: var(--text);
+  resize: vertical;
+  outline: none;
+}
+
+.sample-paste:focus {
+  border-color: var(--border-focus);
+}
+
+.sample-chip-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.sample-chip {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  padding: 10px 12px;
+}
+
+.sample-chip-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.sample-chip-format {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  line-height: 18px;
+  padding: 0 8px;
+  border: 1px solid var(--accent-border);
+  background: var(--accent-bg);
+  color: var(--accent-strong);
+  white-space: nowrap;
+}
+
+.sample-chip-name {
+  font-family: 'Consolas', 'Menlo', 'Courier New', monospace;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  word-break: break-all;
+}
+
+.sample-chip-counts {
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--text-muted);
+}
+
+.sample-chip-rename {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.sample-chip-rename input {
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 20px;
+  padding: 2px 8px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+}
+
+.sample-chip-rename input:focus {
+  outline: none;
+  border-color: var(--border-focus);
+}
+
+.sample-chip-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.sample-chip-detail {
+  margin-top: 8px;
+}
+
+.sample-chip-detail summary {
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.sample-field-table-wrap {
+  overflow-x: auto;
+  margin-top: 8px;
+}
+
+.sample-field-table {
+  border-collapse: collapse;
+  width: 100%;
+  min-width: 360px;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.sample-field-table th,
+.sample-field-table td {
+  text-align: left;
+  padding: 4px 10px;
+  border-bottom: 1px solid var(--border-subtle);
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.sample-field-table th {
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.sample-field-example {
+  font-family: 'Consolas', 'Menlo', 'Courier New', monospace;
+  color: var(--text-muted);
+  max-width: 320px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sample-raw-preview {
+  margin-top: 8px;
+}

@@ -19,6 +19,10 @@
 //   GET    /api/jobs?kind=          newest-first list
 //   GET    /api/jobs/{id}           record or 404
 //   PATCH  /api/jobs/{id}           merge patch -> merged record or 404
+//   GET    /api/tagged-samples      first-upsert-order list
+//   POST   /api/tagged-samples      { logType, format, rawEvents, parsed } upsert
+//   GET    /api/tagged-samples/{lt} { sample } - sample or null
+//   DELETE /api/tagged-samples/{lt} idempotent remove
 //   POST   /api/logs                { entries } batch from the browser logger
 //                                   (sanitized server-side, appended to
 //                                   data/logs/app.log with rotation)
@@ -39,6 +43,7 @@ import { createCriblAuth } from './cribl-auth.mjs';
 import { createCriblProxy } from './cribl.mjs';
 import { createSecretsStore } from './secrets.mjs';
 import { createJobStore } from './jobs.mjs';
+import { createTaggedSampleStore } from './tagged-samples.mjs';
 import {
   LOG_TAIL_DEFAULT,
   LOG_TAIL_MAX,
@@ -73,6 +78,7 @@ export function createHostServer(config) {
   const cribl = createCriblProxy(config.cribl, criblAuth);
   const secrets = createSecretsStore(DATA_DIR);
   const jobs = createJobStore(DATA_DIR);
+  const taggedSamples = createTaggedSampleStore(DATA_DIR);
   const serveStatic = createStaticHandler(WEB_ROOT);
 
   /**
@@ -275,6 +281,40 @@ export function createHostServer(config) {
       return;
     }
 
+    // --- tagged samples -----------------------------------------------------
+    if (pathname === '/api/tagged-samples') {
+      if (method === 'GET') {
+        sendJson(res, 200, await taggedSamples.list());
+        return;
+      }
+      if (method === 'POST') {
+        const payload = await readJsonBody(req);
+        const sample = validateTaggedSample(payload);
+        await taggedSamples.upsert(sample);
+        sendEmpty(res, 204);
+        return;
+      }
+      res.writeHead(405, { Allow: 'GET, POST' });
+      res.end();
+      return;
+    }
+
+    if (pathname.startsWith('/api/tagged-samples/')) {
+      const logType = decodeKey(pathname.slice('/api/tagged-samples/'.length));
+      if (method === 'GET') {
+        sendJson(res, 200, { sample: await taggedSamples.get(logType) });
+        return;
+      }
+      if (method === 'DELETE') {
+        await taggedSamples.remove(logType);
+        sendEmpty(res, 204);
+        return;
+      }
+      res.writeHead(405, { Allow: 'GET, DELETE' });
+      res.end();
+      return;
+    }
+
     // --- logs ---------------------------------------------------------------
     if (pathname === '/api/logs') {
       if (method === 'POST') {
@@ -398,6 +438,33 @@ async function upstream(call) {
     }
     throw new HttpError(502, err instanceof Error ? err.message : String(err));
   }
+}
+
+/**
+ * Validate a POST /api/tagged-samples body as a TaggedSample (@soc/core shape):
+ * a non-empty logType, a format string, a rawEvents array, and a parsed object.
+ * Returns the sample (any extra fields ride along) or throws HttpError 400.
+ *
+ * @param {unknown} payload
+ * @returns {{ logType: string, format: string, rawEvents: unknown[], parsed: object }}
+ */
+function validateTaggedSample(payload) {
+  if (!isPlainObject(payload)) {
+    throw new HttpError(400, 'POST /api/tagged-samples: body must be a TaggedSample object');
+  }
+  if (typeof payload.logType !== 'string' || payload.logType === '') {
+    throw new HttpError(400, 'POST /api/tagged-samples: "logType" must be a non-empty string');
+  }
+  if (typeof payload.format !== 'string') {
+    throw new HttpError(400, 'POST /api/tagged-samples: "format" must be a string');
+  }
+  if (!Array.isArray(payload.rawEvents)) {
+    throw new HttpError(400, 'POST /api/tagged-samples: "rawEvents" must be an array');
+  }
+  if (!isPlainObject(payload.parsed)) {
+    throw new HttpError(400, 'POST /api/tagged-samples: "parsed" must be an object');
+  }
+  return payload;
 }
 
 /**

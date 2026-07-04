@@ -23,34 +23,42 @@ describe("deriveSectionInputs", () => {
       workerGroup: "prod",
       packName: "MyPack",
       deployCompleted: true,
+      sampleCount: 2,
     });
     expect(inputs).toEqual({
       scopeCommitted: true,
       workerGroupSelected: true,
       packNameSet: true,
       deployCompleted: true,
+      samplesProvided: true,
     });
   });
 
-  it("treats whitespace-only worker-group and pack-name as unset", () => {
+  it("treats whitespace-only worker-group and pack-name as unset, and a zero sample count as no samples", () => {
     const inputs = deriveSectionInputs({
       scopeCommitted: false,
       workerGroup: "   ",
       packName: "\t \n",
       deployCompleted: false,
+      sampleCount: 0,
     });
     expect(inputs.workerGroupSelected).toBe(false);
     expect(inputs.packNameSet).toBe(false);
+    expect(inputs.samplesProvided).toBe(false);
   });
 
-  it("produces inputs that make canDeploy true only when all three built prerequisites are set", () => {
+  it("produces inputs that make canDeploy true only when all three built prerequisites are set - samples never participate", () => {
     const base = {
       scopeCommitted: true,
       workerGroup: "prod",
       packName: "Pack",
       deployCompleted: false,
+      sampleCount: 0,
     };
+    // canDeploy is true with zero samples (the native-table deploy rule) ...
     expect(canDeploy(deriveSectionInputs(base))).toBe(true);
+    // ... and stays true with samples; samplesProvided does not gate deploy.
+    expect(canDeploy(deriveSectionInputs({ ...base, sampleCount: 3 }))).toBe(true);
     expect(canDeploy(deriveSectionInputs({ ...base, scopeCommitted: false }))).toBe(
       false,
     );
@@ -94,6 +102,8 @@ describe("deployDisabledReason", () => {
     workerGroupSelected: true,
     packNameSet: true,
     deployCompleted: false,
+    // Samples deliberately absent: they never affect the native-deploy gate.
+    samplesProvided: false,
   };
 
   it("is null when the operable deploy can run", () => {

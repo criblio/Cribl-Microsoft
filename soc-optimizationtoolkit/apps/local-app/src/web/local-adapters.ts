@@ -26,6 +26,8 @@ import type {
   PortHttpResponse,
   SecretSetOptions,
   SecretsStore,
+  TaggedSample,
+  TaggedSampleStore,
   UserContext,
   UserIdentity,
 } from '@soc/core';
@@ -361,6 +363,62 @@ function asJobRecord(label: string, payload: unknown): JobRecord {
 }
 
 // ---------------------------------------------------------------------------
+// TaggedSampleStore
+// ---------------------------------------------------------------------------
+
+/** URL for one tagged sample; encodeURIComponent keeps odd log types intact. */
+function taggedSampleUrl(logType: string): string {
+  return `/api/tagged-samples/${encodeURIComponent(logType)}`;
+}
+
+/** Shape guard for a host-returned tagged sample (the host validates on write). */
+function isTaggedSampleShape(value: unknown): value is TaggedSample {
+  return (
+    typeof prop(value, 'logType') === 'string' &&
+    typeof prop(value, 'format') === 'string' &&
+    Array.isArray(prop(value, 'rawEvents')) &&
+    typeof prop(value, 'parsed') === 'object' &&
+    prop(value, 'parsed') !== null
+  );
+}
+
+/**
+ * TaggedSampleStore over the host's /api/tagged-samples endpoints
+ * (data/tagged-samples.json on the host side). The host owns replace-by-logType
+ * semantics and first-upsert ordering - the same contract as the cloud
+ * PlatformTaggedSampleStore (porting-plan Unit 11).
+ */
+export class LocalTaggedSampleStore implements TaggedSampleStore {
+  async upsert(sample: TaggedSample): Promise<void> {
+    const res = await fetchWithTimeout('/api/tagged-samples', jsonInit('POST', sample));
+    if (!res.ok) {
+      throw await hostError('POST /api/tagged-samples', res);
+    }
+  }
+
+  async get(logType: string): Promise<TaggedSample | null> {
+    const payload = await hostJson(`GET /api/tagged-samples/${logType}`, taggedSampleUrl(logType));
+    const sample = prop(payload, 'sample');
+    return isTaggedSampleShape(sample) ? sample : null;
+  }
+
+  async list(): Promise<TaggedSample[]> {
+    const payload = await hostJson('GET /api/tagged-samples', '/api/tagged-samples');
+    if (!Array.isArray(payload)) {
+      throw new Error('GET /api/tagged-samples: unexpected host response shape (expected an array)');
+    }
+    return payload.filter(isTaggedSampleShape);
+  }
+
+  async remove(logType: string): Promise<void> {
+    const res = await fetchWithTimeout(taggedSampleUrl(logType), { method: 'DELETE' });
+    if (!res.ok) {
+      throw await hostError(`DELETE /api/tagged-samples/${logType}`, res);
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
 // UserContext
 // ---------------------------------------------------------------------------
 
@@ -430,6 +488,8 @@ export interface LocalPorts {
   jobs: JobStore;
   user: UserContext;
   artifacts: ArtifactSink;
+  /** Tagged-sample store over the host's /api/tagged-samples (Unit 11). */
+  samples: TaggedSampleStore;
   /** The shell's Logger (web/logger.ts HostLogger, batching to the host). */
   logger: Logger;
 }
@@ -452,6 +512,7 @@ export function makeLocalPorts(logger: Logger): LocalPorts {
     jobs: new LocalJobStore(),
     user: new LocalUserContext(),
     artifacts: new LocalArtifactSink(),
+    samples: new LocalTaggedSampleStore(),
     logger,
   };
 }

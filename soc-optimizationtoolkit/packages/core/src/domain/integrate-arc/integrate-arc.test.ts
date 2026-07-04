@@ -4,7 +4,7 @@
  *   - section metadata: seven sections numbered 1..7 in page order, the
  *     built/not-built split matches the MVP scope, shippedInUnit lives only on
  *     the not-built sections, no emojis in any copy
- *   - the full 2^4 input matrix: at most one 'current' across the page, built
+ *   - the full 2^5 input matrix: at most one 'current' across the page, built
  *     sections are always navigable (never 'coming-soon'), the not-built
  *     sections are ALWAYS 'coming-soon' regardless of inputs
  *   - blocked discipline: only Deploy is ever 'blocked', only when a built
@@ -40,25 +40,29 @@ function inputs(overrides: Partial<SectionInputs> = {}): SectionInputs {
     workerGroupSelected: false,
     packNameSet: false,
     deployCompleted: false,
+    samplesProvided: false,
     ...overrides,
   };
 }
 
 const BOOLS: readonly boolean[] = [true, false];
 
-/** All 2^4 = 16 input records. */
+/** All 2^5 = 32 input records. */
 function everyInputCombination(): SectionInputs[] {
   const combos: SectionInputs[] = [];
   for (const scopeCommitted of BOOLS) {
     for (const workerGroupSelected of BOOLS) {
       for (const packNameSet of BOOLS) {
         for (const deployCompleted of BOOLS) {
-          combos.push({
-            scopeCommitted,
-            workerGroupSelected,
-            packNameSet,
-            deployCompleted,
-          });
+          for (const samplesProvided of BOOLS) {
+            combos.push({
+              scopeCommitted,
+              workerGroupSelected,
+              packNameSet,
+              deployCompleted,
+              samplesProvided,
+            });
+          }
         }
       }
     }
@@ -67,13 +71,13 @@ function everyInputCombination(): SectionInputs[] {
 }
 
 const BUILT_IDS: readonly IntegrateSectionId[] = [
+  "sample-data",
   "azure-resources",
   "cribl-config",
   "deploy",
 ];
 const NOT_BUILT_IDS: readonly IntegrateSectionId[] = [
   "solution",
-  "sample-data",
   "gap-analysis",
   "rule-coverage",
 ];
@@ -109,7 +113,7 @@ describe("INTEGRATE_SECTIONS metadata", () => {
     expect(numbers.size).toBe(INTEGRATE_SECTIONS.length);
   });
 
-  it("marks exactly azure-resources, cribl-config, deploy as built", () => {
+  it("marks exactly sample-data, azure-resources, cribl-config, deploy as built", () => {
     const built = INTEGRATE_SECTIONS.filter((s) => s.built).map((s) => s.id);
     expect(built.sort()).toEqual([...BUILT_IDS].sort());
   });
@@ -118,13 +122,12 @@ describe("INTEGRATE_SECTIONS metadata", () => {
     const unitById = new Map(
       INTEGRATE_SECTIONS.map((s) => [s.id, s.shippedInUnit]),
     );
-    // built sections omit it
+    // built sections omit it (sample-data lost its shippedInUnit when Unit 11 landed)
     for (const id of BUILT_IDS) {
       expect(unitById.get(id)).toBeUndefined();
     }
     // not-built sections carry their roadmap unit
     expect(unitById.get("solution")).toBe(14);
-    expect(unitById.get("sample-data")).toBe(11);
     expect(unitById.get("gap-analysis")).toBe(18);
     expect(unitById.get("rule-coverage")).toBe(23);
   });
@@ -196,25 +199,46 @@ describe("not-built sections are always coming-soon", () => {
 // ---------------------------------------------------------------------------
 
 describe("built-section status matrix", () => {
-  it("azure-resources: current until scope committed, then complete", () => {
-    expect(statusOf("azure-resources", inputs())).toBe("current");
+  it("sample-data: current at the page start, complete once a sample is tagged", () => {
+    // Solution (1) is coming-soon, so Sample Data (2) is the earliest built,
+    // incomplete, actionable section - it is the page's entry point.
+    expect(statusOf("sample-data", inputs())).toBe("current");
+    expect(
+      statusOf("sample-data", inputs({ samplesProvided: true })),
+    ).toBe("complete");
+  });
+
+  it("azure-resources: current once samples are in, complete once scope committed", () => {
+    // With Sample Data still incomplete it is 'current' and Azure Resources is
+    // read-ahead 'available'; a tagged sample advances 'current' to Azure.
+    expect(statusOf("azure-resources", inputs())).toBe("available");
+    expect(
+      statusOf("azure-resources", inputs({ samplesProvided: true })),
+    ).toBe("current");
     expect(
       statusOf("azure-resources", inputs({ scopeCommitted: true })),
     ).toBe("complete");
   });
 
-  it("cribl-config: available ahead of scope, current once scope is committed, complete when both halves set", () => {
-    // nothing committed: azure-resources is current, cribl-config is read-ahead
+  it("cribl-config: available ahead of scope, current once samples+scope are committed, complete when both halves set", () => {
+    // nothing committed: sample-data is current, cribl-config is read-ahead
     expect(statusOf("cribl-config", inputs())).toBe("available");
-    // scope committed, cribl not yet: cribl-config becomes current
+    // samples + scope committed, cribl not yet: cribl-config becomes current
     expect(
-      statusOf("cribl-config", inputs({ scopeCommitted: true })),
+      statusOf(
+        "cribl-config",
+        inputs({ samplesProvided: true, scopeCommitted: true }),
+      ),
     ).toBe("current");
     // only one half set: still not complete
     expect(
       statusOf(
         "cribl-config",
-        inputs({ scopeCommitted: true, workerGroupSelected: true }),
+        inputs({
+          samplesProvided: true,
+          scopeCommitted: true,
+          workerGroupSelected: true,
+        }),
       ),
     ).toBe("current");
     // both halves set: complete
@@ -237,8 +261,10 @@ describe("built-section status matrix", () => {
         inputs({ scopeCommitted: true, workerGroupSelected: true }),
       ),
     ).toBe("blocked");
-    // all three prerequisites met, not yet deployed: current
+    // all three operable prerequisites met AND samples in, not yet deployed:
+    // deploy is the earliest incomplete actionable section -> current
     const ready = inputs({
+      samplesProvided: true,
       scopeCommitted: true,
       workerGroupSelected: true,
       packNameSet: true,
@@ -315,9 +341,15 @@ describe("read-ahead and single-current invariants", () => {
   });
 
   it("read-ahead: a blocked Deploy never changes the earlier sections' status", () => {
-    // Azure Resources incomplete -> it is current; Deploy is blocked; the
-    // block on the later section does not demote or hide the earlier one.
-    const i = inputs({ workerGroupSelected: true, packNameSet: true });
+    // Samples in and Cribl Config complete, but scope not committed: Azure
+    // Resources is current; Deploy is blocked; the block on the later section
+    // does not demote or hide the earlier one.
+    const i = inputs({
+      samplesProvided: true,
+      workerGroupSelected: true,
+      packNameSet: true,
+    });
+    expect(statusOf("sample-data", i)).toBe("complete");
     expect(statusOf("azure-resources", i)).toBe("current");
     expect(statusOf("cribl-config", i)).toBe("complete");
     expect(statusOf("deploy", i)).toBe("blocked");
@@ -348,9 +380,10 @@ describe("read-ahead and single-current invariants", () => {
 // ---------------------------------------------------------------------------
 
 describe("deriveReadinessPills", () => {
-  const contentPills: readonly IntegratePillId[] = [
+  // The still-not-built content pills (solution=U14, mappings=U18). Samples is
+  // now built (Unit 11) and tracks samplesProvided, so it is tested separately.
+  const notBuiltContentPills: readonly IntegratePillId[] = [
     "solution",
-    "samples",
     "mappings",
   ];
   const operablePills: readonly IntegratePillId[] = [
@@ -370,13 +403,23 @@ describe("deriveReadinessPills", () => {
     ]);
   });
 
-  it("keeps the three content pills 'coming-soon' for every input - never false-ok", () => {
+  it("keeps the still-not-built content pills 'coming-soon' for every input - never false-ok", () => {
     for (const i of everyInputCombination()) {
       const pills = deriveReadinessPills(i);
-      for (const id of contentPills) {
+      for (const id of notBuiltContentPills) {
         const pill = pills.find((p) => p.id === id);
         expect(pill?.state).toBe("coming-soon");
       }
+    }
+  });
+
+  it("lights the Samples pill 'ok' once samples are provided, muted 'coming-soon' otherwise - never 'missing'", () => {
+    for (const i of everyInputCombination()) {
+      const samples = deriveReadinessPills(i).find((p) => p.id === "samples");
+      expect(samples?.state).toBe(i.samplesProvided ? "ok" : "coming-soon");
+      // Samples never blocks: it is never rendered as an amber 'missing'
+      // prerequisite, unlike the operable workspace/worker-group/pack pills.
+      expect(samples?.state).not.toBe("missing");
     }
   });
 
@@ -427,30 +470,37 @@ describe("canDeploy honors only the built prerequisites", () => {
     expect(canDeploy({ ...ready, deployCompleted: true })).toBe(true);
   });
 
-  it("the not-yet-built prerequisites (coming-soon pills) never block deploy", () => {
-    // With all operable prerequisites met, canDeploy is true even though the
-    // Solution / Samples / Mappings pills are still 'coming-soon'. This is the
-    // MVP-transition rule: the native-table deploy the user validated live
-    // does not wait on Units 11/14/18.
-    const ready = inputs({
+  it("the content prerequisites never block deploy - samples included", () => {
+    // With all operable prerequisites met, canDeploy is true whether or not
+    // samples are tagged, and regardless of the still-coming-soon Solution /
+    // Mappings pills. This is the MVP-transition rule: the native-table deploy
+    // the user validated live does not wait on samples (U11), Solution (U14),
+    // or Mappings (U18).
+    const base = inputs({
       scopeCommitted: true,
       workerGroupSelected: true,
       packNameSet: true,
     });
-    const contentPending = deriveReadinessPills(ready)
-      .filter((p) => ["solution", "samples", "mappings"].includes(p.id))
-      .every((p) => p.state === "coming-soon");
-    expect(contentPending).toBe(true);
-    expect(canDeploy(ready)).toBe(true);
+    for (const samplesProvided of [true, false]) {
+      const ready = { ...base, samplesProvided };
+      const stillComingSoon = deriveReadinessPills(ready)
+        .filter((p) => ["solution", "mappings"].includes(p.id))
+        .every((p) => p.state === "coming-soon");
+      expect(stillComingSoon).toBe(true);
+      // canDeploy ignores samplesProvided entirely.
+      expect(canDeploy(ready)).toBe(true);
+    }
   });
 
   it("Deploy is blocked exactly when it is not complete and cannot deploy", () => {
     for (const i of everyInputCombination()) {
       const deployStatus = statusOf("deploy", i);
-      // 'blocked' <=> the run has not completed AND the prerequisites are unmet.
-      // (Once canDeploy is true, Deploy is 'current'; once deployCompleted,
-      // it is 'complete' - the degenerate deployed-without-prereqs input, which
-      // reality never produces, still resolves to 'complete', not 'blocked'.)
+      // 'blocked' <=> the run has not completed AND the operable prerequisites
+      // are unmet. (Once canDeploy is true, Deploy is 'current' or read-ahead
+      // 'available' - 'available' when an earlier built section, e.g. Sample
+      // Data, is still incomplete; once deployCompleted it is 'complete' - the
+      // degenerate deployed-without-prereqs input, which reality never
+      // produces, still resolves to 'complete', not 'blocked'.)
       expect(deployStatus === "blocked").toBe(
         !i.deployCompleted && !canDeploy(i),
       );

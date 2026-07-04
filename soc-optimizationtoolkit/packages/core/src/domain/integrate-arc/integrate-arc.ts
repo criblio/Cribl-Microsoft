@@ -12,12 +12,13 @@
  *
  * Two things this module makes HONEST during the MVP transition:
  *
- *   1. Only three of the seven sections are BUILT NOW and operable
- *      (Azure Resources, Cribl Config, Deploy - the native-table onboard the
- *      user validated live end to end). The other four are NOT-YET-BUILT
- *      (Solution=U14, Sample Data=U11, Gap Analysis=U18, Rule Coverage=U23);
- *      they render 'coming-soon', never as a working teaser. The `built` flag
- *      on each section is the single source of truth for that split.
+ *   1. Four of the seven sections are BUILT NOW and operable (Sample Data,
+ *      Azure Resources, Cribl Config, Deploy). Azure Resources / Cribl Config /
+ *      Deploy are the native-table onboard the user validated live end to end;
+ *      Sample Data joined them when Unit 11 shipped. The other three are
+ *      NOT-YET-BUILT (Solution=U14, Gap Analysis=U18, Rule Coverage=U23); they
+ *      render 'coming-soon', never as a working teaser. The `built` flag on
+ *      each section is the single source of truth for that split.
  *
  *   2. The deploy-readiness footer never shows a false green. A prerequisite
  *      whose section has not shipped renders as a 'coming-soon' pill, not an
@@ -26,12 +27,14 @@
  *      satisfied.
  *
  * MVP-TRANSITION DEPLOY RULE (binding, documented on {@link canDeploy}): the
- * native-table deploy that already works needs ONLY the built prerequisites -
- * a committed workspace scope, a selected worker group, and a pack name. The
- * not-yet-built prerequisites (samples, mappings, solution) do NOT block it;
- * they will gate the FULL content-driven deploy once Units 11/14/18 land, but
- * gating on them today would break the flow the user already validated. This
- * module encodes that rule in exactly one place so it cannot drift.
+ * native-table deploy that already works needs ONLY a committed workspace
+ * scope, a selected worker group, and a pack name. Samples do NOT block it -
+ * even though Sample Data is now built and taggable, the native-table deploy
+ * the user validated never needed a sample, so canDeploy ignores samples (they
+ * enrich the content flow and will gate the FULL content-driven deploy once
+ * gap analysis lands). The still-not-built prerequisites (mappings=U18,
+ * solution=U14) likewise do NOT block it. This module encodes that rule in
+ * exactly one place so it cannot drift.
  *
  * READ-AHEAD contract (user decision, binding - shared with journey-state):
  * every section of the page is visible and navigable; gating happens ONLY at
@@ -92,10 +95,10 @@ export interface IntegrateSection {
 }
 
 /**
- * The seven sections in page order (numbers 1..7). BUILT NOW: azure-resources,
- * cribl-config, deploy. NOT-YET-BUILT (coming-soon): solution (U14),
- * sample-data (U11), gap-analysis (U18), rule-coverage (U23). Order and
- * numbering match the ADOPTED single-page decision in legacy-flow-analysis.md.
+ * The seven sections in page order (numbers 1..7). BUILT NOW: sample-data,
+ * azure-resources, cribl-config, deploy. NOT-YET-BUILT (coming-soon): solution
+ * (U14), gap-analysis (U18), rule-coverage (U23). Order and numbering match the
+ * ADOPTED single-page decision in legacy-flow-analysis.md.
  */
 export const INTEGRATE_SECTIONS: readonly IntegrateSection[] = [
   {
@@ -115,12 +118,14 @@ export const INTEGRATE_SECTIONS: readonly IntegrateSection[] = [
     number: 2,
     title: "Sample Data",
     infoTip:
-      "Provide representative events per log type - paste, upload, or browse " +
-      "the solution's samples. Sample fields drive the gap analysis and " +
-      "pipeline generation. Select a solution first.",
+      "Provide representative events per log type - paste a sample and name " +
+      "its log type, or upload one or more files. The format is detected from " +
+      "the content (Cribl capture events are unwrapped to their inner _raw), " +
+      "and the discovered fields drive the gap analysis and pipeline " +
+      "generation. Browsing a solution's samples arrives with the content " +
+      "browser (Unit 16).",
     requires: "none",
-    built: false,
-    shippedInUnit: 11,
+    built: true,
   },
   {
     id: "azure-resources",
@@ -214,6 +219,15 @@ export interface SectionInputs {
   packNameSet: boolean;
   /** At least one deploy run has completed successfully. */
   deployCompleted: boolean;
+  /**
+   * At least one sample has been tagged to a log type (Unit 11 sample intake).
+   * Added additively: it completes the now-built Sample Data section and lights
+   * the Samples readiness pill, but it deliberately does NOT participate in
+   * {@link canDeploy} - the native-table deploy still runs with no samples (the
+   * MVP-transition rule). While false, Sample Data reads as incomplete and the
+   * Samples pill stays 'coming-soon' - never a false green.
+   */
+  samplesProvided: boolean;
 }
 
 /**
@@ -257,8 +271,8 @@ const DEPLOY_NEEDS_PACK_NAME_REASON =
 const COMING_SOON_REASONS: Readonly<Record<IntegrateSectionId, string>> = {
   solution:
     "Solution search and selection ships with the GitHub content browser (Unit 14).",
-  "sample-data":
-    "Sample intake (paste, upload, browse) ships with the sample parser (Unit 11).",
+  // sample-data is BUILT NOW (Unit 11); it is never coming-soon.
+  "sample-data": "",
   "azure-resources": "",
   "cribl-config": "",
   "gap-analysis":
@@ -277,6 +291,8 @@ function sectionComplete(
     return false;
   }
   switch (section.id) {
+    case "sample-data":
+      return inputs.samplesProvided;
     case "azure-resources":
       return inputs.scopeCommitted;
     case "cribl-config":
@@ -425,12 +441,15 @@ export interface ReadinessPill {
 /**
  * The deploy-readiness footer - one pill per prerequisite, in the legacy
  * order: Solution, Samples, Mappings, Workspace, Worker Groups, Pack Name
- * (SentinelIntegration.tsx 3255-3273). The three content prerequisites map to
- * not-yet-built sections and are therefore 'coming-soon' (honest, never
- * false-ok); the three operable prerequisites are 'ok' / 'missing' per inputs.
+ * (SentinelIntegration.tsx 3255-3273). Solution and Mappings map to not-yet-
+ * built sections and are always 'coming-soon' (honest, never false-ok). Samples
+ * is now built (Unit 11): it lights 'ok' once a sample is tagged and stays a
+ * muted 'coming-soon' otherwise - never 'missing', because samples do not gate
+ * the native deploy. The three operable prerequisites are 'ok' / 'missing' per
+ * inputs.
  *
- * canDeploy honors ONLY the operable three (see its docs) - the coming-soon
- * pills are visible-but-not-blocking during the MVP transition.
+ * canDeploy honors ONLY the operable three (see its docs) - the Samples and
+ * still-not-built pills are visible-but-not-blocking during the MVP transition.
  */
 export function deriveReadinessPills(inputs: SectionInputs): ReadinessPill[] {
   return [
@@ -443,8 +462,16 @@ export function deriveReadinessPills(inputs: SectionInputs): ReadinessPill[] {
     {
       id: "samples",
       label: "Samples",
-      state: "coming-soon",
-      hint: "Sample intake ships with the sample parser (Unit 11).",
+      // Sample intake shipped (Unit 11): the pill lights green once at least
+      // one sample is tagged, and stays muted 'coming-soon' (never 'missing')
+      // while none are - samples enrich the content flow but do NOT gate the
+      // native-table deploy (see canDeploy), so an unsatisfied Samples pill
+      // must never read as a blocking prerequisite.
+      state: inputs.samplesProvided ? "ok" : "coming-soon",
+      hint: inputs.samplesProvided
+        ? "At least one sample is tagged to a log type."
+        : "Optional for the native-table deploy. Tag a sample in Sample Data to " +
+          "drive the gap analysis and pipeline generation.",
     },
     {
       id: "mappings",
@@ -482,15 +509,16 @@ export function deriveReadinessPills(inputs: SectionInputs): ReadinessPill[] {
 /**
  * Whether the OPERABLE native-table deploy can run.
  *
- * MVP-TRANSITION RULE (binding): true exactly when the three BUILT
+ * MVP-TRANSITION RULE (binding): true exactly when the three BUILT-AND-GATING
  * prerequisites are met - a committed workspace scope, a selected worker
- * group, and a pack name. The not-yet-built prerequisites (Solution, Samples,
- * Mappings) do NOT participate: the native-table onboard the user validated
- * live end to end never needed them, and gating on them today would regress a
- * working flow. When Units 11/14/18 land, their sections flip to built and
- * their pills flip from 'coming-soon' to 'ok'/'missing'; only then does the
- * FULL content-driven deploy gate on them. This is the ONE place that rule
- * lives, so canDeploy and the readiness footer can never disagree.
+ * group, and a pack name. Samples do NOT participate even though Sample Data is
+ * now built (Unit 11): the native-table onboard the user validated live end to
+ * end never needed a sample, so requiring one here would regress a working
+ * flow. The still-not-built prerequisites (Solution=U14, Mappings=U18) do not
+ * participate either; when they land, the FULL content-driven deploy will gate
+ * on samples and mappings, but that is a future usecase, not this rule. This is
+ * the ONE place the native-deploy rule lives, so canDeploy and the readiness
+ * footer can never disagree.
  *
  * Note: deployCompleted is intentionally NOT a factor - a finished run does
  * not disable deploying again (each step is independently re-runnable).
