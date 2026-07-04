@@ -8,6 +8,7 @@ import {
   LogsScreen,
   ModeSelect,
   OnboardTableScreen,
+  OptionsScreen,
   PortsProvider,
   SettingsScreen,
   commitNoticeText,
@@ -27,6 +28,7 @@ import {
   appRegistrationRequest,
   commitTargetScope,
   computeInvalidation,
+  DEFAULT_APP_OPTIONS,
   deriveResourceGroup,
   hasAzure,
   EMPTY_AZURE_CONFIG,
@@ -36,6 +38,7 @@ import {
   getActiveProfile,
   parseAcceptanceRecord,
   parseAppMode,
+  parseAppOptions,
   parseAzureConfig,
   parseProfileStore,
   removeProfile,
@@ -54,6 +57,7 @@ import {
 import type {
   AcceptanceRecord,
   AppMode,
+  AppOptions,
   AzureConfig,
   ChangeRequestContext,
   ConnectionProfile,
@@ -101,6 +105,10 @@ type Status = 'idle' | 'running' | 'ok' | 'failed';
 // (parse/serialize) live in @soc/core app-mode; the shell owns the clock.
 const AUA_ACCEPTANCE_KEY = 'auaAcceptance';
 const APP_MODE_KEY = 'appMode';
+// Deployment/naming options (porting-plan Unit 4): ONE plain KV entry,
+// persisted through the same SecretsStore adapter as appMode. Saves go
+// through @soc/core applyOptionsPatch so unmanaged keys in the blob survive.
+const APP_OPTIONS_KEY = 'appOptions';
 const appStateStore = new PlatformSecretsStore();
 const appLogger = new PlatformLogger();
 
@@ -1570,19 +1578,27 @@ function App() {
   const [acceptance, setAcceptance] = useState<LoadableAcceptance>('loading');
   const [mode, setMode] = useState<LoadableMode>('loading');
 
+  // The parsed deployment/naming options (porting-plan Unit 4). Hydrated
+  // from the plain appOptions KV entry alongside acceptance and mode;
+  // refreshed by the Options screen's save callback. The tolerant codec
+  // makes a failed read equal "defaults", never a crash.
+  const [appOptions, setAppOptions] = useState<AppOptions>(DEFAULT_APP_OPTIONS);
+
   // Status of the consolidated connection poll (the one budgeted poller):
   // 'checking...' -> 'ok' | 'failed - <error>'.
   const [platformLink, setPlatformLink] = useState('checking...');
 
-  // Load acceptance + mode once on mount. Tolerant on purpose: a failed read
-  // parses to null, which re-prompts (acceptance) or re-asks (mode) rather
-  // than silently waving the user through.
+  // Load acceptance + mode + options once on mount. Tolerant on purpose: a
+  // failed read parses to null, which re-prompts (acceptance) or re-asks
+  // (mode) rather than silently waving the user through; options fall back
+  // to their defaults.
   useEffect(() => {
     let cancelled = false;
     void (async () => {
-      const [accRaw, modeRaw] = await Promise.allSettled([
+      const [accRaw, modeRaw, optionsRaw] = await Promise.allSettled([
         appStateStore.get(AUA_ACCEPTANCE_KEY),
         appStateStore.get(APP_MODE_KEY),
+        appStateStore.get(APP_OPTIONS_KEY),
       ]);
       if (cancelled) {
         return;
@@ -1591,10 +1607,23 @@ function App() {
         parseAcceptanceRecord(accRaw.status === 'fulfilled' ? accRaw.value : null)
       );
       setMode(parseAppMode(modeRaw.status === 'fulfilled' ? modeRaw.value : null));
+      setAppOptions(
+        parseAppOptions(optionsRaw.status === 'fulfilled' ? optionsRaw.value : null)
+      );
     })();
     return () => {
       cancelled = true;
     };
+  }, []);
+
+  // The Options screen's storage callbacks (the small shared load/save this
+  // shell owns): one plain KV entry, read raw so the screen can merge saves
+  // through applyOptionsPatch, with the shell's parsed copy refreshed on
+  // every save so onboarding defaults follow immediately.
+  const loadAppOptions = useCallback(() => appStateStore.get(APP_OPTIONS_KEY), []);
+  const saveAppOptions = useCallback(async (serialized: string) => {
+    await appStateStore.set(APP_OPTIONS_KEY, serialized);
+    setAppOptions(parseAppOptions(serialized));
   }, []);
 
   // Which profile's secret was last written to the single azureBasic slot THIS
@@ -2217,10 +2246,31 @@ function App() {
             </p>
           )}
           <PortsProvider ports={cloudPorts} config={activeConfig}>
-            <OnboardTableScreen key={`onboard-${store.activeProfileId ?? 'none'}`} />
+            <OnboardTableScreen
+              key={`onboard-${store.activeProfileId ?? 'none'}`}
+              criblDefaults={appOptions.cribl}
+            />
           </PortsProvider>
         </>
       )}
+    </>
+  );
+
+  // The Options route (porting-plan Unit 4): deployment and naming defaults
+  // as typed forms over the plain appOptions KV entry. requires: 'none' -
+  // options are app configuration, editable in every mode. No PortsProvider
+  // needed: the screen's only IO is the two storage callbacks above.
+  const optionsView = (
+    <>
+      <header className="harness-header">
+        <h1 className="harness-title">Options</h1>
+        <p className="harness-subtitle">
+          Deployment and naming defaults for onboarding and deployment jobs:
+          Direct vs DCE mode, timeouts, template handling, custom-table
+          retention, Private Link, and Cribl destination naming.
+        </p>
+      </header>
+      <OptionsScreen loadOptions={loadAppOptions} saveOptions={saveAppOptions} />
     </>
   );
 
@@ -2300,12 +2350,13 @@ function App() {
   // The frame's route table; requirements drive mode-aware navigation via
   // @soc/core filterNavItems. Onboard needs BOTH live sides (it deploys to
   // Azure and Cribl in one run); Azure Targeting needs the live Azure side;
-  // the Spike Harness is diagnostics (panel 4's discovery stays as a
-  // diagnostic - the targeting screen is the product path) and always
-  // available; so is Settings.
+  // Options is app configuration and always available; the Spike Harness is
+  // diagnostics (panel 4's discovery stays as a diagnostic - the targeting
+  // screen is the product path) and always available; so is Settings.
   const routes: AppRoute[] = [
     { id: 'onboard', label: 'Onboard', requires: 'both', render: renderOnboard },
     { id: 'azure-target', label: 'Azure Targeting', requires: 'azure', render: renderTargeting },
+    { id: 'options', label: 'Options', requires: 'none', render: () => optionsView },
     { id: 'harness', label: 'Spike Harness', requires: 'none', render: () => harnessView },
     { id: 'logs', label: 'Logs', requires: 'none', render: () => logsView },
     { id: 'settings', label: 'Settings', requires: 'none', render: () => settingsView },

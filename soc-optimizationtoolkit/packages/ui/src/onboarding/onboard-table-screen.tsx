@@ -17,12 +17,14 @@
 
 import { useCallback, useEffect, useState } from "react";
 import {
+  destinationIdFromOptions,
   onboardTable,
   ONBOARD_TABLE_STEPS,
   SENTINEL_SECRET_PLACEHOLDER,
 } from "@soc/core";
 import type {
   CriblGroupSummary,
+  CriblOptions,
   JobStep,
   OnboardTableOutcome,
 } from "@soc/core";
@@ -33,11 +35,21 @@ import { summaryText } from "./summary";
 
 type RunStatus = "idle" | "running" | "ok" | "failed";
 
+export interface OnboardTableScreenProps {
+  /**
+   * Persisted Cribl naming/targeting defaults (porting-plan Unit 4). When
+   * provided, the destination id is composed from its prefix/suffix and the
+   * worker-group dropdown preselects its workerGroup when that group exists
+   * in the live list. Absent, legacy defaults apply unchanged.
+   */
+  criblDefaults?: CriblOptions;
+}
+
 /**
  * The walking-skeleton onboarding screen: table name + worker group +
  * ingestion identity in, a live step list and an honest summary out.
  */
-export function OnboardTableScreen() {
+export function OnboardTableScreen({ criblDefaults }: OnboardTableScreenProps = {}) {
   const { ports, config } = usePorts();
 
   const [table, setTable] = useState("SecurityEvent");
@@ -60,17 +72,24 @@ export function OnboardTableScreen() {
 
   // Populate the worker-group dropdown from the CriblClient port. On failure
   // the raw error is shown with a retry button - no silent empty dropdown.
+  // The persisted worker-group default (Unit 4 options) wins the initial
+  // selection when that group actually exists in the live list; otherwise
+  // the first discovered group is preselected as before.
+  const preferredGroup = criblDefaults?.workerGroup ?? "";
   const loadGroups = useCallback(async () => {
     setGroups(null);
     setGroupsError("");
     try {
       const list = await ports.cribl.listGroups();
       setGroups(list);
-      setGroupId((current) => (current !== "" ? current : (list[0]?.id ?? "")));
+      const preferred = list.some((g) => g.id === preferredGroup)
+        ? preferredGroup
+        : (list[0]?.id ?? "");
+      setGroupId((current) => (current !== "" ? current : preferred));
     } catch (err) {
       setGroupsError(String(err));
     }
-  }, [ports.cribl]);
+  }, [ports.cribl, preferredGroup]);
 
   useEffect(() => {
     void loadGroups();
@@ -90,6 +109,17 @@ export function OnboardTableScreen() {
     try {
       const record = await onboardTable(ports, {
         table: table.trim(),
+        // The persisted destination prefix/suffix (Unit 4 options) compose
+        // the destination id; without options the use-case's legacy default
+        // ("MS-Sentinel-{table}-dest") applies.
+        ...(criblDefaults !== undefined
+          ? {
+              destinationId: destinationIdFromOptions(
+                table.trim(),
+                criblDefaults,
+              ),
+            }
+          : {}),
         subscriptionId: config.subscriptionId,
         resourceGroup: config.resourceGroup,
         workspaceName: config.workspaceName,

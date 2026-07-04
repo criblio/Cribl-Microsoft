@@ -11,6 +11,7 @@ export type {
   UiPorts,
 } from "./ports-context";
 export { OnboardTableScreen } from "./onboarding/onboard-table-screen";
+export type { OnboardTableScreenProps } from "./onboarding/onboard-table-screen";
 export { formatStepLine, STEP_STATUS_TAG_WIDTH } from "./onboarding/step-line";
 
 // App frame: chrome, acceptance gate, mode chooser, and their pure state.
@@ -72,6 +73,25 @@ export {
   parseLogLine,
 } from "./screens/logs/logs-state";
 export type { LogFilterInputs } from "./screens/logs/logs-state";
+
+// Options (porting-plan Unit 4): the two @soc/core option forms rendered
+// from their field descriptors through the generic OptionFieldRow (the
+// descriptor-driven pattern later units reuse), with validate-on-save
+// per-field errors, a dirty indicator, and merge-preserving persistence
+// through shell-provided load/save callbacks over one stored blob.
+export { OptionFieldRow, OptionsScreen } from "./screens/options/options-screen";
+export type {
+  OptionFieldRowProps,
+  OptionsScreenProps,
+} from "./screens/options/options-screen";
+export {
+  defaultOptionsState,
+  isOptionsStateDirty,
+  patchFromState,
+  stateFromOptions,
+  validateOptionsState,
+} from "./screens/options/options-state";
+export type { OptionsFormState } from "./screens/options/options-state";
 
 // Settings.
 export { SettingsScreen } from "./screens/settings-screen";

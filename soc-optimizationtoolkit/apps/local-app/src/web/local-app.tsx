@@ -21,6 +21,7 @@ import {
   LogsScreen,
   ModeSelect,
   OnboardTableScreen,
+  OptionsScreen,
   PortsProvider,
   SettingsScreen,
   commitNoticeText,
@@ -39,16 +40,25 @@ import type {
   PlatformInfoRow,
 } from '@soc/ui';
 import {
+  DEFAULT_APP_OPTIONS,
   EMPTY_AZURE_CONFIG,
   computeInvalidation,
   hasAzure,
   parseAcceptanceRecord,
   parseAppMode,
+  parseAppOptions,
   parseAzureConfig,
   serializeAcceptanceRecord,
   serializeAppMode,
 } from '@soc/core';
-import type { AcceptanceRecord, AppMode, AzureConfig, LogEntry, TargetScope } from '@soc/core';
+import type {
+  AcceptanceRecord,
+  AppMode,
+  AppOptions,
+  AzureConfig,
+  LogEntry,
+  TargetScope,
+} from '@soc/core';
 import { fetchWithTimeout, makeLocalPorts } from './local-adapters';
 import { HostLogger } from './logger';
 
@@ -87,6 +97,11 @@ const APP_MODE_KEY = 'appMode';
 // here, merged over the file's scope on load - merge, never replace, which
 // is this shell's equivalent of the cloud profile-store commit.
 const TARGET_SCOPE_KEY = 'azureTargetScope';
+
+// Deployment/naming options (porting-plan Unit 4): ONE plain entry in the
+// host secrets store, same key name as the cloud shell's KV entry. Saves go
+// through @soc/core applyOptionsPatch so unmanaged keys in the blob survive.
+const APP_OPTIONS_KEY = 'appOptions';
 
 // What GET /api/config yields for the shell: the AzureConfig-shaped
 // non-secret fields plus the leader URL for display. Secrets (Azure client
@@ -144,6 +159,11 @@ export function LocalApp() {
   // committed). Tolerant parse: a garbage blob reads as "nothing committed".
   const [scopeOverride, setScopeOverride] = useState<TargetScope | null>(null);
 
+  // The parsed deployment/naming options (porting-plan Unit 4). Hydrated
+  // alongside acceptance/mode/scope; refreshed by the Options screen's save
+  // callback. A failed read parses to the defaults.
+  const [appOptions, setAppOptions] = useState<AppOptions>(DEFAULT_APP_OPTIONS);
+
   // Status of the consolidated connection poll: is the loopback host up?
   const [hostLink, setHostLink] = useState('checking...');
 
@@ -166,10 +186,11 @@ export function LocalApp() {
   useEffect(() => {
     let cancelled = false;
     void (async () => {
-      const [accRaw, modeRaw, scopeRaw] = await Promise.allSettled([
+      const [accRaw, modeRaw, scopeRaw, optionsRaw] = await Promise.allSettled([
         ports.secrets.get(AUA_ACCEPTANCE_KEY),
         ports.secrets.get(APP_MODE_KEY),
         ports.secrets.get(TARGET_SCOPE_KEY),
+        ports.secrets.get(APP_OPTIONS_KEY),
       ]);
       if (cancelled) {
         return;
@@ -181,10 +202,23 @@ export function LocalApp() {
       setScopeOverride(
         parseTargetScope(scopeRaw.status === 'fulfilled' ? scopeRaw.value : null)
       );
+      setAppOptions(
+        parseAppOptions(optionsRaw.status === 'fulfilled' ? optionsRaw.value : null)
+      );
     })();
     return () => {
       cancelled = true;
     };
+  }, []);
+
+  // The Options screen's storage callbacks (the small shared load/save this
+  // shell owns): one plain host-secrets entry, read raw so the screen can
+  // merge saves through applyOptionsPatch, with the shell's parsed copy
+  // refreshed on every save so onboarding defaults follow immediately.
+  const loadAppOptions = useCallback(() => ports.secrets.get(APP_OPTIONS_KEY), []);
+  const saveAppOptions = useCallback(async (serialized: string) => {
+    await ports.secrets.set(APP_OPTIONS_KEY, serialized);
+    setAppOptions(parseAppOptions(serialized));
   }, []);
 
   const phase = resolveFramePhase(acceptance, mode);
@@ -348,9 +382,27 @@ export function LocalApp() {
       )}
       {load.state === 'loaded' && activeAzureConfig !== null && (
         <PortsProvider ports={ports} config={activeAzureConfig}>
-          <OnboardTableScreen />
+          <OnboardTableScreen criblDefaults={appOptions.cribl} />
         </PortsProvider>
       )}
+    </>
+  );
+
+  // The Options route (porting-plan Unit 4): deployment and naming defaults
+  // as typed forms over one plain host-secrets entry. requires: 'none' -
+  // options are app configuration, editable in every mode. No PortsProvider
+  // needed: the screen's only IO is the two storage callbacks above.
+  const optionsView = (
+    <>
+      <header className="local-header">
+        <h1 className="local-title">Options</h1>
+        <p className="local-subtitle">
+          Deployment and naming defaults for onboarding and deployment jobs:
+          Direct vs DCE mode, timeouts, template handling, custom-table
+          retention, Private Link, and Cribl destination naming.
+        </p>
+      </header>
+      <OptionsScreen loadOptions={loadAppOptions} saveOptions={saveAppOptions} />
     </>
   );
 
@@ -486,10 +538,11 @@ export function LocalApp() {
   );
 
   // Route table: Onboard needs BOTH live sides; Azure Targeting needs the
-  // live Azure side; Logs and Settings are always shown.
+  // live Azure side; Options, Logs, and Settings are always shown.
   const routes: AppRoute[] = [
     { id: 'onboard', label: 'Onboard', requires: 'both', render: () => onboardView },
     { id: 'azure-target', label: 'Azure Targeting', requires: 'azure', render: () => targetingView },
+    { id: 'options', label: 'Options', requires: 'none', render: () => optionsView },
     { id: 'logs', label: 'Logs', requires: 'none', render: () => logsView },
     { id: 'settings', label: 'Settings', requires: 'none', render: () => settingsView },
   ];
