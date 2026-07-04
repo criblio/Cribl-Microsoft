@@ -44,3 +44,7 @@ Host side: src/host/logger.mjs is the file logger - appends formatLogLine-format
 ## Unit 4: deployment and naming options
 
 The Options route (requires 'none') mounts @soc/ui OptionsScreen over ONE plain host-secrets entry appOptions (same key name as the cloud shell's KV entry), following the appMode persistence pattern: local-app.tsx hydrates the parsed options alongside acceptance/mode/scope on mount and passes loadOptions/saveOptions callbacks over ports.secrets; saves merge through @soc/core applyOptionsPatch (unmanaged blob keys survive) and refresh the shell's parsed copy, so the Onboard route's criblDefaults (worker-group preselect + destination-id prefix/suffix) follow immediately. No new host surface: the existing /api/secrets routes carry it.
+
+## Unit 6: batch onboarding
+
+The Batch Onboard route (requires 'both') mounts @soc/ui BatchDeployScreen against the same six local adapters, gated on the host config load like Onboard. The shell injects the module-scoped BATCH_PACING hooks (Date.now/setTimeout) for the usecase's rolling-minute ARM budget (loopback has no proxy budget, but ARM is rate-limited upstream, so the @soc/core default 80 req/min stays) plus the persisted appOptions, and hands nav.navigate('options') as the open-Options hook. templateOnly artifacts download through the existing ArtifactSink adapter (Blob + anchor). No new host surface: the batch rides the existing /api/azure/request, /api/cribl/*, and /api/jobs* routes.

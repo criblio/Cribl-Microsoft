@@ -7,8 +7,17 @@
  * - Local shell: the Node host persists jobs on disk.
  */
 
-/** Lifecycle state shared by jobs and their individual steps. */
-export type JobStatus = 'pending' | 'running' | 'succeeded' | 'failed';
+/**
+ * Lifecycle state shared by jobs and their individual steps.
+ *
+ * 'skipped' is FIRST-CLASS (user decision, porting-plan "DECISIONS RESOLVED
+ * 2026-07-03" item 1, binding Units 6/20 and step-line rendering): a step or
+ * job that was deliberately not run - a skip-existing hit, or a downstream
+ * step of a failed prerequisite (the legacy engine cascaded confusing errors
+ * instead; downstream steps of a failed table SKIP here). It is terminal and
+ * distinct from 'succeeded' - a skipped step did no work.
+ */
+export type JobStatus = 'pending' | 'running' | 'succeeded' | 'failed' | 'skipped';
 
 /** One unit of progress within a job (e.g. "create table", "deploy DCR"). */
 export interface JobStep {
@@ -16,7 +25,7 @@ export interface JobStep {
   name: string;
   /** Current lifecycle state of this step. */
   status: JobStatus;
-  /** Optional human-readable progress or failure detail. */
+  /** Optional human-readable progress, skip-reason, or failure detail. */
   detail?: string;
 }
 

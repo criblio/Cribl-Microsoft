@@ -1,20 +1,31 @@
 /**
- * Direct (Kind:Direct) DCR ARM request builder and deployment-response parser.
+ * DCR ARM request builders (Direct and DCE-based) and deployment-response
+ * parser.
  *
- * The request shape is mined from the legacy automation:
+ * The request shapes are mined from the legacy automation:
  *   - Azure/CustomDeploymentTemplates/DCR-Automation/core/dcr-template-direct.json
- *     (the ARM template the legacy engine deploys: kind "Direct", apiVersion
- *     "2023-03-11", properties.streamDeclarations / destinations.logAnalytics /
- *     dataFlows with transformKql "source")
+ *     (the ARM template the legacy engine deploys in Direct mode: kind
+ *     "Direct", apiVersion "2023-03-11", properties.streamDeclarations /
+ *     destinations.logAnalytics / dataFlows with transformKql "source")
+ *   - Azure/CustomDeploymentTemplates/DCR-Automation/core/dcr-template-with-dce.json
+ *     (the DCE-mode template: SAME apiVersion 2023-03-11 and properties
+ *     fragment, plus properties.dataCollectionEndpointId, and NO kind
+ *     property - DCE-based DCRs are NOT Kind:Direct)
  *   - Create-TableDCRs.ps1 line 1652 (api-version 2023-03-11 is required to
  *     read endpoints.logsIngestion on Direct DCRs - March 2024 ARM update)
+ *   - Create-TableDCRs.ps1 lines 2841-2850: stream naming is IDENTICAL in
+ *     both modes (input always "Custom-{table}"; output "Microsoft-{table}"
+ *     native / "Custom-{table}" custom)
  *   - Get-DirectDCRIngestionEndpoint in Generate-CriblDestinations.ps1
  *     (the endpoint fallback paths replayed by {@link parseDcrDeployment})
  *
  * Column mapping is NOT re-implemented here: the column set and the
  * stream/dataFlow fragment come from ../schema-mapping (buildDcrColumnSet +
  * buildStreamDeclaration, the legacy compatibility contract). The DCR resource
- * name is an input - generate it with ../dcr-naming at the call site.
+ * name is an input - generate it with ../dcr-naming at the call site (mode
+ * "direct" for {@link buildDirectDcrRequest}, mode "dce" - the 64-char limit -
+ * for {@link buildDceDcrRequest}). The DCE resource itself is built and parsed
+ * by ../dce-request.
  *
  * Pure: no IO, no fetch, no React, no Date/Math.random/crypto.
  */
@@ -116,21 +127,19 @@ export class DcrRequestError extends Error {
 }
 
 /**
- * Build the complete ARM PUT request for a Kind:Direct DCR. Mirrors what the
- * legacy engine deploys through dcr-template-direct.json: a single
- * "Custom-{table}" stream declaration, a single logAnalytics destination
- * named "logAnalyticsWorkspace", and one dataFlow with transformKql "source"
- * into "Microsoft-{table}" (native) or "Custom-{table}" (custom _CL tables,
- * tableMode "custom").
- *
- * @throws DcrRequestError when workspaceResourceId lacks a subscription or
- *   resource group, or when a required input string is empty.
- * @throws SchemaMappingError (from buildStreamDeclaration) when every input
- *   column is filtered away - the legacy engine fails the table then too.
+ * Everything both DCR builders share: input validation, the schema-mapping
+ * composition, and the ARM path. Exactly ONE implementation of the common
+ * shape (the legacy repo had two drifted deploy implementations; porting-plan
+ * Unit 6 pins a single one).
  */
-export function buildDirectDcrRequest(
-  input: DirectDcrRequestInput,
-): DirectDcrRequest {
+function composeDcrRequestCore(input: DirectDcrRequestInput): {
+  path: string;
+  properties: DirectDcrProperties;
+  streamName: string;
+  outputStream: string;
+  droppedColumns: DroppedColumn[];
+  unknownTypeColumns: UnknownTypeColumn[];
+} {
   const { table, columns, location, workspaceResourceId, dcrName } = input;
   const tableMode: TableMode = input.tableMode ?? "native";
 
@@ -169,26 +178,151 @@ export function buildDirectDcrRequest(
     `/providers/Microsoft.Insights/dataCollectionRules/${dcrName}`;
 
   return {
-    method: "PUT",
     path,
-    apiVersion: DIRECT_DCR_API_VERSION,
-    body: {
-      kind: "Direct",
-      location,
-      properties: {
-        streamDeclarations: declaration.streamDeclarations,
-        destinations: {
-          logAnalytics: [
-            { workspaceResourceId, name: LOG_ANALYTICS_DESTINATION_NAME },
-          ],
-        },
-        dataFlows: declaration.dataFlows,
+    properties: {
+      streamDeclarations: declaration.streamDeclarations,
+      destinations: {
+        logAnalytics: [
+          { workspaceResourceId, name: LOG_ANALYTICS_DESTINATION_NAME },
+        ],
       },
+      dataFlows: declaration.dataFlows,
     },
     streamName: declaration.streamName,
     outputStream: declaration.outputStreamName,
     droppedColumns: columnSet.dropped,
     unknownTypeColumns: columnSet.unknownTypes,
+  };
+}
+
+/**
+ * Build the complete ARM PUT request for a Kind:Direct DCR. Mirrors what the
+ * legacy engine deploys through dcr-template-direct.json: a single
+ * "Custom-{table}" stream declaration, a single logAnalytics destination
+ * named "logAnalyticsWorkspace", and one dataFlow with transformKql "source"
+ * into "Microsoft-{table}" (native) or "Custom-{table}" (custom _CL tables,
+ * tableMode "custom").
+ *
+ * @throws DcrRequestError when workspaceResourceId lacks a subscription or
+ *   resource group, or when a required input string is empty.
+ * @throws SchemaMappingError (from buildStreamDeclaration) when every input
+ *   column is filtered away - the legacy engine fails the table then too.
+ */
+export function buildDirectDcrRequest(
+  input: DirectDcrRequestInput,
+): DirectDcrRequest {
+  const core = composeDcrRequestCore(input);
+  return {
+    method: "PUT",
+    path: core.path,
+    apiVersion: DIRECT_DCR_API_VERSION,
+    body: {
+      kind: "Direct",
+      location: input.location,
+      properties: core.properties,
+    },
+    streamName: core.streamName,
+    outputStream: core.outputStream,
+    droppedColumns: core.droppedColumns,
+    unknownTypeColumns: core.unknownTypeColumns,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// DCE-based variant (porting-plan Unit 6)
+// ---------------------------------------------------------------------------
+
+/**
+ * ARM api-version for DCE-based DCRs - the same 2023-03-11 the legacy DCE
+ * template pins (dcr-template-with-dce.json, resources[0].apiVersion).
+ */
+export const DCE_DCR_API_VERSION = DIRECT_DCR_API_VERSION;
+
+/** Input for {@link buildDceDcrRequest}. */
+export interface DceDcrRequestInput extends DirectDcrRequestInput {
+  /**
+   * Full ARM resource id of the Data Collection Endpoint the DCR routes
+   * through (the legacy template's endpointResourceId parameter, wired as
+   * properties.dataCollectionEndpointId). Deploy the DCE first with
+   * ../dce-request and take DceDeploymentInfo.id. The DCR name for this
+   * variant comes from dcr-naming mode "dce" (64-char limit).
+   */
+  dataCollectionEndpointId: string;
+}
+
+/**
+ * The `properties` fragment of a DCE-based DCR resource body: the shared
+ * fragment plus dataCollectionEndpointId (dcr-template-with-dce.json line
+ * "dataCollectionEndpointId": "[parameters('endpointResourceId')]").
+ */
+export interface DceDcrProperties extends DirectDcrProperties {
+  dataCollectionEndpointId: string;
+}
+
+/**
+ * The full PUT body for a DCE-based DCR. Deliberately has NO `kind`
+ * property: the legacy dcr-template-with-dce.json declares none (DCE-based
+ * DCRs are NOT Kind:Direct - only dcr-template-direct.json carries
+ * "kind": "Direct").
+ */
+export interface DceDcrRequestBody {
+  location: string;
+  properties: DceDcrProperties;
+}
+
+/** The complete ARM request for deploying a DCE-based DCR. */
+export interface DceDcrRequest {
+  method: "PUT";
+  /** Same ARM path shape as the Direct variant. */
+  path: string;
+  /** {@link DCE_DCR_API_VERSION}. */
+  apiVersion: string;
+  body: DceDcrRequestBody;
+  /** Input stream name: "Custom-{table}" (also the streamDeclarations key). */
+  streamName: string;
+  /** Output stream: "Microsoft-{table}" (native) / "Custom-{table}" (custom). */
+  outputStream: string;
+  /** Columns removed by the schema-mapping filter (diagnostics; legacy logs these). */
+  droppedColumns: DroppedColumn[];
+  /** Columns whose LA type fell back to string (diagnostics; legacy warns). */
+  unknownTypeColumns: UnknownTypeColumn[];
+}
+
+/**
+ * Build the complete ARM PUT request for a DCE-based DCR. Mirrors what the
+ * legacy engine deploys through dcr-template-with-dce.json: the SAME
+ * streamDeclarations / destinations / dataFlows fragment as the Direct
+ * variant (stream naming is identical in both modes - Create-TableDCRs.ps1
+ * lines 2841-2850), plus properties.dataCollectionEndpointId, and NO kind.
+ *
+ * @throws DcrRequestError under the same conditions as
+ *   {@link buildDirectDcrRequest}, and additionally when
+ *   dataCollectionEndpointId is blank.
+ * @throws SchemaMappingError (from buildStreamDeclaration) when every input
+ *   column is filtered away.
+ */
+export function buildDceDcrRequest(input: DceDcrRequestInput): DceDcrRequest {
+  if (input.dataCollectionEndpointId.trim() === "") {
+    throw new DcrRequestError(
+      "dataCollectionEndpointId must be a non-empty string",
+    );
+  }
+  const core = composeDcrRequestCore(input);
+  return {
+    method: "PUT",
+    path: core.path,
+    apiVersion: DCE_DCR_API_VERSION,
+    body: {
+      location: input.location,
+      properties: {
+        dataCollectionEndpointId: input.dataCollectionEndpointId,
+        ...core.properties,
+      },
+    },
+    streamName: core.streamName,
+    outputStream: core.outputStream,
+    droppedColumns: core.droppedColumns,
+    unknownTypeColumns: core.unknownTypeColumns,
   };
 }
 

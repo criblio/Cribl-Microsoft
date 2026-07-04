@@ -8,6 +8,7 @@ export {
   ONBOARD_TABLE_STEPS,
 } from "./onboard-table";
 export type {
+  OnboardTableDceInput,
   OnboardTableInput,
   OnboardTableOutcome,
   OnboardTablePorts,

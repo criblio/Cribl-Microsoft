@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  // usecases/onboard-batch
+  onboardBatch,
+  onboardBatchStepsFor,
+  paceAzureManagement,
+  pollAttemptsForTimeout,
+  DEFAULT_BATCH_MAX_REQUESTS_PER_MINUTE,
+  ONBOARD_BATCH_JOB_KIND,
   // usecases/azure-discovery
   commitTargetScope,
   deriveResourceGroupsFromWorkspaces,
@@ -21,6 +28,14 @@ import {
   mapColumnType,
   NATIVE_SYSTEM_COLUMNS,
   SchemaMappingError,
+  // domain/dce-request
+  buildDceRequest,
+  buildAmplsAssociationRequest,
+  parseDceDeployment,
+  DCE_API_VERSION,
+  // domain/dcr-request (DCE variant)
+  buildDceDcrRequest,
+  DCE_DCR_API_VERSION,
   // testing fakes
   DEFAULT_FAKE_USER,
   FakeArtifactSink,
@@ -56,6 +71,24 @@ describe("@soc/core root barrel", () => {
     expect(typeof mapColumnType).toBe("function");
     expect(SchemaMappingError.prototype).toBeInstanceOf(Error);
     expect(NATIVE_SYSTEM_COLUMNS.length).toBeGreaterThan(0);
+  });
+
+  it("re-exports the dce-request and DCE-mode dcr-request builders", () => {
+    expect(typeof buildDceRequest).toBe("function");
+    expect(typeof buildAmplsAssociationRequest).toBe("function");
+    expect(typeof parseDceDeployment).toBe("function");
+    expect(typeof buildDceDcrRequest).toBe("function");
+    expect(DCE_API_VERSION).toBe("2023-03-11");
+    expect(DCE_DCR_API_VERSION).toBe("2023-03-11");
+  });
+
+  it("re-exports the onboard-batch usecase module", () => {
+    expect(typeof onboardBatch).toBe("function");
+    expect(typeof onboardBatchStepsFor).toBe("function");
+    expect(typeof paceAzureManagement).toBe("function");
+    expect(typeof pollAttemptsForTimeout).toBe("function");
+    expect(ONBOARD_BATCH_JOB_KIND).toBe("onboard-batch");
+    expect(DEFAULT_BATCH_MAX_REQUESTS_PER_MINUTE).toBe(80);
   });
 
   it("re-exports the azure-discovery usecase module", () => {

@@ -32,6 +32,33 @@ export type {
   SchemaPreviewRow,
 } from "./onboarding/custom-schema-state";
 
+// Batch deployment (porting-plan Unit 6): the multi-table screen over the
+// @soc/core onboardBatch usecase, plus its pure decision layer (selection
+// parsing, per-run option overrides, counts/summary derivation, templateOnly
+// artifact naming, batch RecentRuns renderers).
+export { BatchDeployScreen } from "./onboarding/batch/batch-deploy-screen";
+export type { BatchDeployScreenProps } from "./onboarding/batch/batch-deploy-screen";
+export {
+  DEFAULT_BATCH_RUN_OVERRIDES,
+  amplsIssueFor,
+  applyRunOverrides,
+  batchRunDetail,
+  batchRunLabel,
+  batchTemplatesArtifactName,
+  buildBatchSelection,
+  buildTemplatesArtifact,
+  deriveBatchCounts,
+  formatBatchCountsLine,
+  formatBatchSummary,
+  parseTableListText,
+} from "./onboarding/batch/batch-state";
+export type {
+  BatchCounts,
+  BatchRunOverride,
+  BatchRunOverrides,
+  BatchSelection,
+} from "./onboarding/batch/batch-state";
+
 // App frame: chrome, acceptance gate, mode chooser, and their pure state.
 export { AppFrame } from "./frame/app-frame";
 export type { AppFrameNav, AppFrameProps, AppRoute } from "./frame/app-frame";

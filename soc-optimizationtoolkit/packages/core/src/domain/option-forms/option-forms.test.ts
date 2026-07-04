@@ -222,6 +222,89 @@ describe("validateOptions", () => {
       "keepTemplateVersions",
     ]);
   });
+
+  // CROSS-FIELD RULE (porting-plan Unit 6, deferred from Unit 4). LEGACY
+  // CONTRAST: Create-TableDCRs.ps1 lines 2752-2755 only WARNED ("Private
+  // Link enabled but no AMPLS configured. DCE created with private-only
+  // access but not associated with AMPLS.") and created a DCE nothing could
+  // reach. The new contract blocks the save instead.
+  describe("AMPLS cross-field rule", () => {
+    const AMPLS_ID =
+      "/subscriptions/sub-123/resourceGroups/rg-network/providers/" +
+      "Microsoft.Insights/privateLinkScopes/ampls-prod";
+
+    const privateDceValues = (amplsResourceId: string): OptionFormValues => ({
+      ...validValues(),
+      createDCE: true,
+      dcePublicNetworkAccess: false,
+      amplsResourceId,
+    });
+
+    it("REQUIRES amplsResourceId when createDCE=true and public access is disabled", () => {
+      for (const blank of ["", "   "]) {
+        const errors = validateOptions(
+          OPERATION_OPTION_FIELDS,
+          privateDceValues(blank),
+        );
+        expect(errors).toHaveLength(1);
+        expect(errors[0].key).toBe("amplsResourceId");
+        expect(errors[0].message).toContain("Required");
+      }
+    });
+
+    it("format-checks the AMPLS id via the azure-resource-id parser", () => {
+      for (const junk of ["garbage", "/subscriptions/sub-123", "ampls-prod"]) {
+        const errors = validateOptions(
+          OPERATION_OPTION_FIELDS,
+          privateDceValues(junk),
+        );
+        expect(errors).toHaveLength(1);
+        expect(errors[0].key).toBe("amplsResourceId");
+        expect(errors[0].message).toContain("Not a valid Azure resource ID");
+      }
+    });
+
+    it("accepts a well-formed AMPLS id when the rule triggers", () => {
+      expect(
+        validateOptions(OPERATION_OPTION_FIELDS, privateDceValues(AMPLS_ID)),
+      ).toEqual([]);
+    });
+
+    it("does NOT require an AMPLS id when public access stays enabled", () => {
+      expect(
+        validateOptions(OPERATION_OPTION_FIELDS, {
+          ...validValues(),
+          createDCE: true,
+          dcePublicNetworkAccess: true,
+          amplsResourceId: "",
+        }),
+      ).toEqual([]);
+    });
+
+    it("does NOT require an AMPLS id when createDCE is off (Direct mode)", () => {
+      // dcePublicNetworkAccess=false without createDCE deploys no DCE at
+      // all - nothing to associate, nothing to require.
+      expect(
+        validateOptions(OPERATION_OPTION_FIELDS, {
+          ...validValues(),
+          createDCE: false,
+          dcePublicNetworkAccess: false,
+          amplsResourceId: "",
+        }),
+      ).toEqual([]);
+    });
+
+    it("stays out of field sets without the participating fields", () => {
+      expect(
+        validateOptions(
+          CRIBL_OPTION_FIELDS,
+          optionsToFormValues(CRIBL_OPTION_FIELDS, {
+            ...DEFAULT_CRIBL_OPTIONS,
+          }),
+        ),
+      ).toEqual([]);
+    });
+  });
 });
 
 describe("formValuesToOptions", () => {

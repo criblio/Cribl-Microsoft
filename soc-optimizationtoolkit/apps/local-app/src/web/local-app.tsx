@@ -17,6 +17,7 @@ import {
   AppFrame,
   AuaGate,
   AzureTargetingScreen,
+  BatchDeployScreen,
   EMPTY_MODE_RECORD,
   LogsScreen,
   ModeSelect,
@@ -33,6 +34,7 @@ import {
   useConsolidatedPolling,
 } from '@soc/ui';
 import type {
+  AppFrameNav,
   AppRoute,
   CommitScopeOutcome,
   LoadableAcceptance,
@@ -56,6 +58,7 @@ import type {
   AppMode,
   AppOptions,
   AzureConfig,
+  BatchPacing,
   LogEntry,
   TargetScope,
 } from '@soc/core';
@@ -68,6 +71,15 @@ import { HostLogger } from './logger';
 // the host appends them to data/logs/app.log - the shell's one log truth.
 const hostLogger = new HostLogger();
 const ports = makeLocalPorts(hostLogger);
+
+// The pacing hooks the batch-onboarding usecase runs its rolling-minute ARM
+// budget on (porting-plan Unit 6): the SHELL owns time - @soc/core never
+// reads a clock. Loopback traffic has no proxy budget, but ARM itself is
+// still rate-limited upstream, so the @soc/core default (80 req/min) stays.
+const BATCH_PACING: BatchPacing = {
+  now: () => Date.now(),
+  sleep: (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)),
+};
 
 // The Logs screen's data source: flush anything the browser logger still
 // holds, then read the host log tail back and re-parse the pinned line
@@ -391,6 +403,51 @@ export function LocalApp() {
     </>
   );
 
+  // The Batch Onboard route (porting-plan Unit 6): many tables as ONE parent
+  // onboard-batch job against the same local adapters - shared prologue
+  // (workspace fetch; in DCE mode one batch-wide DCE plus the AMPLS
+  // association when public access is disabled) plus one step per table.
+  // The shell injects the pacing hooks and the persisted Unit 4 options.
+  const renderBatch = (nav: AppFrameNav) => (
+    <>
+      <header className="local-header">
+        <h1 className="local-title">Batch onboarding</h1>
+        <p className="local-subtitle">
+          Deploy DCRs for many tables in one run: per-table isolation and
+          skip-existing semantics, Direct or DCE mode with Private Link
+          support, resumable progress, and template-only export - the same
+          onboardBatch use-case as the Cribl.Cloud app, served by the loopback
+          Node host.
+        </p>
+      </header>
+      {load.state === 'loading' && (
+        <p className="local-subtitle">Loading host configuration...</p>
+      )}
+      {load.state === 'error' && (
+        <>
+          <div className="local-error">
+            Could not load the host configuration: {load.message}
+          </div>
+          <div className="panel-controls">
+            <button className="run-button" onClick={() => void reload()}>
+              Retry
+            </button>
+          </div>
+        </>
+      )}
+      {load.state === 'loaded' && activeAzureConfig !== null && (
+        <PortsProvider ports={ports} config={activeAzureConfig}>
+          <BatchDeployScreen
+            pacing={BATCH_PACING}
+            operationDefaults={appOptions.operation}
+            criblDefaults={appOptions.cribl}
+            onOpenOptions={() => nav.navigate('options')}
+          />
+        </PortsProvider>
+      )}
+    </>
+  );
+
   // The Options route (porting-plan Unit 4): deployment and naming defaults
   // as typed forms over one plain host-secrets entry. requires: 'none' -
   // options are app configuration, editable in every mode. No PortsProvider
@@ -544,6 +601,7 @@ export function LocalApp() {
   // live Azure side; Options, Logs, and Settings are always shown.
   const routes: AppRoute[] = [
     { id: 'onboard', label: 'Onboard', requires: 'both', render: () => onboardView },
+    { id: 'batch-onboard', label: 'Batch Onboard', requires: 'both', render: renderBatch },
     { id: 'azure-target', label: 'Azure Targeting', requires: 'azure', render: () => targetingView },
     { id: 'options', label: 'Options', requires: 'none', render: () => optionsView },
     { id: 'logs', label: 'Logs', requires: 'none', render: () => logsView },

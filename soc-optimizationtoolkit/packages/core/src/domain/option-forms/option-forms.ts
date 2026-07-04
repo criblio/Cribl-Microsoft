@@ -30,8 +30,19 @@
  * (legacy `_comments`, keys written by newer app versions, operator notes), so
  * a save can never destroy what it does not understand.
  *
+ * CROSS-FIELD VALIDATION (porting-plan Unit 6, deferred from Unit 4, pinned
+ * by test): when createDCE is true and dcePublicNetworkAccess is false, the
+ * DCE is reachable ONLY through Azure Monitor Private Link, so amplsResourceId
+ * is REQUIRED and must parse as an ARM resource id. The legacy engine merely
+ * warned and created an unreachable private-only DCE anyway
+ * (Create-TableDCRs.ps1 lines 2752-2755: "Private Link enabled but no AMPLS
+ * configured. DCE created with private-only access but not associated with
+ * AMPLS."); {@link validateOptions} blocks the save instead.
+ *
  * Pure: no IO, no fetch, no React, no Date/crypto.
  */
+
+import { parseResourceId } from "../azure-resource-id";
 
 // ---------------------------------------------------------------------------
 // Typed option shapes and defaults
@@ -341,6 +352,60 @@ export function optionsToFormValues(
 const INTEGER_PATTERN = /^-?\d+$/;
 
 /**
+ * The AMPLS cross-field rule (porting-plan Unit 6, deferred from Unit 4).
+ * Runs only when the field set carries all three participating fields (i.e.
+ * the operation form); appends at most one error, keyed 'amplsResourceId'.
+ *
+ * The rule mirrors when the deploy path actually USES the AMPLS id: the
+ * legacy engine associated the DCE with the AMPLS only when creating DCEs
+ * with network access "Disabled" (Create-TableDCRs.ps1 line 2739), and
+ * warned-but-proceeded when none was configured (lines 2752-2755) - leaving
+ * a DCE nothing could reach. Here the combination createDCE=true +
+ * dcePublicNetworkAccess=false REQUIRES a well-formed amplsResourceId.
+ */
+function validateAmplsCrossField(
+  fields: readonly OptionFormField[],
+  values: OptionFormValues,
+  errors: OptionFieldError[],
+): void {
+  const participating = ["createDCE", "dcePublicNetworkAccess", "amplsResourceId"];
+  if (!participating.every((key) => fields.some((f) => f.key === key))) {
+    return;
+  }
+  // Booleans that fail their own per-field validation cannot trigger the
+  // cross-field rule (=== true / === false, never truthiness).
+  if (values["createDCE"] !== true || values["dcePublicNetworkAccess"] !== false) {
+    return;
+  }
+  const raw = values["amplsResourceId"];
+  const id = typeof raw === "string" ? raw.trim() : "";
+  if (id === "") {
+    errors.push({
+      key: "amplsResourceId",
+      message:
+        "Required when Create DCE is enabled and DCE public network access " +
+        "is disabled: a private-only DCE is reachable exclusively through " +
+        "the AMPLS.",
+    });
+    return;
+  }
+  const parsed = parseResourceId(id);
+  if (
+    parsed.subscriptionId === "" ||
+    parsed.resourceGroup === "" ||
+    parsed.name === ""
+  ) {
+    errors.push({
+      key: "amplsResourceId",
+      message:
+        "Not a valid Azure resource ID - expected /subscriptions/{sub}/" +
+        "resourceGroups/{rg}/providers/Microsoft.Insights/" +
+        "privateLinkScopes/{name}.",
+    });
+  }
+}
+
+/**
  * Validate raw form values against their field descriptors, returning one
  * error per offending field (empty array = valid).
  *
@@ -349,6 +414,12 @@ const INTEGER_PATTERN = /^-?\d+$/;
  * 0. Here, non-numeric input for a number field REJECTS with a named field
  * error; nothing is coerced. Number fields must be whole numbers and respect
  * the descriptor's `min`.
+ *
+ * CROSS-FIELD RULE (porting-plan Unit 6): on field sets containing createDCE,
+ * dcePublicNetworkAccess, and amplsResourceId (the operation form), the
+ * combination createDCE=true + dcePublicNetworkAccess=false additionally
+ * requires a well-formed amplsResourceId - see
+ * {@link validateAmplsCrossField}.
  */
 export function validateOptions(
   fields: readonly OptionFormField[],
@@ -395,8 +466,10 @@ export function validateOptions(
         });
       }
     }
-    // kind 'text': any string is acceptable.
+    // kind 'text': any string is acceptable per-field; cross-field rules
+    // below may still constrain specific text fields.
   }
+  validateAmplsCrossField(fields, values, errors);
   return errors;
 }
 

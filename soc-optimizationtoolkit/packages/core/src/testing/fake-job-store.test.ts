@@ -66,6 +66,28 @@ describe('FakeJobStore', () => {
     expect(final!.error).toBe('deploy DCR failed');
   });
 
+  it("round-trips the first-class 'skipped' status on jobs and steps", async () => {
+    // 'skipped' is a first-class JobStatus (user decision, porting-plan
+    // "DECISIONS RESOLVED 2026-07-03" item 1). The store must persist it like
+    // any other status - purely additive, no special merge semantics.
+    const store = new FakeJobStore(tickingClock());
+    const created = await store.create('deploy-dcr', { table: 'SecurityEvent' });
+
+    const steps: JobStep[] = [
+      { name: 'create table', status: 'failed', detail: 'ARM 403' },
+      { name: 'deploy DCR', status: 'skipped', detail: 'prerequisite failed' },
+    ];
+    await store.update(created.id, { status: 'skipped', steps });
+
+    const final = await store.get(created.id);
+    expect(final!.status).toBe('skipped');
+    expect(final!.steps[1]).toEqual({
+      name: 'deploy DCR',
+      status: 'skipped',
+      detail: 'prerequisite failed',
+    });
+  });
+
   it('rejects updates for unknown ids', async () => {
     const store = new FakeJobStore();
     await expect(store.update('job-404', { status: 'running' })).rejects.toThrow('job-404');

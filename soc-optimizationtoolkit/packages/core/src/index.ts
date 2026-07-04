@@ -23,6 +23,7 @@ export * from "./domain/log-model";
 export * from "./domain/change-request";
 export * from "./domain/role-plan";
 export * from "./domain/dcr-request";
+export * from "./domain/dce-request";
 export * from "./domain/option-forms";
 export * from "./domain/sentinel-destination";
 export * from "./domain/custom-table";

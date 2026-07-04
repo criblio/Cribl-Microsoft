@@ -1,9 +1,12 @@
 /**
  * RecentRuns - the app's run log, rendered from the persisted JobStore
- * records. Every onboard-table run (including failures) is stored with its
- * step-by-step statuses, timestamps, and outcome, so this list survives
- * reloads and answers "what did the app do, when, and where" without any
- * external logging system. Pure React over the ports: zero direct IO.
+ * records. Every run (including failures) is stored with its step-by-step
+ * statuses, timestamps, and outcome, so this list survives reloads and
+ * answers "what did the app do, when, and where" without any external
+ * logging system. Defaults render onboard-table records; other job kinds
+ * (e.g. onboard-batch, porting-plan Unit 6) reuse the SAME list by passing
+ * their kind plus label/detail renderers. Pure React over the ports: zero
+ * direct IO.
  */
 
 import { useCallback, useEffect, useState } from "react";
@@ -13,7 +16,7 @@ import { usePorts } from "../ports-context";
 import { formatStepLine } from "./step-line";
 import { summaryText } from "./summary";
 
-/** One-line label for a run: when, what table, terminal status. */
+/** One-line label for an onboard-table run: when, what table, status. */
 function runLabel(job: JobRecord): string {
   const table =
     (job.input as { table?: string } | null | undefined)?.table ??
@@ -36,21 +39,35 @@ function runDetail(job: JobRecord): string {
 export interface RecentRunsProps {
   /** Bump to reload the list (e.g. after a run completes). */
   refreshToken: number;
+  /** JobStore kind to list; defaults to onboard-table records. */
+  kind?: string;
+  /** Heading text; defaults to the onboard-table wording. */
+  title?: string;
+  /** One-line label per record; defaults to the onboard-table label. */
+  label?: (job: JobRecord) => string;
+  /** Expanded detail per record; defaults to the onboard-table detail. */
+  detail?: (job: JobRecord) => string;
 }
 
-export function RecentRuns({ refreshToken }: RecentRunsProps) {
+export function RecentRuns({
+  refreshToken,
+  kind = ONBOARD_TABLE_JOB_KIND,
+  title = "Recent runs (persisted job records - the app's run log)",
+  label = runLabel,
+  detail = runDetail,
+}: RecentRunsProps) {
   const { ports } = usePorts();
   const [jobs, setJobs] = useState<JobRecord[] | null>(null);
   const [error, setError] = useState("");
 
   const load = useCallback(async () => {
     try {
-      setJobs(await ports.jobs.list(ONBOARD_TABLE_JOB_KIND));
+      setJobs(await ports.jobs.list(kind));
       setError("");
     } catch (err) {
       setError(String(err));
     }
-  }, [ports.jobs]);
+  }, [ports.jobs, kind]);
 
   useEffect(() => {
     void load();
@@ -58,9 +75,7 @@ export function RecentRuns({ refreshToken }: RecentRunsProps) {
 
   return (
     <div className="discovery-result">
-      <span className="field-label">
-        Recent runs (persisted job records - the app&apos;s run log)
-      </span>
+      <span className="field-label">{title}</span>
       <div className="panel-controls">
         <button className="run-button" onClick={() => void load()}>
           Refresh
@@ -73,8 +88,8 @@ export function RecentRuns({ refreshToken }: RecentRunsProps) {
       {jobs !== null &&
         jobs.map((job) => (
           <details key={job.id}>
-            <summary className="panel-desc">{runLabel(job)}</summary>
-            <pre className="result">{runDetail(job)}</pre>
+            <summary className="panel-desc">{label(job)}</summary>
+            <pre className="result">{detail(job)}</pre>
           </details>
         ))}
     </div>

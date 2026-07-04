@@ -30,7 +30,11 @@
  *                              GET). Columns are selected via schema-mapping
  *                              selectSchemaColumns in the table's mode
  *   4 generate-dcr-name        dcr-naming, mode "direct" (legacy contract;
- *                              custom tables get "_CL" stripped)
+ *                              custom tables get "_CL" stripped) - or mode
+ *                              "dce" (64-char limit) when a preresolved DCE
+ *                              is supplied (input.dce, porting-plan Unit 6;
+ *                              the body then comes from buildDceDcrRequest
+ *                              and the ingestion endpoint is the DCE's)
  *   5 deploy-dcr               PUT the Kind:Direct DCR (buildDirectDcrRequest
  *                              in the table's mode - custom tables emit
  *                              Custom-{table} output streams) then GET-poll
@@ -67,6 +71,7 @@ import { generateDcrName } from "../../domain/dcr-naming";
 import { selectSchemaColumns } from "../../domain/schema-mapping";
 import type { LogAnalyticsColumn } from "../../domain/schema-mapping";
 import {
+  buildDceDcrRequest,
   buildDirectDcrRequest,
   parseDcrDeployment,
   DIRECT_DCR_API_VERSION,
@@ -140,6 +145,25 @@ export function onboardTableStepsFor(
     : ONBOARD_TABLE_STEPS.filter((name) => name !== "create-custom-table");
 }
 
+/**
+ * A PRERESOLVED Data Collection Endpoint (porting-plan Unit 6). When supplied
+ * on {@link OnboardTableInput.dce}, the job deploys a DCE-BASED DCR instead of
+ * a Kind:Direct one: the DCR name comes from dcr-naming mode "dce" (64-char
+ * limit), the PUT body from buildDceDcrRequest (dataCollectionEndpointId
+ * wired, NO kind), and the Cribl destination points at the DCE's
+ * logs-ingestion endpoint (DCE-based DCRs expose no endpoints.logsIngestion
+ * of their own - the legacy PS engine read the DCE's
+ * properties.logsIngestion.endpoint for exactly this case). The DCE itself is
+ * ensured by the CALLER (onboardBatch ensures it ONCE per batch); this
+ * usecase never creates DCEs.
+ */
+export interface OnboardTableDceInput {
+  /** Full ARM resource id of the deployed DCE (DceDeploymentInfo.id). */
+  resourceId: string;
+  /** The DCE's logs-ingestion endpoint URL (properties.logsIngestion.endpoint). */
+  logsIngestionEndpoint: string;
+}
+
 /** The ports {@link onboardTable} orchestrates. */
 export interface OnboardTablePorts {
   azure: AzureManagement;
@@ -202,6 +226,12 @@ export interface OnboardTableInput {
   ingestionClientSecret?: string;
   /** Cribl output id; defaults to the legacy "MS-Sentinel-{table}-dest". */
   destinationId?: string;
+  /**
+   * Preresolved DCE for DCE-BASED deployment (see
+   * {@link OnboardTableDceInput}). ABSENT = the existing Direct behavior,
+   * byte-identical to the pre-Unit-6 contract (pinned by test).
+   */
+  dce?: OnboardTableDceInput;
   /** DCR name prefix, concatenated verbatim (legacy default "dcr-"). */
   dcrNamePrefix?: string;
   /** Optional DCR name suffix (legacy default: none). */
@@ -301,6 +331,11 @@ export async function onboardTable(
     ingestionClientId: input.ingestionClientId,
     ingestionClientSecretProvided: secretProvided,
     destinationId: input.destinationId ?? null,
+    // DCE-mode field recorded ONLY when a DCE was supplied, so Direct-mode
+    // job records stay byte-identical to the pre-Unit-6 contract.
+    ...(input.dce !== undefined
+      ? { dceResourceId: input.dce.resourceId }
+      : {}),
     ...(isCustom
       ? {
           customSchemaProvided:
@@ -592,9 +627,11 @@ export async function onboardTable(
     // ---- Step 4: generate-dcr-name -----------------------------------
     currentStep = "generate-dcr-name";
     await setStep(currentStep, "running");
+    // Direct DCRs cap at 30 characters, DCE-based at 64 (dcr-naming modes
+    // "direct" / "dce" - the legacy contract for each deployment flavor).
     const { name: dcrName } = generateDcrName({
       table: input.table,
-      mode: "direct",
+      mode: input.dce !== undefined ? "dce" : "direct",
       prefix: input.dcrNamePrefix ?? "dcr-",
       suffix: input.dcrNameSuffix,
       location,
@@ -606,14 +643,25 @@ export async function onboardTable(
     currentStep = "deploy-dcr";
     await setStep(currentStep, "running");
 
-    const dcrRequest = buildDirectDcrRequest({
+    // Exactly ONE deploy path with a mode switch on the request builder
+    // (the legacy repo had two drifted deploy implementations; porting-plan
+    // Unit 6 pins a single one). DCE-based bodies carry
+    // dataCollectionEndpointId and NO kind; Direct bodies are Kind:Direct.
+    const dcrRequestInput = {
       table: input.table,
       columns,
       location,
       workspaceResourceId,
       dcrName,
-      tableMode: isCustom ? "custom" : "native",
-    });
+      tableMode: isCustom ? ("custom" as const) : ("native" as const),
+    };
+    const dcrRequest =
+      input.dce !== undefined
+        ? buildDceDcrRequest({
+            ...dcrRequestInput,
+            dataCollectionEndpointId: input.dce.resourceId,
+          })
+        : buildDirectDcrRequest(dcrRequestInput);
 
     const putResponse = await azure.request({
       method: dcrRequest.method,
@@ -670,7 +718,15 @@ export async function onboardTable(
         `DCR '${dcrName}' provisioned but carries no properties.immutableId`,
       );
     }
-    if (deployment.logsIngestionEndpoint === null) {
+    // Ingestion endpoint: Direct DCRs expose their own
+    // endpoints.logsIngestion; DCE-based DCRs do not - ingestion goes through
+    // the preresolved DCE's endpoint instead.
+    let ingestionEndpoint: string;
+    if (input.dce !== undefined) {
+      ingestionEndpoint = input.dce.logsIngestionEndpoint;
+    } else if (deployment.logsIngestionEndpoint !== null) {
+      ingestionEndpoint = deployment.logsIngestionEndpoint;
+    } else {
       throw new StepFailure(
         `DCR '${dcrName}' provisioned but exposes no logsIngestion endpoint ` +
           `(is it Kind:Direct and api-version >= ${DIRECT_DCR_API_VERSION}?)`,
@@ -691,7 +747,7 @@ export async function onboardTable(
     const destination = buildSentinelDestination({
       id: destinationId,
       dcrImmutableId: deployment.immutableId,
-      ingestionEndpoint: deployment.logsIngestionEndpoint,
+      ingestionEndpoint,
       streamName: dcrRequest.streamName,
       tenantId: input.tenantId,
       ingestionClientId: input.ingestionClientId,
@@ -821,7 +877,7 @@ export async function onboardTable(
     const outcome: OnboardTableOutcome = {
       dcrName,
       dcrImmutableId: deployment.immutableId,
-      logsIngestionEndpoint: deployment.logsIngestionEndpoint,
+      logsIngestionEndpoint: ingestionEndpoint,
       streamName: dcrRequest.streamName,
       destinationId,
       subscriptionId: input.subscriptionId,

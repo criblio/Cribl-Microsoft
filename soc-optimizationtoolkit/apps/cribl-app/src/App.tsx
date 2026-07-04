@@ -4,6 +4,7 @@ import {
   AppFrame,
   AuaGate,
   AzureTargetingScreen,
+  BatchDeployScreen,
   EMPTY_MODE_RECORD,
   LogsScreen,
   ModeSelect,
@@ -59,6 +60,7 @@ import type {
   AppMode,
   AppOptions,
   AzureConfig,
+  BatchPacing,
   ChangeRequestContext,
   ConnectionProfile,
   PermissionsResponse,
@@ -111,6 +113,17 @@ const APP_MODE_KEY = 'appMode';
 const APP_OPTIONS_KEY = 'appOptions';
 const appStateStore = new PlatformSecretsStore();
 const appLogger = new PlatformLogger();
+
+// The pacing hooks the batch-onboarding usecase runs its rolling-minute ARM
+// budget on (porting-plan Unit 6): the SHELL owns time - @soc/core never
+// reads a clock. Module scope keeps the object identity stable across
+// renders. maxRequestsPerMinute stays at the @soc/core default (80/min),
+// leaving headroom under the platform proxy's ~100 req/min budget for the
+// status pollers and the operator's other screens.
+const BATCH_PACING: BatchPacing = {
+  now: () => Date.now(),
+  sleep: (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)),
+};
 
 // The AzureConfig fields the Onboard screen cannot run without. tenantId
 // drives the ARM token flow; the rest address the workspace the DCR targets.
@@ -2257,6 +2270,66 @@ function App() {
     </>
   );
 
+  // The Batch Onboard route (porting-plan Unit 6): many tables as ONE parent
+  // onboard-batch job - shared prologue (workspace fetch; in DCE mode one
+  // batch-wide DCE plus the AMPLS association when public access is
+  // disabled) and one step per table. Gated on the same five config fields
+  // as Onboard; the shell injects the pacing hooks (BATCH_PACING) and the
+  // persisted Unit 4 options, and hands navigation to the Options screen for
+  // editing the defaults.
+  const renderBatch = (nav: AppFrameNav) => (
+    <>
+      <header className="harness-header">
+        <h1 className="harness-title">Batch onboarding</h1>
+        <p className="harness-subtitle">
+          Deploy DCRs for many tables in one run: per-table isolation and
+          skip-existing semantics, Direct or DCE mode with Private Link
+          support, resumable progress, and template-only export - through the
+          shared onboardBatch use-case.
+        </p>
+      </header>
+      {missingOnboardFields.length > 0 ? (
+        <section className="panel">
+          <h2 className="panel-title">Connection incomplete</h2>
+          <p className="panel-desc">
+            The active connection is missing required configuration:{' '}
+            {missingOnboardFields.join(', ')}. Connect first in panel 3 (App registration and
+            connect) of the Spike Harness, then commit a target scope on the Azure Targeting
+            screen. This screen unlocks once all five fields are set.
+          </p>
+          <div className="panel-controls">
+            <button className="run-button" onClick={() => nav.navigate('azure-target')}>
+              Open Azure Targeting
+            </button>
+            <button className="run-button" onClick={() => nav.navigate('harness')}>
+              Open the Spike Harness
+            </button>
+          </div>
+        </section>
+      ) : (
+        <>
+          {!secretLive && (
+            <p className="connection-notice">
+              This connection&apos;s client secret has not been entered this session. A secret
+              connected in an earlier session may still be live server-side; if the run fails
+              acquiring a token, re-enter the secret in panel 3 (Save and connect) of the
+              Spike Harness view first.
+            </p>
+          )}
+          <PortsProvider ports={cloudPorts} config={activeConfig}>
+            <BatchDeployScreen
+              key={`batch-${store.activeProfileId ?? 'none'}`}
+              pacing={BATCH_PACING}
+              operationDefaults={appOptions.operation}
+              criblDefaults={appOptions.cribl}
+              onOpenOptions={() => nav.navigate('options')}
+            />
+          </PortsProvider>
+        </>
+      )}
+    </>
+  );
+
   // The Options route (porting-plan Unit 4): deployment and naming defaults
   // as typed forms over the plain appOptions KV entry. requires: 'none' -
   // options are app configuration, editable in every mode. No PortsProvider
@@ -2356,6 +2429,7 @@ function App() {
   // screen is the product path) and always available; so is Settings.
   const routes: AppRoute[] = [
     { id: 'onboard', label: 'Onboard', requires: 'both', render: renderOnboard },
+    { id: 'batch-onboard', label: 'Batch Onboard', requires: 'both', render: renderBatch },
     { id: 'azure-target', label: 'Azure Targeting', requires: 'azure', render: renderTargeting },
     { id: 'options', label: 'Options', requires: 'none', render: () => optionsView },
     { id: 'harness', label: 'Spike Harness', requires: 'none', render: () => harnessView },

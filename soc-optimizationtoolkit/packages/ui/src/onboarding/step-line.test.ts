@@ -34,10 +34,33 @@ describe("formatStepLine", () => {
     );
   });
 
+  it("renders a skipped step with its skip-reason detail", () => {
+    // 'skipped' is a first-class step status (porting-plan DECISIONS
+    // 2026-07-03 item 1): downstream steps of a failed prerequisite and
+    // skip-existing hits render it with the reason in the detail slot.
+    expect(
+      formatStepLine({
+        name: "deploy-dcr",
+        status: "skipped",
+        detail: "DCR already exists",
+      }),
+    ).toBe("[skipped]   deploy-dcr - DCR already exists");
+  });
+
   it("aligns every status tag to the same width", () => {
-    for (const status of ["pending", "running", "succeeded", "failed"] as const) {
+    // The full JobStatus union - the padded-tag width contract covers
+    // 'skipped' too, and "[succeeded]" remains the longest tag within it.
+    const statuses = [
+      "pending",
+      "running",
+      "succeeded",
+      "failed",
+      "skipped",
+    ] as const;
+    for (const status of statuses) {
       const line = formatStepLine({ name: "x", status });
       expect(line.indexOf("x")).toBe(STEP_STATUS_TAG_WIDTH);
+      expect(`[${status}]`.length).toBeLessThan(STEP_STATUS_TAG_WIDTH);
     }
   });
 });
