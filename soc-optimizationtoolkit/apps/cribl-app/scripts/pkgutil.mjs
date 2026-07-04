@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process';
+import { createReadStream } from 'node:fs';
 import {
   mkdir,
   rm,
@@ -54,12 +55,81 @@ async function pathExists(filePath) {
 }
 
 /**
+ * Run `tar` to a REAL FILE (not a pipe). tar must write to a file, never to a
+ * Node-consumed stdout pipe: Windows bsdtar exits 1 on the pipe path (a
+ * non-fatal warning under libarchive) while GNU tar exits 0, and the old
+ * streaming design then called stdout.destroy() on that non-zero exit, which
+ * could truncate the archive mid-write (observed: a 2 KB package with an empty
+ * static/ folder). File output exits 0 on both GNU tar and bsdtar.
+ *
+ * @param {string} cwd
+ * @param {string} outPath - absolute path for the .tgz (outside the tarred dir)
+ * @param {string} srcDir - directory (relative to cwd) whose contents are packed
+ */
+async function tarToFile(cwd, outPath, srcDir) {
+  return new Promise((resolve, reject) => {
+    const child = spawn('tar', ['-czf', outPath, '-C', srcDir, '.'], {
+      cwd,
+      stdio: ['ignore', 'ignore', 'pipe'],
+    });
+    let stderr = '';
+    child.stderr?.setEncoding('utf8');
+    child.stderr?.on('data', (chunk) => {
+      stderr += chunk;
+    });
+    child.once('error', reject);
+    child.once('close', (code) => {
+      // Non-zero from tar is not blindly fatal (bsdtar warns on benign
+      // conditions); the archive is validated separately by verifyArchive.
+      resolve({ code, stderr });
+    });
+  });
+}
+
+/**
+ * Validate a produced .tgz: gzip magic bytes, a sane minimum size, and that it
+ * actually contains the app entry point. Catches a truncated or empty archive
+ * regardless of tar's exit code.
+ *
+ * @param {string} tgzPath
+ * @param {boolean} expectStatic - a non-dev pack must carry static/index.html
+ */
+async function verifyArchive(tgzPath, expectStatic) {
+  const buf = await readFile(tgzPath);
+  if (buf.length < 2 || buf[0] !== 0x1f || buf[1] !== 0x8b) {
+    throw new Error(`package ${tgzPath} is not a valid gzip archive`);
+  }
+  if (expectStatic && buf.length < 10_000) {
+    throw new Error(
+      `package ${tgzPath} is only ${buf.length} bytes - the build output is likely missing (empty static/)`
+    );
+  }
+  const entries = await new Promise((resolve, reject) => {
+    const child = spawn('tar', ['-tzf', tgzPath], { stdio: ['ignore', 'pipe', 'ignore'] });
+    let out = '';
+    child.stdout.setEncoding('utf8');
+    child.stdout.on('data', (c) => {
+      out += c;
+    });
+    child.once('error', reject);
+    child.once('close', () => resolve(out));
+  });
+  if (!entries.includes('package.json')) {
+    throw new Error(`package ${tgzPath} is missing package.json`);
+  }
+  if (expectStatic && !/static\/index\.html/.test(entries)) {
+    throw new Error(`package ${tgzPath} is missing static/index.html`);
+  }
+}
+
+/**
  * @param {boolean} [dev]
- * @returns {Promise<{ closePromise: Promise<void>; stdout: import('node:stream').Readable }>}
+ * @returns {Promise<{ tgzPath: string; cleanup: () => Promise<void> }>}
  */
 export async function createAppPack(dev = false) {
   const rootDir = join(__dirname, '..');
   const buildDir = join(rootDir, 'package-build');
+  const packedPath = join(rootDir, 'package-build.tgz');
   const distDir = join(rootDir, 'dist');
   const proxiesPath = join(rootDir, 'config', 'proxies.yml');
   const policiesPath = join(rootDir, 'config', 'policies.yml');
@@ -111,47 +181,30 @@ export async function createAppPack(dev = false) {
     JSON.stringify(packageInfo, null, 2)
   );
 
-  const child = spawn(
-    'tar',
-    ['-czf', '-', '-C', 'package-build', '.'],
-    {
-      cwd: rootDir,
-      stdio: ['ignore', 'pipe', 'pipe'],
+  const cleanup = async () => {
+    await rm(buildDir, { recursive: true, force: true }).catch(() => {});
+    await rm(packedPath, { force: true }).catch(() => {});
+  };
+
+  try {
+    await rm(packedPath, { force: true });
+    const { code, stderr } = await tarToFile(rootDir, packedPath, 'package-build');
+    // Validate the actual deliverable; a benign tar warning (non-zero exit with
+    // a complete archive) passes, a truncated/empty one fails loudly.
+    await verifyArchive(packedPath, !dev);
+    if (code !== 0) {
+      process.stderr.write(
+        `note: tar exited with code ${code} but the archive validated; proceeding.` +
+          (stderr ? ` (tar: ${stderr.trim()})` : '') +
+          '\n'
+      );
     }
-  );
+  } catch (err) {
+    await cleanup();
+    throw err;
+  }
 
-  const closePromise = new Promise((resolve, reject) => {
-    let settled = false;
-    const finish = async (/** @type {Error | null} */ err) => {
-      if (settled) return;
-      settled = true;
-      try {
-        await rm(buildDir, { recursive: true });
-      } catch {
-        // ignore cleanup errors
-      }
-      if (err) {
-        reject(err);
-        return;
-      }
-      resolve();
-    };
-
-    child.once('error', (err) => {
-      child.stdout.destroy(err);
-      void finish(err);
-    });
-
-    child.once('close', (code) => {
-      if (code !== 0) {
-        void finish(new Error(`tar exited with code ${code}`));
-        return;
-      }
-      void finish(null);
-    });
-  });
-
-  return { closePromise, stdout: child.stdout };
+  return { tgzPath: packedPath, cleanup };
 }
 
 /**
@@ -184,13 +237,17 @@ export async function servePackageTgz(req, res, root) {
       await runNpmBuild(root);
     }
 
-    const { closePromise, stdout } = await createAppPack(dev);
+    const { tgzPath, cleanup } = await createAppPack(dev);
 
     res.statusCode = 200;
     res.setHeader('Content-Type', 'application/gzip');
     res.setHeader('Content-Disposition', `attachment; filename="${tgzName}"`);
 
-    await Promise.all([pipeline(stdout, res), closePromise]);
+    try {
+      await pipeline(createReadStream(tgzPath), res);
+    } finally {
+      await cleanup();
+    }
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     if (!res.headersSent) {

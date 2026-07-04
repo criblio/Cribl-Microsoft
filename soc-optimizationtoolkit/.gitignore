@@ -28,3 +28,6 @@ dist-ssr
 # Build outputs
 build/
 package-build/
+
+# Packaging temp archive (cleanup removes it; ignored in case a run is interrupted)
+apps/*/package-build.tgz
