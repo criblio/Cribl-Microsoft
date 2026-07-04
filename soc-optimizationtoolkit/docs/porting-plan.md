@@ -1,5 +1,13 @@
 # Porting Plan: Legacy Integration Solution to the Dual-Target Toolkit
 
+> MVP SCOPE (user, 2026-07-04): the initial release is exactly two flows - the SETUP WIZARD and the
+> SENTINEL INTEGRATION flow (see docs/legacy-flow-analysis.md). Remaining build effort focuses on
+> completing them; everything else waits until they are validated in a real environment.
+> - MVP-required units: 8, 9, 11, 12, 13, 14, 16, 17, 18, 19, 20, 22, 23 (rule coverage core) + the
+>   single-page Integrate-arc restructure. Built/reused: 1, 2, 3, 4, 5, 6, 6.5, 7, auth manager.
+> - DEFERRED post-MVP: 10, 15, workbook analysis, 21, 24, 25-27. Do not build these until MVP is validated.
+> - The Integrate arc is ONE numbered-section page (adopted); built screens refactor into its sections.
+
 Companion to [roadmap.md](roadmap.md) and [feature-catalog.md](feature-catalog.md). This plan decomposes the legacy Electron Integration Solution (ENG-01..52, GUI-01..32) into ordered port units that slot into the roadmap's existing phases. It does NOT invent a new sequence: units are grouped by roadmap phase (2, 3, 4, with a small tail the roadmap itself schedules in phases 6-7), ordered by dependency edges, then by operational friction (never leave the new app more manual than legacy where users actually touch it).
 
 Grounding rules:
