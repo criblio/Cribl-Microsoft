@@ -281,9 +281,22 @@ Phase 3 exit check (roadmap): solution browsed -> samples -> pipeline -> pack ->
 
 ### Phase 4: Discovery and governance
 
-#### Unit 23: Analytics rule coverage (M)
+#### Unit 23: Analytics rule and workbook coverage (M/L)
 
-- Covers: ENG-11, GUI-09.
+> AMENDED (user, 2026-07-04): (a) RESEQUENCED - this unit runs immediately after Unit 18, not in
+> Phase 4: the user considers rule analysis part of the core Sentinel onboarding experience, and
+> Unit 18's RULE badges are inert without it. (b) SCOPE ADDED - WORKBOOK ANALYSIS, a net-new
+> capability with NO legacy source (the old app never had it): enumerate the workspace's workbooks
+> via ARM (Microsoft.Insights/workbooks - existing management.azure.com surface), extract the KQL
+> buried in properties.serializedData (the buried-KQL parsing the native-onboarding plan flags as a
+> known analyzer risk - parse defensively, count what could not be parsed), reuse extractKqlFields
+> for table/field references, and render the same three-way coverage summary per workbook (covered /
+> missing-from-reduced-schema / unknown) beside the rule panel. This doubles as the FIRST SLICE of
+> the native-onboarding flagship's content-reference analyzer (azure-native-onboarding.md section 3)
+> - build it as a shared analyzer over {type, id, queries[]} content items so alertRules and
+> workbooks are two sources into one engine, hunting queries/parsers/playbooks join later.
+
+- Covers: ENG-11, GUI-09, plus net-new workbook coverage (first slice of the flagship content-reference analyzer).
 - Legacy sources: `IS/sentinel-repo.ts` 897-1085 (KQL_BUILTINS, extractKqlFields, listAnalyticRules), `IS/pack-builder.ts` 3176-3307, SentinelIntegration.tsx 2580-2793.
 - New core: KQL_BUILTINS (~130 entries) verbatim; extractKqlFields RELOCATED into the analysis module (it lives in the repo adapter today but is domain logic) with the regression suite's vectors re-pointed at the REAL implementation (the legacy tests ran an inline copy with a reduced builtins set - re-verify against the full set); rule acquisition through the Unit 14 content port (three dir-name variants); adopt a real YAML parser AFTER pinning current regex extraction behavior with fixtures (incl. the JS-literal-\Z query-regex quirk and the silent drop of zero-schema-field rules - decide keep-or-surface); coverage math (schema union across all destination tables, case-insensitive availability set, missingFieldsAcrossRules frequency ranking, ruleReferencedFields casing preserved); custom-rule upload parse (dedupe-by-name quirk: fix to allow re-upload, pinned); coverage re-run rules (no stale-skip when mappedDest empty - fix + pin).
 - UI: coverage panel (three-way summary, per-rule expandables, severity badges, CUSTOM badge, aggregated missing-fields chips, custom YAML upload/clear); activates the RULE badges in Unit 18's mapping table (the ruleReferencedFields coupling is a kept contract).
