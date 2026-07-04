@@ -10,5 +10,9 @@ export type { SecretsStore, SecretSetOptions } from './secrets-store';
 export type { UserContext, UserIdentity } from './user-context';
 export type { ArtifactSink } from './artifact-sink';
 export type { JobStore, JobRecord, JobStep, JobStatus } from './job-store';
-export type { AzureManagement, AzureManagementRequest } from './azure-management';
+export type {
+  AzureManagement,
+  AzureManagementRequest,
+  AzureManagementUrlRequest,
+} from './azure-management';
 export type { CriblClient, CriblRequest, CriblGroupSummary } from './cribl-client';

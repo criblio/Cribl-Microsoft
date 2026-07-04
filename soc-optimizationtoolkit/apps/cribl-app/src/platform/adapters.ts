@@ -11,6 +11,7 @@ import type {
   ArtifactSink,
   AzureManagement,
   AzureManagementRequest,
+  AzureManagementUrlRequest,
   CriblClient,
   CriblGroupSummary,
   CriblRequest,
@@ -218,6 +219,40 @@ export class PlatformAzureManagement implements AzureManagement {
     // ONCE and retry the request once; whatever comes back is the answer.
     await this.ensureArmToken();
     return this.send(opts);
+  }
+
+  /**
+   * Execute a request against a FULL ARM URL (an ARM list `nextLink` -
+   * pagination is the one ARM surface that arrives as an absolute URL).
+   * RESTRICTED to https://management.azure.com/ per the port contract: any
+   * other host is rejected BEFORE a request is sent - this port grants
+   * access to ARM and nothing else (and only management.azure.com is
+   * declared in proxies.yml anyway). Same token flow and 401-retry-once
+   * semantics as request().
+   */
+  async requestUrl(opts: AzureManagementUrlRequest): Promise<PortHttpResponse> {
+    if (!opts.url.startsWith(`${ARM_BASE_URL}/`)) {
+      throw new Error(
+        `requestUrl refused '${opts.url}': only ${ARM_BASE_URL}/ URLs are allowed ` +
+          '(ARM nextLink pagination) - refusing to request any other host',
+      );
+    }
+    if (!this.tokenEnsured) {
+      await this.ensureArmToken();
+    }
+    const first = await this.sendUrl(opts);
+    if (first.status !== 401) {
+      return first;
+    }
+    await this.ensureArmToken();
+    return this.sendUrl(opts);
+  }
+
+  private async sendUrl(opts: AzureManagementUrlRequest): Promise<PortHttpResponse> {
+    // No body and no headers: a nextLink carries its full query string, and
+    // the proxy injects Authorization server-side.
+    const res = await fetchWithTimeout(opts.url, { method: opts.method }, ARM_TIMEOUT_MS);
+    return { status: res.status, body: await readPortBody(res) };
   }
 
   private async send(opts: AzureManagementRequest): Promise<PortHttpResponse> {

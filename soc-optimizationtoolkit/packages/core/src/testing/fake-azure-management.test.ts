@@ -35,6 +35,35 @@ describe('FakeAzureManagement', () => {
     expect(azure.calls).toHaveLength(1);
   });
 
+  it('serves requestUrl (nextLink pages) from the same FIFO queue and records urlCalls', async () => {
+    const azure = new FakeAzureManagement();
+    const nextLink = 'https://management.azure.com/subscriptions/sub-1/resourcegroups?api-version=2021-04-01&%24skiptoken=abc';
+    azure.respondWith(
+      { status: 200, body: { value: [{ name: 'rg-1' }], nextLink } },
+      { status: 200, body: { value: [{ name: 'rg-2' }] } },
+    );
+
+    const page1 = await azure.request({
+      method: 'GET',
+      path: '/subscriptions/sub-1/resourcegroups',
+      apiVersion: '2021-04-01',
+    });
+    const page2 = await azure.requestUrl({ method: 'GET', url: nextLink });
+
+    expect(page1.status).toBe(200);
+    expect(page2).toEqual({ status: 200, body: { value: [{ name: 'rg-2' }] } });
+    expect(azure.calls).toHaveLength(1);
+    expect(azure.urlCalls).toEqual([{ method: 'GET', url: nextLink }]);
+  });
+
+  it('throws on requestUrl when the response queue is exhausted', async () => {
+    const azure = new FakeAzureManagement();
+    await expect(
+      azure.requestUrl({ method: 'GET', url: 'https://management.azure.com/subscriptions?x=1' }),
+    ).rejects.toThrow('no scripted response for GET https://management.azure.com/subscriptions?x=1');
+    expect(azure.urlCalls).toHaveLength(1);
+  });
+
   it('passes non-2xx scripted responses through as resolutions, not rejections', async () => {
     const azure = new FakeAzureManagement();
     azure.respondWith({ status: 409, body: { error: { code: 'Conflict' } } });

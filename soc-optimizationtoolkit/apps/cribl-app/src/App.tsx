@@ -3,25 +3,31 @@ import type { ReactNode } from 'react';
 import {
   AppFrame,
   AuaGate,
+  AzureTargetingScreen,
   EMPTY_MODE_RECORD,
   ModeSelect,
   OnboardTableScreen,
   PortsProvider,
   SettingsScreen,
+  commitNoticeText,
+  formatScopeChip,
   resolveFramePhase,
   useConsolidatedPolling,
 } from '@soc/ui';
 import type {
   AppFrameNav,
   AppRoute,
+  CommitScopeOutcome,
   LoadableAcceptance,
   LoadableMode,
 } from '@soc/ui';
 import {
   allGranted,
   appRegistrationRequest,
+  commitTargetScope,
   computeInvalidation,
   deriveResourceGroup,
+  hasAzure,
   EMPTY_AZURE_CONFIG,
   EMPTY_PROFILE_STORE,
   evaluatePermissions,
@@ -53,6 +59,7 @@ import type {
   PermissionsResponse,
   ProfileStore,
   RequiredAction,
+  TargetScope,
 } from '@soc/core';
 // The proven platform primitives (bridge-safe fetch, KV helpers, ARM token
 // flow) live in platform/http.ts as the single source of truth, shared with
@@ -1863,6 +1870,37 @@ function App() {
     setSwitchNotice('');
   };
 
+  // The EXPLICIT scope commit from the Azure Targeting screen: the ONE way a
+  // browsed subscription/RG/workspace becomes the active target. Runs the pure
+  // @soc/core commitTargetScope (MERGE into the active profile - identity
+  // fields survive untouched), persists via the store autosave, applies the
+  // returned invalidation (a pure scope change only ever stales permission
+  // results, but the token/secret flags are honored defensively), and surfaces
+  // the consequence through the connection-bar notice pattern.
+  const handleCommitScope = async (scope: TargetScope): Promise<CommitScopeOutcome> => {
+    const result = commitTargetScope(store, scope);
+    if (!result.committed) {
+      return {
+        committed: false,
+        notice: 'No active connection - create or select a connection first.',
+      };
+    }
+    setStore(result.store);
+    if (result.invalidation.clearToken) {
+      void kvDelete('azureArmToken');
+    }
+    if (result.invalidation.clearSecret) {
+      void kvDelete('azureBasic');
+      setLiveSecretProfileId(null);
+      setLiveSecretIdentity(null);
+    }
+    const notice =
+      commitNoticeText(result.invalidation) ||
+      'Target scope unchanged - it was already committed.';
+    setSwitchNotice(notice);
+    return { committed: true, notice };
+  };
+
   // Accept the acceptable-use agreement: the shell mints the timestamp (core
   // never calls Date) and persists the record as a plain KV entry. A failed
   // write is non-fatal (legacy contract): the session proceeds and the gate
@@ -2014,6 +2052,17 @@ function App() {
             secret: {secretLive ? 'stored (this session)' : 'not entered'}
           </span>
           <span
+            className="scope-chip"
+            title="The committed Azure target scope (subscription / resource group / workspace) of the active connection. Change it from the Azure Targeting screen - browsing there never changes it until you click Use this target."
+          >
+            target:{' '}
+            {formatScopeChip({
+              subscriptionId: activeConfig.subscriptionId,
+              resourceGroup: activeConfig.resourceGroup,
+              workspaceName: activeConfig.workspaceName,
+            })}
+          </span>
+          <span
             className={`link-badge ${platformLink === 'ok' ? 'link-badge-ok' : 'link-badge-off'}`}
             title={platformLink}
           >
@@ -2078,6 +2127,32 @@ function App() {
     </>
   );
 
+  // The Azure Targeting route (Unit 2): the product path for choosing where
+  // DCRs deploy. Keyed by the active profile so switching connections resets
+  // all browse state. requires: 'azure' gates it to modes with a live Azure
+  // side; the screen's offline branch stays wired for the day the route table
+  // exposes it in artifact-only modes.
+  const renderTargeting = () => (
+    <>
+      <header className="harness-header">
+        <h1 className="harness-title">Azure targeting</h1>
+        <p className="harness-subtitle">
+          Browse subscriptions, workspaces, and resource groups; create what is
+          missing; enable Sentinel; then commit the scope with Use this target.
+          Browsing never changes the committed target - the chip in the
+          connection bar always shows what is committed.
+        </p>
+      </header>
+      <PortsProvider ports={cloudPorts} config={activeConfig}>
+        <AzureTargetingScreen
+          key={`target-${store.activeProfileId ?? 'none'}`}
+          offline={!hasAzure(phase.mode)}
+          onCommitScope={handleCommitScope}
+        />
+      </PortsProvider>
+    </>
+  );
+
   // The Onboard route: gated on the five config fields the use-case cannot
   // run without; the escape hatch navigates to the harness through the frame.
   const renderOnboard = (nav: AppFrameNav) => (
@@ -2095,14 +2170,16 @@ function App() {
           <h2 className="panel-title">Connection incomplete</h2>
           <p className="panel-desc">
             The active connection is missing required configuration:{' '}
-            {missingOnboardFields.join(', ')}. Complete panel 3 (App registration and connect)
-            and panel 4 (Select resources and grant permissions) in the Spike Harness:
-            connecting fills the tenant and client ids; in panel 4, Discover / refresh from
-            Azure, then select a subscription and workspace - the resource group derives from
-            the workspace and everything saves automatically. This screen unlocks once all five
-            fields are set.
+            {missingOnboardFields.join(', ')}. Connect first in panel 3 (App registration and
+            connect) of the Spike Harness - that fills the tenant and client ids. Then choose
+            WHERE to deploy on the Azure Targeting screen: browse the subscription, workspace,
+            and resource group cascade and click Use this target to commit the scope. This
+            screen unlocks once all five fields are set.
           </p>
           <div className="panel-controls">
+            <button className="run-button" onClick={() => nav.navigate('azure-target')}>
+              Open Azure Targeting
+            </button>
             <button className="run-button" onClick={() => nav.navigate('harness')}>
               Open the Spike Harness
             </button>
@@ -2170,10 +2247,13 @@ function App() {
 
   // The frame's route table; requirements drive mode-aware navigation via
   // @soc/core filterNavItems. Onboard needs BOTH live sides (it deploys to
-  // Azure and Cribl in one run); the Spike Harness is diagnostics and always
+  // Azure and Cribl in one run); Azure Targeting needs the live Azure side;
+  // the Spike Harness is diagnostics (panel 4's discovery stays as a
+  // diagnostic - the targeting screen is the product path) and always
   // available; so is Settings.
   const routes: AppRoute[] = [
     { id: 'onboard', label: 'Onboard', requires: 'both', render: renderOnboard },
+    { id: 'azure-target', label: 'Azure Targeting', requires: 'azure', render: renderTargeting },
     { id: 'harness', label: 'Spike Harness', requires: 'none', render: () => harnessView },
     { id: 'settings', label: 'Settings', requires: 'none', render: () => settingsView },
   ];

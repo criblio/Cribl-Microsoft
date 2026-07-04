@@ -6,6 +6,9 @@
 //
 //   GET    /api/config              non-secret Azure config + leader URL
 //   POST   /api/azure/request       ARM proxy (host owns the token flow)
+//   POST   /api/azure/request-url   ARM full-URL proxy for nextLink pagination
+//                                   (HARD https://management.azure.com/ prefix
+//                                   check - SSRF guard - before any request)
 //   POST   /api/cribl/request       leader proxy (host attaches the token)
 //   GET    /api/cribl/groups        convenience /master/groups mapping
 //   PUT    /api/secrets/{key}       store value ({ value, encrypted })
@@ -34,6 +37,7 @@ import { createSecretsStore } from './secrets.mjs';
 import { createJobStore } from './jobs.mjs';
 import { createStaticHandler } from './static.mjs';
 import {
+  ALLOWED_PROXY_METHODS,
   HttpError,
   isPlainObject,
   readJsonBody,
@@ -112,6 +116,36 @@ export function createHostServer(config) {
       }
       const result = await upstream(() =>
         azure.request({ method: base.method, path: base.path, apiVersion, body: base.body, query: base.query })
+      );
+      sendJson(res, 200, result);
+      return;
+    }
+
+    // --- Azure ARM full-URL proxy (nextLink pagination) ---------------------
+    if (pathname === '/api/azure/request-url' && method === 'POST') {
+      const payload = await readJsonBody(req);
+      if (!isPlainObject(payload)) {
+        throw new HttpError(400, 'POST /api/azure/request-url: body must be { method, url }');
+      }
+      const urlMethod = payload.method;
+      if (typeof urlMethod !== 'string' || !ALLOWED_PROXY_METHODS.includes(urlMethod.toUpperCase())) {
+        throw new HttpError(
+          400,
+          `POST /api/azure/request-url: "method" must be one of ${ALLOWED_PROXY_METHODS.join(', ')}`
+        );
+      }
+      // SSRF guard at the route boundary; azure.mjs re-checks before
+      // attaching the bearer, so the prefix is enforced twice on purpose.
+      const targetUrl = payload.url;
+      if (typeof targetUrl !== 'string' || !targetUrl.startsWith('https://management.azure.com/')) {
+        throw new HttpError(
+          400,
+          'POST /api/azure/request-url: "url" must start with https://management.azure.com/ ' +
+            '(ARM nextLink pagination) - this host refuses to proxy any other destination'
+        );
+      }
+      const result = await upstream(() =>
+        azure.requestUrl({ method: urlMethod.toUpperCase(), url: targetUrl })
       );
       sendJson(res, 200, result);
       return;

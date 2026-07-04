@@ -16,6 +16,23 @@
 
 import type { HttpMethod, PortHttpResponse } from './http';
 
+/**
+ * A request against a FULL ARM URL. Needed for ARM list pagination: list
+ * responses carry `nextLink`, an ABSOLUTE https://management.azure.com URL
+ * with an opaque continuation token that cannot be decomposed into
+ * path + api-version + query.
+ */
+export interface AzureManagementUrlRequest {
+  /** HTTP verb (pagination uses GET; other verbs allowed for symmetry). */
+  method: HttpMethod;
+  /**
+   * The full URL to request. Adapters MUST restrict this to
+   * https://management.azure.com/ - any other host is rejected before a
+   * request is sent (this port grants access to ARM and nothing else).
+   */
+  url: string;
+}
+
 /** A single ARM request. */
 export interface AzureManagementRequest {
   /** HTTP verb. */
@@ -44,4 +61,17 @@ export interface AzureManagementRequest {
 export interface AzureManagement {
   /** Execute one ARM request. See {@link AzureManagementRequest}. */
   request(opts: AzureManagementRequest): Promise<PortHttpResponse>;
+
+  /**
+   * OPTIONAL: execute a request against a FULL URL (an ARM `nextLink`).
+   *
+   * Adapters that implement this MUST restrict the URL to
+   * https://management.azure.com/ and reject anything else - the port grants
+   * ARM access only, and a nextLink is the single ARM surface that arrives as
+   * an absolute URL. Same error semantics as {@link AzureManagement.request}.
+   *
+   * When an adapter does not implement this method, callers treat every list
+   * response as single-page (see listAllPages in usecases/azure-discovery).
+   */
+  requestUrl?(opts: AzureManagementUrlRequest): Promise<PortHttpResponse>;
 }

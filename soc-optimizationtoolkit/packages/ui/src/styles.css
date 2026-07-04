@@ -363,6 +363,46 @@ body {
   background: #f9f0ff;
 }
 
+/* The committed Azure target scope, rendered as a compact chip in the frame
+ * topBar area alongside the connection bar (GUI-28's Azure half). Shared by
+ * both shells so the chip cannot drift between them. */
+.scope-chip {
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 20px;
+  padding: 2px 10px;
+  border: 1px solid #91caff;
+  background: #e6f4ff;
+  color: #0958d9;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+/* Minimal topBar container for shells without a full connection bar (the
+ * local shell): keeps the chip aligned with the frame content. */
+.scope-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+/* The consequence notice a committed scope (or a connection switch) surfaces
+ * - the connection-bar notice pattern, shared so @soc/ui screens can render
+ * it too. The cloud shell's stylesheet repeats this rule verbatim (it loads
+ * after this one; identical values, no drift). */
+.connection-notice {
+  font-size: 13px;
+  line-height: 20px;
+  color: #d46b08;
+  background: #fff7e6;
+  border: 1px solid #ffd591;
+  padding: 8px 12px;
+}
+
 /* ---------------------------------------------------------------------------
  * Gate screens: acceptance agreement + mode chooser (frame/aua-gate.tsx,
  * frame/mode-select.tsx)

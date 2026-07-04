@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  // usecases/azure-discovery
+  commitTargetScope,
+  deriveResourceGroupsFromWorkspaces,
+  enableSentinel,
+  listAllPages,
+  listSubscriptions,
+  listWorkspaces,
+  SENTINEL_SOLUTION_API_VERSION,
   // domain/dcr-naming
   DIRECT_DCR_NAME_MAX_LENGTH,
   DIRECT_DCR_TABLE_ABBREVIATIONS,
@@ -48,6 +56,16 @@ describe("@soc/core root barrel", () => {
     expect(typeof mapColumnType).toBe("function");
     expect(SchemaMappingError.prototype).toBeInstanceOf(Error);
     expect(NATIVE_SYSTEM_COLUMNS.length).toBeGreaterThan(0);
+  });
+
+  it("re-exports the azure-discovery usecase module", () => {
+    expect(typeof listSubscriptions).toBe("function");
+    expect(typeof listWorkspaces).toBe("function");
+    expect(typeof listAllPages).toBe("function");
+    expect(typeof enableSentinel).toBe("function");
+    expect(typeof commitTargetScope).toBe("function");
+    expect(typeof deriveResourceGroupsFromWorkspaces).toBe("function");
+    expect(SENTINEL_SOLUTION_API_VERSION).toBe("2015-11-01-preview");
   });
 
   it("re-exports a fake implementing each port interface", () => {

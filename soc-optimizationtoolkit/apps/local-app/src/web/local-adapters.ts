@@ -16,6 +16,7 @@ import type {
   ArtifactSink,
   AzureManagement,
   AzureManagementRequest,
+  AzureManagementUrlRequest,
   CriblClient,
   CriblGroupSummary,
   CriblRequest,
@@ -162,6 +163,24 @@ export class LocalAzureManagement implements AzureManagement {
         body: opts.body,
         query: opts.query,
       }),
+      PROXY_TIMEOUT_MS
+    );
+    return asPortResponse(label, payload);
+  }
+
+  /**
+   * Execute a request against a FULL ARM URL (an ARM list `nextLink`) via
+   * POST /api/azure/request-url. The HOST enforces the
+   * https://management.azure.com/ prefix (hard reject - SSRF guard) and
+   * attaches the bearer; this adapter just relays {method, url} with the
+   * same bounded timeout as request().
+   */
+  async requestUrl(opts: AzureManagementUrlRequest): Promise<PortHttpResponse> {
+    const label = `POST /api/azure/request-url (${opts.method} ${opts.url})`;
+    const payload = await hostJson(
+      label,
+      '/api/azure/request-url',
+      jsonInit('POST', { method: opts.method, url: opts.url }),
       PROXY_TIMEOUT_MS
     );
     return asPortResponse(label, payload);

@@ -35,6 +35,29 @@ export type {
   ModeOption,
 } from "./frame/frame-state";
 
+// Azure targeting (Unit 2): the subscription -> workspace -> resource-group
+// cascade, create/enable actions, explicit scope commit, and the pure state
+// behind it (chip text, commit notice, RG name rules, scope codec).
+export { AzureTargetingScreen } from "./screens/azure-targeting/azure-targeting-screen";
+export type {
+  AzureTargetingScreenProps,
+  CommitScopeOutcome,
+} from "./screens/azure-targeting/azure-targeting-screen";
+export {
+  RESOURCE_GROUP_MAX_LENGTH,
+  buildLoaderPlan,
+  commitNoticeText,
+  formatScopeChip,
+  parseTargetScope,
+  sanitizeResourceGroupName,
+  serializeTargetScope,
+  validateResourceGroupName,
+} from "./screens/azure-targeting/targeting-state";
+export type {
+  LoaderPlan,
+  LoaderPlanInput,
+} from "./screens/azure-targeting/targeting-state";
+
 // Settings.
 export { SettingsScreen } from "./screens/settings-screen";
 export type {

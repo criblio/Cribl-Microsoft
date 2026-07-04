@@ -1,0 +1,34 @@
+export {
+  SUBSCRIPTIONS_API_VERSION,
+  RESOURCE_GROUP_API_VERSION,
+  WORKSPACE_API_VERSION,
+  SENTINEL_SOLUTION_API_VERSION,
+  WORKSPACE_DEFAULT_SKU,
+  WORKSPACE_DEFAULT_RETENTION_DAYS,
+  DEFAULT_WORKSPACE_POLL_ATTEMPTS,
+  MAX_LIST_PAGES,
+  listAllPages,
+  listSubscriptions,
+  listWorkspaces,
+  listResourceGroups,
+  listResourceGroupChoices,
+  createResourceGroup,
+  createWorkspace,
+  enableSentinel,
+  commitTargetScope,
+} from "./azure-discovery";
+export type {
+  AzureSubscription,
+  AzureWorkspace,
+  ResourceGroupChoices,
+  ResourceGroupChoicesSource,
+  CreateResourceGroupInput,
+  CreateWorkspaceInput,
+  CreatedWorkspace,
+  EnableSentinelInput,
+  EnableSentinelResult,
+  TargetScope,
+  CommitTargetScopeResult,
+} from "./azure-discovery";
+export { deriveResourceGroupsFromWorkspaces } from "./azure-resources";
+export type { AzureResourceGroup } from "./azure-resources";

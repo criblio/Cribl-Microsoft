@@ -14,6 +14,11 @@ import { HttpError, fetchTextWithTimeout, parseUpstreamBody } from './http-util.
 import { CONFIG_PATH } from './config.mjs';
 
 const ARM_BASE_URL = 'https://management.azure.com';
+// The ONLY URL prefix the full-URL proxy (requestUrl) will touch. ARM list
+// pagination hands back absolute nextLink URLs; anything outside this prefix
+// is rejected BEFORE any request is sent (SSRF guard - the browser must not
+// be able to steer the host, bearer token attached, at arbitrary hosts).
+const ARM_URL_PREFIX = 'https://management.azure.com/';
 // Refresh the cached token when it is within 5 minutes of expiry.
 const TOKEN_REFRESH_MARGIN_MS = 5 * 60 * 1000;
 // Fallback lifetime when the token endpoint omits expires_in.
@@ -29,10 +34,19 @@ const DEFAULT_TOKEN_LIFETIME_S = 3600;
  */
 
 /**
+ * @typedef {object} AzureProxyUrlRequest
+ * @property {string} method
+ * @property {string} url FULL URL - MUST start with https://management.azure.com/.
+ */
+
+/**
  * Build the ARM proxy over the config's client-credentials identity.
  *
  * @param {import('./config.mjs').AzureSection} azure
- * @returns {{ request(opts: AzureProxyRequest): Promise<{ status: number, body: unknown }> }}
+ * @returns {{
+ *   request(opts: AzureProxyRequest): Promise<{ status: number, body: unknown }>,
+ *   requestUrl(opts: AzureProxyUrlRequest): Promise<{ status: number, body: unknown }>,
+ * }}
  */
 export function createAzureProxy(azure) {
   /** @type {{ accessToken: string, expiresAt: number } | null} */
@@ -114,6 +128,24 @@ export function createAzureProxy(azure) {
     return { status: res.status, body: parseUpstreamBody(res.text) };
   }
 
+  /**
+   * Send a request against a FULL, already-validated ARM URL. No body: the
+   * only caller shape is ARM nextLink pagination (the URL carries its whole
+   * query string, continuation token included).
+   *
+   * @param {AzureProxyUrlRequest} opts
+   * @param {string} accessToken
+   */
+  async function sendUrl(opts, accessToken) {
+    /** @type {RequestInit} */
+    const init = {
+      method: opts.method,
+      headers: { Authorization: `Bearer ${accessToken}` },
+    };
+    const res = await fetchTextWithTimeout(opts.url, init);
+    return { status: res.status, body: parseUpstreamBody(res.text) };
+  }
+
   return {
     async request(opts) {
       if (typeof opts.apiVersion !== 'string' || opts.apiVersion === '') {
@@ -128,6 +160,26 @@ export function createAzureProxy(azure) {
       // ONCE and retry ONCE; whatever comes back is the answer.
       const fresh = await ensureToken(true);
       return send(opts, fresh);
+    },
+
+    async requestUrl(opts) {
+      // SSRF guard, enforced HERE regardless of what the route validated:
+      // the bearer token is attached below, so any URL outside the ARM
+      // prefix is a HARD reject before a single byte leaves the host.
+      if (typeof opts.url !== 'string' || !opts.url.startsWith(ARM_URL_PREFIX)) {
+        throw new HttpError(
+          400,
+          `POST /api/azure/request-url: "url" must start with ${ARM_URL_PREFIX} ` +
+            '(ARM nextLink pagination) - refusing to proxy any other host',
+        );
+      }
+      const token = await ensureToken(false);
+      const first = await sendUrl(opts, token);
+      if (first.status !== 401) {
+        return first;
+      }
+      const fresh = await ensureToken(true);
+      return sendUrl(opts, fresh);
     },
   };
 }

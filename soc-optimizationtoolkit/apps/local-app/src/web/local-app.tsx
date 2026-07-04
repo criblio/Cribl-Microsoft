@@ -16,28 +16,36 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   AppFrame,
   AuaGate,
+  AzureTargetingScreen,
   EMPTY_MODE_RECORD,
   ModeSelect,
   OnboardTableScreen,
   PortsProvider,
   SettingsScreen,
+  commitNoticeText,
+  formatScopeChip,
+  parseTargetScope,
   resolveFramePhase,
+  serializeTargetScope,
   useConsolidatedPolling,
 } from '@soc/ui';
 import type {
   AppRoute,
+  CommitScopeOutcome,
   LoadableAcceptance,
   LoadableMode,
   PlatformInfoRow,
 } from '@soc/ui';
 import {
+  computeInvalidation,
+  hasAzure,
   parseAcceptanceRecord,
   parseAppMode,
   parseAzureConfig,
   serializeAcceptanceRecord,
   serializeAppMode,
 } from '@soc/core';
-import type { AcceptanceRecord, AppMode, AzureConfig } from '@soc/core';
+import type { AcceptanceRecord, AppMode, AzureConfig, TargetScope } from '@soc/core';
 import { fetchWithTimeout, makeLocalPorts } from './local-adapters';
 
 // Constructed once: the adapters are stateless over the host API, and a
@@ -48,6 +56,13 @@ const ports = makeLocalPorts();
 // they must be readable back). Same key names as the cloud shell's KV.
 const AUA_ACCEPTANCE_KEY = 'auaAcceptance';
 const APP_MODE_KEY = 'appMode';
+
+// The committed Azure target scope OVERRIDE (plain entry, readable back).
+// The host config file owns the IDENTITY (tenant/client/secret); the
+// targeting screen's Use this target commits only the three scope fields
+// here, merged over the file's scope on load - merge, never replace, which
+// is this shell's equivalent of the cloud profile-store commit.
+const TARGET_SCOPE_KEY = 'azureTargetScope';
 
 // What GET /api/config yields for the shell: the AzureConfig-shaped
 // non-secret fields plus the leader URL for display. Secrets (Azure client
@@ -101,6 +116,10 @@ export function LocalApp() {
   const [acceptance, setAcceptance] = useState<LoadableAcceptance>('loading');
   const [mode, setMode] = useState<LoadableMode>('loading');
 
+  // The committed target-scope override (null until hydrated / when none is
+  // committed). Tolerant parse: a garbage blob reads as "nothing committed".
+  const [scopeOverride, setScopeOverride] = useState<TargetScope | null>(null);
+
   // Status of the consolidated connection poll: is the loopback host up?
   const [hostLink, setHostLink] = useState('checking...');
 
@@ -123,9 +142,10 @@ export function LocalApp() {
   useEffect(() => {
     let cancelled = false;
     void (async () => {
-      const [accRaw, modeRaw] = await Promise.allSettled([
+      const [accRaw, modeRaw, scopeRaw] = await Promise.allSettled([
         ports.secrets.get(AUA_ACCEPTANCE_KEY),
         ports.secrets.get(APP_MODE_KEY),
+        ports.secrets.get(TARGET_SCOPE_KEY),
       ]);
       if (cancelled) {
         return;
@@ -134,6 +154,9 @@ export function LocalApp() {
         parseAcceptanceRecord(accRaw.status === 'fulfilled' ? accRaw.value : null)
       );
       setMode(parseAppMode(modeRaw.status === 'fulfilled' ? modeRaw.value : null));
+      setScopeOverride(
+        parseTargetScope(scopeRaw.status === 'fulfilled' ? scopeRaw.value : null)
+      );
     })();
     return () => {
       cancelled = true;
@@ -170,6 +193,42 @@ export function LocalApp() {
     maxPerMinute: 60,
     enabled: phase.phase === 'ready',
   });
+
+  // The ACTIVE AzureConfig: the host file's non-secret fields with the
+  // committed scope override merged over the three scope fields (merge,
+  // never replace - identity always comes from the file). This is what the
+  // shared screens see through PortsContext.
+  const activeAzureConfig: AzureConfig | null =
+    load.state === 'loaded'
+      ? scopeOverride === null
+        ? load.config.azure
+        : { ...load.config.azure, ...scopeOverride }
+      : null;
+
+  // The EXPLICIT scope commit from the Azure Targeting screen: persist the
+  // three scope fields as a plain override entry, then surface the
+  // invalidation consequences computed by @soc/core (a pure scope change
+  // stales cached permission results only; nothing else is cached locally
+  // yet, but the notice states it honestly either way).
+  const handleCommitScope = async (scope: TargetScope): Promise<CommitScopeOutcome> => {
+    if (activeAzureConfig === null) {
+      return {
+        committed: false,
+        notice: 'Host configuration is not loaded - retry loading it first.',
+      };
+    }
+    const next: AzureConfig = { ...activeAzureConfig, ...scope };
+    const invalidation = computeInvalidation(activeAzureConfig, next);
+    try {
+      await ports.secrets.set(TARGET_SCOPE_KEY, serializeTargetScope(scope));
+    } catch (err) {
+      return { committed: false, notice: `Could not persist the target scope: ${String(err)}` };
+    }
+    setScopeOverride(scope);
+    const notice =
+      commitNoticeText(invalidation) || 'Target scope unchanged - it was already committed.';
+    return { committed: true, notice };
+  };
 
   // Accept the agreement: the shell mints the timestamp and persists the
   // record as a plain entry. A failed write is non-fatal (legacy contract):
@@ -253,9 +312,50 @@ export function LocalApp() {
           </div>
         </>
       )}
-      {load.state === 'loaded' && (
-        <PortsProvider ports={ports} config={load.config.azure}>
+      {load.state === 'loaded' && activeAzureConfig !== null && (
+        <PortsProvider ports={ports} config={activeAzureConfig}>
           <OnboardTableScreen />
+        </PortsProvider>
+      )}
+    </>
+  );
+
+  // The Azure Targeting route (Unit 2): browse subscriptions, workspaces,
+  // and resource groups through the host's ARM proxy, create what is
+  // missing, and commit the scope explicitly. The host config file keeps the
+  // identity; the committed scope persists as a plain override entry.
+  const targetingView = (
+    <>
+      <header className="local-header">
+        <h1 className="local-title">Azure targeting</h1>
+        <p className="local-subtitle">
+          Browse the subscription, workspace, and resource-group cascade,
+          create what is missing, enable Sentinel, then commit the scope with
+          Use this target. The identity (tenant, client, secret) stays in
+          config/local-config.json; only the committed scope is stored here.
+        </p>
+      </header>
+      {load.state === 'loading' && (
+        <p className="local-subtitle">Loading host configuration...</p>
+      )}
+      {load.state === 'error' && (
+        <>
+          <div className="local-error">
+            Could not load the host configuration: {load.message}
+          </div>
+          <div className="panel-controls">
+            <button className="run-button" onClick={() => void reload()}>
+              Retry
+            </button>
+          </div>
+        </>
+      )}
+      {load.state === 'loaded' && activeAzureConfig !== null && (
+        <PortsProvider ports={ports} config={activeAzureConfig}>
+          <AzureTargetingScreen
+            offline={!hasAzure(phase.mode)}
+            onCommitScope={handleCommitScope}
+          />
         </PortsProvider>
       )}
     </>
@@ -265,22 +365,33 @@ export function LocalApp() {
   // config-summary rows, graduated into the shared SettingsScreen. Secrets
   // never appear - the host only ever serves non-secret fields.
   const configRows: PlatformInfoRow[] =
-    load.state === 'loaded'
+    load.state === 'loaded' && activeAzureConfig !== null
       ? [
           { label: 'Cribl leader', value: display(load.config.criblLeaderUrl) },
-          { label: 'Tenant ID', value: display(load.config.azure.tenantId) },
-          { label: 'Client ID', value: display(load.config.azure.clientId) },
-          { label: 'Subscription', value: display(load.config.azure.subscriptionId) },
-          { label: 'Resource group', value: display(load.config.azure.resourceGroup) },
-          { label: 'Workspace', value: display(load.config.azure.workspaceName) },
+          { label: 'Tenant ID', value: display(activeAzureConfig.tenantId) },
+          { label: 'Client ID', value: display(activeAzureConfig.clientId) },
+          {
+            label: 'Subscription',
+            value: display(activeAzureConfig.subscriptionId),
+            ...(scopeOverride !== null
+              ? {
+                  tip:
+                    'Committed from the Azure Targeting screen; it overrides the\n' +
+                    'scope fields in config/local-config.json (identity fields\n' +
+                    'always come from the file).',
+                }
+              : {}),
+          },
+          { label: 'Resource group', value: display(activeAzureConfig.resourceGroup) },
+          { label: 'Workspace', value: display(activeAzureConfig.workspaceName) },
         ]
       : [
           {
             label: 'Connection',
             value:
-              load.state === 'loading'
-                ? 'loading host configuration...'
-                : `unavailable - ${load.message}`,
+              load.state === 'error'
+                ? `unavailable - ${load.message}`
+                : 'loading host configuration...',
           },
         ];
 
@@ -309,11 +420,35 @@ export function LocalApp() {
     />
   );
 
-  // Route table: Onboard needs BOTH live sides; Settings is always shown.
+  // Route table: Onboard needs BOTH live sides; Azure Targeting needs the
+  // live Azure side; Settings is always shown.
   const routes: AppRoute[] = [
     { id: 'onboard', label: 'Onboard', requires: 'both', render: () => onboardView },
+    { id: 'azure-target', label: 'Azure Targeting', requires: 'azure', render: () => targetingView },
     { id: 'settings', label: 'Settings', requires: 'none', render: () => settingsView },
   ];
+
+  // Frame topBar (GUI-28's Azure half): the committed target scope as a
+  // compact chip, always visible above the active screen.
+  const topBar = (
+    <div className="scope-bar">
+      <span
+        className="scope-chip"
+        title="The committed Azure target scope (subscription / resource group / workspace). Change it from the Azure Targeting screen - browsing there never changes it until you click Use this target."
+      >
+        target:{' '}
+        {formatScopeChip(
+          activeAzureConfig !== null
+            ? {
+                subscriptionId: activeAzureConfig.subscriptionId,
+                resourceGroup: activeAzureConfig.resourceGroup,
+                workspaceName: activeAzureConfig.workspaceName,
+              }
+            : { subscriptionId: '', resourceGroup: '', workspaceName: '' }
+        )}
+      </span>
+    </div>
+  );
 
   return (
     <AppFrame
@@ -321,6 +456,7 @@ export function LocalApp() {
       subtitle="Local shell"
       mode={phase.mode}
       routes={routes}
+      topBar={topBar}
       initialRouteId="onboard"
       footerNote="local host"
     />
