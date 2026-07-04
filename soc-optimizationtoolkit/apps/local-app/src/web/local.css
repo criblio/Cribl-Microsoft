@@ -1,8 +1,10 @@
 /*
- * Local-shell chrome only: page frame, header, and the config summary bar.
- * The shared @soc/ui class conventions (reset/body, panel, field, run-button,
- * status, result, ...) come from "@soc/ui/styles.css", imported in main.tsx
- * BEFORE this file.
+ * Local-shell chrome only: gate-screen page frame headers and the error
+ * banner. The shared @soc/ui class conventions (reset/body, panel, field,
+ * run-button, status, result, app-frame, gate, settings, ...) come from
+ * "@soc/ui/styles.css", imported in main.tsx BEFORE this file. The old
+ * config-summary bar graduated into the shared SettingsScreen's platform
+ * info, so its styles left with it.
  */
 
 .local-shell {
@@ -28,42 +30,6 @@
   font-weight: 400;
   line-height: 22px;
   color: #595959;
-}
-
-.config-bar {
-  border: 1px solid #d9d9d9;
-  background: #ffffff;
-  padding: 16px 24px;
-  margin-bottom: 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.config-grid {
-  display: grid;
-  grid-template-columns: max-content 1fr;
-  column-gap: 16px;
-  row-gap: 4px;
-}
-
-.config-key {
-  font-size: 13px;
-  font-weight: 600;
-  line-height: 20px;
-  color: #595959;
-  white-space: nowrap;
-}
-
-.config-value {
-  font-size: 13px;
-  line-height: 20px;
-  color: #262626;
-  word-break: break-all;
-}
-
-.config-value-unset {
-  color: #8c8c8c;
 }
 
 .local-error {

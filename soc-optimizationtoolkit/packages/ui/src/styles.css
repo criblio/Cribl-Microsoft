@@ -227,3 +227,467 @@ body {
   flex-direction: column;
   gap: 4px;
 }
+
+/* ---------------------------------------------------------------------------
+ * App frame: sidebar navigation + content area (frame/app-frame.tsx)
+ * ------------------------------------------------------------------------ */
+
+.app-frame {
+  display: flex;
+  align-items: stretch;
+  min-height: 100vh;
+}
+
+.app-frame-sidebar {
+  width: 216px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  background: #ffffff;
+  border-right: 1px solid #d9d9d9;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow-y: auto;
+}
+
+.app-frame-brand {
+  padding: 20px 16px 16px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.app-frame-title {
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 20px;
+  color: #1890ff;
+  letter-spacing: 0.5px;
+}
+
+.app-frame-subtitle {
+  margin-top: 4px;
+  font-size: 11px;
+  line-height: 16px;
+  color: #8c8c8c;
+}
+
+.app-frame-nav {
+  flex: 1;
+  padding: 8px 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.app-frame-nav-item {
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 20px;
+  text-align: left;
+  padding: 10px 16px;
+  border: none;
+  border-left: 3px solid transparent;
+  background: transparent;
+  color: #595959;
+  cursor: pointer;
+}
+
+.app-frame-nav-item:hover {
+  color: #1890ff;
+}
+
+.app-frame-nav-item-active {
+  color: #1890ff;
+  font-weight: 600;
+  border-left-color: #1890ff;
+  background: #e6f4ff;
+}
+
+.app-frame-footer {
+  padding: 12px 16px;
+  border-top: 1px solid #f0f0f0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.app-frame-footer-note {
+  font-size: 11px;
+  line-height: 16px;
+  color: #8c8c8c;
+}
+
+.app-frame-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.app-frame-content {
+  max-width: 920px;
+  margin: 0 auto;
+  padding: 24px 16px 64px;
+}
+
+/* The mode chip: the frame's always-visible answer to "what may this app
+ * touch right now". One color per mode. */
+.mode-chip {
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 16px;
+  padding: 2px 8px;
+  border: 1px solid #d9d9d9;
+  white-space: nowrap;
+}
+
+.mode-chip-full {
+  color: #389e0d;
+  border-color: #b7eb8f;
+  background: #f6ffed;
+}
+
+.mode-chip-azure-only {
+  color: #0958d9;
+  border-color: #91caff;
+  background: #e6f4ff;
+}
+
+.mode-chip-cribl-only {
+  color: #d46b08;
+  border-color: #ffd591;
+  background: #fff7e6;
+}
+
+.mode-chip-air-gapped {
+  color: #531dab;
+  border-color: #d3adf7;
+  background: #f9f0ff;
+}
+
+/* ---------------------------------------------------------------------------
+ * Gate screens: acceptance agreement + mode chooser (frame/aua-gate.tsx,
+ * frame/mode-select.tsx)
+ * ------------------------------------------------------------------------ */
+
+.gate-screen {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 16px;
+}
+
+.gate-card {
+  max-width: 700px;
+  width: 100%;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  background: #ffffff;
+  border: 1px solid #d9d9d9;
+  padding: 32px;
+}
+
+.gate-title {
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 28px;
+  color: rgba(0, 0, 0, 0.85);
+  margin-bottom: 4px;
+}
+
+.gate-sub {
+  font-size: 12px;
+  line-height: 18px;
+  color: #8c8c8c;
+  margin-bottom: 16px;
+}
+
+.aua-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+  border: 1px solid #d9d9d9;
+  background: #fafafa;
+  font-size: 12px;
+  line-height: 1.6;
+  color: #595959;
+  margin-bottom: 16px;
+}
+
+.aua-body p {
+  margin-bottom: 8px;
+}
+
+.aua-body ul {
+  padding-left: 20px;
+  margin: 8px 0;
+}
+
+.aua-body li {
+  margin-bottom: 6px;
+}
+
+.aua-heading {
+  font-weight: 700;
+  color: #262626;
+  margin-top: 14px;
+}
+
+.aua-footer-note {
+  margin-top: 16px;
+  font-style: italic;
+  color: #8c8c8c;
+}
+
+.gate-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.gate-hint {
+  font-size: 11px;
+  line-height: 16px;
+  color: #8c8c8c;
+}
+
+.gate-accept {
+  font-weight: 700;
+  padding: 8px 32px;
+}
+
+.mode-options {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow-y: auto;
+}
+
+.mode-option {
+  font-family: inherit;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  text-align: left;
+  padding: 12px 16px;
+  border: 1px solid #d9d9d9;
+  background: #ffffff;
+  cursor: pointer;
+}
+
+.mode-option:hover:not(:disabled) {
+  border-color: #1890ff;
+}
+
+.mode-option:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.mode-option-label {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 20px;
+  color: #262626;
+}
+
+.mode-option-desc {
+  font-size: 12px;
+  line-height: 18px;
+  color: #595959;
+}
+
+/* ---------------------------------------------------------------------------
+ * Settings screen (screens/settings-screen.tsx)
+ * ------------------------------------------------------------------------ */
+
+.settings-section {
+  margin-bottom: 24px;
+}
+
+.settings-section-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #595959;
+  margin-bottom: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.settings-card {
+  background: #ffffff;
+  border: 1px solid #d9d9d9;
+  padding: 4px 16px;
+}
+
+.settings-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  padding: 8px 0;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.settings-row:last-child {
+  border-bottom: none;
+}
+
+.settings-row-label {
+  font-size: 13px;
+  line-height: 20px;
+  color: #595959;
+  display: inline-flex;
+  align-items: center;
+}
+
+.settings-row-value {
+  font-family: 'Consolas', 'Menlo', 'Courier New', monospace;
+  font-size: 12px;
+  line-height: 18px;
+  color: #262626;
+  text-align: right;
+  word-break: break-all;
+}
+
+.settings-note {
+  margin-top: 8px;
+  margin-bottom: 0;
+}
+
+.config-editor {
+  padding: 0;
+}
+
+.config-editor-header {
+  font-family: inherit;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+}
+
+.config-editor-title {
+  font-family: 'Consolas', 'Menlo', 'Courier New', monospace;
+  font-size: 12px;
+  font-weight: 600;
+  color: #595959;
+}
+
+.config-editor-modified {
+  font-size: 11px;
+  line-height: 16px;
+  color: #d46b08;
+}
+
+.config-editor-body {
+  padding: 12px 14px;
+  border-top: 1px solid #f0f0f0;
+}
+
+.config-editor-textarea {
+  width: 100%;
+  min-height: 200px;
+  font-family: 'Consolas', 'Menlo', 'Courier New', monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  padding: 10px;
+  border: 1px solid #d9d9d9;
+  background: #fafafa;
+  color: #262626;
+  resize: vertical;
+  outline: none;
+}
+
+.config-editor-textarea:focus {
+  border-color: #1890ff;
+}
+
+.config-editor-error {
+  font-size: 12px;
+  line-height: 18px;
+  color: #cf1322;
+  margin-top: 6px;
+}
+
+.config-editor-saved {
+  font-size: 11px;
+  line-height: 16px;
+  color: #389e0d;
+  margin-top: 6px;
+}
+
+.config-editor-warning {
+  font-size: 11px;
+  line-height: 16px;
+  color: #d46b08;
+  margin-top: 6px;
+}
+
+.config-editor-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 8px;
+}
+
+/* ---------------------------------------------------------------------------
+ * InfoTip (components/info-tip.tsx) - embedded newlines render via pre-wrap
+ * ------------------------------------------------------------------------ */
+
+.info-tip {
+  position: relative;
+  display: inline-flex;
+  margin-left: 4px;
+}
+
+.info-tip-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 9px;
+  font-weight: 700;
+  font-family: 'Consolas', 'Menlo', 'Courier New', monospace;
+  background: #e6f4ff;
+  color: #1890ff;
+  border: 1px solid #91caff;
+  flex-shrink: 0;
+  line-height: 1;
+  user-select: none;
+}
+
+.info-tip-icon:focus {
+  outline: 1px solid #1890ff;
+  outline-offset: 1px;
+}
+
+.info-tip-pop {
+  position: absolute;
+  z-index: 10000;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 10px 12px;
+  background: #ffffff;
+  border: 1px solid #d9d9d9;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+  font-size: 11px;
+  line-height: 1.5;
+  font-weight: 400;
+  color: #595959;
+  white-space: pre-wrap;
+  width: max-content;
+  max-width: 320px;
+  pointer-events: none;
+}

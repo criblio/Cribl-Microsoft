@@ -8,7 +8,9 @@
 
 export * from "./ports";
 export * from "./testing";
+export * from "./domain/app-mode";
 export * from "./domain/dcr-naming";
+export * from "./domain/poll-scheduler";
 export * from "./domain/schema-mapping";
 export * from "./domain/azure-permissions";
 export * from "./domain/azure-config";

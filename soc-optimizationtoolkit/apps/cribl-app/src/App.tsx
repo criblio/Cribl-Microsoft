@@ -1,6 +1,22 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import { OnboardTableScreen, PortsProvider } from '@soc/ui';
+import {
+  AppFrame,
+  AuaGate,
+  EMPTY_MODE_RECORD,
+  ModeSelect,
+  OnboardTableScreen,
+  PortsProvider,
+  SettingsScreen,
+  resolveFramePhase,
+  useConsolidatedPolling,
+} from '@soc/ui';
+import type {
+  AppFrameNav,
+  AppRoute,
+  LoadableAcceptance,
+  LoadableMode,
+} from '@soc/ui';
 import {
   allGranted,
   appRegistrationRequest,
@@ -11,6 +27,8 @@ import {
   evaluatePermissions,
   getActiveConfig,
   getActiveProfile,
+  parseAcceptanceRecord,
+  parseAppMode,
   parseAzureConfig,
   parseProfileStore,
   removeProfile,
@@ -19,12 +37,16 @@ import {
   REQUIRED_ACTIONS,
   resourceCreationRequest,
   roleAssignmentRequest,
+  serializeAcceptanceRecord,
+  serializeAppMode,
   serializeProfileStore,
   setActiveProfile,
   updateActiveConfig,
   upsertProfile,
 } from '@soc/core';
 import type {
+  AcceptanceRecord,
+  AppMode,
   AzureConfig,
   ChangeRequestContext,
   ConnectionProfile,
@@ -38,7 +60,7 @@ import type {
 import { acquireArmToken, fetchWithTimeout, kvDelete, kvUrl } from './platform/http';
 // Cloud-shell port adapters for the shared @soc/ui screens: the six @soc/core
 // ports bound to the platform primitives (KV, proxy-injected auth, downloads).
-import { makeCloudPorts } from './platform/adapters';
+import { makeCloudPorts, PlatformSecretsStore } from './platform/adapters';
 
 // The app's display name, shown in generated change-request tickets and the
 // architecture diagrams embedded in them. The change-request text and diagrams
@@ -61,9 +83,13 @@ const APP_NAME = 'SOC Optimization Toolkit';
 
 type Status = 'idle' | 'running' | 'ok' | 'failed';
 
-// Top-level views: the Phase 1 diagnostics harness (default, panels intact)
-// and the first shared feature screen from @soc/ui (onboard walking skeleton).
-type AppView = 'harness' | 'onboard';
+// Acceptance-of-use and operating-mode records persist as PLAIN KV entries
+// (not encrypted) through the platform SecretsStore adapter: they are app
+// state, not secrets, and must be readable back on every launch. The codecs
+// (parse/serialize) live in @soc/core app-mode; the shell owns the clock.
+const AUA_ACCEPTANCE_KEY = 'auaAcceptance';
+const APP_MODE_KEY = 'appMode';
+const appStateStore = new PlatformSecretsStore();
 
 // The AzureConfig fields the Onboard screen cannot run without. tenantId
 // drives the ARM token flow; the rest address the workspace the DCR targets.
@@ -1523,9 +1549,40 @@ function App() {
   const [store, setStore] = useState<ProfileStore>(EMPTY_PROFILE_STORE);
   const [hydrated, setHydrated] = useState(false);
 
-  // Which top-level view is showing. Defaults to the harness; the Onboard
-  // view mounts the shared @soc/ui screen against the cloud port adapters.
-  const [view, setView] = useState<AppView>('harness');
+  // Acceptance-of-use and operating mode: 'loading' until the persisted
+  // blobs arrive, then the parsed value (null = not accepted / not chosen).
+  // resolveFramePhase turns the pair into the top-level surface; its loading
+  // contract guarantees the agreement gate NEVER flashes for a user whose
+  // acceptance is merely still in flight.
+  const [acceptance, setAcceptance] = useState<LoadableAcceptance>('loading');
+  const [mode, setMode] = useState<LoadableMode>('loading');
+
+  // Status of the consolidated connection poll (the one budgeted poller):
+  // 'checking...' -> 'ok' | 'failed - <error>'.
+  const [platformLink, setPlatformLink] = useState('checking...');
+
+  // Load acceptance + mode once on mount. Tolerant on purpose: a failed read
+  // parses to null, which re-prompts (acceptance) or re-asks (mode) rather
+  // than silently waving the user through.
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const [accRaw, modeRaw] = await Promise.allSettled([
+        appStateStore.get(AUA_ACCEPTANCE_KEY),
+        appStateStore.get(APP_MODE_KEY),
+      ]);
+      if (cancelled) {
+        return;
+      }
+      setAcceptance(
+        parseAcceptanceRecord(accRaw.status === 'fulfilled' ? accRaw.value : null)
+      );
+      setMode(parseAppMode(modeRaw.status === 'fulfilled' ? modeRaw.value : null));
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Which profile's secret was last written to the single azureBasic slot THIS
   // session, plus the identity it was written under. Non-persisted: both reset to
@@ -1631,6 +1688,40 @@ function App() {
   // ACTIVE connection's tenant changes (the ARM token flow is tenant-scoped;
   // see makeCloudPorts). Construction is side-effect free.
   const cloudPorts = useMemo(() => makeCloudPorts(activeConfig.tenantId), [activeConfig.tenantId]);
+
+  // Which top-level surface to show (loading / AUA gate / mode select /
+  // frame). Computed every render from the two loadable states.
+  const phase = resolveFramePhase(acceptance, mode);
+
+  // The ONE budgeted status poller (@soc/ui hook over the @soc/core
+  // poll-scheduler). For this unit only the connection-status poll registers:
+  // a KV key listing once a minute proves the platform bridge and the leader
+  // are reachable. Every future poll (health, data-flow, drift) registers
+  // HERE with a priority - never its own setInterval - so the shared
+  // ~100 req/min proxy budget has one enforcement point.
+  const connectionPolls = useMemo(
+    () => [
+      {
+        id: 'connection-status',
+        intervalMs: 60_000,
+        priority: 10,
+        run: async () => {
+          try {
+            await appStateStore.list('azure');
+            setPlatformLink('ok');
+          } catch (err) {
+            setPlatformLink(`failed - ${String(err)}`);
+          }
+        },
+      },
+    ],
+    []
+  );
+  useConsolidatedPolling({
+    polls: connectionPolls,
+    maxPerMinute: 30,
+    enabled: phase.phase === 'ready',
+  });
 
   // Fields the Onboard screen still needs. Non-empty means the screen is
   // replaced by a message pointing at panels 3 and 4 in the harness view.
@@ -1772,6 +1863,65 @@ function App() {
     setSwitchNotice('');
   };
 
+  // Accept the acceptable-use agreement: the shell mints the timestamp (core
+  // never calls Date) and persists the record as a plain KV entry. A failed
+  // write is non-fatal (legacy contract): the session proceeds and the gate
+  // simply re-prompts on the next launch.
+  const handleAccept = async () => {
+    const record: AcceptanceRecord = { acceptedAt: new Date().toISOString() };
+    try {
+      await appStateStore.set(AUA_ACCEPTANCE_KEY, serializeAcceptanceRecord(record));
+    } catch {
+      // Non-fatal; re-prompts next launch.
+    }
+    setAcceptance(record);
+  };
+
+  // First-run mode choice: persist, then adopt. A failed write holds the
+  // mode for this session only and re-asks next launch.
+  const handleSelectMode = async (next: AppMode) => {
+    try {
+      await appStateStore.set(APP_MODE_KEY, serializeAppMode(next));
+    } catch {
+      // Non-fatal; re-asks next launch.
+    }
+    setMode(next);
+  };
+
+  // The Reconfigure contract (mined from the legacy Settings page): write an
+  // EMPTY mode record - which parses back to null, "not yet chosen" - then
+  // reload so the next load lands in ModeSelect. Connections and their
+  // configs are untouched. If the write fails, fall back to an in-session
+  // reset so the user still reaches the chooser.
+  const handleReconfigure = async () => {
+    try {
+      await appStateStore.set(APP_MODE_KEY, EMPTY_MODE_RECORD);
+      window.location.reload();
+    } catch {
+      setMode(null);
+    }
+  };
+
+  // Gate order is the contract: acceptance before ANYTHING else, then mode
+  // selection, then the frame. The loading branch is what keeps the gate
+  // from flashing for already-accepted users.
+  if (phase.phase === 'loading') {
+    return (
+      <div className="harness">
+        <header className="harness-header">
+          <h1 className="harness-title">{APP_NAME}</h1>
+          <p className="harness-subtitle">Loading...</p>
+        </header>
+      </div>
+    );
+  }
+  if (phase.phase === 'aua') {
+    return <AuaGate onAccept={handleAccept} />;
+  }
+  if (phase.phase === 'mode-select') {
+    return <ModeSelect onSelect={handleSelectMode} />;
+  }
+
   if (!hydrated) {
     return (
       <div className="harness">
@@ -1797,46 +1947,11 @@ function App() {
     );
   }
 
-  return (
-    <div className="harness">
-      <nav className="view-tabs">
-        <button
-          className={`view-tab${view === 'harness' ? ' view-tab-active' : ''}`}
-          onClick={() => setView('harness')}
-        >
-          Spike Harness
-        </button>
-        <button
-          className={`view-tab${view === 'onboard' ? ' view-tab-active' : ''}`}
-          onClick={() => setView('onboard')}
-        >
-          Onboard (walking skeleton)
-        </button>
-      </nav>
-
-      <header className="harness-header">
-        {view === 'harness' ? (
-          <>
-            <h1 className="harness-title">Phase 1 Spike Harness</h1>
-            <p className="harness-subtitle">
-              Sequential diagnostics for the Cribl App Platform: globals, KV store semantics,
-              proxy header injection, Azure AD token flow, ARM access, and iframe download behavior.
-              Pick or create a connection above, then run the panels top to bottom.
-            </p>
-          </>
-        ) : (
-          <>
-            <h1 className="harness-title">Onboard a native table</h1>
-            <p className="harness-subtitle">
-              The first walking-skeleton feature screen from the shared UI package: deploy a
-              Kind:Direct DCR for one native Log Analytics table and create the matching Cribl
-              Sentinel destination, end to end through the shared onboardTable use-case.
-            </p>
-          </>
-        )}
-      </header>
-
-      <div className="connection-bar">
+  // The connection bar: shell chrome that stays visible within the frame,
+  // above whatever screen is active. Connection select/create/rename/delete,
+  // the live-secret badge, and the consolidated poll's platform-link badge.
+  const connectionBar = (
+    <div className="connection-bar">
         <div className="connection-bar-main">
           <label className="connection-select">
             <span className="field-label">Connection</span>
@@ -1898,6 +2013,13 @@ function App() {
           <span className={`secret-badge ${secretLive ? 'secret-badge-stored' : 'secret-badge-none'}`}>
             secret: {secretLive ? 'stored (this session)' : 'not entered'}
           </span>
+          <span
+            className={`link-badge ${platformLink === 'ok' ? 'link-badge-ok' : 'link-badge-off'}`}
+            title={platformLink}
+          >
+            platform link:{' '}
+            {platformLink === 'ok' ? 'ok' : platformLink === 'checking...' ? 'checking' : 'failed'}
+          </span>
         </div>
         {switchNotice !== '' && <p className="connection-notice">{switchNotice}</p>}
         {identityDrifted && (
@@ -1907,42 +2029,19 @@ function App() {
           </p>
         )}
       </div>
+  );
 
-      {view === 'onboard' ? (
-        missingOnboardFields.length > 0 ? (
-          <section className="panel">
-            <h2 className="panel-title">Connection incomplete</h2>
-            <p className="panel-desc">
-              The active connection is missing required configuration:{' '}
-              {missingOnboardFields.join(', ')}. Complete panel 3 (App registration and connect)
-              and panel 4 (Select resources and grant permissions): connecting fills the tenant
-              and client ids; in panel 4, Discover / refresh from Azure, then select a
-              subscription and workspace - the resource group derives from the workspace and
-              everything saves automatically. This screen unlocks once all five fields are set.
-            </p>
-            <div className="panel-controls">
-              <button className="run-button" onClick={() => setView('harness')}>
-                Open the setup panels
-              </button>
-            </div>
-          </section>
-        ) : (
-          <>
-            {!secretLive && (
-              <p className="connection-notice">
-                This connection&apos;s client secret has not been entered this session. A secret
-                connected in an earlier session may still be live server-side; if the run fails
-                acquiring a token, re-enter the secret in panel 3 (Save and connect) of the
-                Spike Harness view first.
-              </p>
-            )}
-            <PortsProvider ports={cloudPorts} config={activeConfig}>
-              <OnboardTableScreen key={`onboard-${store.activeProfileId ?? 'none'}`} />
-            </PortsProvider>
-          </>
-        )
-      ) : (
-        <>
+  // The Phase 1 diagnostics panels, intact, now living behind a frame route.
+  const harnessView = (
+    <>
+      <header className="harness-header">
+        <h1 className="harness-title">Phase 1 Spike Harness</h1>
+        <p className="harness-subtitle">
+          Sequential diagnostics for the Cribl App Platform: globals, KV store semantics,
+          proxy header injection, Azure AD token flow, ARM access, and iframe download behavior.
+          Pick or create a connection above, then run the panels top to bottom.
+        </p>
+      </header>
       <PlatformGlobalsPanel />
       <KvStorePanel />
       <AppRegistrationConnectPanel
@@ -1976,9 +2075,119 @@ function App() {
       <TokenAcquisitionPanel tenantId={activeConfig.tenantId} />
       <ArmCallPanel />
       <ArtifactDownloadPanel />
+    </>
+  );
+
+  // The Onboard route: gated on the five config fields the use-case cannot
+  // run without; the escape hatch navigates to the harness through the frame.
+  const renderOnboard = (nav: AppFrameNav) => (
+    <>
+      <header className="harness-header">
+        <h1 className="harness-title">Onboard a native table</h1>
+        <p className="harness-subtitle">
+          The first walking-skeleton feature screen from the shared UI package: deploy a
+          Kind:Direct DCR for one native Log Analytics table and create the matching Cribl
+          Sentinel destination, end to end through the shared onboardTable use-case.
+        </p>
+      </header>
+      {missingOnboardFields.length > 0 ? (
+        <section className="panel">
+          <h2 className="panel-title">Connection incomplete</h2>
+          <p className="panel-desc">
+            The active connection is missing required configuration:{' '}
+            {missingOnboardFields.join(', ')}. Complete panel 3 (App registration and connect)
+            and panel 4 (Select resources and grant permissions) in the Spike Harness:
+            connecting fills the tenant and client ids; in panel 4, Discover / refresh from
+            Azure, then select a subscription and workspace - the resource group derives from
+            the workspace and everything saves automatically. This screen unlocks once all five
+            fields are set.
+          </p>
+          <div className="panel-controls">
+            <button className="run-button" onClick={() => nav.navigate('harness')}>
+              Open the Spike Harness
+            </button>
+          </div>
+        </section>
+      ) : (
+        <>
+          {!secretLive && (
+            <p className="connection-notice">
+              This connection&apos;s client secret has not been entered this session. A secret
+              connected in an earlier session may still be live server-side; if the run fails
+              acquiring a token, re-enter the secret in panel 3 (Save and connect) of the
+              Spike Harness view first.
+            </p>
+          )}
+          <PortsProvider ports={cloudPorts} config={activeConfig}>
+            <OnboardTableScreen key={`onboard-${store.activeProfileId ?? 'none'}`} />
+          </PortsProvider>
         </>
       )}
-    </div>
+    </>
+  );
+
+  // Settings: the Phase 1 exit item graduated into a real screen - platform
+  // info, current mode + Reconfigure, and the validate-before-save raw-JSON
+  // editor over the active connection's non-secret config.
+  const settingsView = (
+    <SettingsScreen
+      shellName="Cribl.Cloud app platform (sandboxed iframe on the leader)"
+      platformRows={[
+        { label: 'Application', value: APP_NAME },
+        { label: 'App ID', value: window.CRIBL_APP_ID ?? '(not present)' },
+        { label: 'Platform API', value: String(window.CRIBL_API_URL) },
+        {
+          label: 'Platform link',
+          value: platformLink,
+          tip:
+            'The consolidated status poll: one KV key listing per minute,\n' +
+            'scheduled under the shared request budget, proves the platform\n' +
+            'bridge and the leader are reachable.',
+        },
+        { label: 'Active connection', value: activeProfile?.name ?? '(none)' },
+        {
+          label: 'Agreement accepted',
+          value:
+            typeof acceptance === 'object' && acceptance !== null
+              ? acceptance.acceptedAt
+              : '(not recorded)',
+        },
+      ]}
+      platformNote={
+        'Requests to Azure ride the platform proxy (30s timeout, shared request budget). ' +
+        'Secrets live in the app-scoped KV store; encrypted entries are write-only and can ' +
+        'only be replaced, never read back.'
+      }
+      mode={phase.mode}
+      onReconfigure={handleReconfigure}
+      configEditor={{
+        label: `Active connection config - ${activeProfile?.name ?? '(none)'}`,
+        json: JSON.stringify(activeConfig, null, 2),
+        onSave: (config) => updateField(config),
+      }}
+    />
+  );
+
+  // The frame's route table; requirements drive mode-aware navigation via
+  // @soc/core filterNavItems. Onboard needs BOTH live sides (it deploys to
+  // Azure and Cribl in one run); the Spike Harness is diagnostics and always
+  // available; so is Settings.
+  const routes: AppRoute[] = [
+    { id: 'onboard', label: 'Onboard', requires: 'both', render: renderOnboard },
+    { id: 'harness', label: 'Spike Harness', requires: 'none', render: () => harnessView },
+    { id: 'settings', label: 'Settings', requires: 'none', render: () => settingsView },
+  ];
+
+  return (
+    <AppFrame
+      title={APP_NAME}
+      subtitle="Cribl.Cloud shell"
+      mode={phase.mode}
+      routes={routes}
+      topBar={connectionBar}
+      footerNote="v1.0.0"
+      initialRouteId="onboard"
+    />
   );
 }
 

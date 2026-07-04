@@ -142,31 +142,25 @@
   padding: 8px 12px;
 }
 
-.view-tabs {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 16px;
-}
-
-.view-tab {
-  font-family: inherit;
-  font-size: 13px;
-  line-height: 20px;
-  padding: 6px 16px;
-  border: 1px solid #d9d9d9;
-  background: #fafafa;
-  color: #595959;
-  cursor: pointer;
-}
-
-.view-tab:hover {
-  border-color: #1890ff;
-  color: #1890ff;
-}
-
-.view-tab-active {
-  background: #ffffff;
-  border-color: #1890ff;
-  color: #1890ff;
+/* The consolidated poll's connection-bar badge (frame nav replaced the old
+ * view tabs; the platform-link status renders beside the secret badge). */
+.link-badge {
+  font-size: 12px;
   font-weight: 600;
+  line-height: 20px;
+  padding: 2px 10px;
+  border: 1px solid #d9d9d9;
+  white-space: nowrap;
+}
+
+.link-badge-ok {
+  color: #52c41a;
+  border-color: #b7eb8f;
+  background: #f6ffed;
+}
+
+.link-badge-off {
+  color: #8c8c8c;
+  border-color: #d9d9d9;
+  background: #fafafa;
 }
