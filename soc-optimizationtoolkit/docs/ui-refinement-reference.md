@@ -34,29 +34,27 @@ The dark-mode work already tokenized all colors into CSS custom properties, ever
 | Settings | `Settings.tsx` (164) | SettingsScreen | Unit 6.5 | yes |
 | Diagnostics/deps | `DepsCheck.tsx` (273) | (platform-provided; harness = diagnostics) | dropped/harness | n/a |
 
-## Capture checklist - START HERE (areas already built in the new app)
+## Capture checklist - one folder per legacy sidebar page
 
-Refine these first since the new screens exist and you can compare side by side. For each, capture the legacy screen in the listed STATES (empty, filled, mid-operation, results, error) - states are where the legacy polish lived.
+The `docs/ui-reference/` folders mirror the legacy app's sidebar in nav order, so you can walk the old app top to bottom and drop each page's screenshots into its folder. For each page capture the meaningful STATES (empty, filled, mid-operation, results, error) - states are where the legacy polish lived. The folder skeleton is committed (`.gitkeep`); only the image files are gitignored.
 
-### Batch A: the built areas (highest priority)
+| Folder | Legacy page | Priority | Feeds new-app unit(s) |
+|---|---|---|---|
+| `00-setup-wizard/` | SetupWizard (first-run, before the sidebar) | high (built) | 6.5, 22 |
+| `01-sentinel-integration/` | SentinelIntegration (the flagship) | HIGHEST (partly built) | 2,5,6,7 built; 11-20 to come |
+| `02-data-flow/` | DataFlow | later | 21 |
+| `03-dcr-automation/` | DcrAutomation | high (built as Batch/Onboard) | 5,6 |
+| `04-discovery/` | Discovery | later | 24 |
+| `05-labs/` | LabAutomation | later | labs area |
+| `06-siem-migration/` | SiemMigration | later | 26 |
+| `07-pack-builder/` | PackBuilder (+ `browser/`, `scaffold/`, `manager/` subfolders) | later | 17,19 |
+| `08-packs/` | Packs | later | 19 |
+| `09-repositories/` | RepoSetup | later | 14 |
+| `10-settings/` | Settings | high (built) | 6.5 |
 
-- [ ] `sentinel-integration/` - the flagship page top to bottom: initial/empty, content-selected, sample-loaded, analysis/gap-review, Azure-targeting section, Cribl-targeting section, deploy-in-progress, deploy-summary, and any review/approve modal. This one page seeds most of the Integrate arc; capture generously.
-- [ ] `azure-targeting/` - subscription/workspace/RG selection: empty, loaded dropdowns, a create-new-RG state, an enable-Sentinel action.
-- [ ] `deployment-review/` - the resource preview: exists-vs-will-create rows, expanded request detail, any acknowledge/confirm moment.
-- [ ] `batch-deploy/` (`DcrAutomation.tsx` + SentinelIntegration deploy) - table selection, per-table progress, combined summary.
-- [ ] `settings/` - the settings page layout and any config editor.
-- [ ] `setup-wizard/` - each wizard step (the step rail, per-step content, skip/next affordances).
+START with the "high"/"HIGHEST" rows - those new screens already exist so refinement can begin immediately. `01-sentinel-integration/` is the biggest win: one 3477-line page that seeds most of the Integrate arc, so capture it generously (initial/empty, content selected, sample loaded, analysis/gap review, Azure targeting, Cribl targeting, deploy in progress, deploy summary, any review/approve modal). The other pages can be captured as their unit approaches. Naming tip: number-prefix within a folder for flow order, e.g. `01-empty.png`, `02-content-selected.png`.
 
-### Batch B: the coming areas (capture as their units approach)
-
-- [ ] `repositories/` (`RepoSetup.tsx`) - PAT entry, solution browser, fetch states - for Unit 14.
-- [ ] `pack-builder/` (Browser/Scaffold/Manager) - each sub-screen and its states - for Units 17/19.
-- [ ] `packs/` (`Packs.tsx`) - inventory list, per-pack detail - for Unit 19.
-- [ ] `data-flow/` (`DataFlow.tsx`) - the monitoring/validation view - for Unit 21.
-- [ ] `siem-migration/` (`SiemMigration.tsx`) - input, analysis, report - for Unit 26.
-- [ ] `discovery/` (`Discovery.tsx`) - for Unit 24.
-- [ ] `labs/` (`LabAutomation.tsx`) - for the labs area.
-- [ ] rule/workbook analysis sections of SentinelIntegration - for Unit 23 (note: workbooks are NEW - no legacy reference; design fresh beside the rule panel).
+Note: rule + workbook coverage (Unit 23) - the rule analysis lives inside SentinelIntegration (capture it there); WORKBOOK analysis is net-new with no legacy reference, designed fresh beside the rule panel.
 
 ## Per-area refinement pass (what I do with the references)
 

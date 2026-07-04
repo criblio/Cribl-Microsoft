@@ -32,6 +32,12 @@ package-build/
 # Packaging temp archive (cleanup removes it; ignored in case a run is interrupted)
 apps/*/package-build.tgz
 
-# UI reference screenshots contain real tenant data - never commit the images
-docs/ui-reference/**
-!docs/ui-reference/README.md
+# UI reference screenshots contain real tenant data - never commit the IMAGES,
+# but keep the folder skeleton (.gitkeep) and README tracked so the structure
+# mirrors the legacy app sidebar on any checkout.
+docs/ui-reference/**/*.png
+docs/ui-reference/**/*.jpg
+docs/ui-reference/**/*.jpeg
+docs/ui-reference/**/*.gif
+docs/ui-reference/**/*.webp
+docs/ui-reference/**/*.bmp
