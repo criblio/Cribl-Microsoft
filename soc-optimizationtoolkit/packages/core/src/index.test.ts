@@ -19,6 +19,9 @@ import {
   resolveTheme,
   serializeThemeChoice,
   THEME_CHOICES,
+  // usecases/deployment-preview
+  buildDeploymentPreview,
+  checkExistingDcrs,
   // usecases/azure-discovery
   commitTargetScope,
   deriveResourceGroupsFromWorkspaces,
@@ -110,6 +113,11 @@ describe("@soc/core root barrel", () => {
     expect(typeof commitTargetScope).toBe("function");
     expect(typeof deriveResourceGroupsFromWorkspaces).toBe("function");
     expect(SENTINEL_SOLUTION_API_VERSION).toBe("2015-11-01-preview");
+  });
+
+  it("re-exports the deployment-preview usecase module", () => {
+    expect(typeof checkExistingDcrs).toBe("function");
+    expect(typeof buildDeploymentPreview).toBe("function");
   });
 
   it("re-exports the journey-state domain module", () => {

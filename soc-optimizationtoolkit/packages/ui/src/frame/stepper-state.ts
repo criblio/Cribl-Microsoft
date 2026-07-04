@@ -55,9 +55,17 @@ export const SHARED_JOURNEY_LINKS: JourneyLinks = {
     routeId: "onboard",
     hint: "Per-run overrides live on the run screens; saved defaults in Options.",
   },
+  review: {
+    routeId: "review",
+    hint:
+      "Preview exactly what a deploy run would create (live ARM truth); " +
+      "acknowledging the preview arms the Deploy handoff on that screen.",
+  },
   deploy: {
     routeId: "onboard",
-    hint: "Run on Onboard or Batch Onboard.",
+    hint:
+      "Run on Onboard or Batch Onboard. The Review stage previews what a " +
+      "run would create - recommended, never required (read-ahead).",
   },
 };
 

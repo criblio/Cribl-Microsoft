@@ -3,3 +3,4 @@
 export * from "./onboard-table";
 export * from "./onboard-batch";
 export * from "./azure-discovery";
+export * from "./deployment-preview";

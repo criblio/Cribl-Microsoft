@@ -51,12 +51,20 @@ describe("buildStepperItems", () => {
 
   it("never routes a not-yet-available stage, even when a link binds one", () => {
     const journey = deriveJourney(facts());
-    const review = stage(journey.integrate, "review");
-    expect(review.status).toBe("not-yet-available");
-    const [item] = buildStepperItems([review], {
-      review: { routeId: "somewhere" },
+    const validate = stage(journey.integrate, "validate");
+    expect(validate.status).toBe("not-yet-available");
+    const [item] = buildStepperItems([validate], {
+      validate: { routeId: "somewhere" },
     });
     expect(item?.routeId).toBeNull();
+  });
+
+  it("routes the shipped review stage to the review screen (Unit 7)", () => {
+    const journey = deriveJourney(facts());
+    const review = stage(journey.integrate, "review");
+    expect(review.status).toBe("available");
+    const [item] = buildStepperItems([review], SHARED_JOURNEY_LINKS);
+    expect(item?.routeId).toBe("review");
   });
 
   it("keeps the route on blocked stages (read-ahead: navigable, gated at commit)", () => {

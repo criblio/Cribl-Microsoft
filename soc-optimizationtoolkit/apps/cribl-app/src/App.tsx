@@ -13,6 +13,7 @@ import {
   OnboardTableScreen,
   OptionsScreen,
   PortsProvider,
+  ReviewScreen,
   SettingsScreen,
   commitNoticeText,
   formatScopeChip,
@@ -36,6 +37,7 @@ import {
   computeInvalidation,
   DEFAULT_APP_OPTIONS,
   DEFAULT_THEME_CHOICE,
+  deriveJourney,
   deriveResourceGroup,
   hasAzure,
   hasCribl,
@@ -137,6 +139,12 @@ const BATCH_PACING: BatchPacing = {
   sleep: (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)),
 };
 
+// The Review screen's generated-at token supplier (porting-plan Unit 7):
+// the SHELL owns the clock - @soc/core echoes the token verbatim onto the
+// preview so the staleness marker can render a generation time without core
+// ever reading Date. Module scope keeps the identity stable across renders.
+const REVIEW_GENERATED_AT = () => new Date().toISOString();
+
 // The AzureConfig fields the Onboard screen cannot run without. tenantId
 // drives the ARM token flow; the rest address the workspace the DCR targets.
 const ONBOARD_REQUIRED_FIELDS = [
@@ -179,7 +187,9 @@ const AZURE_ONLY_JOURNEY_LINKS = mergeJourneyLinks({
   },
   deploy: {
     routeId: 'batch-onboard',
-    hint: 'Run on Batch Onboard - template-only in this mode; ARM bodies download as one artifact.',
+    hint:
+      'Run on Batch Onboard - template-only in this mode; ARM bodies download as one ' +
+      'artifact. The Review stage previews what a run would create.',
   },
 });
 
@@ -2169,6 +2179,18 @@ function App() {
       platformLink === 'ok' ? true : platformLink === 'checking...' ? undefined : false,
   };
 
+  // The Review screen's disabled-control hint comes from journey-state's
+  // deploy stage (Unit 7 amendment: the single missing thing - identity or
+  // scope - is journey data, never per-screen prose). The preview needs the
+  // same live-ARM prerequisites as a deploy run, so one hint serves both.
+  const deployStage = deriveJourney(journeyFacts).integrate.find(
+    (stage) => stage.id === 'deploy'
+  );
+  const reviewJourneyHint =
+    deployStage !== undefined && deployStage.status === 'blocked'
+      ? (deployStage.blockedReason ?? null)
+      : null;
+
   // The connection bar: shell chrome that stays visible within the frame,
   // above whatever screen is active. Connection select/create/rename/delete,
   // the live-secret badge, and the consolidated poll's platform-link badge.
@@ -2492,6 +2514,40 @@ function App() {
     </>
   );
 
+  // The Review route (porting-plan Unit 7, ux-flow-plan 5.2): the Integrate
+  // arc's REVIEW stage - live-ARM deployment preview with the staleness
+  // marker and the acknowledge gate arming the handoff to Batch Onboard.
+  // No "connection incomplete" wall here: the screen keeps every control
+  // visible and disables them with the journey-state hint (the same
+  // identity/scope prerequisites a deploy run needs). Keyed by the active
+  // profile so switching connections drops the generated preview (stale
+  // cross-profile previews were a legacy hazard class).
+  const renderReview = (nav: AppFrameNav) => (
+    <>
+      <header className="harness-header">
+        <h1 className="harness-title">Review deployment</h1>
+        <p className="harness-subtitle">
+          Preview exactly what a deploy run would create - predicted DCR/DCE
+          names (the same names deployment uses), Exists vs Will create from
+          live Azure, and the ARM request bodies - then acknowledge the
+          preview to arm the Deploy handoff. Read-only: checking never
+          deploys anything.
+        </p>
+      </header>
+      <PortsProvider ports={cloudPorts} config={activeConfig}>
+        <ReviewScreen
+          key={`review-${store.activeProfileId ?? 'none'}`}
+          generatedAtToken={REVIEW_GENERATED_AT}
+          operationDefaults={appOptions.operation}
+          journeyBlockedReason={reviewJourneyHint}
+          onOpenOptions={() => nav.navigate('options')}
+          onProceedToDeploy={() => nav.navigate('batch-onboard')}
+          deploySurfaceLabel="Batch Onboard"
+        />
+      </PortsProvider>
+    </>
+  );
+
   // The Options route (porting-plan Unit 4): deployment and naming defaults
   // as typed forms over the plain appOptions KV entry. requires: 'none' -
   // options are app configuration, editable in every mode. No PortsProvider
@@ -2593,12 +2649,15 @@ function App() {
   // presentation only. Onboard needs BOTH live sides (it deploys to Azure
   // and Cribl in one run); batch-onboard relaxes to 'azure' (recorded Unit
   // 6.5 decision) - in azure-only mode templateOnly is FORCED on because no
-  // live Cribl connection exists to deploy destinations to.
+  // live Cribl connection exists to deploy destinations to. Review (Unit 7)
+  // requires 'azure' (its truth is live ARM) and sits after the screens
+  // serving Choose/Configure, mirroring the integrate arc's stage order.
   const routes: AppRoute[] = [
     { id: 'home', label: 'Home', requires: 'none', section: 'journey', render: renderHome },
     { id: 'azure-target', label: 'Azure Targeting', requires: 'azure', section: 'journey', render: renderTargeting },
     { id: 'onboard', label: 'Onboard', requires: 'both', section: 'journey', render: renderOnboard },
     { id: 'batch-onboard', label: 'Batch Onboard', requires: 'azure', section: 'journey', render: renderBatch },
+    { id: 'review', label: 'Review', requires: 'azure', section: 'journey', render: renderReview },
     { id: 'options', label: 'Options', requires: 'none', section: 'tools', render: () => optionsView },
     { id: 'logs', label: 'Logs', requires: 'none', section: 'tools', render: () => logsView },
     { id: 'settings', label: 'Settings', requires: 'none', section: 'tools', render: () => settingsView },

@@ -26,6 +26,7 @@ import {
   OnboardTableScreen,
   OptionsScreen,
   PortsProvider,
+  ReviewScreen,
   SettingsScreen,
   commitNoticeText,
   formatScopeChip,
@@ -51,6 +52,7 @@ import {
   DEFAULT_THEME_CHOICE,
   EMPTY_AZURE_CONFIG,
   computeInvalidation,
+  deriveJourney,
   hasAzure,
   hasCribl,
   parseAcceptanceRecord,
@@ -92,6 +94,12 @@ const BATCH_PACING: BatchPacing = {
   now: () => Date.now(),
   sleep: (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)),
 };
+
+// The Review screen's generated-at token supplier (porting-plan Unit 7):
+// the SHELL owns the clock - @soc/core echoes the token verbatim onto the
+// preview so the staleness marker can render a generation time without core
+// ever reading Date. Module scope keeps the identity stable across renders.
+const REVIEW_GENERATED_AT = () => new Date().toISOString();
 
 // The Logs screen's data source: flush anything the browser logger still
 // holds, then read the host log tail back and re-parse the pinned line
@@ -158,7 +166,9 @@ const AZURE_ONLY_JOURNEY_LINKS = mergeJourneyLinks({
   },
   deploy: {
     routeId: 'batch-onboard',
-    hint: 'Run on Batch Onboard - template-only in this mode; ARM bodies download as one artifact.',
+    hint:
+      'Run on Batch Onboard - template-only in this mode; ARM bodies download as one ' +
+      'artifact. The Review stage previews what a run would create.',
   },
 });
 
@@ -484,6 +494,18 @@ export function LocalApp() {
       activeAzureConfig.workspaceName.trim() !== '',
   };
 
+  // The Review screen's disabled-control hint comes from journey-state's
+  // deploy stage (Unit 7 amendment: the single missing thing - identity or
+  // scope - is journey data, never per-screen prose). The preview needs the
+  // same live-ARM prerequisites as a deploy run, so one hint serves both.
+  const deployStage = deriveJourney(journeyFacts).integrate.find(
+    (stage) => stage.id === 'deploy'
+  );
+  const reviewJourneyHint =
+    deployStage !== undefined && deployStage.status === 'blocked'
+      ? (deployStage.blockedReason ?? null)
+      : null;
+
   // The Home route (ux-flow-plan 4.3, Unit 6.5): the state-aware landing
   // surface BOTH shells open on every launch. Facts in, rails and the single
   // next action out - position is derived from persisted state on every
@@ -589,6 +611,55 @@ export function LocalApp() {
             criblDefaults={appOptions.cribl}
             onOpenOptions={() => nav.navigate('options')}
             forcedTemplateOnly={!hasCribl(phase.mode)}
+          />
+        </PortsProvider>
+      )}
+    </>
+  );
+
+  // The Review route (porting-plan Unit 7, ux-flow-plan 5.2): the Integrate
+  // arc's REVIEW stage - live-ARM deployment preview through the host's ARM
+  // proxy, with the staleness marker and the acknowledge gate arming the
+  // handoff to Batch Onboard. Controls stay visible and disable with the
+  // journey-state hint (identity/scope - the same prerequisites a deploy
+  // run needs); the host-config loading/error branches match the other
+  // ports-backed routes.
+  const renderReview = (nav: AppFrameNav) => (
+    <>
+      <header className="local-header">
+        <h1 className="local-title">Review deployment</h1>
+        <p className="local-subtitle">
+          Preview exactly what a deploy run would create - predicted DCR/DCE
+          names (the same names deployment uses), Exists vs Will create from
+          live Azure, and the ARM request bodies - then acknowledge the
+          preview to arm the Deploy handoff. Read-only: checking never
+          deploys anything.
+        </p>
+      </header>
+      {load.state === 'loading' && (
+        <p className="local-subtitle">Loading host configuration...</p>
+      )}
+      {load.state === 'error' && (
+        <>
+          <div className="local-error">
+            Could not load the host configuration: {load.message}
+          </div>
+          <div className="panel-controls">
+            <button className="run-button" onClick={() => void reload()}>
+              Retry
+            </button>
+          </div>
+        </>
+      )}
+      {load.state === 'loaded' && activeAzureConfig !== null && (
+        <PortsProvider ports={ports} config={activeAzureConfig}>
+          <ReviewScreen
+            generatedAtToken={REVIEW_GENERATED_AT}
+            operationDefaults={appOptions.operation}
+            journeyBlockedReason={reviewJourneyHint}
+            onOpenOptions={() => nav.navigate('options')}
+            onProceedToDeploy={() => nav.navigate('batch-onboard')}
+            deploySurfaceLabel="Batch Onboard"
           />
         </PortsProvider>
       )}
@@ -746,16 +817,20 @@ export function LocalApp() {
   );
 
   // Route table, SECTIONED per ux-flow-plan 4.4: journey steps in dependency
-  // order (Home, Azure Targeting, Onboard, Batch Onboard), then tools. This
-  // shell has no diagnostics section (the Spike Harness is cloud-only).
-  // Onboard needs BOTH live sides; batch-onboard relaxes to 'azure'
-  // (recorded Unit 6.5 decision) - in azure-only mode templateOnly is FORCED
-  // on because no live Cribl connection exists to deploy destinations to.
+  // order (Home, Azure Targeting, Onboard, Batch Onboard, Review), then
+  // tools. This shell has no diagnostics section (the Spike Harness is
+  // cloud-only). Onboard needs BOTH live sides; batch-onboard relaxes to
+  // 'azure' (recorded Unit 6.5 decision) - in azure-only mode templateOnly
+  // is FORCED on because no live Cribl connection exists to deploy
+  // destinations to. Review (Unit 7) requires 'azure' (its truth is live
+  // ARM) and sits after the screens serving Choose/Configure, mirroring the
+  // integrate arc's stage order.
   const routes: AppRoute[] = [
     { id: 'home', label: 'Home', requires: 'none', section: 'journey', render: renderHome },
     { id: 'azure-target', label: 'Azure Targeting', requires: 'azure', section: 'journey', render: () => targetingView },
     { id: 'onboard', label: 'Onboard', requires: 'both', section: 'journey', render: () => onboardView },
     { id: 'batch-onboard', label: 'Batch Onboard', requires: 'azure', section: 'journey', render: renderBatch },
+    { id: 'review', label: 'Review', requires: 'azure', section: 'journey', render: renderReview },
     { id: 'options', label: 'Options', requires: 'none', section: 'tools', render: () => optionsView },
     { id: 'logs', label: 'Logs', requires: 'none', section: 'tools', render: () => logsView },
     { id: 'settings', label: 'Settings', requires: 'none', section: 'tools', render: () => settingsView },

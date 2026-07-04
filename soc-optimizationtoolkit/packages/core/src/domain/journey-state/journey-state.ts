@@ -16,11 +16,12 @@
  *     wizard-progress blob to drift (ux-flow-plan 4.2).
  *
  *   INTEGRATE arc  (choose-content -> configure -> review -> deploy ->
- *     validate -> monitor): the repeatable job. In Unit 6.5 the shipped
- *     surfaces are choose-content, configure, and deploy (the existing
- *     Onboard / Batch Onboard / Options screens); review, validate, and
- *     monitor render as HONEST 'not-yet-available' placeholders until their
- *     units land (7, 10/20/21, 27) - see UNSHIPPED_INTEGRATE_STAGES.
+ *     validate -> monitor): the repeatable job. The shipped surfaces are
+ *     choose-content, configure, and deploy (the existing Onboard / Batch
+ *     Onboard / Options screens) plus review (the Unit 7 deployment-preview
+ *     screen - the ux-flow-plan 5.2 REVIEW stage); validate and monitor
+ *     render as HONEST 'not-yet-available' placeholders until their units
+ *     land (10/20/21, 27) - see UNSHIPPED_INTEGRATE_STAGES.
  *
  * Inputs are SPLIT readiness facts (replacing the conflated five-field
  * ONBOARD_REQUIRED_FIELDS gate): identity presence (tenantId + clientId),
@@ -137,13 +138,12 @@ export const INTEGRATE_ARC: readonly IntegrateStageId[] = [
 ];
 
 /**
- * Integrate stages whose product surface has NOT shipped yet (Unit 6.5).
- * They render 'not-yet-available' - an honest placeholder, never a teaser.
- * Later units shrink this list (7 ships review; 10/20/21 ship validate;
- * 27 ships monitor) by editing it HERE, in the one journey module.
+ * Integrate stages whose product surface has NOT shipped yet. They render
+ * 'not-yet-available' - an honest placeholder, never a teaser. Later units
+ * shrink this list (Unit 7 shipped review; 10/20/21 ship validate; 27 ships
+ * monitor) by editing it HERE, in the one journey module.
  */
 export const UNSHIPPED_INTEGRATE_STAGES: readonly IntegrateStageId[] = [
-  "review",
   "validate",
   "monitor",
 ];
@@ -226,7 +226,6 @@ const MODE_WALL_REASON = "Choose an operating mode to continue.";
 
 // Honest not-shipped notes for the placeholder integrate stages.
 const UNSHIPPED_REASONS: Partial<Record<IntegrateStageId, string>> = {
-  review: "The deployment preview stage has not shipped yet.",
   validate: "The post-deploy validation stage has not shipped yet.",
   monitor:
     "The monitoring dashboard has not shipped yet; observe completed runs in Recent runs and Logs.",
@@ -410,7 +409,11 @@ export function deriveJourney(facts: JourneyFacts): Journey {
         status: firstRunDone ? ("current" as const) : ("available" as const),
       };
     }
-    if (id === "configure") {
+    if (id === "configure" || id === "review") {
+      // Review (Unit 7's deployment preview) is READ-AHEAD like configure:
+      // always navigable, never a hard gate on Deploy - its acknowledge
+      // check arms only the handoff button on the Review screen itself,
+      // and the acknowledgement is transient, never persisted as consent.
       return { id, label, status: "available" as const };
     }
     // deploy: mirror the EXISTING Run gate - identity fields + committed

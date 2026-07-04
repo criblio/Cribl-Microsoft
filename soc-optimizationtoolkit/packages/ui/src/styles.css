@@ -1105,3 +1105,82 @@ button.journey-step-main:hover .journey-step-label {
   border-color: var(--warn-border);
   background: var(--warn-bg);
 }
+
+/*
+ * Review screen (porting-plan Unit 7, ux-flow-plan 5.2): per-resource rows
+ * with DCR/TBL/DCE tags and Exists / Will create pills (the pills reuse the
+ * readiness-chip tints above), the staleness marker row, and the
+ * acknowledge-gate block. All colors come from the theme tokens.
+ */
+.review-row {
+  border: 1px solid var(--border-subtle);
+  background: var(--surface);
+  padding: 10px 12px;
+  margin-top: 8px;
+}
+
+.review-row-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.review-tag {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  line-height: 18px;
+  padding: 0 8px;
+  border: 1px solid var(--accent-border);
+  background: var(--accent-bg);
+  color: var(--accent-strong);
+  white-space: nowrap;
+}
+
+.review-tag-dce {
+  border-color: var(--purple-border);
+  background: var(--purple-bg);
+  color: var(--purple);
+}
+
+.review-name {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  word-break: break-all;
+}
+
+.review-request {
+  margin-top: 6px;
+}
+
+.review-request summary {
+  cursor: pointer;
+}
+
+.review-marker-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.review-stale-notice {
+  margin-top: 6px;
+  font-size: 13px;
+  color: var(--warn);
+  border: 1px solid var(--warn-border);
+  background: var(--warn-bg);
+  padding: 6px 10px;
+}
+
+.review-acknowledge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 0;
+  font-size: 14px;
+  color: var(--text);
+}

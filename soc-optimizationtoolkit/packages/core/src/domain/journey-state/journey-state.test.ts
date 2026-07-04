@@ -217,7 +217,7 @@ describe("deriveJourney invariants (full 360-combination fact matrix)", () => {
     }
   });
 
-  it("keeps choose-content and configure navigable in Azure modes past the walls, whatever later stages need", () => {
+  it("keeps choose-content, configure, and review navigable in Azure modes past the walls, whatever later stages need", () => {
     for (const f of everyFactCombination()) {
       if (!f.accepted || (f.mode !== "full" && f.mode !== "azure-only")) {
         continue;
@@ -227,6 +227,9 @@ describe("deriveJourney invariants (full 360-combination fact matrix)", () => {
         statusOf(journey, "choose-content"),
       );
       expect(statusOf(journey, "configure")).toBe("available");
+      // Review is read-ahead by decision: never a hard gate on Deploy (the
+      // acknowledge check arms only the Review screen's own handoff button).
+      expect(statusOf(journey, "review")).toBe("available");
     }
   });
 });
@@ -466,7 +469,7 @@ describe("air-gapped mode", () => {
 });
 
 describe("unshipped integrate placeholders", () => {
-  it("keeps review, validate, and monitor not-yet-available even on a fully green full-mode journey", () => {
+  it("keeps validate and monitor not-yet-available even on a fully green full-mode journey", () => {
     const journey = deriveJourney(
       facts({ mode: "full", criblReachable: true }),
     );
@@ -477,12 +480,17 @@ describe("unshipped integrate placeholders", () => {
     }
   });
 
-  it("lists exactly the stages Unit 6.5 does not ship", () => {
-    expect(UNSHIPPED_INTEGRATE_STAGES).toEqual([
-      "review",
-      "validate",
-      "monitor",
-    ]);
+  it("lists exactly the stages still unshipped after Unit 7 shipped review", () => {
+    expect(UNSHIPPED_INTEGRATE_STAGES).toEqual(["validate", "monitor"]);
+  });
+
+  it("ships review: available on a green Azure journey, never a placeholder", () => {
+    const journey = deriveJourney(
+      facts({ mode: "full", criblReachable: true }),
+    );
+    const review = stageOf(journey, "review");
+    expect(review.status).toBe("available");
+    expect(review.blockedReason).toBeUndefined();
   });
 });
 
