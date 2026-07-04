@@ -76,6 +76,15 @@ Legacy source root abbreviations used below:
 - External surface: management.azure.com (existing).
 - Depends on: Units 2, 4.
 
+> QUEUED (user, 2026-07-04): DARK MODE TOGGLE - refactor the shared stylesheet's hardcoded colors
+> into CSS custom properties on :root with a [data-theme="dark"] override (single source, both
+> shells; no rule duplication); theme choice light|dark|system (default system via
+> prefers-color-scheme) persisted as a plain 'appTheme' entry following the appMode pattern; toggle
+> control in the frame topBar plus the Settings screen. Caveat to document: inside the Cribl iframe,
+> "system" follows the OS preference, not Cribl's own UI theme (no platform theme signal exists in
+> AGENTS.md). Lands with the guided-journey shell unit (both are app chrome) or immediately after
+> Unit 6 - whichever comes first once the in-flight UI work clears.
+
 > DECISIONS RESOLVED (user, 2026-07-03, via multiple choice - all recommendations accepted):
 > (1) JobStatus/step status gains a first-class 'skipped' value (binds Units 6/20 and step-line rendering).
 > (2) Cribl destinations reference a named Cribl secret object (app ensures it via API); '<replace me>' survives only in air-gapped export artifacts (binds Unit 20).
