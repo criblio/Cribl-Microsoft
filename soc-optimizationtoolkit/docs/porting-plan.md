@@ -76,6 +76,14 @@ Legacy source root abbreviations used below:
 - External surface: management.azure.com (existing).
 - Depends on: Units 2, 4.
 
+> UNIT 6 FOLLOW-UPS (review observations, 2026-07-04): (a) the legacy Fix-HandlerControlEndpoint
+> repair (handler.control.monitor -> ingest.monitor rewrite, catalog DCR-28) is deferred to the
+> sentinel-destination composition layer - port it there (with the legacy-cited test) before
+> DCE-based Cribl configs ship to environments exhibiting the anomaly; (b)
+> AMPLS_SCOPED_RESOURCE_API_VERSION 2021-07-01-preview was not minable from legacy (Az cmdlets) -
+> confirm against a live ARM call before relying on the association path in production (add to the
+> user's live-testing list).
+
 > QUEUED (user, 2026-07-04): DARK MODE TOGGLE - refactor the shared stylesheet's hardcoded colors
 > into CSS custom properties on :root with a [data-theme="dark"] override (single source, both
 > shells; no rule duplication); theme choice light|dark|system (default system via
