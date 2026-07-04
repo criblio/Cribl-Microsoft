@@ -1,0 +1,318 @@
+{
+  "name": "CrowdStrike_Secondary_Data_CL",
+  "description": "Auto-generated from Sentinel Content Hub for CrowdStrike_Secondary_Data_CL",
+  "retentionInDays": 30,
+  "totalRetentionInDays": 90,
+  "columns": [
+    {
+      "name": "TimeGenerated",
+      "type": "datetime",
+      "description": "The timestamp (UTC) reflecting the time in which the event was generated."
+    },
+    {
+      "name": "FolderName",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "AdditionalFields",
+      "type": "dynamic",
+      "description": ""
+    },
+    {
+      "name": "AgentLoadFlags",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "AgentLocalTime",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "AgentTimeOffset",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "AgentVersion",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "BiosManufacturer",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "BiosVersion",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ChassisType",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "City",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ComputerName",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ConfigBuild",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ConfigIDBuild",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "Continent",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "Country",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "FalconGroupingTags",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "FirstSeen",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "HostHiddenStatus",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "MachineDomain",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "OU",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "PointerSize",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ProductType",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "SensorGroupingTags",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ServicePackMajor",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "SiteName",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "SystemManufacturer",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "SystemProductName",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "Timezone",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "Version",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "aid",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "aip",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "cid",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "event_platform",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "event_simpleName",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "CompanyName",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "FileName",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "FileVersion",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ProductName",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ProductVersion",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "SHA256HashData",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "detectionCount",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "hostname",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "externalIP",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "installationTimestamp",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "SoftwareType",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "Category",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "GatewayIP",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "GatewayMAC",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "InterfaceAlias",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "InterfaceDescription",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "LocalAddressIP4",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "MAC",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "MACPrefix",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "CurrentLocalIP",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "FirstDiscoveredDate",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "LastDiscoveredBy",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "discovererCount",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "discoverer_aid",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "discoverer_devicetype",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "localipCount",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "subnet",
+      "type": "string",
+      "description": ""
+    }
+  ]
+}

@@ -30,6 +30,7 @@ import type {
   DcrDataFlow,
   DroppedColumn,
   LogAnalyticsColumn,
+  TableMode,
   UnknownTypeColumn,
 } from "../schema-mapping";
 
@@ -43,7 +44,7 @@ export const DIRECT_DCR_API_VERSION = "2023-03-11";
 
 /** Input for {@link buildDirectDcrRequest}. */
 export interface DirectDcrRequestInput {
-  /** Native table name, e.g. "SecurityEvent". */
+  /** Table name, e.g. "SecurityEvent" or "CloudFlare_CL" (custom mode). */
   table: string;
   /**
    * Log Analytics schema columns for the table (the column array selected via
@@ -51,6 +52,13 @@ export interface DirectDcrRequestInput {
    * and guid-typed columns are filtered here via buildDcrColumnSet.
    */
   columns: readonly LogAnalyticsColumn[];
+  /**
+   * "native" (default) or "custom" (_CL tables). Drives the schema-mapping
+   * drop list (18-name native vs 6-name custom) and the output stream
+   * ("Microsoft-{table}" native vs "Custom-{table}" custom) - Unit 5 wires
+   * the custom path through the SAME builder, never a duplicate.
+   */
+  tableMode?: TableMode;
   /** Azure region for the DCR resource, e.g. "eastus". */
   location: string;
   /**
@@ -91,7 +99,7 @@ export interface DirectDcrRequest {
   body: DirectDcrRequestBody;
   /** Input stream name: "Custom-{table}" (also the streamDeclarations key). */
   streamName: string;
-  /** Output stream name: "Microsoft-{table}" (native tables). */
+  /** Output stream: "Microsoft-{table}" (native) / "Custom-{table}" (custom). */
   outputStream: string;
   /** Columns removed by the schema-mapping filter (diagnostics; legacy logs these). */
   droppedColumns: DroppedColumn[];
@@ -108,11 +116,12 @@ export class DcrRequestError extends Error {
 }
 
 /**
- * Build the complete ARM PUT request for a Kind:Direct DCR targeting a NATIVE
- * table. Mirrors what the legacy engine deploys through
- * dcr-template-direct.json: a single "Custom-{table}" stream declaration, a
- * single logAnalytics destination named "logAnalyticsWorkspace", and one
- * dataFlow with transformKql "source" into "Microsoft-{table}".
+ * Build the complete ARM PUT request for a Kind:Direct DCR. Mirrors what the
+ * legacy engine deploys through dcr-template-direct.json: a single
+ * "Custom-{table}" stream declaration, a single logAnalytics destination
+ * named "logAnalyticsWorkspace", and one dataFlow with transformKql "source"
+ * into "Microsoft-{table}" (native) or "Custom-{table}" (custom _CL tables,
+ * tableMode "custom").
  *
  * @throws DcrRequestError when workspaceResourceId lacks a subscription or
  *   resource group, or when a required input string is empty.
@@ -123,6 +132,7 @@ export function buildDirectDcrRequest(
   input: DirectDcrRequestInput,
 ): DirectDcrRequest {
   const { table, columns, location, workspaceResourceId, dcrName } = input;
+  const tableMode: TableMode = input.tableMode ?? "native";
 
   if (table.trim() === "") {
     throw new DcrRequestError("table must be a non-empty string");
@@ -146,8 +156,12 @@ export function buildDirectDcrRequest(
 
   // Compatibility contract: column filtering/mapping and the stream/dataFlow
   // fragment come from schema-mapping, never re-implemented here.
-  const columnSet = buildDcrColumnSet(columns, "native");
-  const declaration = buildStreamDeclaration(table, columnSet.columns, "native");
+  const columnSet = buildDcrColumnSet(columns, tableMode);
+  const declaration = buildStreamDeclaration(
+    table,
+    columnSet.columns,
+    tableMode,
+  );
 
   const path =
     `/subscriptions/${subscriptionId}` +

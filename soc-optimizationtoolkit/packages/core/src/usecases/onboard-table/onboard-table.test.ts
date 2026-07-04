@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   onboardTable,
+  onboardTableStepsFor,
   ONBOARD_TABLE_JOB_KIND,
   ONBOARD_TABLE_STEPS,
 } from "./onboard-table";
@@ -82,6 +83,45 @@ function stepByName(steps: JobStep[], name: string): JobStep {
   return step;
 }
 
+/**
+ * NATIVE-PATH REGRESSION PIN (porting-plan Unit 5): native jobs carry
+ * EXACTLY the walking-skeleton step list - the create-custom-table step is
+ * ABSENT (not "skipped"), keeping native job records byte-identical to the
+ * pre-Unit-5 contract. Pinned as a literal, NOT derived from the constant,
+ * so a step-list change cannot silently rewrite this contract.
+ */
+const NATIVE_STEPS = [
+  "fetch-workspace",
+  "fetch-table-schema",
+  "generate-dcr-name",
+  "deploy-dcr",
+  "create-cribl-destination",
+  "commit-and-deploy",
+  "verify",
+] as const;
+
+describe("onboardTable step lists", () => {
+  it("native tables carry the walking-skeleton steps; create-custom-table is ABSENT", () => {
+    expect(onboardTableStepsFor("SecurityEvent")).toEqual([...NATIVE_STEPS]);
+    expect(onboardTableStepsFor("SecurityEvent")).not.toContain(
+      "create-custom-table",
+    );
+  });
+
+  it("custom (_CL) tables carry the full list with create-custom-table before deploy-dcr", () => {
+    expect(onboardTableStepsFor("CloudFlare_CL")).toEqual([
+      ...ONBOARD_TABLE_STEPS,
+    ]);
+    const steps = onboardTableStepsFor("CloudFlare_CL");
+    expect(steps.indexOf("create-custom-table")).toBeGreaterThan(-1);
+    expect(steps.indexOf("create-custom-table")).toBeLessThan(
+      steps.indexOf("deploy-dcr"),
+    );
+    // The suffix check is case-insensitive, matching the original guard.
+    expect(onboardTableStepsFor("table_cl")).toContain("create-custom-table");
+  });
+});
+
 describe("onboardTable happy path", () => {
   it("runs every step, records the exact port call sequence, and succeeds", async () => {
     const ports = makePorts();
@@ -111,8 +151,12 @@ describe("onboardTable happy path", () => {
     expect(job.kind).toBe(ONBOARD_TABLE_JOB_KIND);
     expect(job.status).toBe("succeeded");
     expect(job.error).toBeUndefined();
+    // Native regression: the pinned walking-skeleton list, nothing more.
     expect(job.steps.map((step) => `${step.name}:${step.status}`)).toEqual(
-      ONBOARD_TABLE_STEPS.map((name) => `${name}:succeeded`),
+      NATIVE_STEPS.map((name) => `${name}:succeeded`),
+    );
+    expect(job.steps.map((step) => step.name)).not.toContain(
+      "create-custom-table",
     );
 
     const outcome = job.result as OnboardTableOutcome;
@@ -180,10 +224,13 @@ describe("onboardTable happy path", () => {
     // The persisted job input never carries the secret value.
     expect(JSON.stringify(job.input)).not.toContain("live-secret");
     expect(job.input).toMatchObject({ ingestionClientSecretProvided: true });
+    // Native regression: no custom-path fields leak into native job input.
+    expect(job.input).not.toHaveProperty("customSchemaProvided");
+    expect(job.input).not.toHaveProperty("customTableRetentionDays");
 
     // onProgress saw running -> succeeded for every step, in order.
     expect(progress).toEqual(
-      ONBOARD_TABLE_STEPS.flatMap((name) => [
+      NATIVE_STEPS.flatMap((name) => [
         `${name}:running`,
         `${name}:succeeded`,
       ]),
@@ -214,16 +261,25 @@ describe("onboardTable failures", () => {
     expect(ports.cribl.calls).toHaveLength(0);
   });
 
-  it("refuses _CL tables in native mode without calling the tables API", async () => {
+  it("routes _CL tables to the custom path: missing table + no customSchema fails at create-custom-table", async () => {
+    // DELIBERATE CONTRACT CHANGE (Unit 5): the walking skeleton REFUSED _CL
+    // tables outright; they now run the custom path, which requires either
+    // an existing table or input.customSchema. Neither here -> loud failure,
+    // no PUT ever sent (see onboard-table.custom.test.ts for the full path).
     const ports = makePorts();
-    ports.azure.respondWith(WORKSPACE_RESPONSE);
+    ports.azure.respondWith(WORKSPACE_RESPONSE, {
+      status: 404,
+      body: { error: { code: "NotFound", message: "Table not found" } },
+    });
 
     const job = await onboardTable(ports, baseInput({ table: "CloudFlare_CL" }));
 
     expect(job.status).toBe("failed");
-    expect(job.error).toContain("_CL");
-    expect(stepByName(job.steps, "fetch-table-schema").status).toBe("failed");
-    expect(ports.azure.calls).toHaveLength(1); // workspace GET only
+    expect(job.error).toContain("no customSchema was provided");
+    expect(stepByName(job.steps, "create-custom-table").status).toBe("failed");
+    // workspace GET + table existence GET, nothing else (no PUT).
+    expect(ports.azure.calls).toHaveLength(2);
+    expect(ports.azure.calls[1]!.method).toBe("GET");
     expect(ports.cribl.calls).toHaveLength(0);
   });
 

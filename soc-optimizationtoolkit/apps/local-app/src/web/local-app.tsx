@@ -382,7 +382,10 @@ export function LocalApp() {
       )}
       {load.state === 'loaded' && activeAzureConfig !== null && (
         <PortsProvider ports={ports} config={activeAzureConfig}>
-          <OnboardTableScreen criblDefaults={appOptions.cribl} />
+          <OnboardTableScreen
+            criblDefaults={appOptions.cribl}
+            operationDefaults={appOptions.operation}
+          />
         </PortsProvider>
       )}
     </>

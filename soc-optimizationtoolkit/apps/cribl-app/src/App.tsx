@@ -2249,6 +2249,7 @@ function App() {
             <OnboardTableScreen
               key={`onboard-${store.activeProfileId ?? 'none'}`}
               criblDefaults={appOptions.cribl}
+              operationDefaults={appOptions.operation}
             />
           </PortsProvider>
         </>

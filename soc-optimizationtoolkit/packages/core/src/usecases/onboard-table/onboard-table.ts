@@ -1,31 +1,52 @@
 /**
- * onboardTable - the walking-skeleton use-case: onboard one NATIVE Log
- * Analytics table end to end. Pure orchestration against the three ports
- * (AzureManagement, CriblClient, JobStore); zero IO of its own, no wall-clock
- * reads, no timers - polling is bounded by ATTEMPT COUNT only (the adapters
- * enforce per-request timeouts).
+ * onboardTable - onboard one Log Analytics table end to end: NATIVE tables
+ * (walking skeleton) and, since porting-plan Unit 5, CUSTOM (_CL) tables in
+ * the SAME pipelined job (custom table + DCR as one job - the catalog
+ * decision; never the legacy PS double-run). Pure orchestration against the
+ * three ports (AzureManagement, CriblClient, JobStore); zero IO of its own,
+ * no wall-clock reads, no timers - polling is bounded by ATTEMPT COUNT only
+ * (the adapters enforce per-request timeouts).
  *
- * Steps (each updates the JobStore record AND fires onProgress):
+ * Steps (each updates the JobStore record AND fires onProgress). The
+ * create-custom-table step exists ONLY on custom (_CL) jobs - for native
+ * tables it is ABSENT, not "skipped", so native job records stay
+ * byte-identical to the pre-Unit-5 contract (pinned by test); UIs must seed
+ * step lines from {@link onboardTableStepsFor}, not the raw constant:
  *   1 fetch-workspace          GET the workspace resource (resource id +
  *                              location when the caller did not provide one)
- *   2 fetch-table-schema       GET workspace tables/{table}; native mode
- *                              REFUSES "_CL" tables; columns are selected via
- *                              schema-mapping selectSchemaColumns
- *   3 generate-dcr-name        dcr-naming, mode "direct" (legacy contract)
- *   4 deploy-dcr               PUT the Kind:Direct DCR (buildDirectDcrRequest)
- *                              then GET-poll until provisioningState Succeeded
- *                              or maxDcrPollAttempts is exhausted; parse
+ *   2 create-custom-table      CUSTOM ONLY. GET workspace tables/{table}
+ *                              first: exists -> creation is skipped
+ *                              (idempotency, the legacy Process-CustomTable
+ *                              contract) and its schema is reused; 404 ->
+ *                              REQUIRES input.customSchema, validates it
+ *                              (validateCustomTableSchema), PUTs the table
+ *                              (buildTablePutRequest, retention
+ *                              30/90-contract via customTableRetentionDays)
+ *                              and GET-polls until the created table reads
+ *                              back Succeeded, bounded by
+ *                              maxTablePollAttempts
+ *   3 fetch-table-schema       native: GET workspace tables/{table}; custom:
+ *                              reuse the body resolved in step 2 (no second
+ *                              GET). Columns are selected via schema-mapping
+ *                              selectSchemaColumns in the table's mode
+ *   4 generate-dcr-name        dcr-naming, mode "direct" (legacy contract;
+ *                              custom tables get "_CL" stripped)
+ *   5 deploy-dcr               PUT the Kind:Direct DCR (buildDirectDcrRequest
+ *                              in the table's mode - custom tables emit
+ *                              Custom-{table} output streams) then GET-poll
+ *                              until provisioningState Succeeded or
+ *                              maxDcrPollAttempts is exhausted; parse
  *                              immutableId + logsIngestion endpoint
- *   5 create-cribl-destination POST /system/outputs in groupId context with
+ *   6 create-cribl-destination POST /system/outputs in groupId context with
  *                              buildSentinelDestination
- *   6 commit-and-deploy        POST /version/commit (group) then PATCH
+ *   7 commit-and-deploy        POST /version/commit (group) then PATCH
  *                              /master/groups/{groupId}/deploy (leader).
  *                              HTTP errors here are REPORTED BUT NONFATAL:
  *                              deployment semantics differ per Cribl mode
  *                              (single-instance leaders reject group commit
  *                              routes), so the step is recorded honestly as
  *                              failed and the job continues.
- *   7 verify                   GET the DCR and GET the created output
+ *   8 verify                   GET the DCR and GET the created output
  *
  * Any other failure marks the current step AND the job failed with the raw
  * error text and stops.
@@ -54,6 +75,15 @@ import {
   buildSentinelDestination,
   defaultSentinelDestinationId,
 } from "../../domain/sentinel-destination";
+import {
+  buildTablePutRequest,
+  DEFAULT_CUSTOM_TABLE_RETENTION_DAYS,
+  isCustomTableName,
+  LOG_ANALYTICS_TABLES_API_VERSION,
+  validateCustomTableSchema,
+} from "../../domain/custom-table";
+import type { CustomSchemaFileColumn } from "../../domain/schema-mapping";
+import type { CustomTableRetentionDays } from "../../domain/option-forms";
 
 /** JobStore `kind` for records created by {@link onboardTable}. */
 export const ONBOARD_TABLE_JOB_KIND = "onboard-table";
@@ -61,15 +91,31 @@ export const ONBOARD_TABLE_JOB_KIND = "onboard-table";
 /**
  * ARM api-version for Microsoft.OperationalInsights workspaces and tables
  * (the legacy engine pins 2022-10-01 for both the tables GET and PUT).
+ * Single source of truth: domain/custom-table's
+ * LOG_ANALYTICS_TABLES_API_VERSION; re-exported here under the walking
+ * skeleton's original name.
  */
-export const LOG_ANALYTICS_API_VERSION = "2022-10-01";
+export const LOG_ANALYTICS_API_VERSION = LOG_ANALYTICS_TABLES_API_VERSION;
 
 /** Default bound on DCR provisioning-poll GETs (attempts, not wall-clock). */
 export const DEFAULT_DCR_POLL_ATTEMPTS = 10;
 
-/** Ordered step names of an onboard-table job. */
+/**
+ * Default bound on created-custom-table readback GETs (attempts, not
+ * wall-clock; replaces the legacy engine's blind Start-Sleep 10).
+ */
+export const DEFAULT_TABLE_POLL_ATTEMPTS = 10;
+
+/**
+ * Ordered step names of an onboard-table job - the FULL (custom-table) list.
+ * "create-custom-table" exists only on custom (_CL) jobs; seed step lines
+ * from {@link onboardTableStepsFor}, which drops it for native tables (the
+ * Unit 5 decision: absent, not "skipped", so native job records stay
+ * byte-identical to the walking-skeleton contract).
+ */
 export const ONBOARD_TABLE_STEPS = Object.freeze([
   "fetch-workspace",
+  "create-custom-table",
   "fetch-table-schema",
   "generate-dcr-name",
   "deploy-dcr",
@@ -80,6 +126,19 @@ export const ONBOARD_TABLE_STEPS = Object.freeze([
 
 /** One of the {@link ONBOARD_TABLE_STEPS} names. */
 export type OnboardTableStepName = (typeof ONBOARD_TABLE_STEPS)[number];
+
+/**
+ * The ordered step names an onboard-table job for `table` will carry:
+ * the full list for custom (_CL) tables, the list WITHOUT
+ * "create-custom-table" for native tables.
+ */
+export function onboardTableStepsFor(
+  table: string,
+): readonly OnboardTableStepName[] {
+  return isCustomTableName(table)
+    ? ONBOARD_TABLE_STEPS
+    : ONBOARD_TABLE_STEPS.filter((name) => name !== "create-custom-table");
+}
 
 /** The ports {@link onboardTable} orchestrates. */
 export interface OnboardTablePorts {
@@ -97,8 +156,34 @@ export interface OnboardTablePorts {
 
 /** Input for {@link onboardTable}. */
 export interface OnboardTableInput {
-  /** Native table name, e.g. "SecurityEvent". "_CL" tables are refused. */
+  /**
+   * Table name. Native ("SecurityEvent") and custom ("CloudFlare_CL") tables
+   * are both supported; a name ending in "_CL" (case-insensitive, matching
+   * the original native-mode guard) routes to the custom path, which
+   * REQUIRES either an existing table in the workspace or
+   * {@link OnboardTableInput.customSchema}.
+   */
   table: string;
+  /**
+   * Parsed schema-file columns for a custom (_CL) table that does not exist
+   * yet (from parseTableSchemaFile or a bundled VENDOR_SCHEMAS entry).
+   * Ignored for native tables and for custom tables that already exist -
+   * the EXISTING Azure schema always wins (legacy Process-CustomTable
+   * contract).
+   */
+  customSchema?: readonly CustomSchemaFileColumn[];
+  /**
+   * Interactive retention (days) for a NEWLY CREATED custom table; defaults
+   * to 30 (compatibility contract 30/90; Unit 4's
+   * OperationOptions.customTableRetentionDays feeds this). Total retention
+   * is always 90.
+   */
+  customTableRetentionDays?: CustomTableRetentionDays;
+  /**
+   * Max readback GETs after creating a custom table; defaults to
+   * {@link DEFAULT_TABLE_POLL_ATTEMPTS}.
+   */
+  maxTablePollAttempts?: number;
   subscriptionId: string;
   resourceGroup: string;
   workspaceName: string;
@@ -186,20 +271,25 @@ class StepFailure extends Error {
 }
 
 /**
- * Onboard a native table: deploy a Kind:Direct DCR for it and create the
- * matching Cribl Sentinel destination. Never rejects for step failures - the
- * job record carries the outcome; the final record is returned either way.
- * (It can still reject if the JobStore itself fails.)
+ * Onboard a table: for custom (_CL) tables ensure the Log Analytics table
+ * exists (create it from the supplied schema when it does not), then deploy
+ * a Kind:Direct DCR and create the matching Cribl Sentinel destination - ONE
+ * pipelined job. Never rejects for step failures - the job record carries
+ * the outcome; the final record is returned either way. (It can still reject
+ * if the JobStore itself fails.)
  */
 export async function onboardTable(
   ports: OnboardTablePorts,
   input: OnboardTableInput,
 ): Promise<JobRecord> {
   const { azure, cribl, jobs, logger } = ports;
+  const isCustom = isCustomTableName(input.table);
   const secretProvided =
     input.ingestionClientSecret != null && input.ingestionClientSecret !== "";
 
   // Persisted job input: everything serializable, NEVER the secret value.
+  // The custom-path fields are recorded ONLY on custom jobs so native job
+  // records stay byte-identical to the walking-skeleton contract.
   const job = await jobs.create(ONBOARD_TABLE_JOB_KIND, {
     table: input.table,
     subscriptionId: input.subscriptionId,
@@ -211,6 +301,15 @@ export async function onboardTable(
     ingestionClientId: input.ingestionClientId,
     ingestionClientSecretProvided: secretProvided,
     destinationId: input.destinationId ?? null,
+    ...(isCustom
+      ? {
+          customSchemaProvided:
+            input.customSchema !== undefined && input.customSchema.length > 0,
+          customTableRetentionDays:
+            input.customTableRetentionDays ??
+            DEFAULT_CUSTOM_TABLE_RETENTION_DAYS,
+        }
+      : {}),
   });
 
   logger?.info(
@@ -230,7 +329,10 @@ export async function onboardTable(
     job.id,
   );
 
-  const steps: JobStep[] = ONBOARD_TABLE_STEPS.map((name) => ({
+  // Native jobs carry the walking-skeleton step list unchanged; the
+  // create-custom-table step exists only on custom (_CL) jobs (Unit 5
+  // decision: absent for native, never "skipped").
+  const steps: JobStep[] = onboardTableStepsFor(input.table).map((name) => ({
     name,
     status: "pending",
   }));
@@ -314,34 +416,163 @@ export async function onboardTable(
     }
     await setStep(currentStep, "succeeded", `location ${location}`);
 
-    // ---- Step 2: fetch-table-schema ----------------------------------
+    // ---- Step 2 (custom jobs only): create-custom-table ---------------
+    // GET first: an existing table wins and creation is skipped (the legacy
+    // Process-CustomTable idempotency contract); a 404 requires
+    // input.customSchema and creates the table from it.
+    const tablePath = `${workspacePath}/tables/${input.table}`;
+    let customTableBody: unknown;
+    if (isCustom) {
+      currentStep = "create-custom-table";
+      await setStep(currentStep, "running");
+
+      const existingResponse = await azure.request({
+        method: "GET",
+        path: tablePath,
+        apiVersion: LOG_ANALYTICS_API_VERSION,
+      });
+      if (is2xx(existingResponse.status)) {
+        customTableBody = existingResponse.body;
+        await setStep(
+          currentStep,
+          "succeeded",
+          `table '${input.table}' already exists - creation skipped`,
+        );
+      } else if (existingResponse.status === 404) {
+        if (input.customSchema === undefined || input.customSchema.length === 0) {
+          throw new StepFailure(
+            `custom table '${input.table}' does not exist and no ` +
+              "customSchema was provided; supply a parsed schema " +
+              "(parseTableSchemaFile / VENDOR_SCHEMAS) or create the table first",
+          );
+        }
+        const validation = validateCustomTableSchema(
+          input.table,
+          input.customSchema,
+        );
+        if (!validation.valid) {
+          throw new StepFailure(
+            `custom table schema for '${input.table}' is invalid: ` +
+              validation.errors.join("; "),
+          );
+        }
+
+        const tableRequest = buildTablePutRequest({
+          subscriptionId: input.subscriptionId,
+          resourceGroup: input.resourceGroup,
+          workspaceName: input.workspaceName,
+          table: input.table,
+          columns: input.customSchema,
+          ...(input.customTableRetentionDays !== undefined
+            ? { retentionDays: input.customTableRetentionDays }
+            : {}),
+        });
+        const tablePutResponse = await azure.request({
+          method: tableRequest.method,
+          path: tableRequest.path,
+          apiVersion: tableRequest.apiVersion,
+          body: tableRequest.body,
+        });
+        if (!is2xx(tablePutResponse.status)) {
+          throw new StepFailure(
+            httpErrorText(
+              `create custom table '${tableRequest.tableName}'`,
+              tablePutResponse.status,
+              tablePutResponse.body,
+            ),
+          );
+        }
+
+        // Attempt-bounded readback (replaces the legacy blind Start-Sleep
+        // 10): poll until the created table GETs back with a terminal
+        // provisioningState. A 404 counts as "not replicated yet".
+        const maxTableAttempts =
+          input.maxTablePollAttempts ?? DEFAULT_TABLE_POLL_ATTEMPTS;
+        let tableAttempts = 0;
+        for (;;) {
+          if (tableAttempts >= maxTableAttempts) {
+            throw new StepFailure(
+              `custom table '${tableRequest.tableName}' was created but did ` +
+                `not read back successfully within ${maxTableAttempts} poll attempts`,
+            );
+          }
+          tableAttempts++;
+          const pollResponse = await azure.request({
+            method: "GET",
+            path: tablePath,
+            apiVersion: LOG_ANALYTICS_API_VERSION,
+          });
+          if (is2xx(pollResponse.status)) {
+            const state = prop(prop(pollResponse.body, "properties"), "provisioningState");
+            const stateText = typeof state === "string" ? state : null;
+            if (stateText !== null && /^(failed|canceled)$/i.test(stateText)) {
+              throw new StepFailure(
+                `custom table '${tableRequest.tableName}' provisioning ended ` +
+                  `in state '${stateText}'`,
+              );
+            }
+            if (stateText === null || /^succeeded$/i.test(stateText)) {
+              customTableBody = pollResponse.body;
+              break;
+            }
+          } else if (pollResponse.status !== 404) {
+            throw new StepFailure(
+              httpErrorText(
+                `poll custom table '${tableRequest.tableName}'`,
+                pollResponse.status,
+                pollResponse.body,
+              ),
+            );
+          }
+        }
+        await setStep(
+          currentStep,
+          "succeeded",
+          `created '${tableRequest.tableName}' with ` +
+            `${tableRequest.body.properties.schema.columns.length} columns, ` +
+            `retention ${tableRequest.body.properties.retentionInDays}/` +
+            `${tableRequest.body.properties.totalRetentionInDays} days`,
+        );
+      } else {
+        throw new StepFailure(
+          httpErrorText(
+            `check custom table '${input.table}'`,
+            existingResponse.status,
+            existingResponse.body,
+          ),
+        );
+      }
+    }
+
+    // ---- Step 3: fetch-table-schema ----------------------------------
     currentStep = "fetch-table-schema";
     await setStep(currentStep, "running");
 
-    // Native mode refuses custom (_CL) tables outright - the legacy variant
-    // rules never look up _CL names for native tables (collision guard).
-    if (/_CL$/i.test(input.table)) {
-      throw new StepFailure(
-        `table '${input.table}' ends with _CL; onboardTable handles NATIVE tables only`,
-      );
+    // Custom jobs already hold the table body (existing or created) from
+    // the create-custom-table step - no second GET, matching the legacy
+    // single-lookup Process-CustomTable flow. Native jobs GET it here.
+    let tableBody: unknown;
+    if (isCustom) {
+      tableBody = customTableBody;
+    } else {
+      const tableResponse = await azure.request({
+        method: "GET",
+        path: tablePath,
+        apiVersion: LOG_ANALYTICS_API_VERSION,
+      });
+      if (!is2xx(tableResponse.status)) {
+        throw new StepFailure(
+          httpErrorText(
+            `fetch schema for table '${input.table}'`,
+            tableResponse.status,
+            tableResponse.body,
+          ),
+        );
+      }
+      tableBody = tableResponse.body;
     }
 
-    const tableResponse = await azure.request({
-      method: "GET",
-      path: `${workspacePath}/tables/${input.table}`,
-      apiVersion: LOG_ANALYTICS_API_VERSION,
-    });
-    if (!is2xx(tableResponse.status)) {
-      throw new StepFailure(
-        httpErrorText(
-          `fetch schema for table '${input.table}'`,
-          tableResponse.status,
-          tableResponse.body,
-        ),
-      );
-    }
-
-    const schema = prop(prop(tableResponse.body, "properties"), "schema");
+    const schema = prop(prop(tableBody, "properties"), "schema");
     const columns = selectSchemaColumns(
       {
         columns: prop(schema, "columns") as LogAnalyticsColumn[] | undefined,
@@ -349,7 +580,7 @@ export async function onboardTable(
           | LogAnalyticsColumn[]
           | undefined,
       },
-      "native",
+      isCustom ? "custom" : "native",
     );
     if (columns === null) {
       throw new StepFailure(
@@ -358,7 +589,7 @@ export async function onboardTable(
     }
     await setStep(currentStep, "succeeded", `${columns.length} columns`);
 
-    // ---- Step 3: generate-dcr-name -----------------------------------
+    // ---- Step 4: generate-dcr-name -----------------------------------
     currentStep = "generate-dcr-name";
     await setStep(currentStep, "running");
     const { name: dcrName } = generateDcrName({
@@ -367,11 +598,11 @@ export async function onboardTable(
       prefix: input.dcrNamePrefix ?? "dcr-",
       suffix: input.dcrNameSuffix,
       location,
-      isCustomTable: false,
+      isCustomTable: isCustom,
     });
     await setStep(currentStep, "succeeded", dcrName);
 
-    // ---- Step 4: deploy-dcr (PUT, poll, parse) -----------------------
+    // ---- Step 5: deploy-dcr (PUT, poll, parse) -----------------------
     currentStep = "deploy-dcr";
     await setStep(currentStep, "running");
 
@@ -381,6 +612,7 @@ export async function onboardTable(
       location,
       workspaceResourceId,
       dcrName,
+      tableMode: isCustom ? "custom" : "native",
     });
 
     const putResponse = await azure.request({
@@ -450,7 +682,7 @@ export async function onboardTable(
       `immutableId ${deployment.immutableId}`,
     );
 
-    // ---- Step 5: create-cribl-destination ----------------------------
+    // ---- Step 6: create-cribl-destination ----------------------------
     currentStep = "create-cribl-destination";
     await setStep(currentStep, "running");
 
@@ -483,7 +715,7 @@ export async function onboardTable(
     }
     await setStep(currentStep, "succeeded", destinationId);
 
-    // ---- Step 6: commit-and-deploy (REPORTED BUT NONFATAL) -----------
+    // ---- Step 7: commit-and-deploy (REPORTED BUT NONFATAL) -----------
     // Deployment semantics differ per Cribl mode (distributed leaders take
     // group commits + /master/groups/{id}/deploy; single-instance rejects
     // them), so an HTTP error here is recorded on the step without failing
@@ -548,7 +780,7 @@ export async function onboardTable(
       );
     }
 
-    // ---- Step 7: verify ----------------------------------------------
+    // ---- Step 8: verify ----------------------------------------------
     currentStep = "verify";
     await setStep(currentStep, "running");
 

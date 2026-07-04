@@ -1,0 +1,188 @@
+{
+  "name": "CrowdStrike_DNS_Events_CL",
+  "description": "Auto-generated from Sentinel Content Hub for CrowdStrike_DNS_Events_CL",
+  "retentionInDays": 30,
+  "totalRetentionInDays": 90,
+  "columns": [
+    {
+      "name": "TimeGenerated",
+      "type": "datetime",
+      "description": "The timestamp (UTC) reflecting the time in which the event was generated."
+    },
+    {
+      "name": "event_simpleName",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "timestamp",
+      "type": "long",
+      "description": ""
+    },
+    {
+      "name": "aip",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "aid",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "UserName",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "event_platform",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ContextTimeStamp",
+      "type": "real",
+      "description": ""
+    },
+    {
+      "name": "name",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ConfigBuild",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "CrowdStrikeId",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ConfigStateHash",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ContextProcessId",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ContextThreadId",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "BoundingLimitCount",
+      "type": "long",
+      "description": ""
+    },
+    {
+      "name": "BoundingLimitDuration",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "Entitlements",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "EffectiveTransmissionClass",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "cid",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "OciContainerId",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "TreeId",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "DomainName",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "RequestType",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "IP4Records",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "QueryStatus",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "FirstIP4Record",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "DnsRequestCount",
+      "type": "long",
+      "description": ""
+    },
+    {
+      "name": "IP6Records",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "InterfaceIndex",
+      "type": "long",
+      "description": ""
+    },
+    {
+      "name": "DualRequest",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "DnsResponseType",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "EventOrigin",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "RespondingDnsServer",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "CNAMERecords",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "FirstIP6Record",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "AdditionalFields",
+      "type": "dynamic",
+      "description": ""
+    }
+  ]
+}

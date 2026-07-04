@@ -28,7 +28,16 @@
  *   RULE 2d zero surviving columns -> no DCR (buildStreamDeclaration throws)
  *   RULE 2e table-CREATION payload strips 13 reserved names
  *           (stripReservedTableCreationColumns) - separate from the DCR set
- *   RULE 3  type mapping to the 7-value DCR vocabulary; unknown -> string
+ *   RULE 3  type mapping to the 7-value DCR vocabulary; unknown -> string.
+ *           Two entries are LEGACY-TS ADDITIONS reconciled from the Electron
+ *           Integration Solution's own mapColumnType
+ *           (Cribl-Microsoft_IntegrationSolution/src/main/ipc/azure-deploy.ts
+ *           lines 395-405, Unit 5 reconciliation): "datetimeoffset" ->
+ *           datetime and "array" -> dynamic. Where the two legacy maps
+ *           DISAGREE the PS contract wins: the legacy TS mapped "guid" ->
+ *           "guid", but ConvertTo-DCRColumnType maps the guid family to
+ *           string, so string it stays. Pinned by
+ *           mapcolumntype-reconciliation.test.ts.
  *   RULE 4  order preserved; no sort, no dedup, no rename; {name, type} only
  *   RULE 5  stream declaration: input stream "Custom-{table}", output stream
  *           "Microsoft-{table}" (native) / "Custom-{table}" (custom),
@@ -230,12 +239,19 @@ const typeMap: ReadonlyMap<string, DcrColumnType> = new Map<
   ["bool", "boolean"],
   ["boolean", "boolean"],
   ["datetime", "datetime"],
+  // Legacy-TS addition (azure-deploy.ts mapColumnType line 397): Sentinel
+  // table definitions carry "datetimeoffset"; ConvertTo-DCRColumnType never
+  // saw it (its callers only handled LA/user types).
+  ["datetimeoffset", "datetime"],
   ["timestamp", "datetime"],
   ["date", "datetime"],
   ["time", "datetime"],
   ["dynamic", "dynamic"],
   ["object", "dynamic"],
   ["json", "dynamic"],
+  // Legacy-TS addition (azure-deploy.ts mapColumnType line 402): Sentinel
+  // table definitions carry "array"; maps to dynamic like object/json.
+  ["array", "dynamic"],
   ["guid", "string"],
   ["uniqueidentifier", "string"],
   ["uuid", "string"],

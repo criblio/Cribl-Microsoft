@@ -1,8 +1,15 @@
 /**
- * OnboardTableScreen - the first shared @soc/ui screen: onboard one NATIVE
- * Log Analytics table end to end by driving the @soc/core onboardTable
- * use-case through the ports in PortsContext. Pure React over the ports:
- * ZERO direct fetch or storage access in this module.
+ * OnboardTableScreen - the first shared @soc/ui screen: onboard one Log
+ * Analytics table end to end by driving the @soc/core onboardTable use-case
+ * through the ports in PortsContext. Native tables run the walking-skeleton
+ * flow unchanged; a table name ending in _CL contextually reveals the
+ * custom-table section (porting-plan Unit 5): schema source picker (bundled
+ * vendor library, uploaded/pasted file, or the existing workspace table),
+ * a column preview mapped through the characterized @soc/core contracts,
+ * and a per-run retention choice seeded from the persisted Unit 4 default.
+ * Pure React over the ports: ZERO direct fetch or storage access in this
+ * module (the file input reads a user-picked File via the browser File API,
+ * which is user input, not app IO).
  *
  * Class names (panel, panel-title, field, run-button, result, ...) follow
  * the hosting shell's existing conventions; the shell's stylesheet is
@@ -15,23 +22,37 @@
  * destination ships the "<replace me>" placeholder to fill in Cribl's UI.
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   destinationIdFromOptions,
+  isCustomTableName,
   onboardTable,
-  ONBOARD_TABLE_STEPS,
+  onboardTableStepsFor,
+  DEFAULT_CUSTOM_TABLE_TOTAL_RETENTION_DAYS,
+  DEFAULT_OPERATION_OPTIONS,
   SENTINEL_SECRET_PLACEHOLDER,
+  VENDOR_SCHEMAS,
 } from "@soc/core";
 import type {
   CriblGroupSummary,
   CriblOptions,
   JobStep,
   OnboardTableOutcome,
+  OperationOptions,
 } from "@soc/core";
 import { usePorts } from "../ports-context";
 import { formatStepLine } from "./step-line";
 import { RecentRuns } from "./recent-runs";
 import { summaryText } from "./summary";
+import {
+  CUSTOM_SCHEMA_SOURCE_OPTIONS,
+  defaultVendorIdForTable,
+  deriveCustomSchemaPreview,
+  formatSchemaPreview,
+  resolveRetentionDays,
+  RETENTION_CHOICES,
+} from "./custom-schema-state";
+import type { CustomSchemaSource } from "./custom-schema-state";
 
 type RunStatus = "idle" | "running" | "ok" | "failed";
 
@@ -43,13 +64,23 @@ export interface OnboardTableScreenProps {
    * in the live list. Absent, legacy defaults apply unchanged.
    */
   criblDefaults?: CriblOptions;
+  /**
+   * Persisted deployment options (porting-plan Unit 4). Currently feeds the
+   * custom (_CL) section's retention default (customTableRetentionDays,
+   * overridable per run). Absent, the 30-day contract default applies.
+   */
+  operationDefaults?: OperationOptions;
 }
 
 /**
- * The walking-skeleton onboarding screen: table name + worker group +
- * ingestion identity in, a live step list and an honest summary out.
+ * The onboarding screen: table name + worker group + ingestion identity in,
+ * a live step list and an honest summary out. A _CL table name reveals the
+ * custom-table schema section; native names keep the walking-skeleton flow.
  */
-export function OnboardTableScreen({ criblDefaults }: OnboardTableScreenProps = {}) {
+export function OnboardTableScreen({
+  criblDefaults,
+  operationDefaults,
+}: OnboardTableScreenProps = {}) {
   const { ports, config } = usePorts();
 
   const [table, setTable] = useState("SecurityEvent");
@@ -69,6 +100,41 @@ export function OnboardTableScreen({ criblDefaults }: OnboardTableScreenProps = 
   // Bumped after every run (success or failure) so the persisted-run history
   // below reloads and shows the record that was just written.
   const [historyToken, setHistoryToken] = useState(0);
+
+  // Custom (_CL) section state (porting-plan Unit 5). All decisions live in
+  // the pure custom-schema-state module; this component only holds the raw
+  // control values. The section renders ONLY for _CL names - the native flow
+  // is visually unchanged.
+  const isCustom = isCustomTableName(table.trim());
+  const [schemaSource, setSchemaSource] = useState<CustomSchemaSource>("vendor");
+  // "" = no explicit pick: follow the typed table name (a matching bundled
+  // schema preselects itself); an explicit pick sticks.
+  const [vendorId, setVendorId] = useState("");
+  const [schemaFileText, setSchemaFileText] = useState("");
+  const [schemaFileName, setSchemaFileName] = useState("");
+  // "" = no per-run override: the persisted Unit 4 default applies (and an
+  // options blob that loads after mount still takes effect).
+  const [retentionOverride, setRetentionOverride] = useState("");
+
+  const persistedRetentionDefault =
+    operationDefaults?.customTableRetentionDays ??
+    DEFAULT_OPERATION_OPTIONS.customTableRetentionDays;
+  const retentionDays = resolveRetentionDays(
+    retentionOverride,
+    persistedRetentionDefault,
+  );
+  const effectiveVendorId =
+    vendorId !== "" ? vendorId : defaultVendorIdForTable(table);
+  const schemaPreview = useMemo(
+    () =>
+      deriveCustomSchemaPreview({
+        table,
+        source: schemaSource,
+        vendorId: effectiveVendorId,
+        fileText: schemaFileText,
+      }),
+    [table, schemaSource, effectiveVendorId, schemaFileText],
+  );
 
   // Populate the worker-group dropdown from the CriblClient port. On failure
   // the raw error is shown with a retry button - no silent empty dropdown.
@@ -100,8 +166,9 @@ export function OnboardTableScreen({ criblDefaults }: OnboardTableScreenProps = 
     setOutcome(null);
     setRunError("");
     // Seed every use-case step as pending so the list renders complete from
-    // the first onProgress tick.
-    const seeded: JobStep[] = ONBOARD_TABLE_STEPS.map((name) => ({
+    // the first onProgress tick. The step list depends on the table: custom
+    // (_CL) jobs carry the create-custom-table step, native jobs do not.
+    const seeded: JobStep[] = onboardTableStepsFor(table.trim()).map((name) => ({
       name,
       status: "pending",
     }));
@@ -118,6 +185,18 @@ export function OnboardTableScreen({ criblDefaults }: OnboardTableScreenProps = 
                 table.trim(),
                 criblDefaults,
               ),
+            }
+          : {}),
+        // Custom (_CL) jobs carry the resolved schema (when a source
+        // provides one - "use existing table" deliberately sends none) and
+        // the per-run retention choice; native jobs carry neither, keeping
+        // their input record byte-identical to the walking skeleton.
+        ...(isCustom
+          ? {
+              ...(schemaPreview.providesSchema
+                ? { customSchema: schemaPreview.columns }
+                : {}),
+              customTableRetentionDays: retentionDays,
             }
           : {}),
         subscriptionId: config.subscriptionId,
@@ -166,17 +245,20 @@ export function OnboardTableScreen({ criblDefaults }: OnboardTableScreenProps = 
     !running &&
     table.trim() !== "" &&
     groupId !== "" &&
-    ingestionClientId.trim() !== "";
+    ingestionClientId.trim() !== "" &&
+    (!isCustom || schemaPreview.ready);
 
   return (
     <section className="panel">
-      <h2 className="panel-title">Onboard a native table (walking skeleton)</h2>
+      <h2 className="panel-title">Onboard a table</h2>
       <p className="panel-desc">
-        Deploys a Kind:Direct Data Collection Rule for one native Log
-        Analytics table in workspace {config.workspaceName} (resource group{" "}
+        Deploys a Kind:Direct Data Collection Rule for one Log Analytics
+        table in workspace {config.workspaceName} (resource group{" "}
         {config.resourceGroup}), then creates the matching Sentinel
         destination in the selected Cribl worker group and commits and
-        deploys the group config. Every step below reports its real outcome.
+        deploys the group config. Custom (_CL) tables are created first when
+        missing - one pipelined job. Every step below reports its real
+        outcome.
       </p>
       <div className="form-grid">
         <label className="field">
@@ -189,8 +271,9 @@ export function OnboardTableScreen({ criblDefaults }: OnboardTableScreenProps = 
             spellCheck={false}
           />
           <span className="field-hint">
-            Native tables only (e.g. SecurityEvent, Syslog). Custom _CL tables
-            are refused by this walking skeleton.
+            Native tables (e.g. SecurityEvent, Syslog) onboard directly. A
+            name ending in _CL onboards a custom table - the custom table
+            schema section appears below.
           </span>
         </label>
         <label className="field">
@@ -248,6 +331,136 @@ export function OnboardTableScreen({ criblDefaults }: OnboardTableScreenProps = 
           </span>
         </label>
       </div>
+      {isCustom && (
+        <div className="discovery-result">
+          <span className="field-label">Custom table schema</span>
+          <p className="panel-desc">
+            The job checks whether {table.trim()} already exists in the
+            workspace. An existing table keeps its live Azure schema; a
+            missing table is created from the schema selected here
+            (TimeGenerated is added automatically when absent, and
+            Azure-managed columns are removed from the creation payload).
+          </p>
+          <div className="form-grid">
+            <label className="field">
+              <span className="field-label">Schema source</span>
+              <select
+                value={schemaSource}
+                onChange={(e) =>
+                  setSchemaSource(e.target.value as CustomSchemaSource)
+                }
+              >
+                {CUSTOM_SCHEMA_SOURCE_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+              <span className="field-hint">
+                Bundled vendor schemas ship with the app (no fetch). Choose
+                &quot;Use the existing workspace table&quot; when the table
+                was already created - the run then fails honestly if it does
+                not exist.
+              </span>
+            </label>
+            {schemaSource === "vendor" && (
+              <label className="field">
+                <span className="field-label">Vendor schema</span>
+                <select
+                  value={effectiveVendorId}
+                  onChange={(e) => setVendorId(e.target.value)}
+                >
+                  <option value="">Select a vendor schema...</option>
+                  {VENDOR_SCHEMAS.map((entry) => (
+                    <option key={entry.id} value={entry.id}>
+                      {entry.label} ({entry.table})
+                    </option>
+                  ))}
+                </select>
+                <span className="field-hint">
+                  A schema matching the typed table name preselects itself.
+                </span>
+              </label>
+            )}
+            {schemaSource === "file" && (
+              <label className="field">
+                <span className="field-label">Schema JSON file</span>
+                <input
+                  type="file"
+                  accept=".json,application/json"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file === undefined) {
+                      return;
+                    }
+                    setSchemaFileName(file.name);
+                    void file.text().then(setSchemaFileText);
+                  }}
+                />
+                <textarea
+                  value={schemaFileText}
+                  onChange={(e) => {
+                    setSchemaFileText(e.target.value);
+                    setSchemaFileName("");
+                  }}
+                  rows={6}
+                  placeholder='Or paste the schema JSON here, e.g. {"columns": [{"name": "EventName", "type": "string"}]}'
+                  spellCheck={false}
+                />
+                <span className="field-hint">
+                  Accepts a bare {"{"}columns{"}"} schema file, a Sentinel
+                  table definition (properties.schema.columns), or a table
+                  definition wrapper
+                  (properties.schema.tableDefinition.columns).
+                  {schemaFileName !== "" && ` Loaded from ${schemaFileName}.`}
+                </span>
+              </label>
+            )}
+            <label className="field">
+              <span className="field-label">Interactive retention</span>
+              <select
+                value={String(retentionDays)}
+                onChange={(e) => setRetentionOverride(e.target.value)}
+              >
+                {RETENTION_CHOICES.map((choice) => (
+                  <option key={choice.value} value={choice.value}>
+                    {choice.label}
+                  </option>
+                ))}
+              </select>
+              <span className="field-hint">
+                Applies only when the table is created by this run. Default (
+                {persistedRetentionDefault} days) comes from the Options
+                screen; total retention is always{" "}
+                {DEFAULT_CUSTOM_TABLE_TOTAL_RETENTION_DAYS} days.
+              </span>
+            </label>
+          </div>
+          {schemaPreview.notReadyHint !== null && (
+            <p className="field-hint">{schemaPreview.notReadyHint}</p>
+          )}
+          {schemaPreview.errors.map((error) => (
+            <p key={error} className="config-editor-error">
+              {error}
+            </p>
+          ))}
+          {schemaPreview.warnings.map((warning) => (
+            <p key={warning} className="config-editor-warning">
+              {warning}
+            </p>
+          ))}
+          {schemaPreview.rows.length > 0 && (
+            <>
+              <span className="field-label">
+                Column preview ({schemaPreview.rows.length} columns)
+              </span>
+              <pre className="result">
+                {formatSchemaPreview(schemaPreview.rows)}
+              </pre>
+            </>
+          )}
+        </div>
+      )}
       <div className="panel-controls">
         <button
           className="run-button"

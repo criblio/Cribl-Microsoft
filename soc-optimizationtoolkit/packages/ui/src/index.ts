@@ -14,6 +14,24 @@ export { OnboardTableScreen } from "./onboarding/onboard-table-screen";
 export type { OnboardTableScreenProps } from "./onboarding/onboard-table-screen";
 export { formatStepLine, STEP_STATUS_TAG_WIDTH } from "./onboarding/step-line";
 
+// Custom (_CL) table section of onboarding (porting-plan Unit 5): the pure
+// decision layer behind the schema-source picker, column preview, and
+// retention default/override.
+export {
+  CUSTOM_SCHEMA_SOURCE_OPTIONS,
+  RETENTION_CHOICES,
+  defaultVendorIdForTable,
+  deriveCustomSchemaPreview,
+  formatSchemaPreview,
+  resolveRetentionDays,
+} from "./onboarding/custom-schema-state";
+export type {
+  CustomSchemaInputs,
+  CustomSchemaPreview,
+  CustomSchemaSource,
+  SchemaPreviewRow,
+} from "./onboarding/custom-schema-state";
+
 // App frame: chrome, acceptance gate, mode chooser, and their pure state.
 export { AppFrame } from "./frame/app-frame";
 export type { AppFrameNav, AppFrameProps, AppRoute } from "./frame/app-frame";

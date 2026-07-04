@@ -1,0 +1,558 @@
+{
+  "name": "CrowdStrike_Audit_Events_CL",
+  "description": "Auto-generated from Sentinel Content Hub for CrowdStrike_Audit_Events_CL",
+  "retentionInDays": 30,
+  "totalRetentionInDays": 90,
+  "columns": [
+    {
+      "name": "TimeGenerated",
+      "type": "datetime",
+      "description": "The timestamp (UTC) reflecting the time in which the event was generated."
+    },
+    {
+      "name": "event_simpleName",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "timestamp",
+      "type": "long",
+      "description": ""
+    },
+    {
+      "name": "aip",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "aid",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "UserName",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "event_platform",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ContextTimeStamp",
+      "type": "real",
+      "description": ""
+    },
+    {
+      "name": "name",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ConfigBuild",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "CrowdStrikeId",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ConfigStateHash",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ContextProcessId",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ContextThreadId",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "BoundingLimitCount",
+      "type": "long",
+      "description": ""
+    },
+    {
+      "name": "BoundingLimitDuration",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "Entitlements",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "EffectiveTransmissionClass",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "cid",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "OciContainerId",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "TreeId",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "VolumeSnapshotName",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "SmbShareName",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ShareName",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "UploadId",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "SessionId",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ComputerName",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "FirewallRule",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "FirewallRuleId",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "FirewallOption",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "SourceFileName",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "TargetFileName",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "DeviceVendorId",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "DeviceProductId",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "DeviceSerialNumber",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "BluetoothDeviceAddress",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "EnvironmentVariableName",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "SamAccountName",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "FirewallOptionNumericValue",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "FirewallOptionStringValue",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "FileVaultIsEnabled",
+      "type": "boolean",
+      "description": ""
+    },
+    {
+      "name": "EnvironmentVariableValue",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ConfigStateData",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ActiveDirectoryOuDn",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ActiveDirectoryDepartment",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "SHA256HashData",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "CommandLine",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "VolumeName",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "VolumeDriveLetter",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "TokenType",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "InterfaceGuid",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "RpcClientProcessId",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "InterfaceVersion",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "RpcClientThreadId",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "AuthenticationId",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ImageFileName",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "RpcOpNum",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "RpcNestingLevel",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ClientComputerName",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "DomainName",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "RemoteAddressIP6",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "RemoteAddressIP4",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "SmbClientName",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "AgentLoadFlags",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ProvisioningDuration",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "Status",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ErrorText",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "CloudErrorCode",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "SharePath",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ShareMaxCount",
+      "type": "long",
+      "description": ""
+    },
+    {
+      "name": "ShareRemark",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ShareData",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "IntelTDTEnabled",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "FalconServiceState",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "LfoUploadFlags",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "AttemptNumber",
+      "type": "long",
+      "description": ""
+    },
+    {
+      "name": "Size",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "Tags",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "CloudRequestId",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "LocalSession",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "IOServiceClass",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "IOServicePath",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "IOServiceProperties",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "IOServiceName",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "Protocol",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ChannelDiffStatusList",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "AccountDomain",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "AccountObjectGuid",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "AccountObjectSid",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "TotalCount",
+      "type": "long",
+      "description": ""
+    },
+    {
+      "name": "ErrorCode",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "EventOrigin",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "AddressFamily",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "BluetoothDeviceType",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "DeviceTimeStamp",
+      "type": "real",
+      "description": ""
+    },
+    {
+      "name": "DeviceInstanceId",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "BluetoothDeviceAddressType",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "DeviceVersion",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "DeviceDescriptorSetHash",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "DeviceManufacturer",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "DeviceProduct",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "DeviceUserSid",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "DeviceUserAuthenticationId",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "FirewallProfile",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ShareAccess",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "DesiredAccess",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "GID",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "UID",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "UnixMode",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "AdditionalFields",
+      "type": "dynamic",
+      "description": ""
+    }
+  ]
+}
