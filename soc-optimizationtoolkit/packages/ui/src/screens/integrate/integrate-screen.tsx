@@ -61,6 +61,7 @@ import type {
   JobStep,
   OnboardTableOutcome,
   OperationOptions,
+  TaggedSample,
   TargetScope,
 } from "@soc/core";
 import type { ReactNode } from "react";
@@ -73,6 +74,7 @@ import { formatStepLine } from "../../onboarding/step-line";
 import { summaryText } from "../../onboarding/summary";
 import { RecentRuns } from "../../onboarding/recent-runs";
 import { SampleIntakeSection } from "../samples/sample-intake-section";
+import { MatchPreviewSection } from "../match-preview/match-preview-section";
 import {
   INTEGRATE_DEFAULT_TABLE,
   defaultPackName,
@@ -160,6 +162,16 @@ export function IntegrateScreen({
   // gate the native-table deploy below (the MVP-transition rule in @soc/core
   // canDeploy), so this count is intentionally NOT part of the run gate.
   const [sampleCount, setSampleCount] = useState(0);
+  // The tagged samples themselves feed the Unit 13 match preview seeded into
+  // this section (sample vs destination table -> matched/overflow/unmatched).
+  const [samples, setSamples] = useState<TaggedSample[]>([]);
+
+  // One place the Sample Data section reports its list: keep the count (arc
+  // completion / Samples pill) and the samples (match preview) in sync.
+  const handleSamplesChange = useCallback((list: TaggedSample[]) => {
+    setSamples(list);
+    setSampleCount(list.length);
+  }, []);
 
   // Rename contract (Unit 11 -> Unit 18): the Sample Data section re-keys the
   // tagged-sample STORE entry itself; this handler is where downstream edits
@@ -307,11 +319,14 @@ export function IntegrateScreen({
   // ---- Section bodies (built sections only) -----------------------------
 
   const sampleDataBody = (
-    <SampleIntakeSection
-      store={ports.samples}
-      onSamplesChange={(list) => setSampleCount(list.length)}
-      onRenameLogType={handleRenameLogType}
-    />
+    <>
+      <SampleIntakeSection
+        store={ports.samples}
+        onSamplesChange={handleSamplesChange}
+        onRenameLogType={handleRenameLogType}
+      />
+      <MatchPreviewSection samples={samples} />
+    </>
   );
 
   const azureResourcesBody = (

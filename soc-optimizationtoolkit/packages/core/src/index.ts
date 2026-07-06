@@ -31,5 +31,6 @@ export * from "./domain/custom-table";
 export * from "./domain/journey-state";
 export * from "./domain/integrate-arc";
 export * from "./domain/sample-parsing";
+export * from "./domain/field-matcher";
 export * from "./assets/vendor-schemas";
 export * from "./usecases";

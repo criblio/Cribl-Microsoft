@@ -213,6 +213,41 @@ export type {
   SampleFieldRow,
 } from "./screens/samples/sample-intake-state";
 
+// Match preview (porting-plan Unit 13 UI, ENG-04/05/03): the minimal,
+// read-only preview seeded into the Sample Data section - a tagged sample vs a
+// destination table rendered as matched/overflow/unmatched stat cards (the
+// legacy gap-analysis vocabulary), surfaced warnings (the AdditionalData_d
+// overflow-loss case honestly), and an expandable per-field mapping list. The
+// SEED of the Unit 18 gap-analysis review screen. Schema resolution flows
+// through the @soc/core SchemaCatalog port (bundled adapter by default); all
+// projection is the pure match-preview-state helpers.
+export { MatchPreview } from "./screens/match-preview/match-preview";
+export type { MatchPreviewProps } from "./screens/match-preview/match-preview";
+export { MatchPreviewSection } from "./screens/match-preview/match-preview-section";
+export type { MatchPreviewSectionProps } from "./screens/match-preview/match-preview-section";
+export {
+  MATCH_PREVIEW_NO_SAMPLE_REASON,
+  MATCH_PREVIEW_NO_TABLE_REASON,
+  deriveMatchPreview,
+  deriveMatchRows,
+  deriveMatchStats,
+  deriveMatchWarnings,
+  formatRowRoute,
+  matchPreviewEmptyReason,
+  matchRatePercent,
+} from "./screens/match-preview/match-preview-state";
+export type {
+  MatchPreviewInputs,
+  MatchPreviewRow,
+  MatchPreviewStat,
+  MatchPreviewView,
+  MatchPreviewWarning,
+  MatchRowKind,
+  MatchStatKey,
+  MatchStatTone,
+  MatchWarningKind,
+} from "./screens/match-preview/match-preview-state";
+
 // CSV header resolution (porting-plan Unit 12 UI, ENG-16/17, GUI-07): the
 // two-tab dialog (header row / paste feed config) that names a headerless
 // positional CSV's columns, its preview zip + mismatch warning, and the pure

@@ -1695,3 +1695,201 @@ button.journey-step-main:hover .journey-step-label {
   padding-top: 10px;
   border-top: 1px solid var(--border-subtle);
 }
+
+/* ---------------------------------------------------------------------------
+ * Match preview (porting-plan Unit 13 UI) - the minimal, read-only preview
+ * seeded into the Sample Data section: stat cards in the legacy gap-analysis
+ * vocabulary, surfaced warnings, and an expandable per-field mapping list. The
+ * full six-tile crown jewel lands in Unit 18; all colors are theme tokens.
+ * ------------------------------------------------------------------------ */
+
+.match-preview-section {
+  margin-top: 12px;
+}
+
+.match-preview {
+  margin-top: 10px;
+}
+
+.match-preview-empty {
+  border: 1px dashed var(--border);
+  background: var(--surface-raised);
+  padding: 10px 12px;
+}
+
+.match-preview-head {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.match-preview-target {
+  font-family: 'Courier New', monospace;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.match-rate {
+  margin-left: auto;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent-strong);
+  white-space: nowrap;
+}
+
+.match-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
+  gap: 8px;
+  margin: 10px 0;
+}
+
+.match-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 8px 6px;
+  border: 1px solid var(--border);
+  background: var(--surface-raised);
+}
+
+.match-stat-value {
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 24px;
+  color: var(--text-strong);
+}
+
+.match-stat-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.match-stat-ok {
+  border-color: var(--ok-border);
+  background: var(--ok-bg);
+}
+
+.match-stat-ok .match-stat-value {
+  color: var(--ok-strong);
+}
+
+.match-stat-warn {
+  border-color: var(--warn-border);
+  background: var(--warn-bg);
+}
+
+.match-stat-warn .match-stat-value {
+  color: var(--warn);
+}
+
+.match-warning {
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--warn);
+  border: 1px solid var(--warn-border);
+  background: var(--warn-bg);
+  padding: 6px 10px;
+  margin: 8px 0 0;
+}
+
+.match-field-list {
+  margin-top: 10px;
+}
+
+.match-field-list summary {
+  cursor: pointer;
+}
+
+.match-field-table-wrap {
+  overflow-x: auto;
+  margin-top: 8px;
+}
+
+.match-field-table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 12px;
+}
+
+.match-field-table th,
+.match-field-table td {
+  text-align: left;
+  vertical-align: top;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.match-field-table th {
+  color: var(--text-muted);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.match-field-name {
+  font-family: 'Courier New', monospace;
+  font-weight: 600;
+  color: var(--text);
+  word-break: break-all;
+}
+
+.match-field-type {
+  display: block;
+  font-size: 11px;
+  color: var(--text-faint);
+}
+
+.match-kind {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  line-height: 16px;
+  padding: 0 6px;
+  border: 1px solid var(--border);
+  background: var(--surface-raised);
+  color: var(--text-muted);
+}
+
+.match-kind-matched {
+  border-color: var(--ok-border);
+  background: var(--ok-bg);
+  color: var(--ok-strong);
+}
+
+.match-kind-overflow {
+  border-color: var(--warn-border);
+  background: var(--warn-bg);
+  color: var(--warn);
+}
+
+.match-kind-unmatched {
+  border-color: var(--error-border);
+  background: var(--error-bg);
+  color: var(--error-strong);
+}
+
+.match-conf {
+  margin-left: 6px;
+  font-size: 11px;
+  color: var(--text-faint);
+}
+
+.match-detail {
+  max-width: 320px;
+}
+
+.match-coerce {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--warn);
+  margin-right: 6px;
+}
