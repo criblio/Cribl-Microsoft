@@ -12,6 +12,7 @@
  */
 
 import type { SampleFormat } from "./models";
+import { PANOS_CSV_HEADERS } from "./panos-dictionary";
 
 // ---------------------------------------------------------------------------
 // Syslog prefix stripping (shared by parseCsv and capture inner detection)
@@ -50,37 +51,12 @@ export function stripSyslogPrefix(line: string): string {
 // ---------------------------------------------------------------------------
 // PAN-OS positional column names (headerless CSV)
 // ---------------------------------------------------------------------------
-
-/**
- * PAN-OS TRAFFIC log positional columns. NOTE: index 20 is 'log_action' here -
- * this is one of the three drifted PAN-OS dictionaries the porting plan flags
- * (Unit 12 owns the canonical reconciliation of parser 'log_action' vs resolver
- * 'logset'). Kept verbatim so parseSampleContent's headerless path matches
- * legacy output; Unit 12 supersedes it.
- */
-const PANOS_TRAFFIC_COLS: readonly string[] = [
-  "future_use1", "receive_time", "serial", "type", "subtype", "future_use2",
-  "generated_time", "src", "dst", "natsrc", "natdst", "rule", "srcuser",
-  "dstuser", "app", "vsys", "from", "to", "inbound_if", "outbound_if",
-  "log_action", "future_use3", "sessionid", "repeatcnt", "sport", "dport",
-  "natsport", "natdport", "flags", "proto", "action", "bytes", "bytes_sent",
-  "bytes_received", "packets", "start", "elapsed", "category", "future_use4",
-  "seqno", "actionflags", "srcloc", "dstloc", "future_use5", "pkts_sent",
-  "pkts_received", "session_end_reason",
-];
-
-/** PAN-OS THREAT log positional columns (verbatim from legacy). */
-const PANOS_THREAT_COLS: readonly string[] = [
-  "future_use1", "receive_time", "serial", "type", "subtype", "future_use2",
-  "generated_time", "src", "dst", "natsrc", "natdst", "rule", "srcuser",
-  "dstuser", "app", "vsys", "from", "to", "inbound_if", "outbound_if",
-  "log_action", "future_use3", "sessionid", "repeatcnt", "sport", "dport",
-  "natsport", "natdport", "flags", "proto", "action", "misc", "threatid",
-  "category", "severity", "direction", "seqno", "actionflags", "srcloc",
-  "dstloc", "future_use4", "contenttype", "pcap_id", "filedigest", "cloud",
-  "url_idx", "user_agent", "filetype", "xff", "referer", "sender", "subject",
-  "recipient", "reportid",
-];
+//
+// Unit 11 kept a local TRAFFIC/THREAT column copy here as a stopgap; Unit 12
+// deleted it and this headerless path now consumes the ONE canonical dictionary
+// (see panos-dictionary.ts). The drifted index 20 therefore resolves to the
+// canonical 'logset' (not the old 'log_action') - the conscious reconciliation
+// is pinned by panos-dictionary.test.ts.
 
 // ---------------------------------------------------------------------------
 // Parsers
@@ -152,9 +128,9 @@ export function parseCsv(content: string): Array<Record<string, unknown>> {
       const logType = values[3];
       let colNames: readonly string[] | null = null;
       if (logType === "TRAFFIC") {
-        colNames = PANOS_TRAFFIC_COLS;
+        colNames = PANOS_CSV_HEADERS.TRAFFIC;
       } else if (logType === "THREAT") {
-        colNames = PANOS_THREAT_COLS;
+        colNames = PANOS_CSV_HEADERS.THREAT;
       }
 
       if (colNames) {

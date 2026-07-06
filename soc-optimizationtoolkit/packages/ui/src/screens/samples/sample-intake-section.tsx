@@ -18,6 +18,16 @@
  *     (Unit 18 mapping edits) - fixing the legacy orphaning bug.
  *   - REMOVE a tagged sample.
  *
+ * UNIT 12 EXTENSION (ENG-16/17, GUI-07): when an intaken sample is detected as
+ * headerless positional CSV (isHeaderlessCsvSample), a CSV header-resolution
+ * affordance is surfaced on that chip and the CsvHeaderDialog opens. Across a
+ * MULTI-FILE batch, EVERY headerless CSV is QUEUED for its own resolution turn
+ * (the legacy renderer dropped the rest of the batch after the first - fixed and
+ * pinned in csv-resolution-state). Applying resolved headers re-parses the
+ * sample via the core parseCsvWithHeaders and re-keys its TaggedSample; skipping
+ * keeps the positional _N names. All queue/preview/mismatch decisions are the
+ * pure csv-resolution-state helpers.
+ *
  * The store is keyed by log type with replace-by-logType semantics, so tagging
  * the same log type twice overwrites it (one chip per log type). The pure
  * decisions (chip derivation, dedupe, rename re-key, validation) live in
@@ -40,6 +50,18 @@ import {
   validateLogType,
   validateRename,
 } from "./sample-intake-state";
+import { CsvHeaderDialog } from "./csv-header-dialog";
+import {
+  advanceQueue,
+  buildResolutionQueue,
+  currentItem,
+  isHeaderlessCsvSample,
+  isQueueDone,
+  queuePosition,
+  resolveHeaders,
+  singleItemQueue,
+} from "./csv-resolution-state";
+import type { CsvResolutionQueue } from "./csv-resolution-state";
 
 export interface SampleIntakeSectionProps {
   /** The tagged-sample store this section reads and writes. */
@@ -79,6 +101,11 @@ export function SampleIntakeSection({
     null,
   );
   const [renameError, setRenameError] = useState("");
+
+  // CSV header-resolution queue (Unit 12): non-null while the dialog is open.
+  // A multi-file batch queues EVERY headerless CSV; the per-chip affordance
+  // opens a single-item queue. null = no dialog.
+  const [csvQueue, setCsvQueue] = useState<CsvResolutionQueue | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -140,6 +167,10 @@ export function SampleIntakeSection({
       await persistUpsert(sample);
       setPasteText("");
       setPasteLogType("");
+      // Headerless positional CSV: offer header resolution for this sample.
+      if (isHeaderlessCsvSample(sample)) {
+        setCsvQueue(singleItemQueue(sample));
+      }
     } catch (err) {
       setPasteError(String(err));
     } finally {
@@ -155,12 +186,16 @@ export function SampleIntakeSection({
       // Fold upserts so multiple files auto-detecting the SAME log type replace
       // rather than duplicate (dedupe-by-logType).
       let next = samples ?? [];
+      // Track every sample tagged in THIS batch so the CSV resolver can queue
+      // ALL headerless CSVs (the legacy silent-drop fix), not just the first.
+      const added: TaggedSample[] = [];
       for (const file of Array.from(files)) {
         try {
           const content = await file.text();
           const sample = tagFileContent(content, file.name);
           await store.upsert(sample);
           next = upsertSample(next, sample);
+          added.push(sample);
         } catch (err) {
           problems.push(`${file.name}: ${String(err)}`);
         }
@@ -168,6 +203,11 @@ export function SampleIntakeSection({
       commit(next);
       if (problems.length > 0) {
         setUploadError(problems.join("\n"));
+      }
+      // Queue every headerless CSV in the batch for its own resolution turn.
+      const queue = buildResolutionQueue(added);
+      if (!isQueueDone(queue)) {
+        setCsvQueue(queue);
       }
       setBusy(false);
       // Reset the input so re-selecting the same file re-fires onChange.
@@ -229,6 +269,45 @@ export function SampleIntakeSection({
       setBusy(false);
     }
   }, [renaming, samples, store, commit, onRenameLogType]);
+
+  // Advance the CSV resolution queue after an apply or a skip; close when done.
+  const advanceCsvQueue = useCallback(() => {
+    setCsvQueue((current) => {
+      if (current === null) {
+        return null;
+      }
+      const next = advanceQueue(current);
+      return isQueueDone(next) ? null : next;
+    });
+  }, []);
+
+  // Apply resolved headers to the current queued item: re-parse via the core
+  // parseCsvWithHeaders (in resolveHeaders) and upsert the re-keyed sample,
+  // REPLACING its positional-named chip; then advance the queue.
+  const applyCsvHeaders = useCallback(
+    async (headers: string[]) => {
+      if (csvQueue === null) {
+        return;
+      }
+      const item = currentItem(csvQueue);
+      if (item === null) {
+        setCsvQueue(null);
+        return;
+      }
+      setBusy(true);
+      try {
+        const resolved = resolveHeaders(item, headers);
+        await store.upsert(resolved);
+        commit(upsertSample(samples ?? [], resolved));
+      } catch (err) {
+        setUploadError(`Header resolution failed: ${String(err)}`);
+      } finally {
+        setBusy(false);
+      }
+      advanceCsvQueue();
+    },
+    [csvQueue, store, samples, commit, advanceCsvQueue],
+  );
 
   return (
     <div className="sample-intake">
@@ -323,6 +402,7 @@ export function SampleIntakeSection({
             const rows = fieldRows(sample.parsed);
             const preview = rawPreviewLines(sample);
             const isRenaming = renaming?.from === sample.logType;
+            const headerless = isHeaderlessCsvSample(sample);
             return (
               <div className="sample-chip" key={sample.logType}>
                 <div className="sample-chip-head">
@@ -374,6 +454,18 @@ export function SampleIntakeSection({
                   </span>
                   {!isRenaming && (
                     <span className="sample-chip-actions">
+                      {headerless && (
+                        <button
+                          className="run-button"
+                          onClick={() =>
+                            setCsvQueue(singleItemQueue(sample))
+                          }
+                          disabled={busy}
+                          title="Name the positional CSV columns"
+                        >
+                          Resolve headers
+                        </button>
+                      )}
                       <button
                         className="run-button"
                         onClick={() => {
@@ -397,6 +489,12 @@ export function SampleIntakeSection({
                     </span>
                   )}
                 </div>
+                {headerless && !isRenaming && (
+                  <p className="field-hint">
+                    Headerless CSV: columns are positional (_0, _1, ...). Resolve
+                    headers to name them for accurate field mapping.
+                  </p>
+                )}
                 {isRenaming && renameError !== "" && (
                   <p className="field-hint">{renameError}</p>
                 )}
@@ -442,6 +540,23 @@ export function SampleIntakeSection({
           })}
         </div>
       )}
+
+      {/* CSV header-resolution dialog (Unit 12). Keyed by queue index so each
+          queued file gets a fresh dialog (transient tab/paste state resets). */}
+      {csvQueue !== null &&
+        (() => {
+          const item = currentItem(csvQueue);
+          return item === null ? null : (
+            <CsvHeaderDialog
+              key={csvQueue.index}
+              item={item}
+              position={queuePosition(csvQueue)}
+              onApply={(headers) => void applyCsvHeaders(headers)}
+              onSkip={advanceCsvQueue}
+              busy={busy}
+            />
+          );
+        })()}
     </div>
   );
 }

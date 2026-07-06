@@ -213,6 +213,38 @@ export type {
   SampleFieldRow,
 } from "./screens/samples/sample-intake-state";
 
+// CSV header resolution (porting-plan Unit 12 UI, ENG-16/17, GUI-07): the
+// two-tab dialog (header row / paste feed config) that names a headerless
+// positional CSV's columns, its preview zip + mismatch warning, and the pure
+// queue state that resolves EVERY headerless CSV in a multi-file batch instead
+// of dropping the rest after the first (the legacy silent-drop fix). Applying
+// re-parses via the core parseCsvWithHeaders and re-keys the tagged sample.
+export { CsvHeaderDialog } from "./screens/samples/csv-header-dialog";
+export type { CsvHeaderDialogProps } from "./screens/samples/csv-header-dialog";
+export {
+  advanceQueue,
+  buildResolutionQueue,
+  currentItem,
+  deriveMismatch,
+  isHeaderlessCsvSample,
+  isQueueDone,
+  parseHeaderFileText,
+  previewZip,
+  queuePosition,
+  reconstructCsvLines,
+  remainingCount,
+  resolveHeaders,
+  singleItemQueue,
+  splitCsvRow,
+  toResolutionItem,
+} from "./screens/samples/csv-resolution-state";
+export type {
+  CsvMismatch,
+  CsvResolutionItem,
+  CsvResolutionQueue,
+  PreviewZipRow,
+} from "./screens/samples/csv-resolution-state";
+
 // Azure targeting (Unit 2): the subscription -> workspace -> resource-group
 // cascade, create/enable actions, explicit scope commit, and the pure state
 // behind it (chip text, commit notice, RG name rules, scope codec).

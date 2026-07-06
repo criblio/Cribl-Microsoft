@@ -60,3 +60,21 @@ export {
   recordOriginalFormats,
   resolveOriginalFormat,
 } from "./log-type";
+
+// Unit 12 (ENG-16/17, GUI-07): headerless-CSV + vendor feed-config resolution.
+export type { ParseCsvWithHeadersOptions } from "./csv-headers";
+export { parseCsvWithHeaders } from "./csv-headers";
+
+export {
+  PANOS_CSV_HEADERS,
+  PANOS_LOG_TYPES,
+  PANOS_TRAFFIC_LOGSET_INDEX,
+  PANOS_LEGACY_PARSER_INDEX20,
+  PANOS_CANONICAL_INDEX20,
+  parsePanosLine,
+  isPanosFormat,
+  convertPanosToJson,
+} from "./panos-dictionary";
+
+export type { VendorFeedConfig } from "./feed-config";
+export { parseFeedConfig } from "./feed-config";

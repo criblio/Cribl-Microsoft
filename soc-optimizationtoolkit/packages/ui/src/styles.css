@@ -1553,3 +1553,145 @@ button.journey-step-main:hover .journey-step-label {
 .sample-raw-preview {
   margin-top: 8px;
 }
+
+/* ---------------------------------------------------------------------------
+ * CSV header-resolution dialog (screens/samples/csv-header-dialog.tsx, Unit 12):
+ * a modal over a headerless-CSV chip with two tabs (header row / paste feed
+ * config), a preview zip, and a mismatch warning. Theme tokens only, except the
+ * backdrop scrim (a neutral darken that reads correctly in both themes).
+ * ------------------------------------------------------------------------ */
+
+.csv-dialog-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(0, 0, 0, 0.5);
+}
+
+.csv-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  max-width: 680px;
+  max-height: 85vh;
+  overflow-y: auto;
+  padding: 20px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+
+.csv-dialog-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.csv-dialog-tabs {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.csv-dialog-tab {
+  padding: 6px 16px;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--text-muted);
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+}
+
+.csv-dialog-tab:hover {
+  color: var(--text);
+}
+
+.csv-dialog-tab-active {
+  font-weight: 700;
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+.csv-dialog-tabbody {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.csv-dialog-status {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 12px;
+  font-size: 12px;
+  line-height: 1.5;
+  border: 1px solid var(--accent-border);
+  background: var(--accent-bg);
+  color: var(--accent-strong);
+}
+
+.csv-dialog-status-warn {
+  border-color: var(--warn-border);
+  background: var(--warn-bg);
+  color: var(--warn);
+}
+
+.csv-dialog-mismatch {
+  color: var(--warn);
+}
+
+.csv-preview-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.csv-preview {
+  max-height: 180px;
+  overflow: auto;
+  padding: 8px;
+  font-family: 'Consolas', 'Menlo', 'Courier New', monospace;
+  font-size: 12px;
+  line-height: 1.6;
+  background: var(--surface-raised);
+  border: 1px solid var(--border-subtle);
+}
+
+.csv-preview-row {
+  display: flex;
+  gap: 12px;
+}
+
+.csv-preview-header {
+  min-width: 160px;
+  font-weight: 600;
+  color: var(--accent-strong);
+  word-break: break-all;
+}
+
+.csv-preview-value {
+  color: var(--text-muted);
+  word-break: break-all;
+}
+
+.csv-preview-more {
+  color: var(--text-muted);
+  padding-top: 2px;
+}
+
+.csv-dialog-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border-subtle);
+}
