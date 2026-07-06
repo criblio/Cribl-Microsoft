@@ -8,6 +8,13 @@ import {
   pollAttemptsForTimeout,
   DEFAULT_BATCH_MAX_REQUESTS_PER_MINUTE,
   ONBOARD_BATCH_JOB_KIND,
+  // usecases/assign-dcr-role
+  assignDcrRoles,
+  buildRoleAssignmentRequest,
+  matchDcrsToTables,
+  ASSIGN_DCR_ROLE_JOB_KIND,
+  MONITORING_METRICS_PUBLISHER_ROLE_ID,
+  ROLE_ASSIGNMENTS_API_VERSION,
   // domain/journey-state
   deriveJourney,
   nextAction,
@@ -119,6 +126,17 @@ describe("@soc/core root barrel", () => {
     expect(typeof pollAttemptsForTimeout).toBe("function");
     expect(ONBOARD_BATCH_JOB_KIND).toBe("onboard-batch");
     expect(DEFAULT_BATCH_MAX_REQUESTS_PER_MINUTE).toBe(80);
+  });
+
+  it("re-exports the assign-dcr-role usecase module", () => {
+    expect(typeof assignDcrRoles).toBe("function");
+    expect(typeof buildRoleAssignmentRequest).toBe("function");
+    expect(typeof matchDcrsToTables).toBe("function");
+    expect(ASSIGN_DCR_ROLE_JOB_KIND).toBe("assign-dcr-role");
+    expect(MONITORING_METRICS_PUBLISHER_ROLE_ID).toBe(
+      "3913510d-42f4-4e42-8a64-420c390055eb",
+    );
+    expect(ROLE_ASSIGNMENTS_API_VERSION).toBe("2022-04-01");
   });
 
   it("re-exports the azure-discovery usecase module", () => {

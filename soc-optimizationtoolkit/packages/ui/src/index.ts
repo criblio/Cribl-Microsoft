@@ -528,6 +528,41 @@ export type {
   StorageSummary,
 } from "./screens/packs/pack-inventory-state";
 
+// Ingestion role assignment (porting-plan Unit 8, ENG-37 runtime half): the
+// Integrate page's Azure-section step that grants Monitoring Metrics Publisher
+// to the ingestion service principal on each deployed DCR (the run is the
+// @soc/core assignDcrRoles usecase; GUID minting is shell-injected). Additive
+// and NON-GATING - it never touches canDeploy / canDeployContentPath. The
+// object-id validation SHAPE, the always-visible-disabled gate, and the
+// {assigned, total} + per-DCR result projection are the pure state module.
+export { RoleAssignmentSection } from "./screens/role-assignment/role-assignment-section";
+export type { RoleAssignmentSectionProps } from "./screens/role-assignment/role-assignment-section";
+export {
+  OBJECT_ID_EMPTY_REASON,
+  OBJECT_ID_IS_CLIENT_ID_REASON,
+  OBJECT_ID_NOT_GUID_REASON,
+  ROLE_ASSIGN_NO_MINTER_REASON,
+  ROLE_ASSIGN_NO_TARGETS_REASON,
+  ROLE_ASSIGN_RUNNING_REASON,
+  ROLE_DETAIL_ALREADY,
+  ROLE_DETAIL_ASSIGNED,
+  dcrResourceIdFor,
+  projectRoleOutcome,
+  roleAssignDisabledReason,
+  roleAssignStepNames,
+  roleTargetDisplayName,
+  upsertRoleTarget,
+  validateObjectId,
+} from "./screens/role-assignment/role-assignment-state";
+export type {
+  DcrScopeName,
+  ObjectIdCheck,
+  RoleAssignGateInput,
+  RoleOutcomeKind,
+  RoleOutcomeRow,
+  RoleOutcomeView,
+} from "./screens/role-assignment/role-assignment-state";
+
 // Settings.
 export { SettingsScreen } from "./screens/settings-screen";
 export type {

@@ -155,6 +155,15 @@ export interface UiPorts {
    * packs API through it.
    */
   packInstall?: PackInstallClient;
+  /**
+   * OPTIONAL shell-injected GUID minter for role-assignment names (porting-plan
+   * Unit 8, ENG-37 runtime half). The shell OWNS id conventions: @soc/core never
+   * mints an id, so the assign-dcr-role usecase takes the name provider from
+   * here (both shells bind crypto.randomUUID). Absent = the role-assignment step
+   * stays visible-but-disabled with the reason (a shell wiring gap, not a
+   * runtime state); every other screen is unaffected.
+   */
+  mintAssignmentName?: () => string;
 }
 
 /** What PortsContext carries: the ports plus the active connection config. */

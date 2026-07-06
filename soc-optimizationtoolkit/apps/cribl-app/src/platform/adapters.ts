@@ -1350,6 +1350,14 @@ export interface CloudPorts {
   packs: PackRecordStore;
   /** Pack install + deployed-status client over the workspace API (Unit 19). */
   packInstall: PackInstallClient;
+  /**
+   * Shell-minted GUID provider for role-assignment names (Unit 8, ENG-37
+   * runtime half). The SHELL owns id conventions - @soc/core never mints - so
+   * the assign-dcr-role usecase takes its per-assignment name from here. The
+   * platform iframe has Web Crypto; randomUUID yields the RFC 4122 v4 GUID ARM
+   * expects for a roleAssignments name.
+   */
+  mintAssignmentName: () => string;
   /** The shell's Logger (platform/logger.ts PlatformLogger instance). */
   logger: Logger;
 }
@@ -1381,6 +1389,7 @@ export function makeCloudPorts(tenantId: string, logger: Logger): CloudPorts {
     githubPat: new PlatformGithubPat(),
     packs: new PlatformPackStore(),
     packInstall: new PlatformPackInstall(cribl),
+    mintAssignmentName: () => crypto.randomUUID(),
     logger,
   };
 }

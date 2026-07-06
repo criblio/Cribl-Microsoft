@@ -17,10 +17,12 @@
  *      + paste-and-tag, per-sample chips (detected format + field table + raw
  *      preview), and a log-type rename that re-keys the tagged-sample store
  *      (Unit 11).
- *   3. Azure Resources     - BUILT: the AzureTargetingScreen cascade + the
- *      DCE / metrics / role-assignment capability checkboxes (the role
- *      checkbox is Unit 8's target - rendered honestly with an
- *      "assigns after deploy" note).
+ *   3. Azure Resources     - BUILT: the AzureTargetingScreen cascade, the
+ *      DCE / provision-DCR capability checkboxes, AND the operable
+ *      RoleAssignmentSection (Unit 8, ENG-37 runtime half): grant Monitoring
+ *      Metrics Publisher to the ingestion service principal on each DCR a
+ *      deploy created, over the @soc/core assignDcrRoles usecase (GUID minting
+ *      shell-injected). ADDITIVE + NON-GATING.
  *   4. Cribl Configuration - BUILT: worker-group select + pack name (prefilled
  *      from the saved Options destination prefix).
  *   5. DCR Gap Analysis    - BUILT: the MappingReviewSection - per-log-type
@@ -71,6 +73,7 @@ import {
 import type {
   CriblGroupSummary,
   CriblOptions,
+  DcrRoleTarget,
   GapFieldMapping,
   GapReport,
   IntegrateSectionId,
@@ -97,6 +100,11 @@ import type { MappingReviewRenameEvent } from "../mapping-review/mapping-review-
 import { PipelinePreviewSection } from "../pipeline-preview/pipeline-preview-section";
 import { SolutionBrowser } from "../solution-browser/solution-browser";
 import { RuleCoverageSection } from "../rule-coverage/rule-coverage-section";
+import { RoleAssignmentSection } from "../role-assignment/role-assignment-section";
+import {
+  dcrResourceIdFor,
+  upsertRoleTarget,
+} from "../role-assignment/role-assignment-state";
 import {
   INTEGRATE_DEFAULT_TABLE,
   defaultPackName,
@@ -177,6 +185,11 @@ export function IntegrateScreen({
   const [runError, setRunError] = useState("");
   const [deployCompleted, setDeployCompleted] = useState(false);
   const [historyToken, setHistoryToken] = useState(0);
+  // The DCRs this page's deploys created, accumulated for the Azure Resources
+  // ingestion-role step (Unit 8, ENG-37 runtime half). The exact deployed name
+  // + scope come straight from each outcome, so the role step never has to
+  // predict a name (no location guesswork). Additive: never part of any gate.
+  const [roleTargets, setRoleTargets] = useState<DcrRoleTarget[]>([]);
 
   // ---- Solution section (Unit 14) ---------------------------------------
   // The lazy GitHub solution browser is the Solution section's content. The
@@ -351,8 +364,22 @@ export function IntegrateScreen({
         },
       });
       if (record.status === "succeeded") {
-        setOutcome(record.result as OnboardTableOutcome);
+        const result = record.result as OnboardTableOutcome;
+        setOutcome(result);
         setDeployCompleted(true);
+        // Register the just-deployed DCR as an ingestion-role target. The
+        // outcome carries the exact deployed name and its scope, so the role
+        // step addresses it precisely without predicting a name.
+        setRoleTargets((prev) =>
+          upsertRoleTarget(prev, {
+            dcrResourceId: dcrResourceIdFor({
+              subscriptionId: result.subscriptionId,
+              resourceGroup: result.resourceGroup,
+              dcrName: result.dcrName,
+            }),
+            table: trimmedTable,
+          }),
+        );
       } else {
         setRunError(
           record.error ?? "onboarding failed but recorded no error text",
@@ -489,12 +516,11 @@ export function IntegrateScreen({
           </span>
         </label>
         <label className="integrate-check">
-          <input type="checkbox" checked={false} readOnly disabled />
+          <input type="checkbox" checked readOnly disabled />
           <span className="integrate-check-text">
             Assign Monitoring Metrics Publisher to the ingestion identity -
-            assigns after deploy (automated in Unit 8). Until then,{" "}
-            {roleGuidance ??
-              "grant it out of band (az CLI, the portal, or a change request)."}
+            granted per DCR in the step below (data cannot flow to a DCR without
+            it).
           </span>
         </label>
         {onOpenOptions !== undefined && (
@@ -505,6 +531,11 @@ export function IntegrateScreen({
           </div>
         )}
       </div>
+      <RoleAssignmentSection
+        targets={roleTargets}
+        clientId={config.clientId}
+        roleGuidance={roleGuidance}
+      />
     </>
   );
 

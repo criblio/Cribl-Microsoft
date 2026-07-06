@@ -998,6 +998,14 @@ export interface LocalPorts {
   packs: PackRecordStore;
   /** Pack install + deployed-status client over the host leader proxy (Unit 19). */
   packInstall: PackInstallClient;
+  /**
+   * Shell-minted GUID provider for role-assignment names (Unit 8, ENG-37
+   * runtime half). The SHELL owns id conventions - @soc/core never mints - so
+   * the assign-dcr-role usecase takes its per-assignment name from here. The
+   * local web layer runs in a browser with Web Crypto; randomUUID yields the
+   * RFC 4122 v4 GUID ARM expects for a roleAssignments name.
+   */
+  mintAssignmentName: () => string;
   /** The shell's Logger (web/logger.ts HostLogger, batching to the host). */
   logger: Logger;
 }
@@ -1030,6 +1038,7 @@ export function makeLocalPorts(logger: Logger): LocalPorts {
     githubPat: new LocalGithubPat(),
     packs: new LocalPackStore(),
     packInstall: new LocalPackInstall(cribl),
+    mintAssignmentName: () => crypto.randomUUID(),
     logger,
   };
 }
