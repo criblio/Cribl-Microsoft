@@ -149,8 +149,9 @@ describe("@soc/core root barrel", () => {
     expect(typeof deriveReadinessPills).toBe("function");
     expect(typeof canDeploy).toBe("function");
     expect(INTEGRATE_SECTIONS).toHaveLength(7);
-    // sample-data joined the built set when Unit 11 shipped (was 3).
-    expect(INTEGRATE_SECTIONS.filter((s) => s.built)).toHaveLength(4);
+    // sample-data joined the built set when Unit 11 shipped (was 3); solution
+    // joined it when Unit 14 shipped the lazy solution browser (now 5).
+    expect(INTEGRATE_SECTIONS.filter((s) => s.built)).toHaveLength(5);
   });
 
   it("re-exports the sample-parsing domain module and store fake", () => {

@@ -45,6 +45,12 @@ export const FALLBACK_PACK_NAME = "Sentinel-Integration";
 
 /** The raw screen values the component holds before reducing to SectionInputs. */
 export interface IntegrateRawInputs {
+  /**
+   * A Sentinel solution has been selected in the Solution browser (Unit 14).
+   * Additive and NON-GATING (like {@link samplesProvided}): completes the
+   * now-built Solution section and lights its pill, never gates the deploy.
+   */
+  solutionSelected: boolean;
   /** Committed-scope flag supplied by the shell (a full target is committed). */
   scopeCommitted: boolean;
   /** The page-owned worker-group selection (Cribl Config section). */
@@ -69,6 +75,7 @@ export interface IntegrateRawInputs {
  */
 export function deriveSectionInputs(raw: IntegrateRawInputs): SectionInputs {
   return {
+    solutionSelected: raw.solutionSelected,
     scopeCommitted: raw.scopeCommitted,
     workerGroupSelected: raw.workerGroup.trim() !== "",
     packNameSet: raw.packName.trim() !== "",

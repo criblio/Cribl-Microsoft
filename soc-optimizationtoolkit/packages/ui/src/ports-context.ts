@@ -15,10 +15,13 @@ import type {
   ArtifactSink,
   AzureConfig,
   AzureManagement,
+  ContentCache,
   CriblClient,
+  GithubPatManager,
   JobStore,
   Logger,
   SecretsStore,
+  SentinelContent,
   TaggedSampleStore,
   UserContext,
 } from "@soc/core";
@@ -42,6 +45,26 @@ export interface UiPorts {
    * replace-by-logType semantics.
    */
   samples: TaggedSampleStore;
+  /**
+   * OPTIONAL lazy Sentinel content accessor (porting-plan Unit 14). The
+   * solution browser reads solutions and per-solution connector files through
+   * it; both shells bind a real adapter over the proxied/host GitHub path.
+   * Optional so shells/tests that never open the content flow still satisfy
+   * the bundle; screens that need it degrade gracefully when it is absent.
+   */
+  content?: SentinelContent;
+  /**
+   * OPTIONAL parsed-content cache keyed by solution+commit (porting-plan Unit
+   * 14). Paired with {@link content}; the browser caches a solution's parsed
+   * result so it is fetched at most once per upstream commit.
+   */
+  contentCache?: ContentCache;
+  /**
+   * OPTIONAL GitHub PAT lifecycle manager (porting-plan Unit 14). The
+   * Repositories settings page validates-then-stores a PAT through it and reads
+   * back only hasPat + login (never the token).
+   */
+  githubPat?: GithubPatManager;
   /**
    * OPTIONAL diagnostics sink (porting-plan Unit 3). Carrying it in the
    * ports bundle means every usecase invoked with the bundle logs for free

@@ -23,6 +23,14 @@
 //   POST   /api/tagged-samples      { logType, format, rawEvents, parsed } upsert
 //   GET    /api/tagged-samples/{lt} { sample } - sample or null
 //   DELETE /api/tagged-samples/{lt} idempotent remove
+//   POST   /api/github/request      { url } -> { status, body } GitHub GET proxy
+//                                   (api.github.com + raw.githubusercontent.com
+//                                   host allowlist; PAT attached server-side)
+//   GET    /api/github/pat          { hasPat, login } - never the token
+//   PUT    /api/github/pat          { pat } validate-then-store -> PatManagerStatus
+//   DELETE /api/github/pat          idempotent clear
+//   GET    /api/content-cache/{key} { value } - parsed content, null on miss
+//   PUT    /api/content-cache/{key} { value } store parsed content
 //   POST   /api/logs                { entries } batch from the browser logger
 //                                   (sanitized server-side, appended to
 //                                   data/logs/app.log with rotation)
@@ -44,6 +52,8 @@ import { createCriblProxy } from './cribl.mjs';
 import { createSecretsStore } from './secrets.mjs';
 import { createJobStore } from './jobs.mjs';
 import { createTaggedSampleStore } from './tagged-samples.mjs';
+import { createGithubProxy } from './github.mjs';
+import { createContentCache } from './content-cache.mjs';
 import {
   LOG_TAIL_DEFAULT,
   LOG_TAIL_MAX,
@@ -79,6 +89,8 @@ export function createHostServer(config) {
   const secrets = createSecretsStore(DATA_DIR);
   const jobs = createJobStore(DATA_DIR);
   const taggedSamples = createTaggedSampleStore(DATA_DIR);
+  const github = createGithubProxy(DATA_DIR, log);
+  const contentCache = createContentCache(DATA_DIR);
   const serveStatic = createStaticHandler(WEB_ROOT);
 
   /**
@@ -311,6 +323,68 @@ export function createHostServer(config) {
         return;
       }
       res.writeHead(405, { Allow: 'GET, DELETE' });
+      res.end();
+      return;
+    }
+
+    // --- GitHub content proxy + PAT (porting-plan Unit 14) ------------------
+    if (pathname === '/api/github/request' && method === 'POST') {
+      const payload = await readJsonBody(req);
+      if (!isPlainObject(payload) || typeof payload.url !== 'string') {
+        throw new HttpError(400, 'POST /api/github/request: body must be { url: string }');
+      }
+      // github.request enforces the host allowlist (SSRF guard) itself; a
+      // disallowed host throws HttpError 400 before any request leaves the host.
+      const result = await upstream(() => github.request(payload.url));
+      sendJson(res, 200, result);
+      return;
+    }
+
+    if (pathname === '/api/github/pat') {
+      if (method === 'GET') {
+        // WRITE-ONLY parity with the cloud KV: only { hasPat, login } - the
+        // token never leaves the host process.
+        sendJson(res, 200, await github.status());
+        return;
+      }
+      if (method === 'PUT') {
+        const payload = await readJsonBody(req);
+        if (!isPlainObject(payload) || typeof payload.pat !== 'string') {
+          throw new HttpError(400, 'PUT /api/github/pat: body must be { pat: string }');
+        }
+        // validate-then-store: transport failures are surfaced as a data-level
+        // { hasPat:false, error } here (not a 502), matching the cloud adapter's
+        // renderer-facing PatManagerStatus.
+        sendJson(res, 200, await github.validateAndStore(payload.pat));
+        return;
+      }
+      if (method === 'DELETE') {
+        await github.clear();
+        sendEmpty(res, 204);
+        return;
+      }
+      res.writeHead(405, { Allow: 'GET, PUT, DELETE' });
+      res.end();
+      return;
+    }
+
+    // --- parsed-content cache (porting-plan Unit 14) ------------------------
+    if (pathname.startsWith('/api/content-cache/')) {
+      const key = decodeKey(pathname.slice('/api/content-cache/'.length));
+      if (method === 'GET') {
+        sendJson(res, 200, { value: await contentCache.get(key) });
+        return;
+      }
+      if (method === 'PUT') {
+        const payload = await readJsonBody(req);
+        if (!isPlainObject(payload) || !('value' in payload)) {
+          throw new HttpError(400, `PUT /api/content-cache/${key}: body must be { value: ... }`);
+        }
+        await contentCache.set(key, payload.value);
+        sendEmpty(res, 204);
+        return;
+      }
+      res.writeHead(405, { Allow: 'GET, PUT' });
       res.end();
       return;
     }

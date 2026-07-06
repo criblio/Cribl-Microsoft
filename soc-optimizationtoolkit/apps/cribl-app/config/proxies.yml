@@ -54,3 +54,38 @@ management.azure.com:
     allowlist:
       - Content-Type
       - Accept
+
+# GitHub REST API (Microsoft Sentinel content: solution index, per-solution
+# tree queries, connector JSON) - porting-plan Unit 14. The GitHub personal
+# access token lives in the encrypted, write-only KV entry githubPat (validated
+# with GET /user before it is stored, exactly like azureBasic/azureArmToken) and
+# is injected server-side as a Bearer credential; the browser never sets an
+# Authorization header (the proxy strips any it sends). Only Content-Type/Accept
+# are forwarded so the browser's Origin header cannot reach GitHub. A PAT is
+# effectively REQUIRED here: the hosted app shares one egress IP across tenants,
+# so GitHub's 60 req/hr anonymous per-IP limit is unreliable. Fetches are LAZY
+# and per-solution (never a whole-repo mirror) to stay under the 100 req/min
+# proxy budget and the 30s per-request timeout.
+api.github.com:
+  timeout: 30000
+  headers:
+    inject:
+      Authorization: '`Bearer ${kv.githubPat}`'
+    allowlist:
+      - Content-Type
+      - Accept
+  rejectUnauthorized: true
+
+# GitHub raw content host (immutable per-commit file bytes: connector JSON,
+# solution metadata, sample data). Same server-side githubPat injection and the
+# same Origin-suppressing allowlist as api.github.com; commit-pinned URLs make
+# the bytes safe to cache by solution + commit SHA.
+raw.githubusercontent.com:
+  timeout: 30000
+  headers:
+    inject:
+      Authorization: '`Bearer ${kv.githubPat}`'
+    allowlist:
+      - Content-Type
+      - Accept
+  rejectUnauthorized: true

@@ -12,13 +12,13 @@
  *
  * Two things this module makes HONEST during the MVP transition:
  *
- *   1. Four of the seven sections are BUILT NOW and operable (Sample Data,
- *      Azure Resources, Cribl Config, Deploy). Azure Resources / Cribl Config /
- *      Deploy are the native-table onboard the user validated live end to end;
- *      Sample Data joined them when Unit 11 shipped. The other three are
- *      NOT-YET-BUILT (Solution=U14, Gap Analysis=U18, Rule Coverage=U23); they
- *      render 'coming-soon', never as a working teaser. The `built` flag on
- *      each section is the single source of truth for that split.
+ *   1. Five of the seven sections are BUILT NOW and operable (Solution, Sample
+ *      Data, Azure Resources, Cribl Config, Deploy). Azure Resources / Cribl
+ *      Config / Deploy are the native-table onboard the user validated live end
+ *      to end; Sample Data joined them when Unit 11 shipped and Solution when
+ *      Unit 14 shipped. The other two are NOT-YET-BUILT (Gap Analysis=U18, Rule
+ *      Coverage=U23); they render 'coming-soon', never as a working teaser. The
+ *      `built` flag on each section is the single source of truth for that split.
  *
  *   2. The deploy-readiness footer never shows a false green. A prerequisite
  *      whose section has not shipped renders as a 'coming-soon' pill, not an
@@ -32,9 +32,17 @@
  * even though Sample Data is now built and taggable, the native-table deploy
  * the user validated never needed a sample, so canDeploy ignores samples (they
  * enrich the content flow and will gate the FULL content-driven deploy once
- * gap analysis lands). The still-not-built prerequisites (mappings=U18,
- * solution=U14) likewise do NOT block it. This module encodes that rule in
- * exactly one place so it cannot drift.
+ * gap analysis lands). The now-built-but-non-gating Solution selection (U14)
+ * and the still-not-built Mappings (U18) likewise do NOT block it. This module
+ * encodes that rule in exactly one place so it cannot drift.
+ *
+ * UNIT 14 (solution browser): the Solution section is now BUILT - the lazy
+ * GitHub solution browser is its content. Its completion signal
+ * (`solutionSelected`) is ADDITIVE and NON-GATING, exactly like samples: it
+ * completes the Solution section and lights the Solution readiness pill, but it
+ * does NOT participate in {@link canDeploy} (the native-table deploy the user
+ * validated never needed a selected solution). While unselected the Solution
+ * pill stays muted 'coming-soon' (never a blocking 'missing').
  *
  * READ-AHEAD contract (user decision, binding - shared with journey-state):
  * every section of the page is visible and navigable; gating happens ONLY at
@@ -95,10 +103,10 @@ export interface IntegrateSection {
 }
 
 /**
- * The seven sections in page order (numbers 1..7). BUILT NOW: sample-data,
- * azure-resources, cribl-config, deploy. NOT-YET-BUILT (coming-soon): solution
- * (U14), gap-analysis (U18), rule-coverage (U23). Order and numbering match the
- * ADOPTED single-page decision in legacy-flow-analysis.md.
+ * The seven sections in page order (numbers 1..7). BUILT NOW: solution,
+ * sample-data, azure-resources, cribl-config, deploy. NOT-YET-BUILT
+ * (coming-soon): gap-analysis (U18), rule-coverage (U23). Order and numbering
+ * match the ADOPTED single-page decision in legacy-flow-analysis.md.
  */
 export const INTEGRATE_SECTIONS: readonly IntegrateSection[] = [
   {
@@ -106,12 +114,12 @@ export const INTEGRATE_SECTIONS: readonly IntegrateSection[] = [
     number: 1,
     title: "Sentinel Solution",
     infoTip:
-      "Search and select a Sentinel solution (452 active / 97 deprecated). " +
-      "The chosen solution scopes which tables, samples, and analytics rules " +
-      "the rest of the page works with.",
+      "Search and select a Sentinel solution. Selecting one lazily fetches " +
+      "that solution's content from GitHub (never a bulk mirror) and scopes " +
+      "which tables, samples, and analytics rules the rest of the page works " +
+      "with. Deprecated solutions are badged with the reason.",
     requires: "none",
-    built: false,
-    shippedInUnit: 14,
+    built: true,
   },
   {
     id: "sample-data",
@@ -211,6 +219,14 @@ export function integrateSection(id: IntegrateSectionId): IntegrateSection {
  *                          successfully; re-running is still allowed).
  */
 export interface SectionInputs {
+  /**
+   * A Sentinel solution has been selected in the Solution browser (Unit 14).
+   * Additive and NON-GATING: it completes the now-built Solution section and
+   * lights the Solution readiness pill, but - like {@link samplesProvided} - it
+   * deliberately does NOT participate in {@link canDeploy}. While false, Solution
+   * reads as incomplete and its pill stays a muted 'coming-soon', never 'missing'.
+   */
+  solutionSelected: boolean;
   /** A target scope (subscription + resource group + workspace) is committed. */
   scopeCommitted: boolean;
   /** At least one Cribl worker group is selected. */
@@ -269,8 +285,8 @@ const DEPLOY_NEEDS_PACK_NAME_REASON =
 
 /** Honest coming-soon note per not-yet-built section (built === false). */
 const COMING_SOON_REASONS: Readonly<Record<IntegrateSectionId, string>> = {
-  solution:
-    "Solution search and selection ships with the GitHub content browser (Unit 14).",
+  // solution is BUILT NOW (Unit 14); it is never coming-soon.
+  solution: "",
   // sample-data is BUILT NOW (Unit 11); it is never coming-soon.
   "sample-data": "",
   "azure-resources": "",
@@ -291,6 +307,8 @@ function sectionComplete(
     return false;
   }
   switch (section.id) {
+    case "solution":
+      return inputs.solutionSelected;
     case "sample-data":
       return inputs.samplesProvided;
     case "azure-resources":
@@ -441,12 +459,12 @@ export interface ReadinessPill {
 /**
  * The deploy-readiness footer - one pill per prerequisite, in the legacy
  * order: Solution, Samples, Mappings, Workspace, Worker Groups, Pack Name
- * (SentinelIntegration.tsx 3255-3273). Solution and Mappings map to not-yet-
- * built sections and are always 'coming-soon' (honest, never false-ok). Samples
- * is now built (Unit 11): it lights 'ok' once a sample is tagged and stays a
- * muted 'coming-soon' otherwise - never 'missing', because samples do not gate
- * the native deploy. The three operable prerequisites are 'ok' / 'missing' per
- * inputs.
+ * (SentinelIntegration.tsx 3255-3273). Solution (Unit 14) and Samples (Unit 11)
+ * are now built and track their inputs, each lighting 'ok' when satisfied and
+ * staying a muted 'coming-soon' otherwise - never 'missing', because neither
+ * gates the native deploy. Mappings maps to the still-not-built gap analysis
+ * (Unit 18) and is always 'coming-soon' (honest, never false-ok). The three
+ * operable prerequisites are 'ok' / 'missing' per inputs.
  *
  * canDeploy honors ONLY the operable three (see its docs) - the Samples and
  * still-not-built pills are visible-but-not-blocking during the MVP transition.
@@ -456,8 +474,17 @@ export function deriveReadinessPills(inputs: SectionInputs): ReadinessPill[] {
     {
       id: "solution",
       label: "Solution",
-      state: "coming-soon",
-      hint: "Solution selection ships with the content browser (Unit 14).",
+      // Solution browsing shipped (Unit 14): the pill lights green once a
+      // solution is selected, and stays muted 'coming-soon' (never 'missing')
+      // while none is - selecting a solution enriches the content flow but does
+      // NOT gate the native-table deploy (see canDeploy), so an unselected
+      // Solution pill must never read as a blocking prerequisite (same rule as
+      // the Samples pill).
+      state: inputs.solutionSelected ? "ok" : "coming-soon",
+      hint: inputs.solutionSelected
+        ? "A Sentinel solution is selected."
+        : "Optional for the native-table deploy. Select a solution to scope its " +
+          "tables, samples, and analytics rules for the content-driven flow.",
     },
     {
       id: "samples",
@@ -514,9 +541,10 @@ export function deriveReadinessPills(inputs: SectionInputs): ReadinessPill[] {
  * group, and a pack name. Samples do NOT participate even though Sample Data is
  * now built (Unit 11): the native-table onboard the user validated live end to
  * end never needed a sample, so requiring one here would regress a working
- * flow. The still-not-built prerequisites (Solution=U14, Mappings=U18) do not
- * participate either; when they land, the FULL content-driven deploy will gate
- * on samples and mappings, but that is a future usecase, not this rule. This is
+ * flow. The now-built Solution selection (U14) and the still-not-built Mappings
+ * (U18) do not participate either; when the content flow is complete, the FULL
+ * content-driven deploy will gate on solution, samples, and mappings, but that
+ * is a future usecase, not this rule. This is
  * the ONE place the native-deploy rule lives, so canDeploy and the readiness
  * footer can never disagree.
  *

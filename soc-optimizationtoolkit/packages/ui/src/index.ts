@@ -337,6 +337,47 @@ export {
 } from "./screens/options/options-state";
 export type { OptionsFormState } from "./screens/options/options-state";
 
+// Sentinel content browser + Repositories/PAT settings (porting-plan Unit 14):
+// the lazy GitHub solution browser (search, deprecation badges, the preserved
+// `#/?solution=` deep link) and the PAT settings page (13-step walkthrough,
+// save-then-unstick stale-error sequence, reachability + PAT-valid status).
+// Pure decision logic lives in the *-state modules with their own tests.
+export { SolutionBrowser } from "./screens/solution-browser/solution-browser";
+export type { SolutionBrowserProps } from "./screens/solution-browser/solution-browser";
+export {
+  DEPRECATED_BADGE_LABEL,
+  SOLUTION_DEEPLINK_PARAM,
+  buildSolutionDeepLink,
+  deprecationBadge,
+  filterSolutions,
+  parseSolutionDeepLink,
+  resolveSelectedSolution,
+  solutionCounts,
+  solutionMatchesQuery,
+} from "./screens/solution-browser/browser-state";
+export type {
+  DeprecationBadge,
+  SolutionCounts,
+  SolutionFilter,
+} from "./screens/solution-browser/browser-state";
+export { RepositoriesScreen } from "./screens/repositories/repositories-screen";
+export type { RepositoriesScreenProps } from "./screens/repositories/repositories-screen";
+export {
+  derivePatFormView,
+  deriveReachabilityStatus,
+  initialPatFormState,
+  patFormReducer,
+} from "./screens/repositories/pat-form-state";
+export type {
+  PatFormAction,
+  PatFormPhase,
+  PatFormState,
+  PatFormView,
+  ReachabilityInput,
+  ReachabilityStatus,
+  ReachabilityTone,
+} from "./screens/repositories/pat-form-state";
+
 // Settings.
 export { SettingsScreen } from "./screens/settings-screen";
 export type {

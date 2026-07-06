@@ -7,9 +7,12 @@
  * rather than scattering them across sidebar routes.
  *
  * The seven sections render in page order from @soc/core INTEGRATE_SECTIONS.
- * Four are BUILT and operable today; three are honest coming-soon:
+ * Five are BUILT and operable today; two are honest coming-soon:
  *
- *   1. Sentinel Solution   - coming-soon (Unit 14)
+ *   1. Sentinel Solution   - BUILT: the SolutionBrowser - lazy GitHub solution
+ *      index (search, DEPRECATED badges + reason), per-solution on-demand fetch
+ *      with commit-keyed caching, and the preserved `#/?solution=` deep link
+ *      (Unit 14). Selecting a solution is additive and non-gating.
  *   2. Sample Data         - BUILT: the SampleIntakeSection - multi-file upload
  *      + paste-and-tag, per-sample chips (detected format + field table + raw
  *      preview), and a log-type rename that re-keys the tagged-sample store
@@ -61,6 +64,7 @@ import type {
   JobStep,
   OnboardTableOutcome,
   OperationOptions,
+  SolutionRef,
   TaggedSample,
   TargetScope,
 } from "@soc/core";
@@ -75,6 +79,7 @@ import { summaryText } from "../../onboarding/summary";
 import { RecentRuns } from "../../onboarding/recent-runs";
 import { SampleIntakeSection } from "../samples/sample-intake-section";
 import { MatchPreviewSection } from "../match-preview/match-preview-section";
+import { SolutionBrowser } from "../solution-browser/solution-browser";
 import {
   INTEGRATE_DEFAULT_TABLE,
   defaultPackName,
@@ -156,6 +161,14 @@ export function IntegrateScreen({
   const [deployCompleted, setDeployCompleted] = useState(false);
   const [historyToken, setHistoryToken] = useState(0);
 
+  // ---- Solution section (Unit 14) ---------------------------------------
+  // The lazy GitHub solution browser is the Solution section's content. The
+  // selection is ADDITIVE and NON-GATING (like samples): it completes the
+  // now-built Solution section and lights the Solution readiness pill, but it
+  // never gates the native-table deploy (the MVP-transition canDeploy rule).
+  const [solution, setSolution] = useState<SolutionRef | null>(null);
+  const solutionSelected = solution !== null;
+
   // ---- Sample Data section (Unit 11) ------------------------------------
   // The section owns its own store IO and reports the tagged-sample count so
   // the arc can complete Sample Data and light the Samples pill. Samples never
@@ -211,6 +224,7 @@ export function IntegrateScreen({
 
   // ---- Derived section states, readiness pills, deploy gate -------------
   const sectionInputs = deriveSectionInputs({
+    solutionSelected,
     scopeCommitted,
     workerGroup: groupId,
     packName,
@@ -317,6 +331,19 @@ export function IntegrateScreen({
   const createDCE = (operationDefaults ?? DEFAULT_OPERATION_OPTIONS).createDCE;
 
   // ---- Section bodies (built sections only) -----------------------------
+
+  const solutionBody = (
+    <>
+      <p className="panel-desc">
+        Search and select a Microsoft Sentinel solution. Selecting one lazily
+        fetches that solution&apos;s content from GitHub (never a bulk mirror)
+        and scopes the tables, samples, and analytics rules the rest of the page
+        works with. Deprecated solutions are badged with the reason. Set or check
+        your GitHub token in Repositories settings.
+      </p>
+      <SolutionBrowser onSelect={setSolution} />
+    </>
+  );
 
   const sampleDataBody = (
     <>
@@ -521,6 +548,8 @@ export function IntegrateScreen({
 
   const sectionBody = (id: IntegrateSectionId): ReactNode => {
     switch (id) {
+      case "solution":
+        return solutionBody;
       case "sample-data":
         return sampleDataBody;
       case "azure-resources":

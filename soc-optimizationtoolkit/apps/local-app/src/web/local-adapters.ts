@@ -17,19 +17,32 @@ import type {
   AzureManagement,
   AzureManagementRequest,
   AzureManagementUrlRequest,
+  ContentCache,
   CriblClient,
   CriblGroupSummary,
   CriblRequest,
+  GithubPatManager,
   JobRecord,
   JobStore,
   Logger,
+  PatManagerStatus,
   PortHttpResponse,
   SecretSetOptions,
   SecretsStore,
+  SentinelContent,
+  SolutionFileRef,
+  SolutionRef,
   TaggedSample,
   TaggedSampleStore,
   UserContext,
   UserIdentity,
+} from '@soc/core';
+import {
+  blockedSolutionNames,
+  classifySolutionDeprecation,
+  findConnectorDirName,
+  isPathAllowedByEdr,
+  selectConnectorFiles,
 } from '@soc/core';
 
 // ---------------------------------------------------------------------------
@@ -477,6 +490,322 @@ export class LocalArtifactSink implements ArtifactSink {
 }
 
 // ---------------------------------------------------------------------------
+// SentinelContent (GitHub) - porting-plan Unit 14
+// ---------------------------------------------------------------------------
+
+// The Microsoft Sentinel content repo (same targets as the cloud adapter).
+// LAZY per-solution tree queries only - never a whole-repo recursive tree walk.
+const SENTINEL_OWNER = 'Azure';
+const SENTINEL_REPO = 'Azure-Sentinel';
+const SENTINEL_BRANCH = 'master';
+const GITHUB_API = 'https://api.github.com';
+const GITHUB_RAW = 'https://raw.githubusercontent.com';
+
+// Encode a repo-relative path for a URL, preserving "/" while percent-encoding
+// each segment (paths carry spaces/parentheses).
+function encodeRepoPath(p: string): string {
+  return p
+    .split('/')
+    .map((seg) => encodeURIComponent(seg))
+    .join('/');
+}
+
+/** One entry of a GitHub "contents" directory listing (fields used here). */
+interface GithubContentEntry {
+  name: string;
+  path: string;
+  type: string;
+  size?: number;
+  sha?: string;
+}
+
+function asContentEntries(body: unknown): GithubContentEntry[] {
+  if (!Array.isArray(body)) {
+    return [];
+  }
+  const out: GithubContentEntry[] = [];
+  for (const raw of body) {
+    const name = prop(raw, 'name');
+    const path = prop(raw, 'path');
+    const type = prop(raw, 'type');
+    if (typeof name === 'string' && typeof path === 'string' && typeof type === 'string') {
+      const size = prop(raw, 'size');
+      const sha = prop(raw, 'sha');
+      out.push({
+        name,
+        path,
+        type,
+        ...(typeof size === 'number' ? { size } : {}),
+        ...(typeof sha === 'string' ? { sha } : {}),
+      });
+    }
+  }
+  return out;
+}
+
+/**
+ * SentinelContent over the host's GitHub proxy (POST /api/github/request),
+ * porting-plan Unit 14. The transport differs from the cloud adapter (the host
+ * attaches the PAT and returns { status, body } with BODY as raw text), but the
+ * shape and laziness are identical: listSolutions is one contents call,
+ * listConnectorFiles is a single per-solution git/trees query on the connector
+ * subtree, readFile/rawFetch pull raw file text.
+ *
+ * EDR GUARD (MANDATORY - local disk persistence): readFile/rawFetch resolve null
+ * for any Solutions/ path whose owning solution is on the built-in EDR
+ * blocklist (core isPathAllowedByEdr), so blocklisted IOC-laden rule content
+ * never reaches the browser and therefore never lands in the host's on-disk
+ * content cache. This is the single enforcement point the catalog requires on
+ * the disk-persistence path.
+ */
+export class LocalSentinelContent implements SentinelContent {
+  private readonly blocked = blockedSolutionNames();
+
+  // One proxied GitHub GET via the host: returns { status, bodyText }.
+  private async proxied(url: string): Promise<{ status: number; bodyText: string }> {
+    const payload = await hostJson(
+      `POST /api/github/request (${url})`,
+      '/api/github/request',
+      jsonInit('POST', { url }),
+      PROXY_TIMEOUT_MS
+    );
+    const status = prop(payload, 'status');
+    const body = prop(payload, 'body');
+    if (typeof status !== 'number') {
+      throw new Error(`POST /api/github/request: unexpected host response shape (missing numeric "status")`);
+    }
+    return { status, bodyText: typeof body === 'string' ? body : '' };
+  }
+
+  // A proxied GitHub API (JSON) GET: parse the raw text body, or throw with the
+  // status on a non-2xx that the caller does not translate to [] / null.
+  private async apiJson(apiPath: string): Promise<{ status: number; value: unknown }> {
+    const { status, bodyText } = await this.proxied(`${GITHUB_API}${apiPath}`);
+    if (status === 404) {
+      return { status, value: null };
+    }
+    if (status < 200 || status >= 300) {
+      throw new Error(`GET GitHub ${apiPath}: HTTP ${status}${bodyText === '' ? '' : `\n${bodyText}`}`);
+    }
+    let value: unknown = null;
+    try {
+      value = bodyText === '' ? null : JSON.parse(bodyText);
+    } catch {
+      value = null;
+    }
+    return { status, value };
+  }
+
+  async getCommitSha(): Promise<string | null> {
+    const { status, value } = await this.apiJson(
+      `/repos/${SENTINEL_OWNER}/${SENTINEL_REPO}/commits/${SENTINEL_BRANCH}`
+    );
+    if (status === 404) {
+      return null;
+    }
+    const sha = prop(value, 'sha');
+    return typeof sha === 'string' && sha !== '' ? sha : null;
+  }
+
+  async listSolutions(): Promise<SolutionRef[]> {
+    const { status, value } = await this.apiJson(
+      `/repos/${SENTINEL_OWNER}/${SENTINEL_REPO}/contents/Solutions`
+    );
+    if (status === 404) {
+      return [];
+    }
+    const refs: SolutionRef[] = [];
+    for (const entry of asContentEntries(value)) {
+      if (entry.type !== 'dir') {
+        continue;
+      }
+      // Index-time deprecation is NAME-BASED only (cheap, lazy).
+      const { deprecated, reason } = classifySolutionDeprecation({ name: entry.name });
+      const ref: SolutionRef = { name: entry.name, path: entry.path };
+      if (deprecated) {
+        ref.deprecated = true;
+        if (reason !== undefined) {
+          ref.deprecationReason = reason;
+        }
+      }
+      refs.push(ref);
+    }
+    refs.sort((a, b) => a.name.localeCompare(b.name));
+    return refs;
+  }
+
+  async listSolutionFiles(solutionName: string, subDir: string): Promise<SolutionFileRef[]> {
+    const { status, value } = await this.apiJson(
+      `/repos/${SENTINEL_OWNER}/${SENTINEL_REPO}/contents/${encodeRepoPath(
+        `Solutions/${solutionName}/${subDir}`
+      )}`
+    );
+    if (status === 404) {
+      return [];
+    }
+    const files: SolutionFileRef[] = [];
+    for (const entry of asContentEntries(value)) {
+      if (entry.type === 'file') {
+        files.push({ name: entry.name, path: entry.path, size: entry.size ?? 0 });
+      }
+    }
+    files.sort((a, b) => a.path.localeCompare(b.path));
+    return files;
+  }
+
+  async listConnectorFiles(solutionName: string): Promise<SolutionFileRef[]> {
+    const top = await this.apiJson(
+      `/repos/${SENTINEL_OWNER}/${SENTINEL_REPO}/contents/${encodeRepoPath(`Solutions/${solutionName}`)}`
+    );
+    if (top.status === 404) {
+      return [];
+    }
+    const topEntries = asContentEntries(top.value);
+    const dirNames = topEntries.filter((e) => e.type === 'dir').map((e) => e.name);
+    const connectorDir = findConnectorDirName(dirNames);
+    if (connectorDir === null) {
+      return [];
+    }
+    const connectorEntry = topEntries.find((e) => e.name === connectorDir && e.type === 'dir');
+    if (connectorEntry?.sha === undefined) {
+      return [];
+    }
+    // One PER-SOLUTION recursive tree query on the connector subtree.
+    const tree = await this.apiJson(
+      `/repos/${SENTINEL_OWNER}/${SENTINEL_REPO}/git/trees/${connectorEntry.sha}?recursive=1`
+    );
+    const nodes = prop(tree.value, 'tree');
+    const prefix = `Solutions/${solutionName}/${connectorDir}/`;
+    const allPaths: string[] = [];
+    const sizeByPath = new Map<string, number>();
+    if (Array.isArray(nodes)) {
+      for (const node of nodes) {
+        if (prop(node, 'type') !== 'blob') {
+          continue;
+        }
+        const rel = prop(node, 'path');
+        if (typeof rel !== 'string' || rel === '') {
+          continue;
+        }
+        const full = `${prefix}${rel}`;
+        allPaths.push(full);
+        const size = prop(node, 'size');
+        if (typeof size === 'number') {
+          sizeByPath.set(full, size);
+        }
+      }
+    }
+    return selectConnectorFiles(allPaths, solutionName, (p) => sizeByPath.get(p) ?? 0);
+  }
+
+  async readFile(relativePath: string): Promise<string | null> {
+    if (!isPathAllowedByEdr(relativePath, this.blocked)) {
+      return null;
+    }
+    return this.fetchRaw(
+      `${GITHUB_RAW}/${SENTINEL_OWNER}/${SENTINEL_REPO}/${SENTINEL_BRANCH}/${encodeRepoPath(relativePath)}`,
+      relativePath
+    );
+  }
+
+  async rawFetch(relativePath: string, commitSha: string): Promise<string | null> {
+    if (!isPathAllowedByEdr(relativePath, this.blocked)) {
+      return null;
+    }
+    const ref = commitSha === '' ? SENTINEL_BRANCH : commitSha;
+    return this.fetchRaw(
+      `${GITHUB_RAW}/${SENTINEL_OWNER}/${SENTINEL_REPO}/${ref}/${encodeRepoPath(relativePath)}`,
+      relativePath
+    );
+  }
+
+  private async fetchRaw(url: string, relativePath: string): Promise<string | null> {
+    const { status, bodyText } = await this.proxied(url);
+    if (status === 404) {
+      return null;
+    }
+    if (status < 200 || status >= 300) {
+      throw new Error(`GET raw ${relativePath}: HTTP ${status}${bodyText === '' ? '' : `\n${bodyText}`}`);
+    }
+    return bodyText;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// ContentCache (host store) - porting-plan Unit 14
+// ---------------------------------------------------------------------------
+
+// URL for one content-cache entry; encodeURIComponent keeps the ':'-bearing
+// @soc/core cache keys intact as a single path segment.
+function contentCacheUrl(key: string): string {
+  return `/api/content-cache/${encodeURIComponent(key)}`;
+}
+
+/**
+ * ContentCache over the host's /api/content-cache endpoints (data/content-cache
+ * .json), porting-plan Unit 14. Only PARSED results are cached; the cache key
+ * embeds the commit SHA so entries self-invalidate on a new commit.
+ */
+export class LocalContentCache implements ContentCache {
+  async get(key: string): Promise<unknown | null> {
+    const payload = await hostJson(`GET ${contentCacheUrl(key)}`, contentCacheUrl(key));
+    const value = prop(payload, 'value');
+    return value === undefined ? null : value;
+  }
+
+  async set(key: string, value: unknown): Promise<void> {
+    const res = await fetchWithTimeout(contentCacheUrl(key), jsonInit('PUT', { value }));
+    if (!res.ok) {
+      throw await hostError(`PUT ${contentCacheUrl(key)}`, res);
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// GithubPatManager (host store) - porting-plan Unit 14
+// ---------------------------------------------------------------------------
+
+/** Shape-guard a host PatManagerStatus payload. */
+function asPatStatus(label: string, payload: unknown): PatManagerStatus {
+  const hasPat = prop(payload, 'hasPat');
+  if (typeof hasPat !== 'boolean') {
+    throw new Error(`${label}: unexpected host response shape (missing boolean "hasPat")`);
+  }
+  const login = prop(payload, 'login');
+  const error = prop(payload, 'error');
+  return {
+    hasPat,
+    ...(typeof login === 'string' ? { login } : {}),
+    ...(typeof error === 'string' ? { error } : {}),
+  };
+}
+
+/**
+ * GithubPatManager over the host's /api/github/pat endpoints (porting-plan Unit
+ * 14; ENG-30). The HOST owns validate-then-store and holds the token in
+ * data/github.json server-side; this adapter only ever sees { hasPat, login }.
+ */
+export class LocalGithubPat implements GithubPatManager {
+  async status(): Promise<PatManagerStatus> {
+    return asPatStatus('GET /api/github/pat', await hostJson('GET /api/github/pat', '/api/github/pat'));
+  }
+
+  async validateAndStore(pat: string): Promise<PatManagerStatus> {
+    return asPatStatus(
+      'PUT /api/github/pat',
+      await hostJson('PUT /api/github/pat', '/api/github/pat', jsonInit('PUT', { pat }), PROXY_TIMEOUT_MS)
+    );
+  }
+
+  async clear(): Promise<void> {
+    const res = await fetchWithTimeout('/api/github/pat', { method: 'DELETE' });
+    if (!res.ok) {
+      throw await hostError('DELETE /api/github/pat', res);
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Factory
 // ---------------------------------------------------------------------------
 
@@ -490,6 +819,12 @@ export interface LocalPorts {
   artifacts: ArtifactSink;
   /** Tagged-sample store over the host's /api/tagged-samples (Unit 11). */
   samples: TaggedSampleStore;
+  /** Lazy Sentinel content over the host's GitHub proxy (porting-plan Unit 14). */
+  content: SentinelContent;
+  /** Parsed-content cache over the host store, keyed by solution+commit (Unit 14). */
+  contentCache: ContentCache;
+  /** GitHub PAT lifecycle over the host store: validate-then-store, hasPat-only (Unit 14). */
+  githubPat: GithubPatManager;
   /** The shell's Logger (web/logger.ts HostLogger, batching to the host). */
   logger: Logger;
 }
@@ -513,6 +848,9 @@ export function makeLocalPorts(logger: Logger): LocalPorts {
     user: new LocalUserContext(),
     artifacts: new LocalArtifactSink(),
     samples: new LocalTaggedSampleStore(),
+    content: new LocalSentinelContent(),
+    contentCache: new LocalContentCache(),
+    githubPat: new LocalGithubPat(),
     logger,
   };
 }

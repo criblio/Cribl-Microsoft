@@ -14,6 +14,7 @@ import {
   OnboardTableScreen,
   OptionsScreen,
   PortsProvider,
+  RepositoriesScreen,
   ReviewScreen,
   SettingsScreen,
   commitNoticeText,
@@ -2401,10 +2402,10 @@ function App() {
       <header className="harness-header">
         <h1 className="harness-title">Integrate</h1>
         <p className="harness-subtitle">
-          The single-page integration flow: Azure resources, Cribl
-          configuration, and the operable native-table deploy on one page, with
-          deploy readiness always visible. The solution, sample-data,
-          gap-analysis, and rule-coverage sections arrive in later units.
+          The single-page integration flow: solution browser, sample data,
+          Azure resources, Cribl configuration, and the operable native-table
+          deploy on one page, with deploy readiness always visible. The
+          gap-analysis and rule-coverage sections arrive in later units.
         </p>
       </header>
       {!secretLive && (
@@ -2663,6 +2664,28 @@ function App() {
     </>
   );
 
+  // Repositories (porting-plan Unit 14): the GitHub PAT settings page over the
+  // cloud shell's content ports (validate-then-store the encrypted, write-only
+  // githubPat; reachability + PAT-valid status; the 13-step walkthrough). A PAT
+  // is effectively required on cloud (shared egress IP). requires: 'none' -
+  // reachable in every mode, and content is external (proxies, not product API).
+  const repositoriesView = (
+    <>
+      <header className="harness-header">
+        <h1 className="harness-title">Repositories</h1>
+        <p className="harness-subtitle">
+          Connect to GitHub for Microsoft Sentinel content. A personal access
+          token is validated then stored encrypted and write-only - it never
+          reaches the browser. Content is fetched lazily per selected solution
+          and cached by commit; nothing is mirrored.
+        </p>
+      </header>
+      <PortsProvider ports={cloudPorts} config={activeConfig}>
+        <RepositoriesScreen platform="cloud" />
+      </PortsProvider>
+    </>
+  );
+
   // Settings: the Phase 1 exit item graduated into a real screen - platform
   // info, current mode + Reconfigure, and the validate-before-save raw-JSON
   // editor over the active connection's non-secret config.
@@ -2729,6 +2752,7 @@ function App() {
     { id: 'batch-onboard', label: 'Batch Onboard', requires: 'azure', section: 'journey', render: renderBatch },
     { id: 'review', label: 'Review', requires: 'azure', section: 'journey', render: renderReview },
     { id: 'options', label: 'Options', requires: 'none', section: 'tools', render: () => optionsView },
+    { id: 'repositories', label: 'Repositories', requires: 'none', section: 'tools', render: () => repositoriesView },
     { id: 'logs', label: 'Logs', requires: 'none', section: 'tools', render: () => logsView },
     { id: 'settings', label: 'Settings', requires: 'none', section: 'tools', render: () => settingsView },
     { id: 'harness', label: 'Diagnostics', requires: 'none', section: 'diagnostics', render: () => harnessView },

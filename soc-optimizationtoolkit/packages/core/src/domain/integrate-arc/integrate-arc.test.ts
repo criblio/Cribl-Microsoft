@@ -36,6 +36,7 @@ import type {
 /** The fully-unsatisfied baseline; tests override the signals under exercise. */
 function inputs(overrides: Partial<SectionInputs> = {}): SectionInputs {
   return {
+    solutionSelected: false,
     scopeCommitted: false,
     workerGroupSelected: false,
     packNameSet: false,
@@ -47,21 +48,24 @@ function inputs(overrides: Partial<SectionInputs> = {}): SectionInputs {
 
 const BOOLS: readonly boolean[] = [true, false];
 
-/** All 2^5 = 32 input records. */
+/** All 2^6 = 64 input records. */
 function everyInputCombination(): SectionInputs[] {
   const combos: SectionInputs[] = [];
-  for (const scopeCommitted of BOOLS) {
-    for (const workerGroupSelected of BOOLS) {
-      for (const packNameSet of BOOLS) {
-        for (const deployCompleted of BOOLS) {
-          for (const samplesProvided of BOOLS) {
-            combos.push({
-              scopeCommitted,
-              workerGroupSelected,
-              packNameSet,
-              deployCompleted,
-              samplesProvided,
-            });
+  for (const solutionSelected of BOOLS) {
+    for (const scopeCommitted of BOOLS) {
+      for (const workerGroupSelected of BOOLS) {
+        for (const packNameSet of BOOLS) {
+          for (const deployCompleted of BOOLS) {
+            for (const samplesProvided of BOOLS) {
+              combos.push({
+                solutionSelected,
+                scopeCommitted,
+                workerGroupSelected,
+                packNameSet,
+                deployCompleted,
+                samplesProvided,
+              });
+            }
           }
         }
       }
@@ -71,13 +75,13 @@ function everyInputCombination(): SectionInputs[] {
 }
 
 const BUILT_IDS: readonly IntegrateSectionId[] = [
+  "solution",
   "sample-data",
   "azure-resources",
   "cribl-config",
   "deploy",
 ];
 const NOT_BUILT_IDS: readonly IntegrateSectionId[] = [
-  "solution",
   "gap-analysis",
   "rule-coverage",
 ];
@@ -113,7 +117,7 @@ describe("INTEGRATE_SECTIONS metadata", () => {
     expect(numbers.size).toBe(INTEGRATE_SECTIONS.length);
   });
 
-  it("marks exactly sample-data, azure-resources, cribl-config, deploy as built", () => {
+  it("marks exactly solution, sample-data, azure-resources, cribl-config, deploy as built", () => {
     const built = INTEGRATE_SECTIONS.filter((s) => s.built).map((s) => s.id);
     expect(built.sort()).toEqual([...BUILT_IDS].sort());
   });
@@ -122,12 +126,12 @@ describe("INTEGRATE_SECTIONS metadata", () => {
     const unitById = new Map(
       INTEGRATE_SECTIONS.map((s) => [s.id, s.shippedInUnit]),
     );
-    // built sections omit it (sample-data lost its shippedInUnit when Unit 11 landed)
+    // built sections omit it (solution lost its shippedInUnit when Unit 14
+    // landed, as sample-data did when Unit 11 landed)
     for (const id of BUILT_IDS) {
       expect(unitById.get(id)).toBeUndefined();
     }
     // not-built sections carry their roadmap unit
-    expect(unitById.get("solution")).toBe(14);
     expect(unitById.get("gap-analysis")).toBe(18);
     expect(unitById.get("rule-coverage")).toBe(23);
   });
@@ -199,35 +203,54 @@ describe("not-built sections are always coming-soon", () => {
 // ---------------------------------------------------------------------------
 
 describe("built-section status matrix", () => {
-  it("sample-data: current at the page start, complete once a sample is tagged", () => {
-    // Solution (1) is coming-soon, so Sample Data (2) is the earliest built,
-    // incomplete, actionable section - it is the page's entry point.
-    expect(statusOf("sample-data", inputs())).toBe("current");
+  it("solution: current at the page start, complete once a solution is selected", () => {
+    // Solution (1) is now BUILT - it is the earliest built, incomplete,
+    // actionable section, so it is the page's entry point.
+    expect(statusOf("solution", inputs())).toBe("current");
+    expect(
+      statusOf("solution", inputs({ solutionSelected: true })),
+    ).toBe("complete");
+  });
+
+  it("sample-data: available ahead of a selected solution, current once one is selected, complete once a sample is tagged", () => {
+    // With Solution still incomplete it is 'current' and Sample Data is
+    // read-ahead 'available'; selecting a solution advances 'current' to it.
+    expect(statusOf("sample-data", inputs())).toBe("available");
+    expect(
+      statusOf("sample-data", inputs({ solutionSelected: true })),
+    ).toBe("current");
     expect(
       statusOf("sample-data", inputs({ samplesProvided: true })),
     ).toBe("complete");
   });
 
-  it("azure-resources: current once samples are in, complete once scope committed", () => {
-    // With Sample Data still incomplete it is 'current' and Azure Resources is
-    // read-ahead 'available'; a tagged sample advances 'current' to Azure.
+  it("azure-resources: current once solution+samples are in, complete once scope committed", () => {
+    // Earlier built sections still incomplete: Azure Resources is read-ahead
+    // 'available'; solution selected + a tagged sample advance 'current' to it.
     expect(statusOf("azure-resources", inputs())).toBe("available");
     expect(
-      statusOf("azure-resources", inputs({ samplesProvided: true })),
+      statusOf(
+        "azure-resources",
+        inputs({ solutionSelected: true, samplesProvided: true }),
+      ),
     ).toBe("current");
     expect(
       statusOf("azure-resources", inputs({ scopeCommitted: true })),
     ).toBe("complete");
   });
 
-  it("cribl-config: available ahead of scope, current once samples+scope are committed, complete when both halves set", () => {
-    // nothing committed: sample-data is current, cribl-config is read-ahead
+  it("cribl-config: available ahead of scope, current once solution+samples+scope are committed, complete when both halves set", () => {
+    // nothing committed: solution is current, cribl-config is read-ahead
     expect(statusOf("cribl-config", inputs())).toBe("available");
-    // samples + scope committed, cribl not yet: cribl-config becomes current
+    // solution + samples + scope committed, cribl not yet: cribl-config current
     expect(
       statusOf(
         "cribl-config",
-        inputs({ samplesProvided: true, scopeCommitted: true }),
+        inputs({
+          solutionSelected: true,
+          samplesProvided: true,
+          scopeCommitted: true,
+        }),
       ),
     ).toBe("current");
     // only one half set: still not complete
@@ -235,6 +258,7 @@ describe("built-section status matrix", () => {
       statusOf(
         "cribl-config",
         inputs({
+          solutionSelected: true,
           samplesProvided: true,
           scopeCommitted: true,
           workerGroupSelected: true,
@@ -261,9 +285,10 @@ describe("built-section status matrix", () => {
         inputs({ scopeCommitted: true, workerGroupSelected: true }),
       ),
     ).toBe("blocked");
-    // all three operable prerequisites met AND samples in, not yet deployed:
-    // deploy is the earliest incomplete actionable section -> current
+    // all three operable prerequisites met AND solution+samples in, not yet
+    // deployed: deploy is the earliest incomplete actionable section -> current
     const ready = inputs({
+      solutionSelected: true,
       samplesProvided: true,
       scopeCommitted: true,
       workerGroupSelected: true,
@@ -341,14 +366,16 @@ describe("read-ahead and single-current invariants", () => {
   });
 
   it("read-ahead: a blocked Deploy never changes the earlier sections' status", () => {
-    // Samples in and Cribl Config complete, but scope not committed: Azure
-    // Resources is current; Deploy is blocked; the block on the later section
-    // does not demote or hide the earlier one.
+    // Solution selected, Samples in and Cribl Config complete, but scope not
+    // committed: Azure Resources is current; Deploy is blocked; the block on the
+    // later section does not demote or hide the earlier one.
     const i = inputs({
+      solutionSelected: true,
       samplesProvided: true,
       workerGroupSelected: true,
       packNameSet: true,
     });
+    expect(statusOf("solution", i)).toBe("complete");
     expect(statusOf("sample-data", i)).toBe("complete");
     expect(statusOf("azure-resources", i)).toBe("current");
     expect(statusOf("cribl-config", i)).toBe("complete");
@@ -380,12 +407,10 @@ describe("read-ahead and single-current invariants", () => {
 // ---------------------------------------------------------------------------
 
 describe("deriveReadinessPills", () => {
-  // The still-not-built content pills (solution=U14, mappings=U18). Samples is
-  // now built (Unit 11) and tracks samplesProvided, so it is tested separately.
-  const notBuiltContentPills: readonly IntegratePillId[] = [
-    "solution",
-    "mappings",
-  ];
+  // The still-not-built content pill (mappings=U18). Solution (Unit 14) and
+  // Samples (Unit 11) are now built and track their inputs, so they are tested
+  // separately.
+  const notBuiltContentPills: readonly IntegratePillId[] = ["mappings"];
   const operablePills: readonly IntegratePillId[] = [
     "workspace",
     "worker-groups",
@@ -410,6 +435,16 @@ describe("deriveReadinessPills", () => {
         const pill = pills.find((p) => p.id === id);
         expect(pill?.state).toBe("coming-soon");
       }
+    }
+  });
+
+  it("lights the Solution pill 'ok' once a solution is selected, muted 'coming-soon' otherwise - never 'missing'", () => {
+    for (const i of everyInputCombination()) {
+      const solution = deriveReadinessPills(i).find((p) => p.id === "solution");
+      expect(solution?.state).toBe(i.solutionSelected ? "ok" : "coming-soon");
+      // Solution never blocks: like Samples, it is never an amber 'missing'
+      // prerequisite - it does not gate the native-table deploy.
+      expect(solution?.state).not.toBe("missing");
     }
   });
 

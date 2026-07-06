@@ -27,6 +27,7 @@ import {
   OnboardTableScreen,
   OptionsScreen,
   PortsProvider,
+  RepositoriesScreen,
   ReviewScreen,
   SettingsScreen,
   commitNoticeText,
@@ -569,10 +570,10 @@ export function LocalApp() {
       <header className="local-header">
         <h1 className="local-title">Integrate</h1>
         <p className="local-subtitle">
-          The single-page integration flow: Azure resources, Cribl
-          configuration, and the operable native-table deploy on one page, with
-          deploy readiness always visible. The solution, sample-data,
-          gap-analysis, and rule-coverage sections arrive in later units.
+          The single-page integration flow: solution browser, sample data,
+          Azure resources, Cribl configuration, and the operable native-table
+          deploy on one page, with deploy readiness always visible. The
+          gap-analysis and rule-coverage sections arrive in later units.
         </p>
       </header>
       {load.state === 'loading' && (
@@ -864,6 +865,27 @@ export function LocalApp() {
           },
         ];
 
+  // Repositories (porting-plan Unit 14): the GitHub PAT settings page over the
+  // local shell's content ports. The host owns the token (data/github.json,
+  // server-side); this page only ever sees hasPat + login. A PAT is recommended
+  // (not required) on local - the process has its own egress IP.
+  const repositoriesView = (
+    <>
+      <header className="local-header">
+        <h1 className="local-title">Repositories</h1>
+        <p className="local-subtitle">
+          Connect to GitHub for Microsoft Sentinel content. The token is
+          validated then stored by the host process (never returned to this
+          page). Content is fetched lazily per selected solution and cached by
+          commit; nothing is mirrored.
+        </p>
+      </header>
+      <PortsProvider ports={ports} config={activeAzureConfig ?? EMPTY_AZURE_CONFIG}>
+        <RepositoriesScreen platform="local" />
+      </PortsProvider>
+    </>
+  );
+
   const settingsView = (
     <SettingsScreen
       shellName="Local Node host (127.0.0.1 loopback)"
@@ -910,6 +932,7 @@ export function LocalApp() {
     { id: 'batch-onboard', label: 'Batch Onboard', requires: 'azure', section: 'journey', render: renderBatch },
     { id: 'review', label: 'Review', requires: 'azure', section: 'journey', render: renderReview },
     { id: 'options', label: 'Options', requires: 'none', section: 'tools', render: () => optionsView },
+    { id: 'repositories', label: 'Repositories', requires: 'none', section: 'tools', render: () => repositoriesView },
     { id: 'logs', label: 'Logs', requires: 'none', section: 'tools', render: () => logsView },
     { id: 'settings', label: 'Settings', requires: 'none', section: 'tools', render: () => settingsView },
   ];

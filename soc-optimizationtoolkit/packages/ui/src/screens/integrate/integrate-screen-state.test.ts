@@ -17,8 +17,9 @@ import {
 } from "./integrate-screen-state";
 
 describe("deriveSectionInputs", () => {
-  it("passes scope and deploy flags through and reduces the text fields to booleans", () => {
+  it("passes solution, scope and deploy flags through and reduces the text fields to booleans", () => {
     const inputs = deriveSectionInputs({
+      solutionSelected: true,
       scopeCommitted: true,
       workerGroup: "prod",
       packName: "MyPack",
@@ -26,6 +27,7 @@ describe("deriveSectionInputs", () => {
       sampleCount: 2,
     });
     expect(inputs).toEqual({
+      solutionSelected: true,
       scopeCommitted: true,
       workerGroupSelected: true,
       packNameSet: true,
@@ -36,19 +38,22 @@ describe("deriveSectionInputs", () => {
 
   it("treats whitespace-only worker-group and pack-name as unset, and a zero sample count as no samples", () => {
     const inputs = deriveSectionInputs({
+      solutionSelected: false,
       scopeCommitted: false,
       workerGroup: "   ",
       packName: "\t \n",
       deployCompleted: false,
       sampleCount: 0,
     });
+    expect(inputs.solutionSelected).toBe(false);
     expect(inputs.workerGroupSelected).toBe(false);
     expect(inputs.packNameSet).toBe(false);
     expect(inputs.samplesProvided).toBe(false);
   });
 
-  it("produces inputs that make canDeploy true only when all three built prerequisites are set - samples never participate", () => {
+  it("produces inputs that make canDeploy true only when all three built prerequisites are set - solution and samples never participate", () => {
     const base = {
+      solutionSelected: false,
       scopeCommitted: true,
       workerGroup: "prod",
       packName: "Pack",
@@ -98,6 +103,9 @@ describe("defaultPackName", () => {
 
 describe("deployDisabledReason", () => {
   const set = {
+    // Solution deliberately unselected: like samples, it never affects the
+    // native-deploy gate.
+    solutionSelected: false,
     scopeCommitted: true,
     workerGroupSelected: true,
     packNameSet: true,

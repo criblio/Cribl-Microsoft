@@ -19,6 +19,14 @@ export type { CriblClient, CriblRequest, CriblGroupSummary } from './cribl-clien
 export type { TaggedSampleStore } from './tagged-sample-store';
 export type { SchemaCatalog, DcrSchemaColumn } from './schema-catalog';
 export type {
+  SentinelContent,
+  ContentCache,
+  SolutionRef,
+  SolutionFileRef,
+  GithubPatManager,
+  PatManagerStatus,
+} from './sentinel-content';
+export type {
   Logger,
   LogLevel,
   LogContext,

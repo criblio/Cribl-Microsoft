@@ -1893,3 +1893,141 @@ button.journey-step-main:hover .journey-step-label {
   color: var(--warn);
   margin-right: 6px;
 }
+
+/* ---------------------------------------------------------------------------
+ * Solution browser (porting-plan Unit 14): the lazy GitHub solution list -
+ * search, hide-deprecated toggle, counts, per-row DEPRECATED badge + reason,
+ * and the on-demand per-solution detail (spinner per row, never a bulk-mirror
+ * progress bar).
+ * ------------------------------------------------------------------------- */
+.solution-browser {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.solution-browser-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 16px;
+}
+.solution-browser-search {
+  flex: 1 1 240px;
+}
+.solution-browser-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+.solution-browser-counts {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.solution-browser-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 420px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.solution-browser-item {
+  border-bottom: 1px solid var(--border-subtle);
+}
+.solution-browser-item:last-child {
+  border-bottom: none;
+}
+.solution-browser-item-selected {
+  background: var(--accent-bg);
+}
+.solution-browser-item-button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 12px;
+  background: none;
+  border: none;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+  color: var(--text-primary);
+}
+.solution-browser-item-button:hover {
+  background: var(--surface-raised);
+}
+.solution-browser-item-name {
+  flex: 1 1 auto;
+}
+.solution-browser-badge {
+  flex: 0 0 auto;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 2px 6px;
+  border-radius: 4px;
+  color: var(--warn);
+  background: var(--warn-bg);
+  border: 1px solid var(--warn-border);
+}
+.solution-browser-deprecation {
+  margin: 0;
+  padding: 0 12px 8px;
+  font-size: 12px;
+  color: var(--warn);
+}
+.solution-browser-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 0 12px 12px;
+}
+.solution-browser-deeplink {
+  font-family: var(--font-mono);
+  word-break: break-all;
+}
+
+/* ---------------------------------------------------------------------------
+ * Repositories / PAT settings (porting-plan Unit 14): the reachability status
+ * line (a state, never "downloaded N files") with a tone-coloured dot.
+ * ------------------------------------------------------------------------- */
+.repositories-screen {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.reachability {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--surface-raised);
+}
+.reachability-dot {
+  flex: 0 0 auto;
+  width: 10px;
+  height: 10px;
+  margin-top: 5px;
+  border-radius: 50%;
+  background: var(--text-muted);
+}
+.reachability-ok .reachability-dot {
+  background: var(--ok);
+}
+.reachability-warn .reachability-dot {
+  background: var(--warn);
+}
+.reachability-error .reachability-dot {
+  background: var(--error);
+}
+.reachability-label {
+  font-weight: 600;
+  color: var(--text-primary);
+}

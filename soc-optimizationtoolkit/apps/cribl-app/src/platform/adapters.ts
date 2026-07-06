@@ -12,19 +12,34 @@ import type {
   AzureManagement,
   AzureManagementRequest,
   AzureManagementUrlRequest,
+  ContentCache,
   CriblClient,
   CriblGroupSummary,
   CriblRequest,
+  GithubPatManager,
   JobRecord,
   JobStore,
   Logger,
+  PatManagerStatus,
   PortHttpResponse,
   SecretSetOptions,
   SecretsStore,
+  SentinelContent,
+  SolutionFileRef,
+  SolutionRef,
   TaggedSample,
   TaggedSampleStore,
   UserContext,
   UserIdentity,
+} from '@soc/core';
+import {
+  blockedSolutionNames,
+  classifySolutionDeprecation,
+  findConnectorDirName,
+  isPathAllowedByEdr,
+  patFormatIssue,
+  patStatusFrom,
+  selectConnectorFiles,
 } from '@soc/core';
 import { acquireArmToken, fetchWithTimeout, kvDelete, kvUrl } from './http';
 
@@ -671,6 +686,408 @@ export class PlatformArtifactSink implements ArtifactSink {
 }
 
 // ---------------------------------------------------------------------------
+// SentinelContent (GitHub) - porting-plan Unit 14
+// ---------------------------------------------------------------------------
+
+// The Microsoft Sentinel content repo. LAZY per-solution tree queries only -
+// NEVER a whole-repo recursive tree walk (the mirror-and-scan architecture
+// deliberately does not port; catalog line 103). The PAT is injected
+// server-side by proxies.yml on both hosts below; this adapter sets no
+// Authorization header.
+const SENTINEL_OWNER = 'Azure';
+const SENTINEL_REPO = 'Azure-Sentinel';
+const SENTINEL_BRANCH = 'master';
+const GITHUB_API = 'https://api.github.com';
+const GITHUB_RAW = 'https://raw.githubusercontent.com';
+// Proxied external requests hit a 30s server-side timeout; racing at 25s keeps
+// the client-side failure loud and ahead of the platform's (same as ARM).
+const GITHUB_TIMEOUT_MS = 25000;
+const GITHUB_JSON_ACCEPT = 'application/vnd.github+json';
+
+// Encode a repo-relative path for a URL, preserving the "/" separators while
+// percent-encoding each segment (paths carry spaces and parentheses, e.g.
+// "Solutions/Forescout (Legacy)/...").
+function encodeRepoPath(path: string): string {
+  return path
+    .split('/')
+    .map((seg) => encodeURIComponent(seg))
+    .join('/');
+}
+
+// One entry of a GitHub "contents" directory listing (the fields used here).
+interface GithubContentEntry {
+  name: string;
+  path: string;
+  type: string;
+  size?: number;
+  sha?: string;
+}
+
+function asContentEntries(body: unknown): GithubContentEntry[] {
+  if (!Array.isArray(body)) {
+    return [];
+  }
+  const out: GithubContentEntry[] = [];
+  for (const raw of body) {
+    const name = prop(raw, 'name');
+    const path = prop(raw, 'path');
+    const type = prop(raw, 'type');
+    if (typeof name === 'string' && typeof path === 'string' && typeof type === 'string') {
+      const size = prop(raw, 'size');
+      const sha = prop(raw, 'sha');
+      out.push({
+        name,
+        path,
+        type,
+        ...(typeof size === 'number' ? { size } : {}),
+        ...(typeof sha === 'string' ? { sha } : {}),
+      });
+    }
+  }
+  return out;
+}
+
+/**
+ * SentinelContent over the proxied GitHub API (porting-plan Unit 14). Reads are
+ * LAZY: listSolutions is one `contents/Solutions` call; listConnectorFiles is a
+ * single per-solution `git/trees/{sha}?recursive=1` on the solution's connector
+ * directory (a PER-SOLUTION subtree, never the whole repo). readFile/rawFetch
+ * pull raw bytes from raw.githubusercontent.com. The PAT is injected server-side
+ * (proxies.yml); this adapter never sets an Authorization header.
+ *
+ * Error semantics per the port: list methods resolve [] when the target is
+ * absent (404); readFile/rawFetch resolve null for a missing file; a rejected
+ * PAT (401/403) or other non-404 error REJECTS so the PAT UI can surface it.
+ *
+ * EDR guard: readFile/rawFetch resolve null for any Solutions/ path whose owning
+ * solution is on the built-in blocklist, so IOC-laden rule content never leaves
+ * the proxy toward a cache (harmless here - the cloud shell has no disk - but
+ * kept identical to the local adapter where the disk-persistence guard is
+ * MANDATORY; core edr-filter isPathAllowedByEdr).
+ */
+export class PlatformSentinelContent implements SentinelContent {
+  private readonly blocked = blockedSolutionNames();
+
+  private async apiGet(path: string): Promise<Response> {
+    return fetchWithTimeout(
+      `${GITHUB_API}${path}`,
+      { method: 'GET', headers: { Accept: GITHUB_JSON_ACCEPT } },
+      GITHUB_TIMEOUT_MS,
+    );
+  }
+
+  async getCommitSha(): Promise<string | null> {
+    const res = await this.apiGet(
+      `/repos/${SENTINEL_OWNER}/${SENTINEL_REPO}/commits/${SENTINEL_BRANCH}`,
+    );
+    if (res.status === 404) {
+      return null;
+    }
+    if (!res.ok) {
+      throw new Error(`GET GitHub commits/${SENTINEL_BRANCH}: HTTP ${res.status}\n${await res.text()}`);
+    }
+    const sha = prop(await readPortBody(res), 'sha');
+    return typeof sha === 'string' && sha !== '' ? sha : null;
+  }
+
+  async listSolutions(): Promise<SolutionRef[]> {
+    const res = await this.apiGet(`/repos/${SENTINEL_OWNER}/${SENTINEL_REPO}/contents/Solutions`);
+    if (res.status === 404) {
+      return [];
+    }
+    if (!res.ok) {
+      throw new Error(`GET GitHub contents/Solutions: HTTP ${res.status}\n${await res.text()}`);
+    }
+    const entries = asContentEntries(await readPortBody(res));
+    const refs: SolutionRef[] = [];
+    for (const entry of entries) {
+      if (entry.type !== 'dir') {
+        continue;
+      }
+      // Index-time deprecation is NAME-BASED only (cheap, lazy); the full
+      // content-based classifier (Solution_*.json / all-connectors) runs
+      // per-solution when a solution is opened.
+      const { deprecated, reason } = classifySolutionDeprecation({ name: entry.name });
+      const ref: SolutionRef = { name: entry.name, path: entry.path };
+      if (deprecated) {
+        ref.deprecated = true;
+        if (reason !== undefined) {
+          ref.deprecationReason = reason;
+        }
+      }
+      refs.push(ref);
+    }
+    refs.sort((a, b) => a.name.localeCompare(b.name));
+    return refs;
+  }
+
+  async listSolutionFiles(solutionName: string, subDir: string): Promise<SolutionFileRef[]> {
+    const res = await this.apiGet(
+      `/repos/${SENTINEL_OWNER}/${SENTINEL_REPO}/contents/${encodeRepoPath(
+        `Solutions/${solutionName}/${subDir}`,
+      )}`,
+    );
+    if (res.status === 404) {
+      return [];
+    }
+    if (!res.ok) {
+      throw new Error(
+        `GET GitHub contents Solutions/${solutionName}/${subDir}: HTTP ${res.status}\n${await res.text()}`,
+      );
+    }
+    const files: SolutionFileRef[] = [];
+    for (const entry of asContentEntries(await readPortBody(res))) {
+      if (entry.type === 'file') {
+        files.push({ name: entry.name, path: entry.path, size: entry.size ?? 0 });
+      }
+    }
+    files.sort((a, b) => a.path.localeCompare(b.path));
+    return files;
+  }
+
+  async listConnectorFiles(solutionName: string): Promise<SolutionFileRef[]> {
+    // 1) One level: find the connector directory variant this solution uses.
+    const topRes = await this.apiGet(
+      `/repos/${SENTINEL_OWNER}/${SENTINEL_REPO}/contents/${encodeRepoPath(`Solutions/${solutionName}`)}`,
+    );
+    if (topRes.status === 404) {
+      return [];
+    }
+    if (!topRes.ok) {
+      throw new Error(
+        `GET GitHub contents Solutions/${solutionName}: HTTP ${topRes.status}\n${await topRes.text()}`,
+      );
+    }
+    const topEntries = asContentEntries(await readPortBody(topRes));
+    const dirNames = topEntries.filter((e) => e.type === 'dir').map((e) => e.name);
+    const connectorDir = findConnectorDirName(dirNames);
+    if (connectorDir === null) {
+      return [];
+    }
+    const connectorEntry = topEntries.find((e) => e.name === connectorDir && e.type === 'dir');
+    if (connectorEntry?.sha === undefined) {
+      return [];
+    }
+    // 2) One PER-SOLUTION recursive tree query on the connector subtree (NOT
+    // the whole repo). Tree paths are relative to the connector directory.
+    const treeRes = await this.apiGet(
+      `/repos/${SENTINEL_OWNER}/${SENTINEL_REPO}/git/trees/${connectorEntry.sha}?recursive=1`,
+    );
+    if (!treeRes.ok) {
+      throw new Error(
+        `GET GitHub git/trees for Solutions/${solutionName}/${connectorDir}: HTTP ${treeRes.status}\n${await treeRes.text()}`,
+      );
+    }
+    const tree = prop(await readPortBody(treeRes), 'tree');
+    const prefix = `Solutions/${solutionName}/${connectorDir}/`;
+    const allPaths: string[] = [];
+    const sizeByPath = new Map<string, number>();
+    if (Array.isArray(tree)) {
+      for (const node of tree) {
+        if (prop(node, 'type') !== 'blob') {
+          continue;
+        }
+        const rel = prop(node, 'path');
+        if (typeof rel !== 'string' || rel === '') {
+          continue;
+        }
+        const full = `${prefix}${rel}`;
+        allPaths.push(full);
+        const size = prop(node, 'size');
+        if (typeof size === 'number') {
+          sizeByPath.set(full, size);
+        }
+      }
+    }
+    // Reuse the characterized recursive selection (the TEST 10 pin).
+    return selectConnectorFiles(allPaths, solutionName, (p) => sizeByPath.get(p) ?? 0);
+  }
+
+  async readFile(relativePath: string): Promise<string | null> {
+    if (!isPathAllowedByEdr(relativePath, this.blocked)) {
+      return null;
+    }
+    return this.fetchRaw(`${GITHUB_RAW}/${SENTINEL_OWNER}/${SENTINEL_REPO}/${SENTINEL_BRANCH}/${encodeRepoPath(relativePath)}`, relativePath);
+  }
+
+  async rawFetch(relativePath: string, commitSha: string): Promise<string | null> {
+    if (!isPathAllowedByEdr(relativePath, this.blocked)) {
+      return null;
+    }
+    const ref = commitSha === '' ? SENTINEL_BRANCH : commitSha;
+    return this.fetchRaw(`${GITHUB_RAW}/${SENTINEL_OWNER}/${SENTINEL_REPO}/${ref}/${encodeRepoPath(relativePath)}`, relativePath);
+  }
+
+  private async fetchRaw(url: string, relativePath: string): Promise<string | null> {
+    const res = await fetchWithTimeout(url, { method: 'GET' }, GITHUB_TIMEOUT_MS);
+    if (res.status === 404) {
+      return null;
+    }
+    if (!res.ok) {
+      throw new Error(`GET raw ${relativePath}: HTTP ${res.status}\n${await res.text()}`);
+    }
+    return res.text();
+  }
+}
+
+// ---------------------------------------------------------------------------
+// ContentCache (KV) - porting-plan Unit 14
+// ---------------------------------------------------------------------------
+
+// Parsed content-cache entries live under this plain (unencrypted) KV prefix,
+// keyed by the @soc/core contentCacheKey (which embeds the commit SHA, so a new
+// upstream commit yields new keys and stale entries simply miss). Only PARSED
+// results are cached here - never raw bytes - and they are not secrets.
+const CONTENT_CACHE_KV_PREFIX = 'content-cache/';
+
+/**
+ * ContentCache over plain KV entries (porting-plan Unit 14). The @soc/core
+ * cache keys embed the commit SHA, so entries self-invalidate on a new commit;
+ * this adapter only stores/reads the JSON-serialized parsed value.
+ */
+export class KvContentCache implements ContentCache {
+  private key(cacheKey: string): string {
+    return `${CONTENT_CACHE_KV_PREFIX}${encodeURIComponent(cacheKey)}`;
+  }
+
+  async get(cacheKey: string): Promise<unknown | null> {
+    const res = await fetchWithTimeout(kvUrl(this.key(cacheKey)));
+    if (res.status === 404 || res.status === 403) {
+      return null;
+    }
+    if (!res.ok) {
+      throw new Error(`GET content-cache ${cacheKey}: HTTP ${res.status}\n${await res.text()}`);
+    }
+    const text = await res.text();
+    if (text === '') {
+      return null;
+    }
+    try {
+      return JSON.parse(text) as unknown;
+    } catch {
+      // A corrupt entry reads as a miss rather than poisoning the caller.
+      return null;
+    }
+  }
+
+  async set(cacheKey: string, value: unknown): Promise<void> {
+    const res = await fetchWithTimeout(kvUrl(this.key(cacheKey)), {
+      method: 'PUT',
+      body: JSON.stringify(value),
+    });
+    if (!res.ok) {
+      throw new Error(`PUT content-cache ${cacheKey}: HTTP ${res.status}\n${await res.text()}`);
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// GithubPatManager (KV) - porting-plan Unit 14
+// ---------------------------------------------------------------------------
+
+// The FIXED encrypted KV key proxies.yml injects as `Bearer ${kv.githubPat}` on
+// api.github.com / raw.githubusercontent.com requests. Write-only, like
+// azureBasic/azureArmToken - it can never be read back.
+const GITHUB_PAT_KV_KEY = 'githubPat';
+// A plain, READABLE companion holding only the non-secret status (hasPat +
+// login) so status() can report without ever touching the token.
+const GITHUB_PAT_STATUS_KEY = 'githubPatStatus';
+
+/**
+ * GithubPatManager over the KV store (porting-plan Unit 14; ENG-30).
+ *
+ * PLATFORM CONSTRAINT drives the order: proxies.yml injects the PAT from the
+ * encrypted KV slot, so a token can only be validated (GET /user) AFTER it is
+ * stored. validateAndStore therefore STORES the encrypted token first, calls
+ * GET /user through the proxy, and on a non-2xx ROLLS BACK (deletes the token
+ * and clears the status) - the net effect is still "only a valid token
+ * persists". The token never crosses back to the renderer: status() reads the
+ * plain githubPatStatus companion (hasPat + login), never the secret.
+ */
+export class PlatformGithubPat implements GithubPatManager {
+  async status(): Promise<PatManagerStatus> {
+    const res = await fetchWithTimeout(kvUrl(GITHUB_PAT_STATUS_KEY));
+    if (res.status === 404 || res.status === 403) {
+      return { hasPat: false };
+    }
+    if (!res.ok) {
+      throw new Error(`GET ${GITHUB_PAT_STATUS_KEY}: HTTP ${res.status}\n${await res.text()}`);
+    }
+    const text = await res.text();
+    if (text === '') {
+      return { hasPat: false };
+    }
+    try {
+      const parsed = JSON.parse(text) as unknown;
+      const hasPat = prop(parsed, 'hasPat') === true;
+      const login = prop(parsed, 'login');
+      return hasPat
+        ? { hasPat: true, ...(typeof login === 'string' ? { login } : {}) }
+        : { hasPat: false };
+    } catch {
+      return { hasPat: false };
+    }
+  }
+
+  async validateAndStore(pat: string): Promise<PatManagerStatus> {
+    const formatIssue = patFormatIssue(pat);
+    if (formatIssue !== null) {
+      return { hasPat: false, error: formatIssue };
+    }
+    // Store encrypted FIRST so proxies.yml can inject it on the validation call.
+    const putRes = await fetchWithTimeout(kvUrl(`${GITHUB_PAT_KV_KEY}?encrypted=true`), {
+      method: 'PUT',
+      body: pat,
+    });
+    if (!putRes.ok) {
+      throw new Error(`PUT ${GITHUB_PAT_KV_KEY}?encrypted=true: HTTP ${putRes.status}\n${await putRes.text()}`);
+    }
+    // Validate: GET /user with the just-stored token (injected server-side).
+    let userRes: Response;
+    try {
+      userRes = await fetchWithTimeout(
+        `${GITHUB_API}/user`,
+        { method: 'GET', headers: { Accept: GITHUB_JSON_ACCEPT } },
+        GITHUB_TIMEOUT_MS,
+      );
+    } catch (err) {
+      // Transport failure: roll back the provisional token, then surface.
+      await this.clear();
+      throw err;
+    }
+    if (userRes.ok) {
+      const login = prop(await readPortBody(userRes), 'login');
+      const status = patStatusFrom({
+        ok: true,
+        ...(typeof login === 'string' ? { login } : {}),
+      });
+      await fetchWithTimeout(kvUrl(GITHUB_PAT_STATUS_KEY), {
+        method: 'PUT',
+        body: JSON.stringify(status),
+      });
+      return status;
+    }
+    // Invalid token: roll it back so nothing usable persists.
+    await this.clear();
+    const detail =
+      userRes.status === 401
+        ? 'GitHub rejected the token (HTTP 401) - it is invalid, expired, or revoked.'
+        : userRes.status === 403
+          ? 'GitHub refused the token (HTTP 403) - it may be rate-limited or lack access.'
+          : `GitHub validation failed (HTTP ${userRes.status}).`;
+    return { hasPat: false, error: detail };
+  }
+
+  async clear(): Promise<void> {
+    // Independent fire-and-forget deletes: KV DELETE responses are lost by the
+    // bridge, so never sequence one after another (kvDelete owns that quirk).
+    kvDelete(GITHUB_PAT_KV_KEY);
+    kvDelete(GITHUB_PAT_STATUS_KEY);
+    await Promise.resolve();
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Factory
 // ---------------------------------------------------------------------------
 
@@ -684,6 +1101,12 @@ export interface CloudPorts {
   artifacts: ArtifactSink;
   /** Tagged-sample store over plain KV entries (porting-plan Unit 11). */
   samples: TaggedSampleStore;
+  /** Lazy Sentinel content over the proxied GitHub API (porting-plan Unit 14). */
+  content: SentinelContent;
+  /** Parsed-content cache over plain KV entries, keyed by solution+commit (Unit 14). */
+  contentCache: ContentCache;
+  /** GitHub PAT lifecycle: validate-then-store, hasPat-only (Unit 14). */
+  githubPat: GithubPatManager;
   /** The shell's Logger (platform/logger.ts PlatformLogger instance). */
   logger: Logger;
 }
@@ -707,6 +1130,9 @@ export function makeCloudPorts(tenantId: string, logger: Logger): CloudPorts {
     user: new PlatformUserContext(),
     artifacts: new PlatformArtifactSink(),
     samples: new PlatformTaggedSampleStore(),
+    content: new PlatformSentinelContent(),
+    contentCache: new KvContentCache(),
+    githubPat: new PlatformGithubPat(),
     logger,
   };
 }
