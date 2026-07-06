@@ -26,6 +26,7 @@ import {
   ModeSelect,
   OnboardTableScreen,
   OptionsScreen,
+  PackInventoryScreen,
   PortsProvider,
   RepositoriesScreen,
   ReviewScreen,
@@ -886,6 +887,31 @@ export function LocalApp() {
     </>
   );
 
+  // Packs (porting-plan Unit 19, GUI-19/20 folded): the ONE merged pack
+  // inventory over the local shell's pack ports - build records (data/packs.json
+  // on the host), DEPLOYED badges per worker group (truth from the leader's live
+  // packs API), storage/retention, download the .crbl via the ArtifactSink
+  // (regenerated from the stored definition), install-to-group through the
+  // host's octet-stream upload proxy, and delete guarded by scoped record-id
+  // validation. requires: 'cribl' - the inventory and its badges need a leader.
+  const packsView = (
+    <>
+      <header className="local-header">
+        <h1 className="local-title">Packs</h1>
+        <p className="local-subtitle">
+          Every pack built by this app, with its destination tables, size, and
+          live deployed status per worker group. Download the .crbl (regenerated
+          on demand from the stored definition), install it into a group, or
+          delete an older build. Deployed status is read from the Cribl leader,
+          never from this list.
+        </p>
+      </header>
+      <PortsProvider ports={ports} config={activeAzureConfig ?? EMPTY_AZURE_CONFIG}>
+        <PackInventoryScreen />
+      </PortsProvider>
+    </>
+  );
+
   const settingsView = (
     <SettingsScreen
       shellName="Local Node host (127.0.0.1 loopback)"
@@ -932,6 +958,7 @@ export function LocalApp() {
     { id: 'batch-onboard', label: 'Batch Onboard', requires: 'azure', section: 'journey', render: renderBatch },
     { id: 'review', label: 'Review', requires: 'azure', section: 'journey', render: renderReview },
     { id: 'options', label: 'Options', requires: 'none', section: 'tools', render: () => optionsView },
+    { id: 'packs', label: 'Packs', requires: 'cribl', section: 'tools', render: () => packsView },
     { id: 'repositories', label: 'Repositories', requires: 'none', section: 'tools', render: () => repositoriesView },
     { id: 'logs', label: 'Logs', requires: 'none', section: 'tools', render: () => logsView },
     { id: 'settings', label: 'Settings', requires: 'none', section: 'tools', render: () => settingsView },

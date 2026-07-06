@@ -11,6 +11,13 @@
 //                                   check - SSRF guard - before any request)
 //   POST   /api/cribl/request       leader proxy (host attaches the token)
 //   GET    /api/cribl/groups        convenience /master/groups mapping
+//   POST   /api/cribl/upload        pack .crbl octet-stream PUT to the leader
+//                                   ({ groupId, fileName, crblBase64 } ->
+//                                   { status, body }; step 1 of pack install)
+//   GET    /api/packs               pack build records (StoredPack[])
+//   POST   /api/packs               upsert one StoredPack { record, definition }
+//   GET    /api/packs/{id}          { pack } - StoredPack or null
+//   DELETE /api/packs/{id}          idempotent remove by build record id
 //   PUT    /api/secrets/{key}       store value ({ value, encrypted })
 //   GET    /api/secrets/{key}       { value } - null when encrypted/missing
 //   DELETE /api/secrets/{key}       idempotent remove
@@ -45,12 +52,14 @@
 
 import http from 'node:http';
 import os from 'node:os';
+import { Buffer } from 'node:buffer';
 import { DATA_DIR, WEB_ROOT } from './config.mjs';
 import { createAzureProxy } from './azure.mjs';
 import { createCriblAuth } from './cribl-auth.mjs';
 import { createCriblProxy } from './cribl.mjs';
 import { createSecretsStore } from './secrets.mjs';
 import { createJobStore } from './jobs.mjs';
+import { createPackStore } from './packs.mjs';
 import { createTaggedSampleStore } from './tagged-samples.mjs';
 import { createGithubProxy } from './github.mjs';
 import { createContentCache } from './content-cache.mjs';
@@ -88,6 +97,7 @@ export function createHostServer(config) {
   const cribl = createCriblProxy(config.cribl, criblAuth);
   const secrets = createSecretsStore(DATA_DIR);
   const jobs = createJobStore(DATA_DIR);
+  const packs = createPackStore(DATA_DIR);
   const taggedSamples = createTaggedSampleStore(DATA_DIR);
   const github = createGithubProxy(DATA_DIR, log);
   const contentCache = createContentCache(DATA_DIR);
@@ -205,6 +215,34 @@ export function createHostServer(config) {
       return;
     }
 
+    // Two-step pack upload, step 1: proxy the raw .crbl bytes (base64 in the
+    // JSON body) as an octet-stream PUT to the leader. The install decision
+    // logic (two-step, conflict retry) lives in the browser adapter over
+    // @soc/core; the host only owns the binary transport + the token. Steps 2/3
+    // (POST install, DELETE on conflict) ride the existing /api/cribl/request.
+    if (pathname === '/api/cribl/upload' && method === 'POST') {
+      const payload = await readJsonBody(req);
+      if (!isPlainObject(payload) || typeof payload.fileName !== 'string' || payload.fileName === '') {
+        throw new HttpError(400, 'POST /api/cribl/upload: body must be { groupId, fileName, crblBase64 }');
+      }
+      const groupId = payload.groupId;
+      if (typeof groupId !== 'string' || groupId === '') {
+        throw new HttpError(400, 'POST /api/cribl/upload: "groupId" must be a non-empty string');
+      }
+      if (typeof payload.crblBase64 !== 'string' || payload.crblBase64 === '') {
+        throw new HttpError(400, 'POST /api/cribl/upload: "crblBase64" must be a non-empty base64 string');
+      }
+      let bytes;
+      try {
+        bytes = Buffer.from(payload.crblBase64, 'base64');
+      } catch {
+        throw new HttpError(400, 'POST /api/cribl/upload: "crblBase64" is not valid base64');
+      }
+      const result = await upstream(() => cribl.uploadPack(groupId, payload.fileName, bytes));
+      sendJson(res, 200, result);
+      return;
+    }
+
     // --- secrets ------------------------------------------------------------
     if (pathname.startsWith('/api/secrets/')) {
       const key = decodeKey(pathname.slice('/api/secrets/'.length));
@@ -289,6 +327,46 @@ export function createHostServer(config) {
         return;
       }
       res.writeHead(405, { Allow: 'GET, PATCH' });
+      res.end();
+      return;
+    }
+
+    // --- pack build records (porting-plan Unit 19) --------------------------
+    if (pathname === '/api/packs') {
+      if (method === 'GET') {
+        sendJson(res, 200, await packs.list());
+        return;
+      }
+      if (method === 'POST') {
+        const payload = await readJsonBody(req);
+        const record = isPlainObject(payload) ? payload.record : undefined;
+        if (!isPlainObject(record) || typeof record.id !== 'string' || record.id === '') {
+          throw new HttpError(400, 'POST /api/packs: body must be a StoredPack { record: { id, ... }, definition }');
+        }
+        if (!('definition' in payload)) {
+          throw new HttpError(400, 'POST /api/packs: "definition" is required (used to regenerate the .crbl)');
+        }
+        await packs.put(payload);
+        sendEmpty(res, 204);
+        return;
+      }
+      res.writeHead(405, { Allow: 'GET, POST' });
+      res.end();
+      return;
+    }
+
+    if (pathname.startsWith('/api/packs/')) {
+      const id = decodeKey(pathname.slice('/api/packs/'.length));
+      if (method === 'GET') {
+        sendJson(res, 200, { pack: await packs.get(id) });
+        return;
+      }
+      if (method === 'DELETE') {
+        await packs.delete(id);
+        sendEmpty(res, 204);
+        return;
+      }
+      res.writeHead(405, { Allow: 'GET, DELETE' });
       res.end();
       return;
     }

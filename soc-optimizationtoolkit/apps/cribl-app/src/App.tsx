@@ -13,6 +13,7 @@ import {
   ModeSelect,
   OnboardTableScreen,
   OptionsScreen,
+  PackInventoryScreen,
   PortsProvider,
   RepositoriesScreen,
   ReviewScreen,
@@ -2686,6 +2687,32 @@ function App() {
     </>
   );
 
+  // Packs (porting-plan Unit 19, GUI-19/20 folded): the ONE merged pack
+  // inventory over the cloud shell's pack ports - build records, DEPLOYED
+  // badges per worker group (truth from the live packs API), storage/retention,
+  // download the .crbl via the ArtifactSink (regenerated deterministically from
+  // the stored definition - cloud never persists bytes), install-to-group, and
+  // delete guarded by scoped record-id validation. requires: 'cribl' - the
+  // inventory and its deployed badges need a live Cribl side. Additive: it
+  // never touches canDeploy / canDeployContentPath.
+  const packsView = (
+    <>
+      <header className="harness-header">
+        <h1 className="harness-title">Packs</h1>
+        <p className="harness-subtitle">
+          Every pack built by this app, with its destination tables, size, and
+          live deployed status per worker group. Download the .crbl (regenerated
+          on demand from the stored definition), install it into a group, or
+          delete an older build. Deployed status is read from the Cribl packs
+          API, never from this list.
+        </p>
+      </header>
+      <PortsProvider ports={cloudPorts} config={activeConfig}>
+        <PackInventoryScreen key={`packs-${store.activeProfileId ?? 'none'}`} />
+      </PortsProvider>
+    </>
+  );
+
   // Settings: the Phase 1 exit item graduated into a real screen - platform
   // info, current mode + Reconfigure, and the validate-before-save raw-JSON
   // editor over the active connection's non-secret config.
@@ -2752,6 +2779,7 @@ function App() {
     { id: 'batch-onboard', label: 'Batch Onboard', requires: 'azure', section: 'journey', render: renderBatch },
     { id: 'review', label: 'Review', requires: 'azure', section: 'journey', render: renderReview },
     { id: 'options', label: 'Options', requires: 'none', section: 'tools', render: () => optionsView },
+    { id: 'packs', label: 'Packs', requires: 'cribl', section: 'tools', render: () => packsView },
     { id: 'repositories', label: 'Repositories', requires: 'none', section: 'tools', render: () => repositoriesView },
     { id: 'logs', label: 'Logs', requires: 'none', section: 'tools', render: () => logsView },
     { id: 'settings', label: 'Settings', requires: 'none', section: 'tools', render: () => settingsView },

@@ -18,6 +18,22 @@
 #                                        group's pending config
 #   /master/groups/{id}/deploy (patch) - leader-level deploy of the committed
 #                                        version to the group
+#   /packs (get/put/post)              - in /m/{groupId} context: pack inventory
+#                                        (PlatformPackInstall) - GET lists
+#                                        installed packs (deployed-status truth),
+#                                        PUT ?filename= uploads the .crbl bytes,
+#                                        POST installs the returned source
+#   /packs/{id} (delete)               - in /m/{groupId} context: the
+#                                        duplicate-conflict delete-and-retry
+#
+# LEAST PRIVILEGE / same-PR honesty: Unit 19's pack surface installs a
+# self-contained .crbl. The pack's breakers.yml, outputs.yml, and any secret
+# reference travel INSIDE the archive (regenerated deterministically from the
+# stored definition), so this shell calls no group-level /lib/breakers or
+# /system/secrets create-or-update endpoints and none are declared here.
+# (/system/outputs is already declared above for the onboard-table destination
+# step.) The ensure-secret / shared-breakers create-or-update paths belong to
+# Unit 20's guided deploy and ship with the code that calls them.
 
 policies:
   # List Worker Groups / Edge Fleets (CriblClient.listGroups group picker).
@@ -40,3 +56,13 @@ policies:
   # /m/ prefix), called as PATCH /master/groups/{groupId}/deploy.
   - object: '/master/groups/:id/deploy'
     actions: ['PATCH']
+  # Pack inventory + two-step install in a Worker Group context
+  # (PlatformPackInstall): GET lists the group's installed packs (the
+  # deployed-status truth for the badges), PUT ?filename= uploads the .crbl
+  # bytes, POST installs the returned randomized source.
+  - object: '/m/:gid/packs'
+    actions: ['GET', 'PUT', 'POST']
+  # Delete an existing pack by id - only used for the duplicate-conflict
+  # delete-and-retry before re-installing.
+  - object: '/m/:gid/packs/*'
+    actions: ['DELETE']

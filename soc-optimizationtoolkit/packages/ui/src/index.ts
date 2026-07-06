@@ -6,8 +6,12 @@
 
 export { PortsContext, PortsProvider, usePorts } from "./ports-context";
 export type {
+  DeployedGroupPacks,
+  PackInstallClient,
+  PackRecordStore,
   PortsContextValue,
   PortsProviderProps,
+  StoredPack,
   UiPorts,
 } from "./ports-context";
 export { OnboardTableScreen } from "./onboarding/onboard-table-screen";
@@ -494,6 +498,35 @@ export type {
   ReachabilityStatus,
   ReachabilityTone,
 } from "./screens/repositories/pat-form-state";
+
+// Pack inventory (porting-plan Unit 19, GUI-19/20 folded): the ONE merged pack
+// inventory screen - build records with DEPLOYED badges per worker group (truth
+// from the live packs API), storage/retention, DOWNLOAD .crbl via ArtifactSink
+// (regenerated deterministically or served cached), install-to-group, and
+// DELETE guarded by scoped record-id validation (no path semantics). Additive:
+// it never touches canDeploy / canDeployContentPath. Pure decisions live in
+// pack-inventory-state with their own tests.
+export { PackInventoryScreen } from "./screens/packs/pack-inventory-screen";
+export type { PackInventoryScreenProps } from "./screens/packs/pack-inventory-screen";
+export {
+  PACK_INVENTORY_EMPTY_REASON,
+  PACK_INVENTORY_UNAVAILABLE_REASON,
+  PACK_RETENTION_NOTE,
+  deriveDeployedBadge,
+  deriveInventoryRows,
+  deriveStorageSummary,
+  formatCrblSize,
+  resolveBytesSource,
+  tablesSummary,
+  validateDeleteId,
+} from "./screens/packs/pack-inventory-state";
+export type {
+  BytesSource,
+  DeleteIdCheck,
+  DeployedBadge,
+  PackInventoryRow,
+  StorageSummary,
+} from "./screens/packs/pack-inventory-state";
 
 // Settings.
 export { SettingsScreen } from "./screens/settings-screen";

@@ -17,6 +17,7 @@ import type {
   CriblGroupSummary,
   CriblRequest,
   GithubPatManager,
+  InstalledPack,
   JobRecord,
   JobStore,
   Logger,
@@ -36,11 +37,24 @@ import {
   blockedSolutionNames,
   classifySolutionDeprecation,
   findConnectorDirName,
+  interpretInstallResponse,
   isPathAllowedByEdr,
+  packIdFromCrblFileName,
+  parsePackListResponse,
+  parseUploadResponse,
   patFormatIssue,
   patStatusFrom,
   selectConnectorFiles,
 } from '@soc/core';
+// Pack store + install-client contracts are @soc/ui-owned ports (they carry the
+// StoredPack definition the UI regenerates from); the CloudPorts bundle
+// satisfies them structurally.
+import type {
+  DeployedGroupPacks,
+  PackInstallClient,
+  PackRecordStore,
+  StoredPack,
+} from '@soc/ui';
 import { acquireArmToken, fetchWithTimeout, kvDelete, kvUrl } from './http';
 
 // ---------------------------------------------------------------------------
@@ -1088,6 +1102,231 @@ export class PlatformGithubPat implements GithubPatManager {
 }
 
 // ---------------------------------------------------------------------------
+// PackRecordStore (KV) - porting-plan Unit 19 (ENG-09)
+// ---------------------------------------------------------------------------
+
+// Each pack build is one plain (unencrypted) KV entry under pack-builds/{id};
+// the flat pack-builds-index entry holds the JSON array of ids in insert order.
+// Kept outside the pack-builds/ prefix so a prefix listing of records never
+// returns the index itself (same shape as PlatformJobStore). The stored value
+// is the StoredPack {record, definition} - the DEFINITION, not the archive
+// bytes: cloud regenerates the identical .crbl on demand (2026-07-04 decision),
+// so a KV entry stays small.
+const PACK_BUILD_KEY_PREFIX = 'pack-builds/';
+const PACK_BUILD_INDEX_KEY = 'pack-builds-index';
+
+function packBuildKey(id: string): string {
+  return `${PACK_BUILD_KEY_PREFIX}${encodeURIComponent(id)}`;
+}
+
+/**
+ * PackRecordStore over plain KV entries. Upsert PUTs the entry and appends the
+ * id to the index only when new; delete removes the entry and prunes the index;
+ * list walks the index and GETs each entry, skipping any that 404. Cloud NEVER
+ * writes archive bytes here (no cachedCrblBase64) - only the definition, so the
+ * UI regenerates deterministically. Last-writer-wins; single-operator UI.
+ */
+export class PlatformPackStore implements PackRecordStore {
+  async list(): Promise<StoredPack[]> {
+    const ids = await this.readIndex();
+    const packs: StoredPack[] = [];
+    for (const id of ids) {
+      const pack = await this.get(id);
+      if (pack !== null) {
+        packs.push(pack);
+      }
+    }
+    return packs;
+  }
+
+  async get(id: string): Promise<StoredPack | null> {
+    const res = await fetchWithTimeout(kvUrl(packBuildKey(id)));
+    if (res.status === 404) {
+      return null;
+    }
+    if (!res.ok) {
+      throw new Error(`GET kvstore/${packBuildKey(id)}: HTTP ${res.status}\n${await res.text()}`);
+    }
+    const text = await res.text();
+    if (text === '') {
+      return null;
+    }
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(text);
+    } catch {
+      throw new Error(`pack build ${packBuildKey(id)} is not valid JSON`);
+    }
+    if (typeof prop(prop(parsed, 'record'), 'id') !== 'string') {
+      throw new Error(`pack build ${packBuildKey(id)} has an unexpected shape\n${text}`);
+    }
+    // Written exclusively by this adapter as serialized StoredPacks, so after
+    // the shape check the cast is sound (same reasoning as the KV JobRecords).
+    return parsed as StoredPack;
+  }
+
+  async put(pack: StoredPack): Promise<void> {
+    const id = pack.record.id;
+    if (id === '') {
+      throw new Error('PlatformPackStore.put: record.id must be non-empty');
+    }
+    // Cloud never persists the archive bytes (KV size); drop any cache before
+    // writing so the entry stays a small definition.
+    const toStore: StoredPack = { record: pack.record, definition: pack.definition };
+    const res = await fetchWithTimeout(kvUrl(packBuildKey(id)), {
+      method: 'PUT',
+      body: JSON.stringify(toStore),
+    });
+    if (!res.ok) {
+      throw new Error(`PUT kvstore/${packBuildKey(id)}: HTTP ${res.status}\n${await res.text()}`);
+    }
+    const index = await this.readIndex();
+    if (!index.includes(id)) {
+      index.push(id);
+      await this.writeIndex(index);
+    }
+  }
+
+  async delete(id: string): Promise<void> {
+    // kvDelete owns the platform quirk: the delete is processed server-side but
+    // its response may be lost by the bridge, so nothing is sequenced on it.
+    await kvDelete(packBuildKey(id));
+    const index = await this.readIndex();
+    const next = index.filter((x) => x !== id);
+    if (next.length !== index.length) {
+      await this.writeIndex(next);
+    }
+  }
+
+  private async readIndex(): Promise<string[]> {
+    const res = await fetchWithTimeout(kvUrl(PACK_BUILD_INDEX_KEY));
+    if (res.status === 404) {
+      return [];
+    }
+    if (!res.ok) {
+      throw new Error(`GET kvstore/${PACK_BUILD_INDEX_KEY}: HTTP ${res.status}\n${await res.text()}`);
+    }
+    const text = await res.text();
+    if (text === '') {
+      return [];
+    }
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(text);
+    } catch {
+      return [];
+    }
+    return Array.isArray(parsed) ? parsed.filter((x): x is string => typeof x === 'string') : [];
+  }
+
+  private async writeIndex(ids: string[]): Promise<void> {
+    const res = await fetchWithTimeout(kvUrl(PACK_BUILD_INDEX_KEY), {
+      method: 'PUT',
+      body: JSON.stringify(ids),
+    });
+    if (!res.ok) {
+      throw new Error(`PUT kvstore/${PACK_BUILD_INDEX_KEY}: HTTP ${res.status}\n${await res.text()}`);
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// PackInstallClient - porting-plan Unit 19 (ENG-07/28)
+// ---------------------------------------------------------------------------
+
+// Render a CriblClient response body (parsed JSON or raw text) back to the
+// string the @soc/core install interpreters expect (they JSON.parse / substring
+// it). null becomes '' so a bodyless response interprets cleanly.
+function criblBodyText(body: unknown): string {
+  if (body === null || body === undefined) {
+    return '';
+  }
+  if (typeof body === 'string') {
+    return body;
+  }
+  try {
+    return JSON.stringify(body);
+  } catch {
+    return String(body);
+  }
+}
+
+/**
+ * PackInstallClient over the hosting workspace's own product API. The two-step
+ * upload protocol and its decision rules are @soc/core's: the binary PUT
+ * ?filename= (raw octet-stream; the platform proxy injects auth), then the
+ * randomized `source` from parseUploadResponse drives the JSON POST install; a
+ * duplicate-conflict (interpretInstallResponse === 'conflict') deletes the
+ * existing pack (id from packIdFromCrblFileName) and retries once. Deployed
+ * status is read from each group's live packs list (parsePackListResponse) -
+ * never from local storage. JSON ops reuse the injected CriblClient (auth,
+ * groupId prefixing); only the binary PUT is done directly.
+ */
+export class PlatformPackInstall implements PackInstallClient {
+  private readonly cribl: CriblClient;
+
+  constructor(cribl: CriblClient) {
+    this.cribl = cribl;
+  }
+
+  async listDeployed(groups: readonly string[]): Promise<DeployedGroupPacks[]> {
+    const out: DeployedGroupPacks[] = [];
+    for (const group of groups) {
+      const res = await this.cribl.request({ method: 'GET', path: '/packs', groupId: group });
+      const parsed = parsePackListResponse(res.status, criblBodyText(res.body));
+      out.push({ group, packs: parsed.ok ? parsed.packs : [] });
+    }
+    return out;
+  }
+
+  async install(group: string, fileName: string, crbl: Uint8Array): Promise<InstalledPack> {
+    // Step 1: binary PUT ?filename= directly against the workspace API (the
+    // JSON CriblClient cannot carry an octet-stream body). Auth is proxy-injected.
+    const uploadUrl =
+      `${window.CRIBL_API_URL}/m/${encodeURIComponent(group)}` +
+      `/packs?filename=${encodeURIComponent(fileName)}`;
+    const putRes = await fetchWithTimeout(uploadUrl, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/octet-stream' },
+      body: new Uint8Array(crbl),
+    });
+    const upload = parseUploadResponse(putRes.status, await putRes.text());
+    if (!upload.ok) {
+      throw new Error(upload.error);
+    }
+
+    // Step 2: POST the returned (randomized) source; on a duplicate conflict,
+    // delete the existing pack and retry once.
+    let outcome = interpretInstallResponse(...(await this.postInstall(group, upload.source)));
+    if (outcome.kind === 'conflict') {
+      const packId = packIdFromCrblFileName(fileName);
+      await this.cribl.request({
+        method: 'DELETE',
+        path: `/packs/${encodeURIComponent(packId)}`,
+        groupId: group,
+      });
+      outcome = interpretInstallResponse(...(await this.postInstall(group, upload.source)));
+    }
+    if (outcome.kind !== 'installed') {
+      throw new Error(outcome.kind === 'conflict' ? 'Pack install still conflicts after delete-and-retry' : outcome.error);
+    }
+    return outcome.pack;
+  }
+
+  // POST /packs {source} in the group context; returns [status, bodyText] for
+  // the @soc/core interpreter.
+  private async postInstall(group: string, source: string): Promise<[number, string]> {
+    const res = await this.cribl.request({
+      method: 'POST',
+      path: '/packs',
+      groupId: group,
+      body: { source },
+    });
+    return [res.status, criblBodyText(res.body)];
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Factory
 // ---------------------------------------------------------------------------
 
@@ -1107,6 +1346,10 @@ export interface CloudPorts {
   contentCache: ContentCache;
   /** GitHub PAT lifecycle: validate-then-store, hasPat-only (Unit 14). */
   githubPat: GithubPatManager;
+  /** Pack build-record store over plain KV entries - definitions only (Unit 19). */
+  packs: PackRecordStore;
+  /** Pack install + deployed-status client over the workspace API (Unit 19). */
+  packInstall: PackInstallClient;
   /** The shell's Logger (platform/logger.ts PlatformLogger instance). */
   logger: Logger;
 }
@@ -1122,10 +1365,13 @@ export interface CloudPorts {
  * for free.
  */
 export function makeCloudPorts(tenantId: string, logger: Logger): CloudPorts {
+  // One CriblClient shared with the pack installer (it reuses request() for the
+  // JSON install/list/delete ops; only the binary upload is done directly).
+  const cribl = new PlatformCriblClient();
   return {
     secrets: new PlatformSecretsStore(),
     azure: new PlatformAzureManagement(tenantId),
-    cribl: new PlatformCriblClient(),
+    cribl,
     jobs: new PlatformJobStore(),
     user: new PlatformUserContext(),
     artifacts: new PlatformArtifactSink(),
@@ -1133,6 +1379,8 @@ export function makeCloudPorts(tenantId: string, logger: Logger): CloudPorts {
     content: new PlatformSentinelContent(),
     contentCache: new KvContentCache(),
     githubPat: new PlatformGithubPat(),
+    packs: new PlatformPackStore(),
+    packInstall: new PlatformPackInstall(cribl),
     logger,
   };
 }

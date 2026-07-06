@@ -70,6 +70,7 @@ function bodyText(body) {
  * @returns {{
  *   request(opts: CriblProxyRequest): Promise<{ status: number, body: unknown }>,
  *   listGroups(): Promise<Array<{ id: string, product?: string }>>,
+ *   uploadPack(groupId: string, fileName: string, bytes: Buffer): Promise<{ status: number, body: unknown }>,
  * }}
  */
 export function createCriblProxy(cribl, auth) {
@@ -160,7 +161,55 @@ export function createCriblProxy(cribl, auth) {
     return groups;
   }
 
-  return { request, listGroups };
+  /**
+   * Two-step pack upload, step 1: PUT the raw .crbl bytes as an octet-stream to
+   * /m/{group}/packs?filename={file}. The leader answers with a JSON body
+   * carrying the RANDOMIZED source filename; the browser-side install decision
+   * logic (@soc/core parseUploadResponse) reads it and drives the POST install
+   * through request(). Same bearer + 401-recovery contract as request(); only
+   * the body transport differs (a Buffer, not JSON).
+   *
+   * @param {string} groupId
+   * @param {string} fileName
+   * @param {Buffer} bytes
+   * @returns {Promise<{ status: number, body: unknown }>}
+   */
+  async function uploadPack(groupId, fileName, bytes) {
+    if (cribl.leaderUrl === '') {
+      throw new HttpError(500, `cribl.leaderUrl is empty in ${CONFIG_PATH} - set it and restart the host`);
+    }
+    const groupPrefix =
+      typeof groupId === 'string' && groupId !== '' ? `/m/${encodeURIComponent(groupId)}` : '';
+    const target = `${cribl.leaderUrl}/api/v1${groupPrefix}/packs?filename=${encodeURIComponent(fileName)}`;
+
+    const token = await auth.getLeaderToken(false);
+    const first = await sendUpload(target, bytes, token);
+    if (first.status !== 401 || auth.type === 'token') {
+      return first;
+    }
+    // 401 with a mintable auth type: re-auth ONCE and retry ONCE.
+    const fresh = await auth.getLeaderToken(true);
+    return sendUpload(target, bytes, fresh);
+  }
+
+  /**
+   * @param {string} target
+   * @param {Buffer} bytes
+   * @param {string} token
+   * @returns {Promise<{ status: number, body: unknown }>}
+   */
+  async function sendUpload(target, bytes, token) {
+    const res = await leaderRequest(target, {
+      method: 'PUT',
+      headers: { Authorization: `Bearer ${token}` },
+      rawBody: bytes,
+      contentType: 'application/octet-stream',
+      agent: httpsAgent,
+    });
+    return { status: res.status, body: res.body };
+  }
+
+  return { request, listGroups, uploadPack };
 }
 
 /**
@@ -176,6 +225,8 @@ export function createCriblProxy(cribl, auth) {
  *   method: string,
  *   headers?: Record<string, string>,
  *   body?: unknown,
+ *   rawBody?: Buffer,
+ *   contentType?: string,
  *   agent: import('node:https').Agent,
  * }} opts
  * @returns {Promise<{ status: number, headers: import('node:http').IncomingHttpHeaders, body: unknown }>}
@@ -188,7 +239,13 @@ export async function leaderRequest(target, opts) {
   /** @type {Record<string, string | number>} */
   const headers = { ...(opts.headers ?? {}) };
   let payload;
-  if (opts.body !== undefined) {
+  if (opts.rawBody !== undefined) {
+    // Pre-serialized bytes (e.g. an octet-stream .crbl upload): send verbatim
+    // with the caller's content type, never JSON-encoded.
+    payload = opts.rawBody;
+    headers['Content-Type'] = opts.contentType ?? 'application/octet-stream';
+    headers['Content-Length'] = payload.length;
+  } else if (opts.body !== undefined) {
     payload = Buffer.from(JSON.stringify(opts.body), 'utf8');
     headers['Content-Type'] = 'application/json';
     headers['Content-Length'] = payload.length;

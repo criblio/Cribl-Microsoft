@@ -37,13 +37,26 @@ import type {
   UserContext,
   UserIdentity,
 } from '@soc/core';
+import type { InstalledPack } from '@soc/core';
 import {
   blockedSolutionNames,
   classifySolutionDeprecation,
   findConnectorDirName,
+  interpretInstallResponse,
   isPathAllowedByEdr,
+  packIdFromCrblFileName,
+  parsePackListResponse,
+  parseUploadResponse,
   selectConnectorFiles,
 } from '@soc/core';
+// Pack store + install-client contracts are @soc/ui-owned ports; the LocalPorts
+// bundle satisfies them structurally.
+import type {
+  DeployedGroupPacks,
+  PackInstallClient,
+  PackRecordStore,
+  StoredPack,
+} from '@soc/ui';
 
 // ---------------------------------------------------------------------------
 // HTTP primitives
@@ -806,6 +819,162 @@ export class LocalGithubPat implements GithubPatManager {
 }
 
 // ---------------------------------------------------------------------------
+// PackRecordStore (host store) - porting-plan Unit 19 (ENG-09)
+// ---------------------------------------------------------------------------
+
+/** URL for one pack build record; encodeURIComponent keeps odd ids intact. */
+function packUrl(id: string): string {
+  return `/api/packs/${encodeURIComponent(id)}`;
+}
+
+/** Shape-guard a host-returned StoredPack (the host validates on write). */
+function isStoredPackShape(value: unknown): value is StoredPack {
+  const record = prop(value, 'record');
+  return (
+    typeof prop(record, 'id') === 'string' &&
+    prop(record, 'id') !== '' &&
+    prop(value, 'definition') !== undefined
+  );
+}
+
+/**
+ * PackRecordStore over the host's /api/packs endpoints (data/packs.json on the
+ * host side). The host owns upsert-by-record-id and insert ordering - the same
+ * contract as the cloud PlatformPackStore, storing the StoredPack definition so
+ * the UI regenerates the .crbl deterministically.
+ */
+export class LocalPackStore implements PackRecordStore {
+  async list(): Promise<StoredPack[]> {
+    const payload = await hostJson('GET /api/packs', '/api/packs');
+    if (!Array.isArray(payload)) {
+      throw new Error('GET /api/packs: unexpected host response shape (expected an array)');
+    }
+    return payload.filter(isStoredPackShape);
+  }
+
+  async get(id: string): Promise<StoredPack | null> {
+    const payload = await hostJson(`GET /api/packs/${id}`, packUrl(id));
+    const pack = prop(payload, 'pack');
+    return isStoredPackShape(pack) ? pack : null;
+  }
+
+  async put(pack: StoredPack): Promise<void> {
+    const res = await fetchWithTimeout('/api/packs', jsonInit('POST', pack));
+    if (!res.ok) {
+      throw await hostError('POST /api/packs', res);
+    }
+  }
+
+  async delete(id: string): Promise<void> {
+    const res = await fetchWithTimeout(packUrl(id), { method: 'DELETE' });
+    if (!res.ok) {
+      throw await hostError(`DELETE /api/packs/${id}`, res);
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// PackInstallClient - porting-plan Unit 19 (ENG-07/28)
+// ---------------------------------------------------------------------------
+
+// Render a CriblClient response body (parsed JSON or raw text) back to the
+// string the @soc/core install interpreters expect.
+function criblBodyText(body: unknown): string {
+  if (body === null || body === undefined) {
+    return '';
+  }
+  if (typeof body === 'string') {
+    return body;
+  }
+  try {
+    return JSON.stringify(body);
+  } catch {
+    return String(body);
+  }
+}
+
+// Base64-encode raw bytes for the JSON upload envelope (the host decodes it
+// back to a Buffer and PUTs the octet-stream to the leader).
+function bytesToBase64(bytes: Uint8Array): string {
+  let binary = '';
+  for (let i = 0; i < bytes.length; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary);
+}
+
+/**
+ * PackInstallClient over the host. The @soc/core install DECISION LOGIC lives
+ * here (browser side): the binary upload rides POST /api/cribl/upload (the host
+ * PUTs the octet-stream to the leader), parseUploadResponse reads the randomized
+ * source, then the JSON POST install / DELETE conflict retry ride the shared
+ * CriblClient (LocalCriblClient over /api/cribl/request). Deployed status is the
+ * live packs list per group (parsePackListResponse) - never local storage.
+ */
+export class LocalPackInstall implements PackInstallClient {
+  private readonly cribl: CriblClient;
+
+  constructor(cribl: CriblClient) {
+    this.cribl = cribl;
+  }
+
+  async listDeployed(groups: readonly string[]): Promise<DeployedGroupPacks[]> {
+    const out: DeployedGroupPacks[] = [];
+    for (const group of groups) {
+      const res = await this.cribl.request({ method: 'GET', path: '/packs', groupId: group });
+      const parsed = parsePackListResponse(res.status, criblBodyText(res.body));
+      out.push({ group, packs: parsed.ok ? parsed.packs : [] });
+    }
+    return out;
+  }
+
+  async install(group: string, fileName: string, crbl: Uint8Array): Promise<InstalledPack> {
+    // Step 1: upload the bytes through the host's octet-stream proxy.
+    const uploadPayload = await hostJson(
+      'POST /api/cribl/upload',
+      '/api/cribl/upload',
+      jsonInit('POST', { groupId: group, fileName, crblBase64: bytesToBase64(crbl) }),
+      PROXY_TIMEOUT_MS
+    );
+    const uploaded = asPortResponse('POST /api/cribl/upload', uploadPayload);
+    const upload = parseUploadResponse(uploaded.status, criblBodyText(uploaded.body));
+    if (!upload.ok) {
+      throw new Error(upload.error);
+    }
+
+    // Step 2: POST the returned source; on duplicate conflict delete + retry once.
+    let outcome = interpretInstallResponse(...(await this.postInstall(group, upload.source)));
+    if (outcome.kind === 'conflict') {
+      const packId = packIdFromCrblFileName(fileName);
+      await this.cribl.request({
+        method: 'DELETE',
+        path: `/packs/${encodeURIComponent(packId)}`,
+        groupId: group,
+      });
+      outcome = interpretInstallResponse(...(await this.postInstall(group, upload.source)));
+    }
+    if (outcome.kind !== 'installed') {
+      throw new Error(
+        outcome.kind === 'conflict'
+          ? 'Pack install still conflicts after delete-and-retry'
+          : outcome.error
+      );
+    }
+    return outcome.pack;
+  }
+
+  private async postInstall(group: string, source: string): Promise<[number, string]> {
+    const res = await this.cribl.request({
+      method: 'POST',
+      path: '/packs',
+      groupId: group,
+      body: { source },
+    });
+    return [res.status, criblBodyText(res.body)];
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Factory
 // ---------------------------------------------------------------------------
 
@@ -825,6 +994,10 @@ export interface LocalPorts {
   contentCache: ContentCache;
   /** GitHub PAT lifecycle over the host store: validate-then-store, hasPat-only (Unit 14). */
   githubPat: GithubPatManager;
+  /** Pack build-record store over the host's /api/packs (Unit 19). */
+  packs: PackRecordStore;
+  /** Pack install + deployed-status client over the host leader proxy (Unit 19). */
+  packInstall: PackInstallClient;
   /** The shell's Logger (web/logger.ts HostLogger, batching to the host). */
   logger: Logger;
 }
@@ -840,10 +1013,14 @@ export interface LocalPorts {
  * (e.g. OnboardTablePorts) structurally, so usecases log for free.
  */
 export function makeLocalPorts(logger: Logger): LocalPorts {
+  // One CriblClient shared with the pack installer (it reuses request() for the
+  // JSON install/list/delete ops; only the binary upload goes through the host's
+  // dedicated /api/cribl/upload route).
+  const cribl = new LocalCriblClient();
   return {
     secrets: new LocalSecretsStore(),
     azure: new LocalAzureManagement(),
-    cribl: new LocalCriblClient(),
+    cribl,
     jobs: new LocalJobStore(),
     user: new LocalUserContext(),
     artifacts: new LocalArtifactSink(),
@@ -851,6 +1028,8 @@ export function makeLocalPorts(logger: Logger): LocalPorts {
     content: new LocalSentinelContent(),
     contentCache: new LocalContentCache(),
     githubPat: new LocalGithubPat(),
+    packs: new LocalPackStore(),
+    packInstall: new LocalPackInstall(cribl),
     logger,
   };
 }

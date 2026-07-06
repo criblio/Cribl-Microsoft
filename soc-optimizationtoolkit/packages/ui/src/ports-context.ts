@@ -18,13 +18,81 @@ import type {
   ContentCache,
   CriblClient,
   GithubPatManager,
+  InstalledPack,
   JobStore,
   Logger,
+  PackBuildRecord,
+  PackScaffoldInput,
   SecretsStore,
   SentinelContent,
   TaggedSampleStore,
   UserContext,
 } from "@soc/core";
+
+/**
+ * A persisted pack build (porting-plan Unit 19, GUI-19): the small
+ * {@link PackBuildRecord} descriptor PLUS the pack DEFINITION needed to
+ * regenerate the identical .crbl on demand. The 2026-07-04 decision is that
+ * cloud NEVER persists archive bytes in KV (size limits) - it stores the
+ * definition and regenerates deterministically (assemblePack is Date-free; the
+ * builtAtMs input keeps a rebuild byte-stable). Local MAY additionally cache the
+ * bytes; {@link cachedCrblBase64} is that optional cache, and the pure
+ * regenerate-vs-cached choice lives in the pack-inventory state module.
+ */
+export interface StoredPack {
+  /** The lightweight, list-renderable build record (KV/local-store shaped). */
+  record: PackBuildRecord;
+  /** The pack definition for deterministic regeneration of the .crbl bytes. */
+  definition: PackScaffoldInput;
+  /**
+   * OPTIONAL cached .crbl bytes, base64. Cloud NEVER sets this (KV size);
+   * local may, trading disk for a skipped regenerate.
+   */
+  cachedCrblBase64?: string;
+}
+
+/**
+ * Persistence for pack build records (porting-plan Unit 19, ENG-09). Not a
+ * @soc/core port - a shell-provided store the pack inventory screen reads and
+ * writes (cloud = KV entries, local = the Node host store). Keyed by the build
+ * record id.
+ */
+export interface PackRecordStore {
+  /** All stored packs (the screen sorts/derives; order here is unspecified). */
+  list(): Promise<StoredPack[]>;
+  /** One stored pack by build record id, or null when absent. */
+  get(id: string): Promise<StoredPack | null>;
+  /** Upsert one stored pack (replace by record id). */
+  put(pack: StoredPack): Promise<void>;
+  /** Remove one stored pack by build record id (idempotent). */
+  delete(id: string): Promise<void>;
+}
+
+/** The installed packs on one worker group, from the live packs API. */
+export interface DeployedGroupPacks {
+  group: string;
+  packs: InstalledPack[];
+}
+
+/**
+ * Pack install + deployed-status client (porting-plan Unit 19, ENG-07/28).
+ * The shell adapter binds the @soc/core install DECISION LOGIC (two-step PUT
+ * ?filename= then POST source, duplicate-conflict delete-and-retry, the
+ * returned-randomized-filename rule) and reads deployed status from the packs
+ * API - never from local storage.
+ */
+export interface PackInstallClient {
+  /**
+   * The installed packs on each of the given worker groups, from each group's
+   * live packs list (the deployed-status TRUTH the badges derive from).
+   */
+  listDeployed(groups: readonly string[]): Promise<DeployedGroupPacks[]>;
+  /**
+   * Install a built pack's .crbl bytes into a worker group and resolve the
+   * installed pack summary. Runs the two-step upload + conflict retry inside.
+   */
+  install(group: string, fileName: string, crbl: Uint8Array): Promise<InstalledPack>;
+}
 
 /**
  * The @soc/core port instances a shell binds. Structurally compatible
@@ -72,6 +140,21 @@ export interface UiPorts {
    * log sparingly through it. Absent logger = no-op, zero behavior change.
    */
   logger?: Logger;
+  /**
+   * OPTIONAL pack build-record store (porting-plan Unit 19, ENG-09). The pack
+   * inventory screen lists, downloads (via regeneration), and deletes build
+   * records through it. Optional so shells/tests that never open the pack
+   * surface still satisfy the bundle; the screen shows an honest empty state
+   * when it is absent.
+   */
+  packs?: PackRecordStore;
+  /**
+   * OPTIONAL pack install + deployed-status client (porting-plan Unit 19,
+   * ENG-07/28). Paired with {@link packs}: the inventory screen installs a
+   * built pack into a worker group and derives DEPLOYED badges from the live
+   * packs API through it.
+   */
+  packInstall?: PackInstallClient;
 }
 
 /** What PortsContext carries: the ports plus the active connection config. */
