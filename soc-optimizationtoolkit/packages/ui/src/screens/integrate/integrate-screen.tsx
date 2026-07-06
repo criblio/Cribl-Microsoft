@@ -29,7 +29,13 @@
  *      All, per-table Approve, staleness). ADDITIVE + NON-GATING for the native
  *      deploy: it lights the Mappings pill and gates the content path only
  *      (Unit 18).
- *   6. Analytics Rule Cov. - coming-soon (Unit 23)
+ *   6. Analytics Rule Cov. - BUILT: the RuleCoverageSection - the ONE shared
+ *      content-reference analyzer over alert rules (SentinelContent port) and
+ *      workbooks (AzureManagement ARM enumeration, net-new), rendered as two
+ *      sections of one panel with three-way counts, per-item severity + coverage
+ *      %, CUSTOM badges, missing-fields chips, and custom-YAML upload/clear.
+ *      INFORMATIONAL: it lights the mapping table's RULE badges (the kept Unit
+ *      18 ruleReferencedFields contract) but never gates a deploy (Unit 23).
  *   7. Deploy              - BUILT: the operable native-table onboard, driving
  *      the SAME @soc/core onboardTable use-case the validated Onboard screen
  *      runs (reusing onboardTableStepsFor, formatStepLine, summaryText,
@@ -65,6 +71,7 @@ import {
 import type {
   CriblGroupSummary,
   CriblOptions,
+  GapReport,
   IntegrateSectionId,
   JobStep,
   OnboardTableOutcome,
@@ -87,6 +94,7 @@ import { MatchPreviewSection } from "../match-preview/match-preview-section";
 import { MappingReviewSection } from "../mapping-review/mapping-review-section";
 import type { MappingReviewRenameEvent } from "../mapping-review/mapping-review-section";
 import { SolutionBrowser } from "../solution-browser/solution-browser";
+import { RuleCoverageSection } from "../rule-coverage/rule-coverage-section";
 import {
   INTEGRATE_DEFAULT_TABLE,
   defaultPackName,
@@ -197,6 +205,16 @@ export function IntegrateScreen({
   const [mappingsApproved, setMappingsApproved] = useState(false);
   const [renameEvent, setRenameEvent] = useState<MappingReviewRenameEvent>();
   const renameNonce = useRef(0);
+  // The Gap Analysis reports feed the Rule Coverage section (Unit 23): its
+  // availability set and destination tables derive from them.
+  const [gapReports, setGapReports] = useState<GapReport[]>([]);
+
+  // ---- Analytics Rule Coverage section (Unit 23) ------------------------
+  // The coverage analyzer reports the schema-resolvable referenced-field set
+  // (the kept Unit 18 ruleReferencedFields contract) back UP so the Gap
+  // Analysis mapping table lights its RULE badges. Informational only - it
+  // never participates in the deploy gate.
+  const [ruleFields, setRuleFields] = useState<ReadonlySet<string>>();
 
   // One place the Sample Data section reports its list: keep the count (arc
   // completion / Samples pill) and the samples (match preview) in sync.
@@ -393,10 +411,21 @@ export function IntegrateScreen({
         solutionName={solution?.name ?? ""}
         samples={samples}
         content={ports.content}
+        ruleFields={ruleFields}
         onGateChange={setMappingsApproved}
+        onReportsChange={setGapReports}
         renameEvent={renameEvent}
       />
     </>
+  );
+
+  const ruleCoverageBody = (
+    <RuleCoverageSection
+      solutionName={solution?.name ?? ""}
+      reports={gapReports}
+      content={ports.content}
+      onRuleFieldsChange={setRuleFields}
+    />
   );
 
   const azureResourcesBody = (
@@ -601,6 +630,8 @@ export function IntegrateScreen({
         return criblConfigBody;
       case "gap-analysis":
         return gapAnalysisBody;
+      case "rule-coverage":
+        return ruleCoverageBody;
       case "deploy":
         return deployBody;
       default:

@@ -34,5 +34,6 @@ export * from "./domain/sample-parsing";
 export * from "./domain/field-matcher";
 export * from "./domain/sentinel-content";
 export * from "./domain/gap-analysis";
+export * from "./domain/coverage-analysis";
 export * from "./assets/vendor-schemas";
 export * from "./usecases";

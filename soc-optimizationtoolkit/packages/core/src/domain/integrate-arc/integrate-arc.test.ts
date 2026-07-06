@@ -85,9 +85,12 @@ const BUILT_IDS: readonly IntegrateSectionId[] = [
   "azure-resources",
   "cribl-config",
   "gap-analysis",
+  "rule-coverage",
   "deploy",
 ];
-const NOT_BUILT_IDS: readonly IntegrateSectionId[] = ["rule-coverage"];
+// Unit 23 shipped rule-coverage; every section is built now. Kept as a named
+// (empty) set so the "no section is coming-soon" invariants read intentionally.
+const NOT_BUILT_IDS: readonly IntegrateSectionId[] = [];
 
 function statusOf(id: IntegrateSectionId, i: SectionInputs): SectionStatus {
   return deriveSectionStatus(integrateSection(id), i).status;
@@ -120,22 +123,23 @@ describe("INTEGRATE_SECTIONS metadata", () => {
     expect(numbers.size).toBe(INTEGRATE_SECTIONS.length);
   });
 
-  it("marks exactly solution, sample-data, azure-resources, cribl-config, gap-analysis, deploy as built", () => {
+  it("marks every section built now that Unit 23 shipped rule-coverage", () => {
     const built = INTEGRATE_SECTIONS.filter((s) => s.built).map((s) => s.id);
     expect(built.sort()).toEqual([...BUILT_IDS].sort());
+    // no section remains not-built
+    expect(INTEGRATE_SECTIONS.filter((s) => !s.built)).toEqual([]);
   });
 
-  it("puts shippedInUnit ONLY on the not-built sections, with the right units", () => {
+  it("carries shippedInUnit on no section - every section is built", () => {
     const unitById = new Map(
       INTEGRATE_SECTIONS.map((s) => [s.id, s.shippedInUnit]),
     );
-    // built sections omit it (solution lost its shippedInUnit when Unit 14
-    // landed, sample-data when Unit 11 landed, gap-analysis when Unit 18 landed)
+    // Built sections omit it; each lost its shippedInUnit when its unit landed
+    // (Unit 11 sample-data, Unit 14 solution, Unit 18 gap-analysis, Unit 23
+    // rule-coverage).
     for (const id of BUILT_IDS) {
       expect(unitById.get(id)).toBeUndefined();
     }
-    // the only not-built section carries its roadmap unit
-    expect(unitById.get("rule-coverage")).toBe(23);
   });
 
   it("declares a valid requires for every section", () => {
@@ -178,24 +182,40 @@ describe("INTEGRATE_SECTIONS metadata", () => {
 // coming-soon: not-built sections, always, regardless of inputs
 // ---------------------------------------------------------------------------
 
-describe("not-built sections are always coming-soon", () => {
-  it("renders coming-soon for every not-built section across the whole matrix", () => {
+describe("no section is coming-soon now that every section is built", () => {
+  it("has no not-built sections to render coming-soon", () => {
+    expect(NOT_BUILT_IDS).toEqual([]);
+  });
+
+  it("never renders any section as coming-soon across the whole matrix", () => {
     for (const i of everyInputCombination()) {
-      for (const id of NOT_BUILT_IDS) {
-        const state = deriveSectionStatus(integrateSection(id), i);
-        expect(state.status).toBe("coming-soon");
-        // honest not-shipped note present and mentioning the roadmap unit
-        expect(state.reason).toBeTruthy();
-        expect(state.reason).toMatch(/Unit \d+/);
+      for (const r of deriveSectionStatuses(i)) {
+        expect(r.status).not.toBe("coming-soon");
       }
     }
   });
+});
 
-  it("never renders a built section as coming-soon", () => {
+// ---------------------------------------------------------------------------
+// rule-coverage: BUILT + INFORMATIONAL (Unit 23) - never gates a deploy
+// ---------------------------------------------------------------------------
+
+describe("rule-coverage is built and informational", () => {
+  it("is always 'complete' regardless of inputs (never current/blocked/available/coming-soon)", () => {
     for (const i of everyInputCombination()) {
-      for (const id of BUILT_IDS) {
-        expect(statusOf(id, i)).not.toBe("coming-soon");
-      }
+      expect(statusOf("rule-coverage", i)).toBe("complete");
+    }
+  });
+
+  it("never participates in canDeploy or canDeployContentPath", () => {
+    // It has no SectionInputs signal, so the deploy gates cannot depend on it.
+    // Pinned indirectly: canDeploy is exactly scope+worker+pack (asserted
+    // below), and the content path adds only mappingsApproved - neither reads
+    // any rule-coverage state.
+    for (const i of everyInputCombination()) {
+      expect(canDeploy(i)).toBe(
+        i.scopeCommitted && i.workerGroupSelected && i.packNameSet,
+      );
     }
   });
 });

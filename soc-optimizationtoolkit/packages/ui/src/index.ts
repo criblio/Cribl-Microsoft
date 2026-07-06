@@ -288,6 +288,52 @@ export type {
   MappingReviewState,
 } from "./screens/mapping-review/mapping-review-state";
 
+// Analytics Rule + Workbook Coverage (porting-plan Unit 23, ENG-11, GUI-09,
+// plus net-new workbook coverage): the flagship's Rule Coverage section - the
+// UI over the ONE shared @soc/core content-reference analyzer. Alert rules
+// (SentinelContent port) and workbooks (AzureManagement ARM enumeration) are
+// two sources into one engine, rendered as two sections of one panel
+// (three-way counts, per-item severity + coverage %, CUSTOM badge, missing
+// fields chips, custom-YAML upload/clear). INFORMATIONAL - it lights the Unit
+// 18 mapping table's RULE badges via ruleReferencedFields but never gates a
+// deploy. All projection is the pure rule-coverage-state helpers.
+export { RuleCoverageSection } from "./screens/rule-coverage/rule-coverage-section";
+export type { RuleCoverageSectionProps } from "./screens/rule-coverage/rule-coverage-section";
+export {
+  ANALYTIC_RULE_DIR_VARIANTS,
+  CUSTOM_BADGE_LABEL,
+  DEFAULT_MISSING_CHIP_LIMIT,
+  MISSING_FIELDS_HEADING,
+  RULE_COVERAGE_IDLE_NOTE,
+  RULE_COVERAGE_NO_REPORTS_NOTE,
+  VIEW_KQL_LABEL,
+  availableFieldsFromReports,
+  contentTypeNoun,
+  coverageCountChips,
+  coveragePercent,
+  coverageSummaryLine,
+  coverageTone,
+  customRuleCount,
+  deriveCoverageItemView,
+  deriveCoverageSection,
+  deriveThreeWayCounts,
+  destinationTableNamesFromReports,
+  isRuleYamlFileName,
+  missingFieldChips,
+  parseCustomRuleUploads,
+  ruleFieldSet,
+  severityTone,
+} from "./screens/rule-coverage/rule-coverage-state";
+export type {
+  CoverageCountChip,
+  CoverageItemView,
+  CoverageSectionView,
+  CoverageThreeWay,
+  CoverageTone,
+  RuleYamlUpload,
+  SeverityTone,
+} from "./screens/rule-coverage/rule-coverage-state";
+
 // CSV header resolution (porting-plan Unit 12 UI, ENG-16/17, GUI-07): the
 // two-tab dialog (header row / paste feed config) that names a headerless
 // positional CSV's columns, its preview zip + mismatch warning, and the pure

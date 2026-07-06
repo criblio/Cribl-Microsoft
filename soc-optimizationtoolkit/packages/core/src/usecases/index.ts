@@ -5,3 +5,4 @@ export * from "./onboard-batch";
 export * from "./azure-discovery";
 export * from "./deployment-preview";
 export * from "./analyze-samples";
+export * from "./coverage-analysis";

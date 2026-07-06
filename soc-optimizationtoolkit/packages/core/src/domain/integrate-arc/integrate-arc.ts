@@ -12,13 +12,15 @@
  *
  * Two things this module makes HONEST during the MVP transition:
  *
- *   1. Five of the seven sections are BUILT NOW and operable (Solution, Sample
- *      Data, Azure Resources, Cribl Config, Deploy). Azure Resources / Cribl
- *      Config / Deploy are the native-table onboard the user validated live end
- *      to end; Sample Data joined them when Unit 11 shipped and Solution when
- *      Unit 14 shipped. The other two are NOT-YET-BUILT (Gap Analysis=U18, Rule
- *      Coverage=U23); they render 'coming-soon', never as a working teaser. The
- *      `built` flag on each section is the single source of truth for that split.
+ *   1. All seven sections are BUILT NOW. Azure Resources / Cribl Config / Deploy
+ *      are the native-table onboard the user validated live end to end; Sample
+ *      Data joined when Unit 11 shipped, Solution when Unit 14 shipped, Gap
+ *      Analysis when Unit 18 shipped, and Rule Coverage when Unit 23 shipped.
+ *      The `built` flag on each section stays the single source of truth for the
+ *      built/not-built split (it is how a future not-yet-built section still
+ *      renders 'coming-soon' rather than as a working teaser); with Unit 23 in,
+ *      every section is built, so none render coming-soon today. Rule Coverage
+ *      is INFORMATIONAL (see its sectionComplete case): it never gates a deploy.
  *
  *   2. The deploy-readiness footer never shows a false green. A prerequisite
  *      whose section has not shipped renders as a 'coming-soon' pill, not an
@@ -103,10 +105,11 @@ export interface IntegrateSection {
 }
 
 /**
- * The seven sections in page order (numbers 1..7). BUILT NOW: solution,
- * sample-data, azure-resources, cribl-config, deploy. NOT-YET-BUILT
- * (coming-soon): gap-analysis (U18), rule-coverage (U23). Order and numbering
- * match the ADOPTED single-page decision in legacy-flow-analysis.md.
+ * The seven sections in page order (numbers 1..7). ALL BUILT NOW: solution,
+ * sample-data, azure-resources, cribl-config, gap-analysis, rule-coverage,
+ * deploy. Order and numbering match the ADOPTED single-page decision in
+ * legacy-flow-analysis.md. rule-coverage (Unit 23) is BUILT and INFORMATIONAL -
+ * built so it renders real content, informational so it never gates a deploy.
  */
 export const INTEGRATE_SECTIONS: readonly IntegrateSection[] = [
   {
@@ -178,12 +181,18 @@ export const INTEGRATE_SECTIONS: readonly IntegrateSection[] = [
     number: 6,
     title: "Analytics Rule Coverage",
     infoTip:
-      "Analytics rule coverage: fully, partially, and uncovered rule counts, " +
-      "per-rule severity and coverage %, and missing fields by frequency. " +
-      "Upload custom YAML rules to extend coverage.",
+      "Analytics rule and workbook coverage: fully, partially, and uncovered " +
+      "counts, per-item severity and coverage %, and missing fields by " +
+      "frequency. Upload custom YAML rules to extend coverage. Informational - " +
+      "it lights the mapping table's RULE badges but never blocks a deploy.",
     requires: "azure",
-    built: false,
-    shippedInUnit: 23,
+    // BUILT NOW (Unit 23): the rule + workbook coverage panel renders real
+    // content. INFORMATIONAL - its sectionComplete is unconditionally true, so
+    // it never becomes 'current'/'blocked' and never participates in canDeploy
+    // or canDeployContentPath (rule coverage never gates a deploy). It is not in
+    // SectionInputs at all, which structurally guarantees the deploy-gate
+    // partition Unit 18 established stays intact.
+    built: true,
   },
   {
     id: "deploy",
@@ -310,8 +319,8 @@ const COMING_SOON_REASONS: Readonly<Record<IntegrateSectionId, string>> = {
   "cribl-config": "",
   // gap-analysis is BUILT NOW (Unit 18); it is never coming-soon.
   "gap-analysis": "",
-  "rule-coverage":
-    "Analytics rule coverage ships with the rule-coverage analyzer (Unit 23).",
+  // rule-coverage is BUILT NOW (Unit 23); it is never coming-soon.
+  "rule-coverage": "",
   deploy: "",
 };
 
@@ -338,6 +347,16 @@ function sectionComplete(
       // operator who never engages the content flow leaves this false, which
       // never blocks canDeploy (only canDeployContentPath).
       return inputs.mappingsApproved === true;
+    case "rule-coverage":
+      // INFORMATIONAL (Unit 23): rule + workbook coverage never gates a deploy,
+      // so this section is unconditionally "complete" - it never becomes
+      // 'current'/'blocked'/'available' and never demotes Deploy from 'current'.
+      // There is deliberately NO SectionInputs signal for it: coverage is a
+      // read-only diagnostic that lights the mapping table's RULE badges, and
+      // marking it complete keeps the deploy-gate partition (canDeploy vs
+      // canDeployContentPath) exactly as Unit 18 left it. It may thus only ever
+      // read 'ok' (complete) - never a blocking 'missing'.
+      return true;
     case "deploy":
       return inputs.deployCompleted;
     default:

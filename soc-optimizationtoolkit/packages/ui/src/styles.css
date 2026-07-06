@@ -2294,3 +2294,207 @@ button.journey-step-main:hover .journey-step-label {
   font-size: 11px;
   color: var(--warn);
 }
+
+/* ---------------------------------------------------------------------------
+ * Analytics Rule + Workbook Coverage (Unit 23) - the flagship's Rule Coverage
+ * section. Reuses the run-button / gap-reset-button / field-hint grammar; adds
+ * the coverage-specific count chips, per-item expandables, severity badges, and
+ * missing-field chips over the shared design tokens (dark-mode ready).
+ * ------------------------------------------------------------------------- */
+.rule-coverage {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.rule-coverage-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.rule-coverage-upload {
+  font-size: 12px;
+  padding: 4px 12px;
+  border: 1px solid var(--border);
+  background: var(--surface-raised);
+  color: var(--accent-strong);
+  cursor: pointer;
+}
+.rule-coverage-upload input {
+  display: none;
+}
+
+.coverage-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.coverage-section {
+  border: 1px solid var(--border);
+  background: var(--surface);
+}
+.coverage-section-head {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--surface-raised);
+}
+.coverage-subsection {
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.coverage-counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 6px 10px;
+  background: var(--surface-raised);
+}
+.coverage-count-ok {
+  color: var(--ok-strong);
+}
+.coverage-count-warn {
+  color: var(--warn);
+}
+.coverage-count-error {
+  color: var(--error-strong);
+}
+.coverage-count-muted {
+  color: var(--text-muted);
+}
+.coverage-unparseable {
+  color: var(--warn);
+}
+
+.coverage-item {
+  font-size: 12px;
+  border-top: 1px solid var(--border-subtle);
+  padding: 4px 0;
+}
+.coverage-item-summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+.coverage-item-name {
+  flex: 1;
+}
+.coverage-severity {
+  font-size: 9px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 3px;
+  color: var(--text-muted);
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+}
+.coverage-severity-high {
+  color: var(--error-strong);
+  background: var(--error-bg);
+  border-color: var(--error-border);
+}
+.coverage-severity-medium {
+  color: var(--warn);
+  background: var(--warn-bg);
+  border-color: var(--warn-border);
+}
+.coverage-severity-low {
+  color: var(--accent-strong);
+  background: var(--accent-bg);
+  border-color: var(--accent-border);
+}
+.coverage-custom-badge {
+  margin-left: 6px;
+  font-size: 8px;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 3px;
+  color: var(--purple);
+  background: var(--purple-bg);
+  border: 1px solid var(--purple-border);
+  vertical-align: middle;
+}
+.coverage-pct {
+  font-family: var(--font-mono);
+  font-size: 10px;
+}
+.coverage-pct-ok {
+  color: var(--ok-strong);
+}
+.coverage-pct-warn {
+  color: var(--warn);
+}
+.coverage-pct-error {
+  color: var(--error-strong);
+}
+.coverage-missing-count {
+  font-size: 10px;
+  color: var(--error-strong);
+}
+.coverage-item-body {
+  padding-left: 16px;
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+  margin: 4px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.coverage-line-covered {
+  color: var(--ok-strong);
+}
+.coverage-line-missing {
+  color: var(--error-strong);
+}
+.coverage-line-unknown {
+  color: var(--text-muted);
+}
+.coverage-kql summary {
+  cursor: pointer;
+  color: var(--accent-strong);
+  font-size: 10px;
+  margin-top: 6px;
+}
+.coverage-kql-pre {
+  margin-top: 4px;
+  max-height: 200px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+  font-size: 10px;
+}
+
+.coverage-missing {
+  margin-top: 4px;
+  padding: 8px 10px;
+  background: var(--error-bg);
+  border: 1px solid var(--error-border);
+}
+.coverage-missing-heading {
+  font-weight: 700;
+  color: var(--error-strong);
+  font-size: 11px;
+  margin-bottom: 6px;
+}
+.coverage-missing-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.coverage-missing-chip {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 1px 8px;
+  border-radius: 3px;
+  color: var(--error-strong);
+  background: var(--surface);
+  border: 1px solid var(--error-border);
+}
