@@ -167,8 +167,11 @@ export const INTEGRATE_SECTIONS: readonly IntegrateSection[] = [
       "overflow. Approval is required before the pack is built; Auto-Approve " +
       "All is the one-click escape hatch.",
     requires: "both",
-    built: false,
-    shippedInUnit: 18,
+    // BUILT NOW (Unit 18): the mapping review screen renders real content. Its
+    // completion (mappingsApproved) is ADDITIVE and NON-GATING for the native
+    // deploy - exactly like samples/solution - so it never regresses the MVP
+    // quick-onboard path (see canDeploy vs canDeployContentPath).
+    built: true,
   },
   {
     id: "rule-coverage",
@@ -244,6 +247,20 @@ export interface SectionInputs {
    * Samples pill stays 'coming-soon' - never a false green.
    */
   samplesProvided: boolean;
+  /**
+   * Every table with mappings has been approved in the DCR Gap Analysis section
+   * AND that analysis is not stale (Unit 18 mapping review; the shell derives
+   * it from the content-path gate deriveMappingReviewGate().ready). ADDITIVE and
+   * NON-GATING for the native deploy - exactly like {@link samplesProvided} and
+   * {@link solutionSelected}: it completes the now-built Gap Analysis section
+   * and lights the Mappings pill, but it deliberately does NOT participate in
+   * {@link canDeploy}. It DOES gate the CONTENT path via
+   * {@link canDeployContentPath}. Optional so callers that never open the
+   * content flow can omit it (treated as false); while false, Gap Analysis reads
+   * as incomplete and the Mappings pill stays a muted 'coming-soon', never
+   * 'missing'.
+   */
+  mappingsApproved?: boolean;
 }
 
 /**
@@ -291,8 +308,8 @@ const COMING_SOON_REASONS: Readonly<Record<IntegrateSectionId, string>> = {
   "sample-data": "",
   "azure-resources": "",
   "cribl-config": "",
-  "gap-analysis":
-    "DCR gap analysis and the mapping-approval gate ship with the field matcher (Unit 18).",
+  // gap-analysis is BUILT NOW (Unit 18); it is never coming-soon.
+  "gap-analysis": "",
   "rule-coverage":
     "Analytics rule coverage ships with the rule-coverage analyzer (Unit 23).",
   deploy: "",
@@ -315,6 +332,12 @@ function sectionComplete(
       return inputs.scopeCommitted;
     case "cribl-config":
       return inputs.workerGroupSelected && inputs.packNameSet;
+    case "gap-analysis":
+      // Complete when the content-path review is done (every table with
+      // mappings approved and the analysis fresh). Additive: a native-only
+      // operator who never engages the content flow leaves this false, which
+      // never blocks canDeploy (only canDeployContentPath).
+      return inputs.mappingsApproved === true;
     case "deploy":
       return inputs.deployCompleted;
     default:
@@ -503,8 +526,18 @@ export function deriveReadinessPills(inputs: SectionInputs): ReadinessPill[] {
     {
       id: "mappings",
       label: "Mappings",
-      state: "coming-soon",
-      hint: "Field-mapping approval ships with the gap analysis (Unit 18).",
+      // Gap analysis shipped (Unit 18): the pill lights green once every table
+      // with mappings is approved (and the analysis is fresh), and stays muted
+      // 'coming-soon' (never 'missing') otherwise - approving mappings gates the
+      // CONTENT path (canDeployContentPath) but NOT the native-table deploy
+      // (canDeploy), so an unapproved Mappings pill must never read as a
+      // blocking prerequisite (the same rule as Samples and Solution).
+      state: inputs.mappingsApproved === true ? "ok" : "coming-soon",
+      hint:
+        inputs.mappingsApproved === true
+          ? "Every table's field mappings are approved."
+          : "Optional for the native-table deploy. Approve each table's field " +
+            "mappings in DCR Gap Analysis to unlock the content-driven deploy.",
     },
     {
       id: "workspace",
@@ -557,4 +590,24 @@ export function canDeploy(inputs: SectionInputs): boolean {
     inputs.workerGroupSelected &&
     inputs.packNameSet
   );
+}
+
+/**
+ * Whether the CONTENT / mapping-driven flagship path can deploy - the ADDITIVE
+ * gate Unit 18 layers on TOP of {@link canDeploy} without weakening it.
+ *
+ * True exactly when the native prerequisites are met (canDeploy) AND every table
+ * with mappings has been approved and the analysis is fresh (mappingsApproved).
+ * This is the ONLY place the content path folds mapping approval into
+ * readiness; the native quick-onboard path uses {@link canDeploy}, which NEVER
+ * reads mappingsApproved. The strict partition (native deploys with zero
+ * approvals; the content path blocks until approved) is pinned by tests on both
+ * sides - here and in the mapping-review-state gate.
+ *
+ * Note this is a STRICT superset condition: canDeployContentPath(i) implies
+ * canDeploy(i), never the reverse. A shell chooses which gate to honor by which
+ * path the operator is on; it must not require this for the native path.
+ */
+export function canDeployContentPath(inputs: SectionInputs): boolean {
+  return canDeploy(inputs) && inputs.mappingsApproved === true;
 }

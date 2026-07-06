@@ -25,6 +25,7 @@ describe("deriveSectionInputs", () => {
       packName: "MyPack",
       deployCompleted: true,
       sampleCount: 2,
+      mappingsApproved: true,
     });
     expect(inputs).toEqual({
       solutionSelected: true,
@@ -33,6 +34,7 @@ describe("deriveSectionInputs", () => {
       packNameSet: true,
       deployCompleted: true,
       samplesProvided: true,
+      mappingsApproved: true,
     });
   });
 
@@ -44,6 +46,7 @@ describe("deriveSectionInputs", () => {
       packName: "\t \n",
       deployCompleted: false,
       sampleCount: 0,
+      mappingsApproved: false,
     });
     expect(inputs.solutionSelected).toBe(false);
     expect(inputs.workerGroupSelected).toBe(false);
@@ -59,6 +62,7 @@ describe("deriveSectionInputs", () => {
       packName: "Pack",
       deployCompleted: false,
       sampleCount: 0,
+      mappingsApproved: false,
     };
     // canDeploy is true with zero samples (the native-table deploy rule) ...
     expect(canDeploy(deriveSectionInputs(base))).toBe(true);

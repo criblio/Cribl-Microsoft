@@ -1,6 +1,7 @@
 export {
   INTEGRATE_SECTIONS,
   canDeploy,
+  canDeployContentPath,
   deriveReadinessPills,
   deriveSectionStatus,
   deriveSectionStatuses,

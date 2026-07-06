@@ -21,6 +21,7 @@ import { describe, expect, it } from "vitest";
 import {
   INTEGRATE_SECTIONS,
   canDeploy,
+  canDeployContentPath,
   deriveReadinessPills,
   deriveSectionStatus,
   deriveSectionStatuses,
@@ -42,13 +43,14 @@ function inputs(overrides: Partial<SectionInputs> = {}): SectionInputs {
     packNameSet: false,
     deployCompleted: false,
     samplesProvided: false,
+    mappingsApproved: false,
     ...overrides,
   };
 }
 
 const BOOLS: readonly boolean[] = [true, false];
 
-/** All 2^6 = 64 input records. */
+/** All 2^7 = 128 input records. */
 function everyInputCombination(): SectionInputs[] {
   const combos: SectionInputs[] = [];
   for (const solutionSelected of BOOLS) {
@@ -57,14 +59,17 @@ function everyInputCombination(): SectionInputs[] {
         for (const packNameSet of BOOLS) {
           for (const deployCompleted of BOOLS) {
             for (const samplesProvided of BOOLS) {
-              combos.push({
-                solutionSelected,
-                scopeCommitted,
-                workerGroupSelected,
-                packNameSet,
-                deployCompleted,
-                samplesProvided,
-              });
+              for (const mappingsApproved of BOOLS) {
+                combos.push({
+                  solutionSelected,
+                  scopeCommitted,
+                  workerGroupSelected,
+                  packNameSet,
+                  deployCompleted,
+                  samplesProvided,
+                  mappingsApproved,
+                });
+              }
             }
           }
         }
@@ -79,12 +84,10 @@ const BUILT_IDS: readonly IntegrateSectionId[] = [
   "sample-data",
   "azure-resources",
   "cribl-config",
+  "gap-analysis",
   "deploy",
 ];
-const NOT_BUILT_IDS: readonly IntegrateSectionId[] = [
-  "gap-analysis",
-  "rule-coverage",
-];
+const NOT_BUILT_IDS: readonly IntegrateSectionId[] = ["rule-coverage"];
 
 function statusOf(id: IntegrateSectionId, i: SectionInputs): SectionStatus {
   return deriveSectionStatus(integrateSection(id), i).status;
@@ -117,7 +120,7 @@ describe("INTEGRATE_SECTIONS metadata", () => {
     expect(numbers.size).toBe(INTEGRATE_SECTIONS.length);
   });
 
-  it("marks exactly solution, sample-data, azure-resources, cribl-config, deploy as built", () => {
+  it("marks exactly solution, sample-data, azure-resources, cribl-config, gap-analysis, deploy as built", () => {
     const built = INTEGRATE_SECTIONS.filter((s) => s.built).map((s) => s.id);
     expect(built.sort()).toEqual([...BUILT_IDS].sort());
   });
@@ -127,12 +130,11 @@ describe("INTEGRATE_SECTIONS metadata", () => {
       INTEGRATE_SECTIONS.map((s) => [s.id, s.shippedInUnit]),
     );
     // built sections omit it (solution lost its shippedInUnit when Unit 14
-    // landed, as sample-data did when Unit 11 landed)
+    // landed, sample-data when Unit 11 landed, gap-analysis when Unit 18 landed)
     for (const id of BUILT_IDS) {
       expect(unitById.get(id)).toBeUndefined();
     }
-    // not-built sections carry their roadmap unit
-    expect(unitById.get("gap-analysis")).toBe(18);
+    // the only not-built section carries its roadmap unit
     expect(unitById.get("rule-coverage")).toBe(23);
   });
 
@@ -274,6 +276,25 @@ describe("built-section status matrix", () => {
     ).toBe("complete");
   });
 
+  it("gap-analysis: available ahead, current after the earlier sections, complete once mappings approved", () => {
+    // Nothing done: Solution is current, Gap Analysis reads ahead as 'available'.
+    expect(statusOf("gap-analysis", inputs())).toBe("available");
+    // Every earlier built section complete, mappings not yet approved: Gap
+    // Analysis is the earliest incomplete actionable section -> current.
+    const upToGap = inputs({
+      solutionSelected: true,
+      samplesProvided: true,
+      scopeCommitted: true,
+      workerGroupSelected: true,
+      packNameSet: true,
+    });
+    expect(statusOf("gap-analysis", upToGap)).toBe("current");
+    // Mappings approved: complete. It is never 'blocked' (only Deploy is).
+    expect(
+      statusOf("gap-analysis", inputs({ mappingsApproved: true })),
+    ).toBe("complete");
+  });
+
   it("deploy: blocked until every prerequisite is met, then current, then complete", () => {
     expect(statusOf("deploy", inputs())).toBe("blocked");
     expect(
@@ -285,11 +306,13 @@ describe("built-section status matrix", () => {
         inputs({ scopeCommitted: true, workerGroupSelected: true }),
       ),
     ).toBe("blocked");
-    // all three operable prerequisites met AND solution+samples in, not yet
-    // deployed: deploy is the earliest incomplete actionable section -> current
+    // all three operable prerequisites met AND the whole content chain in
+    // (solution + samples + mappings approved), not yet deployed: deploy is the
+    // earliest incomplete actionable section -> current
     const ready = inputs({
       solutionSelected: true,
       samplesProvided: true,
+      mappingsApproved: true,
       scopeCommitted: true,
       workerGroupSelected: true,
       packNameSet: true,
@@ -407,10 +430,6 @@ describe("read-ahead and single-current invariants", () => {
 // ---------------------------------------------------------------------------
 
 describe("deriveReadinessPills", () => {
-  // The still-not-built content pill (mappings=U18). Solution (Unit 14) and
-  // Samples (Unit 11) are now built and track their inputs, so they are tested
-  // separately.
-  const notBuiltContentPills: readonly IntegratePillId[] = ["mappings"];
   const operablePills: readonly IntegratePillId[] = [
     "workspace",
     "worker-groups",
@@ -428,13 +447,15 @@ describe("deriveReadinessPills", () => {
     ]);
   });
 
-  it("keeps the still-not-built content pills 'coming-soon' for every input - never false-ok", () => {
+  it("lights the Mappings pill 'ok' once mappings are approved, muted 'coming-soon' otherwise - never 'missing'", () => {
     for (const i of everyInputCombination()) {
-      const pills = deriveReadinessPills(i);
-      for (const id of notBuiltContentPills) {
-        const pill = pills.find((p) => p.id === id);
-        expect(pill?.state).toBe("coming-soon");
-      }
+      const mappings = deriveReadinessPills(i).find((p) => p.id === "mappings");
+      expect(mappings?.state).toBe(
+        i.mappingsApproved === true ? "ok" : "coming-soon",
+      );
+      // Mappings never blocks the native deploy: like Samples and Solution, it
+      // is never an amber 'missing' prerequisite.
+      expect(mappings?.state).not.toBe("missing");
     }
   });
 
@@ -542,6 +563,53 @@ describe("canDeploy honors only the built prerequisites", () => {
       // and canDeploy never coexists with a blocked Deploy
       if (canDeploy(i)) {
         expect(deployStatus).not.toBe("blocked");
+      }
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// canDeployContentPath: the ADDITIVE content gate, partitioned from native
+// ---------------------------------------------------------------------------
+
+describe("canDeployContentPath is the additive content-path gate", () => {
+  it("requires the native prerequisites AND approved mappings", () => {
+    const nativeReady = inputs({
+      scopeCommitted: true,
+      workerGroupSelected: true,
+      packNameSet: true,
+    });
+    // Native path is deployable with ZERO approvals ...
+    expect(canDeploy(nativeReady)).toBe(true);
+    // ... but the content path is NOT until mappings are approved.
+    expect(canDeployContentPath(nativeReady)).toBe(false);
+    expect(
+      canDeployContentPath({ ...nativeReady, mappingsApproved: true }),
+    ).toBe(true);
+  });
+
+  it("is a strict superset of canDeploy - never true when canDeploy is false", () => {
+    for (const i of everyInputCombination()) {
+      if (canDeployContentPath(i)) {
+        expect(canDeploy(i)).toBe(true);
+      }
+    }
+  });
+
+  it("PINS the partition: mappings approval never affects the native gate", () => {
+    for (const i of everyInputCombination()) {
+      // Flipping ONLY mappingsApproved must not change canDeploy for any input.
+      const flipped = { ...i, mappingsApproved: !i.mappingsApproved };
+      expect(canDeploy(flipped)).toBe(canDeploy(i));
+    }
+  });
+
+  it("equals canDeploy exactly when mappings are approved", () => {
+    for (const i of everyInputCombination()) {
+      if (i.mappingsApproved === true) {
+        expect(canDeployContentPath(i)).toBe(canDeploy(i));
+      } else {
+        expect(canDeployContentPath(i)).toBe(false);
       }
     }
   });

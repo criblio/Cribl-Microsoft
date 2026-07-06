@@ -2031,3 +2031,266 @@ button.journey-step-main:hover .journey-step-label {
   font-weight: 600;
   color: var(--text-primary);
 }
+
+/* ---------------------------------------------------------------------------
+ * DCR Gap Analysis / mapping review (porting-plan Unit 18): the crown-jewel
+ * approval section. Reuses the match-stat / match-field-table grammar from the
+ * Unit 13 match preview and adds the info stat tone, the approval bar, the
+ * per-table card, the editable mapping grid, and the approval badges.
+ * ------------------------------------------------------------------------- */
+
+.match-stat-info {
+  border-color: var(--accent-border);
+  background: var(--accent-bg);
+}
+.match-stat-info .match-stat-value {
+  color: var(--accent-strong);
+}
+
+.mapping-review {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.mapping-review-analyze {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.gap-provenance {
+  font-size: 12px;
+  padding: 6px 10px;
+  border: 1px solid var(--ok-border);
+  background: var(--ok-bg);
+  color: var(--ok-strong);
+}
+.gap-provenance-default {
+  border-color: var(--warn-border);
+  background: var(--warn-bg);
+  color: var(--warn);
+}
+.gap-provenance-label {
+  font-weight: 700;
+}
+.gap-provenance-tables {
+  font-family: 'Courier New', monospace;
+}
+.gap-provenance-source {
+  color: var(--text-faint);
+}
+
+.mapping-review-stale {
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--warn);
+  border: 1px solid var(--warn-border);
+  background: var(--warn-bg);
+  padding: 6px 10px;
+  margin: 0;
+}
+
+.gap-approval-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 8px 12px;
+  border: 1px solid var(--warn-border);
+  background: var(--warn-bg);
+}
+.gap-approval-bar-ok {
+  border-color: var(--ok-border);
+  background: var(--ok-bg);
+}
+.gap-approval-text {
+  flex: 1;
+  min-width: 200px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.gap-reset-button {
+  font-size: 11px;
+  padding: 4px 12px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.mapping-review-card {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  padding: 12px;
+}
+
+.mapping-review-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+.mapping-review-logtype {
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--text-strong);
+}
+.mapping-review-table {
+  font-family: 'Courier New', monospace;
+  font-size: 12px;
+  color: var(--text-faint);
+}
+
+.gap-handles {
+  font-size: 12px;
+  margin-top: 6px;
+}
+.gap-handles summary {
+  cursor: pointer;
+}
+.gap-handles-dcr summary {
+  color: var(--accent-strong);
+}
+.gap-handles-cribl summary {
+  color: var(--warn);
+}
+.gap-handles-body {
+  font-family: 'Courier New', monospace;
+  color: var(--text-muted);
+  padding: 4px 0;
+}
+
+.gap-route {
+  margin-top: 4px;
+  font-size: 11px;
+  font-family: 'Courier New', monospace;
+  color: var(--text-faint);
+  word-break: break-all;
+}
+
+.gap-overflow-note {
+  margin-top: 6px;
+}
+
+.mapping-review-fields {
+  margin-top: 10px;
+}
+.mapping-review-fields-summary {
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  color: var(--accent-strong);
+}
+
+.gap-badge {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  padding: 1px 8px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+.gap-badge-required {
+  color: var(--warn);
+  border-color: var(--warn-border);
+  background: var(--warn-bg);
+}
+.gap-badge-approved {
+  color: var(--ok-strong);
+  border-color: var(--ok-border);
+  background: var(--ok-bg);
+}
+.gap-badge-modified {
+  color: var(--accent-strong);
+  border-color: var(--accent-border);
+  background: var(--accent-bg);
+}
+
+.mapping-review-table-wrap {
+  overflow: auto;
+  max-height: 400px;
+  margin-top: 8px;
+  border: 1px solid var(--border);
+}
+
+.mapping-review-grid th {
+  position: sticky;
+  top: 0;
+  background: var(--surface-raised);
+  z-index: 1;
+}
+
+.mapping-row-overflow {
+  background: var(--warn-bg);
+}
+.mapping-row-drop {
+  color: var(--text-faint);
+}
+.mapping-row-unmapped {
+  opacity: 0.7;
+}
+.mapping-unmapped-head td {
+  font-weight: 700;
+  font-size: 11px;
+  color: var(--text-muted);
+  background: var(--surface-raised);
+}
+
+.mapping-select {
+  font-size: 11px;
+  padding: 2px 4px;
+  max-width: 220px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-strong);
+}
+
+.match-conf-exact {
+  color: var(--ok-strong);
+}
+.match-conf-alias {
+  color: var(--accent-strong);
+}
+.match-conf-fuzzy {
+  color: var(--warn);
+}
+.match-conf-unmatched {
+  color: var(--error-strong);
+}
+
+.rule-badge {
+  margin-left: 4px;
+  font-size: 8px;
+  font-weight: 700;
+  padding: 0 4px;
+  border-radius: 3px;
+  color: var(--warn);
+  background: var(--warn-bg);
+  border: 1px solid var(--warn-border);
+  vertical-align: middle;
+}
+.rule-badge-missing {
+  color: var(--error-strong);
+  background: var(--error-bg);
+  border-color: var(--error-border);
+}
+
+.mapping-review-approve {
+  margin-top: 8px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.gap-approved-line {
+  font-size: 12px;
+  color: var(--ok-strong);
+}
+.gap-modified-line {
+  font-size: 11px;
+  color: var(--warn);
+}

@@ -248,6 +248,46 @@ export type {
   MatchWarningKind,
 } from "./screens/match-preview/match-preview-state";
 
+// DCR Gap Analysis / mapping review (porting-plan Unit 18, ENG-12, GUI-08,
+// GUI-32): THE crown-jewel approval moment - the Integrate page's Gap Analysis
+// section grown from the Unit 13 match-preview seed. The MappingReviewSection
+// runs the @soc/core analyzeSamples usecase per log type and renders the six
+// stat tiles, the DCR/Cribl handles split, an editable dest/action mapping
+// table, and the data-loss warnings. The pure approval STATE MACHINE
+// (mapping-review-state) owns the consent semantics: approvals reset on
+// re-analysis, edits survive and re-key on rename (the Unit 11 seam), the
+// staleness flag, and the CONTENT-path deploy gate that is strictly partitioned
+// from the native quick-onboard gate.
+export { MappingReviewSection } from "./screens/mapping-review/mapping-review-section";
+export type {
+  MappingReviewRenameEvent,
+  MappingReviewSectionProps,
+} from "./screens/mapping-review/mapping-review-section";
+export {
+  INITIAL_MAPPING_REVIEW_STATE,
+  MAPPING_REVIEW_NO_SAMPLES_REASON,
+  MAPPING_REVIEW_STALE_NOTICE,
+  OVERFLOW_COVERAGE_NOTE,
+  analyzeButtonLabel,
+  approvalBarText,
+  deriveMappingReviewGate,
+  effectiveMappings,
+  fieldMappingsLabel,
+  isApproved,
+  isModified,
+  isRuleField,
+  mappingReviewReducer,
+  sortedMappings,
+  tablesWithMappings,
+  unmappedDestColumns,
+} from "./screens/mapping-review/mapping-review-state";
+export type {
+  MappingEditField,
+  MappingReviewAction,
+  MappingReviewGate,
+  MappingReviewState,
+} from "./screens/mapping-review/mapping-review-state";
+
 // CSV header resolution (porting-plan Unit 12 UI, ENG-16/17, GUI-07): the
 // two-tab dialog (header row / paste feed config) that names a headerless
 // positional CSV's columns, its preview zip + mismatch warning, and the pure

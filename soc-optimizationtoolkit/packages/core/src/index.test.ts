@@ -150,8 +150,9 @@ describe("@soc/core root barrel", () => {
     expect(typeof canDeploy).toBe("function");
     expect(INTEGRATE_SECTIONS).toHaveLength(7);
     // sample-data joined the built set when Unit 11 shipped (was 3); solution
-    // joined it when Unit 14 shipped the lazy solution browser (now 5).
-    expect(INTEGRATE_SECTIONS.filter((s) => s.built)).toHaveLength(5);
+    // joined it when Unit 14 shipped the lazy solution browser (was 5);
+    // gap-analysis joined it when Unit 18 shipped the mapping review (now 6).
+    expect(INTEGRATE_SECTIONS.filter((s) => s.built)).toHaveLength(6);
   });
 
   it("re-exports the sample-parsing domain module and store fake", () => {

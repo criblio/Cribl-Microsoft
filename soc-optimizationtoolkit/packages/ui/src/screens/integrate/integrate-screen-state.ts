@@ -65,6 +65,14 @@ export interface IntegrateRawInputs {
    * lights the Samples pill but never gates the native-table deploy.
    */
   sampleCount: number;
+  /**
+   * The DCR Gap Analysis section reports every table's mappings approved AND
+   * the analysis fresh (Unit 18, the content-path gate deriveMappingReviewGate
+   * ().ready). ADDITIVE and NON-GATING for the native deploy - like samples and
+   * solution: it completes the Gap Analysis section and lights the Mappings
+   * pill, but never participates in canDeploy. Defaults false.
+   */
+  mappingsApproved: boolean;
 }
 
 /**
@@ -81,6 +89,7 @@ export function deriveSectionInputs(raw: IntegrateRawInputs): SectionInputs {
     packNameSet: raw.packName.trim() !== "",
     deployCompleted: raw.deployCompleted,
     samplesProvided: raw.sampleCount > 0,
+    mappingsApproved: raw.mappingsApproved,
   };
 }
 

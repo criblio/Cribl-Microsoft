@@ -23,7 +23,12 @@
  *      "assigns after deploy" note).
  *   4. Cribl Configuration - BUILT: worker-group select + pack name (prefilled
  *      from the saved Options destination prefix).
- *   5. DCR Gap Analysis    - coming-soon (Unit 18)
+ *   5. DCR Gap Analysis    - BUILT: the MappingReviewSection - per-log-type
+ *      gap analysis (six stat tiles, DCR/Cribl handles split), an editable
+ *      dest/action mapping table, and the approval state machine (Auto-Approve
+ *      All, per-table Approve, staleness). ADDITIVE + NON-GATING for the native
+ *      deploy: it lights the Mappings pill and gates the content path only
+ *      (Unit 18).
  *   6. Analytics Rule Cov. - coming-soon (Unit 23)
  *   7. Deploy              - BUILT: the operable native-table onboard, driving
  *      the SAME @soc/core onboardTable use-case the validated Onboard screen
@@ -47,7 +52,7 @@
  * left blank, the destination ships the placeholder to fill in Cribl.
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   DEFAULT_OPERATION_OPTIONS,
   SENTINEL_SECRET_PLACEHOLDER,
@@ -79,6 +84,8 @@ import { summaryText } from "../../onboarding/summary";
 import { RecentRuns } from "../../onboarding/recent-runs";
 import { SampleIntakeSection } from "../samples/sample-intake-section";
 import { MatchPreviewSection } from "../match-preview/match-preview-section";
+import { MappingReviewSection } from "../mapping-review/mapping-review-section";
+import type { MappingReviewRenameEvent } from "../mapping-review/mapping-review-section";
 import { SolutionBrowser } from "../solution-browser/solution-browser";
 import {
   INTEGRATE_DEFAULT_TABLE,
@@ -176,8 +183,20 @@ export function IntegrateScreen({
   // canDeploy), so this count is intentionally NOT part of the run gate.
   const [sampleCount, setSampleCount] = useState(0);
   // The tagged samples themselves feed the Unit 13 match preview seeded into
-  // this section (sample vs destination table -> matched/overflow/unmatched).
+  // this section (sample vs destination table -> matched/overflow/unmatched)
+  // and the Unit 18 DCR Gap Analysis section below.
   const [samples, setSamples] = useState<TaggedSample[]>([]);
+
+  // ---- DCR Gap Analysis section (Unit 18) -------------------------------
+  // The mapping-review approval gate reports the CONTENT-path readiness. It is
+  // ADDITIVE and NON-GATING for the native deploy (like samples/solution): it
+  // completes the now-built Gap Analysis section and lights the Mappings pill,
+  // but never participates in canDeploy (the MVP-transition rule). A log-type
+  // rename is forwarded to the section so its approvals + mapping edits re-key
+  // by the same Unit 11 primitive sample intake uses.
+  const [mappingsApproved, setMappingsApproved] = useState(false);
+  const [renameEvent, setRenameEvent] = useState<MappingReviewRenameEvent>();
+  const renameNonce = useRef(0);
 
   // One place the Sample Data section reports its list: keep the count (arc
   // completion / Samples pill) and the samples (match preview) in sync.
@@ -187,13 +206,15 @@ export function IntegrateScreen({
   }, []);
 
   // Rename contract (Unit 11 -> Unit 18): the Sample Data section re-keys the
-  // tagged-sample STORE entry itself; this handler is where downstream edits
-  // keyed by log type (Unit 18 mapping edits, via reKeyByLogType) will re-key
-  // so a rename never orphans them (the legacy bug). Until mappings ship there
-  // is nothing else to move, so the wired seam just records the rename.
+  // tagged-sample STORE entry itself; this handler forwards the rename to the
+  // DCR Gap Analysis section so its log-type-keyed approvals and mapping edits
+  // re-key by the same Unit 11 primitive (never orphaning them - the legacy
+  // bug). The nonce makes a repeated from/to still fire the section's effect.
   const handleRenameLogType = useCallback(
     (from: string, to: string) => {
       ports.logger?.info("sample log type renamed", { from, to });
+      renameNonce.current += 1;
+      setRenameEvent({ from, to, nonce: renameNonce.current });
     },
     [ports],
   );
@@ -230,6 +251,7 @@ export function IntegrateScreen({
     packName,
     deployCompleted,
     sampleCount,
+    mappingsApproved,
   });
   const resolved = deriveSectionStatuses(sectionInputs);
   const pills = deriveReadinessPills(sectionInputs);
@@ -353,6 +375,27 @@ export function IntegrateScreen({
         onRenameLogType={handleRenameLogType}
       />
       <MatchPreviewSection samples={samples} />
+    </>
+  );
+
+  const gapAnalysisBody = (
+    <>
+      <p className="panel-desc">
+        Compare each tagged sample&apos;s fields against its Sentinel
+        destination table: what passes through, what the Azure DCR already
+        transforms, what the Cribl pipeline must handle, and what overflows.
+        Approve each table&apos;s mappings before the content-driven pack is
+        built - Auto-Approve All accepts them as-is. Approvals reset when you
+        re-analyze; your edits survive. This is additive: the native-table
+        deploy below never waits on an approval.
+      </p>
+      <MappingReviewSection
+        solutionName={solution?.name ?? ""}
+        samples={samples}
+        content={ports.content}
+        onGateChange={setMappingsApproved}
+        renameEvent={renameEvent}
+      />
     </>
   );
 
@@ -556,6 +599,8 @@ export function IntegrateScreen({
         return azureResourcesBody;
       case "cribl-config":
         return criblConfigBody;
+      case "gap-analysis":
+        return gapAnalysisBody;
       case "deploy":
         return deployBody;
       default:
