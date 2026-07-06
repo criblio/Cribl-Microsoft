@@ -334,6 +334,37 @@ export type {
   SeverityTone,
 } from "./screens/rule-coverage/rule-coverage-state";
 
+// Pipeline preview (porting-plan Unit 17 UI, ENG-01/02/03-emission/13): the
+// Integrate flow's READ-ONLY pipeline preview panel. It projects the Unit 18
+// gap reports + the reviewer's approved/edited mappings into the exact conf.yml
+// per log type (the pipeline functions in order), the reduction rules with
+// their reasons, and the pack-level route.yml - all emitted by the pure @soc/core
+// Unit 17 generators, then validated honestly with checkCriblYaml. Additive and
+// non-gating: it consumes the mapping-review content-path gate and never touches
+// canDeploy. All projection is the pure pipeline-preview-state helpers.
+export { PipelinePreviewSection } from "./screens/pipeline-preview/pipeline-preview-section";
+export type { PipelinePreviewSectionProps } from "./screens/pipeline-preview/pipeline-preview-section";
+export {
+  PIPELINE_PREVIEW_NO_REPORTS_REASON,
+  PIPELINE_PREVIEW_NO_SAMPLES_REASON,
+  PIPELINE_PREVIEW_NOT_APPROVED_REASON,
+  derivePipelinePreview,
+  effectiveReportMappings,
+  gapMappingToPreset,
+  normalizeSourceFormat,
+  pipelineFunctionLines,
+  pipelinePreviewEmptyReason,
+  reductionRuleViews,
+  reportToPlanInput,
+} from "./screens/pipeline-preview/pipeline-preview-state";
+export type {
+  PipelineFunctionLine,
+  PipelinePreviewInputs,
+  PipelinePreviewTable,
+  PipelinePreviewView,
+  ReductionRuleView,
+} from "./screens/pipeline-preview/pipeline-preview-state";
+
 // CSV header resolution (porting-plan Unit 12 UI, ENG-16/17, GUI-07): the
 // two-tab dialog (header row / paste feed config) that names a headerless
 // positional CSV's columns, its preview zip + mismatch warning, and the pure

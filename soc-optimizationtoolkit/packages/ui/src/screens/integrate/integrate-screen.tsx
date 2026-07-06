@@ -58,7 +58,7 @@
  * left blank, the destination ships the placeholder to fill in Cribl.
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   DEFAULT_OPERATION_OPTIONS,
   SENTINEL_SECRET_PLACEHOLDER,
@@ -71,6 +71,7 @@ import {
 import type {
   CriblGroupSummary,
   CriblOptions,
+  GapFieldMapping,
   GapReport,
   IntegrateSectionId,
   JobStep,
@@ -93,6 +94,7 @@ import { SampleIntakeSection } from "../samples/sample-intake-section";
 import { MatchPreviewSection } from "../match-preview/match-preview-section";
 import { MappingReviewSection } from "../mapping-review/mapping-review-section";
 import type { MappingReviewRenameEvent } from "../mapping-review/mapping-review-section";
+import { PipelinePreviewSection } from "../pipeline-preview/pipeline-preview-section";
 import { SolutionBrowser } from "../solution-browser/solution-browser";
 import { RuleCoverageSection } from "../rule-coverage/rule-coverage-section";
 import {
@@ -208,6 +210,11 @@ export function IntegrateScreen({
   // The Gap Analysis reports feed the Rule Coverage section (Unit 23): its
   // availability set and destination tables derive from them.
   const [gapReports, setGapReports] = useState<GapReport[]>([]);
+  // The reviewer's effective (edited) mappings per logType feed the Unit 17
+  // pipeline preview below, so it mirrors hand edits (not just the baseline).
+  const [mappingOverrides, setMappingOverrides] = useState<
+    Readonly<Record<string, GapFieldMapping[]>>
+  >({});
 
   // ---- Analytics Rule Coverage section (Unit 23) ------------------------
   // The coverage analyzer reports the schema-resolvable referenced-field set
@@ -222,6 +229,16 @@ export function IntegrateScreen({
     setSamples(list);
     setSampleCount(list.length);
   }, []);
+
+  // The detected format per log type (drives the pipeline preview's serde /
+  // timestamp selection). Derived from the tagged samples the section reports.
+  const sampleFormats = useMemo<Record<string, string>>(() => {
+    const map: Record<string, string> = {};
+    for (const sample of samples) {
+      map[sample.logType] = sample.format;
+    }
+    return map;
+  }, [samples]);
 
   // Rename contract (Unit 11 -> Unit 18): the Sample Data section re-keys the
   // tagged-sample STORE entry itself; this handler forwards the rename to the
@@ -414,8 +431,26 @@ export function IntegrateScreen({
         ruleFields={ruleFields}
         onGateChange={setMappingsApproved}
         onReportsChange={setGapReports}
+        onEffectiveMappingsChange={setMappingOverrides}
         renameEvent={renameEvent}
       />
+      <div className="integrate-subsection">
+        <span className="field-label">Pipeline preview</span>
+        <p className="panel-desc">
+          The exact conf.yml and route.yml a content-driven build would generate
+          from the approved mappings above - one pipeline per log type, with the
+          volume-reduction rules and their reasons. Read-only: nothing here is
+          deployed until the pack is built and installed.
+        </p>
+        <PipelinePreviewSection
+          solutionName={solution?.name ?? ""}
+          packName={packName}
+          reports={gapReports}
+          mappingOverrides={mappingOverrides}
+          sampleFormats={sampleFormats}
+          approved={mappingsApproved}
+        />
+      </div>
     </>
   );
 

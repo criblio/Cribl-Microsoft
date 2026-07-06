@@ -2498,3 +2498,218 @@ button.journey-step-main:hover .journey-step-label {
   background: var(--surface);
   border: 1px solid var(--error-border);
 }
+
+/* ---------------------------------------------------------------------------
+ * Pipeline preview (porting-plan Unit 17 UI) - the READ-ONLY preview panel of
+ * the Integrate arc: the generated conf.yml per log type (functions in order),
+ * the reduction rules with reasons, and the pack-level route.yml. Reuses the
+ * result / field-hint / panel-desc grammar; theme tokens only.
+ * ------------------------------------------------------------------------- */
+.integrate-subsection {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-subtle);
+}
+.pipeline-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.pipeline-preview-empty {
+  padding: 8px 0;
+}
+.pipeline-preview-valid {
+  font-size: 12px;
+  padding: 8px 10px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+}
+.pipeline-preview-valid-ok {
+  color: var(--ok-strong);
+  background: var(--ok-bg);
+  border-color: var(--ok-border);
+}
+.pipeline-preview-valid-bad {
+  color: var(--error-strong);
+  background: var(--error-bg);
+  border-color: var(--error-border);
+}
+.pipeline-preview-card {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.pipeline-preview-card-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+.pipeline-preview-logtype {
+  font-weight: 700;
+  color: var(--text-strong);
+}
+.pipeline-preview-table,
+.pipeline-preview-dest,
+.pipeline-preview-format {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 1px 8px;
+  border-radius: 3px;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  background: var(--bg);
+}
+.pipeline-preview-format {
+  color: var(--accent-strong);
+  border-color: var(--accent-border);
+}
+.pipeline-preview-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  font-size: 11px;
+  color: var(--text-faint);
+}
+.pipeline-preview-meta code {
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+}
+.pipeline-preview-subhead {
+  font-weight: 600;
+  font-size: 12px;
+  color: var(--accent-strong);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 6px;
+}
+.pipeline-preview-func-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.pipeline-preview-func {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 11px;
+  padding: 2px 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+.pipeline-preview-func-order {
+  font-family: var(--font-mono);
+  color: var(--text-faint);
+  min-width: 18px;
+  text-align: right;
+}
+.pipeline-preview-func-id {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  color: var(--text-strong);
+  min-width: 64px;
+}
+.pipeline-preview-func-group {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--accent-strong);
+  padding: 0 6px;
+  border: 1px solid var(--accent-border);
+  border-radius: 8px;
+}
+.pipeline-preview-func-desc {
+  color: var(--text-muted);
+}
+.pipeline-preview-rule-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.pipeline-preview-rule {
+  border-left: 3px solid var(--border);
+  padding: 4px 0 4px 10px;
+}
+.pipeline-preview-rule-keep {
+  border-left-color: var(--ok);
+}
+.pipeline-preview-rule-drop {
+  border-left-color: var(--error);
+}
+.pipeline-preview-rule-suppress {
+  border-left-color: var(--warn);
+}
+.pipeline-preview-rule-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.pipeline-preview-rule-badge {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  padding: 1px 6px;
+  border-radius: 3px;
+  border: 1px solid var(--border);
+}
+.rule-kind-keep {
+  color: var(--ok-strong);
+  border-color: var(--ok-border);
+  background: var(--ok-bg);
+}
+.rule-kind-drop {
+  color: var(--error-strong);
+  border-color: var(--error-border);
+  background: var(--error-bg);
+}
+.rule-kind-suppress {
+  color: var(--warn);
+  border-color: var(--warn-border);
+  background: var(--warn-bg);
+}
+.pipeline-preview-rule-desc {
+  font-weight: 600;
+  font-size: 12px;
+  color: var(--text-strong);
+}
+.pipeline-preview-rule-supp {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-faint);
+}
+.pipeline-preview-rule-reason {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin: 3px 0;
+}
+.pipeline-preview-rule-filter {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-faint);
+  word-break: break-all;
+  white-space: pre-wrap;
+}
+.pipeline-preview-conf summary {
+  cursor: pointer;
+  font-size: 12px;
+  font-family: var(--font-mono);
+  color: var(--accent-strong);
+}
+.pipeline-preview-yaml {
+  max-height: 360px;
+  overflow: auto;
+  font-size: 11px;
+}
+.pipeline-preview-issues {
+  color: var(--error-strong);
+  border: 1px solid var(--error-border);
+  background: var(--error-bg);
+}

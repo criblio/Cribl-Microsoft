@@ -45,6 +45,7 @@ import {
 } from "@soc/core";
 import type {
   DestinationTableResolution,
+  GapFieldMapping,
   GapReport,
   MatchAction,
   SchemaCatalog,
@@ -114,6 +115,14 @@ export interface MappingReviewSectionProps {
   onGateChange?: (ready: boolean) => void;
   /** Surfaces the produced reports (e.g. for the pipeline-generation section). */
   onReportsChange?: (reports: GapReport[]) => void;
+  /**
+   * Surfaces the reviewer's EFFECTIVE (edited) mappings keyed by logType, so the
+   * Unit 17 pipeline preview reflects hand edits (not just the analyzed
+   * baseline). Additive; absent -> the preview falls back to report baselines.
+   */
+  onEffectiveMappingsChange?: (
+    byLogType: Readonly<Record<string, GapFieldMapping[]>>,
+  ) => void;
   /** A log-type rename to re-key approvals + edits by (the Unit 11 seam). */
   renameEvent?: MappingReviewRenameEvent;
 }
@@ -148,6 +157,7 @@ export function MappingReviewSection({
   ruleFields,
   onGateChange,
   onReportsChange,
+  onEffectiveMappingsChange,
   renameEvent,
 }: MappingReviewSectionProps) {
   const activeCatalog = useMemo(
@@ -260,6 +270,20 @@ export function MappingReviewSection({
   useEffect(() => {
     onReportsChange?.(reports);
   }, [reports, onReportsChange]);
+
+  // Surface the reviewer's EFFECTIVE (edited) mappings per logType (the Unit 17
+  // pipeline preview seam). Recomputed from the reports + edit store so the
+  // preview mirrors hand edits, not just the analyzed baseline.
+  useEffect(() => {
+    if (onEffectiveMappingsChange === undefined) {
+      return;
+    }
+    const byLogType: Record<string, GapFieldMapping[]> = {};
+    for (const report of reports) {
+      byLogType[report.logType] = effectiveMappings(review, report);
+    }
+    onEffectiveMappingsChange(byLogType);
+  }, [reports, review, onEffectiveMappingsChange]);
 
   const updateMapping = useCallback(
     (
