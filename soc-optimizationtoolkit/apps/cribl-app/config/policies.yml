@@ -29,11 +29,28 @@
 # LEAST PRIVILEGE / same-PR honesty: Unit 19's pack surface installs a
 # self-contained .crbl. The pack's breakers.yml, outputs.yml, and any secret
 # reference travel INSIDE the archive (regenerated deterministically from the
-# stored definition), so this shell calls no group-level /lib/breakers or
-# /system/secrets create-or-update endpoints and none are declared here.
-# (/system/outputs is already declared above for the onboard-table destination
-# step.) The ensure-secret / shared-breakers create-or-update paths belong to
-# Unit 20's guided deploy and ship with the code that calls them.
+# stored definition), so Unit 19 calls no group-level /lib/breakers or
+# /system/secrets create-or-update endpoints. (/system/outputs is already
+# declared above for the onboard-table destination step.)
+#
+# Unit 20 (guided deploy: post-deploy SOURCE WIRING + the connected-path secret)
+# ADDS exactly the paths its code calls, and nothing more:
+#   /m/{groupId}/routes (get/put)            - wireSource GETs the group's
+#                                              routes, prepends the Sentinel
+#                                              (+ optional Lake) routes in
+#                                              evaluation order, and PUTs the
+#                                              merged config back
+#   /m/{groupId}/system/secrets (post)       - ensure-secret create of the named
+#                                              text secret sentinel_client_secret
+#   /m/{groupId}/system/secrets/{id} (patch) - ensure-secret update on a 409
+#                                              (create-or-update)
+#   /system/lake/datasets (post)             - CLOUD-ONLY Cribl Lake dataset
+#                                              create (409/exists is success); a
+#                                              leader route, no /m/ prefix
+# The wiring's commit (/m/{groupId}/version/commit) and deploy
+# (/master/groups/{groupId}/deploy) reuse the routes ALREADY declared below and
+# are not redeclared. Live input creation (/system/inputs) is NOT shipped, so it
+# is deliberately absent (least privilege).
 
 policies:
   # List Worker Groups / Edge Fleets (CriblClient.listGroups group picker).
@@ -66,3 +83,20 @@ policies:
   # delete-and-retry before re-installing.
   - object: '/m/:gid/packs/*'
     actions: ['DELETE']
+  # Unit 20 source wiring: read the group's routes and PUT the merged config
+  # back (wireSource prepends the Sentinel + optional Lake routes in evaluation
+  # order). GET + PUT only - the wiring never deletes a route.
+  - object: '/m/:gid/routes'
+    actions: ['GET', 'PUT']
+  # Unit 20 ensure-secret (connected path): create the named text secret
+  # sentinel_client_secret the Sentinel destination references. POST only.
+  - object: '/m/:gid/system/secrets'
+    actions: ['POST']
+  # Unit 20 ensure-secret update on a 409 (create-or-update): PATCH the existing
+  # named secret in place.
+  - object: '/m/:gid/system/secrets/*'
+    actions: ['PATCH']
+  # Unit 20 CLOUD-ONLY Cribl Lake dataset create (full-fidelity federation);
+  # 409/exists is treated as success. A LEADER route (no /m/ prefix).
+  - object: '/system/lake/datasets'
+    actions: ['POST']

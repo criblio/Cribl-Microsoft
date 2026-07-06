@@ -164,6 +164,14 @@ export interface UiPorts {
    * runtime state); every other screen is unaffected.
    */
   mintAssignmentName?: () => string;
+  /**
+   * OPTIONAL Cribl deployment flavor the shell declares (porting-plan Unit 20):
+   * "cloud" for a Cribl.Cloud workspace, "onprem" for a self-hosted leader. It
+   * gates the CLOUD-ONLY Cribl Lake federation in the post-deploy source wiring
+   * (planSourceWiring never emits a Lake route otherwise). Absent = treated as
+   * onprem (no Lake toggle); every other surface is unaffected.
+   */
+  criblDeploymentType?: "cloud" | "onprem";
 }
 
 /** What PortsContext carries: the ports plus the active connection config. */

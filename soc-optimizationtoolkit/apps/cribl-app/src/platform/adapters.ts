@@ -1360,6 +1360,12 @@ export interface CloudPorts {
   mintAssignmentName: () => string;
   /** The shell's Logger (platform/logger.ts PlatformLogger instance). */
   logger: Logger;
+  /**
+   * The Cribl deployment flavor (porting-plan Unit 20): the app runs INSIDE a
+   * Cribl.Cloud workspace, so this is always "cloud" - it enables the cloud-only
+   * Cribl Lake federation in the post-deploy source wiring.
+   */
+  criblDeploymentType: 'cloud' | 'onprem';
 }
 
 /**
@@ -1391,5 +1397,7 @@ export function makeCloudPorts(tenantId: string, logger: Logger): CloudPorts {
     packInstall: new PlatformPackInstall(cribl),
     mintAssignmentName: () => crypto.randomUUID(),
     logger,
+    // The app is hosted inside a Cribl.Cloud workspace: Lake federation applies.
+    criblDeploymentType: 'cloud',
   };
 }

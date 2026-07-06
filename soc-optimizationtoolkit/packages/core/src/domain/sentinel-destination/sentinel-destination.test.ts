@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildSentinelDestination,
   defaultSentinelDestinationId,
+  rewriteIngestionEndpoint,
   SentinelDestinationError,
   SENTINEL_SECRET_PLACEHOLDER,
 } from "./sentinel-destination";
@@ -92,6 +93,25 @@ describe("buildSentinelDestination", () => {
     );
   });
 
+  it("applies the DCR-28 handler.control -> ingest.monitor repair to dceEndpoint and url", () => {
+    // The DCR GET reported a control-plane host; the shared builder is the ONE
+    // place the rewrite lands (parseDcrDeployment stays verbatim). Both the
+    // dceEndpoint and the composed url must carry the corrected data-plane host.
+    const config = buildSentinelDestination({
+      ...INPUT,
+      ingestionEndpoint:
+        "https://dce-x-1234.eastus-1.handler.control.monitor.azure.com",
+    });
+    expect(config.dceEndpoint).toBe(
+      "https://dce-x-1234.eastus-1.ingest.monitor.azure.com",
+    );
+    expect(config.url).toBe(
+      "https://dce-x-1234.eastus-1.ingest.monitor.azure.com" +
+        "/dataCollectionRules/dcr-0123456789abcdef0123456789abcdef" +
+        "/streams/Custom-SecurityEvent?api-version=2021-11-01-preview",
+    );
+  });
+
   it("throws SentinelDestinationError on blank required fields", () => {
     expect(() => buildSentinelDestination({ ...INPUT, id: " " })).toThrow(
       SentinelDestinationError,
@@ -105,6 +125,27 @@ describe("buildSentinelDestination", () => {
     expect(() =>
       buildSentinelDestination({ ...INPUT, ingestionClientId: "" }),
     ).toThrow(SentinelDestinationError);
+  });
+});
+
+describe("rewriteIngestionEndpoint (DCR-28)", () => {
+  it("rewrites the control-plane host fragment to the data-plane one", () => {
+    expect(
+      rewriteIngestionEndpoint(
+        "https://dce.eastus-1.handler.control.monitor.azure.com",
+      ),
+    ).toBe("https://dce.eastus-1.ingest.monitor.azure.com");
+  });
+
+  it("is a no-op for an already-correct endpoint (idempotent, total)", () => {
+    const ok = "https://dce.eastus-1.ingest.monitor.azure.com";
+    expect(rewriteIngestionEndpoint(ok)).toBe(ok);
+    expect(rewriteIngestionEndpoint("")).toBe("");
+    // Idempotent: applying twice equals applying once.
+    const once = rewriteIngestionEndpoint(
+      "https://a.handler.control.monitor.b",
+    );
+    expect(rewriteIngestionEndpoint(once)).toBe(once);
   });
 });
 

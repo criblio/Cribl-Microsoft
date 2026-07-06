@@ -46,6 +46,44 @@ export const SENTINEL_OAUTH_SCOPE = "https://monitor.azure.com/.default";
  */
 export const SENTINEL_INGESTION_API_VERSION = "2021-11-01-preview";
 
+/**
+ * DCR-28 REPAIR (porting-plan Unit 20 task item 6; catalog DCR-28). Some Azure
+ * Monitor stamps report a Direct DCR's logs-ingestion endpoint with the
+ * CONTROL-plane host fragment `handler.control.monitor` - a hostname that
+ * rejects data-plane ingestion traffic. The legacy generator rewrote it to the
+ * DATA-plane fragment `ingest.monitor` before baking the endpoint into the
+ * Cribl destination (Generate-CriblDestinations.ps1, and the azure-deploy.ts
+ * refresh-destinations chain: `-replace 'handler\.control\.monitor',
+ * 'ingest.monitor'`).
+ *
+ * The repair lives HERE - in the shared destination builder - deliberately NOT
+ * in parseDcrDeployment: parseDcrDeployment (dcr-request) is the raw
+ * endpoint-RESOLUTION chain and returns exactly what Azure reported (pinned
+ * VERBATIM by the deployment-preview characterization tests). The rewrite is a
+ * destination-COMPOSITION concern, so every path that composes a Cribl Sentinel
+ * destination - the live deploy AND the air-gap export - gets the corrected
+ * host exactly once, right here.
+ */
+export const HANDLER_CONTROL_HOST_FRAGMENT = "handler.control.monitor";
+
+/** The data-plane host fragment {@link HANDLER_CONTROL_HOST_FRAGMENT} maps to. */
+export const INGEST_HOST_FRAGMENT = "ingest.monitor";
+
+/**
+ * Apply the DCR-28 repair to a DCR logs-ingestion endpoint: rewrite every
+ * `handler.control.monitor` host fragment to `ingest.monitor`. TOTAL and
+ * IDEMPOTENT - an already-correct endpoint (or one with no such fragment)
+ * passes through byte-identical. Uses split/join (not a regex) so there is no
+ * escaping subtlety and every occurrence is rewritten (the legacy PowerShell
+ * -replace was global; the transient JS path replaced only the first, a
+ * discrepancy this port resolves in favor of the global rewrite).
+ */
+export function rewriteIngestionEndpoint(endpoint: string): string {
+  return endpoint
+    .split(HANDLER_CONTROL_HOST_FRAGMENT)
+    .join(INGEST_HOST_FRAGMENT);
+}
+
 /** Input for {@link buildSentinelDestination}. */
 export interface SentinelDestinationInput {
   /** Cribl output id, e.g. "MS-Sentinel-SecurityEvent-dest". */
@@ -150,9 +188,10 @@ export function buildSentinelDestination(
 ): SentinelDestinationConfig {
   const id = requireNonBlank(input.id, "id");
   const dcrImmutableId = requireNonBlank(input.dcrImmutableId, "dcrImmutableId");
-  const ingestionEndpoint = requireNonBlank(
-    input.ingestionEndpoint,
-    "ingestionEndpoint",
+  // DCR-28 repair applied at composition time: dceEndpoint, host, and url all
+  // flow from this corrected endpoint (see rewriteIngestionEndpoint).
+  const ingestionEndpoint = rewriteIngestionEndpoint(
+    requireNonBlank(input.ingestionEndpoint, "ingestionEndpoint"),
   );
   const streamName = requireNonBlank(input.streamName, "streamName");
   const tenantId = requireNonBlank(input.tenantId, "tenantId");

@@ -64,16 +64,18 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   DEFAULT_OPERATION_OPTIONS,
   SENTINEL_SECRET_PLACEHOLDER,
-  deriveReadinessPills,
+  canWireSource,
   deriveSectionStatuses,
   destinationIdFromOptions,
   onboardTable,
   onboardTableStepsFor,
+  readinessPillsForMode,
 } from "@soc/core";
 import type {
   CriblGroupSummary,
   CriblOptions,
   DcrRoleTarget,
+  DeployMode,
   GapFieldMapping,
   GapReport,
   IntegrateSectionId,
@@ -111,6 +113,7 @@ import {
   deployDisabledReason,
   deriveSectionInputs,
 } from "./integrate-screen-state";
+import { WiringSection } from "./wiring-section";
 
 export interface IntegrateScreenProps {
   /**
@@ -152,6 +155,15 @@ export interface IntegrateScreenProps {
    * takes). Absent, a shell-neutral sentence renders.
    */
   roleGuidance?: string;
+  /**
+   * The active integration mode (Unit 20 mode gating). Drives the readiness
+   * pills a mode shows (Workspace hidden when Azure is skipped, Worker Groups
+   * when Cribl is skipped) and the post-deploy source-wiring unlock. Defaults
+   * to "full" so the operable native path is unchanged (in "full" the pill set
+   * equals the un-gated set); this route requires both connections, so in
+   * practice the shell passes "full".
+   */
+  mode?: DeployMode;
 }
 
 type DeployStatus = "idle" | "running" | "ok" | "failed";
@@ -164,6 +176,7 @@ export function IntegrateScreen({
   operationDefaults,
   onOpenOptions,
   roleGuidance,
+  mode = "full",
 }: IntegrateScreenProps) {
   const { ports, config } = usePorts();
 
@@ -302,7 +315,10 @@ export function IntegrateScreen({
     mappingsApproved,
   });
   const resolved = deriveSectionStatuses(sectionInputs);
-  const pills = deriveReadinessPills(sectionInputs);
+  // Mode-aware pills (Unit 20): the full pill set with the skipped side's
+  // prerequisite hidden. In "full" this is identical to the un-gated set, so
+  // the operable native path is unchanged.
+  const pills = readinessPillsForMode(sectionInputs, mode);
 
   // The single unlock condition, in dependency order: the arc's built
   // prerequisites first (scope -> worker group -> pack name, from the pure
@@ -681,6 +697,24 @@ export function IntegrateScreen({
         the deployed DCR (see the Azure Resources section above).
       </p>
       <RecentRuns refreshToken={historyToken} />
+      {canWireSource(deployCompleted, mode) && (
+        <div className="integrate-subsection">
+          <span className="field-label">Source wiring</span>
+          <p className="panel-desc">
+            The destination is live - now connect a Cribl source to it. This
+            creates the Sentinel route (and an optional non-final Cribl Lake
+            route above it, cloud only), commits, and deploys to the worker
+            group. Each action below is independently re-runnable.
+          </p>
+          <WiringSection
+            deployCompleted={deployCompleted}
+            mode={mode}
+            deploymentType={ports.criblDeploymentType}
+            workerGroup={groupId}
+            packName={packName}
+          />
+        </div>
+      )}
     </>
   );
 

@@ -186,6 +186,30 @@ export {
   deriveSectionInputs,
 } from "./screens/integrate/integrate-screen-state";
 export type { IntegrateRawInputs } from "./screens/integrate/integrate-screen-state";
+// Post-deploy source wiring (porting-plan Unit 20 UI: "wiring with a Lake
+// toggle"): create the Sentinel route (+ optional cloud-only Cribl Lake route)
+// in evaluation order, ensure the named Cribl secret (connected-path half of
+// the one secret convention), commit and deploy. Plus the pure decision layer
+// behind it (unlock chain, lake-toggle gating, per-action disabled reasons).
+export { WiringSection } from "./screens/integrate/wiring-section";
+export type { WiringSectionProps } from "./screens/integrate/wiring-section";
+export {
+  WIRING_CRIBL_SKIPPED_REASON,
+  WIRING_NEEDS_DATASET_REASON,
+  WIRING_NEEDS_DEPLOY_REASON,
+  WIRING_NEEDS_PACK_NAME_REASON,
+  WIRING_NEEDS_SECRET_REASON,
+  WIRING_NEEDS_SOURCE_REASON,
+  WIRING_NEEDS_WORKER_GROUP_REASON,
+  deriveWiringState,
+  isLakeAvailable,
+  wiringLockReason,
+} from "./screens/integrate/wiring-state";
+export type {
+  WiringDeploymentType,
+  WiringInputs,
+  WiringState,
+} from "./screens/integrate/wiring-state";
 
 // Sample intake (porting-plan Unit 11 UI, ENG-14/15/18): the Integrate page's
 // Sample Data section - multi-file upload + paste-and-tag, per-sample chips with

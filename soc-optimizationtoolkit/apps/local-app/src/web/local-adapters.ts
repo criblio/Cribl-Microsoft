@@ -1008,6 +1008,12 @@ export interface LocalPorts {
   mintAssignmentName: () => string;
   /** The shell's Logger (web/logger.ts HostLogger, batching to the host). */
   logger: Logger;
+  /**
+   * The Cribl deployment flavor (porting-plan Unit 20): the local host talks to
+   * a self-hosted on-prem leader, so this is "onprem" - the cloud-only Cribl
+   * Lake federation in the post-deploy source wiring is not offered.
+   */
+  criblDeploymentType: 'cloud' | 'onprem';
 }
 
 /**
@@ -1040,5 +1046,7 @@ export function makeLocalPorts(logger: Logger): LocalPorts {
     packInstall: new LocalPackInstall(cribl),
     mintAssignmentName: () => crypto.randomUUID(),
     logger,
+    // The local host connects to a self-hosted leader: no Cribl Lake federation.
+    criblDeploymentType: 'onprem',
   };
 }

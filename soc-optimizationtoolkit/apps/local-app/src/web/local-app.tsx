@@ -602,6 +602,7 @@ export function LocalApp() {
             operationDefaults={appOptions.operation}
             onOpenOptions={() => nav.navigate('options')}
             roleGuidance={ROLE_GUIDANCE}
+            mode={phase.mode}
           />
         </PortsProvider>
       )}
