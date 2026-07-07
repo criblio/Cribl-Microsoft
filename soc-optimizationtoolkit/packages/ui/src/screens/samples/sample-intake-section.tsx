@@ -320,29 +320,11 @@ export function SampleIntakeSection({
         content-driven flow.
       </p>
 
-      {/* Upload */}
-      <div className="sample-intake-input">
-        <span className="field-label">Upload sample files</span>
-        <input
-          ref={fileInputRef}
-          type="file"
-          multiple
-          className="sample-file-input"
-          onChange={(e) => {
-            if (e.target.files !== null && e.target.files.length > 0) {
-              void addFromFiles(e.target.files);
-            }
-          }}
-          disabled={busy}
-        />
-        <span className="field-hint">
-          One or more files. The log type is auto-detected from each filename and
-          content; rename it on the chip afterwards.
-        </span>
-        {uploadError !== "" && <pre className="result">{uploadError}</pre>}
-      </div>
-
-      {/* Paste */}
+      {/* Paste + name + upload: one intake block (paste on the left, the log-type
+          name and the Add Sample / Upload Files actions grouped), matching the
+          reference's Sample Data layout. The native file input stays in the DOM
+          (works in both shells) but is visually hidden and driven by the ghost
+          Upload Files button, so both actions read as buttons. */}
       <div className="sample-intake-input">
         <span className="field-label">Paste a sample</span>
         <textarea
@@ -366,16 +348,45 @@ export function SampleIntakeSection({
             disabled={busy}
           />
         </label>
+        {/* The native file input is driven by the visible Browse button; the
+            .sample-file-input class owns its display:none (no inline styles). */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          multiple
+          className="sample-file-input"
+          onChange={(e) => {
+            if (e.target.files !== null && e.target.files.length > 0) {
+              void addFromFiles(e.target.files);
+            }
+          }}
+          disabled={busy}
+          tabIndex={-1}
+          aria-hidden="true"
+        />
         <div className="panel-controls">
           <button
-            className="run-button"
+            className="next-action-button"
             onClick={() => void addFromPaste()}
             disabled={busy}
           >
-            Add sample
+            Add Sample
+          </button>
+          <button
+            className="run-button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={busy}
+          >
+            Upload Files
           </button>
           {pasteError !== "" && <span className="field-hint">{pasteError}</span>}
         </div>
+        <span className="field-hint">
+          Upload one or more files instead of pasting: the log type is
+          auto-detected from each filename and content; rename it on the chip
+          afterwards.
+        </span>
+        {uploadError !== "" && <pre className="result">{uploadError}</pre>}
       </div>
 
       {/* Tagged sample chips */}

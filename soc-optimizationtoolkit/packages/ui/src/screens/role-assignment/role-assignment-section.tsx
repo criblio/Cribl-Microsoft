@@ -179,6 +179,7 @@ export function RoleAssignmentSection({
           placeholder="00000000-0000-0000-0000-000000000000"
           autoComplete="off"
           spellCheck={false}
+          className="mono"
         />
         <span className="field-hint">
           This is the ingestion service principal&apos;s OBJECT id - its

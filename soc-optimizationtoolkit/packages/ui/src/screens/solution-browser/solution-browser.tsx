@@ -322,14 +322,20 @@ export function SolutionBrowser({ onSelect }: SolutionBrowserProps) {
                   {isSelected && (
                     <div className="solution-browser-detail">
                       {detail.phase === "loading" && (
-                        <span className="field-hint">
-                          Fetching {solution.name} content...
-                        </span>
+                        <div className="status-bar status-bar-checking">
+                          <span className="status-bar-dot" />
+                          <span className="status-bar-text">
+                            Fetching {solution.name} content...
+                          </span>
+                        </div>
                       )}
                       {detail.phase === "error" && (
-                        <span className="field-hint">
-                          Could not fetch this solution: {detail.message}
-                        </span>
+                        <div className="status-bar status-bar-error">
+                          <span className="status-bar-dot" />
+                          <span className="status-bar-text">
+                            Could not fetch this solution: {detail.message}
+                          </span>
+                        </div>
                       )}
                       {detail.phase === "loaded" && (
                         <>
@@ -344,7 +350,10 @@ export function SolutionBrowser({ onSelect }: SolutionBrowserProps) {
                               : "."}
                           </span>
                           <span className="field-hint solution-browser-deeplink">
-                            Deep link: {buildSolutionDeepLink(solution.name)}
+                            Deep link:{" "}
+                            <code className="code-chip">
+                              {buildSolutionDeepLink(solution.name)}
+                            </code>
                           </span>
                         </>
                       )}

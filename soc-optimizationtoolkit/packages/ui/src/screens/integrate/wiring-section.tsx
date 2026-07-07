@@ -196,7 +196,8 @@ export function WiringSection({
       <span className="field-label">Ensure Cribl secret (connected path)</span>
       <p className="panel-desc">
         The Sentinel destination references a named Cribl secret,{" "}
-        {SENTINEL_CLIENT_SECRET_REFERENCE}. Store the ingestion client secret
+        <code className="code-chip">{SENTINEL_CLIENT_SECRET_REFERENCE}</code>.
+        Store the ingestion client secret
         under that name here so the live destination resolves without hand-editing
         Cribl. Create-or-update: it creates the secret, or updates it if it
         already exists. The value is transient - written once to Cribl, never
@@ -213,7 +214,8 @@ export function WiringSection({
           autoComplete="new-password"
         />
         <span className="field-hint">
-          Stored as the Cribl text secret {SENTINEL_CLIENT_SECRET_NAME} in worker
+          Stored as the Cribl text secret{" "}
+          <code className="code-chip">{SENTINEL_CLIENT_SECRET_NAME}</code> in worker
           group {workerGroup.trim() === "" ? "(none selected)" : workerGroup}.
         </span>
       </label>
@@ -250,6 +252,7 @@ export function WiringSection({
           placeholder="in_http:sentinel"
           autoComplete="off"
           spellCheck={false}
+          className="mono"
         />
         <span className="field-hint">
           The input the routes filter on (__inputId==&apos;...&apos;). This is the

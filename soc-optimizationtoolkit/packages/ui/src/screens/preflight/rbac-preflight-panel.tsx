@@ -279,7 +279,7 @@ export function RbacPreflightPanel({
 
       <div className="panel-controls">
         <button
-          className="run-button"
+          className="next-action-button"
           onClick={() => run()}
           disabled={!view.actions.canRetry}
           title={view.actions.retryReason ?? undefined}

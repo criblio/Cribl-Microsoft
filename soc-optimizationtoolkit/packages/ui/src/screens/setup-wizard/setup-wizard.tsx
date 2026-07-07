@@ -329,7 +329,7 @@ export function SetupWizard(props: SetupWizardProps) {
             {final ? (
               <button
                 type="button"
-                className="next-action-button"
+                className="next-action-button next-action-button-positive"
                 onClick={() => void start()}
                 disabled={!getStarted.ready || starting}
                 title={getStarted.ready ? undefined : getStarted.reason}

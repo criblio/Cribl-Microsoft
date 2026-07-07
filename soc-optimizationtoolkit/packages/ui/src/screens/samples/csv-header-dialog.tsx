@@ -283,7 +283,7 @@ export function CsvHeaderDialog({
             </button>
             <button
               type="button"
-              className="run-button"
+              className="next-action-button"
               onClick={() => onApply(headers)}
               disabled={busy || !hasHeaders}
             >

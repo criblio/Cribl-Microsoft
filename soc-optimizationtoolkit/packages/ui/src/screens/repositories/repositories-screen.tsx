@@ -156,33 +156,23 @@ export function RepositoriesScreen({ platform }: RepositoriesScreenProps) {
     error: reachError,
   });
 
+  const patBadgeClass = view.hasPat
+    ? "numbered-section-badge-complete"
+    : "numbered-section-badge-current";
+  const connBadgeClass =
+    solutionCount !== null
+      ? "numbered-section-badge-complete"
+      : "numbered-section-badge-current";
+
   return (
     <div className="repositories-screen">
-      <section className="panel">
-        <h2 className="panel-title">GitHub connection</h2>
-        <div className={`reachability reachability-${reachability.tone}`}>
-          <span className="reachability-dot" aria-hidden="true" />
-          <div>
-            <span className="reachability-label">{reachability.label}</span>
-            <p className="panel-desc">{reachability.detail}</p>
-          </div>
+      <section className="numbered-section">
+        <div className="numbered-section-head">
+          <span className={`numbered-section-badge ${patBadgeClass}`}>1</span>
+          <h2 className="numbered-section-title">
+            GitHub personal access token
+          </h2>
         </div>
-        <div className="panel-controls">
-          <button
-            className="run-button"
-            onClick={() => void checkConnection()}
-            disabled={checking || content === undefined}
-          >
-            {checking ? "Checking..." : "Check connection"}
-          </button>
-        </div>
-        {view.hasPat && view.login !== "" && (
-          <p className="panel-desc">Authenticated as {view.login}.</p>
-        )}
-      </section>
-
-      <section className="panel">
-        <h2 className="panel-title">Personal access token</h2>
         <p className="panel-desc">{policy.rationale}</p>
         <p className="panel-desc">{policy.scopeGuidance}</p>
         {policy.required && !view.hasPat && (
@@ -190,6 +180,23 @@ export function RepositoriesScreen({ platform }: RepositoriesScreenProps) {
             A token is required on this hosted app before you can browse
             solutions or fetch content.
           </p>
+        )}
+        {view.hasPat && (
+          <div className="status-bar status-bar-ready">
+            <span className="status-bar-dot" aria-hidden="true" />
+            <span className="status-bar-text">
+              GitHub token saved
+              {view.login !== "" ? ` (${view.login})` : ""}
+            </span>
+            {view.canClear && (
+              <button
+                className="run-button status-bar-action"
+                onClick={() => void clear()}
+              >
+                Clear token
+              </button>
+            )}
+          </div>
         )}
         <div className="form-grid">
           <label className="field">
@@ -219,13 +226,13 @@ export function RepositoriesScreen({ platform }: RepositoriesScreenProps) {
         </div>
         <div className="panel-controls">
           <button
-            className="run-button"
+            className="next-action-button"
             onClick={() => void save()}
             disabled={!view.canSubmit}
           >
             {view.busy ? "Validating..." : view.submitLabel}
           </button>
-          {view.canClear && (
+          {view.canClear && !view.hasPat && (
             <button className="run-button" onClick={() => void clear()}>
               Clear token
             </button>
@@ -257,6 +264,34 @@ export function RepositoriesScreen({ platform }: RepositoriesScreenProps) {
             </p>
           </div>
         )}
+      </section>
+
+      <section className="numbered-section">
+        <div className="numbered-section-head">
+          <span className={`numbered-section-badge ${connBadgeClass}`}>2</span>
+          <h2 className="numbered-section-title">Sentinel content</h2>
+        </div>
+        <p className="panel-desc">
+          Fetches Solution definitions and analytic content from GitHub over the
+          REST API - no git install or clone. The count is a live reachability +
+          token check, not a bulk mirror.
+        </p>
+        <div className={`reachability reachability-${reachability.tone}`}>
+          <span className="reachability-dot" aria-hidden="true" />
+          <div>
+            <span className="reachability-label">{reachability.label}</span>
+            <p className="panel-desc">{reachability.detail}</p>
+          </div>
+        </div>
+        <div className="panel-controls">
+          <button
+            className="next-action-button"
+            onClick={() => void checkConnection()}
+            disabled={checking || content === undefined}
+          >
+            {checking ? "Checking..." : "Refresh"}
+          </button>
+        </div>
       </section>
     </div>
   );

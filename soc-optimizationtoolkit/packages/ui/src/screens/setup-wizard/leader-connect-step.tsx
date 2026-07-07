@@ -119,8 +119,8 @@ export function LeaderConnectStep({
       <h2 className="wizard-step-title">Connect your Cribl leader</h2>
       <p className="panel-desc">
         Point the toolkit at your leader. Choose the deployment type and confirm
-        the base URL - the toolkit appends <code>/api/v1</code> to every leader
-        call itself, so enter the bare leader base URL.
+        the base URL - the toolkit appends <code className="code-chip">/api/v1</code>{" "}
+        to every leader call itself, so enter the bare leader base URL.
       </p>
 
       <div className="form-grid">
@@ -223,7 +223,7 @@ export function LeaderConnectStep({
           <div className="panel-controls">
             <button
               type="button"
-              className="run-button"
+              className="next-action-button"
               disabled={reconnecting}
               onClick={() => void reconnect()}
             >
@@ -232,7 +232,10 @@ export function LeaderConnectStep({
           </div>
           {reconnectError !== "" && <pre className="result">{reconnectError}</pre>}
           {reconnectOk !== "" && (
-            <p className="connection-notice">{reconnectOk}</p>
+            <div className="status-bar status-bar-ready">
+              <span className="status-bar-dot" aria-hidden="true" />
+              <span className="status-bar-text">{reconnectOk}</span>
+            </div>
           )}
         </section>
       )}

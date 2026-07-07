@@ -65,10 +65,12 @@
   --border-focus: #1890ff;
   --text: #262626;
   --text-strong: rgba(0, 0, 0, 0.85);
+  --text-primary: #262626;
   --text-muted: #595959;
   --text-faint: #8c8c8c;
   --accent: #1890ff;
   --on-accent: #ffffff;
+  --on-ok: #10361b;
   --accent-strong: #0958d9;
   --accent-bg: #e6f4ff;
   --accent-border: #91caff;
@@ -88,6 +90,19 @@
   --purple-bg: #f9f0ff;
   --purple-border: #d3adf7;
   --shadow: rgba(0, 0, 0, 0.15);
+  /* Info-cyan (DCR Handles stat). Light parity darkens the reference cyan so
+   * the large stat number clears the contrast bar on the white surface; the
+   * dark theme uses the reference #4db8ff. */
+  --info-cyan: #0e7fc2;
+  /* Load-bearing monospace stack (technical values, counts, summaries,
+   * placeholders, the REPOS status line, code chips). Previously several rules
+   * referenced var(--font-mono) with no fallback and silently rendered as
+   * sans; defining it here makes those values monospace as intended. */
+  --font-mono: 'Consolas', 'Menlo', 'Courier New', monospace;
+  /* Card / control corner radii for the soft-rounded console look. */
+  --radius-card: 14px;
+  --radius-control: 8px;
+  --radius-pill: 999px;
 }
 
 /*
@@ -100,37 +115,43 @@
  */
 [data-theme='dark'] {
   color-scheme: dark;
-  --bg: #141414;
-  --surface: #1f1f1f;
-  --surface-raised: #262626;
-  --border: #424242;
-  --border-subtle: #303030;
-  --border-focus: #3c9ae8;
-  --text: #e6e6e6;
-  --text-strong: rgba(255, 255, 255, 0.88);
-  --text-muted: #b0b0b0;
-  --text-faint: #8c8c8c;
-  --accent: #3c9ae8;
-  --on-accent: #10171f;
-  --accent-strong: #8dc5f8;
-  --accent-bg: #111a2c;
-  --accent-border: #15395b;
-  --ok: #6abe39;
-  --ok-strong: #8fd460;
-  --ok-bg: #162312;
-  --ok-border: #274916;
-  --running: #3c9ae8;
-  --error: #e84749;
-  --error-strong: #f37370;
-  --error-bg: #2a1215;
-  --error-border: #58181c;
-  --warn: #e89a3c;
-  --warn-bg: #2b1d11;
-  --warn-border: #593815;
-  --purple: #b37feb;
-  --purple-bg: #1a1325;
-  --purple-border: #3e2069;
-  --shadow: rgba(0, 0, 0, 0.55);
+  /* Navy "engineering console" palette (ui-design-language.md target). Deep
+   * near-black navy page, section cards a shade lighter, inset panels a shade
+   * darker; status colors tuned to stay legible on the navy surfaces. */
+  --bg: #0a0e1a;
+  --surface: #111a2e;
+  --surface-raised: #0d1526;
+  --border: #1e2a44;
+  --border-subtle: #17223a;
+  --border-focus: #3ba7e8;
+  --text: #e6ecf5;
+  --text-strong: rgba(255, 255, 255, 0.92);
+  --text-primary: #e6ecf5;
+  --text-muted: #8793a8;
+  --text-faint: #63708a;
+  --accent: #3ba7e8;
+  --on-accent: #ffffff;
+  --on-ok: #06210f;
+  --accent-strong: #7cc4f2;
+  --accent-bg: #12243f;
+  --accent-border: #2a5a86;
+  --ok: #57b374;
+  --ok-strong: #7bcf96;
+  --ok-bg: #11251a;
+  --ok-border: #2c5a3e;
+  --running: #3ba7e8;
+  --error: #e0665f;
+  --error-strong: #f0918b;
+  --error-bg: #2a1513;
+  --error-border: #5c2b28;
+  --warn: #e0a13c;
+  --warn-bg: #2a2012;
+  --warn-border: #5c451e;
+  --purple: #b39aec;
+  --purple-bg: #1c1730;
+  --purple-border: #3a2f5e;
+  --shadow: rgba(0, 0, 0, 0.6);
+  --info-cyan: #4db8ff;
 }
 
 * {
@@ -147,6 +168,7 @@ body {
 
 .panel {
   border: 1px solid var(--border);
+  border-radius: var(--radius-card);
   background: var(--surface);
   padding: 20px 24px;
   margin-bottom: 16px;
@@ -221,12 +243,15 @@ body {
   margin-bottom: 12px;
 }
 
+/* Ghost / secondary button (Back, Retry, Open Settings): dark fill + subtle
+ * border, per the button vocabulary. */
 .run-button {
   font-family: inherit;
   font-size: 13px;
   line-height: 20px;
-  padding: 4px 14px;
+  padding: 5px 14px;
   border: 1px solid var(--border);
+  border-radius: var(--radius-control);
   background: var(--surface-raised);
   color: var(--text);
   cursor: pointer;
@@ -265,12 +290,13 @@ body {
 }
 
 .result {
-  font-family: 'Consolas', 'Menlo', 'Courier New', monospace;
+  font-family: var(--font-mono);
   font-size: 12px;
   line-height: 18px;
   color: var(--text);
   background: var(--surface-raised);
   border: 1px solid var(--border);
+  border-radius: var(--radius-control);
   padding: 12px;
   white-space: pre-wrap;
   word-break: break-word;
@@ -311,10 +337,16 @@ body {
   font-family: inherit;
   font-size: 13px;
   line-height: 20px;
-  padding: 4px 8px;
+  padding: 6px 10px;
   border: 1px solid var(--border);
-  background: var(--surface);
+  border-radius: var(--radius-control);
+  background: var(--surface-raised);
   color: var(--text);
+}
+
+.field input::placeholder {
+  font-family: var(--font-mono);
+  color: var(--text-faint);
 }
 
 .field input:focus {
@@ -326,9 +358,10 @@ body {
   font-family: inherit;
   font-size: 13px;
   line-height: 20px;
-  padding: 4px 8px;
+  padding: 6px 10px;
   border: 1px solid var(--border);
-  background: var(--surface);
+  border-radius: var(--radius-control);
+  background: var(--surface-raised);
   color: var(--text);
 }
 
@@ -503,8 +536,9 @@ body {
   font-size: 11px;
   font-weight: 600;
   line-height: 16px;
-  padding: 2px 8px;
+  padding: 2px 10px;
   border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
   white-space: nowrap;
 }
 
@@ -536,11 +570,13 @@ body {
  * topBar area alongside the connection bar (GUI-28's Azure half). Shared by
  * both shells so the chip cannot drift between them. */
 .scope-chip {
+  font-family: var(--font-mono);
   font-size: 12px;
   font-weight: 600;
   line-height: 20px;
   padding: 2px 10px;
   border: 1px solid var(--accent-border);
+  border-radius: var(--radius-pill);
   background: var(--accent-bg);
   color: var(--accent-strong);
   white-space: nowrap;
@@ -595,6 +631,7 @@ body {
   flex-direction: column;
   background: var(--surface);
   border: 1px solid var(--border);
+  border-radius: var(--radius-card);
   padding: 32px;
 }
 
@@ -681,14 +718,16 @@ body {
   flex-direction: column;
   gap: 4px;
   text-align: left;
-  padding: 12px 16px;
+  padding: 14px 16px;
   border: 1px solid var(--border);
+  border-radius: var(--radius-card);
   background: var(--surface);
   cursor: pointer;
 }
 
 .mode-option:hover:not(:disabled) {
   border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
 }
 
 .mode-option:disabled {
@@ -886,10 +925,10 @@ body {
   cursor: pointer;
   font-size: 9px;
   font-weight: 700;
-  font-family: 'Consolas', 'Menlo', 'Courier New', monospace;
-  background: var(--accent-bg);
-  color: var(--accent);
-  border: 1px solid var(--accent-border);
+  font-family: var(--font-mono);
+  background: var(--accent);
+  color: var(--on-accent);
+  border: 1px solid var(--accent);
   flex-shrink: 0;
   line-height: 1;
   user-select: none;
@@ -982,6 +1021,7 @@ button.journey-step-main:hover .journey-step-label {
   flex-shrink: 0;
   font-size: 11px;
   font-weight: 700;
+  font-family: var(--font-mono);
   border: 1px solid var(--border);
   background: var(--surface);
   color: var(--text-muted);
@@ -992,9 +1032,9 @@ button.journey-step-main:hover .journey-step-label {
 }
 
 .journey-step-complete .journey-step-circle {
-  background: var(--ok-bg);
-  border-color: var(--ok-border);
-  color: var(--ok-strong);
+  background: var(--ok);
+  border-color: var(--ok);
+  color: var(--on-ok);
 }
 
 .journey-step-current .journey-step-circle {
@@ -1050,6 +1090,7 @@ button.journey-step-main:hover .journey-step-label {
   margin-top: 0;
 }
 
+/* Primary button = accent (blue) fill. */
 .next-action-button {
   font-family: inherit;
   font-size: 14px;
@@ -1057,14 +1098,28 @@ button.journey-step-main:hover .journey-step-label {
   line-height: 22px;
   padding: 8px 24px;
   border: 1px solid var(--accent);
+  border-radius: var(--radius-control);
   background: var(--accent);
   color: var(--on-accent);
   cursor: pointer;
   align-self: flex-start;
 }
 
-.next-action-button:hover {
+.next-action-button:hover:not(:disabled) {
   opacity: 0.85;
+}
+
+.next-action-button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* Positive / CTA variant = ok (green) fill with dark text (Deploy All / Get
+ * Started) - the reference's affirmative commit color. */
+.next-action-button-positive {
+  border-color: var(--ok);
+  background: var(--ok);
+  color: var(--on-ok);
 }
 
 /* Readiness chips (identity / secret / scope): the legacy point-of-commit
@@ -1083,6 +1138,7 @@ button.journey-step-main:hover .journey-step-label {
   line-height: 20px;
   padding: 2px 10px;
   border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
   background: var(--surface-raised);
   color: var(--text-muted);
   white-space: nowrap;
@@ -1197,8 +1253,28 @@ button.journey-step-main:hover .journey-step-label {
   flex-direction: column;
 }
 
+/* Integrate page chrome: a big bold sans page title over a muted subtitle
+ * (ui-design-language.md - "Big bold sans-serif page titles"). */
+.integrate-header {
+  margin-bottom: 20px;
+}
+.integrate-title {
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 32px;
+  color: var(--text-strong);
+  margin: 0 0 4px;
+}
+.integrate-subtitle {
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--text-muted);
+  margin: 0;
+}
+
 .numbered-section {
   border: 1px solid var(--border);
+  border-radius: var(--radius-card);
   background: var(--surface);
   padding: 16px 20px;
   margin-bottom: 16px;
@@ -1223,18 +1299,20 @@ button.journey-step-main:hover .journey-step-label {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 26px;
-  height: 26px;
+  width: 30px;
+  height: 30px;
   border-radius: 50%;
   flex-shrink: 0;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 700;
+  font-family: var(--font-mono);
   border: 1px solid var(--border);
   background: var(--surface);
   color: var(--text-muted);
 }
 
-/* current / available: blue-filled circle with the section number. */
+/* current / available: solid accent (blue) circle with a white section
+ * number - the reference's active-step badge. */
 .numbered-section-badge-current,
 .numbered-section-badge-available {
   background: var(--accent);
@@ -1242,11 +1320,21 @@ button.journey-step-main:hover .journey-step-label {
   color: var(--on-accent);
 }
 
-/* complete: green circle with the CSS-drawn check (no emoji/symbol glyph). */
+/* complete: solid green circle with a white CSS-drawn check (no emoji/symbol
+ * glyph - repo rule). */
 .numbered-section-badge-complete {
-  background: var(--ok-bg);
-  border-color: var(--ok-border);
-  color: var(--ok-strong);
+  background: var(--ok);
+  border-color: var(--ok);
+  color: var(--on-accent);
+}
+
+/* warn: a solid accent circle carrying a "!" - the attention variant the refs
+ * use for a rule-coverage section. Available as shared vocabulary; the badge
+ * glyph is supplied by the caller's number/text. */
+.numbered-section-badge-warn {
+  background: var(--warn);
+  border-color: var(--warn);
+  color: var(--on-accent);
 }
 
 .numbered-section-check {
@@ -1254,7 +1342,7 @@ button.journey-step-main:hover .journey-step-label {
   width: 6px;
   height: 11px;
   margin-top: -2px;
-  border: solid var(--ok-strong);
+  border: solid var(--on-accent);
   border-width: 0 2px 2px 0;
   transform: rotate(45deg);
 }
@@ -1333,8 +1421,18 @@ button.journey-step-main:hover .journey-step-label {
   margin-top: 4px;
   padding: 12px 16px;
   border: 1px solid var(--border);
+  border-radius: var(--radius-card);
   background: var(--surface);
   box-shadow: 0 -2px 8px var(--shadow);
+}
+
+/* Deploy-ready: a green gradient hairline across the top of the readiness
+ * surface, echoing the reference Deploy card's ready state. */
+.readiness-footer-ready {
+  border-top: 2px solid transparent;
+  background:
+    linear-gradient(var(--surface), var(--surface)) padding-box,
+    linear-gradient(90deg, var(--ok), var(--accent)) border-box;
 }
 
 .readiness-footer-pills {
@@ -1343,13 +1441,19 @@ button.journey-step-main:hover .journey-step-label {
   gap: 8px;
 }
 
+/* Readiness pills = rounded outline pills. The satisfied (ok) pill carries a
+ * green check glyph before its label; missing = amber, coming-soon = muted. */
 .readiness-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   font-size: 12px;
   font-weight: 600;
   line-height: 20px;
-  padding: 2px 10px;
+  padding: 2px 12px;
   border: 1px solid var(--border);
-  background: var(--surface-raised);
+  border-radius: var(--radius-pill);
+  background: transparent;
   color: var(--text-faint);
   white-space: nowrap;
 }
@@ -1358,6 +1462,11 @@ button.journey-step-main:hover .journey-step-label {
   color: var(--ok-strong);
   border-color: var(--ok-border);
   background: var(--ok-bg);
+}
+
+.readiness-pill-ok::before {
+  content: '\2713';
+  font-weight: 700;
 }
 
 .readiness-pill-missing {
@@ -1407,6 +1516,9 @@ button.journey-step-main:hover .journey-step-label {
 }
 
 .sample-file-input {
+  /* The native file input is driven by the visible Browse button; it is kept
+   * out of the layout here (was an inline display:none escape hatch). */
+  display: none;
   font-family: inherit;
   font-size: 13px;
   color: var(--text);
@@ -1753,10 +1865,14 @@ button.journey-step-main:hover .journey-step-label {
   gap: 2px;
   padding: 8px 6px;
   border: 1px solid var(--border);
+  border-radius: var(--radius-control);
   background: var(--surface-raised);
 }
 
+/* Big monospace stat number (the reference's expert, precise feel). Semantic
+ * tone comes from the modifier classes below. */
 .match-stat-value {
+  font-family: var(--font-mono);
   font-size: 20px;
   font-weight: 700;
   line-height: 24px;
@@ -2039,12 +2155,26 @@ button.journey-step-main:hover .journey-step-label {
  * per-table card, the editable mapping grid, and the approval badges.
  * ------------------------------------------------------------------------- */
 
+/* Six-tile stat row semantic contract (ui-design-language.md #2):
+ *   Source Fields / Dest Columns -> neutral text (plain .match-stat)
+ *   Passthrough -> ok/green (.match-stat-ok)
+ *   DCR Handles  -> info-cyan   (.match-stat-info)
+ *   Cribl Handles-> warn/amber  (.match-stat-warn)
+ *   Overflow     -> error/red   (.match-stat-error) */
 .match-stat-info {
-  border-color: var(--accent-border);
+  border-color: var(--info-cyan);
   background: var(--accent-bg);
 }
 .match-stat-info .match-stat-value {
-  color: var(--accent-strong);
+  color: var(--info-cyan);
+}
+
+.match-stat-error {
+  border-color: var(--error-border);
+  background: var(--error-bg);
+}
+.match-stat-error .match-stat-value {
+  color: var(--error-strong);
 }
 
 .mapping-review {
@@ -2092,18 +2222,22 @@ button.journey-step-main:hover .journey-step-label {
   margin: 0;
 }
 
+/* Approval bar = inset panel with an amber left-accent while approval is
+ * pending (an amber dot + prompt in the markup) and the primary Auto-Approve
+ * All action on the right; the satisfied state flips the accent to green. */
 .gap-approval-bar {
   display: flex;
   align-items: center;
   gap: 12px;
   flex-wrap: wrap;
-  padding: 8px 12px;
-  border: 1px solid var(--warn-border);
-  background: var(--warn-bg);
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--warn);
+  border-radius: var(--radius-control);
+  background: var(--surface-raised);
 }
 .gap-approval-bar-ok {
-  border-color: var(--ok-border);
-  background: var(--ok-bg);
+  border-left-color: var(--ok);
 }
 .gap-approval-text {
   flex: 1;
@@ -2846,9 +2980,9 @@ button.journey-step-main:hover .journey-step-label {
   gap: 4px;
 }
 .wizard-title {
-  font-size: 20px;
+  font-size: 24px;
   font-weight: 700;
-  line-height: 28px;
+  line-height: 30px;
   color: var(--text-strong);
 }
 .wizard-subtitle {
@@ -2872,6 +3006,7 @@ button.journey-step-main:hover .journey-step-label {
   padding: 8px 12px;
   border: 1px solid var(--border);
   border-top: 3px solid var(--border);
+  border-radius: var(--radius-control);
   background: var(--surface);
 }
 .wizard-progress-seg-complete {
@@ -2903,7 +3038,7 @@ button.journey-step-main:hover .journey-step-label {
 .wizard-progress-seg-complete .wizard-progress-index {
   background: var(--ok);
   border-color: var(--ok);
-  color: var(--on-accent);
+  color: var(--on-ok);
 }
 .wizard-progress-label {
   font-size: 12px;
@@ -2913,6 +3048,7 @@ button.journey-step-main:hover .journey-step-label {
 
 .wizard-body {
   border: 1px solid var(--border);
+  border-radius: var(--radius-card);
   background: var(--surface);
   padding: 20px;
 }
@@ -2941,15 +3077,34 @@ button.journey-step-main:hover .journey-step-label {
   text-align: left;
   padding: 14px 16px;
   border: 1px solid var(--border);
+  border-radius: var(--radius-card);
   background: var(--surface);
   cursor: pointer;
 }
 .wizard-card:hover:not(:disabled) {
   border-color: var(--accent);
 }
+/* Selected radio card = accent border + soft glow (the reference's active
+ * card). */
 .wizard-card-selected {
   border-color: var(--accent);
   background: var(--accent-bg);
+  box-shadow: 0 0 0 1px var(--accent), 0 0 12px var(--accent-bg);
+}
+/* Filled radio dot inside a radio card. Empty = hollow outline; selected card
+ * fills the dot accent with an inset ring (shared class, no inline styles). */
+.wizard-card-radio {
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid var(--border);
+  background: transparent;
+}
+.wizard-card-selected .wizard-card-radio {
+  border-color: var(--accent);
+  background: var(--accent);
+  box-shadow: inset 0 0 0 2px var(--surface);
 }
 .wizard-card:disabled,
 .wizard-card-unavailable {
@@ -3023,6 +3178,7 @@ button.journey-step-main:hover .journey-step-label {
   flex-direction: column;
   gap: 12px;
   border: 1px solid var(--border);
+  border-radius: var(--radius-card);
   background: var(--surface-raised);
   padding: 14px 16px;
 }
@@ -3079,4 +3235,139 @@ button.journey-step-main:hover .journey-step-label {
   line-height: 16px;
   color: var(--warn);
   text-align: right;
+}
+
+/* ---------------------------------------------------------------------------
+ * Shared status vocabulary (ui-design-language.md #6, #11, #12): the REPOS /
+ * connections status line, a generic inset status bar (dot + text + right
+ * action), an inline code chip, and a generic missing-field chip. These are
+ * theme-token-only shared classes area agents apply; nothing here injects
+ * markup. Monospace is applied deliberately to counts / identifiers.
+ * ------------------------------------------------------------------------- */
+
+/* REPOS / connections status line: a muted uppercase label followed by
+ * dot-prefixed monospace counts (e.g. "Sentinel (549 solutions)"). */
+.repos-status-line {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: var(--surface-raised);
+  margin-bottom: 16px;
+}
+.repos-status-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+.repos-status-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+.repos-status-dot {
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--text-faint);
+}
+.repos-status-ok .repos-status-dot {
+  background: var(--ok);
+}
+.repos-status-ok {
+  color: var(--ok-strong);
+}
+.repos-status-warn .repos-status-dot {
+  background: var(--warn);
+}
+.repos-status-warn {
+  color: var(--warn);
+}
+.repos-status-error .repos-status-dot {
+  background: var(--error);
+}
+.repos-status-error {
+  color: var(--error-strong);
+}
+
+/* Generic status bar: an inset panel with a tone dot, status text, and a
+ * right-aligned action (Refresh / Clear Token). */
+.status-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: var(--surface-raised);
+}
+.status-bar-dot {
+  flex: 0 0 auto;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--text-muted);
+}
+.status-bar-ready .status-bar-dot {
+  background: var(--ok);
+}
+.status-bar-warn .status-bar-dot {
+  background: var(--warn);
+}
+.status-bar-error .status-bar-dot {
+  background: var(--error);
+}
+.status-bar-checking .status-bar-dot {
+  background: var(--running);
+}
+.status-bar-text {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  color: var(--text);
+}
+.status-bar-action {
+  margin-left: auto;
+}
+
+/* Monospace utility: technical values, GUID/id/resource inputs render in the
+ * load-bearing mono face. Shared class so components never inline font-family. */
+.mono {
+  font-family: var(--font-mono);
+}
+
+/* Inline code chip: a subtle bordered monospace run for inline commands and
+ * identifiers. */
+.code-chip {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  padding: 1px 6px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface-raised);
+  color: var(--text-muted);
+  word-break: break-all;
+}
+
+/* Generic missing-field chip: a red-outline monospace chip (rule coverage and
+ * anywhere a required-but-absent field is surfaced). */
+.missing-field-chip {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 1px 8px;
+  border: 1px solid var(--error-border);
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--error-strong);
+  white-space: nowrap;
 }

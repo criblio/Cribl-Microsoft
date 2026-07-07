@@ -66,6 +66,7 @@ export function ModeCardGrid({ capabilities, value, onChange }: ModeCardGridProp
               onClick={() => card.available && onChange(card.mode)}
             >
               <span className="wizard-card-head">
+                <span className="wizard-card-radio" aria-hidden="true" />
                 <span className="wizard-card-label">{card.label}</span>
                 {card.recommended && (
                   <span className="wizard-recommended-badge">Recommended</span>

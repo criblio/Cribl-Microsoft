@@ -43,6 +43,7 @@ export function TargetChooser({ value, onChange, locked = false }: TargetChooser
               onClick={() => onChange(tradeoff.target)}
             >
               <span className="wizard-card-head">
+                <span className="wizard-card-radio" aria-hidden="true" />
                 <span className="wizard-card-label">{tradeoff.label}</span>
               </span>
               <span className="wizard-card-desc">{tradeoff.summary}</span>

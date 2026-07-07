@@ -351,8 +351,9 @@ export function MappingReviewSection({
 
       {hasMappings && (
         <div
-          className={`gap-approval-bar${gate.allApproved ? " gap-approval-bar-ok" : ""}`}
+          className={`gap-approval-bar ${gate.allApproved ? "gap-approval-bar-ok status-bar-ready" : "status-bar-warn"}`}
         >
+          <span className="status-bar-dot" aria-hidden="true" />
           <span className="gap-approval-text">{approvalBarText(gate)}</span>
           {gate.allApproved ? (
             <button
@@ -363,7 +364,7 @@ export function MappingReviewSection({
             </button>
           ) : (
             <button
-              className="run-button"
+              className="next-action-button"
               onClick={() =>
                 dispatch({
                   type: "auto-approve-all",

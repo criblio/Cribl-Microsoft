@@ -50,7 +50,11 @@ export function ReadinessFooter({
 }: ReadinessFooterProps) {
   const disabled = !canDeploy || deploying;
   return (
-    <div className="readiness-footer">
+    <div
+      className={`readiness-footer${
+        canDeploy ? " readiness-footer-ready" : ""
+      }`}
+    >
       <div className="readiness-footer-pills">
         {pills.map((pill) => (
           <span
@@ -67,7 +71,7 @@ export function ReadinessFooter({
           <span className="readiness-footer-hint">{disabledReason}</span>
         )}
         <button
-          className="next-action-button"
+          className="next-action-button next-action-button-positive"
           onClick={onDeploy}
           disabled={disabled}
           title={

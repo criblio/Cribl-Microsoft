@@ -399,7 +399,8 @@ export function AzureTargetingScreen(props: AzureTargetingScreenProps) {
           Use this target
         </button>
         <span className="field-hint">
-          Committed scope: {formatScopeChip(committedScope)}
+          Committed scope:{" "}
+          <span className="code-chip">{formatScopeChip(committedScope)}</span>
         </span>
       </div>
       {!scopeComplete && (
@@ -469,13 +470,34 @@ export function AzureTargetingScreen(props: AzureTargetingScreenProps) {
         scope with Use this target. Browsing never switches the committed
         scope by itself.
       </p>
-      <div className="panel-controls">
-        <button className="run-button" onClick={refresh} disabled={actionBusy}>
+      <div
+        className={`status-bar ${
+          subsLoad.status === "loading"
+            ? "status-bar-checking"
+            : subsLoad.status === "error"
+              ? "status-bar-error"
+              : subsLoad.status === "loaded"
+                ? "status-bar-ready"
+                : "status-bar-warn"
+        }`}
+      >
+        <span className="status-bar-dot" />
+        <span className="status-bar-text">
+          {subsLoad.status === "loading"
+            ? "Checking Azure permissions..."
+            : subsLoad.status === "error"
+              ? "Azure discovery failed - fix the connection, then Refresh."
+              : subsLoad.status === "loaded"
+                ? `Connected - ${subsLoad.list.length} subscription(s) visible.`
+                : "Connect, then Refresh from Azure."}
+        </span>
+        <button
+          className="run-button status-bar-action"
+          onClick={refresh}
+          disabled={actionBusy}
+        >
           Refresh from Azure
         </button>
-        {subsLoad.status === "loading" && (
-          <span className="field-hint">Loading subscriptions...</span>
-        )}
       </div>
       {subsLoad.status === "error" && <pre className="result">{subsLoad.error}</pre>}
       <div className="form-grid">
@@ -590,6 +612,7 @@ export function AzureTargetingScreen(props: AzureTargetingScreenProps) {
             placeholder="e.g. eastus"
             autoComplete="off"
             spellCheck={false}
+            className="mono"
           />
           <span className="field-hint">
             Derived from the selected resource group or workspace; used by the

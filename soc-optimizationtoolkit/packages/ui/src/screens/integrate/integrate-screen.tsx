@@ -741,6 +741,13 @@ export function IntegrateScreen({
 
   return (
     <div className="integrate-page">
+      <header className="integrate-header">
+        <h1 className="integrate-title">Cribl Sentinel Integration</h1>
+        <p className="integrate-subtitle">
+          Configure and deploy a complete Cribl-to-Sentinel integration
+          pipeline.
+        </p>
+      </header>
       {resolved.map(({ section, status, reason }) => (
         <NumberedSection
           key={section.id}

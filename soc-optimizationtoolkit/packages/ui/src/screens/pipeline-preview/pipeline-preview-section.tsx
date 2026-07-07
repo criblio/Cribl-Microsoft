@@ -166,15 +166,16 @@ export function PipelinePreviewSection({
 
           <div className="pipeline-preview-meta">
             <span>
-              Pipeline: <code>{table.pipelineName}</code>
+              Pipeline: <code className="code-chip">{table.pipelineName}</code>
             </span>
             <span>
-              Stream: <code>{table.streamName}</code>
+              Stream: <code className="code-chip">{table.streamName}</code>
             </span>
             <span>{table.fieldCount} field(s)</span>
             {table.routeCondition !== "true" && (
               <span>
-                Route filter: <code>{table.routeCondition}</code>
+                Route filter:{" "}
+                <code className="code-chip">{table.routeCondition}</code>
               </span>
             )}
           </div>

@@ -485,8 +485,9 @@ export function RuleCoverageSection({
               ? "Analyze rule coverage"
               : "Re-analyze coverage"}
         </button>
+        <span className="field-label">Custom Rules</span>
         <label className="rule-coverage-upload">
-          Upload custom YAML
+          Upload YAML
           <input
             type="file"
             accept=".yaml,.yml"
@@ -517,7 +518,12 @@ export function RuleCoverageSection({
         <p className="field-hint">{RULE_COVERAGE_NO_REPORTS_NOTE}</p>
       )}
       {analyzeError !== "" && <pre className="result">{analyzeError}</pre>}
-      {workbookNote !== "" && <p className="field-hint">{workbookNote}</p>}
+      {workbookNote !== "" && (
+        <div className="status-bar status-bar-warn">
+          <span className="status-bar-dot" />
+          <span className="status-bar-text">{workbookNote}</span>
+        </div>
+      )}
 
       {report === null ? (
         <p className="field-hint">{RULE_COVERAGE_IDLE_NOTE}</p>
@@ -543,7 +549,7 @@ export function RuleCoverageSection({
               </div>
               <div className="coverage-missing-chips">
                 {missingChips.map((field) => (
-                  <span key={field} className="coverage-missing-chip">
+                  <span key={field} className="missing-field-chip">
                     {field}
                   </span>
                 ))}

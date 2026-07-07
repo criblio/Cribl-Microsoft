@@ -276,7 +276,7 @@ export function OptionsScreen({ loadOptions, saveOptions }: OptionsScreenProps) 
       )}
       <div className="panel-controls">
         <button
-          className="run-button"
+          className="next-action-button"
           disabled={!dirty || saving}
           onClick={() => void save()}
         >
