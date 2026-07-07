@@ -949,10 +949,38 @@ export class PlatformSentinelContent implements SentinelContent {
 // ---------------------------------------------------------------------------
 
 // Parsed content-cache entries live under this plain (unencrypted) KV prefix,
-// keyed by the @soc/core contentCacheKey (which embeds the commit SHA, so a new
-// upstream commit yields new keys and stale entries simply miss). Only PARSED
-// results are cached here - never raw bytes - and they are not secrets.
-const CONTENT_CACHE_KV_PREFIX = 'content-cache/';
+// keyed by a HASH of the @soc/core contentCacheKey. Only PARSED results are
+// cached here - never raw bytes - and they are not secrets.
+//
+// KV KEY SHAPE: the leader's KV store only reliably round-trips a key that is a
+// SINGLE path segment of [A-Za-z0-9-] - the shape proven live (`githubPat`,
+// `spike-plain`). The @soc/core cache key uses `~` separators plus `_ . /`
+// segment characters; the original `content-cache/` + encodeURIComponent form
+// 404'd against the real leader (it rejects the extra path segment / escaped
+// chars). Rather than depend on which characters the leader accepts, hash the
+// logical key to hex so the physical KV key is always `content-cache-<hex>`:
+// one segment, [a-z0-9-], and still prefix-listable under `content-cache-`.
+const CONTENT_CACHE_KV_PREFIX = 'content-cache-';
+
+/**
+ * Deterministic 64-bit hex key (two rolling 32-bit FNV-style accumulators) for a
+ * content cache entry. No crypto/Date; the collision space is ample for a
+ * per-commit content cache and the physical key is always KV-path-safe.
+ */
+function contentCacheKvKey(cacheKey: string): string {
+  let h1 = 0x811c9dc5;
+  let h2 = 0xdeadbeef;
+  for (let i = 0; i < cacheKey.length; i++) {
+    const c = cacheKey.charCodeAt(i);
+    h1 = Math.imul(h1 ^ c, 0x01000193) >>> 0;
+    h2 = Math.imul(h2 ^ c, 0x85ebca6b) >>> 0;
+  }
+  return (
+    CONTENT_CACHE_KV_PREFIX +
+    h1.toString(16).padStart(8, '0') +
+    h2.toString(16).padStart(8, '0')
+  );
+}
 
 /**
  * ContentCache over plain KV entries (porting-plan Unit 14). The @soc/core
@@ -961,7 +989,7 @@ const CONTENT_CACHE_KV_PREFIX = 'content-cache/';
  */
 export class KvContentCache implements ContentCache {
   private key(cacheKey: string): string {
-    return `${CONTENT_CACHE_KV_PREFIX}${encodeURIComponent(cacheKey)}`;
+    return contentCacheKvKey(cacheKey);
   }
 
   async get(cacheKey: string): Promise<unknown | null> {
