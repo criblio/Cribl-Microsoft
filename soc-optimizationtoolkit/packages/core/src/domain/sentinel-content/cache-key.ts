@@ -9,7 +9,12 @@
  * staleness" idea survives only as an optional adapter-side TTL). Content at a
  * given commit is immutable, so a solution is parsed at most once per commit.
  *
- * Keys are stable, deterministic, and KV-safe (only [A-Za-z0-9_.:-]).
+ * Keys are stable, deterministic, and KV-safe (only [A-Za-z0-9_.~-]). The
+ * segment separator is "~" (a URI-unreserved char), NOT ":": a colon is a URI
+ * reserved gen-delim, so it survives in the KV path as "%3A" and the Cribl KV
+ * store route rejects the request with HTTP 404. "~" is also illegal-filename-
+ * safe for the local host on Windows (":" is not). sanitizeSegment strips "~"
+ * from every segment, so it can never collide with segment content.
  *
  * Pure: no IO, no fetch, no React, no Date/crypto.
  */
@@ -49,7 +54,7 @@ export interface ContentCacheKeyParams {
 
 /**
  * Derive the ContentCache key for a parsed result. Shape:
- *   sentinel-content:<kind>:<shortSha>:<solution?>:<extra?>
+ *   sentinel-content~<kind>~<shortSha>~<solution?>~<extra?>
  * Two calls with the same params produce the same key; changing the commit,
  * solution, kind, or extra produces a different key.
  */
@@ -61,7 +66,7 @@ export function contentCacheKey(params: ContentCacheKeyParams): string {
   ];
   if (params.solution !== undefined) parts.push(sanitizeSegment(params.solution));
   if (params.extra !== undefined) parts.push(sanitizeSegment(params.extra));
-  return parts.join(":");
+  return parts.join("~");
 }
 
 /** Convenience: the per-solution connectors key. */

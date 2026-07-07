@@ -50,14 +50,14 @@ describe("contentCacheKey", () => {
       solution: "CrowdStrike Falcon Endpoint Protection (v2)!",
       commitSha: SHA_A,
     });
-    expect(key).toMatch(/^[A-Za-z0-9_.:-]+$/);
-    expect(key.startsWith("sentinel-content:connectors:abcdef012345:")).toBe(true);
+    expect(key).toMatch(/^[A-Za-z0-9_.~-]+$/);
+    expect(key.startsWith("sentinel-content~connectors~abcdef012345~")).toBe(true);
   });
 
   it("solutionIndexCacheKey omits the solution segment", () => {
-    expect(solutionIndexCacheKey(SHA_A)).toBe("sentinel-content:solution-index:abcdef012345");
+    expect(solutionIndexCacheKey(SHA_A)).toBe("sentinel-content~solution-index~abcdef012345");
     expect(connectorsCacheKey("Foo", SHA_A)).toBe(
-      "sentinel-content:connectors:abcdef012345:Foo",
+      "sentinel-content~connectors~abcdef012345~Foo",
     );
   });
 });
