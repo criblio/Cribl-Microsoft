@@ -634,7 +634,7 @@ export function IntegrateScreen({
           />
           <span className="field-hint">
             A native Log Analytics table (e.g. SecurityEvent, Syslog). Custom
-            (_CL) tables and vendor schemas use the Onboard and Batch Onboard
+            (_CL) tables and vendor schemas use the Onboard and DCR Automation
             screens.
           </span>
         </label>

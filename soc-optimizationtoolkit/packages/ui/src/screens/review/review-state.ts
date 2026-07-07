@@ -11,7 +11,7 @@
  *
  * READ-AHEAD contract (user decision, binding): the acknowledge gate arms
  * ONLY the handoff button on the Review screen itself - it is never a hard
- * gate on Deploy (the Run buttons on Onboard / Batch Onboard stay governed
+ * gate on Deploy (the Run buttons on Onboard / DCR Automation stay governed
  * by their own gates), and the acknowledgement is a TRANSIENT flag that is
  * never persisted as consent.
  *
@@ -368,5 +368,5 @@ export function deriveDeployHandoff(input: DeployHandoffInput): DeployHandoff {
  */
 export const REVIEW_SELECTION_NOTE =
   "This screen takes its own table list (same parsing and vendor-schema " +
-  "picks as Batch Onboard - enter the same selection you plan to run " +
+  "picks as DCR Automation - enter the same selection you plan to run " +
   "there). Selections are not yet shared between the two screens.";

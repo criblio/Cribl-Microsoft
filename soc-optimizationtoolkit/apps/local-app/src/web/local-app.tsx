@@ -194,23 +194,23 @@ const JOURNEY_LINKS = mergeJourneyLinks({
 });
 
 // azure-only: the Onboard route requires a live Cribl side and is hidden, so
-// the integrate stages bind to Batch Onboard - the surface the relaxed
+// the integrate stages bind to DCR Automation - the surface the relaxed
 // 'azure' requirement actually exposes in this mode (templateOnly forced on;
 // the honest copy lives on the screen).
 const AZURE_ONLY_JOURNEY_LINKS = mergeJourneyLinks({
   ...SHELL_LINK_OVERRIDES,
   'choose-content': {
     routeId: 'batch-onboard',
-    hint: 'Batch Onboard is this mode\'s onboarding surface; runs are template-only (no live Cribl connection).',
+    hint: 'DCR Automation is this mode\'s onboarding surface; runs are template-only (no live Cribl connection).',
   },
   configure: {
     routeId: 'batch-onboard',
-    hint: 'Per-run overrides live on Batch Onboard; saved defaults in Options.',
+    hint: 'Per-run overrides live on DCR Automation; saved defaults in Options.',
   },
   deploy: {
     routeId: 'batch-onboard',
     hint:
-      'Run on Batch Onboard - template-only in this mode; ARM bodies download as one ' +
+      'Run on DCR Automation - template-only in this mode; ARM bodies download as one ' +
       'artifact. The Review stage previews what a run would create.',
   },
 });
@@ -709,7 +709,7 @@ export function LocalApp() {
     </>
   );
 
-  // The Batch Onboard route (porting-plan Unit 6): many tables as ONE parent
+  // The DCR Automation route (porting-plan Unit 6): many tables as ONE parent
   // onboard-batch job against the same local adapters - shared prologue
   // (workspace fetch; in DCE mode one batch-wide DCE plus the AMPLS
   // association when public access is disabled) plus one step per table.
@@ -758,7 +758,7 @@ export function LocalApp() {
   // The Review route (porting-plan Unit 7, ux-flow-plan 5.2): the Integrate
   // arc's REVIEW stage - live-ARM deployment preview through the host's ARM
   // proxy, with the staleness marker and the acknowledge gate arming the
-  // handoff to Batch Onboard. Controls stay visible and disable with the
+  // handoff to DCR Automation. Controls stay visible and disable with the
   // journey-state hint (identity/scope - the same prerequisites a deploy
   // run needs); the host-config loading/error branches match the other
   // ports-backed routes.
@@ -797,7 +797,7 @@ export function LocalApp() {
             journeyBlockedReason={reviewJourneyHint}
             onOpenOptions={() => nav.navigate('options')}
             onProceedToDeploy={() => nav.navigate('batch-onboard')}
-            deploySurfaceLabel="Batch Onboard"
+            deploySurfaceLabel="DCR Automation"
           />
         </PortsProvider>
       )}
@@ -1049,7 +1049,7 @@ export function LocalApp() {
     { id: 'azure-target', label: 'Azure Targeting', requires: 'azure', section: 'journey', render: () => targetingView },
     { id: 'preflight', label: 'Preflight', requires: 'azure', section: 'journey', render: renderPreflight },
     { id: 'onboard', label: 'Onboard', requires: 'both', section: 'journey', render: () => onboardView },
-    { id: 'batch-onboard', label: 'Batch Onboard', requires: 'azure', section: 'journey', render: renderBatch },
+    { id: 'batch-onboard', label: 'DCR Automation', requires: 'azure', section: 'journey', render: renderBatch },
     { id: 'review', label: 'Review', requires: 'azure', section: 'journey', render: renderReview },
     { id: 'options', label: 'Options', requires: 'none', section: 'tools', render: () => optionsView },
     { id: 'packs', label: 'Packs', requires: 'cribl', section: 'tools', render: () => packsView },

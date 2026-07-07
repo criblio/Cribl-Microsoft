@@ -49,7 +49,7 @@ export const SHARED_JOURNEY_LINKS: JourneyLinks = {
   },
   "choose-content": {
     routeId: "onboard",
-    hint: "One table on Onboard; many tables on Batch Onboard.",
+    hint: "One table on Onboard; many tables on DCR Automation.",
   },
   configure: {
     routeId: "onboard",
@@ -64,7 +64,7 @@ export const SHARED_JOURNEY_LINKS: JourneyLinks = {
   deploy: {
     routeId: "onboard",
     hint:
-      "Run on Onboard or Batch Onboard. The Review stage previews what a " +
+      "Run on Onboard or DCR Automation. The Review stage previews what a " +
       "run would create - recommended, never required (read-ahead).",
   },
 };

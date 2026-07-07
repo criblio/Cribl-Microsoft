@@ -13,7 +13,7 @@
  * do not exist here (DO-NOT-PORT defects, fixed in core and pinned there).
  *
  * The table selection is entered HERE with the same parsing and
- * vendor-schema picks as Batch Onboard (buildBatchSelection - one parse
+ * vendor-schema picks as DCR Automation (buildBatchSelection - one parse
  * path); this unit does not lift the batch screen's selection state into a
  * shared store, and the screen says so honestly (REVIEW_SELECTION_NOTE).
  *
@@ -26,7 +26,7 @@
  *
  * ACKNOWLEDGE GATE (read-ahead decision, binding): the required 'I have
  * reviewed these changes' check arms ONLY the Deploy handoff button on this
- * screen (which navigates to Batch Onboard). It is never a hard gate on
+ * screen (which navigates to DCR Automation). It is never a hard gate on
  * Deploy - the Run buttons elsewhere keep their own gates - and the
  * acknowledgement is TRANSIENT React state, never persisted as consent.
  * Disabled-button hints come from journey-state's unlock hint (passed by
@@ -71,7 +71,7 @@ export interface ReviewScreenProps {
   /**
    * Persisted deployment options (porting-plan Unit 4). The preview honors
    * their createDCE / customTableRetentionDays / dcePublicNetworkAccess;
-   * per-run overrides applied on Batch Onboard are NOT visible here (stated
+   * per-run overrides applied on DCR Automation are NOT visible here (stated
    * on screen). Absent, the @soc/core defaults apply.
    */
   operationDefaults?: OperationOptions;
@@ -139,11 +139,11 @@ export function ReviewScreen({
   journeyBlockedReason = null,
   onOpenOptions,
   onProceedToDeploy,
-  deploySurfaceLabel = "Batch Onboard",
+  deploySurfaceLabel = "DCR Automation",
 }: ReviewScreenProps) {
   const { ports, config } = usePorts();
 
-  // ---- Table selection (same parse path as Batch Onboard) ---------------
+  // ---- Table selection (same parse path as DCR Automation) ---------------
   const [listText, setListText] = useState("");
   const [vendorPick, setVendorPick] = useState("");
   const [vendorIds, setVendorIds] = useState<string[]>([]);
