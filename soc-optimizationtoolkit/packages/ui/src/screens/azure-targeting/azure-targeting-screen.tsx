@@ -175,6 +175,28 @@ export function AzureTargetingScreen(props: AzureTargetingScreenProps) {
     };
   }, [ports.azure, ports.logger, offline, browseSub, reloadNonce]);
 
+  // Back-fill Location for a workspace/RG selection restored from the committed
+  // scope on mount. browseWs/browseRg seed from config, but location is not
+  // persisted, so without this the field stays empty after a reload until a
+  // manual re-select (the derivation otherwise only runs in the onSelect
+  // handlers). Runs once discovery is loaded and only while location is empty -
+  // the workspace's region is preferred over the RG's, and typing a custom
+  // location stops it, so a new-resource-group region entry is never clobbered.
+  useEffect(() => {
+    if (depLoad.status !== "loaded" || location !== "") {
+      return;
+    }
+    const ws = depLoad.workspaces.find((w) => w.name === browseWs);
+    if (ws !== undefined && ws.location !== "") {
+      setLocation(ws.location);
+      return;
+    }
+    const rg = depLoad.choices.groups.find((g) => g.name === browseRg);
+    if (rg !== undefined && rg.location !== "") {
+      setLocation(rg.location);
+    }
+  }, [depLoad, browseWs, browseRg, location]);
+
   const refresh = () => setReloadNonce((n) => n + 1);
 
   // Selecting a subscription clears the dependent browse choices; the loader
