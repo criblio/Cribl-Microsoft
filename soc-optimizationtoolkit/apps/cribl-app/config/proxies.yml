@@ -61,7 +61,10 @@ management.azure.com:
 # with GET /user before it is stored, exactly like azureBasic/azureArmToken) and
 # is injected server-side as a Bearer credential; the browser never sets an
 # Authorization header (the proxy strips any it sends). Only Content-Type/Accept
-# are forwarded so the browser's Origin header cannot reach GitHub. A PAT is
+# are forwarded so the browser's Origin header cannot reach GitHub. A User-Agent
+# is INJECTED server-side because the GitHub API rejects any request without one
+# with HTTP 403, and the browser cannot set User-Agent (a forbidden fetch header)
+# nor would the allowlist forward it. A PAT is
 # effectively REQUIRED here: the hosted app shares one egress IP across tenants,
 # so GitHub's 60 req/hr anonymous per-IP limit is unreliable. Fetches are LAZY
 # and per-solution (never a whole-repo mirror) to stay under the 100 req/min
@@ -71,6 +74,7 @@ api.github.com:
   headers:
     inject:
       Authorization: '`Bearer ${kv.githubPat}`'
+      User-Agent: 'cribl-soc-optimization-toolkit'
     allowlist:
       - Content-Type
       - Accept
@@ -85,6 +89,7 @@ raw.githubusercontent.com:
   headers:
     inject:
       Authorization: '`Bearer ${kv.githubPat}`'
+      User-Agent: 'cribl-soc-optimization-toolkit'
     allowlist:
       - Content-Type
       - Accept

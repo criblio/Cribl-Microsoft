@@ -28,6 +28,9 @@ const FILE_MODE = 0o600;
 // be able to steer the host, PAT attached, at arbitrary destinations).
 const ALLOWED_GITHUB_HOSTS = new Set(['api.github.com', 'raw.githubusercontent.com']);
 const GITHUB_JSON_ACCEPT = 'application/vnd.github+json';
+// GitHub rejects any API request without a User-Agent with HTTP 403, and Node's
+// fetch does not set one by default - send an explicit app identifier.
+const GITHUB_USER_AGENT = 'cribl-soc-optimization-toolkit';
 const PAT_VALIDATION_URL = 'https://api.github.com/user';
 // Format precheck mirrored from @soc/core patFormatIssue (kept in sync as a
 // small constant since the host cannot import the TypeScript core at runtime).
@@ -132,7 +135,11 @@ export function createGithubProxy(dataDir, logger) {
         try {
           res = await fetchTextWithTimeout(PAT_VALIDATION_URL, {
             method: 'GET',
-            headers: { Authorization: `Bearer ${pat}`, Accept: GITHUB_JSON_ACCEPT },
+            headers: {
+              Authorization: `Bearer ${pat}`,
+              Accept: GITHUB_JSON_ACCEPT,
+              'User-Agent': GITHUB_USER_AGENT,
+            },
           });
         } catch (err) {
           // Transport failure: store nothing, surface the actionable message.
@@ -202,7 +209,7 @@ export function createGithubProxy(dataDir, logger) {
       }
       const token = await currentToken();
       /** @type {Record<string, string>} */
-      const headers = { Accept: GITHUB_JSON_ACCEPT };
+      const headers = { Accept: GITHUB_JSON_ACCEPT, 'User-Agent': GITHUB_USER_AGENT };
       if (token !== '') {
         headers.Authorization = `Bearer ${token}`;
       }
