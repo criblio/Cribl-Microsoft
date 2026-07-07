@@ -2816,3 +2816,267 @@ button.journey-step-main:hover .journey-step-label {
   font-size: 12px;
   font-family: var(--font-mono, monospace);
 }
+
+/* ---------------------------------------------------------------------------
+ * Setup Wizard (porting-plan Unit 22): the assembled first-run flow chrome -
+ * a 3-segment progress bar (Target/Connect/Mode), radio CARDS with a
+ * Recommended badge, the tradeoff table, and the persistent Connections +
+ * Repositories status footer with Back / Next / Get Started. Reuses the shared
+ * status tokens so light and dark both work.
+ * ------------------------------------------------------------------------- */
+.wizard-screen {
+  min-height: 100vh;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 32px 16px;
+  background: var(--bg);
+  color: var(--text);
+}
+.wizard-shell {
+  width: 100%;
+  max-width: 860px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.wizard-header {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.wizard-title {
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 28px;
+  color: var(--text-strong);
+}
+.wizard-subtitle {
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--text-faint);
+}
+
+.wizard-progress {
+  display: flex;
+  gap: 8px;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.wizard-progress-seg {
+  flex: 1 1 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-top: 3px solid var(--border);
+  background: var(--surface);
+}
+.wizard-progress-seg-complete {
+  border-top-color: var(--ok);
+}
+.wizard-progress-seg-current {
+  border-top-color: var(--accent);
+  background: var(--accent-bg);
+}
+.wizard-progress-index {
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+.wizard-progress-seg-current .wizard-progress-index {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--on-accent);
+}
+.wizard-progress-seg-complete .wizard-progress-index {
+  background: var(--ok);
+  border-color: var(--ok);
+  color: var(--on-accent);
+}
+.wizard-progress-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.wizard-body {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  padding: 20px;
+}
+.wizard-step {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.wizard-step-title {
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 22px;
+  color: var(--text-strong);
+}
+
+.wizard-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.wizard-card {
+  font-family: inherit;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  text-align: left;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  cursor: pointer;
+}
+.wizard-card:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+.wizard-card-selected {
+  border-color: var(--accent);
+  background: var(--accent-bg);
+}
+.wizard-card:disabled,
+.wizard-card-unavailable {
+  opacity: 0.55;
+  cursor: default;
+}
+.wizard-card-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.wizard-card-label {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 20px;
+  color: var(--text);
+}
+.wizard-card-desc {
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--text-muted);
+}
+.wizard-card-reason {
+  font-size: 11px;
+  line-height: 16px;
+  color: var(--warn);
+}
+.wizard-recommended-badge {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: var(--ok-bg);
+  border: 1px solid var(--ok-border);
+  color: var(--ok-strong);
+}
+
+.wizard-tradeoff {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+.wizard-tradeoff-col {
+  flex: 1 1 240px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.wizard-tradeoff-heading {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-faint);
+}
+.wizard-tradeoff-list {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--text-muted);
+}
+.wizard-tradeoff-list-cannot {
+  color: var(--text-faint);
+}
+
+.wizard-footer {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  border: 1px solid var(--border);
+  background: var(--surface-raised);
+  padding: 14px 16px;
+}
+.wizard-footer-status {
+  display: flex;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+.wizard-status-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.wizard-status-group-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-faint);
+}
+.wizard-status-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text);
+}
+.wizard-status-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--text-muted);
+}
+.wizard-status-ready .wizard-status-dot {
+  background: var(--ok);
+}
+.wizard-status-pending .wizard-status-dot {
+  background: var(--text-faint);
+}
+.wizard-status-attention .wizard-status-dot {
+  background: var(--warn);
+}
+.wizard-footer-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+}
+.wizard-footer-actions .field-hint {
+  margin-right: auto;
+}
+.wizard-footer-hint {
+  font-size: 11px;
+  line-height: 16px;
+  color: var(--warn);
+  text-align: right;
+}

@@ -23,7 +23,6 @@ import {
   HomeScreen,
   IntegrateScreen,
   LogsScreen,
-  ModeSelect,
   OnboardTableScreen,
   OptionsScreen,
   PackInventoryScreen,
@@ -32,6 +31,7 @@ import {
   RepositoriesScreen,
   ReviewScreen,
   SettingsScreen,
+  SetupWizard,
   commitNoticeText,
   formatScopeChip,
   logLineToEntry,
@@ -80,6 +80,7 @@ import type {
   SetupPath as PreflightSetupPath,
   TargetScope,
   ThemeChoice,
+  WizardCapabilities,
 } from '@soc/core';
 import { fetchWithTimeout, makeLocalPorts } from './local-adapters';
 import { HostLogger } from './logger';
@@ -509,7 +510,49 @@ export function LocalApp() {
     return <AuaGate onAccept={handleAccept} />;
   }
   if (phase.phase === 'mode-select') {
-    return <ModeSelect onSelect={handleSelectMode} />;
+    // First-run onboarding: the assembled Setup Wizard (porting-plan Unit 22)
+    // replaces the plain mode chooser. Acceptance is already handled by the
+    // AuaGate phase above, so the wizard opens at the Target step and its Get
+    // Started persists the chosen mode through the same handleSelectMode the
+    // plain chooser used. The composed preflight + repositories panels read IO
+    // through PortsContext, so the wizard is mounted inside a PortsProvider
+    // (the host config falls back to the empty config while it loads).
+    //
+    // Capabilities gate the mode cards from what the host config actually
+    // configures (identity present -> Azure; a leader URL -> Cribl); the
+    // preflight step is where the operator VERIFIES those links.
+    const wizardCapabilities: WizardCapabilities = {
+      hasAzure:
+        activeAzureConfig !== null &&
+        activeAzureConfig.tenantId.trim() !== '' &&
+        activeAzureConfig.clientId.trim() !== '',
+      hasCribl:
+        load.state === 'loaded' && load.config.criblLeaderUrl.trim() !== '',
+    };
+    return (
+      <PortsProvider ports={ports} config={activeAzureConfig ?? EMPTY_AZURE_CONFIG}>
+        <SetupWizard
+          capabilities={wizardCapabilities}
+          initialTarget="local"
+          criblShellMode="local"
+          contentPlatform="local"
+          defaultSetupPath={defaultPreflightPath(
+            activeAzureConfig?.setupPath ?? 'existing',
+          )}
+          connectGuidance={
+            'This local host reads leader credentials from config/local-config.json: ' +
+            'edit the file, restart the host, then reload. The base-URL check above ' +
+            'validates the value you would put there. A live in-app reconnect ships later.'
+          }
+          azureConnectGuidance={
+            'The Azure service-principal identity (tenant, client id, client secret) ' +
+            'lives in config/local-config.json; edit the file and restart the host to ' +
+            'change it, then use the permission check to verify access.'
+          }
+          onGetStarted={handleSelectMode}
+        />
+      </PortsProvider>
+    );
   }
 
   // The journey readiness FACTS (ux-flow-plan 4.1, Unit 6.5), composed from

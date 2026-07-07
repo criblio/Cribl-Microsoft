@@ -621,6 +621,58 @@ export type {
   SidePhase,
 } from "./screens/preflight/preflight-state";
 
+// Setup Wizard (porting-plan Unit 22, GUI-03 delta): the local-app first-run
+// onboarding ASSEMBLED from already-shipped pieces - AuaGate (Unit 1) ->
+// target chooser (core tradeoff data) -> Connect (the .tgz upload walkthrough
+// for cribl-hosted, the leader-connect form for local over the core base-URL +
+// dual-profile rules) -> permission preflight (Unit 9) -> Repositories/PAT
+// (Unit 14) -> availability-gated mode cards with a Recommended badge (the core
+// matrix) -> Get Started. The pure decision layer (concrete step list with the
+// injected panels, Back/Next navigation, 3-segment progress mapping, footer
+// status, Get Started gate, leader base-URL dispatch) lives in
+// setup-wizard-state with its own tests; the abstract rules stay in @soc/core.
+export { SetupWizard } from "./screens/setup-wizard/setup-wizard";
+export type { SetupWizardProps } from "./screens/setup-wizard/setup-wizard";
+export { TargetChooser } from "./screens/setup-wizard/target-chooser";
+export type { TargetChooserProps } from "./screens/setup-wizard/target-chooser";
+export { ModeCardGrid } from "./screens/setup-wizard/mode-card-grid";
+export type { ModeCardGridProps } from "./screens/setup-wizard/mode-card-grid";
+export { LeaderConnectStep } from "./screens/setup-wizard/leader-connect-step";
+export type {
+  AppliedReconnect,
+  LeaderConnectStepProps,
+} from "./screens/setup-wizard/leader-connect-step";
+export { UploadWalkthroughStep } from "./screens/setup-wizard/upload-walkthrough-step";
+export type { UploadWalkthroughStepProps } from "./screens/setup-wizard/upload-walkthrough-step";
+export {
+  GET_STARTED_MODE_UNAVAILABLE_REASON,
+  GET_STARTED_NO_MODE_REASON,
+  GET_STARTED_NOT_FINAL_REASON,
+  deriveFooterStatus,
+  deriveGetStarted,
+  deriveLeaderBaseUrl,
+  isFinalView,
+  isFirstView,
+  nextViewId,
+  previousViewId,
+  resolveCurrentViewId,
+  wizardViewIds,
+  wizardViewProgress,
+  wizardViews,
+} from "./screens/setup-wizard/setup-wizard-state";
+export type {
+  GetStartedGate,
+  GetStartedInput,
+  LeaderConnectFormInput,
+  WizardExtraViewId,
+  WizardFooterInput,
+  WizardFooterStatus,
+  WizardStatusItem,
+  WizardStatusTone,
+  WizardView,
+  WizardViewId,
+} from "./screens/setup-wizard/setup-wizard-state";
+
 // Settings.
 export { SettingsScreen } from "./screens/settings-screen";
 export type {

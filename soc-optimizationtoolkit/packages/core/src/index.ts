@@ -29,6 +29,7 @@ export * from "./domain/option-forms";
 export * from "./domain/sentinel-destination";
 export * from "./domain/custom-table";
 export * from "./domain/journey-state";
+export * from "./domain/first-run-wizard";
 export * from "./domain/integrate-arc";
 export * from "./domain/sample-parsing";
 export * from "./domain/field-matcher";
