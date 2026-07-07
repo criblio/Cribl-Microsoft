@@ -23,6 +23,7 @@ import type {
   Logger,
   PackBuildRecord,
   PackScaffoldInput,
+  RemoteSampleSource,
   SecretsStore,
   SentinelContent,
   TaggedSampleStore,
@@ -127,6 +128,15 @@ export interface UiPorts {
    * result so it is fetched at most once per upstream commit.
    */
   contentCache?: ContentCache;
+  /**
+   * OPTIONAL elastic/cribl sample fetch seam (porting-plan Unit 16). The Browse
+   * Samples modal's sentinel-repo tier runs through {@link content}; this seam
+   * powers the ELASTIC and CRIBL browse tiers (the two sibling GitHub repos the
+   * SentinelContent port cannot address), bound by each shell over the same
+   * api.github.com + raw.githubusercontent.com hosts. Absent = those two tiers
+   * stay empty; the sentinel-repo tier still works.
+   */
+  sampleSource?: RemoteSampleSource;
   /**
    * OPTIONAL GitHub PAT lifecycle manager (porting-plan Unit 14). The
    * Repositories settings page validates-then-stores a PAT through it and reads

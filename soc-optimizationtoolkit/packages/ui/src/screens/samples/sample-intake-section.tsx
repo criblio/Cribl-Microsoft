@@ -35,7 +35,16 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { TaggedSample, TaggedSampleStore } from "@soc/core";
+import type {
+  Logger,
+  RemoteSampleSource,
+  ResolvedSample,
+  SentinelContent,
+  TaggedSample,
+  TaggedSampleStore,
+} from "@soc/core";
+import { BrowseSamplesModal } from "./browse-samples-modal";
+import { plannedTagged } from "./browse-samples-state";
 import {
   chipFromTagged,
   dedupeByLogType,
@@ -80,12 +89,36 @@ export interface SampleIntakeSectionProps {
    * re-keys the sample, the callback re-keys everything else.
    */
   onRenameLogType?: (from: string, to: string) => void;
+  /**
+   * The active solution name (Unit 14 selection). Drives the Browse Samples
+   * modal, which is curated per solution. Empty = no solution selected, so the
+   * Browse Samples button stays visible-but-disabled with a reason.
+   */
+  solutionName?: string;
+  /**
+   * OPTIONAL Unit 14 Sentinel content port (porting-plan Unit 16). Powers the
+   * Browse Samples modal's sentinel-repo tier. Absent = the button stays
+   * visible-but-disabled (a shell wiring gap, not a runtime state).
+   */
+  content?: SentinelContent;
+  /**
+   * OPTIONAL elastic/cribl fetch seam (porting-plan Unit 16). Absent = those
+   * browse tiers stay empty; the sentinel-repo tier still works via {@link
+   * content}.
+   */
+  sampleSource?: RemoteSampleSource;
+  /** OPTIONAL diagnostics sink forwarded to the acquisition usecase. */
+  logger?: Logger;
 }
 
 export function SampleIntakeSection({
   store,
   onSamplesChange,
   onRenameLogType,
+  solutionName = "",
+  content,
+  sampleSource,
+  logger,
 }: SampleIntakeSectionProps) {
   const [samples, setSamples] = useState<TaggedSample[] | null>(null);
   const [loadError, setLoadError] = useState("");
@@ -106,6 +139,10 @@ export function SampleIntakeSection({
   // A multi-file batch queues EVERY headerless CSV; the per-chip affordance
   // opens a single-item queue. null = no dialog.
   const [csvQueue, setCsvQueue] = useState<CsvResolutionQueue | null>(null);
+
+  // Browse Samples modal (Unit 16): non-null-open flag. Browsing never touches
+  // the store - only the modal's Load path (loadBrowsed) commits.
+  const [browsing, setBrowsing] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -270,6 +307,42 @@ export function SampleIntakeSection({
     }
   }, [renaming, samples, store, commit, onRenameLogType]);
 
+  // Commit the samples loaded from the Browse Samples modal: convert each
+  // resolved sample to a tagged sample (one per log type, last wins) and upsert
+  // it, REPLACING any existing sample with the same log type. This is the only
+  // path that touches the store from browse - browsing itself never commits.
+  const loadBrowsed = useCallback(
+    async (resolved: ResolvedSample[]) => {
+      const tagged = plannedTagged(resolved);
+      if (tagged.length === 0) {
+        return;
+      }
+      setBusy(true);
+      setUploadError("");
+      try {
+        let next = samples ?? [];
+        for (const sample of tagged) {
+          await store.upsert(sample);
+          next = upsertSample(next, sample);
+        }
+        commit(next);
+      } catch (err) {
+        setUploadError(`Loading browsed samples failed: ${String(err)}`);
+      } finally {
+        setBusy(false);
+      }
+    },
+    [store, samples, commit],
+  );
+
+  // Why the Browse Samples button is disabled, or null when it is usable.
+  const browseDisabledReason =
+    content === undefined
+      ? "Connect a repository in Repositories settings to browse curated samples."
+      : solutionName.trim() === ""
+        ? "Select a solution above to browse its curated samples."
+        : null;
+
   // Advance the CSV resolution queue after an apply or a skip; close when done.
   const advanceCsvQueue = useCallback(() => {
     setCsvQueue((current) => {
@@ -379,8 +452,22 @@ export function SampleIntakeSection({
           >
             Upload Files
           </button>
+          {/* Browse Samples is the green/positive CTA (design language 10):
+              curated samples for the active solution. Always visible; disabled
+              with a reason when no solution or no content port is available. */}
+          <button
+            className="next-action-button next-action-button-positive"
+            onClick={() => setBrowsing(true)}
+            disabled={busy || browseDisabledReason !== null}
+            title={browseDisabledReason ?? "Browse curated samples for this solution"}
+          >
+            Browse Samples
+          </button>
           {pasteError !== "" && <span className="field-hint">{pasteError}</span>}
         </div>
+        {browseDisabledReason !== null && (
+          <span className="field-hint">{browseDisabledReason}</span>
+        )}
         <span className="field-hint">
           Upload one or more files instead of pasting: the log type is
           auto-detected from each filename and content; rename it on the chip
@@ -568,6 +655,21 @@ export function SampleIntakeSection({
             />
           );
         })()}
+
+      {/* Browse Samples modal (Unit 16). Rendered only when content is bound and
+          a solution is selected (the button is disabled otherwise). Loading a
+          selection converts + upserts through loadBrowsed; browsing commits
+          nothing. */}
+      {browsing && content !== undefined && (
+        <BrowseSamplesModal
+          solutionName={solutionName}
+          content={content}
+          {...(sampleSource !== undefined ? { sampleSource } : {})}
+          {...(logger !== undefined ? { logger } : {})}
+          onClose={() => setBrowsing(false)}
+          onLoad={loadBrowsed}
+        />
+      )}
     </div>
   );
 }

@@ -6,6 +6,7 @@ export * from "./assign-dcr-role";
 export * from "./azure-discovery";
 export * from "./deployment-preview";
 export * from "./analyze-samples";
+export * from "./acquire-samples";
 export * from "./coverage-analysis";
 export * from "./guided-deploy";
 export * from "./permission-preflight";

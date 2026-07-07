@@ -451,6 +451,12 @@ export function IntegrateScreen({
         store={ports.samples}
         onSamplesChange={handleSamplesChange}
         onRenameLogType={handleRenameLogType}
+        solutionName={solution?.name ?? ""}
+        {...(ports.content !== undefined ? { content: ports.content } : {})}
+        {...(ports.sampleSource !== undefined
+          ? { sampleSource: ports.sampleSource }
+          : {})}
+        {...(ports.logger !== undefined ? { logger: ports.logger } : {})}
       />
       <MatchPreviewSection samples={samples} />
     </>

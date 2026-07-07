@@ -1809,6 +1809,131 @@ button.journey-step-main:hover .journey-step-label {
 }
 
 /* ---------------------------------------------------------------------------
+ * Browse Samples modal (screens/samples/browse-samples-modal.tsx, Unit 16):
+ * a modal over the Sample Data section that lists curated samples for the
+ * active solution grouped by tier, each tier with an indeterminate select-all,
+ * a preview per entry, and a live load summary. Reuses the CSV dialog shell
+ * (.csv-dialog-overlay / .csv-dialog); theme tokens only.
+ * ------------------------------------------------------------------------ */
+
+.browse-dialog {
+  max-width: 760px;
+}
+
+.browse-dialog-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 12px;
+  font-size: 12px;
+  line-height: 1.5;
+  border: 1px solid var(--border-subtle);
+  background: var(--surface-raised);
+  color: var(--text-muted);
+}
+
+.browse-dialog-status-ok {
+  border-color: var(--ok-border);
+  background: var(--ok-bg);
+  color: var(--ok-strong);
+}
+
+.browse-dialog-status-warn {
+  border-color: var(--warn-border);
+  background: var(--warn-bg);
+  color: var(--warn);
+}
+
+.browse-tier {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.browse-tier-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.browse-tier-select {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.browse-tier-name {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.browse-tier-counts {
+  margin-left: auto;
+  font-family: 'Consolas', 'Menlo', 'Courier New', monospace;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.browse-entry-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.browse-entry {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--border-subtle);
+  background: var(--surface-raised);
+  cursor: pointer;
+}
+
+.browse-entry-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  flex: 1;
+}
+
+.browse-entry-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.browse-entry-name {
+  font-family: 'Consolas', 'Menlo', 'Courier New', monospace;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  word-break: break-all;
+}
+
+.browse-entry-source {
+  font-size: 12px;
+  color: var(--text-faint);
+  word-break: break-all;
+}
+
+.browse-entry-preview {
+  margin: 0;
+  max-height: 96px;
+  overflow: auto;
+}
+
+/* ---------------------------------------------------------------------------
  * Match preview (porting-plan Unit 13 UI) - the minimal, read-only preview
  * seeded into the Sample Data section: stat cards in the legacy gap-analysis
  * vocabulary, surfaced warnings, and an expandable per-field mapping list. The

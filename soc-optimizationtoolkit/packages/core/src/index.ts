@@ -32,6 +32,7 @@ export * from "./domain/journey-state";
 export * from "./domain/first-run-wizard";
 export * from "./domain/integrate-arc";
 export * from "./domain/sample-parsing";
+export * from "./domain/sample-acquisition";
 export * from "./domain/field-matcher";
 export * from "./domain/sentinel-content";
 export * from "./domain/gap-analysis";
