@@ -2713,3 +2713,106 @@ button.journey-step-main:hover .journey-step-label {
   border: 1px solid var(--error-border);
   background: var(--error-bg);
 }
+
+/* ---------------------------------------------------------------------------
+ * RBAC preflight panel (porting-plan Unit 9, ENG-38 delta / GUI-11): the Setup
+ * Wizard's permission-check step. Two side sections (Azure, Cribl), each a list
+ * of per-capability status DOTS, plus the granted-roles decoration and the
+ * Retry / Switch account actions. Dot tones reuse the shared status tokens so
+ * light and dark modes track automatically.
+ * ------------------------------------------------------------------------- */
+.preflight-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.preflight-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.preflight-summary {
+  padding: 10px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--surface-raised);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.preflight-summary.status-ok {
+  border-color: var(--ok);
+}
+.preflight-summary.status-failed {
+  border-color: var(--error);
+}
+.preflight-summary.status-running {
+  border-color: var(--running);
+}
+.preflight-sides {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 16px;
+}
+.preflight-side {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--surface-raised);
+}
+.preflight-side-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.preflight-dot-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.preflight-dot-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.preflight-dot {
+  flex: 0 0 auto;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  align-self: center;
+}
+.preflight-dot-granted .preflight-dot {
+  background: var(--ok);
+}
+.preflight-dot-missing .preflight-dot {
+  background: var(--error);
+}
+.preflight-dot-unknown .preflight-dot {
+  background: var(--warn);
+}
+.preflight-dot-pending .preflight-dot {
+  background: var(--running);
+}
+.preflight-dot-label {
+  color: var(--text-primary);
+}
+.preflight-dot-status {
+  color: var(--text-muted);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.preflight-dot-detail {
+  color: var(--text-muted);
+  font-size: 12px;
+  font-family: var(--font-mono, monospace);
+}

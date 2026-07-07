@@ -28,6 +28,7 @@ import {
   OptionsScreen,
   PackInventoryScreen,
   PortsProvider,
+  RbacPreflightPanel,
   RepositoriesScreen,
   ReviewScreen,
   SettingsScreen,
@@ -76,11 +77,28 @@ import type {
   BatchPacing,
   JourneyFacts,
   LogEntry,
+  SetupPath as PreflightSetupPath,
   TargetScope,
   ThemeChoice,
 } from '@soc/core';
 import { fetchWithTimeout, makeLocalPorts } from './local-adapters';
 import { HostLogger } from './logger';
+
+// Map the coarse setup path (persisted on AzureConfig) to the DEFAULT core
+// preflight SetupPath the RBAC panel opens on. 'existing' defaults to the
+// resource-group WRITE path; the operator can switch inside the panel.
+function defaultPreflightPath(
+  path: 'existing' | 'lab-new-rg' | 'lab-byo-rg',
+): PreflightSetupPath {
+  switch (path) {
+    case 'existing':
+      return 'existing-rg';
+    case 'lab-new-rg':
+      return 'lab-new-rg-subscription';
+    case 'lab-byo-rg':
+      return 'lab-byo-rg';
+  }
+}
 
 // Constructed once: the adapters are stateless over the host API, and a
 // stable identity keeps PortsProvider's memoized context value stable. The
@@ -939,6 +957,37 @@ export function LocalApp() {
     />
   );
 
+  // Preflight route (porting-plan Unit 9, ENG-38 delta / GUI-11): the Setup
+  // Wizard's PERMISSION-CHECK step. The panel runs the @soc/core side-runners
+  // over the local shell's ports. On the LOCAL shell the Cribl probes are
+  // genuinely informative against the configured leader (mode 'local'), so
+  // criblShellMode is 'local'. Switch account is a reconnect: the loopback host
+  // holds the credentials, so it routes to Settings which explains editing
+  // config/local-config.json and restarting. requires 'azure'; INFORMATIONAL,
+  // it never gates the deploy partition.
+  const renderPreflight = (nav: AppFrameNav) => (
+    <>
+      <header className="harness-header">
+        <h1 className="harness-title">Permission preflight</h1>
+        <p className="harness-subtitle">
+          What the configured identity can and cannot do, on both Azure and
+          Cribl, before a deploy is attempted. Effective-action checks and live
+          probes are the truth; role names are decoration. This is
+          informational - it reports access, it does not gate the deploy.
+        </p>
+      </header>
+      <PortsProvider ports={ports} config={activeAzureConfig ?? EMPTY_AZURE_CONFIG}>
+        <RbacPreflightPanel
+          criblShellMode="local"
+          defaultSetupPath={defaultPreflightPath(
+            activeAzureConfig?.setupPath ?? 'existing',
+          )}
+          onSwitchAccount={() => nav.navigate('settings')}
+        />
+      </PortsProvider>
+    </>
+  );
+
   // Route table, SECTIONED per ux-flow-plan 4.4: journey steps in dependency
   // order - Home, then Integrate (the single-page flagship, the PRIMARY
   // journey route), then the standalone Azure Targeting, Onboard, Batch
@@ -955,6 +1004,7 @@ export function LocalApp() {
     { id: 'home', label: 'Home', requires: 'none', section: 'journey', render: renderHome },
     { id: 'integrate', label: 'Integrate', requires: 'both', section: 'journey', render: renderIntegrate },
     { id: 'azure-target', label: 'Azure Targeting', requires: 'azure', section: 'journey', render: () => targetingView },
+    { id: 'preflight', label: 'Preflight', requires: 'azure', section: 'journey', render: renderPreflight },
     { id: 'onboard', label: 'Onboard', requires: 'both', section: 'journey', render: () => onboardView },
     { id: 'batch-onboard', label: 'Batch Onboard', requires: 'azure', section: 'journey', render: renderBatch },
     { id: 'review', label: 'Review', requires: 'azure', section: 'journey', render: renderReview },

@@ -587,6 +587,40 @@ export type {
   RoleOutcomeView,
 } from "./screens/role-assignment/role-assignment-state";
 
+// RBAC preflight panel (porting-plan Unit 9, ENG-38 delta / GUI-11): the Setup
+// Wizard's PERMISSION-CHECK step in the onboarding consent flow. The panel runs
+// the @soc/core runAzurePreflight / runCriblPreflight side-runners INDEPENDENTLY
+// (partial results render honestly - one side pending/failed never blanks the
+// other) and renders per-capability status DOTS, the granted-roles decoration,
+// and RETRY / SWITCH ACCOUNT actions. INFORMATIONAL / NON-GATING: the verdict is
+// surfaced as hasRequiredAccess (a PERMISSION verdict), deliberately distinct
+// from integrate-arc's canDeploy so the two never collide. Pure decisions
+// (dot derivation, retry/switch enablement, partial-render state, summary) live
+// in preflight-state with their own tests.
+export { RbacPreflightPanel } from "./screens/preflight/rbac-preflight-panel";
+export type { RbacPreflightPanelProps } from "./screens/preflight/rbac-preflight-panel";
+export {
+  PREFLIGHT_NO_SWITCH_REASON,
+  PREFLIGHT_RUNNING_REASON,
+  deriveAzureDots,
+  deriveCriblDots,
+  derivePreflightView,
+  dotStatusLabel,
+  dotToneClass,
+  preflightActions,
+} from "./screens/preflight/preflight-state";
+export type {
+  AzureSideState,
+  CapabilityDot,
+  CriblSideState,
+  DotStatus,
+  PreflightActionsView,
+  PreflightSideView,
+  PreflightView,
+  PreflightViewInput,
+  SidePhase,
+} from "./screens/preflight/preflight-state";
+
 // Settings.
 export { SettingsScreen } from "./screens/settings-screen";
 export type {

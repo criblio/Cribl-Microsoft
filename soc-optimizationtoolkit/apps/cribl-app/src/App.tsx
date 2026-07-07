@@ -15,6 +15,7 @@ import {
   OptionsScreen,
   PackInventoryScreen,
   PortsProvider,
+  RbacPreflightPanel,
   RepositoriesScreen,
   ReviewScreen,
   SettingsScreen,
@@ -82,6 +83,7 @@ import type {
   PermissionsResponse,
   ProfileStore,
   RequiredAction,
+  SetupPath as PreflightSetupPath,
   TargetScope,
   ThemeChoice,
 } from '@soc/core';
@@ -467,6 +469,21 @@ function KvStorePanel() {
 // group. Blank fields stay as <placeholders> so a partial copy is still visibly
 // incomplete.
 type SetupPath = 'existing' | 'lab-new-rg' | 'lab-byo-rg';
+
+// Map the coarse shell setup path (persisted on AzureConfig) to the DEFAULT
+// core preflight SetupPath the RBAC panel opens on. 'existing' defaults to the
+// resource-group WRITE path (what deploy-readiness turns on); the operator can
+// switch to the subscription-scope read path inside the panel.
+function defaultPreflightPath(path: SetupPath): PreflightSetupPath {
+  switch (path) {
+    case 'existing':
+      return 'existing-rg';
+    case 'lab-new-rg':
+      return 'lab-new-rg-subscription';
+    case 'lab-byo-rg':
+      return 'lab-byo-rg';
+  }
+}
 
 // Reusable "generate a change request" block for operators who must ASK another
 // team to perform a setup step (create the app registration, assign roles, or
@@ -2388,6 +2405,41 @@ function App() {
     </>
   );
 
+  // Preflight route (porting-plan Unit 9, ENG-38 delta / GUI-11): the Setup
+  // Wizard's PERMISSION-CHECK step in the onboarding consent flow. The panel
+  // runs the @soc/core side-runners over THIS shell's ports (Azure effective
+  // actions + live probes; Cribl capability probes) and renders per-capability
+  // dots + Retry / Switch account. On the CLOUD shell the Cribl side is
+  // granted-by-platform (mode 'cloud'), so criblShellMode is 'cloud'. Switch
+  // account clears the live secret for this session and returns to the connect
+  // step (Diagnostics panel 3). requires 'azure' - the Azure side is the
+  // informative half here; INFORMATIONAL, it never gates the deploy partition.
+  const renderPreflight = (nav: AppFrameNav) => (
+    <>
+      <header className="harness-header">
+        <h1 className="harness-title">Permission preflight</h1>
+        <p className="harness-subtitle">
+          What the connected identity can and cannot do, on both Azure and
+          Cribl, before a deploy is attempted. Effective-action checks and live
+          probes are the truth; role names are decoration. This is
+          informational - it reports access, it does not gate the deploy.
+        </p>
+      </header>
+      <PortsProvider ports={cloudPorts} config={activeConfig}>
+        <RbacPreflightPanel
+          key={`preflight-${store.activeProfileId ?? 'none'}`}
+          criblShellMode="cloud"
+          defaultSetupPath={defaultPreflightPath(activeConfig.setupPath)}
+          onSwitchAccount={() => {
+            setLiveSecretProfileId(null);
+            setLiveSecretIdentity(null);
+            nav.navigate('harness');
+          }}
+        />
+      </PortsProvider>
+    </>
+  );
+
   // The Integrate route (legacy-flow-analysis.md single-page decision): THE
   // MVP centerpiece - the single-page Integrate flagship composing the built
   // screens (Azure Targeting cascade + the operable native-table deploy) as
@@ -2776,6 +2828,7 @@ function App() {
     { id: 'home', label: 'Home', requires: 'none', section: 'journey', render: renderHome },
     { id: 'integrate', label: 'Integrate', requires: 'both', section: 'journey', render: renderIntegrate },
     { id: 'azure-target', label: 'Azure Targeting', requires: 'azure', section: 'journey', render: renderTargeting },
+    { id: 'preflight', label: 'Preflight', requires: 'azure', section: 'journey', render: renderPreflight },
     { id: 'onboard', label: 'Onboard', requires: 'both', section: 'journey', render: renderOnboard },
     { id: 'batch-onboard', label: 'Batch Onboard', requires: 'azure', section: 'journey', render: renderBatch },
     { id: 'review', label: 'Review', requires: 'azure', section: 'journey', render: renderReview },

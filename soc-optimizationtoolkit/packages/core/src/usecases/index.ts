@@ -8,3 +8,4 @@ export * from "./deployment-preview";
 export * from "./analyze-samples";
 export * from "./coverage-analysis";
 export * from "./guided-deploy";
+export * from "./permission-preflight";
