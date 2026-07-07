@@ -2826,7 +2826,7 @@ function App() {
   // serving Choose/Configure, mirroring the integrate arc's stage order.
   const routes: AppRoute[] = [
     { id: 'home', label: 'Home', requires: 'none', section: 'journey', render: renderHome },
-    { id: 'integrate', label: 'Integrate', requires: 'both', section: 'journey', render: renderIntegrate },
+    { id: 'integrate', label: 'Sentinel Integration', requires: 'both', section: 'journey', render: renderIntegrate },
     { id: 'azure-target', label: 'Azure Targeting', requires: 'azure', section: 'journey', render: renderTargeting },
     { id: 'preflight', label: 'Preflight', requires: 'azure', section: 'journey', render: renderPreflight },
     { id: 'onboard', label: 'Onboard', requires: 'both', section: 'journey', render: renderOnboard },
