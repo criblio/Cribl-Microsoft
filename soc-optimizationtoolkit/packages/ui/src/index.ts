@@ -138,6 +138,8 @@ export type { NextActionView } from "./screens/home/home-state";
 // the pure decision layer behind it all.
 export { ReviewScreen } from "./screens/review/review-screen";
 export type { ReviewScreenProps } from "./screens/review/review-screen";
+export { DcrAutomationScreen } from "./screens/dcr-automation/dcr-automation-screen";
+export type { DcrAutomationScreenProps } from "./screens/dcr-automation/dcr-automation-screen";
 export {
   HANDOFF_CHECKING_REASON,
   HANDOFF_NEEDS_ACKNOWLEDGE_REASON,

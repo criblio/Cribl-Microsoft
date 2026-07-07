@@ -124,13 +124,13 @@ describe("groupNavSections", () => {
       { id: "options" },
       { id: "azure-target", section: "journey" },
       { id: "logs" },
-      { id: "onboard", section: "journey" },
+      { id: "dcr-automation", section: "journey" },
     ];
     const groups = groupNavSections(items);
     expect(groups[0]?.items.map((i) => i.id)).toEqual([
       "home",
       "azure-target",
-      "onboard",
+      "dcr-automation",
     ]);
     expect(groups[1]?.items.map((i) => i.id)).toEqual(["options", "logs"]);
   });

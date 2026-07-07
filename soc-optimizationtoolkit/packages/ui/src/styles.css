@@ -1731,6 +1731,48 @@ button.journey-step-main:hover .journey-step-label {
   border-bottom-color: var(--accent);
 }
 
+/* DCR Automation mode toggle - the Single/Batch switch on the consolidated
+   DCR Automation screen. A segmented pill sitting above the active sub-view. */
+.dcr-mode-toggle {
+  display: inline-flex;
+  gap: 2px;
+  margin: 0 0 16px;
+  padding: 3px;
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill, 999px);
+}
+
+.dcr-mode-tab {
+  padding: 6px 18px;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-pill, 999px);
+  cursor: pointer;
+}
+
+.dcr-mode-tab:hover:not(:disabled) {
+  color: var(--text);
+}
+
+.dcr-mode-tab-active {
+  color: var(--on-accent);
+  background: var(--accent);
+}
+
+.dcr-mode-tab:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.dcr-mode-note {
+  margin: -8px 0 16px;
+}
+
 .csv-dialog-tabbody {
   display: flex;
   flex-direction: column;

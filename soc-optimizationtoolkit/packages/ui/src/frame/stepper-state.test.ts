@@ -73,7 +73,7 @@ describe("buildStepperItems", () => {
     const deploy = stage(journey.integrate, "deploy");
     expect(deploy.status).toBe("blocked");
     const [item] = buildStepperItems([deploy], SHARED_JOURNEY_LINKS);
-    expect(item?.routeId).toBe("onboard");
+    expect(item?.routeId).toBe("dcr-automation");
   });
 
   it("prefers blockedReason over the link hint, falls back to the link hint, else null", () => {

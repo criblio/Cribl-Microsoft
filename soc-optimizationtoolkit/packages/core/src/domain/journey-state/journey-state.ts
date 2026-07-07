@@ -534,7 +534,7 @@ export function nextAction(facts: JourneyFacts): NextAction | null {
       stageId: "choose-content",
       label: "Choose content to onboard",
       description:
-        "Pick a table or vendor schemas on Onboard or DCR Automation to start an integration run.",
+        "Pick a table or vendor schemas on the DCR Automation screen to start an integration run.",
     };
   }
   return null;

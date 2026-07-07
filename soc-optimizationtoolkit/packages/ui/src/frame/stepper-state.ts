@@ -48,12 +48,12 @@ export const SHARED_JOURNEY_LINKS: JourneyLinks = {
     hint: "Summarized by the readiness chips on Home; the preflight report ships later.",
   },
   "choose-content": {
-    routeId: "onboard",
-    hint: "One table on Onboard; many tables on DCR Automation.",
+    routeId: "dcr-automation",
+    hint: "Single or batch DCR deployment on the DCR Automation screen.",
   },
   configure: {
-    routeId: "onboard",
-    hint: "Per-run overrides live on the run screens; saved defaults in Options.",
+    routeId: "dcr-automation",
+    hint: "Per-run overrides live on the run screen; saved defaults in Options.",
   },
   review: {
     routeId: "review",
@@ -62,9 +62,9 @@ export const SHARED_JOURNEY_LINKS: JourneyLinks = {
       "acknowledging the preview arms the Deploy handoff on that screen.",
   },
   deploy: {
-    routeId: "onboard",
+    routeId: "dcr-automation",
     hint:
-      "Run on Onboard or DCR Automation. The Review stage previews what a " +
+      "Run single or batch on DCR Automation. The Review stage previews what a " +
       "run would create - recommended, never required (read-ahead).",
   },
 };

@@ -19,6 +19,7 @@ import {
   AuaGate,
   AzureTargetingScreen,
   BatchDeployScreen,
+  DcrAutomationScreen,
   EMPTY_MODE_RECORD,
   HomeScreen,
   IntegrateScreen,
@@ -200,15 +201,15 @@ const JOURNEY_LINKS = mergeJourneyLinks({
 const AZURE_ONLY_JOURNEY_LINKS = mergeJourneyLinks({
   ...SHELL_LINK_OVERRIDES,
   'choose-content': {
-    routeId: 'batch-onboard',
+    routeId: 'dcr-automation',
     hint: 'DCR Automation is this mode\'s onboarding surface; runs are template-only (no live Cribl connection).',
   },
   configure: {
-    routeId: 'batch-onboard',
+    routeId: 'dcr-automation',
     hint: 'Per-run overrides live on DCR Automation; saved defaults in Options.',
   },
   deploy: {
-    routeId: 'batch-onboard',
+    routeId: 'dcr-automation',
     hint:
       'Run on DCR Automation - template-only in this mode; ARM bodies download as one ' +
       'artifact. The Review stage previews what a run would create.',
@@ -755,6 +756,23 @@ export function LocalApp() {
     </>
   );
 
+  // DCR Automation (consolidated): one surface with a Single/Batch toggle over
+  // the single-table onboard and batch onboard flows (matching the legacy app's
+  // single "DCR Automation" page). Single onboards one table live to Cribl, so
+  // it needs a Cribl connection; in modes without Cribl the Single tab is
+  // disabled and Batch (template-only) is the usable mode.
+  const renderDcrAutomation = (nav: AppFrameNav) => (
+    <DcrAutomationScreen
+      single={onboardView}
+      batch={renderBatch(nav)}
+      singleDisabledReason={
+        hasCribl(phase.mode)
+          ? undefined
+          : 'Single-table onboarding creates a Cribl destination, so it needs a live Cribl connection. Batch supports template-only export without Cribl.'
+      }
+    />
+  );
+
   // The Review route (porting-plan Unit 7, ux-flow-plan 5.2): the Integrate
   // arc's REVIEW stage - live-ARM deployment preview through the host's ARM
   // proxy, with the staleness marker and the acknowledge gate arming the
@@ -796,7 +814,7 @@ export function LocalApp() {
             operationDefaults={appOptions.operation}
             journeyBlockedReason={reviewJourneyHint}
             onOpenOptions={() => nav.navigate('options')}
-            onProceedToDeploy={() => nav.navigate('batch-onboard')}
+            onProceedToDeploy={() => nav.navigate('dcr-automation')}
             deploySurfaceLabel="DCR Automation"
           />
         </PortsProvider>
@@ -1048,8 +1066,7 @@ export function LocalApp() {
     { id: 'integrate', label: 'Sentinel Integration', requires: 'both', section: 'journey', render: renderIntegrate },
     { id: 'azure-target', label: 'Azure Targeting', requires: 'azure', section: 'journey', render: () => targetingView },
     { id: 'preflight', label: 'Preflight', requires: 'azure', section: 'journey', render: renderPreflight },
-    { id: 'onboard', label: 'Onboard', requires: 'both', section: 'journey', render: () => onboardView },
-    { id: 'batch-onboard', label: 'DCR Automation', requires: 'azure', section: 'journey', render: renderBatch },
+    { id: 'dcr-automation', label: 'DCR Automation', requires: 'azure', section: 'journey', render: renderDcrAutomation },
     { id: 'review', label: 'Review', requires: 'azure', section: 'journey', render: renderReview },
     { id: 'options', label: 'Options', requires: 'none', section: 'tools', render: () => optionsView },
     { id: 'packs', label: 'Packs', requires: 'cribl', section: 'tools', render: () => packsView },
