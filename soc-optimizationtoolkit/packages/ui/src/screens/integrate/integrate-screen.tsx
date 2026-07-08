@@ -207,6 +207,9 @@ export function IntegrateScreen({
 
   // ---- Deploy section (the operable native-table onboard) ---------------
   const [table, setTable] = useState(INTEGRATE_DEFAULT_TABLE);
+  // Tracks whether the operator hand-edited the table so the detected-table
+  // prefill never clobbers an explicit choice.
+  const tableTouchedRef = useRef(false);
   const [ingestionClientId, setIngestionClientId] = useState(
     () => config.clientId,
   );
@@ -264,6 +267,29 @@ export function IntegrateScreen({
   // The Gap Analysis reports feed the Rule Coverage section (Unit 23): its
   // availability set and destination tables derive from them.
   const [gapReports, setGapReports] = useState<GapReport[]>([]);
+  // The distinct destination tables the Gap Analysis DETECTED from the
+  // solution's samples (e.g. PaloAlto -> CommonSecurityLog), in first-seen
+  // order. The deploy defaults to these instead of a hardcoded SecurityEvent.
+  const detectedTables = useMemo(() => {
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const report of gapReports) {
+      const name = report.tableName.trim();
+      if (name !== "" && !seen.has(name)) {
+        seen.add(name);
+        out.push(name);
+      }
+    }
+    return out;
+  }, [gapReports]);
+  // Prefill the deploy's native table from the first detected destination table
+  // unless the operator hand-edited it - the gap analysis is the source of truth
+  // for which table a solution's samples map to.
+  useEffect(() => {
+    if (!tableTouchedRef.current && detectedTables.length > 0) {
+      setTable(detectedTables[0]);
+    }
+  }, [detectedTables]);
   // The reviewer's effective (edited) mappings per logType feed the Unit 17
   // pipeline preview below, so it mirrors hand edits (not just the baseline).
   const [mappingOverrides, setMappingOverrides] = useState<
@@ -835,13 +861,30 @@ export function IntegrateScreen({
           <input
             type="text"
             value={table}
-            onChange={(e) => setTable(e.target.value)}
+            onChange={(e) => {
+              tableTouchedRef.current = true;
+              setTable(e.target.value);
+            }}
             autoComplete="off"
             spellCheck={false}
           />
           <span className="field-hint">
-            A native Log Analytics table (e.g. SecurityEvent, Syslog). Custom
-            (_CL) tables and vendor schemas use the DCR Automation screen.
+            {detectedTables.length > 0 ? (
+              <>
+                Detected from the solution&apos;s Gap Analysis:{" "}
+                {detectedTables.join(", ")}
+                {detectedTables.length > 1
+                  ? " - this native onboard deploys one DCR for the table above; deploy each additional table by changing this field and re-running (multi-DCR fan-out is coming)."
+                  : " - prefilled above; editable."}
+              </>
+            ) : (
+              <>
+                A native Log Analytics table (e.g. SecurityEvent, Syslog). Add
+                samples and run the DCR Gap Analysis above to auto-detect the
+                solution&apos;s table(s). Custom (_CL) tables and vendor schemas
+                use the DCR Automation screen.
+              </>
+            )}
           </span>
         </label>
         <label className="field">
