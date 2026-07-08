@@ -1978,27 +1978,34 @@ button.journey-step-main:hover .journey-step-label {
 
 .browse-entry {
   display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  padding: 8px 10px;
+  flex-direction: column;
+  gap: 6px;
+  padding: 6px 10px;
   border: 1px solid var(--border-subtle);
   background: var(--surface-raised);
-  cursor: pointer;
 }
 
-.browse-entry-body {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-width: 0;
-  flex: 1;
-}
-
-.browse-entry-head {
+/* The collapsed row: checkbox + badges + log name on one line. */
+.browse-entry-main {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
+  min-width: 0;
+  cursor: pointer;
+}
+
+/* The per-row Preview expander - a quiet inline link, not a heavy button. */
+.browse-entry-preview-toggle {
+  align-self: flex-start;
+  font-family: inherit;
+  font-size: 12px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--accent-strong);
+  cursor: pointer;
+  text-decoration: underline;
 }
 
 .browse-entry-name {

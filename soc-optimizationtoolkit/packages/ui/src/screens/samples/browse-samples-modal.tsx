@@ -315,33 +315,67 @@ function BrowseTierBlock({
       <p className="field-hint">{group.description}</p>
       <div className="browse-entry-list">
         {group.entries.map((entry) => (
-          <label className="browse-entry" key={entry.id}>
-            <input
-              type="checkbox"
-              checked={selected.has(entry.id)}
-              onChange={() => onToggleEntry(entry.id)}
-              aria-label={`Select ${entry.source} ${entry.logType}`}
-            />
-            <div className="browse-entry-body">
-              <div className="browse-entry-head">
-                <span className="sample-chip-format">
-                  {entry.format.toUpperCase()}
-                </span>
-                <span className="browse-entry-name">{entry.logType}</span>
-                <span className="browse-entry-source">{entry.source}</span>
-                <span className="sample-chip-counts">
-                  {entry.eventCount} event{entry.eventCount === 1 ? "" : "s"}
-                </span>
-              </div>
-              {entry.preview !== undefined && entry.preview.length > 0 && (
-                <pre className="result browse-entry-preview">
-                  {entry.preview.slice(0, PREVIEW_LINE_LIMIT).join("\n")}
-                </pre>
-              )}
-            </div>
-          </label>
+          <BrowseEntryRow
+            key={entry.id}
+            entry={entry}
+            checked={selected.has(entry.id)}
+            onToggle={() => onToggleEntry(entry.id)}
+          />
         ))}
       </div>
+    </div>
+  );
+}
+
+/**
+ * One selectable sample row, COLLAPSED by default to just its log type and
+ * badges - the raw-event preview (the busy part) is hidden behind a per-row
+ * Preview toggle so the modal reads as a compact selection list.
+ */
+function BrowseEntryRow({
+  entry,
+  checked,
+  onToggle,
+}: {
+  entry: AvailableSample;
+  checked: boolean;
+  onToggle: () => void;
+}) {
+  const [showPreview, setShowPreview] = useState(false);
+  const previewLines = entry.preview ?? [];
+  const hasPreview = previewLines.length > 0;
+
+  return (
+    <div className="browse-entry">
+      <label className="browse-entry-main">
+        <input
+          type="checkbox"
+          checked={checked}
+          onChange={onToggle}
+          aria-label={`Select ${entry.source} ${entry.logType}`}
+        />
+        <span className="sample-chip-format">{entry.format.toUpperCase()}</span>
+        <span className="browse-entry-name">{entry.logType}</span>
+        <span className="browse-entry-source">{entry.source}</span>
+        <span className="sample-chip-counts">
+          {entry.eventCount} event{entry.eventCount === 1 ? "" : "s"}
+        </span>
+      </label>
+      {hasPreview && (
+        <button
+          type="button"
+          className="browse-entry-preview-toggle"
+          onClick={() => setShowPreview((v) => !v)}
+          aria-expanded={showPreview}
+        >
+          {showPreview ? "Hide preview" : "Preview"}
+        </button>
+      )}
+      {showPreview && hasPreview && (
+        <pre className="result browse-entry-preview">
+          {previewLines.slice(0, PREVIEW_LINE_LIMIT).join("\n")}
+        </pre>
+      )}
     </div>
   );
 }

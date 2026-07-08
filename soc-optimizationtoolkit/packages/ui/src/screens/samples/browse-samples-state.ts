@@ -52,9 +52,9 @@ export const BROWSE_TIER_ORDER: readonly BrowseTier[] = [
 ];
 
 const TIER_LABELS: Record<BrowseTier, string> = {
-  "sentinel-repo": "Sentinel Repo",
-  elastic: "Elastic Integrations",
-  cribl: "Cribl Packs",
+  "sentinel-repo": "Sentinel",
+  elastic: "Elastic",
+  cribl: "Cribl",
   synthesized: "Synthesized",
 };
 
