@@ -21,7 +21,7 @@
  * ThemeToggle at the top of the content area.
  */
 
-import { useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { filterNavItems } from "@soc/core";
 import type { AppMode, NavRequirement } from "@soc/core";
@@ -92,6 +92,10 @@ export function AppFrame(props: AppFrameProps) {
     themeControl,
   } = props;
   const [routeId, setRouteId] = useState(initialRouteId ?? "");
+  const [resetNonces, setResetNonces] = useState<Record<string, number>>({});
+
+  const navigate = useCallback((id: string) => setRouteId(id), []);
+  const nav = useMemo<AppFrameNav>(() => ({ navigate }), [navigate]);
 
   // Filter, then fall back: if the requested route is hidden by the current
   // mode (or unknown), the first visible route renders instead - the frame
@@ -99,8 +103,29 @@ export function AppFrame(props: AppFrameProps) {
   // grouping below is presentation only.
   const visible = filterNavItems(mode, routes);
   const active = visible.find((route) => route.id === routeId) ?? visible[0];
-  const nav: AppFrameNav = { navigate: setRouteId };
+  const activeId = active?.id;
   const sections = groupNavSections(visible);
+
+  // Keep-alive: once a route becomes active it stays MOUNTED (hidden when
+  // inactive) so its local state survives navigation - bouncing to another
+  // screen and back no longer resets the page. Routes mount only on FIRST visit
+  // (never eagerly), so unvisited screens run no data-loading effects. The ref
+  // accumulates visited ids idempotently; reading it during render is safe.
+  const visitedRef = useRef<Set<string>>(new Set());
+  if (activeId !== undefined) {
+    visitedRef.current.add(activeId);
+  }
+  const mounted = visible.filter((route) => visitedRef.current.has(route.id));
+
+  // "Start over" remounts the active screen fresh by bumping its reset nonce:
+  // the wrapper key changes, so React discards the old instance (and its state)
+  // and re-runs the screen's default-loading effects.
+  const startOver = useCallback(() => {
+    if (activeId === undefined) {
+      return;
+    }
+    setResetNonces((prev) => ({ ...prev, [activeId]: (prev[activeId] ?? 0) + 1 }));
+  }, [activeId]);
 
   return (
     <div className="app-frame" data-theme={themeControl?.resolvedTheme}>
@@ -145,23 +170,45 @@ export function AppFrame(props: AppFrameProps) {
       </aside>
       <main className="app-frame-main">
         <div className="app-frame-content">
-          {themeControl !== undefined && (
-            <div className="app-frame-theme-row">
+          <div className="app-frame-theme-row">
+            {themeControl !== undefined && (
               <ThemeToggle
                 theme={themeControl.theme}
                 resolvedTheme={themeControl.resolvedTheme}
                 onThemeChange={themeControl.onThemeChange}
               />
-            </div>
-          )}
+            )}
+            {activeId !== undefined && (
+              <button
+                type="button"
+                className="app-frame-startover"
+                title="Clear this page's inputs and reload it with defaults."
+                onClick={startOver}
+              >
+                Start over
+              </button>
+            )}
+          </div>
           {topBar}
-          {active !== undefined ? (
-            active.render(nav)
-          ) : (
+          {active === undefined ? (
             <p className="panel-desc">
               No screens are available in this mode. Reconfigure the mode from
               Settings.
             </p>
+          ) : (
+            mounted.map((route) => {
+              const isActive = route.id === activeId;
+              return (
+                <div
+                  key={`${route.id}:${resetNonces[route.id] ?? 0}`}
+                  className="app-frame-route"
+                  style={isActive ? undefined : { display: "none" }}
+                  {...(isActive ? {} : { "aria-hidden": true })}
+                >
+                  {route.render(nav)}
+                </div>
+              );
+            })
           )}
         </div>
       </main>

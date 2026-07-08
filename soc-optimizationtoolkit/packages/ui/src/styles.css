@@ -510,7 +510,28 @@ body {
 .app-frame-theme-row {
   display: flex;
   justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
   margin-bottom: 8px;
+}
+
+/* "Start over" - remounts the active screen with default state (frame keeps
+   visited screens mounted so their state survives navigation otherwise). */
+.app-frame-startover {
+  padding: 4px 12px;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control, 8px);
+  cursor: pointer;
+}
+
+.app-frame-startover:hover {
+  color: var(--text);
+  border-color: var(--accent);
 }
 
 .theme-toggle {
