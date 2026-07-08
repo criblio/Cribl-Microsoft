@@ -42,11 +42,23 @@ import {
   loadSummary,
   projectTiers,
   repoNotice,
+  tierDescription,
+  tierLabel,
   tierSelectionState,
   toggleOne,
   toggleTier,
   type BrowseTierGroup,
 } from "./browse-samples-state";
+
+/** Shown for the Sentinel section when the solution ships no raw Sample Data. */
+const SENTINEL_EMPTY_MESSAGE =
+  "This solution ships no raw sample events in its Sample Data folder in the " +
+  "Sentinel repository. Its analytics rules and workbooks still drive coverage - " +
+  "add samples with Upload or Paste above, or pick from Elastic below.";
+
+/** Shown for the Elastic section when no Elastic package matched the solution. */
+const ELASTIC_EMPTY_MESSAGE =
+  "No matching Elastic integration package was found for this solution.";
 
 /** A no-op remote source: elastic/cribl tiers degrade to empty when unbound. */
 const NOOP_SOURCE: RemoteSampleSource = {
@@ -124,6 +136,14 @@ export function BrowseSamplesModal({
   const groups = available === null ? [] : projectTiers(available);
   const summary = loadSummary(groups, selected);
   const notice = repoNotice(repo);
+  // Sentinel and Elastic are ALWAYS rendered as their own sections (even empty)
+  // so it is clear whether the solution ships raw samples for each; other tiers
+  // (cribl / synthesized) render only when they have entries.
+  const sentinelGroup = groups.find((g) => g.tier === "sentinel-repo");
+  const elasticGroup = groups.find((g) => g.tier === "elastic");
+  const otherGroups = groups.filter(
+    (g) => g.tier !== "sentinel-repo" && g.tier !== "elastic",
+  );
 
   const setTier = useCallback(
     (entries: readonly AvailableSample[], select: boolean) => {
@@ -192,38 +212,47 @@ export function BrowseSamplesModal({
           <p className="field-hint">Fetching samples for {solutionName}...</p>
         )}
 
-        {/* The honest ENG-42 sentinel-repo notice (found / all pre-ingested /
-            none parsed / no match). */}
-        {notice !== null && (
-          <div
-            className={
-              notice.tone === "warn"
-                ? "browse-dialog-status browse-dialog-status-warn"
-                : notice.tone === "ok"
-                  ? "browse-dialog-status browse-dialog-status-ok"
-                  : "browse-dialog-status"
-            }
-          >
-            <span>{notice.message}</span>
-          </div>
+        {available !== null && browseError === "" && (
+          <>
+            {sentinelGroup !== undefined ? (
+              <BrowseTierBlock
+                group={sentinelGroup}
+                selected={selected}
+                onToggleTier={setTier}
+                onToggleEntry={toggleEntry}
+              />
+            ) : (
+              <EmptyTierBlock
+                label={tierLabel("sentinel-repo")}
+                description={tierDescription("sentinel-repo")}
+                message={notice?.message ?? SENTINEL_EMPTY_MESSAGE}
+              />
+            )}
+            {elasticGroup !== undefined ? (
+              <BrowseTierBlock
+                group={elasticGroup}
+                selected={selected}
+                onToggleTier={setTier}
+                onToggleEntry={toggleEntry}
+              />
+            ) : (
+              <EmptyTierBlock
+                label={tierLabel("elastic")}
+                description={tierDescription("elastic")}
+                message={ELASTIC_EMPTY_MESSAGE}
+              />
+            )}
+            {otherGroups.map((group) => (
+              <BrowseTierBlock
+                key={group.tier}
+                group={group}
+                selected={selected}
+                onToggleTier={setTier}
+                onToggleEntry={toggleEntry}
+              />
+            ))}
+          </>
         )}
-
-        {available !== null && groups.length === 0 && browseError === "" && (
-          <p className="field-hint">
-            No curated samples were found for this solution. Upload or paste raw
-            vendor events instead.
-          </p>
-        )}
-
-        {groups.map((group) => (
-          <BrowseTierBlock
-            key={group.tier}
-            group={group}
-            selected={selected}
-            onToggleTier={setTier}
-            onToggleEntry={toggleEntry}
-          />
-        ))}
 
         {/* Load summary + actions */}
         <div className="csv-dialog-actions">
@@ -323,6 +352,28 @@ function BrowseTierBlock({
           />
         ))}
       </div>
+    </div>
+  );
+}
+
+/** A tier section with no entries: its heading and an honest empty-state note. */
+function EmptyTierBlock({
+  label,
+  description,
+  message,
+}: {
+  label: string;
+  description: string;
+  message: string;
+}) {
+  return (
+    <div className="browse-tier">
+      <div className="browse-tier-head">
+        <span className="browse-tier-name">{label}</span>
+        <span className="browse-tier-counts">0 samples</span>
+      </div>
+      <p className="field-hint">{description}</p>
+      <p className="field-hint">{message}</p>
     </div>
   );
 }
