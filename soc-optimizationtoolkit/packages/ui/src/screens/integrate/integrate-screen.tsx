@@ -65,6 +65,7 @@ import {
   DEFAULT_OPERATION_OPTIONS,
   SENTINEL_SECRET_PLACEHOLDER,
   canWireSource,
+  deployedGroups,
   deriveSectionStatuses,
   destinationIdFromOptions,
   onboardTable,
@@ -191,6 +192,14 @@ export function IntegrateScreen({
   const [groupsError, setGroupsError] = useState("");
   const [groupId, setGroupId] = useState("");
   const [packName, setPackName] = useState(() => defaultPackName(criblDefaults));
+  // Multi-group deploy: opt-in fan-out beyond the primary worker group.
+  const [multiGroup, setMultiGroup] = useState(false);
+  const [extraGroups, setExtraGroups] = useState<string[]>([]);
+  // Pack overwrite guard: null = not yet checked; [] = name is free everywhere.
+  const [packConflicts, setPackConflicts] = useState<string[] | null>(null);
+  const [conflictChecking, setConflictChecking] = useState(false);
+  const [conflictError, setConflictError] = useState("");
+  const [overwriteAcked, setOverwriteAcked] = useState(false);
 
   // ---- Deploy section (the operable native-table onboard) ---------------
   const [table, setTable] = useState(INTEGRATE_DEFAULT_TABLE);
@@ -347,6 +356,59 @@ export function IntegrateScreen({
   useEffect(() => {
     void loadGroups();
   }, [loadGroups]);
+
+  // Distinct worker groups the pack would be deployed to: the primary group
+  // plus any extra groups when the multi-group toggle is on.
+  const packTargetGroups = useMemo(() => {
+    const set = new Set<string>();
+    if (groupId !== "") set.add(groupId);
+    if (multiGroup) for (const g of extraGroups) if (g !== "") set.add(g);
+    return [...set];
+  }, [groupId, multiGroup, extraGroups]);
+  const packTargetKey = packTargetGroups.join(",");
+
+  // Any change to the pack name or target groups invalidates a prior
+  // conflict check and its overwrite acknowledgment.
+  useEffect(() => {
+    setPackConflicts(null);
+    setOverwriteAcked(false);
+    setConflictError("");
+  }, [packName, packTargetKey]);
+
+  // Live pack-name-exists check across the target groups. deployedGroups()
+  // matches by pack id (tolerating @version / .child suffixes), so a rebuild
+  // of the same-named pack is flagged as an overwrite before it happens.
+  const checkPackConflicts = useCallback(async () => {
+    const packInstall = ports.packInstall;
+    if (packInstall === undefined) {
+      setConflictError("Pack inventory is not available in this host.");
+      return;
+    }
+    if (packTargetGroups.length === 0) {
+      setConflictError("Select at least one worker group first.");
+      return;
+    }
+    if (packName.trim() === "") {
+      setConflictError("Enter a pack name first.");
+      return;
+    }
+    setConflictChecking(true);
+    setConflictError("");
+    try {
+      const deployed = await packInstall.listDeployed(packTargetGroups);
+      setPackConflicts(deployedGroups(packName.trim(), deployed));
+    } catch (err) {
+      setConflictError(err instanceof Error ? err.message : String(err));
+      setPackConflicts(null);
+    } finally {
+      setConflictChecking(false);
+    }
+  }, [ports.packInstall, packTargetGroups, packName]);
+
+  // The pack build/install is blocked only while an ACKNOWLEDGED conflict is
+  // pending: a checked, non-empty conflict list that the user has not accepted.
+  const packOverwriteBlocked =
+    packConflicts !== null && packConflicts.length > 0 && !overwriteAcked;
 
   // ---- Derived section states, readiness pills, deploy gate -------------
   const sectionInputs = deriveSectionInputs({
@@ -667,6 +729,114 @@ export function IntegrateScreen({
           directly.
         </span>
       </label>
+      <div className="discovery-result">
+        <span className="field-label">Deploy targets and overwrite check</span>
+        <p className="panel-desc">
+          The pack deploys to the primary worker group above. Optionally fan it
+          out to additional groups, then check whether the name is already in
+          use before building - a matching pack is overwritten, so the check
+          must be acknowledged first.
+        </p>
+        <label className="integrate-check">
+          <input
+            type="checkbox"
+            checked={multiGroup}
+            onChange={(e) => setMultiGroup(e.target.checked)}
+          />
+          <span className="integrate-check-text">
+            Deploy the pack to multiple worker groups.
+            {multiGroup ? " Select the additional groups below." : ""}
+          </span>
+        </label>
+        {multiGroup &&
+          (groups !== null ? (
+            groups.filter((g) => g.id !== groupId).length > 0 ? (
+              groups
+                .filter((g) => g.id !== groupId)
+                .map((g) => (
+                  <label className="integrate-check" key={g.id}>
+                    <input
+                      type="checkbox"
+                      checked={extraGroups.includes(g.id)}
+                      onChange={(e) =>
+                        setExtraGroups((prev) =>
+                          e.target.checked
+                            ? [...prev, g.id]
+                            : prev.filter((x) => x !== g.id),
+                        )
+                      }
+                    />
+                    <span className="integrate-check-text">
+                      {g.product !== undefined
+                        ? `${g.id} (${g.product})`
+                        : g.id}
+                    </span>
+                  </label>
+                ))
+            ) : (
+              <span className="field-hint">
+                No other worker groups are available to fan out to.
+              </span>
+            )
+          ) : (
+            <span className="field-hint">Loading worker groups...</span>
+          ))}
+        <div className="integrate-check">
+          <button
+            className="run-button"
+            disabled={
+              conflictChecking ||
+              packTargetGroups.length === 0 ||
+              packName.trim() === ""
+            }
+            onClick={() => void checkPackConflicts()}
+          >
+            {conflictChecking ? "Checking..." : "Check for existing packs"}
+          </button>
+          <span className="integrate-check-text">
+            Looks for a pack named {packName.trim() === "" ? "(unset)" : `"${packName.trim()}"`} in{" "}
+            {packTargetGroups.length === 0
+              ? "(no target groups)"
+              : packTargetGroups.join(", ")}
+            .
+          </span>
+        </div>
+        {conflictError !== "" && (
+          <span className="field-hint" style={{ color: "var(--error, #f5738b)" }}>
+            Could not check packs: {conflictError}
+          </span>
+        )}
+        {conflictError === "" &&
+          packConflicts !== null &&
+          (packConflicts.length === 0 ? (
+            <span className="field-hint" style={{ color: "var(--ok, #4ec9b0)" }}>
+              No existing pack named &quot;{packName.trim()}&quot; in the target
+              group{packTargetGroups.length > 1 ? "s" : ""} - safe to build.
+            </span>
+          ) : (
+            <label className="integrate-check">
+              <input
+                type="checkbox"
+                checked={overwriteAcked}
+                onChange={(e) => setOverwriteAcked(e.target.checked)}
+              />
+              <span
+                className="integrate-check-text"
+                style={{ color: "var(--warn, #d7ba7d)" }}
+              >
+                A pack named &quot;{packName.trim()}&quot; already exists in{" "}
+                {packConflicts.join(", ")}. Building will overwrite it there -
+                check to acknowledge and allow the overwrite.
+              </span>
+            </label>
+          ))}
+        {packOverwriteBlocked && (
+          <span className="field-hint" style={{ color: "var(--warn, #d7ba7d)" }}>
+            Overwrite not yet acknowledged - the pack build will refuse to
+            overwrite until the box above is checked.
+          </span>
+        )}
+      </div>
     </div>
   );
 
