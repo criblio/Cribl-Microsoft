@@ -656,21 +656,21 @@ export function IntegrateScreen({
               : "."}
           </span>
         </label>
-        <label className="integrate-check">
-          <input type="checkbox" checked readOnly disabled />
+        <div className="integrate-fact">
+          <span className="integrate-fact-badge">Always on</span>
           <span className="integrate-check-text">
             Provision the Data Collection Rule the Cribl destination publishes
             metrics to - always part of the deploy below.
           </span>
-        </label>
-        <label className="integrate-check">
-          <input type="checkbox" checked readOnly disabled />
+        </div>
+        <div className="integrate-fact">
+          <span className="integrate-fact-badge">Always on</span>
           <span className="integrate-check-text">
             Assign Monitoring Metrics Publisher to the ingestion identity -
             granted per DCR in the step below (data cannot flow to a DCR without
             it).
           </span>
-        </label>
+        </div>
         {onOpenOptions !== undefined && (
           <div className="panel-controls">
             <button className="run-button" onClick={onOpenOptions}>

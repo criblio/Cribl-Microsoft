@@ -1430,6 +1430,31 @@ button.journey-step-main:hover .journey-step-label {
   color: var(--text-muted);
 }
 
+/* An always-included capability: a fact, NOT a control. Rendered with a badge
+ * (never a disabled checkbox, which reads as a broken toggle the user tries to
+ * uncheck). */
+.integrate-fact {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 6px 0;
+  font-size: 13px;
+  color: var(--text);
+}
+.integrate-fact-badge {
+  flex: none;
+  margin-top: 1px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 1px 8px;
+  border-radius: 10px;
+  background: var(--accent-bg);
+  color: var(--accent-strong);
+  border: 1px solid var(--accent-border);
+  white-space: nowrap;
+}
+
 /* The persistent deploy-readiness footer: pills + the single Deploy action,
  * sticky at the page bottom so readiness is auditable without scrolling. */
 .readiness-footer {
