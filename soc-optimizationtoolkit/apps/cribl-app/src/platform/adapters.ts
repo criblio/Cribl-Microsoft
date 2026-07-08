@@ -13,6 +13,8 @@ import type {
   AzureManagementRequest,
   AzureManagementUrlRequest,
   ContentCache,
+  FetchedSampleFile,
+  RemoteSampleSource,
   CriblClient,
   CriblGroupSummary,
   CriblRequest,
@@ -945,6 +947,101 @@ export class PlatformSentinelContent implements SentinelContent {
 }
 
 // ---------------------------------------------------------------------------
+// RemoteSampleSource (Elastic integrations + Cribl packs) - porting-plan Unit 16
+// ---------------------------------------------------------------------------
+
+const ELASTIC_OWNER_REPO = 'elastic/integrations';
+const ELASTIC_BRANCH = 'main';
+const CRIBLPACKS_OWNER = 'criblpacks';
+const CRIBLPACKS_BRANCH = 'main';
+
+// The Elastic test-pipeline raw sample files: the .log inputs and .json inputs,
+// excluding the pipeline's -expected outputs and -config files (legacy filter).
+function isElasticSampleFile(name: string): boolean {
+  return (
+    name.endsWith('.log') ||
+    (name.endsWith('.json') && !name.includes('-expected') && !name.includes('-config'))
+  );
+}
+
+/**
+ * RemoteSampleSource over the proxied GitHub API (porting-plan Unit 16): the two
+ * sibling repos the SentinelContent port cannot address. Elastic test-pipeline
+ * files for a package + data stream (raw vendor samples) and a Cribl pack repo's
+ * data/samples. Same hosts as PlatformSentinelContent (api.github.com +
+ * raw.githubusercontent.com); the PAT is injected server-side (proxies.yml), so
+ * this adapter never sets an Authorization header. A missing directory (404)
+ * resolves to []; a missing raw file resolves to null and is skipped.
+ */
+export class PlatformRemoteSampleSource implements RemoteSampleSource {
+  private async listContents(path: string): Promise<GithubContentEntry[]> {
+    const res = await fetchWithTimeout(
+      `${GITHUB_API}${path}`,
+      { method: 'GET', headers: { Accept: GITHUB_JSON_ACCEPT } },
+      GITHUB_TIMEOUT_MS,
+    );
+    if (res.status === 404) {
+      return [];
+    }
+    if (!res.ok) {
+      throw new Error(`GET GitHub ${path}: HTTP ${res.status}\n${await res.text()}`);
+    }
+    return asContentEntries(await readPortBody(res));
+  }
+
+  private async fetchRawText(url: string): Promise<string | null> {
+    const res = await fetchWithTimeout(url, { method: 'GET' }, GITHUB_TIMEOUT_MS);
+    if (res.status === 404) {
+      return null;
+    }
+    if (!res.ok) {
+      throw new Error(`GET raw ${url}: HTTP ${res.status}`);
+    }
+    return res.text();
+  }
+
+  async listElasticTestFiles(packageName: string, stream: string): Promise<FetchedSampleFile[]> {
+    const dir = `packages/${packageName}/data_stream/${stream}/_dev/test/pipeline`;
+    const entries = await this.listContents(
+      `/repos/${ELASTIC_OWNER_REPO}/contents/${encodeRepoPath(dir)}`,
+    );
+    const out: FetchedSampleFile[] = [];
+    for (const e of entries) {
+      if (e.type !== 'file' || !isElasticSampleFile(e.name)) {
+        continue;
+      }
+      const text = await this.fetchRawText(
+        `${GITHUB_RAW}/${ELASTIC_OWNER_REPO}/${ELASTIC_BRANCH}/${encodeRepoPath(`${dir}/${e.name}`)}`,
+      );
+      if (text !== null) {
+        out.push({ fileName: e.name, content: text });
+      }
+    }
+    return out;
+  }
+
+  async listCriblPackSamples(repoName: string): Promise<FetchedSampleFile[]> {
+    const dir = 'data/samples';
+    const entries = await this.listContents(
+      `/repos/${CRIBLPACKS_OWNER}/${repoName}/contents/${dir}`,
+    );
+    const out: FetchedSampleFile[] = [];
+    for (const e of entries) {
+      if (e.type !== 'file') {
+        continue;
+      }
+      const text = await this.fetchRawText(
+        `${GITHUB_RAW}/${CRIBLPACKS_OWNER}/${repoName}/${CRIBLPACKS_BRANCH}/${dir}/${encodeURIComponent(e.name)}`,
+      );
+      if (text !== null) {
+        out.push({ fileName: e.name, content: text });
+      }
+    }
+    return out;
+  }
+}
+
+// ---------------------------------------------------------------------------
 // ContentCache (KV) - porting-plan Unit 14
 // ---------------------------------------------------------------------------
 
@@ -1372,6 +1469,8 @@ export interface CloudPorts {
   content: SentinelContent;
   /** Parsed-content cache over plain KV entries, keyed by solution+commit (Unit 14). */
   contentCache: ContentCache;
+  /** Elastic + Cribl-pack raw sample fetch over the proxied GitHub API (Unit 16). */
+  sampleSource: RemoteSampleSource;
   /** GitHub PAT lifecycle: validate-then-store, hasPat-only (Unit 14). */
   githubPat: GithubPatManager;
   /** Pack build-record store over plain KV entries - definitions only (Unit 19). */
@@ -1420,6 +1519,7 @@ export function makeCloudPorts(tenantId: string, logger: Logger): CloudPorts {
     samples: new PlatformTaggedSampleStore(),
     content: new PlatformSentinelContent(),
     contentCache: new KvContentCache(),
+    sampleSource: new PlatformRemoteSampleSource(),
     githubPat: new PlatformGithubPat(),
     packs: new PlatformPackStore(),
     packInstall: new PlatformPackInstall(cribl),

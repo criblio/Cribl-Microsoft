@@ -18,6 +18,8 @@ import type {
   AzureManagementRequest,
   AzureManagementUrlRequest,
   ContentCache,
+  FetchedSampleFile,
+  RemoteSampleSource,
   CriblClient,
   CriblGroupSummary,
   CriblRequest,
@@ -745,6 +747,130 @@ export class LocalSentinelContent implements SentinelContent {
 }
 
 // ---------------------------------------------------------------------------
+// RemoteSampleSource (Elastic integrations + Cribl packs) - porting-plan Unit 16
+// ---------------------------------------------------------------------------
+
+const ELASTIC_OWNER_REPO = 'elastic/integrations';
+const ELASTIC_BRANCH = 'main';
+const CRIBLPACKS_OWNER = 'criblpacks';
+const CRIBLPACKS_BRANCH = 'main';
+
+// The Elastic test-pipeline raw sample files: the .log/.json inputs, excluding
+// the pipeline's -expected outputs and -config files (legacy filter).
+function isElasticSampleFile(name: string): boolean {
+  return (
+    name.endsWith('.log') ||
+    (name.endsWith('.json') && !name.includes('-expected') && !name.includes('-config'))
+  );
+}
+
+// The {name, type} entries of a GitHub "contents" directory listing.
+function parseGithubEntries(value: unknown): Array<{ name: string; type: string }> {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  const out: Array<{ name: string; type: string }> = [];
+  for (const raw of value) {
+    const name = prop(raw, 'name');
+    const type = prop(raw, 'type');
+    if (typeof name === 'string' && typeof type === 'string') {
+      out.push({ name, type });
+    }
+  }
+  return out;
+}
+
+/**
+ * RemoteSampleSource over the host's GitHub proxy (POST /api/github/request):
+ * Elastic integrations test-pipeline files and a Cribl pack repo's data/samples,
+ * over the same api.github.com + raw.githubusercontent.com hosts the content
+ * adapter uses (the host attaches the PAT server-side). Missing dir -> []; a
+ * missing raw file -> null (skipped).
+ */
+export class LocalRemoteSampleSource implements RemoteSampleSource {
+  private async proxied(url: string): Promise<{ status: number; bodyText: string }> {
+    const payload = await hostJson(
+      `POST /api/github/request (${url})`,
+      '/api/github/request',
+      jsonInit('POST', { url }),
+      PROXY_TIMEOUT_MS
+    );
+    const status = prop(payload, 'status');
+    const body = prop(payload, 'body');
+    if (typeof status !== 'number') {
+      throw new Error(`POST /api/github/request: unexpected host response shape (missing numeric "status")`);
+    }
+    return { status, bodyText: typeof body === 'string' ? body : '' };
+  }
+
+  private async listContents(apiPath: string): Promise<Array<{ name: string; type: string }>> {
+    const { status, bodyText } = await this.proxied(`${GITHUB_API}${apiPath}`);
+    if (status === 404) {
+      return [];
+    }
+    if (status < 200 || status >= 300) {
+      throw new Error(`GET GitHub ${apiPath}: HTTP ${status}${bodyText === '' ? '' : `\n${bodyText}`}`);
+    }
+    let value: unknown = null;
+    try {
+      value = bodyText === '' ? null : JSON.parse(bodyText);
+    } catch {
+      value = null;
+    }
+    return parseGithubEntries(value);
+  }
+
+  private async fetchRawText(url: string): Promise<string | null> {
+    const { status, bodyText } = await this.proxied(url);
+    if (status === 404) {
+      return null;
+    }
+    if (status < 200 || status >= 300) {
+      throw new Error(`GET raw ${url}: HTTP ${status}`);
+    }
+    return bodyText;
+  }
+
+  async listElasticTestFiles(packageName: string, stream: string): Promise<FetchedSampleFile[]> {
+    const dir = `packages/${packageName}/data_stream/${stream}/_dev/test/pipeline`;
+    const entries = await this.listContents(
+      `/repos/${ELASTIC_OWNER_REPO}/contents/${encodeRepoPath(dir)}`
+    );
+    const out: FetchedSampleFile[] = [];
+    for (const e of entries) {
+      if (e.type !== 'file' || !isElasticSampleFile(e.name)) {
+        continue;
+      }
+      const text = await this.fetchRawText(
+        `${GITHUB_RAW}/${ELASTIC_OWNER_REPO}/${ELASTIC_BRANCH}/${encodeRepoPath(`${dir}/${e.name}`)}`
+      );
+      if (text !== null) {
+        out.push({ fileName: e.name, content: text });
+      }
+    }
+    return out;
+  }
+
+  async listCriblPackSamples(repoName: string): Promise<FetchedSampleFile[]> {
+    const dir = 'data/samples';
+    const entries = await this.listContents(`/repos/${CRIBLPACKS_OWNER}/${repoName}/contents/${dir}`);
+    const out: FetchedSampleFile[] = [];
+    for (const e of entries) {
+      if (e.type !== 'file') {
+        continue;
+      }
+      const text = await this.fetchRawText(
+        `${GITHUB_RAW}/${CRIBLPACKS_OWNER}/${repoName}/${CRIBLPACKS_BRANCH}/${dir}/${encodeURIComponent(e.name)}`
+      );
+      if (text !== null) {
+        out.push({ fileName: e.name, content: text });
+      }
+    }
+    return out;
+  }
+}
+
+// ---------------------------------------------------------------------------
 // ContentCache (host store) - porting-plan Unit 14
 // ---------------------------------------------------------------------------
 
@@ -992,6 +1118,8 @@ export interface LocalPorts {
   content: SentinelContent;
   /** Parsed-content cache over the host store, keyed by solution+commit (Unit 14). */
   contentCache: ContentCache;
+  /** Elastic + Cribl-pack raw sample fetch over the host GitHub proxy (Unit 16). */
+  sampleSource: RemoteSampleSource;
   /** GitHub PAT lifecycle over the host store: validate-then-store, hasPat-only (Unit 14). */
   githubPat: GithubPatManager;
   /** Pack build-record store over the host's /api/packs (Unit 19). */
@@ -1041,6 +1169,7 @@ export function makeLocalPorts(logger: Logger): LocalPorts {
     samples: new LocalTaggedSampleStore(),
     content: new LocalSentinelContent(),
     contentCache: new LocalContentCache(),
+    sampleSource: new LocalRemoteSampleSource(),
     githubPat: new LocalGithubPat(),
     packs: new LocalPackStore(),
     packInstall: new LocalPackInstall(cribl),
