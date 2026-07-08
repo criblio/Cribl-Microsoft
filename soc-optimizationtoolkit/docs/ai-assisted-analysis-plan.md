@@ -1,7 +1,9 @@
 # AI-Assisted Analysis Plan (Fable 5)
 
-Status: PLAN (2026-07-07). Owner: analysis flow. Model of record: Fable 5
-(`claude-fable-5`), overridable per call.
+Status: P0/P1/P2 SHIPPED (2026-07-08); P3 (cost tracking + caching) remains.
+Owner: analysis flow. Model of record: Fable 5 (`claude-fable-5`), overridable
+per call. Decisions taken as recommended: fixed default model (no picker),
+redaction = names + types + one truncated example, caching deferred to P3.
 
 ## Goal (user request, verbatim intent)
 
@@ -159,14 +161,23 @@ approve `api.anthropic.com` at install time as an explicit, reviewable surface.
 
 ## Rollout phases
 
-- P0 - seam: `LlmAssist` port + cloud/local adapters + proxies.yml entry + KV
-  key capture/validate + a health/echo call. No feature yet; app unchanged when
-  the key is absent.
-- P1 - A1 mapping proposal: pure prompt/parse in core + suggested-row UI in the
-  mapping review, behind the optional port.
-- P2 - A2/A3 coverage annotations on the existing coverage panel.
+- P0 - seam: SHIPPED. `LlmAssist` + `LlmKeyManager` ports, cloud adapters
+  (proxies.yml api.anthropic.com, encrypted KV `anthropicKey`,
+  validate-then-store via the zero-token GET /v1/models), local adapters
+  (host/anthropic.mjs + /api/llm routes), and the "AI Assist" key section on
+  the Repositories screen. App unchanged when the key is absent.
+- P1 - A1 mapping proposal: SHIPPED. domain/ai-advisory (buildMappingPrompt,
+  fence-tolerant parseMappingSuggestion, never-trusted
+  sanitizeMappingSuggestion) + usecases adviseMapping (never rejects) + the
+  per-table "AI suggestions" panel in the mapping review; Apply flows through
+  the same edit-mapping dispatch as the manual dropdowns; tableRanking
+  surfaces the better-table hint.
+- P2 - A2/A3 coverage annotations: SHIPPED. buildCoveragePrompt /
+  parseCoverageAdvice (fixes filtered to REAL missing fields) + adviseCoverage
+  + the per-item "Explain missing fields with AI" block on both the rules and
+  workbooks coverage sections.
 - P3 - cost tracking + input-hash caching + a per-run AI cost line in the job
-  record.
+  record. (Per-call token counts already render in every advisory block.)
 
 ## Open decisions (promote to ADRs when taken)
 

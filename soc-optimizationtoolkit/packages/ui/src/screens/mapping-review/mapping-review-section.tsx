@@ -38,6 +38,7 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import {
   DEFAULT_GAP_PROFILE,
+  adviseMapping,
   collectGapReports,
   createBundledSchemaCatalog,
   matchSampleLogTypeToTable,
@@ -47,10 +48,13 @@ import type {
   DestinationTableResolution,
   GapFieldMapping,
   GapReport,
+  LlmAssist,
+  MappingSuggestion,
   MatchAction,
   SchemaCatalog,
   SentinelContent,
   SolutionConnector,
+  SuggestedMapping,
   TaggedSample,
   VendorGapProfile,
 } from "@soc/core";
@@ -126,7 +130,27 @@ export interface MappingReviewSectionProps {
   ) => void;
   /** A log-type rename to re-key approvals + edits by (the Unit 11 seam). */
   renameEvent?: MappingReviewRenameEvent;
+  /**
+   * OPTIONAL AI advisory seam (ports.llm, ai-assisted-analysis P1). Present ->
+   * each report card offers "AI suggestions" that propose better destinations
+   * for weak mappings; accepted rows flow through the identical deterministic
+   * edit path. Absent -> no AI control renders.
+   */
+  llm?: LlmAssist;
 }
+
+/** Per-logType AI advisory state (P1). */
+type AiAdvisoryState =
+  | { status: "running" }
+  | { status: "error"; error: string }
+  | {
+      status: "done";
+      suggestion: MappingSuggestion;
+      inputTokens: number;
+      outputTokens: number;
+      /** Source fields whose suggestion the reviewer applied. */
+      applied: string[];
+    };
 
 /**
  * A degraded content accessor for when no SentinelContent port is bound: every
@@ -172,6 +196,7 @@ export function MappingReviewSection({
   onReportsChange,
   onEffectiveMappingsChange,
   renameEvent,
+  llm,
 }: MappingReviewSectionProps) {
   const activeCatalog = useMemo(
     () => catalog ?? createBundledSchemaCatalog(),
@@ -274,6 +299,100 @@ export function MappingReviewSection({
       void runAnalysis(next);
     },
     [tableOverrides, runAnalysis, analyzing],
+  );
+
+  // ---- AI advisory (ai-assisted-analysis P1) -----------------------------
+  // Per-logType advisory state; ADVISORY ONLY - a suggestion changes nothing
+  // until the reviewer applies it, and applying flows through the identical
+  // updateMapping edit path the dropdowns use.
+  const [aiByLogType, setAiByLogType] = useState<Record<string, AiAdvisoryState>>(
+    {},
+  );
+
+  const runAdvisory = useCallback(
+    async (report: GapReport, current: GapFieldMapping[]) => {
+      if (llm === undefined) return;
+      setAiByLogType((prev) => ({
+        ...prev,
+        [report.logType]: { status: "running" },
+      }));
+      // REDACTION BEFORE EGRESS: names, types, and at most one sampleValue per
+      // field (truncated inside buildMappingPrompt); never raw events.
+      const result = await adviseMapping(llm, {
+        logType: report.logType,
+        tableName: report.tableName,
+        candidateTables: candidateTables.filter((t) => t !== report.tableName),
+        fields: report.fieldMappings.map((m) => ({
+          name: m.source,
+          type: m.sourceType,
+          ...(m.sampleValue !== undefined && m.sampleValue !== ""
+            ? { example: m.sampleValue }
+            : {}),
+        })),
+        currentMappings: current.map((m) => ({
+          source: m.source,
+          dest: m.dest,
+          action: m.action,
+          confidence: m.confidence,
+        })),
+        destColumns: report.destSchema.map((d) => ({
+          name: d.name,
+          type: d.type,
+        })),
+      });
+      setAiByLogType((prev) => ({
+        ...prev,
+        [report.logType]: result.ok
+          ? {
+              status: "done",
+              suggestion: result.suggestion,
+              inputTokens: result.inputTokens,
+              outputTokens: result.outputTokens,
+              applied: [],
+            }
+          : { status: "error", error: result.error },
+      }));
+    },
+    [llm, candidateTables],
+  );
+
+  const applySuggestion = useCallback(
+    (report: GapReport, s: SuggestedMapping) => {
+      // drop/overflow are destless actions: only the action changes. Otherwise
+      // set the destination first, then the action - both through the same
+      // "edit-mapping" dispatch the manual dropdowns use (the deterministic
+      // edit path; AI output never mutates anything directly).
+      if (s.action !== "drop" && s.action !== "overflow" && s.dest !== "") {
+        dispatch({
+          type: "edit-mapping",
+          logType: report.logType,
+          sourceField: s.source,
+          field: "dest",
+          value: s.dest,
+          baseline: report.fieldMappings,
+        });
+      }
+      dispatch({
+        type: "edit-mapping",
+        logType: report.logType,
+        sourceField: s.source,
+        field: "action",
+        value: s.action,
+        baseline: report.fieldMappings,
+      });
+      setAiByLogType((prev) => {
+        const state = prev[report.logType];
+        if (state === undefined || state.status !== "done") return prev;
+        return {
+          ...prev,
+          [report.logType]: {
+            ...state,
+            applied: [...state.applied, s.source],
+          },
+        };
+      });
+    },
+    [],
   );
 
   // ---- Staleness: inputs changed after the last analysis ----------------
@@ -686,6 +805,16 @@ export function MappingReviewSection({
                   </table>
                 </div>
 
+                {llm !== undefined && (
+                  <AiAdvisoryPanel
+                    report={report}
+                    state={aiByLogType[report.logType]}
+                    analyzing={analyzing}
+                    onRun={() => void runAdvisory(report, sortedMappings(effective))}
+                    onApply={(s) => applySuggestion(report, s)}
+                  />
+                )}
+
                 <div className="mapping-review-approve">
                   {approved ? (
                     <span className="gap-approved-line">
@@ -712,6 +841,115 @@ export function MappingReviewSection({
           </div>
         );
       })}
+    </div>
+  );
+}
+
+/**
+ * The per-table AI advisory panel (ai-assisted-analysis P1). ADVISORY ONLY:
+ * suggestions render as rows the reviewer applies one by one (or ignores);
+ * Apply flows through the same edit dispatch as the manual dropdowns, so an
+ * accepted suggestion is indistinguishable from a hand edit downstream. An
+ * LLM failure renders inline and the deterministic mapping stands untouched.
+ */
+function AiAdvisoryPanel({
+  report,
+  state,
+  analyzing,
+  onRun,
+  onApply,
+}: {
+  report: GapReport;
+  state: AiAdvisoryState | undefined;
+  analyzing: boolean;
+  onRun: () => void;
+  onApply: (s: SuggestedMapping) => void;
+}) {
+  const running = state?.status === "running";
+  const done = state?.status === "done" ? state : null;
+  const ranking = done?.suggestion.tableRanking ?? [];
+  const suggestsOtherTable =
+    ranking.length > 0 && ranking[0] !== report.tableName;
+
+  return (
+    <div className="ai-advisory">
+      <div className="ai-advisory-controls">
+        <button
+          className="run-button"
+          onClick={onRun}
+          disabled={running || analyzing}
+        >
+          {running
+            ? "Asking Fable 5..."
+            : state === undefined
+              ? "AI suggestions"
+              : "Re-run AI suggestions"}
+        </button>
+        <span className="field-hint">
+          Advisory only - nothing changes until you apply a suggestion. Sends
+          field names, types, and one truncated example per field.
+        </span>
+      </div>
+
+      {state?.status === "error" && (
+        <span className="field-hint ai-advisory-error">
+          AI advisory unavailable: {state.error} The deterministic mapping
+          above is unaffected.
+        </span>
+      )}
+
+      {done !== null && (
+        <>
+          {suggestsOtherTable && (
+            <span className="field-hint ai-advisory-note">
+              The AI ranks {ranking[0]} as the better destination table for
+              this log type - change the Destination table above to re-analyze
+              against it.
+            </span>
+          )}
+          {done.suggestion.suggestions.length === 0 ? (
+            <span className="field-hint">
+              No improvements found - the AI agrees with the current mapping.
+            </span>
+          ) : (
+            <div className="ai-suggestion-list">
+              {done.suggestion.suggestions.map((s) => {
+                const applied = done.applied.includes(s.source);
+                const destless = s.action === "drop" || s.action === "overflow";
+                return (
+                  <div className="ai-suggestion" key={s.source}>
+                    <span className="ai-suggestion-change">
+                      <code>{s.source}</code>
+                      {" -> "}
+                      <code>{destless ? `(${s.action})` : s.dest}</code>
+                      {!destless && s.action !== "rename" ? ` (${s.action})` : ""}
+                    </span>
+                    <span className="ai-suggestion-confidence">
+                      {Math.round(s.confidence * 100)}%
+                    </span>
+                    {s.reason !== "" && (
+                      <span className="ai-suggestion-reason">{s.reason}</span>
+                    )}
+                    <button
+                      className="gap-reset-button"
+                      onClick={() => onApply(s)}
+                      disabled={applied}
+                    >
+                      {applied ? "Applied" : "Apply"}
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+          {done.suggestion.notes !== "" && (
+            <span className="field-hint">{done.suggestion.notes}</span>
+          )}
+          <span className="field-hint ai-advisory-tokens">
+            Tokens: {done.inputTokens} in / {done.outputTokens} out.
+          </span>
+        </>
+      )}
     </div>
   );
 }
