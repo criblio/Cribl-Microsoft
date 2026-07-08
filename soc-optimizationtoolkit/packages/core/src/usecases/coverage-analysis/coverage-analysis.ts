@@ -84,6 +84,85 @@ export async function acquireAnalyticRules(
 }
 
 // ---------------------------------------------------------------------------
+// Workbook acquisition (SentinelContent port - the solution's SHIPPED workbooks)
+// ---------------------------------------------------------------------------
+
+/**
+ * The Workbooks directory-name variants a solution may use, probed in order
+ * (mirrors the ANALYTIC_RULE_DIR_NAMES first-match rule). The Azure-Sentinel
+ * repo standard is "Workbooks"; the singular is tolerated defensively.
+ */
+export const WORKBOOK_DIR_NAMES: readonly string[] = ["Workbooks", "Workbook"];
+
+/**
+ * Whether a solution file is a workbook TEMPLATE json (not the WorkbooksMetadata
+ * manifest that ships alongside them). A repo workbook file's json body IS the
+ * workbook document - the ARM `serializedData` equivalent - so it feeds
+ * extractWorkbookQueries directly.
+ */
+export function isWorkbookTemplateFile(name: string): boolean {
+  const lower = name.toLowerCase();
+  return lower.endsWith(".json") && !lower.includes("metadata");
+}
+
+/** The display name for a repo workbook: its file name minus the .json suffix. */
+export function workbookNameFromFile(fileName: string): string {
+  return fileName.replace(/\.json$/i, "");
+}
+
+/**
+ * Acquire a solution's SHIPPED workbooks from the Sentinel repo as
+ * {@link ContentItem}s - the exact parallel to {@link acquireAnalyticRules},
+ * over the SentinelContent port (NO new external surface). Tries each Workbooks
+ * directory-name variant and reads the .json templates from the FIRST that has
+ * any. A repo workbook file's json body is the workbook document itself, so it
+ * is fed straight to extractWorkbookQueries, which recursively mines every
+ * type:3 KQL step. Unreadable files are skipped; a solution with no Workbooks
+ * directory resolves to `[]`. Never throws for a content miss.
+ */
+export async function acquireSolutionWorkbooks(
+  content: SentinelContent,
+  solutionName: string,
+  logger?: Logger,
+): Promise<ContentItem[]> {
+  for (const dirName of WORKBOOK_DIR_NAMES) {
+    const files = await content.listSolutionFiles(solutionName, dirName);
+    const templates = files.filter((f) => isWorkbookTemplateFile(f.name));
+    if (templates.length === 0) continue;
+
+    const items: ContentItem[] = [];
+    for (const file of templates) {
+      const text = await content.readFile(file.path);
+      if (text === null) {
+        logger?.debug("coverage-analysis: workbook file unreadable", {
+          solution: solutionName,
+          file: file.name,
+        });
+        continue;
+      }
+      const extraction = extractWorkbookQueries(text);
+      items.push(
+        workbookToContentItem(
+          file.path,
+          workbookNameFromFile(file.name),
+          extraction,
+        ),
+      );
+    }
+    logger?.info("coverage-analysis: acquired solution workbooks", {
+      solution: solutionName,
+      dir: dirName,
+      count: items.length,
+    });
+    return items;
+  }
+  logger?.debug("coverage-analysis: no workbooks directory", {
+    solution: solutionName,
+  });
+  return [];
+}
+
+// ---------------------------------------------------------------------------
 // Workbook acquisition (AzureManagement port - existing ARM surface)
 // ---------------------------------------------------------------------------
 

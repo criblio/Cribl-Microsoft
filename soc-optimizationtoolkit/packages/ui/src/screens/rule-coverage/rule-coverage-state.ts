@@ -330,7 +330,7 @@ export function coverageSummaryLine(
   if (counts.total === 0) {
     return isRule
       ? "No analytics rules found in the Sentinel repository for this solution. You can upload custom rules below to validate field coverage."
-      : "No workbooks found for this workspace. Workbook coverage enumerates the workspace's Sentinel workbooks through Azure Resource Manager.";
+      : "No workbooks found for this solution. Workbook coverage reads the solution's Workbooks directory from the Sentinel repository and folds in any Sentinel workbooks already deployed in your subscription.";
   }
   if (counts.fullyCovered === counts.total) {
     return isRule

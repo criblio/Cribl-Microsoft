@@ -18,6 +18,7 @@ import {
 import {
   WORKBOOKS_API_VERSION,
   acquireAnalyticRules,
+  acquireSolutionWorkbooks,
   acquireWorkbooks,
 } from "./coverage-analysis";
 
@@ -132,6 +133,67 @@ describe("acquireWorkbooks over the AzureManagement port", () => {
       },
     });
     const items = await acquireWorkbooks(azure, { subscriptionId: "s" });
+    expect(items).toHaveLength(1);
+    expect(items[0].queries).toEqual([]);
+    expect(items[0].unparseableQueryCount).toBe(1);
+  });
+});
+
+describe("acquireSolutionWorkbooks over the SentinelContent port", () => {
+  const workbookDoc = JSON.stringify({
+    version: "Notebook/1.0",
+    items: [
+      { type: 1, content: { json: "## A markdown step (not a query)" } },
+      {
+        type: 3,
+        content: {
+          query: "CommonSecurityLog | project SourceIP, DeviceVendor",
+          queryType: 0,
+        },
+      },
+    ],
+  });
+
+  it("finds shipped workbooks under the 'Workbooks' dir and mines their KQL", async () => {
+    const content = new FakeSentinelContent({
+      files: {
+        "Solutions/PAN/Workbooks/PaloAltoOverview.json": workbookDoc,
+        "Solutions/PAN/Data Connectors/connector.json": "{}",
+      },
+    });
+    const items = await acquireSolutionWorkbooks(content, "PAN");
+    expect(items).toHaveLength(1);
+    expect(items[0].type).toBe("workbook");
+    expect(items[0].name).toBe("PaloAltoOverview");
+    expect(items[0].queries[0]).toContain("CommonSecurityLog");
+    expect(items[0].unparseableQueryCount).toBe(0);
+  });
+
+  it("skips the WorkbooksMetadata manifest and non-json files", async () => {
+    const content = new FakeSentinelContent({
+      files: {
+        "Solutions/PAN/Workbooks/Overview.json": workbookDoc,
+        "Solutions/PAN/Workbooks/WorkbooksMetadata.json": "[]",
+        "Solutions/PAN/Workbooks/README.md": "not a workbook",
+      },
+    });
+    const items = await acquireSolutionWorkbooks(content, "PAN");
+    expect(items).toHaveLength(1);
+    expect(items[0].name).toBe("Overview");
+  });
+
+  it("resolves [] when the solution has no Workbooks directory", async () => {
+    const content = new FakeSentinelContent({
+      files: { "Solutions/Empty/Data Connectors/c.json": "{}" },
+    });
+    expect(await acquireSolutionWorkbooks(content, "Empty")).toEqual([]);
+  });
+
+  it("counts a corrupt workbook document as one unparseable unit, not dropped", async () => {
+    const content = new FakeSentinelContent({
+      files: { "Solutions/PAN/Workbooks/Broken.json": "{ not valid json" },
+    });
+    const items = await acquireSolutionWorkbooks(content, "PAN");
     expect(items).toHaveLength(1);
     expect(items[0].queries).toEqual([]);
     expect(items[0].unparseableQueryCount).toBe(1);
