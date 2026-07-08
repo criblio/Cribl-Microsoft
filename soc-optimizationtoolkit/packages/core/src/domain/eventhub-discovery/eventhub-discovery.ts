@@ -154,6 +154,236 @@ export function parseEventHubItem(
 }
 
 // ---------------------------------------------------------------------------
+// Configured-sender discovery (EVH-04) - the single-query crown jewel
+// ---------------------------------------------------------------------------
+
+/**
+ * The single-query diagnostic-settings discovery (EVH-04): every
+ * microsoft.insights/diagnosticsettings resource in the subscription that
+ * targets an Event Hub, with the hub name, the namespace extracted from the
+ * authorization-rule id, and the SOURCE resource id. Ported from the legacy
+ * Get-AllDiagnosticSettingsOptimized KQL; the logs/metrics category columns
+ * are deliberately not projected (the correlation does not consume them and
+ * they dominate the payload).
+ */
+export const EVENTHUB_DIAG_SETTINGS_KQL =
+  "resources" +
+  " | where type == 'microsoft.insights/diagnosticsettings'" +
+  " | where properties.eventHubName != '' or properties.eventHubAuthorizationRuleId != ''" +
+  " | extend eventHubName = tostring(properties.eventHubName)" +
+  " | extend eventHubAuthRuleId = tostring(properties.eventHubAuthorizationRuleId)" +
+  " | extend eventHubNamespace = tostring(split(eventHubAuthRuleId, '/')[8])" +
+  " | extend sourceResourceId = tostring(properties.resourceId)" +
+  " | project name, eventHubName, eventHubNamespace, sourceResourceId";
+
+/** One diagnostic setting sending an Azure resource's logs to an Event Hub. */
+export interface DiagnosticSettingSender {
+  /** The diagnostic setting name. */
+  settingName: string;
+  /** The explicit target hub, or "" (Azure then auto-creates per-category hubs). */
+  eventHubName: string;
+  /** The namespace, extracted from the authorization-rule resource id. */
+  eventHubNamespace: string;
+  /** The SOURCE resource whose logs are exported. */
+  sourceResourceId: string;
+}
+
+/**
+ * Parse a Resource Graph diagnostic-settings response (rows + `$skipToken`).
+ * Rows without a setting name are dropped, never crashed on.
+ */
+export function parseDiagSettingsResponse(body: unknown): {
+  senders: DiagnosticSettingSender[];
+  skipToken: string;
+} {
+  const data = isRecord(body) ? body["data"] : undefined;
+  const rows = Array.isArray(data) ? data : [];
+  const senders: DiagnosticSettingSender[] = [];
+  for (const row of rows) {
+    if (!isRecord(row)) continue;
+    const settingName = str(row["name"]);
+    if (settingName === "") continue;
+    senders.push({
+      settingName,
+      eventHubName: str(row["eventHubName"]),
+      eventHubNamespace: str(row["eventHubNamespace"]),
+      sourceResourceId: str(row["sourceResourceId"]),
+    });
+  }
+  const skipToken = isRecord(body) ? str(body["$skipToken"]) : "";
+  return { senders, skipToken };
+}
+
+/**
+ * The senders configured for ONE hub. Matching rule (a deliberate fix over
+ * the legacy `-or`, which credited a setting naming hub X to EVERY hub in the
+ * namespace): a setting matches when it names this hub explicitly, or when it
+ * names NO hub but targets this namespace (Azure then routes to auto-created
+ * per-category hubs, so every hub in the namespace is a plausible target).
+ */
+export function sendersForHub(
+  senders: readonly DiagnosticSettingSender[],
+  namespaceName: string,
+  hubName: string,
+): DiagnosticSettingSender[] {
+  return senders.filter(
+    (s) =>
+      (s.eventHubName === hubName && s.eventHubNamespace === namespaceName) ||
+      (s.eventHubName === "" && s.eventHubNamespace === namespaceName),
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Activity detection (EVH-07) - IncomingMessages over a lookback window
+// ---------------------------------------------------------------------------
+
+/** The Azure Monitor metrics API version. */
+export const METRICS_API_VERSION = "2018-01-01";
+
+/** The activity lookback the UI mints the timespan from (legacy: 7 days). */
+export const EH_ACTIVITY_LOOKBACK_DAYS = 7;
+
+/**
+ * Build the per-hub IncomingMessages metrics GET (1-hour grain, Total
+ * aggregation - the legacy Get-AzMetric shape). `timespan` is
+ * "{startISO}/{endISO}", minted by the CALLER - core never reads a clock.
+ */
+export function metricsRequest(
+  hubResourceId: string,
+  timespan: string,
+): AzureManagementRequest {
+  return {
+    method: "GET",
+    path: `${hubResourceId}/providers/microsoft.insights/metrics`,
+    apiVersion: METRICS_API_VERSION,
+    query: {
+      metricnames: "IncomingMessages",
+      timespan,
+      interval: "PT1H",
+      aggregation: "Total",
+    },
+  };
+}
+
+/**
+ * Sum the IncomingMessages totals out of a metrics response (the legacy
+ * Measure-Object -Sum over Data.Total). Defensive: a malformed response sums
+ * to 0, never throws.
+ */
+export function parseIncomingMessagesTotal(body: unknown): number {
+  if (!isRecord(body)) return 0;
+  const value = body["value"];
+  if (!Array.isArray(value) || !isRecord(value[0])) return 0;
+  const timeseries = value[0]["timeseries"];
+  if (!Array.isArray(timeseries)) return 0;
+  let total = 0;
+  for (const series of timeseries) {
+    if (!isRecord(series)) continue;
+    const points = series["data"];
+    if (!Array.isArray(points)) continue;
+    for (const point of points) {
+      if (isRecord(point) && typeof point["total"] === "number") {
+        total += point["total"];
+      }
+    }
+  }
+  return total;
+}
+
+/** One hub's measured activity. */
+export interface HubActivity {
+  incomingMessages: number;
+  isActive: boolean;
+  /** Present when the metrics call failed (hub counted inactive, surfaced). */
+  error?: string;
+}
+
+// ---------------------------------------------------------------------------
+// Unknown-sender correlation (EVH-08) - pure inference, verbatim thresholds
+// ---------------------------------------------------------------------------
+
+/** The legacy high-volume heuristic: >100k messages per configured source. */
+export const EH_HIGH_VOLUME_PER_SOURCE = 100000;
+
+/** One hub's correlation findings. */
+export interface HubFindings {
+  /** Active with ZERO configured sources: likely SDK/connection-string senders. */
+  hasUnknownSenders: boolean;
+  /** Human-readable analysis notes (legacy vocabulary). */
+  notes: string[];
+}
+
+/**
+ * Correlate one hub's configured senders against its measured activity - the
+ * legacy Step 6 heuristics verbatim (consumer-group / auth-rule hint
+ * inference joins when EVH-06 enumeration lands):
+ *   - ACTIVE + 0 sources  -> unknown senders (the onboarding-visibility flag);
+ *   - INACTIVE + sources  -> sources may be disabled;
+ *   - ACTIVE + sources + volume > sources x 100k -> possible extra senders.
+ */
+export function analyzeHubFindings(
+  senderCount: number,
+  activity: HubActivity | undefined,
+): HubFindings {
+  const notes: string[] = [];
+  let hasUnknownSenders = false;
+  if (activity === undefined) {
+    return { hasUnknownSenders, notes };
+  }
+  if (activity.isActive && senderCount === 0) {
+    hasUnknownSenders = true;
+    notes.push(
+      "Event Hub is ACTIVE but has NO configured sources - likely using SDK/connection strings",
+    );
+  } else if (!activity.isActive && senderCount > 0) {
+    notes.push(
+      `Event Hub is INACTIVE but has ${senderCount} configured source(s) - sources may be disabled`,
+    );
+  } else if (activity.isActive && senderCount > 0) {
+    if (activity.incomingMessages > senderCount * EH_HIGH_VOLUME_PER_SOURCE) {
+      notes.push(
+        "High message volume relative to configured sources - may have additional SDK-based senders",
+      );
+    }
+  }
+  return { hasUnknownSenders, notes };
+}
+
+/** The subscription-level statistics rollup (legacy Statistics block). */
+export interface EhActivityStatistics {
+  activeEventHubs: number;
+  inactiveEventHubs: number;
+  eventHubsWithUnknownSenders: number;
+}
+
+/** Roll activity + findings up into the legacy statistics counts. */
+export function deriveEhStatistics(
+  activityByHub: ReadonlyMap<string, HubActivity>,
+  findingsByHub: ReadonlyMap<string, HubFindings>,
+): EhActivityStatistics {
+  let active = 0;
+  let inactive = 0;
+  for (const activity of activityByHub.values()) {
+    if (activity.isActive) {
+      active += 1;
+    } else {
+      inactive += 1;
+    }
+  }
+  let unknown = 0;
+  for (const findings of findingsByHub.values()) {
+    if (findings.hasUnknownSenders) {
+      unknown += 1;
+    }
+  }
+  return {
+    activeEventHubs: active,
+    inactiveEventHubs: inactive,
+    eventHubsWithUnknownSenders: unknown,
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Cribl Event Hub source generation (LOG-16) - VERBATIM legacy template
 // ---------------------------------------------------------------------------
 

@@ -1,11 +1,13 @@
 /**
  * EventHubDiscoveryScreen - in-app Event Hub discovery (roadmap Phase 4,
- * EVH-03 + LOG-16). One Resource Graph query inventories every namespace in
- * the active subscription, one bounded ARM GET per namespace lists its hubs,
- * and the user selects hubs to generate Cribl Stream Event Hub source configs
- * (the verbatim legacy template: Kafka format, SASL PLAIN, text-secret
- * reference per namespace) plus the connection-strings reference - downloaded
- * through the ArtifactSink.
+ * EVH-03/04/07/08 + LOG-16). One Resource Graph query inventories every
+ * namespace, one bounded ARM GET per namespace lists its hubs, a second
+ * Resource Graph query discovers the CONFIGURED senders (diagnostic settings
+ * targeting Event Hubs), and an opt-in activity check (one metrics GET per
+ * hub, capped) feeds the pure unknown-sender inference - which hubs are worth
+ * onboarding and where visibility gaps are. Selected hubs generate Cribl
+ * Stream source configs (the verbatim legacy template) plus the
+ * connection-strings reference - downloaded through the ArtifactSink.
  *
  * All request/parse/generate logic is the pure @soc/core eventhub-discovery
  * module + the discoverEventHubs usecase; this component only renders and
@@ -14,12 +16,24 @@
 
 import { useCallback, useMemo, useState } from "react";
 import {
+  EH_ACTIVITY_LOOKBACK_DAYS,
   EH_DEFAULT_CONSUMER_GROUP,
+  analyzeHubFindings,
   buildConnectionStringsReference,
   buildEventHubSourceConfig,
+  checkEventHubActivity,
+  deriveEhStatistics,
+  discoverEventHubSenders,
   discoverEventHubs,
+  sendersForHub,
 } from "@soc/core";
-import type { EventHubDiscoveryResult, EventHubInfo } from "@soc/core";
+import type {
+  DiagnosticSettingSender,
+  EventHubDiscoveryResult,
+  EventHubInfo,
+  HubActivity,
+  HubFindings,
+} from "@soc/core";
 import { usePorts } from "../../ports-context";
 
 /** The stable selection key for one hub. */
@@ -37,6 +51,13 @@ export function EventHubDiscoveryScreen() {
   const [groupId, setGroupId] = useState(EH_DEFAULT_CONSUMER_GROUP);
   const [generated, setGenerated] = useState<string>("");
   const [saveNotice, setSaveNotice] = useState("");
+  // EVH-04: configured senders (one extra Resource Graph query, best-effort).
+  const [senders, setSenders] = useState<DiagnosticSettingSender[] | null>(null);
+  const [senderNote, setSenderNote] = useState("");
+  // EVH-07: opt-in per-hub activity (one metrics call per hub, capped).
+  const [activityByHub, setActivityByHub] = useState<Map<string, HubActivity> | null>(null);
+  const [activityWarnings, setActivityWarnings] = useState<string[]>([]);
+  const [checkingActivity, setCheckingActivity] = useState(false);
 
   const runDiscovery = useCallback(async () => {
     if (discovering || config.subscriptionId === "") {
@@ -47,6 +68,8 @@ export function EventHubDiscoveryScreen() {
     setSaveNotice("");
     setGenerated("");
     setSelected(new Set());
+    setActivityByHub(null);
+    setActivityWarnings([]);
     try {
       const found = await discoverEventHubs(
         ports.azure,
@@ -54,6 +77,23 @@ export function EventHubDiscoveryScreen() {
         ports.logger,
       );
       setResult(found);
+      // Sender discovery is an ENRICHMENT: one more Resource Graph query,
+      // best-effort - a failure degrades to a note, never hides the inventory.
+      try {
+        setSenders(
+          await discoverEventHubSenders(
+            ports.azure,
+            { subscriptionId: config.subscriptionId },
+            ports.logger,
+          ),
+        );
+        setSenderNote("");
+      } catch (senderErr) {
+        setSenders(null);
+        setSenderNote(
+          `Configured-sender discovery unavailable: ${senderErr instanceof Error ? senderErr.message : String(senderErr)}`,
+        );
+      }
     } catch (err) {
       setResult(null);
       setDiscoverError(err instanceof Error ? err.message : String(err));
@@ -83,6 +123,65 @@ export function EventHubDiscoveryScreen() {
   const selectedHubs = useMemo(
     () => hubs.filter((hub) => selected.has(hubKey(hub))),
     [hubs, selected],
+  );
+
+  // EVH-07: opt-in activity check. The timespan is minted HERE (the impure
+  // component layer; core never reads a clock): the last N days, ISO/ISO.
+  const runActivityCheck = useCallback(async () => {
+    if (checkingActivity || hubs.length === 0) {
+      return;
+    }
+    setCheckingActivity(true);
+    setActivityWarnings([]);
+    try {
+      const end = new Date();
+      const start = new Date(end.getTime() - EH_ACTIVITY_LOOKBACK_DAYS * 24 * 60 * 60 * 1000);
+      const checked = await checkEventHubActivity(
+        ports.azure,
+        hubs,
+        `${start.toISOString()}/${end.toISOString()}`,
+        ports.logger,
+      );
+      setActivityByHub(checked.activityByHub);
+      setActivityWarnings(checked.warnings);
+    } catch (err) {
+      setActivityWarnings([err instanceof Error ? err.message : String(err)]);
+    } finally {
+      setCheckingActivity(false);
+    }
+  }, [checkingActivity, hubs, ports.azure, ports.logger]);
+
+  // Configured-sender counts and EVH-08 findings per hub (pure projections).
+  const senderCountByHub = useMemo(() => {
+    const map = new Map<string, number>();
+    if (senders !== null) {
+      for (const hub of hubs) {
+        map.set(hubKey(hub), sendersForHub(senders, hub.namespace, hub.name).length);
+      }
+    }
+    return map;
+  }, [senders, hubs]);
+
+  const findingsByHub = useMemo(() => {
+    const map = new Map<string, HubFindings>();
+    if (activityByHub !== null) {
+      for (const hub of hubs) {
+        const key = hubKey(hub);
+        map.set(
+          key,
+          analyzeHubFindings(senderCountByHub.get(key) ?? 0, activityByHub.get(key)),
+        );
+      }
+    }
+    return map;
+  }, [activityByHub, hubs, senderCountByHub]);
+
+  const stats = useMemo(
+    () =>
+      activityByHub !== null
+        ? deriveEhStatistics(activityByHub, findingsByHub)
+        : null,
+    [activityByHub, findingsByHub],
   );
 
   // Generate the source configs + secrets reference for the selection. Pure
@@ -195,6 +294,40 @@ export function EventHubDiscoveryScreen() {
                 </span>
               </label>
 
+              <div className="panel-controls">
+                <button
+                  className="run-button"
+                  onClick={() => void runActivityCheck()}
+                  disabled={checkingActivity}
+                >
+                  {checkingActivity
+                    ? "Checking activity..."
+                    : activityByHub === null
+                      ? `Check activity (last ${EH_ACTIVITY_LOOKBACK_DAYS} days)`
+                      : "Re-check activity"}
+                </button>
+                <span className="field-hint">
+                  One metrics call per hub - flags which hubs actually receive
+                  data and which active hubs have no configured sources
+                  (visibility gaps worth onboarding).
+                </span>
+              </div>
+              {stats !== null && (
+                <p className="field-hint">
+                  {stats.activeEventHubs} active, {stats.inactiveEventHubs}{" "}
+                  inactive, {stats.eventHubsWithUnknownSenders} with unknown
+                  senders.
+                </p>
+              )}
+              {senderNote !== "" && (
+                <p className="field-hint eh-warning">{senderNote}</p>
+              )}
+              {activityWarnings.map((warning) => (
+                <p className="field-hint eh-warning" key={warning}>
+                  {warning}
+                </p>
+              ))}
+
               {[...byNamespace.entries()].map(([namespace, nsHubs]) => {
                 const ns = result.namespaces.find((n) => n.name === namespace);
                 return (
@@ -207,24 +340,59 @@ export function EventHubDiscoveryScreen() {
                     </span>
                     {nsHubs.map((hub) => {
                       const key = hubKey(hub);
+                      const activity = activityByHub?.get(key);
+                      const findings = findingsByHub.get(key);
                       return (
-                        <label className="integrate-check" key={key}>
-                          <input
-                            type="checkbox"
-                            checked={selected.has(key)}
-                            onChange={() => toggleHub(key)}
-                          />
-                          <span className="integrate-check-text">
-                            {hub.name}
-                            {hub.partitionCount !== null
-                              ? ` - ${hub.partitionCount} partition${hub.partitionCount === 1 ? "" : "s"}`
-                              : ""}
-                            {hub.messageRetentionInDays !== null
-                              ? `, ${hub.messageRetentionInDays}d retention`
-                              : ""}
-                            {hub.status !== "" ? `, ${hub.status}` : ""}
-                          </span>
-                        </label>
+                        <div key={key}>
+                          <label className="integrate-check">
+                            <input
+                              type="checkbox"
+                              checked={selected.has(key)}
+                              onChange={() => toggleHub(key)}
+                            />
+                            <span className="integrate-check-text">
+                              {hub.name}
+                              {hub.partitionCount !== null
+                                ? ` - ${hub.partitionCount} partition${hub.partitionCount === 1 ? "" : "s"}`
+                                : ""}
+                              {hub.messageRetentionInDays !== null
+                                ? `, ${hub.messageRetentionInDays}d retention`
+                                : ""}
+                              {hub.status !== "" ? `, ${hub.status}` : ""}
+                              {senders !== null
+                                ? ` - ${senderCountByHub.get(key) ?? 0} configured source${(senderCountByHub.get(key) ?? 0) === 1 ? "" : "s"}`
+                                : ""}
+                              {activity !== undefined && (
+                                <span
+                                  className={
+                                    activity.isActive
+                                      ? "eh-activity eh-activity-active"
+                                      : "eh-activity eh-activity-idle"
+                                  }
+                                >
+                                  {activity.error !== undefined
+                                    ? `metrics unavailable (${activity.error})`
+                                    : activity.isActive
+                                      ? `ACTIVE - ${Math.round(activity.incomingMessages).toLocaleString()} msgs/${EH_ACTIVITY_LOOKBACK_DAYS}d`
+                                      : "inactive"}
+                                </span>
+                              )}
+                            </span>
+                          </label>
+                          {findings !== undefined &&
+                            findings.notes.map((note) => (
+                              <p
+                                className={
+                                  findings.hasUnknownSenders
+                                    ? "field-hint eh-finding eh-warning"
+                                    : "field-hint eh-finding"
+                                }
+                                key={note}
+                              >
+                                {note}
+                              </p>
+                            ))}
+                        </div>
                       );
                     })}
                   </div>

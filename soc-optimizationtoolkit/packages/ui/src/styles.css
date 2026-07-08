@@ -3874,3 +3874,24 @@ button.journey-step-main:hover .journey-step-label {
 .eh-warning {
   color: var(--warn);
 }
+
+.eh-activity {
+  margin-left: 8px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 1px 8px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  white-space: nowrap;
+}
+.eh-activity-active {
+  color: var(--ok-strong);
+  border-color: var(--ok-border);
+  background: var(--ok-bg);
+}
+.eh-activity-idle {
+  color: var(--text-faint);
+}
+.eh-finding {
+  margin-left: 26px;
+}

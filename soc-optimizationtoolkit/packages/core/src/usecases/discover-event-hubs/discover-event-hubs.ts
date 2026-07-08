@@ -16,15 +16,21 @@
 import type { AzureManagement } from "../../ports/azure-management";
 import type { Logger } from "../../ports/logger";
 import {
+  EVENTHUB_DIAG_SETTINGS_KQL,
   EVENTHUB_NAMESPACES_KQL,
   listEventHubsRequest,
+  metricsRequest,
+  parseDiagSettingsResponse,
   parseEventHubItem,
+  parseIncomingMessagesTotal,
   parseNamespacesResponse,
   resourceGraphRequest,
 } from "../../domain/eventhub-discovery/eventhub-discovery";
 import type {
+  DiagnosticSettingSender,
   EventHubInfo,
   EventHubNamespaceInfo,
+  HubActivity,
 } from "../../domain/eventhub-discovery/eventhub-discovery";
 
 /** Fail-safe bound on Resource Graph skipToken pages (1000 rows per page). */
@@ -115,4 +121,103 @@ export async function discoverEventHubs(
     warnings: warnings.length,
   });
   return { namespaces, hubs, warnings };
+}
+
+/**
+ * Discover the CONFIGURED senders (EVH-04): one skipToken-paginated Resource
+ * Graph query returning every diagnostic setting in the subscription that
+ * targets an Event Hub. Throws on a query failure (callers soft-fail it into
+ * a warning - senders are an enrichment, not the inventory).
+ */
+export async function discoverEventHubSenders(
+  azure: AzureManagement,
+  input: { subscriptionId: string },
+  logger?: Logger,
+): Promise<DiagnosticSettingSender[]> {
+  const senders: DiagnosticSettingSender[] = [];
+  let skipToken = "";
+  for (let page = 0; page < EH_DISCOVERY_MAX_PAGES; page += 1) {
+    const res = await azure.request(
+      resourceGraphRequest(
+        input.subscriptionId,
+        EVENTHUB_DIAG_SETTINGS_KQL,
+        skipToken === "" ? undefined : skipToken,
+      ),
+    );
+    if (!is2xx(res.status)) {
+      throw new Error(`diagnostic-settings query failed: HTTP ${res.status}`);
+    }
+    const parsed = parseDiagSettingsResponse(res.body);
+    senders.push(...parsed.senders);
+    skipToken = parsed.skipToken;
+    if (skipToken === "") {
+      break;
+    }
+  }
+  logger?.info("eventhub-discovery: senders", { count: senders.length });
+  return senders;
+}
+
+/**
+ * Cap on hubs checked per activity run: one metrics GET per hub against the
+ * 100 req/min proxy budget; hubs beyond the cap are reported in the warning.
+ */
+export const EH_ACTIVITY_MAX_HUBS = 80;
+
+/** The activity-check result: per-hub activity keyed "{namespace}/{hub}". */
+export interface EventHubActivityResult {
+  activityByHub: Map<string, HubActivity>;
+  warnings: string[];
+}
+
+/**
+ * Check per-hub activity (EVH-07): one IncomingMessages metrics GET per hub
+ * over the caller-minted `timespan` ("{startISO}/{endISO}" - core never reads
+ * a clock), sequential to pace the proxy budget, capped at
+ * {@link EH_ACTIVITY_MAX_HUBS}. A failing hub is counted inactive with the
+ * error surfaced on its activity record (the legacy SilentlyContinue,
+ * made visible).
+ */
+export async function checkEventHubActivity(
+  azure: AzureManagement,
+  hubs: readonly EventHubInfo[],
+  timespan: string,
+  logger?: Logger,
+): Promise<EventHubActivityResult> {
+  const warnings: string[] = [];
+  const capped = hubs.slice(0, EH_ACTIVITY_MAX_HUBS);
+  if (hubs.length > capped.length) {
+    warnings.push(
+      `Activity checked for the first ${capped.length} of ${hubs.length} hubs ` +
+        "(one metrics call per hub; re-run on a narrower selection for the rest).",
+    );
+  }
+  const activityByHub = new Map<string, HubActivity>();
+  for (const hub of capped) {
+    const key = `${hub.namespace}/${hub.name}`;
+    try {
+      const res = await azure.request(metricsRequest(hub.resourceId, timespan));
+      if (!is2xx(res.status)) {
+        activityByHub.set(key, {
+          incomingMessages: 0,
+          isActive: false,
+          error: `HTTP ${res.status}`,
+        });
+        continue;
+      }
+      const total = parseIncomingMessagesTotal(res.body);
+      activityByHub.set(key, { incomingMessages: total, isActive: total > 0 });
+    } catch (err) {
+      activityByHub.set(key, {
+        incomingMessages: 0,
+        isActive: false,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+  logger?.info("eventhub-discovery: activity", {
+    checked: capped.length,
+    active: [...activityByHub.values()].filter((a) => a.isActive).length,
+  });
+  return { activityByHub, warnings };
 }

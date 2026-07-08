@@ -20,7 +20,20 @@ import {
   resourceGraphRequest,
   sanitizeEhId,
 } from "./eventhub-discovery";
-import { discoverEventHubs } from "../../usecases/discover-event-hubs/discover-event-hubs";
+import {
+  analyzeHubFindings,
+  deriveEhStatistics,
+  metricsRequest,
+  parseDiagSettingsResponse,
+  parseIncomingMessagesTotal,
+  sendersForHub,
+} from "./eventhub-discovery";
+import type { DiagnosticSettingSender, HubActivity } from "./eventhub-discovery";
+import {
+  checkEventHubActivity,
+  discoverEventHubSenders,
+  discoverEventHubs,
+} from "../../usecases/discover-event-hubs/discover-event-hubs";
 
 const NS = {
   name: "cribl-diag-a64acbf7",
@@ -201,5 +214,146 @@ describe("discoverEventHubs usecase", () => {
     await expect(
       discoverEventHubs(azure, { subscriptionId: "sub-1" }),
     ).rejects.toThrow(/Reader on the subscription/);
+  });
+});
+
+describe("sender discovery (EVH-04)", () => {
+  const SENDERS: DiagnosticSettingSender[] = [
+    { settingName: "to-hub-a", eventHubName: "hub-a", eventHubNamespace: "ns-1", sourceResourceId: "/x/kv" },
+    { settingName: "ns-wide", eventHubName: "", eventHubNamespace: "ns-1", sourceResourceId: "/x/vault" },
+    { settingName: "other-ns", eventHubName: "hub-a", eventHubNamespace: "ns-2", sourceResourceId: "/x/sql" },
+  ];
+
+  it("parses rows + skipToken, dropping nameless rows", () => {
+    const parsed = parseDiagSettingsResponse({
+      data: [
+        { name: "d1", eventHubName: "h", eventHubNamespace: "n", sourceResourceId: "/x" },
+        { eventHubName: "orphan" },
+      ],
+      $skipToken: "next",
+    });
+    expect(parsed.senders).toHaveLength(1);
+    expect(parsed.skipToken).toBe("next");
+  });
+
+  it("matches explicit hub targets and namespace-wide settings, never other namespaces", () => {
+    expect(sendersForHub(SENDERS, "ns-1", "hub-a").map((s) => s.settingName)).toEqual([
+      "to-hub-a",
+      "ns-wide",
+    ]);
+    // The legacy -or overcount is FIXED: an explicit hub-a setting does not
+    // credit hub-b; only the namespace-wide (empty hub) setting does.
+    expect(sendersForHub(SENDERS, "ns-1", "hub-b").map((s) => s.settingName)).toEqual([
+      "ns-wide",
+    ]);
+    expect(sendersForHub(SENDERS, "ns-3", "hub-a")).toEqual([]);
+  });
+
+  it("discoverEventHubSenders paginates and throws on failure", async () => {
+    const azure = new FakeAzureManagement();
+    azure.respondWith(
+      { status: 200, body: { data: [{ name: "d1", eventHubName: "h", eventHubNamespace: "n", sourceResourceId: "/x" }], $skipToken: "t" } },
+      { status: 200, body: { data: [{ name: "d2", eventHubName: "", eventHubNamespace: "n", sourceResourceId: "/y" }] } },
+    );
+    const senders = await discoverEventHubSenders(azure, { subscriptionId: "sub-1" });
+    expect(senders.map((s) => s.settingName)).toEqual(["d1", "d2"]);
+
+    const failing = new FakeAzureManagement();
+    failing.respondWith({ status: 500, body: {} });
+    await expect(
+      discoverEventHubSenders(failing, { subscriptionId: "sub-1" }),
+    ).rejects.toThrow(/HTTP 500/);
+  });
+});
+
+describe("activity detection (EVH-07)", () => {
+  it("builds the legacy metrics GET (IncomingMessages, PT1H, Total)", () => {
+    const req = metricsRequest("/x/hub", "2026-07-01T00:00:00Z/2026-07-08T00:00:00Z");
+    expect(req.path).toBe("/x/hub/providers/microsoft.insights/metrics");
+    expect(req.query).toMatchObject({
+      metricnames: "IncomingMessages",
+      interval: "PT1H",
+      aggregation: "Total",
+    });
+  });
+
+  it("sums totals defensively", () => {
+    expect(
+      parseIncomingMessagesTotal({
+        value: [{ timeseries: [{ data: [{ total: 10 }, { total: 5 }, {}] }] }],
+      }),
+    ).toBe(15);
+    expect(parseIncomingMessagesTotal({})).toBe(0);
+    expect(parseIncomingMessagesTotal("junk")).toBe(0);
+  });
+
+  it("checkEventHubActivity marks active/inactive and surfaces per-hub failures", async () => {
+    const azure = new FakeAzureManagement();
+    azure.respondWith(
+      { status: 200, body: { value: [{ timeseries: [{ data: [{ total: 42 }] }] }] } },
+      { status: 403, body: {} },
+    );
+    const hubs = [
+      { name: "hub-a", namespace: "ns-1", partitionCount: 1, messageRetentionInDays: 1, status: "Active", resourceId: "/x/a" },
+      { name: "hub-b", namespace: "ns-1", partitionCount: 1, messageRetentionInDays: 1, status: "Active", resourceId: "/x/b" },
+    ];
+    const result = await checkEventHubActivity(azure, hubs, "start/end");
+    expect(result.activityByHub.get("ns-1/hub-a")).toMatchObject({
+      incomingMessages: 42,
+      isActive: true,
+    });
+    expect(result.activityByHub.get("ns-1/hub-b")).toMatchObject({
+      isActive: false,
+      error: "HTTP 403",
+    });
+  });
+});
+
+describe("unknown-sender inference (EVH-08, legacy thresholds)", () => {
+  const active: HubActivity = { incomingMessages: 500, isActive: true };
+  const idle: HubActivity = { incomingMessages: 0, isActive: false };
+
+  it("flags an active hub with zero configured sources", () => {
+    const findings = analyzeHubFindings(0, active);
+    expect(findings.hasUnknownSenders).toBe(true);
+    expect(findings.notes[0]).toContain("NO configured sources");
+  });
+
+  it("notes an inactive hub with configured sources", () => {
+    const findings = analyzeHubFindings(2, idle);
+    expect(findings.hasUnknownSenders).toBe(false);
+    expect(findings.notes[0]).toContain("INACTIVE but has 2 configured source(s)");
+  });
+
+  it("notes high volume relative to configured sources (>100k per source)", () => {
+    const atThreshold: HubActivity = { incomingMessages: 200000, isActive: true };
+    expect(analyzeHubFindings(2, atThreshold).notes).toEqual([]);
+    const flooded: HubActivity = { incomingMessages: 200001, isActive: true };
+    expect(analyzeHubFindings(2, flooded).notes[0]).toContain("High message volume");
+  });
+
+  it("yields nothing without activity data", () => {
+    expect(analyzeHubFindings(0, undefined)).toEqual({
+      hasUnknownSenders: false,
+      notes: [],
+    });
+  });
+
+  it("rolls up the legacy statistics", () => {
+    const activity = new Map<string, HubActivity>([
+      ["a", active],
+      ["b", idle],
+      ["c", active],
+    ]);
+    const findings = new Map([
+      ["a", analyzeHubFindings(0, active)],
+      ["b", analyzeHubFindings(1, idle)],
+      ["c", analyzeHubFindings(3, active)],
+    ]);
+    expect(deriveEhStatistics(activity, findings)).toEqual({
+      activeEventHubs: 2,
+      inactiveEventHubs: 1,
+      eventHubsWithUnknownSenders: 1,
+    });
   });
 });
