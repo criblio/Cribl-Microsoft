@@ -64,6 +64,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   DEFAULT_OPERATION_OPTIONS,
   SENTINEL_SECRET_PLACEHOLDER,
+  assemblePack,
   canWireSource,
   deployedGroups,
   deriveSectionStatuses,
@@ -83,7 +84,10 @@ import type {
   JobStep,
   OnboardTableOutcome,
   OperationOptions,
+  PackScaffoldInput,
+  PackVendorSample,
   SolutionRef,
+  TableAssemblyInput,
   TaggedSample,
   TargetScope,
 } from "@soc/core";
@@ -100,6 +104,7 @@ import { SampleIntakeSection } from "../samples/sample-intake-section";
 import { MappingReviewSection } from "../mapping-review/mapping-review-section";
 import type { MappingReviewRenameEvent } from "../mapping-review/mapping-review-section";
 import { PipelinePreviewSection } from "../pipeline-preview/pipeline-preview-section";
+import { derivePipelinePreview } from "../pipeline-preview/pipeline-preview-state";
 import { SolutionBrowser } from "../solution-browser/solution-browser";
 import { RuleCoverageSection } from "../rule-coverage/rule-coverage-section";
 import {
@@ -452,6 +457,211 @@ export function IntegrateScreen({
   const packOverwriteBlocked =
     packConflicts !== null && packConflicts.length > 0 && !overwriteAcked;
 
+  // ---- Build and install pack (the content-path closer) -----------------
+  // Assembles the pack from the APPROVED mappings (the same plan derivation
+  // the pipeline preview renders), persists the build record (the Packs
+  // screen lists/downloads it), and installs the .crbl into every target
+  // worker group - honoring the overwrite check above. Deployed tables get
+  // their REAL DCR values baked into outputs.yml (from the multi-DCR deploy
+  // outcomes); undeployed tables ship the fill-in-Cribl placeholders.
+  const [packBuilding, setPackBuilding] = useState(false);
+  const [packBuildLines, setPackBuildLines] = useState<string[]>([]);
+
+  // The single unlock condition for the build, in dependency order.
+  const packBuildDisabledReason =
+    ports.packs === undefined || ports.packInstall === undefined
+      ? "Pack build is not available in this host."
+      : !mappingsApproved
+        ? "Approve the DCR Gap Analysis mappings (section 5) first - the pack is built from them."
+        : packName.trim() === ""
+          ? "Enter a pack name."
+          : packTargetGroups.length === 0
+            ? "Select at least one worker group."
+            : packOverwriteBlocked
+              ? "Acknowledge the pack overwrite above."
+              : null;
+
+  const buildAndInstallPack = useCallback(async () => {
+    const packStore = ports.packs;
+    const packInstall = ports.packInstall;
+    const name = packName.trim();
+    if (
+      packBuilding ||
+      packStore === undefined ||
+      packInstall === undefined ||
+      name === "" ||
+      packTargetGroups.length === 0 ||
+      !mappingsApproved
+    ) {
+      return;
+    }
+    setPackBuilding(true);
+    const lines: string[] = [];
+    const push = (line: string) => {
+      lines.push(line);
+      setPackBuildLines([...lines]);
+    };
+    setPackBuildLines([]);
+    try {
+      // 1. Overwrite guard: always re-check live, then honor the acknowledgment.
+      push(
+        `Checking for an existing pack named "${name}" in ${packTargetGroups.join(", ")}...`,
+      );
+      const deployed = await packInstall.listDeployed(packTargetGroups);
+      const conflicts = deployedGroups(name, deployed);
+      setPackConflicts(conflicts);
+      if (conflicts.length > 0 && !overwriteAcked) {
+        push(
+          `A pack named "${name}" already exists in ${conflicts.join(", ")}. ` +
+            "Acknowledge the overwrite above, then build again.",
+        );
+        return;
+      }
+      push(
+        conflicts.length > 0
+          ? `Overwrite acknowledged for ${conflicts.join(", ")}.`
+          : "The name is free in every target group.",
+      );
+
+      // 2. Resolve the plan - the SAME derivation the pipeline preview renders,
+      // including the Cribl YAML validation (an invalid plan never ships).
+      const preview = derivePipelinePreview({
+        solutionName: solution?.name ?? "",
+        packName: name,
+        reports: gapReports,
+        mappingOverrides,
+        sampleFormats,
+        approved: mappingsApproved,
+      });
+      if (!preview.available || preview.plan === null) {
+        push(`Cannot build: ${preview.emptyReason ?? "no pipeline plan available"}`);
+        return;
+      }
+      if (!preview.valid) {
+        push(
+          `Cannot build: Cribl YAML validation found ${preview.totalYamlIssues} ` +
+            "issue(s) - see the pipeline preview in section 5.",
+        );
+        return;
+      }
+      const plan = preview.plan;
+      push(
+        `Plan resolved: ${plan.tables.length} pipeline(s) for ` +
+          `${plan.tables.map((t) => t.logType).join(", ")}.`,
+      );
+
+      // 3. Compose the assembly input: the reviewer's effective mappings feed
+      // the lookup CSVs; deployed tables carry their real DCR destination.
+      const ingestId =
+        ingestionClientId.trim() === "" ? config.clientId : ingestionClientId.trim();
+      const reportByLogType = new Map(gapReports.map((r) => [r.logType, r]));
+      const tableInputs: TableAssemblyInput[] = plan.tables.map((table) => {
+        const report = reportByLogType.get(table.logType);
+        const effective =
+          report !== undefined
+            ? (mappingOverrides[report.logType] ?? report.fieldMappings)
+            : [];
+        const outcomeEntry = outcomes.find((o) => o.table === table.sentinelTable);
+        return {
+          ...(effective.length > 0
+            ? {
+                fieldOverrides: effective.map((m) => ({
+                  source: m.source,
+                  dest: m.dest,
+                  sourceType: m.sourceType,
+                  destType: m.destType,
+                  confidence: m.confidence,
+                  action: m.action,
+                  needsCoercion: m.needsCoercion,
+                  description: m.description,
+                })),
+              }
+            : {}),
+          ...(outcomeEntry !== undefined
+            ? {
+                destination: {
+                  id: outcomeEntry.outcome.destinationId,
+                  dcrImmutableId: outcomeEntry.outcome.dcrImmutableId,
+                  ingestionEndpoint: outcomeEntry.outcome.logsIngestionEndpoint,
+                  streamName: outcomeEntry.outcome.streamName,
+                  tenantId: config.tenantId,
+                  ingestionClientId: ingestId,
+                },
+              }
+            : {}),
+        };
+      });
+      const vendorSamples: PackVendorSample[] = samples
+        .filter((s) => reportByLogType.has(s.logType))
+        .map((s) => {
+          const report = reportByLogType.get(s.logType);
+          return {
+            tableName: report !== undefined ? report.tableName : "",
+            rawEvents: s.rawEvents,
+            source: `${solution?.name ?? "solution"}:${s.logType}`,
+            logType: s.logType,
+            format: s.format,
+          };
+        })
+        .filter((s) => s.tableName !== "");
+      const definition: PackScaffoldInput = {
+        plan,
+        tableInputs,
+        vendorSamples,
+        builtAtMs: Date.now(),
+        outputsDefaults: { tenantId: config.tenantId, ingestionClientId: ingestId },
+      };
+
+      // 4. Assemble deterministically and persist the build record.
+      const assembled = assemblePack(definition);
+      push(
+        `Assembled ${assembled.crblFileName} (${assembled.crbl.length.toLocaleString()} bytes).`,
+      );
+      await packStore.put({ record: assembled.record, definition });
+      push("Build record saved - the pack is also downloadable from the Packs screen.");
+
+      // 5. Install into every target group; per-group failures are reported
+      // and never abort the remaining groups.
+      for (const group of packTargetGroups) {
+        try {
+          const installed = await packInstall.install(
+            group,
+            assembled.crblFileName,
+            assembled.crbl,
+          );
+          push(`Installed ${installed.displayName || installed.id} on ${group}.`);
+        } catch (err) {
+          push(
+            `Install FAILED on ${group}: ${err instanceof Error ? err.message : String(err)}`,
+          );
+        }
+      }
+      push(
+        "Done. Wire a source below (or commit and deploy in Cribl) to activate the pack.",
+      );
+    } catch (err) {
+      push(`Build failed: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setPackBuilding(false);
+    }
+  }, [
+    ports.packs,
+    ports.packInstall,
+    packBuilding,
+    packName,
+    packTargetGroups,
+    mappingsApproved,
+    overwriteAcked,
+    solution,
+    gapReports,
+    mappingOverrides,
+    sampleFormats,
+    outcomes,
+    samples,
+    config,
+    ingestionClientId,
+  ]);
+
   // ---- Derived section states, readiness pills, deploy gate -------------
   const sectionInputs = deriveSectionInputs({
     solutionSelected,
@@ -764,10 +974,9 @@ export function IntegrateScreen({
           spellCheck={false}
         />
         <span className="field-hint">
-          The pack that will be built and installed. Prefilled from the
-          destination prefix in Options; editable. Pack assembly ships in Unit
-          19 - the native-table deploy below creates a Cribl destination
-          directly.
+          The pack that will be built and installed by Build and install pack
+          below (from the approved Gap Analysis mappings). Prefilled from the
+          destination prefix in Options; editable.
         </span>
       </label>
       <div className="discovery-result">
@@ -866,6 +1075,36 @@ export function IntegrateScreen({
             Overwrite not yet acknowledged - the pack build will refuse to
             overwrite until the box above is checked.
           </span>
+        )}
+      </div>
+      <div className="discovery-result">
+        <span className="field-label">Build and install pack</span>
+        <p className="panel-desc">
+          Builds the content-driven pack from the APPROVED Gap Analysis
+          mappings - the pipelines, reduction rules, routes, breakers, sample
+          files, and lookups previewed in section 5 - and installs it into the
+          target worker group(s). Tables already deployed below get their real
+          DCR values baked into the pack&apos;s outputs; others ship with a
+          fill-in-Cribl placeholder. The build re-checks the pack name and
+          honors the overwrite acknowledgment above.
+        </p>
+        <div className="panel-controls">
+          <button
+            className="next-action-button next-action-button-positive"
+            onClick={() => void buildAndInstallPack()}
+            disabled={packBuilding || packBuildDisabledReason !== null}
+            title={packBuildDisabledReason ?? undefined}
+          >
+            {packBuilding
+              ? "Building..."
+              : `Build and install pack (${packTargetGroups.length} group${packTargetGroups.length === 1 ? "" : "s"})`}
+          </button>
+          {packBuildDisabledReason !== null && !packBuilding && (
+            <span className="field-hint">{packBuildDisabledReason}</span>
+          )}
+        </div>
+        {packBuildLines.length > 0 && (
+          <pre className="result">{packBuildLines.join("\n")}</pre>
         )}
       </div>
     </div>
