@@ -41,6 +41,7 @@ import type {
   OperationOptions,
 } from "@soc/core";
 import { usePorts } from "../ports-context";
+import { SearchableSelect } from "../components/searchable-select";
 import { formatStepLine } from "./step-line";
 import { RecentRuns } from "./recent-runs";
 import { summaryText } from "./summary";
@@ -289,14 +290,17 @@ export function OnboardTableScreen({
         <label className="field">
           <span className="field-label">Cribl worker group</span>
           {groups !== null ? (
-            <select value={groupId} onChange={(e) => setGroupId(e.target.value)}>
-              <option value="">Select a worker group...</option>
-              {groups.map((g) => (
-                <option key={g.id} value={g.id}>
-                  {g.product !== undefined ? `${g.id} (${g.product})` : g.id}
-                </option>
-              ))}
-            </select>
+            <SearchableSelect
+              options={groups.map((g) => ({
+                value: g.id,
+                label: g.id,
+                hint: g.product,
+              }))}
+              value={groupId}
+              onChange={setGroupId}
+              placeholder="Select a worker group..."
+              ariaLabel="Filter worker groups"
+            />
           ) : groupsError === "" ? (
             <span className="field-hint">Loading worker groups...</span>
           ) : (

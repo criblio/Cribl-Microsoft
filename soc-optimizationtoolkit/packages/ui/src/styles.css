@@ -3566,3 +3566,145 @@ button.journey-step-main:hover .journey-step-label {
   color: var(--error-strong);
   white-space: nowrap;
 }
+
+/* ---------------------------------------------------------------------------
+ * SearchableSelect / SearchableMultiSelect - the bounded, filterable combobox
+ * that replaces long native <select>s. The popover is absolutely positioned so
+ * a long list never expands the page; the list itself scrolls within a cap.
+ * ------------------------------------------------------------------------- */
+.searchable-select {
+  position: relative;
+  display: block;
+  width: 100%;
+}
+.searchable-select-control {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 20px;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: var(--surface-raised);
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+.searchable-select-control::after {
+  content: "";
+  flex: none;
+  width: 0;
+  height: 0;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-top: 5px solid var(--text-faint);
+}
+.searchable-select-control:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+.searchable-select-control:focus {
+  outline: none;
+  border-color: var(--border-focus);
+}
+.searchable-select-placeholder {
+  color: var(--text-faint);
+}
+.searchable-select-popover {
+  position: absolute;
+  z-index: 40;
+  top: calc(100% + 2px);
+  left: 0;
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.28);
+  overflow: hidden;
+}
+.searchable-select-search {
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 20px;
+  padding: 6px 10px;
+  border: none;
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--surface);
+  color: var(--text);
+}
+.searchable-select-search:focus {
+  outline: none;
+  border-bottom-color: var(--border-focus);
+}
+.searchable-select-list {
+  list-style: none;
+  margin: 0;
+  padding: 4px;
+  max-height: 240px;
+  overflow-y: auto;
+}
+.searchable-select-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--text);
+}
+.searchable-select-option.is-highlighted {
+  background: var(--accent-bg);
+}
+.searchable-select-option.is-selected {
+  color: var(--accent-strong);
+  font-weight: 600;
+}
+.searchable-select-option-label {
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.searchable-select-option-hint {
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-faint);
+}
+.searchable-select-check {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  background: var(--surface-raised);
+  position: relative;
+}
+.searchable-select-option-multi.is-selected .searchable-select-check {
+  background: var(--accent-strong);
+  border-color: var(--accent-strong);
+}
+.searchable-select-option-multi.is-selected .searchable-select-check::after {
+  content: "";
+  position: absolute;
+  left: 4px;
+  top: 1px;
+  width: 3px;
+  height: 7px;
+  border: solid var(--on-accent, #fff);
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+.searchable-select-empty {
+  padding: 8px;
+  font-size: 12px;
+  color: var(--text-faint);
+  text-align: center;
+}

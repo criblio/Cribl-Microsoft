@@ -102,6 +102,10 @@ import type { MappingReviewRenameEvent } from "../mapping-review/mapping-review-
 import { PipelinePreviewSection } from "../pipeline-preview/pipeline-preview-section";
 import { SolutionBrowser } from "../solution-browser/solution-browser";
 import { RuleCoverageSection } from "../rule-coverage/rule-coverage-section";
+import {
+  SearchableMultiSelect,
+  SearchableSelect,
+} from "../../components/searchable-select";
 import { RoleAssignmentSection } from "../role-assignment/role-assignment-section";
 import {
   dcrResourceIdFor,
@@ -688,14 +692,17 @@ export function IntegrateScreen({
       <label className="field">
         <span className="field-label">Cribl worker group</span>
         {groups !== null ? (
-          <select value={groupId} onChange={(e) => setGroupId(e.target.value)}>
-            <option value="">Select a worker group...</option>
-            {groups.map((g) => (
-              <option key={g.id} value={g.id}>
-                {g.product !== undefined ? `${g.id} (${g.product})` : g.id}
-              </option>
-            ))}
-          </select>
+          <SearchableSelect
+            options={groups.map((g) => ({
+              value: g.id,
+              label: g.id,
+              hint: g.product,
+            }))}
+            value={groupId}
+            onChange={setGroupId}
+            placeholder="Select a worker group..."
+            ariaLabel="Filter worker groups"
+          />
         ) : groupsError === "" ? (
           <span className="field-hint">Loading worker groups...</span>
         ) : (
@@ -751,28 +758,18 @@ export function IntegrateScreen({
         {multiGroup &&
           (groups !== null ? (
             groups.filter((g) => g.id !== groupId).length > 0 ? (
-              groups
-                .filter((g) => g.id !== groupId)
-                .map((g) => (
-                  <label className="integrate-check" key={g.id}>
-                    <input
-                      type="checkbox"
-                      checked={extraGroups.includes(g.id)}
-                      onChange={(e) =>
-                        setExtraGroups((prev) =>
-                          e.target.checked
-                            ? [...prev, g.id]
-                            : prev.filter((x) => x !== g.id),
-                        )
-                      }
-                    />
-                    <span className="integrate-check-text">
-                      {g.product !== undefined
-                        ? `${g.id} (${g.product})`
-                        : g.id}
-                    </span>
-                  </label>
-                ))
+              <label className="field">
+                <span className="field-label">Additional worker groups</span>
+                <SearchableMultiSelect
+                  options={groups
+                    .filter((g) => g.id !== groupId)
+                    .map((g) => ({ value: g.id, label: g.id, hint: g.product }))}
+                  values={extraGroups}
+                  onChange={setExtraGroups}
+                  placeholder="Select additional worker groups..."
+                  ariaLabel="Filter worker groups"
+                />
+              </label>
             ) : (
               <span className="field-hint">
                 No other worker groups are available to fan out to.

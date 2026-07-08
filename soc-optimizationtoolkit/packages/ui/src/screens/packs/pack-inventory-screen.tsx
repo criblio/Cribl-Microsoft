@@ -19,6 +19,7 @@ import { assemblePack } from "@soc/core";
 import type { CriblGroupSummary } from "@soc/core";
 import { usePorts } from "../../ports-context";
 import type { DeployedGroupPacks, StoredPack } from "../../ports-context";
+import { SearchableSelect } from "../../components/searchable-select";
 import {
   PACK_INVENTORY_EMPTY_REASON,
   PACK_INVENTORY_UNAVAILABLE_REASON,
@@ -223,17 +224,13 @@ export function PackInventoryScreen({ refreshToken = 0 }: PackInventoryScreenPro
         {groups.length > 0 && packInstall !== undefined && (
           <label className="field">
             <span className="field-label">Deploy target</span>
-            <select
-              className="mapping-select"
+            <SearchableSelect
+              options={groups.map((g) => ({ value: g.id, label: g.id }))}
               value={selectedGroup}
-              onChange={(e) => setSelectedGroup(e.target.value)}
-            >
-              {groups.map((g) => (
-                <option key={g.id} value={g.id}>
-                  {g.id}
-                </option>
-              ))}
-            </select>
+              onChange={setSelectedGroup}
+              placeholder="Select a worker group..."
+              ariaLabel="Filter worker groups"
+            />
           </label>
         )}
       </div>

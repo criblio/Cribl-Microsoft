@@ -47,6 +47,7 @@ import type {
   TargetScope,
 } from "@soc/core";
 import { usePorts } from "../../ports-context";
+import { SearchableSelect } from "../../components/searchable-select";
 import {
   buildLoaderPlan,
   formatScopeChip,
@@ -526,19 +527,18 @@ export function AzureTargetingScreen(props: AzureTargetingScreenProps) {
         <label className="field">
           <span className="field-label">Subscription</span>
           {subsLoad.status === "loaded" && subsLoad.list.length > 0 ? (
-            <select
+            <SearchableSelect
+              options={subsLoad.list.map((sub) => ({
+                value: sub.subscriptionId,
+                label:
+                  sub.displayName === "" ? sub.subscriptionId : sub.displayName,
+                hint: sub.displayName === "" ? undefined : sub.subscriptionId,
+              }))}
               value={browseSub}
-              onChange={(e) => onSubscriptionSelect(e.target.value)}
-            >
-              <option value="">Select a subscription...</option>
-              {subsLoad.list.map((sub) => (
-                <option key={sub.subscriptionId} value={sub.subscriptionId}>
-                  {sub.displayName === ""
-                    ? sub.subscriptionId
-                    : `${sub.displayName} (${sub.subscriptionId})`}
-                </option>
-              ))}
-            </select>
+              onChange={onSubscriptionSelect}
+              placeholder="Select a subscription..."
+              ariaLabel="Filter subscriptions"
+            />
           ) : (
             <select disabled value="">
               <option value="">
@@ -559,20 +559,22 @@ export function AzureTargetingScreen(props: AzureTargetingScreenProps) {
         <label className="field">
           <span className="field-label">Log Analytics workspace</span>
           {depLoad.status === "loaded" && wsOptions.length > 0 ? (
-            <select
+            <SearchableSelect
+              options={[
+                ...(!wsOptionsHaveSelection
+                  ? [{ value: browseWs, label: `${browseWs} (just created)` }]
+                  : []),
+                ...wsOptions.map((ws) => ({
+                  value: ws.name,
+                  label: ws.name,
+                  hint: `${ws.resourceGroup} / ${ws.location}`,
+                })),
+              ]}
               value={browseWs}
-              onChange={(e) => onWorkspaceSelect(e.target.value)}
-            >
-              <option value="">Select a workspace...</option>
-              {!wsOptionsHaveSelection && (
-                <option value={browseWs}>{browseWs} (just created)</option>
-              )}
-              {wsOptions.map((ws) => (
-                <option key={`${ws.resourceGroup}/${ws.name}`} value={ws.name}>
-                  {ws.name} ({ws.resourceGroup} / {ws.location})
-                </option>
-              ))}
-            </select>
+              onChange={onWorkspaceSelect}
+              placeholder="Select a workspace..."
+              ariaLabel="Filter workspaces"
+            />
           ) : (
             <select disabled value="">
               <option value="">
@@ -593,17 +595,17 @@ export function AzureTargetingScreen(props: AzureTargetingScreenProps) {
         <label className="field">
           <span className="field-label">Resource group (for DCRs)</span>
           {rgOptionsWithSelection.length > 0 ? (
-            <select
+            <SearchableSelect
+              options={rgOptionsWithSelection.map((rg) => ({
+                value: rg.name,
+                label: rg.name,
+                hint: rg.location === "" ? undefined : rg.location,
+              }))}
               value={browseRg}
-              onChange={(e) => onResourceGroupSelect(e.target.value)}
-            >
-              <option value="">Select a resource group...</option>
-              {rgOptionsWithSelection.map((rg) => (
-                <option key={rg.name} value={rg.name}>
-                  {rg.location === "" ? rg.name : `${rg.name} (${rg.location})`}
-                </option>
-              ))}
-            </select>
+              onChange={onResourceGroupSelect}
+              placeholder="Select a resource group..."
+              ariaLabel="Filter resource groups"
+            />
           ) : (
             <select disabled value="">
               <option value="">

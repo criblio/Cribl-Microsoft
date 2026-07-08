@@ -46,6 +46,7 @@ import {
 } from "@soc/core";
 import type { OperationOptions } from "@soc/core";
 import { usePorts } from "../../ports-context";
+import { SearchableSelect } from "../../components/searchable-select";
 import { buildBatchSelection } from "../../onboarding/batch/batch-state";
 import {
   REVIEW_SELECTION_NOTE,
@@ -257,17 +258,16 @@ export function ReviewScreen({
         </label>
         <label className="field">
           <span className="field-label">Add a bundled vendor schema table</span>
-          <select
+          <SearchableSelect
+            options={availableVendors.map((entry) => ({
+              value: entry.id,
+              label: `${entry.label} (${entry.table})`,
+            }))}
             value={vendorPick}
-            onChange={(e) => setVendorPick(e.target.value)}
-          >
-            <option value="">Select a vendor schema...</option>
-            {availableVendors.map((entry) => (
-              <option key={entry.id} value={entry.id}>
-                {entry.label} ({entry.table})
-              </option>
-            ))}
-          </select>
+            onChange={setVendorPick}
+            placeholder="Select a vendor schema..."
+            ariaLabel="Filter vendor schemas"
+          />
           <button
             className="run-button"
             disabled={vendorPick === ""}

@@ -34,6 +34,7 @@ import type {
   ServicePrincipalRef,
 } from "@soc/core";
 import { usePorts } from "../../ports-context";
+import { SearchableSelect } from "../../components/searchable-select";
 import { formatStepLine } from "../../onboarding/step-line";
 import {
   projectRoleOutcome,
@@ -224,23 +225,22 @@ export function RoleAssignmentSection({
         </span>
         {useDropdown ? (
           <>
-            <select
+            <SearchableSelect
+              options={(servicePrincipals ?? []).map((sp) => ({
+                value: sp.id,
+                label: sp.displayName,
+                hint: sp.id,
+              }))}
               value={objectId}
-              onChange={(e) => setObjectId(e.target.value)}
+              onChange={setObjectId}
               disabled={spLoading}
-              className="mono"
-            >
-              <option value="">
-                {spLoading
+              placeholder={
+                spLoading
                   ? "Loading service principals..."
-                  : "Select a service principal..."}
-              </option>
-              {(servicePrincipals ?? []).map((sp) => (
-                <option key={sp.id} value={sp.id}>
-                  {sp.displayName} - {sp.id}
-                </option>
-              ))}
-            </select>
+                  : "Select a service principal..."
+              }
+              ariaLabel="Filter service principals"
+            />
             <div className="role-sp-controls">
               <button
                 type="button"
