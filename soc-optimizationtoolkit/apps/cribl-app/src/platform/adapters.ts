@@ -39,6 +39,7 @@ import type {
 } from '@soc/core';
 import {
   blockedSolutionNames,
+  capTaggedSampleBytes,
   classifySolutionDeprecation,
   findConnectorDirName,
   interpretInstallResponse,
@@ -654,9 +655,19 @@ export class PlatformTaggedSampleStore implements TaggedSampleStore {
       throw new Error('PlatformTaggedSampleStore.upsert: logType must be non-empty');
     }
     const key = taggedSampleKey(sample.logType);
+    // Byte-cap before the PUT: the KV entry is bounded by the leader's request
+    // body limit, not an event count, so a log type with large events (a
+    // verbose THREAT capture) would otherwise 413 (PayloadTooLargeError).
+    const { sample: capped, droppedEvents, trimmed } = capTaggedSampleBytes(sample);
+    if (trimmed) {
+      console.warn(
+        `[tagged-samples] "${sample.logType}" trimmed to ${capped.rawEvents.length} events ` +
+          `(dropped ${droppedEvents}) to fit the KV size budget`,
+      );
+    }
     const res = await fetchWithTimeout(kvUrl(key), {
       method: 'PUT',
-      body: JSON.stringify(sample),
+      body: JSON.stringify(capped),
     });
     if (!res.ok) {
       throw new Error(`PUT kvstore/${key}: HTTP ${res.status}\n${await res.text()}`);

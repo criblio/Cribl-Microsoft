@@ -15,6 +15,9 @@ export type {
 } from "./models";
 export { RAW_EVENTS_CAP, MAX_FIELD_EXAMPLES } from "./models";
 
+export type { CappedTaggedSample } from "./cap-bytes";
+export { TAGGED_SAMPLE_MAX_BYTES, capTaggedSampleBytes } from "./cap-bytes";
+
 export type { DetectMode, DetectOptions } from "./format-detection";
 export {
   detectSampleFormat,

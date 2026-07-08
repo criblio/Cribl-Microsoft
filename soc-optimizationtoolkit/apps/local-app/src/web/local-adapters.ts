@@ -44,6 +44,7 @@ import type {
 import type { InstalledPack } from '@soc/core';
 import {
   blockedSolutionNames,
+  capTaggedSampleBytes,
   classifySolutionDeprecation,
   findConnectorDirName,
   interpretInstallResponse,
@@ -462,7 +463,16 @@ function isTaggedSampleShape(value: unknown): value is TaggedSample {
  */
 export class LocalTaggedSampleStore implements TaggedSampleStore {
   async upsert(sample: TaggedSample): Promise<void> {
-    const res = await fetchWithTimeout('/api/tagged-samples', jsonInit('POST', sample));
+    // Byte-cap for parity with the cloud shell (and to bound the host store):
+    // large captures are trimmed to fit rather than rejected by a body limit.
+    const { sample: capped, droppedEvents, trimmed } = capTaggedSampleBytes(sample);
+    if (trimmed) {
+      console.warn(
+        `[tagged-samples] "${sample.logType}" trimmed to ${capped.rawEvents.length} events ` +
+          `(dropped ${droppedEvents}) to fit the storage size budget`,
+      );
+    }
+    const res = await fetchWithTimeout('/api/tagged-samples', jsonInit('POST', capped));
     if (!res.ok) {
       throw await hostError('POST /api/tagged-samples', res);
     }
