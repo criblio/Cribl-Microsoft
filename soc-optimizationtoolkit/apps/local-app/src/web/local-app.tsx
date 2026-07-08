@@ -16,6 +16,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   APP_THEME_KEY,
   AppFrame,
+  ArchitectureScreen,
   AuaGate,
   AzureTargetingScreen,
   BatchDeployScreen,
@@ -961,6 +962,22 @@ export function LocalApp() {
   // local shell's content ports. The host owns the token (data/github.json,
   // server-side); this page only ever sees hasPat + login. A PAT is recommended
   // (not required) on local - the process has its own egress IP.
+  // Architecture Patterns (roadmap Phase 4 queued item): the data-driven
+  // reference-architecture advisor. Pure core recommender + inline-SVG
+  // diagrams; no ports, no IO. requires: 'none' - advisory in every mode.
+  const architectureView = (
+    <>
+      <header className="local-header">
+        <h1 className="local-title">Architecture Patterns</h1>
+        <p className="local-subtitle">
+          Reference architectures for your Cribl + Azure footprint. Select what
+          is in use; get the matching patterns, diagrams, and considerations.
+        </p>
+      </header>
+      <ArchitectureScreen />
+    </>
+  );
+
   const repositoriesView = (
     <>
       <header className="local-header">
@@ -1082,6 +1099,7 @@ export function LocalApp() {
     { id: 'options', label: 'Options', requires: 'none', section: 'tools', render: () => optionsView },
     { id: 'packs', label: 'Packs', requires: 'cribl', section: 'tools', render: () => packsView },
     { id: 'repositories', label: 'Repositories', requires: 'none', section: 'tools', render: () => repositoriesView },
+    { id: 'architecture', label: 'Architecture Patterns', requires: 'none', section: 'tools', render: () => architectureView },
     { id: 'logs', label: 'Logs', requires: 'none', section: 'tools', render: () => logsView },
     { id: 'settings', label: 'Settings', requires: 'none', section: 'tools', render: () => settingsView },
   ];

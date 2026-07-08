@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import {
   APP_THEME_KEY,
   AppFrame,
+  ArchitectureScreen,
   AuaGate,
   AzureTargetingScreen,
   BatchDeployScreen,
@@ -2763,6 +2764,22 @@ function App() {
     </>
   );
 
+  // Architecture Patterns (roadmap Phase 4 queued item): the data-driven
+  // reference-architecture advisor. Pure core recommender + inline-SVG
+  // diagrams; no ports, no IO. requires: 'none' - advisory in every mode.
+  const architectureView = (
+    <>
+      <header className="harness-header">
+        <h1 className="harness-title">Architecture Patterns</h1>
+        <p className="harness-subtitle">
+          Reference architectures for your Cribl + Azure footprint. Select what
+          is in use; get the matching patterns, diagrams, and considerations.
+        </p>
+      </header>
+      <ArchitectureScreen />
+    </>
+  );
+
   // Repositories (porting-plan Unit 14): the GitHub PAT settings page over the
   // cloud shell's content ports (validate-then-store the encrypted, write-only
   // githubPat; reachability + PAT-valid status; the 13-step walkthrough). A PAT
@@ -2879,6 +2896,7 @@ function App() {
     { id: 'options', label: 'Options', requires: 'none', section: 'tools', render: () => optionsView },
     { id: 'packs', label: 'Packs', requires: 'cribl', section: 'tools', render: () => packsView },
     { id: 'repositories', label: 'Repositories', requires: 'none', section: 'tools', render: () => repositoriesView },
+    { id: 'architecture', label: 'Architecture Patterns', requires: 'none', section: 'tools', render: () => architectureView },
     { id: 'logs', label: 'Logs', requires: 'none', section: 'tools', render: () => logsView },
     { id: 'settings', label: 'Settings', requires: 'none', section: 'tools', render: () => settingsView },
     { id: 'harness', label: 'Diagnostics', requires: 'none', section: 'diagnostics', render: () => harnessView },

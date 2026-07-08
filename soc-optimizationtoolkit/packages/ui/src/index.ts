@@ -474,6 +474,8 @@ export type {
 } from "./screens/solution-browser/browser-state";
 export { RepositoriesScreen } from "./screens/repositories/repositories-screen";
 export type { RepositoriesScreenProps } from "./screens/repositories/repositories-screen";
+
+export { ArchitectureScreen } from "./screens/architecture/architecture-screen";
 export {
   derivePatFormView,
   deriveReachabilityStatus,

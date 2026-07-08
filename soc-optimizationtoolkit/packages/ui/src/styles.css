@@ -3756,3 +3756,112 @@ button.journey-step-main:hover .journey-step-label {
   color: var(--text-faint);
   text-align: center;
 }
+
+/* ---------------------------------------------------------------------------
+ * Architecture Patterns advisor - selection pickers, pattern cards, and the
+ * self-contained inline-SVG tier diagrams (no external assets; theme-aware
+ * via the CSS variables).
+ * ------------------------------------------------------------------------- */
+.arch-pickers {
+  margin-bottom: 12px;
+}
+.arch-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 14px 0;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  background: var(--surface-raised);
+}
+.arch-card-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-strong);
+}
+.arch-diagram {
+  overflow-x: auto;
+  padding: 6px 0;
+}
+.arch-diagram-svg {
+  display: block;
+  width: 100%;
+  max-width: 760px;
+  height: auto;
+}
+.arch-node {
+  fill: var(--surface);
+  stroke: var(--border);
+  stroke-width: 1.2;
+}
+.arch-node-source {
+  stroke: var(--text-faint);
+}
+.arch-node-cribl {
+  stroke: var(--accent);
+  fill: var(--accent-bg);
+}
+.arch-node-azure {
+  stroke: var(--info-cyan);
+}
+.arch-node-destination {
+  stroke: var(--ok);
+  fill: var(--ok-bg);
+}
+.arch-node-label {
+  fill: var(--text);
+  font-size: 11px;
+  font-family: inherit;
+  text-anchor: middle;
+}
+.arch-edge {
+  stroke: var(--text-muted);
+  stroke-width: 1.4;
+  fill: none;
+}
+.arch-edge-back {
+  stroke-dasharray: 5 4;
+  stroke: var(--text-faint);
+}
+.arch-edge-label {
+  fill: var(--text-faint);
+  font-size: 9px;
+  font-family: inherit;
+  text-anchor: middle;
+}
+.arch-arrowhead {
+  fill: var(--text-muted);
+}
+.arch-considerations {
+  margin: 0 0 0 18px;
+  padding: 0;
+  font-size: 13px;
+  color: var(--text-muted);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.arch-near-block {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 14px;
+}
+.arch-near {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 12px;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-control);
+}
+.arch-near-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+.arch-near-unlock {
+  font-size: 12px;
+  color: var(--warn);
+}
