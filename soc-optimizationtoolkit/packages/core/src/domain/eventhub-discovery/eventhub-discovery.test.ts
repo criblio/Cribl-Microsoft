@@ -30,9 +30,17 @@ import {
 } from "./eventhub-discovery";
 import type { DiagnosticSettingSender, HubActivity } from "./eventhub-discovery";
 import {
+  inferSendersFromEnumeration,
+  listAuthRulesRequest,
+  listConsumerGroupsRequest,
+  parseAuthRulesResponse,
+  parseConsumerGroupsResponse,
+} from "./eventhub-discovery";
+import {
   checkEventHubActivity,
   discoverEventHubSenders,
   discoverEventHubs,
+  enumerateEventHubDetails,
 } from "../../usecases/discover-event-hubs/discover-event-hubs";
 
 const NS = {
@@ -355,5 +363,77 @@ describe("unknown-sender inference (EVH-08, legacy thresholds)", () => {
       inactiveEventHubs: 1,
       eventHubsWithUnknownSenders: 1,
     });
+  });
+});
+
+describe("consumer-group + auth-rule enumeration (EVH-06)", () => {
+  it("builds the two per-hub ARM GETs", () => {
+    expect(listConsumerGroupsRequest("/x/hub").path).toBe("/x/hub/consumergroups");
+    expect(listAuthRulesRequest("/x/hub").path).toBe("/x/hub/authorizationRules");
+  });
+
+  it("parses consumer groups and auth rules defensively", () => {
+    expect(
+      parseConsumerGroupsResponse({ value: [{ name: "$Default" }, { name: "cribl" }, {}] }),
+    ).toEqual(["$Default", "cribl"]);
+    expect(parseConsumerGroupsResponse("junk")).toEqual([]);
+    expect(
+      parseAuthRulesResponse({
+        value: [
+          { name: "RootManageSharedAccessKey", properties: { rights: ["Listen", "Manage", "Send"] } },
+          { name: "app-sender", properties: { rights: ["Send"] } },
+          { properties: {} },
+        ],
+      }),
+    ).toEqual([
+      { name: "RootManageSharedAccessKey", rights: ["Listen", "Manage", "Send"] },
+      { name: "app-sender", rights: ["Send"] },
+    ]);
+  });
+
+  it("infers consumers from non-$Default groups and senders from Send rules (legacy hints)", () => {
+    const inferred = inferSendersFromEnumeration({
+      consumerGroups: ["$Default", "cribl-workers"],
+      authRules: [
+        { name: "RootManageSharedAccessKey", rights: ["Listen", "Manage", "Send"] },
+        { name: "app-sender", rights: ["Send"] },
+        { name: "listen-only", rights: ["Listen"] },
+      ],
+    });
+    expect(inferred).toHaveLength(2);
+    expect(inferred[0]).toMatchObject({
+      inferredFrom: "ConsumerGroup",
+      name: "cribl-workers",
+      confidence: "Hint",
+    });
+    expect(inferred[1]).toMatchObject({
+      inferredFrom: "AuthorizationRule",
+      name: "app-sender",
+      rights: ["Send"],
+    });
+  });
+
+  it("enumerateEventHubDetails collects per hub and soft-fails a broken hub", async () => {
+    const azure = new FakeAzureManagement();
+    azure.respondWith(
+      // hub-a: groups + rules.
+      { status: 200, body: { value: [{ name: "$Default" }, { name: "cribl" }] } },
+      { status: 200, body: { value: [{ name: "app-sender", properties: { rights: ["Send"] } }] } },
+      // hub-b: groups denied.
+      { status: 403, body: {} },
+      { status: 200, body: { value: [] } },
+    );
+    const hubs = [
+      { name: "hub-a", namespace: "ns-1", partitionCount: 1, messageRetentionInDays: 1, status: "Active", resourceId: "/x/a" },
+      { name: "hub-b", namespace: "ns-1", partitionCount: 1, messageRetentionInDays: 1, status: "Active", resourceId: "/x/b" },
+    ];
+    const result = await enumerateEventHubDetails(azure, hubs);
+    expect(result.enumerationByHub.get("ns-1/hub-a")).toEqual({
+      consumerGroups: ["$Default", "cribl"],
+      authRules: [{ name: "app-sender", rights: ["Send"] }],
+    });
+    expect(result.enumerationByHub.has("ns-1/hub-b")).toBe(false);
+    expect(result.warnings).toHaveLength(1);
+    expect(result.warnings[0]).toContain("hub-b");
   });
 });

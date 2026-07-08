@@ -18,8 +18,12 @@ import type { Logger } from "../../ports/logger";
 import {
   EVENTHUB_DIAG_SETTINGS_KQL,
   EVENTHUB_NAMESPACES_KQL,
+  listAuthRulesRequest,
+  listConsumerGroupsRequest,
   listEventHubsRequest,
   metricsRequest,
+  parseAuthRulesResponse,
+  parseConsumerGroupsResponse,
   parseDiagSettingsResponse,
   parseEventHubItem,
   parseIncomingMessagesTotal,
@@ -31,6 +35,7 @@ import type {
   EventHubInfo,
   EventHubNamespaceInfo,
   HubActivity,
+  HubEnumeration,
 } from "../../domain/eventhub-discovery/eventhub-discovery";
 
 /** Fail-safe bound on Resource Graph skipToken pages (1000 rows per page). */
@@ -220,4 +225,68 @@ export async function checkEventHubActivity(
     active: [...activityByHub.values()].filter((a) => a.isActive).length,
   });
   return { activityByHub, warnings };
+}
+
+/**
+ * Cap on hubs enumerated per run: TWO ARM GETs per hub (consumer groups +
+ * authorization rules) against the 100 req/min proxy budget.
+ */
+export const EH_ENUMERATION_MAX_HUBS = 40;
+
+/** The enumeration result: per-hub details keyed "{namespace}/{hub}". */
+export interface EventHubEnumerationResult {
+  enumerationByHub: Map<string, HubEnumeration>;
+  warnings: string[];
+}
+
+/**
+ * Enumerate consumer groups + authorization rules per hub (EVH-06): two ARM
+ * GETs per hub, sequential, capped at {@link EH_ENUMERATION_MAX_HUBS}. A hub
+ * whose enumeration fails becomes a warning and is skipped - the rest
+ * continue. Feeds the EVH-08 hint inference (inferSendersFromEnumeration) and
+ * the consumer-group names that seed Cribl source configs.
+ */
+export async function enumerateEventHubDetails(
+  azure: AzureManagement,
+  hubs: readonly EventHubInfo[],
+  logger?: Logger,
+): Promise<EventHubEnumerationResult> {
+  const warnings: string[] = [];
+  const capped = hubs.slice(0, EH_ENUMERATION_MAX_HUBS);
+  if (hubs.length > capped.length) {
+    warnings.push(
+      `Enumerated the first ${capped.length} of ${hubs.length} hubs ` +
+        "(two ARM calls per hub; re-run on a narrower selection for the rest).",
+    );
+  }
+  const enumerationByHub = new Map<string, HubEnumeration>();
+  for (const hub of capped) {
+    const key = `${hub.namespace}/${hub.name}`;
+    try {
+      const groupsRes = await azure.request(
+        listConsumerGroupsRequest(hub.resourceId),
+      );
+      const rulesRes = await azure.request(listAuthRulesRequest(hub.resourceId));
+      if (!is2xx(groupsRes.status) || !is2xx(rulesRes.status)) {
+        warnings.push(
+          `Could not enumerate ${key}: HTTP ` +
+            `${!is2xx(groupsRes.status) ? groupsRes.status : rulesRes.status}`,
+        );
+        continue;
+      }
+      enumerationByHub.set(key, {
+        consumerGroups: parseConsumerGroupsResponse(groupsRes.body),
+        authRules: parseAuthRulesResponse(rulesRes.body),
+      });
+    } catch (err) {
+      warnings.push(
+        `Could not enumerate ${key}: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+  }
+  logger?.info("eventhub-discovery: enumeration", {
+    enumerated: enumerationByHub.size,
+    warnings: warnings.length,
+  });
+  return { enumerationByHub, warnings };
 }

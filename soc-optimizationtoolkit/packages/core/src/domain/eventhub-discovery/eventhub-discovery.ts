@@ -299,6 +299,119 @@ export interface HubActivity {
 }
 
 // ---------------------------------------------------------------------------
+// Consumer-group + authorization-rule enumeration (EVH-06)
+// ---------------------------------------------------------------------------
+
+/** One Event Hub authorization rule (name + joined rights). */
+export interface EventHubAuthRule {
+  name: string;
+  rights: string[];
+}
+
+/** One hub's enumerated consumer groups and authorization rules. */
+export interface HubEnumeration {
+  consumerGroups: string[];
+  authRules: EventHubAuthRule[];
+}
+
+/** Build the ARM GET listing one hub's consumer groups. */
+export function listConsumerGroupsRequest(
+  hubResourceId: string,
+): AzureManagementRequest {
+  return {
+    method: "GET",
+    path: `${hubResourceId}/consumergroups`,
+    apiVersion: EVENTHUB_API_VERSION,
+  };
+}
+
+/** Build the ARM GET listing one hub's authorization rules. */
+export function listAuthRulesRequest(
+  hubResourceId: string,
+): AzureManagementRequest {
+  return {
+    method: "GET",
+    path: `${hubResourceId}/authorizationRules`,
+    apiVersion: EVENTHUB_API_VERSION,
+  };
+}
+
+/** Parse consumer-group names out of the ARM list response. Defensive. */
+export function parseConsumerGroupsResponse(body: unknown): string[] {
+  if (!isRecord(body) || !Array.isArray(body["value"])) return [];
+  const names: string[] = [];
+  for (const item of body["value"]) {
+    if (isRecord(item) && typeof item["name"] === "string" && item["name"] !== "") {
+      names.push(item["name"]);
+    }
+  }
+  return names;
+}
+
+/** Parse authorization rules (name + rights) out of the ARM list response. */
+export function parseAuthRulesResponse(body: unknown): EventHubAuthRule[] {
+  if (!isRecord(body) || !Array.isArray(body["value"])) return [];
+  const rules: EventHubAuthRule[] = [];
+  for (const item of body["value"]) {
+    if (!isRecord(item)) continue;
+    const name = item["name"];
+    if (typeof name !== "string" || name === "") continue;
+    const props = isRecord(item["properties"]) ? item["properties"] : {};
+    const rightsRaw = props["rights"];
+    const rights = Array.isArray(rightsRaw)
+      ? rightsRaw.filter((r): r is string => typeof r === "string")
+      : [];
+    rules.push({ name, rights });
+  }
+  return rules;
+}
+
+/** One inferred sender/consumer hint (legacy Confidence: Hint vocabulary). */
+export interface InferredSender {
+  inferredFrom: "ConsumerGroup" | "AuthorizationRule";
+  name: string;
+  rights?: string[];
+  confidence: "Hint";
+  note: string;
+}
+
+/**
+ * The legacy hint-inference heuristics (EVH-08 second half) over one hub's
+ * enumeration: every non-$Default consumer group suggests a CONSUMER; every
+ * non-RootManageSharedAccessKey rule carrying Send rights suggests a SENDER.
+ */
+export function inferSendersFromEnumeration(
+  enumeration: HubEnumeration,
+): InferredSender[] {
+  const inferred: InferredSender[] = [];
+  for (const group of enumeration.consumerGroups) {
+    if (group !== "$Default") {
+      inferred.push({
+        inferredFrom: "ConsumerGroup",
+        name: group,
+        confidence: "Hint",
+        note: "Consumer group name suggests this application/service consumes data",
+      });
+    }
+  }
+  for (const rule of enumeration.authRules) {
+    if (
+      rule.name !== "RootManageSharedAccessKey" &&
+      rule.rights.some((r) => r.toLowerCase().includes("send"))
+    ) {
+      inferred.push({
+        inferredFrom: "AuthorizationRule",
+        name: rule.name,
+        rights: rule.rights,
+        confidence: "Hint",
+        note: "Auth rule with Send rights suggests this is used by a sender",
+      });
+    }
+  }
+  return inferred;
+}
+
+// ---------------------------------------------------------------------------
 // Unknown-sender correlation (EVH-08) - pure inference, verbatim thresholds
 // ---------------------------------------------------------------------------
 

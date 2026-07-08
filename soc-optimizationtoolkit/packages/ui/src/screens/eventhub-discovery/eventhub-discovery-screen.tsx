@@ -25,6 +25,8 @@ import {
   deriveEhStatistics,
   discoverEventHubSenders,
   discoverEventHubs,
+  enumerateEventHubDetails,
+  inferSendersFromEnumeration,
   sendersForHub,
 } from "@soc/core";
 import type {
@@ -32,6 +34,7 @@ import type {
   EventHubDiscoveryResult,
   EventHubInfo,
   HubActivity,
+  HubEnumeration,
   HubFindings,
 } from "@soc/core";
 import { usePorts } from "../../ports-context";
@@ -58,6 +61,10 @@ export function EventHubDiscoveryScreen() {
   const [activityByHub, setActivityByHub] = useState<Map<string, HubActivity> | null>(null);
   const [activityWarnings, setActivityWarnings] = useState<string[]>([]);
   const [checkingActivity, setCheckingActivity] = useState(false);
+  // EVH-06: opt-in consumer-group + auth-rule enumeration (2 calls per hub).
+  const [enumerationByHub, setEnumerationByHub] = useState<Map<string, HubEnumeration> | null>(null);
+  const [enumWarnings, setEnumWarnings] = useState<string[]>([]);
+  const [enumerating, setEnumerating] = useState(false);
 
   const runDiscovery = useCallback(async () => {
     if (discovering || config.subscriptionId === "") {
@@ -70,6 +77,8 @@ export function EventHubDiscoveryScreen() {
     setSelected(new Set());
     setActivityByHub(null);
     setActivityWarnings([]);
+    setEnumerationByHub(null);
+    setEnumWarnings([]);
     try {
       const found = await discoverEventHubs(
         ports.azure,
@@ -150,6 +159,24 @@ export function EventHubDiscoveryScreen() {
       setCheckingActivity(false);
     }
   }, [checkingActivity, hubs, ports.azure, ports.logger]);
+
+  // EVH-06: opt-in enumeration - two ARM calls per hub, capped in the usecase.
+  const runEnumeration = useCallback(async () => {
+    if (enumerating || hubs.length === 0) {
+      return;
+    }
+    setEnumerating(true);
+    setEnumWarnings([]);
+    try {
+      const result = await enumerateEventHubDetails(ports.azure, hubs, ports.logger);
+      setEnumerationByHub(result.enumerationByHub);
+      setEnumWarnings(result.warnings);
+    } catch (err) {
+      setEnumWarnings([err instanceof Error ? err.message : String(err)]);
+    } finally {
+      setEnumerating(false);
+    }
+  }, [enumerating, hubs, ports.azure, ports.logger]);
 
   // Configured-sender counts and EVH-08 findings per hub (pure projections).
   const senderCountByHub = useMemo(() => {
@@ -311,6 +338,22 @@ export function EventHubDiscoveryScreen() {
                   data and which active hubs have no configured sources
                   (visibility gaps worth onboarding).
                 </span>
+                <button
+                  className="run-button"
+                  onClick={() => void runEnumeration()}
+                  disabled={enumerating}
+                >
+                  {enumerating
+                    ? "Enumerating..."
+                    : enumerationByHub === null
+                      ? "Enumerate consumer groups + access rules"
+                      : "Re-enumerate"}
+                </button>
+                <span className="field-hint">
+                  Two calls per hub - consumer-group names (they seed the
+                  source config) and Send-capable access rules hint at existing
+                  consumers/senders.
+                </span>
               </div>
               {stats !== null && (
                 <p className="field-hint">
@@ -323,6 +366,11 @@ export function EventHubDiscoveryScreen() {
                 <p className="field-hint eh-warning">{senderNote}</p>
               )}
               {activityWarnings.map((warning) => (
+                <p className="field-hint eh-warning" key={warning}>
+                  {warning}
+                </p>
+              ))}
+              {enumWarnings.map((warning) => (
                 <p className="field-hint eh-warning" key={warning}>
                   {warning}
                 </p>
@@ -392,6 +440,35 @@ export function EventHubDiscoveryScreen() {
                                 {note}
                               </p>
                             ))}
+                          {(() => {
+                            const enumeration = enumerationByHub?.get(key);
+                            if (enumeration === undefined) {
+                              return null;
+                            }
+                            const inferred = inferSendersFromEnumeration(enumeration);
+                            return (
+                              <>
+                                <p className="field-hint eh-finding">
+                                  Consumer groups:{" "}
+                                  {enumeration.consumerGroups.length > 0
+                                    ? enumeration.consumerGroups.join(", ")
+                                    : "(none)"}
+                                </p>
+                                {inferred.map((hint) => (
+                                  <p
+                                    className="field-hint eh-finding"
+                                    key={`${hint.inferredFrom}:${hint.name}`}
+                                  >
+                                    Hint ({hint.inferredFrom}): {hint.name}
+                                    {hint.rights !== undefined
+                                      ? ` [${hint.rights.join(", ")}]`
+                                      : ""}{" "}
+                                    - {hint.note}.
+                                  </p>
+                                ))}
+                              </>
+                            );
+                          })()}
                         </div>
                       );
                     })}
