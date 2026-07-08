@@ -719,8 +719,22 @@ export function IntegrateScreen({
             status: "pending",
           })),
         );
+        // Custom (_CL) targets ride the SAME job: the create-custom-table step
+        // (idempotent - an existing table's schema wins) uses the destination
+        // schema the Gap Analysis resolved for this table, so a solution
+        // mapping to a not-yet-existing custom table deploys end to end here.
+        const schemaReport = gapReports.find((r) => r.tableName === target);
         const record = await onboardTable(ports, {
           table: target,
+          ...(schemaReport !== undefined && schemaReport.destSchema.length > 0
+            ? { customSchema: schemaReport.destSchema }
+            : {}),
+          ...(operationDefaults?.customTableRetentionDays !== undefined
+            ? {
+                customTableRetentionDays:
+                  operationDefaults.customTableRetentionDays,
+              }
+            : {}),
           ...(criblDefaults !== undefined
             ? { destinationId: destinationIdFromOptions(target, criblDefaults) }
             : {}),
@@ -781,6 +795,8 @@ export function IntegrateScreen({
     ports,
     criblDefaults,
     config,
+    gapReports,
+    operationDefaults,
   ]);
 
   const deployStatus: DeployStatus = deploying
@@ -1113,18 +1129,18 @@ export function IntegrateScreen({
   const deployBody = (
     <>
       <p className="panel-desc">
-        Deploys a Kind:Direct Data Collection Rule for the native table below
-        in workspace{" "}
+        Deploys a Kind:Direct Data Collection Rule per detected table in
+        workspace{" "}
         {config.workspaceName === "" ? "(not set)" : config.workspaceName} and
         creates the matching Sentinel destination in worker group{" "}
-        {groupId === "" ? "(none selected)" : groupId}. This is the operable
-        native-table onboard; solution- and sample-driven multi-log-type deploy
-        arrives with the sections above. Each step below reports its real
-        outcome.
+        {groupId === "" ? "(none selected)" : groupId}. Custom (_CL) tables
+        that do not exist yet are created first from the Gap Analysis schema
+        (an existing table&apos;s schema always wins). Each step below reports
+        its real outcome.
       </p>
       <div className="form-grid">
         <label className="field">
-          <span className="field-label">Native table name</span>
+          <span className="field-label">Table name</span>
           <input
             type="text"
             value={table}
@@ -1146,10 +1162,11 @@ export function IntegrateScreen({
               </>
             ) : (
               <>
-                A native Log Analytics table (e.g. SecurityEvent, Syslog). Add
-                samples and run the DCR Gap Analysis above to auto-detect the
-                solution&apos;s table(s). Custom (_CL) tables and vendor schemas
-                use the DCR Automation screen.
+                A Log Analytics table (e.g. SecurityEvent, Syslog, or a custom
+                MyVendor_CL). Add samples and run the DCR Gap Analysis above to
+                auto-detect the solution&apos;s table(s); a custom (_CL) table
+                is created here from the analysis schema when it does not exist
+                yet.
               </>
             )}
           </span>
