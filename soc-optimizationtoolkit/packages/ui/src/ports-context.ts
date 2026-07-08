@@ -20,6 +20,8 @@ import type {
   GithubPatManager,
   GraphDirectory,
   InstalledPack,
+  LlmAssist,
+  LlmKeyManager,
   JobStore,
   Logger,
   PackBuildRecord,
@@ -191,6 +193,19 @@ export interface UiPorts {
    * (exactly today's behavior); a denied directory read degrades the same way.
    */
   graph?: GraphDirectory;
+  /**
+   * OPTIONAL AI advisory seam (docs/ai-assisted-analysis-plan.md). The mapping
+   * review and coverage panels offer AI suggestions through it. ADVISORY ONLY:
+   * the deterministic analyzers stay the source of truth and the deploy gates
+   * never read AI output. Absent = no AI control renders anywhere.
+   */
+  llm?: LlmAssist;
+  /**
+   * OPTIONAL Anthropic key lifecycle (paired with {@link llm}): the settings
+   * surface validates-then-stores the key through it and reads back only
+   * hasKey (never the key).
+   */
+  llmKey?: LlmKeyManager;
 }
 
 /** What PortsContext carries: the ports plus the active connection config. */

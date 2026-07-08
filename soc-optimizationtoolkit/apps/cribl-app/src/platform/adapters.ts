@@ -23,6 +23,11 @@ import type {
   InstalledPack,
   JobRecord,
   JobStore,
+  LlmAssist,
+  LlmCompletionRequest,
+  LlmCompletionResult,
+  LlmKeyManager,
+  LlmKeyStatus,
   Logger,
   PatManagerStatus,
   PortHttpResponse,
@@ -38,10 +43,12 @@ import type {
   UserIdentity,
 } from '@soc/core';
 import {
+  DEFAULT_LLM_MODEL,
   TAGGED_SAMPLE_MAX_BYTES,
   blockedSolutionNames,
   capTaggedSampleBytes,
   classifySolutionDeprecation,
+  llmKeyFormatIssue,
   findConnectorDirName,
   interpretInstallResponse,
   isPathAllowedByEdr,
@@ -1365,6 +1372,158 @@ export class PlatformGithubPat implements GithubPatManager {
 }
 
 // ---------------------------------------------------------------------------
+// LlmAssist + LlmKeyManager (Anthropic via proxy) - ai-assisted-analysis P0
+// ---------------------------------------------------------------------------
+
+const ANTHROPIC_API = 'https://api.anthropic.com';
+// Proxied external requests hit the 30s server-side timeout; racing at 28s
+// keeps the client-side failure loud and ahead of the platform's while giving
+// a near-cap advisory call (maxTokens <= 4096) the most room.
+const LLM_TIMEOUT_MS = 28000;
+// The FIXED encrypted KV key proxies.yml injects as `x-api-key:
+// ${kv.anthropicKey}` on api.anthropic.com requests. Write-only, like
+// githubPat - it can never be read back.
+const ANTHROPIC_KEY_KV_KEY = 'anthropicKey';
+// A plain, READABLE companion holding only the non-secret status (hasKey) so
+// status() can report without ever touching the key.
+const ANTHROPIC_KEY_STATUS_KEY = 'anthropicKeyStatus';
+
+/**
+ * LlmAssist over the platform proxy (docs/ai-assisted-analysis-plan.md P0).
+ * POSTs /v1/messages with NO client-side auth header - proxies.yml injects
+ * x-api-key + anthropic-version server-side from the encrypted KV entry. A 401
+ * is surfaced with a "set the key" hint; callers (the advisory usecases) catch
+ * and degrade to the deterministic result.
+ */
+export class PlatformLlmAssist implements LlmAssist {
+  async complete(req: LlmCompletionRequest): Promise<LlmCompletionResult> {
+    const res = await fetchWithTimeout(
+      `${ANTHROPIC_API}/v1/messages`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: req.model ?? DEFAULT_LLM_MODEL,
+          max_tokens: req.maxTokens,
+          system: req.system,
+          messages: [{ role: 'user', content: req.user }],
+        }),
+      },
+      LLM_TIMEOUT_MS,
+    );
+    const body = await readPortBody(res);
+    if (!res.ok) {
+      const hint =
+        res.status === 401
+          ? ' - no valid Anthropic API key is stored; set it in the AI Assist settings'
+          : res.status === 429
+            ? ' - the Anthropic API is rate-limiting; retry shortly'
+            : '';
+      throw new Error(`Anthropic API: HTTP ${res.status}${hint}\n${bodyText(body).slice(0, 400)}`);
+    }
+    // Response shape: content[] blocks (take the text ones), usage token counts.
+    const content = prop(body, 'content');
+    let text = '';
+    if (Array.isArray(content)) {
+      text = content
+        .map((block) => (prop(block, 'type') === 'text' ? prop(block, 'text') : ''))
+        .filter((t): t is string => typeof t === 'string')
+        .join('');
+    }
+    const usage = prop(body, 'usage');
+    const inputTokens = prop(usage, 'input_tokens');
+    const outputTokens = prop(usage, 'output_tokens');
+    return {
+      text,
+      inputTokens: typeof inputTokens === 'number' ? inputTokens : 0,
+      outputTokens: typeof outputTokens === 'number' ? outputTokens : 0,
+    };
+  }
+}
+
+/**
+ * LlmKeyManager over the KV store - the exact PlatformGithubPat choreography:
+ * proxies.yml injects the key from the encrypted slot, so it can only be
+ * validated AFTER it is stored. validateAndStore STORES the encrypted key
+ * first, calls the zero-token GET /v1/models through the proxy, and on a
+ * non-2xx ROLLS BACK - only a valid key persists. The key never crosses back
+ * to the renderer: status() reads the plain anthropicKeyStatus companion.
+ */
+export class PlatformLlmKey implements LlmKeyManager {
+  async status(): Promise<LlmKeyStatus> {
+    const res = await fetchWithTimeout(kvUrl(ANTHROPIC_KEY_STATUS_KEY));
+    if (res.status === 404 || res.status === 403) {
+      return { hasKey: false };
+    }
+    if (!res.ok) {
+      throw new Error(`GET ${ANTHROPIC_KEY_STATUS_KEY}: HTTP ${res.status}\n${await res.text()}`);
+    }
+    const text = await res.text();
+    if (text === '') {
+      return { hasKey: false };
+    }
+    try {
+      return prop(JSON.parse(text) as unknown, 'hasKey') === true
+        ? { hasKey: true }
+        : { hasKey: false };
+    } catch {
+      return { hasKey: false };
+    }
+  }
+
+  async validateAndStore(key: string): Promise<LlmKeyStatus> {
+    const formatIssue = llmKeyFormatIssue(key);
+    if (formatIssue !== null) {
+      return { hasKey: false, error: formatIssue };
+    }
+    // Store encrypted FIRST so proxies.yml can inject it on the validation call.
+    const putRes = await fetchWithTimeout(kvUrl(`${ANTHROPIC_KEY_KV_KEY}?encrypted=true`), {
+      method: 'PUT',
+      body: key.trim(),
+    });
+    if (!putRes.ok) {
+      throw new Error(
+        `PUT ${ANTHROPIC_KEY_KV_KEY}?encrypted=true: HTTP ${putRes.status}\n${await putRes.text()}`,
+      );
+    }
+    // Validate with the zero-token models listing (key injected server-side).
+    let modelsRes: Response;
+    try {
+      modelsRes = await fetchWithTimeout(
+        `${ANTHROPIC_API}/v1/models`,
+        { method: 'GET', headers: { Accept: 'application/json' } },
+        LLM_TIMEOUT_MS,
+      );
+    } catch (err) {
+      // Transport failure: roll back the provisional key, then surface.
+      await this.clear();
+      throw err;
+    }
+    if (modelsRes.ok) {
+      await fetchWithTimeout(kvUrl(ANTHROPIC_KEY_STATUS_KEY), {
+        method: 'PUT',
+        body: JSON.stringify({ hasKey: true }),
+      });
+      return { hasKey: true };
+    }
+    // Invalid key: roll it back so nothing usable persists.
+    await this.clear();
+    const detail =
+      modelsRes.status === 401
+        ? 'Anthropic rejected the key (HTTP 401) - it is invalid, expired, or revoked.'
+        : `Anthropic validation failed (HTTP ${modelsRes.status}).`;
+    return { hasKey: false, error: detail };
+  }
+
+  async clear(): Promise<void> {
+    // Independent fire-and-forget deletes (kvDelete owns the lost-response quirk).
+    kvDelete(ANTHROPIC_KEY_KV_KEY);
+    kvDelete(ANTHROPIC_KEY_STATUS_KEY);
+    await Promise.resolve();
+  }
+}
+
+// ---------------------------------------------------------------------------
 // PackRecordStore (KV) - porting-plan Unit 19 (ENG-09)
 // ---------------------------------------------------------------------------
 
@@ -1617,6 +1776,10 @@ export interface CloudPorts {
   packInstall: PackInstallClient;
   /** Entra directory reader for the ingestion service-principal picker (B3). */
   graph: GraphDirectory;
+  /** AI advisory completions over the proxied Anthropic API (ai-assist P0). */
+  llm: LlmAssist;
+  /** Anthropic key lifecycle: validate-then-store, hasKey-only (ai-assist P0). */
+  llmKey: LlmKeyManager;
   /**
    * Shell-minted GUID provider for role-assignment names (Unit 8, ENG-37
    * runtime half). The SHELL owns id conventions - @soc/core never mints - so
@@ -1664,6 +1827,8 @@ export function makeCloudPorts(tenantId: string, logger: Logger): CloudPorts {
     packs: new PlatformPackStore(),
     packInstall: new PlatformPackInstall(cribl),
     graph: new PlatformGraphDirectory(tenantId),
+    llm: new PlatformLlmAssist(),
+    llmKey: new PlatformLlmKey(),
     mintAssignmentName: () => crypto.randomUUID(),
     logger,
     // The app is hosted inside a Cribl.Cloud workspace: Lake federation applies.

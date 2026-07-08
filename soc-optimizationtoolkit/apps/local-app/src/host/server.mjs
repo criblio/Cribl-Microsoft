@@ -63,6 +63,7 @@ import { createJobStore } from './jobs.mjs';
 import { createPackStore } from './packs.mjs';
 import { createTaggedSampleStore } from './tagged-samples.mjs';
 import { createGithubProxy } from './github.mjs';
+import { createAnthropicProxy } from './anthropic.mjs';
 import { createContentCache } from './content-cache.mjs';
 import {
   LOG_TAIL_DEFAULT,
@@ -102,6 +103,7 @@ export function createHostServer(config) {
   const packs = createPackStore(DATA_DIR);
   const taggedSamples = createTaggedSampleStore(DATA_DIR);
   const github = createGithubProxy(DATA_DIR, log);
+  const anthropic = createAnthropicProxy(DATA_DIR, log);
   const contentCache = createContentCache(DATA_DIR);
   const serveStatic = createStaticHandler(WEB_ROOT);
 
@@ -455,6 +457,45 @@ export function createHostServer(config) {
       }
       res.writeHead(405, { Allow: 'GET, PUT, DELETE' });
       res.end();
+      return;
+    }
+
+    // --- Anthropic key + advisory completions (ai-assisted-analysis P0) -----
+    if (pathname === '/api/llm/key') {
+      if (method === 'GET') {
+        // WRITE-ONLY parity with the cloud KV: only { hasKey } - the key never
+        // leaves the host process.
+        sendJson(res, 200, await anthropic.status());
+        return;
+      }
+      if (method === 'PUT') {
+        const payload = await readJsonBody(req);
+        if (!isPlainObject(payload) || typeof payload.key !== 'string') {
+          throw new HttpError(400, 'PUT /api/llm/key: body must be { key: string }');
+        }
+        // validate-then-store: a rejected key is a data-level { hasKey:false,
+        // error }, matching the cloud adapter's renderer-facing LlmKeyStatus.
+        sendJson(res, 200, await anthropic.validateAndStore(payload.key));
+        return;
+      }
+      if (method === 'DELETE') {
+        await anthropic.clear();
+        sendEmpty(res, 204);
+        return;
+      }
+      res.writeHead(405, { Allow: 'GET, PUT, DELETE' });
+      res.end();
+      return;
+    }
+
+    if (pathname === '/api/llm/complete' && method === 'POST') {
+      const payload = await readJsonBody(req);
+      if (!isPlainObject(payload)) {
+        throw new HttpError(400, 'POST /api/llm/complete: body must be { system, user, maxTokens, model? }');
+      }
+      // anthropic.complete validates the request shape and owns the key; a
+      // missing key is its 409, an upstream failure its 502.
+      sendJson(res, 200, await anthropic.complete(payload));
       return;
     }
 

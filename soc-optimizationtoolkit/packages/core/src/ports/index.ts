@@ -17,6 +17,14 @@ export type {
 } from './azure-management';
 export type { CriblClient, CriblRequest, CriblGroupSummary } from './cribl-client';
 export type { GraphDirectory, ServicePrincipalRef } from './graph-directory';
+export type {
+  LlmAssist,
+  LlmCompletionRequest,
+  LlmCompletionResult,
+  LlmKeyManager,
+  LlmKeyStatus,
+} from './llm-assist';
+export { DEFAULT_LLM_MODEL, llmKeyFormatIssue } from './llm-assist';
 export type { TaggedSampleStore } from './tagged-sample-store';
 export type { SchemaCatalog, DcrSchemaColumn } from './schema-catalog';
 export type {

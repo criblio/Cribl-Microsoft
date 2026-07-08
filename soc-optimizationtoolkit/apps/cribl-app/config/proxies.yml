@@ -74,6 +74,26 @@ graph.microsoft.com:
       - Accept
   rejectUnauthorized: true
 
+# Anthropic API (AI-assisted analysis - docs/ai-assisted-analysis-plan.md).
+# The key lives in the encrypted, write-only KV entry anthropicKey (validated
+# with a zero-token GET /v1/models before it is stored, exactly like githubPat)
+# and is injected server-side as x-api-key; the browser never sets an auth
+# header. Only Content-Type/Accept are forwarded so the browser's Origin cannot
+# reach Anthropic. Advisory calls are one-per-item with maxTokens <= 4096 so
+# each stays inside the 30s proxy timeout. Nothing sent here contains secrets
+# or raw events - prompts carry field NAMES, inferred TYPES, and at most one
+# truncated example value per field.
+api.anthropic.com:
+  timeout: 30000
+  headers:
+    inject:
+      x-api-key: '`${kv.anthropicKey}`'
+      anthropic-version: '2023-06-01'
+    allowlist:
+      - Content-Type
+      - Accept
+  rejectUnauthorized: true
+
 # GitHub REST API (Microsoft Sentinel content: solution index, per-solution
 # tree queries, connector JSON) - porting-plan Unit 14. The GitHub personal
 # access token lives in the encrypted, write-only KV entry githubPat (validated

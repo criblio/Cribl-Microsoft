@@ -27,6 +27,11 @@ import type {
   GraphDirectory,
   JobRecord,
   JobStore,
+  LlmAssist,
+  LlmCompletionRequest,
+  LlmCompletionResult,
+  LlmKeyManager,
+  LlmKeyStatus,
   Logger,
   PatManagerStatus,
   PortHttpResponse,
@@ -999,6 +1004,68 @@ export class LocalGithubPat implements GithubPatManager {
 }
 
 // ---------------------------------------------------------------------------
+// LlmAssist + LlmKeyManager (ai-assisted-analysis P0)
+// ---------------------------------------------------------------------------
+
+/** Project a host response into the renderer-facing LlmKeyStatus. */
+function asLlmKeyStatus(label: string, payload: unknown): LlmKeyStatus {
+  const hasKey = prop(payload, 'hasKey');
+  if (typeof hasKey !== 'boolean') {
+    throw new Error(`${label}: unexpected host response shape (missing boolean "hasKey")`);
+  }
+  const error = prop(payload, 'error');
+  return { hasKey, ...(typeof error === 'string' && error !== '' ? { error } : {}) };
+}
+
+/**
+ * LlmAssist over POST /api/llm/complete. The host owns the Anthropic key and
+ * the upstream call; this adapter relays the prompt and the {text, tokens}
+ * result. A host 409 (no key stored) or 502 (upstream failure) surfaces as a
+ * thrown error the advisory usecases catch and degrade on.
+ */
+export class LocalLlmAssist implements LlmAssist {
+  async complete(req: LlmCompletionRequest): Promise<LlmCompletionResult> {
+    const label = 'POST /api/llm/complete';
+    const payload = await hostJson(label, '/api/llm/complete', jsonInit('POST', req), PROXY_TIMEOUT_MS);
+    const text = prop(payload, 'text');
+    if (typeof text !== 'string') {
+      throw new Error(`${label}: unexpected host response shape (missing string "text")`);
+    }
+    const inputTokens = prop(payload, 'inputTokens');
+    const outputTokens = prop(payload, 'outputTokens');
+    return {
+      text,
+      inputTokens: typeof inputTokens === 'number' ? inputTokens : 0,
+      outputTokens: typeof outputTokens === 'number' ? outputTokens : 0,
+    };
+  }
+}
+
+/**
+ * LlmKeyManager over /api/llm/key. WRITE-ONLY parity with the cloud KV slot:
+ * the key goes down in the PUT and never comes back - status is { hasKey }.
+ */
+export class LocalLlmKey implements LlmKeyManager {
+  async status(): Promise<LlmKeyStatus> {
+    return asLlmKeyStatus('GET /api/llm/key', await hostJson('GET /api/llm/key', '/api/llm/key'));
+  }
+
+  async validateAndStore(key: string): Promise<LlmKeyStatus> {
+    return asLlmKeyStatus(
+      'PUT /api/llm/key',
+      await hostJson('PUT /api/llm/key', '/api/llm/key', jsonInit('PUT', { key }), PROXY_TIMEOUT_MS)
+    );
+  }
+
+  async clear(): Promise<void> {
+    const res = await fetchWithTimeout('/api/llm/key', { method: 'DELETE' });
+    if (!res.ok) {
+      throw await hostError('DELETE /api/llm/key', res);
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
 // PackRecordStore (host store) - porting-plan Unit 19 (ENG-09)
 // ---------------------------------------------------------------------------
 
@@ -1182,6 +1249,10 @@ export interface LocalPorts {
   packInstall: PackInstallClient;
   /** Entra directory reader for the ingestion service-principal picker (B3). */
   graph: GraphDirectory;
+  /** AI advisory completions over the host's Anthropic proxy (ai-assist P0). */
+  llm: LlmAssist;
+  /** Anthropic key lifecycle: validate-then-store, hasKey-only (ai-assist P0). */
+  llmKey: LlmKeyManager;
   /**
    * Shell-minted GUID provider for role-assignment names (Unit 8, ENG-37
    * runtime half). The SHELL owns id conventions - @soc/core never mints - so
@@ -1230,6 +1301,8 @@ export function makeLocalPorts(logger: Logger): LocalPorts {
     packs: new LocalPackStore(),
     packInstall: new LocalPackInstall(cribl),
     graph: new LocalGraphDirectory(),
+    llm: new LocalLlmAssist(),
+    llmKey: new LocalLlmKey(),
     mintAssignmentName: () => crypto.randomUUID(),
     logger,
     // The local host connects to a self-hosted leader: no Cribl Lake federation.
