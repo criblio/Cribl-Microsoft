@@ -96,7 +96,6 @@ import { formatStepLine } from "../../onboarding/step-line";
 import { summaryText } from "../../onboarding/summary";
 import { RecentRuns } from "../../onboarding/recent-runs";
 import { SampleIntakeSection } from "../samples/sample-intake-section";
-import { MatchPreviewSection } from "../match-preview/match-preview-section";
 import { MappingReviewSection } from "../mapping-review/mapping-review-section";
 import type { MappingReviewRenameEvent } from "../mapping-review/mapping-review-section";
 import { PipelinePreviewSection } from "../pipeline-preview/pipeline-preview-section";
@@ -218,9 +217,10 @@ export function IntegrateScreen({
   // gate the native-table deploy below (the MVP-transition rule in @soc/core
   // canDeploy), so this count is intentionally NOT part of the run gate.
   const [sampleCount, setSampleCount] = useState(0);
-  // The tagged samples themselves feed the Unit 13 match preview seeded into
-  // this section (sample vs destination table -> matched/overflow/unmatched)
-  // and the Unit 18 DCR Gap Analysis section below.
+  // The tagged samples feed the pipeline preview's per-log-type format map and
+  // the Unit 18 DCR Gap Analysis section below - which AUTO-RESOLVES each
+  // sample's destination table from the selected solution's connectors (no
+  // manual table entry; the destination can differ per sample).
   const [samples, setSamples] = useState<TaggedSample[]>([]);
 
   // ---- DCR Gap Analysis section (Unit 18) -------------------------------
@@ -458,7 +458,6 @@ export function IntegrateScreen({
           : {})}
         {...(ports.logger !== undefined ? { logger: ports.logger } : {})}
       />
-      <MatchPreviewSection samples={samples} />
     </>
   );
 
