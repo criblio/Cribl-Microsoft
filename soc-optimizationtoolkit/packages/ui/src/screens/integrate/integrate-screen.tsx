@@ -217,6 +217,10 @@ export function IntegrateScreen({
   const [deploying, setDeploying] = useState(false);
   const [steps, setSteps] = useState<JobStep[]>([]);
   const [outcome, setOutcome] = useState<OnboardTableOutcome | null>(null);
+  // Per-table outcomes from a multi-DCR run (one entry per deployed table).
+  const [outcomes, setOutcomes] = useState<
+    Array<{ table: string; outcome: OnboardTableOutcome }>
+  >([]);
   const [runError, setRunError] = useState("");
   const [deployCompleted, setDeployCompleted] = useState(false);
   const [historyToken, setHistoryToken] = useState(0);
@@ -290,6 +294,14 @@ export function IntegrateScreen({
       setTable(detectedTables[0]);
     }
   }, [detectedTables]);
+  // The native tables the deploy will provision a DCR for: EVERY detected table
+  // when the solution mapped to more than one (multi-DCR fan-out), otherwise the
+  // single field value (the detected-or-typed table).
+  const deployTargets = useMemo(() => {
+    if (detectedTables.length > 1) return detectedTables;
+    const trimmed = table.trim();
+    return trimmed === "" ? [] : [trimmed];
+  }, [detectedTables, table]);
   // The reviewer's effective (edited) mappings per logType feed the Unit 17
   // pipeline preview below, so it mirrors hand edits (not just the baseline).
   const [mappingOverrides, setMappingOverrides] = useState<
@@ -462,7 +474,7 @@ export function IntegrateScreen({
   // track (a table name and an ingestion identity).
   const runDisabledReason =
     deployDisabledReason(sectionInputs) ??
-    (table.trim() === ""
+    (deployTargets.length === 0
       ? "Enter a native table name in the Deploy section."
       : ingestionClientId.trim() === ""
         ? "Enter an ingestion client id in the Deploy section."
@@ -470,11 +482,11 @@ export function IntegrateScreen({
   const canRunDeploy = runDisabledReason === null;
 
   const runDeploy = useCallback(async () => {
-    const trimmedTable = table.trim();
+    const targets = deployTargets;
     const trimmedClientId = ingestionClientId.trim();
     if (
       deploying ||
-      trimmedTable === "" ||
+      targets.length === 0 ||
       groupId === "" ||
       trimmedClientId === ""
     ) {
@@ -482,60 +494,65 @@ export function IntegrateScreen({
     }
     setDeploying(true);
     setOutcome(null);
+    setOutcomes([]);
     setRunError("");
-    // Seed every use-case step as pending so the list renders complete from
-    // the first onProgress tick (the shipped honest-step-list idiom).
-    const seeded: JobStep[] = onboardTableStepsFor(trimmedTable).map((name) => ({
-      name,
-      status: "pending",
-    }));
-    setSteps(seeded);
+    // One DCR per detected table, deployed in sequence. Each table gets its own
+    // honest step list (onProgress matches by unprefixed step name); outcomes
+    // accumulate so the summary reports every deployed DCR. A failing table
+    // stops the run and surfaces which table failed.
+    const collected: Array<{ table: string; outcome: OnboardTableOutcome }> = [];
     try {
-      const record = await onboardTable(ports, {
-        table: trimmedTable,
-        ...(criblDefaults !== undefined
-          ? {
-              destinationId: destinationIdFromOptions(
-                trimmedTable,
-                criblDefaults,
-              ),
-            }
-          : {}),
-        subscriptionId: config.subscriptionId,
-        resourceGroup: config.resourceGroup,
-        workspaceName: config.workspaceName,
-        groupId,
-        tenantId: config.tenantId,
-        ingestionClientId: trimmedClientId,
-        ingestionClientSecret:
-          ingestionClientSecret === "" ? undefined : ingestionClientSecret,
-        onProgress: (step) => {
-          setSteps((prev) =>
-            prev.map((s) => (s.name === step.name ? { ...step } : s)),
-          );
-        },
-      });
-      if (record.status === "succeeded") {
-        const result = record.result as OnboardTableOutcome;
-        setOutcome(result);
-        setDeployCompleted(true);
-        // Register the just-deployed DCR as an ingestion-role target. The
-        // outcome carries the exact deployed name and its scope, so the role
-        // step addresses it precisely without predicting a name.
-        setRoleTargets((prev) =>
-          upsertRoleTarget(prev, {
-            dcrResourceId: dcrResourceIdFor({
-              subscriptionId: result.subscriptionId,
-              resourceGroup: result.resourceGroup,
-              dcrName: result.dcrName,
+      for (const target of targets) {
+        setSteps(
+          onboardTableStepsFor(target).map((name) => ({
+            name,
+            status: "pending",
+          })),
+        );
+        const record = await onboardTable(ports, {
+          table: target,
+          ...(criblDefaults !== undefined
+            ? { destinationId: destinationIdFromOptions(target, criblDefaults) }
+            : {}),
+          subscriptionId: config.subscriptionId,
+          resourceGroup: config.resourceGroup,
+          workspaceName: config.workspaceName,
+          groupId,
+          tenantId: config.tenantId,
+          ingestionClientId: trimmedClientId,
+          ingestionClientSecret:
+            ingestionClientSecret === "" ? undefined : ingestionClientSecret,
+          onProgress: (step) => {
+            setSteps((prev) =>
+              prev.map((s) => (s.name === step.name ? { ...step } : s)),
+            );
+          },
+        });
+        if (record.status === "succeeded") {
+          const result = record.result as OnboardTableOutcome;
+          collected.push({ table: target, outcome: result });
+          setOutcome(result);
+          setOutcomes([...collected]);
+          setDeployCompleted(true);
+          // Register the just-deployed DCR as an ingestion-role target. The
+          // outcome carries the exact deployed name and its scope, so the role
+          // step addresses it precisely without predicting a name.
+          setRoleTargets((prev) =>
+            upsertRoleTarget(prev, {
+              dcrResourceId: dcrResourceIdFor({
+                subscriptionId: result.subscriptionId,
+                resourceGroup: result.resourceGroup,
+                dcrName: result.dcrName,
+              }),
+              table: target,
             }),
-            table: trimmedTable,
-          }),
-        );
-      } else {
-        setRunError(
-          record.error ?? "onboarding failed but recorded no error text",
-        );
+          );
+        } else {
+          setRunError(
+            `${target}: ${record.error ?? "onboarding failed but recorded no error text"}`,
+          );
+          break;
+        }
       }
     } catch (err) {
       setRunError(String(err));
@@ -546,7 +563,7 @@ export function IntegrateScreen({
       setHistoryToken((n) => n + 1);
     }
   }, [
-    table,
+    deployTargets,
     ingestionClientId,
     ingestionClientSecret,
     deploying,
@@ -874,7 +891,7 @@ export function IntegrateScreen({
                 Detected from the solution&apos;s Gap Analysis:{" "}
                 {detectedTables.join(", ")}
                 {detectedTables.length > 1
-                  ? " - this native onboard deploys one DCR for the table above; deploy each additional table by changing this field and re-running (multi-DCR fan-out is coming)."
+                  ? ` - Run deploy provisions one DCR per detected table (${detectedTables.length} DCRs); the field above shows the first.`
                   : " - prefilled above; editable."}
               </>
             ) : (
@@ -938,10 +955,21 @@ export function IntegrateScreen({
         <pre className="result">{steps.map(formatStepLine).join("\n")}</pre>
       )}
       {runError !== "" && <pre className="result">{runError}</pre>}
-      {outcome !== null && (
+      {outcomes.length > 0 && (
         <div className="discovery-result">
-          <span className="field-label">Deploy summary</span>
-          <pre className="result">{summaryText(outcome)}</pre>
+          <span className="field-label">
+            Deploy summary
+            {outcomes.length > 1 ? ` (${outcomes.length} DCRs)` : ""}
+          </span>
+          <pre className="result">
+            {outcomes
+              .map(({ table: t, outcome: o }) =>
+                outcomes.length > 1
+                  ? `== ${t} ==\n${summaryText(o)}`
+                  : summaryText(o),
+              )
+              .join("\n\n")}
+          </pre>
         </div>
       )}
       <p className="panel-desc">
