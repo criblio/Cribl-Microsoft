@@ -21,9 +21,18 @@
  * hidden).
  */
 
-import { useCallback, useMemo, useState } from "react";
-import { assignDcrRoles } from "@soc/core";
-import type { AssignDcrRoleOutcome, DcrRoleTarget, JobStep } from "@soc/core";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  acquireServicePrincipals,
+  assignDcrRoles,
+  defaultServicePrincipalId,
+} from "@soc/core";
+import type {
+  AssignDcrRoleOutcome,
+  DcrRoleTarget,
+  JobStep,
+  ServicePrincipalRef,
+} from "@soc/core";
 import { usePorts } from "../../ports-context";
 import { formatStepLine } from "../../onboarding/step-line";
 import {
@@ -86,6 +95,47 @@ export function RoleAssignmentSection({
   const [steps, setSteps] = useState<JobStep[]>([]);
   const [outcome, setOutcome] = useState<AssignDcrRoleOutcome | null>(null);
   const [runError, setRunError] = useState("");
+
+  // Service-principal picker (B3): when the shell binds a GraphDirectory, the
+  // object id is chosen from a name-sorted dropdown (own app first, cribl-named
+  // next) instead of typed. Everything degrades to the plain text field when the
+  // port is absent or the directory read is denied - never worse than before.
+  const [servicePrincipals, setServicePrincipals] = useState<
+    ServicePrincipalRef[] | null
+  >(null);
+  const [spLoading, setSpLoading] = useState(false);
+  const [spError, setSpError] = useState("");
+  const [manualEntry, setManualEntry] = useState(false);
+
+  const loadServicePrincipals = useCallback(async () => {
+    const graph = ports.graph;
+    if (graph === undefined) return;
+    setSpLoading(true);
+    setSpError("");
+    try {
+      const list = await acquireServicePrincipals(graph, clientId);
+      setServicePrincipals(list);
+      // Preselect the app's own SP when the field is still empty; never
+      // overwrite an id the operator already entered.
+      setObjectId((cur) =>
+        cur.trim() === "" ? defaultServicePrincipalId(list, clientId) : cur,
+      );
+    } catch (err) {
+      setSpError(err instanceof Error ? err.message : String(err));
+      setServicePrincipals([]);
+    } finally {
+      setSpLoading(false);
+    }
+  }, [ports.graph, clientId]);
+
+  useEffect(() => {
+    if (ports.graph !== undefined) void loadServicePrincipals();
+  }, [ports.graph, loadServicePrincipals]);
+
+  // The dropdown drives the field only when the port is bound, the directory
+  // read succeeded, and the operator has not switched to manual entry.
+  const useDropdown =
+    ports.graph !== undefined && spError === "" && !manualEntry;
 
   const objectIdCheck = validateObjectId(objectId, clientId);
   const canMint = ports.mintAssignmentName !== undefined;
@@ -172,23 +222,92 @@ export function RoleAssignmentSection({
         <span className="field-label">
           Enterprise Application object id (ingestion service principal)
         </span>
-        <input
-          type="text"
-          value={objectId}
-          onChange={(e) => setObjectId(e.target.value)}
-          placeholder="00000000-0000-0000-0000-000000000000"
-          autoComplete="off"
-          spellCheck={false}
-          className="mono"
-        />
-        <span className="field-hint">
-          This is the ingestion service principal&apos;s OBJECT id - its
-          Enterprise Application object id in Entra ID - NOT the app
-          registration&apos;s client (application) id. They are different GUIDs,
-          and confusing the two is the classic failure. In Entra ID, open the
-          app registration, follow the Managed application link to the Enterprise
-          Application, and copy its Object ID.
-        </span>
+        {useDropdown ? (
+          <>
+            <select
+              value={objectId}
+              onChange={(e) => setObjectId(e.target.value)}
+              disabled={spLoading}
+              className="mono"
+            >
+              <option value="">
+                {spLoading
+                  ? "Loading service principals..."
+                  : "Select a service principal..."}
+              </option>
+              {(servicePrincipals ?? []).map((sp) => (
+                <option key={sp.id} value={sp.id}>
+                  {sp.displayName} - {sp.id}
+                </option>
+              ))}
+            </select>
+            <div className="role-sp-controls">
+              <button
+                type="button"
+                className="gap-reset-button"
+                onClick={() => void loadServicePrincipals()}
+                disabled={spLoading}
+              >
+                Reload
+              </button>
+              <button
+                type="button"
+                className="gap-reset-button"
+                onClick={() => setManualEntry(true)}
+              >
+                Enter manually
+              </button>
+            </div>
+            <span className="field-hint">
+              The ingestion service principal&apos;s OBJECT id, picked from your
+              directory - the app registration this app uses is preselected, and
+              cribl-named principals are listed first. This is NOT the app
+              registration&apos;s client (application) id - confusing the two is
+              the classic failure.
+            </span>
+          </>
+        ) : (
+          <>
+            <input
+              type="text"
+              value={objectId}
+              onChange={(e) => setObjectId(e.target.value)}
+              placeholder="00000000-0000-0000-0000-000000000000"
+              autoComplete="off"
+              spellCheck={false}
+              className="mono"
+            />
+            {ports.graph !== undefined && (
+              <div className="role-sp-controls">
+                <button
+                  type="button"
+                  className="gap-reset-button"
+                  onClick={() => {
+                    setManualEntry(false);
+                    if (spError !== "") void loadServicePrincipals();
+                  }}
+                >
+                  Pick from directory
+                </button>
+              </div>
+            )}
+            {spError !== "" && (
+              <span className="field-hint">
+                Could not read the directory ({spError}). Enter the object id
+                manually, or retry with Pick from directory. This needs the app
+                to have Application.Read.All (or Directory.Read.All) consented.
+              </span>
+            )}
+            <span className="field-hint">
+              This is the ingestion service principal&apos;s OBJECT id - its
+              Enterprise Application object id in Entra ID - NOT the app
+              registration&apos;s client (application) id. They are different
+              GUIDs, and confusing the two is the classic failure. In Entra ID,
+              open the app registration, follow the Managed application link to
+              the Enterprise Application, and copy its Object ID.
+            </span>
+          </>
+        )}
       </label>
 
       {targets.length > 0 ? (

@@ -18,6 +18,7 @@ import type {
   ContentCache,
   CriblClient,
   GithubPatManager,
+  GraphDirectory,
   InstalledPack,
   JobStore,
   Logger,
@@ -182,6 +183,14 @@ export interface UiPorts {
    * onprem (no Lake toggle); every other surface is unaffected.
    */
   criblDeploymentType?: "cloud" | "onprem";
+  /**
+   * OPTIONAL Entra directory accessor (B3). The role-assignment step's
+   * ingestion-identity picker lists service principals through it - the app's
+   * own SP first, cribl-named next - so the operator selects the object id
+   * instead of typing it. Absent = the object-id field stays a plain text input
+   * (exactly today's behavior); a denied directory read degrades the same way.
+   */
+  graph?: GraphDirectory;
 }
 
 /** What PortsContext carries: the ports plus the active connection config. */

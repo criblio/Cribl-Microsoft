@@ -2634,6 +2634,13 @@ button.journey-step-main:hover .journey-step-label {
   gap: 10px;
   flex-wrap: wrap;
 }
+.role-sp-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 6px 0;
+}
 .rule-coverage-upload {
   font-size: 12px;
   padding: 4px 12px;
