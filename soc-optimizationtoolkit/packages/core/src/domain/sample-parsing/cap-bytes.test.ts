@@ -104,7 +104,7 @@ describe("capTaggedSampleBytes", () => {
     expect(out.keptEvents).toBe(0);
   });
 
-  it("defaults to the 512 KiB budget", () => {
-    expect(TAGGED_SAMPLE_MAX_BYTES).toBe(512 * 1024);
+  it("defaults to the 256 KiB budget", () => {
+    expect(TAGGED_SAMPLE_MAX_BYTES).toBe(256 * 1024);
   });
 });

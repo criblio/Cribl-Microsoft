@@ -38,6 +38,7 @@ import type {
   UserIdentity,
 } from '@soc/core';
 import {
+  TAGGED_SAMPLE_MAX_BYTES,
   blockedSolutionNames,
   capTaggedSampleBytes,
   classifySolutionDeprecation,
@@ -660,20 +661,34 @@ export class PlatformTaggedSampleStore implements TaggedSampleStore {
       throw new Error('PlatformTaggedSampleStore.upsert: logType must be non-empty');
     }
     const key = taggedSampleKey(sample.logType);
-    // Byte-cap before the PUT: the KV entry is bounded by the leader's request
-    // body limit, not an event count, so a log type with large events (a
-    // verbose THREAT capture) would otherwise 413 (PayloadTooLargeError).
-    const { sample: capped, droppedEvents, trimmed } = capTaggedSampleBytes(sample);
-    if (trimmed) {
+    // The KV entry is bounded by the leader's request-body limit (a BYTE budget,
+    // not an event count), and that limit is UNKNOWN and smaller than our budget
+    // for some verbose log types (e.g. PAN-OS TRAFFIC). So: byte-cap first, then
+    // SHRINK-ON-413 - each 413 halves the budget (trimming more events) and
+    // retries until the write fits or a single event remains. This adapts to the
+    // real limit without hard-coding it, and a stored TaggedSample carries the
+    // per-event data three times (rawEvents + parsed.rawEvents + parsed.records)
+    // so trimming events shrinks it fast.
+    let budget = TAGGED_SAMPLE_MAX_BYTES;
+    let capped = capTaggedSampleBytes(sample, budget);
+    let res = await fetchWithTimeout(kvUrl(key), {
+      method: 'PUT',
+      body: JSON.stringify(capped.sample),
+    });
+    while (res.status === 413 && capped.keptEvents > 1) {
+      budget = Math.floor(budget / 2);
+      capped = capTaggedSampleBytes(sample, budget);
+      res = await fetchWithTimeout(kvUrl(key), {
+        method: 'PUT',
+        body: JSON.stringify(capped.sample),
+      });
+    }
+    if (capped.trimmed) {
       console.warn(
-        `[tagged-samples] "${sample.logType}" trimmed to ${capped.rawEvents.length} events ` +
-          `(dropped ${droppedEvents}) to fit the KV size budget`,
+        `[tagged-samples] "${sample.logType}" stored ${capped.keptEvents} of ` +
+          `${sample.rawEvents.length} events (trimmed to fit the KV size limit)`,
       );
     }
-    const res = await fetchWithTimeout(kvUrl(key), {
-      method: 'PUT',
-      body: JSON.stringify(capped),
-    });
     if (!res.ok) {
       throw new Error(`PUT kvstore/${key}: HTTP ${res.status}\n${await res.text()}`);
     }
