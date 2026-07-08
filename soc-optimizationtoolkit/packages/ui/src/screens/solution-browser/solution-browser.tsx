@@ -179,6 +179,12 @@ export function SolutionBrowser({ onSelect }: SolutionBrowserProps) {
     (solution: SolutionRef) => {
       setSelectedName(solution.name);
       onSelect?.(solution);
+      // Persist the selection in the URL hash so a full page refresh restores
+      // it (the on-mount deep-link read re-selects it), keeping the solution in
+      // sync with the samples that already persist in the store.
+      if (typeof window !== "undefined") {
+        window.location.hash = buildSolutionDeepLink(solution.name);
+      }
     },
     [onSelect],
   );
@@ -187,6 +193,9 @@ export function SolutionBrowser({ onSelect }: SolutionBrowserProps) {
     setSelectedName(null);
     setDetail({ phase: "idle" });
     onSelect?.(null);
+    if (typeof window !== "undefined") {
+      window.location.hash = "#/";
+    }
   }, [onSelect]);
 
   // Lazily fetch the selected solution's detail whenever the selection changes.

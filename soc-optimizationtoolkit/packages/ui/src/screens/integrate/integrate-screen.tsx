@@ -210,6 +210,14 @@ export function IntegrateScreen({
   // never gates the native-table deploy (the MVP-transition canDeploy rule).
   const [solution, setSolution] = useState<SolutionRef | null>(null);
   const solutionSelected = solution !== null;
+  // Bumped when the solution CHANGES to a different one: it re-keys the
+  // solution-dependent sections (samples, gap analysis, rule coverage, pipeline
+  // preview) so they remount fresh - the old solution's work must not carry
+  // over. The initial pick and the on-refresh deep-link restore are NOT changes
+  // (prevSolutionRef starts null), so persisted samples for the restored
+  // solution survive a reload.
+  const [contentResetKey, setContentResetKey] = useState(0);
+  const prevSolutionRef = useRef<string | null>(null);
 
   // ---- Sample Data section (Unit 11) ------------------------------------
   // The section owns its own store IO and reports the tagged-sample count so
@@ -255,6 +263,35 @@ export function IntegrateScreen({
     setSamples(list);
     setSampleCount(list.length);
   }, []);
+
+  // The Solution browser reports its selection here. On a real CHANGE (not the
+  // initial pick or the on-refresh deep-link restore), the samples/mappings/
+  // coverage were for the OLD solution, so clear the tagged-sample store and
+  // reset every dependent bit; the contentResetKey bump remounts the sections
+  // empty once the store is cleared.
+  const handleSolutionChange = useCallback(
+    (next: SolutionRef | null) => {
+      const prevName = prevSolutionRef.current;
+      const nextName = next?.name ?? null;
+      prevSolutionRef.current = nextName;
+      setSolution(next);
+      if (prevName === null || prevName === nextName) {
+        return;
+      }
+      setSamples([]);
+      setSampleCount(0);
+      setGapReports([]);
+      setMappingsApproved(false);
+      setMappingOverrides({});
+      setRuleFields(undefined);
+      void (async () => {
+        const existing = await ports.samples.list();
+        await Promise.all(existing.map((s) => ports.samples.remove(s.logType)));
+        setContentResetKey((k) => k + 1);
+      })();
+    },
+    [ports.samples],
+  );
 
   // The detected format per log type (drives the pipeline preview's serde /
   // timestamp selection). Derived from the tagged samples the section reports.
@@ -441,13 +478,14 @@ export function IntegrateScreen({
         works with. Deprecated solutions are badged with the reason. Set or check
         your GitHub token in Repositories settings.
       </p>
-      <SolutionBrowser onSelect={setSolution} />
+      <SolutionBrowser onSelect={handleSolutionChange} />
     </>
   );
 
   const sampleDataBody = (
     <>
       <SampleIntakeSection
+        key={contentResetKey}
         store={ports.samples}
         onSamplesChange={handleSamplesChange}
         onRenameLogType={handleRenameLogType}
@@ -473,6 +511,7 @@ export function IntegrateScreen({
         deploy below never waits on an approval.
       </p>
       <MappingReviewSection
+        key={contentResetKey}
         solutionName={solution?.name ?? ""}
         samples={samples}
         content={ports.content}
@@ -491,6 +530,7 @@ export function IntegrateScreen({
           deployed until the pack is built and installed.
         </p>
         <PipelinePreviewSection
+          key={contentResetKey}
           solutionName={solution?.name ?? ""}
           packName={packName}
           reports={gapReports}
@@ -504,6 +544,7 @@ export function IntegrateScreen({
 
   const ruleCoverageBody = (
     <RuleCoverageSection
+      key={contentResetKey}
       solutionName={solution?.name ?? ""}
       reports={gapReports}
       content={ports.content}
