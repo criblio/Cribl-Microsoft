@@ -1,11 +1,16 @@
 /**
  * field-matcher KNOWLEDGE BASES - porting-plan Unit 13 (ENG-04).
  *
- * Ported VERBATIM from legacy field-matcher.ts. These curated tables ARE the
- * matcher's intelligence and its compatibility contract - characterization-
- * pinned, NOT "improved". Any edit changes deployed rename rules.
+ * Ported VERBATIM from legacy field-matcher.ts, then DELIBERATELY EXTENDED
+ * (user request 2026-07-08, docs/ai-assisted-analysis-plan.md): the legacy
+ * entries below are unchanged and stay characterization-pinned; the "curated
+ * extension" section at the end of ALIAS_TABLE adds vendor knowledge for
+ * fields that previously landed in fuzzy/overflow (PAN-OS field names as the
+ * panos-dictionary parser emits them, missing CEF standard keys, FortiGate,
+ * and cross-vendor web/hash conventions). Every extension entry is pinned in
+ * field-matcher-improvements.test.ts - additions must come with a test.
  *
- *   ALIAS_TABLE          legacy lines 73-316  (~240 entries)
+ *   ALIAS_TABLE          legacy lines 73-316  (~240 entries) + curated extension
  *   REVERSE_ALIAS        legacy lines 319-327
  *   classifyEventType    legacy lines 367-383
  *   EVENT_TYPE_BOOSTS    legacy lines 386-395
@@ -262,6 +267,69 @@ export const ALIAS_TABLE: Record<string, string[]> = {
   displayMessage: ["Message", "Activity"],
   // outcome already defined in CEF address/host section above
   actor: ["SourceUserName"],
+
+  // -------------------------------------------------------------------------
+  // Curated extension (2026-07-08) - deliberate additions for fields observed
+  // landing in fuzzy/overflow. Alias hits require the destination column to
+  // exist in the resolved schema, so entries here have zero blast radius on
+  // tables that lack the column. Pinned in field-matcher-improvements.test.ts.
+  // -------------------------------------------------------------------------
+
+  // PAN-OS THREAT/URL fields exactly as the panos-dictionary parser emits them
+  user_agent: ["RequestClientApplication"],
+  http_method: ["RequestMethod"],
+  referer: ["RequestContext"], // CEF requestContext IS the HTTP referer
+  session_end_reason: ["Reason"],
+  src_mac: ["SourceMACAddress"],
+  dst_mac: ["DestinationMACAddress"],
+  src_host: ["SourceHostName"],
+  dst_host: ["DestinationHostName"],
+
+  // CEF standard keys the legacy table missed
+  deviceDirection: ["CommunicationDirection"],
+  fsize: ["FileSize"],
+  oldFileName: ["OldFileName"],
+  oldFilePath: ["OldFilePath"],
+
+  // FortiGate key=value fields
+  devname: ["DeviceName", "Computer"],
+  eventtime: ["TimeGenerated", "EventTime"],
+  transport: ["Protocol", "NetworkProtocol"],
+
+  // Cross-vendor web/API log conventions (IIS, nginx, Zscaler, WAFs)
+  useragent: ["RequestClientApplication"],
+  http_user_agent: ["RequestClientApplication"],
+  method: ["RequestMethod"],
+  uri: ["RequestURL"],
+  status_code: ["EventOutcome"],
+  response_code: ["EventOutcome"],
+  client_ip: ["SourceIP"],
+  clientip: ["SourceIP"],
+  server_ip: ["DestinationIP"],
+  serverip: ["DestinationIP"],
+
+  // Splunk CIM-style source names
+  dest_ip: ["DestinationIP"],
+  dest_port: ["DestinationPort"],
+  dest_host: ["DestinationHostName"],
+
+  // File-hash conventions (any EDR/AV feed)
+  sha256: ["FileHash"],
+  sha1: ["FileHash"],
+  md5: ["FileHash"],
+  file_hash: ["FileHash"],
+  file_name: ["FileName"],
+  file_path: ["FilePath"],
+  file_size: ["FileSize"],
+
+  // Severity/level variants
+  log_level: ["LogSeverity", "SeverityLevel"],
+
+  // Syslog transport fields (the Syslog table's dedicated columns)
+  procid: ["ProcessID"],
+  appname: ["ProcessName", "AppName"],
+  app_name: ["ProcessName", "AppName"],
+  program: ["ProcessName"],
 };
 
 /** Reverse lookup: destName (lowercased) -> sourceNames (lowercased). */

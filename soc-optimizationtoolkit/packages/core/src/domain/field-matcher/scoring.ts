@@ -11,6 +11,19 @@
 import type { MatchConfidence } from "./models";
 import { ALIAS_TABLE, REVERSE_ALIAS } from "./knowledge-bases";
 
+/**
+ * Lowercased-key alias index (2026-07-08 improvement): the legacy lookup was
+ * case-SENSITIVE on the alias key, so a case variant of a known source field
+ * ("SRC", "User_Agent") silently missed its alias and fell to fuzzy/overflow.
+ * Exact-key lookup still runs first; this index is the fallback. Key
+ * collisions after lowercasing (CustomString1 vs customstring1) carry
+ * equivalent values, so last-wins is harmless.
+ */
+const ALIAS_TABLE_LOWER = new Map<string, string[]>();
+for (const [key, dests] of Object.entries(ALIAS_TABLE)) {
+  ALIAS_TABLE_LOWER.set(key.toLowerCase(), dests);
+}
+
 /** Strip separators and lowercase (camelCase preserved for comparison). */
 export function normalize(name: string): string {
   return name
@@ -94,8 +107,9 @@ export function scoreMatch(
     return { score: 95, confidence: "exact", reason: "Case-insensitive match" };
   }
 
-  // 3. Known alias lookup
-  const aliases = ALIAS_TABLE[sourceName];
+  // 3. Known alias lookup (exact key first, then the case-insensitive index)
+  const aliases =
+    ALIAS_TABLE[sourceName] ?? ALIAS_TABLE_LOWER.get(sourceName.toLowerCase());
   if (aliases) {
     for (const alias of aliases) {
       if (alias.toLowerCase() === destName.toLowerCase()) {
