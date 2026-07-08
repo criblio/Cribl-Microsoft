@@ -55,6 +55,7 @@ import type {
   VendorGapProfile,
 } from "@soc/core";
 import { InfoTip } from "../../components/info-tip";
+import { SearchableSelect } from "../../components/searchable-select";
 import {
   INITIAL_MAPPING_REVIEW_STATE,
   MAPPING_REVIEW_NO_SAMPLES_REASON,
@@ -140,6 +141,18 @@ const EMPTY_SENTINEL_CONTENT: SentinelContent = {
   getCommitSha: async () => null,
 };
 
+/**
+ * Common Sentinel native destination tables offered in the per-sample table
+ * override (in addition to the solution's resolved tables), so the operator can
+ * realign a sample to a standard table the detection did not pick.
+ */
+const COMMON_NATIVE_TABLES: readonly string[] = [
+  "CommonSecurityLog",
+  "SecurityEvent",
+  "Syslog",
+  "WindowsEvent",
+];
+
 /** A stable signature of the analysis inputs (drives staleness detection). */
 function inputSignature(solutionName: string, samples: TaggedSample[]): string {
   const parts = samples.map(
@@ -170,6 +183,11 @@ export function MappingReviewSection({
   const [reports, setReports] = useState<GapReport[]>([]);
   const [resolution, setResolution] =
     useState<DestinationTableResolution | null>(null);
+  // Per-logType destination-table OVERRIDES: the operator can reassign which
+  // native table a sample aligns to when the default detection is wrong.
+  const [tableOverrides, setTableOverrides] = useState<Record<string, string>>(
+    {},
+  );
   const [analyzing, setAnalyzing] = useState(false);
   const [analyzeError, setAnalyzeError] = useState("");
   const [review, dispatch] = useReducer(
@@ -181,10 +199,11 @@ export function MappingReviewSection({
   const currentSig = inputSignature(solutionName, samples);
 
   // ---- Analyze / Re-Analyze ---------------------------------------------
-  const runAnalysis = useCallback(async () => {
+  const runAnalysis = useCallback(async (overrides?: Record<string, string>) => {
     if (analyzing || samples.length === 0) {
       return;
     }
+    const activeOverrides = overrides ?? tableOverrides;
     setAnalyzing(true);
     setAnalyzeError("");
     try {
@@ -201,12 +220,14 @@ export function MappingReviewSection({
 
       const specs = samples.map((sample) => ({
         logType: sample.logType,
-        tableName: matchSampleLogTypeToTable(
-          sample.logType,
-          [],
-          resolved.tables.length,
-          defaultTable,
-        ),
+        tableName:
+          activeOverrides[sample.logType] ??
+          matchSampleLogTypeToTable(
+            sample.logType,
+            [],
+            resolved.tables.length,
+            defaultTable,
+          ),
         content: sample.rawEvents.join("\n"),
       }));
 
@@ -229,7 +250,31 @@ export function MappingReviewSection({
     activeContent,
     activeCatalog,
     profile,
+    tableOverrides,
   ]);
+
+  // Candidate destination tables for the per-sample override dropdown: the
+  // solution's resolved tables, the tables already in the reports, and a few
+  // common natives - deduped and sorted.
+  const candidateTables = useMemo(() => {
+    const set = new Set<string>();
+    for (const t of resolution?.tables ?? []) set.add(t);
+    for (const r of reports) set.add(r.tableName);
+    for (const t of COMMON_NATIVE_TABLES) set.add(t);
+    return [...set].filter((t) => t !== "").sort();
+  }, [resolution, reports]);
+
+  // Reassign a logType to a different destination table, then re-analyze so its
+  // gap report reflects the new table's schema.
+  const changeTable = useCallback(
+    (logType: string, newTable: string) => {
+      if (newTable === "" || analyzing) return;
+      const next = { ...tableOverrides, [logType]: newTable };
+      setTableOverrides(next);
+      void runAnalysis(next);
+    },
+    [tableOverrides, runAnalysis, analyzing],
+  );
 
   // ---- Staleness: inputs changed after the last analysis ----------------
   useEffect(() => {
@@ -388,7 +433,19 @@ export function MappingReviewSection({
           <div key={report.logType} className="mapping-review-card">
             <div className="mapping-review-card-head">
               <span className="mapping-review-logtype">{report.logType}</span>
-              <span className="mapping-review-table">{report.tableName}</span>
+              <div className="mapping-review-table-select">
+                <span className="mapping-review-table-label">
+                  Destination table
+                  <InfoTip text="The native table this log sample aligns to - detected from the solution. Override it to realign this sample to a different DCR/table; re-analysis runs against the new table's schema." />
+                </span>
+                <SearchableSelect
+                  options={candidateTables.map((t) => ({ value: t, label: t }))}
+                  value={report.tableName}
+                  onChange={(t) => changeTable(report.logType, t)}
+                  disabled={analyzing}
+                  ariaLabel="Filter destination tables"
+                />
+              </div>
             </div>
 
             <div className="match-stat-grid">
