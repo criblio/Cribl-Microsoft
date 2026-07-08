@@ -542,18 +542,7 @@ export function IntegrateScreen({
 
   // ---- Section bodies (built sections only) -----------------------------
 
-  const solutionBody = (
-    <>
-      <p className="panel-desc">
-        Search and select a Microsoft Sentinel solution. Selecting one lazily
-        fetches that solution&apos;s content from GitHub (never a bulk mirror)
-        and scopes the tables, samples, and analytics rules the rest of the page
-        works with. Deprecated solutions are badged with the reason. Set or check
-        your GitHub token in Repositories settings.
-      </p>
-      <SolutionBrowser onSelect={handleSolutionChange} />
-    </>
-  );
+  const solutionBody = <SolutionBrowser onSelect={handleSolutionChange} />;
 
   const sampleDataBody = (
     <>
@@ -574,15 +563,6 @@ export function IntegrateScreen({
 
   const gapAnalysisBody = (
     <>
-      <p className="panel-desc">
-        Compare each tagged sample&apos;s fields against its Sentinel
-        destination table: what passes through, what the Azure DCR already
-        transforms, what the Cribl pipeline must handle, and what overflows.
-        Approve each table&apos;s mappings before the content-driven pack is
-        built - Auto-Approve All accepts them as-is. Approvals reset when you
-        re-analyze; your edits survive. This is additive: the native-table
-        deploy below never waits on an approval.
-      </p>
       <MappingReviewSection
         key={contentResetKey}
         solutionName={solution?.name ?? ""}

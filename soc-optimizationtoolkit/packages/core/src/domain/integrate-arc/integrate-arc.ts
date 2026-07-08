@@ -115,19 +115,20 @@ export const INTEGRATE_SECTIONS: readonly IntegrateSection[] = [
   {
     id: "solution",
     number: 1,
-    title: "Sentinel Solution",
+    title: "Select Sentinel Solution",
     infoTip:
       "Search and select a Sentinel solution. Selecting one lazily fetches " +
       "that solution's content from GitHub (never a bulk mirror) and scopes " +
       "which tables, samples, and analytics rules the rest of the page works " +
-      "with. Deprecated solutions are badged with the reason.",
+      "with. Deprecated solutions are badged with the reason. Set or check " +
+      "your GitHub token in Repositories settings.",
     requires: "none",
     built: true,
   },
   {
     id: "sample-data",
     number: 2,
-    title: "Sample Data",
+    title: "Add Sample Data",
     infoTip:
       "Provide representative events per log type - paste a sample and name " +
       "its log type, or upload one or more files. The format is detected from " +
@@ -141,7 +142,7 @@ export const INTEGRATE_SECTIONS: readonly IntegrateSection[] = [
   {
     id: "azure-resources",
     number: 3,
-    title: "Azure Resources",
+    title: "Select Azure Resources",
     infoTip:
       "Choose the subscription, Log Analytics workspace, resource group, and " +
       "location. A live permission preflight checks DCE creation, metrics " +
@@ -152,7 +153,7 @@ export const INTEGRATE_SECTIONS: readonly IntegrateSection[] = [
   {
     id: "cribl-config",
     number: 4,
-    title: "Cribl Configuration",
+    title: "Configure Cribl",
     infoTip:
       "Select the Cribl worker group(s) that will run the pipelines and name " +
       "the pack that will be built and installed. The pack name is prefilled " +
@@ -163,12 +164,13 @@ export const INTEGRATE_SECTIONS: readonly IntegrateSection[] = [
   {
     id: "gap-analysis",
     number: 5,
-    title: "DCR Gap Analysis",
+    title: "Run DCR Gap Analysis",
     infoTip:
       "Per log type, compare source fields to destination columns - " +
       "passthrough, DCR handles, Cribl handles (renames and coercions), and " +
       "overflow. Approval is required before the pack is built; Auto-Approve " +
-      "All is the one-click escape hatch.",
+      "All is the one-click escape hatch. Approvals reset when you re-analyze, " +
+      "but your edits survive; the native-table deploy never waits on approval.",
     requires: "both",
     // BUILT NOW (Unit 18): the mapping review screen renders real content. Its
     // completion (mappingsApproved) is ADDITIVE and NON-GATING for the native
@@ -179,7 +181,7 @@ export const INTEGRATE_SECTIONS: readonly IntegrateSection[] = [
   {
     id: "rule-coverage",
     number: 6,
-    title: "Analytics Rule Coverage",
+    title: "Review Analytics Rule Coverage",
     infoTip:
       "Analytics rule and workbook coverage: fully, partially, and uncovered " +
       "counts, per-item severity and coverage %, and missing fields by " +

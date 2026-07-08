@@ -476,14 +476,6 @@ export function RuleCoverageSection({
 
   return (
     <div className="rule-coverage">
-      <p className="panel-desc">
-        Checks which fields the solution&apos;s Sentinel analytics rules and
-        workbooks reference against the destination columns your DCR Gap Analysis
-        mappings produce. This is informational - it lights the RULE badges in
-        the mapping table above but never blocks a deploy.
-        <InfoTip text="Rules and workbooks are both read from the solution's directories in the Sentinel repo (Analytic Rules and Workbooks); each workbook template's buried KQL is mined defensively. Any Sentinel workbooks already deployed in your subscription are folded in through Azure Resource Manager. Everything flows through one shared coverage analyzer. Missing fields may cause detection rules to fail or workbook tiles to stay empty in production." />
-      </p>
-
       <div className="rule-coverage-controls">
         <button
           className="run-button"
