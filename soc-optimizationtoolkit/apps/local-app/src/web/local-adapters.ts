@@ -24,6 +24,7 @@ import type {
   CriblGroupSummary,
   CriblRequest,
   GithubPatManager,
+  GraphDirectory,
   JobRecord,
   JobStore,
   Logger,
@@ -32,6 +33,7 @@ import type {
   SecretSetOptions,
   SecretsStore,
   SentinelContent,
+  ServicePrincipalRef,
   SolutionFileRef,
   SolutionRef,
   TaggedSample,
@@ -215,6 +217,48 @@ export class LocalAzureManagement implements AzureManagement {
       PROXY_TIMEOUT_MS
     );
     return asPortResponse(label, payload);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// GraphDirectory (B3)
+// ---------------------------------------------------------------------------
+
+/**
+ * GraphDirectory over GET /api/graph/service-principals. The host owns the
+ * Graph token flow and the servicePrincipals mapping; this adapter relays the
+ * already-mapped array. A host 4xx/5xx (e.g. 403 when Application.Read.All is
+ * not consented) surfaces as a thrown error via hostJson, which the picker
+ * catches and degrades to manual object-id entry.
+ */
+export class LocalGraphDirectory implements GraphDirectory {
+  async listServicePrincipals(): Promise<ServicePrincipalRef[]> {
+    const label = 'GET /api/graph/service-principals';
+    const payload = await hostJson(
+      label,
+      '/api/graph/service-principals',
+      undefined,
+      PROXY_TIMEOUT_MS,
+    );
+    const list = prop(payload, 'servicePrincipals');
+    if (!Array.isArray(list)) {
+      throw new Error(
+        `${label}: unexpected host response shape (expected { servicePrincipals: [...] })`,
+      );
+    }
+    const out: ServicePrincipalRef[] = [];
+    for (const item of list) {
+      const id = prop(item, 'id');
+      if (typeof id !== 'string' || id === '') continue;
+      const appId = prop(item, 'appId');
+      const displayName = prop(item, 'displayName');
+      out.push({
+        id,
+        appId: typeof appId === 'string' ? appId : '',
+        displayName: typeof displayName === 'string' ? displayName : id,
+      });
+    }
+    return out;
   }
 }
 
@@ -1126,6 +1170,8 @@ export interface LocalPorts {
   packs: PackRecordStore;
   /** Pack install + deployed-status client over the host leader proxy (Unit 19). */
   packInstall: PackInstallClient;
+  /** Entra directory reader for the ingestion service-principal picker (B3). */
+  graph: GraphDirectory;
   /**
    * Shell-minted GUID provider for role-assignment names (Unit 8, ENG-37
    * runtime half). The SHELL owns id conventions - @soc/core never mints - so
@@ -1173,6 +1219,7 @@ export function makeLocalPorts(logger: Logger): LocalPorts {
     githubPat: new LocalGithubPat(),
     packs: new LocalPackStore(),
     packInstall: new LocalPackInstall(cribl),
+    graph: new LocalGraphDirectory(),
     mintAssignmentName: () => crypto.randomUUID(),
     logger,
     // The local host connects to a self-hosted leader: no Cribl Lake federation.

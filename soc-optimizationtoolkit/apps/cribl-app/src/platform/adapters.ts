@@ -19,6 +19,7 @@ import type {
   CriblGroupSummary,
   CriblRequest,
   GithubPatManager,
+  GraphDirectory,
   InstalledPack,
   JobRecord,
   JobStore,
@@ -28,6 +29,7 @@ import type {
   SecretSetOptions,
   SecretsStore,
   SentinelContent,
+  ServicePrincipalRef,
   SolutionFileRef,
   SolutionRef,
   TaggedSample,
@@ -57,7 +59,7 @@ import type {
   PackRecordStore,
   StoredPack,
 } from '@soc/ui';
-import { acquireArmToken, fetchWithTimeout, kvDelete, kvUrl } from './http';
+import { acquireArmToken, acquireGraphToken, fetchWithTimeout, kvDelete, kvUrl } from './http';
 
 // ---------------------------------------------------------------------------
 // Shared helpers
@@ -300,6 +302,111 @@ export class PlatformAzureManagement implements AzureManagement {
     }
     const res = await fetchWithTimeout(`${ARM_BASE_URL}${opts.path}?${params.toString()}`, init, ARM_TIMEOUT_MS);
     return { status: res.status, body: await readPortBody(res) };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// GraphDirectory (B3)
+// ---------------------------------------------------------------------------
+
+const GRAPH_BASE_URL = 'https://graph.microsoft.com';
+const GRAPH_TIMEOUT_MS = 25000;
+// The FIXED encrypted KV key proxies.yml injects as `Bearer ${kv.azureGraphToken}`
+// on graph.microsoft.com requests. Separate slot from azureArmToken: the Graph
+// audience differs, so ARM and Graph tokens cannot be shared.
+const GRAPH_TOKEN_KV_KEY = 'azureGraphToken';
+// Bound on @odata.nextLink pages the service-principal enumeration will follow.
+const GRAPH_MAX_PAGES = 20;
+// A generous page size; the picker only needs id/appId/displayName per SP.
+const GRAPH_SP_URL =
+  `${GRAPH_BASE_URL}/v1.0/servicePrincipals?$select=id,appId,displayName&$top=100`;
+
+/** Map one Graph servicePrincipals `value[]` body into ServicePrincipalRefs. */
+function mapServicePrincipals(body: unknown): ServicePrincipalRef[] {
+  const value = prop(body, 'value');
+  if (!Array.isArray(value)) return [];
+  const out: ServicePrincipalRef[] = [];
+  for (const entry of value) {
+    const id = prop(entry, 'id');
+    if (typeof id !== 'string' || id === '') continue;
+    const appId = prop(entry, 'appId');
+    const displayName = prop(entry, 'displayName');
+    out.push({
+      id,
+      appId: typeof appId === 'string' ? appId : '',
+      displayName: typeof displayName === 'string' ? displayName : id,
+    });
+  }
+  return out;
+}
+
+/**
+ * GraphDirectory over the platform proxy. Same token discipline as
+ * PlatformAzureManagement: no client-set Authorization (proxies.yml injects
+ * `Bearer ${kv.azureGraphToken}`), a Graph-audience token acquired lazily on
+ * the first call and re-acquired once on a 401. A 403 is surfaced as a thrown
+ * error with an Application.Read.All hint so the picker degrades to manual
+ * object-id entry (the directory read needs that permission consented).
+ */
+export class PlatformGraphDirectory implements GraphDirectory {
+  private readonly tenantId: string;
+  private tokenEnsured = false;
+
+  constructor(tenantId: string) {
+    this.tenantId = tenantId;
+  }
+
+  private async ensureGraphToken(): Promise<void> {
+    const token = await acquireGraphToken(this.tenantId);
+    const res = await fetchWithTimeout(kvUrl(`${GRAPH_TOKEN_KV_KEY}?encrypted=true`), {
+      method: 'PUT',
+      body: token.access_token,
+    });
+    if (!res.ok) {
+      throw new Error(
+        `PUT ${GRAPH_TOKEN_KV_KEY}?encrypted=true: HTTP ${res.status}\n${await res.text()}`,
+      );
+    }
+    this.tokenEnsured = true;
+  }
+
+  private async page(url: string): Promise<PortHttpResponse> {
+    // No headers: a nextLink carries its full query and the proxy injects
+    // Authorization server-side.
+    const res = await fetchWithTimeout(url, { method: 'GET' }, GRAPH_TIMEOUT_MS);
+    return { status: res.status, body: await readPortBody(res) };
+  }
+
+  async listServicePrincipals(): Promise<ServicePrincipalRef[]> {
+    if (!this.tokenEnsured) {
+      await this.ensureGraphToken();
+    }
+    let res = await this.page(GRAPH_SP_URL);
+    if (res.status === 401) {
+      // The stored token was rejected (expired/evicted): re-acquire once.
+      await this.ensureGraphToken();
+      res = await this.page(GRAPH_SP_URL);
+    }
+    if (res.status !== 200) {
+      const hint =
+        res.status === 403
+          ? ' - the app registration needs Application.Read.All (or Directory.Read.All) consented to read the directory'
+          : '';
+      throw new Error(`Graph servicePrincipals: HTTP ${res.status}${hint}`);
+    }
+    const out: ServicePrincipalRef[] = [];
+    let body: unknown = res.body;
+    for (let pages = 0; ; pages += 1) {
+      out.push(...mapServicePrincipals(body));
+      const next = prop(body, '@odata.nextLink');
+      if (typeof next !== 'string' || next === '' || pages >= GRAPH_MAX_PAGES) {
+        break;
+      }
+      const page = await this.page(next);
+      if (page.status !== 200) break;
+      body = page.body;
+    }
+    return out;
   }
 }
 
@@ -1477,6 +1584,8 @@ export interface CloudPorts {
   packs: PackRecordStore;
   /** Pack install + deployed-status client over the workspace API (Unit 19). */
   packInstall: PackInstallClient;
+  /** Entra directory reader for the ingestion service-principal picker (B3). */
+  graph: GraphDirectory;
   /**
    * Shell-minted GUID provider for role-assignment names (Unit 8, ENG-37
    * runtime half). The SHELL owns id conventions - @soc/core never mints - so
@@ -1523,6 +1632,7 @@ export function makeCloudPorts(tenantId: string, logger: Logger): CloudPorts {
     githubPat: new PlatformGithubPat(),
     packs: new PlatformPackStore(),
     packInstall: new PlatformPackInstall(cribl),
+    graph: new PlatformGraphDirectory(tenantId),
     mintAssignmentName: () => crypto.randomUUID(),
     logger,
     // The app is hosted inside a Cribl.Cloud workspace: Lake federation applies.

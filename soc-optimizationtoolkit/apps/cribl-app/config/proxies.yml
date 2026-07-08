@@ -55,6 +55,25 @@ management.azure.com:
       - Content-Type
       - Accept
 
+# Microsoft Graph. The ingestion service-principal picker (role-assignment step)
+# enumerates servicePrincipals here. A SEPARATE Graph-audience bearer token is
+# stored encrypted under azureGraphToken (the ARM token's audience does not work
+# for Graph) via the same client_credentials flow as azureArmToken, and injected
+# server-side because client-sent Authorization headers are stripped by the
+# proxy. Only Content-Type/Accept are forwarded so the browser's Origin cannot
+# reach Graph. Reading the directory REQUIRES the app registration to have
+# Application.Read.All (or Directory.Read.All) consented; without it Graph returns
+# 403 and the picker falls back to manual object-id entry.
+graph.microsoft.com:
+  timeout: 30000
+  headers:
+    inject:
+      Authorization: '`Bearer ${kv.azureGraphToken}`'
+    allowlist:
+      - Content-Type
+      - Accept
+  rejectUnauthorized: true
+
 # GitHub REST API (Microsoft Sentinel content: solution index, per-solution
 # tree queries, connector JSON) - porting-plan Unit 14. The GitHub personal
 # access token lives in the encrypted, write-only KV entry githubPat (validated

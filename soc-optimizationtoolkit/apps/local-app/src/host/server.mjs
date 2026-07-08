@@ -55,6 +55,7 @@ import os from 'node:os';
 import { Buffer } from 'node:buffer';
 import { DATA_DIR, WEB_ROOT } from './config.mjs';
 import { createAzureProxy } from './azure.mjs';
+import { createGraphProxy } from './graph.mjs';
 import { createCriblAuth } from './cribl-auth.mjs';
 import { createCriblProxy } from './cribl.mjs';
 import { createSecretsStore } from './secrets.mjs';
@@ -93,6 +94,7 @@ export function createHostServer(config) {
   // ever reaches a log call - context is primitives only.
   const log = createFileLogger(DATA_DIR);
   const azure = createAzureProxy(config.azure, log);
+  const graph = createGraphProxy(config.azure, log);
   const criblAuth = createCriblAuth(config.cribl, log);
   const cribl = createCriblProxy(config.cribl, criblAuth);
   const secrets = createSecretsStore(DATA_DIR);
@@ -191,6 +193,16 @@ export function createHostServer(config) {
         azure.requestUrl({ method: urlMethod.toUpperCase(), url: targetUrl })
       );
       sendJson(res, 200, result);
+      return;
+    }
+
+    // --- Microsoft Graph: service-principal picker (B3) --------------------
+    if (pathname === '/api/graph/service-principals' && method === 'GET') {
+      // The host owns the Graph token flow and mapping; the web adapter relays
+      // the array. A 403 (Application.Read.All not consented) surfaces as an
+      // {error} the picker catches and falls back to manual object-id entry.
+      const servicePrincipals = await upstream(() => graph.listServicePrincipals());
+      sendJson(res, 200, { servicePrincipals });
       return;
     }
 

@@ -95,6 +95,25 @@ export interface ArmTokenResult {
 // fetchWithTimeout at 25s, keeping the client-side failure loud and ahead of
 // the platform's.
 export async function acquireArmToken(tenantId: string): Promise<ArmTokenResult> {
+  return acquireToken(tenantId, 'https://management.azure.com/.default');
+}
+
+// Acquire a Microsoft Graph-audience token (client_credentials) for the given
+// tenant. Same proxied token endpoint and Basic ${kv.azureBasic} server-side
+// injection as the ARM token - only the scope differs. Consumed by the
+// GraphDirectory adapter to enumerate service principals; stored encrypted under
+// azureGraphToken so proxies.yml injects Bearer on graph.microsoft.com. NOTE:
+// the token itself is granted regardless of directory-read consent; it is the
+// servicePrincipals READ that returns 403 until Application.Read.All (or
+// Directory.Read.All) is consented on the app registration.
+export async function acquireGraphToken(tenantId: string): Promise<ArmTokenResult> {
+  return acquireToken(tenantId, 'https://graph.microsoft.com/.default');
+}
+
+// The shared client_credentials redemption. The app sets no Authorization
+// header: proxies.yml injects Basic ${kv.azureBasic} server-side (the active
+// connection's secret). Rides fetchWithTimeout at 25s, ahead of the proxy's 30s.
+async function acquireToken(tenantId: string, scope: string): Promise<ArmTokenResult> {
   const tenant = tenantId.trim();
   if (tenant === '') {
     throw new Error(
@@ -103,7 +122,7 @@ export async function acquireArmToken(tenantId: string): Promise<ArmTokenResult>
   }
   const form = new URLSearchParams({
     grant_type: 'client_credentials',
-    scope: 'https://management.azure.com/.default',
+    scope,
   });
   const res = await fetchWithTimeout(
     `https://login.microsoftonline.com/${encodeURIComponent(tenant)}/oauth2/v2.0/token`,
