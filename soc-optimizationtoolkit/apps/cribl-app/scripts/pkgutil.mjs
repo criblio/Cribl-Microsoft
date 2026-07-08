@@ -198,18 +198,38 @@ export async function createAppPack(dev = false) {
     await rm(packedPath, { force: true }).catch(() => {});
   };
 
+  // Retry the pack+verify: on Windows the tar read can race file handles (AV
+  // scan/indexer) right after the build wrote dist/, yielding a truncated
+  // archive that verifyArchive catches (observed live 2026-07-08: two failed
+  // runs, then an identical run succeeded). Transient by nature - retry.
+  const PACK_ATTEMPTS = 3;
   try {
-    await rm(packedPath, { force: true });
-    const { code, stderr } = await tarToFile(rootDir, packedPath, 'package-build');
-    // Validate the actual deliverable; a benign tar warning (non-zero exit with
-    // a complete archive) passes, a truncated/empty one fails loudly.
-    await verifyArchive(packedPath, !dev);
-    if (code !== 0) {
-      process.stderr.write(
-        `note: tar exited with code ${code} but the archive validated; proceeding.` +
-          (stderr ? ` (tar: ${stderr.trim()})` : '') +
-          '\n'
-      );
+    for (let attempt = 1; attempt <= PACK_ATTEMPTS; attempt += 1) {
+      await rm(packedPath, { force: true });
+      const { code, stderr } = await tarToFile(rootDir, packedPath, 'package-build');
+      try {
+        // Validate the actual deliverable; a benign tar warning (non-zero exit
+        // with a complete archive) passes, a truncated/empty one fails loudly.
+        await verifyArchive(packedPath, !dev);
+      } catch (verifyErr) {
+        if (attempt === PACK_ATTEMPTS) {
+          throw verifyErr;
+        }
+        process.stderr.write(
+          `note: archive verification failed (attempt ${attempt}/${PACK_ATTEMPTS}): ` +
+            `${verifyErr instanceof Error ? verifyErr.message : String(verifyErr)} - retrying...\n`
+        );
+        await new Promise((resolve) => setTimeout(resolve, 500 * attempt));
+        continue;
+      }
+      if (code !== 0) {
+        process.stderr.write(
+          `note: tar exited with code ${code} but the archive validated; proceeding.` +
+            (stderr ? ` (tar: ${stderr.trim()})` : '') +
+            '\n'
+        );
+      }
+      break;
     }
   } catch (err) {
     await cleanup();
