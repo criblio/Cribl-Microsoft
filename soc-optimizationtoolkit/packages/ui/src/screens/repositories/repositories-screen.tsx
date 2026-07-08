@@ -53,6 +53,12 @@ const PAT_WALKTHROUGH_STEPS: readonly string[] = [
   "Click Generate token, then copy the token (it starts with github_pat_...).",
 ];
 
+// A representative Elastic integrations package/stream used ONLY to verify the
+// elastic/integrations repo is reachable and the sample-fetch path works end to
+// end (nginx access logs are a stable, always-present pipeline test set).
+const ELASTIC_PROBE_PACKAGE = "nginx";
+const ELASTIC_PROBE_STREAM = "access";
+
 export function RepositoriesScreen({ platform }: RepositoriesScreenProps) {
   const { ports } = usePorts();
   const githubPat = ports.githubPat;
@@ -66,6 +72,11 @@ export function RepositoriesScreen({ platform }: RepositoriesScreenProps) {
   const [solutionCount, setSolutionCount] = useState<number | null>(null);
   const [reachError, setReachError] = useState("");
   const [checking, setChecking] = useState(false);
+
+  const sampleSource = ports.sampleSource;
+  const [elasticFiles, setElasticFiles] = useState<number | null>(null);
+  const [elasticError, setElasticError] = useState("");
+  const [elasticChecking, setElasticChecking] = useState(false);
 
   // Load the stored status once on mount (hasPat + login; never the token).
   useEffect(() => {
@@ -136,6 +147,29 @@ export function RepositoriesScreen({ platform }: RepositoriesScreenProps) {
     }
   }, [content]);
 
+  // Elastic reachability: probe a well-known package's test-pipeline files
+  // (nginx/access) - proves github.com/elastic/integrations is reachable AND the
+  // on-demand sample-fetch path works end to end (never a bulk mirror).
+  const checkElastic = useCallback(async () => {
+    if (sampleSource === undefined) {
+      return;
+    }
+    setElasticChecking(true);
+    setElasticError("");
+    try {
+      const files = await sampleSource.listElasticTestFiles(
+        ELASTIC_PROBE_PACKAGE,
+        ELASTIC_PROBE_STREAM,
+      );
+      setElasticFiles(files.length);
+    } catch (err) {
+      setElasticFiles(null);
+      setElasticError(String(err));
+    } finally {
+      setElasticChecking(false);
+    }
+  }, [sampleSource]);
+
   if (githubPat === undefined) {
     return (
       <div className="panel">
@@ -163,6 +197,29 @@ export function RepositoriesScreen({ platform }: RepositoriesScreenProps) {
     solutionCount !== null
       ? "numbered-section-badge-complete"
       : "numbered-section-badge-current";
+  const elasticBadgeClass =
+    elasticFiles !== null
+      ? "numbered-section-badge-complete"
+      : "numbered-section-badge-current";
+  const elasticStatus =
+    elasticError !== ""
+      ? {
+          tone: "error",
+          label: "Could not reach Elastic sample data",
+          detail: elasticError,
+        }
+      : elasticFiles !== null
+        ? {
+            tone: "ok",
+            label: "Elastic integrations reachable",
+            detail: `${elasticFiles} sample file${elasticFiles === 1 ? "" : "s"} found for the ${ELASTIC_PROBE_PACKAGE}/${ELASTIC_PROBE_STREAM} probe. Vendor samples are fetched on demand when you browse a solution.`,
+          }
+        : {
+            tone: "warn",
+            label: "Not checked yet",
+            detail:
+              "Refresh to verify github.com/elastic/integrations is reachable with your token.",
+          };
 
   return (
     <div className="repositories-screen">
@@ -293,6 +350,42 @@ export function RepositoriesScreen({ platform }: RepositoriesScreenProps) {
           </button>
         </div>
       </section>
+
+      {sampleSource !== undefined && (
+        <section className="numbered-section">
+          <div className="numbered-section-head">
+            <span className={`numbered-section-badge ${elasticBadgeClass}`}>
+              3
+            </span>
+            <h2 className="numbered-section-title">
+              Elastic integrations sample data
+            </h2>
+          </div>
+          <p className="panel-desc">
+            Raw vendor log samples from github.com/elastic/integrations, fetched
+            ON DEMAND per selected solution to drive field mapping and reduction
+            rules - never a bulk mirror. The check below probes a known package (
+            {ELASTIC_PROBE_PACKAGE}/{ELASTIC_PROBE_STREAM}) to confirm the repo is
+            reachable with your token.
+          </p>
+          <div className={`reachability reachability-${elasticStatus.tone}`}>
+            <span className="reachability-dot" aria-hidden="true" />
+            <div>
+              <span className="reachability-label">{elasticStatus.label}</span>
+              <p className="panel-desc">{elasticStatus.detail}</p>
+            </div>
+          </div>
+          <div className="panel-controls">
+            <button
+              className="next-action-button"
+              onClick={() => void checkElastic()}
+              disabled={elasticChecking}
+            >
+              {elasticChecking ? "Checking..." : "Refresh"}
+            </button>
+          </div>
+        </section>
+      )}
     </div>
   );
 }
