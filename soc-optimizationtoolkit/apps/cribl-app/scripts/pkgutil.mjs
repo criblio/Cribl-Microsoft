@@ -8,7 +8,7 @@ import {
   readFile,
   access,
 } from 'node:fs/promises';
-import { join, dirname } from 'node:path';
+import { join, dirname, relative, basename } from 'node:path';
 import { pipeline } from 'node:stream/promises';
 import { fileURLToPath } from 'node:url';
 
@@ -62,13 +62,20 @@ async function pathExists(filePath) {
  * could truncate the archive mid-write (observed: a 2 KB package with an empty
  * static/ folder). File output exits 0 on both GNU tar and bsdtar.
  *
+ * The -f path is passed RELATIVE to cwd, never absolute: Node on Windows
+ * commonly resolves `tar` to Git's GNU tar, which reads an absolute `C:\...`
+ * path as a REMOTE host spec ("Cannot connect to C: resolve failed") and writes
+ * nothing. A relative path has no colon, so both GNU tar and bsdtar write the
+ * local file.
+ *
  * @param {string} cwd
  * @param {string} outPath - absolute path for the .tgz (outside the tarred dir)
  * @param {string} srcDir - directory (relative to cwd) whose contents are packed
  */
 async function tarToFile(cwd, outPath, srcDir) {
+  const relOut = relative(cwd, outPath) || outPath;
   return new Promise((resolve, reject) => {
-    const child = spawn('tar', ['-czf', outPath, '-C', srcDir, '.'], {
+    const child = spawn('tar', ['-czf', relOut, '-C', srcDir, '.'], {
       cwd,
       stdio: ['ignore', 'ignore', 'pipe'],
     });
@@ -105,7 +112,12 @@ async function verifyArchive(tgzPath, expectStatic) {
     );
   }
   const entries = await new Promise((resolve, reject) => {
-    const child = spawn('tar', ['-tzf', tgzPath], { stdio: ['ignore', 'pipe', 'ignore'] });
+    // Relative -f from the tgz's own directory: an absolute C:\ path trips GNU
+    // tar's remote-host parsing on Windows (see tarToFile).
+    const child = spawn('tar', ['-tzf', basename(tgzPath)], {
+      cwd: dirname(tgzPath),
+      stdio: ['ignore', 'pipe', 'ignore'],
+    });
     let out = '';
     child.stdout.setEncoding('utf8');
     child.stdout.on('data', (c) => {
