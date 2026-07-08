@@ -383,8 +383,13 @@ export class PlatformGraphDirectory implements GraphDirectory {
       await this.ensureGraphToken();
     }
     let res = await this.page(GRAPH_SP_URL);
-    if (res.status === 401) {
-      // The stored token was rejected (expired/evicted): re-acquire once.
+    if (res.status === 401 || res.status === 403) {
+      // 401 = token expired/evicted. 403 can also mean the CACHED token predates
+      // a just-granted Application.Read.All consent - app-role claims are baked
+      // into the token at issuance, so a token minted before consent will 403
+      // forever. Re-acquire ONCE (a fresh redemption reflects current consent)
+      // and retry; a genuine missing-permission 403 simply repeats and is
+      // surfaced with the hint below.
       await this.ensureGraphToken();
       res = await this.page(GRAPH_SP_URL);
     }

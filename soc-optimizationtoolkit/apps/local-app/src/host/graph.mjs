@@ -128,9 +128,14 @@ export function createGraphProxy(azure, logger) {
     async listServicePrincipals() {
       let token = await ensureToken(false);
       let res = await fetchPage(`${GRAPH_BASE_URL}${GRAPH_SP_PATH}`, token);
-      if (res.status === 401) {
-        // Cached token rejected (expired/revoked): re-acquire ONCE and retry.
-        logger?.warn('graph request got 401 - re-acquiring token and retrying once', {});
+      if (res.status === 401 || res.status === 403) {
+        // 401 = token expired/revoked. 403 can also mean the cached token
+        // predates a just-granted Application.Read.All consent (app-role claims
+        // are baked in at issuance). Force a fresh redemption ONCE and retry; a
+        // genuine missing-permission 403 repeats and is surfaced below.
+        logger?.warn('graph request got 401/403 - re-acquiring token and retrying once', {
+          status: res.status,
+        });
         token = await ensureToken(true);
         res = await fetchPage(`${GRAPH_BASE_URL}${GRAPH_SP_PATH}`, token);
       }
