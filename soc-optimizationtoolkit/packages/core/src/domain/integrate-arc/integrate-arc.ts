@@ -65,6 +65,7 @@ export type IntegrateSectionId =
   | "cribl-config"
   | "gap-analysis"
   | "rule-coverage"
+  | "workbook-coverage"
   | "deploy";
 
 /**
@@ -183,22 +184,38 @@ export const INTEGRATE_SECTIONS: readonly IntegrateSection[] = [
     number: 6,
     title: "Review Analytics Rule Coverage",
     infoTip:
-      "Analytics rule and workbook coverage: fully, partially, and uncovered " +
-      "counts, per-item severity and coverage %, and missing fields by " +
-      "frequency. Upload custom YAML rules to extend coverage. Informational - " +
-      "it lights the mapping table's RULE badges but never blocks a deploy.",
+      "Analytics rule coverage: fully, partially, and uncovered counts, " +
+      "per-rule severity and coverage %, and missing fields by frequency. " +
+      "Upload custom YAML rules to extend coverage. Informational - it lights " +
+      "the mapping table's RULE badges but never blocks a deploy.",
     requires: "azure",
-    // BUILT NOW (Unit 23): the rule + workbook coverage panel renders real
-    // content. INFORMATIONAL - its sectionComplete is unconditionally true, so
-    // it never becomes 'current'/'blocked' and never participates in canDeploy
-    // or canDeployContentPath (rule coverage never gates a deploy). It is not in
+    // BUILT NOW (Unit 23): the rule coverage panel renders real content.
+    // INFORMATIONAL - its sectionComplete is unconditionally true, so it never
+    // becomes 'current'/'blocked' and never participates in canDeploy or
+    // canDeployContentPath (rule coverage never gates a deploy). It is not in
     // SectionInputs at all, which structurally guarantees the deploy-gate
     // partition Unit 18 established stays intact.
     built: true,
   },
   {
-    id: "deploy",
+    id: "workbook-coverage",
     number: 7,
+    title: "Review Workbook Coverage",
+    infoTip:
+      "Workbook coverage: the solution's Sentinel workbooks (read from the " +
+      "repo, plus any deployed in your subscription) scored against your " +
+      "sample fields - fully, partially, and uncovered counts, per-workbook " +
+      "coverage %, and missing fields by frequency. Informational - missing " +
+      "fields may leave workbook tiles empty, but it never blocks a deploy.",
+    requires: "azure",
+    // BUILT: workbook coverage is its own panel, INFORMATIONAL exactly like
+    // rule-coverage (unconditionally complete, absent from SectionInputs, never
+    // gates a deploy).
+    built: true,
+  },
+  {
+    id: "deploy",
+    number: 8,
     title: "Deploy",
     infoTip:
       "Review the readiness pills - Solution, Samples, Mappings, Workspace, " +
@@ -323,6 +340,8 @@ const COMING_SOON_REASONS: Readonly<Record<IntegrateSectionId, string>> = {
   "gap-analysis": "",
   // rule-coverage is BUILT NOW (Unit 23); it is never coming-soon.
   "rule-coverage": "",
+  // workbook-coverage is BUILT; it is never coming-soon.
+  "workbook-coverage": "",
   deploy: "",
 };
 
@@ -358,6 +377,10 @@ function sectionComplete(
       // marking it complete keeps the deploy-gate partition (canDeploy vs
       // canDeployContentPath) exactly as Unit 18 left it. It may thus only ever
       // read 'ok' (complete) - never a blocking 'missing'.
+      return true;
+    case "workbook-coverage":
+      // INFORMATIONAL, same contract as rule-coverage: unconditionally complete,
+      // no SectionInputs signal, never gates a deploy.
       return true;
     case "deploy":
       return inputs.deployCompleted;

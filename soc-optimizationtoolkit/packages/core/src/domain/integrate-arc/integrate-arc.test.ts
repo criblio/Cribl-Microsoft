@@ -86,6 +86,7 @@ const BUILT_IDS: readonly IntegrateSectionId[] = [
   "cribl-config",
   "gap-analysis",
   "rule-coverage",
+  "workbook-coverage",
   "deploy",
 ];
 // Unit 23 shipped rule-coverage; every section is built now. Kept as a named
@@ -101,9 +102,9 @@ function statusOf(id: IntegrateSectionId, i: SectionInputs): SectionStatus {
 // ---------------------------------------------------------------------------
 
 describe("INTEGRATE_SECTIONS metadata", () => {
-  it("has seven sections numbered 1..7 in page order", () => {
+  it("has eight sections numbered 1..8 in page order", () => {
     expect(INTEGRATE_SECTIONS.map((s) => s.number)).toEqual([
-      1, 2, 3, 4, 5, 6, 7,
+      1, 2, 3, 4, 5, 6, 7, 8,
     ]);
     expect(INTEGRATE_SECTIONS.map((s) => s.id)).toEqual([
       "solution",
@@ -112,6 +113,7 @@ describe("INTEGRATE_SECTIONS metadata", () => {
       "cribl-config",
       "gap-analysis",
       "rule-coverage",
+      "workbook-coverage",
       "deploy",
     ]);
   });
@@ -437,10 +439,10 @@ describe("read-ahead and single-current invariants", () => {
     }
   });
 
-  it("deriveSectionStatuses preserves page order and covers all seven", () => {
+  it("deriveSectionStatuses preserves page order and covers all eight", () => {
     const resolved = deriveSectionStatuses(inputs());
     expect(resolved.map((r) => r.section.number)).toEqual([
-      1, 2, 3, 4, 5, 6, 7,
+      1, 2, 3, 4, 5, 6, 7, 8,
     ]);
   });
 });

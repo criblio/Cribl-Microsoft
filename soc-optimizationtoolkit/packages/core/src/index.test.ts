@@ -166,13 +166,13 @@ describe("@soc/core root barrel", () => {
     expect(typeof deriveSectionStatus).toBe("function");
     expect(typeof deriveReadinessPills).toBe("function");
     expect(typeof canDeploy).toBe("function");
-    expect(INTEGRATE_SECTIONS).toHaveLength(7);
+    expect(INTEGRATE_SECTIONS).toHaveLength(8);
     // sample-data joined the built set when Unit 11 shipped (was 3); solution
     // joined it when Unit 14 shipped the lazy solution browser (was 5);
     // gap-analysis joined it when Unit 18 shipped the mapping review (was 6);
-    // rule-coverage joined it when Unit 23 shipped the coverage panel - all
-    // seven sections are built now.
-    expect(INTEGRATE_SECTIONS.filter((s) => s.built)).toHaveLength(7);
+    // rule-coverage joined it when Unit 23 shipped the coverage panel;
+    // workbook-coverage split out as its own section - all eight are built now.
+    expect(INTEGRATE_SECTIONS.filter((s) => s.built)).toHaveLength(8);
   });
 
   it("re-exports the sample-parsing domain module and store fake", () => {

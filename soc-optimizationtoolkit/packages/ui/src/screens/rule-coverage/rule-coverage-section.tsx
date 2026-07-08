@@ -106,6 +106,14 @@ export interface RuleCoverageSectionProps {
    * 18 contract) so the parent can light the mapping table's RULE badges.
    */
   onRuleFieldsChange?: (fields: ReadonlySet<string>) => void;
+  /**
+   * Which content this instance analyzes and renders. "rules" = analytics rules
+   * only (reports RULE-badge fields, offers custom-YAML upload); "workbooks" =
+   * workbooks only; undefined = both in one panel (legacy combined view). The
+   * integrate page renders two instances - a rules one and a workbooks one - so
+   * each is its own numbered section.
+   */
+  contentFilter?: "rules" | "workbooks";
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -340,6 +348,7 @@ export function RuleCoverageSection({
   subscriptionId,
   catalog,
   onRuleFieldsChange,
+  contentFilter,
 }: RuleCoverageSectionProps) {
   const { ports, config } = usePorts();
   const activeContent = content ?? ports.content;
@@ -349,6 +358,10 @@ export function RuleCoverageSection({
     () => catalog ?? createBundledSchemaCatalog(),
     [catalog],
   );
+  // What this instance covers. Custom-YAML upload and the RULE-badge report are
+  // rules-only concerns; workbooks are a separate diagnostic.
+  const showRules = contentFilter !== "workbooks";
+  const showWorkbooks = contentFilter !== "rules";
 
   const [report, setReport] = useState<CoverageReport | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
@@ -363,10 +376,12 @@ export function RuleCoverageSection({
     [report],
   );
   useEffect(() => {
-    if (ruleFields !== undefined) {
+    // Only the rules instance lights the mapping table's RULE badges; a
+    // workbooks-only instance never reports (workbook fields are not rules).
+    if (ruleFields !== undefined && showRules) {
       onRuleFieldsChange?.(ruleFields);
     }
-  }, [ruleFields, onRuleFieldsChange]);
+  }, [ruleFields, onRuleFieldsChange, showRules]);
 
   const runCoverage = useCallback(
     async (customOverride?: ContentItem[]) => {
@@ -379,11 +394,15 @@ export function RuleCoverageSection({
       try {
         const custom = customOverride ?? customItems;
         const [ruleItems, repoWorkbooks, workbookResult] = await Promise.all([
-          fetchRuleContentItems(activeContent, solutionName),
-          activeContent !== undefined
+          showRules
+            ? fetchRuleContentItems(activeContent, solutionName)
+            : Promise.resolve<ContentItem[]>([]),
+          showWorkbooks && activeContent !== undefined
             ? acquireSolutionWorkbooks(activeContent, solutionName)
-            : Promise.resolve([]),
-          fetchWorkbookContentItems(activeAzure, activeSubscription),
+            : Promise.resolve<ContentItem[]>([]),
+          showWorkbooks
+            ? fetchWorkbookContentItems(activeAzure, activeSubscription)
+            : Promise.resolve({ items: [] as ContentItem[], note: "" }),
         ]);
         // Workbook source of record is the SOLUTION REPO (parallel to rules);
         // any Sentinel workbooks already deployed in the subscription (ARM) are
@@ -424,6 +443,8 @@ export function RuleCoverageSection({
       activeCatalog,
       solutionName,
       reports,
+      showRules,
+      showWorkbooks,
     ],
   );
 
@@ -485,34 +506,40 @@ export function RuleCoverageSection({
           {analyzing
             ? "Analyzing coverage..."
             : report === null
-              ? "Analyze rule coverage"
+              ? showRules
+                ? "Analyze rule coverage"
+                : "Analyze workbook coverage"
               : "Re-analyze coverage"}
         </button>
-        <span className="field-label">Custom Rules</span>
-        <label className="rule-coverage-upload">
-          Upload YAML
-          <input
-            type="file"
-            accept=".yaml,.yml"
-            multiple
-            onChange={(e) => {
-              void onUpload(e.target.files);
-              e.target.value = "";
-            }}
-          />
-        </label>
-        <InfoTip text="Upload organization-specific analytics rule YAML files to include in the coverage analysis. They are merged with the solution's repo rules; re-uploading a rule of the same name replaces it (the legacy silent-ignore is fixed)." />
-        {customCount > 0 && (
+        {showRules && (
           <>
-            <span className="field-hint">
-              {customCount} custom rule{customCount === 1 ? "" : "s"}
-            </span>
-            <button
-              className="gap-reset-button"
-              onClick={() => void onClearCustom()}
-            >
-              Clear
-            </button>
+            <span className="field-label">Custom Rules</span>
+            <label className="rule-coverage-upload">
+              Upload YAML
+              <input
+                type="file"
+                accept=".yaml,.yml"
+                multiple
+                onChange={(e) => {
+                  void onUpload(e.target.files);
+                  e.target.value = "";
+                }}
+              />
+            </label>
+            <InfoTip text="Upload organization-specific analytics rule YAML files to include in the coverage analysis. They are merged with the solution's repo rules; re-uploading a rule of the same name replaces it (the legacy silent-ignore is fixed)." />
+            {customCount > 0 && (
+              <>
+                <span className="field-hint">
+                  {customCount} custom rule{customCount === 1 ? "" : "s"}
+                </span>
+                <button
+                  className="gap-reset-button"
+                  onClick={() => void onClearCustom()}
+                >
+                  Clear
+                </button>
+              </>
+            )}
           </>
         )}
       </div>
@@ -532,13 +559,13 @@ export function RuleCoverageSection({
         <p className="field-hint">{RULE_COVERAGE_IDLE_NOTE}</p>
       ) : (
         <div className="coverage-sections">
-          {ruleSection !== null && (
+          {showRules && ruleSection !== null && (
             <div className="coverage-section">
               <div className="coverage-section-head">Analytics Rules</div>
               <CoverageSectionBody section={ruleSection} />
             </div>
           )}
-          {workbookSection !== null && (
+          {showWorkbooks && workbookSection !== null && (
             <div className="coverage-section">
               <div className="coverage-section-head">Workbooks</div>
               <CoverageSectionBody section={workbookSection} />

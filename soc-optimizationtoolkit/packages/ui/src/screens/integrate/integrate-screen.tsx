@@ -645,6 +645,17 @@ export function IntegrateScreen({
       reports={gapReports}
       content={ports.content}
       onRuleFieldsChange={setRuleFields}
+      contentFilter="rules"
+    />
+  );
+
+  const workbookCoverageBody = (
+    <RuleCoverageSection
+      key={contentResetKey}
+      solutionName={solution?.name ?? ""}
+      reports={gapReports}
+      content={ports.content}
+      contentFilter="workbooks"
     />
   );
 
@@ -1015,6 +1026,8 @@ export function IntegrateScreen({
         return gapAnalysisBody;
       case "rule-coverage":
         return ruleCoverageBody;
+      case "workbook-coverage":
+        return workbookCoverageBody;
       case "deploy":
         return deployBody;
       default:
