@@ -1836,7 +1836,23 @@ function App() {
   useEffect(() => {
     let cancelled = false;
     void (async () => {
-      const loaded = await loadProfileStore();
+      // Transient-abort tolerance (observed live 2026-07-08): the platform
+      // bridge can abort requests fired during app boot ("Error: Aborted" on
+      // the first azureProfiles read) and the same read succeeds moments
+      // later. Retry a couple of times with a short backoff before surfacing
+      // the manual-retry UI; a persistent failure still lands there.
+      let loaded = await loadProfileStore();
+      for (
+        let attempt = 1;
+        attempt <= 2 && !cancelled && loaded.status === 'error';
+        attempt += 1
+      ) {
+        await new Promise((resolve) => setTimeout(resolve, 750 * attempt));
+        if (cancelled) {
+          return;
+        }
+        loaded = await loadProfileStore();
+      }
       if (cancelled) {
         return;
       }
