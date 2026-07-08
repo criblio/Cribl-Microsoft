@@ -40,5 +40,6 @@ export * from "./domain/coverage-analysis";
 export * from "./domain/pipeline-generation";
 export * from "./domain/pack-assembly";
 export * from "./domain/architecture-patterns";
+export * from "./domain/eventhub-discovery";
 export * from "./assets/vendor-schemas";
 export * from "./usecases";

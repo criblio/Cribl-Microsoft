@@ -3865,3 +3865,12 @@ button.journey-step-main:hover .journey-step-label {
   font-size: 12px;
   color: var(--warn);
 }
+
+/* Event Hub discovery */
+.eh-generated {
+  max-height: 360px;
+  overflow: auto;
+}
+.eh-warning {
+  color: var(--warn);
+}

@@ -9,5 +9,6 @@ export * from "./analyze-samples";
 export * from "./acquire-samples";
 export * from "./coverage-analysis";
 export * from "./list-service-principals";
+export * from "./discover-event-hubs";
 export * from "./guided-deploy";
 export * from "./permission-preflight";

@@ -62,7 +62,7 @@ Exit: solution browsed -> samples -> pipeline -> pack -> installed destination e
 
 ## Phase 4: Discovery and governance (Tier 2)
 
-- Event Hub discovery: Resource Graph single-query path only (EVH-03/04/06/07/08); Cribl Event Hub source generation (LOG-16).
+- Event Hub discovery: Resource Graph single-query path only (EVH-03/04/06/07/08); Cribl Event Hub source generation (LOG-16). FIRST SLICE SHIPPED 2026-07-08: the "Event Hub Discovery" screen in both shells - EVH-03 inventory (one Resource Graph query, skipToken-paginated, plus one bounded ARM GET per namespace; per-namespace failures degrade to warnings) and LOG-16 generation (the verbatim legacy Kafka/SASL/text-secret source template + connection-strings reference, downloaded via the ArtifactSink). Remaining: EVH-04 sender discovery, EVH-06 consumer-group enumeration, EVH-07 activity metrics, EVH-08 inference - the analysis layers on top of this inventory.
 - vNet Flow Logs: tenant-wide discovery (VNF-01), collector config generation (VNF-02), AzureFlowLogs pack assets shipped installable (VNF-08 through VNF-14).
 - Azure Log Collection suite: policy initiatives, diagnostic settings at scale, Entra/Defender exports (guided where elevated roles are needed), conflict/collision detection, compliance gap analysis, remediation, cleanup (LOG-02 through LOG-15).
 - Lookups via Graph exclusively (LKP-01 capability, LKP-02 redesigned; LKP-04/05 native Cribl API); analytics rule coverage (ENG-11, GUI-09).

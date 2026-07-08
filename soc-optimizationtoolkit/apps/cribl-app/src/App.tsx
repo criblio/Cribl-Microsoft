@@ -9,6 +9,7 @@ import {
   BatchDeployScreen,
   DcrAutomationScreen,
   EMPTY_MODE_RECORD,
+  EventHubDiscoveryScreen,
   HomeScreen,
   IntegrateScreen,
   LogsScreen,
@@ -2764,6 +2765,24 @@ function App() {
     </>
   );
 
+  // Event Hub Discovery (roadmap Phase 4, EVH-03 + LOG-16): Resource Graph
+  // namespace inventory + per-namespace hub listing over the ARM proxy, and
+  // local generation of Cribl Event Hub source configs. requires: 'azure'.
+  const eventHubDiscoveryView = (
+    <>
+      <header className="harness-header">
+        <h1 className="harness-title">Event Hub Discovery</h1>
+        <p className="harness-subtitle">
+          Inventory the subscription's Event Hubs and generate Cribl Stream
+          source configurations for the hubs worth onboarding.
+        </p>
+      </header>
+      <PortsProvider ports={cloudPorts} config={activeConfig}>
+        <EventHubDiscoveryScreen />
+      </PortsProvider>
+    </>
+  );
+
   // Architecture Patterns (roadmap Phase 4 queued item): the data-driven
   // reference-architecture advisor. Pure core recommender + inline-SVG
   // diagrams; no ports, no IO. requires: 'none' - advisory in every mode.
@@ -2892,6 +2911,7 @@ function App() {
     { id: 'azure-target', label: 'Azure Targeting', requires: 'azure', section: 'journey', render: renderTargeting },
     { id: 'preflight', label: 'Preflight', requires: 'azure', section: 'journey', render: renderPreflight },
     { id: 'dcr-automation', label: 'DCR Automation', requires: 'azure', section: 'journey', render: renderDcrAutomation },
+    { id: 'eventhub-discovery', label: 'Event Hub Discovery', requires: 'azure', section: 'journey', render: () => eventHubDiscoveryView },
     { id: 'review', label: 'Review', requires: 'azure', section: 'journey', render: renderReview },
     { id: 'options', label: 'Options', requires: 'none', section: 'tools', render: () => optionsView },
     { id: 'packs', label: 'Packs', requires: 'cribl', section: 'tools', render: () => packsView },
