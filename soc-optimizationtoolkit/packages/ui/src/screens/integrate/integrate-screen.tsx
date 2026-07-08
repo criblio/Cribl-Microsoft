@@ -616,7 +616,6 @@ export function IntegrateScreen({
         onReportsChange={setGapReports}
         onEffectiveMappingsChange={setMappingOverrides}
         renameEvent={renameEvent}
-        llm={ports.llm}
       />
       <div className="integrate-subsection">
         <span className="field-label">Pipeline preview</span>

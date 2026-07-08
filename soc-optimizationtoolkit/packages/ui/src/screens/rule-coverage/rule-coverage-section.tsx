@@ -34,7 +34,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   acquireSolutionWorkbooks,
-  adviseCoverage,
   analyticRuleToContentItem,
   analyzeContentCoverage,
   createBundledSchemaCatalog,
@@ -47,7 +46,6 @@ import {
 import type {
   AzureManagement,
   ContentItem,
-  CoverageAdvice,
   CoverageReport,
   GapReport,
   SchemaCatalog,
@@ -71,21 +69,7 @@ import {
   parseCustomRuleUploads,
   ruleFieldSet,
 } from "./rule-coverage-state";
-import type {
-  CoverageItemView,
-  CoverageSectionView,
-} from "./rule-coverage-state";
-
-/** Per-item AI explanation state (ai-assisted-analysis P2). */
-type CoverageAdviceState =
-  | { status: "running" }
-  | { status: "error"; error: string }
-  | {
-      status: "done";
-      advice: CoverageAdvice;
-      inputTokens: number;
-      outputTokens: number;
-    };
+import type { CoverageSectionView } from "./rule-coverage-state";
 
 /** The Microsoft.Insights/workbooks ARM api-version used for enumeration. */
 const WORKBOOK_API_VERSION = "2023-06-01";
@@ -276,84 +260,8 @@ async function resolveSchemaUnion(
   return unionSchemaColumns(schemas);
 }
 
-/** The optional AI-explanation wiring handed down to each item (P2). */
-interface CoverageAdvisoryWiring {
-  adviceByKey: Record<string, CoverageAdviceState>;
-  onExplain: (item: CoverageItemView) => void;
-}
-
-/**
- * One item's AI explanation (ai-assisted-analysis P2): an Explain button, the
- * model's summary, and one concrete fix per missing field. ADVISORY ONLY -
- * the analyzer's counts stand; an LLM failure renders inline and changes
- * nothing.
- */
-function CoverageAdviceBlock({
-  item,
-  state,
-  onExplain,
-}: {
-  item: CoverageItemView;
-  state: CoverageAdviceState | undefined;
-  onExplain: () => void;
-}) {
-  const running = state?.status === "running";
-  const done = state?.status === "done" ? state : null;
-  return (
-    <div className="ai-advisory">
-      <div className="ai-advisory-controls">
-        <button className="run-button" onClick={onExplain} disabled={running}>
-          {running
-            ? "Asking Fable 5..."
-            : state === undefined
-              ? "Explain missing fields with AI"
-              : "Re-explain with AI"}
-        </button>
-        <span className="field-hint">
-          Advisory: how to close the {item.missingCount} missing field
-          {item.missingCount === 1 ? "" : "s"}. Sends field names and this{" "}
-          {item.type === "workbook" ? "workbook" : "rule"}&apos;s public KQL.
-        </span>
-      </div>
-      {state?.status === "error" && (
-        <span className="field-hint ai-advisory-error">
-          AI advisory unavailable: {state.error}
-        </span>
-      )}
-      {done !== null && (
-        <>
-          {done.advice.summary !== "" && (
-            <span className="field-hint">{done.advice.summary}</span>
-          )}
-          {done.advice.fixes.length > 0 && (
-            <div className="ai-suggestion-list">
-              {done.advice.fixes.map((fix) => (
-                <div className="ai-suggestion" key={fix.field}>
-                  <span className="ai-suggestion-change">
-                    <code>{fix.field}</code>
-                  </span>
-                  <span className="ai-suggestion-reason">{fix.suggestion}</span>
-                </div>
-              ))}
-            </div>
-          )}
-          <span className="field-hint ai-advisory-tokens">
-            Tokens: {done.inputTokens} in / {done.outputTokens} out.
-          </span>
-        </>
-      )}
-    </div>
-  );
-}
-
 /** One expandable coverage section (rule section or workbook section). */
-function CoverageSectionBody({
-  section,
-  advisory,
-}: {
-  section: CoverageSectionView;
-  advisory?: CoverageAdvisoryWiring;
-}) {
+function CoverageSectionBody({ section }: { section: CoverageSectionView }) {
   return (
     <div className="coverage-subsection">
       <p className="panel-desc">{section.summaryLine}</p>
@@ -417,13 +325,6 @@ function CoverageSectionBody({
                 Unknown (computed or other-table): {item.unknown.join(", ")}
               </div>
             )}
-            {advisory !== undefined && item.missingCount > 0 && (
-              <CoverageAdviceBlock
-                item={item}
-                state={advisory.adviceByKey[item.key]}
-                onExplain={() => advisory.onExplain(item)}
-              />
-            )}
             {item.queries.length > 0 && (
               <details className="coverage-kql">
                 <summary>{VIEW_KQL_LABEL}</summary>
@@ -467,47 +368,6 @@ export function RuleCoverageSection({
   const [analyzeError, setAnalyzeError] = useState("");
   const [workbookNote, setWorkbookNote] = useState("");
   const [customItems, setCustomItems] = useState<ContentItem[]>([]);
-
-  // ---- AI explanation per coverage item (ai-assisted-analysis P2) --------
-  // ADVISORY ONLY: the analyzer's counts and the RULE badges stay
-  // authoritative; the advice is a rendered note. Keyed by the item's stable
-  // view key. Absent ports.llm = the control never renders.
-  const llm = ports.llm;
-  const [adviceByKey, setAdviceByKey] = useState<
-    Record<string, CoverageAdviceState>
-  >({});
-
-  const explainItem = useCallback(
-    async (item: CoverageItemView) => {
-      if (llm === undefined) return;
-      setAdviceByKey((prev) => ({ ...prev, [item.key]: { status: "running" } }));
-      // The availability set is what the mapped pipeline produces (same
-      // derivation the analyzer used); the item's KQL is public repo content.
-      const result = await adviseCoverage(
-        llm,
-        {
-          itemName: item.name,
-          itemType: item.type,
-          missingFields: item.missing,
-          availableFields: availableFieldsFromReports(reports),
-          queries: item.queries,
-        },
-        ports.logger,
-      );
-      setAdviceByKey((prev) => ({
-        ...prev,
-        [item.key]: result.ok
-          ? {
-              status: "done",
-              advice: result.advice,
-              inputTokens: result.inputTokens,
-              outputTokens: result.outputTokens,
-            }
-          : { status: "error", error: result.error },
-      }));
-    },
-    [llm, reports, ports.logger],
-  );
 
   // The kept Unit 18 contract: the lowercased schema-resolvable referenced-field
   // set, recomputed only when the report changes so the effect is stable.
@@ -702,23 +562,13 @@ export function RuleCoverageSection({
           {showRules && ruleSection !== null && (
             <div className="coverage-section">
               <div className="coverage-section-head">Analytics Rules</div>
-              <CoverageSectionBody
-                section={ruleSection}
-                {...(llm !== undefined
-                  ? { advisory: { adviceByKey, onExplain: (item: CoverageItemView) => void explainItem(item) } }
-                  : {})}
-              />
+              <CoverageSectionBody section={ruleSection} />
             </div>
           )}
           {showWorkbooks && workbookSection !== null && (
             <div className="coverage-section">
               <div className="coverage-section-head">Workbooks</div>
-              <CoverageSectionBody
-                section={workbookSection}
-                {...(llm !== undefined
-                  ? { advisory: { adviceByKey, onExplain: (item: CoverageItemView) => void explainItem(item) } }
-                  : {})}
-              />
+              <CoverageSectionBody section={workbookSection} />
             </div>
           )}
 
