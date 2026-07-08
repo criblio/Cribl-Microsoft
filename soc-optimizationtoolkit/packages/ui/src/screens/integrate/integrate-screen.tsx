@@ -843,14 +843,16 @@ export function IntegrateScreen({
         onEffectiveMappingsChange={setMappingOverrides}
         renameEvent={renameEvent}
       />
-      <div className="integrate-subsection">
-        <span className="field-label">Pipeline preview</span>
-        <p className="panel-desc">
-          The exact conf.yml and route.yml a content-driven build would generate
-          from the approved mappings above - one pipeline per log type, with the
-          volume-reduction rules and their reasons. Read-only: nothing here is
-          deployed until the pack is built and installed.
-        </p>
+      {/* COLLAPSED by default: the full per-pipeline detail is reference
+          material, not a decision point - expand on demand. */}
+      <details className="integrate-subsection pipeline-preview-details">
+        <summary className="pipeline-preview-summary">
+          Pipeline preview
+          <span className="field-hint pipeline-preview-summary-hint">
+            the exact pipelines, reduction rules, and routes a build would
+            generate - expand to review
+          </span>
+        </summary>
         <PipelinePreviewSection
           key={contentResetKey}
           solutionName={solution?.name ?? ""}
@@ -860,7 +862,7 @@ export function IntegrateScreen({
           sampleFormats={sampleFormats}
           approved={mappingsApproved}
         />
-      </div>
+      </details>
     </>
   );
 

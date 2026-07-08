@@ -3895,3 +3895,21 @@ button.journey-step-main:hover .journey-step-label {
 .eh-finding {
   margin-left: 26px;
 }
+
+/* Pipeline preview: collapsed-by-default expander in the Gap Analysis section. */
+.pipeline-preview-summary {
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-strong);
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.pipeline-preview-summary-hint {
+  font-weight: 400;
+}
+.pipeline-preview-details[open] > .pipeline-preview-summary {
+  margin-bottom: 8px;
+}
