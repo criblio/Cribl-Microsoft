@@ -149,6 +149,12 @@ export interface IntegrateScreenProps {
   /** Navigate to the Options screen (the frame owns navigation). */
   onOpenOptions?: () => void;
   /**
+   * Persist an edited OperationOptions (e.g. toggling the DCE capability inline
+   * on this page instead of navigating to Options). Absent = the capability
+   * checkboxes are read-only and Options is the only way to change them.
+   */
+  onOperationChange?: (options: OperationOptions) => void;
+  /**
    * Shell-provided pointer to where the operator grants the Monitoring
    * Metrics Publisher role (the same cross-link the shared Onboard footer
    * takes). Absent, a shell-neutral sentence renders.
@@ -174,6 +180,7 @@ export function IntegrateScreen({
   criblDefaults,
   operationDefaults,
   onOpenOptions,
+  onOperationChange,
   roleGuidance,
   mode = "full",
 }: IntegrateScreenProps) {
@@ -558,16 +565,29 @@ export function IntegrateScreen({
       <div className="discovery-result">
         <span className="field-label">Deployment capabilities</span>
         <p className="panel-desc">
-          What the deploy provisions and grants. DCE mode comes from your saved
-          Options; the ingestion role is granted out of band today and
-          automated in a later unit.
+          What the deploy provisions and grants. Toggle DCE here (it saves to
+          your deployment Options); the DCR and the ingestion-role grant are
+          always part of the flow below.
         </p>
         <label className="integrate-check">
-          <input type="checkbox" checked={createDCE} readOnly disabled />
+          <input
+            type="checkbox"
+            checked={createDCE}
+            disabled={onOperationChange === undefined}
+            onChange={(e) =>
+              onOperationChange?.({
+                ...(operationDefaults ?? DEFAULT_OPERATION_OPTIONS),
+                createDCE: e.target.checked,
+              })
+            }
+          />
           <span className="integrate-check-text">
-            Create a Data Collection Endpoint (DCE) -{" "}
-            {createDCE ? "enabled" : "disabled"} in saved Options
-            {onOpenOptions !== undefined ? " (change in Options)" : ""}.
+            Create a Data Collection Endpoint (DCE) for private-endpoint (AMPLS)
+            connectivity. {createDCE ? "Enabled" : "Disabled"}
+            {onOperationChange === undefined ? " in saved Options" : ""} -
+            {onOperationChange !== undefined
+              ? " toggled here and saved with your deployment Options."
+              : "."}
           </span>
         </label>
         <label className="integrate-check">

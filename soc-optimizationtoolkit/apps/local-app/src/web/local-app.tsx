@@ -63,6 +63,7 @@ import {
   parseAcceptanceRecord,
   parseAppMode,
   parseAppOptions,
+  serializeAppOptions,
   parseAzureConfig,
   parseThemeChoice,
   resolveTheme,
@@ -74,6 +75,7 @@ import type {
   AcceptanceRecord,
   AppMode,
   AppOptions,
+  OperationOptions,
   AzureConfig,
   BatchPacing,
   JourneyFacts,
@@ -381,6 +383,14 @@ export function LocalApp() {
     await ports.secrets.set(APP_OPTIONS_KEY, serialized);
     setAppOptions(parseAppOptions(serialized));
   }, []);
+  // Persist an inline OperationOptions edit (the Integrate page's DCE capability
+  // toggle) through the same appOptions entry the Options screen uses.
+  const persistOperation = useCallback(
+    (operation: OperationOptions) => {
+      void saveAppOptions(serializeAppOptions({ ...appOptions, operation }));
+    },
+    [appOptions, saveAppOptions],
+  );
 
   const phase = resolveFramePhase(acceptance, mode);
 
@@ -663,6 +673,7 @@ export function LocalApp() {
             criblDefaults={appOptions.cribl}
             operationDefaults={appOptions.operation}
             onOpenOptions={() => nav.navigate('options')}
+            onOperationChange={persistOperation}
             roleGuidance={ROLE_GUIDANCE}
             mode={phase.mode}
           />

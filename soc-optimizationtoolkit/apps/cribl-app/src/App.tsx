@@ -54,6 +54,7 @@ import {
   parseAcceptanceRecord,
   parseAppMode,
   parseAppOptions,
+  serializeAppOptions,
   parseAzureConfig,
   parseProfileStore,
   parseThemeChoice,
@@ -76,6 +77,7 @@ import type {
   AcceptanceRecord,
   AppMode,
   AppOptions,
+  OperationOptions,
   AzureConfig,
   BatchPacing,
   ChangeRequestContext,
@@ -1787,6 +1789,14 @@ function App() {
     await appStateStore.set(APP_OPTIONS_KEY, serialized);
     setAppOptions(parseAppOptions(serialized));
   }, []);
+  // Persist an inline OperationOptions edit (the Integrate page's DCE capability
+  // toggle) through the same appOptions entry the Options screen uses.
+  const persistOperation = useCallback(
+    (operation: OperationOptions) => {
+      void saveAppOptions(serializeAppOptions({ ...appOptions, operation }));
+    },
+    [appOptions, saveAppOptions],
+  );
 
   // Which profile's secret was last written to the single azureBasic slot THIS
   // session, plus the identity it was written under. Non-persisted: both reset to
@@ -2479,6 +2489,7 @@ function App() {
           criblDefaults={appOptions.cribl}
           operationDefaults={appOptions.operation}
           onOpenOptions={() => nav.navigate('options')}
+          onOperationChange={persistOperation}
           roleGuidance={ROLE_GUIDANCE}
           mode={phase.mode}
         />
