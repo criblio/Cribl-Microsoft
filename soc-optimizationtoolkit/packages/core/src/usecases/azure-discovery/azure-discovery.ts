@@ -615,6 +615,46 @@ export interface EnableSentinelInput {
   workspaceName: string;
 }
 
+/** Result of {@link checkSentinelEnabled}. */
+export interface CheckSentinelResult {
+  /** True when the SecurityInsights solution already exists on the workspace. */
+  enabled: boolean;
+  /** The solution resource name, `SecurityInsights({workspaceName})`. */
+  solutionName: string;
+}
+
+/**
+ * Check whether Microsoft Sentinel is already enabled on a workspace WITHOUT
+ * changing anything - the read-only half of {@link enableSentinel}'s idempotent
+ * pre-check. GETs the Microsoft.OperationsManagement/solutions resource
+ * `SecurityInsights({workspaceName})`; a 2xx means enabled, any non-2xx (404 or
+ * otherwise) means not enabled. Lets the UI show status on workspace selection
+ * instead of only discovering it when the operator clicks Enable.
+ */
+export async function checkSentinelEnabled(
+  azure: AzureManagement,
+  input: EnableSentinelInput,
+  logger?: Logger,
+): Promise<CheckSentinelResult> {
+  const solutionName = `SecurityInsights(${input.workspaceName})`;
+  const solutionPath =
+    `/subscriptions/${input.subscriptionId}` +
+    `/resourceGroups/${input.resourceGroup}` +
+    `/providers/Microsoft.OperationsManagement/solutions/${solutionName}`;
+  const res = await azure.request({
+    method: "GET",
+    path: solutionPath,
+    apiVersion: SENTINEL_SOLUTION_API_VERSION,
+  });
+  const enabled = is2xx(res.status);
+  logger?.debug("check Sentinel enabled", {
+    workspaceName: input.workspaceName,
+    status: res.status,
+    enabled,
+  });
+  return { enabled, solutionName };
+}
+
 /** Result of {@link enableSentinel}. */
 export interface EnableSentinelResult {
   /** True when the SecurityInsights solution already existed (no PUT sent). */

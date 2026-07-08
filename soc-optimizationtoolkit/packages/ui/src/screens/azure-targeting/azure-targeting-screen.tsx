@@ -32,6 +32,7 @@
 import { useEffect, useRef, useState } from "react";
 import {
   DEFAULT_WORKSPACE_POLL_ATTEMPTS,
+  checkSentinelEnabled,
   createResourceGroup,
   createWorkspace,
   enableSentinel,
@@ -113,9 +114,52 @@ export function AzureTargetingScreen(props: AzureTargetingScreenProps) {
   const [actionBusy, setActionBusy] = useState(false);
   const [actionOutput, setActionOutput] = useState("");
 
+  // Sentinel-enabled status, auto-checked when a full workspace scope is
+  // selected so the operator sees whether Sentinel is on WITHOUT clicking
+  // Enable. "unknown" until the scope is complete.
+  const [sentinelStatus, setSentinelStatus] = useState<
+    "unknown" | "checking" | "enabled" | "disabled" | "error"
+  >("unknown");
+  const [sentinelError, setSentinelError] = useState("");
+
   // Commit state.
   const [committing, setCommitting] = useState(false);
   const [commitNotice, setCommitNotice] = useState("");
+
+  // Auto-check Sentinel-enabled whenever a full scope is selected (read-only;
+  // the checkSentinelEnabled GET never changes anything). The latest selection
+  // wins - an in-flight check for a stale workspace is ignored.
+  useEffect(() => {
+    const sub = browseSub.trim();
+    const rg = browseRg.trim();
+    const ws = browseWs.trim();
+    if (sub === "" || rg === "" || ws === "") {
+      setSentinelStatus("unknown");
+      setSentinelError("");
+      return;
+    }
+    let cancelled = false;
+    setSentinelStatus("checking");
+    setSentinelError("");
+    void (async () => {
+      try {
+        const result = await checkSentinelEnabled(
+          ports.azure,
+          { subscriptionId: sub, resourceGroup: rg, workspaceName: ws },
+          ports.logger,
+        );
+        if (!cancelled) setSentinelStatus(result.enabled ? "enabled" : "disabled");
+      } catch (err) {
+        if (!cancelled) {
+          setSentinelStatus("error");
+          setSentinelError(err instanceof Error ? err.message : String(err));
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [browseSub, browseRg, browseWs, ports.azure, ports.logger]);
 
   // THE one loader effect. buildLoaderPlan decides what is stale; the keys
   // in loadedRef prevent refetching data whose inputs did not change (the
@@ -358,6 +402,7 @@ export function AzureTargetingScreen(props: AzureTargetingScreenProps) {
       } else {
         push(`Enabled: ${result.solutionName} deployed in ${result.location}.`);
       }
+      setSentinelStatus("enabled");
     });
 
   // The explicit commit - the ONLY path from browse state to the active
@@ -695,14 +740,39 @@ export function AzureTargetingScreen(props: AzureTargetingScreenProps) {
           >
             Create workspace
           </button>
-          <button
-            className="run-button"
-            onClick={() => void doEnableSentinel()}
-            disabled={actionBusy || !scopeComplete}
-          >
-            Enable Sentinel on the workspace
-          </button>
+          {sentinelStatus === "enabled" ? (
+            <span
+              className="field-hint"
+              style={{ color: "var(--ok)", alignSelf: "center" }}
+            >
+              Sentinel is enabled on this workspace.
+            </span>
+          ) : (
+            <button
+              className="run-button"
+              onClick={() => void doEnableSentinel()}
+              disabled={
+                actionBusy || !scopeComplete || sentinelStatus === "checking"
+              }
+            >
+              {sentinelStatus === "checking"
+                ? "Checking Sentinel status..."
+                : "Enable Sentinel on the workspace"}
+            </button>
+          )}
         </div>
+        {sentinelStatus === "disabled" && (
+          <span className="field-hint">
+            Sentinel is not enabled on this workspace - Enable it above before
+            deploying (the grant is idempotent).
+          </span>
+        )}
+        {sentinelStatus === "error" && sentinelError !== "" && (
+          <span className="field-hint">
+            Could not check Sentinel status ({sentinelError}). You can still
+            Enable - it is idempotent and safe to run.
+          </span>
+        )}
         {actionOutput !== "" && <pre className="result">{actionOutput}</pre>}
       </div>
 

@@ -15,6 +15,7 @@ export {
   createResourceGroup,
   createWorkspace,
   enableSentinel,
+  checkSentinelEnabled,
   commitTargetScope,
 } from "./azure-discovery";
 export type {
@@ -27,6 +28,7 @@ export type {
   CreatedWorkspace,
   EnableSentinelInput,
   EnableSentinelResult,
+  CheckSentinelResult,
   TargetScope,
   CommitTargetScopeResult,
 } from "./azure-discovery";

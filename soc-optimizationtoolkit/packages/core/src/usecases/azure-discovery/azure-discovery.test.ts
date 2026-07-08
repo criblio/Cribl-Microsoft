@@ -12,6 +12,7 @@ import {
   WORKSPACE_API_VERSION,
   WORKSPACE_DEFAULT_RETENTION_DAYS,
   WORKSPACE_DEFAULT_SKU,
+  checkSentinelEnabled,
   commitTargetScope,
   createResourceGroup,
   createWorkspace,
@@ -443,6 +444,41 @@ describe("createWorkspace", () => {
 // ---------------------------------------------------------------------------
 // enableSentinel: idempotent pre-check + the location FIX (never eastus)
 // ---------------------------------------------------------------------------
+
+describe("checkSentinelEnabled", () => {
+  const SOLUTION_PATH =
+    `/subscriptions/${SUB}/resourceGroups/rg-sec` +
+    `/providers/Microsoft.OperationsManagement/solutions/SecurityInsights(law-prod)`;
+  const input = {
+    subscriptionId: SUB,
+    resourceGroup: "rg-sec",
+    workspaceName: "law-prod",
+  };
+
+  it("reports enabled on a 2xx solution GET, sending no PUT", async () => {
+    const azure = new FakeAzureManagement();
+    azure.respondWith({ status: 200, body: { name: "SecurityInsights(law-prod)" } });
+    const result = await checkSentinelEnabled(azure, input);
+    expect(result).toEqual({
+      enabled: true,
+      solutionName: "SecurityInsights(law-prod)",
+    });
+    expect(azure.calls).toHaveLength(1);
+    expect(azure.calls[0]).toMatchObject({
+      method: "GET",
+      path: SOLUTION_PATH,
+      apiVersion: SENTINEL_SOLUTION_API_VERSION,
+    });
+  });
+
+  it("reports NOT enabled on a 404 (never mutates)", async () => {
+    const azure = new FakeAzureManagement();
+    azure.respondWith({ status: 404, body: { error: { code: "ResourceNotFound" } } });
+    const result = await checkSentinelEnabled(azure, input);
+    expect(result.enabled).toBe(false);
+    expect(azure.calls.every((c) => c.method === "GET")).toBe(true);
+  });
+});
 
 describe("enableSentinel", () => {
   const WS_PATH =
