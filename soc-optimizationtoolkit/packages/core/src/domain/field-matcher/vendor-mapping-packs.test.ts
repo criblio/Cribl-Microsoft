@@ -60,9 +60,9 @@ describe("vendorMappingsForSolution", () => {
     expect(map.get("LocalAddressIP4")).toBe("SourceIP");
   });
 
-  it("every pack mapping is Phase-0 shaped (map action, empty types)", () => {
+  it("every pack mapping is Phase-0 shaped (map/decode action, empty types)", () => {
     for (const m of vendorMappingsForSolution("Zscaler Internet Access")) {
-      expect(m.action).toBe("map");
+      expect(["map", "decode"]).toContain(m.action);
       expect(m.sourceType).toBe("");
       expect(m.destType).toBe("");
     }
@@ -72,6 +72,42 @@ describe("vendorMappingsForSolution", () => {
     for (const pack of VENDOR_MAPPING_PACKS) {
       expect(pack.provenance.trim()).not.toBe("");
     }
+  });
+});
+
+describe("decode pack entries (base64-encoded vendor fields)", () => {
+  const zscaler = vendorMappingsForSolution("Zscaler Internet Access");
+  const byName = new Map(zscaler.map((m) => [m.sourceName, m]));
+
+  it("documents b64url as a base64 DECODE into RequestURL, never a rename", () => {
+    expect(byName.get("b64url")?.destName).toBe("RequestURL");
+    expect(byName.get("b64url")?.action).toBe("decode");
+  });
+
+  it("prefers the decoded full referer over refererhost for RequestContext", () => {
+    // Both entries survive the per-SOURCE dedupe (different sources); the
+    // per-sample dest collision resolves by declaration order, so b64referer
+    // must be declared first.
+    const b64Index = zscaler.findIndex((m) => m.sourceName === "b64referer");
+    const hostIndex = zscaler.findIndex((m) => m.sourceName === "refererhost");
+    expect(b64Index).toBeGreaterThanOrEqual(0);
+    expect(hostIndex).toBeGreaterThanOrEqual(0);
+    expect(b64Index).toBeLessThan(hostIndex);
+  });
+
+  it("Phase 0 carries decode through to the match row", () => {
+    const result = matchFields(
+      [{ name: "b64url", type: "string", sampleValue: "d3d3Lg==" }],
+      [
+        { name: "RequestURL", type: "string" },
+        { name: "AdditionalExtensions", type: "string" },
+      ],
+      zscaler.filter((m) => m.sourceName === "b64url"),
+      "CommonSecurityLog",
+    );
+    expect(result.matched[0]?.destName).toBe("RequestURL");
+    expect(result.matched[0]?.action).toBe("decode");
+    expect(result.matched[0]?.description).toContain("base64 decode");
   });
 });
 

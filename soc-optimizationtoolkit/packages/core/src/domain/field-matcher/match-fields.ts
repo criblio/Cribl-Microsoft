@@ -79,16 +79,26 @@ export function matchFields(
           (d) => d.name.toLowerCase() === vm.destName.toLowerCase(),
         );
       if (src) {
+        // "decode": the vendor documents this source as the destination's
+        // data base64-encoded - the pipeline decodes rather than renames.
+        const isDecode = vm.action === "decode";
         matched.push({
           sourceName: src.name, // Use actual casing from source data
           sourceType: src.type || vm.sourceType,
           destName: dst?.name || vm.destName, // Use actual casing from schema
           destType: dst?.type || vm.destType,
           confidence: "exact",
-          action: src.name === (dst?.name || vm.destName) ? "keep" : "rename",
-          needsCoercion:
-            (src.type || vm.sourceType) !== (dst?.type || vm.destType),
-          description: `Vendor mapping: ${src.name} -> ${dst?.name || vm.destName}`,
+          action: isDecode
+            ? "decode"
+            : src.name === (dst?.name || vm.destName)
+              ? "keep"
+              : "rename",
+          needsCoercion: isDecode
+            ? false
+            : (src.type || vm.sourceType) !== (dst?.type || vm.destType),
+          description: isDecode
+            ? `Vendor mapping (base64 decode): ${src.name} -> ${dst?.name || vm.destName}`
+            : `Vendor mapping: ${src.name} -> ${dst?.name || vm.destName}`,
           sampleValue: src.sampleValue,
         });
         usedSource.add(src.name);

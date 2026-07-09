@@ -38,6 +38,12 @@ import generatedPacks from "../../assets/generated-vendor-packs.json";
 export interface VendorPackEntry {
   sourceName: string;
   destName: string;
+  /**
+   * How the pipeline realizes it. "map" (default) renames/keeps; "decode"
+   * base64-decodes the source into the destination (the source carries the
+   * destination's data encoded - e.g. Zscaler b64url).
+   */
+  action?: "map" | "decode";
 }
 
 /** A per-vendor documented mapping pack. */
@@ -76,6 +82,13 @@ const HAND_PACKS: readonly VendorMappingPack[] = [
       { sourceName: "reqsize", destName: "SentBytes" },
       { sourceName: "respsize", destName: "ReceivedBytes" },
       { sourceName: "useragent", destName: "RequestClientApplication" },
+      // The NSS web feed carries the URL and referer base64-ENCODED; decode
+      // them into their columns (a rename would land base64 text where rules
+      // filter on decoded URLs). b64referer is declared BEFORE refererhost
+      // so the full decoded referer wins the per-sample dest collision;
+      // refererhost stays as the fallback for feeds without b64 fields.
+      { sourceName: "b64url", destName: "RequestURL", action: "decode" },
+      { sourceName: "b64referer", destName: "RequestContext", action: "decode" },
       { sourceName: "refererhost", destName: "RequestContext" },
       { sourceName: "host", destName: "DestinationHostName" },
       { sourceName: "filetype", destName: "FileType" },
@@ -179,7 +192,7 @@ export function vendorMappingsForSolution(
         destName: entry.destName,
         sourceType: "",
         destType: "",
-        action: "map",
+        action: entry.action ?? "map",
       });
     }
   }

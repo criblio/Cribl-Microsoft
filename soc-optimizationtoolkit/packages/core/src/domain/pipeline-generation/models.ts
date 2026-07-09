@@ -31,7 +31,8 @@ export interface PipelineFieldMapping {
   source: string;
   target: string;
   type: string;
-  action: "rename" | "keep" | "coerce" | "drop";
+  /** "decode" (2026-07-09): base64-decode source into target (see MatchAction). */
+  action: "rename" | "keep" | "coerce" | "drop" | "decode";
 }
 
 /** A user override for one field (highest planner priority). */

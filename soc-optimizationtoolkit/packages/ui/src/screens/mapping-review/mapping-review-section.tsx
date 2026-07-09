@@ -94,6 +94,7 @@ const ACTION_OPTIONS: readonly MatchAction[] = [
   "keep",
   "rename",
   "coerce",
+  "decode",
   "overflow",
   "drop",
 ];

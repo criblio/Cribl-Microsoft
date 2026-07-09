@@ -28,8 +28,19 @@ export interface DestField {
 /** How confident the matcher is in a single field match. */
 export type MatchConfidence = "exact" | "alias" | "fuzzy" | "unmatched";
 
-/** What the pipeline should do with a matched field. */
-export type MatchAction = "rename" | "keep" | "coerce" | "drop" | "overflow";
+/**
+ * What the pipeline should do with a matched field. "decode" (2026-07-09):
+ * the source carries the destination's data base64-ENCODED (e.g. Zscaler
+ * b64url); the pipeline decodes it into the destination column - a plain
+ * rename would put base64 text where rules expect decoded content.
+ */
+export type MatchAction =
+  | "rename"
+  | "keep"
+  | "coerce"
+  | "drop"
+  | "overflow"
+  | "decode";
 
 /** One source field's resolution against the destination schema. */
 export interface FieldMatch {

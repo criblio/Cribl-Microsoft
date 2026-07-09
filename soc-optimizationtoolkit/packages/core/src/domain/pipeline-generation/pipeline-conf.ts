@@ -137,16 +137,42 @@ export function generatePipelineConf(
   const hasVendorMappings = vendorMappings && vendorMappings.length > 0;
 
   const activeFields = fields.filter((f) => f.action !== "drop");
-  const renameFields = hasVendorMappings
+  // UNION FIX (2026-07-09, pinned): the legacy either/or made ANY vendor
+  // mapping (including enrichment constants riding this channel) silently
+  // discard every preset rename/coercion. Vendor map entries stay
+  // authoritative per source name; preset entries not covered by one still
+  // apply.
+  const vendorRenames = hasVendorMappings
     ? vendorMappings.filter(
         (m) => m.action === "map" && m.sourceName !== m.destName,
       )
-    : activeFields.filter((f) => f.action === "rename" && f.source !== f.target);
-  const coerceFields = hasVendorMappings
+    : [];
+  const vendorRenameSources = new Set(
+    vendorRenames.map((m) => m.sourceName.toLowerCase()),
+  );
+  const presetRenames = activeFields.filter(
+    (f) =>
+      f.action === "rename" &&
+      f.source !== f.target &&
+      !vendorRenameSources.has(f.source.toLowerCase()),
+  );
+  const vendorCoercions = hasVendorMappings
     ? vendorMappings.filter(
         (m) => m.action === "map" && m.sourceType !== m.destType,
       )
-    : activeFields.filter((f) => f.action === "coerce");
+    : [];
+  const vendorCoercionDests = new Set(
+    vendorCoercions.map((m) => m.destName.toLowerCase()),
+  );
+  const presetCoercions = activeFields.filter(
+    (f) =>
+      f.action === "coerce" &&
+      !vendorCoercionDests.has((f.target || f.source).toLowerCase()),
+  );
+  // Base64-decode fields (2026-09 decode action): emitted as an Eval below.
+  const decodeFields = activeFields.filter(
+    (f) => f.action === "decode" && f.target !== "",
+  );
 
   let timestampField = hasVendorMappings
     ? vendorMappings.find((m) => m.destName === "TimeGenerated")?.sourceName ||
@@ -492,19 +518,22 @@ export function generatePipelineConf(
   }
 
   // Step 3 (enrich group): Rename source fields to destination names
-  if (renameFields.length > 0) {
+  if (vendorRenames.length + presetRenames.length > 0) {
     let entries: string[];
     if (hasVendorMappings) {
-      entries = (renameFields as PipelineVendorMapping[]).map(
+      entries = vendorRenames.map(
         (m) =>
           `        - currentName: ${m.sourceName}\n          newName: ${m.destName}`,
       );
     } else {
-      entries = (renameFields as PipelineFieldMapping[]).map(
+      entries = [];
+    }
+    entries.push(
+      ...presetRenames.map(
         (f) =>
           `        - currentName: ${f.source}\n          newName: ${f.target}`,
-      );
-    }
+      ),
+    );
     functions.push(
       [
         "  - id: rename",
@@ -515,6 +544,32 @@ export function generatePipelineConf(
         "    conf:",
         "      rename:",
         ...entries,
+      ].join("\n"),
+    );
+  }
+
+  // Step 3a2 (enrich group): base64-decode documented encoded fields into
+  // their destination columns (e.g. Zscaler b64url -> RequestURL). A rename
+  // would carry base64 text where rules expect decoded content; the source
+  // field is consumed (removed) once decoded.
+  if (decodeFields.length > 0) {
+    const decodeAdds = decodeFields.map(
+      (f) =>
+        `        - disabled: false\n          name: ${f.target}\n          value: "C.Decode.base64(${f.source})"`,
+    );
+    const decodeRemoves = decodeFields.map((f) => `        - ${f.source}`);
+    functions.push(
+      [
+        "  - id: eval",
+        '    filter: "true"',
+        "    disabled: false",
+        "    conf:",
+        "      add:",
+        ...decodeAdds,
+        "      remove:",
+        ...decodeRemoves,
+        "    description: Decode base64 source fields into DCR schema",
+        "    groupId: enrich",
       ].join("\n"),
     );
   }
@@ -544,25 +599,22 @@ export function generatePipelineConf(
 
   // Step 4 (enrich group): Type coercion where source type != dest type
   const coercionExprs: string[] = [];
-  if (hasVendorMappings) {
-    for (const m of coerceFields as PipelineVendorMapping[]) {
-      if (m.sourceType === m.destType) continue;
-      const fieldName = m.destName; // Coerce after rename
-      const expr = buildCoercionExpr(fieldName, m.sourceType, m.destType);
-      if (expr) {
-        coercionExprs.push(
-          `        - name: ${fieldName}\n          value: "${expr}"`,
-        );
-      }
+  for (const m of vendorCoercions) {
+    if (m.sourceType === m.destType) continue;
+    const fieldName = m.destName; // Coerce after rename
+    const expr = buildCoercionExpr(fieldName, m.sourceType, m.destType);
+    if (expr) {
+      coercionExprs.push(
+        `        - name: ${fieldName}\n          value: "${expr}"`,
+      );
     }
-  } else {
-    for (const f of coerceFields as PipelineFieldMapping[]) {
-      const expr = buildCoercionExpr(f.target || f.source, "string", f.type);
-      if (expr) {
-        coercionExprs.push(
-          `        - name: ${f.target || f.source}\n          value: "${expr}"`,
-        );
-      }
+  }
+  for (const f of presetCoercions) {
+    const expr = buildCoercionExpr(f.target || f.source, "string", f.type);
+    if (expr) {
+      coercionExprs.push(
+        `        - name: ${f.target || f.source}\n          value: "${expr}"`,
+      );
     }
   }
 

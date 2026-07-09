@@ -218,3 +218,46 @@ describe("overflow serialize group", () => {
     expect(yaml).not.toContain("id: rename");
   });
 });
+
+describe("decode action + vendor/preset union (2026-07-09)", () => {
+  it("emits a base64-decode Eval that consumes the source field", () => {
+    const conf = generatePipelineConf(
+      "p",
+      "Zscaler Internet Access",
+      "CommonSecurityLog",
+      [
+        { source: "b64url", target: "RequestURL", type: "string", action: "decode" },
+        { source: "cltip", target: "SourceIP", type: "string", action: "rename" },
+      ],
+    );
+    expect(conf).toContain('value: "C.Decode.base64(b64url)"');
+    expect(conf).toContain("name: RequestURL");
+    expect(conf).toContain("Decode base64 source fields into DCR schema");
+    // The encoded source is consumed once decoded.
+    expect(conf).toMatch(/remove:\n        - b64url/);
+  });
+
+  it("preset renames survive when enrichment vendorMappings are present", () => {
+    // The legacy either/or made ANY vendor mapping (enrichment constants
+    // included) silently discard every preset rename - fixed as a union.
+    const conf = generatePipelineConf(
+      "p",
+      "Zscaler Internet Access",
+      "CommonSecurityLog",
+      [{ source: "cltip", target: "SourceIP", type: "string", action: "rename" }],
+      [
+        {
+          sourceName: "DeviceVendor",
+          destName: "DeviceVendor",
+          sourceType: "string",
+          destType: "string",
+          action: "enrich",
+          description: "Zscaler",
+        },
+      ],
+    );
+    expect(conf).toContain("currentName: cltip");
+    expect(conf).toContain("newName: SourceIP");
+    expect(conf).toContain("name: DeviceVendor");
+  });
+});
