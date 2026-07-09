@@ -136,9 +136,12 @@ export function createCriblProxy(cribl, auth) {
   /**
    * List Worker Groups / Edge Fleets - same contract and tolerance as the
    * cloud adapter: expects CountedConfigGroup {count, items} per the vendored
-   * OpenAPI spec, requires only a non-empty string id per entry, and maps
-   * `product` only when it is a non-empty string. Throws (surfaced as 502 by
-   * the route) on non-2xx or an unexpected shape.
+   * OpenAPI spec, requires only a non-empty string id per entry, and derives
+   * `product` from whichever signal the leader reports - the explicit
+   * `product` string (newer leaders) or the isFleet/isSearch booleans (how
+   * older leaders mark Edge fleets and Search groups; mirrors the core
+   * deriveGroupProduct helper the cloud adapter uses). Throws (surfaced as
+   * 502 by the route) on non-2xx or an unexpected shape.
    */
   async function listGroups() {
     const response = await request({ method: 'GET', path: '/master/groups' });
@@ -155,8 +158,16 @@ export function createCriblProxy(cribl, auth) {
       if (typeof id !== 'string' || id === '') {
         continue;
       }
-      const product = prop(item, 'product');
-      groups.push(typeof product === 'string' && product !== '' ? { id, product } : { id });
+      const explicit = prop(item, 'product');
+      const product =
+        typeof explicit === 'string' && explicit !== ''
+          ? explicit
+          : prop(item, 'isFleet') === true
+            ? 'edge'
+            : prop(item, 'isSearch') === true
+              ? 'search'
+              : undefined;
+      groups.push(product !== undefined ? { id, product } : { id });
     }
     return groups;
   }

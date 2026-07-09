@@ -47,14 +47,42 @@ export interface CriblGroupSummary {
 /**
  * Whether a group can run Stream pipelines and host the destinations this app
  * deploys: product "stream" (case-insensitive) or UNREPORTED (older and
- * single-product leaders omit `product`; hiding those would empty the list on
- * exactly the deployments that have no Edge fleets). Edge fleets are excluded
- * everywhere a worker group is selected.
+ * single-product leaders omit every product signal; hiding those would empty
+ * the list on exactly the deployments that have no Edge fleets). Edge fleets
+ * are excluded everywhere a worker group is selected.
  */
 export function isStreamWorkerGroup(group: CriblGroupSummary): boolean {
   return (
     group.product === undefined || group.product.toLowerCase() === "stream"
   );
+}
+
+/**
+ * Derive a group's product from the fields /master/groups items actually
+ * carry, oldest-leader-compatible: an explicit `product` string when present
+ * (newer leaders), else the `isFleet` / `isSearch` booleans - how leaders
+ * that predate `product` mark Edge fleets and Search groups in the SAME
+ * listing (live report 2026-07-09: a leader listed default_fleet and other
+ * fleets with no `product` field, so the Stream-only filter's
+ * unreported-means-stream fallback waved them through). Returns undefined
+ * only when the item carries NO product signal at all; isStreamWorkerGroup
+ * then keeps it visible.
+ */
+export function deriveGroupProduct(
+  product: unknown,
+  isFleet: unknown,
+  isSearch: unknown,
+): string | undefined {
+  if (typeof product === "string" && product !== "") {
+    return product;
+  }
+  if (isFleet === true) {
+    return "edge";
+  }
+  if (isSearch === true) {
+    return "search";
+  }
+  return undefined;
 }
 
 /**

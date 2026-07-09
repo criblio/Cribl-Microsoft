@@ -16,7 +16,7 @@ export type {
   AzureManagementUrlRequest,
 } from './azure-management';
 export type { CriblClient, CriblRequest, CriblGroupSummary } from './cribl-client';
-export { isStreamWorkerGroup } from './cribl-client';
+export { deriveGroupProduct, isStreamWorkerGroup } from './cribl-client';
 export type { GraphDirectory, ServicePrincipalRef } from './graph-directory';
 export type { TaggedSampleStore } from './tagged-sample-store';
 export type { SchemaCatalog, DcrSchemaColumn } from './schema-catalog';

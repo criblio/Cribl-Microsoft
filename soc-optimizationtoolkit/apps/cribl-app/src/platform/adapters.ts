@@ -42,6 +42,7 @@ import {
   blockedSolutionNames,
   capTaggedSampleBytes,
   classifySolutionDeprecation,
+  deriveGroupProduct,
   findConnectorDirName,
   interpretInstallResponse,
   isPathAllowedByEdr,
@@ -469,8 +470,15 @@ export class PlatformCriblClient implements CriblClient {
       if (typeof id !== 'string' || id === '') {
         continue;
       }
-      const product = prop(item, 'product');
-      groups.push(typeof product === 'string' && product !== '' ? { id, product } : { id });
+      // Older leaders omit `product` but mark fleets/search groups with
+      // isFleet/isSearch booleans in the same items - derive from whichever
+      // signal is present so the UI's Stream-only filter actually bites.
+      const product = deriveGroupProduct(
+        prop(item, 'product'),
+        prop(item, 'isFleet'),
+        prop(item, 'isSearch'),
+      );
+      groups.push(product !== undefined ? { id, product } : { id });
     }
     return groups;
   }

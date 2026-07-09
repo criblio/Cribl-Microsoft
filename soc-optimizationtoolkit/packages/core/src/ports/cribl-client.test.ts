@@ -11,7 +11,7 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { isStreamWorkerGroup } from "./cribl-client";
+import { deriveGroupProduct, isStreamWorkerGroup } from "./cribl-client";
 
 describe("isStreamWorkerGroup", () => {
   it("keeps groups reporting product 'stream'", () => {
@@ -37,5 +37,31 @@ describe("isStreamWorkerGroup", () => {
 
   it("excludes any other reported product (e.g. search)", () => {
     expect(isStreamWorkerGroup({ id: "s", product: "search" })).toBe(false);
+  });
+});
+
+describe("deriveGroupProduct", () => {
+  it("prefers the explicit product string when present", () => {
+    expect(deriveGroupProduct("stream", true, undefined)).toBe("stream");
+    expect(deriveGroupProduct("edge", undefined, undefined)).toBe("edge");
+  });
+
+  it("derives edge from isFleet on leaders that omit product", () => {
+    // Live report 2026-07-09: default_fleet and friends listed with no
+    // product field - the isFleet boolean is the only fleet marker.
+    expect(deriveGroupProduct(undefined, true, undefined)).toBe("edge");
+  });
+
+  it("derives search from isSearch", () => {
+    expect(deriveGroupProduct(undefined, undefined, true)).toBe("search");
+  });
+
+  it("returns undefined when no signal is present (kept visible)", () => {
+    expect(deriveGroupProduct(undefined, undefined, undefined)).toBeUndefined();
+    expect(deriveGroupProduct("", false, false)).toBeUndefined();
+  });
+
+  it("ignores non-boolean truthy flag values", () => {
+    expect(deriveGroupProduct(undefined, "yes", undefined)).toBeUndefined();
   });
 });
