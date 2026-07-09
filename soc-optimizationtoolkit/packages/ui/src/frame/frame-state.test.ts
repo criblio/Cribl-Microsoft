@@ -97,15 +97,17 @@ describe("groupNavSections", () => {
     section?: NavSection;
   }
 
-  it("orders sections journey -> tools -> diagnostics regardless of input order", () => {
+  it("orders sections journey -> tools -> development -> diagnostics regardless of input order", () => {
     const items: Item[] = [
       { id: "harness", section: "diagnostics" },
+      { id: "dcr-automation", section: "development" },
       { id: "options", section: "tools" },
       { id: "home", section: "journey" },
     ];
     expect(groupNavSections(items).map((g) => g.section)).toEqual([
       "journey",
       "tools",
+      "development",
       "diagnostics",
     ]);
   });

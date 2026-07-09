@@ -1108,20 +1108,25 @@ export function LocalApp() {
   // destinations to. Review (Unit 7) requires 'azure' (its truth is live
   // ARM) and sits after the screens serving Choose/Configure, mirroring the
   // integrate arc's stage order.
+  // SECTION SPLIT (user directive 2026-07-09, mirrors the cloud shell): only
+  // Setup (home) and Sentinel Integration are ACTIVE; unvalidated features
+  // park in DEVELOPMENT and move out one at a time as they pass live
+  // testing. Options, Repositories, Logs, and Settings stay under Tools
+  // because the two active screens depend on them.
   const routes: AppRoute[] = [
-    { id: 'home', label: 'Home', requires: 'none', section: 'journey', render: renderHome },
+    { id: 'home', label: 'Setup', requires: 'none', section: 'journey', render: renderHome },
     { id: 'integrate', label: 'Sentinel Integration', requires: 'both', section: 'journey', render: renderIntegrate },
-    { id: 'azure-target', label: 'Azure Targeting', requires: 'azure', section: 'journey', render: () => targetingView },
-    { id: 'preflight', label: 'Preflight', requires: 'azure', section: 'journey', render: renderPreflight },
-    { id: 'dcr-automation', label: 'DCR Automation', requires: 'azure', section: 'journey', render: renderDcrAutomation },
-    { id: 'eventhub-discovery', label: 'Event Hub Discovery', requires: 'azure', section: 'journey', render: () => eventHubDiscoveryView },
-    { id: 'review', label: 'Review', requires: 'azure', section: 'journey', render: renderReview },
     { id: 'options', label: 'Options', requires: 'none', section: 'tools', render: () => optionsView },
-    { id: 'packs', label: 'Packs', requires: 'cribl', section: 'tools', render: () => packsView },
     { id: 'repositories', label: 'Repositories', requires: 'none', section: 'tools', render: () => repositoriesView },
-    { id: 'architecture', label: 'Architecture Patterns', requires: 'none', section: 'tools', render: () => architectureView },
     { id: 'logs', label: 'Logs', requires: 'none', section: 'tools', render: () => logsView },
     { id: 'settings', label: 'Settings', requires: 'none', section: 'tools', render: () => settingsView },
+    { id: 'azure-target', label: 'Azure Targeting', requires: 'azure', section: 'development', render: () => targetingView },
+    { id: 'preflight', label: 'Preflight', requires: 'azure', section: 'development', render: renderPreflight },
+    { id: 'dcr-automation', label: 'DCR Automation', requires: 'azure', section: 'development', render: renderDcrAutomation },
+    { id: 'eventhub-discovery', label: 'Event Hub Discovery', requires: 'azure', section: 'development', render: () => eventHubDiscoveryView },
+    { id: 'review', label: 'Review', requires: 'azure', section: 'development', render: renderReview },
+    { id: 'packs', label: 'Packs', requires: 'cribl', section: 'development', render: () => packsView },
+    { id: 'architecture', label: 'Architecture Patterns', requires: 'none', section: 'development', render: () => architectureView },
   ];
 
   // Frame topBar (GUI-28's Azure half): the committed target scope as a

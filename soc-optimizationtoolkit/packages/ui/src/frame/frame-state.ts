@@ -142,10 +142,16 @@ export const CHOOSABLE_MODES: readonly AppMode[] = APP_MODES;
 
 /**
  * The sidebar's nav sections (ux-flow-plan 4.4): journey steps in dependency
- * order, standalone tools that feed or observe the journey, diagnostics
- * last. Routes without a declared section default to 'tools'.
+ * order, standalone tools that feed or observe the journey, features still
+ * under development, diagnostics last. Routes without a declared section
+ * default to 'tools'.
+ *
+ * DEVELOPMENT (user directive 2026-07-09): the holding area for features not
+ * yet validated live. Only Setup and Sentinel Integration are active in the
+ * journey; everything unvalidated parks here (still reachable - parked, not
+ * hidden) and MOVES OUT one item at a time as it passes live testing.
  */
-export type NavSection = "journey" | "tools" | "diagnostics";
+export type NavSection = "journey" | "tools" | "development" | "diagnostics";
 
 /** Where an undeclared route lands. */
 export const DEFAULT_NAV_SECTION: NavSection = "tools";
@@ -154,6 +160,7 @@ export const DEFAULT_NAV_SECTION: NavSection = "tools";
 export const NAV_SECTION_ORDER: readonly NavSection[] = [
   "journey",
   "tools",
+  "development",
   "diagnostics",
 ];
 
@@ -161,6 +168,7 @@ export const NAV_SECTION_ORDER: readonly NavSection[] = [
 export const NAV_SECTION_LABELS: Readonly<Record<NavSection, string>> = {
   journey: "Journey",
   tools: "Tools",
+  development: "Development",
   diagnostics: "Diagnostics",
 };
 
