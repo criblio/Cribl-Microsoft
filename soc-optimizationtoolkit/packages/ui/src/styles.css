@@ -3930,3 +3930,32 @@ button.journey-step-main:hover .journey-step-label {
   font-weight: 700;
   color: var(--text-strong);
 }
+
+/* ---------------------------------------------------------------------------
+ * Disclosure arrows: every expandable <summary> gets one consistent chevron
+ * that rotates open/closed. The native marker is suppressed (flex summaries
+ * were already hiding it inconsistently, leaving sections looking static).
+ * ------------------------------------------------------------------------- */
+details > summary {
+  cursor: pointer;
+  list-style: none;
+}
+details > summary::-webkit-details-marker {
+  display: none;
+}
+details > summary::before {
+  content: "";
+  display: inline-block;
+  flex: none;
+  width: 7px;
+  height: 7px;
+  margin-right: 8px;
+  border-right: 2px solid var(--text-muted);
+  border-bottom: 2px solid var(--text-muted);
+  transform: rotate(-45deg);
+  transition: transform 0.15s ease;
+  vertical-align: middle;
+}
+details[open] > summary::before {
+  transform: rotate(45deg);
+}
