@@ -40,7 +40,9 @@ import {
   DEFAULT_GAP_PROFILE,
   collectGapReports,
   createBundledSchemaCatalog,
+  decodeConnector,
   detectVendorIdentity,
+  hintsFromConnectorTables,
   identityValueOptions,
   matchSampleLogTypeToTable,
   resolveDestinationTables,
@@ -173,6 +175,13 @@ const COMMON_NATIVE_TABLES: readonly string[] = [
   "Syslog",
   "WindowsEvent",
 ];
+
+/**
+ * How many of a solution's connector files are read and decoded for the
+ * destination-table hints (each is one raw fetch; matches the solution
+ * browser's decode cap).
+ */
+const CONNECTOR_TABLE_DECODE_CAP = 5;
 
 /** A stable signature of the analysis inputs (drives staleness detection). */
 function inputSignature(solutionName: string, samples: TaggedSample[]): string {
@@ -361,14 +370,37 @@ export function MappingReviewSection({
     setAnalyzing(true);
     setAnalyzeError("");
     try {
-      // Resolve destination tables (with provenance). Vendor research (Unit 15)
-      // is deferred, so the hints are empty: resolution falls to the solution's
-      // CustomTables connectors, else the CommonSecurityLog default.
-      const loadConnectors = async (): Promise<SolutionConnector[]> => {
-        const files = await activeContent.listConnectorFiles(solutionName);
-        return files.map((f) => ({ name: f.name, path: f.path }));
-      };
-      const resolved = await resolveDestinationTables([], loadConnectors);
+      // Resolve destination tables (with provenance). The FIRST tier is fed
+      // from the solution's OWN connector definitions: read and decode up to
+      // CONNECTOR_TABLE_DECODE_CAP connector files and turn the table names
+      // they declare (including name-only dataTypes labels like
+      // "CommonSecurityLog (Zscaler)") into hints. Only when the connectors
+      // declare nothing does resolution fall to CustomTables filenames, then
+      // the CommonSecurityLog default.
+      const files = await activeContent.listConnectorFiles(solutionName);
+      const hints: ReturnType<typeof hintsFromConnectorTables> = [];
+      for (const file of files.slice(0, CONNECTOR_TABLE_DECODE_CAP)) {
+        try {
+          const text = await activeContent.readFile(file.path);
+          if (text === null) continue;
+          const decoded = decodeConnector(JSON.parse(text), file.path);
+          hints.push(
+            ...hintsFromConnectorTables(
+              decoded.tables.map((t) => t.tableName),
+            ),
+          );
+        } catch {
+          // Unreadable/unparseable connector: the next one may still declare
+          // the tables; resolution degrades to the later tiers otherwise.
+        }
+      }
+      const loadConnectors = async (): Promise<SolutionConnector[]> =>
+        files.map((f) => ({ name: f.name, path: f.path }));
+      const resolved = await resolveDestinationTables(
+        hints,
+        loadConnectors,
+        "Sentinel solution connectors",
+      );
       setResolution(resolved);
       const defaultTable = resolved.tables[0] ?? "CommonSecurityLog";
 
@@ -378,7 +410,7 @@ export function MappingReviewSection({
           activeOverrides[sample.logType] ??
           matchSampleLogTypeToTable(
             sample.logType,
-            [],
+            hints,
             resolved.tables.length,
             defaultTable,
           ),

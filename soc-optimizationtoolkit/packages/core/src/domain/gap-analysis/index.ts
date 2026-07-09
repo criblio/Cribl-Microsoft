@@ -56,6 +56,8 @@ export type {
   SolutionConnector,
 } from "./analyze-workflow";
 export {
+  hintsFromConnectorTables,
+  normalizeConnectorTableName,
   resolveDestinationTables,
   matchSampleToTable as matchSampleLogTypeToTable,
 } from "./analyze-workflow";
