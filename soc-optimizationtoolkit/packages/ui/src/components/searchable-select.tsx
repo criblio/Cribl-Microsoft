@@ -84,6 +84,32 @@ function useCombo(options: readonly SelectOption[]) {
   };
 }
 
+/**
+ * DECOY LABELED CONTROL - rendered as the FIRST child of both combobox roots.
+ *
+ * Hosts wrap these controls in <label> blocks. A click anywhere inside a
+ * label re-dispatches a click to the label's FIRST labelable descendant;
+ * without this decoy that is the combobox's control button, so every click
+ * on a (non-interactive) option <li> ALSO toggled the popover - the
+ * multi-select closed after each pick and read as single-select (live report
+ * 2026-07-09: "only allows 1 additional"). A disabled, hidden checkbox
+ * absorbs the label association and does nothing when activated (disabled
+ * label targets are inert per the HTML spec, and a hidden-but-not-
+ * type-hidden input still counts as the labeled control). Verified against
+ * both real-browser semantics and the happy-dom test environment.
+ */
+function LabelDecoy() {
+  return (
+    <input
+      type="checkbox"
+      disabled
+      hidden
+      tabIndex={-1}
+      aria-hidden="true"
+    />
+  );
+}
+
 interface PopoverProps {
   query: string;
   onQuery: (q: string) => void;
@@ -164,6 +190,7 @@ export function SearchableSelect({
       className={`searchable-select${className !== undefined ? ` ${className}` : ""}`}
       ref={c.rootRef}
     >
+      <LabelDecoy />
       <button
         type="button"
         className="searchable-select-control"
@@ -263,6 +290,7 @@ export function SearchableMultiSelect({
       className={`searchable-select${className !== undefined ? ` ${className}` : ""}`}
       ref={c.rootRef}
     >
+      <LabelDecoy />
       <button
         type="button"
         className="searchable-select-control"
