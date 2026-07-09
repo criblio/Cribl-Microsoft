@@ -48,6 +48,7 @@ import {
   resolveDestinationTables,
   resolveIdentityFields,
   suggestedIdentityValue,
+  vendorMappingsForSolution,
 } from "@soc/core";
 import type {
   DestinationTableResolution,
@@ -417,9 +418,18 @@ export function MappingReviewSection({
         content: sample.rawEvents.join("\n"),
       }));
 
+      // Documented vendor mappings (Phase 0): deterministic, doc-sourced
+      // source->column knowledge for curated vendors. The usecase applies an
+      // entry only when its source field exists in the sample AND its column
+      // exists in the resolved schema.
       const produced = await collectGapReports(
         { content: activeContent, catalog: activeCatalog },
-        { solutionName, samples: specs, vendorProfile: profile },
+        {
+          solutionName,
+          samples: specs,
+          vendorProfile: profile,
+          vendorMappings: vendorMappingsForSolution(solutionName),
+        },
       );
       setReports(produced);
       analyzedSigRef.current = inputSignature(solutionName, samples);

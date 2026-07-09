@@ -43,6 +43,14 @@ export {
 export type { VendorMapping, SampleFieldInput } from "./match-fields";
 export { matchFields, matchSampleToSchema } from "./match-fields";
 
+// Documented per-vendor mapping packs (Phase 0 knowledge)
+export type { VendorMappingPack, VendorPackEntry } from "./vendor-mapping-packs";
+export {
+  VENDOR_MAPPING_PACKS,
+  vendorMappingsForSolution,
+  vendorPacksForSolution,
+} from "./vendor-mapping-packs";
+
 export {
   DCR_SCHEMA_SYSTEM_COLUMNS,
   normalizeTableNames,

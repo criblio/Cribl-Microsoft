@@ -134,3 +134,55 @@ describe("analyzeSamples (chunked DCR gap analysis)", () => {
     expect(reports[0].destFieldCount).toBeGreaterThan(20);
   });
 });
+
+describe("per-sample vendor-mapping guard (Phase 0 packs)", () => {
+  const CSL_SAMPLE = '{"cltip":"10.1.1.1","login":"a@b.com","deviceowner":"jsmith"}';
+
+  it("applies a pack entry only when its destination column is in the schema", async () => {
+    const ports: AnalyzeSamplesPorts = {
+      content: new FakeSentinelContent({ files: {} }),
+      catalog: {
+        // A schema WITHOUT SourceIP: the cltip->SourceIP entry must NOT
+        // produce a phantom mapping onto a nonexistent column.
+        resolveSchema: async () => [{ name: "Message", type: "string" }],
+      },
+    };
+    const [report] = await collectGapReports(ports, {
+      solutionName: "Zscaler Internet Access",
+      samples: [{ logType: "web", tableName: "SomeTable", content: CSL_SAMPLE }],
+      vendorMappings: [
+        { sourceName: "cltip", destName: "SourceIP", sourceType: "", destType: "", action: "map" },
+      ],
+    });
+    expect(
+      report.fieldMappings.some((m) => m.dest === "SourceIP"),
+    ).toBe(false);
+  });
+
+  it("first entry wins a per-sample destination collision", async () => {
+    const ports: AnalyzeSamplesPorts = {
+      content: new FakeSentinelContent({ files: {} }),
+      catalog: {
+        resolveSchema: async () => [
+          { name: "SourceUserName", type: "string" },
+          { name: "AdditionalExtensions", type: "string" },
+        ],
+      },
+    };
+    // Both login and deviceowner are pack-mapped to SourceUserName (web feed
+    // vs mined entry); the sample carries BOTH, so only the first-declared
+    // entry may claim the column - Phase 0 has no reservation of its own.
+    const [report] = await collectGapReports(ports, {
+      solutionName: "Zscaler Internet Access",
+      samples: [{ logType: "web", tableName: "SomeTable", content: CSL_SAMPLE }],
+      vendorMappings: [
+        { sourceName: "login", destName: "SourceUserName", sourceType: "", destType: "", action: "map" },
+        { sourceName: "deviceowner", destName: "SourceUserName", sourceType: "", destType: "", action: "map" },
+      ],
+    });
+    const claimants = report.fieldMappings.filter(
+      (m) => m.dest === "SourceUserName" && m.action !== "overflow",
+    );
+    expect(claimants.map((m) => m.source)).toEqual(["login"]);
+  });
+});

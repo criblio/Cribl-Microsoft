@@ -191,12 +191,34 @@ export async function* analyzeSamples(
       type: c.type,
     }));
 
+    // PER-SAMPLE vendor-mapping guard (pinned): Phase 0 applies whatever it
+    // is given, mapping even onto columns absent from the schema and pushing
+    // duplicate-destination rows (it has no reservation logic). So an entry
+    // passes only when (a) its SOURCE field exists in this sample, (b) its
+    // DESTINATION column exists in the resolved schema, and (c) its
+    // destination was not already claimed by an earlier entry - first wins,
+    // matching the pack declaration order (hand-verified before generated).
+    const sampleFieldNames = new Set(
+      parsed.fields.map((f) => f.name.toLowerCase()),
+    );
+    const schemaColumnNames = new Set(
+      (columns ?? []).map((c) => c.name.toLowerCase()),
+    );
+    const claimedDest = new Set<string>();
+    const applicableMappings = (input.vendorMappings ?? []).filter((vm) => {
+      if (!sampleFieldNames.has(vm.sourceName.toLowerCase())) return false;
+      if (!schemaColumnNames.has(vm.destName.toLowerCase())) return false;
+      if (claimedDest.has(vm.destName.toLowerCase())) return false;
+      claimedDest.add(vm.destName.toLowerCase());
+      return true;
+    });
+
     // USER-FACING engine (Unit 13): alias/fuzzy-aware match.
     const matchResult = matchParsedSampleToColumns(
       parsed,
       columns,
       sample.tableName,
-      input.vendorMappings,
+      applicableMappings.length > 0 ? applicableMappings : undefined,
     );
 
     // DCR-SIDE engine (Unit 18): exact-name partitioning against the DCR flow.

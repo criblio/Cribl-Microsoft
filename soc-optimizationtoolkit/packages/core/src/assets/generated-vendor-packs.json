@@ -1,0 +1,374 @@
+[
+ {
+  "id": "generated-zscaler_zia",
+  "vendor": "Zscaler",
+  "solutionKeywords": [
+   "zscaler"
+  ],
+  "provenance": "Generated from elastic/integrations zscaler_zia pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "mappings": [
+   {
+    "sourceName": "cdip",
+    "destName": "DestinationIP",
+    "ecs": "destination.ip"
+   },
+   {
+    "sourceName": "clt_sip",
+    "destName": "SourceIP",
+    "ecs": "source.ip"
+   },
+   {
+    "sourceName": "cltintip",
+    "destName": "SourceTranslatedAddress",
+    "ecs": "source.nat.ip"
+   },
+   {
+    "sourceName": "cltip",
+    "destName": "SourceIP",
+    "ecs": "source.ip"
+   },
+   {
+    "sourceName": "cltsourceport",
+    "destName": "SourcePort",
+    "ecs": "source.port"
+   },
+   {
+    "sourceName": "csip",
+    "destName": "SourceIP",
+    "ecs": "source.ip"
+   },
+   {
+    "sourceName": "destinationip",
+    "destName": "DestinationIP",
+    "ecs": "destination.ip"
+   },
+   {
+    "sourceName": "deviceowner",
+    "destName": "SourceUserName",
+    "ecs": "user.name"
+   },
+   {
+    "sourceName": "dns_req",
+    "destName": "DestinationDnsDomain",
+    "ecs": "dns.question.name"
+   },
+   {
+    "sourceName": "host",
+    "destName": "DestinationHostName",
+    "ecs": "url.domain"
+   },
+   {
+    "sourceName": "inbytes",
+    "destName": "ReceivedBytes",
+    "ecs": "destination.bytes"
+   },
+   {
+    "sourceName": "login",
+    "destName": "SourceUserName",
+    "ecs": "user.email"
+   },
+   {
+    "sourceName": "outbytes",
+    "destName": "SentBytes",
+    "ecs": "source.bytes"
+   },
+   {
+    "sourceName": "reason",
+    "destName": "Reason",
+    "ecs": "event.reason"
+   },
+   {
+    "sourceName": "recordid",
+    "destName": "ExternalID",
+    "ecs": "event.id"
+   },
+   {
+    "sourceName": "reqmethod",
+    "destName": "RequestMethod",
+    "ecs": "http.request.method"
+   },
+   {
+    "sourceName": "serverip",
+    "destName": "DestinationIP",
+    "ecs": "destination.ip"
+   },
+   {
+    "sourceName": "sha256",
+    "destName": "FileHash",
+    "ecs": "file.hash.sha256"
+   },
+   {
+    "sourceName": "sourceip",
+    "destName": "SourceIP",
+    "ecs": "source.ip"
+   },
+   {
+    "sourceName": "sourceport",
+    "destName": "SourcePort",
+    "ecs": "source.port"
+   },
+   {
+    "sourceName": "srv_dip",
+    "destName": "DestinationIP",
+    "ecs": "destination.ip"
+   },
+   {
+    "sourceName": "srv_dport",
+    "destName": "SourcePort",
+    "ecs": "source.port"
+   },
+   {
+    "sourceName": "tsip",
+    "destName": "SourceTranslatedAddress",
+    "ecs": "source.nat.ip"
+   },
+   {
+    "sourceName": "user",
+    "destName": "SourceUserName",
+    "ecs": "user.email"
+   },
+   {
+    "sourceName": "useragent",
+    "destName": "RequestClientApplication",
+    "ecs": "user_agent.original"
+   }
+  ]
+ },
+ {
+  "id": "generated-crowdstrike",
+  "vendor": "CrowdStrike",
+  "solutionKeywords": [
+   "crowdstrike"
+  ],
+  "provenance": "Generated from elastic/integrations crowdstrike pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "mappings": [
+   {
+    "sourceName": "ContextBaseFileName",
+    "destName": "ProcessName",
+    "ecs": "process.name"
+   },
+   {
+    "sourceName": "Description",
+    "destName": "Message",
+    "ecs": "message"
+   },
+   {
+    "sourceName": "DetectDescription",
+    "destName": "Message",
+    "ecs": "message"
+   },
+   {
+    "sourceName": "DomainName",
+    "destName": "DestinationDnsDomain",
+    "ecs": "dns.question.name"
+   },
+   {
+    "sourceName": "DownloadServer",
+    "destName": "DestinationHostName",
+    "ecs": "url.domain"
+   },
+   {
+    "sourceName": "EtwRawProcessId",
+    "destName": "SourceProcessId",
+    "ecs": "process.pid"
+   },
+   {
+    "sourceName": "event_simpleName",
+    "destName": "DeviceAction",
+    "ecs": "event.action"
+   },
+   {
+    "sourceName": "FilePath",
+    "destName": "FilePath",
+    "ecs": "file.path"
+   },
+   {
+    "sourceName": "GrandParentImageFilePath",
+    "destName": "FilePath",
+    "ecs": "file.path"
+   },
+   {
+    "sourceName": "id",
+    "destName": "ExternalID",
+    "ecs": "event.id"
+   },
+   {
+    "sourceName": "image_file_name",
+    "destName": "FilePath",
+    "ecs": "file.path"
+   },
+   {
+    "sourceName": "indicator_id",
+    "destName": "ExternalID",
+    "ecs": "event.id"
+   },
+   {
+    "sourceName": "LocalAddressIP4",
+    "destName": "SourceIP",
+    "ecs": "source.ip"
+   },
+   {
+    "sourceName": "LocalAddressIP6",
+    "destName": "SourceIP",
+    "ecs": "source.ip"
+   },
+   {
+    "sourceName": "LocalIP",
+    "destName": "SourceIP",
+    "ecs": "source.ip"
+   },
+   {
+    "sourceName": "LocalPort",
+    "destName": "SourcePort",
+    "ecs": "source.port"
+   },
+   {
+    "sourceName": "ObjectName",
+    "destName": "FilePath",
+    "ecs": "file.path"
+   },
+   {
+    "sourceName": "ParentImageFilePath",
+    "destName": "FilePath",
+    "ecs": "file.path"
+   },
+   {
+    "sourceName": "PatternDispositionDescription",
+    "destName": "DeviceAction",
+    "ecs": "event.action"
+   },
+   {
+    "sourceName": "policy_statement",
+    "destName": "Message",
+    "ecs": "message"
+   },
+   {
+    "sourceName": "process_id",
+    "destName": "SourceProcessId",
+    "ecs": "process.pid"
+   },
+   {
+    "sourceName": "ProcessId",
+    "destName": "SourceProcessId",
+    "ecs": "process.pid"
+   },
+   {
+    "sourceName": "RawProcessId",
+    "destName": "SourceProcessId",
+    "ecs": "process.pid"
+   },
+   {
+    "sourceName": "RemoteAddressIP4",
+    "destName": "DestinationIP",
+    "ecs": "destination.ip"
+   },
+   {
+    "sourceName": "RemoteAddressIP6",
+    "destName": "DestinationIP",
+    "ecs": "destination.ip"
+   },
+   {
+    "sourceName": "SHA256HashData",
+    "destName": "FileHash",
+    "ecs": "file.hash.sha256"
+   },
+   {
+    "sourceName": "SHA256String",
+    "destName": "FileHash",
+    "ecs": "file.hash.sha256"
+   },
+   {
+    "sourceName": "Size",
+    "destName": "FileSize",
+    "ecs": "file.size"
+   },
+   {
+    "sourceName": "source_account_name",
+    "destName": "SourceUserName",
+    "ecs": "source.user.name"
+   },
+   {
+    "sourceName": "TargetFileName",
+    "destName": "FilePath",
+    "ecs": "file.path"
+   },
+   {
+    "sourceName": "user_name",
+    "destName": "SourceUserName",
+    "ecs": "user.name"
+   },
+   {
+    "sourceName": "UserName",
+    "destName": "SourceUserName",
+    "ecs": "user.name"
+   },
+   {
+    "sourceName": "UserPrincipal",
+    "destName": "SourceUserName",
+    "ecs": "user.email"
+   }
+  ]
+ },
+ {
+  "id": "generated-suricata",
+  "vendor": "Suricata",
+  "solutionKeywords": [
+   "suricata"
+  ],
+  "provenance": "Generated from elastic/integrations suricata pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "mappings": [
+   {
+    "sourceName": "app_proto",
+    "destName": "ApplicationProtocol",
+    "ecs": "network.protocol"
+   },
+   {
+    "sourceName": "dest_ip",
+    "destName": "DestinationIP",
+    "ecs": "destination.ip"
+   },
+   {
+    "sourceName": "dest_port",
+    "destName": "DestinationPort",
+    "ecs": "destination.port"
+   },
+   {
+    "sourceName": "event_type",
+    "destName": "ApplicationProtocol",
+    "ecs": "network.protocol"
+   },
+   {
+    "sourceName": "src_ip",
+    "destName": "SourceIP",
+    "ecs": "source.ip"
+   },
+   {
+    "sourceName": "src_port",
+    "destName": "SourcePort",
+    "ecs": "source.port"
+   }
+  ]
+ },
+ {
+  "id": "generated-cisco_duo",
+  "vendor": "Cisco Duo",
+  "solutionKeywords": [
+   "cisco duo",
+   "duo security",
+   "cisco secure application"
+  ],
+  "provenance": "Generated from elastic/integrations cisco_duo pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "mappings": [
+   {
+    "sourceName": "action",
+    "destName": "DeviceAction",
+    "ecs": "event.action"
+   },
+   {
+    "sourceName": "username",
+    "destName": "SourceUserName",
+    "ecs": "user.name"
+   }
+  ]
+ }
+]
