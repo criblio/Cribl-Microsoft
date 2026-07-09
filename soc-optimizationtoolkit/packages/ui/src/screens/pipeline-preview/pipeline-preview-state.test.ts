@@ -27,6 +27,8 @@ import {
   normalizeSourceFormat,
   pipelineFunctionLines,
   pipelinePreviewEmptyReason,
+  isValidEnrichmentFieldName,
+  mergeEnrichments,
   reductionRuleViews,
   reportToPlanInput,
 } from "./pipeline-preview-state";
@@ -363,5 +365,63 @@ describe("reductionRuleViews", () => {
         view.tables[0].reductionRules,
       );
     }
+  });
+});
+
+describe("enrichment fields (user-added constants)", () => {
+  it("validates Eval-safe field names", () => {
+    expect(isValidEnrichmentFieldName("DeviceVendor")).toBe(true);
+    expect(isValidEnrichmentFieldName("_internal2")).toBe(true);
+    expect(isValidEnrichmentFieldName("2bad")).toBe(false);
+    expect(isValidEnrichmentFieldName("has space")).toBe(false);
+    expect(isValidEnrichmentFieldName("")).toBe(false);
+  });
+
+  it("merges global + per-table with per-table winning on collision", () => {
+    const merged = mergeEnrichments(
+      [
+        { field: "DeviceVendor", value: "Palo Alto Networks" },
+        { field: "DeviceProduct", value: "PAN-OS" },
+      ],
+      [{ field: "DeviceProduct", value: "Prisma" }],
+    );
+    expect(merged).toEqual([
+      { field: "DeviceVendor", value: "Palo Alto Networks" },
+      { field: "DeviceProduct", value: "Prisma" },
+    ]);
+  });
+
+  it("reportToPlanInput carries enrichments as enrich vendorMappings", () => {
+    const input = reportToPlanInput(report({}), undefined, undefined, [
+      { field: "DeviceVendor", value: "Palo Alto Networks" },
+    ]);
+    expect(input.vendorMappings).toEqual([
+      {
+        sourceName: "DeviceVendor",
+        destName: "DeviceVendor",
+        sourceType: "string",
+        destType: "string",
+        action: "enrich",
+        description: "Palo Alto Networks",
+      },
+    ]);
+  });
+
+  it("the derived preview YAML adds the constant via an Eval enrich step", () => {
+    const view = derivePipelinePreview({
+      ...approvedInputs(),
+      enrichments: {
+        CommonSecurityLog: [
+          { field: "DeviceVendor", value: "Palo Alto Networks" },
+        ],
+      },
+    });
+    expect(view.available).toBe(true);
+    const conf = view.tables[0]?.transformConf ?? "";
+    expect(conf).toContain("name: DeviceVendor");
+    expect(conf).toContain("'Palo Alto Networks'");
+    expect(conf).toContain("Add enrichment fields");
+    // Validation still passes with the enrich step present.
+    expect(view.valid).toBe(true);
   });
 });

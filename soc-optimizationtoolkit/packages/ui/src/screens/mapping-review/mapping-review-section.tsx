@@ -57,6 +57,11 @@ import type {
 import { InfoTip } from "../../components/info-tip";
 import { SearchableSelect } from "../../components/searchable-select";
 import {
+  isValidEnrichmentFieldName,
+  mergeEnrichments,
+} from "../pipeline-preview/pipeline-preview-state";
+import type { EnrichmentField } from "../pipeline-preview/pipeline-preview-state";
+import {
   INITIAL_MAPPING_REVIEW_STATE,
   MAPPING_REVIEW_NO_SAMPLES_REASON,
   MAPPING_REVIEW_STALE_NOTICE,
@@ -126,6 +131,15 @@ export interface MappingReviewSectionProps {
   ) => void;
   /** A log-type rename to re-key approvals + edits by (the Unit 11 seam). */
   renameEvent?: MappingReviewRenameEvent;
+  /**
+   * Surfaces the user-added ENRICHMENT constants (merged global + per-table)
+   * keyed by logType - fields the source does not carry that the pipeline
+   * adds (e.g. DeviceVendor for PAN-OS). Feeds the pipeline preview, the pack
+   * build, and the coverage availability set.
+   */
+  onEnrichmentsChange?: (
+    byLogType: Readonly<Record<string, EnrichmentField[]>>,
+  ) => void;
 }
 
 /**
@@ -173,6 +187,7 @@ export function MappingReviewSection({
   onReportsChange,
   onEffectiveMappingsChange,
   renameEvent,
+  onEnrichmentsChange,
 }: MappingReviewSectionProps) {
   const activeCatalog = useMemo(
     () => catalog ?? createBundledSchemaCatalog(),
@@ -191,6 +206,78 @@ export function MappingReviewSection({
   );
   const [analyzing, setAnalyzing] = useState(false);
   const [analyzeError, setAnalyzeError] = useState("");
+
+  // ---- User-added enrichment fields --------------------------------------
+  // Constants the pipeline ADDS because the source never carries them (the
+  // DeviceVendor/DeviceProduct case): a GLOBAL list applied to every table
+  // plus per-table additions (per-table wins on a field-name collision).
+  const [globalEnrichments, setGlobalEnrichments] = useState<EnrichmentField[]>(
+    [],
+  );
+  const [tableEnrichments, setTableEnrichments] = useState<
+    Record<string, EnrichmentField[]>
+  >({});
+
+  const mergedEnrichments = useMemo(() => {
+    const byLogType: Record<string, EnrichmentField[]> = {};
+    for (const report of reports) {
+      const merged = mergeEnrichments(
+        globalEnrichments,
+        tableEnrichments[report.logType] ?? [],
+      );
+      if (merged.length > 0) {
+        byLogType[report.logType] = merged;
+      }
+    }
+    return byLogType;
+  }, [reports, globalEnrichments, tableEnrichments]);
+
+  useEffect(() => {
+    onEnrichmentsChange?.(mergedEnrichments);
+  }, [mergedEnrichments, onEnrichmentsChange]);
+
+  const addEnrichment = useCallback(
+    (logType: string | null, field: string, value: string) => {
+      const name = field.trim();
+      // Values are emitted inside a single-quoted Eval expression - strip
+      // quotes so a paste cannot break the generated YAML.
+      const safeValue = value.trim().replace(/['"]/g, "");
+      if (!isValidEnrichmentFieldName(name) || safeValue === "") {
+        return false;
+      }
+      const entry: EnrichmentField = { field: name, value: safeValue };
+      if (logType === null) {
+        setGlobalEnrichments((prev) => [
+          ...prev.filter((e) => e.field !== name),
+          entry,
+        ]);
+      } else {
+        setTableEnrichments((prev) => ({
+          ...prev,
+          [logType]: [
+            ...(prev[logType] ?? []).filter((e) => e.field !== name),
+            entry,
+          ],
+        }));
+      }
+      return true;
+    },
+    [],
+  );
+
+  const removeEnrichment = useCallback(
+    (logType: string | null, field: string) => {
+      if (logType === null) {
+        setGlobalEnrichments((prev) => prev.filter((e) => e.field !== field));
+      } else {
+        setTableEnrichments((prev) => ({
+          ...prev,
+          [logType]: (prev[logType] ?? []).filter((e) => e.field !== field),
+        }));
+      }
+    },
+    [],
+  );
   const [review, dispatch] = useReducer(
     mappingReviewReducer,
     INITIAL_MAPPING_REVIEW_STATE,
@@ -421,6 +508,20 @@ export function MappingReviewSection({
               Auto-Approve All
             </button>
           )}
+        </div>
+      )}
+
+      {reports.length > 0 && (
+        <div className="discovery-result">
+          <span className="field-label">
+            Enrichment fields (added to every table)
+            <InfoTip text="Fields the source does NOT carry that the Cribl pipeline ADDS as constants - e.g. DeviceVendor = Palo Alto Networks and DeviceProduct = PAN-OS for a PAN-OS feed. Sentinel content filters on them, but raw vendor logs never include them. Global entries apply to every table below; each table can add its own (a per-table entry wins on the same field name). They appear in the pipeline preview, ship in the built pack, and count as available fields in the coverage sections." />
+          </span>
+          <EnrichmentEditor
+            entries={globalEnrichments}
+            onAdd={(field, value) => addEnrichment(null, field, value)}
+            onRemove={(field) => removeEnrichment(null, field)}
+          />
         </div>
       )}
 
@@ -687,6 +788,22 @@ export function MappingReviewSection({
                   </table>
                 </div>
 
+                <div className="enrich-table-block">
+                  <span className="field-label">
+                    Enrichment fields for {report.logType}
+                  </span>
+                  <EnrichmentEditor
+                    entries={tableEnrichments[report.logType] ?? []}
+                    inherited={globalEnrichments}
+                    onAdd={(field, value) =>
+                      addEnrichment(report.logType, field, value)
+                    }
+                    onRemove={(field) =>
+                      removeEnrichment(report.logType, field)
+                    }
+                  />
+                </div>
+
                 <div className="mapping-review-approve">
                   {approved ? (
                     <span className="gap-approved-line">
@@ -713,6 +830,108 @@ export function MappingReviewSection({
           </div>
         );
       })}
+    </div>
+  );
+}
+
+/**
+ * The enrichment add/list editor (used globally and per table): field name +
+ * constant value inputs, an Add button (validated - Eval-safe names, quotes
+ * stripped from values), and the current entries with Remove. `inherited`
+ * renders the global entries a table already receives, read-only.
+ */
+function EnrichmentEditor({
+  entries,
+  inherited,
+  onAdd,
+  onRemove,
+}: {
+  entries: readonly EnrichmentField[];
+  inherited?: readonly EnrichmentField[];
+  onAdd: (field: string, value: string) => boolean;
+  onRemove: (field: string) => void;
+}) {
+  const [field, setField] = useState("");
+  const [value, setValue] = useState("");
+  const [issue, setIssue] = useState("");
+
+  const submit = () => {
+    if (!isValidEnrichmentFieldName(field.trim())) {
+      setIssue(
+        "Field names must start with a letter/underscore and use only letters, digits, and underscores.",
+      );
+      return;
+    }
+    if (value.trim() === "") {
+      setIssue("Enter the constant value the pipeline should add.");
+      return;
+    }
+    if (onAdd(field, value)) {
+      setField("");
+      setValue("");
+      setIssue("");
+    }
+  };
+
+  return (
+    <div className="enrich-editor">
+      {inherited !== undefined && inherited.length > 0 && (
+        <div className="enrich-rows">
+          {inherited.map((e) => (
+            <div className="enrich-row enrich-row-inherited" key={`g:${e.field}`}>
+              <code className="code-chip">{e.field}</code>
+              <span className="enrich-row-eq">=</span>
+              <span className="enrich-row-value">{e.value}</span>
+              <span className="field-hint">(global)</span>
+            </div>
+          ))}
+        </div>
+      )}
+      {entries.length > 0 && (
+        <div className="enrich-rows">
+          {entries.map((e) => (
+            <div className="enrich-row" key={e.field}>
+              <code className="code-chip">{e.field}</code>
+              <span className="enrich-row-eq">=</span>
+              <span className="enrich-row-value">{e.value}</span>
+              <button
+                className="gap-reset-button"
+                onClick={() => onRemove(e.field)}
+              >
+                Remove
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+      <div className="enrich-add">
+        <input
+          type="text"
+          value={field}
+          onChange={(e) => {
+            setField(e.target.value);
+            setIssue("");
+          }}
+          placeholder="Field name (e.g. DeviceVendor)"
+          autoComplete="off"
+          spellCheck={false}
+        />
+        <input
+          type="text"
+          value={value}
+          onChange={(e) => {
+            setValue(e.target.value);
+            setIssue("");
+          }}
+          placeholder="Constant value (e.g. Palo Alto Networks)"
+          autoComplete="off"
+          spellCheck={false}
+        />
+        <button className="run-button" onClick={submit}>
+          Add field
+        </button>
+      </div>
+      {issue !== "" && <span className="field-hint enrich-issue">{issue}</span>}
     </div>
   );
 }

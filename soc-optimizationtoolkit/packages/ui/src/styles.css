@@ -3959,3 +3959,54 @@ details > summary::before {
 details[open] > summary::before {
   transform: rotate(45deg);
 }
+
+/* Enrichment-field editor (global + per-table constants the pipeline adds). */
+.enrich-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.enrich-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.enrich-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+.enrich-row-inherited {
+  opacity: 0.75;
+}
+.enrich-row-eq {
+  color: var(--text-faint);
+}
+.enrich-row-value {
+  color: var(--text);
+}
+.enrich-add {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.enrich-add input {
+  flex: 1 1 220px;
+  font-family: inherit;
+  font-size: 13px;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: var(--surface-raised);
+  color: var(--text);
+}
+.enrich-issue {
+  color: var(--warn);
+}
+.enrich-table-block {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}

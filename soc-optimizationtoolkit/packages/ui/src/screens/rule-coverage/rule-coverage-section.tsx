@@ -114,6 +114,12 @@ export interface RuleCoverageSectionProps {
    * each is its own numbered section.
    */
   contentFilter?: "rules" | "workbooks";
+  /**
+   * Extra field names counted AVAILABLE beyond what the mappings produce -
+   * the user-added enrichment constants (e.g. DeviceVendor). They close
+   * coverage gaps for fields the pipeline adds rather than maps.
+   */
+  extraAvailableFields?: readonly string[];
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -349,6 +355,7 @@ export function RuleCoverageSection({
   catalog,
   onRuleFieldsChange,
   contentFilter,
+  extraAvailableFields,
 }: RuleCoverageSectionProps) {
   const { ports, config } = usePorts();
   const activeContent = content ?? ports.content;
@@ -423,7 +430,10 @@ export function RuleCoverageSection({
 
         const produced = analyzeContentCoverage({
           items,
-          availableFields: availableFieldsFromReports(reports),
+          availableFields: [
+            ...availableFieldsFromReports(reports),
+            ...(extraAvailableFields ?? []),
+          ],
           schemaUnion,
         });
         setReport(produced);
@@ -445,6 +455,7 @@ export function RuleCoverageSection({
       reports,
       showRules,
       showWorkbooks,
+      extraAvailableFields,
     ],
   );
 

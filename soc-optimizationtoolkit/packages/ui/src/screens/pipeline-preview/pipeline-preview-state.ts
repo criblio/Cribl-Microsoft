@@ -148,6 +148,11 @@ export interface PipelinePreviewInputs {
   /** Detected sample format keyed by logType (drives serde/timestamp). */
   sampleFormats?: Readonly<Record<string, string>>;
   /**
+   * User-added enrichment constants keyed by logType (ALREADY merged global +
+   * per-table by the caller). Each becomes an Eval add in the pipeline.
+   */
+  enrichments?: Readonly<Record<string, readonly EnrichmentField[]>>;
+  /**
    * The mapping-review content-path gate (deriveMappingReviewGate().ready): every
    * table-with-mappings approved and not stale. The preview renders its tables
    * only when this is true (else the always-visible-disabled empty state).
@@ -212,11 +217,41 @@ export function gapMappingToPreset(m: GapFieldMapping): PipelineFieldMapping {
   return { source: m.source, target: m.dest, type: m.destType, action };
 }
 
+/**
+ * A user-added ENRICHMENT: a field the source does not carry that the Cribl
+ * pipeline adds as a constant (e.g. DeviceVendor = "Palo Alto Networks" for a
+ * PAN-OS feed - Sentinel content keys on it, but the raw logs never carry it).
+ */
+export interface EnrichmentField {
+  field: string;
+  value: string;
+}
+
+/** A safe Cribl Eval field name (letters/digits/underscore, no leading digit). */
+export function isValidEnrichmentFieldName(name: string): boolean {
+  return /^[A-Za-z_][A-Za-z0-9_]*$/.test(name);
+}
+
+/**
+ * Merge global enrichments with one table's own: the table's entry WINS on a
+ * field-name collision; order is global-first, per-table appended.
+ */
+export function mergeEnrichments(
+  global: readonly EnrichmentField[],
+  perTable: readonly EnrichmentField[],
+): EnrichmentField[] {
+  const byField = new Map<string, EnrichmentField>();
+  for (const e of global) byField.set(e.field, e);
+  for (const e of perTable) byField.set(e.field, e);
+  return [...byField.values()];
+}
+
 /** Compose ONE typed planner input from a gap report + the reviewer's edits. */
 export function reportToPlanInput(
   report: GapReport,
   overrides?: Readonly<Record<string, GapFieldMapping[]>>,
   sampleFormats?: Readonly<Record<string, string>>,
+  enrichments?: readonly EnrichmentField[],
 ): TablePlanInput {
   const mappings = effectiveReportMappings(report, overrides);
   return {
@@ -224,6 +259,21 @@ export function reportToPlanInput(
     logType: report.logType,
     presetFields: mappings.map(gapMappingToPreset),
     sourceFormat: normalizeSourceFormat(sampleFormats?.[report.logType]),
+    // User-added constants ride the planner's vendorMappings channel: the
+    // conf emitter's enrich branch turns each into an Eval add of
+    // `destName = '<description>'` (the Unit 15 shape, user-supplied here).
+    ...(enrichments !== undefined && enrichments.length > 0
+      ? {
+          vendorMappings: enrichments.map((e) => ({
+            sourceName: e.field,
+            destName: e.field,
+            sourceType: "string",
+            destType: "string",
+            action: "enrich",
+            description: e.value,
+          })),
+        }
+      : {}),
     // The report mirrors the Cribl route condition; feed it as routing so the
     // emitted route.yml filter matches what the gap analysis showed.
     routing: {
@@ -372,7 +422,12 @@ export function derivePipelinePreview(
     packName: inputs.packName,
     ...(inputs.version !== undefined ? { version: inputs.version } : {}),
     tables: planTables.map((r) =>
-      reportToPlanInput(r, inputs.mappingOverrides, inputs.sampleFormats),
+      reportToPlanInput(
+        r,
+        inputs.mappingOverrides,
+        inputs.sampleFormats,
+        inputs.enrichments?.[r.logType],
+      ),
     ),
   });
 

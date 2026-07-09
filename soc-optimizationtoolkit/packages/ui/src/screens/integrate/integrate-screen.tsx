@@ -105,6 +105,7 @@ import { MappingReviewSection } from "../mapping-review/mapping-review-section";
 import type { MappingReviewRenameEvent } from "../mapping-review/mapping-review-section";
 import { PipelinePreviewSection } from "../pipeline-preview/pipeline-preview-section";
 import { derivePipelinePreview } from "../pipeline-preview/pipeline-preview-state";
+import type { EnrichmentField } from "../pipeline-preview/pipeline-preview-state";
 import { SolutionBrowser } from "../solution-browser/solution-browser";
 import { RuleCoverageSection } from "../rule-coverage/rule-coverage-section";
 import {
@@ -312,6 +313,16 @@ export function IntegrateScreen({
   const [mappingOverrides, setMappingOverrides] = useState<
     Readonly<Record<string, GapFieldMapping[]>>
   >({});
+  // User-added enrichment constants (merged global + per-table, keyed by
+  // logType) from the mapping review: they flow into the pipeline preview,
+  // the pack build, and the coverage availability set.
+  const [enrichments, setEnrichments] = useState<
+    Readonly<Record<string, EnrichmentField[]>>
+  >({});
+  const enrichmentFieldNames = useMemo(
+    () => [...new Set(Object.values(enrichments).flat().map((e) => e.field))],
+    [enrichments],
+  );
 
   // ---- Analytics Rule Coverage section (Unit 23) ------------------------
   // The coverage analyzer reports the schema-resolvable referenced-field set
@@ -531,6 +542,7 @@ export function IntegrateScreen({
         reports: gapReports,
         mappingOverrides,
         sampleFormats,
+        enrichments,
         approved: mappingsApproved,
       });
       if (!preview.available || preview.plan === null) {
@@ -656,6 +668,7 @@ export function IntegrateScreen({
     gapReports,
     mappingOverrides,
     sampleFormats,
+    enrichments,
     outcomes,
     samples,
     config,
@@ -841,6 +854,7 @@ export function IntegrateScreen({
         onGateChange={setMappingsApproved}
         onReportsChange={setGapReports}
         onEffectiveMappingsChange={setMappingOverrides}
+        onEnrichmentsChange={setEnrichments}
         renameEvent={renameEvent}
       />
       {/* COLLAPSED by default: the full per-pipeline detail is reference
@@ -860,6 +874,7 @@ export function IntegrateScreen({
           reports={gapReports}
           mappingOverrides={mappingOverrides}
           sampleFormats={sampleFormats}
+          enrichments={enrichments}
           approved={mappingsApproved}
         />
       </details>
@@ -874,6 +889,7 @@ export function IntegrateScreen({
       content={ports.content}
       onRuleFieldsChange={setRuleFields}
       contentFilter="rules"
+      extraAvailableFields={enrichmentFieldNames}
     />
   );
 
@@ -884,6 +900,7 @@ export function IntegrateScreen({
       reports={gapReports}
       content={ports.content}
       contentFilter="workbooks"
+      extraAvailableFields={enrichmentFieldNames}
     />
   );
 

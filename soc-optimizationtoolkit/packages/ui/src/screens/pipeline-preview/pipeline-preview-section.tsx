@@ -25,6 +25,7 @@ import type { GapFieldMapping, GapReport } from "@soc/core";
 import { InfoTip } from "../../components/info-tip";
 import {
   derivePipelinePreview,
+  type EnrichmentField,
   type PipelineFunctionLine,
   type ReductionRuleView,
 } from "./pipeline-preview-state";
@@ -42,6 +43,8 @@ export interface PipelinePreviewSectionProps {
   mappingOverrides?: Readonly<Record<string, GapFieldMapping[]>>;
   /** Detected sample format keyed by logType (drives serde/timestamp). */
   sampleFormats?: Readonly<Record<string, string>>;
+  /** User-added enrichment constants keyed by logType (merged by the caller). */
+  enrichments?: Readonly<Record<string, readonly EnrichmentField[]>>;
   /** The mapping-review content-path gate (every table approved, not stale). */
   approved: boolean;
 }
@@ -97,6 +100,7 @@ export function PipelinePreviewSection({
   reports,
   mappingOverrides,
   sampleFormats,
+  enrichments,
   approved,
 }: PipelinePreviewSectionProps) {
   const view = useMemo(
@@ -108,6 +112,7 @@ export function PipelinePreviewSection({
         reports,
         ...(mappingOverrides !== undefined ? { mappingOverrides } : {}),
         ...(sampleFormats !== undefined ? { sampleFormats } : {}),
+        ...(enrichments !== undefined ? { enrichments } : {}),
         approved,
       }),
     [
@@ -117,6 +122,7 @@ export function PipelinePreviewSection({
       reports,
       mappingOverrides,
       sampleFormats,
+      enrichments,
       approved,
     ],
   );
