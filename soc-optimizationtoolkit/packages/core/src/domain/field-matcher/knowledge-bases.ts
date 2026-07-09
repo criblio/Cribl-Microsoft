@@ -60,16 +60,24 @@ export const ALIAS_TABLE: Record<string, string[]> = {
   proto: ["Protocol", "NetworkProtocol", "IPProtocol"],
   app: ["ApplicationProtocol", "Application", "AppName"],
   service: ["DestinationServiceName", "Service"],
+  // NOTE: do NOT add "Activity" here - alias candidates tie on score, so the
+  // SCHEMA order picks the column, and Activity precedes DeviceAction in
+  // CommonSecurityLog (verified 2026-07-09: it flipped action=Blocked onto
+  // Activity and displaced threat_name).
   action: ["DeviceAction", "Action", "EventAction"],
   rule: ["RuleName", "SecurityRule"],
 
   // Zones / Interfaces
   from: ["SourceZone", "FromZone", "InboundZone"],
   to: ["DestinationZone", "ToZone", "OutboundZone"],
-  inbound_if: ["InboundInterface", "SourceInterface"],
-  outbound_if: ["OutboundInterface", "DestinationInterface"],
-  srcintf: ["InboundInterface", "SourceInterface"],
-  dstintf: ["OutboundInterface", "DestinationInterface"],
+  // CORRECTED 2026-07-09: the legacy candidates (InboundInterface etc.) are
+  // not CommonSecurityLog columns - the real ones are Device*Interface, so
+  // these aliases never fired on the table they were written for. Real
+  // column first; legacy candidates kept as fallbacks.
+  inbound_if: ["DeviceInboundInterface", "InboundInterface", "SourceInterface"],
+  outbound_if: ["DeviceOutboundInterface", "OutboundInterface", "DestinationInterface"],
+  srcintf: ["DeviceInboundInterface", "InboundInterface", "SourceInterface"],
+  dstintf: ["DeviceOutboundInterface", "OutboundInterface", "DestinationInterface"],
 
   // Bytes / Packets
   bytes_sent: ["SentBytes", "BytesSent", "OutBytes"],
@@ -118,7 +126,9 @@ export const ALIAS_TABLE: Record<string, string[]> = {
   subtype: ["Activity", "EventSubType"],
   type: ["DeviceEventClassID", "EventType", "Type"],
   category: ["DeviceEventCategory", "Category", "URLCategory"],
-  thr_category: ["ThreatCategory"],
+  // CORRECTED 2026-07-09: ThreatCategory is not a CommonSecurityLog column;
+  // PAN's own CEF mapping sends thr_category to cat (DeviceEventCategory).
+  thr_category: ["DeviceEventCategory", "ThreatCategory"],
   misc: ["RequestURL", "AdditionalInfo"],
   direction: ["CommunicationDirection"],
   filedigest: ["FileHash", "SHA256"],
@@ -294,7 +304,17 @@ export const ALIAS_TABLE: Record<string, string[]> = {
   // FortiGate key=value fields
   devname: ["DeviceName", "Computer"],
   eventtime: ["TimeGenerated", "EventTime"],
-  transport: ["Protocol", "NetworkProtocol"],
+  // CORRECTED 2026-07-09: the live fortinet_fortigate sample shows the
+  // trandisp=snat / transip / transport trio - transport is the TRANSLATED
+  // PORT (58012), not the protocol.
+  transport: ["SourceTranslatedPort"],
+  transip: ["SourceTranslatedAddress"],
+  mastersrcmac: ["SourceMACAddress"],
+  masterdstmac: ["DestinationMACAddress"],
+  catdesc: ["DeviceEventCategory"],
+  qname: ["DestinationDnsDomain"],
+  agent: ["RequestClientApplication"],
+  logdesc: ["Message"],
 
   // Cross-vendor web/API log conventions (IIS, nginx, Zscaler, WAFs)
   useragent: ["RequestClientApplication"],
@@ -330,6 +350,47 @@ export const ALIAS_TABLE: Record<string, string[]> = {
   appname: ["ProcessName", "AppName"],
   app_name: ["ProcessName", "AppName"],
   program: ["ProcessName"],
+
+  // CrowdStrike FDR / alert stream names (evidence: crowdstrike fdr + alert
+  // test fixtures). aip is the SENSOR's public IP (the reporting device);
+  // aid/agent_id identify the agent.
+  LocalAddressIP4: ["SourceIP"],
+  LocalAddressIP6: ["SourceIP"],
+  RemoteAddressIP4: ["DestinationIP"],
+  RemoteAddressIP6: ["DestinationIP"],
+  LocalPort: ["SourcePort"],
+  RemotePort: ["DestinationPort"],
+  aip: ["DeviceAddress"],
+  aid: ["DeviceExternalID"],
+  agent_id: ["DeviceExternalID"],
+  event_simpleName: ["Activity"],
+  SHA256HashData: ["FileHash"],
+  SHA1HashData: ["FileHash"],
+  MD5HashData: ["FileHash"],
+  ContextTimeStamp: ["ReceiptTime"],
+  context_timestamp: ["ReceiptTime"],
+  ConnectionDirection: ["CommunicationDirection"],
+  RawProcessId: ["SourceProcessId"],
+  logon_domain: ["SourceNTDomain"],
+  cmdline: ["ProcessCommandLine", "CommandLine"],
+
+  // Suricata EVE (evidence: suricata eve alerts fixture)
+  app_proto: ["ApplicationProtocol"],
+  in_iface: ["DeviceInboundInterface"],
+
+  // Cisco Secure Endpoint + Duo (evidence: their admin/event fixtures)
+  detection: ["Message"],
+  detection_id: ["ExternalID"],
+  connector_guid: ["DeviceExternalID"],
+  isotimestamp: ["ReceiptTime"],
+
+  // PAN-OS CSV/dictionary names beyond the 2026-07-08 set (evidence: panw
+  // panos THREAT fixture; per PAN's own CEF mapping cat=thr_category,
+  // deviceEventClassId=threatid, externalId=seqno).
+  seqno: ["ExternalID"],
+
+  // Syslog transport variants
+  pid: ["ProcessID", "SourceProcessId"],
 
   // Zscaler NSS feeds -> CommonSecurityLog (live gap 2026-07-09: 76 of 83
   // Zscaler fields overflowed). Field names verified against the real ZIA
@@ -367,6 +428,15 @@ export const ALIAS_TABLE: Record<string, string[]> = {
   outbytes: ["SentBytes"],
   nwsvc: ["ApplicationProtocol"],
   recordid: ["ExternalID"],
+  // DNS (NSS dns feed): clt_sip/srv_dip name the client and the resolver
+  // target; dns_req is the queried domain.
+  clt_sip: ["SourceIP"],
+  srv_dip: ["DestinationIP"],
+  srv_dport: ["DestinationPort"],
+  dns_req: ["DestinationDnsDomain"],
+  http_code: ["EventOutcome"],
+  reqaction: ["DeviceAction"],
+  error: ["Reason"],
 };
 
 /** Reverse lookup: destName (lowercased) -> sourceNames (lowercased). */
