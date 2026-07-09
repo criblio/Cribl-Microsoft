@@ -37,6 +37,15 @@ export {
   mergeCustomContentItems,
 } from "./parse-analytic-rule";
 
+// Custom-rule uploads beyond YAML: portal ARM JSON exports + raw KQL.
+export {
+  RULE_UPLOAD_EXTENSIONS,
+  isRuleUploadFileName,
+  parseAnalyticRuleArmJson,
+  parseRawKqlRule,
+  parseRuleUploadFile,
+} from "./parse-rule-uploads";
+
 // Workbook query mining (net-new, defensive).
 export { extractWorkbookQueries, workbookToContentItem } from "./parse-workbook";
 

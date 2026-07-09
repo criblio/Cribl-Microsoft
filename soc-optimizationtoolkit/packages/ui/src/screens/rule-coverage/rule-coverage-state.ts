@@ -26,10 +26,7 @@
  * Pure: no IO, no fetch, no React, no Date, no crypto, no Math.random.
  */
 
-import {
-  analyticRuleToContentItem,
-  parseCustomAnalyticRuleYaml,
-} from "@soc/core";
+import { analyticRuleToContentItem, parseRuleUploadFile } from "@soc/core";
 import type {
   ContentItem,
   ContentItemType,
@@ -109,30 +106,32 @@ export function destinationTableNamesFromReports(
 }
 
 // ---------------------------------------------------------------------------
-// Custom-YAML upload projection
+// Custom-rule upload projection (YAML detections, ARM JSON exports, raw KQL)
 // ---------------------------------------------------------------------------
 
-/** One uploaded rule YAML file (name + text) awaiting parse. */
+/** One uploaded rule file (name + text) awaiting parse. */
 export interface RuleYamlUpload {
   fileName: string;
   content: string;
 }
 
 /**
- * Parse uploaded custom rule YAML files into shared ContentItems, each flagged
- * `custom` (drives the CUSTOM badge). Uses the core PINNED regex parser; the
- * query text is PRESERVED (the legacy custom path dropped it), so a custom rule
- * flows through the shared analyzer identically to a repo rule. The component
- * merges the result into its custom-rule list with core mergeCustomContentItems
- * (last-write-wins by name - the re-upload fix), then re-runs coverage.
+ * Parse uploaded custom rule files into shared ContentItems, each flagged
+ * `custom` (drives the CUSTOM badge). The core dispatcher accepts the three
+ * wrappings a rule's KQL arrives in - repo-style YAML detections, portal ARM
+ * JSON exports (which may carry several rules per file), and raw .kql/.txt
+ * queries. Query text is PRESERVED (the legacy custom path dropped it), so a
+ * custom rule flows through the shared analyzer identically to a repo rule.
+ * The component merges the result into its custom-rule list with core
+ * mergeCustomContentItems (last-write-wins by name - the re-upload fix), then
+ * re-runs coverage.
  */
 export function parseCustomRuleUploads(
   uploads: readonly RuleYamlUpload[],
 ): ContentItem[] {
-  return uploads.map((upload) =>
-    analyticRuleToContentItem(
-      parseCustomAnalyticRuleYaml(upload.content, upload.fileName),
-      true,
+  return uploads.flatMap((upload) =>
+    parseRuleUploadFile(upload.fileName, upload.content).map((rule) =>
+      analyticRuleToContentItem(rule, true),
     ),
   );
 }

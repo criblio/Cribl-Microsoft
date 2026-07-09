@@ -459,7 +459,9 @@ export function RuleCoverageSection({
     ],
   );
 
-  // Custom-YAML upload: parse -> merge (re-upload fix) -> re-run coverage.
+  // Custom-rule upload (YAML detection, portal ARM JSON export, or raw KQL):
+  // parse -> merge (re-upload fix) -> re-run coverage.
+  const [uploadNote, setUploadNote] = useState("");
   const onUpload = useCallback(
     async (fileList: FileList | null) => {
       if (fileList === null || fileList.length === 0) {
@@ -472,6 +474,14 @@ export function RuleCoverageSection({
         })),
       );
       const parsed = parseCustomRuleUploads(uploads);
+      setUploadNote(
+        parsed.length === 0
+          ? `No rules found in ${uploads.map((u) => u.fileName).join(", ")} - expected a rule YAML, a portal ARM JSON export, or a raw KQL query.`
+          : "",
+      );
+      if (parsed.length === 0) {
+        return;
+      }
       const merged = mergeCustomContentItems(customItems, parsed);
       setCustomItems(merged);
       // NO STALE-SKIP: always re-run, even with an empty availability set.
@@ -526,10 +536,10 @@ export function RuleCoverageSection({
           <>
             <span className="field-label">Custom Rules</span>
             <label className="rule-coverage-upload">
-              Upload YAML
+              Upload rules
               <input
                 type="file"
-                accept=".yaml,.yml"
+                accept=".yaml,.yml,.json,.kql,.txt"
                 multiple
                 onChange={(e) => {
                   void onUpload(e.target.files);
@@ -537,7 +547,7 @@ export function RuleCoverageSection({
                 }}
               />
             </label>
-            <InfoTip text="Upload organization-specific analytics rule YAML files to include in the coverage analysis. They are merged with the solution's repo rules; re-uploading a rule of the same name replaces it (the legacy silent-ignore is fixed)." />
+            <InfoTip text="Include your organization's own analytics rules in the coverage analysis. A rule's detection logic is KQL; the accepted files are the wrappers that KQL ships in: the ARM JSON export from the portal's Analytics blade (Export - can carry several rules per file), a repo-style rule YAML, or a raw .kql/.txt query. They merge with the solution's repo rules; re-uploading a rule of the same name replaces it." />
             {customCount > 0 && (
               <>
                 <span className="field-hint">
@@ -557,6 +567,12 @@ export function RuleCoverageSection({
 
       {!hasReports && (
         <p className="field-hint">{RULE_COVERAGE_NO_REPORTS_NOTE}</p>
+      )}
+      {uploadNote !== "" && (
+        <div className="status-bar status-bar-warn">
+          <span className="status-bar-dot" />
+          <span className="status-bar-text">{uploadNote}</span>
+        </div>
       )}
       {analyzeError !== "" && <pre className="result">{analyzeError}</pre>}
       {workbookNote !== "" && (
