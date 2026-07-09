@@ -40,9 +40,11 @@ import {
   extractWorkbookQueries,
   mergeCustomContentItems,
   parseAnalyticRuleYaml,
+  suggestCloseMatches,
   unionSchemaColumns,
   workbookToContentItem,
 } from "@soc/core";
+import type { CloseMatchCandidate } from "@soc/core";
 import type {
   AzureManagement,
   ContentItem,
@@ -267,7 +269,14 @@ async function resolveSchemaUnion(
 }
 
 /** One expandable coverage section (rule section or workbook section). */
-function CoverageSectionBody({ section }: { section: CoverageSectionView }) {
+function CoverageSectionBody({
+  section,
+  onInvestigate,
+}: {
+  section: CoverageSectionView;
+  /** Kick off a close-match review of the sample fields for a missing field. */
+  onInvestigate: (field: string) => void;
+}) {
   return (
     <div className="coverage-subsection">
       <p className="panel-desc">{section.summaryLine}</p>
@@ -323,7 +332,18 @@ function CoverageSectionBody({ section }: { section: CoverageSectionView }) {
             )}
             {item.missing.length > 0 && (
               <div className="coverage-line coverage-line-missing">
-                Missing: {item.missing.join(", ")}
+                Missing:{" "}
+                {item.missing.map((field) => (
+                  <button
+                    key={field}
+                    type="button"
+                    className="missing-field-button"
+                    title="Review the sample fields for close matches to this field"
+                    onClick={() => onInvestigate(field)}
+                  >
+                    {field}
+                  </button>
+                ))}
               </div>
             )}
             {item.unknown.length > 0 && (
@@ -376,6 +396,32 @@ export function RuleCoverageSection({
   const [workbookNote, setWorkbookNote] = useState("");
   const [schemaNote, setSchemaNote] = useState("");
   const [customItems, setCustomItems] = useState<ContentItem[]>([]);
+  // Close-match review of a missing field (the clickable missing-field
+  // buttons): candidates come from the Gap Analysis reports' mapping rows -
+  // matched AND overflow - via the core suggester.
+  const [investigation, setInvestigation] = useState<{
+    field: string;
+    candidates: CloseMatchCandidate[];
+  } | null>(null);
+  const investigate = useCallback(
+    (field: string) => {
+      const rows = reports.flatMap((r) =>
+        r.fieldMappings.map((m) => ({
+          sourceName: m.source,
+          logType: r.logType,
+          disposition:
+            m.action === "overflow"
+              ? "overflow -> " + m.dest
+              : m.action + " -> " + m.dest,
+          ...(m.sampleValue !== undefined
+            ? { sampleValue: m.sampleValue }
+            : {}),
+        })),
+      );
+      setInvestigation({ field, candidates: suggestCloseMatches(field, rows) });
+    },
+    [reports],
+  );
 
   // The kept Unit 18 contract: the lowercased schema-resolvable referenced-field
   // set, recomputed only when the report changes so the effect is stable.
@@ -611,13 +657,19 @@ export function RuleCoverageSection({
           {showRules && ruleSection !== null && (
             <div className="coverage-section">
               <div className="coverage-section-head">Analytics Rules</div>
-              <CoverageSectionBody section={ruleSection} />
+              <CoverageSectionBody
+                section={ruleSection}
+                onInvestigate={investigate}
+              />
             </div>
           )}
           {showWorkbooks && workbookSection !== null && (
             <div className="coverage-section">
               <div className="coverage-section-head">Workbooks</div>
-              <CoverageSectionBody section={workbookSection} />
+              <CoverageSectionBody
+                section={workbookSection}
+                onInvestigate={investigate}
+              />
             </div>
           )}
 
@@ -625,14 +677,73 @@ export function RuleCoverageSection({
             <div className="coverage-missing">
               <div className="coverage-missing-heading">
                 {MISSING_FIELDS_HEADING}
+                <InfoTip text="Each missing field is a button: click it to re-review your sample fields for CLOSE matches - near-miss names the automatic mapping deliberately refused (e.g. a base64-encoded URL) or overflow fields worth remapping by hand in the Gap Analysis table." />
               </div>
               <div className="coverage-missing-chips">
                 {missingChips.map((field) => (
-                  <span key={field} className="missing-field-chip">
+                  <button
+                    key={field}
+                    type="button"
+                    className="missing-field-button"
+                    title="Review the sample fields for close matches to this field"
+                    onClick={() => investigate(field)}
+                  >
                     {field}
-                  </span>
+                  </button>
                 ))}
               </div>
+            </div>
+          )}
+
+          {investigation !== null && (
+            <div className="close-match-panel">
+              <div className="close-match-head">
+                <span className="field-label">
+                  Close matches for {investigation.field} in your sample fields
+                </span>
+                <button
+                  type="button"
+                  className="gap-reset-button"
+                  onClick={() => setInvestigation(null)}
+                >
+                  Dismiss
+                </button>
+              </div>
+              {investigation.candidates.length === 0 ? (
+                <p className="field-hint">
+                  No sample field looks close to {investigation.field}. The
+                  data may genuinely be absent from this feed, or carried
+                  under an unrelated name - check the Gap Analysis overflow
+                  rows.
+                </p>
+              ) : (
+                <>
+                  {investigation.candidates.map((c) => (
+                    <div
+                      className="close-match-row"
+                      key={c.sourceName + "|" + c.logType}
+                    >
+                      <code className="code-chip">{c.sourceName}</code>
+                      <span className="field-hint">({c.logType})</span>
+                      <span className="close-match-disposition">
+                        {c.disposition}
+                      </span>
+                      <span className="field-hint">{c.reason}</span>
+                      {c.sampleValue !== undefined && (
+                        <span className="close-match-sample">
+                          e.g. {c.sampleValue.slice(0, 48)}
+                        </span>
+                      )}
+                    </div>
+                  ))}
+                  <p className="field-hint">
+                    To remap one, open the Gap Analysis section and search for
+                    the field in its mapping table. A close match with encoded
+                    or derived content (for example a base64 URL) needs a
+                    pipeline transform, not just a rename.
+                  </p>
+                </>
+              )}
             </div>
           )}
         </div>

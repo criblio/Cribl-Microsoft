@@ -4039,6 +4039,72 @@ details[open] > summary::before {
 .identity-missing-hint {
   color: var(--warn);
 }
+
+/* Field-mapping search (per Gap Analysis card). */
+.mapping-search {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 8px 0;
+  flex-wrap: wrap;
+}
+.mapping-search input {
+  flex: 1 1 260px;
+  font-family: inherit;
+  font-size: 13px;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: var(--surface-raised);
+  color: var(--text);
+}
+
+/* Clickable missing fields (coverage sections) + close-match panel. */
+.missing-field-button {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 1px 8px;
+  margin: 0 4px 4px 0;
+  border: 1px solid var(--error-border);
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--error-strong);
+  white-space: nowrap;
+  cursor: pointer;
+}
+.missing-field-button:hover {
+  border-color: var(--error-strong);
+}
+.close-match-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: var(--surface-raised);
+}
+.close-match-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.close-match-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-size: 13px;
+}
+.close-match-disposition {
+  color: var(--text);
+}
+.close-match-sample {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-faint);
+}
 .identity-required {
   display: flex;
   flex-direction: column;

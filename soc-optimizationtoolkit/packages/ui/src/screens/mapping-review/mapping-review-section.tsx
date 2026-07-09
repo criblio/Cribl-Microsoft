@@ -222,6 +222,12 @@ export function MappingReviewSection({
   );
   const [analyzing, setAnalyzing] = useState(false);
   const [analyzeError, setAnalyzeError] = useState("");
+  // Per-card field search (user request 2026-07-09): filters the mapping
+  // table's rows (source OR destination name) and the unmapped-column list,
+  // so a field flagged by the coverage sections can be found by hand.
+  const [mappingSearch, setMappingSearch] = useState<Record<string, string>>(
+    {},
+  );
 
   // ---- User-added enrichment fields --------------------------------------
   // Constants the pipeline ADDS because the source never carries them (the
@@ -637,6 +643,21 @@ export function MappingReviewSection({
         const effective = effectiveMappings(review, report);
         const mappings = sortedMappings(effective);
         const unmapped = unmappedDestColumns(report, effective);
+        const query = (mappingSearch[report.logType] ?? "")
+          .trim()
+          .toLowerCase();
+        const shownMappings =
+          query === ""
+            ? mappings
+            : mappings.filter(
+                (m) =>
+                  m.source.toLowerCase().includes(query) ||
+                  m.dest.toLowerCase().includes(query),
+              );
+        const shownUnmapped =
+          query === ""
+            ? unmapped
+            : unmapped.filter((d) => d.name.toLowerCase().includes(query));
         const approved = isApproved(review, report.logType);
         const modified = isModified(review, report.logType);
         return (
@@ -763,6 +784,30 @@ export function MappingReviewSection({
                   )}
                 </summary>
 
+                <div className="mapping-search">
+                  <input
+                    type="text"
+                    value={mappingSearch[report.logType] ?? ""}
+                    onChange={(e) =>
+                      setMappingSearch((prev) => ({
+                        ...prev,
+                        [report.logType]: e.target.value,
+                      }))
+                    }
+                    placeholder="Search fields (source or destination)..."
+                    aria-label="Search field mappings"
+                    autoComplete="off"
+                    spellCheck={false}
+                  />
+                  {query !== "" && (
+                    <span className="field-hint">
+                      {shownMappings.length} of {mappings.length} mapped rows,{" "}
+                      {shownUnmapped.length} of {unmapped.length} unmapped
+                      columns
+                    </span>
+                  )}
+                </div>
+
                 <div className="mapping-review-table-wrap">
                   <table className="match-field-table mapping-review-grid">
                     <thead>
@@ -794,7 +839,7 @@ export function MappingReviewSection({
                       </tr>
                     </thead>
                     <tbody>
-                      {mappings.map((m) => {
+                      {shownMappings.map((m) => {
                         const ruleField = isRuleField(m.dest, ruleFields);
                         return (
                           <tr
@@ -867,15 +912,15 @@ export function MappingReviewSection({
                           </tr>
                         );
                       })}
-                      {unmapped.length > 0 && (
+                      {shownUnmapped.length > 0 && (
                         <tr className="mapping-unmapped-head">
                           <td colSpan={6}>
-                            Unmapped Destination Fields ({unmapped.length})
+                            Unmapped Destination Fields ({shownUnmapped.length})
                             <InfoTip text="These destination schema columns have no corresponding field in your sample data. They will be empty in Sentinel unless populated by a DCR transformation or added to your source data." />
                           </td>
                         </tr>
                       )}
-                      {unmapped.map((d) => {
+                      {shownUnmapped.map((d) => {
                         const ruleField = isRuleField(d.name, ruleFields);
                         return (
                           <tr
