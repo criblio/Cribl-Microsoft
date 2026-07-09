@@ -330,6 +330,43 @@ export const ALIAS_TABLE: Record<string, string[]> = {
   appname: ["ProcessName", "AppName"],
   app_name: ["ProcessName", "AppName"],
   program: ["ProcessName"],
+
+  // Zscaler NSS feeds -> CommonSecurityLog (live gap 2026-07-09: 76 of 83
+  // Zscaler fields overflowed). Field names verified against the real ZIA
+  // web + firewall test logs (elastic/integrations zscaler_zia pipeline
+  // fixtures - the exact files the Elastic browse tier serves); every
+  // destination is a real CommonSecurityLog column.
+  // Web (NSS web feed): clt* = the client, host = the visited destination,
+  // req/resp = the HTTP exchange.
+  cltip: ["SourceIP"],
+  cltpubip: ["SourceTranslatedAddress"],
+  cltsourceport: ["SourcePort"],
+  reqmethod: ["RequestMethod"],
+  respcode: ["EventOutcome"],
+  reqsize: ["SentBytes"],
+  respsize: ["ReceivedBytes"],
+  applayerprotocol: ["ApplicationProtocol"],
+  login: ["SourceUserName"],
+  refererhost: ["RequestContext"],
+  host: ["DestinationHostName"],
+  devicehostname: ["SourceHostName"],
+  filetype: ["FileType"],
+  epochtime: ["ReceiptTime"],
+  datetime: ["ReceiptTime"],
+  // Firewall (NSS firewall feed): c=client-side, s=server-side; the
+  // server-side pair is the post-NAT/egress translation.
+  csip: ["SourceIP"],
+  csport: ["SourcePort"],
+  cdip: ["DestinationIP"],
+  cdport: ["DestinationPort"],
+  ssip: ["SourceTranslatedAddress"],
+  ssport: ["SourceTranslatedPort"],
+  sdip: ["DestinationTranslatedAddress"],
+  sdport: ["DestinationTranslatedPort"],
+  inbytes: ["ReceivedBytes"],
+  outbytes: ["SentBytes"],
+  nwsvc: ["ApplicationProtocol"],
+  recordid: ["ExternalID"],
 };
 
 /** Reverse lookup: destName (lowercased) -> sourceNames (lowercased). */

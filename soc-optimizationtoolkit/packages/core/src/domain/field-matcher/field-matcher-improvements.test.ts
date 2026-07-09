@@ -161,6 +161,116 @@ describe("curated alias extension (2026-07-08)", () => {
   });
 });
 
+describe("Zscaler NSS aliases (2026-07-09)", () => {
+  // Live gap: 76 of 83 Zscaler fields overflowed. Names verified against the
+  // real ZIA web + firewall test logs (elastic/integrations zscaler_zia
+  // pipeline fixtures - the files the Elastic browse tier serves).
+  const ZS_COLUMNS: DestField[] = [
+    { name: "SourceIP", type: "string" },
+    { name: "SourcePort", type: "int" },
+    { name: "DestinationIP", type: "string" },
+    { name: "DestinationPort", type: "int" },
+    { name: "SourceTranslatedAddress", type: "string" },
+    { name: "SourceTranslatedPort", type: "int" },
+    { name: "DestinationTranslatedAddress", type: "string" },
+    { name: "DestinationTranslatedPort", type: "int" },
+    { name: "ReceivedBytes", type: "long" },
+    { name: "SentBytes", type: "long" },
+    { name: "ApplicationProtocol", type: "string" },
+    { name: "ExternalID", type: "string" },
+    { name: "ReceiptTime", type: "string" },
+    { name: "RequestMethod", type: "string" },
+    { name: "RequestContext", type: "string" },
+    { name: "EventOutcome", type: "string" },
+    { name: "SourceUserName", type: "string" },
+    { name: "SourceHostName", type: "string" },
+    { name: "DestinationHostName", type: "string" },
+    { name: "FileType", type: "string" },
+    { name: "AdditionalExtensions", type: "string" },
+  ];
+
+  function zsMatchOne(name: string, type = "string") {
+    const result = matchFields(
+      [{ name, type }],
+      ZS_COLUMNS,
+      undefined,
+      "CommonSecurityLog",
+    );
+    return result.matched[0];
+  }
+
+  const CASES: Array<[source: string, dest: string, type?: string]> = [
+    // Web (NSS web feed)
+    ["cltip", "SourceIP"],
+    ["cltpubip", "SourceTranslatedAddress"],
+    ["cltsourceport", "SourcePort", "int"],
+    ["reqmethod", "RequestMethod"],
+    ["respcode", "EventOutcome"],
+    ["reqsize", "SentBytes", "int"],
+    ["respsize", "ReceivedBytes", "int"],
+    ["applayerprotocol", "ApplicationProtocol"],
+    ["login", "SourceUserName"],
+    ["refererhost", "RequestContext"],
+    ["host", "DestinationHostName"],
+    ["devicehostname", "SourceHostName"],
+    ["epochtime", "ReceiptTime", "int"],
+    ["datetime", "ReceiptTime"],
+    // Firewall (NSS firewall feed)
+    ["csip", "SourceIP"],
+    ["csport", "SourcePort", "int"],
+    ["cdip", "DestinationIP"],
+    ["cdport", "DestinationPort", "int"],
+    ["ssip", "SourceTranslatedAddress"],
+    ["ssport", "SourceTranslatedPort", "int"],
+    ["sdip", "DestinationTranslatedAddress"],
+    ["sdport", "DestinationTranslatedPort", "int"],
+    ["inbytes", "ReceivedBytes", "int"],
+    ["outbytes", "SentBytes", "int"],
+    ["nwsvc", "ApplicationProtocol"],
+    ["recordid", "ExternalID"],
+  ];
+
+  for (const [source, dest, type] of CASES) {
+    it(`maps ${source} -> ${dest}`, () => {
+      const match = zsMatchOne(source, type ?? "string");
+      expect(match, `${source} did not match at all`).toBeDefined();
+      expect(match.destName).toBe(dest);
+    });
+  }
+
+  it("maps the full firewall address quad without column collisions", () => {
+    // c=client-side, s=server-side (post-NAT): four IPs, four ports, one
+    // event - every alias must land on ITS column, none stolen.
+    const result = matchFields(
+      [
+        { name: "csip", type: "string" },
+        { name: "csport", type: "int" },
+        { name: "cdip", type: "string" },
+        { name: "cdport", type: "int" },
+        { name: "ssip", type: "string" },
+        { name: "ssport", type: "int" },
+        { name: "sdip", type: "string" },
+        { name: "sdport", type: "int" },
+      ],
+      ZS_COLUMNS,
+      undefined,
+      "CommonSecurityLog",
+    );
+    const byName = new Map(
+      result.matched.map((m) => [m.sourceName, m.destName]),
+    );
+    expect(byName.get("csip")).toBe("SourceIP");
+    expect(byName.get("cdip")).toBe("DestinationIP");
+    expect(byName.get("ssip")).toBe("SourceTranslatedAddress");
+    expect(byName.get("sdip")).toBe("DestinationTranslatedAddress");
+    expect(byName.get("csport")).toBe("SourcePort");
+    expect(byName.get("cdport")).toBe("DestinationPort");
+    expect(byName.get("ssport")).toBe("SourceTranslatedPort");
+    expect(byName.get("sdport")).toBe("DestinationTranslatedPort");
+    expect(result.overflow).toEqual([]);
+  });
+});
+
 describe("case-insensitive alias-key fallback (2026-07-08)", () => {
   it("matches case variants of known alias keys", () => {
     // Exact key "src" exists; "SRC" previously missed the alias entirely.
