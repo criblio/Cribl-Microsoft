@@ -111,8 +111,8 @@ entityMappings:
   });
 });
 
-describe("PINNED quirk: JS-literal \\Z query terminator", () => {
-  it("captures the full query when no literal 'Z' precedes the next key", () => {
+describe("query terminator (the \\Z quirk, FIXED 2026-07-09)", () => {
+  it("captures the full query up to the next top-level key", () => {
     const yaml = `name: R
 severity: High
 query: |
@@ -125,9 +125,11 @@ severity_note: ignore
     expect(rule.query).toContain('Account == "admin"');
   });
 
-  it("TRUNCATES the query at a literal capital Z (the \\Z bug, preserved)", () => {
-    // The query references "Zone"; the `(?=...|\\Z)` lookahead treats the
-    // capital Z as an end-anchor and cuts the body off right before it.
+  it("no longer truncates at a literal capital Z (the legacy \\Z bug)", () => {
+    // The legacy JS-literal \Z terminator cut the body at the first capital
+    // Z. Live evidence 2026-07-09: every Zscaler rule died on its own vendor
+    // name (`=~ "ZScaler"`), collapsing its referenced fields and faking
+    // 100% rule coverage.
     const yaml = `name: R
 severity: High
 query: |
@@ -137,10 +139,40 @@ tactics:
   - Discovery
 `;
     const rule = parseAnalyticRuleYaml(yaml, "r.yaml");
-    expect(rule.query).toContain("SecurityEvent");
-    // The quirk: everything from the capital Z onward is lost.
-    expect(rule.query).not.toContain("Zone");
-    expect(rule.query).not.toContain("dmz");
+    expect(rule.query).toContain('Zone == "dmz"');
+    expect(rule.query).not.toContain("tactics");
+    expect(rule.tactics).toEqual(["Discovery"]);
+  });
+
+  it("captures the full Zscaler-shaped query (vendor name mid-query)", () => {
+    const yaml = `name: Discord CDN Risky File Download
+severity: Medium
+query: |
+  CommonSecurityLog
+  | where DeviceVendor =~ "ZScaler"
+  | where RequestURL has "attachments"
+  | summarize make_set(SourceIP) by DeviceProduct
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SourceIP
+`;
+    const rule = parseAnalyticRuleYaml(yaml, "r.yaml");
+    expect(rule.query).toContain("RequestURL");
+    expect(rule.query).toContain("make_set(SourceIP)");
+    expect(rule.query).not.toContain("entityMappings");
+  });
+
+  it("captures a query that runs to the end of the document", () => {
+    const yaml = `name: R
+severity: Low
+query: |
+  Syslog
+  | where ProcessName == "sshd"
+`;
+    const rule = parseAnalyticRuleYaml(yaml, "r.yaml");
+    expect(rule.query).toContain('ProcessName == "sshd"');
   });
 });
 

@@ -374,6 +374,7 @@ export function RuleCoverageSection({
   const [analyzing, setAnalyzing] = useState(false);
   const [analyzeError, setAnalyzeError] = useState("");
   const [workbookNote, setWorkbookNote] = useState("");
+  const [schemaNote, setSchemaNote] = useState("");
   const [customItems, setCustomItems] = useState<ContentItem[]>([]);
 
   // The kept Unit 18 contract: the lowercased schema-resolvable referenced-field
@@ -392,12 +393,17 @@ export function RuleCoverageSection({
 
   const runCoverage = useCallback(
     async (customOverride?: ContentItem[]) => {
-      if (analyzing) {
+      // No gap reports = no destination schema and no availability set. The
+      // three-way classifier would put EVERY field in "unknown" and report a
+      // 100% built on an empty denominator (live report 2026-07-09) - block
+      // instead of lying green.
+      if (analyzing || reports.length === 0) {
         return;
       }
       setAnalyzing(true);
       setAnalyzeError("");
       setWorkbookNote("");
+      setSchemaNote("");
       try {
         const custom = customOverride ?? customItems;
         const [ruleItems, repoWorkbooks, workbookResult] = await Promise.all([
@@ -427,6 +433,15 @@ export function RuleCoverageSection({
           activeCatalog,
           destinationTableNamesFromReports(reports),
         );
+        if (schemaUnion.length === 0) {
+          // Without a resolvable destination schema every field classifies
+          // "unknown" and the percentages are meaningless - say so instead
+          // of rendering an empty-denominator 100%.
+          setSchemaNote(
+            `No schema could be resolved for destination table(s) ${destinationTableNamesFromReports(reports).join(", ")} - fields cannot be classified and coverage percentages would be meaningless. Re-run the DCR Gap Analysis or check the destination table selection.`,
+          );
+          return;
+        }
 
         const produced = analyzeContentCoverage({
           items,
@@ -522,7 +537,8 @@ export function RuleCoverageSection({
         <button
           className="run-button"
           onClick={() => void runCoverage()}
-          disabled={analyzing}
+          disabled={analyzing || !hasReports}
+          title={hasReports ? undefined : RULE_COVERAGE_NO_REPORTS_NOTE}
         >
           {analyzing
             ? "Analyzing coverage..."
@@ -575,6 +591,12 @@ export function RuleCoverageSection({
         </div>
       )}
       {analyzeError !== "" && <pre className="result">{analyzeError}</pre>}
+      {schemaNote !== "" && (
+        <div className="status-bar status-bar-warn">
+          <span className="status-bar-dot" />
+          <span className="status-bar-text">{schemaNote}</span>
+        </div>
+      )}
       {workbookNote !== "" && (
         <div className="status-bar status-bar-warn">
           <span className="status-bar-dot" />

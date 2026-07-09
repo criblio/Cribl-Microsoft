@@ -11,13 +11,15 @@
  * every extraction quirk first. The upgrade path is documented at
  * {@link parseAnalyticRuleYaml}; until then the pinned regex is authoritative.
  *
- * KNOWN QUIRKS, PINNED (not silently fixed):
- *  - The query terminator `(?=^[a-zA-Z]|\Z)` uses a JS-literal `\Z`. JS regex
- *    has no `\Z` end-of-input anchor (that is Ruby/Python); in JS `\Z` matches
- *    a LITERAL "Z". So the lazy body stops at the first line beginning with a
- *    letter OR the first literal "Z" anywhere - a query containing a capital Z
- *    (e.g. a trailing `Z` UTC marker mid-line) truncates early. Pinned by a
- *    fixture; preserved because the real YAML upgrade is where it gets fixed.
+ * QUIRK FIXED (2026-07-09, deliberate): the legacy query terminator
+ * `(?=^[a-zA-Z]|\Z)` used a JS-literal `\Z` - JS regex has no `\Z`
+ * end-of-input anchor (that is Ruby/Python), so it matched a LITERAL "Z" and
+ * truncated any query at its first capital Z. Live evidence: EVERY Zscaler
+ * rule died on its own vendor name (`=~ "ZScaler"`), collapsing the
+ * referenced-field set to whatever preceded line 4 and making rule coverage
+ * report a fake 100%. The terminator is now the next top-level key line or
+ * the TRUE end of input (`(?![\s\S])`). The old truncation is pinned as
+ * fixed in parse-analytic-rule.test.ts.
  *
  * DECISIONS (SURFACE, per the Unit 13/18 precedent - surface data loss, do not
  * drop silently):
@@ -74,12 +76,13 @@ export function parseAnalyticRuleYaml(
     }
   }
 
-  // PINNED query terminator quirk: `\Z` is a literal "Z" in JS regex, not an
-  // end-of-input anchor. Preserved verbatim from the legacy source; the
-  // no-useless-escape warning is expected and characterized by a fixture, so it
-  // is suppressed rather than "fixed" (fixing it here would change behavior).
-  // eslint-disable-next-line no-useless-escape
-  const queryMatch = content.match(/^query:\s*\|?\s*\n([\s\S]*?)(?=^[a-zA-Z]|\Z)/m);
+  // Terminator: the next top-level key line (a line starting with a letter)
+  // or the TRUE end of input. The legacy `\Z` here was a literal "Z" in JS
+  // regex and truncated queries at their first capital Z (fixed 2026-07-09;
+  // see the module header).
+  const queryMatch = content.match(
+    /^query:\s*\|?\s*\n([\s\S]*?)(?=^[a-zA-Z]|(?![\s\S]))/m,
+  );
   const query = queryMatch?.[1]?.trim() || "";
 
   // Entity-mapping column names - KQL-builtin names filtered out (verbatim from
