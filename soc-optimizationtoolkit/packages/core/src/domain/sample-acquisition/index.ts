@@ -70,6 +70,7 @@ export {
   REPO_MATCH_MIN_SCORE,
   REPO_SAMPLE_DATA_DIRS,
   MAX_REPO_ROOT_SAMPLE_READS,
+  MAX_REPO_SAMPLE_FILE_BYTES,
   detectPreIngested,
   buildSampleKeywords,
   scoreFileName,

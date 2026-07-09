@@ -33,6 +33,7 @@ import type { Logger } from "../../ports/logger";
 import { SAMPLE_DATA_DIR_NAMES } from "../../domain/sentinel-content/discovery";
 import {
   MAX_REPO_ROOT_SAMPLE_READS,
+  MAX_REPO_SAMPLE_FILE_BYTES,
   REPO_SAMPLE_DATA_DIRS,
   buildSampleKeywords,
   isEligibleRepoFile,
@@ -85,29 +86,74 @@ export interface AcquireSamplesDeps {
 
 const DEFAULT_STREAMS = ["log"] as const;
 
+/** Candidate gathering outcome: the files plus non-fatal fetch notes. */
+interface RepoCandidateGathering {
+  candidates: RepoSampleCandidate[];
+  /**
+   * Human-readable notes for every listing/read that failed (deduplicated).
+   * The browse modal shows them as a partial-results warning - a single
+   * failing directory or file must degrade the sentinel tier, never kill the
+   * whole browse (live report 2026-07-08: one bridged "Failed to fetch"
+   * blanked the modal).
+   */
+  notes: string[];
+}
+
 /**
  * Gather candidate Sample-Data files for a solution from the SentinelContent
- * port (one level per SAMPLE_DATA_DIR_NAMES variant). Unreadable files are
- * skipped. The pure ENG-42 scorer decides which candidates actually match.
+ * port (one level per SAMPLE_DATA_DIR_NAMES variant). EVERY listing and read
+ * is individually guarded: unreadable or failing files are skipped with a
+ * note, and files the directory listing reports as larger than
+ * MAX_REPO_SAMPLE_FILE_BYTES are never read at all (a tagged sample keeps at
+ * most 200 events - and oversized responses are what the cloud shell's fetch
+ * bridge refuses). The pure ENG-42 scorer decides which candidates match.
  */
 async function gatherRepoCandidates(
   content: SentinelContent,
   solutionName: string,
   logger?: Logger,
-): Promise<RepoSampleCandidate[]> {
+): Promise<RepoCandidateGathering> {
   const candidates: RepoSampleCandidate[] = [];
-  for (const dir of SAMPLE_DATA_DIR_NAMES) {
-    const files = await content.listSolutionFiles(solutionName, dir);
-    for (const file of files) {
-      const text = await content.readFile(file.path);
+  const notes = new Set<string>();
+  const errText = (err: unknown): string =>
+    err instanceof Error ? err.message : String(err);
+
+  const readCandidate = async (
+    path: string,
+    name: string,
+    size: number,
+    dirName: string,
+  ): Promise<void> => {
+    if (size > MAX_REPO_SAMPLE_FILE_BYTES) {
+      logger?.debug("acquire-samples: sample file too large, skipped", {
+        file: name,
+        size,
+      });
+      return;
+    }
+    try {
+      const text = await content.readFile(path);
       if (text === null) {
         logger?.debug("acquire-samples: repo sample unreadable", {
           solution: solutionName,
-          file: file.name,
+          file: name,
         });
-        continue;
+        return;
       }
-      candidates.push({ fileName: file.name, content: text, dirName: dir });
+      candidates.push({ fileName: name, content: text, dirName });
+    } catch (err) {
+      notes.add(`Reading ${name} failed: ${errText(err)}`);
+    }
+  };
+
+  for (const dir of SAMPLE_DATA_DIR_NAMES) {
+    try {
+      const files = await content.listSolutionFiles(solutionName, dir);
+      for (const file of files) {
+        await readCandidate(file.path, file.name, file.size, dir);
+      }
+    } catch (err) {
+      notes.add(`Listing ${solutionName}/${dir} failed: ${errText(err)}`);
     }
   }
 
@@ -121,6 +167,7 @@ async function gatherRepoCandidates(
   const rootMatches: Array<{
     name: string;
     path: string;
+    size: number;
     dirName: string;
     score: number;
   }> = [];
@@ -132,40 +179,33 @@ async function gatherRepoCandidates(
         if (!isEligibleRepoFile(file.name, dirName)) continue;
         const score = scoreFileName(file.name, keywords);
         if (score > 0) {
-          rootMatches.push({ name: file.name, path: file.path, dirName, score });
+          rootMatches.push({
+            name: file.name,
+            path: file.path,
+            size: file.size,
+            dirName,
+            score,
+          });
         }
       }
     } catch (err) {
-      logger?.debug("acquire-samples: root sample dir unavailable", {
-        dir,
-        error: err instanceof Error ? err.message : String(err),
-      });
+      notes.add(`Listing ${dir} failed: ${errText(err)}`);
     }
   }
   rootMatches.sort((a, b) => b.score - a.score);
   const seenNames = new Set(candidates.map((c) => c.fileName));
   for (const match of rootMatches.slice(0, MAX_REPO_ROOT_SAMPLE_READS)) {
     if (seenNames.has(match.name)) continue;
-    const text = await content.readFile(match.path);
-    if (text === null) {
-      logger?.debug("acquire-samples: root sample unreadable", {
-        file: match.name,
-      });
-      continue;
-    }
     seenNames.add(match.name);
-    candidates.push({
-      fileName: match.name,
-      content: text,
-      dirName: match.dirName,
-    });
+    await readCandidate(match.path, match.name, match.size, match.dirName);
   }
   logger?.info("acquire-samples: repo candidates", {
     solution: solutionName,
     candidates: candidates.length,
     rootMatched: rootMatches.length,
+    notes: notes.size,
   });
-  return candidates;
+  return { candidates, notes: [...notes] };
 }
 
 /**
@@ -180,6 +220,12 @@ export interface BrowseSamplesResult {
   available: AvailableSample[];
   /** The sentinel-repo resolution (null when no candidates existed). */
   repo: RepoSampleResult | null;
+  /**
+   * Non-fatal per-tier fetch failures (a directory listing, a file read, or a
+   * whole tier). The modal renders these as a partial-results warning: browse
+   * degrades to whatever loaded instead of dying on the first failure.
+   */
+  warnings: string[];
 }
 
 /**
@@ -196,31 +242,43 @@ export async function browseSamplesDetailed(
   const { solutionName } = input;
   const entry = lookupSolution(solutionName);
   const results: AvailableSample[] = [];
+  const warnings: string[] = [];
   let repo: RepoSampleResult | null = null;
 
-  // Tier 0: sentinel-repo.
-  const repoCandidates = await gatherRepoCandidates(content, solutionName, logger);
-  if (repoCandidates.length > 0) {
-    repo = resolveRepoSamples(solutionName, repoCandidates);
+  // Tier 0: sentinel-repo. gatherRepoCandidates guards every listing/read
+  // itself and reports failures as notes.
+  const gathered = await gatherRepoCandidates(content, solutionName, logger);
+  warnings.push(...gathered.notes);
+  if (gathered.candidates.length > 0) {
+    repo = resolveRepoSamples(solutionName, gathered.candidates);
     results.push(...browseRepoResult(repo));
   }
 
-  // Tier 1: elastic.
+  // Tier 1: elastic. A failing stream degrades to a warning - the sentinel
+  // entries above must still render (and vice versa).
   if (entry?.elasticPackage) {
     const streams =
       entry.elasticDataStreams && entry.elasticDataStreams.length > 0
         ? entry.elasticDataStreams
         : [...DEFAULT_STREAMS];
     for (const stream of streams) {
-      const files = await source.listElasticTestFiles(entry.elasticPackage, stream);
-      for (const file of files) {
-        results.push(
-          ...browseElasticFile({
-            packageName: entry.elasticPackage,
-            stream,
-            fileName: file.fileName,
-            content: file.content,
-          }),
+      try {
+        const files = await source.listElasticTestFiles(entry.elasticPackage, stream);
+        for (const file of files) {
+          results.push(
+            ...browseElasticFile({
+              packageName: entry.elasticPackage,
+              stream,
+              fileName: file.fileName,
+              content: file.content,
+            }),
+          );
+        }
+      } catch (err) {
+        warnings.push(
+          `Elastic samples (${entry.elasticPackage}/${stream}) unavailable: ${
+            err instanceof Error ? err.message : String(err)
+          }`,
         );
       }
     }
@@ -229,8 +287,9 @@ export async function browseSamplesDetailed(
   logger?.info("acquire-samples: browsed", {
     solution: solutionName,
     count: results.length,
+    warnings: warnings.length,
   });
-  return { available: results, repo };
+  return { available: results, repo, warnings };
 }
 
 /**
@@ -263,11 +322,16 @@ export async function loadSamples(
   const idSet = new Set(selectedIds);
   const results: ResolvedSample[] = [];
 
-  // Sentinel-repo.
+  // Sentinel-repo. Listing/read failures are skipped inside the gathering
+  // (logged as warn here): a selected id whose file failed simply does not
+  // resolve, and the load summary reports the honest count.
   if (selectedIds.some((id) => id.startsWith("sentinel-repo:"))) {
-    const repoCandidates = await gatherRepoCandidates(content, solutionName, logger);
-    if (repoCandidates.length > 0) {
-      const repoResult = resolveRepoSamples(solutionName, repoCandidates);
+    const gathered = await gatherRepoCandidates(content, solutionName, logger);
+    for (const note of gathered.notes) {
+      logger?.warn("acquire-samples: load-time repo fetch issue", { note });
+    }
+    if (gathered.candidates.length > 0) {
+      const repoResult = resolveRepoSamples(solutionName, gathered.candidates);
       results.push(...loadRepoResult(repoResult, idSet));
     }
   }

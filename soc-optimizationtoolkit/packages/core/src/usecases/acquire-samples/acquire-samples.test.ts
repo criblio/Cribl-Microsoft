@@ -156,4 +156,101 @@ ${CEF_LINE}`,
       detailed.available.filter((entry) => entry.tier === "sentinel-repo"),
     ).toEqual([]);
   });
+
+  it("skips files the listing reports as oversized without reading them", async () => {
+    const content = new FakeSentinelContent({
+      files: {
+        "Solutions/PaloAlto-PAN-OS/Data Connectors/conn.json": "{}",
+        // Over MAX_REPO_SAMPLE_FILE_BYTES: must never be read (the cloud
+        // fetch bridge refuses oversized responses).
+        "Sample Data/CEF/PaloAlto_PAN_OS_Huge_CEF.txt": `${CEF_LINE}\n`.repeat(
+          8000,
+        ),
+        "Sample Data/CEF/PaloAlto_PAN_OS_Traffic_CEF.txt": CEF_LINE,
+      },
+    });
+    const reads: string[] = [];
+    const guarded: typeof content = Object.create(content);
+    guarded.readFile = async (path: string) => {
+      reads.push(path);
+      return content.readFile(path);
+    };
+    const deps: AcquireSamplesDeps = { content: guarded, source };
+    const detailed = await browseSamplesDetailed(deps, {
+      solutionName: "PaloAlto-PAN-OS",
+    });
+    expect(reads).not.toContain("Sample Data/CEF/PaloAlto_PAN_OS_Huge_CEF.txt");
+    expect(reads).toContain("Sample Data/CEF/PaloAlto_PAN_OS_Traffic_CEF.txt");
+    expect(detailed.repo?.samples.length ?? 0).toBeGreaterThan(0);
+  });
+});
+
+describe("browse resilience (one failing fetch must not kill the modal)", () => {
+  const CEF_LINE =
+    "CEF:0|Palo Alto Networks|PAN-OS|10.2|end|TRAFFIC|1|src=10.1.1.1 dst=10.2.2.2 spt=1234 dpt=443 act=allow";
+
+  it("degrades to warnings when every Sentinel content call fails", async () => {
+    const failing = new FakeSentinelContent({ files: {} });
+    const boom = async () => {
+      throw new TypeError("Failed to fetch");
+    };
+    failing.listSolutionFiles = boom;
+    failing.listRepoFiles = boom;
+    failing.readFile = boom;
+    const deps: AcquireSamplesDeps = { content: failing, source };
+    const detailed = await browseSamplesDetailed(deps, { solutionName: SOLUTION });
+    // The elastic tier still browsed; the sentinel failures became warnings.
+    expect(
+      detailed.available.filter((e) => e.tier === "elastic").length,
+    ).toBeGreaterThan(0);
+    expect(detailed.warnings.length).toBeGreaterThan(0);
+    expect(detailed.warnings.join("\n")).toContain("Failed to fetch");
+  });
+
+  it("keeps other files when a single read fails", async () => {
+    const content = new FakeSentinelContent({
+      files: {
+        "Solutions/PaloAlto-PAN-OS/Data Connectors/conn.json": "{}",
+        "Sample Data/CEF/PaloAlto_PAN_OS_Broken_CEF.txt": CEF_LINE,
+        "Sample Data/CEF/PaloAlto_PAN_OS_Traffic_CEF.txt": `${CEF_LINE}\n${CEF_LINE}`,
+      },
+    });
+    const guarded: typeof content = Object.create(content);
+    guarded.readFile = async (path: string) => {
+      if (path.includes("Broken")) {
+        throw new TypeError("Failed to fetch");
+      }
+      return content.readFile(path);
+    };
+    const deps: AcquireSamplesDeps = { content: guarded, source };
+    const detailed = await browseSamplesDetailed(deps, {
+      solutionName: "PaloAlto-PAN-OS",
+    });
+    expect(detailed.repo?.samples.length ?? 0).toBeGreaterThan(0);
+    expect(detailed.warnings.join("\n")).toContain("PaloAlto_PAN_OS_Broken_CEF");
+  });
+
+  it("degrades the elastic tier to a warning when its listing fails", async () => {
+    const deps: AcquireSamplesDeps = {
+      content: new FakeSentinelContent({
+        files: {
+          [`Solutions/${SOLUTION}/Sample Data/crowdstrike_fdr.json`]:
+            '{"event_simpleName":"ProcessRollup2","aid":"a"}',
+        },
+      }),
+      source: {
+        async listElasticTestFiles() {
+          throw new TypeError("Failed to fetch");
+        },
+        async listCriblPackSamples() {
+          return [];
+        },
+      },
+    };
+    const detailed = await browseSamplesDetailed(deps, { solutionName: SOLUTION });
+    expect(
+      detailed.available.filter((e) => e.tier === "sentinel-repo").length,
+    ).toBeGreaterThan(0);
+    expect(detailed.warnings.join("\n")).toContain("Elastic samples");
+  });
 });

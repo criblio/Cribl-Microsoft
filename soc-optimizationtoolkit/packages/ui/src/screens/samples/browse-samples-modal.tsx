@@ -101,6 +101,7 @@ export function BrowseSamplesModal({
   const [available, setAvailable] = useState<AvailableSample[] | null>(null);
   const [repo, setRepo] = useState<RepoSampleResult | null>(null);
   const [browseError, setBrowseError] = useState("");
+  const [browseWarnings, setBrowseWarnings] = useState<string[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState("");
@@ -117,11 +118,13 @@ export function BrowseSamplesModal({
   const browse = useCallback(async () => {
     setAvailable(null);
     setBrowseError("");
+    setBrowseWarnings([]);
     setRepo(null);
     try {
       const result = await browseSamplesDetailed(deps, { solutionName });
       setAvailable(result.available);
       setRepo(result.repo);
+      setBrowseWarnings(result.warnings);
     } catch (err) {
       setBrowseError(String(err));
     }
@@ -210,6 +213,33 @@ export function BrowseSamplesModal({
 
         {available === null && browseError === "" && (
           <p className="field-hint">Fetching samples for {solutionName}...</p>
+        )}
+
+        {available !== null && browseWarnings.length > 0 && (
+          <div className="browse-dialog-status browse-dialog-status-warn">
+            <div>
+              <span>
+                Some sources could not be fetched - results may be partial.
+              </span>
+              {browseWarnings.slice(0, 3).map((w) => (
+                <div className="field-hint" key={w}>
+                  {w}
+                </div>
+              ))}
+              {browseWarnings.length > 3 && (
+                <div className="field-hint">
+                  ...and {browseWarnings.length - 3} more.
+                </div>
+              )}
+            </div>
+            <button
+              type="button"
+              className="run-button"
+              onClick={() => void browse()}
+            >
+              Retry
+            </button>
+          </div>
         )}
 
         {available !== null && browseError === "" && (

@@ -232,6 +232,16 @@ export const REPO_SAMPLE_DATA_DIRS: readonly string[] = Object.freeze([
  */
 export const MAX_REPO_ROOT_SAMPLE_READS = 12;
 
+/**
+ * Skip candidate sample files LARGER than this (bytes, from the directory
+ * listing) without reading them. Tagged samples keep at most RAW_EVENTS_CAP
+ * events inside a ~256 KiB KV budget, so a multi-megabyte raw file buys
+ * nothing - and oversized responses are exactly what the cloud shell's
+ * locked fetch bridge has been observed to refuse (a bridged refusal
+ * surfaces as an opaque "TypeError: Failed to fetch").
+ */
+export const MAX_REPO_SAMPLE_FILE_BYTES = 512 * 1024;
+
 const MAX_TOP_FILES = 20;
 const MAX_EVENTS_PER_TABLE = 10;
 
