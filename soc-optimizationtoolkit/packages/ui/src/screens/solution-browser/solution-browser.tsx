@@ -265,7 +265,80 @@ export function SolutionBrowser({ onSelect }: SolutionBrowserProps) {
           </div>
         </div>
       ) : solutions === null ? (
-        <p className="field-hint">Loading the solution index...</p>
+        <p className="field-hint">
+          Loading the solution index...
+          {deepLinkName !== null ? ` (restoring ${deepLinkName})` : ""}
+        </p>
+      ) : selected !== null ? (
+        // SELECTED VIEW: a selection switches the section to this card and
+        // hides the browse list - clear it before choosing another solution.
+        <div className="discovery-result solution-browser-selected">
+          <span className="field-label">Selected solution</span>
+          <div className="solution-browser-selected-head">
+            <span className="solution-browser-selected-name">
+              {selected.name}
+            </span>
+            {(() => {
+              const badge = deprecationBadge(selected);
+              return badge !== null ? (
+                <span className="solution-browser-badge" title={badge.reason}>
+                  {badge.label}
+                </span>
+              ) : null;
+            })()}
+          </div>
+          {(() => {
+            const badge = deprecationBadge(selected);
+            return badge !== null ? (
+              <p className="solution-browser-deprecation">{badge.reason}</p>
+            ) : null;
+          })()}
+          {detail.phase === "loading" && (
+            <div className="status-bar status-bar-checking">
+              <span className="status-bar-dot" />
+              <span className="status-bar-text">
+                Fetching {selected.name} content...
+              </span>
+            </div>
+          )}
+          {detail.phase === "error" && (
+            <div className="status-bar status-bar-error">
+              <span className="status-bar-dot" />
+              <span className="status-bar-text">
+                Could not fetch this solution: {detail.message}
+              </span>
+            </div>
+          )}
+          {detail.phase === "loaded" && (
+            <>
+              <span className="field-hint">
+                {detail.detail.connectorCount} connector file
+                {detail.detail.connectorCount === 1 ? "" : "s"};{" "}
+                {detail.detail.logTypes.length} log type
+                {detail.detail.logTypes.length === 1 ? "" : "s"} detected
+                {detail.detail.logTypes.length > 0
+                  ? `: ${detail.detail.logTypes.join(", ")}`
+                  : "."}
+              </span>
+              <span className="field-hint solution-browser-deeplink">
+                Deep link:{" "}
+                <code className="code-chip">
+                  {buildSolutionDeepLink(selected.name)}
+                </code>
+              </span>
+            </>
+          )}
+          <div className="panel-controls">
+            <button className="run-button" onClick={clearSelection}>
+              Clear selection
+            </button>
+          </div>
+          <span className="field-hint">
+            Every section below is scoped to this solution. Clear it to browse
+            and pick another - the sample, mapping, and coverage sections reset
+            when the solution changes.
+          </span>
+        </div>
       ) : (
         <>
           <div className="solution-browser-controls">
@@ -297,19 +370,15 @@ export function SolutionBrowser({ onSelect }: SolutionBrowserProps) {
           )}
           <ul className="solution-browser-list">
             {visible.map((solution) => {
+              // The list only renders while NOTHING is selected (selecting
+              // switches to the selected-solution card), so rows carry no
+              // selected state of their own.
               const badge = deprecationBadge(solution);
-              const isSelected = selected?.name === solution.name;
               return (
-                <li
-                  key={solution.path}
-                  className={`solution-browser-item${
-                    isSelected ? " solution-browser-item-selected" : ""
-                  }`}
-                >
+                <li key={solution.path} className="solution-browser-item">
                   <button
                     className="solution-browser-item-button"
                     onClick={() => select(solution)}
-                    aria-pressed={isSelected}
                   >
                     <span className="solution-browser-item-name">
                       {solution.name}
@@ -323,56 +392,6 @@ export function SolutionBrowser({ onSelect }: SolutionBrowserProps) {
                       </span>
                     )}
                   </button>
-                  {isSelected && badge !== null && (
-                    <p className="solution-browser-deprecation">
-                      {badge.reason}
-                    </p>
-                  )}
-                  {isSelected && (
-                    <div className="solution-browser-detail">
-                      {detail.phase === "loading" && (
-                        <div className="status-bar status-bar-checking">
-                          <span className="status-bar-dot" />
-                          <span className="status-bar-text">
-                            Fetching {solution.name} content...
-                          </span>
-                        </div>
-                      )}
-                      {detail.phase === "error" && (
-                        <div className="status-bar status-bar-error">
-                          <span className="status-bar-dot" />
-                          <span className="status-bar-text">
-                            Could not fetch this solution: {detail.message}
-                          </span>
-                        </div>
-                      )}
-                      {detail.phase === "loaded" && (
-                        <>
-                          <span className="field-hint">
-                            {detail.detail.connectorCount} connector file
-                            {detail.detail.connectorCount === 1 ? "" : "s"};{" "}
-                            {detail.detail.logTypes.length} log type
-                            {detail.detail.logTypes.length === 1 ? "" : "s"}{" "}
-                            detected
-                            {detail.detail.logTypes.length > 0
-                              ? `: ${detail.detail.logTypes.join(", ")}`
-                              : "."}
-                          </span>
-                          <span className="field-hint solution-browser-deeplink">
-                            Deep link:{" "}
-                            <code className="code-chip">
-                              {buildSolutionDeepLink(solution.name)}
-                            </code>
-                          </span>
-                        </>
-                      )}
-                      <div className="panel-controls">
-                        <button className="run-button" onClick={clearSelection}>
-                          Clear selection
-                        </button>
-                      </div>
-                    </div>
-                  )}
                 </li>
               );
             })}

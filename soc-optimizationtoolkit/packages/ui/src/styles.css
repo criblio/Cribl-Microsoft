@@ -3913,3 +3913,20 @@ button.journey-step-main:hover .journey-step-label {
 .pipeline-preview-details[open] > .pipeline-preview-summary {
   margin-bottom: 8px;
 }
+
+/* Selected-solution card: the browse list hides while a solution is selected;
+ * this card is the visible, unmistakable selection state. */
+.solution-browser-selected {
+  border-left: 3px solid var(--accent);
+}
+.solution-browser-selected-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.solution-browser-selected-name {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-strong);
+}
