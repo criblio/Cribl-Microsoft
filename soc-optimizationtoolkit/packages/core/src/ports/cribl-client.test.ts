@@ -42,26 +42,52 @@ describe("isStreamWorkerGroup", () => {
 
 describe("deriveGroupProduct", () => {
   it("prefers the explicit product string when present", () => {
-    expect(deriveGroupProduct("stream", true, undefined)).toBe("stream");
-    expect(deriveGroupProduct("edge", undefined, undefined)).toBe("edge");
+    expect(deriveGroupProduct("stream", "edge", true, undefined)).toBe(
+      "stream",
+    );
+    expect(deriveGroupProduct("edge", undefined, undefined, undefined)).toBe(
+      "edge",
+    );
   });
 
-  it("derives edge from isFleet on leaders that omit product", () => {
+  it("derives from the ConfigGroup type (the Outpost marker)", () => {
+    // Live report 2026-07-09: default_outpost carried type "outpost" and no
+    // isFleet flag, so it survived the fleet fix until type was read.
+    expect(deriveGroupProduct(undefined, "outpost", undefined, undefined)).toBe(
+      "outpost",
+    );
+    expect(deriveGroupProduct(undefined, "stream", undefined, undefined)).toBe(
+      "stream",
+    );
+    expect(
+      deriveGroupProduct(undefined, "lake_access", undefined, undefined),
+    ).toBe("lake_access");
+  });
+
+  it("derives edge from isFleet on leaders that omit product and type", () => {
     // Live report 2026-07-09: default_fleet and friends listed with no
     // product field - the isFleet boolean is the only fleet marker.
-    expect(deriveGroupProduct(undefined, true, undefined)).toBe("edge");
+    expect(deriveGroupProduct(undefined, undefined, true, undefined)).toBe(
+      "edge",
+    );
   });
 
   it("derives search from isSearch", () => {
-    expect(deriveGroupProduct(undefined, undefined, true)).toBe("search");
+    expect(deriveGroupProduct(undefined, undefined, undefined, true)).toBe(
+      "search",
+    );
   });
 
   it("returns undefined when no signal is present (kept visible)", () => {
-    expect(deriveGroupProduct(undefined, undefined, undefined)).toBeUndefined();
-    expect(deriveGroupProduct("", false, false)).toBeUndefined();
+    expect(
+      deriveGroupProduct(undefined, undefined, undefined, undefined),
+    ).toBeUndefined();
+    expect(deriveGroupProduct("", "", false, false)).toBeUndefined();
   });
 
   it("ignores non-boolean truthy flag values", () => {
-    expect(deriveGroupProduct(undefined, "yes", undefined)).toBeUndefined();
+    expect(
+      deriveGroupProduct(undefined, undefined, "yes", undefined),
+    ).toBeUndefined();
   });
 });

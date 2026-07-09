@@ -470,11 +470,13 @@ export class PlatformCriblClient implements CriblClient {
       if (typeof id !== 'string' || id === '') {
         continue;
       }
-      // Older leaders omit `product` but mark fleets/search groups with
-      // isFleet/isSearch booleans in the same items - derive from whichever
-      // signal is present so the UI's Stream-only filter actually bites.
+      // Derive the product from whichever signal the leader reports so the
+      // UI's Stream-only filter actually bites: the explicit product string,
+      // the ConfigGroup `type` (edge/outpost/search/stream - what marks
+      // Outpost groups), or the deprecated isFleet/isSearch booleans.
       const product = deriveGroupProduct(
         prop(item, 'product'),
+        prop(item, 'type'),
         prop(item, 'isFleet'),
         prop(item, 'isSearch'),
       );

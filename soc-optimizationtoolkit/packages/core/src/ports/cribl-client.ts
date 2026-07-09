@@ -59,22 +59,34 @@ export function isStreamWorkerGroup(group: CriblGroupSummary): boolean {
 
 /**
  * Derive a group's product from the fields /master/groups items actually
- * carry, oldest-leader-compatible: an explicit `product` string when present
- * (newer leaders), else the `isFleet` / `isSearch` booleans - how leaders
- * that predate `product` mark Edge fleets and Search groups in the SAME
- * listing (live report 2026-07-09: a leader listed default_fleet and other
- * fleets with no `product` field, so the Stream-only filter's
- * unreported-means-stream fallback waved them through). Returns undefined
- * only when the item carries NO product signal at all; isStreamWorkerGroup
- * then keeps it visible.
+ * carry, oldest-leader-compatible and in signal order:
+ *
+ *  1. the explicit `product` string, when present;
+ *  2. the ConfigGroup `type` string - the spec's explicit discriminator
+ *     ("Explicit type of the Worker Group, Outpost Group, or Edge Fleet";
+ *     enum edge | lake_access | local_search | outpost | search | stream).
+ *     This is what catches OUTPOST groups (live report 2026-07-09:
+ *     default_outpost carried type "outpost" and NO isFleet flag, so it
+ *     survived the fleet fix);
+ *  3. the DEPRECATED isFleet / isSearch booleans - how leaders that predate
+ *     both fields above mark Edge fleets and Search groups (live report
+ *     2026-07-09: default_fleet listed with no `product` field).
+ *
+ * Returns undefined only when the item carries NO product signal at all;
+ * isStreamWorkerGroup then keeps it visible (a leader reporting nothing is a
+ * single-product deployment with nothing to mis-list).
  */
 export function deriveGroupProduct(
   product: unknown,
+  type: unknown,
   isFleet: unknown,
   isSearch: unknown,
 ): string | undefined {
   if (typeof product === "string" && product !== "") {
     return product;
+  }
+  if (typeof type === "string" && type !== "") {
+    return type;
   }
   if (isFleet === true) {
     return "edge";
