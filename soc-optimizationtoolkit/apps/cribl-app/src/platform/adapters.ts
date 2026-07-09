@@ -868,6 +868,32 @@ const GITHUB_RAW = 'https://raw.githubusercontent.com';
 const GITHUB_TIMEOUT_MS = 25000;
 const GITHUB_JSON_ACCEPT = 'application/vnd.github+json';
 
+// Transient GitHub 5xx blips (502 Bad Gateway pages) are routine; retry a
+// couple of times before surfacing (live report 2026-07-09: one 502 on a
+// sample_data listing degraded the whole Sentinel browse tier).
+const GITHUB_RETRY_STATUSES = new Set([500, 502, 503, 504]);
+const GITHUB_RETRY_DELAYS_MS = [500, 1500];
+
+async function githubFetchWithRetry(url: string, init: RequestInit): Promise<Response> {
+  let res = await fetchWithTimeout(url, init, GITHUB_TIMEOUT_MS);
+  for (const delay of GITHUB_RETRY_DELAYS_MS) {
+    if (!GITHUB_RETRY_STATUSES.has(res.status)) {
+      return res;
+    }
+    await new Promise((resolve) => setTimeout(resolve, delay));
+    res = await fetchWithTimeout(url, init, GITHUB_TIMEOUT_MS);
+  }
+  return res;
+}
+
+// A failed GitHub call answers with a FULL HTML error page (inline base64
+// image included). Keep thrown messages human: strip tags, collapse
+// whitespace, cap the length.
+function errorSnippet(text: string): string {
+  const plain = text.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+  return plain.length > 160 ? `${plain.slice(0, 160)}...` : plain;
+}
+
 // Encode a repo-relative path for a URL, preserving the "/" separators while
 // percent-encoding each segment (paths carry spaces and parentheses, e.g.
 // "Solutions/Forescout (Legacy)/...").
@@ -933,11 +959,10 @@ export class PlatformSentinelContent implements SentinelContent {
   private readonly blocked = blockedSolutionNames();
 
   private async apiGet(path: string): Promise<Response> {
-    return fetchWithTimeout(
-      `${GITHUB_API}${path}`,
-      { method: 'GET', headers: { Accept: GITHUB_JSON_ACCEPT } },
-      GITHUB_TIMEOUT_MS,
-    );
+    return githubFetchWithRetry(`${GITHUB_API}${path}`, {
+      method: 'GET',
+      headers: { Accept: GITHUB_JSON_ACCEPT },
+    });
   }
 
   async getCommitSha(): Promise<string | null> {
@@ -948,7 +973,7 @@ export class PlatformSentinelContent implements SentinelContent {
       return null;
     }
     if (!res.ok) {
-      throw new Error(`GET GitHub commits/${SENTINEL_BRANCH}: HTTP ${res.status}\n${await res.text()}`);
+      throw new Error(`GET GitHub commits/${SENTINEL_BRANCH}: HTTP ${res.status}\n${errorSnippet(await res.text())}`);
     }
     const sha = prop(await readPortBody(res), 'sha');
     return typeof sha === 'string' && sha !== '' ? sha : null;
@@ -960,7 +985,7 @@ export class PlatformSentinelContent implements SentinelContent {
       return [];
     }
     if (!res.ok) {
-      throw new Error(`GET GitHub contents/Solutions: HTTP ${res.status}\n${await res.text()}`);
+      throw new Error(`GET GitHub contents/Solutions: HTTP ${res.status}\n${errorSnippet(await res.text())}`);
     }
     const entries = asContentEntries(await readPortBody(res));
     const refs: SolutionRef[] = [];
@@ -998,7 +1023,7 @@ export class PlatformSentinelContent implements SentinelContent {
     }
     if (!res.ok) {
       throw new Error(
-        `GET GitHub contents ${dirPath}: HTTP ${res.status}\n${await res.text()}`,
+        `GET GitHub contents ${dirPath}: HTTP ${res.status}\n${errorSnippet(await res.text())}`,
       );
     }
     const files: SolutionFileRef[] = [];
@@ -1021,7 +1046,7 @@ export class PlatformSentinelContent implements SentinelContent {
     }
     if (!topRes.ok) {
       throw new Error(
-        `GET GitHub contents Solutions/${solutionName}: HTTP ${topRes.status}\n${await topRes.text()}`,
+        `GET GitHub contents Solutions/${solutionName}: HTTP ${topRes.status}\n${errorSnippet(await topRes.text())}`,
       );
     }
     const topEntries = asContentEntries(await readPortBody(topRes));
@@ -1085,12 +1110,12 @@ export class PlatformSentinelContent implements SentinelContent {
   }
 
   private async fetchRaw(url: string, relativePath: string): Promise<string | null> {
-    const res = await fetchWithTimeout(url, { method: 'GET' }, GITHUB_TIMEOUT_MS);
+    const res = await githubFetchWithRetry(url, { method: 'GET' });
     if (res.status === 404) {
       return null;
     }
     if (!res.ok) {
-      throw new Error(`GET raw ${relativePath}: HTTP ${res.status}\n${await res.text()}`);
+      throw new Error(`GET raw ${relativePath}: HTTP ${res.status}\n${errorSnippet(await res.text())}`);
     }
     return res.text();
   }
@@ -1125,22 +1150,21 @@ function isElasticSampleFile(name: string): boolean {
  */
 export class PlatformRemoteSampleSource implements RemoteSampleSource {
   private async listContents(path: string): Promise<GithubContentEntry[]> {
-    const res = await fetchWithTimeout(
-      `${GITHUB_API}${path}`,
-      { method: 'GET', headers: { Accept: GITHUB_JSON_ACCEPT } },
-      GITHUB_TIMEOUT_MS,
-    );
+    const res = await githubFetchWithRetry(`${GITHUB_API}${path}`, {
+      method: 'GET',
+      headers: { Accept: GITHUB_JSON_ACCEPT },
+    });
     if (res.status === 404) {
       return [];
     }
     if (!res.ok) {
-      throw new Error(`GET GitHub ${path}: HTTP ${res.status}\n${await res.text()}`);
+      throw new Error(`GET GitHub ${path}: HTTP ${res.status}\n${errorSnippet(await res.text())}`);
     }
     return asContentEntries(await readPortBody(res));
   }
 
   private async fetchRawText(url: string): Promise<string | null> {
-    const res = await fetchWithTimeout(url, { method: 'GET' }, GITHUB_TIMEOUT_MS);
+    const res = await githubFetchWithRetry(url, { method: 'GET' });
     if (res.status === 404) {
       return null;
     }

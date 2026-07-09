@@ -654,7 +654,11 @@ export class LocalSentinelContent implements SentinelContent {
       return { status, value: null };
     }
     if (status < 200 || status >= 300) {
-      throw new Error(`GET GitHub ${apiPath}: HTTP ${status}${bodyText === '' ? '' : `\n${bodyText}`}`);
+      // GitHub failure bodies are full HTML error pages (inline base64 image
+      // included) - keep the thrown message human.
+      const plain = bodyText.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+      const snippet = plain.length > 160 ? `${plain.slice(0, 160)}...` : plain;
+      throw new Error(`GET GitHub ${apiPath}: HTTP ${status}${snippet === '' ? '' : `\n${snippet}`}`);
     }
     let value: unknown = null;
     try {
@@ -865,7 +869,11 @@ export class LocalRemoteSampleSource implements RemoteSampleSource {
       return [];
     }
     if (status < 200 || status >= 300) {
-      throw new Error(`GET GitHub ${apiPath}: HTTP ${status}${bodyText === '' ? '' : `\n${bodyText}`}`);
+      // GitHub failure bodies are full HTML error pages (inline base64 image
+      // included) - keep the thrown message human.
+      const plain = bodyText.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+      const snippet = plain.length > 160 ? `${plain.slice(0, 160)}...` : plain;
+      throw new Error(`GET GitHub ${apiPath}: HTTP ${status}${snippet === '' ? '' : `\n${snippet}`}`);
     }
     let value: unknown = null;
     try {

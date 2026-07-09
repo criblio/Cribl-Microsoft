@@ -213,7 +213,14 @@ export function createGithubProxy(dataDir, logger) {
       if (token !== '') {
         headers.Authorization = `Bearer ${token}`;
       }
-      const res = await fetchTextWithTimeout(url, { method: 'GET', headers });
+      // Transient GitHub 5xx blips (502 Bad Gateway pages) are routine -
+      // retry a couple of times before answering (mirrors the cloud shell).
+      let res = await fetchTextWithTimeout(url, { method: 'GET', headers });
+      for (const delay of [500, 1500]) {
+        if (![500, 502, 503, 504].includes(res.status)) break;
+        await new Promise((resolve) => setTimeout(resolve, delay));
+        res = await fetchTextWithTimeout(url, { method: 'GET', headers });
+      }
       return { status: res.status, body: res.text };
     },
   };
