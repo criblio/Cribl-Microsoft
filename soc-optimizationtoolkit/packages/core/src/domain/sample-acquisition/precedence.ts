@@ -73,6 +73,43 @@ export function elasticSourceId(file: ElasticFile): string {
   return `elastic:${file.packageName}/${file.stream}/${file.fileName}`;
 }
 
+/** The stream segment of an elastic id/source ("elastic:pkg/stream/..."). */
+export function elasticStreamOf(ref: string): string | null {
+  const match = /^elastic:[^/]+\/([^/]+)\//.exec(ref);
+  return match ? match[1] : null;
+}
+
+/**
+ * Build a log-type disambiguator over the FULL candidate universe (live
+ * report 2026-07-09: Zscaler's web AND firewall feeds both split on an
+ * action discriminator, producing two indistinguishable "BLOCKED" entries
+ * that overwrite each other in the replace-by-logType store). When the same
+ * log type appears under MORE THAN ONE stream, its display/store name gains
+ * the stream prefix ("web-BLOCKED", "firewall-BLOCKED"); unique names stay
+ * untouched, and a name already containing its stream (dns:dns) is never
+ * double-prefixed. Selection IDS never change - only the human/store name.
+ */
+export function buildElasticLogTypeDisambiguator(
+  all: ReadonlyArray<{ ref: string; logType: string }>,
+): (ref: string, logType: string) => string {
+  const streamsByLogType = new Map<string, Set<string>>();
+  for (const entry of all) {
+    const stream = elasticStreamOf(entry.ref);
+    if (stream === null || entry.logType === "") continue;
+    if (!streamsByLogType.has(entry.logType)) {
+      streamsByLogType.set(entry.logType, new Set());
+    }
+    streamsByLogType.get(entry.logType)!.add(stream);
+  }
+  return (ref, logType) => {
+    const stream = elasticStreamOf(ref);
+    if (stream === null) return logType;
+    if ((streamsByLogType.get(logType)?.size ?? 0) <= 1) return logType;
+    if (logType.toLowerCase().includes(stream.toLowerCase())) return logType;
+    return `${stream}-${logType}`;
+  };
+}
+
 /** Parse + unwrap + cap one Elastic file into its raw event lines and format. */
 function elasticEvents(file: ElasticFile): { events: string[]; format: SampleFormat } {
   const parsed = unwrapElasticEvents(parseElasticFileContent(file.content, file.fileName));

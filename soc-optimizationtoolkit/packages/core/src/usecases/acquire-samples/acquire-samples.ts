@@ -43,6 +43,7 @@ import {
   browseRepoResult,
   loadRepoResult,
   browseElasticFile,
+  buildElasticLogTypeDisambiguator,
   loadElasticFile,
   readCriblPackSamples,
   type AvailableSample,
@@ -284,12 +285,25 @@ export async function browseSamplesDetailed(
     }
   }
 
+  // Stream-scope colliding elastic split names (web-BLOCKED vs
+  // firewall-BLOCKED); ids stay untouched so selection remains stable.
+  const disambiguate = buildElasticLogTypeDisambiguator(
+    results
+      .filter((r) => r.tier === "elastic")
+      .map((r) => ({ ref: r.id, logType: r.logType })),
+  );
+  const available = results.map((r) =>
+    r.tier === "elastic"
+      ? { ...r, logType: disambiguate(r.id, r.logType) }
+      : r,
+  );
+
   logger?.info("acquire-samples: browsed", {
     solution: solutionName,
-    count: results.length,
+    count: available.length,
     warnings: warnings.length,
   });
-  return { available: results, repo, warnings };
+  return { available, repo, warnings };
 }
 
 /**
@@ -336,29 +350,41 @@ export async function loadSamples(
     }
   }
 
-  // Elastic.
+  // Elastic. The disambiguation universe is EVERY split in the package's
+  // streams (not just the selected ids): a subset load must still store
+  // "web-BLOCKED" when a firewall "BLOCKED" also exists.
   if (entry?.elasticPackage) {
     const streams =
       entry.elasticDataStreams && entry.elasticDataStreams.length > 0
         ? entry.elasticDataStreams
         : [...DEFAULT_STREAMS];
+    const allElastic: Array<{ ref: string; logType: string }> = [];
+    const loadedElastic: typeof results = [];
     for (const stream of streams) {
       const files = await source.listElasticTestFiles(entry.elasticPackage, stream);
       for (const file of files) {
-        results.push(
-          ...loadElasticFile(
-            {
-              packageName: entry.elasticPackage,
-              stream,
-              fileName: file.fileName,
-              content: file.content,
-            },
-            idSet,
-            entry.sentinelTable,
-          ),
+        const elasticFile = {
+          packageName: entry.elasticPackage,
+          stream,
+          fileName: file.fileName,
+          content: file.content,
+        };
+        for (const candidate of browseElasticFile(elasticFile)) {
+          allElastic.push({ ref: candidate.id, logType: candidate.logType });
+        }
+        loadedElastic.push(
+          ...loadElasticFile(elasticFile, idSet, entry.sentinelTable),
         );
       }
     }
+    const disambiguate = buildElasticLogTypeDisambiguator(allElastic);
+    results.push(
+      ...loadedElastic.map((sample) =>
+        sample.logType !== undefined
+          ? { ...sample, logType: disambiguate(sample.source, sample.logType) }
+          : sample,
+      ),
+    );
   }
 
   // Cribl.

@@ -98,6 +98,8 @@ export type { ElasticFile, CriblPackFile, UserSampleInput } from "./precedence";
 export {
   selectByPrecedence,
   elasticSourceId,
+  elasticStreamOf,
+  buildElasticLogTypeDisambiguator,
   browseElasticFile,
   loadElasticFile,
   readCriblPackSamples,

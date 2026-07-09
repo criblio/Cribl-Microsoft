@@ -254,3 +254,68 @@ describe("browse resilience (one failing fetch must not kill the modal)", () => 
     expect(detailed.warnings.join("\n")).toContain("Elastic samples");
   });
 });
+
+describe("stream-scoped log types on collision (web-BLOCKED vs firewall-BLOCKED)", () => {
+  const twoStreamSource: RemoteSampleSource = {
+    async listElasticTestFiles(pkg, stream) {
+      if (pkg !== "zscaler_zia") return [];
+      // Two actions per file so the discriminator-based split fires (a
+      // single-action file falls back to the filename log type).
+      if (stream === "web") {
+        return [{
+          fileName: "test-web.log",
+          content:
+            '{"event":{"action":"blocked","b64url":"d3d3Lg==","cltip":"10.0.0.1"}}\n' +
+            '{"event":{"action":"allowed","b64url":"d3d3Mg==","cltip":"10.0.0.4"}}',
+        }];
+      }
+      if (stream === "firewall") {
+        return [{
+          fileName: "test-firewall.log",
+          content:
+            '{"event":{"action":"blocked","csip":"10.0.0.2","cdip":"10.0.0.3"}}\n' +
+            '{"event":{"action":"allowed","csip":"10.0.0.5","cdip":"10.0.0.6"}}',
+        }];
+      }
+      return [];
+    },
+    async listCriblPackSamples() { return []; },
+  };
+  const deps: AcquireSamplesDeps = {
+    content: new FakeSentinelContent({ files: {} }),
+    source: twoStreamSource,
+  };
+
+  it("browse shows stream-scoped names while ids keep the raw split name", async () => {
+    const browse = (await browseSamples(deps, { solutionName: "Zscaler Internet Access" }))
+      .filter((b) => b.tier === "elastic");
+    const logTypes = browse.map((b) => b.logType).sort();
+    expect(logTypes).toEqual([
+      "firewall-ALLOWED",
+      "firewall-BLOCKED",
+      "web-ALLOWED",
+      "web-BLOCKED",
+    ]);
+    // Selection ids are untouched (browse/load id stability contract).
+    for (const b of browse) {
+      expect(b.id).toMatch(/:(BLOCKED|ALLOWED)$/);
+    }
+  });
+
+  it("a subset load still stores the stream-scoped name", async () => {
+    const browse = (await browseSamples(deps, { solutionName: "Zscaler Internet Access" }))
+      .filter((b) => b.tier === "elastic" && b.logType === "web-BLOCKED");
+    const loaded = await loadSamples(deps, {
+      solutionName: "Zscaler Internet Access",
+      selectedIds: browse.map((b) => b.id),
+    });
+    expect(loaded).toHaveLength(1);
+    expect(loaded[0].logType).toBe("web-BLOCKED");
+  });
+
+  it("single-stream splits stay unprefixed (CrowdStrike contract intact)", async () => {
+    const browse = await browseSamples(makeDeps(), { solutionName: SOLUTION });
+    const elastic = browse.filter((b) => b.tier === "elastic").map((b) => b.logType).sort();
+    expect(elastic).toEqual(["THREAT", "TRAFFIC"]);
+  });
+});
