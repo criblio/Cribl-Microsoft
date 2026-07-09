@@ -1,7 +1,7 @@
 {
   "name": "soc-optimizationtoolkit",
   "private": true,
-  "version": "1.2.32",
+  "version": "1.2.33",
   "type": "module",
   "scripts": {
     "dev": "vite",
