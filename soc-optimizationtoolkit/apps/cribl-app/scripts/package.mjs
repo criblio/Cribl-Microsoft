@@ -1,4 +1,4 @@
-import { copyFile, mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createAppPack } from './pkgutil.mjs';
@@ -76,11 +76,9 @@ await writeFile(packageJsonPath, `${JSON.stringify(packageInfo, null, 2)}\n`);
 const tgzName = `${packageInfo.name || 'app'}-${packageInfo.version}.tgz`;
 const tgzPath = join(buildOutDir, tgzName);
 await mkdir(buildOutDir, { recursive: true });
-const { tgzPath: packedPath, cleanup } = await createAppPack(false);
-try {
-  await copyFile(packedPath, tgzPath);
-} finally {
-  await cleanup();
-}
+// The pack writes DIRECTLY to the final path (no intermediate copy - see
+// createAppPack); cleanup removes only the package-build staging directory.
+const { cleanup } = await createAppPack(false, tgzPath);
+await cleanup();
 
 console.log(`\nPackage created: ${tgzPath}`);

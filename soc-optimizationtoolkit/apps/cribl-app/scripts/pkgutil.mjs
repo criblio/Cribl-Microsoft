@@ -73,7 +73,7 @@ async function pathExists(filePath) {
  * @param {string} srcDir - directory (relative to cwd) whose contents are packed
  */
 async function tarToFile(cwd, outPath, srcDir) {
-  const relOut = relative(cwd, outPath) || outPath;
+  const relOut = (relative(cwd, outPath) || outPath).replace(/\\/g, '/');
   return new Promise((resolve, reject) => {
     const child = spawn('tar', ['-czf', relOut, '-C', srcDir, '.'], {
       cwd,
@@ -138,10 +138,14 @@ async function verifyArchive(tgzPath, expectStatic) {
  * @param {boolean} [dev]
  * @returns {Promise<{ tgzPath: string; cleanup: () => Promise<void> }>}
  */
-export async function createAppPack(dev = false) {
+export async function createAppPack(dev = false, outPath = undefined) {
   const rootDir = join(__dirname, '..');
   const buildDir = join(rootDir, 'package-build');
-  const packedPath = join(rootDir, 'package-build.tgz');
+  // Writing DIRECTLY to the caller's final path avoids the intermediate
+  // package-build.tgz copy window entirely (observed live 2026-07-08: the
+  // intermediate vanished between verify and copyFile - an external scanner
+  // interfering with rapid create/read/delete churn on the same file name).
+  const packedPath = outPath ?? join(rootDir, 'package-build.tgz');
   const distDir = join(rootDir, 'dist');
   const proxiesPath = join(rootDir, 'config', 'proxies.yml');
   const policiesPath = join(rootDir, 'config', 'policies.yml');
@@ -195,7 +199,11 @@ export async function createAppPack(dev = false) {
 
   const cleanup = async () => {
     await rm(buildDir, { recursive: true, force: true }).catch(() => {});
-    await rm(packedPath, { force: true }).catch(() => {});
+    // Only the DEFAULT intermediate is disposable; an explicit outPath is the
+    // caller's final artifact and must survive cleanup.
+    if (outPath === undefined) {
+      await rm(packedPath, { force: true }).catch(() => {});
+    }
   };
 
   // Retry the pack+verify: on Windows the tar read can race file handles (AV
