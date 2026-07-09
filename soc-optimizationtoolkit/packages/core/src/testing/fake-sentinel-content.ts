@@ -87,7 +87,11 @@ export class FakeSentinelContent implements SentinelContent {
     solutionName: string,
     subDir: string,
   ): Promise<SolutionFileRef[]> {
-    const prefix = `Solutions/${solutionName}/${subDir}/`;
+    return this.listRepoFiles(`Solutions/${solutionName}/${subDir}`);
+  }
+
+  async listRepoFiles(dirPath: string): Promise<SolutionFileRef[]> {
+    const prefix = `${dirPath}/`;
     const out: SolutionFileRef[] = [];
     for (const [path, content] of this.files) {
       if (!path.startsWith(prefix)) continue;

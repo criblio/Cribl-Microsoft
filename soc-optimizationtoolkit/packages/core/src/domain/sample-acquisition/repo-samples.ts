@@ -210,6 +210,28 @@ export const SHORT_KEYWORD_MIN = 4;
 /** A file must score at least this to survive (reduces partial-overlap noise). */
 export const REPO_MATCH_MIN_SCORE = 8;
 
+/**
+ * The REPO-ROOT Sample Data directories searched for a solution's raw vendor
+ * samples (legacy default-samples.ts searchDirs). Most solutions ship NO
+ * Solutions/<name>/Sample Data folder - their raw samples live here at the
+ * repo root, keyword-matched by file name. ASIM/ carries _RawLogs.txt files
+ * with real raw CEF (important for CEF vendors).
+ */
+export const REPO_SAMPLE_DATA_DIRS: readonly string[] = Object.freeze([
+  "Sample Data",
+  "Sample Data/CEF",
+  "Sample Data/Syslog",
+  "Sample Data/Custom",
+  "Sample Data/ASIM",
+]);
+
+/**
+ * Cap on repo-root sample files READ per browse (highest filename score
+ * first): listing is one call per directory, but every candidate read is a
+ * raw fetch - bound it against the proxy budget.
+ */
+export const MAX_REPO_ROOT_SAMPLE_READS = 12;
+
 const MAX_TOP_FILES = 20;
 const MAX_EVENTS_PER_TABLE = 10;
 

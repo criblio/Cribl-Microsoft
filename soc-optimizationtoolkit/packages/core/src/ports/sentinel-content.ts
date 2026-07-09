@@ -79,6 +79,14 @@ export interface SentinelContent {
   ): Promise<SolutionFileRef[]>;
 
   /**
+   * List the files directly inside an arbitrary REPO-RELATIVE directory (one
+   * level, non-recursive) - e.g. the repo-root "Sample Data" tree, where most
+   * solutions' raw vendor samples actually live (the per-solution Sample Data
+   * folder is the exception, not the rule). Resolves `[]` when absent.
+   */
+  listRepoFiles(dirPath: string): Promise<SolutionFileRef[]>;
+
+  /**
    * List the connector JSON files for a solution, RECURSIVELY (DCR files nest
    * 2+ levels deep, e.g.
    * `Data Connectors/CrowdstrikeReplicatorCLv2/Data Collection Rules/CrowdStrikeCustomDCR.json`).

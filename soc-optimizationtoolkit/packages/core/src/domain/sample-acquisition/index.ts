@@ -68,6 +68,8 @@ export {
   EXCLUDE_PATTERNS,
   SHORT_KEYWORD_MIN,
   REPO_MATCH_MIN_SCORE,
+  REPO_SAMPLE_DATA_DIRS,
+  MAX_REPO_ROOT_SAMPLE_READS,
   detectPreIngested,
   buildSampleKeywords,
   scoreFileName,

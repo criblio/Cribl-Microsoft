@@ -32,8 +32,13 @@ import type { SentinelContent } from "../../ports/sentinel-content";
 import type { Logger } from "../../ports/logger";
 import { SAMPLE_DATA_DIR_NAMES } from "../../domain/sentinel-content/discovery";
 import {
+  MAX_REPO_ROOT_SAMPLE_READS,
+  REPO_SAMPLE_DATA_DIRS,
+  buildSampleKeywords,
+  isEligibleRepoFile,
   lookupSolution,
   resolveRepoSamples,
+  scoreFileName,
   browseRepoResult,
   loadRepoResult,
   browseElasticFile,
@@ -105,6 +110,61 @@ async function gatherRepoCandidates(
       candidates.push({ fileName: file.name, content: text, dirName: dir });
     }
   }
+
+  // REPO-ROOT Sample Data (the legacy's PRIMARY location): most solutions ship
+  // no per-solution Sample Data folder - their raw vendor files live under the
+  // repo-root "Sample Data" tree. List each search dir (one call each), score
+  // FILE NAMES with the same ENG-42 keyword scorer resolveRepoSamples uses,
+  // and READ only the top matches (bounded raw fetches). A failing directory
+  // listing is non-fatal.
+  const keywords = buildSampleKeywords(solutionName);
+  const rootMatches: Array<{
+    name: string;
+    path: string;
+    dirName: string;
+    score: number;
+  }> = [];
+  for (const dir of REPO_SAMPLE_DATA_DIRS) {
+    try {
+      const files = await content.listRepoFiles(dir);
+      const dirName = dir.split("/").pop() ?? dir;
+      for (const file of files) {
+        if (!isEligibleRepoFile(file.name, dirName)) continue;
+        const score = scoreFileName(file.name, keywords);
+        if (score > 0) {
+          rootMatches.push({ name: file.name, path: file.path, dirName, score });
+        }
+      }
+    } catch (err) {
+      logger?.debug("acquire-samples: root sample dir unavailable", {
+        dir,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+  rootMatches.sort((a, b) => b.score - a.score);
+  const seenNames = new Set(candidates.map((c) => c.fileName));
+  for (const match of rootMatches.slice(0, MAX_REPO_ROOT_SAMPLE_READS)) {
+    if (seenNames.has(match.name)) continue;
+    const text = await content.readFile(match.path);
+    if (text === null) {
+      logger?.debug("acquire-samples: root sample unreadable", {
+        file: match.name,
+      });
+      continue;
+    }
+    seenNames.add(match.name);
+    candidates.push({
+      fileName: match.name,
+      content: text,
+      dirName: match.dirName,
+    });
+  }
+  logger?.info("acquire-samples: repo candidates", {
+    solution: solutionName,
+    candidates: candidates.length,
+    rootMatched: rootMatches.length,
+  });
   return candidates;
 }
 

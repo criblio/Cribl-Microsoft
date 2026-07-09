@@ -135,6 +135,7 @@ export interface MappingReviewSectionProps {
 const EMPTY_SENTINEL_CONTENT: SentinelContent = {
   listSolutions: async () => [],
   listSolutionFiles: async () => [],
+  listRepoFiles: async () => [],
   listConnectorFiles: async () => [],
   readFile: async () => null,
   rawFetch: async () => null,

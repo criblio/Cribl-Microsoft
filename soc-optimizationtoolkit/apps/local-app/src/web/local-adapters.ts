@@ -704,10 +704,12 @@ export class LocalSentinelContent implements SentinelContent {
   }
 
   async listSolutionFiles(solutionName: string, subDir: string): Promise<SolutionFileRef[]> {
+    return this.listRepoFiles(`Solutions/${solutionName}/${subDir}`);
+  }
+
+  async listRepoFiles(dirPath: string): Promise<SolutionFileRef[]> {
     const { status, value } = await this.apiJson(
-      `/repos/${SENTINEL_OWNER}/${SENTINEL_REPO}/contents/${encodeRepoPath(
-        `Solutions/${solutionName}/${subDir}`
-      )}`
+      `/repos/${SENTINEL_OWNER}/${SENTINEL_REPO}/contents/${encodeRepoPath(dirPath)}`
     );
     if (status === 404) {
       return [];

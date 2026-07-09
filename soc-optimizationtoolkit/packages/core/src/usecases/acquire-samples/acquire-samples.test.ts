@@ -111,3 +111,49 @@ describe("acquire-samples usecase (lazy per-solution fetch)", () => {
     expect(loaded).toEqual([]);
   });
 });
+
+describe("repo-root Sample Data discovery (the legacy primary location)", () => {
+  const CEF_LINE =
+    "CEF:0|Palo Alto Networks|PAN-OS|10.2|end|TRAFFIC|1|src=10.1.1.1 dst=10.2.2.2 spt=1234 dpt=443 act=allow";
+
+  it("finds keyword-matched files under the repo-root Sample Data tree", async () => {
+    const content = new FakeSentinelContent({
+      files: {
+        // Like PaloAlto-PAN-OS: NO per-solution Sample Data folder at all.
+        "Solutions/PaloAlto-PAN-OS/Data Connectors/conn.json": "{}",
+        "Sample Data/CEF/PaloAlto_PAN_OS_Traffic_CEF.txt": `${CEF_LINE}
+${CEF_LINE}`,
+        "Sample Data/CEF/Unrelated_Vendor.txt": "CEF:0|Other|X|1|1|n|5|src=1.1.1.1",
+        "Sample Data/README.md": "not a sample",
+      },
+    });
+    const deps: AcquireSamplesDeps = { content, source };
+    const detailed = await browseSamplesDetailed(deps, {
+      solutionName: "PaloAlto-PAN-OS",
+    });
+    // The root-dir file was found, read, and survived the ENG-42 scorer.
+    expect(detailed.repo).not.toBeNull();
+    expect(detailed.repo?.samples.length ?? 0).toBeGreaterThan(0);
+    const repoEntries = detailed.available.filter(
+      (entry) => entry.tier === "sentinel-repo",
+    );
+    expect(repoEntries.length).toBeGreaterThan(0);
+    // The unrelated vendor's file never matched the solution keywords.
+    const allText = JSON.stringify(detailed);
+    expect(allText).not.toContain("Unrelated_Vendor");
+  });
+
+  it("still resolves nothing for a solution with no matching root files", async () => {
+    const content = new FakeSentinelContent({
+      files: {
+        "Solutions/Acme/Data Connectors/conn.json": "{}",
+        "Sample Data/CEF/PaloAlto_PAN_OS_Traffic_CEF.txt": CEF_LINE,
+      },
+    });
+    const deps: AcquireSamplesDeps = { content, source };
+    const detailed = await browseSamplesDetailed(deps, { solutionName: "Acme" });
+    expect(
+      detailed.available.filter((entry) => entry.tier === "sentinel-repo"),
+    ).toEqual([]);
+  });
+});

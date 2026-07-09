@@ -976,17 +976,19 @@ export class PlatformSentinelContent implements SentinelContent {
   }
 
   async listSolutionFiles(solutionName: string, subDir: string): Promise<SolutionFileRef[]> {
+    return this.listRepoFiles(`Solutions/${solutionName}/${subDir}`);
+  }
+
+  async listRepoFiles(dirPath: string): Promise<SolutionFileRef[]> {
     const res = await this.apiGet(
-      `/repos/${SENTINEL_OWNER}/${SENTINEL_REPO}/contents/${encodeRepoPath(
-        `Solutions/${solutionName}/${subDir}`,
-      )}`,
+      `/repos/${SENTINEL_OWNER}/${SENTINEL_REPO}/contents/${encodeRepoPath(dirPath)}`,
     );
     if (res.status === 404) {
       return [];
     }
     if (!res.ok) {
       throw new Error(
-        `GET GitHub contents Solutions/${solutionName}/${subDir}: HTTP ${res.status}\n${await res.text()}`,
+        `GET GitHub contents ${dirPath}: HTTP ${res.status}\n${await res.text()}`,
       );
     }
     const files: SolutionFileRef[] = [];
