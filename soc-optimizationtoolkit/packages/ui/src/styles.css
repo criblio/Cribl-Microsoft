@@ -4039,3 +4039,27 @@ details[open] > summary::before {
 .identity-missing-hint {
   color: var(--warn);
 }
+.identity-required {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.identity-suggestions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.identity-suggestion-chip {
+  font-family: inherit;
+  font-size: 12px;
+  padding: 3px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-raised);
+  color: var(--text);
+  cursor: pointer;
+}
+.identity-suggestion-chip:hover {
+  border-color: var(--accent, var(--text));
+}

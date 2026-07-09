@@ -41,6 +41,7 @@ import {
   collectGapReports,
   createBundledSchemaCatalog,
   detectVendorIdentity,
+  identityValueOptions,
   matchSampleLogTypeToTable,
   resolveDestinationTables,
   resolveIdentityFields,
@@ -57,6 +58,7 @@ import type {
   SolutionConnector,
   TaggedSample,
   VendorGapProfile,
+  VendorIdentity,
 } from "@soc/core";
 import { InfoTip } from "../../components/info-tip";
 import { SearchableSelect } from "../../components/searchable-select";
@@ -310,13 +312,21 @@ export function MappingReviewSection({
     return byLogType;
   }, [reports, review, globalEnrichments, tableEnrichments]);
 
+  // The curated identity for the selected solution (null when uncurated):
+  // drives the auto-seeding below and the one-click choices on the
+  // forced-input rows (e.g. Zscaler's NSSWeblog / NSSFWlog products).
+  const detectedIdentity = useMemo(
+    () => detectVendorIdentity(solutionName),
+    [solutionName],
+  );
+
   // Auto-seed curated solution knowledge (e.g. PaloAlto -> DeviceVendor =
   // Palo Alto Networks) as EDITABLE per-table enrichments, once per
   // logType/table/field. The one-shot guard means a user deletion sticks: the
   // field goes missing and becomes a forced input instead of being re-seeded.
   const seededIdentityRef = useRef(new Set<string>());
   useEffect(() => {
-    const identity = detectVendorIdentity(solutionName);
+    const identity = detectedIdentity;
     if (identity === null) {
       return;
     }
@@ -337,7 +347,7 @@ export function MappingReviewSection({
         addEnrichment(report.logType, status.field, value);
       }
     }
-  }, [reports, identityStatuses, solutionName, addEnrichment]);
+  }, [reports, identityStatuses, detectedIdentity, addEnrichment]);
 
   const analyzedSigRef = useRef<string>("");
   const currentSig = inputSignature(solutionName, samples);
@@ -676,6 +686,7 @@ export function MappingReviewSection({
               <IdentityBlock
                 tableName={report.tableName}
                 statuses={identityStatuses[report.logType]}
+                identity={detectedIdentity}
                 onAdd={(field, value) =>
                   addEnrichment(report.logType, field, value)
                 }
@@ -910,10 +921,12 @@ export function MappingReviewSection({
 function IdentityBlock({
   tableName,
   statuses,
+  identity,
   onAdd,
 }: {
   tableName: string;
   statuses: readonly IdentityFieldStatus[];
+  identity: VendorIdentity | null;
   onAdd: (field: string, value: string) => boolean;
 }) {
   const missing = statuses.filter((s) => s.status === "missing");
@@ -923,11 +936,16 @@ function IdentityBlock({
     >
       <span className="field-label">
         Vendor identity for {tableName}
-        <InfoTip text="Sentinel analytics rules and workbooks filter this table on these fields, but raw vendor logs often do not carry them. When the sample provides one (CEF headers do), nothing is added. Otherwise the Cribl pipeline must add it as a constant - detected vendors are pre-filled from the selected solution (editable below); anything still missing must be entered before the pack can be built." />
+        <InfoTip text="Sentinel analytics rules and workbooks filter this table on these fields, but raw vendor logs often do not carry them. When the sample provides one (CEF headers do), nothing is added. Otherwise the Cribl pipeline must add it as a constant - detected vendors are pre-filled from the selected solution (editable below); anything still missing must be entered before the pack can be built. Where a vendor emits several known products (e.g. Zscaler NSSWeblog vs NSSFWlog), the candidates are offered but never auto-picked - the wrong constant silently breaks the content filters." />
       </span>
       {statuses.map((s) =>
         s.status === "missing" ? (
-          <RequiredIdentityInput key={s.field} field={s.field} onAdd={onAdd} />
+          <RequiredIdentityInput
+            key={s.field}
+            field={s.field}
+            options={identityValueOptions(s.field, identity)}
+            onAdd={onAdd}
+          />
         ) : (
           <div className="identity-row" key={s.field}>
             <code className="code-chip">{s.field}</code>
@@ -955,42 +973,70 @@ function IdentityBlock({
   );
 }
 
-/** One forced-input row for a missing required identity field. */
+/**
+ * One forced-input row for a missing required identity field. When the
+ * curated identity KNOWS the candidate values (Zscaler's NSSWeblog vs
+ * NSSFWlog), they render as one-click choices - offered, never auto-picked.
+ */
 function RequiredIdentityInput({
   field,
+  options,
   onAdd,
 }: {
   field: string;
+  options: readonly string[];
   onAdd: (field: string, value: string) => boolean;
 }) {
   const [value, setValue] = useState("");
+  const placeholder =
+    options.length > 0
+      ? `e.g. ${options[0]}`
+      : field.endsWith("Vendor")
+        ? "e.g. Palo Alto Networks"
+        : "e.g. PAN-OS";
   return (
-    <div className="enrich-add identity-required-row">
-      <code className="code-chip">{field}</code>
-      <span className="gap-badge gap-badge-required">Required</span>
-      <input
-        type="text"
-        value={value}
-        onChange={(e) => setValue(e.target.value)}
-        placeholder={
-          field.endsWith("Vendor")
-            ? "e.g. Palo Alto Networks"
-            : "e.g. PAN-OS"
-        }
-        autoComplete="off"
-        spellCheck={false}
-      />
-      <button
-        className="run-button"
-        onClick={() => {
-          if (onAdd(field, value)) {
-            setValue("");
-          }
-        }}
-        disabled={value.trim() === ""}
-      >
-        Add
-      </button>
+    <div className="identity-required">
+      <div className="enrich-add identity-required-row">
+        <code className="code-chip">{field}</code>
+        <span className="gap-badge gap-badge-required">Required</span>
+        <input
+          type="text"
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          placeholder={placeholder}
+          autoComplete="off"
+          spellCheck={false}
+        />
+        <button
+          className="run-button"
+          onClick={() => {
+            if (onAdd(field, value)) {
+              setValue("");
+            }
+          }}
+          disabled={value.trim() === ""}
+        >
+          Add
+        </button>
+      </div>
+      {options.length > 0 && (
+        <div className="identity-suggestions">
+          <span className="field-hint">
+            Known {field} values for this vendor - pick the one matching your
+            feed:
+          </span>
+          {options.map((option) => (
+            <button
+              key={option}
+              type="button"
+              className="identity-suggestion-chip"
+              onClick={() => onAdd(field, option)}
+            >
+              {option}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

@@ -1,6 +1,7 @@
 export {
   detectVendorIdentity,
   identityGateMessage,
+  identityValueOptions,
   missingIdentityFields,
   requiredIdentityFields,
   resolveIdentityFields,

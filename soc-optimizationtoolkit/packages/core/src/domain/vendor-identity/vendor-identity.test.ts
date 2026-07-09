@@ -10,6 +10,7 @@ import { describe, expect, it } from "vitest";
 import {
   detectVendorIdentity,
   identityGateMessage,
+  identityValueOptions,
   missingIdentityFields,
   requiredIdentityFields,
   resolveIdentityFields,
@@ -55,9 +56,10 @@ describe("detectVendorIdentity", () => {
       .toEqual({ vendor: "Fortinet", product: "Fortigate" });
   });
 
-  it("suggests vendor only where the product varies by log type", () => {
+  it("suggests vendor only where the product varies, with the candidates listed", () => {
     expect(detectVendorIdentity("Zscaler Internet Access")).toEqual({
       vendor: "Zscaler",
+      productOptions: ["NSSWeblog", "NSSFWlog"],
     });
   });
 
@@ -95,6 +97,44 @@ describe("suggestedIdentityValue", () => {
 
   it("returns null for a non-identity field name", () => {
     expect(suggestedIdentityValue("DeviceVersion", identity)).toBeNull();
+  });
+
+  it("never auto-suggests from productOptions (choice stays with the operator)", () => {
+    expect(
+      suggestedIdentityValue("DeviceProduct", {
+        vendor: "Zscaler",
+        productOptions: ["NSSWeblog", "NSSFWlog"],
+      }),
+    ).toBeNull();
+  });
+});
+
+describe("identityValueOptions", () => {
+  it("offers the productOptions as one-click choices for a product field", () => {
+    expect(
+      identityValueOptions("DeviceProduct", {
+        vendor: "Zscaler",
+        productOptions: ["NSSWeblog", "NSSFWlog"],
+      }),
+    ).toEqual(["NSSWeblog", "NSSFWlog"]);
+  });
+
+  it("offers the stable product and the vendor for their fields", () => {
+    const pan = { vendor: "Palo Alto Networks", product: "PAN-OS" };
+    expect(identityValueOptions("DeviceProduct", pan)).toEqual(["PAN-OS"]);
+    expect(identityValueOptions("EventVendor", pan)).toEqual([
+      "Palo Alto Networks",
+    ]);
+  });
+
+  it("returns empty for unknown identities and non-identity fields", () => {
+    expect(identityValueOptions("DeviceProduct", null)).toEqual([]);
+    expect(
+      identityValueOptions("DeviceVersion", { vendor: "Zscaler" }),
+    ).toEqual([]);
+    expect(identityValueOptions("DeviceProduct", { vendor: "F5" })).toEqual(
+      [],
+    );
   });
 });
 

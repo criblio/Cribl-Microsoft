@@ -38,6 +38,14 @@ export interface VendorIdentity {
    * field then stays a required manual input.
    */
   product?: string;
+  /**
+   * The KNOWN candidate products when the vendor emits several (e.g. the
+   * Zscaler NSS feeds send NSSWeblog for web logs and NSSFWlog for firewall
+   * logs). NEVER auto-seeded - the operator must pick, because the wrong
+   * constant silently breaks Sentinel content filters - but the UI offers
+   * them as one-click choices on the forced-input row.
+   */
+  productOptions?: readonly string[];
 }
 
 /** One curated entry: solution-name keywords -> identity. */
@@ -62,8 +70,20 @@ const KNOWN_VENDOR_IDENTITIES: readonly VendorIdentityHint[] = [
     keywords: ["fortinet", "fortigate"],
     identity: { vendor: "Fortinet", product: "Fortigate" },
   },
-  { keywords: ["check point", "checkpoint"], identity: { vendor: "Check Point" } },
-  { keywords: ["zscaler"], identity: { vendor: "Zscaler" } },
+  {
+    keywords: ["check point", "checkpoint"],
+    identity: {
+      vendor: "Check Point",
+      productOptions: ["VPN-1 & FireWall-1"],
+    },
+  },
+  {
+    keywords: ["zscaler"],
+    identity: {
+      vendor: "Zscaler",
+      productOptions: ["NSSWeblog", "NSSFWlog"],
+    },
+  },
   { keywords: ["cisco asa"], identity: { vendor: "Cisco", product: "ASA" } },
   {
     keywords: ["crowdstrike"],
@@ -132,7 +152,8 @@ export function detectVendorIdentity(
 /**
  * The suggested constant for one identity FIELD from a detected identity:
  * *Vendor fields take the vendor, *Product fields take the product (null when
- * the curated entry has no stable product - the field stays a manual input).
+ * the curated entry has no stable product - the field stays a manual input;
+ * productOptions are deliberately NOT auto-suggested, only offered).
  */
 export function suggestedIdentityValue(
   field: string,
@@ -145,6 +166,32 @@ export function suggestedIdentityValue(
     return identity.product ?? null;
   }
   return null;
+}
+
+/**
+ * The KNOWN candidate values for one identity field, for the forced-input
+ * row's one-click choices: the vendor for *Vendor fields; for *Product
+ * fields the stable product when there is one, else the curated
+ * productOptions (e.g. Zscaler's NSSWeblog / NSSFWlog). Empty when nothing
+ * is known - the operator types the value.
+ */
+export function identityValueOptions(
+  field: string,
+  identity: VendorIdentity | null,
+): string[] {
+  if (identity === null) {
+    return [];
+  }
+  if (field.endsWith("Vendor")) {
+    return [identity.vendor];
+  }
+  if (field.endsWith("Product")) {
+    if (identity.product !== undefined) {
+      return [identity.product];
+    }
+    return [...(identity.productOptions ?? [])];
+  }
+  return [];
 }
 
 /** The mapping-row shape the resolver needs (a GapFieldMapping subset). */
