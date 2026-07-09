@@ -40,13 +40,17 @@ import {
   DEFAULT_GAP_PROFILE,
   collectGapReports,
   createBundledSchemaCatalog,
+  detectVendorIdentity,
   matchSampleLogTypeToTable,
   resolveDestinationTables,
+  resolveIdentityFields,
+  suggestedIdentityValue,
 } from "@soc/core";
 import type {
   DestinationTableResolution,
   GapFieldMapping,
   GapReport,
+  IdentityFieldStatus,
   MatchAction,
   SchemaCatalog,
   SentinelContent,
@@ -282,6 +286,58 @@ export function MappingReviewSection({
     mappingReviewReducer,
     INITIAL_MAPPING_REVIEW_STATE,
   );
+
+  // ---- Required vendor identity (DeviceVendor/DeviceProduct) --------------
+  // Per-logType resolution of the identity fields the destination table
+  // REQUIRES: sample-provided (CEF headers), enrichment-covered, or MISSING.
+  // Missing fields render a forced-input row on the card and block the pack
+  // build (the parent gates on the same core resolver).
+  const identityStatuses = useMemo(() => {
+    const byLogType: Record<string, IdentityFieldStatus[]> = {};
+    for (const report of reports) {
+      const statuses = resolveIdentityFields(
+        report.tableName,
+        effectiveMappings(review, report),
+        mergeEnrichments(
+          globalEnrichments,
+          tableEnrichments[report.logType] ?? [],
+        ),
+      );
+      if (statuses.length > 0) {
+        byLogType[report.logType] = statuses;
+      }
+    }
+    return byLogType;
+  }, [reports, review, globalEnrichments, tableEnrichments]);
+
+  // Auto-seed curated solution knowledge (e.g. PaloAlto -> DeviceVendor =
+  // Palo Alto Networks) as EDITABLE per-table enrichments, once per
+  // logType/table/field. The one-shot guard means a user deletion sticks: the
+  // field goes missing and becomes a forced input instead of being re-seeded.
+  const seededIdentityRef = useRef(new Set<string>());
+  useEffect(() => {
+    const identity = detectVendorIdentity(solutionName);
+    if (identity === null) {
+      return;
+    }
+    for (const report of reports) {
+      for (const status of identityStatuses[report.logType] ?? []) {
+        if (status.status !== "missing") {
+          continue;
+        }
+        const key = `${report.logType}|${report.tableName}|${status.field}`;
+        if (seededIdentityRef.current.has(key)) {
+          continue;
+        }
+        const value = suggestedIdentityValue(status.field, identity);
+        if (value === null) {
+          continue;
+        }
+        seededIdentityRef.current.add(key);
+        addEnrichment(report.logType, status.field, value);
+      }
+    }
+  }, [reports, identityStatuses, solutionName, addEnrichment]);
 
   const analyzedSigRef = useRef<string>("");
   const currentSig = inputSignature(solutionName, samples);
@@ -616,6 +672,16 @@ export function MappingReviewSection({
               </p>
             ))}
 
+            {(identityStatuses[report.logType] ?? []).length > 0 && (
+              <IdentityBlock
+                tableName={report.tableName}
+                statuses={identityStatuses[report.logType]}
+                onAdd={(field, value) =>
+                  addEnrichment(report.logType, field, value)
+                }
+              />
+            )}
+
             {report.overflowCount > 0 && (
               <p className="field-hint gap-overflow-note">
                 {OVERFLOW_COVERAGE_NOTE}
@@ -830,6 +896,101 @@ export function MappingReviewSection({
           </div>
         );
       })}
+    </div>
+  );
+}
+
+/**
+ * The required vendor-identity block for one table card: how each required
+ * field (DeviceVendor/DeviceProduct or the ASim Event pair) is satisfied -
+ * sample, enrichment, or MISSING with a forced-input row. Rendered OUTSIDE
+ * the collapsed field-mapping details so a missing requirement is visible
+ * without expanding anything.
+ */
+function IdentityBlock({
+  tableName,
+  statuses,
+  onAdd,
+}: {
+  tableName: string;
+  statuses: readonly IdentityFieldStatus[];
+  onAdd: (field: string, value: string) => boolean;
+}) {
+  const missing = statuses.filter((s) => s.status === "missing");
+  return (
+    <div
+      className={`identity-block${missing.length > 0 ? " identity-block-missing" : ""}`}
+    >
+      <span className="field-label">
+        Vendor identity for {tableName}
+        <InfoTip text="Sentinel analytics rules and workbooks filter this table on these fields, but raw vendor logs often do not carry them. When the sample provides one (CEF headers do), nothing is added. Otherwise the Cribl pipeline must add it as a constant - detected vendors are pre-filled from the selected solution (editable below); anything still missing must be entered before the pack can be built." />
+      </span>
+      {statuses.map((s) =>
+        s.status === "missing" ? (
+          <RequiredIdentityInput key={s.field} field={s.field} onAdd={onAdd} />
+        ) : (
+          <div className="identity-row" key={s.field}>
+            <code className="code-chip">{s.field}</code>
+            <span className="enrich-row-eq">=</span>
+            <span className="enrich-row-value">
+              {s.value ?? "(from sample)"}
+            </span>
+            <span className="field-hint">
+              {s.status === "sample"
+                ? "provided by the sample data"
+                : "enrichment constant (editable in the enrichment fields)"}
+            </span>
+          </div>
+        ),
+      )}
+      {missing.length > 0 && (
+        <span className="field-hint identity-missing-hint">
+          Required before the pack can be built: the sample does not carry{" "}
+          {missing.map((s) => s.field).join(" or ")} and no enrichment sets
+          {missing.length === 1 ? " it" : " them"}. Enter the constant the
+          pipeline should add.
+        </span>
+      )}
+    </div>
+  );
+}
+
+/** One forced-input row for a missing required identity field. */
+function RequiredIdentityInput({
+  field,
+  onAdd,
+}: {
+  field: string;
+  onAdd: (field: string, value: string) => boolean;
+}) {
+  const [value, setValue] = useState("");
+  return (
+    <div className="enrich-add identity-required-row">
+      <code className="code-chip">{field}</code>
+      <span className="gap-badge gap-badge-required">Required</span>
+      <input
+        type="text"
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        placeholder={
+          field.endsWith("Vendor")
+            ? "e.g. Palo Alto Networks"
+            : "e.g. PAN-OS"
+        }
+        autoComplete="off"
+        spellCheck={false}
+      />
+      <button
+        className="run-button"
+        onClick={() => {
+          if (onAdd(field, value)) {
+            setValue("");
+          }
+        }}
+        disabled={value.trim() === ""}
+      >
+        Add
+      </button>
     </div>
   );
 }

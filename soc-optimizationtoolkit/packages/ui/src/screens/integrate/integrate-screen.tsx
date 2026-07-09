@@ -69,7 +69,9 @@ import {
   deployedGroups,
   deriveSectionStatuses,
   destinationIdFromOptions,
+  identityGateMessage,
   isStreamWorkerGroup,
+  missingIdentityFields,
   onboardTable,
   onboardTableStepsFor,
   readinessPillsForMode,
@@ -480,19 +482,40 @@ export function IntegrateScreen({
   const [packBuilding, setPackBuilding] = useState(false);
   const [packBuildLines, setPackBuildLines] = useState<string[]>([]);
 
+  // Required vendor identity (DeviceVendor/DeviceProduct and the ASim Event
+  // pair): a table whose content filters on them must have every one covered
+  // by the sample or an enrichment constant before a pipeline ships. Same core
+  // resolver the Gap Analysis cards render their forced-input rows from.
+  const identityGateReason = useMemo(
+    () =>
+      identityGateMessage(
+        gapReports.map((report) => ({
+          tableName: report.tableName,
+          missing: missingIdentityFields(
+            report.tableName,
+            mappingOverrides[report.logType] ?? report.fieldMappings,
+            enrichments[report.logType] ?? [],
+          ),
+        })),
+      ),
+    [gapReports, mappingOverrides, enrichments],
+  );
+
   // The single unlock condition for the build, in dependency order.
   const packBuildDisabledReason =
     ports.packs === undefined || ports.packInstall === undefined
       ? "Pack build is not available in this host."
       : !mappingsApproved
         ? "Approve the DCR Gap Analysis mappings (section 5) first - the pack is built from them."
-        : packName.trim() === ""
-          ? "Enter a pack name."
-          : packTargetGroups.length === 0
-            ? "Select at least one worker group."
-            : packOverwriteBlocked
-              ? "Acknowledge the pack overwrite above."
-              : null;
+        : identityGateReason !== null
+          ? identityGateReason
+          : packName.trim() === ""
+            ? "Enter a pack name."
+            : packTargetGroups.length === 0
+              ? "Select at least one worker group."
+              : packOverwriteBlocked
+                ? "Acknowledge the pack overwrite above."
+                : null;
 
   const buildAndInstallPack = useCallback(async () => {
     const packStore = ports.packs;
@@ -504,7 +527,8 @@ export function IntegrateScreen({
       packInstall === undefined ||
       name === "" ||
       packTargetGroups.length === 0 ||
-      !mappingsApproved
+      !mappingsApproved ||
+      identityGateReason !== null
     ) {
       return;
     }
@@ -671,6 +695,7 @@ export function IntegrateScreen({
     mappingOverrides,
     sampleFormats,
     enrichments,
+    identityGateReason,
     outcomes,
     samples,
     config,

@@ -4010,3 +4010,32 @@ details[open] > summary::before {
   flex-direction: column;
   gap: 6px;
 }
+
+/* Required vendor identity (DeviceVendor/DeviceProduct) per table card. */
+.identity-block {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: var(--surface-raised);
+}
+.identity-block-missing {
+  border-color: var(--warn);
+}
+.identity-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+.identity-required-row {
+  align-items: center;
+}
+.identity-required-row input {
+  flex: 1 1 220px;
+}
+.identity-missing-hint {
+  color: var(--warn);
+}
