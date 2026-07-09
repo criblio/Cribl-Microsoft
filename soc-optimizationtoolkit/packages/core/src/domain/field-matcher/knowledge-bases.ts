@@ -60,11 +60,11 @@ export const ALIAS_TABLE: Record<string, string[]> = {
   proto: ["Protocol", "NetworkProtocol", "IPProtocol"],
   app: ["ApplicationProtocol", "Application", "AppName"],
   service: ["DestinationServiceName", "Service"],
-  // NOTE: do NOT add "Activity" here - alias candidates tie on score, so the
-  // SCHEMA order picks the column, and Activity precedes DeviceAction in
-  // CommonSecurityLog (verified 2026-07-09: it flipped action=Blocked onto
-  // Activity and displaced threat_name).
-  action: ["DeviceAction", "Action", "EventAction"],
+  // Activity is deliberately LAST: alias scoring is rank-aware (90, 89, ...),
+  // so DeviceAction wins wherever it exists (CommonSecurityLog) and Activity
+  // only catches tables without it (SecurityEvent). Before rank-aware scoring
+  // candidates tied and the SCHEMA order flipped action=Blocked onto Activity.
+  action: ["DeviceAction", "Action", "EventAction", "Activity"],
   rule: ["RuleName", "SecurityRule"],
 
   // Zones / Interfaces

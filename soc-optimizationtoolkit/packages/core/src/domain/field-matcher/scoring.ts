@@ -107,16 +107,23 @@ export function scoreMatch(
     return { score: 95, confidence: "exact", reason: "Case-insensitive match" };
   }
 
-  // 3. Known alias lookup (exact key first, then the case-insensitive index)
+  // 3. Known alias lookup (exact key first, then the case-insensitive index).
+  // RANK-AWARE (2026-07-09 improvement, pinned): candidates earlier in the
+  // alias list outscore later ones (90, 89, 88... floored at 86 - still above
+  // the 80 normalized-match band), so the LIST order finally means priority.
+  // Previously every candidate scored a flat 90 and the SCHEMA's column order
+  // broke the tie - which is how `action` (DeviceAction first in its list)
+  // once flipped onto Activity purely because Activity precedes DeviceAction
+  // in the CommonSecurityLog schema.
   const aliases =
     ALIAS_TABLE[sourceName] ?? ALIAS_TABLE_LOWER.get(sourceName.toLowerCase());
   if (aliases) {
-    for (const alias of aliases) {
-      if (alias.toLowerCase() === destName.toLowerCase()) {
+    for (let i = 0; i < aliases.length; i++) {
+      if (aliases[i].toLowerCase() === destName.toLowerCase()) {
         return {
-          score: 90,
+          score: Math.max(86, 90 - i),
           confidence: "alias",
-          reason: `Known alias: ${sourceName} -> ${alias}`,
+          reason: `Known alias: ${sourceName} -> ${aliases[i]}`,
         };
       }
     }
@@ -205,10 +212,13 @@ export function typeValueBoost(
 
   const destLower = destName.toLowerCase();
 
-  // IP address detection -> boost for IP destination fields
+  // IP address detection -> boost for IP destination fields.
+  // FIXED 2026-07-09: the legacy IPv6 pattern had no required ":", so ANY
+  // bare number ("500") or hex string read as "IP-looking" and handed a +12
+  // boost to *IP*/*Address* columns.
   if (
     /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(sampleValue) ||
-    /^[0-9a-f:]{3,39}$/i.test(sampleValue)
+    (sampleValue.includes(":") && /^[0-9a-f:]{3,39}$/i.test(sampleValue))
   ) {
     // IPv4 or IPv6
     if (destLower.includes("ip") || destLower.includes("address")) return 12;

@@ -9,7 +9,7 @@
 import { describe, expect, it } from "vitest";
 
 import { matchFields } from "./match-fields";
-import { scoreMatch } from "./scoring";
+import { scoreMatch, typeValueBoost } from "./scoring";
 import type { DestField, SourceField } from "./models";
 
 /** A CommonSecurityLog-ish destination subset covering the new aliases. */
@@ -379,9 +379,10 @@ describe("vendor-research aliases wave 2 (2026-07-09)", () => {
   }
 
   it("action still claims DeviceAction, never Activity (candidate-order trap)", () => {
-    // Alias candidates tie on score, so the SCHEMA order picks the column -
-    // adding Activity to action's candidates flipped action=Blocked onto
-    // Activity and displaced threat_name (verified 2026-07-09, reverted).
+    // Rank-aware alias scoring: DeviceAction (rank 0, 90) outscores Activity
+    // (rank 3, 87), so action never steals Activity from threat_name on
+    // tables that have DeviceAction. Before rank-aware scoring candidates
+    // tied and the SCHEMA order flipped this (verified live 2026-07-09).
     const result = matchFields(
       [
         { name: "action", type: "string" },
@@ -398,6 +399,19 @@ describe("vendor-research aliases wave 2 (2026-07-09)", () => {
     expect(byName.get("threat_name")).toBe("Activity");
   });
 
+  it("action falls to Activity on tables without DeviceAction (SecurityEvent)", () => {
+    const result = matchFields(
+      [{ name: "action", type: "string" }],
+      [
+        { name: "Activity", type: "string" },
+        { name: "EventID", type: "int" },
+      ],
+      undefined,
+      "SecurityEvent",
+    );
+    expect(result.matched[0]?.destName).toBe("Activity");
+  });
+
   it("maps pid to the Syslog table's ProcessID", () => {
     const result = matchFields(
       [{ name: "pid", type: "int" }],
@@ -406,6 +420,51 @@ describe("vendor-research aliases wave 2 (2026-07-09)", () => {
       "Syslog",
     );
     expect(result.matched[0]?.destName).toBe("ProcessID");
+  });
+});
+
+describe("matcher engine improvements (2026-07-09, pinned)", () => {
+  it("global assignment: the strongest claim wins regardless of field order", () => {
+    // REAL case from the CrowdStrike alert corpus: local_process_id appears
+    // BEFORE process_id in discovery order. The legacy per-source loop let
+    // local_process_id steal ProcessID via a 50-score containment, forcing
+    // process_id onto ProcessName (an id in a name column). Global
+    // best-score-first assignment gives process_id its 80-score normalized
+    // match and leaves ProcessName honestly unclaimed.
+    const result = matchFields(
+      [
+        { name: "local_process_id", type: "string" },
+        { name: "process_id", type: "string" },
+      ],
+      [
+        { name: "ProcessID", type: "string" },
+        { name: "ProcessName", type: "string" },
+      ],
+      undefined,
+      "CommonSecurityLog",
+    );
+    const byName = new Map(
+      result.matched.map((m) => [m.sourceName, m.destName]),
+    );
+    expect(byName.get("process_id")).toBe("ProcessID");
+    expect(byName.get("local_process_id")).not.toBe("ProcessID");
+    expect(
+      result.matched.some((m) => m.destName === "ProcessName"),
+    ).toBe(false);
+  });
+
+  it("alias candidates score by list rank (90, 89, ... floored at 86)", () => {
+    expect(scoreMatch("action", "DeviceAction").score).toBe(90);
+    expect(scoreMatch("action", "Activity").score).toBe(87);
+    // Rank never drops below 86 - still above the 80 normalized-match band.
+    expect(scoreMatch("src", "srcip").score).toBeGreaterThanOrEqual(86);
+  });
+
+  it("bare numbers and hex ids no longer read as IP-looking values", () => {
+    expect(typeValueBoost("500", "SourceIP", "string")).toBe(0);
+    expect(typeValueBoost("deadbeef", "DeviceAddress", "string")).toBe(0);
+    expect(typeValueBoost("fe80::1", "SourceIP", "string")).toBe(12);
+    expect(typeValueBoost("10.0.0.1", "SourceIP", "string")).toBe(12);
   });
 });
 

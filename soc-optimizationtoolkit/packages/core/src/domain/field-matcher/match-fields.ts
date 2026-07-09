@@ -120,16 +120,32 @@ export function matchFields(
   const eventType = classifyEventType(sourceFields.map((s) => s.name));
   const eventBoosts = EVENT_TYPE_BOOSTS[eventType] || {};
 
-  // Phase 1: Exact, alias, and fuzzy matches with type-aware + event-type boosts
-  for (const src of sourceFields) {
+  // Phase 1: Exact, alias, and fuzzy matches with type-aware + event-type
+  // boosts.
+  //
+  // GLOBAL ASSIGNMENT (2026-07-09 improvement, pinned): the legacy loop
+  // assigned per SOURCE field in DISCOVERY order, so an early field holding a
+  // weak fuzzy score (50) could permanently steal a column from a later field
+  // holding an alias score (90) - whether a mapping won depended on the JSON
+  // key order of the sample. Now every (source, dest) pair above threshold is
+  // scored first and assignment runs in DESCENDING score order (ties break by
+  // source order then schema order, matching the legacy tie behavior), so the
+  // strongest claim on a column always wins regardless of field order. A
+  // source that loses its best column still competes for its next-best via
+  // its remaining pairs.
+  interface Candidate {
+    srcIdx: number;
+    destIdx: number;
+    score: number;
+    confidence: MatchConfidence;
+    reason: string;
+  }
+  const candidates: Candidate[] = [];
+  for (let s = 0; s < sourceFields.length; s++) {
+    const src = sourceFields[s];
     if (usedSource.has(src.name)) continue;
-
-    let bestScore = 0;
-    let bestDest: DestField | null = null;
-    let bestReason = "";
-    let bestConfidence: MatchConfidence = "unmatched";
-
-    for (const dst of destFields) {
+    for (let d = 0; d < destFields.length; d++) {
+      const dst = destFields[d];
       if (usedDest.has(dst.name)) continue;
 
       // If this dest has a coalesce reservation, only the reserved source can claim it
@@ -149,41 +165,44 @@ export function matchFields(
       const eventBoost = eventBoosts[dst.name] || 0;
 
       const totalScore = nameScore + valueBoost + eventBoost;
+      // Only accept matches above threshold (50 base, boosts can help borderline)
+      if (totalScore < 50) continue;
 
-      if (totalScore > bestScore) {
-        bestScore = totalScore;
-        bestDest = dst;
-        bestReason =
+      candidates.push({
+        srcIdx: s,
+        destIdx: d,
+        score: totalScore,
+        confidence,
+        reason:
           reason +
           (valueBoost > 0 ? ` [+${valueBoost} value match]` : "") +
-          (eventBoost > 0 ? ` [+${eventBoost} ${eventType} context]` : "");
-        bestConfidence = confidence;
-      }
-    }
-
-    // Only accept matches above threshold (50 base, boosts can help borderline)
-    if (bestDest && bestScore >= 50) {
-      const needsCoercion =
-        src.type !== bestDest.type && src.type !== "" && bestDest.type !== "";
-      matched.push({
-        sourceName: src.name,
-        sourceType: src.type,
-        destName: bestDest.name,
-        destType: bestDest.type,
-        confidence: bestConfidence,
-        action:
-          src.name === bestDest.name
-            ? needsCoercion
-              ? "coerce"
-              : "keep"
-            : "rename",
-        needsCoercion,
-        description: bestReason,
-        sampleValue: src.sampleValue,
+          (eventBoost > 0 ? ` [+${eventBoost} ${eventType} context]` : ""),
       });
-      usedSource.add(src.name);
-      usedDest.add(bestDest.name);
     }
+  }
+  candidates.sort(
+    (a, b) => b.score - a.score || a.srcIdx - b.srcIdx || a.destIdx - b.destIdx,
+  );
+  for (const candidate of candidates) {
+    const src = sourceFields[candidate.srcIdx];
+    const dst = destFields[candidate.destIdx];
+    if (usedSource.has(src.name) || usedDest.has(dst.name)) continue;
+    const needsCoercion =
+      src.type !== dst.type && src.type !== "" && dst.type !== "";
+    matched.push({
+      sourceName: src.name,
+      sourceType: src.type,
+      destName: dst.name,
+      destType: dst.type,
+      confidence: candidate.confidence,
+      action:
+        src.name === dst.name ? (needsCoercion ? "coerce" : "keep") : "rename",
+      needsCoercion,
+      description: candidate.reason,
+      sampleValue: src.sampleValue,
+    });
+    usedSource.add(src.name);
+    usedDest.add(dst.name);
   }
 
   // Collect unmatched source fields
