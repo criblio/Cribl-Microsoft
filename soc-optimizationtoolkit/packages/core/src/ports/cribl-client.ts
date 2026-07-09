@@ -45,6 +45,19 @@ export interface CriblGroupSummary {
 }
 
 /**
+ * Whether a group can run Stream pipelines and host the destinations this app
+ * deploys: product "stream" (case-insensitive) or UNREPORTED (older and
+ * single-product leaders omit `product`; hiding those would empty the list on
+ * exactly the deployments that have no Edge fleets). Edge fleets are excluded
+ * everywhere a worker group is selected.
+ */
+export function isStreamWorkerGroup(group: CriblGroupSummary): boolean {
+  return (
+    group.product === undefined || group.product.toLowerCase() === "stream"
+  );
+}
+
+/**
  * Minimal Cribl API client.
  *
  * Error semantics: `request` resolves with `{status, body}` for every HTTP

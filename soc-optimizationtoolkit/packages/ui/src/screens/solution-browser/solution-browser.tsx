@@ -77,8 +77,10 @@ export function SolutionBrowser({ onSelect }: SolutionBrowserProps) {
   const [detail, setDetail] = useState<DetailState>({ phase: "idle" });
 
   // The deep-link name to preselect once the index loads (read ONCE on mount -
-  // the preserved Unit 26 `#/?solution=` contract).
-  const [deepLinkName] = useState<string | null>(() =>
+  // the preserved Unit 26 `#/?solution=` contract). CONSUMED (set to null) the
+  // first time the preselect effect honors it: left standing, it would re-fire
+  // whenever selectedName returns to null and silently undo Clear selection.
+  const [deepLinkName, setDeepLinkName] = useState<string | null>(() =>
     typeof window !== "undefined"
       ? parseSolutionDeepLink(window.location.hash)
       : null,
@@ -207,11 +209,15 @@ export function SolutionBrowser({ onSelect }: SolutionBrowserProps) {
 
   // Once the index is present, honor a deep-linked solution ONCE (the preserved
   // `#/?solution=` contract). Sets the selection like a click; the effect above
-  // then fetches its detail.
+  // then fetches its detail. The deep link is consumed here - honored or not -
+  // so Clear selection genuinely clears (user report 2026-07-08: with the
+  // deep link left in state, this effect re-selected the cleared solution the
+  // moment selectedName went back to null).
   useEffect(() => {
     if (solutions === null || deepLinkName === null || selectedName !== null) {
       return;
     }
+    setDeepLinkName(null);
     const match = resolveSelectedSolution(solutions, deepLinkName);
     if (match !== null) {
       select(match);

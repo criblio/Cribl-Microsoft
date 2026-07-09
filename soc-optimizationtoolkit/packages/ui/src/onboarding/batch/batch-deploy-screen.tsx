@@ -26,6 +26,7 @@ import {
   SENTINEL_SECRET_PLACEHOLDER,
   VENDOR_SCHEMAS,
   findVendorSchema,
+  isStreamWorkerGroup,
   onboardBatch,
   onboardBatchStepsFor,
 } from "@soc/core";
@@ -190,7 +191,8 @@ export function BatchDeployScreen({
     setGroups(null);
     setGroupsError("");
     try {
-      const list = await ports.cribl.listGroups();
+      // Edge fleets cannot run these pipelines: Stream worker groups only.
+      const list = (await ports.cribl.listGroups()).filter(isStreamWorkerGroup);
       setGroups(list);
       const preferred = list.some((g) => g.id === preferredGroup)
         ? preferredGroup

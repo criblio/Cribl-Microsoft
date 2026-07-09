@@ -69,6 +69,7 @@ import {
   deployedGroups,
   deriveSectionStatuses,
   destinationIdFromOptions,
+  isStreamWorkerGroup,
   onboardTable,
   onboardTableStepsFor,
   readinessPillsForMode,
@@ -400,7 +401,8 @@ export function IntegrateScreen({
     setGroups(null);
     setGroupsError("");
     try {
-      const list = await ports.cribl.listGroups();
+      // Edge fleets cannot run these pipelines: Stream worker groups only.
+      const list = (await ports.cribl.listGroups()).filter(isStreamWorkerGroup);
       setGroups(list);
       const preferred = list.some((g) => g.id === preferredGroup)
         ? preferredGroup

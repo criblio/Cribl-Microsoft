@@ -15,7 +15,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { assemblePack } from "@soc/core";
+import { assemblePack, isStreamWorkerGroup } from "@soc/core";
 import type { CriblGroupSummary } from "@soc/core";
 import { usePorts } from "../../ports-context";
 import type { DeployedGroupPacks, StoredPack } from "../../ports-context";
@@ -88,7 +88,8 @@ export function PackInventoryScreen({ refreshToken = 0 }: PackInventoryScreenPro
       // must not blank the build records the operator can still download.
       if (packInstall !== undefined) {
         try {
-          const gs = await ports.cribl.listGroups();
+          // Edge fleets cannot host installed packs: Stream worker groups only.
+          const gs = (await ports.cribl.listGroups()).filter(isStreamWorkerGroup);
           setGroups(gs);
           if (selectedGroup === "" && gs.length > 0) {
             setSelectedGroup(gs[0].id);

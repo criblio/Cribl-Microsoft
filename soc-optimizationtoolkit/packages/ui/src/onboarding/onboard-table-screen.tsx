@@ -26,6 +26,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   destinationIdFromOptions,
   isCustomTableName,
+  isStreamWorkerGroup,
   onboardTable,
   onboardTableStepsFor,
   DEFAULT_CUSTOM_TABLE_TOTAL_RETENTION_DAYS,
@@ -157,7 +158,8 @@ export function OnboardTableScreen({
     setGroups(null);
     setGroupsError("");
     try {
-      const list = await ports.cribl.listGroups();
+      // Edge fleets cannot run these pipelines: Stream worker groups only.
+      const list = (await ports.cribl.listGroups()).filter(isStreamWorkerGroup);
       setGroups(list);
       const preferred = list.some((g) => g.id === preferredGroup)
         ? preferredGroup
