@@ -38,6 +38,7 @@ import {
   analyzeContentCoverage,
   createBundledSchemaCatalog,
   extractWorkbookQueries,
+  matchSolutionName,
   mergeCustomContentItems,
   parseAnalyticRuleYaml,
   suggestCloseMatches,
@@ -304,11 +305,13 @@ function CoverageSectionBody({
       {section.items.map((item) => (
         <details key={item.key} className="coverage-item">
           <summary className="coverage-item-summary">
-            <span
-              className={`coverage-severity coverage-severity-${item.severityTone}`}
-            >
-              {item.severity}
-            </span>
+            {item.severity !== "Unknown" && (
+              <span
+                className={`coverage-severity coverage-severity-${item.severityTone}`}
+              >
+                {item.severity}
+              </span>
+            )}
             <span className="coverage-item-name">
               {item.name}
               {item.custom && (
@@ -463,13 +466,17 @@ export function RuleCoverageSection({
             ? fetchWorkbookContentItems(activeAzure, activeSubscription)
             : Promise.resolve({ items: [] as ContentItem[], note: "" }),
         ]);
-        // Workbook source of record is the SOLUTION REPO (parallel to rules);
-        // any Sentinel workbooks already deployed in the subscription (ARM) are
-        // folded in, with the repo template winning a name collision.
-        const workbooks = mergeCustomContentItems(
-          workbookResult.items,
-          repoWorkbooks,
+        // Workbook source of record is the SOLUTION REPO (parallel to rules).
+        // Deployed subscription workbooks (ARM) fold in ONLY when their name
+        // relates to the selected solution: a shared subscription carries
+        // everyone's workbooks (live report 2026-07-09: FortiGate and Cisco
+        // dashboards polluted a Zscaler review), and coverage of unrelated
+        // content is noise. The repo template wins a name collision.
+        const relatedArm = workbookResult.items.filter((item) =>
+          matchSolutionName(item.name, solutionName),
         );
+        const excludedArm = workbookResult.items.length - relatedArm.length;
+        const workbooks = mergeCustomContentItems(relatedArm, repoWorkbooks);
         // Repo rules + workbooks, then merge the custom uploads (last-write-wins
         // by name - the re-upload fix).
         const repoAndWorkbooks = [...ruleItems, ...workbooks];
@@ -498,7 +505,16 @@ export function RuleCoverageSection({
           schemaUnion,
         });
         setReport(produced);
-        setWorkbookNote(workbookResult.note);
+        setWorkbookNote(
+          [
+            workbookResult.note,
+            excludedArm > 0
+              ? `${excludedArm} deployed workbook(s) in the subscription do not relate to ${solutionName} and were excluded.`
+              : "",
+          ]
+            .filter((n) => n !== "")
+            .join(" "),
+        );
       } catch (err) {
         setAnalyzeError(String(err));
       } finally {
