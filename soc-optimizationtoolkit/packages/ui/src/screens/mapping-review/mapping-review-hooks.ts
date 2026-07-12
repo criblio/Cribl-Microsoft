@@ -44,6 +44,8 @@ export function useLearnedMappings(
     toLearn: readonly GapReport[],
     effectiveOf: EffectiveMappingsOf,
   ) => void;
+  /** Forget every learned decision for this solution (store + state). */
+  clearLearned: () => void;
 } {
   const [learned, setLearned] = useState<LearnedMapping[]>([]);
 
@@ -95,7 +97,17 @@ export function useLearnedMappings(
     [learnedCache, solutionName, learned],
   );
 
-  return { learned, persistLearned };
+  const clearLearned = useCallback(() => {
+    setLearned([]);
+    if (learnedCache === undefined || solutionName === "") {
+      return;
+    }
+    void learnedCache
+      .set(learnedMappingsCacheKey(solutionName), [])
+      .catch(() => undefined);
+  }, [learnedCache, solutionName]);
+
+  return { learned, persistLearned, clearLearned };
 }
 
 /**

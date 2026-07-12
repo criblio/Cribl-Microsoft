@@ -293,7 +293,7 @@ export function MappingReviewSection({
   // replayed into Phase 0 AHEAD of the vendor packs on every analysis,
   // extended with the diffed hand edits on every APPROVE (the hook owns the
   // load/persist mechanics).
-  const { learned, persistLearned } = useLearnedMappings(
+  const { learned, persistLearned, clearLearned } = useLearnedMappings(
     learnedCache,
     solutionName,
   );
@@ -694,6 +694,29 @@ export function MappingReviewSection({
         </p>
       ))}
 
+      {learned.length > 0 && (
+        <div className="status-bar learned-mappings-bar">
+          <span className="status-bar-dot" />
+          <span className="status-bar-text">
+            {learned.length} learned mapping decision(s) replay for this
+            solution ahead of the vendor packs
+            {learned.filter((l) => l.action === "drop").length > 0
+              ? ` (${learned.filter((l) => l.action === "drop").length} drop(s) - dropped fields never reach the mapping table or overflow)`
+              : ""}
+            . Clearing forgets them; the next analysis starts from the packs
+            and ladder alone.
+          </span>
+          <button
+            className="link-button"
+            onClick={() => {
+              clearLearned();
+            }}
+          >
+            Clear learned mappings
+          </button>
+        </div>
+      )}
+
       {reports.length > 0 &&
         (() => {
           const all = [...assessments.values()];
@@ -755,11 +778,19 @@ export function MappingReviewSection({
               className="next-action-button"
               onClick={() => {
                 persistLearned(withMappings, (r) =>
-                  effectiveMappings(review, r).map((m) => ({
-                    source: m.source,
-                    dest: m.dest,
-                    action: m.action,
-                  })),
+                  effectiveMappings(review, r)
+                    .filter(
+                      (m) =>
+                        !(
+                          m.action === "drop" &&
+                          autoDroppedRef.current.has(`${r.logType}|${m.source}`)
+                        ),
+                    )
+                    .map((m) => ({
+                      source: m.source,
+                      dest: m.dest,
+                      action: m.action,
+                    })),
                 );
                 dispatch({
                   type: "auto-approve-all",
@@ -1181,11 +1212,21 @@ export function MappingReviewSection({
                       className="run-button"
                       onClick={() => {
                         persistLearned([report], (r) =>
-                          effectiveMappings(review, r).map((m) => ({
-                            source: m.source,
-                            dest: m.dest,
-                            action: m.action,
-                          })),
+                          effectiveMappings(review, r)
+                            .filter(
+                              (m) =>
+                                !(
+                                  m.action === "drop" &&
+                                  autoDroppedRef.current.has(
+                                    `${r.logType}|${m.source}`,
+                                  )
+                                ),
+                            )
+                            .map((m) => ({
+                              source: m.source,
+                              dest: m.dest,
+                              action: m.action,
+                            })),
                         );
                         dispatch({ type: "approve", logType: report.logType });
                       }}
