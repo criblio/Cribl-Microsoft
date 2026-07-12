@@ -1,5 +1,6 @@
 export {
   detectVendorIdentity,
+  identityFromConnectorKql,
   identityGateMessage,
   identityValueOptions,
   missingIdentityFields,

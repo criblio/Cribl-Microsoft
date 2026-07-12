@@ -54,6 +54,7 @@ import {
   detectVendorIdentity,
   eventTableRoutingFromMapping,
   hintsFromConnectorTables,
+  identityFromConnectorKql,
   learnedToVendorMappings,
   matchLogTypeToDcrFlow,
   matchSampleLogTypeToTable,
@@ -77,6 +78,7 @@ import type {
   SolutionConnector,
   TaggedSample,
   VendorGapProfile,
+  VendorIdentity,
 } from "@soc/core";
 import { InfoTip } from "../../components/info-tip";
 import { EnrichmentEditor } from "./enrichment-editor";
@@ -302,12 +304,19 @@ export function MappingReviewSection({
     return byLogType;
   }, [reports, review, globalEnrichments, tableEnrichments]);
 
-  // The curated identity for the selected solution (null when uncurated):
-  // drives the auto-seeding below and the one-click choices on the
-  // forced-input rows (e.g. Zscaler's NSSWeblog / NSSFWlog products).
+  // Identity derived from the solution's OWN connector KQL filters (Wave C:
+  // DeviceVendor == "Fortinet" etc.), captured during analysis. Second tier
+  // below the curated list.
+  const [connectorIdentity, setConnectorIdentity] =
+    useState<VendorIdentity | null>(null);
+
+  // The identity for the selected solution: curated knowledge first, then
+  // the connector-KQL derivation (null when neither knows). Drives the
+  // auto-seeding below and the one-click choices on the forced-input rows
+  // (e.g. Zscaler's NSSWeblog / NSSFWlog products).
   const detectedIdentity = useMemo(
-    () => detectVendorIdentity(solutionName),
-    [solutionName],
+    () => detectVendorIdentity(solutionName) ?? connectorIdentity,
+    [solutionName, connectorIdentity],
   );
 
   // The packs feeding this solution's Phase-0 mappings, for the per-table
@@ -401,10 +410,12 @@ export function MappingReviewSection({
       // the CommonSecurityLog default.
       const files = await activeContent.listConnectorFiles(solutionName);
       const hints: ReturnType<typeof hintsFromConnectorTables> = [];
+      const connectorTexts: string[] = [];
       for (const file of files.slice(0, CONNECTOR_TABLE_DECODE_CAP)) {
         try {
           const text = await activeContent.readFile(file.path);
           if (text === null) continue;
+          connectorTexts.push(text);
           const decoded = decodeConnector(JSON.parse(text), file.path);
           hints.push(
             ...hintsFromConnectorTables(
@@ -416,6 +427,8 @@ export function MappingReviewSection({
           // the tables; resolution degrades to the later tiers otherwise.
         }
       }
+      // Wave C: the connector-KQL identity tier (curated knowledge wins).
+      setConnectorIdentity(identityFromConnectorKql(connectorTexts));
       const loadConnectors = async (): Promise<SolutionConnector[]> =>
         files.map((f) => ({ name: f.name, path: f.path }));
       const resolved = await resolveDestinationTables(

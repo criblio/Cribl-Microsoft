@@ -15,6 +15,7 @@ import {
   requiredIdentityFields,
   resolveIdentityFields,
   suggestedIdentityValue,
+  identityFromConnectorKql,
 } from "./vendor-identity";
 
 describe("requiredIdentityFields", () => {
@@ -216,5 +217,35 @@ describe("missingIdentityFields / identityGateMessage", () => {
     expect(
       identityGateMessage([{ tableName: "CommonSecurityLog", missing: [] }]),
     ).toBeNull();
+  });
+});
+
+describe("identityFromConnectorKql (Wave C: identity from connector KQL)", () => {
+  it("derives vendor + startswith product stem from raw connector JSON", () => {
+    const fortinet = String.raw`{"graphQueries":[{"baseQuery":"CommonSecurityLog\n| where DeviceVendor == \"Fortinet\"\n| where DeviceProduct startswith \"Fortigate\""}]}`;
+    expect(identityFromConnectorKql([fortinet])).toEqual({
+      vendor: "Fortinet",
+      product: "Fortigate",
+    });
+  });
+
+  it("several distinct products become options, never an auto product", () => {
+    const web = String.raw`{"baseQuery":"CommonSecurityLog | where DeviceVendor =~ 'Zscaler' | where DeviceProduct == 'NSSWeblog'"}`;
+    const fw = String.raw`{"baseQuery":"CommonSecurityLog | where DeviceVendor =~ 'Zscaler' | where DeviceProduct == 'NSSFWlog'"}`;
+    expect(identityFromConnectorKql([web, fw])).toEqual({
+      vendor: "Zscaler",
+      productOptions: ["NSSFWlog", "NSSWeblog"],
+    });
+  });
+
+  it("returns null on zero or conflicting vendor filters", () => {
+    expect(identityFromConnectorKql(['{"baseQuery":"Syslog | count"}'])).toBeNull();
+    expect(
+      identityFromConnectorKql([
+        `DeviceVendor == "A"`,
+        `DeviceVendor == "B"`,
+      ]),
+    ).toBeNull();
+    expect(identityFromConnectorKql([])).toBeNull();
   });
 });

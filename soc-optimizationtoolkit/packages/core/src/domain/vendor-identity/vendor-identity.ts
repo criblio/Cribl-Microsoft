@@ -291,3 +291,52 @@ export function identityGateMessage(
   );
   return `Add the required vendor identity fields in the Gap Analysis section: ${parts.join("; ")}.`;
 }
+
+/**
+ * Derive a vendor identity from a solution's OWN connector definitions
+ * (Wave C of docs/sentinel-repo-mapping-sources.md): for shared-table (CEF/
+ * Syslog) vendors the connector-UI KQL is the only machine-readable identity
+ * signal (Fortinet: `DeviceVendor == "Fortinet" | where DeviceProduct
+ * startswith "Fortigate"`). Scans RAW connector JSON text - the filters live
+ * inside baseQuery/connectivityCriterias strings across all four connector
+ * formats, so structural decoding is unnecessary.
+ *
+ * A single distinct product value becomes `product`; several become
+ * `productOptions` (never auto-seeded - operator picks). A `startswith`
+ * value is accepted as the product stem: it is the constant the connector
+ * itself filters on, so a pipeline emitting it satisfies the content.
+ * Returns null when no DeviceVendor/EventVendor filter is found - curated
+ * knowledge (detectVendorIdentity) stays the first tier.
+ */
+export function identityFromConnectorKql(
+  connectorTexts: readonly string[],
+): VendorIdentity | null {
+  const vendors = new Set<string>();
+  const products = new Set<string>();
+  // JSON-embedded KQL carries escaped quotes: DeviceVendor == \"Fortinet\".
+  const value = String.raw`\\?['"]([^'"\\]+)\\?['"]`;
+  const vendorRe = new RegExp(
+    String.raw`(?:DeviceVendor|EventVendor)\s*(?:==|=~)\s*` + value,
+    "g",
+  );
+  const productRe = new RegExp(
+    String.raw`(?:DeviceProduct|EventProduct)\s*(?:==|=~|startswith)\s*` + value,
+    "g",
+  );
+  for (const text of connectorTexts) {
+    for (const m of text.matchAll(vendorRe)) vendors.add(m[1].trim());
+    for (const m of text.matchAll(productRe)) products.add(m[1].trim());
+  }
+  if (vendors.size !== 1) {
+    // Zero: nothing to derive. Several: conflicting definitions - do not
+    // guess an identity constant that silently breaks content filters.
+    return null;
+  }
+  const identity: VendorIdentity = { vendor: [...vendors][0] };
+  if (products.size === 1) {
+    identity.product = [...products][0];
+  } else if (products.size > 1) {
+    identity.productOptions = [...products].sort();
+  }
+  return identity;
+}
