@@ -186,11 +186,19 @@ export interface MappingReviewSectionProps {
   learnedCache?: ContentCache;
   /**
    * What the solution's analytics rules + workbooks REQUIRE (merged by the
-   * parent from both coverage sections). Drives the unused-field policy:
-   * overflow fields no content needs default to DROP. Absent/empty = no
-   * evidence, preserve everything (the pre-2026-07-12 behavior).
+   * parent from both coverage sections). Feeds the unused-field policy:
+   * overflow fields no content needs become DROP edits when the operator
+   * triggers the drop action. Absent/empty = no evidence, preserve
+   * everything.
    */
   contentRequirements?: RequirementsForAssessment | null;
+  /**
+   * The "Drop unneeded fields" click from a coverage section (nonce bumps
+   * per click). Switches the unused-field policy to drop; the policy bar
+   * here can restore. Uses the MERGED requirements, so a drop triggered
+   * from the rules section still protects workbook-consumed fields.
+   */
+  dropUnneededEvent?: { nonce: number };
 }
 
 /**
@@ -241,6 +249,7 @@ export function MappingReviewSection({
   onEnrichmentsChange,
   learnedCache,
   contentRequirements,
+  dropUnneededEvent,
 }: MappingReviewSectionProps) {
   const activeContent = content ?? EMPTY_SENTINEL_CONTENT;
   // Wave E: the solution's OWN table ARM definitions resolve ahead of the
@@ -386,12 +395,18 @@ export function MappingReviewSection({
     }
   }, [reports, solutionName, addEnrichment]);
 
-  // Unused-field policy (user direction 2026-07-12): overflow fields that
-  // neither the analytics rules nor the workbooks require default to DROP.
-  // "preserve" restores the fold-everything-into-the-catch-all behavior.
+  // Unused-field policy (user direction 2026-07-12, revised): everything is
+  // PRESERVED until the operator clicks "Drop unneeded fields" on a coverage
+  // section (the decision belongs at the evidence). The parent signals that
+  // click via dropUnneededEvent; the bar below offers the local toggle too.
   const [unusedPolicy, setUnusedPolicy] = useState<"drop" | "preserve">(
-    "drop",
+    "preserve",
   );
+  useEffect(() => {
+    if (dropUnneededEvent !== undefined && dropUnneededEvent.nonce > 0) {
+      setUnusedPolicy("drop");
+    }
+  }, [dropUnneededEvent]);
   const assessments = useMemo(
     () =>
       new Map(
@@ -674,8 +689,8 @@ export function MappingReviewSection({
                   : blocked === "opaque-catch-all"
                     ? "Unused-field policy: the solution's content parses the catch-all column opaquely, so nothing is auto-dropped - all overflow fields are preserved."
                     : unusedPolicy === "drop"
-                      ? `Unused-field policy: ${droppable} overflow field(s) required by neither analytics rules nor workbooks are set to DROP; ${kept} stay for content that consumes them. Edit any row or switch the policy to keep everything.`
-                      : `Unused-field policy: preserving all overflow fields in the catch-all column (${droppable} would be dropped by the content-driven policy).`}
+                      ? `Unused-field policy: ${droppable} overflow field(s) required by neither analytics rules nor workbooks are set to DROP; ${kept} stay for content that consumes them. Edit any row or restore everything below.`
+                      : `Unused-field policy: preserving all overflow fields in the catch-all column. ${droppable} field(s) are required by neither analytics rules nor workbooks - use "Drop unneeded fields" on a coverage section (or the button here) to drop them.`}
               </span>
               {blocked === null && (
                 <button
@@ -687,8 +702,8 @@ export function MappingReviewSection({
                   }
                 >
                   {unusedPolicy === "drop"
-                    ? "Preserve everything instead"
-                    : "Drop unused fields"}
+                    ? "Restore all dropped fields"
+                    : "Drop unneeded fields"}
                 </button>
               )}
             </div>

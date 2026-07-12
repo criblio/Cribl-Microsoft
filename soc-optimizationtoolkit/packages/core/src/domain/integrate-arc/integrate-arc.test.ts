@@ -84,9 +84,9 @@ const BUILT_IDS: readonly IntegrateSectionId[] = [
   "sample-data",
   "azure-resources",
   "cribl-config",
+  "gap-analysis",
   "rule-coverage",
   "workbook-coverage",
-  "gap-analysis",
   "deploy",
 ];
 // Unit 23 shipped rule-coverage; every section is built now. Kept as a named
@@ -111,11 +111,11 @@ describe("INTEGRATE_SECTIONS metadata", () => {
       "sample-data",
       "azure-resources",
       "cribl-config",
-      // CONTENT-FIRST ORDER (2026-07-12): coverage informs the gap
-      // analysis' unused-field drop policy, so it comes first.
+      // Gap analysis INFORMS the coverage sections (availability set), and
+      // the coverage sections then offer the explicit Drop action.
+      "gap-analysis",
       "rule-coverage",
       "workbook-coverage",
-      "gap-analysis",
       "deploy",
     ]);
   });

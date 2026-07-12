@@ -106,12 +106,13 @@ export interface IntegrateSection {
 }
 
 /**
- * The eight sections in page order. CONTENT-FIRST ORDER (user direction
- * 2026-07-12): analytics-rule coverage (5) and workbook coverage (6) come
- * BEFORE the DCR gap analysis (7), because the fields the content requires
- * drive the mapping's unused-field drop policy. rule-coverage and
- * workbook-coverage stay INFORMATIONAL (never gate a deploy); the coverage
- * CLASSIFICATION still needs gap reports and completes after an analysis.
+ * The eight sections in page order: the DCR gap analysis (5) INFORMS the
+ * rule (6) and workbook (7) coverage (classification needs the mapped
+ * availability set), and the coverage sections then offer an explicit
+ * "Drop unneeded fields" action that converts overflow fields required by
+ * neither content type into reviewable DROP edits (user direction
+ * 2026-07-12: decision at the evidence, not before it). rule-coverage and
+ * workbook-coverage stay INFORMATIONAL (never gate a deploy).
  */
 export const INTEGRATE_SECTIONS: readonly IntegrateSection[] = [
   {
@@ -164,13 +165,30 @@ export const INTEGRATE_SECTIONS: readonly IntegrateSection[] = [
     built: true,
   },
   {
-    id: "rule-coverage",
+    id: "gap-analysis",
     number: 5,
+    title: "Run DCR Gap Analysis",
+    infoTip:
+      "Per log type, compare source fields to destination columns - " +
+      "passthrough, DCR handles, Cribl handles (renames and coercions), and " +
+      "overflow. The coverage sections below offer a Drop action for " +
+      "overflow fields required by neither rules nor workbooks. " +
+      "Approval is required before the pack is built; Auto-Approve " +
+      "All is the one-click escape hatch. Approvals reset when you re-analyze, " +
+      "but your edits survive; the native-table deploy never waits on approval.",
+    requires: "both",
+    // BUILT NOW (Unit 18): the mapping review screen renders real content. Its
+    // completion (mappingsApproved) is ADDITIVE and NON-GATING for the native
+    // deploy - exactly like samples/solution - so it never regresses the MVP
+    // quick-onboard path (see canDeploy vs canDeployContentPath).
+    built: true,
+  },
+  {
+    id: "rule-coverage",
+    number: 6,
     title: "Review Analytics Rule Coverage",
     infoTip:
-      "Analytics rule coverage FIRST (content-driven mapping, 2026-07-12): " +
-      "the fields the rules require feed the gap analysis, where unused " +
-      "source fields default to DROP. Fully, partially, and uncovered counts, " +
+      "Analytics rule coverage: fully, partially, and uncovered counts, " +
       "per-rule severity and coverage %, and missing fields by frequency. " +
       "Upload custom YAML rules to extend coverage. Informational - it lights " +
       "the mapping table's RULE badges but never blocks a deploy.",
@@ -185,7 +203,7 @@ export const INTEGRATE_SECTIONS: readonly IntegrateSection[] = [
   },
   {
     id: "workbook-coverage",
-    number: 6,
+    number: 7,
     title: "Review Workbook Coverage",
     infoTip:
       "Workbook coverage: the solution's Sentinel workbooks (read from the " +
@@ -197,25 +215,6 @@ export const INTEGRATE_SECTIONS: readonly IntegrateSection[] = [
     // BUILT: workbook coverage is its own panel, INFORMATIONAL exactly like
     // rule-coverage (unconditionally complete, absent from SectionInputs, never
     // gates a deploy).
-    built: true,
-  },
-  {
-    id: "gap-analysis",
-    number: 7,
-    title: "Run DCR Gap Analysis",
-    infoTip:
-      "Per log type, compare source fields to destination columns - " +
-      "passthrough, DCR handles, Cribl handles (renames and coercions), and " +
-      "overflow. Overflow fields required by neither the rules nor the " +
-      "workbooks above default to DROP (switch to preserve-all per review). " +
-      "Approval is required before the pack is built; Auto-Approve " +
-      "All is the one-click escape hatch. Approvals reset when you re-analyze, " +
-      "but your edits survive; the native-table deploy never waits on approval.",
-    requires: "both",
-    // BUILT NOW (Unit 18): the mapping review screen renders real content. Its
-    // completion (mappingsApproved) is ADDITIVE and NON-GATING for the native
-    // deploy - exactly like samples/solution - so it never regresses the MVP
-    // quick-onboard path (see canDeploy vs canDeployContentPath).
     built: true,
   },
   {

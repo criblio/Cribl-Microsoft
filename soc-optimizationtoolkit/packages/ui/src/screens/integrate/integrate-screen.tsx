@@ -343,6 +343,20 @@ export function IntegrateScreen({
     );
     return parts.length > 0 ? mergeContentRequirements(parts) : null;
   }, [ruleRequirements, workbookRequirements]);
+  // The coverage sections' explicit "Drop unneeded fields" action: bumps a
+  // nonce the mapping review consumes (it applies the drops as reviewable
+  // edits). Disabled with a reason when there is no safe evidence to act on.
+  const [dropNonce, setDropNonce] = useState(0);
+  const requestDropUnneeded = useCallback(() => {
+    setDropNonce((n) => n + 1);
+  }, []);
+  const dropDisabledReason =
+    contentRequirements === null || contentRequirements.itemCount === 0
+      ? "No analyzed content yet - analyze coverage first."
+      : contentRequirements.opaqueCatchAll
+        ? "The solution's content parses the catch-all column opaquely - dropping fields could break it, so the action is disabled."
+        : undefined;
+  const dropUnneededEvent = useMemo(() => ({ nonce: dropNonce }), [dropNonce]);
 
   // One place the Sample Data section reports its list: keep the count (arc
   // completion / Samples pill) and the samples (match preview) in sync.
@@ -895,6 +909,7 @@ export function IntegrateScreen({
         onEnrichmentsChange={setEnrichments}
         renameEvent={renameEvent}
         contentRequirements={contentRequirements}
+        dropUnneededEvent={dropUnneededEvent}
       />
       {/* COLLAPSED by default: the full per-pipeline detail is reference
           material, not a decision point - expand on demand. */}
@@ -930,6 +945,8 @@ export function IntegrateScreen({
       contentFilter="rules"
       extraAvailableFields={enrichmentFieldNames}
       onContentRequirementsChange={setRuleRequirements}
+      onDropUnneededFields={requestDropUnneeded}
+      {...(dropDisabledReason !== undefined ? { dropDisabledReason } : {})}
     />
   );
 
@@ -942,6 +959,8 @@ export function IntegrateScreen({
       contentFilter="workbooks"
       extraAvailableFields={enrichmentFieldNames}
       onContentRequirementsChange={setWorkbookRequirements}
+      onDropUnneededFields={requestDropUnneeded}
+      {...(dropDisabledReason !== undefined ? { dropDisabledReason } : {})}
     />
   );
 

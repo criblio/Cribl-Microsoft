@@ -143,6 +143,16 @@ export interface RuleCoverageSectionProps {
    * content-first order holds.
    */
   onContentRequirementsChange?: (requirements: ContentRequirements) => void;
+  /**
+   * The explicit "Drop unneeded fields" action (user direction 2026-07-12):
+   * converts overflow fields required by neither analytics rules nor
+   * workbooks (the MERGED requirements - a rules-section click still
+   * protects workbook-consumed fields) into reviewable DROP edits in the
+   * gap analysis. Absent = no button.
+   */
+  onDropUnneededFields?: () => void;
+  /** Why the drop action is unavailable (button disabled with this title). */
+  dropDisabledReason?: string;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -469,6 +479,8 @@ export function RuleCoverageSection({
   contentFilter,
   extraAvailableFields,
   onContentRequirementsChange,
+  onDropUnneededFields,
+  dropDisabledReason,
 }: RuleCoverageSectionProps) {
   const { ports, config } = usePorts();
   const activeContent = content ?? ports.content;
@@ -756,6 +768,22 @@ export function RuleCoverageSection({
                 : "Analyze workbook coverage"
               : "Re-analyze coverage"}
         </button>
+        {onDropUnneededFields !== undefined && report !== null && (
+          <>
+            <button
+              className="gap-reset-button"
+              onClick={onDropUnneededFields}
+              disabled={dropDisabledReason !== undefined}
+              title={
+                dropDisabledReason ??
+                "Convert overflow fields required by neither analytics rules nor workbooks into DROP edits in the gap analysis (reviewable and reversible there)."
+              }
+            >
+              Drop unneeded fields
+            </button>
+            <InfoTip text="Applies the content-driven policy: source fields that landed in the catch-all column and are referenced by neither the analytics rules nor the workbooks become DROP edits in the DCR Gap Analysis section - visible per row, reversible with Restore or Reset All. Fields the content consumes (directly, via KQL transformations, or as key=value pairs mined from the catch-all) are always kept. The action uses BOTH content types' requirements regardless of which section triggers it." />
+          </>
+        )}
         {showRules && (
           <>
             <span className="field-label">Custom Rules</span>
