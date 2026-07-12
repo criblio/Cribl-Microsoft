@@ -210,7 +210,7 @@ export async function createAppPack(dev = false, outPath = undefined) {
   // scan/indexer) right after the build wrote dist/, yielding a truncated
   // archive that verifyArchive catches (observed live 2026-07-08: two failed
   // runs, then an identical run succeeded). Transient by nature - retry.
-  const PACK_ATTEMPTS = 3;
+  const PACK_ATTEMPTS = 6;
   try {
     for (let attempt = 1; attempt <= PACK_ATTEMPTS; attempt += 1) {
       await rm(packedPath, { force: true });
@@ -223,11 +223,16 @@ export async function createAppPack(dev = false, outPath = undefined) {
         if (attempt === PACK_ATTEMPTS) {
           throw verifyErr;
         }
+        // Surface WHAT tar said: a 20-byte archive with a silent note is
+        // undiagnosable (live 2026-07-12: eight consecutive failures with
+        // the stderr visible nowhere). Longer backoff outlasts the AV scan
+        // burst that causes this in the first place.
         process.stderr.write(
           `note: archive verification failed (attempt ${attempt}/${PACK_ATTEMPTS}): ` +
-            `${verifyErr instanceof Error ? verifyErr.message : String(verifyErr)} - retrying...\n`
+            `${verifyErr instanceof Error ? verifyErr.message : String(verifyErr)}` +
+            ` [tar exit ${code}${stderr ? `: ${stderr.trim().slice(0, 300)}` : ''}] - retrying...\n`
         );
-        await new Promise((resolve) => setTimeout(resolve, 500 * attempt));
+        await new Promise((resolve) => setTimeout(resolve, 1000 * attempt));
         continue;
       }
       if (code !== 0) {
