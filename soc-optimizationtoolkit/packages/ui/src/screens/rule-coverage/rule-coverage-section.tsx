@@ -14,7 +14,13 @@
  *     %, a CUSTOM badge for uploaded rules, the covered/missing/unknown field
  *     lists, and a "View KQL Query" expandable;
  *   - the aggregated missing-fields-by-frequency chips;
- *   - custom-YAML upload / clear.
+ *   - custom-YAML upload / clear;
+ *   - PARSER-FUNCTION resolution (Wave D): Parsers/*.yaml aliases, unioned
+ *     tables, and friendly-name renames fold into the availability set, with
+ *     a note naming each resolved function (and any unparseable files);
+ *   - missing-field INVESTIGATE buttons (close-match suggestions against the
+ *     sample fields);
+ *   - schemas resolve through the Wave E solution-aware catalog tier.
  *
  * INFORMATIONAL, NOT A GATE: this section never blocks a deploy (the integrate
  * arc's rule-coverage section is always 'complete'; canDeploy /
@@ -138,6 +144,27 @@ function isRecord(value: unknown): value is Record<string, unknown> {
  * port, probing the three dir-name variants and taking the first that yields
  * files (the legacy "first existing dir" rule over the lazy port).
  */
+/** Bound on rule files read per analysis (mirrors the other loader caps). */
+const RULE_DECODE_CAP = 150;
+
+/**
+ * The file list of the FIRST dir-name variant that exists and is non-empty -
+ * the shared probe both the rule and parser loaders use.
+ */
+async function firstPopulatedDir(
+  content: SentinelContent,
+  solutionName: string,
+  variants: readonly string[],
+): Promise<Awaited<ReturnType<SentinelContent["listSolutionFiles"]>>> {
+  for (const dir of variants) {
+    const files = await content.listSolutionFiles(solutionName, dir);
+    if (files.length > 0) {
+      return files;
+    }
+  }
+  return [];
+}
+
 async function fetchRuleContentItems(
   content: SentinelContent | undefined,
   solutionName: string,
@@ -145,25 +172,23 @@ async function fetchRuleContentItems(
   if (content === undefined || solutionName.trim() === "") {
     return [];
   }
-  for (const dir of ANALYTIC_RULE_DIR_VARIANTS) {
-    const files = await content.listSolutionFiles(solutionName, dir);
-    if (files.length === 0) {
+  const files = await firstPopulatedDir(
+    content,
+    solutionName,
+    ANALYTIC_RULE_DIR_VARIANTS,
+  );
+  const items: ContentItem[] = [];
+  for (const file of files.slice(0, RULE_DECODE_CAP)) {
+    if (!isRuleYamlFileName(file.name)) {
       continue;
     }
-    const items: ContentItem[] = [];
-    for (const file of files) {
-      if (!isRuleYamlFileName(file.name)) {
-        continue;
-      }
-      const text = await content.readFile(file.path);
-      if (text === null) {
-        continue;
-      }
-      items.push(analyticRuleToContentItem(parseAnalyticRuleYaml(text, file.name)));
+    const text = await content.readFile(file.path);
+    if (text === null) {
+      continue;
     }
-    return items;
+    items.push(analyticRuleToContentItem(parseAnalyticRuleYaml(text, file.name)));
   }
-  return [];
+  return items;
 }
 
 /** Parser-dir name variants, mirroring the rule-dir probe. */
@@ -181,36 +206,39 @@ const PARSER_DECODE_CAP = 40;
 async function fetchParserFunctions(
   content: SentinelContent | undefined,
   solutionName: string,
-): Promise<ParsedParserFunction[]> {
+): Promise<{ parsers: ParsedParserFunction[]; unparsed: number }> {
   if (content === undefined || solutionName.trim() === "") {
-    return [];
+    return { parsers: [], unparsed: 0 };
   }
-  for (const dir of PARSER_DIR_VARIANTS) {
-    const files = await content.listSolutionFiles(solutionName, dir);
-    if (files.length === 0) {
+  const files = await firstPopulatedDir(
+    content,
+    solutionName,
+    PARSER_DIR_VARIANTS,
+  );
+  const parsers: ParsedParserFunction[] = [];
+  let unparsed = 0;
+  for (const file of files.slice(0, PARSER_DECODE_CAP)) {
+    if (!/\.(yaml|yml)$/i.test(file.name)) {
       continue;
     }
-    const parsers: ParsedParserFunction[] = [];
-    for (const file of files.slice(0, PARSER_DECODE_CAP)) {
-      if (!/\.(yaml|yml)$/i.test(file.name)) {
+    try {
+      const text = await content.readFile(file.path);
+      if (text === null) {
+        unparsed++;
         continue;
       }
-      try {
-        const text = await content.readFile(file.path);
-        if (text === null) {
-          continue;
-        }
-        const parsed = parseParserYaml(text);
-        if (parsed !== null) {
-          parsers.push(parsed);
-        }
-      } catch {
-        // A single unreadable parser never blocks coverage.
+      const parsed = parseParserYaml(text);
+      if (parsed !== null) {
+        parsers.push(parsed);
+      } else {
+        unparsed++;
       }
+    } catch {
+      // Counted, never blocking - surfaced through the parser note.
+      unparsed++;
     }
-    return parsers;
   }
-  return [];
+  return { parsers, unparsed };
 }
 
 /**
@@ -561,20 +589,35 @@ export function RuleCoverageSection({
           ...availableFieldsFromReports(reports),
           ...(extraAvailableFields ?? []),
         ];
-        const parsers = await fetchParserFunctions(activeContent, solutionName);
+        const { parsers, unparsed } = await fetchParserFunctions(
+          activeContent,
+          solutionName,
+        );
         const synonyms = parserFieldSynonyms(
           parsers,
           new Set(availableFields.map((f) => f.toLowerCase())),
         );
-        setParserNote(
-          parsers.length > 0
-            ? `${parsers.length} parser function(s) resolved (` +
-                parsers
-                  .map((p) => `${p.alias} over ${p.tables.join("+") || "?"}`)
-                  .join("; ") +
-                `)${synonyms.length > 0 ? `; ${synonyms.length} parser field name(s) counted as available via their source columns` : ""}.`
-            : "",
-        );
+        const parserParts: string[] = [];
+        if (parsers.length > 0) {
+          parserParts.push(
+            `${parsers.length} parser function(s) resolved (` +
+              parsers
+                .map((p) => `${p.alias} over ${p.tables.join("+") || "?"}`)
+                .join("; ") +
+              `)`,
+          );
+          if (synonyms.length > 0) {
+            parserParts.push(
+              `${synonyms.length} parser field name(s) counted as available via their source columns`,
+            );
+          }
+        }
+        if (unparsed > 0) {
+          parserParts.push(
+            `${unparsed} parser file(s) could not be read or parsed and were skipped`,
+          );
+        }
+        setParserNote(parserParts.length > 0 ? parserParts.join("; ") + "." : "");
 
         const produced = analyzeContentCoverage({
           items,

@@ -13,3 +13,11 @@ export {
   collectGapReports,
   resolveSolutionDcrFlows,
 } from "./analyze-samples";
+export type {
+  SampleRoutingInput,
+  SampleRoutingResult,
+} from "./resolve-sample-routing";
+export {
+  CONNECTOR_TABLE_DECODE_CAP,
+  resolveSampleRouting,
+} from "./resolve-sample-routing";

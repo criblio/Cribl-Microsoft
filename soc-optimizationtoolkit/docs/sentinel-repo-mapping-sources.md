@@ -4,7 +4,7 @@ How Microsoft Sentinel solutions in github.com/Azure/Azure-Sentinel declare
 destination tables and field mappings, surveyed across eight representative
 solutions (CrowdStrike FDR V2, Zscaler, Cloudflare, Netskopev2, SentinelOne,
 Fortinet FortiGate, Cortex XDR CCP, Okta SSO) in concert with each vendor's
-own documentation. Drives the adoption plan at the bottom. All paths relative
+own documentation. The adoption plan at the bottom is now DELIVERED (see per-wave modules). All paths relative
 to the repo master branch.
 
 ## What we already read
@@ -105,17 +105,20 @@ tables (3 native Microsoft-ASim* streams + 5 Custom-ASim*_CL clones).
   problem (one endpoint -> one table); DCR transform embeds a severity
   lookup dict - transforms are not always pure renames.
 
-## Adoption plan (maps to existing components)
+## Adoption plan - DELIVERED 2026-07-12 (all five waves)
 
-- Wave A (generator): mine CCP DCR transformKql project maps into generated
-  packs with provenance "Microsoft Sentinel solution DCR" and docUrl = the
-  DCR's repo path. Zscaler alone contributes 15 feed-specific crosswalks;
-  Cortex XDR, Okta v2, SentinelOne V2, Netskope follow the same shape.
-- Wave B (routing): read EventsToTableMapping.json when present (CrowdStrike
-  function-app path) as a second routing source beside DCR eventSimpleNames.
-- Wave C (identity): derive DeviceVendor/DeviceProduct constants from
-  connector-UI identity KQL instead of (or validating) the curated ladder.
-- Wave D (rule coverage): resolve dataTypes parser-alias indirection through
-  Parsers/*.yaml so rule coverage works for SentinelOne-style solutions.
-- Wave E (schemas): read workspaces/tables ARM resources from CCP bundles /
-  mainTemplate as a live schema tier above the bundled catalog.
+- Wave A (generator) - scripts/generate-sentinel-dcr-packs.mjs ->
+  packages/core/src/assets/generated-sentinel-dcr-packs.json (6 packs / 224
+  mappings; Zscaler 51, Cortex XDR 155; registry order hand > sentinel-dcr >
+  elastic, pinned in vendor-mapping-packs.test.ts).
+- Wave B (routing) - eventTableRoutingFromMapping in
+  domain/gap-analysis/analyze-workflow.ts, applied by the
+  resolveSampleRouting usecase AFTER the DCR flows.
+- Wave C (identity) - identityFromConnectorKql in domain/vendor-identity,
+  the tier below curated knowledge, derived by resolveSampleRouting.
+- Wave D (rule coverage) - domain/coverage-analysis/parse-parser-function.ts
+  (parseParserYaml + parserFieldSynonyms), wired in RuleCoverageSection with
+  the parser note.
+- Wave E (schemas) - domain/field-matcher/solution-schema-catalog.ts
+  (createSolutionSchemaCatalog + tablesFromArmJson), wrapping the base
+  catalog in both analysis panels.

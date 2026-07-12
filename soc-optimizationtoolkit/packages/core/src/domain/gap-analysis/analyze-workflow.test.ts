@@ -27,6 +27,7 @@ describe("resolveDestinationTables", () => {
     expect(r).toEqual({
       tables: ["CommonSecurityLog", "SecurityEvent"],
       source: "Vendor research (Sentinel Content Hub)",
+      tier: "connector",
     });
     expect(loadConnectors).not.toHaveBeenCalled();
   });
@@ -38,6 +39,7 @@ describe("resolveDestinationTables", () => {
     ]);
     expect(r.tables).toEqual(["MyApp_CL"]);
     expect(r.source).toBe("Sentinel repo (CustomTables definition)");
+    expect(r.tier).toBe("custom-tables");
   });
 
   it("defaults to CommonSecurityLog when nothing resolves", async () => {
@@ -45,6 +47,7 @@ describe("resolveDestinationTables", () => {
     expect(r).toEqual({
       tables: ["CommonSecurityLog"],
       source: "Default (no DCR definition found in Sentinel solution)",
+      tier: "default",
     });
   });
 });
@@ -115,6 +118,7 @@ describe("connector-table hints (2026-07-09 extension)", () => {
     expect(r).toEqual({
       tables: ["CommonSecurityLog"],
       source: "Sentinel solution connectors",
+      tier: "connector",
     });
     expect(loadConnectors).not.toHaveBeenCalled();
   });

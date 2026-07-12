@@ -1,23 +1,41 @@
 /**
- * Analyze-workflow helpers - porting-plan Unit 18 (ENG-12, GUI-08). Ported
- * VERBATIM from legacy IS-R/hooks/analyze-workflow.ts (its test ports verbatim
- * too, see analyze-workflow.test.ts).
+ * Analyze-workflow helpers - porting-plan Unit 18 (ENG-12, GUI-08), since
+ * grown into the DESTINATION-ROUTING toolbox (2026-07-12 waves):
  *
- * Two pure helpers the legacy duplicated across the analyze, resource-preview,
- * and deploy flows; centralizing removes that drift and makes the rules
- * testable. resolveDestinationTables carries a PROVENANCE STRING telling which
- * precedence tier resolved the destination (vendor research vs Sentinel repo
- * CustomTables vs the CommonSecurityLog default) - the UI shows it, and the
- * "Default ..." wording is load-bearing (the legacy tinted the destination
- * banner amber when the source string contains "Default").
+ *  - resolveDestinationTables: the three-tier destination resolution with a
+ *    typed `tier` (connector hints > CustomTables definitions > the
+ *    CommonSecurityLog default) plus a human-readable provenance string.
+ *  - hintsFromConnectorTables / normalizeConnectorTableName: connector
+ *    dataTypes labels -> table hints.
+ *  - matchSampleToTable: name-similarity routing of a sample log type.
+ *  - matchLogTypeToDcrFlow: DCR-declared event_simpleName routing (beats
+ *    name similarity; exact beats suffix).
+ *  - eventTableRoutingFromMapping: EventsToTableMapping.json routing
+ *    (CrowdStrike function-app shape).
+ *
+ * matchSampleToTable/resolveDestinationTables were ported from legacy
+ * IS-R/hooks/analyze-workflow.ts; the routing helpers are net-new.
  *
  * Pure: no IO, no fetch, no React, no Date/crypto. loadConnectors is INJECTED
  * so the caller owns its errors/logging and tests need no IO.
  */
 
+/** The case/separator-insensitive token EVERY routing comparison uses -
+ * matchSampleToTable, matchLogTypeToDcrFlow, and eventTableRoutingFromMapping
+ * must agree on what "the same name" means. */
+export function normLogToken(name: string): string {
+  return name.toLowerCase().replace(/[-_ ]/g, "");
+}
+
+/** Which precedence tier resolved the destination (typed - the UI's amber
+ * "default" banner branches on this, never on the prose). */
+export type DestinationTier = "connector" | "custom-tables" | "default";
+
 export interface DestinationTableResolution {
   tables: string[];
+  /** Human-readable provenance (display only - branch on `tier`). */
   source: string;
+  tier: DestinationTier;
 }
 
 export interface VendorLogTypeHint {
@@ -48,11 +66,15 @@ export async function resolveDestinationTables(
 ): Promise<DestinationTableResolution> {
   const destTables = new Set<string>();
   let source = "";
+  let tier: DestinationTier = "default";
 
   for (const lt of researchLogTypes) {
     if (lt.destTable) destTables.add(lt.destTable.replace(/^Microsoft-/, ""));
   }
-  if (destTables.size > 0) source = hintSource;
+  if (destTables.size > 0) {
+    source = hintSource;
+    tier = "connector";
+  }
 
   if (destTables.size === 0) {
     const connectors = await loadConnectors();
@@ -65,15 +87,19 @@ export async function resolveDestinationTables(
         if (tableName.endsWith("_CL")) destTables.add(tableName);
       }
     }
-    if (destTables.size > 0) source = "Sentinel repo (CustomTables definition)";
+    if (destTables.size > 0) {
+      source = "Sentinel repo (CustomTables definition)";
+      tier = "custom-tables";
+    }
   }
 
   if (destTables.size === 0) {
     destTables.add("CommonSecurityLog");
     source = "Default (no DCR definition found in Sentinel solution)";
+    tier = "default";
   }
 
-  return { tables: [...destTables], source };
+  return { tables: [...destTables], source, tier };
 }
 
 /**
@@ -122,11 +148,11 @@ export function matchSampleToTable(
 ): string {
   if (destinationTableCount <= 1) return defaultTable;
 
-  const sNorm = sampleLogType.toLowerCase().replace(/[-_ ]/g, "");
+  const sNorm = normLogToken(sampleLogType);
   for (const lt of researchLogTypes) {
     if (!lt.destTable) continue;
-    const idNorm = (lt.id || "").toLowerCase().replace(/[-_ ]/g, "");
-    const nameNorm = (lt.name || "").toLowerCase().replace(/[-_ ]/g, "");
+    const idNorm = normLogToken(lt.id || "");
+    const nameNorm = normLogToken(lt.name || "");
     if (
       idNorm === sNorm ||
       nameNorm === sNorm ||
@@ -157,7 +183,7 @@ export function matchLogTypeToDcrFlow(
   sampleLogType: string,
   flows: readonly DcrFlowRouting[],
 ): string | null {
-  const norm = sampleLogType.toLowerCase().replace(/[-_ ]/g, "");
+  const norm = normLogToken(sampleLogType);
   if (norm === "") return null;
   // An EXACT event-name match anywhere beats a suffix match anywhere: a
   // stream-scoped "fdr-ProcessRollup2" must not route to a flow declaring a
@@ -165,7 +191,7 @@ export function matchLogTypeToDcrFlow(
   let suffixHit: string | null = null;
   for (const flow of flows) {
     for (const eventName of flow.eventSimpleNames) {
-      const evNorm = eventName.toLowerCase().replace(/[-_ ]/g, "");
+      const evNorm = normLogToken(eventName);
       if (evNorm === "") continue;
       if (evNorm === norm) return flow.tableName;
       if (suffixHit === null && evNorm.length > 3 && norm.endsWith(evNorm)) {
@@ -207,7 +233,7 @@ export function eventTableRoutingFromMapping(
     mappingJson as Record<string, unknown>,
   )) {
     if (typeof category !== "string" || category.trim() === "") continue;
-    const key = category.trim().toLowerCase().replace(/[-_ ]/g, "");
+    const key = normLogToken(category.trim());
     if (key.length < 3) continue;
     const list = eventsByCategory.get(key) ?? [];
     list.push(eventName);
@@ -216,7 +242,7 @@ export function eventTableRoutingFromMapping(
   const routings: DcrFlowRouting[] = [];
   for (const [categoryKey, eventNames] of eventsByCategory) {
     const matches = knownTables.filter((table) =>
-      table.toLowerCase().replace(/[-_ ]/g, "").includes(categoryKey),
+      normLogToken(table).includes(categoryKey),
     );
     if (matches.length !== 1) continue;
     routings.push({ tableName: matches[0], eventSimpleNames: eventNames });

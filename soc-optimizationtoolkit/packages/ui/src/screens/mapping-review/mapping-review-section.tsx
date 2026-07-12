@@ -19,13 +19,22 @@
  *     enrichment / forced-input resolution with curated auto-seeding;
  *   - ENRICHMENT editors (global + per-table constants the pipeline adds);
  *   - RULE badges fed by the rule-coverage section's referenced-field set;
- *   - the data-loss warnings surfaced honestly from the report.
+ *   - the data-loss warnings surfaced honestly from the report;
+ *   - the OVERFLOW TRIAGE line + outranked disclosure (unmappable vs missed);
+ *   - the per-table "Vendor mapping documentation" links (every pack backing
+ *     the solution's Phase-0 mappings);
+ *   - AUTO-SEEDED constants: curated/connector-derived vendor identity and
+ *     the CEF cs/cn LABEL constants (pendingIdentitySeeds/pendingLabelSeeds
+ *     selectors; one-shot - a user deletion sticks).
  *
  * ANALYSIS INPUTS, priority order (Phase 0 of the matcher): LEARNED reviewer
  * decisions (persisted per solution via learnedCache, saved on Approve) beat
- * the documented VENDOR PACKS (vendorMappingsForSolution); destination
- * tables resolve from the solution's own connector definitions
- * (hintsFromConnectorTables) before falling back.
+ * the documented VENDOR PACKS (vendorMappingsForSolution). ROUTING and
+ * resolution are ONE core usecase (resolveSampleRouting): connector hints,
+ * Wave C connector-KQL identity, typed-tier destination resolution, DCR-flow
+ * + EventsToTableMapping split routing (override > DCR flow > name match >
+ * first table), with soft degradation notes rendered under the banner.
+ * Schemas resolve through the Wave E solution-aware catalog tier.
  *
  * The APPROVAL STATE MACHINE lives in the pure mapping-review-state module; this
  * component only drives it: Auto-Approve All / Reset All / per-table Approve,
@@ -34,10 +43,11 @@
  * survive and re-key on a log-type rename (the Unit 11 seam, threaded via the
  * optional renameEvent prop).
  *
- * All analysis IO flows through @soc/core: the analyzeSamples usecase over the
- * SentinelContent + SchemaCatalog ports produces one GapReport per table. This
- * component owns zero decision logic and zero direct fetch/storage - it resolves
- * destinations (with provenance), runs the usecase, and renders.
+ * All analysis IO flows through @soc/core: resolveSampleRouting then the
+ * analyzeSamples usecase (fed the pre-resolved DCR flows - one fetch pass)
+ * over the SentinelContent + SchemaCatalog ports produce one GapReport per
+ * table. This component owns zero decision logic and zero direct
+ * fetch/storage - it calls the usecases and renders.
  *
  * DEPLOY-GATE PARTITION: onGateChange reports the CONTENT-path readiness
  * (deriveMappingReviewGate().ready). The parent feeds it to the arc as
@@ -51,16 +61,9 @@ import {
   collectGapReports,
   createBundledSchemaCatalog,
   createSolutionSchemaCatalog,
-  decodeConnector,
   detectVendorIdentity,
-  eventTableRoutingFromMapping,
-  hintsFromConnectorTables,
-  identityFromConnectorKql,
   learnedToVendorMappings,
-  matchLogTypeToDcrFlow,
-  matchSampleLogTypeToTable,
-  resolveDestinationTables,
-  resolveSolutionDcrFlows,
+  resolveSampleRouting,
   resolveIdentityFields,
   suggestedIdentityValue,
   vendorLabelEnrichments,
@@ -76,7 +79,6 @@ import type {
   MatchAction,
   SchemaCatalog,
   SentinelContent,
-  SolutionConnector,
   TaggedSample,
   VendorGapProfile,
   VendorIdentity,
@@ -105,6 +107,8 @@ import {
   isModified,
   isRuleField,
   mappingReviewReducer,
+  pendingIdentitySeeds,
+  pendingLabelSeeds,
   sortedMappings,
   tablesWithMappings,
   unmappedDestColumns,
@@ -206,13 +210,6 @@ const COMMON_NATIVE_TABLES: readonly string[] = [
   "WindowsEvent",
 ];
 
-/**
- * How many of a solution's connector files are read and decoded for the
- * destination-table hints (each is one raw fetch; matches the solution
- * browser's decode cap).
- */
-const CONNECTOR_TABLE_DECODE_CAP = 5;
-
 /** A stable signature of the analysis inputs (drives staleness detection). */
 function inputSignature(solutionName: string, samples: TaggedSample[]): string {
   const parts = samples.map(
@@ -253,6 +250,9 @@ export function MappingReviewSection({
   const [reports, setReports] = useState<GapReport[]>([]);
   const [resolution, setResolution] =
     useState<DestinationTableResolution | null>(null);
+  // Soft routing degradation notes from the usecase (unreadable connectors,
+  // broken EventsToTableMapping) - surfaced, never silently swallowed.
+  const [routingNotes, setRoutingNotes] = useState<string[]>([]);
   // Per-logType destination-table OVERRIDES: the operator can reassign which
   // native table a sample aligns to when the default detection is wrong.
   const [tableOverrides, setTableOverrides] = useState<Record<string, string>>(
@@ -343,25 +343,17 @@ export function MappingReviewSection({
   const seededIdentityRef = useRef(new Set<string>());
   useEffect(() => {
     const identity = detectedIdentity;
-    if (identity === null) {
-      return;
-    }
-    for (const report of reports) {
-      for (const status of identityStatuses[report.logType] ?? []) {
-        if (status.status !== "missing") {
-          continue;
-        }
-        const key = `${report.logType}|${report.tableName}|${status.field}`;
-        if (seededIdentityRef.current.has(key)) {
-          continue;
-        }
-        const value = suggestedIdentityValue(status.field, identity);
-        if (value === null) {
-          continue;
-        }
-        seededIdentityRef.current.add(key);
-        addEnrichment(report.logType, status.field, value);
-      }
+    const seeds = pendingIdentitySeeds(
+      reports,
+      identityStatuses,
+      identity,
+      (field) =>
+        identity === null ? null : suggestedIdentityValue(field, identity),
+      seededIdentityRef.current,
+    );
+    for (const seed of seeds) {
+      seededIdentityRef.current.add(seed.key);
+      addEnrichment(seed.logType, seed.field, seed.value);
     }
   }, [reports, identityStatuses, detectedIdentity, addEnrichment]);
 
@@ -373,28 +365,14 @@ export function MappingReviewSection({
   // identity seeding: a user deletion sticks.
   const seededLabelRef = useRef(new Set<string>());
   useEffect(() => {
-    const labels = vendorLabelEnrichments(solutionName);
-    if (labels.length === 0) {
-      return;
-    }
-    for (const report of reports) {
-      const appliedPairs = new Set(
-        report.fieldMappings
-          .filter((m) => m.dest !== "")
-          .map((m) => `${m.source.toLowerCase()}|${m.dest.toLowerCase()}`),
-      );
-      const schemaColumns = new Set(
-        report.destSchema.map((c) => c.name.toLowerCase()),
-      );
-      for (const label of labels) {
-        const pair = `${label.sourceName.toLowerCase()}|${label.destName.toLowerCase()}`;
-        if (!appliedPairs.has(pair)) continue;
-        if (!schemaColumns.has(label.field.toLowerCase())) continue;
-        const key = `${report.logType}|${report.tableName}|${label.field}`;
-        if (seededLabelRef.current.has(key)) continue;
-        seededLabelRef.current.add(key);
-        addEnrichment(report.logType, label.field, label.value);
-      }
+    const seeds = pendingLabelSeeds(
+      reports,
+      vendorLabelEnrichments(solutionName),
+      seededLabelRef.current,
+    );
+    for (const seed of seeds) {
+      seededLabelRef.current.add(seed.key);
+      addEnrichment(seed.logType, seed.field, seed.value);
     }
   }, [reports, solutionName, addEnrichment]);
 
@@ -410,96 +388,25 @@ export function MappingReviewSection({
     setAnalyzing(true);
     setAnalyzeError("");
     try {
-      // Resolve destination tables (with provenance). The FIRST tier is fed
-      // from the solution's OWN connector definitions: read and decode up to
-      // CONNECTOR_TABLE_DECODE_CAP connector files and turn the table names
-      // they declare (including name-only dataTypes labels like
-      // "CommonSecurityLog (Zscaler)") into hints. Only when the connectors
-      // declare nothing does resolution fall to CustomTables filenames, then
-      // the CommonSecurityLog default.
-      const files = await activeContent.listConnectorFiles(solutionName);
-      const hints: ReturnType<typeof hintsFromConnectorTables> = [];
-      const connectorTexts: string[] = [];
-      for (const file of files.slice(0, CONNECTOR_TABLE_DECODE_CAP)) {
-        try {
-          const text = await activeContent.readFile(file.path);
-          if (text === null) continue;
-          connectorTexts.push(text);
-          const decoded = decodeConnector(JSON.parse(text), file.path);
-          hints.push(
-            ...hintsFromConnectorTables(
-              decoded.tables.map((t) => t.tableName),
-            ),
-          );
-        } catch {
-          // Unreadable/unparseable connector: the next one may still declare
-          // the tables; resolution degrades to the later tiers otherwise.
-        }
-      }
-      // Wave C: the connector-KQL identity tier (curated knowledge wins).
-      setConnectorIdentity(identityFromConnectorKql(connectorTexts));
-      const loadConnectors = async (): Promise<SolutionConnector[]> =>
-        files.map((f) => ({ name: f.name, path: f.path }));
-      const resolved = await resolveDestinationTables(
-        hints,
-        loadConnectors,
-        "Sentinel solution connectors",
-      );
-      setResolution(resolved);
-      const defaultTable = resolved.tables[0] ?? "CommonSecurityLog";
-
-      // DCR-DECLARED routing outranks name similarity: solutions with
-      // per-event-type custom tables (CrowdStrike FDR) state in their own
-      // DCR exactly which event names land in which table - knowledge name
-      // matching cannot recover ("PROCESSROLLUP2" shares no name with
-      // CrowdStrike_Process_Events_CL). Overrides still win; the resolver
-      // degrades to an empty map on any fetch/parse failure.
-      const dcrFlows = await resolveSolutionDcrFlows(
-        activeContent,
+      // ONE routing usecase call (2026-07-12 audit extraction): connector
+      // hints + Wave C identity + destination resolution + DCR flows + Wave B
+      // EventsToTableMapping + the pinned per-log-type precedence
+      // (override > DCR flow > name match > first table). The returned flows
+      // feed analyzeSamples so DCR files are fetched ONCE per analysis.
+      const routing = await resolveSampleRouting(activeContent, {
         solutionName,
-        profile ?? DEFAULT_GAP_PROFILE,
-      );
-      const flowRouting: Array<{
-        tableName: string;
-        eventSimpleNames: readonly string[];
-      }> = [...dcrFlows.values()];
-
-      // Second routing source (Wave B): a connector EventsToTableMapping.json
-      // (CrowdStrike's function-app path routes BEFORE its DCR). Appended
-      // AFTER the DCR flows so DCR-declared routing stays authoritative.
-      const mappingFile = files.find(
-        (f) => f.name === "EventsToTableMapping.json",
-      );
-      if (mappingFile !== undefined) {
-        try {
-          const text = await activeContent.readFile(mappingFile.path);
-          if (text !== null) {
-            const knownTables = [
-              ...new Set([
-                ...resolved.tables,
-                ...flowRouting.map((f) => f.tableName),
-              ]),
-            ];
-            flowRouting.push(
-              ...eventTableRoutingFromMapping(JSON.parse(text), knownTables),
-            );
-          }
-        } catch {
-          // Unreadable mapping file: DCR flows and name matching still route.
-        }
-      }
+        logTypes: samples.map((sample) => sample.logType),
+        overrides: activeOverrides,
+        profile,
+      });
+      setResolution(routing.resolution);
+      setConnectorIdentity(routing.connectorIdentity);
+      setRoutingNotes(routing.notes);
 
       const specs = samples.map((sample) => ({
         logType: sample.logType,
         tableName:
-          activeOverrides[sample.logType] ??
-          matchLogTypeToDcrFlow(sample.logType, flowRouting) ??
-          matchSampleLogTypeToTable(
-            sample.logType,
-            hints,
-            resolved.tables.length,
-            defaultTable,
-          ),
+          routing.tableByLogType[sample.logType] ?? "CommonSecurityLog",
         content: sample.rawEvents.join("\n"),
       }));
 
@@ -513,6 +420,7 @@ export function MappingReviewSection({
           solutionName,
           samples: specs,
           vendorProfile: profile,
+          dcrFlows: routing.dcrFlows,
           // Learned reviewer decisions FIRST: the usecase's per-sample
           // source dedupe is first-wins, so a learned entry beats a pack.
           vendorMappings: [
@@ -636,8 +544,7 @@ export function MappingReviewSection({
     [],
   );
 
-  const provenanceDefault =
-    resolution !== null && resolution.source.includes("Default");
+  const provenanceDefault = resolution !== null && resolution.tier === "default";
 
   // ---- Render ------------------------------------------------------------
   return (
@@ -676,6 +583,12 @@ export function MappingReviewSection({
           <span className="gap-provenance-source"> - {resolution.source}</span>
         </div>
       )}
+
+      {routingNotes.map((note) => (
+        <p key={note} className="field-hint gap-routing-note">
+          {note}
+        </p>
+      ))}
 
       {gate.stale && reports.length > 0 && (
         <p className="mapping-review-stale">{MAPPING_REVIEW_STALE_NOTICE}</p>

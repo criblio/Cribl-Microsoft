@@ -27,6 +27,8 @@ import {
   sortedMappings,
   tablesWithMappings,
   unmappedDestColumns,
+  pendingIdentitySeeds,
+  pendingLabelSeeds,
 } from "./mapping-review-state";
 import type {
   MappingReviewAction,
@@ -507,5 +509,95 @@ describe("copy helpers", () => {
       const maxCode = Math.max(...[...text].map((c) => c.codePointAt(0) ?? 0));
       expect(maxCode).toBeLessThanOrEqual(0x7f);
     }
+  });
+});
+
+describe("auto-seeding selectors (2026-07-12 audit extraction)", () => {
+  const REPORT = {
+    logType: "web",
+    tableName: "CommonSecurityLog",
+    fieldMappings: [
+      { source: "dept", dest: "DeviceCustomString1", action: "rename" },
+      { source: "noise", dest: "", action: "drop" },
+    ],
+    destSchema: [
+      { name: "DeviceCustomString1", type: "string" },
+      { name: "DeviceCustomString1Label", type: "string" },
+      { name: "DeviceVendor", type: "string" },
+    ],
+  } as unknown as GapReport;
+
+  it("pendingIdentitySeeds seeds missing fields once, with suggested values", () => {
+    const statuses = {
+      web: [
+        { field: "DeviceVendor", status: "missing" },
+        { field: "DeviceProduct", status: "missing" },
+        { field: "DeviceVendor", status: "sample" },
+      ],
+    };
+    const suggest = (field: string) =>
+      field === "DeviceVendor" ? "Zscaler" : null;
+    const seeds = pendingIdentitySeeds(
+      [REPORT],
+      statuses,
+      { vendor: "Zscaler" },
+      suggest,
+      new Set(),
+    );
+    expect(seeds).toEqual([
+      {
+        logType: "web",
+        key: "web|CommonSecurityLog|DeviceVendor",
+        field: "DeviceVendor",
+        value: "Zscaler",
+      },
+    ]);
+    // The one-shot guard: an already-seeded key never re-seeds (a user
+    // deletion sticks).
+    expect(
+      pendingIdentitySeeds(
+        [REPORT],
+        statuses,
+        { vendor: "Zscaler" },
+        suggest,
+        new Set(["web|CommonSecurityLog|DeviceVendor"]),
+      ),
+    ).toEqual([]);
+    expect(
+      pendingIdentitySeeds([REPORT], statuses, null, suggest, new Set()),
+    ).toEqual([]);
+  });
+
+  it("pendingLabelSeeds seeds only APPLIED mappings whose Label column exists", () => {
+    const labels = [
+      {
+        sourceName: "dept",
+        destName: "DeviceCustomString1",
+        field: "DeviceCustomString1Label",
+        value: "dept",
+      },
+      // Not applied in the report - never seeded.
+      {
+        sourceName: "riskscore",
+        destName: "DeviceCustomNumber1",
+        field: "DeviceCustomNumber1Label",
+        value: "riskscore",
+      },
+    ];
+    expect(pendingLabelSeeds([REPORT], labels, new Set())).toEqual([
+      {
+        logType: "web",
+        key: "web|CommonSecurityLog|DeviceCustomString1Label",
+        field: "DeviceCustomString1Label",
+        value: "dept",
+      },
+    ]);
+    expect(
+      pendingLabelSeeds(
+        [REPORT],
+        labels,
+        new Set(["web|CommonSecurityLog|DeviceCustomString1Label"]),
+      ),
+    ).toEqual([]);
   });
 });

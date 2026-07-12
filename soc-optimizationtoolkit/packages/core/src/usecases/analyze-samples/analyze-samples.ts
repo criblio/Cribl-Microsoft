@@ -85,6 +85,12 @@ export interface AnalyzeSamplesInput {
   vendorProfile?: VendorGapProfile;
   /** Optional Phase-0 vendor field-mapping overrides for the matcher. */
   vendorMappings?: VendorMapping[];
+  /**
+   * Pre-resolved DCR flows (from resolveSampleRouting). Supplying them skips
+   * the second resolveSolutionDcrFlows fetch pass - the routing usecase and
+   * this one otherwise each read every DCR file per analysis.
+   */
+  dcrFlows?: ReadonlyMap<string, DcrFlow>;
 }
 
 /** Build the DCR flow to use when the solution has no DCR for a table. */
@@ -110,6 +116,9 @@ function errText(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
+/** Bound on DCR files read per analysis (Zscaler ships 15 CCP bundles). */
+const DCR_FILE_READ_CAP = 30;
+
 export async function resolveSolutionDcrFlows(
   content: SentinelContent,
   solutionName: string,
@@ -130,11 +139,13 @@ export async function resolveSolutionDcrFlows(
     }
 
     const connectors = await content.listConnectorFiles(match.name);
-    const dcrFiles = connectors.filter(
-      (f) =>
-        f.name.toLowerCase().includes("dcr") &&
-        f.name.toLowerCase().endsWith(".json"),
-    );
+    const dcrFiles = connectors
+      .filter(
+        (f) =>
+          f.name.toLowerCase().includes("dcr") &&
+          f.name.toLowerCase().endsWith(".json"),
+      )
+      .slice(0, DCR_FILE_READ_CAP);
     for (const dcrFile of dcrFiles) {
       const text = await content.readFile(dcrFile.path);
       if (!text) continue;
@@ -169,12 +180,14 @@ export async function* analyzeSamples(
   input: AnalyzeSamplesInput,
 ): AsyncGenerator<GapReport> {
   const profile = input.vendorProfile ?? DEFAULT_GAP_PROFILE;
-  const flowsByTable = await resolveSolutionDcrFlows(
-    ports.content,
-    input.solutionName,
-    profile,
-    ports.logger,
-  );
+  const flowsByTable =
+    input.dcrFlows ??
+    (await resolveSolutionDcrFlows(
+      ports.content,
+      input.solutionName,
+      profile,
+      ports.logger,
+    ));
 
   for (const sample of input.samples) {
     const parsed = parseSampleContent(sample.content, {

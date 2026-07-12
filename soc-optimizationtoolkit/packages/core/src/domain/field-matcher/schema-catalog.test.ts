@@ -15,10 +15,10 @@ import {
   DCR_SCHEMA_SYSTEM_COLUMNS,
   bundledCatalogTableNames,
   createBundledSchemaCatalog,
-  matchSampleToTable,
   normalizeTableNames,
   resolveSchemaFromCatalog,
 } from "./index";
+import { matchSampleToTable } from "./match-to-catalog";
 
 describe("bundled catalog contents", () => {
   it("holds all 50 native + 13 custom schemas (63 entries)", () => {

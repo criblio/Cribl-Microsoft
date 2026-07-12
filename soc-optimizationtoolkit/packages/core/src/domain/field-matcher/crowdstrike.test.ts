@@ -21,9 +21,9 @@ import {
   createBundledSchemaCatalog,
   getOverflowConfig,
   matchParsedSampleToColumns,
-  matchSampleToTable,
   resolveSchemaFromCatalog,
 } from "./index";
+import { matchSampleToTable } from "./match-to-catalog";
 
 const VALID_COLUMN_TYPES = new Set([
   "string",

@@ -28,6 +28,8 @@
  * Pure: no IO, no fetch, no React, no Date/crypto.
  */
 
+import type { MatchAction } from "../field-matcher/models";
+
 /** A curated vendor/product identity suggestion. */
 export interface VendorIdentity {
   /** The DeviceVendor/EventVendor constant (e.g. "Palo Alto Networks"). */
@@ -197,7 +199,8 @@ export function identityValueOptions(
 /** The mapping-row shape the resolver needs (a GapFieldMapping subset). */
 export interface IdentityMappingRow {
   dest: string;
-  action: string;
+  /** The matcher's action union - a typo'd literal must not compile. */
+  action: MatchAction;
   sampleValue?: string;
 }
 

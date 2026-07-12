@@ -290,10 +290,12 @@ export function fieldMappingsLabel(
 }
 
 /**
- * RULE-badge seam (task item 4): a field is a rule field only when it is in the
- * supplied set. Rule coverage lands in Unit 23; until then callers pass no set
- * (or an empty one) and this is always false - the badge is present in the
- * markup but INERT. Case-insensitive, mirroring the legacy lookup.
+ * RULE-badge lookup: a field is a rule field only when it is in the supplied
+ * set. LIVE wiring: RuleCoverageSection computes the referenced-field set and
+ * reports it via onRuleFieldsChange; the integrate screen threads it into the
+ * mapping review's ruleFields prop, which lights the badge per mapping row.
+ * An absent/empty set renders no badges. Case-insensitive, mirroring the
+ * legacy lookup.
  */
 export function isRuleField(
   name: string,
@@ -418,3 +420,99 @@ export const OVERFLOW_COVERAGE_NOTE =
 export const MAPPING_REVIEW_NO_SAMPLES_REASON =
   "Tag at least one sample in the Sample Data section, then analyze to compare " +
   "its fields against the destination table schema.";
+
+// ---------------------------------------------------------------------------
+// Auto-seeding selectors (2026-07-12 audit: the "when to seed" decisions were
+// embedded in useEffect bodies - pure and pinned here, the effects just loop)
+// ---------------------------------------------------------------------------
+
+/** One enrichment constant an auto-seeding pass should add. */
+export interface PendingSeed {
+  logType: string;
+  /** The one-shot guard key - a user deletion sticks because the key stays. */
+  key: string;
+  field: string;
+  value: string;
+}
+
+/** The subset of a detected identity the seed selector reads. */
+interface IdentityForSeeding {
+  vendor: string;
+  product?: string;
+}
+
+/** The identity-status subset the seed selector reads. */
+interface IdentityStatusRow {
+  field: string;
+  status: string;
+}
+
+/**
+ * The identity constants to seed NOW: for every report, every REQUIRED
+ * identity field that is missing, not yet seeded (alreadySeeded holds the
+ * one-shot keys), and has a suggested value (vendor always; product only
+ * when the identity carries a single stable one).
+ */
+export function pendingIdentitySeeds(
+  reports: readonly GapReport[],
+  statusesByLogType: Readonly<Record<string, readonly IdentityStatusRow[]>>,
+  identity: IdentityForSeeding | null,
+  suggestValue: (field: string) => string | null,
+  alreadySeeded: ReadonlySet<string>,
+): PendingSeed[] {
+  if (identity === null) return [];
+  const seeds: PendingSeed[] = [];
+  for (const report of reports) {
+    for (const status of statusesByLogType[report.logType] ?? []) {
+      if (status.status !== "missing") continue;
+      const key = `${report.logType}|${report.tableName}|${status.field}`;
+      if (alreadySeeded.has(key)) continue;
+      const value = suggestValue(status.field);
+      if (value === null) continue;
+      seeds.push({ logType: report.logType, key, field: status.field, value });
+    }
+  }
+  return seeds;
+}
+
+/** The vendor-label demand subset the seed selector reads. */
+interface LabelDemand {
+  sourceName: string;
+  destName: string;
+  field: string;
+  value: string;
+}
+
+/**
+ * The CEF label constants to seed NOW: a label seeds only when the pack
+ * mapping that demands it actually APPLIED in the report (source -> dest
+ * present with a real destination), the Label column exists in the resolved
+ * schema, and the one-shot key has not been used.
+ */
+export function pendingLabelSeeds(
+  reports: readonly GapReport[],
+  labels: readonly LabelDemand[],
+  alreadySeeded: ReadonlySet<string>,
+): PendingSeed[] {
+  if (labels.length === 0) return [];
+  const seeds: PendingSeed[] = [];
+  for (const report of reports) {
+    const appliedPairs = new Set(
+      report.fieldMappings
+        .filter((m) => m.dest !== "")
+        .map((m) => `${m.source.toLowerCase()}|${m.dest.toLowerCase()}`),
+    );
+    const schemaColumns = new Set(
+      report.destSchema.map((c) => c.name.toLowerCase()),
+    );
+    for (const label of labels) {
+      const pair = `${label.sourceName.toLowerCase()}|${label.destName.toLowerCase()}`;
+      if (!appliedPairs.has(pair)) continue;
+      if (!schemaColumns.has(label.field.toLowerCase())) continue;
+      const key = `${report.logType}|${report.tableName}|${label.field}`;
+      if (alreadySeeded.has(key)) continue;
+      seeds.push({ logType: report.logType, key, field: label.field, value: label.value });
+    }
+  }
+  return seeds;
+}

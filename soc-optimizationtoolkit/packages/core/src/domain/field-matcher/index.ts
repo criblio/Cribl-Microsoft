@@ -89,10 +89,14 @@ export {
   tablesFromArmJson,
 } from "./solution-schema-catalog";
 
+// NOTE: match-to-catalog's matchSampleToTable (the legacy direct-catalog
+// match path) is deliberately NOT re-exported: the app goes through
+// analyzeSamples, and the name collides with gap-analysis' log-type router
+// (exported as matchSampleLogTypeToTable). Its characterization tests import
+// it from the module directly.
 export {
   parsedSampleToSourceFields,
   matchParsedSampleToColumns,
-  matchSampleToTable,
 } from "./match-to-catalog";
 
 // Overflow triage: unmappable vs outranked vs reviewable (per gap report)
