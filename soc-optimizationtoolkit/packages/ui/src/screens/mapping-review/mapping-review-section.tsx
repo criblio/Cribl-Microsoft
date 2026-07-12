@@ -741,7 +741,27 @@ export function MappingReviewSection({
             {report.overflowCount > 0 && (
               <p className="field-hint gap-overflow-note">
                 {OVERFLOW_COVERAGE_NOTE}
+                {report.overflowTriage.summary !== ""
+                  ? ` ${report.overflowTriage.summary}`
+                  : ""}
               </p>
+            )}
+
+            {report.overflowTriage.outranked.length > 0 && (
+              <details className="gap-overflow-triage">
+                <summary className="field-hint">
+                  Overflow fields with a close-named column (
+                  {report.overflowTriage.outranked.length})
+                </summary>
+                <ul className="field-hint">
+                  {report.overflowTriage.outranked.map((e) => (
+                    <li key={`out-${e.sourceName}`}>
+                      {e.sourceName}: closest column {e.column} is already
+                      claimed by the better-matching field {e.claimedBy}
+                    </li>
+                  ))}
+                </ul>
+              </details>
             )}
 
             {effective.length > 0 && (

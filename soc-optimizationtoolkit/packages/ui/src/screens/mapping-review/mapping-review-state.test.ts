@@ -8,6 +8,7 @@
  *   - the content-path deploy gate (blocks until every table approved and
  *     fresh) - and its strict separation from the native path
  */
+import { EMPTY_OVERFLOW_TRIAGE } from "@soc/core";
 import { describe, expect, it } from "vitest";
 import type { GapFieldMapping, GapReport } from "@soc/core";
 import {
@@ -79,6 +80,7 @@ function report(
       { name: "TimeGenerated", type: "datetime" },
     ],
     overflowLossy: false,
+    overflowTriage: EMPTY_OVERFLOW_TRIAGE,
     warnings: [],
     ...overrides,
   };

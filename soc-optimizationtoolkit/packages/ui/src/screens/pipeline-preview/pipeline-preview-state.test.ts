@@ -15,6 +15,7 @@
  * gap reports, so the projection is exercised against actual generated YAML.
  */
 
+import { EMPTY_OVERFLOW_TRIAGE } from "@soc/core";
 import { describe, expect, it } from "vitest";
 import type { GapFieldMapping, GapReport } from "@soc/core";
 import {
@@ -71,6 +72,7 @@ function report(over: Partial<GapReport>): GapReport {
     fieldMappings: [mapping({})],
     destSchema: [{ name: "SourceIP", type: "string" }],
     overflowLossy: false,
+    overflowTriage: EMPTY_OVERFLOW_TRIAGE,
     warnings: [],
     ...over,
   };

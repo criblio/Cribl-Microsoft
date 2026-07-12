@@ -81,3 +81,7 @@ export {
   matchParsedSampleToColumns,
   matchSampleToTable,
 } from "./match-to-catalog";
+
+// Overflow triage: unmappable vs outranked vs reviewable (per gap report)
+export type { OverflowTriage, OverflowTriageEntry } from "./overflow-triage";
+export { EMPTY_OVERFLOW_TRIAGE, triageOverflow } from "./overflow-triage";

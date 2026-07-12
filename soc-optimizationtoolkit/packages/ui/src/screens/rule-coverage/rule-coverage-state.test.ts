@@ -11,7 +11,7 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { analyzeContentCoverage } from "@soc/core";
+import { analyzeContentCoverage, EMPTY_OVERFLOW_TRIAGE } from "@soc/core";
 import type {
   ContentItem,
   CoverageSummary,
@@ -77,6 +77,7 @@ function gapReport(over: Partial<GapReport> & Pick<GapReport, "tableName" | "fie
     fieldMappings: over.fieldMappings,
     destSchema: over.destSchema ?? [],
     overflowLossy: false,
+    overflowTriage: EMPTY_OVERFLOW_TRIAGE,
     warnings: [],
   };
 }

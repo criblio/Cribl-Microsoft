@@ -33,6 +33,8 @@ import type {
   MatchConfidence,
   MatchResult,
 } from "../field-matcher/models";
+import { triageOverflow } from "../field-matcher/overflow-triage";
+import type { OverflowTriage } from "../field-matcher/overflow-triage";
 import {
   COLLISION_PRONE_INTERNAL_FIELDS,
   internalCollisionWarning,
@@ -111,6 +113,11 @@ export interface GapReport {
    * (the AdditionalData_d-missing case) - overflow is lossy.
    */
   overflowLossy: boolean;
+  /**
+   * UNMAPPABLE vs MISSED: every overflow field triaged against every
+   * destination column (no-equivalent / outranked / reviewable).
+   */
+  overflowTriage: OverflowTriage;
   /** Combined matcher + gap warnings (incl. the data-loss footgun). */
   warnings: string[];
 }
@@ -220,6 +227,12 @@ export function buildGapReport(input: BuildGapReportInput): GapReport {
   const overflowLossy =
     matchResult.overflow.length > 0 && !matchResult.overflowConfig.enabled;
 
+  const overflowTriage = triageOverflow(
+    matchResult,
+    input.destSchema,
+    input.tableName,
+  );
+
   const stats: GapReportStat[] = [
     {
       key: "source-fields",
@@ -313,6 +326,7 @@ export function buildGapReport(input: BuildGapReportInput): GapReport {
     fieldMappings,
     destSchema: input.destSchema.map((c) => ({ ...c })),
     overflowLossy,
+    overflowTriage,
     warnings,
   };
 }
