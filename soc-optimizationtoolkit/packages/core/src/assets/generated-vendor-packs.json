@@ -370,5 +370,163 @@
     "ecs": "user.name"
    }
   ]
+ },
+ {
+  "id": "generated-sentinel_one",
+  "vendor": "SentinelOne",
+  "solutionKeywords": [
+   "sentinelone",
+   "sentinel one"
+  ],
+  "provenance": "Generated from elastic/integrations sentinel_one pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "mappings": [
+   {
+    "sourceName": "primaryDescription",
+    "destName": "Message",
+    "ecs": "message"
+   }
+  ]
+ },
+ {
+  "id": "generated-netskope",
+  "vendor": "Netskope",
+  "solutionKeywords": [
+   "netskope"
+  ],
+  "provenance": "Generated from elastic/integrations netskope pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "mappings": [
+   {
+    "sourceName": "action",
+    "destName": "DeviceAction",
+    "ecs": "event.action"
+   },
+   {
+    "sourceName": "id",
+    "destName": "ExternalID",
+    "ecs": "event.id"
+   }
+  ]
+ },
+ {
+  "id": "generated-cloudflare_logpush",
+  "vendor": "Cloudflare",
+  "solutionKeywords": [
+   "cloudflare"
+  ],
+  "provenance": "Generated from elastic/integrations cloudflare_logpush pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "mappings": [
+   {
+    "sourceName": "Action",
+    "destName": "DeviceAction",
+    "ecs": "event.action"
+   },
+   {
+    "sourceName": "ClientIP",
+    "destName": "SourceIP",
+    "ecs": "source.ip"
+   },
+   {
+    "sourceName": "ClientRequestHost",
+    "destName": "DestinationHostName",
+    "ecs": "url.domain"
+   },
+   {
+    "sourceName": "ClientRequestMethod",
+    "destName": "RequestMethod",
+    "ecs": "http.request.method"
+   },
+   {
+    "sourceName": "ClientRequestReferer",
+    "destName": "RequestContext",
+    "ecs": "http.request.referrer"
+   },
+   {
+    "sourceName": "ClientRequestUserAgent",
+    "destName": "RequestClientApplication",
+    "ecs": "user_agent.original"
+   },
+   {
+    "sourceName": "EdgeResponseStatus",
+    "destName": "EventOutcome",
+    "ecs": "http.response.status_code"
+   },
+   {
+    "sourceName": "OriginIP",
+    "destName": "DestinationIP",
+    "ecs": "destination.ip"
+   },
+   {
+    "sourceName": "QueryName",
+    "destName": "DestinationDnsDomain",
+    "ecs": "dns.question.name"
+   },
+   {
+    "sourceName": "RayID",
+    "destName": "ExternalID",
+    "ecs": "event.id"
+   },
+   {
+    "sourceName": "SourceIP",
+    "destName": "SourceIP",
+    "ecs": "source.ip"
+   }
+  ]
+ },
+ {
+  "id": "generated-carbon_black_cloud",
+  "vendor": "VMware Carbon Black",
+  "solutionKeywords": [
+   "carbon black",
+   "carbonblack"
+  ],
+  "provenance": "Generated from elastic/integrations carbon_black_cloud pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "mappings": [
+   {
+    "sourceName": "action",
+    "destName": "DeviceAction",
+    "ecs": "event.action"
+   },
+   {
+    "sourceName": "process_pid",
+    "destName": "SourceProcessId",
+    "ecs": "process.pid"
+   }
+  ]
+ },
+ {
+  "id": "generated-panw_cortex_xdr",
+  "vendor": "Palo Alto Cortex XDR",
+  "solutionKeywords": [
+   "cortex xdr",
+   "cortex"
+  ],
+  "provenance": "Generated from elastic/integrations panw_cortex_xdr pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "mappings": [
+   {
+    "sourceName": "action",
+    "destName": "DeviceAction",
+    "ecs": "event.action"
+   },
+   {
+    "sourceName": "description",
+    "destName": "Reason",
+    "ecs": "event.reason"
+   },
+   {
+    "sourceName": "external_id",
+    "destName": "ExternalID",
+    "ecs": "event.id"
+   },
+   {
+    "sourceName": "incident_id",
+    "destName": "ExternalID",
+    "ecs": "event.id"
+   },
+   {
+    "sourceName": "name",
+    "destName": "Message",
+    "ecs": "message"
+   }
+  ]
  }
 ]

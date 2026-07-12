@@ -33,6 +33,14 @@ const TARGETS = [
   { pkg: "suricata", streams: ["eve"], vendor: "Suricata", keywords: ["suricata"] },
   { pkg: "cisco_secure_endpoint", streams: ["event"], vendor: "Cisco Secure Endpoint", keywords: ["cisco secure endpoint", "secure endpoint"] },
   { pkg: "cisco_duo", streams: ["admin"], vendor: "Cisco Duo", keywords: ["cisco duo", "duo security", "cisco secure application"] },
+  // Broader coverage (2026-07-12): additional NDJSON security vendors from
+  // the Elastic index. Unknown streams 404 and are skipped harmlessly;
+  // streams that mine nothing produce no pack.
+  { pkg: "sentinel_one", streams: ["activity", "alert", "threat", "agent"], vendor: "SentinelOne", keywords: ["sentinelone", "sentinel one"] },
+  { pkg: "netskope", streams: ["alerts", "events"], vendor: "Netskope", keywords: ["netskope"] },
+  { pkg: "cloudflare_logpush", streams: ["http_request", "firewall_event", "dns"], vendor: "Cloudflare", keywords: ["cloudflare"] },
+  { pkg: "carbon_black_cloud", streams: ["alert", "endpoint_event", "watchlist_hit"], vendor: "VMware Carbon Black", keywords: ["carbon black", "carbonblack"] },
+  { pkg: "panw_cortex_xdr", streams: ["alerts", "incidents"], vendor: "Palo Alto Cortex XDR", keywords: ["cortex xdr", "cortex"] },
 ];
 
 // Curated ECS -> CommonSecurityLog bridge. Every value is a REAL CSL column.
@@ -90,7 +98,13 @@ const DOMINANCE = 0.8;
 // Source fields whose VALUE TYPE varies per event (a hash in one record, an
 // IP or domain in the next) - mining sees only the fixture's variant, so a
 // mapping would be wrong for the others. Reviewed per generation run.
-const SOURCE_BLOCKLIST = new Set(["IOCValue", "ioc_value"]);
+const SOURCE_BLOCKLIST = new Set([
+  "IOCValue",
+  "ioc_value",
+  // SentinelOne: free-text description that only INCIDENTALLY equals
+  // file.path in the fixtures - prose would land in FilePath.
+  "secondaryDescription",
+]);
 // Values too generic to vote with (they collide across unrelated fields).
 const isTrivial = (v) =>
   v === null ||

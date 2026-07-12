@@ -26,7 +26,9 @@ describe("vendorPacksForSolution", () => {
   });
 
   it("returns no packs for uncurated solutions and empty names", () => {
-    expect(vendorPacksForSolution("Cloudflare")).toEqual([]);
+    // Cloudflare graduated to a generated pack on 2026-07-12; Barracuda
+    // remains alias-ladder-only.
+    expect(vendorPacksForSolution("Barracuda CloudGen Firewall")).toEqual([]);
     expect(vendorPacksForSolution("")).toEqual([]);
   });
 });

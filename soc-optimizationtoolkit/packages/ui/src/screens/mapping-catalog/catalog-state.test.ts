@@ -1,11 +1,18 @@
 /**
- * Pins for the Vendor Mapping Catalog projections (user request 2026-07-09:
- * a browsable, vendor-documented catalog of suggested Sentinel mappings).
+ * Pins for the Vendor Mapping Catalog projections (user request 2026-07-09;
+ * reshaped 2026-07-12: one MERGED view per vendor - live report: the hand and
+ * generated Zscaler packs rendered as redundant cards - selected via a
+ * vendor dropdown).
  */
 
 import { describe, expect, it } from "vitest";
 import type { VendorMappingPack } from "@soc/core";
-import { catalogTotals, entryDocLine, filterCatalog } from "./catalog-state";
+import {
+  catalogTotals,
+  entryDocLine,
+  filterVendorEntries,
+  mergedVendorCatalog,
+} from "./catalog-state";
 
 const PACKS: VendorMappingPack[] = [
   {
@@ -25,6 +32,17 @@ const PACKS: VendorMappingPack[] = [
     ],
   },
   {
+    id: "generated-zscaler_zia",
+    vendor: "Zscaler",
+    solutionKeywords: ["zscaler"],
+    provenance: "Generated from elastic/integrations fixtures",
+    mappings: [
+      // Duplicate source: the hand entry above must win the merge.
+      { sourceName: "cltip", destName: "DeviceAddress", ecs: "host.ip" },
+      { sourceName: "dns_req", destName: "DestinationDnsDomain", ecs: "dns.question.name" },
+    ],
+  },
+  {
     id: "generated-suricata",
     vendor: "Suricata",
     solutionKeywords: ["suricata"],
@@ -35,38 +53,52 @@ const PACKS: VendorMappingPack[] = [
   },
 ];
 
-describe("entryDocLine", () => {
-  it("prefers the vendor doc, falls back to the mined ECS path", () => {
-    expect(entryDocLine(PACKS[0].mappings[0])).toContain("base64-encoded");
-    expect(entryDocLine(PACKS[1].mappings[0])).toBe(
-      "Mined from Elastic pipeline fixtures (ECS: network.protocol)",
-    );
-    expect(entryDocLine({ sourceName: "x", destName: "Y" })).toBe("");
+describe("mergedVendorCatalog", () => {
+  const catalog = mergedVendorCatalog(PACKS);
+
+  it("renders ONE view per vendor (no redundant Zscaler cards)", () => {
+    expect(catalog.map((v) => v.vendor)).toEqual(["Suricata", "Zscaler"]);
+  });
+
+  it("applies the runtime dedupe: the hand entry wins a source collision", () => {
+    const zscaler = catalog.find((v) => v.vendor === "Zscaler")!;
+    const cltip = zscaler.entries.find((e) => e.sourceName === "cltip")!;
+    expect(cltip.destName).toBe("SourceIP");
+    expect(zscaler.entries.map((e) => e.sourceName).sort()).toEqual([
+      "b64url",
+      "cltip",
+      "dns_req",
+    ]);
+  });
+
+  it("collects every contributing provenance and the first doc link", () => {
+    const zscaler = catalog.find((v) => v.vendor === "Zscaler")!;
+    expect(zscaler.provenances).toHaveLength(2);
+    expect(zscaler.docUrl).toContain("help.zscaler.com");
   });
 });
 
-describe("filterCatalog", () => {
-  it("keeps everything on a blank query", () => {
-    const views = filterCatalog(PACKS, "");
-    expect(views).toHaveLength(2);
-    expect(views[0].entries).toHaveLength(2);
-    expect(views[0].docUrl).toContain("help.zscaler.com");
+describe("filterVendorEntries / entryDocLine / totals", () => {
+  const catalog = mergedVendorCatalog(PACKS);
+  const zscaler = catalog.find((v) => v.vendor === "Zscaler")!;
+
+  it("filters by source, destination, or documentation text", () => {
+    expect(filterVendorEntries(zscaler, "b64url")).toHaveLength(1);
+    expect(filterVendorEntries(zscaler, "sourceip")).toHaveLength(1);
+    expect(filterVendorEntries(zscaler, "base64")).toHaveLength(1);
+    expect(filterVendorEntries(zscaler, "")).toHaveLength(3);
   });
 
-  it("filters entries by source, destination, or documentation text", () => {
-    expect(filterCatalog(PACKS, "b64url")[0].entries).toHaveLength(1);
-    expect(filterCatalog(PACKS, "sourceip")[0].entries).toHaveLength(1);
-    expect(filterCatalog(PACKS, "base64")[0].entries).toHaveLength(1);
-    expect(filterCatalog(PACKS, "network.protocol")).toHaveLength(1);
+  it("doc line prefers the vendor doc, falls back to the mined ECS path", () => {
+    expect(entryDocLine(zscaler.entries[0])).toContain("base64-encoded");
+    const mined = zscaler.entries.find((e) => e.sourceName === "dns_req")!;
+    expect(entryDocLine(mined)).toBe(
+      "Mined from Elastic pipeline fixtures (ECS: dns.question.name)",
+    );
+    expect(entryDocLine({ sourceName: "x", destName: "Y" })).toBe("");
   });
 
-  it("a vendor-name hit keeps the whole pack; empty packs drop", () => {
-    const views = filterCatalog(PACKS, "zscaler");
-    expect(views).toHaveLength(1);
-    expect(views[0].entries).toHaveLength(2);
-  });
-
-  it("counts totals across the catalog", () => {
-    expect(catalogTotals(PACKS)).toEqual({ packs: 2, mappings: 3 });
+  it("counts totals across the merged catalog", () => {
+    expect(catalogTotals(catalog)).toEqual({ vendors: 2, mappings: 4 });
   });
 });
