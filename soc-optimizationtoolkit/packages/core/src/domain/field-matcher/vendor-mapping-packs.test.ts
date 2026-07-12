@@ -7,6 +7,7 @@
 
 import { describe, expect, it } from "vitest";
 import {
+  CEF_CATALOG_PACK,
   VENDOR_MAPPING_PACKS,
   vendorMappingsForSolution,
   vendorPacksForSolution,
@@ -73,6 +74,26 @@ describe("vendorMappingsForSolution", () => {
   it("all packs carry provenance", () => {
     for (const pack of VENDOR_MAPPING_PACKS) {
       expect(pack.provenance.trim()).not.toBe("");
+    }
+  });
+});
+
+describe("CEF catalog-only pack", () => {
+  it("ships the documented CEF vocabulary for the catalog", () => {
+    expect(CEF_CATALOG_PACK.mappings.length).toBeGreaterThanOrEqual(45);
+    const byName = new Map(
+      CEF_CATALOG_PACK.mappings.map((m) => [m.sourceName, m.destName]),
+    );
+    expect(byName.get("src")).toBe("SourceIP");
+    expect(byName.get("request")).toBe("RequestURL");
+    expect(byName.get("dvchost")).toBe("DeviceName");
+  });
+
+  it("never participates in runtime lookups (empty keywords)", () => {
+    for (const name of ["Zscaler Internet Access", "Check Point", "AnythingElse"]) {
+      expect(
+        vendorPacksForSolution(name).some((p) => p.id === "cef-standard"),
+      ).toBe(false);
     }
   });
 });

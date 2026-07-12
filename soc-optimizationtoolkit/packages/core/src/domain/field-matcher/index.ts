@@ -61,6 +61,7 @@ export {
 // Documented per-vendor mapping packs (Phase 0 knowledge)
 export type { VendorMappingPack, VendorPackEntry } from "./vendor-mapping-packs";
 export {
+  CEF_CATALOG_PACK,
   VENDOR_MAPPING_PACKS,
   vendorMappingsForSolution,
   vendorPacksForSolution,

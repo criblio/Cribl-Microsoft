@@ -145,6 +145,75 @@ const HAND_PACKS: readonly VendorMappingPack[] = [
   },
 ];
 
+/**
+ * CATALOG-ONLY pack: Microsoft's documented CEF key -> CommonSecurityLog
+ * column mapping - the shared vocabulary MOST CEF/syslog Sentinel solutions
+ * ride, which the alias ladder already applies at RUNTIME. Its
+ * solutionKeywords are deliberately EMPTY so vendorPacksForSolution never
+ * feeds it into Phase 0 (that would duplicate the aliases); it exists so the
+ * Mapping Catalog can show, with citations, the coverage every CEF vendor
+ * gets. Source: learn.microsoft.com/azure/sentinel/cef-name-mapping.
+ */
+export const CEF_CATALOG_PACK: VendorMappingPack = {
+  id: "cef-standard",
+  vendor: "CEF (all vendors)",
+  solutionKeywords: [],
+  provenance:
+    "Microsoft Sentinel CEF connector field mapping (applies to every CEF/syslog vendor via the alias ladder)",
+  docUrl: "https://learn.microsoft.com/azure/sentinel/cef-name-mapping",
+  mappings: [
+      { sourceName: "act", destName: "DeviceAction", doc: "CEF act: Action mentioned in the event" },
+      { sourceName: "app", destName: "ApplicationProtocol", doc: "CEF app: Application-layer protocol (HTTP, HTTPS, SSH...)" },
+      { sourceName: "cat", destName: "DeviceEventCategory", doc: "CEF cat: Event category the device assigns" },
+      { sourceName: "cnt", destName: "EventCount", doc: "CEF cnt: Number of aggregated events" },
+      { sourceName: "deviceDirection", destName: "CommunicationDirection", doc: "CEF deviceDirection: Direction of the observed communication" },
+      { sourceName: "deviceDnsDomain", destName: "DeviceDnsDomain", doc: "CEF deviceDnsDomain: DNS domain of the reporting device" },
+      { sourceName: "deviceExternalId", destName: "DeviceExternalID", doc: "CEF deviceExternalId: Unique identifier of the reporting device" },
+      { sourceName: "deviceFacility", destName: "DeviceFacility", doc: "CEF deviceFacility: Facility generating the event" },
+      { sourceName: "deviceInboundInterface", destName: "DeviceInboundInterface", doc: "CEF deviceInboundInterface: Interface the connection entered on" },
+      { sourceName: "deviceOutboundInterface", destName: "DeviceOutboundInterface", doc: "CEF deviceOutboundInterface: Interface the connection left on" },
+      { sourceName: "deviceProcessName", destName: "ProcessName", doc: "CEF deviceProcessName: Process associated with the event" },
+      { sourceName: "dhost", destName: "DestinationHostName", doc: "CEF dhost: Destination host name (FQDN)" },
+      { sourceName: "dmac", destName: "DestinationMACAddress", doc: "CEF dmac: Destination MAC address" },
+      { sourceName: "dntdom", destName: "DestinationNTDomain", doc: "CEF dntdom: Windows domain of the destination user" },
+      { sourceName: "dpid", destName: "DestinationProcessId", doc: "CEF dpid: Destination process id" },
+      { sourceName: "dproc", destName: "DestinationProcessName", doc: "CEF dproc: Destination process name" },
+      { sourceName: "dpt", destName: "DestinationPort", doc: "CEF dpt: Destination port" },
+      { sourceName: "dst", destName: "DestinationIP", doc: "CEF dst: Destination IPv4 address" },
+      { sourceName: "duid", destName: "DestinationUserID", doc: "CEF duid: Destination user id" },
+      { sourceName: "duser", destName: "DestinationUserName", doc: "CEF duser: Destination user name (UPN preferred)" },
+      { sourceName: "dvc", destName: "DeviceAddress", doc: "CEF dvc: IPv4 address of the reporting device" },
+      { sourceName: "dvchost", destName: "DeviceName", doc: "CEF dvchost: Host name (FQDN) of the reporting device" },
+      { sourceName: "end", destName: "EndTime", doc: "CEF end: Time the activity ended" },
+      { sourceName: "externalId", destName: "ExternalID", doc: "CEF externalId: Id the reporting device assigns the event" },
+      { sourceName: "fname", destName: "FileName", doc: "CEF fname: File name" },
+      { sourceName: "filePath", destName: "FilePath", doc: "CEF filePath: Full file path including the name" },
+      { sourceName: "fileHash", destName: "FileHash", doc: "CEF fileHash: File digest" },
+      { sourceName: "fsize", destName: "FileSize", doc: "CEF fsize: File size in bytes" },
+      { sourceName: "in", destName: "ReceivedBytes", doc: "CEF in: Bytes transferred inbound" },
+      { sourceName: "msg", destName: "Message", doc: "CEF msg: Human-readable event detail" },
+      { sourceName: "out", destName: "SentBytes", doc: "CEF out: Bytes transferred outbound" },
+      { sourceName: "outcome", destName: "EventOutcome", doc: "CEF outcome: Outcome of the event (e.g. success/failure)" },
+      { sourceName: "proto", destName: "Protocol", doc: "CEF proto: Transport protocol (TCP, UDP...)" },
+      { sourceName: "reason", destName: "Reason", doc: "CEF reason: Reason for the audit/action" },
+      { sourceName: "request", destName: "RequestURL", doc: "CEF request: URL accessed in the request" },
+      { sourceName: "requestClientApplication", destName: "RequestClientApplication", doc: "CEF requestClientApplication: User agent of the request" },
+      { sourceName: "requestContext", destName: "RequestContext", doc: "CEF requestContext: Context of the request (e.g. the HTTP referer)" },
+      { sourceName: "requestMethod", destName: "RequestMethod", doc: "CEF requestMethod: HTTP method of the request" },
+      { sourceName: "rt", destName: "ReceiptTime", doc: "CEF rt: Time the event was received" },
+      { sourceName: "shost", destName: "SourceHostName", doc: "CEF shost: Source host name (FQDN)" },
+      { sourceName: "smac", destName: "SourceMACAddress", doc: "CEF smac: Source MAC address" },
+      { sourceName: "sntdom", destName: "SourceNTDomain", doc: "CEF sntdom: Windows domain of the source user" },
+      { sourceName: "spid", destName: "SourceProcessId", doc: "CEF spid: Source process id" },
+      { sourceName: "sproc", destName: "SourceProcessName", doc: "CEF sproc: Source process name" },
+      { sourceName: "spt", destName: "SourcePort", doc: "CEF spt: Source port" },
+      { sourceName: "src", destName: "SourceIP", doc: "CEF src: Source IPv4 address" },
+      { sourceName: "start", destName: "StartTime", doc: "CEF start: Time the activity started" },
+      { sourceName: "suid", destName: "SourceUserID", doc: "CEF suid: Source user id" },
+      { sourceName: "suser", destName: "SourceUserName", doc: "CEF suser: Source user name (UPN preferred)" },
+  ],
+};
+
 function isGeneratedPack(value: unknown): value is VendorMappingPack {
   const v = value as VendorMappingPack;
   return (
@@ -155,9 +224,14 @@ function isGeneratedPack(value: unknown): value is VendorMappingPack {
   );
 }
 
-/** Every pack, hand-verified first (their entries win the dedupe). */
+/**
+ * Every pack, hand-verified first (their entries win the dedupe). The
+ * catalog-only CEF pack rides along for display; its empty keyword list
+ * keeps it out of every runtime lookup.
+ */
 export const VENDOR_MAPPING_PACKS: readonly VendorMappingPack[] = [
   ...HAND_PACKS,
+  CEF_CATALOG_PACK,
   ...(Array.isArray(generatedPacks)
     ? (generatedPacks as unknown[]).filter(isGeneratedPack)
     : []),
