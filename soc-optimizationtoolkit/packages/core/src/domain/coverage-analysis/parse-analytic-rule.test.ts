@@ -20,7 +20,6 @@ import {
   analyticRuleToContentItem,
   mergeCustomContentItems,
   parseAnalyticRuleYaml,
-  parseCustomAnalyticRuleYaml,
 } from "./parse-analytic-rule";
 import type { ContentItem } from "./models";
 
@@ -208,9 +207,9 @@ describe("analyticRuleToContentItem projection", () => {
   });
 });
 
-describe("parseCustomAnalyticRuleYaml PRESERVES the query (redesign)", () => {
+describe("custom-upload parsing PRESERVES the query (redesign)", () => {
   it("keeps the KQL so a custom upload flows through the same engine", () => {
-    const rule = parseCustomAnalyticRuleYaml(RULE_YAML, "custom.yaml");
+    const rule = parseAnalyticRuleYaml(RULE_YAML, "custom.yaml");
     const item = analyticRuleToContentItem(rule, true);
     expect(item.custom).toBe(true);
     // Legacy set custom rules' query to '' in coverage; here it is preserved.

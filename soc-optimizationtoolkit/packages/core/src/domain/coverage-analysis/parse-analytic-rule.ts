@@ -97,21 +97,6 @@ export function parseAnalyticRuleYaml(
 }
 
 /**
- * Parse a CUSTOM (user-uploaded) AnalyticRule YAML. Same regex extraction as
- * {@link parseAnalyticRuleYaml}. REDESIGN NOTE: the legacy
- * pack-builder.ts parse-rule-yaml discarded the query text in the coverage
- * merge (it set `query: ''` for custom rules, so the "View KQL Query"
- * expandable was empty for uploads). Here the query is PRESERVED so a custom
- * rule flows through the shared analyzer identically to a repo rule.
- */
-export function parseCustomAnalyticRuleYaml(
-  content: string,
-  fileName: string,
-): ParsedAnalyticRule {
-  return parseAnalyticRuleYaml(content, fileName);
-}
-
-/**
  * Project a parsed rule into the shared {@link ContentItem}. The query is a
  * single-element `queries` array; entity fields become `extraFields`. NO
  * schema filtering and NO zero-field drop happen here - that is the analyzer's

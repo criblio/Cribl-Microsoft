@@ -422,12 +422,12 @@ describe("deriveCoverageSection", () => {
       summary: summary({ totalItems: 3 }),
     };
 
-    const rules = deriveCoverageSection(report, "alert-rule", 1);
+    const rules = deriveCoverageSection(report, "alert-rule");
     expect(rules.items.map((i) => i.name)).toEqual(["Rule 1", "Rule 2"]);
     expect(rules.counts).toEqual({ total: 2, fullyCovered: 1, partiallyCovered: 0, noCoverage: 1 });
     expect(rules.unparseableQueryCount).toBe(0);
 
-    const workbooks = deriveCoverageSection(report, "workbook", 1);
+    const workbooks = deriveCoverageSection(report, "workbook");
     expect(workbooks.items.map((i) => i.name)).toEqual(["Workbook 1"]);
     expect(workbooks.counts).toEqual({ total: 1, fullyCovered: 0, partiallyCovered: 1, noCoverage: 0 });
     expect(workbooks.unparseableQueryCount).toBe(2);
@@ -463,9 +463,14 @@ describe("end-to-end over the real analyzer", () => {
       schemaUnion: ["SourceIP", "TargetUserName", "DeviceName"],
     });
 
-    const missingCount = report.summary.missingFieldsAcrossRules.length;
-    const rules = deriveCoverageSection(report, "alert-rule", missingCount);
-    const workbooks = deriveCoverageSection(report, "workbook", missingCount);
+    const rules = deriveCoverageSection(report, "alert-rule");
+    const workbooks = deriveCoverageSection(report, "workbook");
+    // AUDIT FIX 2026-07-12: each section counts ITS OWN missing fields; the
+    // workbook line no longer reports the rules+workbooks combined number.
+    // Rules miss TargetUserName (1); workbooks miss DeviceName (1) - each
+    // line says 1, not the combined 2.
+    expect(rules.summaryLine).toContain("1 field(s)");
+    expect(workbooks.summaryLine).toContain("1 field(s)");
 
     expect(rules.counts.total).toBe(1);
     expect(workbooks.counts.total).toBe(1);

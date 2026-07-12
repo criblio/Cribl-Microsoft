@@ -86,6 +86,27 @@ describe("replay (learnedToVendorMappings + Phase 0)", () => {
     );
   });
 
+  it("a replayed DROP consumes its source (no overflow, explicit row)", () => {
+    // Audit fix 2026-07-12: matchFields previously SKIPPED drop entries, so
+    // a learned drop fell through to overflow - the layers disagreed.
+    const replayed = learnedToVendorMappings([
+      { sourceName: "noise", destName: "", action: "drop" },
+    ]);
+    const result = matchFields(
+      [{ name: "noise", type: "string" }],
+      [
+        { name: "SourceIP", type: "string" },
+        { name: "AdditionalExtensions", type: "string" },
+      ],
+      replayed,
+      "CommonSecurityLog",
+    );
+    const row = result.matched.find((m) => m.sourceName === "noise");
+    expect(row?.action).toBe("drop");
+    expect(row?.description).toContain("Dropped by reviewer decision");
+    expect(result.overflow.map((m) => m.sourceName)).not.toContain("noise");
+  });
+
   it("replays with the learned provenance visible on the match row", () => {
     const replayed = learnedToVendorMappings([
       { sourceName: "b64url", destName: "RequestURL", action: "decode" },

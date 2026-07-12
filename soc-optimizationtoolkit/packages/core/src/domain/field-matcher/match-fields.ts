@@ -36,7 +36,13 @@ import {
 import { scoreMatch, typeValueBoost } from "./scoring";
 import { SKIP_OVERFLOW_FIELDS, getOverflowConfig } from "./overflow";
 
-/** A vendor-research field mapping override (Phase 0, highest priority). */
+/**
+ * A Phase-0 field-mapping override (highest matcher priority). Despite the
+ * historical name, this is the GENERIC override shape - it carries
+ * documented vendor-pack entries, LEARNED reviewer decisions
+ * (learnedToVendorMappings), and (in the pipeline planner) enrichment
+ * constants. `description` names the provenance on the match row.
+ */
 export interface VendorMapping {
   sourceName: string;
   destName: string;
@@ -72,7 +78,34 @@ export function matchFields(
   // so that downstream rename rules reference the real field casing.
   if (vendorMappings) {
     for (const vm of vendorMappings) {
-      if (vm.action === "drop") continue;
+      if (vm.action === "drop") {
+        // A Phase-0 DROP (learned reviewer decision) CONSUMES its source:
+        // mark it used and emit an explicit drop row so it neither falls
+        // through to overflow nor silently vanishes from the review table
+        // (audit finding 2026-07-12: the layers disagreed - the usecase
+        // guard documented "consumed", but this loop skipped the entry and
+        // the field overflowed anyway).
+        const droppedSrc =
+          sourceFields.find((s) => s.name === vm.sourceName) ||
+          sourceFields.find(
+            (s) => s.name.toLowerCase() === vm.sourceName.toLowerCase(),
+          );
+        if (droppedSrc && !usedSource.has(droppedSrc.name)) {
+          matched.push({
+            sourceName: droppedSrc.name,
+            sourceType: droppedSrc.type || vm.sourceType,
+            destName: "",
+            destType: "",
+            confidence: "exact",
+            action: "drop",
+            needsCoercion: false,
+            description: `Dropped by reviewer decision${vm.description !== undefined && vm.description !== "" ? ` - ${vm.description}` : ""}`,
+            sampleValue: droppedSrc.sampleValue,
+          });
+          usedSource.add(droppedSrc.name);
+        }
+        continue;
+      }
       const src =
         sourceFields.find((s) => s.name === vm.sourceName) ||
         sourceFields.find(

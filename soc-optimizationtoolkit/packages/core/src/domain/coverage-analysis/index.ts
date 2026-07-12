@@ -32,7 +32,6 @@ export { extractKqlFields } from "./extract-kql-fields";
 // AnalyticRule parsing (pinned regex) + custom-rule merge (dedupe fix).
 export {
   parseAnalyticRuleYaml,
-  parseCustomAnalyticRuleYaml,
   analyticRuleToContentItem,
   mergeCustomContentItems,
 } from "./parse-analytic-rule";

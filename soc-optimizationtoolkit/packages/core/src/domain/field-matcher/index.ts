@@ -1,7 +1,7 @@
 /**
  * field-matcher domain module barrel - porting-plan Unit 13 (ENG-04/05/03).
  *
- * The 6-phase field matcher, its verbatim knowledge bases, the per-table
+ * The phased field matcher (Phase 0 overrides + the 6-strategy scoring ladder), its verbatim knowledge bases, the per-table
  * overflow config, and the bundled SchemaCatalog adapter over the pre-extracted
  * DCR/custom column sets. The GAP-ANALYSIS FOUNDATION. All pure.
  */
@@ -63,6 +63,7 @@ export type { VendorMappingPack, VendorPackEntry } from "./vendor-mapping-packs"
 export {
   CEF_CATALOG_PACK,
   VENDOR_MAPPING_PACKS,
+  foldEntriesBySource,
   vendorMappingsForSolution,
   vendorPacksForSolution,
 } from "./vendor-mapping-packs";

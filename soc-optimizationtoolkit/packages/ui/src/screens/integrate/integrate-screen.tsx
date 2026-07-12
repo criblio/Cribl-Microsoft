@@ -6,48 +6,42 @@
  * screen is its successor, composing the ALREADY-SHIPPED screens as sections
  * rather than scattering them across sidebar routes.
  *
- * The seven sections render in page order from @soc/core INTEGRATE_SECTIONS.
- * Five are BUILT and operable today; two are honest coming-soon:
+ * The EIGHT sections render in page order from @soc/core INTEGRATE_SECTIONS,
+ * all BUILT and operable:
  *
- *   1. Sentinel Solution   - BUILT: the SolutionBrowser - lazy GitHub solution
- *      index (search, DEPRECATED badges + reason), per-solution on-demand fetch
- *      with commit-keyed caching, and the preserved `#/?solution=` deep link
- *      (Unit 14). Selecting a solution is additive and non-gating.
- *   2. Sample Data         - BUILT: the SampleIntakeSection - multi-file upload
- *      + paste-and-tag, per-sample chips (detected format + field table + raw
- *      preview), and a log-type rename that re-keys the tagged-sample store
- *      (Unit 11).
- *   3. Azure Resources     - BUILT: the AzureTargetingScreen cascade, the
- *      DCE / provision-DCR capability checkboxes, AND the operable
- *      RoleAssignmentSection (Unit 8, ENG-37 runtime half): grant Monitoring
- *      Metrics Publisher to the ingestion service principal on each DCR a
- *      deploy created, over the @soc/core assignDcrRoles usecase (GUID minting
- *      shell-injected). ADDITIVE + NON-GATING.
- *   4. Cribl Configuration - BUILT: worker-group select + pack name (prefilled
- *      from the saved Options destination prefix).
- *   5. DCR Gap Analysis    - BUILT: the MappingReviewSection - per-log-type
- *      gap analysis (six stat tiles, DCR/Cribl handles split), an editable
- *      dest/action mapping table, and the approval state machine (Auto-Approve
- *      All, per-table Approve, staleness). ADDITIVE + NON-GATING for the native
- *      deploy: it lights the Mappings pill and gates the content path only
- *      (Unit 18).
- *   6. Analytics Rule Cov. - BUILT: the RuleCoverageSection - the ONE shared
- *      content-reference analyzer over alert rules (SentinelContent port) and
- *      workbooks (AzureManagement ARM enumeration, net-new), rendered as two
- *      sections of one panel with three-way counts, per-item severity + coverage
- *      %, CUSTOM badges, missing-fields chips, and custom-YAML upload/clear.
- *      INFORMATIONAL: it lights the mapping table's RULE badges (the kept Unit
- *      18 ruleReferencedFields contract) but never gates a deploy (Unit 23).
- *   7. Deploy              - BUILT: the operable native-table onboard, driving
- *      the SAME @soc/core onboardTable use-case the validated Onboard screen
- *      runs (reusing onboardTableStepsFor, formatStepLine, summaryText,
- *      RecentRuns), with live step lines and the honest summary. The
- *      ReadinessFooter's Deploy triggers this run.
+ *   1. Select Sentinel Solution - the SolutionBrowser: lazy GitHub solution
+ *      index, per-solution on-demand fetch with commit-keyed caching, the
+ *      preserved `#/?solution=` deep link (consumed once so Clear works), and
+ *      the dedicated selected-solution card. Additive and non-gating.
+ *   2. Add Sample Data      - the SampleIntakeSection: multi-file upload,
+ *      paste-and-tag, Browse Samples (Sentinel repo + Elastic tiers,
+ *      stream-scoped split names), per-sample chips, and the log-type rename
+ *      that re-keys the tagged-sample store (Unit 11).
+ *   3. Select Azure Resources - the AzureTargetingScreen cascade, capability
+ *      checkboxes, Sentinel-enabled auto-check, and the operable
+ *      RoleAssignmentSection (Unit 8). Additive + non-gating.
+ *   4. Configure Cribl      - Stream-only worker-group select, pack name,
+ *      multi-group fan-out, and the pack overwrite check.
+ *   5. Run DCR Gap Analysis - the MappingReviewSection: per-log-type gap
+ *      analysis over Phase-0 vendor packs + learned mappings, the editable
+ *      mapping table (with field search), vendor-identity forced inputs,
+ *      enrichment editors, and the approval state machine. Gates the content
+ *      path only (Unit 18); the native deploy stays independent.
+ *   6. Review Analytics Rule Coverage - RuleCoverageSection (rules instance):
+ *      three-way coverage with clickable missing-field close-match review and
+ *      multi-format custom-rule upload. Informational; lights RULE badges.
+ *   7. Review Workbook Coverage - RuleCoverageSection (workbooks instance):
+ *      the solution's shipped workbooks plus solution-related deployed ones.
+ *      Informational.
+ *   8. Deploy               - the operable onboard (native + custom _CL
+ *      tables, multi-DCR fan-out) plus "Build and install pack" closing the
+ *      content path with real DCR values in outputs.yml, gated by the
+ *      vendor-identity check and the overwrite acknowledgment.
  *
  * The user validated the native-table onboard live end to end; it stays fully
  * operable THROUGH this page. The standalone Onboard / Azure Targeting /
- * Batch / Review routes remain registered (this page composes and supersedes
- * them during the transition; they stay reachable).
+ * Batch / Review routes remain registered (parked in the Development nav
+ * section; they stay reachable).
  *
  * Read-ahead contract: every section is visible; gating lives only at the
  * commit actions inside the composed screens (Use this target, Run deploy).

@@ -11,11 +11,21 @@
  *     text, straight off the @soc/core GapReport;
  *   - the "DCR handles: N rename(s), M coercion(s)" and "Cribl handles: ..."
  *     summaries;
- *   - an EDITABLE field-mapping table: a dest-column dropdown and an action
- *     dropdown per source field, plus the unmapped destination columns;
- *   - RULE badges in the markup, INERT until Unit 23 wires a rule-field set;
- *   - the data-loss warnings surfaced honestly (the source/host/port collision
- *     footgun and the overflow-loss case) from the report.
+ *   - an EDITABLE field-mapping table (with a per-card FIELD SEARCH): a
+ *     dest-column dropdown and an action dropdown (incl. base64 decode) per
+ *     source field, plus the unmapped destination columns;
+ *   - a per-sample DESTINATION-TABLE override (re-analyzes on change);
+ *   - the VENDOR IDENTITY block (DeviceVendor/DeviceProduct etc.): sample /
+ *     enrichment / forced-input resolution with curated auto-seeding;
+ *   - ENRICHMENT editors (global + per-table constants the pipeline adds);
+ *   - RULE badges fed by the rule-coverage section's referenced-field set;
+ *   - the data-loss warnings surfaced honestly from the report.
+ *
+ * ANALYSIS INPUTS, priority order (Phase 0 of the matcher): LEARNED reviewer
+ * decisions (persisted per solution via learnedCache, saved on Approve) beat
+ * the documented VENDOR PACKS (vendorMappingsForSolution); destination
+ * tables resolve from the solution's own connector definitions
+ * (hintsFromConnectorTables) before falling back.
  *
  * The APPROVAL STATE MACHINE lives in the pure mapping-review-state module; this
  * component only drives it: Auto-Approve All / Reset All / per-table Approve,
@@ -42,14 +52,9 @@ import {
   createBundledSchemaCatalog,
   decodeConnector,
   detectVendorIdentity,
-  diffLearnedMappings,
   hintsFromConnectorTables,
-  identityValueOptions,
-  learnedMappingsCacheKey,
   learnedToVendorMappings,
   matchSampleLogTypeToTable,
-  mergeLearnedMappings,
-  parseLearnedMappings,
   resolveDestinationTables,
   resolveIdentityFields,
   suggestedIdentityValue,
@@ -60,7 +65,6 @@ import type {
   DestinationTableResolution,
   GapFieldMapping,
   GapReport,
-  LearnedMapping,
   IdentityFieldStatus,
   MatchAction,
   SchemaCatalog,
@@ -68,9 +72,11 @@ import type {
   SolutionConnector,
   TaggedSample,
   VendorGapProfile,
-  VendorIdentity,
 } from "@soc/core";
 import { InfoTip } from "../../components/info-tip";
+import { EnrichmentEditor } from "./enrichment-editor";
+import { IdentityBlock } from "./identity-block";
+import { useEnrichmentFields, useLearnedMappings } from "./mapping-review-hooks";
 import { SearchableSelect } from "../../components/searchable-select";
 import {
   isValidEnrichmentFieldName,
@@ -130,8 +136,8 @@ export interface MappingReviewSectionProps {
   /** Vendor quirks for the gap analysis (defaults to the generic profile). */
   vendorProfile?: VendorGapProfile;
   /**
-   * Rule-referenced field names (lowercased) for the RULE badge. Absent/empty
-   * keeps the badge INERT until Unit 23 wires rule coverage.
+   * Rule-referenced field names (lowercased) for the RULE badge, reported by
+   * the rule-coverage section. Absent/empty renders no badges.
    */
   ruleFields?: ReadonlySet<string>;
   /** Reports the CONTENT-path readiness (every table approved and fresh). */
@@ -245,136 +251,24 @@ export function MappingReviewSection({
     {},
   );
 
-  // ---- Learned mappings (the reviewer-feedback loop) ----------------------
-  // Loaded per solution; replayed into Phase 0 AHEAD of the vendor packs on
-  // every analysis; extended with the diffed hand edits on every APPROVE.
-  const [learned, setLearned] = useState<LearnedMapping[]>([]);
-  useEffect(() => {
-    let cancelled = false;
-    setLearned([]);
-    if (learnedCache === undefined || solutionName === "") {
-      return;
-    }
-    void (async () => {
-      try {
-        const raw = await learnedCache.get(learnedMappingsCacheKey(solutionName));
-        if (!cancelled) {
-          setLearned(parseLearnedMappings(raw));
-        }
-      } catch {
-        // A failed load only disables replay for this session.
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [learnedCache, solutionName]);
-
-  // Persist the hand edits of the given reports (diffed against their
-  // analyzed baselines) into the learned store. Fire-and-forget: a failed
-  // save never blocks the approval.
-  const persistLearned = useCallback(
-    (toLearn: readonly GapReport[], reviewState: typeof review) => {
-      if (learnedCache === undefined || solutionName === "") {
-        return;
-      }
-      const fresh = toLearn.flatMap((report) =>
-        diffLearnedMappings(
-          report.fieldMappings.map((m) => ({
-            source: m.source,
-            dest: m.dest,
-            action: m.action,
-          })),
-          effectiveMappings(reviewState, report).map((m) => ({
-            source: m.source,
-            dest: m.dest,
-            action: m.action,
-          })),
-        ),
-      );
-      if (fresh.length === 0) {
-        return;
-      }
-      const merged = mergeLearnedMappings(learned, fresh);
-      setLearned(merged);
-      void learnedCache
-        .set(learnedMappingsCacheKey(solutionName), merged)
-        .catch(() => undefined);
-    },
-    [learnedCache, solutionName, learned],
+  // Learned mappings (the reviewer-feedback loop): loaded per solution,
+  // replayed into Phase 0 AHEAD of the vendor packs on every analysis,
+  // extended with the diffed hand edits on every APPROVE (the hook owns the
+  // load/persist mechanics).
+  const { learned, persistLearned } = useLearnedMappings(
+    learnedCache,
+    solutionName,
   );
 
-  // ---- User-added enrichment fields --------------------------------------
-  // Constants the pipeline ADDS because the source never carries them (the
-  // DeviceVendor/DeviceProduct case): a GLOBAL list applied to every table
-  // plus per-table additions (per-table wins on a field-name collision).
-  const [globalEnrichments, setGlobalEnrichments] = useState<EnrichmentField[]>(
-    [],
-  );
-  const [tableEnrichments, setTableEnrichments] = useState<
-    Record<string, EnrichmentField[]>
-  >({});
+  // Enrichment constants the pipeline ADDS (DeviceVendor etc.): global +
+  // per-table state, merged per log type and reported upward by the hook.
+  const {
+    globalEnrichments,
+    tableEnrichments,
+    addEnrichment,
+    removeEnrichment,
+  } = useEnrichmentFields(reports, isValidEnrichmentFieldName, onEnrichmentsChange);
 
-  const mergedEnrichments = useMemo(() => {
-    const byLogType: Record<string, EnrichmentField[]> = {};
-    for (const report of reports) {
-      const merged = mergeEnrichments(
-        globalEnrichments,
-        tableEnrichments[report.logType] ?? [],
-      );
-      if (merged.length > 0) {
-        byLogType[report.logType] = merged;
-      }
-    }
-    return byLogType;
-  }, [reports, globalEnrichments, tableEnrichments]);
-
-  useEffect(() => {
-    onEnrichmentsChange?.(mergedEnrichments);
-  }, [mergedEnrichments, onEnrichmentsChange]);
-
-  const addEnrichment = useCallback(
-    (logType: string | null, field: string, value: string) => {
-      const name = field.trim();
-      // Values are emitted inside a single-quoted Eval expression - strip
-      // quotes so a paste cannot break the generated YAML.
-      const safeValue = value.trim().replace(/['"]/g, "");
-      if (!isValidEnrichmentFieldName(name) || safeValue === "") {
-        return false;
-      }
-      const entry: EnrichmentField = { field: name, value: safeValue };
-      if (logType === null) {
-        setGlobalEnrichments((prev) => [
-          ...prev.filter((e) => e.field !== name),
-          entry,
-        ]);
-      } else {
-        setTableEnrichments((prev) => ({
-          ...prev,
-          [logType]: [
-            ...(prev[logType] ?? []).filter((e) => e.field !== name),
-            entry,
-          ],
-        }));
-      }
-      return true;
-    },
-    [],
-  );
-
-  const removeEnrichment = useCallback(
-    (logType: string | null, field: string) => {
-      if (logType === null) {
-        setGlobalEnrichments((prev) => prev.filter((e) => e.field !== field));
-      } else {
-        setTableEnrichments((prev) => ({
-          ...prev,
-          [logType]: (prev[logType] ?? []).filter((e) => e.field !== field),
-        }));
-      }
-    },
-    [],
-  );
   const [review, dispatch] = useReducer(
     mappingReviewReducer,
     INITIAL_MAPPING_REVIEW_STATE,
@@ -694,7 +588,13 @@ export function MappingReviewSection({
             <button
               className="next-action-button"
               onClick={() => {
-                persistLearned(withMappings, review);
+                persistLearned(withMappings, (r) =>
+                  effectiveMappings(review, r).map((m) => ({
+                    source: m.source,
+                    dest: m.dest,
+                    action: m.action,
+                  })),
+                );
                 dispatch({
                   type: "auto-approve-all",
                   logTypes: withMappings.map((r) => r.logType),
@@ -1059,7 +959,13 @@ export function MappingReviewSection({
                     <button
                       className="run-button"
                       onClick={() => {
-                        persistLearned([report], review);
+                        persistLearned([report], (r) =>
+                          effectiveMappings(review, r).map((m) => ({
+                            source: m.source,
+                            dest: m.dest,
+                            action: m.action,
+                          })),
+                        );
                         dispatch({ type: "approve", logType: report.logType });
                       }}
                     >
@@ -1077,238 +983,6 @@ export function MappingReviewSection({
           </div>
         );
       })}
-    </div>
-  );
-}
-
-/**
- * The required vendor-identity block for one table card: how each required
- * field (DeviceVendor/DeviceProduct or the ASim Event pair) is satisfied -
- * sample, enrichment, or MISSING with a forced-input row. Rendered OUTSIDE
- * the collapsed field-mapping details so a missing requirement is visible
- * without expanding anything.
- */
-function IdentityBlock({
-  tableName,
-  statuses,
-  identity,
-  onAdd,
-}: {
-  tableName: string;
-  statuses: readonly IdentityFieldStatus[];
-  identity: VendorIdentity | null;
-  onAdd: (field: string, value: string) => boolean;
-}) {
-  const missing = statuses.filter((s) => s.status === "missing");
-  return (
-    <div
-      className={`identity-block${missing.length > 0 ? " identity-block-missing" : ""}`}
-    >
-      <span className="field-label">
-        Vendor identity for {tableName}
-        <InfoTip text="Sentinel analytics rules and workbooks filter this table on these fields, but raw vendor logs often do not carry them. When the sample provides one (CEF headers do), nothing is added. Otherwise the Cribl pipeline must add it as a constant - detected vendors are pre-filled from the selected solution (editable below); anything still missing must be entered before the pack can be built. Where a vendor emits several known products (e.g. Zscaler NSSWeblog vs NSSFWlog), the candidates are offered but never auto-picked - the wrong constant silently breaks the content filters." />
-      </span>
-      {statuses.map((s) =>
-        s.status === "missing" ? (
-          <RequiredIdentityInput
-            key={s.field}
-            field={s.field}
-            options={identityValueOptions(s.field, identity)}
-            onAdd={onAdd}
-          />
-        ) : (
-          <div className="identity-row" key={s.field}>
-            <code className="code-chip">{s.field}</code>
-            <span className="enrich-row-eq">=</span>
-            <span className="enrich-row-value">
-              {s.value ?? "(from sample)"}
-            </span>
-            <span className="field-hint">
-              {s.status === "sample"
-                ? "provided by the sample data"
-                : "enrichment constant (editable in the enrichment fields)"}
-            </span>
-          </div>
-        ),
-      )}
-      {missing.length > 0 && (
-        <span className="field-hint identity-missing-hint">
-          Required before the pack can be built: the sample does not carry{" "}
-          {missing.map((s) => s.field).join(" or ")} and no enrichment sets
-          {missing.length === 1 ? " it" : " them"}. Enter the constant the
-          pipeline should add.
-        </span>
-      )}
-    </div>
-  );
-}
-
-/**
- * One forced-input row for a missing required identity field. When the
- * curated identity KNOWS the candidate values (Zscaler's NSSWeblog vs
- * NSSFWlog), they render as one-click choices - offered, never auto-picked.
- */
-function RequiredIdentityInput({
-  field,
-  options,
-  onAdd,
-}: {
-  field: string;
-  options: readonly string[];
-  onAdd: (field: string, value: string) => boolean;
-}) {
-  const [value, setValue] = useState("");
-  const placeholder =
-    options.length > 0
-      ? `e.g. ${options[0]}`
-      : field.endsWith("Vendor")
-        ? "e.g. Palo Alto Networks"
-        : "e.g. PAN-OS";
-  return (
-    <div className="identity-required">
-      <div className="enrich-add identity-required-row">
-        <code className="code-chip">{field}</code>
-        <span className="gap-badge gap-badge-required">Required</span>
-        <input
-          type="text"
-          value={value}
-          onChange={(e) => setValue(e.target.value)}
-          placeholder={placeholder}
-          autoComplete="off"
-          spellCheck={false}
-        />
-        <button
-          className="run-button"
-          onClick={() => {
-            if (onAdd(field, value)) {
-              setValue("");
-            }
-          }}
-          disabled={value.trim() === ""}
-        >
-          Add
-        </button>
-      </div>
-      {options.length > 0 && (
-        <div className="identity-suggestions">
-          <span className="field-hint">
-            Known {field} values for this vendor - pick the one matching your
-            feed:
-          </span>
-          {options.map((option) => (
-            <button
-              key={option}
-              type="button"
-              className="identity-suggestion-chip"
-              onClick={() => onAdd(field, option)}
-            >
-              {option}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-/**
- * The enrichment add/list editor (used globally and per table): field name +
- * constant value inputs, an Add button (validated - Eval-safe names, quotes
- * stripped from values), and the current entries with Remove. `inherited`
- * renders the global entries a table already receives, read-only.
- */
-function EnrichmentEditor({
-  entries,
-  inherited,
-  onAdd,
-  onRemove,
-}: {
-  entries: readonly EnrichmentField[];
-  inherited?: readonly EnrichmentField[];
-  onAdd: (field: string, value: string) => boolean;
-  onRemove: (field: string) => void;
-}) {
-  const [field, setField] = useState("");
-  const [value, setValue] = useState("");
-  const [issue, setIssue] = useState("");
-
-  const submit = () => {
-    if (!isValidEnrichmentFieldName(field.trim())) {
-      setIssue(
-        "Field names must start with a letter/underscore and use only letters, digits, and underscores.",
-      );
-      return;
-    }
-    if (value.trim() === "") {
-      setIssue("Enter the constant value the pipeline should add.");
-      return;
-    }
-    if (onAdd(field, value)) {
-      setField("");
-      setValue("");
-      setIssue("");
-    }
-  };
-
-  return (
-    <div className="enrich-editor">
-      {inherited !== undefined && inherited.length > 0 && (
-        <div className="enrich-rows">
-          {inherited.map((e) => (
-            <div className="enrich-row enrich-row-inherited" key={`g:${e.field}`}>
-              <code className="code-chip">{e.field}</code>
-              <span className="enrich-row-eq">=</span>
-              <span className="enrich-row-value">{e.value}</span>
-              <span className="field-hint">(global)</span>
-            </div>
-          ))}
-        </div>
-      )}
-      {entries.length > 0 && (
-        <div className="enrich-rows">
-          {entries.map((e) => (
-            <div className="enrich-row" key={e.field}>
-              <code className="code-chip">{e.field}</code>
-              <span className="enrich-row-eq">=</span>
-              <span className="enrich-row-value">{e.value}</span>
-              <button
-                className="gap-reset-button"
-                onClick={() => onRemove(e.field)}
-              >
-                Remove
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
-      <div className="enrich-add">
-        <input
-          type="text"
-          value={field}
-          onChange={(e) => {
-            setField(e.target.value);
-            setIssue("");
-          }}
-          placeholder="Field name (e.g. DeviceVendor)"
-          autoComplete="off"
-          spellCheck={false}
-        />
-        <input
-          type="text"
-          value={value}
-          onChange={(e) => {
-            setValue(e.target.value);
-            setIssue("");
-          }}
-          placeholder="Constant value (e.g. Palo Alto Networks)"
-          autoComplete="off"
-          spellCheck={false}
-        />
-        <button className="run-button" onClick={submit}>
-          Add field
-        </button>
-      </div>
-      {issue !== "" && <span className="field-hint enrich-issue">{issue}</span>}
     </div>
   );
 }

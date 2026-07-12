@@ -29,6 +29,7 @@
  */
 
 import { parseSampleContent } from "../../domain/sample-parsing/index";
+import { matchSolutionName } from "../../domain/sample-acquisition/index";
 import {
   matchParsedSampleToColumns,
   parsedSampleToSourceFields,
@@ -104,6 +105,11 @@ function syntheticFlow(tableName: string, destSchema: FieldRef[]): DcrFlow {
  * the SentinelContent port. Degrades to an empty map (never throws) - a table
  * with no flow falls back to a synthetic no-op flow at report time.
  */
+/** One-line error text (mirrors acquire-samples' errText). */
+function errText(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
+
 async function resolveSolutionDcrFlows(
   content: SentinelContent,
   solutionName: string,
@@ -113,11 +119,9 @@ async function resolveSolutionDcrFlows(
   const flowsByTable = new Map<string, DcrFlow>();
   try {
     const solutions = await content.listSolutions();
-    const lower = solutionName.toLowerCase().replace(/[^a-z0-9]/g, "");
-    const match = solutions.find((s) => {
-      const key = s.name.toLowerCase().replace(/[^a-z0-9]/g, "");
-      return key === lower || key.includes(lower) || lower.includes(key);
-    });
+    // The ONE fuzzy solution-name matcher (sample-acquisition consolidated
+    // the legacy's three copies; this was a fourth inline fork).
+    const match = solutions.find((s) => matchSolutionName(s.name, solutionName));
     if (!match) {
       logger?.info("analyze-samples: no matching solution", {
         solution: solutionName,
@@ -143,14 +147,14 @@ async function resolveSolutionDcrFlows(
       } catch (err) {
         logger?.warn("analyze-samples: failed to parse DCR JSON", {
           file: dcrFile.name,
-          error: err instanceof Error ? err.message : String(err),
+          error: errText(err),
         });
       }
     }
   } catch (err) {
     logger?.warn("analyze-samples: solution DCR lookup failed", {
       solution: solutionName,
-      error: err instanceof Error ? err.message : String(err),
+      error: errText(err),
     });
   }
   return flowsByTable;
@@ -183,7 +187,7 @@ export async function* analyzeSamples(
     } catch (err) {
       ports.logger?.warn("analyze-samples: schema resolution failed", {
         table: sample.tableName,
-        error: err instanceof Error ? err.message : String(err),
+        error: errText(err),
       });
     }
     const destSchema: FieldRef[] = (columns ?? []).map((c) => ({

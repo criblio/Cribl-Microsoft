@@ -45,7 +45,6 @@ import type { TableReductionRules } from "./reduction-rules";
 
 /**
  * A vendor-research field mapping as consumed by the emitter (Unit 15 shape).
- * Deferred for MVP (vendorMappings is empty), but the enrich/map branches must
  * still compile. `action` is one of "map" | "enrich" | "drop".
  */
 export interface PipelineVendorMapping {

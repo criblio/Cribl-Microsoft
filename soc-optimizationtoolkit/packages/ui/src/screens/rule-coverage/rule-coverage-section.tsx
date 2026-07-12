@@ -575,21 +575,9 @@ export function RuleCoverageSection({
 
   const hasReports = reports.length > 0;
   const ruleSection =
-    report !== null
-      ? deriveCoverageSection(
-          report,
-          "alert-rule",
-          report.summary.missingFieldsAcrossRules.length,
-        )
-      : null;
+    report !== null ? deriveCoverageSection(report, "alert-rule") : null;
   const workbookSection =
-    report !== null
-      ? deriveCoverageSection(
-          report,
-          "workbook",
-          report.summary.missingFieldsAcrossRules.length,
-        )
-      : null;
+    report !== null ? deriveCoverageSection(report, "workbook") : null;
   const missingChips = report !== null ? missingFieldChips(report.summary) : [];
   const customCount = customRuleCount(customItems);
 

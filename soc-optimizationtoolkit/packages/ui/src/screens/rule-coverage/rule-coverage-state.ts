@@ -358,20 +358,22 @@ export interface CoverageSectionView {
  * Project the CoverageReport's items of ONE content type into a section view -
  * the panel renders a rule section and a workbook section from the SAME report
  * (two sources, one analyzer). `missingFieldCount` feeds the summary line and is
- * the panel-level missing-fields count (summary.missingFieldsAcrossRules.length,
- * matching the legacy sectionDesc which counted across all rules).
+ * the section-level missing-fields count. CORRECTED 2026-07-12 (audit): the
+ * count derives from THIS section's own items - the caller previously passed
+ * summary.missingFieldsAcrossRules.length, which counts across ALL item
+ * types, so the workbook section's "N field(s) referenced by workbooks"
+ * line reported a rules+workbooks combined number.
  */
 export function deriveCoverageSection(
   report: CoverageReport,
   type: ContentItemType,
-  missingFieldCount: number,
 ): CoverageSectionView {
-  const items = report.items
-    .filter((item) => item.type === type)
-    .map(deriveCoverageItemView);
-  const counts = deriveThreeWayCounts(
-    report.items.filter((item) => item.type === type),
-  );
+  const typeItems = report.items.filter((item) => item.type === type);
+  const items = typeItems.map(deriveCoverageItemView);
+  const counts = deriveThreeWayCounts(typeItems);
+  const missingFieldCount = new Set(
+    typeItems.flatMap((item) => item.missingFromReducedSchema),
+  ).size;
   const unparseableQueryCount = items.reduce(
     (sum, item) => sum + item.unparseableQueryCount,
     0,

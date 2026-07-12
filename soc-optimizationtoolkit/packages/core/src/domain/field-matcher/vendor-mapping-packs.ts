@@ -237,6 +237,26 @@ export const VENDOR_MAPPING_PACKS: readonly VendorMappingPack[] = [
     : []),
 ];
 
+/**
+ * THE dedupe rule shared by the runtime lookup and the catalog's merged
+ * view: first-declared entry wins per lowercased source name (hand packs
+ * are declared before generated ones). Appends the survivors of `incoming`
+ * onto `accepted` in place and returns it.
+ */
+export function foldEntriesBySource<T extends { sourceName: string }>(
+  accepted: T[],
+  incoming: readonly T[],
+): T[] {
+  const seen = new Set(accepted.map((e) => e.sourceName.toLowerCase()));
+  for (const entry of incoming) {
+    const key = entry.sourceName.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    accepted.push(entry);
+  }
+  return accepted;
+}
+
 /** The packs whose keywords match a solution name, in declaration order. */
 export function vendorPacksForSolution(
   solutionName: string,
@@ -261,25 +281,21 @@ export function vendorPacksForSolution(
 export function vendorMappingsForSolution(
   solutionName: string,
 ): VendorMapping[] {
-  const seenSource = new Set<string>();
-  const out: VendorMapping[] = [];
+  const deduped: VendorPackEntry[] = [];
   for (const pack of vendorPacksForSolution(solutionName)) {
-    for (const entry of pack.mappings) {
-      const sourceKey = entry.sourceName.toLowerCase();
-      if (seenSource.has(sourceKey)) continue;
-      seenSource.add(sourceKey);
-      const description =
-        entry.doc ??
-        (entry.ecs !== undefined ? `Elastic ECS: ${entry.ecs}` : undefined);
-      out.push({
-        sourceName: entry.sourceName,
-        destName: entry.destName,
-        sourceType: "",
-        destType: "",
-        action: entry.action ?? "map",
-        ...(description !== undefined ? { description } : {}),
-      });
-    }
+    foldEntriesBySource(deduped, pack.mappings);
   }
-  return out;
+  return deduped.map((entry) => {
+    const description =
+      entry.doc ??
+      (entry.ecs !== undefined ? `Elastic ECS: ${entry.ecs}` : undefined);
+    return {
+      sourceName: entry.sourceName,
+      destName: entry.destName,
+      sourceType: "",
+      destType: "",
+      action: entry.action ?? "map",
+      ...(description !== undefined ? { description } : {}),
+    };
+  });
 }

@@ -14,6 +14,7 @@
  * Pure: no IO, no fetch, no React.
  */
 
+import { foldEntriesBySource } from "@soc/core";
 import type { VendorMappingPack, VendorPackEntry } from "@soc/core";
 
 /** One vendor's merged catalog view. */
@@ -55,12 +56,8 @@ export function mergedVendorCatalog(
     if (view.docUrl === undefined && pack.docUrl !== undefined) {
       view.docUrl = pack.docUrl;
     }
-    const seen = new Set(view.entries.map((e) => e.sourceName.toLowerCase()));
-    for (const entry of pack.mappings) {
-      if (seen.has(entry.sourceName.toLowerCase())) continue;
-      seen.add(entry.sourceName.toLowerCase());
-      view.entries.push(entry);
-    }
+    // THE runtime dedupe rule, shared with vendorMappingsForSolution.
+    foldEntriesBySource(view.entries, pack.mappings);
   }
   return [...byVendor.values()].sort((a, b) =>
     a.vendor.localeCompare(b.vendor),
