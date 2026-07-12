@@ -48,6 +48,10 @@ export {
 // Workbook query mining (net-new, defensive).
 export { extractWorkbookQueries, workbookToContentItem } from "./parse-workbook";
 
+// Parser-function indirection (Wave D): rules that query a KQL function
+export type { ParsedParserFunction } from "./parse-parser-function";
+export { parseParserYaml, parserFieldSynonyms } from "./parse-parser-function";
+
 // Destination schema union helper.
 export type { NamedColumn } from "./schema-union";
 export { unionSchemaColumns } from "./schema-union";

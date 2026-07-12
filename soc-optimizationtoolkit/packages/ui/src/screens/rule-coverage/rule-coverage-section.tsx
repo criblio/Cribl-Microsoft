@@ -41,6 +41,8 @@ import {
   matchSolutionName,
   mergeCustomContentItems,
   parseAnalyticRuleYaml,
+  parseParserYaml,
+  parserFieldSynonyms,
   suggestCloseMatches,
   unionSchemaColumns,
   workbookToContentItem,
@@ -51,6 +53,7 @@ import type {
   ContentItem,
   CoverageReport,
   GapReport,
+  ParsedParserFunction,
   SchemaCatalog,
   SentinelContent,
 } from "@soc/core";
@@ -158,6 +161,53 @@ async function fetchRuleContentItems(
       items.push(analyticRuleToContentItem(parseAnalyticRuleYaml(text, file.name)));
     }
     return items;
+  }
+  return [];
+}
+
+/** Parser-dir name variants, mirroring the rule-dir probe. */
+const PARSER_DIR_VARIANTS = ["Parsers", "Parser"] as const;
+
+/** Cap parser files read per analysis (Netskope ships 30). */
+const PARSER_DECODE_CAP = 40;
+
+/**
+ * Acquire a solution's parser functions (Wave D): probe the Parsers dir
+ * variants, read up to PARSER_DECODE_CAP YAML files, and parse each into its
+ * alias / tables / renames. Best-effort - unreadable files are skipped and a
+ * solution without parsers yields [].
+ */
+async function fetchParserFunctions(
+  content: SentinelContent | undefined,
+  solutionName: string,
+): Promise<ParsedParserFunction[]> {
+  if (content === undefined || solutionName.trim() === "") {
+    return [];
+  }
+  for (const dir of PARSER_DIR_VARIANTS) {
+    const files = await content.listSolutionFiles(solutionName, dir);
+    if (files.length === 0) {
+      continue;
+    }
+    const parsers: ParsedParserFunction[] = [];
+    for (const file of files.slice(0, PARSER_DECODE_CAP)) {
+      if (!/\.(yaml|yml)$/i.test(file.name)) {
+        continue;
+      }
+      try {
+        const text = await content.readFile(file.path);
+        if (text === null) {
+          continue;
+        }
+        const parsed = parseParserYaml(text);
+        if (parsed !== null) {
+          parsers.push(parsed);
+        }
+      } catch {
+        // A single unreadable parser never blocks coverage.
+      }
+    }
+    return parsers;
   }
   return [];
 }
@@ -397,6 +447,7 @@ export function RuleCoverageSection({
   const [analyzing, setAnalyzing] = useState(false);
   const [analyzeError, setAnalyzeError] = useState("");
   const [workbookNote, setWorkbookNote] = useState("");
+  const [parserNote, setParserNote] = useState("");
   const [schemaNote, setSchemaNote] = useState("");
   const [customItems, setCustomItems] = useState<ContentItem[]>([]);
   // Close-match review of a missing field (the clickable missing-field
@@ -496,12 +547,32 @@ export function RuleCoverageSection({
           return;
         }
 
+        // Wave D: resolve PARSER-FUNCTION indirection. Solutions like
+        // SentinelOne bind rules to a KQL function whose friendly output
+        // names rename underlying columns - an output name counts as
+        // available when its source column is.
+        const availableFields = [
+          ...availableFieldsFromReports(reports),
+          ...(extraAvailableFields ?? []),
+        ];
+        const parsers = await fetchParserFunctions(activeContent, solutionName);
+        const synonyms = parserFieldSynonyms(
+          parsers,
+          new Set(availableFields.map((f) => f.toLowerCase())),
+        );
+        setParserNote(
+          parsers.length > 0
+            ? `${parsers.length} parser function(s) resolved (` +
+                parsers
+                  .map((p) => `${p.alias} over ${p.tables.join("+") || "?"}`)
+                  .join("; ") +
+                `)${synonyms.length > 0 ? `; ${synonyms.length} parser field name(s) counted as available via their source columns` : ""}.`
+            : "",
+        );
+
         const produced = analyzeContentCoverage({
           items,
-          availableFields: [
-            ...availableFieldsFromReports(reports),
-            ...(extraAvailableFields ?? []),
-          ],
+          availableFields: [...availableFields, ...synonyms],
           schemaUnion,
         });
         setReport(produced);
@@ -651,6 +722,12 @@ export function RuleCoverageSection({
         <div className="status-bar status-bar-warn">
           <span className="status-bar-dot" />
           <span className="status-bar-text">{workbookNote}</span>
+        </div>
+      )}
+      {parserNote !== "" && (
+        <div className="status-bar">
+          <span className="status-bar-dot" />
+          <span className="status-bar-text">{parserNote}</span>
         </div>
       )}
 
