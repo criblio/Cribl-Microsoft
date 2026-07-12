@@ -80,6 +80,7 @@ import type {
   GapReport,
   IdentityFieldStatus,
   MatchAction,
+  Logger,
   SchemaCatalog,
   SentinelContent,
   TaggedSample,
@@ -218,6 +219,8 @@ export interface MappingReviewSectionProps {
    * from the rules section still protects workbook-consumed fields.
    */
   dropUnneededEvent?: { nonce: number };
+  /** Diagnostics sink - analysis runs narrate into the Logs page. */
+  logger?: Logger;
 }
 
 /**
@@ -269,6 +272,7 @@ export function MappingReviewSection({
   learnedCache,
   contentRequirements,
   dropUnneededEvent,
+  logger,
 }: MappingReviewSectionProps) {
   const activeContent = content ?? EMPTY_SENTINEL_CONTENT;
   // Wave E: the solution's OWN table ARM definitions resolve ahead of the
@@ -513,12 +517,19 @@ export function MappingReviewSection({
       // EventsToTableMapping + the pinned per-log-type precedence
       // (override > DCR flow > name match > first table). The returned flows
       // feed analyzeSamples so DCR files are fetched ONCE per analysis.
+      logger?.info("gap-analysis: starting", {
+        solution: solutionName,
+        samples: samples.length,
+      });
       const routing = await resolveSampleRouting(activeContent, {
         solutionName,
         logTypes: samples.map((sample) => sample.logType),
         overrides: activeOverrides,
         profile,
       });
+      for (const note of routing.notes) {
+        logger?.warn(`gap-analysis: ${note}`);
+      }
       setResolution(routing.resolution);
       setConnectorIdentity(routing.connectorIdentity);
       setRoutingNotes(routing.notes);
@@ -535,7 +546,7 @@ export function MappingReviewSection({
       // entry only when its source field exists in the sample AND its column
       // exists in the resolved schema.
       const produced = await collectGapReports(
-        { content: activeContent, catalog: activeCatalog },
+        { content: activeContent, catalog: activeCatalog, logger },
         {
           solutionName,
           samples: specs,
@@ -550,9 +561,14 @@ export function MappingReviewSection({
         },
       );
       setReports(produced);
+      logger?.info("gap-analysis: finished", {
+        tables: produced.map((r) => r.tableName).join(","),
+        reports: produced.length,
+      });
       analyzedSigRef.current = inputSignature(solutionName, samples);
       dispatch({ type: "analyzed" });
     } catch (err) {
+      logger?.error(`gap-analysis: failed: ${String(err)}`);
       setAnalyzeError(String(err));
     } finally {
       setAnalyzing(false);
@@ -566,6 +582,7 @@ export function MappingReviewSection({
     profile,
     tableOverrides,
     learned,
+    logger,
   ]);
 
   // Candidate destination tables for the per-sample override dropdown: the

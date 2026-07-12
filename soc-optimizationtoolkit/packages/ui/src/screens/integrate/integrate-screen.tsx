@@ -93,6 +93,7 @@ import type {
 import type { ReactNode } from "react";
 import { usePorts } from "../../ports-context";
 import { NumberedSection } from "../../components/numbered-section";
+import { InfoTip } from "../../components/info-tip";
 import { ReadinessFooter } from "../../components/readiness-footer";
 import { AzureTargetingScreen } from "../azure-targeting/azure-targeting-screen";
 import type { CommitScopeOutcome } from "../azure-targeting/azure-targeting-screen";
@@ -561,6 +562,7 @@ export function IntegrateScreen({
     const push = (line: string) => {
       lines.push(line);
       setPackBuildLines([...lines]);
+      ports.logger?.info(`pack-build: ${line}`);
     };
     setPackBuildLines([]);
     try {
@@ -755,7 +757,7 @@ export function IntegrateScreen({
         : null);
   const canRunDeploy = runDisabledReason === null;
 
-  const runDeploy = useCallback(async () => {
+  const runDeploy = useCallback(async (): Promise<boolean> => {
     const targets = deployTargets;
     const trimmedClientId = ingestionClientId.trim();
     if (
@@ -764,8 +766,9 @@ export function IntegrateScreen({
       groupId === "" ||
       trimmedClientId === ""
     ) {
-      return;
+      return false;
     }
+    let allOk = true;
     setDeploying(true);
     setOutcome(null);
     setOutcomes([]);
@@ -839,17 +842,20 @@ export function IntegrateScreen({
           setRunError(
             `${target}: ${record.error ?? "onboarding failed but recorded no error text"}`,
           );
+          allOk = false;
           break;
         }
       }
     } catch (err) {
       setRunError(String(err));
+      allOk = false;
     } finally {
       // The secret is transient: never kept after the run it was typed for.
       setIngestionClientSecret("");
       setDeploying(false);
       setHistoryToken((n) => n + 1);
     }
+    return allOk;
   }, [
     deployTargets,
     ingestionClientId,
@@ -870,6 +876,32 @@ export function IntegrateScreen({
       : runError !== ""
         ? "failed"
         : "idle";
+
+  // ONE deploy action (user direction 2026-07-12): the button at the end
+  // deploys EVERYTHING - the native path (tables, DCRs, destination), then
+  // the content pack when the content path is engaged. With gap reports
+  // present the pack gates join the unlock condition, so a partial deploy
+  // can no longer surprise; without reports (pure quick-onboard) the native
+  // path deploys alone.
+  const packPortsAvailable =
+    ports.packs !== undefined && ports.packInstall !== undefined;
+  const contentEngaged = gapReports.length > 0 && packPortsAvailable;
+  const deployEverythingDisabledReason =
+    runDisabledReason ?? (contentEngaged ? packBuildDisabledReason : null);
+  const runDeployEverything = useCallback(async () => {
+    ports.logger?.info("deploy-everything: starting", {
+      targets: deployTargets.join(","),
+      contentPack: contentEngaged,
+    });
+    const nativeOk = await runDeploy();
+    ports.logger?.info("deploy-everything: native path finished", {
+      ok: nativeOk,
+    });
+    if (nativeOk && contentEngaged) {
+      await buildAndInstallPack();
+      ports.logger?.info("deploy-everything: pack build finished");
+    }
+  }, [runDeploy, buildAndInstallPack, contentEngaged, deployTargets, ports.logger]);
 
   const createDCE = (operationDefaults ?? DEFAULT_OPERATION_OPTIONS).createDCE;
 
@@ -910,6 +942,7 @@ export function IntegrateScreen({
         renameEvent={renameEvent}
         contentRequirements={contentRequirements}
         dropUnneededEvent={dropUnneededEvent}
+        logger={ports.logger}
       />
       {/* COLLAPSED by default: the full per-pipeline detail is reference
           material, not a decision point - expand on demand. */}
@@ -1173,26 +1206,20 @@ export function IntegrateScreen({
         )}
       </div>
       <div className="discovery-result">
-        <span className="field-label">Build and install pack</span>
-        <p className="panel-desc">
-          Builds the content-driven pack from the APPROVED Gap Analysis
-          mappings - the pipelines, reduction rules, routes, breakers, sample
-          files, and lookups previewed in section 5 - and installs it into the
-          target worker group(s). Tables already deployed below get their real
-          DCR values baked into the pack&apos;s outputs; others ship with a
-          fill-in-Cribl placeholder. The build re-checks the pack name and
-          honors the overwrite acknowledgment above.
-        </p>
+        <span className="field-label">
+          Pack rebuild
+          <InfoTip text="The pack ships automatically with Deploy in the Deploy section. Use this only to rebuild and reinstall the pack alone after editing mappings - no Azure resources are touched. Builds from the APPROVED Gap Analysis mappings (the exact pipelines, reduction rules, routes, breakers, samples, and lookups previewed in section 5); deployed tables carry their real DCR values, others a fill-in-Cribl placeholder; the pack name and overwrite acknowledgment above are honored." />
+        </span>
         <div className="panel-controls">
           <button
-            className="next-action-button next-action-button-positive"
+            className="gap-reset-button"
             onClick={() => void buildAndInstallPack()}
             disabled={packBuilding || packBuildDisabledReason !== null}
             title={packBuildDisabledReason ?? undefined}
           >
             {packBuilding
               ? "Building..."
-              : `Build and install pack (${packTargetGroups.length} group${packTargetGroups.length === 1 ? "" : "s"})`}
+              : `Rebuild pack only (${packTargetGroups.length} group${packTargetGroups.length === 1 ? "" : "s"})`}
           </button>
           {packBuildDisabledReason !== null && !packBuilding && (
             <span className="field-hint">{packBuildDisabledReason}</span>
@@ -1208,14 +1235,10 @@ export function IntegrateScreen({
   const deployBody = (
     <>
       <p className="panel-desc">
-        Deploys a Kind:Direct Data Collection Rule per detected table in
-        workspace{" "}
-        {config.workspaceName === "" ? "(not set)" : config.workspaceName} and
-        creates the matching Sentinel destination in worker group{" "}
-        {groupId === "" ? "(none selected)" : groupId}. Custom (_CL) tables
-        that do not exist yet are created first from the Gap Analysis schema
-        (an existing table&apos;s schema always wins). Each step below reports
-        its real outcome.
+        Workspace:{" "}
+        {config.workspaceName === "" ? "(not set)" : config.workspaceName};
+        worker group: {groupId === "" ? "(none selected)" : groupId}.
+        <InfoTip text="Deploys a Kind:Direct Data Collection Rule per detected table in the workspace and creates the matching Cribl Sentinel destination in the worker group. Custom (_CL) tables that do not exist yet are created first from the Gap Analysis schema (an existing table's schema always wins). Each step reports its real outcome." />
       </p>
       <div className="form-grid">
         <label className="field">
@@ -1233,19 +1256,16 @@ export function IntegrateScreen({
           <span className="field-hint">
             {detectedTables.length > 0 ? (
               <>
-                Detected from the solution&apos;s Gap Analysis:{" "}
-                {detectedTables.join(", ")}
+                Detected: {detectedTables.join(", ")}
                 {detectedTables.length > 1
-                  ? ` - Run deploy provisions one DCR per detected table (${detectedTables.length} DCRs); the field above shows the first.`
-                  : " - prefilled above; editable."}
+                  ? ` (${detectedTables.length} DCRs)`
+                  : ""}
+                <InfoTip text="Detected from the solution's Gap Analysis and prefilled (editable). With several tables, deploy provisions one DCR per table; the field shows the first." />
               </>
             ) : (
               <>
-                A Log Analytics table (e.g. SecurityEvent, Syslog, or a custom
-                MyVendor_CL). Add samples and run the DCR Gap Analysis above to
-                auto-detect the solution&apos;s table(s); a custom (_CL) table
-                is created here from the analysis schema when it does not exist
-                yet.
+                No table detected yet.
+                <InfoTip text="A Log Analytics table (e.g. SecurityEvent, Syslog, or a custom MyVendor_CL). Add samples and run the DCR Gap Analysis above to auto-detect the solution's table(s); a custom (_CL) table is created at deploy time from the analysis schema when it does not exist yet." />
               </>
             )}
           </span>
@@ -1260,8 +1280,8 @@ export function IntegrateScreen({
             spellCheck={false}
           />
           <span className="field-hint">
-            The app registration the Cribl destination authenticates with when
-            sending events. Defaults to the active connection&apos;s client id.
+            Defaults to the active connection.
+            <InfoTip text="The app registration the Cribl destination authenticates with when sending events. Defaults to the active connection's client id." />
           </span>
         </label>
         <label className="field">
@@ -1275,30 +1295,43 @@ export function IntegrateScreen({
             autoComplete="new-password"
           />
           <span className="field-hint">
-            Transient: this platform&apos;s encrypted storage is write-only, so
-            the app cannot reuse a stored secret here. Provide it to bake it
-            into the destination for this run only, or leave blank to create the
-            destination with the {SENTINEL_SECRET_PLACEHOLDER} placeholder and
-            paste the real secret in Cribl&apos;s UI.
+            Optional; used for this run only.
+            <InfoTip
+              text={`Transient: this platform's encrypted storage is write-only, so the app cannot reuse a stored secret here. Provide it to bake it into the destination for this run only, or leave blank to create the destination with the ${SENTINEL_SECRET_PLACEHOLDER} placeholder and paste the real secret in Cribl's UI.`}
+            />
           </span>
         </label>
       </div>
       <div className="panel-controls">
         <button
           className="run-button"
-          onClick={() => void runDeploy()}
-          disabled={!canRunDeploy || deploying}
-          title={runDisabledReason ?? undefined}
+          onClick={() => void runDeployEverything()}
+          disabled={deployEverythingDisabledReason !== null || deploying || packBuilding}
+          title={deployEverythingDisabledReason ?? undefined}
         >
-          Run deploy
+          {deploying
+            ? "Deploying..."
+            : packBuilding
+              ? "Installing pack..."
+              : contentEngaged
+                ? "Deploy everything"
+                : "Deploy"}
         </button>
         <span className={`status status-${deployStatus}`}>{deployStatus}</span>
-        {!canRunDeploy && runDisabledReason !== null && (
-          <span className="field-hint">{runDisabledReason}</span>
+        <InfoTip
+          text={
+            "One action, in order: per detected table - create the custom table if needed, deploy its Kind:Direct DCR, create the matching Cribl Sentinel destination; then, when the Gap Analysis mappings are approved, build the content pack from them and install it into every selected worker group. The button unlocks only when every prerequisite for the whole run is met (the tooltip names the first missing one)."
+          }
+        />
+        {deployEverythingDisabledReason !== null && !deploying && (
+          <span className="field-hint">{deployEverythingDisabledReason}</span>
         )}
       </div>
       {steps.length > 0 && (
         <pre className="result">{steps.map(formatStepLine).join("\n")}</pre>
+      )}
+      {packBuildLines.length > 0 && (
+        <pre className="result">{packBuildLines.join("\n")}</pre>
       )}
       {runError !== "" && <pre className="result">{runError}</pre>}
       {outcomes.length > 0 && (

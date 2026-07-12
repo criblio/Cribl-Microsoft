@@ -24,6 +24,7 @@
  * decision help text.
  */
 
+import { useState } from "react";
 import type { ReactNode } from "react";
 import type { SectionStatus } from "@soc/core";
 import { InfoTip } from "./info-tip";
@@ -65,9 +66,26 @@ export function NumberedSection({
 }: NumberedSectionProps) {
   const comingSoon = status === "coming-soon";
   const blocked = status === "blocked";
+  // COLLAPSIBLE (user request 2026-07-12: shorten the page as sections are
+  // completed). Manual toggle - never auto-collapses, so a section cannot
+  // vanish mid-edit when a gate flips. Header click or the chevron toggles;
+  // coming-soon sections have no body to collapse.
+  const [collapsed, setCollapsed] = useState(false);
+  const collapsible = !comingSoon;
+  const bodyHidden = collapsible && collapsed;
   return (
-    <section className={`numbered-section numbered-section-${status}`}>
-      <div className="numbered-section-head">
+    <section
+      className={`numbered-section numbered-section-${status}${bodyHidden ? " numbered-section-collapsed" : ""}`}
+    >
+      <div
+        className="numbered-section-head"
+        {...(collapsible
+          ? {
+              onClick: () => setCollapsed((c) => !c),
+              style: { cursor: "pointer" },
+            }
+          : {})}
+      >
         <span
           className={`numbered-section-badge numbered-section-badge-${status}`}
           aria-label={`Section ${number}${
@@ -81,7 +99,22 @@ export function NumberedSection({
           )}
         </span>
         <h2 className="numbered-section-title">{title}</h2>
-        <InfoTip text={infoTip} />
+        <span onClick={(e) => e.stopPropagation()}>
+          <InfoTip text={infoTip} />
+        </span>
+        {collapsible && (
+          <button
+            className="numbered-section-collapse"
+            aria-expanded={!collapsed}
+            aria-label={collapsed ? `Expand ${title}` : `Collapse ${title}`}
+            onClick={(e) => {
+              e.stopPropagation();
+              setCollapsed((c) => !c);
+            }}
+          >
+            {collapsed ? "Expand" : "Collapse"}
+          </button>
+        )}
       </div>
 
       {comingSoon ? (
@@ -95,7 +128,7 @@ export function NumberedSection({
             <p className="numbered-section-comingsoon-note">{reason}</p>
           )}
         </div>
-      ) : (
+      ) : bodyHidden ? null : (
         <>
           {blocked && reason !== undefined && reason !== "" && (
             <p className="numbered-section-blocked-reason">{reason}</p>
