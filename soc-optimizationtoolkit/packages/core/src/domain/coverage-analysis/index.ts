@@ -58,3 +58,12 @@ export { unionSchemaColumns } from "./schema-union";
 
 // The shared analyzer + the no-stale-skip pin.
 export { analyzeContentCoverage, shouldRerunCoverage } from "./analyze-coverage";
+
+// Content requirements (rules+workbooks -> required fields; drives the
+// unused-field drop policy)
+export type { ContentRequirements } from "./content-requirements";
+export {
+  EMPTY_CONTENT_REQUIREMENTS,
+  deriveContentRequirements,
+  mergeContentRequirements,
+} from "./content-requirements";

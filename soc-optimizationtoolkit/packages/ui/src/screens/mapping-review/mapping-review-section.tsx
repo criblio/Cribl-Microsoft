@@ -93,8 +93,10 @@ import {
   mergeEnrichments,
 } from "../pipeline-preview/pipeline-preview-state";
 import type { EnrichmentField } from "../pipeline-preview/pipeline-preview-state";
+import type { RequirementsForAssessment } from "./mapping-review-state";
 import {
   INITIAL_MAPPING_REVIEW_STATE,
+  assessUnusedOverflow,
   MAPPING_REVIEW_NO_SAMPLES_REASON,
   MAPPING_REVIEW_STALE_NOTICE,
   OVERFLOW_COVERAGE_NOTE,
@@ -182,6 +184,13 @@ export interface MappingReviewSectionProps {
    * loop is off (analysis still works).
    */
   learnedCache?: ContentCache;
+  /**
+   * What the solution's analytics rules + workbooks REQUIRE (merged by the
+   * parent from both coverage sections). Drives the unused-field policy:
+   * overflow fields no content needs default to DROP. Absent/empty = no
+   * evidence, preserve everything (the pre-2026-07-12 behavior).
+   */
+  contentRequirements?: RequirementsForAssessment | null;
 }
 
 /**
@@ -231,6 +240,7 @@ export function MappingReviewSection({
   renameEvent,
   onEnrichmentsChange,
   learnedCache,
+  contentRequirements,
 }: MappingReviewSectionProps) {
   const activeContent = content ?? EMPTY_SENTINEL_CONTENT;
   // Wave E: the solution's OWN table ARM definitions resolve ahead of the
@@ -375,6 +385,65 @@ export function MappingReviewSection({
       addEnrichment(seed.logType, seed.field, seed.value);
     }
   }, [reports, solutionName, addEnrichment]);
+
+  // Unused-field policy (user direction 2026-07-12): overflow fields that
+  // neither the analytics rules nor the workbooks require default to DROP.
+  // "preserve" restores the fold-everything-into-the-catch-all behavior.
+  const [unusedPolicy, setUnusedPolicy] = useState<"drop" | "preserve">(
+    "drop",
+  );
+  const assessments = useMemo(
+    () =>
+      new Map(
+        reports.map((report) => [
+          report.logType,
+          assessUnusedOverflow(report, contentRequirements ?? null),
+        ]),
+      ),
+    [reports, contentRequirements],
+  );
+  // Auto-apply as reviewable EDITS (visible in the mapping table, reverted
+  // by Reset All or by switching the policy). autoDroppedRef tracks exactly
+  // what this effect set so preserve only reverts machine drops.
+  const autoDroppedRef = useRef(new Set<string>());
+  useEffect(() => {
+    for (const report of reports) {
+      const assessment = assessments.get(report.logType);
+      if (assessment === undefined) continue;
+      const effective = effectiveMappings(review, report);
+      if (unusedPolicy === "drop" && assessment.blocked === null) {
+        for (const source of assessment.droppable) {
+          const key = `${report.logType}|${source}`;
+          const row = effective.find((m) => m.source === source);
+          if (row === undefined || row.action !== "overflow") continue;
+          autoDroppedRef.current.add(key);
+          dispatch({
+            type: "edit-mapping",
+            logType: report.logType,
+            sourceField: source,
+            field: "action",
+            value: "drop",
+            baseline: report.fieldMappings,
+          });
+        }
+      }
+      if (unusedPolicy === "preserve") {
+        for (const source of assessment.droppable) {
+          const key = `${report.logType}|${source}`;
+          if (!autoDroppedRef.current.has(key)) continue;
+          autoDroppedRef.current.delete(key);
+          dispatch({
+            type: "edit-mapping",
+            logType: report.logType,
+            sourceField: source,
+            field: "action",
+            value: "overflow",
+            baseline: report.fieldMappings,
+          });
+        }
+      }
+    }
+  }, [reports, assessments, unusedPolicy, review]);
 
   const analyzedSigRef = useRef<string>("");
   const currentSig = inputSignature(solutionName, samples);
@@ -589,6 +658,42 @@ export function MappingReviewSection({
           {note}
         </p>
       ))}
+
+      {reports.length > 0 &&
+        (() => {
+          const all = [...assessments.values()];
+          const blocked = all.find((a) => a.blocked !== null)?.blocked ?? null;
+          const droppable = all.reduce((n, a) => n + a.droppable.length, 0);
+          const kept = all.reduce((n, a) => n + a.keptByContent.length, 0);
+          return (
+            <div className="status-bar unused-policy-bar">
+              <span className="status-bar-dot" />
+              <span className="status-bar-text">
+                {blocked === "no-requirements"
+                  ? "Unused-field policy: no rule/workbook analysis available yet - all overflow fields are preserved in the catch-all column."
+                  : blocked === "opaque-catch-all"
+                    ? "Unused-field policy: the solution's content parses the catch-all column opaquely, so nothing is auto-dropped - all overflow fields are preserved."
+                    : unusedPolicy === "drop"
+                      ? `Unused-field policy: ${droppable} overflow field(s) required by neither analytics rules nor workbooks are set to DROP; ${kept} stay for content that consumes them. Edit any row or switch the policy to keep everything.`
+                      : `Unused-field policy: preserving all overflow fields in the catch-all column (${droppable} would be dropped by the content-driven policy).`}
+              </span>
+              {blocked === null && (
+                <button
+                  className="link-button"
+                  onClick={() =>
+                    setUnusedPolicy(
+                      unusedPolicy === "drop" ? "preserve" : "drop",
+                    )
+                  }
+                >
+                  {unusedPolicy === "drop"
+                    ? "Preserve everything instead"
+                    : "Drop unused fields"}
+                </button>
+              )}
+            </div>
+          );
+        })()}
 
       {gate.stale && reports.length > 0 && (
         <p className="mapping-review-stale">{MAPPING_REVIEW_STALE_NOTICE}</p>

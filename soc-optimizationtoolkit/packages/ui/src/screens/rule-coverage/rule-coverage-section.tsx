@@ -43,6 +43,7 @@ import {
   analyticRuleToContentItem,
   analyzeContentCoverage,
   createBundledSchemaCatalog,
+  deriveContentRequirements,
   createSolutionSchemaCatalog,
   extractWorkbookQueries,
   matchSolutionName,
@@ -58,6 +59,7 @@ import type { CloseMatchCandidate } from "@soc/core";
 import type {
   AzureManagement,
   ContentItem,
+  ContentRequirements,
   CoverageReport,
   GapReport,
   ParsedParserFunction,
@@ -133,6 +135,14 @@ export interface RuleCoverageSectionProps {
    * coverage gaps for fields the pipeline adds rather than maps.
    */
   extraAvailableFields?: readonly string[];
+  /**
+   * Reports what this instance's content REQUIRES (columns, catch-all keys,
+   * opaque use) - the parent merges both instances and feeds the mapping
+   * review's unused-field drop policy. The RULES instance also reports
+   * EARLY (on solution change, before any gap analysis) so the
+   * content-first order holds.
+   */
+  onContentRequirementsChange?: (requirements: ContentRequirements) => void;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -458,6 +468,7 @@ export function RuleCoverageSection({
   onRuleFieldsChange,
   contentFilter,
   extraAvailableFields,
+  onContentRequirementsChange,
 }: RuleCoverageSectionProps) {
   const { ports, config } = usePorts();
   const activeContent = content ?? ports.content;
@@ -475,6 +486,31 @@ export function RuleCoverageSection({
   // What this instance covers. Custom-YAML upload and the RULE-badge report are
   // rules-only concerns; workbooks are a separate diagnostic.
   const showRules = contentFilter !== "workbooks";
+
+  // CONTENT-FIRST ORDER (2026-07-12): the RULES instance derives and reports
+  // its requirements as soon as the solution is selected - the mapping
+  // review's drop policy needs them BEFORE the first gap analysis. The
+  // workbooks instance reports from its analyze() (ARM enumeration needs a
+  // subscription).
+  useEffect(() => {
+    if (!showRules || onContentRequirementsChange === undefined) {
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      try {
+        const items = await fetchRuleContentItems(activeContent, solutionName);
+        if (!cancelled) {
+          onContentRequirementsChange(deriveContentRequirements(items));
+        }
+      } catch {
+        // No early requirements - the policy stays blocked (preserve-all).
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [showRules, activeContent, solutionName, onContentRequirementsChange]);
   const showWorkbooks = contentFilter !== "rules";
 
   const [report, setReport] = useState<CoverageReport | null>(null);
@@ -566,6 +602,7 @@ export function RuleCoverageSection({
         // by name - the re-upload fix).
         const repoAndWorkbooks = [...ruleItems, ...workbooks];
         const items = mergeCustomContentItems(repoAndWorkbooks, custom);
+        onContentRequirementsChange?.(deriveContentRequirements(items));
 
         const schemaUnion = await resolveSchemaUnion(
           activeCatalog,
@@ -653,6 +690,7 @@ export function RuleCoverageSection({
       showRules,
       showWorkbooks,
       extraAvailableFields,
+      onContentRequirementsChange,
     ],
   );
 

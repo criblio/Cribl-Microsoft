@@ -69,6 +69,7 @@ import {
   onboardTable,
   onboardTableStepsFor,
   readinessPillsForMode,
+  mergeContentRequirements,
 } from "@soc/core";
 import type {
   CriblGroupSummary,
@@ -87,6 +88,7 @@ import type {
   TableAssemblyInput,
   TaggedSample,
   TargetScope,
+  ContentRequirements,
 } from "@soc/core";
 import type { ReactNode } from "react";
 import { usePorts } from "../../ports-context";
@@ -327,6 +329,20 @@ export function IntegrateScreen({
   // Analysis mapping table lights its RULE badges. Informational only - it
   // never participates in the deploy gate.
   const [ruleFields, setRuleFields] = useState<ReadonlySet<string>>();
+
+  // CONTENT-FIRST ORDER (2026-07-12): each coverage instance reports what
+  // its content REQUIRES; merged here and fed to the mapping review's
+  // unused-field drop policy.
+  const [ruleRequirements, setRuleRequirements] =
+    useState<ContentRequirements | null>(null);
+  const [workbookRequirements, setWorkbookRequirements] =
+    useState<ContentRequirements | null>(null);
+  const contentRequirements = useMemo(() => {
+    const parts = [ruleRequirements, workbookRequirements].filter(
+      (part): part is ContentRequirements => part !== null,
+    );
+    return parts.length > 0 ? mergeContentRequirements(parts) : null;
+  }, [ruleRequirements, workbookRequirements]);
 
   // One place the Sample Data section reports its list: keep the count (arc
   // completion / Samples pill) and the samples (match preview) in sync.
@@ -878,6 +894,7 @@ export function IntegrateScreen({
         onEffectiveMappingsChange={setMappingOverrides}
         onEnrichmentsChange={setEnrichments}
         renameEvent={renameEvent}
+        contentRequirements={contentRequirements}
       />
       {/* COLLAPSED by default: the full per-pipeline detail is reference
           material, not a decision point - expand on demand. */}
@@ -912,6 +929,7 @@ export function IntegrateScreen({
       onRuleFieldsChange={setRuleFields}
       contentFilter="rules"
       extraAvailableFields={enrichmentFieldNames}
+      onContentRequirementsChange={setRuleRequirements}
     />
   );
 
@@ -923,6 +941,7 @@ export function IntegrateScreen({
       content={ports.content}
       contentFilter="workbooks"
       extraAvailableFields={enrichmentFieldNames}
+      onContentRequirementsChange={setWorkbookRequirements}
     />
   );
 

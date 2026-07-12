@@ -516,3 +516,61 @@ export function pendingLabelSeeds(
   }
   return seeds;
 }
+
+// ---------------------------------------------------------------------------
+// Unused-field disposition (user direction 2026-07-12: fields required by
+// neither analytics rules nor workbooks default to DROP, not catch-all)
+// ---------------------------------------------------------------------------
+
+/** The content-requirements subset the assessor reads (core shape). */
+export interface RequirementsForAssessment {
+  columns: ReadonlySet<string>;
+  catchAllKeys: ReadonlySet<string>;
+  opaqueCatchAll: boolean;
+  itemCount: number;
+}
+
+/** One table's unused-overflow assessment. */
+export interface UnusedFieldAssessment {
+  /** Overflow sources required by neither rules nor workbooks - droppable. */
+  droppable: string[];
+  /** Overflow sources content consumes (catch-all keys / same-named refs). */
+  keptByContent: string[];
+  /** Why auto-drop is disabled (null = safe to drop the droppable list). */
+  blocked: "no-requirements" | "opaque-catch-all" | null;
+}
+
+/**
+ * Assess a report's OVERFLOW rows against the content requirements. Mapped
+ * rows are never candidates (their destination column is the requirement
+ * surface); only catch-all overflow is. Honesty gates: with no analyzed
+ * content there is no evidence to drop on, and with OPAQUE catch-all use
+ * (content parses AdditionalExtensions without determinable keys) dropping
+ * anything could break that content.
+ */
+export function assessUnusedOverflow(
+  report: GapReport,
+  requirements: RequirementsForAssessment | null,
+): UnusedFieldAssessment {
+  if (requirements === null || requirements.itemCount === 0) {
+    return { droppable: [], keptByContent: [], blocked: "no-requirements" };
+  }
+  if (requirements.opaqueCatchAll) {
+    return { droppable: [], keptByContent: [], blocked: "opaque-catch-all" };
+  }
+  const droppable: string[] = [];
+  const keptByContent: string[] = [];
+  for (const mapping of report.fieldMappings) {
+    if (mapping.action !== "overflow") continue;
+    const source = mapping.source.toLowerCase();
+    if (
+      requirements.catchAllKeys.has(source) ||
+      requirements.columns.has(source)
+    ) {
+      keptByContent.push(mapping.source);
+    } else {
+      droppable.push(mapping.source);
+    }
+  }
+  return { droppable, keptByContent, blocked: null };
+}

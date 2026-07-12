@@ -29,6 +29,7 @@ import {
   unmappedDestColumns,
   pendingIdentitySeeds,
   pendingLabelSeeds,
+  assessUnusedOverflow,
 } from "./mapping-review-state";
 import type {
   MappingReviewAction,
@@ -599,5 +600,51 @@ describe("auto-seeding selectors (2026-07-12 audit extraction)", () => {
         new Set(["web|CommonSecurityLog|DeviceCustomString1Label"]),
       ),
     ).toEqual([]);
+  });
+});
+
+describe("assessUnusedOverflow (content-driven drop policy, 2026-07-12)", () => {
+  const REPORT = {
+    logType: "web",
+    tableName: "CommonSecurityLog",
+    fieldMappings: [
+      { source: "act", dest: "DeviceAction", action: "rename" },
+      { source: "dept", dest: "AdditionalExtensions", action: "overflow" },
+      { source: "noise1", dest: "AdditionalExtensions", action: "overflow" },
+      { source: "noise2", dest: "AdditionalExtensions", action: "overflow" },
+    ],
+    destSchema: [],
+  } as unknown as GapReport;
+
+  const REQ = {
+    columns: new Set(["deviceaction"]),
+    catchAllKeys: new Set(["dept"]),
+    opaqueCatchAll: false,
+    itemCount: 3,
+  };
+
+  it("drops overflow fields no content needs; keeps catch-all keys", () => {
+    const a = assessUnusedOverflow(REPORT, REQ);
+    expect(a.blocked).toBeNull();
+    expect(a.droppable).toEqual(["noise1", "noise2"]);
+    expect(a.keptByContent).toEqual(["dept"]);
+  });
+
+  it("mapped rows are never drop candidates", () => {
+    const a = assessUnusedOverflow(REPORT, REQ);
+    expect(a.droppable).not.toContain("act");
+  });
+
+  it("blocks without analyzed content (no evidence, no drops)", () => {
+    expect(assessUnusedOverflow(REPORT, null).blocked).toBe("no-requirements");
+    expect(
+      assessUnusedOverflow(REPORT, { ...REQ, itemCount: 0 }).blocked,
+    ).toBe("no-requirements");
+  });
+
+  it("blocks on opaque catch-all use (dropping could break content)", () => {
+    const a = assessUnusedOverflow(REPORT, { ...REQ, opaqueCatchAll: true });
+    expect(a.blocked).toBe("opaque-catch-all");
+    expect(a.droppable).toEqual([]);
   });
 });
