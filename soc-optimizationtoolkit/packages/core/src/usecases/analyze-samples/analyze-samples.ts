@@ -110,7 +110,7 @@ function errText(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
-async function resolveSolutionDcrFlows(
+export async function resolveSolutionDcrFlows(
   content: SentinelContent,
   solutionName: string,
   profile: VendorGapProfile,

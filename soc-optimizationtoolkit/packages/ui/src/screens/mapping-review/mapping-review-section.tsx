@@ -54,8 +54,10 @@ import {
   detectVendorIdentity,
   hintsFromConnectorTables,
   learnedToVendorMappings,
+  matchLogTypeToDcrFlow,
   matchSampleLogTypeToTable,
   resolveDestinationTables,
+  resolveSolutionDcrFlows,
   resolveIdentityFields,
   suggestedIdentityValue,
   vendorLabelEnrichments,
@@ -423,10 +425,24 @@ export function MappingReviewSection({
       setResolution(resolved);
       const defaultTable = resolved.tables[0] ?? "CommonSecurityLog";
 
+      // DCR-DECLARED routing outranks name similarity: solutions with
+      // per-event-type custom tables (CrowdStrike FDR) state in their own
+      // DCR exactly which event names land in which table - knowledge name
+      // matching cannot recover ("PROCESSROLLUP2" shares no name with
+      // CrowdStrike_Process_Events_CL). Overrides still win; the resolver
+      // degrades to an empty map on any fetch/parse failure.
+      const dcrFlows = await resolveSolutionDcrFlows(
+        activeContent,
+        solutionName,
+        profile ?? DEFAULT_GAP_PROFILE,
+      );
+      const flowRouting = [...dcrFlows.values()];
+
       const specs = samples.map((sample) => ({
         logType: sample.logType,
         tableName:
           activeOverrides[sample.logType] ??
+          matchLogTypeToDcrFlow(sample.logType, flowRouting) ??
           matchSampleLogTypeToTable(
             sample.logType,
             hints,

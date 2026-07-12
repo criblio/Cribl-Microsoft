@@ -9,6 +9,7 @@ import {
   matchSampleToTable,
   normalizeConnectorTableName,
   resolveDestinationTables,
+  matchLogTypeToDcrFlow,
 } from "./analyze-workflow";
 
 describe("resolveDestinationTables", () => {
@@ -123,5 +124,53 @@ describe("connector-table hints (2026-07-09 extension)", () => {
       async () => [],
     );
     expect(r.source).toBe("Vendor research (Sentinel Content Hub)");
+  });
+});
+
+describe("matchLogTypeToDcrFlow (DCR-declared table routing, 2026-07-12)", () => {
+  const FLOWS = [
+    {
+      tableName: "CrowdStrike_Process_Events_CL",
+      eventSimpleNames: ["ProcessRollup2", "SyntheticProcessRollup2"],
+    },
+    {
+      tableName: "CrowdStrike_Network_Events_CL",
+      eventSimpleNames: ["NetworkConnectIP4", "NetworkConnectIP6"],
+    },
+    { tableName: "CommonSecurityLog", eventSimpleNames: [] },
+  ];
+
+  it("routes an event name to its DCR-declared table, case-insensitively", () => {
+    expect(matchLogTypeToDcrFlow("PROCESSROLLUP2", FLOWS)).toBe(
+      "CrowdStrike_Process_Events_CL",
+    );
+    expect(matchLogTypeToDcrFlow("NetworkConnectIP6", FLOWS)).toBe(
+      "CrowdStrike_Network_Events_CL",
+    );
+  });
+
+  it("routes stream-scoped split names by suffix", () => {
+    expect(matchLogTypeToDcrFlow("fdr-PROCESSROLLUP2", FLOWS)).toBe(
+      "CrowdStrike_Process_Events_CL",
+    );
+  });
+
+  it("returns null when no DCR claims the log type (caller falls to name match)", () => {
+    expect(matchLogTypeToDcrFlow("BLOCKED", FLOWS)).toBeNull();
+    expect(matchLogTypeToDcrFlow("", FLOWS)).toBeNull();
+    expect(matchLogTypeToDcrFlow("PROCESSROLLUP2", [])).toBeNull();
+  });
+
+  it("an exact match on a later flow beats a suffix on an earlier one", () => {
+    // SYNTHETICPROCESSROLLUP2 ends with the PROCESSROLLUP2 event name too -
+    // the exact event name must win regardless of declaration order.
+    expect(matchLogTypeToDcrFlow("SYNTHETICPROCESSROLLUP2", FLOWS)).toBe(
+      "CrowdStrike_Process_Events_CL",
+    );
+    const SPLIT = [
+      { tableName: "T_Suffix_CL", eventSimpleNames: ["Rollup2"] },
+      { tableName: "T_Exact_CL", eventSimpleNames: ["ProcessRollup2"] },
+    ];
+    expect(matchLogTypeToDcrFlow("ProcessRollup2", SPLIT)).toBe("T_Exact_CL");
   });
 });

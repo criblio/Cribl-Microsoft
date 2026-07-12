@@ -140,3 +140,44 @@ export function matchSampleToTable(
   }
   return defaultTable;
 }
+
+/**
+ * Route a sample's log type to the table whose DCR FLOW declares it (user
+ * request 2026-07-12): solutions with per-event-type custom tables
+ * (CrowdStrike FDR) state in their own DCR exactly which event_simpleName
+ * values land in which table - authoritative routing that name similarity
+ * cannot recover ("PROCESSROLLUP2" shares no name with
+ * "CrowdStrike_Process_Events_CL"). Callers try this BEFORE
+ * {@link matchSampleToTable}; null means the DCRs do not claim the log type.
+ *
+ * Matching is normalized (case/separator-insensitive) exact, plus a suffix
+ * match for stream-scoped split names ("fdr-PROCESSROLLUP2" still routes).
+ */
+export function matchLogTypeToDcrFlow(
+  sampleLogType: string,
+  flows: readonly DcrFlowRouting[],
+): string | null {
+  const norm = sampleLogType.toLowerCase().replace(/[-_ ]/g, "");
+  if (norm === "") return null;
+  // An EXACT event-name match anywhere beats a suffix match anywhere: a
+  // stream-scoped "fdr-ProcessRollup2" must not route to a flow declaring a
+  // shorter suffix ("Rollup2") while another flow declares the exact name.
+  let suffixHit: string | null = null;
+  for (const flow of flows) {
+    for (const eventName of flow.eventSimpleNames) {
+      const evNorm = eventName.toLowerCase().replace(/[-_ ]/g, "");
+      if (evNorm === "") continue;
+      if (evNorm === norm) return flow.tableName;
+      if (suffixHit === null && evNorm.length > 3 && norm.endsWith(evNorm)) {
+        suffixHit = flow.tableName;
+      }
+    }
+  }
+  return suffixHit;
+}
+
+/** The slice of a DcrFlow the router needs (structural, avoids a models dep). */
+export interface DcrFlowRouting {
+  tableName: string;
+  eventSimpleNames: readonly string[];
+}

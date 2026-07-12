@@ -61,7 +61,9 @@ export {
   normalizeConnectorTableName,
   resolveDestinationTables,
   matchSampleToTable as matchSampleLogTypeToTable,
+  matchLogTypeToDcrFlow,
 } from "./analyze-workflow";
+export type { DcrFlowRouting } from "./analyze-workflow";
 
 // Typed six-tile gap report (replaces the legacy DCR_GAP_ANALYSIS_*.txt files)
 export type {

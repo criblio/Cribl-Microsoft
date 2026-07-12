@@ -8,4 +8,8 @@ export type {
   AnalyzeSampleSpec,
   AnalyzeSamplesInput,
 } from "./analyze-samples";
-export { analyzeSamples, collectGapReports } from "./analyze-samples";
+export {
+  analyzeSamples,
+  collectGapReports,
+  resolveSolutionDcrFlows,
+} from "./analyze-samples";
