@@ -59,11 +59,16 @@ export {
 } from "./learned-mappings";
 
 // Documented per-vendor mapping packs (Phase 0 knowledge)
-export type { VendorMappingPack, VendorPackEntry } from "./vendor-mapping-packs";
+export type {
+  VendorLabelEnrichment,
+  VendorMappingPack,
+  VendorPackEntry,
+} from "./vendor-mapping-packs";
 export {
   CEF_CATALOG_PACK,
   VENDOR_MAPPING_PACKS,
   foldEntriesBySource,
+  vendorLabelEnrichments,
   vendorMappingsForSolution,
   vendorPacksForSolution,
 } from "./vendor-mapping-packs";

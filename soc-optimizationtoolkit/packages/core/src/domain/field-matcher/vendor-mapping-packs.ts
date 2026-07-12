@@ -44,6 +44,15 @@ export interface VendorPackEntry {
    * destination's data encoded - e.g. Zscaler b64url).
    */
   action?: "map" | "decode";
+  /**
+   * CEF custom-column label contract: when the destination is a
+   * DeviceCustomString/Number column, the vendor's feed also sets the
+   * companion <destName>Label column to this literal (e.g. cs1Label=dept)
+   * so queries can interpret the payload. When set, applying this mapping
+   * also seeds the label constant as an editable enrichment - see
+   * {@link vendorLabelEnrichments}.
+   */
+  label?: string;
   /** Vendor-documentation citation for this field (hand packs). */
   doc?: string;
   /** The mined ECS path (generated packs; the generator writes it). */
@@ -75,8 +84,9 @@ const HAND_PACKS: readonly VendorMappingPack[] = [
     vendor: "Zscaler",
     solutionKeywords: ["zscaler"],
     provenance:
-      "Zscaler NSS feed output format (web/firewall/dns) + ZIA CEF mapping guide",
-    docUrl: "https://help.zscaler.com/zia/nss-feed-output-format-web-logs",
+      "Zscaler NSS feed output format (web/firewall/dns) + Zscaler and Microsoft Sentinel Deployment Guide (canonical feed: github.com/zscaler/microsoft-resources)",
+    docUrl:
+      "https://help.zscaler.com/zscaler-technology-partners/zscaler-and-microsoft-sentinel-deployment-guide",
     mappings: [
       // Web (NSS web feed)
       { sourceName: "login", destName: "SourceUserName", doc: "NSS web: login/email of the transaction owner" },
@@ -104,6 +114,26 @@ const HAND_PACKS: readonly VendorMappingPack[] = [
       { sourceName: "epochtime", destName: "ReceiptTime", doc: "NSS web: transaction time, epoch seconds" },
       { sourceName: "url", destName: "RequestURL", doc: "NSS web: full URL (feeds configured un-encoded)" },
       { sourceName: "action", destName: "DeviceAction", doc: "NSS: action Zscaler applied (allowed/blocked)" },
+      // VENDOR PARITY (2026-07-12): the remaining named-column mappings from
+      // Zscaler's own Microsoft Sentinel feed definition (nss-web.cef /
+      // cloud-nss-web.fof in github.com/zscaler/microsoft-resources), so our
+      // coverage is a superset of the vendor's published integration. Label
+      // literals are VERBATIM from the feed (cs1Label=dept ... cn1Label=
+      // riskscore). bamd5 (feed: fileHash={bamd5}) is DELIBERATELY absent:
+      // the alias ladder already maps sha256 -> FileHash, and a Phase-0
+      // bamd5 entry would outrank the stronger hash.
+      { sourceName: "urlcat", destName: "DeviceEventCategory", doc: "Sentinel feed: cat={urlcat} - URL category" },
+      { sourceName: "urlsubcat", destName: "DeviceEventCategory", doc: "Cloud NSS raw name for the URL category (CEF feed: cat={urlcat})" },
+      { sourceName: "location", destName: "SourceUserPrivileges", doc: "Sentinel feed: spriv={location} - Zscaler location of the transaction" },
+      { sourceName: "appname", destName: "DestinationServiceName", doc: "Sentinel feed: destinationServiceName={appname} - cloud application" },
+      { sourceName: "dept", destName: "DeviceCustomString1", label: "dept", doc: "Sentinel feed: cs1={dept}, cs1Label=dept - user department" },
+      { sourceName: "urlsupercat", destName: "DeviceCustomString2", label: "urlsupercat", doc: "Sentinel feed: cs2={urlsupercat}, cs2Label=urlsupercat - URL super category" },
+      { sourceName: "appclass", destName: "DeviceCustomString3", label: "appclass", doc: "Sentinel feed: cs3={appclass}, cs3Label=appclass - application class" },
+      { sourceName: "malwarecat", destName: "DeviceCustomString4", label: "malwarecat", doc: "Sentinel feed: cs4={malwarecat}, cs4Label=malwarecat - malware category" },
+      { sourceName: "malwarecategory", destName: "DeviceCustomString4", label: "malwarecat", doc: "Cloud NSS raw name for the malware category (CEF feed: cs4={malwarecat})" },
+      { sourceName: "threatname", destName: "DeviceCustomString5", label: "threatname", doc: "Sentinel feed: cs5={threatname}, cs5Label=threatname - threat name" },
+      { sourceName: "dlpeng", destName: "DeviceCustomString6", label: "dlpeng", doc: "Sentinel feed: cs6={dlpeng}, cs6Label=dlpeng - DLP engine" },
+      { sourceName: "riskscore", destName: "DeviceCustomNumber1", label: "riskscore", doc: "Sentinel feed: cn1={riskscore}, cn1Label=riskscore - application risk score" },
       // Firewall (NSS firewall feed): c=client-side, s=server-side post-NAT
       { sourceName: "csip", destName: "SourceIP", doc: "NSS firewall: client source IP" },
       { sourceName: "csport", destName: "SourcePort", doc: "NSS firewall: client source port" },
@@ -298,4 +328,40 @@ export function vendorMappingsForSolution(
       ...(description !== undefined ? { description } : {}),
     };
   });
+}
+
+/** One label constant a pack entry demands when its mapping applies. */
+export interface VendorLabelEnrichment {
+  /** The pack entry's source field - seed only when this mapping applied. */
+  sourceName: string;
+  /** The pack entry's destination column (the custom column carrying data). */
+  destName: string;
+  /** The companion label column to set (e.g. DeviceCustomString1Label). */
+  field: string;
+  /** The vendor-documented label literal (e.g. "dept"). */
+  value: string;
+}
+
+/**
+ * The CEF label constants a solution's packs demand: for every entry with a
+ * `label`, the companion `<destName>Label` column must carry the vendor's
+ * literal so queries can interpret the custom column. The caller seeds each
+ * one as an editable enrichment ONLY for reports where the entry's mapping
+ * actually applied (source present, destination claimed).
+ */
+export function vendorLabelEnrichments(
+  solutionName: string,
+): VendorLabelEnrichment[] {
+  const deduped: VendorPackEntry[] = [];
+  for (const pack of vendorPacksForSolution(solutionName)) {
+    foldEntriesBySource(deduped, pack.mappings);
+  }
+  return deduped
+    .filter((entry) => entry.label !== undefined && entry.label !== "")
+    .map((entry) => ({
+      sourceName: entry.sourceName,
+      destName: entry.destName,
+      field: `${entry.destName}Label`,
+      value: entry.label as string,
+    }));
 }

@@ -58,7 +58,9 @@ import {
   resolveDestinationTables,
   resolveIdentityFields,
   suggestedIdentityValue,
+  vendorLabelEnrichments,
   vendorMappingsForSolution,
+  vendorPacksForSolution,
 } from "@soc/core";
 import type {
   ContentCache,
@@ -305,6 +307,14 @@ export function MappingReviewSection({
     [solutionName],
   );
 
+  // The packs feeding this solution's Phase-0 mappings, for the per-table
+  // "Vendor mapping documentation" line (user request 2026-07-12). Generated
+  // packs carry no docUrl and render as provenance text.
+  const vendorDocPacks = useMemo(
+    () => vendorPacksForSolution(solutionName),
+    [solutionName],
+  );
+
   // Auto-seed curated solution knowledge (e.g. PaloAlto -> DeviceVendor =
   // Palo Alto Networks) as EDITABLE per-table enrichments, once per
   // logType/table/field. The one-shot guard means a user deletion sticks: the
@@ -333,6 +343,39 @@ export function MappingReviewSection({
       }
     }
   }, [reports, identityStatuses, detectedIdentity, addEnrichment]);
+
+  // Auto-seed the CEF custom-column LABEL constants the vendor packs demand
+  // (cs1Label=dept etc. - a DeviceCustomString column is only interpretable
+  // through its companion Label). A label seeds once per logType/column, only
+  // when the pack mapping that demands it actually APPLIED in this report and
+  // the Label column exists in the resolved schema. Same one-shot guard as
+  // identity seeding: a user deletion sticks.
+  const seededLabelRef = useRef(new Set<string>());
+  useEffect(() => {
+    const labels = vendorLabelEnrichments(solutionName);
+    if (labels.length === 0) {
+      return;
+    }
+    for (const report of reports) {
+      const appliedPairs = new Set(
+        report.fieldMappings
+          .filter((m) => m.dest !== "")
+          .map((m) => `${m.source.toLowerCase()}|${m.dest.toLowerCase()}`),
+      );
+      const schemaColumns = new Set(
+        report.destSchema.map((c) => c.name.toLowerCase()),
+      );
+      for (const label of labels) {
+        const pair = `${label.sourceName.toLowerCase()}|${label.destName.toLowerCase()}`;
+        if (!appliedPairs.has(pair)) continue;
+        if (!schemaColumns.has(label.field.toLowerCase())) continue;
+        const key = `${report.logType}|${report.tableName}|${label.field}`;
+        if (seededLabelRef.current.has(key)) continue;
+        seededLabelRef.current.add(key);
+        addEnrichment(report.logType, label.field, label.value);
+      }
+    }
+  }, [reports, solutionName, addEnrichment]);
 
   const analyzedSigRef = useRef<string>("");
   const currentSig = inputSignature(solutionName, samples);
@@ -736,6 +779,26 @@ export function MappingReviewSection({
                   addEnrichment(report.logType, field, value)
                 }
               />
+            )}
+
+            {vendorDocPacks.length > 0 && (
+              <p className="field-hint vendor-doc-links">
+                Vendor mapping documentation:{" "}
+                {vendorDocPacks.map((pack, i) => (
+                  <span key={pack.id}>
+                    {i > 0 ? "; " : ""}
+                    {pack.docUrl !== undefined ? (
+                      <a href={pack.docUrl} target="_blank" rel="noreferrer">
+                        {pack.vendor} - {pack.provenance}
+                      </a>
+                    ) : (
+                      <span>
+                        {pack.vendor} - {pack.provenance}
+                      </span>
+                    )}
+                  </span>
+                ))}
+              </p>
             )}
 
             {report.overflowCount > 0 && (
