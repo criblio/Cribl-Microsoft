@@ -3,8 +3,10 @@
  * (porting-plan Unit 23, ENG-11, GUI-09, plus net-new workbook coverage). It is
  * the UI over the ONE shared content-reference analyzer in @soc/core: alert
  * rules (acquired through the Unit 14 SentinelContent port) and workbooks
- * (enumerated through the AzureManagement port - net-new) are TWO SOURCES INTO
- * ONE ENGINE, rendered as two sections of the same panel.
+ * (read from the SOLUTION REPO's Workbooks folder - deployed subscription
+ * copies are deliberately NOT analyzed, user direction 2026-07-12: shared
+ * subscriptions carry unrelated dashboards and local copies drift) are TWO
+ * SOURCES INTO ONE ENGINE, rendered as two sections of the same panel.
  *
  * What it renders (legacy vocabulary verbatim where the legacy had it,
  * SentinelIntegration.tsx 2580-2793):
@@ -45,19 +47,15 @@ import {
   createBundledSchemaCatalog,
   deriveContentRequirements,
   createSolutionSchemaCatalog,
-  extractWorkbookQueries,
-  matchSolutionName,
   mergeCustomContentItems,
   parseAnalyticRuleYaml,
   parseParserYaml,
   parserFieldSynonyms,
   suggestCloseMatches,
   unionSchemaColumns,
-  workbookToContentItem,
 } from "@soc/core";
 import type { CloseMatchCandidate } from "@soc/core";
 import type {
-  AzureManagement,
   ContentItem,
   ContentRequirements,
   CoverageReport,
@@ -86,16 +84,6 @@ import {
 } from "./rule-coverage-state";
 import type { CoverageSectionView } from "./rule-coverage-state";
 
-/** The Microsoft.Insights/workbooks ARM api-version used for enumeration. */
-const WORKBOOK_API_VERSION = "2023-06-01";
-
-/**
- * Bound on ARM `nextLink` pages the workbook enumeration will follow before it
- * stops (fail-safe against a cyclic/absurd nextLink chain). Mirrors the core
- * listAllPages guard; workbook lists are small, so this is generous headroom.
- */
-const WORKBOOK_MAX_PAGES = 50;
-
 export interface RuleCoverageSectionProps {
   /** The selected Sentinel solution name (scopes the rule lookup); "" when none. */
   solutionName: string;
@@ -110,10 +98,6 @@ export interface RuleCoverageSectionProps {
    * are fetched (custom uploads still analyze).
    */
   content?: SentinelContent;
-  /** The ARM client for workbook enumeration; defaults to ports.azure. */
-  azure?: AzureManagement;
-  /** The subscription to enumerate workbooks in; defaults to the active config. */
-  subscriptionId?: string;
   /** Schema catalog; defaults to the fetch-free bundled adapter. */
   catalog?: SchemaCatalog;
   /**
@@ -155,9 +139,6 @@ export interface RuleCoverageSectionProps {
   dropDisabledReason?: string;
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
 
 /**
  * Acquire a solution's analytic rules as shared ContentItems through the content
@@ -262,98 +243,10 @@ async function fetchParserFunctions(
 }
 
 /**
- * Enumerate the workspace's Sentinel workbooks through ARM and mine the KQL out
- * of each workbook's serializedData (DEFENSIVELY - a workbook whose
- * serializedData is absent or unreadable is counted as one unparseable unit,
- * never silently dropped). Best-effort: a non-200 or a transport failure yields
- * no workbooks plus a soft note, never breaking the rule section.
+ * Union the schemas of every destination table (the analyzer's schemaUnion):
+ * a rule referencing a sibling table's column classifies
+ * missing-from-reduced-schema, not unknown.
  */
-async function fetchWorkbookContentItems(
-  azure: AzureManagement | undefined,
-  subscriptionId: string,
-): Promise<{ items: ContentItem[]; note: string }> {
-  if (azure === undefined || subscriptionId.trim() === "") {
-    return { items: [], note: "" };
-  }
-  const pageValue = (body: unknown): { value: unknown[]; nextLink: string } => {
-    const value =
-      isRecord(body) && Array.isArray(body["value"])
-        ? (body["value"] as unknown[])
-        : [];
-    const nextLink =
-      isRecord(body) && typeof body["nextLink"] === "string"
-        ? (body["nextLink"] as string)
-        : "";
-    return { value, nextLink };
-  };
-  try {
-    const res = await azure.request({
-      method: "GET",
-      path: `/subscriptions/${subscriptionId}/providers/Microsoft.Insights/workbooks`,
-      apiVersion: WORKBOOK_API_VERSION,
-      query: { category: "sentinel", canFetchContent: "true" },
-    });
-    if (res.status !== 200) {
-      return {
-        items: [],
-        note: `Azure returned status ${res.status} enumerating workbooks - showing rules only.`,
-      };
-    }
-    // Accumulate every ARM page. A workbook list carries nextLink (an absolute
-    // management.azure.com URL) when it spans pages; follow it via the optional
-    // requestUrl exactly as the core listAllPages does, so a large workspace's
-    // workbooks are not SILENTLY DROPPED past the first page. Adapters without
-    // requestUrl degrade to single-page (the documented fallback).
-    const raws: unknown[] = [];
-    let note = "";
-    let { value, nextLink } = pageValue(res.body);
-    raws.push(...value);
-    let pages = 0;
-    while (nextLink !== "" && typeof azure.requestUrl === "function") {
-      if (pages >= WORKBOOK_MAX_PAGES) {
-        note = `Stopped after ${WORKBOOK_MAX_PAGES} workbook pages - some workbooks may be omitted.`;
-        break;
-      }
-      pages += 1;
-      const page = await azure.requestUrl({ method: "GET", url: nextLink });
-      if (page.status !== 200) {
-        note = `Azure returned status ${page.status} paging workbooks - showing the workbooks read so far.`;
-        break;
-      }
-      ({ value, nextLink } = pageValue(page.body));
-      raws.push(...value);
-    }
-    const items: ContentItem[] = [];
-    for (const raw of raws) {
-      if (!isRecord(raw)) {
-        continue;
-      }
-      const id =
-        typeof raw["id"] === "string"
-          ? raw["id"]
-          : typeof raw["name"] === "string"
-            ? raw["name"]
-            : "workbook";
-      const props = isRecord(raw["properties"]) ? raw["properties"] : {};
-      const name =
-        typeof props["displayName"] === "string" ? props["displayName"] : id;
-      const serialized = props["serializedData"];
-      const extraction =
-        typeof serialized === "string"
-          ? extractWorkbookQueries(serialized)
-          : { queries: [], unparseableCount: 1 };
-      items.push(workbookToContentItem(id, name, extraction));
-    }
-    return { items, note };
-  } catch (err) {
-    return {
-      items: [],
-      note: `Could not enumerate workbooks: ${String(err)} - showing rules only.`,
-    };
-  }
-}
-
-/** Union every destination table's schema columns via the catalog port. */
 async function resolveSchemaUnion(
   catalog: SchemaCatalog,
   tableNames: readonly string[],
@@ -472,8 +365,6 @@ export function RuleCoverageSection({
   solutionName,
   reports,
   content,
-  azure,
-  subscriptionId,
   catalog,
   onRuleFieldsChange,
   contentFilter,
@@ -482,10 +373,8 @@ export function RuleCoverageSection({
   onDropUnneededFields,
   dropDisabledReason,
 }: RuleCoverageSectionProps) {
-  const { ports, config } = usePorts();
+  const { ports } = usePorts();
   const activeContent = content ?? ports.content;
-  const activeAzure = azure ?? ports.azure;
-  const activeSubscription = subscriptionId ?? config.subscriptionId;
   // Wave E: same solution-aware schema tier the mapping review resolves with,
   // so both panels see identical columns for a solution's custom tables.
   // Without a content port the base catalog serves alone.
@@ -528,7 +417,6 @@ export function RuleCoverageSection({
   const [report, setReport] = useState<CoverageReport | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
   const [analyzeError, setAnalyzeError] = useState("");
-  const [workbookNote, setWorkbookNote] = useState("");
   const [parserNote, setParserNote] = useState("");
   const [schemaNote, setSchemaNote] = useState("");
   const [customItems, setCustomItems] = useState<ContentItem[]>([]);
@@ -584,32 +472,23 @@ export function RuleCoverageSection({
       }
       setAnalyzing(true);
       setAnalyzeError("");
-      setWorkbookNote("");
       setSchemaNote("");
       try {
         const custom = customOverride ?? customItems;
-        const [ruleItems, repoWorkbooks, workbookResult] = await Promise.all([
+        const [ruleItems, workbooks] = await Promise.all([
           showRules
             ? fetchRuleContentItems(activeContent, solutionName)
             : Promise.resolve<ContentItem[]>([]),
           showWorkbooks && activeContent !== undefined
             ? acquireSolutionWorkbooks(activeContent, solutionName)
             : Promise.resolve<ContentItem[]>([]),
-          showWorkbooks
-            ? fetchWorkbookContentItems(activeAzure, activeSubscription)
-            : Promise.resolve({ items: [] as ContentItem[], note: "" }),
         ]);
-        // Workbook source of record is the SOLUTION REPO (parallel to rules).
-        // Deployed subscription workbooks (ARM) fold in ONLY when their name
-        // relates to the selected solution: a shared subscription carries
-        // everyone's workbooks (live report 2026-07-09: FortiGate and Cisco
-        // dashboards polluted a Zscaler review), and coverage of unrelated
-        // content is noise. The repo template wins a name collision.
-        const relatedArm = workbookResult.items.filter((item) =>
-          matchSolutionName(item.name, solutionName),
-        );
-        const excludedArm = workbookResult.items.length - relatedArm.length;
-        const workbooks = mergeCustomContentItems(relatedArm, repoWorkbooks);
+        // Workbook source of record is the SOLUTION REPO only (parallel to
+        // rules; user direction 2026-07-12). Deployed subscription workbooks
+        // are deliberately NOT analyzed - a shared subscription carries
+        // everyone's dashboards (live report 2026-07-09: FortiGate and Cisco
+        // dashboards polluted a Zscaler review), local copies drift from the
+        // repo templates, and coverage should describe the SOLUTION.
         // Repo rules + workbooks, then merge the custom uploads (last-write-wins
         // by name - the re-upload fix).
         const repoAndWorkbooks = [...ruleItems, ...workbooks];
@@ -674,17 +553,7 @@ export function RuleCoverageSection({
           schemaUnion,
         });
         setReport(produced);
-        setWorkbookNote(
-          [
-            workbookResult.note,
-            excludedArm > 0
-              ? `${excludedArm} deployed workbook(s) in the subscription do not relate to ${solutionName} and were excluded.`
-              : "",
-          ]
-            .filter((n) => n !== "")
-            .join(" "),
-        );
-      } catch (err) {
+        } catch (err) {
         setAnalyzeError(String(err));
       } finally {
         setAnalyzing(false);
@@ -694,8 +563,6 @@ export function RuleCoverageSection({
       analyzing,
       customItems,
       activeContent,
-      activeAzure,
-      activeSubscription,
       activeCatalog,
       solutionName,
       reports,
@@ -831,12 +698,6 @@ export function RuleCoverageSection({
         <div className="status-bar status-bar-warn">
           <span className="status-bar-dot" />
           <span className="status-bar-text">{schemaNote}</span>
-        </div>
-      )}
-      {workbookNote !== "" && (
-        <div className="status-bar status-bar-warn">
-          <span className="status-bar-dot" />
-          <span className="status-bar-text">{workbookNote}</span>
         </div>
       )}
       {parserNote !== "" && (
