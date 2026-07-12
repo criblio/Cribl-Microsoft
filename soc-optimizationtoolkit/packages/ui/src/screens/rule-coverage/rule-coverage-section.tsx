@@ -37,6 +37,7 @@ import {
   analyticRuleToContentItem,
   analyzeContentCoverage,
   createBundledSchemaCatalog,
+  createSolutionSchemaCatalog,
   extractWorkbookQueries,
   matchSolutionName,
   mergeCustomContentItems,
@@ -434,10 +435,15 @@ export function RuleCoverageSection({
   const activeContent = content ?? ports.content;
   const activeAzure = azure ?? ports.azure;
   const activeSubscription = subscriptionId ?? config.subscriptionId;
-  const activeCatalog = useMemo(
-    () => catalog ?? createBundledSchemaCatalog(),
-    [catalog],
-  );
+  // Wave E: same solution-aware schema tier the mapping review resolves with,
+  // so both panels see identical columns for a solution's custom tables.
+  // Without a content port the base catalog serves alone.
+  const activeCatalog = useMemo(() => {
+    const base = catalog ?? createBundledSchemaCatalog();
+    return activeContent === undefined
+      ? base
+      : createSolutionSchemaCatalog(activeContent, solutionName, base);
+  }, [activeContent, solutionName, catalog]);
   // What this instance covers. Custom-YAML upload and the RULE-badge report are
   // rules-only concerns; workbooks are a separate diagnostic.
   const showRules = contentFilter !== "workbooks";

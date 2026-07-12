@@ -81,6 +81,14 @@ export {
   createBundledSchemaCatalog,
 } from "./bundled-schema-catalog";
 
+// Solution-aware schema tier (Wave E): the solution's own table ARM
+// resources resolve ahead of the bundled snapshot.
+export type { SolutionTableSchema } from "./solution-schema-catalog";
+export {
+  createSolutionSchemaCatalog,
+  tablesFromArmJson,
+} from "./solution-schema-catalog";
+
 export {
   parsedSampleToSourceFields,
   matchParsedSampleToColumns,

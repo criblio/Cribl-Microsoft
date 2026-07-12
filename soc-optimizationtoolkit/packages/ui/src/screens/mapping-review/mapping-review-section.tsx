@@ -50,6 +50,7 @@ import {
   DEFAULT_GAP_PROFILE,
   collectGapReports,
   createBundledSchemaCatalog,
+  createSolutionSchemaCatalog,
   decodeConnector,
   detectVendorIdentity,
   eventTableRoutingFromMapping,
@@ -234,11 +235,19 @@ export function MappingReviewSection({
   onEnrichmentsChange,
   learnedCache,
 }: MappingReviewSectionProps) {
-  const activeCatalog = useMemo(
-    () => catalog ?? createBundledSchemaCatalog(),
-    [catalog],
-  );
   const activeContent = content ?? EMPTY_SENTINEL_CONTENT;
+  // Wave E: the solution's OWN table ARM definitions resolve ahead of the
+  // bundled snapshot (or the injected catalog) - CCP custom tables work even
+  // when absent from the bundle. Degrades to the base catalog on any failure.
+  const activeCatalog = useMemo(
+    () =>
+      createSolutionSchemaCatalog(
+        activeContent,
+        solutionName,
+        catalog ?? createBundledSchemaCatalog(),
+      ),
+    [activeContent, solutionName, catalog],
+  );
   const profile: VendorGapProfile = vendorProfile ?? DEFAULT_GAP_PROFILE;
 
   const [reports, setReports] = useState<GapReport[]>([]);
