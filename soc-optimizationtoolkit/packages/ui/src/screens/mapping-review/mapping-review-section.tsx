@@ -105,6 +105,7 @@ import {
   OVERFLOW_COVERAGE_NOTE,
   analyzeButtonLabel,
   approvalBarText,
+  deriveLiveStats,
   deriveMappingReviewGate,
   effectiveMappings,
   fieldMappingsLabel,
@@ -859,7 +860,7 @@ export function MappingReviewSection({
             </div>
 
             <div className="match-stat-grid">
-              {report.stats.map((stat) => (
+              {deriveLiveStats(report, effective).map((stat) => (
                 <div
                   key={stat.key}
                   className={`match-stat match-stat-${stat.tone}`}

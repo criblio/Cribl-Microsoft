@@ -30,6 +30,7 @@ import {
   pendingIdentitySeeds,
   pendingLabelSeeds,
   assessUnusedOverflow,
+  deriveLiveStats,
 } from "./mapping-review-state";
 import type {
   MappingReviewAction,
@@ -646,5 +647,56 @@ describe("assessUnusedOverflow (content-driven drop policy, 2026-07-12)", () => 
     const a = assessUnusedOverflow(REPORT, { ...REQ, opaqueCatchAll: true });
     expect(a.blocked).toBe("opaque-catch-all");
     expect(a.droppable).toEqual([]);
+  });
+});
+
+describe("deriveLiveStats (live tiles + the Dropped tile, 2026-07-12)", () => {
+  const STAT = (key: string, value: number) =>
+    ({ key, label: key, value, hint: "h", tone: "neutral" }) as never;
+  const REPORT = {
+    logType: "web",
+    tableName: "CommonSecurityLog",
+    stats: [
+      STAT("source-fields", 4),
+      STAT("dest-columns", 10),
+      STAT("passthrough", 1),
+      STAT("dcr-handles", 2),
+      STAT("cribl-handles", 1),
+      STAT("overflow", 2),
+    ],
+    fieldMappings: [
+      { source: "a", dest: "a", action: "keep", needsCoercion: false },
+      { source: "b", dest: "B", action: "rename", needsCoercion: false },
+      { source: "c", dest: "AdditionalExtensions", action: "overflow", needsCoercion: false },
+      { source: "d", dest: "AdditionalExtensions", action: "overflow", needsCoercion: false },
+    ],
+  } as unknown as GapReport;
+
+  it("reproduces the report tiles exactly when nothing is edited", () => {
+    const live = deriveLiveStats(REPORT, REPORT.fieldMappings);
+    expect(live.map((s) => [s.key, s.value])).toEqual([
+      ["source-fields", 4],
+      ["dest-columns", 10],
+      ["passthrough", 1],
+      ["dcr-handles", 2],
+      ["cribl-handles", 1],
+      ["overflow", 2],
+      ["dropped", 0],
+    ]);
+  });
+
+  it("dropping every overflow field zeroes Overflow and fills Dropped", () => {
+    const effective = REPORT.fieldMappings.map((m) =>
+      m.action === "overflow" ? { ...m, action: "drop" } : m,
+    );
+    const live = deriveLiveStats(REPORT, effective as never);
+    const byKey = new Map(live.map((s) => [s.key, s]));
+    expect(byKey.get("overflow")?.value).toBe(0);
+    expect(byKey.get("overflow")?.tone).toBe("neutral");
+    expect(byKey.get("dropped")?.value).toBe(2);
+    expect(byKey.get("dropped")?.tone).toBe("info");
+    // Analysis facts pass through untouched.
+    expect(byKey.get("source-fields")?.value).toBe(4);
+    expect(byKey.get("dcr-handles")?.value).toBe(2);
   });
 });

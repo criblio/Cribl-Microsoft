@@ -48,7 +48,11 @@ export type GapStatKey =
   | "passthrough"
   | "dcr-handles"
   | "cribl-handles"
-  | "overflow";
+  | "overflow"
+  // UI-derived only: the mapping review's LIVE tile row appends a Dropped
+  // tile computed from the reviewer's effective mappings. buildGapReport
+  // itself still emits exactly the six legacy tiles.
+  | "dropped";
 
 /** A stat tile's visual emphasis. */
 export type GapStatTone = "neutral" | "ok" | "info" | "warn";

@@ -35,7 +35,7 @@
  * the Unit 11 reKeyByLogType primitive (the shared re-key seam) verbatim.
  */
 
-import type { GapFieldMapping, GapReport } from "@soc/core";
+import type { GapFieldMapping, GapReport, GapReportStat } from "@soc/core";
 import { reKeyByLogType } from "../samples/sample-intake-state";
 
 // ---------------------------------------------------------------------------
@@ -573,4 +573,68 @@ export function assessUnusedOverflow(
     }
   }
   return { droppable, keptByContent, blocked: null };
+}
+
+// ---------------------------------------------------------------------------
+// LIVE stat tiles (user request 2026-07-12: a Dropped tile, and Overflow
+// reaching ZERO when every overflow field is dropped)
+// ---------------------------------------------------------------------------
+
+/** InfoTip for the UI-only Dropped tile (parallel to the report's hints). */
+const HINT_DROPPED =
+  "Source fields the pipeline DROPS - via the unused-field policy, a " +
+  "reviewer edit, or a learned decision. Dropped fields are removed before " +
+  "serialization: they reach neither a destination column nor the catch-all.";
+
+/**
+ * The stat tiles derived from the reviewer's EFFECTIVE mappings, so edits
+ * move the numbers live: dropping an overflow field decrements Overflow and
+ * increments the appended Dropped tile. With no edits the six report tiles
+ * are reproduced exactly (same counting rules as buildGapReport); Source
+ * Fields, Dest Columns, and DCR Handles are analysis facts and pass through.
+ */
+export function deriveLiveStats(
+  report: GapReport,
+  effective: readonly GapFieldMapping[],
+): GapReportStat[] {
+  const passthrough = effective.filter(
+    (m) => m.action === "keep" && !m.needsCoercion,
+  ).length;
+  const renames = effective.filter((m) => m.action === "rename").length;
+  const coerces = effective.filter(
+    (m) => m.action === "coerce" || (m.action === "keep" && m.needsCoercion),
+  ).length;
+  const overflow = effective.filter((m) => m.action === "overflow").length;
+  const dropped = effective.filter((m) => m.action === "drop").length;
+
+  const live = report.stats.map((stat): GapReportStat => {
+    switch (stat.key) {
+      case "passthrough":
+        return {
+          ...stat,
+          value: passthrough,
+          tone: passthrough > 0 ? "ok" : "neutral",
+        };
+      case "cribl-handles": {
+        const value = renames + coerces;
+        return { ...stat, value, tone: value > 0 ? "info" : "neutral" };
+      }
+      case "overflow":
+        return {
+          ...stat,
+          value: overflow,
+          tone: overflow > 0 ? "warn" : "neutral",
+        };
+      default:
+        return stat;
+    }
+  });
+  live.push({
+    key: "dropped",
+    label: "Dropped",
+    value: dropped,
+    hint: HINT_DROPPED,
+    tone: dropped > 0 ? "info" : "neutral",
+  });
+  return live;
 }
