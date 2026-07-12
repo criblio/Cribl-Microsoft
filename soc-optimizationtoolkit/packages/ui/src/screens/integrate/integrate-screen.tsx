@@ -711,6 +711,7 @@ export function IntegrateScreen({
   }, [
     ports.packs,
     ports.packInstall,
+    ports.logger,
     packBuilding,
     packName,
     packTargetGroups,
