@@ -181,3 +181,45 @@ export interface DcrFlowRouting {
   tableName: string;
   eventSimpleNames: readonly string[];
 }
+
+/**
+ * Build routing entries from a connector's EventsToTableMapping.json (Wave B
+ * of docs/sentinel-repo-mapping-sources.md). CrowdStrike's function-app
+ * connector routes BEFORE its DCR via a flat dict of
+ * event_simpleName -> table CATEGORY ("ZipFileWritten": "File"); the
+ * category resolves to whichever known table carries the token
+ * (File -> CrowdStrike_File_Events_CL). Categories matching zero or several
+ * known tables are dropped (never guess). Malformed input yields [].
+ */
+export function eventTableRoutingFromMapping(
+  mappingJson: unknown,
+  knownTables: readonly string[],
+): DcrFlowRouting[] {
+  if (
+    mappingJson === null ||
+    typeof mappingJson !== "object" ||
+    Array.isArray(mappingJson)
+  ) {
+    return [];
+  }
+  const eventsByCategory = new Map<string, string[]>();
+  for (const [eventName, category] of Object.entries(
+    mappingJson as Record<string, unknown>,
+  )) {
+    if (typeof category !== "string" || category.trim() === "") continue;
+    const key = category.trim().toLowerCase().replace(/[-_ ]/g, "");
+    if (key.length < 3) continue;
+    const list = eventsByCategory.get(key) ?? [];
+    list.push(eventName);
+    eventsByCategory.set(key, list);
+  }
+  const routings: DcrFlowRouting[] = [];
+  for (const [categoryKey, eventNames] of eventsByCategory) {
+    const matches = knownTables.filter((table) =>
+      table.toLowerCase().replace(/[-_ ]/g, "").includes(categoryKey),
+    );
+    if (matches.length !== 1) continue;
+    routings.push({ tableName: matches[0], eventSimpleNames: eventNames });
+  }
+  return routings;
+}

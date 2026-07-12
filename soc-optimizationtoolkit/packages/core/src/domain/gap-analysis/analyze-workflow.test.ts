@@ -10,6 +10,7 @@ import {
   normalizeConnectorTableName,
   resolveDestinationTables,
   matchLogTypeToDcrFlow,
+  eventTableRoutingFromMapping,
 } from "./analyze-workflow";
 
 describe("resolveDestinationTables", () => {
@@ -172,5 +173,55 @@ describe("matchLogTypeToDcrFlow (DCR-declared table routing, 2026-07-12)", () =>
       { tableName: "T_Exact_CL", eventSimpleNames: ["ProcessRollup2"] },
     ];
     expect(matchLogTypeToDcrFlow("ProcessRollup2", SPLIT)).toBe("T_Exact_CL");
+  });
+});
+
+describe("eventTableRoutingFromMapping (EventsToTableMapping.json, Wave B)", () => {
+  const KNOWN = [
+    "CrowdStrike_File_Events_CL",
+    "CrowdStrike_DNS_Events_CL",
+    "CrowdStrike_User_Events_CL",
+    "CommonSecurityLog",
+  ];
+
+  it("groups events by category and resolves each to its known table", () => {
+    const routings = eventTableRoutingFromMapping(
+      {
+        ZipFileWritten: "File",
+        XarFileWritten: "File",
+        DnsRequest: "Dns",
+        UserAccountCreated: "User",
+      },
+      KNOWN,
+    );
+    const byTable = new Map(routings.map((r) => [r.tableName, r.eventSimpleNames]));
+    expect(byTable.get("CrowdStrike_File_Events_CL")).toEqual([
+      "ZipFileWritten",
+      "XarFileWritten",
+    ]);
+    expect(byTable.get("CrowdStrike_DNS_Events_CL")).toEqual(["DnsRequest"]);
+    expect(byTable.get("CrowdStrike_User_Events_CL")).toEqual([
+      "UserAccountCreated",
+    ]);
+    // And the result plugs straight into the split router.
+    expect(matchLogTypeToDcrFlow("ZIPFILEWRITTEN", routings)).toBe(
+      "CrowdStrike_File_Events_CL",
+    );
+  });
+
+  it("drops categories matching zero or several known tables (never guess)", () => {
+    const routings = eventTableRoutingFromMapping(
+      { SomeEvent: "Registry", Other: "Events" },
+      KNOWN,
+    );
+    // "Registry" matches no known table; "Events" matches three.
+    expect(routings).toEqual([]);
+  });
+
+  it("yields [] for malformed input", () => {
+    expect(eventTableRoutingFromMapping(null, KNOWN)).toEqual([]);
+    expect(eventTableRoutingFromMapping([1, 2], KNOWN)).toEqual([]);
+    expect(eventTableRoutingFromMapping("x", KNOWN)).toEqual([]);
+    expect(eventTableRoutingFromMapping({ A: 5, B: "" }, KNOWN)).toEqual([]);
   });
 });

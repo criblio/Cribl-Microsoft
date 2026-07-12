@@ -52,6 +52,7 @@ import {
   createBundledSchemaCatalog,
   decodeConnector,
   detectVendorIdentity,
+  eventTableRoutingFromMapping,
   hintsFromConnectorTables,
   learnedToVendorMappings,
   matchLogTypeToDcrFlow,
@@ -436,7 +437,35 @@ export function MappingReviewSection({
         solutionName,
         profile ?? DEFAULT_GAP_PROFILE,
       );
-      const flowRouting = [...dcrFlows.values()];
+      const flowRouting: Array<{
+        tableName: string;
+        eventSimpleNames: readonly string[];
+      }> = [...dcrFlows.values()];
+
+      // Second routing source (Wave B): a connector EventsToTableMapping.json
+      // (CrowdStrike's function-app path routes BEFORE its DCR). Appended
+      // AFTER the DCR flows so DCR-declared routing stays authoritative.
+      const mappingFile = files.find(
+        (f) => f.name === "EventsToTableMapping.json",
+      );
+      if (mappingFile !== undefined) {
+        try {
+          const text = await activeContent.readFile(mappingFile.path);
+          if (text !== null) {
+            const knownTables = [
+              ...new Set([
+                ...resolved.tables,
+                ...flowRouting.map((f) => f.tableName),
+              ]),
+            ];
+            flowRouting.push(
+              ...eventTableRoutingFromMapping(JSON.parse(text), knownTables),
+            );
+          }
+        } catch {
+          // Unreadable mapping file: DCR flows and name matching still route.
+        }
+      }
 
       const specs = samples.map((sample) => ({
         logType: sample.logType,

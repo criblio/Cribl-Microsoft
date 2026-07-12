@@ -62,6 +62,7 @@ export {
   resolveDestinationTables,
   matchSampleToTable as matchSampleLogTypeToTable,
   matchLogTypeToDcrFlow,
+  eventTableRoutingFromMapping,
 } from "./analyze-workflow";
 export type { DcrFlowRouting } from "./analyze-workflow";
 
