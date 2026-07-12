@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { buildGapReport } from "./gap-report";
+import { internalCollisionWarning } from "./analyze-dcr-gap";
 import type { MatchResult } from "../field-matcher/models";
 import type { DcrGapAnalysis, FieldRef } from "./models";
 
@@ -194,5 +195,70 @@ describe("buildGapReport composes the two engines into six tiles", () => {
       destSchema: DEST_SCHEMA,
     });
     expect(r.routeCondition).toBe("true");
+  });
+});
+
+describe("matcher-claimed internal-name collisions (Zscaler host, 2026-07-12)", () => {
+  // The gap engine warns that "host" is dropped as internal metadata, but the
+  // vendor pack maps host->DestinationHostName and the rename runs in the
+  // enrich group BEFORE the cleanup drop - the value survives. The composed
+  // report must resolve the false alarm into the informational note.
+  const withHost = (destName: string): MatchResult => ({
+    ...MATCH,
+    matched: [
+      ...MATCH.matched,
+      {
+        sourceName: "host",
+        sourceType: "string",
+        destName,
+        destType: "string",
+        confidence: "alias",
+        action: destName === "" ? "drop" : "rename",
+        needsCoercion: false,
+        description: "Vendor mapping",
+      },
+    ],
+  });
+  const gapWithHostWarning: DcrGapAnalysis = {
+    ...GAP,
+    warnings: [internalCollisionWarning("host")],
+  };
+
+  it("resolves the data-loss warning into a preserved note when claimed", () => {
+    const report = buildGapReport({
+      tableName: "CommonSecurityLog",
+      logType: "web",
+      matchResult: withHost("DestinationHostName"),
+      gap: gapWithHostWarning,
+      destSchema: DEST_SCHEMA,
+    });
+    expect(report.warnings[0]).toBe(
+      'Source field "host" shares a Cribl-internal field name, but the ' +
+        "pipeline maps it to DestinationHostName before the internal " +
+        "cleanup, so the vendor value is preserved.",
+    );
+    expect(report.warnings.join("\n")).not.toContain("DROPPED as internal");
+  });
+
+  it("keeps the data-loss warning when the matcher did NOT claim the field", () => {
+    const report = buildGapReport({
+      tableName: "CommonSecurityLog",
+      logType: "web",
+      matchResult: MATCH,
+      gap: gapWithHostWarning,
+      destSchema: DEST_SCHEMA,
+    });
+    expect(report.warnings[0]).toBe(internalCollisionWarning("host"));
+  });
+
+  it("keeps the warning when the only claim is a reviewer DROP (no column)", () => {
+    const report = buildGapReport({
+      tableName: "CommonSecurityLog",
+      logType: "web",
+      matchResult: withHost(""),
+      gap: gapWithHostWarning,
+      destSchema: DEST_SCHEMA,
+    });
+    expect(report.warnings[0]).toBe(internalCollisionWarning("host"));
   });
 });

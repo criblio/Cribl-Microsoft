@@ -84,6 +84,23 @@ export const COLLISION_PRONE_INTERNAL_FIELDS: ReadonlySet<string> = new Set([
 ]);
 
 /**
+ * The data-loss-footgun warning for a vendor field whose name collides with
+ * the internal drop-set. Built here (the only emitter) and exported so
+ * buildGapReport can RECOGNIZE the exact warning and resolve it into an
+ * informational note when the field matcher has already claimed the field -
+ * a matcher rename runs in the enrich group, before the cleanup drop, so the
+ * vendor value survives and the alarm would be false.
+ */
+export function internalCollisionWarning(fieldName: string): string {
+  return (
+    `Source field "${fieldName}" collides with a Cribl-internal field name ` +
+    `and is DROPPED as internal metadata. If "${fieldName}" is real ` +
+    `vendor data, rename it upstream (or in the pipeline before this ` +
+    `drop) so it is not lost.`
+  );
+}
+
+/**
  * Whether a source type is compatible with a destination type (the DCR can
  * accept the value without a Cribl coercion). VERBATIM from legacy
  * typesCompatible.
@@ -164,12 +181,7 @@ export function analyzeDcrGap(
       // DATA-LOSS FOOTGUN: a real vendor field collided with the internal
       // drop-set. Surface it (do not silently drop) - Unit 13 precedent.
       if (COLLISION_PRONE_INTERNAL_FIELDS.has(src.name)) {
-        warnings.push(
-          `Source field "${src.name}" collides with a Cribl-internal field name ` +
-            `and is DROPPED as internal metadata. If "${src.name}" is real ` +
-            `vendor data, rename it upstream (or in the pipeline before this ` +
-            `drop) so it is not lost.`,
-        );
+        warnings.push(internalCollisionWarning(src.name));
       }
       continue;
     }

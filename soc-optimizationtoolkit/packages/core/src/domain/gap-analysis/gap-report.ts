@@ -33,6 +33,10 @@ import type {
   MatchConfidence,
   MatchResult,
 } from "../field-matcher/models";
+import {
+  COLLISION_PRONE_INTERNAL_FIELDS,
+  internalCollisionWarning,
+} from "./analyze-dcr-gap";
 import type { DcrGapAnalysis, FieldRef } from "./models";
 
 /** Stable id for each of the six stat tiles (also its render key). */
@@ -261,11 +265,32 @@ export function buildGapReport(input: BuildGapReportInput): GapReport {
     },
   ];
 
+  // A collision-prone internal name (host/source/port...) the MATCHER claimed
+  // is renamed in the enrich group BEFORE the cleanup drop, so the vendor
+  // value survives - the gap engine's data-loss warning would be a false
+  // alarm. Resolve it into the informational note instead (keyed on the exact
+  // warning text, which internalCollisionWarning is the only producer of).
+  const resolvedCollisions = new Map(
+    matchResult.matched
+      .filter(
+        (m) =>
+          m.destName !== "" &&
+          COLLISION_PRONE_INTERNAL_FIELDS.has(m.sourceName),
+      )
+      .map((m) => [
+        internalCollisionWarning(m.sourceName),
+        `Source field "${m.sourceName}" shares a Cribl-internal field name, ` +
+          `but the pipeline maps it to ${m.destName} before the internal ` +
+          `cleanup, so the vendor value is preserved.`,
+      ]),
+  );
+
   // Combined warnings: gap-side (data-loss footgun) then matcher-side
   // (AdditionalData_d-missing), de-duplicated while preserving order.
   const warnings: string[] = [];
   for (const w of [...gap.warnings, ...matchResult.warnings]) {
-    if (!warnings.includes(w)) warnings.push(w);
+    const resolved = resolvedCollisions.get(w) ?? w;
+    if (!warnings.includes(resolved)) warnings.push(resolved);
   }
 
   return {

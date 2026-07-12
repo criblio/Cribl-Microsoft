@@ -32,6 +32,7 @@ export {
   COLLISION_PRONE_INTERNAL_FIELDS,
   typesCompatible,
   analyzeDcrGap,
+  internalCollisionWarning,
 } from "./analyze-dcr-gap";
 
 // Vendor-parameterized profile (default + verbatim CrowdStrike/FDR)
