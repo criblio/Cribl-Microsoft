@@ -81,3 +81,13 @@ export {
 
 export type { VendorFeedConfig } from "./feed-config";
 export { parseFeedConfig } from "./feed-config";
+
+// Drop savings estimator (bytes saved by reviewer drops, for the GUI)
+export type { DropSavings } from "./drop-savings";
+export {
+  NO_DROP_SAVINGS,
+  dropSavingsLine,
+  dropSavingsPercent,
+  estimateDropSavings,
+  mergeDropSavings,
+} from "./drop-savings";

@@ -62,7 +62,10 @@ import {
   createBundledSchemaCatalog,
   createSolutionSchemaCatalog,
   detectVendorIdentity,
+  dropSavingsLine,
+  estimateDropSavings,
   learnedToVendorMappings,
+  mergeDropSavings,
   resolveSampleRouting,
   resolveIdentityFields,
   suggestedIdentityValue,
@@ -417,6 +420,23 @@ export function MappingReviewSection({
       ),
     [reports, contentRequirements],
   );
+  // Byte savings of the CURRENT drop decisions (reviewer + policy + learned),
+  // measured against the actual sample events (user request 2026-07-12).
+  const dropSavingsByLogType = useMemo(() => {
+    const byLogType = new Map<string, ReturnType<typeof estimateDropSavings>>();
+    for (const report of reports) {
+      const droppedFields = effectiveMappings(review, report)
+        .filter((m) => m.action === "drop")
+        .map((m) => m.source);
+      const sample = samples.find((s) => s.logType === report.logType);
+      byLogType.set(
+        report.logType,
+        estimateDropSavings(sample?.rawEvents ?? [], droppedFields),
+      );
+    }
+    return byLogType;
+  }, [reports, review, samples]);
+
   // Auto-apply as reviewable EDITS (visible in the mapping table, reverted
   // by Reset All or by switching the policy). autoDroppedRef tracks exactly
   // what this effect set so preserve only reverts machine drops.
@@ -680,6 +700,9 @@ export function MappingReviewSection({
           const blocked = all.find((a) => a.blocked !== null)?.blocked ?? null;
           const droppable = all.reduce((n, a) => n + a.droppable.length, 0);
           const kept = all.reduce((n, a) => n + a.keptByContent.length, 0);
+          const savingsText = dropSavingsLine(
+            mergeDropSavings([...dropSavingsByLogType.values()]),
+          );
           return (
             <div className="status-bar unused-policy-bar">
               <span className="status-bar-dot" />
@@ -689,7 +712,7 @@ export function MappingReviewSection({
                   : blocked === "opaque-catch-all"
                     ? "Unused-field policy: the solution's content parses the catch-all column opaquely, so nothing is auto-dropped - all overflow fields are preserved."
                     : unusedPolicy === "drop"
-                      ? `Unused-field policy: ${droppable} overflow field(s) required by neither analytics rules nor workbooks are set to DROP; ${kept} stay for content that consumes them. Edit any row or restore everything below.`
+                      ? `Unused-field policy: ${droppable} overflow field(s) required by neither analytics rules nor workbooks are set to DROP; ${kept} stay for content that consumes them.${savingsText !== "" ? ` Volume: ${savingsText}.` : ""} Edit any row or restore everything below.`
                       : `Unused-field policy: preserving all overflow fields in the catch-all column. ${droppable} field(s) are required by neither analytics rules nor workbooks - use "Drop unneeded fields" on a coverage section (or the button here) to drop them.`}
               </span>
               {blocked === null && (
@@ -925,6 +948,21 @@ export function MappingReviewSection({
                   ))}
                 </ul>
               </details>
+            )}
+
+            {(dropSavingsByLogType.get(report.logType)?.droppedBytes ?? 0) >
+              0 && (
+              <p className="field-hint gap-drop-savings">
+                Volume reduction from dropped fields:{" "}
+                {dropSavingsLine(
+                  dropSavingsByLogType.get(report.logType) ?? {
+                    events: 0,
+                    originalBytes: 0,
+                    droppedBytes: 0,
+                  },
+                )}
+                .
+              </p>
             )}
 
             {effective.length > 0 && (
