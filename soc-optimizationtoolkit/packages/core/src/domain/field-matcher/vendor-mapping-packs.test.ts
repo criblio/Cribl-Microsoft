@@ -193,3 +193,47 @@ describe("documentation references (user requirement 2026-07-12: ALL vendors)", 
     }
   });
 });
+
+describe("Sentinel-DCR packs (Wave A, 2026-07-12)", () => {
+  const dcrPacks = VENDOR_MAPPING_PACKS.filter((p) =>
+    p.id.startsWith("sentinel-dcr-"),
+  );
+
+  it("ships the mined DCR-transform packs with pinned repo doc links", () => {
+    expect(dcrPacks.length).toBeGreaterThanOrEqual(5);
+    for (const pack of dcrPacks) {
+      expect(pack.docUrl, pack.id).toMatch(
+        /^https:\/\/github\.com\/Azure\/Azure-Sentinel\/tree\/master\/Solutions\//,
+      );
+      expect(pack.provenance).toContain("Microsoft Sentinel solution DCR");
+      expect(pack.mappings.length, pack.id).toBeGreaterThan(0);
+    }
+  });
+
+  it("outranks Elastic-mined packs and is outranked by hand packs", () => {
+    const ids = VENDOR_MAPPING_PACKS.map((p) => p.id);
+    const firstHand = ids.indexOf("zscaler-zia");
+    const firstDcr = ids.findIndex((id) => id.startsWith("sentinel-dcr-"));
+    const firstElastic = ids.findIndex((id) => id.startsWith("generated-"));
+    expect(firstHand).toBeGreaterThanOrEqual(0);
+    expect(firstDcr).toBeGreaterThan(firstHand);
+    expect(firstElastic).toBeGreaterThan(firstDcr);
+  });
+
+  it("Zscaler gains the official CEF-key crosswalk (act -> DeviceAction)", () => {
+    const mappings = vendorMappingsForSolution("Zscaler Internet Access");
+    const act = mappings.find((m) => m.sourceName === "act");
+    expect(act?.destName).toBe("DeviceAction");
+    expect(act?.description).toContain("Sentinel solution DCR");
+    // The hand pack still wins for sources it declares.
+    const host = mappings.find((m) => m.sourceName === "host");
+    expect(host?.description).toContain("NSS web");
+  });
+
+  it("Cortex XDR custom-table projections are exposed for its solution", () => {
+    const mappings = vendorMappingsForSolution("Palo Alto Cortex XDR");
+    expect(mappings.length).toBeGreaterThan(100);
+    const incident = mappings.find((m) => m.sourceName === "incident_id");
+    expect(incident?.destName).toBe("IncidentId");
+  });
+});

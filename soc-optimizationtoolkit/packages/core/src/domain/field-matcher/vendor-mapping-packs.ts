@@ -33,6 +33,7 @@
 
 import type { VendorMapping } from "./match-fields";
 import generatedPacks from "../../assets/generated-vendor-packs.json";
+import sentinelDcrPacks from "../../assets/generated-sentinel-dcr-packs.json";
 
 /** One documented source -> destination mapping. */
 export interface VendorPackEntry {
@@ -255,13 +256,22 @@ function isGeneratedPack(value: unknown): value is VendorMappingPack {
 }
 
 /**
- * Every pack, hand-verified first (their entries win the dedupe). The
- * catalog-only CEF pack rides along for display; its empty keyword list
+ * Every pack, in AUTHORITY order (first-declared wins the per-source dedupe):
+ *  1. HAND-VERIFIED packs (vendor docs, human-checked).
+ *  2. SENTINEL-DCR packs - mined from the Azure-Sentinel repo's CCP DCR
+ *     transformKql projections, the exact transform Microsoft runs at
+ *     ingestion (scripts/generate-sentinel-dcr-packs.mjs).
+ *  3. ELASTIC-MINED packs - value-vote mining over elastic/integrations
+ *     pipeline fixtures (scripts/generate-vendor-packs.mjs).
+ * The catalog-only CEF pack rides along for display; its empty keyword list
  * keeps it out of every runtime lookup.
  */
 export const VENDOR_MAPPING_PACKS: readonly VendorMappingPack[] = [
   ...HAND_PACKS,
   CEF_CATALOG_PACK,
+  ...(Array.isArray(sentinelDcrPacks)
+    ? (sentinelDcrPacks as unknown[]).filter(isGeneratedPack)
+    : []),
   ...(Array.isArray(generatedPacks)
     ? (generatedPacks as unknown[]).filter(isGeneratedPack)
     : []),
