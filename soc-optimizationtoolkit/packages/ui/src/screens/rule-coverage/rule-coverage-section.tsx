@@ -418,6 +418,7 @@ export function RuleCoverageSection({
   const [analyzing, setAnalyzing] = useState(false);
   const [analyzeError, setAnalyzeError] = useState("");
   const [parserNote, setParserNote] = useState("");
+  const [parserDetail, setParserDetail] = useState("");
   const [schemaNote, setSchemaNote] = useState("");
   const [customItems, setCustomItems] = useState<ContentItem[]>([]);
   // Close-match review of a missing field (the clickable missing-field
@@ -525,27 +526,31 @@ export function RuleCoverageSection({
           parsers,
           new Set(availableFields.map((f) => f.toLowerCase())),
         );
-        const parserParts: string[] = [];
+        const parserSummary: string[] = [];
         if (parsers.length > 0) {
-          parserParts.push(
-            `${parsers.length} parser function(s) resolved (` +
-              parsers
-                .map((p) => `${p.alias} over ${p.tables.join("+") || "?"}`)
-                .join("; ") +
-              `)`,
-          );
+          parserSummary.push(`${parsers.length} parser function(s) resolved`);
           if (synonyms.length > 0) {
-            parserParts.push(
-              `${synonyms.length} parser field name(s) counted as available via their source columns`,
-            );
+            parserSummary.push(`${synonyms.length} field(s) available via parsers`);
           }
         }
         if (unparsed > 0) {
-          parserParts.push(
-            `${unparsed} parser file(s) could not be read or parsed and were skipped`,
-          );
+          parserSummary.push(`${unparsed} parser file(s) skipped`);
         }
-        setParserNote(parserParts.length > 0 ? parserParts.join("; ") + "." : "");
+        setParserNote(
+          parserSummary.length > 0 ? parserSummary.join("; ") + "." : "",
+        );
+        setParserDetail(
+          parsers.length > 0
+            ? "Rules that query a KQL parser FUNCTION instead of a table are resolved through it: " +
+                parsers
+                  .map((p) => `${p.alias} over ${p.tables.join("+") || "?"}`)
+                  .join("; ") +
+                ". A parser output name counts as available when the source column it renames is available." +
+                (unparsed > 0
+                  ? ` ${unparsed} parser file(s) could not be read or parsed and were skipped.`
+                  : "")
+            : "",
+        );
 
         const produced = analyzeContentCoverage({
           items,
@@ -685,7 +690,10 @@ export function RuleCoverageSection({
       </div>
 
       {!hasReports && (
-        <p className="field-hint">{RULE_COVERAGE_NO_REPORTS_NOTE}</p>
+        <p className="field-hint">
+          Run the DCR Gap Analysis first.
+          <InfoTip text={RULE_COVERAGE_NO_REPORTS_NOTE} />
+        </p>
       )}
       {uploadNote !== "" && (
         <div className="status-bar status-bar-warn">
@@ -703,7 +711,10 @@ export function RuleCoverageSection({
       {parserNote !== "" && (
         <div className="status-bar">
           <span className="status-bar-dot" />
-          <span className="status-bar-text">{parserNote}</span>
+          <span className="status-bar-text">
+            {parserNote}
+            {parserDetail !== "" && <InfoTip text={parserDetail} />}
+          </span>
         </div>
       )}
 

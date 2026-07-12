@@ -120,6 +120,21 @@ import {
   unmappedDestColumns,
 } from "./mapping-review-state";
 
+/**
+ * The unused-field policy explainer (InfoTip; the bar itself stays terse).
+ */
+const POLICY_BAR_TIP =
+  "Overflow fields required by neither the analytics rules nor the " +
+  "workbooks can be DROPPED instead of preserved in the catch-all column. " +
+  'Trigger via "Drop unneeded fields" on a coverage section or the button ' +
+  "here; every drop is a visible row edit, reversible per row, via " +
+  "Restore, or via Reset All. Fields the content consumes - directly, " +
+  "through KQL transformations, or as key=value pairs mined from the " +
+  "catch-all - are always kept. With no analyzed content there is no " +
+  "evidence to drop on; if content parses the catch-all without " +
+  "determinable keys, dropping anything could break it, so the action is " +
+  "disabled.";
+
 /** The action-dropdown options (the Cribl pipeline dispositions). */
 const ACTION_OPTIONS: readonly MatchAction[] = [
   "keep",
@@ -699,13 +714,12 @@ export function MappingReviewSection({
         <div className="status-bar learned-mappings-bar">
           <span className="status-bar-dot" />
           <span className="status-bar-text">
-            {learned.length} learned mapping decision(s) replay for this
-            solution ahead of the vendor packs
+            {learned.length} learned decision(s)
             {learned.filter((l) => l.action === "drop").length > 0
-              ? ` (${learned.filter((l) => l.action === "drop").length} drop(s) - dropped fields never reach the mapping table or overflow)`
-              : ""}
-            . Clearing forgets them; the next analysis starts from the packs
-            and ladder alone.
+              ? ` (${learned.filter((l) => l.action === "drop").length} drop(s))`
+              : ""}{" "}
+            replay for this solution.
+            <InfoTip text="Approved hand edits persist per solution and replay ahead of the vendor packs on every analysis. Learned DROPS consume their source fields before the mapping table or overflow sees them. Clearing forgets all of them; the next analysis starts from the packs and matching ladder alone." />
           </span>
           <button
             className="link-button"
@@ -732,12 +746,13 @@ export function MappingReviewSection({
               <span className="status-bar-dot" />
               <span className="status-bar-text">
                 {blocked === "no-requirements"
-                  ? "Unused-field policy: no rule/workbook analysis available yet - all overflow fields are preserved in the catch-all column."
+                  ? "Unused fields: preserving all (no coverage analysis yet)."
                   : blocked === "opaque-catch-all"
-                    ? "Unused-field policy: the solution's content parses the catch-all column opaquely, so nothing is auto-dropped - all overflow fields are preserved."
+                    ? "Unused fields: preserving all (content parses the catch-all opaquely)."
                     : unusedPolicy === "drop"
-                      ? `Unused-field policy: ${droppable} overflow field(s) required by neither analytics rules nor workbooks are set to DROP; ${kept} stay for content that consumes them.${savingsText !== "" ? ` Volume: ${savingsText}.` : ""} Edit any row or restore everything below.`
-                      : `Unused-field policy: preserving all overflow fields in the catch-all column. ${droppable} field(s) are required by neither analytics rules nor workbooks - use "Drop unneeded fields" on a coverage section (or the button here) to drop them.`}
+                      ? `Unused fields: ${droppable} dropped, ${kept} kept for content.${savingsText !== "" ? ` ${savingsText}.` : ""}`
+                      : `Unused fields: preserving all (${droppable} droppable).`}
+                <InfoTip text={POLICY_BAR_TIP} />
               </span>
               {blocked === null && (
                 <button
@@ -766,7 +781,14 @@ export function MappingReviewSection({
           className={`gap-approval-bar ${gate.allApproved ? "gap-approval-bar-ok status-bar-ready" : "status-bar-warn"}`}
         >
           <span className="status-bar-dot" aria-hidden="true" />
-          <span className="gap-approval-text">{approvalBarText(gate)}</span>
+          <span className="gap-approval-text">
+            {gate.allApproved
+              ? `All ${gate.total} table mapping(s) approved.`
+              : gate.approved > 0
+                ? `${gate.approved} of ${gate.total} table mapping(s) approved.`
+                : "Field mappings require approval before building."}
+            <InfoTip text={approvalBarText(gate)} />
+          </span>
           {gate.allApproved ? (
             <button
               className="gap-reset-button"
@@ -938,30 +960,47 @@ export function MappingReviewSection({
 
             {vendorDocPacks.length > 0 && (
               <p className="field-hint vendor-doc-links">
-                Vendor mapping documentation:{" "}
+                Mapping docs:{" "}
                 {vendorDocPacks.map((pack, i) => (
                   <span key={pack.id}>
-                    {i > 0 ? "; " : ""}
+                    {i > 0 ? ", " : ""}
                     {pack.docUrl !== undefined ? (
                       <a href={pack.docUrl} target="_blank" rel="noreferrer">
-                        {pack.vendor} - {pack.provenance}
+                        {pack.vendor}
                       </a>
                     ) : (
-                      <span>
-                        {pack.vendor} - {pack.provenance}
-                      </span>
+                      <span>{pack.vendor}</span>
                     )}
                   </span>
                 ))}
+                <InfoTip
+                  text={
+                    "Documentation backing this solution's Phase-0 vendor mappings: " +
+                    vendorDocPacks
+                      .map((pack) => `${pack.vendor} - ${pack.provenance}`)
+                      .join("; ") +
+                    "."
+                  }
+                />
               </p>
             )}
 
             {report.overflowCount > 0 && (
               <p className="field-hint gap-overflow-note">
-                {OVERFLOW_COVERAGE_NOTE}
+                Overflow: {report.overflowCount} field(s) preserved in the
+                catch-all
                 {report.overflowTriage.summary !== ""
-                  ? ` ${report.overflowTriage.summary}`
+                  ? ` - ${report.overflowTriage.noEquivalentCount} unmappable, ${report.overflowTriage.outranked.length} outranked`
                   : ""}
+                .
+                <InfoTip
+                  text={
+                    OVERFLOW_COVERAGE_NOTE +
+                    (report.overflowTriage.summary !== ""
+                      ? ` ${report.overflowTriage.summary}`
+                      : "")
+                  }
+                />
               </p>
             )}
 
@@ -985,7 +1024,7 @@ export function MappingReviewSection({
             {(dropSavingsByLogType.get(report.logType)?.droppedBytes ?? 0) >
               0 && (
               <p className="field-hint gap-drop-savings">
-                Volume reduction from dropped fields:{" "}
+                Volume:{" "}
                 {dropSavingsLine(
                   dropSavingsByLogType.get(report.logType) ?? {
                     events: 0,
