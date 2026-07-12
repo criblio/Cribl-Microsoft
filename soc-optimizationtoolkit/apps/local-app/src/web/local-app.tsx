@@ -17,6 +17,7 @@ import {
   APP_THEME_KEY,
   AppFrame,
   ArchitectureScreen,
+  MappingCatalogScreen,
   AuaGate,
   AzureTargetingScreen,
   EventHubDiscoveryScreen,
@@ -981,6 +982,21 @@ export function LocalApp() {
     </>
   );
 
+  // Vendor Mapping Catalog: the documented source-field -> Sentinel-column
+  // suggestions the analysis applies. Pure bundled data; no ports, no IO.
+  const mappingCatalogView = (
+    <>
+      <header className="local-header">
+        <h1 className="local-title">Vendor Mapping Catalog</h1>
+        <p className="local-subtitle">
+          The vendor-suggested Sentinel field mappings applied during the DCR
+          Gap Analysis, with the documentation behind each one.
+        </p>
+      </header>
+      <MappingCatalogScreen />
+    </>
+  );
+
   // Architecture Patterns (roadmap Phase 4 queued item): the data-driven
   // reference-architecture advisor. Pure core recommender + inline-SVG
   // diagrams; no ports, no IO. requires: 'none' - advisory in every mode.
@@ -1127,6 +1143,7 @@ export function LocalApp() {
     { id: 'review', label: 'Review', requires: 'azure', section: 'development', render: renderReview },
     { id: 'packs', label: 'Packs', requires: 'cribl', section: 'development', render: () => packsView },
     { id: 'architecture', label: 'Architecture Patterns', requires: 'none', section: 'development', render: () => architectureView },
+    { id: 'mapping-catalog', label: 'Mapping Catalog', requires: 'none', section: 'development', render: () => mappingCatalogView },
   ];
 
   // Frame topBar (GUI-28's Azure half): the committed target scope as a
