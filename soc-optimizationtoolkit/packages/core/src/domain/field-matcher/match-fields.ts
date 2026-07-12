@@ -43,6 +43,11 @@ export interface VendorMapping {
   sourceType: string;
   destType: string;
   action: string;
+  /**
+   * Provenance line rendered with the match (vendor doc citation, mined ECS
+   * path, or the learned-from-review marker).
+   */
+  description?: string;
 }
 
 /**
@@ -96,9 +101,13 @@ export function matchFields(
           needsCoercion: isDecode
             ? false
             : (src.type || vm.sourceType) !== (dst?.type || vm.destType),
-          description: isDecode
-            ? `Vendor mapping (base64 decode): ${src.name} -> ${dst?.name || vm.destName}`
-            : `Vendor mapping: ${src.name} -> ${dst?.name || vm.destName}`,
+          description:
+            (isDecode
+              ? `Vendor mapping (base64 decode): ${src.name} -> ${dst?.name || vm.destName}`
+              : `Vendor mapping: ${src.name} -> ${dst?.name || vm.destName}`) +
+            (vm.description !== undefined && vm.description !== ""
+              ? ` - ${vm.description}`
+              : ""),
           sampleValue: src.sampleValue,
         });
         usedSource.add(src.name);

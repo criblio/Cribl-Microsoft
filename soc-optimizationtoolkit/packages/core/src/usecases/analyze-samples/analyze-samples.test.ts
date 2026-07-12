@@ -186,3 +186,34 @@ describe("per-sample vendor-mapping guard (Phase 0 packs)", () => {
     expect(claimants.map((m) => m.source)).toEqual(["login"]);
   });
 });
+
+describe("learned mappings outrank packs (per-sample source dedupe)", () => {
+  it("the FIRST entry for a source wins; later pack entries are skipped", async () => {
+    const ports: AnalyzeSamplesPorts = {
+      content: new FakeSentinelContent({ files: {} }),
+      catalog: {
+        resolveSchema: async () => [
+          { name: "DeviceAddress", type: "string" },
+          { name: "SourceIP", type: "string" },
+          { name: "AdditionalExtensions", type: "string" },
+        ],
+      },
+    };
+    const [report] = await collectGapReports(ports, {
+      solutionName: "Zscaler Internet Access",
+      samples: [
+        { logType: "web", tableName: "SomeTable", content: '{"cltip":"10.1.1.1"}' },
+      ],
+      vendorMappings: [
+        // Learned reviewer decision (declared first)...
+        { sourceName: "cltip", destName: "DeviceAddress", sourceType: "", destType: "", action: "map" },
+        // ...must beat the pack's documented mapping for the same source.
+        { sourceName: "cltip", destName: "SourceIP", sourceType: "", destType: "", action: "map" },
+      ],
+    });
+    const claimants = report.fieldMappings.filter(
+      (m) => m.source === "cltip" && m.action !== "overflow",
+    );
+    expect(claimants.map((m) => m.dest)).toEqual(["DeviceAddress"]);
+  });
+});

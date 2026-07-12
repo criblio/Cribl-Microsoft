@@ -47,6 +47,17 @@ export { matchFields, matchSampleToSchema } from "./match-fields";
 export type { CloseMatchCandidate, CloseMatchRow } from "./close-matches";
 export { nameTokens, suggestCloseMatches } from "./close-matches";
 
+// Learned reviewer decisions (highest-priority Phase 0 tier)
+export type { LearnedDiffRow, LearnedMapping } from "./learned-mappings";
+export {
+  LEARNED_MAPPING_DESCRIPTION,
+  diffLearnedMappings,
+  learnedMappingsCacheKey,
+  learnedToVendorMappings,
+  mergeLearnedMappings,
+  parseLearnedMappings,
+} from "./learned-mappings";
+
 // Documented per-vendor mapping packs (Phase 0 knowledge)
 export type { VendorMappingPack, VendorPackEntry } from "./vendor-mapping-packs";
 export {

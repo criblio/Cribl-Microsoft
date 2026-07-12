@@ -205,10 +205,19 @@ export async function* analyzeSamples(
       (columns ?? []).map((c) => c.name.toLowerCase()),
     );
     const claimedDest = new Set<string>();
+    const claimedSource = new Set<string>();
     const applicableMappings = (input.vendorMappings ?? []).filter((vm) => {
-      if (!sampleFieldNames.has(vm.sourceName.toLowerCase())) return false;
+      const sourceKey = vm.sourceName.toLowerCase();
+      if (!sampleFieldNames.has(sourceKey)) return false;
+      if (claimedSource.has(sourceKey)) return false;
+      // A learned/pack DROP consumes its source without claiming a column.
+      if (vm.action === "drop") {
+        claimedSource.add(sourceKey);
+        return true;
+      }
       if (!schemaColumnNames.has(vm.destName.toLowerCase())) return false;
       if (claimedDest.has(vm.destName.toLowerCase())) return false;
+      claimedSource.add(sourceKey);
       claimedDest.add(vm.destName.toLowerCase());
       return true;
     });

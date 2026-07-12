@@ -877,6 +877,7 @@ export function IntegrateScreen({
         solutionName={solution?.name ?? ""}
         samples={samples}
         content={ports.content}
+        learnedCache={ports.contentCache}
         ruleFields={ruleFields}
         onGateChange={setMappingsApproved}
         onReportsChange={setGapReports}

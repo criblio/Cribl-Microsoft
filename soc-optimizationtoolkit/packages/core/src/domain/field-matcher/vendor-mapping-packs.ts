@@ -44,6 +44,10 @@ export interface VendorPackEntry {
    * destination's data encoded - e.g. Zscaler b64url).
    */
   action?: "map" | "decode";
+  /** Vendor-documentation citation for this field (hand packs). */
+  doc?: string;
+  /** The mined ECS path (generated packs; the generator writes it). */
+  ecs?: string;
 }
 
 /** A per-vendor documented mapping pack. */
@@ -56,6 +60,8 @@ export interface VendorMappingPack {
   solutionKeywords: readonly string[];
   /** Where the mapping knowledge comes from (doc pointer / generator tag). */
   provenance: string;
+  /** Link to the vendor documentation backing the pack, when one exists. */
+  docUrl?: string;
   mappings: readonly VendorPackEntry[];
 }
 
@@ -70,56 +76,57 @@ const HAND_PACKS: readonly VendorMappingPack[] = [
     solutionKeywords: ["zscaler"],
     provenance:
       "Zscaler NSS feed output format (web/firewall/dns) + ZIA CEF mapping guide",
+    docUrl: "https://help.zscaler.com/zia/nss-feed-output-format-web-logs",
     mappings: [
       // Web (NSS web feed)
-      { sourceName: "login", destName: "SourceUserName" },
-      { sourceName: "cltip", destName: "SourceIP" },
-      { sourceName: "cltpubip", destName: "SourceTranslatedAddress" },
-      { sourceName: "cltsourceport", destName: "SourcePort" },
-      { sourceName: "serverip", destName: "DestinationIP" },
-      { sourceName: "reqmethod", destName: "RequestMethod" },
-      { sourceName: "respcode", destName: "EventOutcome" },
-      { sourceName: "reqsize", destName: "SentBytes" },
-      { sourceName: "respsize", destName: "ReceivedBytes" },
-      { sourceName: "useragent", destName: "RequestClientApplication" },
+      { sourceName: "login", destName: "SourceUserName", doc: "NSS web: login/email of the transaction owner" },
+      { sourceName: "cltip", destName: "SourceIP", doc: "NSS web: client IP address of the transaction" },
+      { sourceName: "cltpubip", destName: "SourceTranslatedAddress", doc: "NSS web: public client IP as seen by Zscaler" },
+      { sourceName: "cltsourceport", destName: "SourcePort", doc: "NSS web: client source port" },
+      { sourceName: "serverip", destName: "DestinationIP", doc: "NSS web: destination server IP" },
+      { sourceName: "reqmethod", destName: "RequestMethod", doc: "NSS web: HTTP request method" },
+      { sourceName: "respcode", destName: "EventOutcome", doc: "NSS web: HTTP response status code" },
+      { sourceName: "reqsize", destName: "SentBytes", doc: "NSS web: request bytes (client to server)" },
+      { sourceName: "respsize", destName: "ReceivedBytes", doc: "NSS web: response bytes (server to client)" },
+      { sourceName: "useragent", destName: "RequestClientApplication", doc: "NSS web: full user agent string" },
       // The NSS web feed carries the URL and referer base64-ENCODED; decode
       // them into their columns (a rename would land base64 text where rules
       // filter on decoded URLs). b64referer is declared BEFORE refererhost
       // so the full decoded referer wins the per-sample dest collision;
       // refererhost stays as the fallback for feeds without b64 fields.
-      { sourceName: "b64url", destName: "RequestURL", action: "decode" },
-      { sourceName: "b64referer", destName: "RequestContext", action: "decode" },
-      { sourceName: "refererhost", destName: "RequestContext" },
-      { sourceName: "host", destName: "DestinationHostName" },
-      { sourceName: "filetype", destName: "FileType" },
-      { sourceName: "devicehostname", destName: "SourceHostName" },
-      { sourceName: "applayerprotocol", destName: "ApplicationProtocol" },
-      { sourceName: "epochtime", destName: "ReceiptTime" },
-      { sourceName: "url", destName: "RequestURL" },
-      { sourceName: "action", destName: "DeviceAction" },
+      { sourceName: "b64url", destName: "RequestURL", action: "decode", doc: "NSS web: full URL, base64-encoded by the feed" },
+      { sourceName: "b64referer", destName: "RequestContext", action: "decode", doc: "NSS web: full referer URL, base64-encoded by the feed" },
+      { sourceName: "refererhost", destName: "RequestContext", doc: "NSS web: host portion of the HTTP referer" },
+      { sourceName: "host", destName: "DestinationHostName", doc: "NSS web: destination host of the request" },
+      { sourceName: "filetype", destName: "FileType", doc: "NSS web: type of the transferred file" },
+      { sourceName: "devicehostname", destName: "SourceHostName", doc: "NSS web: client device hostname (Client Connector)" },
+      { sourceName: "applayerprotocol", destName: "ApplicationProtocol", doc: "NSS web: application-layer protocol" },
+      { sourceName: "epochtime", destName: "ReceiptTime", doc: "NSS web: transaction time, epoch seconds" },
+      { sourceName: "url", destName: "RequestURL", doc: "NSS web: full URL (feeds configured un-encoded)" },
+      { sourceName: "action", destName: "DeviceAction", doc: "NSS: action Zscaler applied (allowed/blocked)" },
       // Firewall (NSS firewall feed): c=client-side, s=server-side post-NAT
-      { sourceName: "csip", destName: "SourceIP" },
-      { sourceName: "csport", destName: "SourcePort" },
-      { sourceName: "cdip", destName: "DestinationIP" },
-      { sourceName: "cdport", destName: "DestinationPort" },
-      { sourceName: "ssip", destName: "SourceTranslatedAddress" },
-      { sourceName: "ssport", destName: "SourceTranslatedPort" },
-      { sourceName: "sdip", destName: "DestinationTranslatedAddress" },
-      { sourceName: "sdport", destName: "DestinationTranslatedPort" },
-      { sourceName: "inbytes", destName: "ReceivedBytes" },
-      { sourceName: "outbytes", destName: "SentBytes" },
-      { sourceName: "nwsvc", destName: "ApplicationProtocol" },
-      { sourceName: "user", destName: "SourceUserName" },
-      { sourceName: "recordid", destName: "ExternalID" },
-      { sourceName: "datetime", destName: "ReceiptTime" },
+      { sourceName: "csip", destName: "SourceIP", doc: "NSS firewall: client source IP" },
+      { sourceName: "csport", destName: "SourcePort", doc: "NSS firewall: client source port" },
+      { sourceName: "cdip", destName: "DestinationIP", doc: "NSS firewall: client destination IP" },
+      { sourceName: "cdport", destName: "DestinationPort", doc: "NSS firewall: client destination port" },
+      { sourceName: "ssip", destName: "SourceTranslatedAddress", doc: "NSS firewall: server source IP (post-NAT egress)" },
+      { sourceName: "ssport", destName: "SourceTranslatedPort", doc: "NSS firewall: server source port (post-NAT egress)" },
+      { sourceName: "sdip", destName: "DestinationTranslatedAddress", doc: "NSS firewall: server destination IP" },
+      { sourceName: "sdport", destName: "DestinationTranslatedPort", doc: "NSS firewall: server destination port" },
+      { sourceName: "inbytes", destName: "ReceivedBytes", doc: "NSS firewall: bytes received" },
+      { sourceName: "outbytes", destName: "SentBytes", doc: "NSS firewall: bytes sent" },
+      { sourceName: "nwsvc", destName: "ApplicationProtocol", doc: "NSS firewall: network service (application protocol)" },
+      { sourceName: "user", destName: "SourceUserName", doc: "NSS firewall: user who owns the session" },
+      { sourceName: "recordid", destName: "ExternalID", doc: "NSS: unique record identifier" },
+      { sourceName: "datetime", destName: "ReceiptTime", doc: "NSS firewall: transaction date and time" },
       // DNS (NSS dns feed)
-      { sourceName: "dns_req", destName: "DestinationDnsDomain" },
-      { sourceName: "clt_sip", destName: "SourceIP" },
-      { sourceName: "srv_dip", destName: "DestinationIP" },
-      { sourceName: "srv_dport", destName: "DestinationPort" },
-      { sourceName: "reqaction", destName: "DeviceAction" },
-      { sourceName: "http_code", destName: "EventOutcome" },
-      { sourceName: "error", destName: "Reason" },
+      { sourceName: "dns_req", destName: "DestinationDnsDomain", doc: "NSS dns: requested domain name" },
+      { sourceName: "clt_sip", destName: "SourceIP", doc: "NSS dns: client source IP" },
+      { sourceName: "srv_dip", destName: "DestinationIP", doc: "NSS dns: resolver destination IP" },
+      { sourceName: "srv_dport", destName: "DestinationPort", doc: "NSS dns: resolver destination port" },
+      { sourceName: "reqaction", destName: "DeviceAction", doc: "NSS dns: action taken on the DNS request" },
+      { sourceName: "http_code", destName: "EventOutcome", doc: "NSS dns: response code of the transaction" },
+      { sourceName: "error", destName: "Reason", doc: "NSS dns: error reason" },
     ],
   },
   {
@@ -187,12 +194,16 @@ export function vendorMappingsForSolution(
       const sourceKey = entry.sourceName.toLowerCase();
       if (seenSource.has(sourceKey)) continue;
       seenSource.add(sourceKey);
+      const description =
+        entry.doc ??
+        (entry.ecs !== undefined ? `Elastic ECS: ${entry.ecs}` : undefined);
       out.push({
         sourceName: entry.sourceName,
         destName: entry.destName,
         sourceType: "",
         destType: "",
         action: entry.action ?? "map",
+        ...(description !== undefined ? { description } : {}),
       });
     }
   }

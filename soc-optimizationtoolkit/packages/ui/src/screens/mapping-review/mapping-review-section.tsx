@@ -42,18 +42,25 @@ import {
   createBundledSchemaCatalog,
   decodeConnector,
   detectVendorIdentity,
+  diffLearnedMappings,
   hintsFromConnectorTables,
   identityValueOptions,
+  learnedMappingsCacheKey,
+  learnedToVendorMappings,
   matchSampleLogTypeToTable,
+  mergeLearnedMappings,
+  parseLearnedMappings,
   resolveDestinationTables,
   resolveIdentityFields,
   suggestedIdentityValue,
   vendorMappingsForSolution,
 } from "@soc/core";
 import type {
+  ContentCache,
   DestinationTableResolution,
   GapFieldMapping,
   GapReport,
+  LearnedMapping,
   IdentityFieldStatus,
   MatchAction,
   SchemaCatalog,
@@ -150,6 +157,13 @@ export interface MappingReviewSectionProps {
   onEnrichmentsChange?: (
     byLogType: Readonly<Record<string, EnrichmentField[]>>,
   ) => void;
+  /**
+   * Plain-KV store for LEARNED mappings (the reviewer-feedback loop): every
+   * approved hand edit persists per solution and replays on future analyses
+   * as the highest-priority tier, ahead of the vendor packs. Absent = the
+   * loop is off (analysis still works).
+   */
+  learnedCache?: ContentCache;
 }
 
 /**
@@ -205,6 +219,7 @@ export function MappingReviewSection({
   onEffectiveMappingsChange,
   renameEvent,
   onEnrichmentsChange,
+  learnedCache,
 }: MappingReviewSectionProps) {
   const activeCatalog = useMemo(
     () => catalog ?? createBundledSchemaCatalog(),
@@ -228,6 +243,65 @@ export function MappingReviewSection({
   // so a field flagged by the coverage sections can be found by hand.
   const [mappingSearch, setMappingSearch] = useState<Record<string, string>>(
     {},
+  );
+
+  // ---- Learned mappings (the reviewer-feedback loop) ----------------------
+  // Loaded per solution; replayed into Phase 0 AHEAD of the vendor packs on
+  // every analysis; extended with the diffed hand edits on every APPROVE.
+  const [learned, setLearned] = useState<LearnedMapping[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    setLearned([]);
+    if (learnedCache === undefined || solutionName === "") {
+      return;
+    }
+    void (async () => {
+      try {
+        const raw = await learnedCache.get(learnedMappingsCacheKey(solutionName));
+        if (!cancelled) {
+          setLearned(parseLearnedMappings(raw));
+        }
+      } catch {
+        // A failed load only disables replay for this session.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [learnedCache, solutionName]);
+
+  // Persist the hand edits of the given reports (diffed against their
+  // analyzed baselines) into the learned store. Fire-and-forget: a failed
+  // save never blocks the approval.
+  const persistLearned = useCallback(
+    (toLearn: readonly GapReport[], reviewState: typeof review) => {
+      if (learnedCache === undefined || solutionName === "") {
+        return;
+      }
+      const fresh = toLearn.flatMap((report) =>
+        diffLearnedMappings(
+          report.fieldMappings.map((m) => ({
+            source: m.source,
+            dest: m.dest,
+            action: m.action,
+          })),
+          effectiveMappings(reviewState, report).map((m) => ({
+            source: m.source,
+            dest: m.dest,
+            action: m.action,
+          })),
+        ),
+      );
+      if (fresh.length === 0) {
+        return;
+      }
+      const merged = mergeLearnedMappings(learned, fresh);
+      setLearned(merged);
+      void learnedCache
+        .set(learnedMappingsCacheKey(solutionName), merged)
+        .catch(() => undefined);
+    },
+    [learnedCache, solutionName, learned],
   );
 
   // ---- User-added enrichment fields --------------------------------------
@@ -435,7 +509,12 @@ export function MappingReviewSection({
           solutionName,
           samples: specs,
           vendorProfile: profile,
-          vendorMappings: vendorMappingsForSolution(solutionName),
+          // Learned reviewer decisions FIRST: the usecase's per-sample
+          // source dedupe is first-wins, so a learned entry beats a pack.
+          vendorMappings: [
+            ...learnedToVendorMappings(learned),
+            ...vendorMappingsForSolution(solutionName),
+          ],
         },
       );
       setReports(produced);
@@ -454,6 +533,7 @@ export function MappingReviewSection({
     activeCatalog,
     profile,
     tableOverrides,
+    learned,
   ]);
 
   // Candidate destination tables for the per-sample override dropdown: the
@@ -613,12 +693,13 @@ export function MappingReviewSection({
           ) : (
             <button
               className="next-action-button"
-              onClick={() =>
+              onClick={() => {
+                persistLearned(withMappings, review);
                 dispatch({
                   type: "auto-approve-all",
                   logTypes: withMappings.map((r) => r.logType),
-                })
-              }
+                });
+              }}
             >
               Auto-Approve All
             </button>
@@ -977,9 +1058,10 @@ export function MappingReviewSection({
                   ) : (
                     <button
                       className="run-button"
-                      onClick={() =>
-                        dispatch({ type: "approve", logType: report.logType })
-                      }
+                      onClick={() => {
+                        persistLearned([report], review);
+                        dispatch({ type: "approve", logType: report.logType });
+                      }}
                     >
                       Approve {report.logType}
                     </button>
