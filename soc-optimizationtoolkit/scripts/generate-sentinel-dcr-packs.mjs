@@ -7,12 +7,9 @@
 //
 // For each target solution, fetch its CCP DCR JSON(s) and tokenize every
 // dataFlow's transformKql project/extend clauses into source -> destination
-// pairs. Accepted right-hand shapes (everything else is skipped - lookup
-// dicts, iff() logic, now(), constants):
-//   Dest = source_field
-//   Dest = toXxx(source_field)
-//   Dest = column_ifexists('source_field', ...)
-//   Dest = datetime(1970-01-01) + (source_field * 1ms)   (epoch-ms fields)
+// pairs via THE shared miner (packages/core/src/domain/gap-analysis/
+// transform-kql-mining.ts - also used by the runtime kql-parser, pinned
+// there; accepted RHS shapes documented in that module).
 //
 // Output: packages/core/src/assets/generated-sentinel-dcr-packs.json (never
 // hand-edit; re-run this script). Declared AFTER hand packs and BEFORE the
@@ -114,72 +111,15 @@ function encodePath(p) {
   return p.split("/").map(encodeURIComponent).join("/");
 }
 
-/** Split a KQL stage's argument list on TOP-LEVEL commas. */
-function splitTopLevel(text) {
-  const parts = [];
-  let depth = 0;
-  let quote = null;
-  let cur = "";
-  for (const ch of text) {
-    if (quote !== null) {
-      cur += ch;
-      if (ch === quote) quote = null;
-      continue;
-    }
-    if (ch === "'" || ch === '"') {
-      quote = ch;
-      cur += ch;
-      continue;
-    }
-    if (ch === "(" || ch === "[" || ch === "{") depth++;
-    if (ch === ")" || ch === "]" || ch === "}") depth--;
-    if (ch === "," && depth === 0) {
-      parts.push(cur);
-      cur = "";
-      continue;
-    }
-    cur += ch;
-  }
-  if (cur.trim() !== "") parts.push(cur);
-  return parts;
-}
-
-const IDENT = "[A-Za-z_][A-Za-z0-9_]*";
-const RHS_PATTERNS = [
-  new RegExp(`^(${IDENT})$`), // bare identifier
-  new RegExp(`^to\\w+\\(\\s*(${IDENT})\\s*\\)$`), // toXxx(field)
-  new RegExp(`^column_ifexists\\(\\s*'(${IDENT})'`), // column_ifexists('field',...)
-  // datetime(1970-01-01) + (field * 1ms)  - epoch-ms conversion
-  new RegExp(`^datetime\\([^)]*\\)\\s*\\+\\s*\\(\\s*(${IDENT})\\s*\\*\\s*1ms\\s*\\)$`),
-];
-
-/** Extract dest<-source pairs from one transformKql string. */
-export function minePairsFromTransform(transformKql) {
-  const pairs = [];
-  for (const stage of transformKql.split("|")) {
-    const trimmed = stage.trim();
-    const m = trimmed.match(/^(project-rename|project|extend)\s+([\s\S]+)$/);
-    if (m === null) continue;
-    for (const item of splitTopLevel(m[2])) {
-      const eq = item.match(
-        new RegExp(`^\\s*(${IDENT})\\s*=\\s*([\\s\\S]+?)\\s*$`),
-      );
-      if (eq === null) continue;
-      const dest = eq[1];
-      const rhs = eq[2];
-      for (const pattern of RHS_PATTERNS) {
-        const hit = rhs.match(pattern);
-        if (hit !== null) {
-          if (hit[1].toLowerCase() !== dest.toLowerCase()) {
-            pairs.push({ sourceName: hit[1], destName: dest });
-          }
-          break;
-        }
-      }
-    }
-  }
-  return pairs;
-}
+// THE shared miner - the same module the runtime kql-parser uses, so the
+// generator and runtime cannot drift (2026-07-12 audit unification). Node
+// 23.6+ runs the dependency-free core TS file natively via type stripping.
+const { mineTransformFieldPairs } = await import(
+  new URL(
+    "../packages/core/src/domain/gap-analysis/transform-kql-mining.ts",
+    import.meta.url,
+  ).href
+);
 
 function stripStream(outputStream) {
   return String(outputStream ?? "").replace(/^(Custom|Microsoft)-/, "");
@@ -236,7 +176,7 @@ async function main() {
       for (const flow of dataFlowsOf(json)) {
         flowsSeen++;
         const table = stripStream(flow.outputStream);
-        for (const pair of minePairsFromTransform(flow.transformKql)) {
+        for (const pair of mineTransformFieldPairs(flow.transformKql)) {
           const key = pair.sourceName.toLowerCase();
           if (!bySource.has(key)) {
             bySource.set(key, {

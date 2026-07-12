@@ -26,6 +26,10 @@ export {
   extractTableRouting,
 } from "./kql-parser";
 
+// THE shared transformKql miner (generator + runtime kql-parser lockstep)
+export type { TransformFieldPair, TransformStage } from "./transform-kql-mining";
+export { mineTransformFieldPairs } from "./transform-kql-mining";
+
 // DCR gap partitioner + the verbatim drop-set + type compatibility
 export {
   CRIBL_INTERNAL_FIELDS,

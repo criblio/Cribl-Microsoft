@@ -20,6 +20,7 @@
 
 import type { DcrFlow, ParsedDcr, TableRoutingInfo } from "./models";
 import type { VendorGapProfile } from "./vendor-profile";
+import { mineTransformFieldPairs } from "./transform-kql-mining";
 import { DEFAULT_GAP_PROFILE } from "./vendor-profile";
 
 // ---------------------------------------------------------------------------
@@ -78,9 +79,13 @@ export function parseTransformKql(
     }
   }
 
-  // Extract project-rename: dest = ['source'] or dest = source
+  // Extract project-rename: dest = ['source'] or dest = source.
+  // FIX + PIN (2026-07-12, exposed by the miner-lockstep pins): the legacy
+  // terminator only stopped at a NEWLINE-pipe, so on single-line transforms
+  // (the common CCP shape) it over-captured the following stage and emitted
+  // garbage renames like `dest = tostring`. The stage ends at ANY pipe.
   const renames: Array<{ dest: string; source: string }> = [];
-  const renameBlock = clean.match(/project-rename\s+([\s\S]*?)(?=\n\s*\||\n*$)/);
+  const renameBlock = clean.match(/project-rename\s+([\s\S]*?)(?=\||\n*$)/);
   if (renameBlock) {
     const renameRegex = /(\w+)\s*=\s*\[?'?(\w+)'?\]?/g;
     let m: RegExpExecArray | null;
@@ -92,6 +97,18 @@ export function parseTransformKql(
         renames.push({ dest, source });
       }
     }
+  }
+
+  // Extract PROJECT-stage field pairs via THE shared miner (2026-07-12
+  // audit unification): a CCP DCR's projection map (`project
+  // IncidentId=incident_id, DeviceAction=tostring(act), ...`) is a set of
+  // DCR-side renames Cribl must not duplicate - previously invisible here
+  // while the pack generator mined it. project-rename stays with the
+  // verbatim legacy extraction above; the miner reads project only.
+  for (const pair of mineTransformFieldPairs(clean, ["project"])) {
+    if (RENAME_SKIP_NAMES.includes(pair.destName)) continue;
+    if (renames.some((r) => r.dest === pair.destName)) continue;
+    renames.push({ dest: pair.destName, source: pair.sourceName });
   }
 
   // Extract type coercions from extend blocks: field = tolong(field), etc.
