@@ -7,6 +7,7 @@
    "abnormal"
   ],
   "provenance": "Generated from elastic/integrations abnormal_security pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/abnormal_security",
   "mappings": [
    {
     "sourceName": "abxMessageIdStr",
@@ -73,6 +74,7 @@
    "amazon security"
   ],
   "provenance": "Generated from elastic/integrations amazon_security_lake pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/amazon_security_lake",
   "mappings": [
    {
     "sourceName": "activity_name",
@@ -98,6 +100,7 @@
    "anthropic"
   ],
   "provenance": "Generated from elastic/integrations anthropic pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/anthropic",
   "mappings": [
    {
     "sourceName": "filename",
@@ -124,6 +127,7 @@
    "atlassian"
   ],
   "provenance": "Generated from elastic/integrations atlassian_bitbucket pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/atlassian_bitbucket",
   "mappings": [
    {
     "sourceName": "method",
@@ -145,6 +149,7 @@
    "atlassian"
   ],
   "provenance": "Generated from elastic/integrations atlassian_confluence pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/atlassian_confluence",
   "mappings": [
    {
     "sourceName": "remoteAddress",
@@ -171,6 +176,7 @@
    "atlassian"
   ],
   "provenance": "Generated from elastic/integrations atlassian_jira pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/atlassian_jira",
   "mappings": [
    {
     "sourceName": "id",
@@ -201,6 +207,7 @@
    "authentik"
   ],
   "provenance": "Generated from elastic/integrations authentik pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/authentik",
   "mappings": [
    {
     "sourceName": "action",
@@ -236,6 +243,7 @@
    "aws"
   ],
   "provenance": "Generated from elastic/integrations aws pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/aws",
   "mappings": [
    {
     "sourceName": "action",
@@ -316,6 +324,7 @@
    "axonius"
   ],
   "provenance": "Generated from elastic/integrations axonius pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/axonius",
   "mappings": [
    {
     "sourceName": "action_if_exists",
@@ -351,6 +360,7 @@
    "azure logs"
   ],
   "provenance": "Generated from elastic/integrations azure pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/azure",
   "mappings": [
    {
     "sourceName": "EventName",
@@ -376,6 +386,7 @@
    "beelzebub"
   ],
   "provenance": "Generated from elastic/integrations beelzebub pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/beelzebub",
   "mappings": [
    {
     "sourceName": "HTTPMethod",
@@ -417,6 +428,7 @@
    "beyondtrust"
   ],
   "provenance": "Generated from elastic/integrations beyondtrust_epm pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/beyondtrust_epm",
   "mappings": [
    {
     "sourceName": "action",
@@ -458,6 +470,7 @@
    "beyondtrust"
   ],
   "provenance": "Generated from elastic/integrations beyondtrust_isi pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/beyondtrust_isi",
   "mappings": [
    {
     "sourceName": "definitionSummary",
@@ -478,6 +491,7 @@
    "box events"
   ],
   "provenance": "Generated from elastic/integrations box_events pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/box_events",
   "mappings": [
    {
     "sourceName": "event_id",
@@ -504,6 +518,7 @@
    "carbonblack"
   ],
   "provenance": "Generated from elastic/integrations carbon_black_cloud pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/carbon_black_cloud",
   "mappings": [
    {
     "sourceName": "action",
@@ -550,6 +565,7 @@
    "cato"
   ],
   "provenance": "Generated from elastic/integrations cato_networks pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/cato_networks",
   "mappings": [
    {
     "sourceName": "admin",
@@ -626,6 +642,7 @@
    "check"
   ],
   "provenance": "Generated from elastic/integrations checkpoint_email pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/checkpoint_email",
   "mappings": [
    {
     "sourceName": "description",
@@ -652,6 +669,7 @@
    "check"
   ],
   "provenance": "Generated from elastic/integrations checkpoint_harmony_endpoint pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/checkpoint_harmony_endpoint",
   "mappings": [
    {
     "sourceName": "action",
@@ -694,6 +712,7 @@
    "cisco secure application"
   ],
   "provenance": "Generated from elastic/integrations cisco_duo pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/cisco_duo",
   "mappings": [
    {
     "sourceName": "action",
@@ -740,6 +759,7 @@
    "claroty"
   ],
   "provenance": "Generated from elastic/integrations claroty_ctd pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/claroty_ctd",
   "mappings": [
    {
     "sourceName": "description",
@@ -766,6 +786,7 @@
    "claroty"
   ],
   "provenance": "Generated from elastic/integrations claroty_xdome pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/claroty_xdome",
   "mappings": [
    {
     "sourceName": "authentication_user_list",
@@ -821,6 +842,7 @@
    "cloudflare"
   ],
   "provenance": "Generated from elastic/integrations cloudflare_logpush pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/cloudflare_logpush",
   "mappings": [
    {
     "sourceName": "Action",
@@ -1096,6 +1118,7 @@
    "crowdstrike"
   ],
   "provenance": "Generated from elastic/integrations crowdstrike pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/crowdstrike",
   "mappings": [
    {
     "sourceName": "ContextBaseFileName",
@@ -1281,6 +1304,7 @@
    "cursor"
   ],
   "provenance": "Generated from elastic/integrations cursor pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/cursor",
   "mappings": [
    {
     "sourceName": "event_id",
@@ -1312,6 +1336,7 @@
    "cyberark"
   ],
   "provenance": "Generated from elastic/integrations cyberark_epm pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/cyberark_epm",
   "mappings": [
    {
     "sourceName": "Administrator",
@@ -1362,6 +1387,7 @@
    "cyera"
   ],
   "provenance": "Generated from elastic/integrations cyera pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/cyera",
   "mappings": [
    {
     "sourceName": "name",
@@ -1383,6 +1409,7 @@
    "dataminr"
   ],
   "provenance": "Generated from elastic/integrations dataminr_pulse pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/dataminr_pulse",
   "mappings": [
    {
     "sourceName": "alertId",
@@ -1404,6 +1431,7 @@
    "eset"
   ],
   "provenance": "Generated from elastic/integrations eset_protect pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/eset_protect",
   "mappings": [
    {
     "sourceName": "circumstances",
@@ -1454,6 +1482,7 @@
    "extrahop"
   ],
   "provenance": "Generated from elastic/integrations extrahop pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/extrahop",
   "mappings": [
    {
     "sourceName": "name",
@@ -1474,6 +1503,7 @@
    "f5 big-ip"
   ],
   "provenance": "Generated from elastic/integrations f5_bigip pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/f5_bigip",
   "mappings": [
    {
     "sourceName": "application",
@@ -1499,6 +1529,7 @@
    "gitlab"
   ],
   "provenance": "Generated from elastic/integrations gitlab pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/gitlab",
   "mappings": [
    {
     "sourceName": "action",
@@ -1570,6 +1601,7 @@
    "goflow2"
   ],
   "provenance": "Generated from elastic/integrations goflow2 pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/goflow2",
   "mappings": [
    {
     "sourceName": "dst_addr",
@@ -1605,6 +1637,7 @@
    "google workspace"
   ],
   "provenance": "Generated from elastic/integrations google_workspace pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/google_workspace",
   "mappings": [
    {
     "sourceName": "alertId",
@@ -1636,6 +1669,7 @@
    "hashicorp"
   ],
   "provenance": "Generated from elastic/integrations hashicorp_vault pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/hashicorp_vault",
   "mappings": [
    {
     "sourceName": "@message",
@@ -1656,6 +1690,7 @@
    "ironscales"
   ],
   "provenance": "Generated from elastic/integrations ironscales pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/ironscales",
   "mappings": [
    {
     "sourceName": "incident_id",
@@ -1677,6 +1712,7 @@
    "island"
   ],
   "provenance": "Generated from elastic/integrations island_browser pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/island_browser",
   "mappings": [
    {
     "sourceName": "actionType",
@@ -1743,6 +1779,7 @@
    "jamf"
   ],
   "provenance": "Generated from elastic/integrations jamf_protect pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/jamf_protect",
   "mappings": [
    {
     "sourceName": "action",
@@ -1773,6 +1810,7 @@
    "lastpass"
   ],
   "provenance": "Generated from elastic/integrations lastpass pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/lastpass",
   "mappings": [
    {
     "sourceName": "IP_Address",
@@ -1794,6 +1832,7 @@
    "macos"
   ],
   "provenance": "Generated from elastic/integrations macos pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/macos",
   "mappings": [
    {
     "sourceName": "eventMessage",
@@ -1814,6 +1853,7 @@
    "mattermost"
   ],
   "provenance": "Generated from elastic/integrations mattermost pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/mattermost",
   "mappings": [
    {
     "sourceName": "api_path",
@@ -1845,6 +1885,7 @@
    "menlo"
   ],
   "provenance": "Generated from elastic/integrations menlo pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/menlo",
   "mappings": [
    {
     "sourceName": "domain",
@@ -1916,6 +1957,7 @@
    "microsoft defender"
   ],
   "provenance": "Generated from elastic/integrations microsoft_defender_endpoint pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/microsoft_defender_endpoint",
   "mappings": [
    {
     "sourceName": "category",
@@ -1957,6 +1999,7 @@
    "neon"
   ],
   "provenance": "Generated from elastic/integrations neon_cyber pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/neon_cyber",
   "mappings": [
    {
     "sourceName": "ua",
@@ -1977,6 +2020,7 @@
    "netskope"
   ],
   "provenance": "Generated from elastic/integrations netskope pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/netskope",
   "mappings": [
    {
     "sourceName": "_id",
@@ -2043,6 +2087,7 @@
    "nextron"
   ],
   "provenance": "Generated from elastic/integrations nextron_thor pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/nextron_thor",
   "mappings": [
    {
     "sourceName": "file",
@@ -2068,6 +2113,7 @@
    "opencanary"
   ],
   "provenance": "Generated from elastic/integrations opencanary pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/opencanary",
   "mappings": [
    {
     "sourceName": "dst_host",
@@ -2099,6 +2145,7 @@
    "cortex"
   ],
   "provenance": "Generated from elastic/integrations panw_cortex_xdr pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/panw_cortex_xdr",
   "mappings": [
    {
     "sourceName": "action",
@@ -2134,6 +2181,7 @@
    "pingone"
   ],
   "provenance": "Generated from elastic/integrations ping_one pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/ping_one",
   "mappings": [
    {
     "sourceName": "correlationId",
@@ -2155,6 +2203,7 @@
    "palo alto"
   ],
   "provenance": "Generated from elastic/integrations prisma_cloud pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/prisma_cloud",
   "mappings": [
    {
     "sourceName": "resourceName",
@@ -2176,6 +2225,7 @@
    "proofpoint"
   ],
   "provenance": "Generated from elastic/integrations proofpoint_365totalprotection pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/proofpoint_365totalprotection",
   "mappings": [
    {
     "sourceName": "destination_ip",
@@ -2197,6 +2247,7 @@
    "proofpoint"
   ],
   "provenance": "Generated from elastic/integrations proofpoint_essentials pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/proofpoint_essentials",
   "mappings": [
    {
     "sourceName": "clickIP",
@@ -2233,6 +2284,7 @@
    "proofpoint"
   ],
   "provenance": "Generated from elastic/integrations proofpoint_on_demand pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/proofpoint_on_demand",
   "mappings": [
    {
     "sourceName": "data",
@@ -2264,6 +2316,7 @@
    "proofpoint"
   ],
   "provenance": "Generated from elastic/integrations proofpoint_tap pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/proofpoint_tap",
   "mappings": [
    {
     "sourceName": "clickIP",
@@ -2300,6 +2353,7 @@
    "qualys"
   ],
   "provenance": "Generated from elastic/integrations qualys_vmdr pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/qualys_vmdr",
   "mappings": [
    {
     "sourceName": "Action",
@@ -2336,6 +2390,7 @@
    "sentinel one"
   ],
   "provenance": "Generated from elastic/integrations sentinel_one pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/sentinel_one",
   "mappings": [
    {
     "sourceName": "agentIp",
@@ -2407,6 +2462,7 @@
    "slack"
   ],
   "provenance": "Generated from elastic/integrations slack pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/slack",
   "mappings": [
    {
     "sourceName": "action",
@@ -2427,6 +2483,7 @@
    "snort"
   ],
   "provenance": "Generated from elastic/integrations snort pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/snort",
   "mappings": [
    {
     "sourceName": "dst_addr",
@@ -2463,6 +2520,7 @@
    "sophos"
   ],
   "provenance": "Generated from elastic/integrations sophos_central pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/sophos_central",
   "mappings": [
    {
     "sourceName": "description",
@@ -2493,6 +2551,7 @@
    "suricata"
   ],
   "provenance": "Generated from elastic/integrations suricata pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/suricata",
   "mappings": [
    {
     "sourceName": "app_proto",
@@ -2534,6 +2593,7 @@
    "symantec"
   ],
   "provenance": "Generated from elastic/integrations symantec_endpoint_security pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/symantec_endpoint_security",
   "mappings": [
    {
     "sourceName": "collector_device_ip",
@@ -2569,6 +2629,7 @@
    "sysdig"
   ],
   "provenance": "Generated from elastic/integrations sysdig pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/sysdig",
   "mappings": [
    {
     "sourceName": "id",
@@ -2589,6 +2650,7 @@
    "tanium"
   ],
   "provenance": "Generated from elastic/integrations tanium pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/tanium",
   "mappings": [
    {
     "sourceName": "action",
@@ -2629,6 +2691,7 @@
    "teleport"
   ],
   "provenance": "Generated from elastic/integrations teleport pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/teleport",
   "mappings": [
    {
     "sourceName": "db_uri",
@@ -2740,6 +2803,7 @@
    "tenable"
   ],
   "provenance": "Generated from elastic/integrations tenable_io pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/tenable_io",
   "mappings": [
    {
     "sourceName": "finding_id",
@@ -2761,6 +2825,7 @@
    "tencent"
   ],
   "provenance": "Generated from elastic/integrations tencent_cloud pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/tencent_cloud",
   "mappings": [
    {
     "sourceName": "__SOURCE__",
@@ -2896,6 +2961,7 @@
    "flashpoint"
   ],
   "provenance": "Generated from elastic/integrations ti_flashpoint pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/ti_flashpoint",
   "mappings": [
    {
     "sourceName": "description",
@@ -2917,6 +2983,7 @@
    "recorded"
   ],
   "provenance": "Generated from elastic/integrations ti_recordedfuture pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/ti_recordedfuture",
   "mappings": [
    {
     "sourceName": "fragment",
@@ -2937,6 +3004,7 @@
    "traefik"
   ],
   "provenance": "Generated from elastic/integrations traefik pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/traefik",
   "mappings": [
    {
     "sourceName": "ClientHost",
@@ -2998,6 +3066,7 @@
    "trendai"
   ],
   "provenance": "Generated from elastic/integrations trend_micro_vision_one pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/trend_micro_vision_one",
   "mappings": [
    {
     "sourceName": "clientIp",
@@ -3138,6 +3207,7 @@
    "wiz"
   ],
   "provenance": "Generated from elastic/integrations wiz pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/wiz",
   "mappings": [
    {
     "sourceName": "description",
@@ -3158,6 +3228,7 @@
    "workday"
   ],
   "provenance": "Generated from elastic/integrations workday pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/workday",
   "mappings": [
    {
     "sourceName": "ipAddress",
@@ -3183,6 +3254,7 @@
    "xm cyber"
   ],
   "provenance": "Generated from elastic/integrations xm_cyber pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/xm_cyber",
   "mappings": [
    {
     "sourceName": "_id",
@@ -3208,6 +3280,7 @@
    "zeek"
   ],
   "provenance": "Generated from elastic/integrations zeek pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/zeek",
   "mappings": [
    {
     "sourceName": "command",
@@ -3308,6 +3381,7 @@
    "zoom"
   ],
   "provenance": "Generated from elastic/integrations zoom pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/zoom",
   "mappings": [
    {
     "sourceName": "action",
@@ -3348,6 +3422,7 @@
    "zscaler"
   ],
   "provenance": "Generated from elastic/integrations zscaler_zia pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/zscaler_zia",
   "mappings": [
    {
     "sourceName": "actiontaken",

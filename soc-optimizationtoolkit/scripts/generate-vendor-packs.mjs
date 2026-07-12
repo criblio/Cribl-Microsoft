@@ -280,6 +280,11 @@ function foldMined(bySource, mined) {
   }
 }
 
+// The exact tree every pack was mined from - a durable documentation
+// reference for the per-table "Vendor mapping documentation" line (each
+// package page cites the vendor's own docs and holds the fixture pairs).
+const FIXTURES_COMMIT = "96400ccea7056b462c1baad1c2cbffe7fb961bf4";
+
 function packFromSources(pkg, vendor, keywords, bySource, minMappings) {
   const mappings = [...bySource.values()]
     .sort((a, b) => a.sourceName.localeCompare(b.sourceName))
@@ -290,6 +295,7 @@ function packFromSources(pkg, vendor, keywords, bySource, minMappings) {
     vendor,
     solutionKeywords: keywords,
     provenance: `Generated from elastic/integrations ${pkg} pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge`,
+    docUrl: `https://github.com/elastic/integrations/tree/${FIXTURES_COMMIT}/packages/${pkg}`,
     mappings,
   };
 }

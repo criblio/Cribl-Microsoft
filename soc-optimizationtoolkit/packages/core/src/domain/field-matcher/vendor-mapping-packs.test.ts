@@ -153,3 +153,43 @@ describe("Phase 0 integration (documented mappings outrank the ladder)", () => {
     expect(result.matched[0]?.description).toContain("Vendor mapping");
   });
 });
+
+describe("documentation references (user requirement 2026-07-12: ALL vendors)", () => {
+  it("every pack carries provenance and every generated pack a pinned docUrl", () => {
+    expect(VENDOR_MAPPING_PACKS.length).toBeGreaterThanOrEqual(75);
+    for (const pack of VENDOR_MAPPING_PACKS) {
+      expect(pack.provenance.length, pack.id).toBeGreaterThan(0);
+    }
+    const generated = VENDOR_MAPPING_PACKS.filter((p) =>
+      p.id.startsWith("generated-"),
+    );
+    expect(generated.length).toBeGreaterThanOrEqual(70);
+    for (const pack of generated) {
+      // Pinned to the exact mined tree so the link cannot rot under us.
+      expect(pack.docUrl, pack.id).toMatch(
+        /^https:\/\/github\.com\/elastic\/integrations\/tree\/[0-9a-f]{40}\/packages\/[a-z0-9_]+$/,
+      );
+    }
+  });
+
+  it("every solution with packs exposes at least one documentation LINK", () => {
+    // The per-table doc line renders anchors from docUrl; a solution whose
+    // packs were all link-less would render text only. Every generated pack
+    // now links, and the hand packs either link (zscaler) or share a vendor
+    // with a generated pack that does (crowdstrike).
+    const vendorsWithPacks = new Set(
+      VENDOR_MAPPING_PACKS.filter((p) => p.solutionKeywords.length > 0).map(
+        (p) => p.vendor.toLowerCase(),
+      ),
+    );
+    for (const vendor of vendorsWithPacks) {
+      const linked = VENDOR_MAPPING_PACKS.some(
+        (p) =>
+          p.vendor.toLowerCase() === vendor &&
+          p.solutionKeywords.length > 0 &&
+          p.docUrl !== undefined,
+      );
+      expect(linked, vendor).toBe(true);
+    }
+  });
+});
