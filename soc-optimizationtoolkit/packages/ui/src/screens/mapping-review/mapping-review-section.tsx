@@ -532,7 +532,14 @@ export function MappingReviewSection({
       }
       setResolution(routing.resolution);
       setConnectorIdentity(routing.connectorIdentity);
-      setRoutingNotes(routing.notes);
+      setRoutingNotes(
+        solutionName.trim() === ""
+          ? [
+              ...routing.notes,
+              "No Sentinel solution selected (section 1) - vendor mapping packs, analytics rules, connector-based table detection, and identity detection were ALL disabled for this analysis.",
+            ]
+          : routing.notes,
+      );
 
       const specs = samples.map((sample) => ({
         logType: sample.logType,
@@ -718,6 +725,17 @@ export function MappingReviewSection({
             {resolution.tables.join(", ")}
           </span>
           <span className="gap-provenance-source"> - {resolution.source}</span>
+        </div>
+      )}
+
+      {solutionName.trim() === "" && (
+        <div className="status-bar status-bar-warn">
+          <span className="status-bar-dot" />
+          <span className="status-bar-text">
+            No Sentinel solution selected - analysis runs with the generic
+            matching ladder only.
+            <InfoTip text="Select a solution in section 1 first: the vendor mapping packs, learned decisions, analytics-rule requirements, connector-based destination detection, and vendor identity all key off the selected solution. Without one, this analysis uses only the generic alias/fuzzy ladder." />
+          </span>
         </div>
       )}
 

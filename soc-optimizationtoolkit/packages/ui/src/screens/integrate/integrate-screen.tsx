@@ -125,6 +125,9 @@ import {
 } from "./integrate-screen-state";
 import { WiringSection } from "./wiring-section";
 
+/** Plain-KV key persisting the selected solution name across reloads. */
+const SELECTED_SOLUTION_KEY = "integrate-selected-solution~v1";
+
 export interface IntegrateScreenProps {
   /**
    * Whether the active connection has a committed target scope (subscription
@@ -242,6 +245,29 @@ export function IntegrateScreen({
   // now-built Solution section and lights the Solution readiness pill, but it
   // never gates the native-table deploy (the MVP-transition canDeploy rule).
   const [solution, setSolution] = useState<SolutionRef | null>(null);
+  // Restore the persisted selection once on mount (deep links and clicks
+  // both overwrite it via handleSolutionChange).
+  const restoredRef = useRef(false);
+  useEffect(() => {
+    if (restoredRef.current || solution !== null) return;
+    restoredRef.current = true;
+    void (async () => {
+      try {
+        const stored = await ports.contentCache?.get(SELECTED_SOLUTION_KEY);
+        if (typeof stored === "string" && stored !== "") {
+          prevSolutionRef.current = stored;
+          setSolution({
+            name: stored,
+            path: `Solutions/${stored}`,
+            deprecated: false,
+          });
+        }
+      } catch {
+        // No restore - the browser selection works as before.
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const solutionSelected = solution !== null;
   // Bumped when the solution CHANGES to a different one: it re-keys the
   // solution-dependent sections (samples, gap analysis, rule coverage, pipeline
@@ -377,6 +403,13 @@ export function IntegrateScreen({
       const nextName = next?.name ?? null;
       prevSolutionRef.current = nextName;
       setSolution(next);
+      // Persist across reloads (live 2026-07-13: uploading a new app
+      // version reloaded the page, samples survived via their store but
+      // the selection silently reset - the next analysis ran solution-less
+      // with no packs, no rules, and no identity).
+      void ports.contentCache
+        ?.set(SELECTED_SOLUTION_KEY, nextName ?? "")
+        .catch(() => undefined);
       if (prevName === null || prevName === nextName) {
         return;
       }
@@ -392,7 +425,7 @@ export function IntegrateScreen({
         setContentResetKey((k) => k + 1);
       })();
     },
-    [ports.samples],
+    [ports.samples, ports.contentCache],
   );
 
   // The detected format per log type (drives the pipeline preview's serde /
