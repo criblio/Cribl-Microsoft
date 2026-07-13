@@ -37,9 +37,10 @@ export function DcrInventoryPanel() {
   const [previewDce, setPreviewDce] = useState("");
   const [newColName, setNewColName] = useState("");
   const [newColType, setNewColType] = useState("string");
-  // Unchanged columns are collapsed by default - 150+ identical chips add
-  // nothing to the decision (user feedback 2026-07-13).
-  const [showUnchanged, setShowUnchanged] = useState(false);
+  // Matching (green) columns show by default (user color semantics
+  // 2026-07-13: matches ARE the highlight); the toggle hides them when the
+  // 150+ chips get in the way of the changes.
+  const [showUnchanged, setShowUnchanged] = useState(true);
 
   const scopeReady =
     config.subscriptionId !== "" && config.resourceGroup !== "";
@@ -148,22 +149,45 @@ export function DcrInventoryPanel() {
     }
   }, [ports.azure, scope, preview, previewLocation, previewDce]);
 
-  // Add a custom column to the (custom) table, then re-preview - the diff
-  // then shows the new column as an addition the DCR update would install.
+  // Add a custom column to the (custom) table AND apply the DCR update in
+  // one action (user request 2026-07-13: "add a new field to the DCR and
+  // table") - the field lands end to end. If the DCR half fails, the
+  // column is already on the table and the diff shows it amber-pending;
+  // Apply update retries just that half.
   const addColumn = useCallback(async () => {
     if (preview === null || newColName.trim() === "") return;
+    const columnName = newColName.trim();
     setBusy(true);
     setError("");
     setNotice("");
     try {
-      const result = await addTableColumn(ports.azure, {
+      await addTableColumn(ports.azure, {
         ...scope(),
         table: preview.table,
-        column: { name: newColName.trim(), type: newColType },
+        column: { name: columnName, type: newColType },
       });
+      let dcrUpdated = true;
+      try {
+        await updateDcrInPlace(ports.azure, {
+          ...scope(),
+          dcrName: preview.dcrName,
+          table: preview.table,
+          location: previewLocation,
+          dceResourceId: previewDce || undefined,
+        });
+      } catch (err) {
+        dcrUpdated = false;
+        setError(
+          `Column added to ${preview.table}, but the DCR update failed: ` +
+            `${err instanceof Error ? err.message : String(err)} - ` +
+            "use Apply update below to retry.",
+        );
+      }
       setNotice(
-        `Added '${newColName.trim()}' (${newColType}) to ${result.table} - ` +
-          "apply the update below to make the DCR accept it.",
+        dcrUpdated
+          ? `Added '${columnName}' (${newColType}) to ${preview.table} AND ` +
+            `updated '${preview.dcrName}' - the field is ingestable end to end.`
+          : `Added '${columnName}' (${newColType}) to ${preview.table}.`,
       );
       setNewColName("");
       setPreview(
@@ -343,14 +367,12 @@ export function DcrInventoryPanel() {
                 const unchanged = chips.filter((c) => c.status === "unchanged");
                 return (
                   <>
-                    {changed.length > 0 && (
-                      <p className="field-hint dcr-chip-legend">
-                        <span className="dcr-col-chip dcr-col-added">added</span>
-                        <span className="dcr-col-chip dcr-col-removed">removed</span>
-                        <span className="dcr-col-chip dcr-col-retyped">retyped</span>
-                        <span className="dcr-col-chip dcr-col-unchanged">unchanged</span>
-                      </p>
-                    )}
+                    <p className="field-hint dcr-chip-legend">
+                      <span className="dcr-col-chip dcr-col-unchanged">matches table</span>
+                      <span className="dcr-col-chip dcr-col-removed">DCR only - removed by update</span>
+                      <span className="dcr-col-chip dcr-col-retyped">type differs - retyped by update</span>
+                      <span className="dcr-col-chip dcr-col-added">table only - added by update</span>
+                    </p>
                     <div className="dcr-chip-grid">
                       {changed.map((c) => (
                         <span
@@ -375,7 +397,7 @@ export function DcrInventoryPanel() {
                           <span
                             key={`u-${c.name}`}
                             className="dcr-col-chip dcr-col-unchanged"
-                            title={`${c.name} (${c.type}) - unchanged`}
+                            title={`${c.name} (${c.type}) - matches the table schema`}
                           >
                             {c.name}
                             <span className="dcr-col-type">{c.type}</span>
@@ -388,8 +410,8 @@ export function DcrInventoryPanel() {
                         onClick={() => setShowUnchanged((v) => !v)}
                       >
                         {showUnchanged
-                          ? "Hide unchanged columns"
-                          : `Show ${unchanged.length} unchanged column${unchanged.length === 1 ? "" : "s"}`}
+                          ? `Hide ${unchanged.length} matching column${unchanged.length === 1 ? "" : "s"}`
+                          : `Show ${unchanged.length} matching column${unchanged.length === 1 ? "" : "s"}`}
                       </button>
                     )}
                   </>
@@ -419,7 +441,7 @@ export function DcrInventoryPanel() {
                     onClick={() => void addColumn()}
                     disabled={busy || newColName.trim() === ""}
                   >
-                    Add column to table
+                    Add to table and DCR
                   </button>
                 </div>
               ) : (

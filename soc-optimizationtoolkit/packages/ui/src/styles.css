@@ -4157,9 +4157,11 @@ details[open] > summary::before {
   margin-bottom: 0;
 }
 
-/* DCR update preview chips (2026-07-13): color-coded columns - changes
-   first, unchanged collapsed. Backgrounds are translucent so both themes
-   keep contrast; the border carries the status color. */
+/* DCR update preview chips (2026-07-13, user color semantics): GREEN =
+   the field matches between DCR and table; RED = in the DCR but not the
+   table (the update removes it; type mismatches too); AMBER = in the table
+   but not the DCR (the update adds it). Backgrounds are translucent so
+   both themes keep contrast; the border carries the status color. */
 .dcr-chip-grid {
   display: flex;
   flex-wrap: wrap;
@@ -4168,6 +4170,7 @@ details[open] > summary::before {
 }
 .dcr-chip-legend {
   display: flex;
+  flex-wrap: wrap;
   gap: 6px;
   align-items: center;
 }
@@ -4187,18 +4190,19 @@ details[open] > summary::before {
   color: var(--text-dim, #8b9cb8);
 }
 .dcr-col-added {
-  border-color: #2e9e5b;
-  background: rgba(46, 158, 91, 0.14);
+  border-color: #c98a2b;
+  background: rgba(201, 138, 43, 0.16);
 }
 .dcr-col-removed {
   border-color: #c04a4a;
-  background: rgba(192, 74, 74, 0.14);
+  background: rgba(192, 74, 74, 0.16);
   text-decoration: line-through;
 }
 .dcr-col-retyped {
-  border-color: #c98a2b;
-  background: rgba(201, 138, 43, 0.14);
+  border-color: #c04a4a;
+  background: rgba(192, 74, 74, 0.16);
 }
 .dcr-col-unchanged {
-  opacity: 0.75;
+  border-color: #2e9e5b;
+  background: rgba(46, 158, 91, 0.14);
 }

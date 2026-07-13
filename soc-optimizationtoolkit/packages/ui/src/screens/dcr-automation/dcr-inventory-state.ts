@@ -1,8 +1,10 @@
 /**
  * Pure presentation helpers for the DCR inventory's update preview (user
  * feedback 2026-07-13: the before/after column dumps were unreadable walls
- * of text - the preview renders color-coded chips instead, changes first,
- * unchanged collapsed).
+ * of text - the preview renders color-coded chips instead, changes first).
+ * Color semantics (user direction): GREEN = matches between DCR and table
+ * ("unchanged"), RED = in the DCR but not the table ("removed"; type
+ * mismatches too), AMBER = in the table but not the DCR ("added").
  *
  * Pure: no IO, no React, no Date.
  */
