@@ -506,6 +506,12 @@ export function IntegrateScreen({
   // outcomes); undeployed tables ship the fill-in-Cribl placeholders.
   const [packBuilding, setPackBuilding] = useState(false);
   const [packBuildLines, setPackBuildLines] = useState<string[]>([]);
+  // Structured pack result for the Deploy summary (user report 2026-07-13:
+  // the summary showed only the native outcome, never the pack).
+  const [packOutcome, setPackOutcome] = useState<{
+    name: string;
+    installs: Array<{ group: string; ok: boolean; detail: string }>;
+  } | null>(null);
 
   // Required vendor identity (DeviceVendor/DeviceProduct and the ASim Event
   // pair): a table whose content filters on them must have every one covered
@@ -565,6 +571,8 @@ export function IntegrateScreen({
       ports.logger?.info(`pack-build: ${line}`);
     };
     setPackBuildLines([]);
+    setPackOutcome(null);
+    const installs: Array<{ group: string; ok: boolean; detail: string }> = [];
     try {
       // 1. Overwrite guard: always re-check live, then honor the acknowledgment.
       push(
@@ -694,12 +702,23 @@ export function IntegrateScreen({
             assembled.crbl,
           );
           push(`Installed ${installed.displayName || installed.id} on ${group}.`);
+          installs.push({
+            group,
+            ok: true,
+            detail: `installed (${installed.displayName || installed.id})`,
+          });
         } catch (err) {
           push(
             `Install FAILED on ${group}: ${err instanceof Error ? err.message : String(err)}`,
           );
+          installs.push({
+            group,
+            ok: false,
+            detail: err instanceof Error ? err.message : String(err),
+          });
         }
       }
+      setPackOutcome({ name, installs });
       push(
         "Done. Wire a source below (or commit and deploy in Cribl) to activate the pack.",
       );
@@ -1335,13 +1354,24 @@ export function IntegrateScreen({
             {outcomes.length > 1 ? ` (${outcomes.length} DCRs)` : ""}
           </span>
           <pre className="result">
-            {outcomes
-              .map(({ table: t, outcome: o }) =>
+            {[
+              ...outcomes.map(({ table: t, outcome: o }) =>
                 outcomes.length > 1
                   ? `== ${t} ==\n${summaryText(o)}`
                   : summaryText(o),
-              )
-              .join("\n\n")}
+              ),
+              ...(packOutcome !== null
+                ? [
+                    `Pack:            ${packOutcome.name}\n` +
+                      packOutcome.installs
+                        .map(
+                          (i) =>
+                            `  ${i.group}:${" ".repeat(Math.max(1, 14 - i.group.length))}${i.ok ? i.detail : `FAILED - ${i.detail}`}`,
+                        )
+                        .join("\n"),
+                  ]
+                : []),
+            ].join("\n\n")}
           </pre>
         </div>
       )}
