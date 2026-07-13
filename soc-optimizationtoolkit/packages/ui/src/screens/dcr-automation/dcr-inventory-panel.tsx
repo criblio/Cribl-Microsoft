@@ -161,11 +161,13 @@ export function DcrInventoryPanel() {
     setError("");
     setNotice("");
     try {
-      await addTableColumn(ports.azure, {
+      const added = await addTableColumn(ports.azure, {
         ...scope(),
         table: preview.table,
         column: { name: columnName, type: newColType },
       });
+      // Native tables suffix custom fields with _CF - report the FINAL name.
+      const finalName = added.columnName;
       let dcrUpdated = true;
       try {
         await updateDcrInPlace(ports.azure, {
@@ -185,9 +187,9 @@ export function DcrInventoryPanel() {
       }
       setNotice(
         dcrUpdated
-          ? `Added '${columnName}' (${newColType}) to ${preview.table} AND ` +
+          ? `Added '${finalName}' (${newColType}) to ${preview.table} AND ` +
             `updated '${preview.dcrName}' - the field is ingestable end to end.`
-          : `Added '${columnName}' (${newColType}) to ${preview.table}.`,
+          : `Added '${finalName}' (${newColType}) to ${preview.table}.`,
       );
       setNewColName("");
       setPreview(
@@ -417,39 +419,51 @@ export function DcrInventoryPanel() {
                   </>
                 );
               })()}
-              {preview.table.endsWith("_CL") ? (
-                <div className="panel-controls">
-                  <input
-                    aria-label="New column name"
-                    placeholder="New column name"
-                    value={newColName}
-                    onChange={(ev) => setNewColName(ev.target.value)}
-                  />
-                  <select
-                    aria-label="New column type"
-                    value={newColType}
-                    onChange={(ev) => setNewColType(ev.target.value)}
-                  >
-                    {CUSTOM_COLUMN_TYPES.map((t) => (
-                      <option key={t} value={t}>
-                        {t}
-                      </option>
-                    ))}
-                  </select>
-                  <button
-                    className="run-button"
-                    onClick={() => void addColumn()}
-                    disabled={busy || newColName.trim() === ""}
-                  >
-                    Add to table and DCR
-                  </button>
-                </div>
-              ) : (
-                <p className="field-hint">
-                  Native Azure table - its schema is fixed, so no custom
-                  columns can be added here.
-                </p>
-              )}
+              {(() => {
+                // The add-field affordance is ALWAYS visible (live feedback
+                // 2026-07-13). Native tables accept custom fields too -
+                // Azure suffixes their names with _CF (appended
+                // automatically when missing).
+                const nativeTable = !preview.table.endsWith("_CL");
+                return (
+                  <>
+                    <div className="panel-controls">
+                      <input
+                        aria-label="New column name"
+                        placeholder="New field name"
+                        value={newColName}
+                        onChange={(ev) => setNewColName(ev.target.value)}
+                      />
+                      <select
+                        aria-label="New column type"
+                        value={newColType}
+                        onChange={(ev) => setNewColType(ev.target.value)}
+                      >
+                        {CUSTOM_COLUMN_TYPES.map((t) => (
+                          <option key={t} value={t}>
+                            {t}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        className="run-button"
+                        onClick={() => void addColumn()}
+                        disabled={busy || newColName.trim() === ""}
+                        title="Adds the field to the table AND applies the DCR update - ingestable end to end."
+                      >
+                        Add to table and DCR
+                      </button>
+                    </div>
+                    {nativeTable && (
+                      <p className="field-hint">
+                        {preview.table} is a native table: custom fields are
+                        named with the _CF suffix (added automatically), e.g.
+                        MyField_CF.
+                      </p>
+                    )}
+                  </>
+                );
+              })()}
               <div className="panel-controls">
                 <button
                   className="run-button"

@@ -41,7 +41,7 @@ function definition(): PackScaffoldInput {
       sourceType: "string",
       targetType: "string",
     },
-  ] as typeof plan.tables[0]["fields"];
+  ] as unknown as typeof plan.tables[0]["fields"];
   plan.tables[0].overflowConfig = {
     ...plan.tables[0].overflowConfig,
     enabled: true,

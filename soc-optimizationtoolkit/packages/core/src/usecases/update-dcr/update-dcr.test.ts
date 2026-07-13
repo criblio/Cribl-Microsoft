@@ -148,20 +148,81 @@ describe("updateDcrInPlace", () => {
     expect(azure.calls.every((c) => c.method === "GET")).toBe(true);
   });
 
-  it("addTableColumn PATCHes a custom table and refuses native tables and duplicates", async () => {
+  it("addTableColumn suffixes _CF on native tables (user correction 2026-07-13)", async () => {
+    const azure = new FakeAzureManagement();
+    azure.respondWith(
+      {
+        status: 200,
+        body: {
+          properties: {
+            schema: {
+              standardColumns: [{ name: "TimeGenerated", type: "datetime" }],
+            },
+          },
+        },
+      },
+      { status: 200, body: {} },
+    );
+    const result = await addTableColumn(azure, {
+      subscriptionId: "sub",
+      resourceGroup: "rg",
+      workspaceName: "ws",
+      table: "CommonSecurityLog",
+      column: { name: "RiskScore", type: "long" },
+    });
+    expect(result.columnName).toBe("RiskScore_CF");
+    const patch = azure.calls.find((c) => c.method === "PATCH");
+    const body = patch!.body as {
+      properties: { schema: { columns: Array<{ name: string }> } };
+    };
+    expect(body.properties.schema.columns.map((c) => c.name)).toEqual([
+      "RiskScore_CF",
+    ]);
+  });
+
+  it("merges native custom (_CF) columns into the rebuilt declaration", async () => {
+    // selectSchemaColumns picks ONE source; the rebuild needs standard AND
+    // custom columns or an added _CF field would vanish from the DCR.
+    const azure = new FakeAzureManagement();
+    azure.respondWith(
+      {
+        status: 200,
+        body: {
+          properties: {
+            streamDeclarations: {
+              "Custom-SecurityEvent": {
+                columns: [{ name: "TimeGenerated", type: "datetime" }],
+              },
+            },
+          },
+        },
+      },
+      {
+        status: 200,
+        body: {
+          properties: {
+            schema: {
+              standardColumns: [
+                { name: "TimeGenerated", type: "datetime" },
+                { name: "Computer", type: "string" },
+              ],
+              columns: [{ name: "RiskScore_CF", type: "long" }],
+            },
+          },
+        },
+      },
+    );
+    const preview = await previewDcrUpdate(azure, INPUT);
+    expect(preview.rebuiltDcrColumns.map((c) => c.name)).toContain("RiskScore_CF");
+    expect(preview.diff.added.map((c) => c.name)).toContain("RiskScore_CF");
+  });
+
+  it("addTableColumn PATCHes a custom table and refuses duplicates", async () => {
     const scope = {
       subscriptionId: "sub",
       resourceGroup: "rg",
       workspaceName: "ws",
     };
-    await expect(
-      addTableColumn(new FakeAzureManagement(), {
-        ...scope,
-        table: "SecurityEvent",
-        column: { name: "Extra", type: "string" },
-      }),
-    ).rejects.toThrow(/native Azure table.*fixed/);
-
     const azure = new FakeAzureManagement();
     azure.respondWith(
       {

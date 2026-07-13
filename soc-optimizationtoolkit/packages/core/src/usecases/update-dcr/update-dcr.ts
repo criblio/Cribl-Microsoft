@@ -66,6 +66,40 @@ function prop(value: unknown, key: string): unknown {
 }
 
 /**
+ * The table's ingestable columns for a DCR rebuild. NATIVE tables can carry
+ * custom `_CF` columns (user correction 2026-07-13) - they live in the
+ * schema's `columns` array while the built-ins live in `standardColumns`,
+ * and selectSchemaColumns picks ONE source; the rebuild needs BOTH, so the
+ * custom columns are merged in after the standard selection.
+ */
+function resolveTableColumns(
+  schema: unknown,
+  isCustom: boolean,
+): LogAnalyticsColumn[] | null {
+  const columns = prop(schema, "columns") as LogAnalyticsColumn[] | undefined;
+  const standardColumns = prop(schema, "standardColumns") as
+    | LogAnalyticsColumn[]
+    | undefined;
+  const selected = selectSchemaColumns(
+    { columns, standardColumns },
+    isCustom ? "custom" : "native",
+  );
+  if (selected === null) return null;
+  if (isCustom || !Array.isArray(columns)) return selected;
+  const present = new Set(selected.map((c) => c.name.toLowerCase()));
+  const merged = [...selected];
+  for (const column of columns) {
+    if (
+      typeof column?.name === "string" &&
+      !present.has(column.name.toLowerCase())
+    ) {
+      merged.push(column);
+    }
+  }
+  return merged;
+}
+
+/**
  * Refresh one Kind:Direct DCR from its table's current schema. Throws with
  * the failing call's status on any error - the caller renders it verbatim.
  */
@@ -91,15 +125,7 @@ export async function updateDcrInPlace(
     );
   }
   const schema = prop(prop(tableResponse.body, "properties"), "schema");
-  const columns = selectSchemaColumns(
-    {
-      columns: prop(schema, "columns") as LogAnalyticsColumn[] | undefined,
-      standardColumns: prop(schema, "standardColumns") as
-        | LogAnalyticsColumn[]
-        | undefined,
-    },
-    isCustom ? "custom" : "native",
-  );
+  const columns = resolveTableColumns(schema, isCustom);
   if (columns === null) {
     throw new Error(
       `table '${input.table}' has no usable column source in its schema response`,
@@ -297,15 +323,7 @@ export async function previewDcrUpdate(
     );
   }
   const schema = prop(prop(tableResponse.body, "properties"), "schema");
-  const tableColumns = selectSchemaColumns(
-    {
-      columns: prop(schema, "columns") as LogAnalyticsColumn[] | undefined,
-      standardColumns: prop(schema, "standardColumns") as
-        | LogAnalyticsColumn[]
-        | undefined,
-    },
-    isCustom ? "custom" : "native",
-  );
+  const tableColumns = resolveTableColumns(schema, isCustom);
   if (tableColumns === null) {
     throw new Error(
       `table '${input.table}' has no usable column source in its schema response`,
@@ -369,14 +387,15 @@ export async function addTableColumn(
     table: string;
     column: { name: string; type: string };
   },
-): Promise<{ table: string; columnCount: number }> {
-  if (!input.table.endsWith("_CL")) {
-    throw new Error(
-      `'${input.table}' is a native Azure table - its schema is fixed. ` +
-        "Custom columns can only be added to custom (_CL) tables.",
-    );
+): Promise<{ table: string; columnName: string; columnCount: number }> {
+  // Native tables DO accept custom columns (user correction 2026-07-13) -
+  // Azure requires their names to end in _CF; custom (_CL) tables have no
+  // suffix rule. The suffix is appended automatically when missing.
+  const isCustomTable = input.table.endsWith("_CL");
+  let name = input.column.name.trim();
+  if (!isCustomTable && !name.endsWith("_CF")) {
+    name = `${name}_CF`;
   }
-  const name = input.column.name.trim();
   if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) {
     throw new Error(
       `column name '${name}' is invalid - letters, digits, and underscores only, not starting with a digit`,
@@ -430,5 +449,5 @@ export async function addTableColumn(
         JSON.stringify(patch.body).slice(0, 300),
     );
   }
-  return { table: input.table, columnCount: columns.length };
+  return { table: input.table, columnName: name, columnCount: columns.length };
 }
