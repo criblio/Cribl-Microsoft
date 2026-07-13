@@ -61,4 +61,24 @@ describe("NumberedSection collapse", () => {
     fireEvent.click(getByText("Run DCR Gap Analysis"));
     expect(getByText("count:1").closest("div[hidden]")).toBeNull();
   });
+
+  it("puts Collapse at the BOTTOM of the expanded body and Expand in the header", () => {
+    // User direction 2026-07-13: a section is finished at its end, so the
+    // put-it-away control lives after the body, not in the header.
+    const { getByRole, queryByRole } = renderSection();
+
+    const collapse = getByRole("button", { name: "Collapse Run DCR Gap Analysis" });
+    expect(collapse.closest(".numbered-section-head")).toBeNull();
+    expect(collapse.previousElementSibling?.className).toBe("numbered-section-body");
+    // No Expand affordance while expanded.
+    expect(queryByRole("button", { name: "Expand Run DCR Gap Analysis" })).toBeNull();
+
+    fireEvent.click(collapse);
+    const expand = getByRole("button", { name: "Expand Run DCR Gap Analysis" });
+    expect(expand.closest(".numbered-section-head")).not.toBeNull();
+    // The bottom Collapse is hidden along with the body.
+    expect(
+      queryByRole("button", { name: "Collapse Run DCR Gap Analysis" }),
+    ).toBeNull();
+  });
 });

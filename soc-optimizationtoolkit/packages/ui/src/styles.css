@@ -4130,8 +4130,10 @@ details[open] > summary::before {
   border-color: var(--accent, var(--text));
 }
 
-/* Collapsible numbered sections (2026-07-12): the Expand/Collapse affordance
-   sits at the right edge of the section header. */
+/* Collapsible numbered sections (2026-07-12): Expand sits at the right edge
+   of a collapsed section's header; Collapse sits at the bottom of the
+   expanded body (user direction 2026-07-13 - a section is finished at its
+   end). */
 .numbered-section-collapse {
   margin-left: auto;
   background: none;
@@ -4145,6 +4147,11 @@ details[open] > summary::before {
 .numbered-section-collapse:hover {
   color: var(--text, #dbe4f0);
   border-color: var(--text-dim, #8b9cb8);
+}
+.numbered-section-collapse-bottom {
+  display: block;
+  width: fit-content;
+  margin: 12px 0 0 auto;
 }
 .numbered-section-collapsed .numbered-section-head {
   margin-bottom: 0;

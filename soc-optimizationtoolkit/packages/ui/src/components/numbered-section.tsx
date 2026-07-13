@@ -102,17 +102,17 @@ export function NumberedSection({
         <span onClick={(e) => e.stopPropagation()}>
           <InfoTip text={infoTip} />
         </span>
-        {collapsible && (
+        {collapsible && collapsed && (
           <button
             className="numbered-section-collapse"
-            aria-expanded={!collapsed}
-            aria-label={collapsed ? `Expand ${title}` : `Collapse ${title}`}
+            aria-expanded={false}
+            aria-label={`Expand ${title}`}
             onClick={(e) => {
               e.stopPropagation();
-              setCollapsed((c) => !c);
+              setCollapsed(false);
             }}
           >
-            {collapsed ? "Expand" : "Collapse"}
+            Expand
           </button>
         )}
       </div>
@@ -138,6 +138,20 @@ export function NumberedSection({
             <p className="numbered-section-blocked-reason">{reason}</p>
           )}
           <div className="numbered-section-body">{children}</div>
+          {collapsible && (
+            // Collapse lives at the BOTTOM of the expanded body (user
+            // direction 2026-07-13): a section is finished at its end, so
+            // that is where the put-it-away control belongs. Expand stays
+            // in the header - a collapsed section has no visible bottom.
+            <button
+              className="numbered-section-collapse numbered-section-collapse-bottom"
+              aria-expanded={true}
+              aria-label={`Collapse ${title}`}
+              onClick={() => setCollapsed(true)}
+            >
+              Collapse
+            </button>
+          )}
         </div>
       )}
     </section>
