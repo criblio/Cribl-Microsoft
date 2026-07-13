@@ -1,7 +1,7 @@
 /**
  * Contract tests for the integrate-arc module (the single-page Integrate
  * flagship's pure model - legacy-flow-analysis.md ADOPTED decision):
- *   - section metadata: seven sections numbered 1..7 in page order, the
+ *   - section metadata: eight sections numbered 1..8 in page order, the
  *     built/not-built split matches the MVP scope, shippedInUnit lives only on
  *     the not-built sections, no emojis in any copy
  *   - the full 2^5 input matrix: at most one 'current' across the page, built
@@ -109,13 +109,16 @@ describe("INTEGRATE_SECTIONS metadata", () => {
     expect(INTEGRATE_SECTIONS.map((s) => s.id)).toEqual([
       "solution",
       "sample-data",
-      "azure-resources",
-      "cribl-config",
       // Gap analysis INFORMS the coverage sections (availability set), and
       // the coverage sections then offer the explicit Drop action.
       "gap-analysis",
       "rule-coverage",
       "workbook-coverage",
+      // Azure Resources and Cribl Config FOLLOW the analysis arc (user
+      // direction 2026-07-13): detected tables prefill the deploy and the
+      // pack is built from the approved mappings.
+      "azure-resources",
+      "cribl-config",
       "deploy",
     ]);
   });
@@ -250,14 +253,36 @@ describe("built-section status matrix", () => {
     ).toBe("complete");
   });
 
-  it("azure-resources: current once solution+samples are in, complete once scope committed", () => {
+  it("gap-analysis: available ahead, current once solution+samples are in, complete once mappings approved", () => {
+    // Nothing done: Solution is current, Gap Analysis reads ahead as 'available'.
+    expect(statusOf("gap-analysis", inputs())).toBe("available");
+    // Solution selected + a tagged sample advance 'current' to the analysis
+    // (the arc's pivot now sits directly after the evidence intake).
+    expect(
+      statusOf(
+        "gap-analysis",
+        inputs({ solutionSelected: true, samplesProvided: true }),
+      ),
+    ).toBe("current");
+    // Mappings approved: complete. It is never 'blocked' (only Deploy is).
+    expect(
+      statusOf("gap-analysis", inputs({ mappingsApproved: true })),
+    ).toBe("complete");
+  });
+
+  it("azure-resources: current once the analysis arc is done, complete once scope committed", () => {
     // Earlier built sections still incomplete: Azure Resources is read-ahead
-    // 'available'; solution selected + a tagged sample advance 'current' to it.
+    // 'available'; solution + samples + approved mappings advance 'current'
+    // to it (it now FOLLOWS the analysis arc).
     expect(statusOf("azure-resources", inputs())).toBe("available");
     expect(
       statusOf(
         "azure-resources",
-        inputs({ solutionSelected: true, samplesProvided: true }),
+        inputs({
+          solutionSelected: true,
+          samplesProvided: true,
+          mappingsApproved: true,
+        }),
       ),
     ).toBe("current");
     expect(
@@ -265,16 +290,17 @@ describe("built-section status matrix", () => {
     ).toBe("complete");
   });
 
-  it("cribl-config: available ahead of scope, current once solution+samples+scope are committed, complete when both halves set", () => {
+  it("cribl-config: available ahead of scope, current once the analysis arc+scope are done, complete when both halves set", () => {
     // nothing committed: solution is current, cribl-config is read-ahead
     expect(statusOf("cribl-config", inputs())).toBe("available");
-    // solution + samples + scope committed, cribl not yet: cribl-config current
+    // analysis arc done + scope committed, cribl not yet: cribl-config current
     expect(
       statusOf(
         "cribl-config",
         inputs({
           solutionSelected: true,
           samplesProvided: true,
+          mappingsApproved: true,
           scopeCommitted: true,
         }),
       ),
@@ -286,6 +312,7 @@ describe("built-section status matrix", () => {
         inputs({
           solutionSelected: true,
           samplesProvided: true,
+          mappingsApproved: true,
           scopeCommitted: true,
           workerGroupSelected: true,
         }),
@@ -297,25 +324,6 @@ describe("built-section status matrix", () => {
         "cribl-config",
         inputs({ workerGroupSelected: true, packNameSet: true }),
       ),
-    ).toBe("complete");
-  });
-
-  it("gap-analysis: available ahead, current after the earlier sections, complete once mappings approved", () => {
-    // Nothing done: Solution is current, Gap Analysis reads ahead as 'available'.
-    expect(statusOf("gap-analysis", inputs())).toBe("available");
-    // Every earlier built section complete, mappings not yet approved: Gap
-    // Analysis is the earliest incomplete actionable section -> current.
-    const upToGap = inputs({
-      solutionSelected: true,
-      samplesProvided: true,
-      scopeCommitted: true,
-      workerGroupSelected: true,
-      packNameSet: true,
-    });
-    expect(statusOf("gap-analysis", upToGap)).toBe("current");
-    // Mappings approved: complete. It is never 'blocked' (only Deploy is).
-    expect(
-      statusOf("gap-analysis", inputs({ mappingsApproved: true })),
     ).toBe("complete");
   });
 
@@ -413,17 +421,20 @@ describe("read-ahead and single-current invariants", () => {
   });
 
   it("read-ahead: a blocked Deploy never changes the earlier sections' status", () => {
-    // Solution selected, Samples in and Cribl Config complete, but scope not
-    // committed: Azure Resources is current; Deploy is blocked; the block on the
-    // later section does not demote or hide the earlier one.
+    // Solution selected, Samples in, mappings approved and Cribl Config
+    // complete, but scope not committed: Azure Resources is current; Deploy is
+    // blocked; the block on the later section does not demote or hide the
+    // earlier one.
     const i = inputs({
       solutionSelected: true,
       samplesProvided: true,
+      mappingsApproved: true,
       workerGroupSelected: true,
       packNameSet: true,
     });
     expect(statusOf("solution", i)).toBe("complete");
     expect(statusOf("sample-data", i)).toBe("complete");
+    expect(statusOf("gap-analysis", i)).toBe("complete");
     expect(statusOf("azure-resources", i)).toBe("current");
     expect(statusOf("cribl-config", i)).toBe("complete");
     expect(statusOf("deploy", i)).toBe("blocked");

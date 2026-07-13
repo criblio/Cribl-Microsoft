@@ -570,7 +570,7 @@ export function IntegrateScreen({
     ports.packs === undefined || ports.packInstall === undefined
       ? "Pack build is not available in this host."
       : !mappingsApproved
-        ? "Approve the DCR Gap Analysis mappings (section 5) first - the pack is built from them."
+        ? "Approve the DCR Gap Analysis mappings (section 3) first - the pack is built from them."
         : identityGateReason !== null
           ? identityGateReason
           : packName.trim() === ""
@@ -605,7 +605,7 @@ export function IntegrateScreen({
               : packTargetGroups.length === 0
                 ? "no worker group selected."
                 : !mappingsApproved
-                  ? "the DCR Gap Analysis mappings are not approved (section 5)."
+                  ? "the DCR Gap Analysis mappings are not approved (section 3)."
                   : (identityGateReason ?? "a build is already running.")
         }`,
       ]);
@@ -660,7 +660,7 @@ export function IntegrateScreen({
       if (!preview.valid) {
         push(
           `Cannot build: Cribl YAML validation found ${preview.totalYamlIssues} ` +
-            "issue(s) - see the pipeline preview in section 5.",
+            "issue(s) - see the pipeline preview in section 3.",
         );
         return;
       }
@@ -1280,7 +1280,7 @@ export function IntegrateScreen({
       <div className="discovery-result">
         <span className="field-label">
           Pack rebuild
-          <InfoTip text="The pack ships automatically with Deploy in the Deploy section. Use this only to rebuild and reinstall the pack alone after editing mappings - no Azure resources are touched. Builds from the APPROVED Gap Analysis mappings (the exact pipelines, reduction rules, routes, breakers, samples, and lookups previewed in section 5); deployed tables carry their real DCR values, others a fill-in-Cribl placeholder; the pack name and overwrite acknowledgment above are honored." />
+          <InfoTip text="The pack ships automatically with Deploy in the Deploy section. Use this only to rebuild and reinstall the pack alone after editing mappings - no Azure resources are touched. Builds from the APPROVED Gap Analysis mappings (the exact pipelines, reduction rules, routes, breakers, samples, and lookups previewed in section 3); deployed tables carry their real DCR values, others a fill-in-Cribl placeholder; the pack name and overwrite acknowledgment above are honored." />
         </span>
         <div className="panel-controls">
           <button

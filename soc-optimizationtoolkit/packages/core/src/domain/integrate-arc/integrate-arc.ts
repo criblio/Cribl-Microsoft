@@ -3,12 +3,15 @@
  *
  * legacy-flow-analysis.md (structural decision ADOPTED 2026-07-04): the
  * Integrate arc becomes ONE numbered-section page - Solution -> Sample Data ->
- * Azure Resources -> Cribl Config -> Gap Analysis -> Rule Coverage -> Deploy -
- * with a persistent deploy-readiness footer, matching the legacy Sentinel
- * Integration flagship (IS-R/pages/SentinelIntegration.tsx). This module is the
- * pure successor to that page's sectionDone / canDeploy chain, scoped to the
- * SECTIONS of the one page (the whole-app journey rail stays in journey-state;
- * this is the arc's interior).
+ * Gap Analysis -> Rule Coverage -> Workbook Coverage -> Azure Resources ->
+ * Cribl Config -> Deploy - with a persistent deploy-readiness footer, matching
+ * the legacy Sentinel Integration flagship (IS-R/pages/SentinelIntegration.tsx).
+ * (Azure Resources and Cribl Config moved BELOW the analysis arc, user
+ * direction 2026-07-13: they consume the gap analysis - detected tables
+ * prefill the deploy and the pack is built from the approved mappings - so
+ * the evidence comes first.) This module is the pure successor to that page's
+ * sectionDone / canDeploy chain, scoped to the SECTIONS of the one page (the
+ * whole-app journey rail stays in journey-state; this is the arc's interior).
  *
  * Two things this module makes HONEST during the MVP transition:
  *
@@ -106,13 +109,17 @@ export interface IntegrateSection {
 }
 
 /**
- * The eight sections in page order: the DCR gap analysis (5) INFORMS the
- * rule (6) and workbook (7) coverage (classification needs the mapped
+ * The eight sections in page order: the DCR gap analysis (3) INFORMS the
+ * rule (4) and workbook (5) coverage (classification needs the mapped
  * availability set), and the coverage sections then offer an explicit
  * "Drop unneeded fields" action that converts overflow fields required by
  * neither content type into reviewable DROP edits (user direction
- * 2026-07-12: decision at the evidence, not before it). rule-coverage and
- * workbook-coverage stay INFORMATIONAL (never gate a deploy).
+ * 2026-07-12: decision at the evidence, not before it). Azure Resources (6)
+ * and Cribl Config (7) follow the analysis arc (user direction 2026-07-13:
+ * both depend on it - detected tables prefill the deploy, the pack is built
+ * from the approved mappings); read-ahead still lets an operator fill them
+ * anytime. rule-coverage and workbook-coverage stay INFORMATIONAL (never
+ * gate a deploy).
  */
 export const INTEGRATE_SECTIONS: readonly IntegrateSection[] = [
   {
@@ -143,30 +150,8 @@ export const INTEGRATE_SECTIONS: readonly IntegrateSection[] = [
     built: true,
   },
   {
-    id: "azure-resources",
-    number: 3,
-    title: "Select Azure Resources",
-    infoTip:
-      "Choose the subscription, Log Analytics workspace, resource group, and " +
-      "location. A live permission preflight checks DCE creation, metrics " +
-      "publishing, and role assignment before any deploy.",
-    requires: "azure",
-    built: true,
-  },
-  {
-    id: "cribl-config",
-    number: 4,
-    title: "Configure Cribl",
-    infoTip:
-      "Select the Cribl worker group(s) that will run the pipelines and name " +
-      "the pack that will be built and installed. The pack name is prefilled " +
-      "from the solution and stays editable.",
-    requires: "cribl",
-    built: true,
-  },
-  {
     id: "gap-analysis",
-    number: 5,
+    number: 3,
     title: "Run DCR Gap Analysis",
     infoTip:
       "Per log type, compare source fields to destination columns - " +
@@ -185,7 +170,7 @@ export const INTEGRATE_SECTIONS: readonly IntegrateSection[] = [
   },
   {
     id: "rule-coverage",
-    number: 6,
+    number: 4,
     title: "Review Analytics Rule Coverage",
     infoTip:
       "Analytics rule coverage: fully, partially, and uncovered counts, " +
@@ -203,7 +188,7 @@ export const INTEGRATE_SECTIONS: readonly IntegrateSection[] = [
   },
   {
     id: "workbook-coverage",
-    number: 7,
+    number: 5,
     title: "Review Workbook Coverage",
     infoTip:
       "Workbook coverage: the solution's Sentinel workbooks (read from the " +
@@ -215,6 +200,28 @@ export const INTEGRATE_SECTIONS: readonly IntegrateSection[] = [
     // BUILT: workbook coverage is its own panel, INFORMATIONAL exactly like
     // rule-coverage (unconditionally complete, absent from SectionInputs, never
     // gates a deploy).
+    built: true,
+  },
+  {
+    id: "azure-resources",
+    number: 6,
+    title: "Select Azure Resources",
+    infoTip:
+      "Choose the subscription, Log Analytics workspace, resource group, and " +
+      "location. A live permission preflight checks DCE creation, metrics " +
+      "publishing, and role assignment before any deploy.",
+    requires: "azure",
+    built: true,
+  },
+  {
+    id: "cribl-config",
+    number: 7,
+    title: "Configure Cribl",
+    infoTip:
+      "Select the Cribl worker group(s) that will run the pipelines and name " +
+      "the pack that will be built and installed. The pack name is prefilled " +
+      "from the solution and stays editable.",
+    requires: "cribl",
     built: true,
   },
   {
