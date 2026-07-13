@@ -423,6 +423,40 @@ export async function addTableColumn(
     );
   }
 
+  const read = await readTableCustomColumns(azure, input);
+  const taken = new Set(
+    [...read.existing, ...read.standard].map((c) => c.name.toLowerCase()),
+  );
+  if (taken.has(name.toLowerCase())) {
+    throw new Error(`column '${name}' already exists on '${input.table}'`);
+  }
+
+  const columns = [
+    ...read.existing.map((c) => ({ name: c.name, type: c.type })),
+    { name, type: input.column.type },
+  ];
+  await patchTableColumns(azure, input, read.tablePath, columns, "add column", isCustomTable);
+  return { table: input.table, columnName: name, columnCount: columns.length };
+}
+
+/** Scope shared by the table schema-edit operations. */
+interface TableEditScope {
+  subscriptionId: string;
+  resourceGroup: string;
+  workspaceName: string;
+  table: string;
+  maxPollAttempts?: number;
+}
+
+/** GET the table and split its column sources (custom vs standard). */
+async function readTableCustomColumns(
+  azure: AzureManagement,
+  input: TableEditScope,
+): Promise<{
+  tablePath: string;
+  existing: LogAnalyticsColumn[];
+  standard: LogAnalyticsColumn[];
+}> {
   const tablePath =
     `/subscriptions/${input.subscriptionId}` +
     `/resourceGroups/${input.resourceGroup}` +
@@ -445,14 +479,22 @@ export async function addTableColumn(
   const standard = Array.isArray(prop(schema, "standardColumns"))
     ? (prop(schema, "standardColumns") as LogAnalyticsColumn[])
     : [];
-  const taken = new Set(
-    [...existing, ...standard].map((c) => c.name.toLowerCase()),
-  );
-  if (taken.has(name.toLowerCase())) {
-    throw new Error(`column '${name}' already exists on '${input.table}'`);
-  }
+  return { tablePath, existing, standard };
+}
 
-  const columns = [...existing.map((c) => ({ name: c.name, type: c.type })), { name, type: input.column.type }];
+/**
+ * PATCH the table's custom column set (the array REPLACES it) and, on a
+ * 202 long-running response, poll until the table unlocks
+ * (provisioningState Succeeded) so a follow-up DCR update sees the change.
+ */
+async function patchTableColumns(
+  azure: AzureManagement,
+  input: TableEditScope,
+  tablePath: string,
+  columns: Array<{ name: string; type: string }>,
+  operation: string,
+  isCustomTable: boolean,
+): Promise<void> {
   const patch = await azure.request({
     method: "PATCH",
     path: tablePath,
@@ -470,15 +512,11 @@ export async function addTableColumn(
         " fields or a custom (_CL) side table are the fallback"
       : "";
     throw new Error(
-      `add column to '${input.table}': HTTP ${patch.status} ` +
+      `${operation} on '${input.table}': HTTP ${patch.status} ` +
         JSON.stringify(patch.body).slice(0, 300) +
         nativeHint,
     );
   }
-
-  // 202 = long-running schema update: poll until the table unlocks
-  // (provisioningState Succeeded) so the follow-up DCR update sees the
-  // new column.
   if (patch.status === 202) {
     const maxAttempts = input.maxPollAttempts ?? 5;
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
@@ -500,5 +538,46 @@ export async function addTableColumn(
       }
     }
   }
-  return { table: input.table, columnName: name, columnCount: columns.length };
+}
+
+/**
+ * Remove one CUSTOM column from a table (user request 2026-07-13). Only
+ * custom columns are removable - standard/built-in columns are Azure's,
+ * and TimeGenerated is required on every table. The follow-up DCR update
+ * (the caller's) drops the column from the stream declaration.
+ */
+export async function removeTableColumn(
+  azure: AzureManagement,
+  input: TableEditScope & { columnName: string },
+): Promise<{ table: string; columnName: string; columnCount: number }> {
+  const name = input.columnName.trim();
+  if (name.toLowerCase() === "timegenerated") {
+    throw new Error("TimeGenerated is required on every table and cannot be removed");
+  }
+  const read = await readTableCustomColumns(azure, input);
+  const match = read.existing.find(
+    (c) => c.name.toLowerCase() === name.toLowerCase(),
+  );
+  if (match === undefined) {
+    const standardHit = read.standard.some(
+      (c) => c.name.toLowerCase() === name.toLowerCase(),
+    );
+    throw new Error(
+      standardHit
+        ? `'${name}' is a standard column on '${input.table}' - only custom columns can be removed`
+        : `'${name}' is not a custom column on '${input.table}'`,
+    );
+  }
+  const columns = read.existing
+    .filter((c) => c.name.toLowerCase() !== name.toLowerCase())
+    .map((c) => ({ name: c.name, type: c.type }));
+  await patchTableColumns(
+    azure,
+    input,
+    read.tablePath,
+    columns,
+    "remove column",
+    input.table.endsWith("_CL"),
+  );
+  return { table: input.table, columnName: match.name, columnCount: columns.length };
 }

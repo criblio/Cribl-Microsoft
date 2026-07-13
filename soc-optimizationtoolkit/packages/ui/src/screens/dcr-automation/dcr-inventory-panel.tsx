@@ -15,6 +15,7 @@ import {
   listDcrInventory,
   listResourceGroups,
   previewDcrUpdate,
+  removeTableColumn,
   updateDcrInPlace,
 } from "@soc/core";
 import type { DcrInventoryEntry, DcrUpdatePreview } from "@soc/core";
@@ -50,6 +51,7 @@ export function DcrInventoryPanel() {
   const [progress, setProgress] = useState("");
   const [newColName, setNewColName] = useState("");
   const [newColType, setNewColType] = useState("string");
+  const [removeColName, setRemoveColName] = useState("");
   // Matching (green) columns show by default (user color semantics
   // 2026-07-13: matches ARE the highlight); the toggle hides them when the
   // 150+ chips get in the way of the changes.
@@ -249,6 +251,77 @@ export function DcrInventoryPanel() {
       setBusy(false);
     }
   }, [ports.azure, scope, preview, previewLocation, previewDce, newColName, newColType, logInfo, logError]);
+
+  // Remove a CUSTOM column from the table AND apply the DCR update in one
+  // action (user request 2026-07-13) - the field disappears end to end.
+  const removeColumn = useCallback(async () => {
+    if (preview === null || removeColName === "") return;
+    const columnName = removeColName;
+    setBusy(true);
+    setError("");
+    setNotice("");
+    logInfo(
+      `removing field '${columnName}' from ${preview.table} and updating '${preview.dcrName}'`,
+    );
+    setProgress(`Removing '${columnName}' from ${preview.table}...`);
+    try {
+      const removed = await removeTableColumn(ports.azure, {
+        ...scope(),
+        table: preview.table,
+        columnName,
+      });
+      setProgress(`Updating DCR '${preview.dcrName}' to drop '${removed.columnName}'...`);
+      let dcrUpdated = true;
+      try {
+        await updateDcrInPlace(ports.azure, {
+          ...scope(),
+          dcrName: preview.dcrName,
+          table: preview.table,
+          location: previewLocation,
+          dceResourceId: previewDce || undefined,
+        });
+      } catch (err) {
+        dcrUpdated = false;
+        logError(
+          `column '${removed.columnName}' removed from ${preview.table} but the DCR update failed: ${err instanceof Error ? err.message : String(err)}`,
+        );
+        setError(
+          `Column removed from ${preview.table}, but the DCR update failed: ` +
+            `${err instanceof Error ? err.message : String(err)} - ` +
+            "use Apply update below to retry.",
+        );
+      }
+      if (dcrUpdated) {
+        logInfo(
+          `removed '${removed.columnName}' from ${preview.table} and updated '${preview.dcrName}'`,
+        );
+      }
+      setNotice(
+        dcrUpdated
+          ? `Removed '${removed.columnName}' from ${preview.table} AND ` +
+            `updated '${preview.dcrName}' - the field is gone end to end.`
+          : `Removed '${removed.columnName}' from ${preview.table}.`,
+      );
+      setRemoveColName("");
+      setProgress("Refreshing the field list...");
+      setPreview(
+        await previewDcrUpdate(ports.azure, {
+          ...scope(),
+          dcrName: preview.dcrName,
+          table: preview.table,
+          location: previewLocation,
+          dceResourceId: previewDce || undefined,
+        }),
+      );
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      logError(`remove field '${columnName}' from ${preview.table} failed: ${message}`);
+      setError(message);
+    } finally {
+      setProgress("");
+      setBusy(false);
+    }
+  }, [ports.azure, scope, preview, previewLocation, previewDce, removeColName, logInfo, logError]);
 
   const load = useCallback(async () => {
     setBusy(true);
@@ -454,6 +527,44 @@ export function DcrInventoryPanel() {
                         MyField_CF.
                       </p>
                     )}
+                    {(() => {
+                      // Removable = the table's CUSTOM columns only: _CF
+                      // fields on native tables, everything except
+                      // TimeGenerated on _CL tables.
+                      const removable = preview.tableColumns
+                        .filter((c) =>
+                          nativeTable
+                            ? c.name.endsWith("_CF")
+                            : c.name.toLowerCase() !== "timegenerated",
+                        )
+                        .map((c) => c.name)
+                        .sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
+                      if (removable.length === 0) return null;
+                      return (
+                        <div className="panel-controls">
+                          <select
+                            aria-label="Column to remove"
+                            value={removeColName}
+                            onChange={(ev) => setRemoveColName(ev.target.value)}
+                          >
+                            <option value="">Select a field to remove...</option>
+                            {removable.map((n) => (
+                              <option key={n} value={n}>
+                                {n}
+                              </option>
+                            ))}
+                          </select>
+                          <button
+                            className="gap-reset-button"
+                            onClick={() => void removeColumn()}
+                            disabled={busy || removeColName === ""}
+                            title="Removes the custom field from the table AND applies the DCR update - gone end to end."
+                          >
+                            Remove from table and DCR
+                          </button>
+                        </div>
+                      );
+                    })()}
                   </>
                 );
               })()}

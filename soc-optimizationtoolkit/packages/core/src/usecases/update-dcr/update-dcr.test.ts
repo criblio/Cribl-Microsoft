@@ -9,6 +9,7 @@ import {
   addTableColumn,
   diffColumns,
   previewDcrUpdate,
+  removeTableColumn,
   updateDcrInPlace,
 } from "./update-dcr";
 
@@ -298,6 +299,84 @@ describe("updateDcrInPlace", () => {
         column: { name: "riskscore", type: "long" },
       }),
     ).rejects.toThrow(/already exists/);
+  });
+
+  it("removeTableColumn drops ONLY the named custom column, keeping the rest", async () => {
+    const scope = {
+      subscriptionId: "sub",
+      resourceGroup: "rg",
+      workspaceName: "ws",
+      table: "Acme_CL",
+    };
+    const azure = new FakeAzureManagement();
+    azure.respondWith(
+      {
+        status: 200,
+        body: {
+          properties: {
+            schema: {
+              columns: [
+                { name: "TimeGenerated", type: "dateTime" },
+                { name: "Keep", type: "string" },
+                { name: "Gone", type: "string" },
+              ],
+            },
+          },
+        },
+      },
+      { status: 200, body: {} },
+    );
+    const result = await removeTableColumn(azure, { ...scope, columnName: "gone" });
+    expect(result.columnName).toBe("Gone");
+    const patch = azure.calls.find((c) => c.method === "PATCH");
+    const body = patch!.body as {
+      properties: { schema: { columns: Array<{ name: string }> } };
+    };
+    // The array REPLACES the custom set - the survivors must ride along.
+    expect(body.properties.schema.columns.map((c) => c.name)).toEqual([
+      "TimeGenerated",
+      "Keep",
+    ]);
+  });
+
+  it("removeTableColumn refuses TimeGenerated, standard columns, and unknowns", async () => {
+    const scope = {
+      subscriptionId: "sub",
+      resourceGroup: "rg",
+      workspaceName: "ws",
+      table: "SecurityEvent",
+    };
+    await expect(
+      removeTableColumn(new FakeAzureManagement(), {
+        ...scope,
+        columnName: "TimeGenerated",
+      }),
+    ).rejects.toThrow(/TimeGenerated is required/);
+
+    const azure = new FakeAzureManagement();
+    azure.respondWith({
+      status: 200,
+      body: {
+        properties: {
+          schema: {
+            columns: [{ name: "Extra_CF", type: "string" }],
+            standardColumns: [{ name: "Computer", type: "string" }],
+          },
+        },
+      },
+    });
+    await expect(
+      removeTableColumn(azure, { ...scope, columnName: "Computer" }),
+    ).rejects.toThrow(/standard column.*only custom columns/);
+
+    const azure2 = new FakeAzureManagement();
+    azure2.respondWith({
+      status: 200,
+      body: { properties: { schema: { columns: [] } } },
+    });
+    await expect(
+      removeTableColumn(azure2, { ...scope, columnName: "Nope_CF" }),
+    ).rejects.toThrow(/not a custom column/);
   });
 
   it("surfaces schema-fetch and PUT failures with their status", async () => {
