@@ -3,7 +3,9 @@ import { describe, expect, it } from "vitest";
 import {
   deployedGroups,
   interpretInstallResponse,
+  installedPackVersions,
   isPackDeployed,
+  nextPackVersion,
   packDeleteRequest,
   packIdFromCrblFileName,
   packInstallRequest,
@@ -122,6 +124,30 @@ describe("deployed status is TRUTH FROM THE PACKS API", () => {
       { group: "wg2", packs: [] },
     ]);
     expect(groups).toEqual(["wg1"]);
+  });
+
+  it("collects installed versions case-insensitively and bumps the patch", () => {
+    // A rebuild ships the next patch above the highest installed copy
+    // (live 2026-07-13: every rebuild said 1.0.0).
+    const groups = [
+      {
+        group: "default",
+        packs: [
+          { id: "ms-sentinel", displayName: "MS", version: "1.0.3" },
+          { id: "other", displayName: "o", version: "9.9.9" },
+        ],
+      },
+      {
+        group: "dc-east",
+        packs: [{ id: "MS-Sentinel", displayName: "MS", version: "1.1.0" }],
+      },
+    ];
+    const versions = installedPackVersions(groups, "MS-Sentinel");
+    expect(versions.sort()).toEqual(["1.0.3", "1.1.0"]);
+    expect(nextPackVersion(versions)).toBe("1.1.1");
+    // Fresh install / junk versions -> 1.0.0.
+    expect(nextPackVersion([])).toBe("1.0.0");
+    expect(nextPackVersion(["latest", ""])).toBe("1.0.0");
   });
 
   it("matches deployed pack ids CASE-INSENSITIVELY", () => {

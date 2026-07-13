@@ -115,4 +115,6 @@ export {
   parsePackListResponse,
   isPackDeployed,
   deployedGroups,
+  installedPackVersions,
+  nextPackVersion,
 } from "./install";

@@ -247,3 +247,53 @@ export function deployedGroups(
 ): string[] {
   return groupPacks.filter((g) => isPackDeployed(g.packs, packId)).map((g) => g.group);
 }
+
+/**
+ * The versions this pack is installed at across the fetched group listings
+ * (case-insensitive id match, same rule as {@link isPackDeployed}). Feeds
+ * {@link nextPackVersion} so a rebuild ships an INCREMENTED version (live
+ * 2026-07-13: every rebuild said 1.0.0, indistinguishable in Cribl).
+ */
+export function installedPackVersions(
+  groupPacks: Array<{ group: string; packs: InstalledPack[] }>,
+  packId: string,
+): string[] {
+  const want = packId.toLowerCase();
+  const versions: string[] = [];
+  for (const g of groupPacks) {
+    for (const p of g.packs) {
+      if (p.id.toLowerCase() === want && p.version !== "") {
+        versions.push(p.version);
+      }
+    }
+  }
+  return versions;
+}
+
+/**
+ * The version the NEXT build of this pack should carry: the highest
+ * installed x.y.z with its patch bumped, or 1.0.0 when the pack is not
+ * installed anywhere (or no version parses).
+ */
+export function nextPackVersion(existing: readonly string[]): string {
+  let best: [number, number, number] | null = null;
+  for (const version of existing) {
+    const m = version.match(/^(\d+)\.(\d+)\.(\d+)/);
+    if (m === null) continue;
+    const parts: [number, number, number] = [
+      Number(m[1]),
+      Number(m[2]),
+      Number(m[3]),
+    ];
+    if (
+      best === null ||
+      parts[0] > best[0] ||
+      (parts[0] === best[0] && parts[1] > best[1]) ||
+      (parts[0] === best[0] && parts[1] === best[1] && parts[2] > best[2])
+    ) {
+      best = parts;
+    }
+  }
+  if (best === null) return "1.0.0";
+  return `${best[0]}.${best[1]}.${best[2] + 1}`;
+}

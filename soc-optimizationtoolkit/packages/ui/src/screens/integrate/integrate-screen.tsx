@@ -64,8 +64,10 @@ import {
   deriveSectionStatuses,
   destinationIdFromOptions,
   identityGateMessage,
+  installedPackVersions,
   isStreamWorkerGroup,
   missingIdentityFields,
+  nextPackVersion,
   onboardTable,
   onboardTableStepsFor,
   readinessPillsForMode,
@@ -642,6 +644,12 @@ export function IntegrateScreen({
           : "The name is free in every target group.",
       );
 
+      // A rebuild ships an INCREMENTED version (live 2026-07-13: every
+      // rebuild said 1.0.0, indistinguishable in Cribl) - the next patch
+      // above the highest installed copy, from the same listing the
+      // overwrite check fetched.
+      const packVersion = nextPackVersion(installedPackVersions(deployed, name));
+
       // 2. Resolve the plan - the SAME derivation the pipeline preview renders,
       // including the Cribl YAML validation (an invalid plan never ships).
       const preview = derivePipelinePreview({
@@ -652,6 +660,7 @@ export function IntegrateScreen({
         sampleFormats,
         enrichments,
         approved: mappingsApproved,
+        version: packVersion,
       });
       if (!preview.available || preview.plan === null) {
         push(`Cannot build: ${preview.emptyReason ?? "no pipeline plan available"}`);
