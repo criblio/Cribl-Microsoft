@@ -15,8 +15,20 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { assemblePack, isStreamWorkerGroup } from "@soc/core";
-import type { CriblGroupSummary } from "@soc/core";
+import {
+  applyMaintenanceEdits,
+  assemblePack,
+  installedPackVersions,
+  isStreamWorkerGroup,
+  maintenanceRows,
+  makeBuildRecord,
+  nextPackVersion,
+} from "@soc/core";
+import type {
+  CriblGroupSummary,
+  MaintenanceEdit,
+  PipelineFieldMapping,
+} from "@soc/core";
 import { usePorts } from "../../ports-context";
 import type { DeployedGroupPacks, StoredPack } from "../../ports-context";
 import { SearchableSelect } from "../../components/searchable-select";
@@ -176,6 +188,83 @@ export function PackInventoryScreen({ refreshToken = 0 }: PackInventoryScreenPro
     [packStore, packs, load],
   );
 
+  // ---- Pack maintenance (user request 2026-07-13): reconstruct the pack's
+  // mapping table from its stored definition, edit dispositions/targets, and
+  // rebuild + install the NEXT version in place (the install ladder upgrades
+  // the existing pack id).
+  const [maintainId, setMaintainId] = useState<string | null>(null);
+  const [maintEdits, setMaintEdits] = useState<Map<string, MaintenanceEdit>>(
+    new Map(),
+  );
+
+  const editKey = (logType: string, source: string) => `${logType} ${source}`;
+  const setEdit = useCallback(
+    (logType: string, source: string, patch: Partial<MaintenanceEdit>) => {
+      setMaintEdits((prev) => {
+        const nextMap = new Map(prev);
+        const key = editKey(logType, source);
+        nextMap.set(key, { logType, source, ...prev.get(key), ...patch });
+        return nextMap;
+      });
+    },
+    [],
+  );
+
+  const rebuildInPlace = useCallback(
+    async (id: string) => {
+      const pack = findPack(id);
+      if (pack === undefined || packStore === undefined) {
+        return;
+      }
+      setBusy(true);
+      setError("");
+      setNotice("");
+      try {
+        // Next version: above the highest INSTALLED copy and this record.
+        const version = nextPackVersion([
+          ...installedPackVersions(snapshot, pack.record.packName),
+          pack.record.version,
+        ]);
+        const nextDef = applyMaintenanceEdits(
+          pack.definition,
+          [...maintEdits.values()],
+          { version, builtAtMs: Date.now() },
+        );
+        const assembled = assemblePack(nextDef);
+        await packStore.put({
+          record: makeBuildRecord(nextDef.plan, {
+            builtAtMs: nextDef.builtAtMs,
+            crblSizeBytes: assembled.crbl.length,
+            displayName: pack.record.displayName,
+          }),
+          definition: nextDef,
+        });
+        if (packInstall !== undefined && selectedGroup !== "") {
+          const installed = await packInstall.install(
+            selectedGroup,
+            assembled.crblFileName,
+            assembled.crbl,
+          );
+          setNotice(
+            `Rebuilt v${version} and installed '${installed.id}' on ${selectedGroup}.`,
+          );
+        } else {
+          setNotice(
+            `Rebuilt v${version} - record saved. Select a worker group to install.`,
+          );
+        }
+        setMaintainId(null);
+        setMaintEdits(new Map());
+        await load();
+      } catch (err) {
+        setError(`Rebuild failed: ${String(err)}`);
+      } finally {
+        setBusy(false);
+      }
+    },
+    [findPack, packStore, snapshot, maintEdits, packInstall, selectedGroup, load],
+  );
+
   const install = useCallback(
     async (id: string) => {
       if (packInstall === undefined || selectedGroup === "") {
@@ -293,6 +382,16 @@ export function PackInventoryScreen({ refreshToken = 0 }: PackInventoryScreenPro
                 </button>
               )}
               <button
+                className="run-button"
+                onClick={() => {
+                  setMaintEdits(new Map());
+                  setMaintainId(maintainId === row.id ? null : row.id);
+                }}
+                disabled={busy}
+              >
+                {maintainId === row.id ? "Close maintenance" : "Maintain"}
+              </button>
+              <button
                 className="gap-reset-button"
                 onClick={() => void remove(row.id)}
                 disabled={busy}
@@ -300,6 +399,90 @@ export function PackInventoryScreen({ refreshToken = 0 }: PackInventoryScreenPro
                 Delete
               </button>
             </div>
+            {maintainId === row.id &&
+              (() => {
+                const pack = findPack(row.id);
+                if (pack === undefined) return null;
+                const mrows = maintenanceRows(pack.definition);
+                return (
+                  <div className="pack-maintenance">
+                    <p className="field-hint">
+                      Reconstructed from the stored build definition. Edit a
+                      row's action or destination, then rebuild - the next
+                      version installs over the existing pack in place.
+                    </p>
+                    <table className="match-field-table mapping-review-grid">
+                      <thead>
+                        <tr>
+                          <th>Log type</th>
+                          <th>Source field</th>
+                          <th>Action</th>
+                          <th>Destination</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {mrows.map((m) => {
+                          const key = editKey(m.logType, m.source);
+                          const edit = maintEdits.get(key);
+                          const action = edit?.action ?? m.action;
+                          return (
+                            <tr key={key}>
+                              <td>{m.logType}</td>
+                              <td>{m.source}</td>
+                              <td>
+                                <select
+                                  aria-label={`Action for ${m.source}`}
+                                  value={action}
+                                  onChange={(e) =>
+                                    setEdit(m.logType, m.source, {
+                                      action: e.target
+                                        .value as PipelineFieldMapping["action"],
+                                    })
+                                  }
+                                >
+                                  <option value="rename">rename</option>
+                                  <option value="keep">keep</option>
+                                  <option value="coerce">coerce</option>
+                                  <option value="decode">decode</option>
+                                  <option value="overflow">overflow</option>
+                                  <option value="drop">drop</option>
+                                </select>
+                              </td>
+                              <td>
+                                <input
+                                  aria-label={`Destination for ${m.source}`}
+                                  value={edit?.target ?? m.target}
+                                  disabled={action === "drop" || action === "overflow"}
+                                  onChange={(e) =>
+                                    setEdit(m.logType, m.source, {
+                                      target: e.target.value,
+                                    })
+                                  }
+                                />
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                    <div className="panel-controls">
+                      <button
+                        className="run-button"
+                        onClick={() => void rebuildInPlace(row.id)}
+                        disabled={busy}
+                      >
+                        Rebuild next version
+                        {selectedGroup !== "" ? ` and install to ${selectedGroup}` : ""}
+                      </button>
+                      {maintEdits.size > 0 && (
+                        <span className="field-hint">
+                          {maintEdits.size} row(s) edited
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
           </div>
         );
       })}

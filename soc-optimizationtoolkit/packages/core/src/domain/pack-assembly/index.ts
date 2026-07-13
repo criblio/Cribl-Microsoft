@@ -118,3 +118,5 @@ export {
   installedPackVersions,
   nextPackVersion,
 } from "./install";
+export type { MaintenanceRow, MaintenanceEdit } from "./maintenance";
+export { maintenanceRows, applyMaintenanceEdits } from "./maintenance";

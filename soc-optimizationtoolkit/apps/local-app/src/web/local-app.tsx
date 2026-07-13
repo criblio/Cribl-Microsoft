@@ -23,6 +23,7 @@ import {
   EventHubDiscoveryScreen,
   BatchDeployScreen,
   DcrAutomationScreen,
+  DcrInventoryPanel,
   EMPTY_MODE_RECORD,
   HomeScreen,
   IntegrateScreen,
@@ -779,6 +780,11 @@ export function LocalApp() {
     <DcrAutomationScreen
       single={onboardView}
       batch={renderBatch(nav)}
+      inventory={
+        <PortsProvider ports={ports} config={activeAzureConfig ?? EMPTY_AZURE_CONFIG}>
+          <DcrInventoryPanel />
+        </PortsProvider>
+      }
       singleDisabledReason={
         hasCribl(phase.mode)
           ? undefined
@@ -1040,7 +1046,7 @@ export function LocalApp() {
   const packsView = (
     <>
       <header className="local-header">
-        <h1 className="local-title">Packs</h1>
+        <h1 className="local-title">Pack Maintenance</h1>
         <p className="local-subtitle">
           Every pack built by this app, with its destination tables, size, and
           live deployed status per worker group. Download the .crbl (regenerated
@@ -1141,7 +1147,7 @@ export function LocalApp() {
     { id: 'dcr-automation', label: 'DCR Automation', requires: 'azure', section: 'development', render: renderDcrAutomation },
     { id: 'eventhub-discovery', label: 'Event Hub Discovery', requires: 'azure', section: 'development', render: () => eventHubDiscoveryView },
     { id: 'review', label: 'Review', requires: 'azure', section: 'development', render: renderReview },
-    { id: 'packs', label: 'Packs', requires: 'cribl', section: 'development', render: () => packsView },
+    { id: 'packs', label: 'Pack Maintenance', requires: 'cribl', section: 'development', render: () => packsView },
     { id: 'architecture', label: 'Architecture Patterns', requires: 'none', section: 'development', render: () => architectureView },
     { id: 'mapping-catalog', label: 'Mapping Catalog', requires: 'none', section: 'development', render: () => mappingCatalogView },
   ];
