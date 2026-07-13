@@ -737,8 +737,18 @@ export function IntegrateScreen({
       push(
         `Assembled ${assembled.crblFileName} (${assembled.crbl.length.toLocaleString()} bytes).`,
       );
-      await packStore.put({ record: assembled.record, definition });
-      push("Build record saved - the pack is also downloadable from the Packs screen.");
+      // The record is a CONVENIENCE (the Packs screen lists/downloads it);
+      // the install below is the point. A store failure - live 2026-07-13:
+      // the leader's kvstore answered HTTP 413 for a 103 KB record - must
+      // never abort the install.
+      try {
+        await packStore.put({ record: assembled.record, definition });
+        push("Build record saved - the pack is also downloadable from the Packs screen.");
+      } catch (err) {
+        push(
+          `Build record NOT saved (${err instanceof Error ? err.message.split("\n")[0] : String(err)}) - continuing with the install; rebuild from this page to reproduce the pack.`,
+        );
+      }
 
       // 5. Install into every target group; per-group failures are reported
       // and never abort the remaining groups.

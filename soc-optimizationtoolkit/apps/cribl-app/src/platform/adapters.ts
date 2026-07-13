@@ -1466,6 +1466,30 @@ function packBuildKey(id: string): string {
 }
 
 /**
+ * CHUNKED entries (live 2026-07-13: a definition carrying real vendor
+ * samples hit the kvstore body limit - HTTP 413 at ~100 KB). A value whose
+ * JSON exceeds CHUNK_CHARS is split across `<key>.partN` entries with a
+ * small manifest at the base key; get() reassembles transparently. Values
+ * under the limit stay single plain entries, so existing records read
+ * unchanged.
+ */
+const CHUNK_CHARS = 48_000;
+
+interface ChunkManifest {
+  chunked: true;
+  parts: number;
+}
+
+function isChunkManifest(value: unknown): value is ChunkManifest {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    (value as Record<string, unknown>)['chunked'] === true &&
+    typeof (value as Record<string, unknown>)['parts'] === 'number'
+  );
+}
+
+/**
  * PackRecordStore over plain KV entries. Upsert PUTs the entry and appends the
  * id to the index only when new; delete removes the entry and prunes the index;
  * list walks the index and GETs each entry, skipping any that 404. Cloud NEVER
@@ -1503,6 +1527,25 @@ export class PlatformPackStore implements PackRecordStore {
     } catch {
       throw new Error(`pack build ${packBuildKey(id)} is not valid JSON`);
     }
+    if (isChunkManifest(parsed)) {
+      let joined = '';
+      for (let part = 0; part < parsed.parts; part++) {
+        const partRes = await fetchWithTimeout(
+          kvUrl(`${packBuildKey(id)}.part${part}`),
+        );
+        if (!partRes.ok) {
+          throw new Error(
+            `GET kvstore/${packBuildKey(id)}.part${part}: HTTP ${partRes.status}`,
+          );
+        }
+        joined += await partRes.text();
+      }
+      try {
+        parsed = JSON.parse(joined);
+      } catch {
+        throw new Error(`pack build ${packBuildKey(id)} chunks are not valid JSON`);
+      }
+    }
     if (typeof prop(prop(parsed, 'record'), 'id') !== 'string') {
       throw new Error(`pack build ${packBuildKey(id)} has an unexpected shape\n${text}`);
     }
@@ -1519,12 +1562,39 @@ export class PlatformPackStore implements PackRecordStore {
     // Cloud never persists the archive bytes (KV size); drop any cache before
     // writing so the entry stays a small definition.
     const toStore: StoredPack = { record: pack.record, definition: pack.definition };
-    const res = await fetchWithTimeout(kvUrl(packBuildKey(id)), {
-      method: 'PUT',
-      body: JSON.stringify(toStore),
-    });
-    if (!res.ok) {
-      throw new Error(`PUT kvstore/${packBuildKey(id)}: HTTP ${res.status}\n${await res.text()}`);
+    const json = JSON.stringify(toStore);
+    if (json.length > CHUNK_CHARS) {
+      // Oversized definitions split across .partN entries (see CHUNK_CHARS).
+      const parts = Math.ceil(json.length / CHUNK_CHARS);
+      for (let part = 0; part < parts; part++) {
+        const body = json.slice(part * CHUNK_CHARS, (part + 1) * CHUNK_CHARS);
+        const partRes = await fetchWithTimeout(
+          kvUrl(`${packBuildKey(id)}.part${part}`),
+          { method: 'PUT', body },
+        );
+        if (!partRes.ok) {
+          throw new Error(
+            `PUT kvstore/${packBuildKey(id)}.part${part}: HTTP ${partRes.status}\n${await partRes.text()}`,
+          );
+        }
+      }
+      const manifestRes = await fetchWithTimeout(kvUrl(packBuildKey(id)), {
+        method: 'PUT',
+        body: JSON.stringify({ chunked: true, parts }),
+      });
+      if (!manifestRes.ok) {
+        throw new Error(
+          `PUT kvstore/${packBuildKey(id)}: HTTP ${manifestRes.status}\n${await manifestRes.text()}`,
+        );
+      }
+    } else {
+      const res = await fetchWithTimeout(kvUrl(packBuildKey(id)), {
+        method: 'PUT',
+        body: json,
+      });
+      if (!res.ok) {
+        throw new Error(`PUT kvstore/${packBuildKey(id)}: HTTP ${res.status}\n${await res.text()}`);
+      }
     }
     const index = await this.readIndex();
     if (!index.includes(id)) {
@@ -1536,6 +1606,17 @@ export class PlatformPackStore implements PackRecordStore {
   async delete(id: string): Promise<void> {
     // kvDelete owns the platform quirk: the delete is processed server-side but
     // its response may be lost by the bridge, so nothing is sequenced on it.
+    // Chunked records: prune the .partN entries best-effort before the base
+    // key (a stale part is harmless; get() only follows a live manifest).
+    try {
+      const record = await this.get(id);
+      void record; // reassembly proves the parts exist; prune a fixed window
+    } catch {
+      // Unreadable record still gets its keys pruned below.
+    }
+    for (let part = 0; part < 64; part++) {
+      await kvDelete(`${packBuildKey(id)}.part${part}`).catch(() => undefined);
+    }
     await kvDelete(packBuildKey(id));
     const index = await this.readIndex();
     const next = index.filter((x) => x !== id);
