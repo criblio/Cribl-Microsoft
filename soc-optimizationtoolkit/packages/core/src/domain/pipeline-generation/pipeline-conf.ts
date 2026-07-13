@@ -135,7 +135,9 @@ export function generatePipelineConf(
   // If vendor mappings exist, use them for authoritative source->dest transformation
   const hasVendorMappings = vendorMappings && vendorMappings.length > 0;
 
-  const activeFields = fields.filter((f) => f.action !== "drop");
+  const activeFields = fields.filter(
+    (f) => f.action !== "drop" && f.action !== "overflow",
+  );
   // UNION FIX (2026-07-09, pinned): the legacy either/or made ANY vendor
   // mapping (including enrichment constants riding this channel) silently
   // discard every preset rename/coercion. Vendor map entries stay
@@ -666,8 +668,13 @@ export function generatePipelineConf(
       excludeFields.add(f);
     // Schema fields (renamed dest names + kept source names)
     for (const f of activeFields) {
-      if (f.action !== "drop") excludeFields.add(f.target || f.source);
+      excludeFields.add(f.target || f.source);
       if (f.action === "keep") excludeFields.add(f.source);
+    }
+    // DROPPED fields never enter the catch-all (2026-07-13 live fix: they
+    // were being serialized into AdditionalExtensions and shipped anyway).
+    for (const f of fields) {
+      if (f.action === "drop") excludeFields.add(f.source);
     }
     if (hasVendorMappings) {
       for (const m of vendorMappings) {
@@ -701,6 +708,11 @@ export function generatePipelineConf(
   const vendorDropFields = hasVendorMappings
     ? vendorMappings.filter((m) => m.action === "drop").map((m) => m.sourceName)
     : [];
+  // Reviewer/policy drops arrive as preset fields (2026-07-13 live fix).
+  const presetDropFields = fields
+    .filter((f) => f.action === "drop")
+    .map((f) => f.source)
+    .filter((source) => !vendorDropFields.includes(source));
   const dropEntries = [
     "_raw",
     "_time",
@@ -719,6 +731,7 @@ export function generatePipelineConf(
     "cribl_breaker",
     "sourcetype",
     ...vendorDropFields,
+    ...presetDropFields,
   ];
 
   functions.push(

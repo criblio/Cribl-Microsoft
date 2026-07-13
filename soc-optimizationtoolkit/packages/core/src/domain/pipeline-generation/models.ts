@@ -31,8 +31,15 @@ export interface PipelineFieldMapping {
   source: string;
   target: string;
   type: string;
-  /** "decode" (2026-07-09): base64-decode source into target (see MatchAction). */
-  action: "rename" | "keep" | "coerce" | "drop" | "decode";
+  /**
+   * "decode" (2026-07-09): base64-decode source into target (see MatchAction).
+   * "overflow" vs "drop" (2026-07-13 live fix): OVERFLOW fields are folded
+   * into the catch-all column by the serialize step; DROP fields are removed
+   * outright - excluded from the serialize AND listed in the cleanup remove.
+   * The legacy collapsed both to "drop", which shipped reviewer-dropped
+   * fields inside AdditionalExtensions.
+   */
+  action: "rename" | "keep" | "coerce" | "drop" | "decode" | "overflow";
 }
 
 /** A user override for one field (highest planner priority). */

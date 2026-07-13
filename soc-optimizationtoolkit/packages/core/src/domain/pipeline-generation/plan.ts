@@ -69,7 +69,7 @@ function mapMatchedAction(m: FieldMatch): PipelineFieldMapping["action"] {
   if (m.action === "keep" && !m.needsCoercion) return "keep";
   if (m.action === "keep" && m.needsCoercion) return "coerce";
   if (m.needsCoercion) return "rename";
-  if (m.action === "overflow") return "drop";
+  if (m.action === "overflow") return "overflow";
   return m.action;
 }
 
@@ -98,8 +98,7 @@ function resolveFields(input: TablePlanInput): {
       source: o.source,
       target: o.dest,
       type: o.destType,
-      action: (o.action === "overflow" ? "drop" : o.action) as
-        | PipelineFieldMapping["action"],
+      action: o.action as PipelineFieldMapping["action"],
     }));
     return {
       fields,

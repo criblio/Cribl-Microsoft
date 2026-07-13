@@ -261,3 +261,37 @@ describe("decode action + vendor/preset union (2026-07-09)", () => {
     expect(conf).toContain("name: DeviceVendor");
   });
 });
+
+describe("reviewer drops vs overflow (2026-07-13 live fix)", () => {
+  const FIELDS = [
+    { source: "act", target: "DeviceAction", type: "string", action: "rename" as const },
+    { source: "noise", target: "", type: "string", action: "drop" as const },
+    { source: "extra", target: "AdditionalExtensions", type: "string", action: "overflow" as const },
+  ];
+
+  it("removes dropped sources in cleanup and excludes them from the serialize", () => {
+    const conf = generatePipelineConf(
+      "Sentinel_Test_web",
+      "Test Solution",
+      "CommonSecurityLog",
+      FIELDS,
+      undefined,
+      "json",
+      {
+        enabled: true,
+        fieldName: "AdditionalExtensions",
+        fieldType: "string",
+        sourceFields: ["extra"],
+      },
+    );
+    // Cleanup removes the dropped field outright.
+    expect(conf).toContain("- noise");
+    // The serialize excludes it so it never lands in the catch-all...
+    expect(conf).toContain('- "!noise"');
+    // ...while the overflow field stays serializable (no exclusion).
+    expect(conf).not.toContain('- "!extra"');
+    // And the overflow source is never in the cleanup remove list.
+    const cleanup = conf.slice(conf.indexOf("Remove internal fields") - 800);
+    expect(cleanup).not.toContain("- extra");
+  });
+});

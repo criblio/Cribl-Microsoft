@@ -206,15 +206,18 @@ export function effectiveReportMappings(
 /**
  * Map one resolved gap mapping row to a pipeline preset field. The reviewer's
  * table already decided the disposition, so these are handed to the planner as
- * `presetFields` (provenance "preset-fields"). `overflow` becomes `drop`, exactly
- * as the planner collapses it for user overrides.
+ * `presetFields` (provenance "preset-fields") with the disposition intact -
+ * overflow folds into the catch-all, drop is removed outright.
  */
 export function gapMappingToPreset(m: GapFieldMapping): PipelineFieldMapping {
-  const action: PipelineFieldMapping["action"] =
-    m.action === "overflow"
-      ? "drop"
-      : (m.action as PipelineFieldMapping["action"]);
-  return { source: m.source, target: m.dest, type: m.destType, action };
+  // overflow and drop stay DISTINCT (2026-07-13 live fix): overflow folds
+  // into the catch-all; drop is removed outright by the emitted pipeline.
+  return {
+    source: m.source,
+    target: m.dest,
+    type: m.destType,
+    action: m.action as PipelineFieldMapping["action"],
+  };
 }
 
 /**

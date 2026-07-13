@@ -160,10 +160,14 @@ describe("normalizeSourceFormat", () => {
 });
 
 describe("gapMappingToPreset", () => {
-  it("collapses overflow to drop and preserves other actions", () => {
+  it("keeps overflow and drop DISTINCT (2026-07-13 live fix)", () => {
+    // overflow folds into the catch-all; drop is removed outright by the
+    // emitted pipeline. Collapsing them shipped reviewer-dropped fields
+    // inside AdditionalExtensions.
     expect(gapMappingToPreset(mapping({ action: "overflow" })).action).toBe(
-      "drop",
+      "overflow",
     );
+    expect(gapMappingToPreset(mapping({ action: "drop" })).action).toBe("drop");
     expect(gapMappingToPreset(mapping({ action: "keep" })).action).toBe("keep");
     expect(gapMappingToPreset(mapping({ action: "coerce" })).action).toBe(
       "coerce",
