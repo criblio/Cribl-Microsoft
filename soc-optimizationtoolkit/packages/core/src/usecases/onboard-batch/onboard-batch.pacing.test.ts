@@ -137,13 +137,13 @@ describe("paceAzureManagement", () => {
     const { pacing } = fakeClock();
     // Constructing with the default budget must not throw.
     expect(() =>
-      paceAzureManagement(new FakeAzureManagement(), pacing),
+      paceAzureManagement(new FakeAzureManagement({ dataCollectionRulesList: [] }), pacing),
     ).not.toThrow();
   });
 
   it("rejects a non-positive budget instead of stalling forever", () => {
     const { pacing } = fakeClock(0);
-    expect(() => paceAzureManagement(new FakeAzureManagement(), pacing)).toThrow(
+    expect(() => paceAzureManagement(new FakeAzureManagement({ dataCollectionRulesList: [] }), pacing)).toThrow(
       RangeError,
     );
   });
@@ -152,7 +152,7 @@ describe("paceAzureManagement", () => {
 describe("onboardBatch budget pacing", () => {
   it("never issues more than maxRequestsPerMinute ARM calls in any rolling minute (fake ticks)", async () => {
     const { state, sleeps, pacing } = fakeClock(2);
-    const fake = new FakeAzureManagement();
+    const fake = new FakeAzureManagement({ dataCollectionRulesList: [] });
     fake.respondWith(
       WORKSPACE_RESPONSE, // prologue
       WORKSPACE_RESPONSE, // child fetch-workspace
@@ -168,7 +168,7 @@ describe("onboardBatch budget pacing", () => {
         return fake.request(opts);
       },
     };
-    const cribl = new FakeCriblClient();
+    const cribl = new FakeCriblClient({ outputsList: [] });
     scriptCriblHappyPath(cribl, 1);
     const jobs = new FakeJobStore();
 
@@ -199,7 +199,7 @@ describe("onboardBatch resumability", () => {
     const jobs = new FakeJobStore();
 
     // Run 1: complete the batch.
-    const azure1 = new FakeAzureManagement();
+    const azure1 = new FakeAzureManagement({ dataCollectionRulesList: [] });
     azure1.respondWith(
       WORKSPACE_RESPONSE,
       WORKSPACE_RESPONSE,
@@ -207,7 +207,7 @@ describe("onboardBatch resumability", () => {
       { status: 200, body: directDcrBody("immutable-1") },
       { status: 200, body: directDcrBody("immutable-1") },
     );
-    const cribl1 = new FakeCriblClient();
+    const cribl1 = new FakeCriblClient({ outputsList: [] });
     scriptCriblHappyPath(cribl1, 1);
     const run1 = await onboardBatch(
       { azure: azure1, cribl: cribl1, jobs },
@@ -217,8 +217,8 @@ describe("onboardBatch resumability", () => {
 
     // Run 2: same input, FRESH transports with NO scripted responses - any
     // call would throw, so green means genuinely zero calls.
-    const azure2 = new FakeAzureManagement();
-    const cribl2 = new FakeCriblClient();
+    const azure2 = new FakeAzureManagement({ dataCollectionRulesList: [] });
+    const cribl2 = new FakeCriblClient({ outputsList: [] });
     const run2 = await onboardBatch(
       { azure: azure2, cribl: cribl2, jobs },
       baseInput(fakeClock().pacing),
@@ -255,7 +255,7 @@ describe("onboardBatch resumability", () => {
     // Run 1: SecurityEvent succeeds, Syslog fails at the DCR PUT. The parent
     // persisted SecurityEvent's result BEFORE Syslog ran (progress after
     // every table), which is what run 2 resumes from.
-    const azure1 = new FakeAzureManagement();
+    const azure1 = new FakeAzureManagement({ dataCollectionRulesList: [] });
     azure1.respondWith(
       WORKSPACE_RESPONSE,
       WORKSPACE_RESPONSE,
@@ -266,7 +266,7 @@ describe("onboardBatch resumability", () => {
       NATIVE_SCHEMA_RESPONSE,
       { status: 500, body: { error: { code: "InternalServerError" } } },
     );
-    const cribl1 = new FakeCriblClient();
+    const cribl1 = new FakeCriblClient({ outputsList: [] });
     scriptCriblHappyPath(cribl1, 1);
     const run1 = await onboardBatch(
       { azure: azure1, cribl: cribl1, jobs },
@@ -277,7 +277,7 @@ describe("onboardBatch resumability", () => {
 
     // Run 2: only Syslog's work is scripted - SecurityEvent must not touch
     // the transports again.
-    const azure2 = new FakeAzureManagement();
+    const azure2 = new FakeAzureManagement({ dataCollectionRulesList: [] });
     azure2.respondWith(
       WORKSPACE_RESPONSE, // prologue (tables remain, so the prologue runs)
       WORKSPACE_RESPONSE,
@@ -285,7 +285,7 @@ describe("onboardBatch resumability", () => {
       { status: 200, body: directDcrBody("immutable-2") },
       { status: 200, body: directDcrBody("immutable-2") },
     );
-    const cribl2 = new FakeCriblClient();
+    const cribl2 = new FakeCriblClient({ outputsList: [] });
     scriptCriblHappyPath(cribl2, 1);
     const run2 = await onboardBatch(
       { azure: azure2, cribl: cribl2, jobs },
@@ -331,19 +331,19 @@ describe("onboardBatch resumability", () => {
         },
       });
 
-    const azure1 = new FakeAzureManagement();
+    const azure1 = new FakeAzureManagement({ dataCollectionRulesList: [] });
     azure1.respondWith(WORKSPACE_RESPONSE, NATIVE_SCHEMA_RESPONSE);
     const run1 = await onboardBatch(
-      { azure: azure1, cribl: new FakeCriblClient(), jobs },
+      { azure: azure1, cribl: new FakeCriblClient({ outputsList: [] }), jobs },
       templateInput(fakeClock().pacing),
     );
     expect(run1.status).toBe("succeeded");
 
     // The re-run regenerates (deterministic artifacts) instead of skipping.
-    const azure2 = new FakeAzureManagement();
+    const azure2 = new FakeAzureManagement({ dataCollectionRulesList: [] });
     azure2.respondWith(WORKSPACE_RESPONSE, NATIVE_SCHEMA_RESPONSE);
     const run2 = await onboardBatch(
-      { azure: azure2, cribl: new FakeCriblClient(), jobs },
+      { azure: azure2, cribl: new FakeCriblClient({ outputsList: [] }), jobs },
       templateInput(fakeClock().pacing),
     );
     expect(run2.status).toBe("succeeded");
@@ -352,7 +352,7 @@ describe("onboardBatch resumability", () => {
 
     // And a LATER DEPLOY run must not mistake the templateOnly runs'
     // "succeeded" table entries for actual completion - it deploys.
-    const azure3 = new FakeAzureManagement();
+    const azure3 = new FakeAzureManagement({ dataCollectionRulesList: [] });
     azure3.respondWith(
       WORKSPACE_RESPONSE,
       WORKSPACE_RESPONSE,
@@ -360,7 +360,7 @@ describe("onboardBatch resumability", () => {
       { status: 200, body: directDcrBody("immutable-1") },
       { status: 200, body: directDcrBody("immutable-1") },
     );
-    const cribl3 = new FakeCriblClient();
+    const cribl3 = new FakeCriblClient({ outputsList: [] });
     scriptCriblHappyPath(cribl3, 1);
     const run3 = await onboardBatch(
       { azure: azure3, cribl: cribl3, jobs },

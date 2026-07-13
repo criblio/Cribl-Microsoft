@@ -24,8 +24,29 @@ export class FakeCriblClient implements CriblClient {
     this.queue.push(...responses);
   }
 
+  /**
+   * The group's existing outputs, served to the destination collision-scan
+   * GET (2026-07-12) WITHOUT consuming the scripted queue (same rationale as
+   * FakeAzureManagement.dataCollectionRulesList). UNDEFINED (the default)
+   * disables the special-casing - the call falls through to the queue.
+   */
+  outputsList: unknown[] | undefined = undefined;
+
+  constructor(init?: { outputsList?: unknown[] }) {
+    if (init?.outputsList !== undefined) {
+      this.outputsList = init.outputsList;
+    }
+  }
+
   async request(opts: CriblRequest): Promise<PortHttpResponse> {
     this.calls.push(opts);
+    if (
+      this.outputsList !== undefined &&
+      opts.method === "GET" &&
+      opts.path === "/system/outputs"
+    ) {
+      return { status: 200, body: { items: this.outputsList } };
+    }
     const response = this.queue.shift();
     if (response === undefined) {
       throw new Error(`FakeCriblClient: no scripted response for ${opts.method} ${opts.path}`);

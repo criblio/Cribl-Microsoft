@@ -122,8 +122,8 @@ const CUSTOM_SCHEMA: CustomSchemaFileColumn[] = [
 
 function makePorts() {
   return {
-    azure: new FakeAzureManagement(),
-    cribl: new FakeCriblClient(),
+    azure: new FakeAzureManagement({ dataCollectionRulesList: [] }),
+    cribl: new FakeCriblClient({ outputsList: [] }),
     jobs: new FakeJobStore(),
   };
 }

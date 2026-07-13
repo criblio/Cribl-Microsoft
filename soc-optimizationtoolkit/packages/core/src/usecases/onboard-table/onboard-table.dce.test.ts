@@ -27,6 +27,7 @@ const DCR_NAME = "dcr-MicrosoftGraphActivityLogs-eastus";
 const DCR_PATH =
   "/subscriptions/sub-123/resourceGroups/rg-sec/providers/" +
   `Microsoft.Insights/dataCollectionRules/${DCR_NAME}`;
+const DCR_LIST_PATH = DCR_PATH.slice(0, DCR_PATH.lastIndexOf("/"));
 
 const DCE_RESOURCE_ID =
   "/subscriptions/sub-123/resourceGroups/rg-sec/providers/" +
@@ -66,8 +67,8 @@ const DCE_DCR_SUCCEEDED_BODY = {
 
 function makePorts() {
   return {
-    azure: new FakeAzureManagement(),
-    cribl: new FakeCriblClient(),
+    azure: new FakeAzureManagement({ dataCollectionRulesList: [] }),
+    cribl: new FakeCriblClient({ outputsList: [] }),
     jobs: new FakeJobStore(),
   };
 }
@@ -115,13 +116,15 @@ describe("onboardTable with a preresolved DCE", () => {
     ).toEqual([
       `GET ${WORKSPACE_ID}`,
       `GET ${WORKSPACE_ID}/tables/${TABLE}`,
+      // Collision/reuse scan (2026-07-12) lists the RG's DCRs first.
+      `GET ${DCR_LIST_PATH}`,
       `PUT ${DCR_PATH}`,
       `GET ${DCR_PATH}`,
     ]);
 
     // The PUT body is the DCE-based shape: dataCollectionEndpointId wired,
     // NO kind property (DCE-based DCRs are NOT Kind:Direct).
-    const putBody = ports.azure.calls[2]!.body as {
+    const putBody = ports.azure.calls[3]!.body as {
       kind?: string;
       properties: { dataCollectionEndpointId: string };
     };
@@ -130,7 +133,7 @@ describe("onboardTable with a preresolved DCE", () => {
 
     // The Cribl destination ingests through the DCE's endpoint - the DCR
     // response carried none, and none was required.
-    const destinationBody = ports.cribl.calls[0]!.body as {
+    const destinationBody = ports.cribl.calls[1]!.body as {
       dceEndpoint: string;
       dcrID: string;
     };

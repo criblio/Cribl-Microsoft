@@ -67,7 +67,7 @@ import type { CriblClient } from "../../ports/cribl-client";
 import type { JobRecord, JobStep, JobStore } from "../../ports/job-store";
 import type { Logger } from "../../ports/logger";
 import { redactedLength } from "../../ports/logger";
-import { generateDcrName } from "../../domain/dcr-naming";
+import { avoidNameCollision, generateDcrName } from "../../domain/dcr-naming";
 import { selectSchemaColumns } from "../../domain/schema-mapping";
 import type { LogAnalyticsColumn } from "../../domain/schema-mapping";
 import {
@@ -227,6 +227,13 @@ export interface OnboardTableInput {
   /** Cribl output id; defaults to the legacy "MS-Sentinel-{table}-dest". */
   destinationId?: string;
   /**
+   * Skip the existing-object collision/reuse scans (the RG DCR listing and
+   * the group outputs listing). Set by callers that already performed their
+   * own existence checks (onboardBatch's skip-existing pass) - avoids N
+   * identical listings across a batch.
+   */
+  skipCollisionScan?: boolean;
+  /**
    * Preresolved DCE for DCE-BASED deployment (see
    * {@link OnboardTableDceInput}). ABSENT = the existing Direct behavior,
    * byte-identical to the pre-Unit-6 contract (pinned by test).
@@ -293,6 +300,78 @@ function prop(value: unknown, key: string): unknown {
 }
 
 /** Internal signal: a step failed; message already carries the raw text. */
+/** Parse a Cribl outputs listing into id + url pairs. */
+function listExistingOutputs(body: unknown): Array<{ id: string; url: string }> {
+  const items =
+    typeof body === "object" && body !== null && !Array.isArray(body)
+      ? (body as Record<string, unknown>)["items"]
+      : undefined;
+  if (!Array.isArray(items)) return [];
+  const out: Array<{ id: string; url: string }> = [];
+  for (const item of items) {
+    if (typeof item !== "object" || item === null) continue;
+    const record = item as Record<string, unknown>;
+    const id = record["id"];
+    if (typeof id === "string" && id !== "") {
+      out.push({
+        id,
+        url: typeof record["url"] === "string" ? (record["url"] as string) : "",
+      });
+    }
+  }
+  return out;
+}
+
+/** One existing DCR from the resource-group listing. */
+interface ExistingDcr {
+  name: string;
+  body: unknown;
+}
+
+/** Parse an ARM DCR list response into name + full resource body pairs. */
+function listExistingDcrs(body: unknown): ExistingDcr[] {
+  const value =
+    typeof body === "object" && body !== null && !Array.isArray(body)
+      ? (body as Record<string, unknown>)["value"]
+      : undefined;
+  if (!Array.isArray(value)) return [];
+  const out: ExistingDcr[] = [];
+  for (const item of value) {
+    if (typeof item !== "object" || item === null) continue;
+    const name = (item as Record<string, unknown>)["name"];
+    if (typeof name === "string" && name !== "") {
+      out.push({ name, body: item });
+    }
+  }
+  return out;
+}
+
+/**
+ * Whether an existing DCR resource TARGETS `table`: any dataFlow whose
+ * outputStream is Custom-/Microsoft-<table> (case-insensitive).
+ */
+function dcrTargetsTable(dcrBody: unknown, table: string): boolean {
+  const record =
+    typeof dcrBody === "object" && dcrBody !== null
+      ? (dcrBody as Record<string, unknown>)
+      : null;
+  const props =
+    record !== null && typeof record["properties"] === "object"
+      ? (record["properties"] as Record<string, unknown>)
+      : null;
+  const flows = props !== null ? props["dataFlows"] : undefined;
+  if (!Array.isArray(flows)) return false;
+  const wanted = table.toLowerCase();
+  for (const flow of flows) {
+    if (typeof flow !== "object" || flow === null) continue;
+    const outputStream = (flow as Record<string, unknown>)["outputStream"];
+    if (typeof outputStream !== "string") continue;
+    const stripped = outputStream.replace(/^(Custom|Microsoft)-/, "");
+    if (stripped.toLowerCase() === wanted) return true;
+  }
+  return false;
+}
+
 class StepFailure extends Error {
   constructor(message: string) {
     super(message);
@@ -629,7 +708,7 @@ export async function onboardTable(
     await setStep(currentStep, "running");
     // Direct DCRs cap at 30 characters, DCE-based at 64 (dcr-naming modes
     // "direct" / "dce" - the legacy contract for each deployment flavor).
-    const { name: dcrName } = generateDcrName({
+    const desired = generateDcrName({
       table: input.table,
       mode: input.dce !== undefined ? "dce" : "direct",
       prefix: input.dcrNamePrefix ?? "dcr-",
@@ -637,7 +716,59 @@ export async function onboardTable(
       location,
       isCustomTable: isCustom,
     });
-    await setStep(currentStep, "succeeded", dcrName);
+
+    // COLLISION + REUSE scan (user direction 2026-07-12): retrieve the
+    // resource group's existing DCRs BEFORE committing to a name. A DCR that
+    // already TARGETS this table is REUSED (deploy-dcr skips the PUT); a
+    // name taken by a DIFFERENT table gets a -N suffix (an ARM PUT is an
+    // upsert - an unnoticed collision silently overwrites the other DCR).
+    // A failed listing degrades to today's behavior: deploy under the
+    // generated name.
+    let dcrName = desired.name;
+    let reuseDcr: { name: string; body: unknown } | null = null;
+    if (input.skipCollisionScan !== true) try {
+      const listResponse = await azure.request({
+        method: "GET",
+        path:
+          `/subscriptions/${input.subscriptionId}` +
+          `/resourceGroups/${input.resourceGroup}` +
+          `/providers/Microsoft.Insights/dataCollectionRules`,
+        apiVersion: DIRECT_DCR_API_VERSION,
+      });
+      if (is2xx(listResponse.status)) {
+        const existing = listExistingDcrs(listResponse.body);
+        const sameTable = existing.find((dcr) =>
+          dcrTargetsTable(dcr.body, input.table),
+        );
+        if (sameTable !== undefined) {
+          reuseDcr = sameTable;
+          dcrName = sameTable.name;
+        } else {
+          const picked = avoidNameCollision(
+            desired.name,
+            existing.map((dcr) => dcr.name),
+            input.dce !== undefined ? 64 : 30,
+          );
+          dcrName = picked.name;
+          if (picked.collided) {
+            await setStep(
+              currentStep,
+              "running",
+              `'${desired.name}' is taken by another table - using '${dcrName}'`,
+            );
+          }
+        }
+      }
+    } catch {
+      // Listing is a safety net, never a gate.
+    }
+    await setStep(
+      currentStep,
+      "succeeded",
+      reuseDcr !== null
+        ? `${dcrName} (existing DCR already targets ${input.table} - reusing)`
+        : dcrName,
+    );
 
     // ---- Step 5: deploy-dcr (PUT, poll, parse) -----------------------
     currentStep = "deploy-dcr";
@@ -663,23 +794,35 @@ export async function onboardTable(
           })
         : buildDirectDcrRequest(dcrRequestInput);
 
-    const putResponse = await azure.request({
-      method: dcrRequest.method,
-      path: dcrRequest.path,
-      apiVersion: dcrRequest.apiVersion,
-      body: dcrRequest.body,
-    });
-    if (!is2xx(putResponse.status)) {
-      throw new StepFailure(
-        httpErrorText(
-          `deploy DCR '${dcrName}'`,
-          putResponse.status,
-          putResponse.body,
-        ),
+    let deployment;
+    if (reuseDcr !== null) {
+      // Skip the create entirely (user direction 2026-07-12): the existing
+      // DCR for this table is the deployment. Its body carries the
+      // immutableId and endpoints exactly like a PUT response.
+      deployment = parseDcrDeployment(reuseDcr.body);
+      await setStep(
+        currentStep,
+        "running",
+        `skipped - reusing existing DCR '${dcrName}'`,
       );
+    } else {
+      const putResponse = await azure.request({
+        method: dcrRequest.method,
+        path: dcrRequest.path,
+        apiVersion: dcrRequest.apiVersion,
+        body: dcrRequest.body,
+      });
+      if (!is2xx(putResponse.status)) {
+        throw new StepFailure(
+          httpErrorText(
+            `deploy DCR '${dcrName}'`,
+            putResponse.status,
+            putResponse.body,
+          ),
+        );
+      }
+      deployment = parseDcrDeployment(putResponse.body);
     }
-
-    let deployment = parseDcrDeployment(putResponse.body);
     const maxAttempts = input.maxDcrPollAttempts ?? DEFAULT_DCR_POLL_ATTEMPTS;
     let attempts = 0;
     while (deployment.provisioningState?.toLowerCase() !== "succeeded") {
@@ -742,34 +885,84 @@ export async function onboardTable(
     currentStep = "create-cribl-destination";
     await setStep(currentStep, "running");
 
-    const destinationId =
+    let destinationId =
       input.destinationId ?? defaultSentinelDestinationId(input.table);
-    const destination = buildSentinelDestination({
-      id: destinationId,
-      dcrImmutableId: deployment.immutableId,
-      ingestionEndpoint,
-      streamName: dcrRequest.streamName,
-      tenantId: input.tenantId,
-      ingestionClientId: input.ingestionClientId,
-      ingestionClientSecret: input.ingestionClientSecret,
-    });
 
-    const createResponse = await cribl.request({
-      method: "POST",
-      path: "/system/outputs",
-      groupId: input.groupId,
-      body: destination,
-    });
-    if (!is2xx(createResponse.status)) {
-      throw new StepFailure(
-        httpErrorText(
-          `create Cribl destination '${destinationId}'`,
-          createResponse.status,
-          createResponse.body,
-        ),
-      );
+    // COLLISION + REUSE scan (user direction 2026-07-12): retrieve the
+    // group's existing outputs before committing to the id. An output that
+    // already points at THIS DCR is reused (skip the create); an id taken
+    // by anything else gets a -N suffix. A failed listing degrades to
+    // today's behavior.
+    let reuseDestination = false;
+    if (input.skipCollisionScan !== true) try {
+      const listResponse = await cribl.request({
+        method: "GET",
+        path: "/system/outputs",
+        groupId: input.groupId,
+      });
+      if (is2xx(listResponse.status)) {
+        const outputs = listExistingOutputs(listResponse.body);
+        const existing = outputs.find(
+          (o) => o.id.toLowerCase() === destinationId.toLowerCase(),
+        );
+        if (
+          existing !== undefined &&
+          deployment.immutableId !== null &&
+          existing.url.includes(deployment.immutableId)
+        ) {
+          reuseDestination = true;
+        } else if (existing !== undefined) {
+          const picked = avoidNameCollision(
+            destinationId,
+            outputs.map((o) => o.id),
+            64,
+          );
+          await setStep(
+            currentStep,
+            "running",
+            `'${destinationId}' exists and points elsewhere - using '${picked.name}'`,
+          );
+          destinationId = picked.name;
+        }
+      }
+    } catch {
+      // Listing is a safety net, never a gate.
     }
-    await setStep(currentStep, "succeeded", destinationId);
+
+    if (!reuseDestination) {
+      const destination = buildSentinelDestination({
+        id: destinationId,
+        dcrImmutableId: deployment.immutableId,
+        ingestionEndpoint,
+        streamName: dcrRequest.streamName,
+        tenantId: input.tenantId,
+        ingestionClientId: input.ingestionClientId,
+        ingestionClientSecret: input.ingestionClientSecret,
+      });
+
+      const createResponse = await cribl.request({
+        method: "POST",
+        path: "/system/outputs",
+        groupId: input.groupId,
+        body: destination,
+      });
+      if (!is2xx(createResponse.status)) {
+        throw new StepFailure(
+          httpErrorText(
+            `create Cribl destination '${destinationId}'`,
+            createResponse.status,
+            createResponse.body,
+          ),
+        );
+      }
+    }
+    await setStep(
+      currentStep,
+      "succeeded",
+      reuseDestination
+        ? `${destinationId} (already points at this DCR - reusing)`
+        : destinationId,
+    );
 
     // ---- Step 7: commit-and-deploy (REPORTED BUT NONFATAL) -----------
     // Deployment semantics differ per Cribl mode (distributed leaders take

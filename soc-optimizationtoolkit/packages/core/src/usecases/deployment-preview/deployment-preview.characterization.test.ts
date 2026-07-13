@@ -135,8 +135,10 @@ describe("preview name === deployed name (abbreviation-triggering legacy vectors
     // over the 30-char direct limit ("dcr-CommonSecurityLog-eastus-prod" is
     // 33 chars), forcing the dictionary abbreviation the legacy preview got
     // wrong.
-    const azure = new FakeAzureManagement();
-    const cribl = new FakeCriblClient();
+    // onboardTable's collision/reuse scans (2026-07-12) get benign empty
+    // lists so the scripted queue below stays aligned with the writes.
+    const azure = new FakeAzureManagement({ dataCollectionRulesList: [] });
+    const cribl = new FakeCriblClient({ outputsList: [] });
     const jobs = new FakeJobStore();
 
     const succeededDcr = {

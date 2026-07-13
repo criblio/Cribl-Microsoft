@@ -32,8 +32,31 @@ export class FakeAzureManagement implements AzureManagement {
     this.queue.push(...responses);
   }
 
+  /**
+   * The resource group's existing DCRs, served to the collision-scan GET
+   * (2026-07-12) WITHOUT consuming the scripted queue - the scan is an
+   * idempotent read every onboard run makes, and threading it through every
+   * FIFO script would churn all of them. UNDEFINED (the default) disables
+   * the special-casing entirely - the call falls through to the queue like
+   * any other, so suites that script this route themselves are untouched.
+   */
+  dataCollectionRulesList: unknown[] | undefined = undefined;
+
+  constructor(init?: { dataCollectionRulesList?: unknown[] }) {
+    if (init?.dataCollectionRulesList !== undefined) {
+      this.dataCollectionRulesList = init.dataCollectionRulesList;
+    }
+  }
+
   async request(opts: AzureManagementRequest): Promise<PortHttpResponse> {
     this.calls.push(opts);
+    if (
+      this.dataCollectionRulesList !== undefined &&
+      opts.method === "GET" &&
+      /\/providers\/Microsoft\.Insights\/dataCollectionRules$/.test(opts.path)
+    ) {
+      return { status: 200, body: { value: this.dataCollectionRulesList } };
+    }
     return this.nextResponse(`${opts.method} ${opts.path}`);
   }
 

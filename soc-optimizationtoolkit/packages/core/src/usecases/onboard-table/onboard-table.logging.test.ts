@@ -44,8 +44,8 @@ const DCR_SUCCEEDED_BODY = {
 
 function makePorts() {
   return {
-    azure: new FakeAzureManagement(),
-    cribl: new FakeCriblClient(),
+    azure: new FakeAzureManagement({ dataCollectionRulesList: [] }),
+    cribl: new FakeCriblClient({ outputsList: [] }),
     jobs: new FakeJobStore(),
     logger: new FakeLogger(() => "2026-07-03T10:00:00.000Z"),
   };
@@ -171,8 +171,8 @@ describe("onboardTable logging", () => {
     const withLogger = makePorts();
     scriptHappyPath(withLogger);
     const without = {
-      azure: new FakeAzureManagement(),
-      cribl: new FakeCriblClient(),
+      azure: new FakeAzureManagement({ dataCollectionRulesList: [] }),
+      cribl: new FakeCriblClient({ outputsList: [] }),
       jobs: new FakeJobStore(),
     };
     scriptHappyPath(without);

@@ -28,6 +28,7 @@ const TABLE_PATH = `${WORKSPACE_ID}/tables/CloudFlare_CL`;
 const DCR_PATH =
   "/subscriptions/sub-123/resourceGroups/rg-sec/providers/" +
   "Microsoft.Insights/dataCollectionRules/dcr-CloudFlare-eastus";
+const DCR_LIST_PATH = DCR_PATH.slice(0, DCR_PATH.lastIndexOf("/"));
 
 const IMMUTABLE_ID = "dcr-fedcba9876543210fedcba9876543210";
 const INGESTION_ENDPOINT =
@@ -78,8 +79,8 @@ const CUSTOM_SCHEMA: CustomSchemaFileColumn[] = [
 
 function makePorts() {
   return {
-    azure: new FakeAzureManagement(),
-    cribl: new FakeCriblClient(),
+    azure: new FakeAzureManagement({ dataCollectionRulesList: [] }),
+    cribl: new FakeCriblClient({ outputsList: [] }),
     jobs: new FakeJobStore(),
   };
 }
@@ -150,6 +151,8 @@ describe("onboardTable custom (_CL) happy path", () => {
       `PUT ${TABLE_PATH}`, // create
       `GET ${TABLE_PATH}`, // readback 1 (Updating)
       `GET ${TABLE_PATH}`, // readback 2 (Succeeded)
+      // Collision/reuse scan (2026-07-12) lists the RG's DCRs first.
+      `GET ${DCR_LIST_PATH}`,
       `PUT ${DCR_PATH}`,
       `GET ${DCR_PATH}`, // verify
     ]);
@@ -185,7 +188,7 @@ describe("onboardTable custom (_CL) happy path", () => {
 
     // The DCR PUT: custom mode - Custom-{table} for BOTH input and output
     // stream (native emits Microsoft-{table} output).
-    const dcrPut = ports.azure.calls[5]!.body as {
+    const dcrPut = ports.azure.calls[6]!.body as {
       kind: string;
       properties: {
         streamDeclarations: Record<string, { columns: unknown[] }>;
@@ -222,7 +225,7 @@ describe("onboardTable custom (_CL) happy path", () => {
     expect(outcome.commitVersion).toBe("abc123");
 
     // The Cribl destination points at the DCR's ACTUAL declared stream.
-    const destinationBody = ports.cribl.calls[0]!.body as {
+    const destinationBody = ports.cribl.calls[1]!.body as {
       id: string;
       streamName: string;
       dcrID: string;
@@ -312,10 +315,10 @@ describe("onboardTable custom (_CL) idempotency", () => {
     );
     expect(tableCalls).toHaveLength(1);
     expect(tableCalls[0]!.method).toBe("GET");
-    expect(ports.azure.calls).toHaveLength(4);
+    expect(ports.azure.calls).toHaveLength(5);
 
     // The DCR declaration came from the EXISTING table's schema.
-    const dcrPut = ports.azure.calls[2]!.body as {
+    const dcrPut = ports.azure.calls[3]!.body as {
       properties: {
         streamDeclarations: Record<string, { columns: Array<{ name: string }> }>;
       };

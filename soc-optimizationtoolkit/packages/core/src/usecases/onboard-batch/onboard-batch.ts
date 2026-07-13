@@ -1166,6 +1166,9 @@ export async function onboardBatch(
       // (in DCE mode) the preresolved shared DCE.
       const childInput: OnboardTableInput = {
         table: spec.table,
+        // The batch runs its OWN skip-existing pass above - do not repeat
+        // the per-table collision/reuse listings inside every child.
+        skipCollisionScan: true,
         customSchema: spec.customSchema,
         customTableRetentionDays: options.customTableRetentionDays,
         maxTablePollAttempts: pollAttempts,

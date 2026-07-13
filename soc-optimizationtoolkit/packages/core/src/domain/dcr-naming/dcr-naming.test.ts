@@ -12,6 +12,7 @@ import {
   DIRECT_DCR_TABLE_ABBREVIATIONS,
   DcrNamingError,
   generateDcrName,
+  avoidNameCollision,
   stripCustomTableSuffix,
 } from "./index";
 
@@ -525,5 +526,28 @@ describe("wasAbbreviated flag (legacy UI warning, not part of the name)", () => 
       location: "eastus",
     });
     expect(result.wasAbbreviated).toBe(true);
+  });
+});
+
+describe("avoidNameCollision (2026-07-12: never silently upsert a taken name)", () => {
+  it("keeps a free name and suffixes a taken one, case-insensitively", () => {
+    expect(avoidNameCollision("dcr-web", ["dcr-dns"], 30)).toEqual({
+      name: "dcr-web",
+      collided: false,
+    });
+    expect(avoidNameCollision("dcr-web", ["DCR-WEB"], 30)).toEqual({
+      name: "dcr-web-2",
+      collided: true,
+    });
+    expect(
+      avoidNameCollision("dcr-web", ["dcr-web", "dcr-web-2", "dcr-web-3"], 30),
+    ).toEqual({ name: "dcr-web-4", collided: true });
+  });
+
+  it("truncates the base so the suffixed name honors maxLength", () => {
+    const desired = "dcr-abcdefghijklmnopqrstuvwxyz"; // 30 chars
+    const result = avoidNameCollision(desired, [desired], 30);
+    expect(result.name.length).toBeLessThanOrEqual(30);
+    expect(result.name.endsWith("-2")).toBe(true);
   });
 });

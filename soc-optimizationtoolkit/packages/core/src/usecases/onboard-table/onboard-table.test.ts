@@ -20,6 +20,8 @@ const WORKSPACE_PATH = WORKSPACE_ID; // GET path equals the resource id here
 const DCR_PATH =
   "/subscriptions/sub-123/resourceGroups/rg-sec/providers/" +
   "Microsoft.Insights/dataCollectionRules/dcr-SecurityEvent-eastus";
+const DCR_LIST_PATH =
+  DCR_PATH.slice(0, DCR_PATH.lastIndexOf("/"));
 
 const IMMUTABLE_ID = "dcr-0123456789abcdef0123456789abcdef";
 const INGESTION_ENDPOINT =
@@ -56,8 +58,8 @@ const DCR_SUCCEEDED_BODY = {
 
 function makePorts() {
   return {
-    azure: new FakeAzureManagement(),
-    cribl: new FakeCriblClient(),
+    azure: new FakeAzureManagement({ dataCollectionRulesList: [] }),
+    cribl: new FakeCriblClient({ outputsList: [] }),
     jobs: new FakeJobStore(),
   };
 }
@@ -179,13 +181,15 @@ describe("onboardTable happy path", () => {
     ).toEqual([
       `GET ${WORKSPACE_PATH}`,
       `GET ${WORKSPACE_PATH}/tables/SecurityEvent`,
+      // The collision/reuse scan (2026-07-12) lists the RG's DCRs first.
+      `GET ${DCR_LIST_PATH}`,
       `PUT ${DCR_PATH}`,
       `GET ${DCR_PATH}`,
       `GET ${DCR_PATH}`,
     ]);
     expect(ports.azure.calls[0]!.apiVersion).toBe("2022-10-01");
-    expect(ports.azure.calls[2]!.apiVersion).toBe("2023-03-11");
-    const putBody = ports.azure.calls[2]!.body as {
+    expect(ports.azure.calls[3]!.apiVersion).toBe("2023-03-11");
+    const putBody = ports.azure.calls[3]!.body as {
       kind: string;
       properties: { streamDeclarations: Record<string, unknown> };
     };
@@ -200,12 +204,14 @@ describe("onboardTable happy path", () => {
         (call) => `${call.method} ${call.path} [${call.groupId ?? "leader"}]`,
       ),
     ).toEqual([
+      // The destination collision/reuse scan (2026-07-12) lists first.
+      "GET /system/outputs [default]",
       "POST /system/outputs [default]",
       "POST /version/commit [default]",
       "PATCH /master/groups/default/deploy [leader]",
       "GET /system/outputs/MS-Sentinel-SecurityEvent-dest [default]",
     ]);
-    const destinationBody = ports.cribl.calls[0]!.body as {
+    const destinationBody = ports.cribl.calls[1]!.body as {
       id: string;
       secret: string;
       client_id: string;
@@ -219,7 +225,7 @@ describe("onboardTable happy path", () => {
     );
     expect(destinationBody.dcrID).toBe(IMMUTABLE_ID);
     expect(destinationBody.streamName).toBe("Custom-SecurityEvent");
-    expect(ports.cribl.calls[2]!.body).toEqual({ version: "abc123" });
+    expect(ports.cribl.calls[3]!.body).toEqual({ version: "abc123" });
 
     // The persisted job input never carries the secret value.
     expect(JSON.stringify(job.input)).not.toContain("live-secret");
@@ -319,8 +325,8 @@ describe("onboardTable failures", () => {
 
     expect(job.status).toBe("failed");
     expect(job.error).toContain("within 2 poll attempts");
-    // workspace + table + PUT + exactly 2 poll GETs
-    expect(ports.azure.calls).toHaveLength(5);
+    // workspace + table + DCR list scan + PUT + exactly 2 poll GETs
+    expect(ports.azure.calls).toHaveLength(6);
   });
 
   it("ships the placeholder secret and treats a commit 4xx as reported-but-nonfatal", async () => {
@@ -351,14 +357,145 @@ describe("onboardTable failures", () => {
     const outcome = job.result as OnboardTableOutcome;
     expect(outcome.commitVersion).toBeNull();
 
-    const destinationBody = ports.cribl.calls[0]!.body as { secret: string };
+    const destinationBody = ports.cribl.calls[1]!.body as { secret: string };
     expect(destinationBody.secret).toBe("<replace me>");
     expect(job.input).toMatchObject({ ingestionClientSecretProvided: false });
     // The deploy PATCH was never attempted after the failed commit.
     expect(ports.cribl.calls.map((call) => call.path)).toEqual([
       "/system/outputs",
+      "/system/outputs",
       "/version/commit",
       "/system/outputs/MS-Sentinel-SecurityEvent-dest",
     ]);
+  });
+});
+
+describe("collision + reuse scans (user direction 2026-07-12)", () => {
+  it("REUSES an existing DCR that targets the table: no PUT at all", async () => {
+    const ports = makePorts();
+    ports.azure.dataCollectionRulesList = [
+      {
+        name: "dcr-someone-else-made",
+        properties: {
+          provisioningState: "Succeeded",
+          immutableId: IMMUTABLE_ID,
+          endpoints: { logsIngestion: INGESTION_ENDPOINT },
+          dataFlows: [{ outputStream: "Microsoft-SecurityEvent" }],
+        },
+      },
+    ];
+    ports.azure.respondWith(
+      WORKSPACE_RESPONSE,
+      TABLE_SCHEMA_RESPONSE,
+      // The verify step re-GETs the (reused) DCR at the end of the run.
+      { status: 200, body: DCR_SUCCEEDED_BODY },
+    );
+    ports.cribl.respondWith(
+      { status: 201, body: {} },
+      { status: 200, body: { items: [{ commit: "abc123" }] } },
+      { status: 200, body: { items: [{ id: "default" }] } },
+      { status: 200, body: { items: [{ id: "MS-Sentinel-SecurityEvent-dest" }] } },
+    );
+
+    const job = await onboardTable(ports, baseInput());
+    expect(job.error ?? "").toBe("");
+    expect(job.status).toBe("succeeded");
+    const outcome = job.result as { dcrName: string; dcrImmutableId: string };
+    expect(outcome.dcrName).toBe("dcr-someone-else-made");
+    expect(outcome.dcrImmutableId).toBe(IMMUTABLE_ID);
+    expect(
+      ports.azure.calls.some((call) => call.method === "PUT"),
+    ).toBe(false);
+  });
+
+  it("suffixes the DCR name when it is taken by a DIFFERENT table", async () => {
+    const ports = makePorts();
+    ports.azure.dataCollectionRulesList = [
+      {
+        name: "dcr-SecurityEvent-eastus",
+        properties: { dataFlows: [{ outputStream: "Custom-Other_CL" }] },
+      },
+    ];
+    ports.azure.respondWith(
+      WORKSPACE_RESPONSE,
+      TABLE_SCHEMA_RESPONSE,
+      { status: 200, body: DCR_SUCCEEDED_BODY },
+      { status: 200, body: DCR_SUCCEEDED_BODY },
+    );
+    ports.cribl.respondWith(
+      { status: 201, body: {} },
+      { status: 200, body: { items: [{ commit: "abc123" }] } },
+      { status: 200, body: { items: [{ id: "default" }] } },
+      { status: 200, body: { items: [{ id: "MS-Sentinel-SecurityEvent-dest" }] } },
+    );
+
+    const job = await onboardTable(ports, baseInput());
+    expect(job.status).toBe("succeeded");
+    const put = ports.azure.calls.find((call) => call.method === "PUT");
+    expect(put !== undefined && put.path.endsWith("/dcr-SecurityEvent-eastus-2")).toBe(
+      true,
+    );
+  });
+
+  it("REUSES a destination that already points at this DCR: no POST", async () => {
+    const ports = makePorts();
+    ports.cribl.outputsList = [
+      {
+        id: "MS-Sentinel-SecurityEvent-dest",
+        url: `https://x.ingest.monitor.azure.com/dataCollectionRules/${IMMUTABLE_ID}/streams/Custom-SecurityEvent`,
+      },
+    ];
+    ports.azure.respondWith(
+      WORKSPACE_RESPONSE,
+      TABLE_SCHEMA_RESPONSE,
+      { status: 200, body: DCR_SUCCEEDED_BODY },
+      { status: 200, body: DCR_SUCCEEDED_BODY },
+    );
+    ports.cribl.respondWith(
+      { status: 200, body: { items: [{ commit: "abc123" }] } },
+      { status: 200, body: { items: [{ id: "default" }] } },
+      { status: 200, body: { items: [{ id: "MS-Sentinel-SecurityEvent-dest" }] } },
+    );
+
+    const job = await onboardTable(ports, baseInput());
+    expect(job.status).toBe("succeeded");
+    expect(
+      ports.cribl.calls.some(
+        (call) => call.method === "POST" && call.path === "/system/outputs",
+      ),
+    ).toBe(false);
+  });
+
+  it("suffixes the destination id when it exists pointing elsewhere (the live 2026-07-13 failure)", async () => {
+    const ports = makePorts();
+    ports.cribl.outputsList = [
+      {
+        id: "MS-Sentinel-SecurityEvent-dest",
+        url: "https://x.ingest.monitor.azure.com/dataCollectionRules/dcr-some-other-dcr/streams/other",
+      },
+    ];
+    ports.azure.respondWith(
+      WORKSPACE_RESPONSE,
+      TABLE_SCHEMA_RESPONSE,
+      { status: 200, body: DCR_SUCCEEDED_BODY },
+      { status: 200, body: DCR_SUCCEEDED_BODY },
+    );
+    ports.cribl.respondWith(
+      { status: 201, body: {} },
+      { status: 200, body: { items: [{ commit: "abc123" }] } },
+      { status: 200, body: { items: [{ id: "default" }] } },
+      { status: 200, body: { items: [{ id: "MS-Sentinel-SecurityEvent-dest-2" }] } },
+    );
+
+    const job = await onboardTable(ports, baseInput());
+    expect(job.status).toBe("succeeded");
+    const post = ports.cribl.calls.find(
+      (call) => call.method === "POST" && call.path === "/system/outputs",
+    );
+    expect((post!.body as { id: string }).id).toBe(
+      "MS-Sentinel-SecurityEvent-dest-2",
+    );
+    const outcome = job.result as { destinationId: string };
+    expect(outcome.destinationId).toBe("MS-Sentinel-SecurityEvent-dest-2");
   });
 });

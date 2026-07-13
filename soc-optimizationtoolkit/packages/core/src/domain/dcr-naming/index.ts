@@ -1,5 +1,6 @@
 export {
   generateDcrName,
+  avoidNameCollision,
   stripCustomTableSuffix,
   DcrNamingError,
   DIRECT_DCR_NAME_MAX_LENGTH,

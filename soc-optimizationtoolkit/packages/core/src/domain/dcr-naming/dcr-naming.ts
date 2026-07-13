@@ -245,3 +245,33 @@ export function generateDcrName(input: DcrNameInput): DcrNameResult {
 
   return { name, wasAbbreviated };
 }
+
+/**
+ * Pick a name that does not collide with `existing` (case-insensitive):
+ * the desired name when free, else `desired-2`, `desired-3`, ... with the
+ * base truncated so the suffixed result still fits `maxLength` (user
+ * direction 2026-07-12: retrieve existing object names before committing
+ * to a new one - an ARM PUT is an upsert, so an unnoticed collision would
+ * silently overwrite someone else's resource).
+ */
+export function avoidNameCollision(
+  desired: string,
+  existing: Iterable<string>,
+  maxLength: number,
+): { name: string; collided: boolean } {
+  const taken = new Set<string>();
+  for (const name of existing) taken.add(name.toLowerCase());
+  if (!taken.has(desired.toLowerCase())) {
+    return { name: desired, collided: false };
+  }
+  for (let n = 2; n < 100; n++) {
+    const suffix = `-${n}`;
+    const base = desired.slice(0, Math.max(1, maxLength - suffix.length));
+    const candidate = `${base}${suffix}`;
+    if (!taken.has(candidate.toLowerCase())) {
+      return { name: candidate, collided: true };
+    }
+  }
+  // 98 collisions deep is not a naming problem the suffix can fix.
+  return { name: desired, collided: true };
+}
