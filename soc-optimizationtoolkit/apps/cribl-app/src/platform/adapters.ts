@@ -44,10 +44,9 @@ import {
   classifySolutionDeprecation,
   deriveGroupProduct,
   findConnectorDirName,
-  interpretInstallResponse,
+  installViaConflictLadder,
   isPathAllowedByEdr,
-  packIdFromCrblFileName,
-  parsePackListResponse,
+  listDeployedPacks,
   parseUploadResponse,
   patFormatIssue,
   patStatusFrom,
@@ -1682,12 +1681,12 @@ function criblBodyText(body: unknown): string {
  * PackInstallClient over the hosting workspace's own product API. The two-step
  * upload protocol and its decision rules are @soc/core's: the binary PUT
  * ?filename= (raw octet-stream; the platform proxy injects auth), then the
- * randomized `source` from parseUploadResponse drives the JSON POST install; a
- * duplicate-conflict (interpretInstallResponse === 'conflict') deletes the
- * existing pack (id from packIdFromCrblFileName) and retries once. Deployed
- * status is read from each group's live packs list (parsePackListResponse) -
- * never from local storage. JSON ops reuse the injected CriblClient (auth,
- * groupId prefixing); only the binary PUT is done directly.
+ * randomized `source` drives installViaConflictLadder (plain POST, then the
+ * documented force overwrite, then delete-and-retry with the delete's refusal
+ * reported). Deployed status is read from each group's live packs list via
+ * listDeployedPacks - never from local storage, and a failed listing THROWS
+ * instead of reading as "no packs". JSON ops reuse the injected CriblClient
+ * (auth, groupId prefixing); only the binary PUT is done directly.
  */
 export class PlatformPackInstall implements PackInstallClient {
   private readonly cribl: CriblClient;
@@ -1697,13 +1696,10 @@ export class PlatformPackInstall implements PackInstallClient {
   }
 
   async listDeployed(groups: readonly string[]): Promise<DeployedGroupPacks[]> {
-    const out: DeployedGroupPacks[] = [];
-    for (const group of groups) {
+    return listDeployedPacks(groups, async (group) => {
       const res = await this.cribl.request({ method: 'GET', path: '/packs', groupId: group });
-      const parsed = parsePackListResponse(res.status, criblBodyText(res.body));
-      out.push({ group, packs: parsed.ok ? parsed.packs : [] });
-    }
-    return out;
+      return [res.status, criblBodyText(res.body)];
+    });
   }
 
   async install(group: string, fileName: string, crbl: Uint8Array): Promise<InstalledPack> {
@@ -1722,34 +1718,26 @@ export class PlatformPackInstall implements PackInstallClient {
       throw new Error(upload.error);
     }
 
-    // Step 2: POST the returned (randomized) source; on a duplicate conflict,
-    // delete the existing pack and retry once.
-    let outcome = interpretInstallResponse(...(await this.postInstall(group, upload.source)));
-    if (outcome.kind === 'conflict') {
-      const packId = packIdFromCrblFileName(fileName);
-      await this.cribl.request({
-        method: 'DELETE',
-        path: `/packs/${encodeURIComponent(packId)}`,
-        groupId: group,
-      });
-      outcome = interpretInstallResponse(...(await this.postInstall(group, upload.source)));
-    }
-    if (outcome.kind !== 'installed') {
-      throw new Error(outcome.kind === 'conflict' ? 'Pack install still conflicts after delete-and-retry' : outcome.error);
-    }
-    return outcome.pack;
-  }
-
-  // POST /packs {source} in the group context; returns [status, bodyText] for
-  // the @soc/core interpreter.
-  private async postInstall(group: string, source: string): Promise<[number, string]> {
-    const res = await this.cribl.request({
-      method: 'POST',
-      path: '/packs',
-      groupId: group,
-      body: { source },
+    // Step 2: the @soc/core conflict ladder over this group's JSON transport.
+    return installViaConflictLadder(fileName, upload.source, {
+      post: async (body) => {
+        const res = await this.cribl.request({
+          method: 'POST',
+          path: '/packs',
+          groupId: group,
+          body,
+        });
+        return [res.status, criblBodyText(res.body)];
+      },
+      deletePack: async (packId) => {
+        const res = await this.cribl.request({
+          method: 'DELETE',
+          path: `/packs/${encodeURIComponent(packId)}`,
+          groupId: group,
+        });
+        return [res.status, criblBodyText(res.body)];
+      },
     });
-    return [res.status, criblBodyText(res.body)];
   }
 }
 

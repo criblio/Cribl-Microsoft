@@ -41,3 +41,6 @@ docs/ui-reference/**/*.jpeg
 docs/ui-reference/**/*.gif
 docs/ui-reference/**/*.webp
 docs/ui-reference/**/*.bmp
+
+# TypeScript incremental build state (tsc -b)
+*.tsbuildinfo

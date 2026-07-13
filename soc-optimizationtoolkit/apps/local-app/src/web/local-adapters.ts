@@ -47,10 +47,9 @@ import {
   capTaggedSampleBytes,
   classifySolutionDeprecation,
   findConnectorDirName,
-  interpretInstallResponse,
+  installViaConflictLadder,
   isPathAllowedByEdr,
-  packIdFromCrblFileName,
-  parsePackListResponse,
+  listDeployedPacks,
   parseUploadResponse,
   selectConnectorFiles,
 } from '@soc/core';
@@ -1122,9 +1121,12 @@ function bytesToBase64(bytes: Uint8Array): string {
  * PackInstallClient over the host. The @soc/core install DECISION LOGIC lives
  * here (browser side): the binary upload rides POST /api/cribl/upload (the host
  * PUTs the octet-stream to the leader), parseUploadResponse reads the randomized
- * source, then the JSON POST install / DELETE conflict retry ride the shared
- * CriblClient (LocalCriblClient over /api/cribl/request). Deployed status is the
- * live packs list per group (parsePackListResponse) - never local storage.
+ * source, then installViaConflictLadder drives the JSON POST install (plain,
+ * then force overwrite, then delete-and-retry with the delete's refusal
+ * reported) over the shared CriblClient (LocalCriblClient over
+ * /api/cribl/request). Deployed status is the live packs list per group via
+ * listDeployedPacks - never local storage, and a failed listing THROWS instead
+ * of reading as "no packs".
  */
 export class LocalPackInstall implements PackInstallClient {
   private readonly cribl: CriblClient;
@@ -1134,13 +1136,10 @@ export class LocalPackInstall implements PackInstallClient {
   }
 
   async listDeployed(groups: readonly string[]): Promise<DeployedGroupPacks[]> {
-    const out: DeployedGroupPacks[] = [];
-    for (const group of groups) {
+    return listDeployedPacks(groups, async (group) => {
       const res = await this.cribl.request({ method: 'GET', path: '/packs', groupId: group });
-      const parsed = parsePackListResponse(res.status, criblBodyText(res.body));
-      out.push({ group, packs: parsed.ok ? parsed.packs : [] });
-    }
-    return out;
+      return [res.status, criblBodyText(res.body)];
+    });
   }
 
   async install(group: string, fileName: string, crbl: Uint8Array): Promise<InstalledPack> {
@@ -1157,35 +1156,26 @@ export class LocalPackInstall implements PackInstallClient {
       throw new Error(upload.error);
     }
 
-    // Step 2: POST the returned source; on duplicate conflict delete + retry once.
-    let outcome = interpretInstallResponse(...(await this.postInstall(group, upload.source)));
-    if (outcome.kind === 'conflict') {
-      const packId = packIdFromCrblFileName(fileName);
-      await this.cribl.request({
-        method: 'DELETE',
-        path: `/packs/${encodeURIComponent(packId)}`,
-        groupId: group,
-      });
-      outcome = interpretInstallResponse(...(await this.postInstall(group, upload.source)));
-    }
-    if (outcome.kind !== 'installed') {
-      throw new Error(
-        outcome.kind === 'conflict'
-          ? 'Pack install still conflicts after delete-and-retry'
-          : outcome.error
-      );
-    }
-    return outcome.pack;
-  }
-
-  private async postInstall(group: string, source: string): Promise<[number, string]> {
-    const res = await this.cribl.request({
-      method: 'POST',
-      path: '/packs',
-      groupId: group,
-      body: { source },
+    // Step 2: the @soc/core conflict ladder over this group's JSON transport.
+    return installViaConflictLadder(fileName, upload.source, {
+      post: async (body) => {
+        const res = await this.cribl.request({
+          method: 'POST',
+          path: '/packs',
+          groupId: group,
+          body,
+        });
+        return [res.status, criblBodyText(res.body)];
+      },
+      deletePack: async (packId) => {
+        const res = await this.cribl.request({
+          method: 'DELETE',
+          path: `/packs/${encodeURIComponent(packId)}`,
+          groupId: group,
+        });
+        return [res.status, criblBodyText(res.body)];
+      },
     });
-    return [res.status, criblBodyText(res.body)];
   }
 }
 

@@ -16,8 +16,10 @@
  *      -> the response JSON returns a RANDOMIZED `source` filename
  *         (e.g. "paloalto-sentinel.h1i8P1M.crbl"); the install MUST use it.
  *   2. POST /api/v1/m/{group}/packs   {"source": "<returned source>"}
- *      -> on 500 "conflicts with existing Pack": DELETE the existing pack
- *         (id derived from the ORIGINAL filename) and retry the POST.
+ *      -> on 500 "conflicts with existing Pack": escalate through the
+ *         conflict ladder in usecases/install-pack (force overwrite, then
+ *         DELETE the existing pack - id derived from the ORIGINAL filename -
+ *         and retry the POST).
  *
  * Pure: no IO, no fetch, no React, no Date/crypto/Math.random.
  */
