@@ -128,13 +128,17 @@ export function NumberedSection({
             <p className="numbered-section-comingsoon-note">{reason}</p>
           )}
         </div>
-      ) : bodyHidden ? null : (
-        <>
+      ) : (
+        // A collapsed body stays MOUNTED and is hidden with CSS (live report
+        // 2026-07-13: rendering null here unmounted the section's subtree,
+        // so collapsing the DCR Gap Analysis destroyed its analysis state
+        // and re-expanding required a fresh Analyze run).
+        <div hidden={bodyHidden}>
           {blocked && reason !== undefined && reason !== "" && (
             <p className="numbered-section-blocked-reason">{reason}</p>
           )}
           <div className="numbered-section-body">{children}</div>
-        </>
+        </div>
       )}
     </section>
   );
