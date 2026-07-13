@@ -105,6 +105,10 @@ export function OnboardTableScreen({
     () => config.clientId,
   );
   const [ingestionClientSecret, setIngestionClientSecret] = useState("");
+  // Update-in-place (user request 2026-07-13): when a DCR already targets
+  // the table, PUT the freshly-built body over it (schema refresh) instead
+  // of reusing it untouched. See the Inventory tab for the existing DCRs.
+  const [updateInPlace, setUpdateInPlace] = useState(false);
   const [running, setRunning] = useState(false);
   const [steps, setSteps] = useState<JobStep[]>([]);
   const [outcome, setOutcome] = useState<OnboardTableOutcome | null>(null);
@@ -215,6 +219,7 @@ export function OnboardTableScreen({
         subscriptionId: config.subscriptionId,
         resourceGroup: config.resourceGroup,
         workspaceName: config.workspaceName,
+        ...(updateInPlace ? { updateExistingDcr: true } : {}),
         groupId,
         tenantId: config.tenantId,
         ingestionClientId: ingestionClientId.trim(),
@@ -477,6 +482,18 @@ export function OnboardTableScreen({
           )}
         </div>
       )}
+      <label className="field field-inline">
+        <input
+          type="checkbox"
+          checked={updateInPlace}
+          onChange={(e) => setUpdateInPlace(e.target.checked)}
+        />
+        <span className="field-label">
+          Update existing DCR in place - when a DCR already targets this
+          table, overwrite it with the current schema instead of reusing it
+          untouched
+        </span>
+      </label>
       <div className="panel-controls">
         <button
           className="run-button"

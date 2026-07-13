@@ -11,6 +11,11 @@ export interface DcrAutomationScreenProps {
   /** The batch onboard view (created by the shell). */
   batch: ReactNode;
   /**
+   * The existing-DCR inventory view (2026-07-13). Azure-only, so it is
+   * never gated on Cribl. Absent = the tab is not rendered.
+   */
+  inventory?: ReactNode;
+  /**
    * When set, the Single tab is disabled and this reason is shown - Single
    * onboards one table live to Cribl, so it needs a Cribl connection; Batch
    * still works template-only. When undefined, Single is enabled.
@@ -28,6 +33,7 @@ export interface DcrAutomationScreenProps {
 export function DcrAutomationScreen({
   single,
   batch,
+  inventory,
   singleDisabledReason,
 }: DcrAutomationScreenProps) {
   const singleDisabled = singleDisabledReason !== undefined;
@@ -57,11 +63,22 @@ export function DcrAutomationScreen({
         >
           Batch
         </button>
+        {inventory !== undefined && (
+          <button
+            type="button"
+            role="tab"
+            aria-selected={active === "inventory"}
+            className={`dcr-mode-tab${active === "inventory" ? " dcr-mode-tab-active" : ""}`}
+            onClick={() => setSelected("inventory")}
+          >
+            Inventory
+          </button>
+        )}
       </div>
       {singleDisabled && (
         <p className="field-hint dcr-mode-note">{singleDisabledReason}</p>
       )}
-      {active === "single" ? single : batch}
+      {active === "single" ? single : active === "inventory" ? inventory : batch}
     </>
   );
 }

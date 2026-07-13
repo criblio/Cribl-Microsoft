@@ -11,7 +11,9 @@
  * Pure: no IO, no React, no Date.
  */
 
-export type DcrTab = "single" | "batch";
+// "inventory" (2026-07-13): list the resource group's existing DCRs;
+// azure-only, so it is never disabled by a missing Cribl connection.
+export type DcrTab = "single" | "batch" | "inventory";
 
 /**
  * The tab to show on first render: Batch when the Single tab is disabled

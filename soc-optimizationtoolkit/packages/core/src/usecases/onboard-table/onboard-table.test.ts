@@ -408,6 +408,47 @@ describe("collision + reuse scans (user direction 2026-07-12)", () => {
     ).toBe(false);
   });
 
+  it("UPDATES the existing same-table DCR in place when updateExistingDcr is set", async () => {
+    // User request 2026-07-13 (DCR inventory + update): the same-table DCR
+    // is not skipped - the freshly-built body PUTs over its name.
+    const ports = makePorts();
+    ports.azure.dataCollectionRulesList = [
+      {
+        name: "dcr-someone-else-made",
+        properties: {
+          provisioningState: "Succeeded",
+          immutableId: IMMUTABLE_ID,
+          endpoints: { logsIngestion: INGESTION_ENDPOINT },
+          dataFlows: [{ outputStream: "Microsoft-SecurityEvent" }],
+        },
+      },
+    ];
+    ports.azure.respondWith(
+      WORKSPACE_RESPONSE,
+      TABLE_SCHEMA_RESPONSE,
+      // The PUT response, then the verify re-GET.
+      { status: 200, body: DCR_SUCCEEDED_BODY },
+      { status: 200, body: DCR_SUCCEEDED_BODY },
+    );
+    ports.cribl.respondWith(
+      { status: 201, body: {} },
+      { status: 200, body: { items: [{ commit: "abc123" }] } },
+      { status: 200, body: { items: [{ id: "default" }] } },
+      { status: 200, body: { items: [{ id: "MS-Sentinel-SecurityEvent-dest" }] } },
+    );
+
+    const job = await onboardTable(ports, {
+      ...baseInput(),
+      updateExistingDcr: true,
+    });
+    expect(job.error ?? "").toBe("");
+    expect(job.status).toBe("succeeded");
+    const put = ports.azure.calls.find((call) => call.method === "PUT");
+    expect(put !== undefined && put.path.endsWith("/dcr-someone-else-made")).toBe(
+      true,
+    );
+  });
+
   it("suffixes the DCR name when it is taken by a DIFFERENT table", async () => {
     const ports = makePorts();
     ports.azure.dataCollectionRulesList = [

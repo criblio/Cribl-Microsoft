@@ -234,6 +234,15 @@ export interface OnboardTableInput {
    */
   skipCollisionScan?: boolean;
   /**
+   * UPDATE an existing same-table DCR in place instead of reusing it as-is
+   * (user request 2026-07-13: inventory existing DCRs and update them).
+   * When the collision scan finds a DCR already targeting the table, the
+   * deploy step PUTs the freshly-built body (current table schema) to that
+   * DCR's name - an ARM upsert - rather than skipping the deploy. Without a
+   * same-table DCR this flag is a no-op (a fresh DCR deploys either way).
+   */
+  updateExistingDcr?: boolean;
+  /**
    * Preresolved DCE for DCE-BASED deployment (see
    * {@link OnboardTableDceInput}). ABSENT = the existing Direct behavior,
    * byte-identical to the pre-Unit-6 contract (pinned by test).
@@ -795,7 +804,7 @@ export async function onboardTable(
         : buildDirectDcrRequest(dcrRequestInput);
 
     let deployment;
-    if (reuseDcr !== null) {
+    if (reuseDcr !== null && input.updateExistingDcr !== true) {
       // Skip the create entirely (user direction 2026-07-12): the existing
       // DCR for this table is the deployment. Its body carries the
       // immutableId and endpoints exactly like a PUT response.
@@ -806,6 +815,15 @@ export async function onboardTable(
         `skipped - reusing existing DCR '${dcrName}'`,
       );
     } else {
+      if (reuseDcr !== null) {
+        // updateExistingDcr: PUT the freshly-built body (current table
+        // schema) over the existing DCR - an ARM upsert to the same name.
+        await setStep(
+          currentStep,
+          "running",
+          `updating existing DCR '${dcrName}' in place`,
+        );
+      }
       const putResponse = await azure.request({
         method: dcrRequest.method,
         path: dcrRequest.path,
