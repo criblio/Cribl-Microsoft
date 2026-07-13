@@ -21,6 +21,7 @@
  * hidden).
  */
 
+import { InfoTip } from "../../components/info-tip";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   acquireServicePrincipals,
@@ -210,18 +211,13 @@ export function RoleAssignmentSection({
   return (
     <div className="discovery-result">
       <span className="field-label">
-        Assign Monitoring Metrics Publisher (ingestion role)
+        Ingestion role (Monitoring Metrics Publisher)
+        <InfoTip text="The Cribl ingestion identity needs Monitoring Metrics Publisher on each deployed DCR before any event can flow to it. Granted directly over ARM - idempotent (a DCR that already has the role is reported as such) and resilient to Entra ID replication lag. Additive: it never gates the deploy." />
       </span>
-      <p className="panel-desc">
-        The Cribl ingestion identity needs Monitoring Metrics Publisher on each
-        deployed DCR before any event can flow to it. This grants it directly
-        over ARM - idempotent (a DCR that already has the role is reported as
-        such), and resilient to Entra ID replication lag. It is additive: it
-        never gates the deploy above.
-      </p>
       <label className="field">
         <span className="field-label">
-          Enterprise Application object id (ingestion service principal)
+          Ingestion service principal (object id)
+          <InfoTip text="The ingestion service principal's OBJECT id - its Enterprise Application object id in Entra ID. This is NOT the app registration's client (application) id; they are different GUIDs, and confusing the two is the classic failure. In Entra ID: open the app registration, follow the Managed application link to the Enterprise Application, and copy its Object ID." />
         </span>
         {useDropdown ? (
           <>
@@ -259,11 +255,8 @@ export function RoleAssignmentSection({
               </button>
             </div>
             <span className="field-hint">
-              The ingestion service principal&apos;s OBJECT id, picked from your
-              directory - the app registration this app uses is preselected, and
-              cribl-named principals are listed first. This is NOT the app
-              registration&apos;s client (application) id - confusing the two is
-              the classic failure.
+              OBJECT id, not the client id.
+              <InfoTip text="Picked from your directory: the app registration this app uses is preselected, and cribl-named principals are listed first. This is NOT the app registration's client (application) id - confusing the two is the classic failure." />
             </span>
           </>
         ) : (
@@ -299,12 +292,8 @@ export function RoleAssignmentSection({
               </span>
             )}
             <span className="field-hint">
-              This is the ingestion service principal&apos;s OBJECT id - its
-              Enterprise Application object id in Entra ID - NOT the app
-              registration&apos;s client (application) id. They are different
-              GUIDs, and confusing the two is the classic failure. In Entra ID,
-              open the app registration, follow the Managed application link to
-              the Enterprise Application, and copy its Object ID.
+              OBJECT id, not the client id.
+              <InfoTip text="The Enterprise Application object id in Entra ID - NOT the app registration's client (application) id; they are different GUIDs. In Entra ID: open the app registration, follow the Managed application link to the Enterprise Application, and copy its Object ID." />
             </span>
           </>
         )}
@@ -321,8 +310,8 @@ export function RoleAssignmentSection({
         </>
       ) : (
         <p className="field-hint">
-          No deployed DCRs yet. Run the deploy below; each DCR a successful run
-          creates appears here to grant the role on.
+          No deployed DCRs yet.
+          <InfoTip text="Run the deploy below; each DCR a successful run creates appears here to grant the role on." />
         </p>
       )}
 
@@ -359,10 +348,14 @@ export function RoleAssignmentSection({
         </div>
       )}
 
-      <p className="panel-desc">
-        Prefer to grant it out of band?{" "}
-        {roleGuidance ??
-          "Assign Monitoring Metrics Publisher on each DCR via the az CLI, the portal, or a change request."}
+      <p className="field-hint">
+        Out-of-band grant
+        <InfoTip
+          text={
+            roleGuidance ??
+            "Assign Monitoring Metrics Publisher on each DCR via the az CLI, the portal, or a change request."
+          }
+        />
       </p>
     </div>
   );

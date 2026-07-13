@@ -1002,12 +1002,10 @@ export function IntegrateScreen({
     <>
       <AzureTargetingScreen offline={offline} onCommitScope={onCommitScope} />
       <div className="discovery-result">
-        <span className="field-label">Deployment capabilities</span>
-        <p className="panel-desc">
-          What the deploy provisions and grants. Toggle DCE here (it saves to
-          your deployment Options); the DCR and the ingestion-role grant are
-          always part of the flow below.
-        </p>
+        <span className="field-label">
+          Deployment capabilities
+          <InfoTip text="What the deploy provisions and grants. Toggle the optional DCE here (saved with your deployment Options); the DCR and the ingestion-role grant are always part of the deploy." />
+        </span>
         <label className="integrate-check">
           <input
             type="checkbox"
@@ -1021,27 +1019,22 @@ export function IntegrateScreen({
             }
           />
           <span className="integrate-check-text">
-            Create a Data Collection Endpoint (DCE) for private-endpoint (AMPLS)
-            connectivity. {createDCE ? "Enabled" : "Disabled"}
-            {onOperationChange === undefined ? " in saved Options" : ""} -
-            {onOperationChange !== undefined
-              ? " toggled here and saved with your deployment Options."
-              : "."}
+            Create a DCE ({createDCE ? "enabled" : "disabled"})
+            <InfoTip text="A Data Collection Endpoint enables private-endpoint (AMPLS) connectivity. Toggled here and saved with your deployment Options; without it the DCR uses its direct ingestion endpoint." />
           </span>
         </label>
         <div className="integrate-fact">
           <span className="integrate-fact-badge">Always on</span>
           <span className="integrate-check-text">
-            Provision the Data Collection Rule the Cribl destination publishes
-            metrics to - always part of the deploy below.
+            DCR provisioning
+            <InfoTip text="The Data Collection Rule the Cribl destination sends events to is always provisioned by the deploy." />
           </span>
         </div>
         <div className="integrate-fact">
           <span className="integrate-fact-badge">Always on</span>
           <span className="integrate-check-text">
-            Assign Monitoring Metrics Publisher to the ingestion identity -
-            granted per DCR in the step below (data cannot flow to a DCR without
-            it).
+            Ingestion role grant
+            <InfoTip text="Monitoring Metrics Publisher is assigned to the ingestion identity per deployed DCR (in the step below) - data cannot flow to a DCR without it." />
           </span>
         </div>
         {onOpenOptions !== undefined && (
