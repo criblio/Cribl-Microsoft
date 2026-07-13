@@ -561,6 +561,21 @@ export function IntegrateScreen({
       !mappingsApproved ||
       identityGateReason !== null
     ) {
+      // NEVER skip silently (live 2026-07-13: a green Deploy run shipped no
+      // pack and nothing said why) - name the first unmet prerequisite.
+      setPackBuildLines([
+        `Pack build skipped: ${
+          packStore === undefined || packInstall === undefined
+            ? "pack build is not available in this host."
+            : name === ""
+              ? "no pack name."
+              : packTargetGroups.length === 0
+                ? "no worker group selected."
+                : !mappingsApproved
+                  ? "the DCR Gap Analysis mappings are not approved (section 5)."
+                  : (identityGateReason ?? "a build is already running.")
+        }`,
+      ]);
       return;
     }
     setPackBuilding(true);
@@ -775,7 +790,6 @@ export function IntegrateScreen({
       : ingestionClientId.trim() === ""
         ? "Enter an ingestion client id in the Deploy section."
         : null);
-  const canRunDeploy = runDisabledReason === null;
 
   const runDeploy = useCallback(async (): Promise<boolean> => {
     const targets = deployTargets;
@@ -1451,10 +1465,10 @@ export function IntegrateScreen({
       ))}
       <ReadinessFooter
         pills={pills}
-        canDeploy={canRunDeploy}
-        onDeploy={() => void runDeploy()}
-        deploying={deploying}
-        disabledReason={runDisabledReason}
+        canDeploy={deployEverythingDisabledReason === null}
+        onDeploy={() => void runDeployEverything()}
+        deploying={deploying || packBuilding}
+        disabledReason={deployEverythingDisabledReason}
       />
     </div>
   );
