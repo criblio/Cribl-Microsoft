@@ -2,7 +2,7 @@
  * PACK INSTALL CONFLICT LADDER - the shared decision logic both shells run
  * after uploading a .crbl.
  *
- * Two live failures shaped this (2026-07-13):
+ * Three live failures shaped this (2026-07-13):
  *  - "Pack install still conflicts after delete-and-retry" with no
  *    explanation: the silent DELETE was refused (a pack whose pipelines are
  *    referenced by routes cannot be deleted) and the retry walked into the
@@ -13,13 +13,17 @@
  *    reinstall path is PATCH /packs/{id} {source} ("Upgrade a Pack" in the
  *    vendored cribl-openapi.json): in place, id preserved, route references
  *    intact.
+ *  - A POST without an `id` lets the server DERIVE the pack id from the
+ *    RANDOMIZED upload filename (the "fi...entinel_1" stray) - so every
+ *    install POST now pins {id} explicitly (PackRequestBody.id in the
+ *    vendored spec). The name is never server-guessed.
  *
  * The ladder, in order:
- *   1. POST {source}                  - the plain install.
+ *   1. POST {source, id}              - the plain install, id pinned.
  *   2. PATCH /packs/{id} {source}    - on conflict: the documented upgrade.
  *   3. DELETE /packs/{id} + POST     - last resort; the DELETE's status and
  *      body are CAPTURED and reported, never swallowed.
- * Whatever rung succeeds, the returned pack id must MATCH the requested one
+ * Whatever rung succeeds, a returned pack id must MATCH the requested one
  * (sanitize-tolerant compare) - a server-side rename is deleted and reported
  * instead of silently accepted.
  *
@@ -36,8 +40,8 @@ import type { InstalledPack } from "../../domain/pack-assembly";
 
 /** The transport the ladder drives; each returns [status, bodyText]. */
 export interface PackInstallTransport {
-  /** POST /packs {source} in the group context. */
-  post(body: { source: string }): Promise<[number, string]>;
+  /** POST /packs {source, id} in the group context (id always pinned). */
+  post(body: { source: string; id: string }): Promise<[number, string]>;
   /** PATCH /packs/{id} {source} in the group context (documented upgrade). */
   upgradePack(packId: string, body: { source: string }): Promise<[number, string]>;
   /** DELETE /packs/{id} in the group context. */
@@ -65,7 +69,10 @@ export async function installViaConflictLadder(
   transport: PackInstallTransport,
 ): Promise<InstalledPack> {
   const expectedId = packIdFromCrblFileName(fileName);
-  let outcome = interpretInstallResponse(...(await transport.post({ source })));
+  // The id is PINNED on every POST (live 2026-07-13: without it the server
+  // derived the id from the randomized upload filename).
+  const installBody = { source, id: expectedId };
+  let outcome = interpretInstallResponse(...(await transport.post(installBody)));
 
   let upgradeDetail = "";
   let deleteDetail = "";
@@ -87,7 +94,7 @@ export async function installViaConflictLadder(
           ` ${delBody.slice(0, 200)} - if its pipelines are referenced by` +
           " routes outside the pack, detach those routes in Cribl and retry)";
       }
-      outcome = interpretInstallResponse(...(await transport.post({ source })));
+      outcome = interpretInstallResponse(...(await transport.post(installBody)));
     }
   }
 
@@ -109,6 +116,12 @@ export async function installViaConflictLadder(
         ` An existing pack named '${expectedId}' is likely blocking the` +
         " install - delete it in Cribl (detach any routes first) and retry.",
     );
+  }
+  // Some install responses omit the pack summary entirely (the rename guard
+  // above cannot verify those); the id the caller reports is then the one we
+  // PINNED in the request, never a blank.
+  if (outcome.pack.id === "") {
+    return { ...outcome.pack, id: expectedId };
   }
   return outcome.pack;
 }

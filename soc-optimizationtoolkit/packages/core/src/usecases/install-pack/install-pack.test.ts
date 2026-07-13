@@ -25,17 +25,17 @@ function transport(init: {
   upgrade?: [number, string];
   del?: [number, string];
 }): PackInstallTransport & {
-  postCount: number;
+  postBodies: Array<{ source: string; id: string }>;
   upgradedIds: string[];
   deletedIds: string[];
 } {
   const t = {
-    postCount: 0,
+    postBodies: [] as Array<{ source: string; id: string }>,
     upgradedIds: [] as string[],
     deletedIds: [] as string[],
-    async post(): Promise<[number, string]> {
-      t.postCount++;
-      return init.posts[t.postCount - 1] ?? [500, "no scripted response"];
+    async post(body: { source: string; id: string }): Promise<[number, string]> {
+      t.postBodies.push(body);
+      return init.posts[t.postBodies.length - 1] ?? [500, "no scripted response"];
     },
     async upgradePack(packId: string): Promise<[number, string]> {
       t.upgradedIds.push(packId);
@@ -50,11 +50,13 @@ function transport(init: {
 }
 
 describe("installViaConflictLadder", () => {
-  it("installs on the first POST without upgrade or delete", async () => {
+  it("installs on the first POST with the id PINNED, no upgrade or delete", async () => {
+    // The id rides every install POST (live 2026-07-13: without it the
+    // server derived the id from the randomized upload filename).
     const t = transport({ posts: [[200, installedBody()]] });
     const pack = await installViaConflictLadder("MS-Sentinel_1.0.0.crbl", "src.crbl", t);
     expect(pack.id).toBe("MS-Sentinel");
-    expect(t.postCount).toBe(1);
+    expect(t.postBodies).toEqual([{ source: "src.crbl", id: "MS-Sentinel" }]);
     expect(t.upgradedIds).toEqual([]);
     expect(t.deletedIds).toEqual([]);
   });
@@ -66,7 +68,7 @@ describe("installViaConflictLadder", () => {
     expect(pack.id).toBe("MS-Sentinel");
     expect(t.upgradedIds).toEqual(["MS-Sentinel"]);
     expect(t.deletedIds).toEqual([]);
-    expect(t.postCount).toBe(1);
+    expect(t.postBodies.length).toBe(1);
   });
 
   it("falls back to delete-and-retry when the upgrade fails", async () => {
@@ -77,7 +79,20 @@ describe("installViaConflictLadder", () => {
     const pack = await installViaConflictLadder("MS-Sentinel_1.0.0.crbl", "src.crbl", t);
     expect(pack.id).toBe("MS-Sentinel");
     expect(t.deletedIds).toEqual(["MS-Sentinel"]);
-    expect(t.postCount).toBe(2);
+    // Both POSTs pin the id.
+    expect(t.postBodies).toEqual([
+      { source: "src.crbl", id: "MS-Sentinel" },
+      { source: "src.crbl", id: "MS-Sentinel" },
+    ]);
+  });
+
+  it("backfills the PINNED id when the install response omits the pack summary", async () => {
+    // Some responses carry no items[] - the caller still reports the id we
+    // requested, never a blank.
+    const t = transport({ posts: [[200, "{}"]] });
+    const pack = await installViaConflictLadder("MS-Sentinel_1.0.0.crbl", "src.crbl", t);
+    expect(pack.id).toBe("MS-Sentinel");
+    expect(t.deletedIds).toEqual([]);
   });
 
   it("reports the upgrade failure AND a REFUSED delete in the final error", async () => {
