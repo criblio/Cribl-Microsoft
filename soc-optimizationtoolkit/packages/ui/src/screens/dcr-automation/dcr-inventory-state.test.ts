@@ -35,6 +35,31 @@ describe("mergePreviewColumns", () => {
     ]);
   });
 
+  it("alphabetizes within each status group (user direction 2026-07-13)", () => {
+    const chips = mergePreviewColumns({
+      currentDcrColumns: [
+        { name: "zeta", type: "string" },
+        { name: "Alpha", type: "string" },
+      ],
+      rebuiltDcrColumns: [
+        { name: "zeta", type: "string" },
+        { name: "Alpha", type: "string" },
+        { name: "delta", type: "string" },
+        { name: "Beta", type: "string" },
+      ],
+      diff: {
+        added: [
+          { name: "delta", type: "string" },
+          { name: "Beta", type: "string" },
+        ],
+        removed: [],
+        retyped: [],
+        unchanged: 2,
+      },
+    });
+    expect(chips.map((c) => c.name)).toEqual(["Beta", "delta", "Alpha", "zeta"]);
+  });
+
   it("marks everything unchanged when the diff is empty", () => {
     const inSync = {
       currentDcrColumns: PREVIEW.currentDcrColumns,

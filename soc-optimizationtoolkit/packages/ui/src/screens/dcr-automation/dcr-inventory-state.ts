@@ -21,9 +21,17 @@ export interface PreviewColumnChip {
   fromType?: string;
 }
 
+/** Case-insensitive alphabetical order (user direction 2026-07-13). */
+function byName(a: PreviewColumnChip, b: PreviewColumnChip): number {
+  const left = a.name.toLowerCase();
+  const right = b.name.toLowerCase();
+  return left < right ? -1 : left > right ? 1 : 0;
+}
+
 /**
  * Merge a preview into one chip list: additions, retypes, and removals
- * FIRST (the decisions), then the unchanged columns in declaration order.
+ * FIRST (the decisions), then the matching columns - each group in
+ * ALPHABETICAL order so a field is findable among 150 chips.
  */
 export function mergePreviewColumns(
   preview: Pick<DcrUpdatePreview, "currentDcrColumns" | "rebuiltDcrColumns" | "diff">,
@@ -34,35 +42,39 @@ export function mergePreviewColumns(
     preview.diff.retyped.map((r) => [r.name.toLowerCase(), r]),
   );
 
-  const chips: PreviewColumnChip[] = [];
+  const addedChips: PreviewColumnChip[] = [];
+  const retypedChips: PreviewColumnChip[] = [];
+  const removedChips: PreviewColumnChip[] = [];
+  const unchangedChips: PreviewColumnChip[] = [];
   for (const column of preview.rebuiltDcrColumns) {
-    if (added.has(column.name.toLowerCase())) {
-      chips.push({ name: column.name, type: column.type, status: "added" });
+    const key = column.name.toLowerCase();
+    if (added.has(key)) {
+      addedChips.push({ name: column.name, type: column.type, status: "added" });
+      continue;
     }
-  }
-  for (const column of preview.rebuiltDcrColumns) {
-    const retype = retypedByName.get(column.name.toLowerCase());
+    const retype = retypedByName.get(key);
     if (retype !== undefined) {
-      chips.push({
+      retypedChips.push({
         name: column.name,
         type: retype.to,
         fromType: retype.from,
         status: "retyped",
       });
+      continue;
     }
+    unchangedChips.push({ name: column.name, type: column.type, status: "unchanged" });
   }
   for (const column of preview.currentDcrColumns) {
     if (removed.has(column.name.toLowerCase())) {
-      chips.push({ name: column.name, type: column.type, status: "removed" });
+      removedChips.push({ name: column.name, type: column.type, status: "removed" });
     }
   }
-  for (const column of preview.rebuiltDcrColumns) {
-    const key = column.name.toLowerCase();
-    if (!added.has(key) && !retypedByName.has(key)) {
-      chips.push({ name: column.name, type: column.type, status: "unchanged" });
-    }
-  }
-  return chips;
+  return [
+    ...addedChips.sort(byName),
+    ...retypedChips.sort(byName),
+    ...removedChips.sort(byName),
+    ...unchangedChips.sort(byName),
+  ];
 }
 
 /** One-line human summary of what the update would change. */

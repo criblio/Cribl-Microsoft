@@ -45,6 +45,9 @@ export function DcrInventoryPanel() {
   // The previewed DCR's DCE id ("" for Kind:Direct) - the rebuild must keep
   // the same variant and endpoint.
   const [previewDce, setPreviewDce] = useState("");
+  // Live phase line while a multi-step action runs (user request
+  // 2026-07-13: show the progress of the update).
+  const [progress, setProgress] = useState("");
   const [newColName, setNewColName] = useState("");
   const [newColType, setNewColType] = useState("string");
   // Matching (green) columns show by default (user color semantics
@@ -135,6 +138,7 @@ export function DcrInventoryPanel() {
     setError("");
     setNotice("");
     logInfo(`updating '${preview.dcrName}' in place from table ${preview.table}`);
+    setProgress(`Updating DCR '${preview.dcrName}' from the current ${preview.table} schema...`);
     try {
       const result = await updateDcrInPlace(ports.azure, {
         ...scope(),
@@ -150,6 +154,7 @@ export function DcrInventoryPanel() {
         `Updated '${result.dcrName}' in place (${result.columnCount} columns, ` +
           `${result.provisioningState}).`,
       );
+      setProgress("Refreshing the field list...");
       setPreview(
         await previewDcrUpdate(ports.azure, {
           ...scope(),
@@ -164,6 +169,7 @@ export function DcrInventoryPanel() {
       logError(`update of '${preview.dcrName}' failed: ${message}`);
       setError(message);
     } finally {
+      setProgress("");
       setBusy(false);
     }
   }, [ports.azure, scope, preview, previewLocation, previewDce, logInfo, logError]);
@@ -182,6 +188,7 @@ export function DcrInventoryPanel() {
     logInfo(
       `adding field '${columnName}' (${newColType}) to ${preview.table} and updating '${preview.dcrName}'`,
     );
+    setProgress(`Adding '${columnName}' (${newColType}) to ${preview.table}...`);
     try {
       const added = await addTableColumn(ports.azure, {
         ...scope(),
@@ -190,6 +197,7 @@ export function DcrInventoryPanel() {
       });
       // Native tables suffix custom fields with _CF - report the FINAL name.
       const finalName = added.columnName;
+      setProgress(`Updating DCR '${preview.dcrName}' to accept '${finalName}'...`);
       let dcrUpdated = true;
       try {
         await updateDcrInPlace(ports.azure, {
@@ -222,6 +230,7 @@ export function DcrInventoryPanel() {
           : `Added '${finalName}' (${newColType}) to ${preview.table}.`,
       );
       setNewColName("");
+      setProgress("Refreshing the field list...");
       setPreview(
         await previewDcrUpdate(ports.azure, {
           ...scope(),
@@ -236,6 +245,7 @@ export function DcrInventoryPanel() {
       logError(`add field '${columnName}' to ${preview.table} failed: ${message}`);
       setError(message);
     } finally {
+      setProgress("");
       setBusy(false);
     }
   }, [ports.azure, scope, preview, previewLocation, previewDce, newColName, newColType, logInfo, logError]);
@@ -397,6 +407,9 @@ export function DcrInventoryPanel() {
                   Close
                 </button>
               </div>
+              {busy && progress !== "" && (
+                <p className="panel-desc dcr-progress-line">{progress}</p>
+              )}
               {error !== "" && <pre className="result">{error}</pre>}
               {notice !== "" && <p className="panel-desc">{notice}</p>}
               <p className="panel-desc">{summarizePreview(preview)}</p>
