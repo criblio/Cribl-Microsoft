@@ -52,6 +52,43 @@ describe("updateDcrInPlace", () => {
     expect((put!.body as { kind?: string }).kind).toBe("Direct");
   });
 
+  it("targets the DCR's OWN resource group while reading the table from the workspace's", async () => {
+    // The inventory can browse any group in the subscription (2026-07-13);
+    // the DCR paths follow that selection, the table path never does.
+    const azure = new FakeAzureManagement();
+    azure.respondWith(
+      TABLE_SCHEMA,
+      { status: 200, body: { properties: { provisioningState: "Succeeded" } } },
+    );
+    await updateDcrInPlace(azure, { ...INPUT, dcrResourceGroup: "other-rg" });
+    const tableGet = azure.calls.find((c) => c.path.includes("/tables/"));
+    expect(tableGet?.path).toContain("/resourceGroups/rg/");
+    const put = azure.calls.find((c) => c.method === "PUT");
+    expect(put?.path).toContain("/resourceGroups/other-rg/");
+  });
+
+  it("rebuilds the DCE variant when a dceResourceId is supplied", async () => {
+    const azure = new FakeAzureManagement();
+    azure.respondWith(
+      TABLE_SCHEMA,
+      { status: 200, body: { properties: { provisioningState: "Succeeded" } } },
+    );
+    await updateDcrInPlace(azure, {
+      ...INPUT,
+      dceResourceId: "/subscriptions/s/rg/dce-1",
+    });
+    const put = azure.calls.find((c) => c.method === "PUT");
+    const body = put!.body as {
+      kind?: string;
+      properties: { dataCollectionEndpointId?: string };
+    };
+    // DCE bodies carry the endpoint and NO kind.
+    expect(body.kind).toBeUndefined();
+    expect(body.properties.dataCollectionEndpointId).toBe(
+      "/subscriptions/s/rg/dce-1",
+    );
+  });
+
   it("polls a pending upsert to Succeeded", async () => {
     const azure = new FakeAzureManagement();
     azure.respondWith(

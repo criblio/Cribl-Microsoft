@@ -8,16 +8,18 @@
  * freshly-built body over the existing DCR.
  */
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   CUSTOM_COLUMN_TYPES,
   addTableColumn,
   listDcrInventory,
+  listResourceGroups,
   previewDcrUpdate,
   updateDcrInPlace,
 } from "@soc/core";
 import type { DcrInventoryEntry, DcrUpdatePreview } from "@soc/core";
 import { usePorts } from "../../ports-context";
+import { SearchableSelect } from "../../components/searchable-select";
 import { mergePreviewColumns, summarizePreview } from "./dcr-inventory-state";
 
 export function DcrInventoryPanel() {
@@ -30,6 +32,9 @@ export function DcrInventoryPanel() {
   // from its table's current schema (user request 2026-07-13).
   const [preview, setPreview] = useState<DcrUpdatePreview | null>(null);
   const [previewLocation, setPreviewLocation] = useState("");
+  // The previewed DCR's DCE id ("" for Kind:Direct) - the rebuild must keep
+  // the same variant and endpoint.
+  const [previewDce, setPreviewDce] = useState("");
   const [newColName, setNewColName] = useState("");
   const [newColType, setNewColType] = useState("string");
   // Unchanged columns are collapsed by default - 150+ identical chips add
@@ -39,13 +44,43 @@ export function DcrInventoryPanel() {
   const scopeReady =
     config.subscriptionId !== "" && config.resourceGroup !== "";
 
+  // The inventoried resource group is CHANGEABLE (user request 2026-07-13):
+  // defaults to the committed target's group, selectable across the
+  // subscription. Workspace/table operations stay on the COMMITTED group -
+  // only the DCR side follows this selection.
+  const [inventoryRg, setInventoryRg] = useState(config.resourceGroup);
+  const [rgOptions, setRgOptions] = useState<string[]>(
+    config.resourceGroup !== "" ? [config.resourceGroup] : [],
+  );
+  useEffect(() => {
+    if (!scopeReady) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const groups = await listResourceGroups(ports.azure, config.subscriptionId);
+        if (cancelled) return;
+        const names = groups.map((g) => g.name);
+        if (!names.includes(config.resourceGroup) && config.resourceGroup !== "") {
+          names.unshift(config.resourceGroup);
+        }
+        setRgOptions(names);
+      } catch {
+        // The listing is a convenience; the committed group stays usable.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [scopeReady, ports.azure, config.subscriptionId, config.resourceGroup]);
+
   const scope = useCallback(
     () => ({
       subscriptionId: config.subscriptionId,
       resourceGroup: config.resourceGroup,
       workspaceName: config.workspaceName,
+      dcrResourceGroup: inventoryRg,
     }),
-    [config.subscriptionId, config.resourceGroup, config.workspaceName],
+    [config.subscriptionId, config.resourceGroup, config.workspaceName, inventoryRg],
   );
 
   // Read-only before/after: the DCR's live declaration vs the declaration a
@@ -62,9 +97,11 @@ export function DcrInventoryPanel() {
             dcrName: entry.name,
             table,
             location: entry.location,
+            dceResourceId: entry.dataCollectionEndpointId || undefined,
           }),
         );
         setPreviewLocation(entry.location);
+        setPreviewDce(entry.dataCollectionEndpointId);
         setNewColName("");
       } catch (err) {
         setError(err instanceof Error ? err.message : String(err));
@@ -89,6 +126,7 @@ export function DcrInventoryPanel() {
         dcrName: preview.dcrName,
         table: preview.table,
         location: previewLocation,
+        dceResourceId: previewDce || undefined,
       });
       setNotice(
         `Updated '${result.dcrName}' in place (${result.columnCount} columns, ` +
@@ -100,6 +138,7 @@ export function DcrInventoryPanel() {
           dcrName: preview.dcrName,
           table: preview.table,
           location: previewLocation,
+          dceResourceId: previewDce || undefined,
         }),
       );
     } catch (err) {
@@ -107,7 +146,7 @@ export function DcrInventoryPanel() {
     } finally {
       setBusy(false);
     }
-  }, [ports.azure, scope, preview, previewLocation]);
+  }, [ports.azure, scope, preview, previewLocation, previewDce]);
 
   // Add a custom column to the (custom) table, then re-preview - the diff
   // then shows the new column as an addition the DCR update would install.
@@ -133,6 +172,7 @@ export function DcrInventoryPanel() {
           dcrName: preview.dcrName,
           table: preview.table,
           location: previewLocation,
+          dceResourceId: previewDce || undefined,
         }),
       );
     } catch (err) {
@@ -140,16 +180,17 @@ export function DcrInventoryPanel() {
     } finally {
       setBusy(false);
     }
-  }, [ports.azure, scope, preview, previewLocation, newColName, newColType]);
+  }, [ports.azure, scope, preview, previewLocation, previewDce, newColName, newColType]);
 
   const load = useCallback(async () => {
     setBusy(true);
     setError("");
+    setPreview(null);
     try {
       setEntries(
         await listDcrInventory(ports.azure, {
           subscriptionId: config.subscriptionId,
-          resourceGroup: config.resourceGroup,
+          resourceGroup: inventoryRg,
         }),
       );
     } catch (err) {
@@ -158,7 +199,7 @@ export function DcrInventoryPanel() {
     } finally {
       setBusy(false);
     }
-  }, [ports.azure, config.subscriptionId, config.resourceGroup]);
+  }, [ports.azure, config.subscriptionId, inventoryRg]);
 
   if (!scopeReady) {
     return (
@@ -172,12 +213,33 @@ export function DcrInventoryPanel() {
   return (
     <div className="discovery-result">
       <div className="panel-controls">
-        <button className="run-button" onClick={() => void load()} disabled={busy}>
+        <label className="field">
+          <span className="field-label">Resource group</span>
+          <SearchableSelect
+            options={rgOptions.map((name) => ({ value: name, label: name }))}
+            value={inventoryRg}
+            onChange={(value) => {
+              setInventoryRg(value);
+              setEntries(null);
+              setPreview(null);
+            }}
+            placeholder="Select a resource group..."
+            ariaLabel="Filter resource groups"
+          />
+        </label>
+        <button
+          className="run-button"
+          onClick={() => void load()}
+          disabled={busy || inventoryRg === ""}
+        >
           {entries === null ? "Load DCR inventory" : "Refresh"}
         </button>
-        <span className="field-hint">
-          Resource group: {config.resourceGroup}
-        </span>
+        {inventoryRg !== config.resourceGroup && (
+          <span className="field-hint">
+            Browsing '{inventoryRg}' - table and schema operations stay on the
+            committed workspace in '{config.resourceGroup}'.
+          </span>
+        )}
       </div>
       {error !== "" && <pre className="result">{error}</pre>}
       {notice !== "" && <p className="panel-desc">{notice}</p>}
@@ -217,8 +279,29 @@ export function DcrInventoryPanel() {
                   <td>{e.immutableId || "-"}</td>
                   <td>{e.ingestionEndpoint || "-"}</td>
                   <td>
-                    {e.kind === "Direct" && e.tables.length > 0 ? (
-                      e.tables.map((table) => (
+                    {(() => {
+                      // Updatable: a Kind:Direct ingestion DCR, or a
+                      // DCE-based one (no kind, but a DCE id + custom
+                      // stream declarations). Agent/workspace-transform
+                      // DCRs have neither shape and cannot be rebuilt from
+                      // a table schema.
+                      const dceBased =
+                        e.dataCollectionEndpointId !== "" &&
+                        e.streamDeclarationCount > 0;
+                      const updatable =
+                        e.tables.length > 0 && (e.kind === "Direct" || dceBased);
+                      if (!updatable) {
+                        const why =
+                          e.tables.length === 0
+                            ? "no destination table is resolvable from its dataFlows"
+                            : `kind '${e.kind || "none"}' is not a Direct or DCE-based ingestion DCR (agent and workspace-transform DCRs are not schema-rebuildable)`;
+                        return (
+                          <span className="field-hint" title={why}>
+                            not updatable - {e.tables.length === 0 ? "no table" : `kind '${e.kind || "none"}'`}
+                          </span>
+                        );
+                      }
+                      return e.tables.map((table) => (
                         <button
                           key={table}
                           className="run-button"
@@ -232,15 +315,8 @@ export function DcrInventoryPanel() {
                         >
                           {e.tables.length > 1 ? `Preview (${table})` : "Preview update"}
                         </button>
-                      ))
-                    ) : (
-                      <span
-                        className="field-hint"
-                        title="Only Kind:Direct DCRs with a resolvable target table can be rebuilt here."
-                      >
-                        not updatable
-                      </span>
-                    )}
+                      ));
+                    })()}
                   </td>
                 </tr>
               ))}

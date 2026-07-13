@@ -32,7 +32,30 @@ describe("parseDcrInventoryEntry", () => {
       ingestionEndpoint: "https://dcr-x.eastus-1.ingest.monitor.azure.com",
       tables: ["CommonSecurityLog", "Extra_CL"],
       provisioningState: "Succeeded",
+      dataCollectionEndpointId: "",
+      streamDeclarationCount: 0,
     });
+  });
+
+  it("recognizes DCE-based DCRs (no kind) and stream-name table fallback", () => {
+    // A DCE-based ingestion DCR: no kind, a DCE id, stream declarations,
+    // and a dataFlow with streams but NO outputStream (live 2026-07-13:
+    // one such row read as "not updatable").
+    const entry = parseDcrInventoryEntry({
+      name: "dcr-dce-based",
+      location: "eastus",
+      properties: {
+        dataCollectionEndpointId: "/subscriptions/s/resourceGroups/rg/providers/Microsoft.Insights/dataCollectionEndpoints/dce-1",
+        streamDeclarations: { "Custom-Acme_CL": { columns: [] } },
+        dataFlows: [{ streams: ["Custom-Acme_CL"] }],
+      },
+    });
+    expect(entry).toMatchObject({
+      kind: "",
+      tables: ["Acme_CL"],
+      streamDeclarationCount: 1,
+    });
+    expect(entry?.dataCollectionEndpointId).toContain("dce-1");
   });
 
   it("returns null for junk and tolerates missing properties", () => {

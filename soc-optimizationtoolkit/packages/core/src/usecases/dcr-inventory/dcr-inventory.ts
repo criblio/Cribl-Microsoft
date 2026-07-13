@@ -23,9 +23,16 @@ export interface DcrInventoryEntry {
   immutableId: string;
   /** The logs ingestion endpoint (Direct DCRs); "" when absent. */
   ingestionEndpoint: string;
-  /** Destination tables, from each dataFlow's outputStream (prefix stripped). */
+  /**
+   * Destination tables from each dataFlow's outputStream, falling back to
+   * its stream names when no outputStream is set (prefixes stripped).
+   */
   tables: string[];
   provisioningState: string;
+  /** The DCE resource id for DCE-based DCRs (they carry NO kind); "". */
+  dataCollectionEndpointId: string;
+  /** How many custom stream declarations the DCR carries. */
+  streamDeclarationCount: number;
 }
 
 function rec(value: unknown): Record<string, unknown> | null {
@@ -46,12 +53,27 @@ export function parseDcrInventoryEntry(item: unknown): DcrInventoryEntry | null 
   const endpoints = rec(props["endpoints"]) ?? {};
   const flows = Array.isArray(props["dataFlows"]) ? props["dataFlows"] : [];
   const tables: string[] = [];
+  const addTable = (stream: string) => {
+    if (stream === "") return;
+    const table = stream.replace(/^(Custom|Microsoft)-/, "");
+    if (!tables.includes(table)) tables.push(table);
+  };
   for (const flow of flows) {
     const outputStream = str(rec(flow)?.["outputStream"]);
-    if (outputStream === "") continue;
-    const table = outputStream.replace(/^(Custom|Microsoft)-/, "");
-    if (!tables.includes(table)) tables.push(table);
+    if (outputStream !== "") {
+      addTable(outputStream);
+      continue;
+    }
+    // No outputStream: the flow lands on its input stream's table (the
+    // agent/DCE shapes) - derive from the stream names instead.
+    const streams = rec(flow)?.["streams"];
+    if (Array.isArray(streams)) {
+      for (const stream of streams) {
+        if (typeof stream === "string") addTable(stream);
+      }
+    }
   }
+  const declarations = rec(props["streamDeclarations"]) ?? {};
   return {
     name: str(resource["name"]),
     location: str(resource["location"]),
@@ -60,6 +82,8 @@ export function parseDcrInventoryEntry(item: unknown): DcrInventoryEntry | null 
     ingestionEndpoint: str(endpoints["logsIngestion"]),
     tables,
     provisioningState: str(props["provisioningState"]),
+    dataCollectionEndpointId: str(props["dataCollectionEndpointId"]),
+    streamDeclarationCount: Object.keys(declarations).length,
   };
 }
 

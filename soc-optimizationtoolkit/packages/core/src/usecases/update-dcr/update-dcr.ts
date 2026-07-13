@@ -16,13 +16,17 @@
  */
 
 import type { AzureManagement } from "../../ports";
-import { buildDirectDcrRequest } from "../../domain/dcr-request";
+import {
+  buildDceDcrRequest,
+  buildDirectDcrRequest,
+} from "../../domain/dcr-request";
 import { selectSchemaColumns } from "../../domain/schema-mapping";
 import type { LogAnalyticsColumn } from "../../domain/schema-mapping";
 import { LOG_ANALYTICS_API_VERSION } from "../onboard-table";
 
 export interface UpdateDcrInput {
   subscriptionId: string;
+  /** The WORKSPACE's resource group (table schema reads live here). */
   resourceGroup: string;
   workspaceName: string;
   /** The EXISTING DCR's name - the PUT lands on it (upsert). */
@@ -31,6 +35,18 @@ export interface UpdateDcrInput {
   table: string;
   /** The DCR's location (from the inventory row). */
   location: string;
+  /**
+   * The resource group the DCR LIVES IN when it differs from the
+   * workspace's (the inventory can browse any group in the subscription,
+   * 2026-07-13). Defaults to {@link resourceGroup}.
+   */
+  dcrResourceGroup?: string;
+  /**
+   * The DCE resource id for a DCE-BASED DCR (they carry no kind but do
+   * carry this id + stream declarations). Present = the rebuilt body is
+   * the DCE variant with this endpoint preserved; absent = Kind:Direct.
+   */
+  dceResourceId?: string;
   /** Poll attempts for provisioningState Succeeded (default 5). */
   maxPollAttempts?: number;
 }
@@ -90,18 +106,33 @@ export async function updateDcrInPlace(
     );
   }
 
-  // 2. The SAME body a fresh deploy would create, PUT over the same name.
-  const request = buildDirectDcrRequest({
+  // 2. The SAME body a fresh deploy would create, PUT over the same name -
+  // the DCE variant (endpoint preserved) when the DCR is DCE-based. The
+  // path targets the DCR's OWN resource group (which can differ from the
+  // workspace's) - the builder derives its path from the workspace, so it
+  // is overridden here.
+  const requestInput = {
     table: input.table,
     columns,
     location: input.location,
     workspaceResourceId: workspacePath,
     dcrName: input.dcrName,
-    tableMode: isCustom ? "custom" : "native",
-  });
+    tableMode: isCustom ? ("custom" as const) : ("native" as const),
+  };
+  const request =
+    input.dceResourceId !== undefined && input.dceResourceId !== ""
+      ? buildDceDcrRequest({
+          ...requestInput,
+          dataCollectionEndpointId: input.dceResourceId,
+        })
+      : buildDirectDcrRequest(requestInput);
+  const dcrPath =
+    `/subscriptions/${input.subscriptionId}` +
+    `/resourceGroups/${input.dcrResourceGroup ?? input.resourceGroup}` +
+    `/providers/Microsoft.Insights/dataCollectionRules/${input.dcrName}`;
   const putResponse = await azure.request({
     method: request.method,
-    path: request.path,
+    path: dcrPath,
     apiVersion: request.apiVersion,
     body: request.body,
   });
@@ -133,7 +164,7 @@ export async function updateDcrInPlace(
     attempts++;
     const poll = await azure.request({
       method: "GET",
-      path: request.path,
+      path: dcrPath,
       apiVersion: request.apiVersion,
     });
     if (poll.status < 200 || poll.status >= 300) {
@@ -244,7 +275,7 @@ export async function previewDcrUpdate(
     method: "GET",
     path:
       `/subscriptions/${input.subscriptionId}` +
-      `/resourceGroups/${input.resourceGroup}` +
+      `/resourceGroups/${input.dcrResourceGroup ?? input.resourceGroup}` +
       `/providers/Microsoft.Insights/dataCollectionRules/${input.dcrName}`,
     apiVersion: "2023-03-11",
   });
@@ -281,14 +312,21 @@ export async function previewDcrUpdate(
     );
   }
 
-  const request = buildDirectDcrRequest({
+  const previewInput = {
     table: input.table,
     columns: tableColumns,
     location: input.location,
     workspaceResourceId: workspacePath,
     dcrName: input.dcrName,
-    tableMode: isCustom ? "custom" : "native",
-  });
+    tableMode: isCustom ? ("custom" as const) : ("native" as const),
+  };
+  const request =
+    input.dceResourceId !== undefined && input.dceResourceId !== ""
+      ? buildDceDcrRequest({
+          ...previewInput,
+          dataCollectionEndpointId: input.dceResourceId,
+        })
+      : buildDirectDcrRequest(previewInput);
   const rebuiltDcrColumns = declarationColumns(request.body);
 
   return {
