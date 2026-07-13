@@ -14,3 +14,4 @@ export * from "./guided-deploy";
 export * from "./permission-preflight";
 export * from "./install-pack";
 export * from "./dcr-inventory";
+export * from "./update-dcr";

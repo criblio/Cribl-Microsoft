@@ -9,7 +9,7 @@
  */
 
 import { useCallback, useState } from "react";
-import { listDcrInventory } from "@soc/core";
+import { listDcrInventory, updateDcrInPlace } from "@soc/core";
 import type { DcrInventoryEntry } from "@soc/core";
 import { usePorts } from "../../ports-context";
 
@@ -17,10 +17,42 @@ export function DcrInventoryPanel() {
   const { ports, config } = usePorts();
   const [entries, setEntries] = useState<DcrInventoryEntry[] | null>(null);
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
 
   const scopeReady =
     config.subscriptionId !== "" && config.resourceGroup !== "";
+
+  // Per-row in-place update (user request 2026-07-13): rebuild the DCR body
+  // from the table's CURRENT schema and PUT it over the existing name (ARM
+  // upsert - the immutableId and connected clients keep working).
+  const update = useCallback(
+    async (entry: DcrInventoryEntry, table: string) => {
+      setBusy(true);
+      setError("");
+      setNotice("");
+      try {
+        const result = await updateDcrInPlace(ports.azure, {
+          subscriptionId: config.subscriptionId,
+          resourceGroup: config.resourceGroup,
+          workspaceName: config.workspaceName,
+          dcrName: entry.name,
+          table,
+          location: entry.location,
+        });
+        setNotice(
+          `Updated '${result.dcrName}' in place from the current ` +
+            `${result.table} schema (${result.columnCount} columns, ` +
+            `${result.provisioningState}).`,
+        );
+      } catch (err) {
+        setError(err instanceof Error ? err.message : String(err));
+      } finally {
+        setBusy(false);
+      }
+    },
+    [ports.azure, config.subscriptionId, config.resourceGroup, config.workspaceName],
+  );
 
   const load = useCallback(async () => {
     setBusy(true);
@@ -60,16 +92,18 @@ export function DcrInventoryPanel() {
         </span>
       </div>
       {error !== "" && <pre className="result">{error}</pre>}
+      {notice !== "" && <p className="panel-desc">{notice}</p>}
       {entries !== null && entries.length === 0 && (
         <p className="panel-desc">No Data Collection Rules in this resource group.</p>
       )}
       {entries !== null && entries.length > 0 && (
         <>
           <p className="field-hint">
-            To update a DCR in place (refresh its schema from the current
-            table), run its table on the Single tab with "Update existing DCR
-            in place" checked - the deploy overwrites this DCR instead of
-            creating a new one.
+            Update in place rebuilds the DCR from its table's CURRENT Log
+            Analytics schema and overwrites it under the same name - the
+            immutable ID and connected clients keep working. For mapping
+            changes end to end (Cribl destination included), use the Single
+            tab with "Update existing DCR in place" checked.
           </p>
           <table className="match-field-table mapping-review-grid">
             <thead>
@@ -81,6 +115,7 @@ export function DcrInventoryPanel() {
                 <th>State</th>
                 <th>Immutable ID</th>
                 <th>Ingestion endpoint</th>
+                <th>Update</th>
               </tr>
             </thead>
             <tbody>
@@ -93,6 +128,32 @@ export function DcrInventoryPanel() {
                   <td>{e.provisioningState || "-"}</td>
                   <td>{e.immutableId || "-"}</td>
                   <td>{e.ingestionEndpoint || "-"}</td>
+                  <td>
+                    {e.kind === "Direct" && e.tables.length > 0 ? (
+                      e.tables.map((table) => (
+                        <button
+                          key={table}
+                          className="run-button"
+                          disabled={busy || config.workspaceName === ""}
+                          title={
+                            config.workspaceName === ""
+                              ? "Commit a workspace in the Azure target first."
+                              : `Rebuild from the current ${table} schema and overwrite this DCR.`
+                          }
+                          onClick={() => void update(e, table)}
+                        >
+                          {e.tables.length > 1 ? `Update (${table})` : "Update in place"}
+                        </button>
+                      ))
+                    ) : (
+                      <span
+                        className="field-hint"
+                        title="Only Kind:Direct DCRs with a resolvable target table can be rebuilt here."
+                      >
+                        not updatable
+                      </span>
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>
