@@ -48,24 +48,17 @@ describe("mineTransformFieldPairs", () => {
   });
 });
 
-describe("runtime lockstep: parseTransformKql sees project-map renames", () => {
-  it("counts a CCP projection map as DCR-side renames", () => {
-    // The audit's exact drift case: a DCR that projects Dest = tostring(src)
-    // previously yielded ZERO renames at runtime while the generator mined it.
+describe("runtime boundary: parseTransformKql does NOT mine project maps", () => {
+  it("ignores CCP projection maps (live regression 2026-07-13: they are the solution's ingest path, not our deployed DCR)", () => {
     const flow = parseTransformKql(
       "source | project TimeGenerated, DeviceAction=tostring(act), IncidentId=incident_id",
     );
-    expect(flow.renames).toEqual([
-      { dest: "DeviceAction", source: "act" },
-      { dest: "IncidentId", source: "incident_id" },
-    ]);
-    // The derived column set includes the projected destinations.
-    expect(flow.columns.map((c) => c.name)).toContain("DeviceAction");
+    expect(flow.renames).toEqual([]);
   });
 
-  it("keeps project-rename extraction authoritative (no duplicates)", () => {
+  it("keeps the legacy project-rename extraction (the deployable DCR shape)", () => {
     const flow = parseTransformKql(
-      "source | project-rename DeviceAction = act | project DeviceAction=tostring(act)",
+      "source | project-rename DeviceAction = act | project Ignored=tostring(x)",
     );
     expect(flow.renames).toEqual([{ dest: "DeviceAction", source: "act" }]);
   });

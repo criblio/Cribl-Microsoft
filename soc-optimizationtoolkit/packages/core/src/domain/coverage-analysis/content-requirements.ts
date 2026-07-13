@@ -107,6 +107,14 @@ export function deriveContentRequirements(
       transformationBaseColumns(kql, columns);
       for (const catchAll of CATCH_ALL_COLUMNS) {
         if (!kql.includes(catchAll)) continue;
+        // OPAQUE only when content PARSES the catch-all (live regression
+        // 2026-07-13: a workbook that merely projects AdditionalExtensions
+        // into a table view disabled dropping globally). A bare column
+        // reference renders whatever is there; parsing it without
+        // determinable keys is what dropping could silently break.
+        const parses = new RegExp(
+          `(?:parse_json|todynamic|extract(?:_all)?|parse_kv|split|mv-expand)\\s*\\(?[^)\\n]*${catchAll}`,
+        ).test(kql);
         let keysFound = 0;
         // extract(@"key=([^;]+)", 1, AdditionalExtensions) and friends:
         // scan every call/expression line that mentions the catch-all for
@@ -125,7 +133,7 @@ export function deriveContentRequirements(
           catchAllKeys.add((m[1] ?? m[2]).toLowerCase());
           keysFound++;
         }
-        if (keysFound === 0) opaqueCatchAll = true;
+        if (parses && keysFound === 0) opaqueCatchAll = true;
       }
     }
   }

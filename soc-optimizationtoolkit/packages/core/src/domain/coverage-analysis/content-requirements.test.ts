@@ -44,11 +44,20 @@ describe("deriveContentRequirements", () => {
     expect(req.opaqueCatchAll).toBe(false);
   });
 
-  it("flags opaque catch-all use (no determinable keys)", () => {
-    const req = deriveContentRequirements([
+  it("flags opaque use only when the catch-all is PARSED without keys", () => {
+    const parsed = deriveContentRequirements([
+      item([
+        "CommonSecurityLog\n| mv-expand parse_kv(AdditionalExtensions, dynamic([]))",
+      ]),
+    ]);
+    expect(parsed.opaqueCatchAll).toBe(true);
+    // A bare projection just renders the column - dropping stays available
+    // (live regression 2026-07-13: a display-only workbook reference
+    // disabled the drop action globally).
+    const displayed = deriveContentRequirements([
       item(["CommonSecurityLog\n| project AdditionalExtensions"]),
     ]);
-    expect(req.opaqueCatchAll).toBe(true);
+    expect(displayed.opaqueCatchAll).toBe(false);
   });
 
   it("counts items and stays empty for none", () => {
@@ -60,7 +69,7 @@ describe("mergeContentRequirements", () => {
   it("unions columns/keys and ORs the opaque flag", () => {
     const a = deriveContentRequirements([item(["T | project ColA"])]);
     const b = deriveContentRequirements([
-      item(["T | project ColB, AdditionalExtensions"]),
+      item(["T | extend x = parse_json(AdditionalExtensions)[tostring(k)] | project ColB"]),
     ]);
     const merged = mergeContentRequirements([a, b]);
     expect(merged.columns.has("cola")).toBe(true);

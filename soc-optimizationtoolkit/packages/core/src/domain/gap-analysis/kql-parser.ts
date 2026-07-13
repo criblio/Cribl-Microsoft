@@ -20,7 +20,6 @@
 
 import type { DcrFlow, ParsedDcr, TableRoutingInfo } from "./models";
 import type { VendorGapProfile } from "./vendor-profile";
-import { mineTransformFieldPairs } from "./transform-kql-mining";
 import { DEFAULT_GAP_PROFILE } from "./vendor-profile";
 
 // ---------------------------------------------------------------------------
@@ -99,17 +98,15 @@ export function parseTransformKql(
     }
   }
 
-  // Extract PROJECT-stage field pairs via THE shared miner (2026-07-12
-  // audit unification): a CCP DCR's projection map (`project
-  // IncidentId=incident_id, DeviceAction=tostring(act), ...`) is a set of
-  // DCR-side renames Cribl must not duplicate - previously invisible here
-  // while the pack generator mined it. project-rename stays with the
-  // verbatim legacy extraction above; the miner reads project only.
-  for (const pair of mineTransformFieldPairs(clean, ["project"])) {
-    if (RENAME_SKIP_NAMES.includes(pair.destName)) continue;
-    if (renames.some((r) => r.dest === pair.destName)) continue;
-    renames.push({ dest: pair.destName, source: pair.sourceName });
-  }
+  // PROJECT-stage pairs are deliberately NOT mined into renames (live
+  // regression 2026-07-13: Zscaler's CCP DCRs projected 20 phantom "DCR
+  // handles" into every analysis). A CCP DCR's projection map describes the
+  // SOLUTION'S Cloud NSS ingest path - this app deploys its own Kind:Direct
+  // DCR with no transform, so those renames are never "handled by the DCR"
+  // on our path. The pack generator still mines them via
+  // mineTransformFieldPairs (vendor-mapping knowledge); the runtime keeps
+  // the legacy project-rename + extend extraction only, which covers the
+  // function-app DCRs (CrowdStrike) the app can actually deploy.
 
   // Extract type coercions from extend blocks: field = tolong(field), etc.
   const typeConversions: Array<{ field: string; toType: string }> = [];
