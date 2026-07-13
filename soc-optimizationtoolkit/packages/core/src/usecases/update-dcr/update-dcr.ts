@@ -151,3 +151,246 @@ export async function updateDcrInPlace(
     provisioningState: state,
   };
 }
+
+// ---------------------------------------------------------------------------
+// Preview: current vs rebuilt schema, with the differences named
+// ---------------------------------------------------------------------------
+
+/** The named differences between two column sets. */
+export interface ColumnDiff {
+  added: LogAnalyticsColumn[];
+  removed: LogAnalyticsColumn[];
+  retyped: Array<{ name: string; from: string; to: string }>;
+  unchanged: number;
+}
+
+/** Diff two column lists by (case-insensitive) name. Pure. */
+export function diffColumns(
+  before: readonly LogAnalyticsColumn[],
+  after: readonly LogAnalyticsColumn[],
+): ColumnDiff {
+  const beforeByName = new Map(before.map((c) => [c.name.toLowerCase(), c]));
+  const afterByName = new Map(after.map((c) => [c.name.toLowerCase(), c]));
+  const added: LogAnalyticsColumn[] = [];
+  const retyped: Array<{ name: string; from: string; to: string }> = [];
+  let unchanged = 0;
+  for (const column of after) {
+    const prior = beforeByName.get(column.name.toLowerCase());
+    if (prior === undefined) {
+      added.push(column);
+    } else if (prior.type !== column.type) {
+      retyped.push({ name: column.name, from: prior.type, to: column.type });
+    } else {
+      unchanged++;
+    }
+  }
+  const removed = before.filter(
+    (c) => !afterByName.has(c.name.toLowerCase()),
+  );
+  return { added, removed, retyped, unchanged };
+}
+
+/** The before/after view of one DCR update (user request 2026-07-13). */
+export interface DcrUpdatePreview {
+  dcrName: string;
+  table: string;
+  /** The table's current Log Analytics schema columns. */
+  tableColumns: LogAnalyticsColumn[];
+  /** The DCR's CURRENT stream-declaration columns (before). */
+  currentDcrColumns: LogAnalyticsColumn[];
+  /** The stream-declaration columns an update would install (after). */
+  rebuiltDcrColumns: LogAnalyticsColumn[];
+  /** rebuilt vs current - what the update would change in the DCR. */
+  diff: ColumnDiff;
+}
+
+function declarationColumns(dcrBody: unknown): LogAnalyticsColumn[] {
+  const declarations = prop(prop(dcrBody, "properties"), "streamDeclarations");
+  if (typeof declarations !== "object" || declarations === null) return [];
+  // A Direct DCR carries ONE declaration; tolerate several by concatenating.
+  const out: LogAnalyticsColumn[] = [];
+  for (const declaration of Object.values(
+    declarations as Record<string, unknown>,
+  )) {
+    const columns = prop(declaration, "columns");
+    if (!Array.isArray(columns)) continue;
+    for (const column of columns) {
+      const name = prop(column, "name");
+      const type = prop(column, "type");
+      if (typeof name === "string" && typeof type === "string") {
+        out.push({ name, type });
+      }
+    }
+  }
+  return out;
+}
+
+/**
+ * Compute the before/after of updating a DCR from its table's current
+ * schema WITHOUT changing anything: the DCR's live stream declaration vs
+ * the declaration a rebuild would install, with the differences named.
+ */
+export async function previewDcrUpdate(
+  azure: AzureManagement,
+  input: UpdateDcrInput,
+): Promise<DcrUpdatePreview> {
+  const workspacePath =
+    `/subscriptions/${input.subscriptionId}` +
+    `/resourceGroups/${input.resourceGroup}` +
+    `/providers/Microsoft.OperationalInsights/workspaces/${input.workspaceName}`;
+  const isCustom = input.table.endsWith("_CL");
+
+  const dcrResponse = await azure.request({
+    method: "GET",
+    path:
+      `/subscriptions/${input.subscriptionId}` +
+      `/resourceGroups/${input.resourceGroup}` +
+      `/providers/Microsoft.Insights/dataCollectionRules/${input.dcrName}`,
+    apiVersion: "2023-03-11",
+  });
+  if (dcrResponse.status < 200 || dcrResponse.status >= 300) {
+    throw new Error(
+      `fetch DCR '${input.dcrName}': HTTP ${dcrResponse.status}`,
+    );
+  }
+  const currentDcrColumns = declarationColumns(dcrResponse.body);
+
+  const tableResponse = await azure.request({
+    method: "GET",
+    path: `${workspacePath}/tables/${input.table}`,
+    apiVersion: LOG_ANALYTICS_API_VERSION,
+  });
+  if (tableResponse.status < 200 || tableResponse.status >= 300) {
+    throw new Error(
+      `fetch schema for table '${input.table}': HTTP ${tableResponse.status}`,
+    );
+  }
+  const schema = prop(prop(tableResponse.body, "properties"), "schema");
+  const tableColumns = selectSchemaColumns(
+    {
+      columns: prop(schema, "columns") as LogAnalyticsColumn[] | undefined,
+      standardColumns: prop(schema, "standardColumns") as
+        | LogAnalyticsColumn[]
+        | undefined,
+    },
+    isCustom ? "custom" : "native",
+  );
+  if (tableColumns === null) {
+    throw new Error(
+      `table '${input.table}' has no usable column source in its schema response`,
+    );
+  }
+
+  const request = buildDirectDcrRequest({
+    table: input.table,
+    columns: tableColumns,
+    location: input.location,
+    workspaceResourceId: workspacePath,
+    dcrName: input.dcrName,
+    tableMode: isCustom ? "custom" : "native",
+  });
+  const rebuiltDcrColumns = declarationColumns(request.body);
+
+  return {
+    dcrName: input.dcrName,
+    table: input.table,
+    tableColumns,
+    currentDcrColumns,
+    rebuiltDcrColumns,
+    diff: diffColumns(currentDcrColumns, rebuiltDcrColumns),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Add a custom column to a custom (_CL) table
+// ---------------------------------------------------------------------------
+
+/** Column types the Log Analytics tables API accepts for custom columns. */
+export const CUSTOM_COLUMN_TYPES = [
+  "string",
+  "int",
+  "long",
+  "real",
+  "boolean",
+  "datetime",
+  "dynamic",
+] as const;
+
+/**
+ * Add one custom column to a CUSTOM (_CL) table. Native Azure table schemas
+ * are fixed - this throws for them with the reason. PATCHes only the schema
+ * columns (never plan/retention), then the caller re-previews and updates
+ * the DCR so the new column becomes ingestable.
+ */
+export async function addTableColumn(
+  azure: AzureManagement,
+  input: {
+    subscriptionId: string;
+    resourceGroup: string;
+    workspaceName: string;
+    table: string;
+    column: { name: string; type: string };
+  },
+): Promise<{ table: string; columnCount: number }> {
+  if (!input.table.endsWith("_CL")) {
+    throw new Error(
+      `'${input.table}' is a native Azure table - its schema is fixed. ` +
+        "Custom columns can only be added to custom (_CL) tables.",
+    );
+  }
+  const name = input.column.name.trim();
+  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) {
+    throw new Error(
+      `column name '${name}' is invalid - letters, digits, and underscores only, not starting with a digit`,
+    );
+  }
+  if (!(CUSTOM_COLUMN_TYPES as readonly string[]).includes(input.column.type)) {
+    throw new Error(
+      `column type '${input.column.type}' is not one of: ${CUSTOM_COLUMN_TYPES.join(", ")}`,
+    );
+  }
+
+  const tablePath =
+    `/subscriptions/${input.subscriptionId}` +
+    `/resourceGroups/${input.resourceGroup}` +
+    `/providers/Microsoft.OperationalInsights/workspaces/${input.workspaceName}` +
+    `/tables/${input.table}`;
+  const current = await azure.request({
+    method: "GET",
+    path: tablePath,
+    apiVersion: LOG_ANALYTICS_API_VERSION,
+  });
+  if (current.status < 200 || current.status >= 300) {
+    throw new Error(`fetch table '${input.table}': HTTP ${current.status}`);
+  }
+  const schema = prop(prop(current.body, "properties"), "schema");
+  const existing = (
+    Array.isArray(prop(schema, "columns"))
+      ? (prop(schema, "columns") as LogAnalyticsColumn[])
+      : []
+  ).filter((c) => typeof c?.name === "string");
+  const standard = Array.isArray(prop(schema, "standardColumns"))
+    ? (prop(schema, "standardColumns") as LogAnalyticsColumn[])
+    : [];
+  const taken = new Set(
+    [...existing, ...standard].map((c) => c.name.toLowerCase()),
+  );
+  if (taken.has(name.toLowerCase())) {
+    throw new Error(`column '${name}' already exists on '${input.table}'`);
+  }
+
+  const columns = [...existing.map((c) => ({ name: c.name, type: c.type })), { name, type: input.column.type }];
+  const patch = await azure.request({
+    method: "PATCH",
+    path: tablePath,
+    apiVersion: LOG_ANALYTICS_API_VERSION,
+    body: { properties: { schema: { name: input.table, columns } } },
+  });
+  if (patch.status < 200 || patch.status >= 300) {
+    throw new Error(
+      `add column to '${input.table}': HTTP ${patch.status} ` +
+        JSON.stringify(patch.body).slice(0, 300),
+    );
+  }
+  return { table: input.table, columnCount: columns.length };
+}

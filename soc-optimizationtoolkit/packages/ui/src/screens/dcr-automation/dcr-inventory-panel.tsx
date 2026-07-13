@@ -9,9 +9,20 @@
  */
 
 import { useCallback, useState } from "react";
-import { listDcrInventory, updateDcrInPlace } from "@soc/core";
-import type { DcrInventoryEntry } from "@soc/core";
+import {
+  CUSTOM_COLUMN_TYPES,
+  addTableColumn,
+  listDcrInventory,
+  previewDcrUpdate,
+  updateDcrInPlace,
+} from "@soc/core";
+import type { DcrInventoryEntry, DcrUpdatePreview } from "@soc/core";
 import { usePorts } from "../../ports-context";
+
+/** Render a column list compactly: "Name:type, Name:type". */
+function columnList(columns: ReadonlyArray<{ name: string; type: string }>): string {
+  return columns.map((c) => `${c.name}:${c.type}`).join(", ");
+}
 
 export function DcrInventoryPanel() {
   const { ports, config } = usePorts();
@@ -19,40 +30,118 @@ export function DcrInventoryPanel() {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
+  // The open preview (one at a time): before/after of updating that DCR
+  // from its table's current schema (user request 2026-07-13).
+  const [preview, setPreview] = useState<DcrUpdatePreview | null>(null);
+  const [previewLocation, setPreviewLocation] = useState("");
+  const [newColName, setNewColName] = useState("");
+  const [newColType, setNewColType] = useState("string");
 
   const scopeReady =
     config.subscriptionId !== "" && config.resourceGroup !== "";
 
-  // Per-row in-place update (user request 2026-07-13): rebuild the DCR body
-  // from the table's CURRENT schema and PUT it over the existing name (ARM
-  // upsert - the immutableId and connected clients keep working).
-  const update = useCallback(
+  const scope = useCallback(
+    () => ({
+      subscriptionId: config.subscriptionId,
+      resourceGroup: config.resourceGroup,
+      workspaceName: config.workspaceName,
+    }),
+    [config.subscriptionId, config.resourceGroup, config.workspaceName],
+  );
+
+  // Read-only before/after: the DCR's live declaration vs the declaration a
+  // rebuild from the table's current schema would install.
+  const openPreview = useCallback(
     async (entry: DcrInventoryEntry, table: string) => {
       setBusy(true);
       setError("");
       setNotice("");
       try {
-        const result = await updateDcrInPlace(ports.azure, {
-          subscriptionId: config.subscriptionId,
-          resourceGroup: config.resourceGroup,
-          workspaceName: config.workspaceName,
-          dcrName: entry.name,
-          table,
-          location: entry.location,
-        });
-        setNotice(
-          `Updated '${result.dcrName}' in place from the current ` +
-            `${result.table} schema (${result.columnCount} columns, ` +
-            `${result.provisioningState}).`,
+        setPreview(
+          await previewDcrUpdate(ports.azure, {
+            ...scope(),
+            dcrName: entry.name,
+            table,
+            location: entry.location,
+          }),
         );
+        setPreviewLocation(entry.location);
+        setNewColName("");
       } catch (err) {
         setError(err instanceof Error ? err.message : String(err));
+        setPreview(null);
       } finally {
         setBusy(false);
       }
     },
-    [ports.azure, config.subscriptionId, config.resourceGroup, config.workspaceName],
+    [ports.azure, scope],
   );
+
+  // Apply = the PUT-over-existing-name upsert, then re-preview so the panel
+  // shows the post-update state (before == after when in sync).
+  const applyUpdate = useCallback(async () => {
+    if (preview === null) return;
+    setBusy(true);
+    setError("");
+    setNotice("");
+    try {
+      const result = await updateDcrInPlace(ports.azure, {
+        ...scope(),
+        dcrName: preview.dcrName,
+        table: preview.table,
+        location: previewLocation,
+      });
+      setNotice(
+        `Updated '${result.dcrName}' in place (${result.columnCount} columns, ` +
+          `${result.provisioningState}).`,
+      );
+      setPreview(
+        await previewDcrUpdate(ports.azure, {
+          ...scope(),
+          dcrName: preview.dcrName,
+          table: preview.table,
+          location: previewLocation,
+        }),
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  }, [ports.azure, scope, preview, previewLocation]);
+
+  // Add a custom column to the (custom) table, then re-preview - the diff
+  // then shows the new column as an addition the DCR update would install.
+  const addColumn = useCallback(async () => {
+    if (preview === null || newColName.trim() === "") return;
+    setBusy(true);
+    setError("");
+    setNotice("");
+    try {
+      const result = await addTableColumn(ports.azure, {
+        ...scope(),
+        table: preview.table,
+        column: { name: newColName.trim(), type: newColType },
+      });
+      setNotice(
+        `Added '${newColName.trim()}' (${newColType}) to ${result.table} - ` +
+          "apply the update below to make the DCR accept it.",
+      );
+      setNewColName("");
+      setPreview(
+        await previewDcrUpdate(ports.azure, {
+          ...scope(),
+          dcrName: preview.dcrName,
+          table: preview.table,
+          location: previewLocation,
+        }),
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  }, [ports.azure, scope, preview, previewLocation, newColName, newColType]);
 
   const load = useCallback(async () => {
     setBusy(true);
@@ -138,11 +227,11 @@ export function DcrInventoryPanel() {
                           title={
                             config.workspaceName === ""
                               ? "Commit a workspace in the Azure target first."
-                              : `Rebuild from the current ${table} schema and overwrite this DCR.`
+                              : `Show the before/after of rebuilding this DCR from the current ${table} schema.`
                           }
-                          onClick={() => void update(e, table)}
+                          onClick={() => void openPreview(e, table)}
                         >
-                          {e.tables.length > 1 ? `Update (${table})` : "Update in place"}
+                          {e.tables.length > 1 ? `Preview (${table})` : "Preview update"}
                         </button>
                       ))
                     ) : (
@@ -158,6 +247,104 @@ export function DcrInventoryPanel() {
               ))}
             </tbody>
           </table>
+          {preview !== null && (
+            <div className="pack-card mapping-review-card">
+              <div className="pack-card-head mapping-review-card-head">
+                <span className="field-label">
+                  {preview.dcrName} - update preview ({preview.table})
+                </span>
+                <button
+                  className="gap-reset-button"
+                  onClick={() => setPreview(null)}
+                  disabled={busy}
+                >
+                  Close
+                </button>
+              </div>
+              <p className="field-hint">
+                Table schema (current): {preview.tableColumns.length} columns.
+              </p>
+              <p className="field-hint">
+                DCR declaration BEFORE: {preview.currentDcrColumns.length}{" "}
+                columns - {columnList(preview.currentDcrColumns) || "none"}
+              </p>
+              <p className="field-hint">
+                DCR declaration AFTER: {preview.rebuiltDcrColumns.length}{" "}
+                columns - {columnList(preview.rebuiltDcrColumns) || "none"}
+              </p>
+              {preview.diff.added.length === 0 &&
+              preview.diff.removed.length === 0 &&
+              preview.diff.retyped.length === 0 ? (
+                <p className="panel-desc">
+                  In sync - the DCR already matches the table schema
+                  ({preview.diff.unchanged} columns).
+                </p>
+              ) : (
+                <>
+                  {preview.diff.added.length > 0 && (
+                    <p className="panel-desc">
+                      Added by the update: {columnList(preview.diff.added)}
+                    </p>
+                  )}
+                  {preview.diff.removed.length > 0 && (
+                    <p className="panel-desc">
+                      Removed by the update: {columnList(preview.diff.removed)}
+                    </p>
+                  )}
+                  {preview.diff.retyped.length > 0 && (
+                    <p className="panel-desc">
+                      Retyped:{" "}
+                      {preview.diff.retyped
+                        .map((r) => `${r.name} (${r.from} to ${r.to})`)
+                        .join(", ")}
+                    </p>
+                  )}
+                </>
+              )}
+              {preview.table.endsWith("_CL") ? (
+                <div className="panel-controls">
+                  <input
+                    aria-label="New column name"
+                    placeholder="New column name"
+                    value={newColName}
+                    onChange={(ev) => setNewColName(ev.target.value)}
+                  />
+                  <select
+                    aria-label="New column type"
+                    value={newColType}
+                    onChange={(ev) => setNewColType(ev.target.value)}
+                  >
+                    {CUSTOM_COLUMN_TYPES.map((t) => (
+                      <option key={t} value={t}>
+                        {t}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    className="run-button"
+                    onClick={() => void addColumn()}
+                    disabled={busy || newColName.trim() === ""}
+                  >
+                    Add column to table
+                  </button>
+                </div>
+              ) : (
+                <p className="field-hint">
+                  Native Azure table - its schema is fixed, so no custom
+                  columns can be added here.
+                </p>
+              )}
+              <div className="panel-controls">
+                <button
+                  className="run-button"
+                  onClick={() => void applyUpdate()}
+                  disabled={busy}
+                >
+                  Apply update to {preview.dcrName}
+                </button>
+              </div>
+            </div>
+          )}
         </>
       )}
     </div>
