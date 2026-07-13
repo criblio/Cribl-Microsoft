@@ -230,3 +230,51 @@ describe("reduction rules resolution", () => {
     expect(plan.tables[0].reductionRules).toBeNull();
   });
 });
+
+describe("multi-log-type route discriminators (live flaw 2026-07-13)", () => {
+  it("gives each match-all table a filter from its unique sample fields", () => {
+    const plan = buildPipelinePlan({
+      solutionName: "Zscaler Internet",
+      packName: "zia",
+      tables: [
+        {
+          sentinelTable: "CommonSecurityLog",
+          logType: "web-BLOCKED",
+          sourceFormat: "cef",
+          passthroughFields: [
+            { name: "urlcategory", type: "string" },
+            { name: "act", type: "string" },
+          ],
+        },
+        {
+          sentinelTable: "CommonSecurityLog",
+          logType: "firewall",
+          sourceFormat: "cef",
+          passthroughFields: [
+            { name: "nwapp", type: "string" },
+            { name: "act", type: "string" },
+          ],
+        },
+      ],
+    });
+    expect(plan.tables[0].routeCondition).toContain("urlcategory !== undefined");
+    expect(plan.tables[0].routeCondition).toContain("urlcategory=");
+    expect(plan.tables[1].routeCondition).toContain("nwapp !== undefined");
+    // The shared field never discriminates.
+    expect(plan.tables[0].routeCondition).not.toContain("act !==");
+  });
+
+  it("keeps explicit routing conditions and single-table match-alls untouched", () => {
+    const single = buildPipelinePlan({
+      solutionName: "Acme",
+      packName: "acme",
+      tables: [
+        {
+          sentinelTable: "Acme_CL",
+          passthroughFields: [{ name: "a", type: "string" }],
+        },
+      ],
+    });
+    expect(single.tables[0].routeCondition).toBe("true");
+  });
+});

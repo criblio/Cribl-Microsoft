@@ -63,6 +63,47 @@ describe("paired routes + disable-swap", () => {
   });
 });
 
+describe("multi-log-type route order (live flaw 2026-07-13)", () => {
+  it("emits discriminated pairs FIRST and the match-all pair LAST", () => {
+    const plan = buildPipelinePlan({
+      solutionName: "Zscaler Internet",
+      packName: "zia",
+      tables: [
+        // The match-all table is declared FIRST - emission must reorder it
+        // behind the discriminated one or the final match-all route makes
+        // every later route unreachable.
+        { sentinelTable: "CommonSecurityLog", logType: "generic", reductionRules: null },
+        {
+          sentinelTable: "CommonSecurityLog",
+          logType: "firewall",
+          sourceFormat: "cef",
+          reductionRules: null,
+          routing: routing("sourcetype == 'zscalernss-fw'"),
+        },
+      ],
+    });
+    const yaml = generateRouteYml(plan);
+    const fwAt = yaml.indexOf("sourcetype == 'zscalernss-fw'");
+    const allAt = yaml.indexOf('filter: "true"');
+    expect(fwAt).toBeGreaterThan(-1);
+    expect(allAt).toBeGreaterThan(fwAt);
+    expect(yaml).not.toContain("WARNING");
+  });
+
+  it("warns in the header when several match-all pairs overlap", () => {
+    const plan = buildPipelinePlan({
+      solutionName: "Acme",
+      packName: "acme",
+      tables: [
+        { sentinelTable: "A_CL", logType: "a", reductionRules: null },
+        { sentinelTable: "B_CL", logType: "b", reductionRules: null },
+      ],
+    });
+    // No sample fields -> no discriminators -> two overlapping match-alls.
+    expect(generateRouteYml(plan)).toContain("WARNING: 2 log types");
+  });
+});
+
 describe("filter key contract (regression re-pointed at real code)", () => {
   it("route.yml uses filter: and never condition:", () => {
     const plan = buildPipelinePlan({

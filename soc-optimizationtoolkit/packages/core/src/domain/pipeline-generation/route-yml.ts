@@ -92,8 +92,17 @@ export function buildRouteEntries(
 
 /** Emit the full route.yml for a resolved {@link PipelinePlan}. */
 export function generateRouteYml(plan: PipelinePlan): string {
+  // Match-all pairs go LAST (live flaw 2026-07-13: a final match-all route
+  // emitted first made every later route unreachable). Discriminated pairs
+  // keep their relative order; at most one match-all is reachable, so any
+  // beyond the first get an honest warning comment.
+  const ordered = [...plan.tables].sort(
+    (a, b) =>
+      Number(a.routeCondition === "true") - Number(b.routeCondition === "true"),
+  );
+  const catchAlls = ordered.filter((t) => t.routeCondition === "true").length;
   const allRouteEntries: string[] = [];
-  for (const table of plan.tables) {
+  for (const table of ordered) {
     allRouteEntries.push(...buildRouteEntries(plan, table));
   }
 
@@ -105,6 +114,14 @@ export function generateRouteYml(plan: PipelinePlan): string {
     "#   1. Reduction + Transform (enabled): full pipeline with volume reduction",
     "#   2. Transform only (disabled): same pipeline without reduction",
     "# To skip reduction: disable the reduction route and enable the passthrough route.",
+    ...(catchAlls > 1
+      ? [
+          "#",
+          `# WARNING: ${catchAlls} log types have no distinguishing fields - their`,
+          "# match-all routes overlap and only the first receives events. Edit the",
+          "# filters below to separate them.",
+        ]
+      : []),
     "",
     "id: default",
     "groups: {}",

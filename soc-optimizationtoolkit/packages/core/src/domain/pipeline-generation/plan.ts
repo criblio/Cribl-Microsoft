@@ -53,6 +53,7 @@ import type {
   TablePlanInput,
 } from "./models";
 import { findReductionRules, type TableReductionRules } from "./reduction-rules";
+import { deriveRouteDiscriminator } from "./route-discriminator";
 import {
   destinationId,
   pipelineName,
@@ -254,6 +255,33 @@ export function buildPipelinePlan(
       provenance,
     };
   });
+
+  // Multi-log-type plans need DISCRIMINATING route filters (live flaw
+  // 2026-07-13: two match-all final routes left the second unreachable).
+  // Each match-all table gets a filter built from source fields unique to
+  // its log type; a table whose evidence cannot separate it keeps "true"
+  // and route.yml orders it last as the catch-all.
+  if (tables.length > 1) {
+    const sourceSets = tables.map(
+      (table) =>
+        new Set(
+          table.fields
+            .map((f) => f.source.toLowerCase())
+            .filter((s) => s !== ""),
+        ),
+    );
+    tables.forEach((table, i) => {
+      if (table.routeCondition !== "true") return;
+      const discriminator = deriveRouteDiscriminator(
+        table.fields.map((f) => f.source),
+        sourceSets.filter((_, j) => j !== i),
+        table.sourceFormat,
+      );
+      if (discriminator !== null) {
+        table.routeCondition = discriminator;
+      }
+    });
+  }
 
   return {
     solutionName: input.solutionName,
