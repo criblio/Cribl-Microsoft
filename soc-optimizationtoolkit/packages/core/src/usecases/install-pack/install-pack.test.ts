@@ -19,6 +19,13 @@ const CONFLICT: [number, string] = [
   500,
   '{"message":"MS-Sentinel conflicts with existing Pack MS-Sentinel"}',
 ];
+// A conflict naming a DIFFERENT pack - the live 2026-07-13 shape: a stray
+// from the id-guessing era blocks the reinstall while the expected id is
+// not installed at all.
+const STRAY_CONFLICT: [number, string] = [
+  500,
+  '{"message":"MS-Sentinel conflicts with existing Pack fi8Xk-Zscaler_Internet_Sentinel_1"}',
+];
 
 function transport(init: {
   posts: Array<[number, string]>;
@@ -84,6 +91,50 @@ describe("installViaConflictLadder", () => {
       { source: "src.crbl", id: "MS-Sentinel" },
       { source: "src.crbl", id: "MS-Sentinel" },
     ]);
+  });
+
+  it("deletes the NAMED conflicting stray and retries when the conflict names a different id", async () => {
+    // The expected id is not installed (PATCH/DELETE on it would fail); the
+    // blocker is the stray the server names. Delete THAT and retry.
+    const t = transport({
+      posts: [STRAY_CONFLICT, [200, installedBody()]],
+    });
+    const pack = await installViaConflictLadder("MS-Sentinel_1.0.0.crbl", "src.crbl", t);
+    expect(pack.id).toBe("MS-Sentinel");
+    expect(t.deletedIds).toEqual(["fi8Xk-Zscaler_Internet_Sentinel_1"]);
+    expect(t.upgradedIds).toEqual([]);
+  });
+
+  it("clears SEVERAL accumulated strays, bounded", async () => {
+    const stray2: [number, string] = [
+      500,
+      '{"message":"MS-Sentinel conflicts with existing Pack qZ2p-Zscaler_Internet_Sentinel_1"}',
+    ];
+    const t = transport({
+      posts: [STRAY_CONFLICT, stray2, [200, installedBody()]],
+    });
+    const pack = await installViaConflictLadder("MS-Sentinel_1.0.0.crbl", "src.crbl", t);
+    expect(pack.id).toBe("MS-Sentinel");
+    expect(t.deletedIds).toEqual([
+      "fi8Xk-Zscaler_Internet_Sentinel_1",
+      "qZ2p-Zscaler_Internet_Sentinel_1",
+    ]);
+  });
+
+  it("reports the conflict message AND the failed stray delete in the final error", async () => {
+    // Stray delete refused -> the remaining rungs run and every failure is
+    // in the final error: the raw conflict, the stray refusal, the upgrade
+    // failure, the expected-id delete refusal.
+    const t = transport({
+      posts: [STRAY_CONFLICT, STRAY_CONFLICT],
+      del: [500, '{"message":"failed to uninstall: in use"}'],
+      upgrade: [500, "failed to upgrade: Pack is not currently installed"],
+    });
+    await expect(
+      installViaConflictLadder("MS-Sentinel_1.0.0.crbl", "src.crbl", t),
+    ).rejects.toThrow(
+      /conflict: .*fi8Xk-Zscaler_Internet_Sentinel_1.*conflicting pack 'fi8Xk-Zscaler_Internet_Sentinel_1' could not be deleted: HTTP 500.*upgrade attempt.*not currently installed/,
+    );
   });
 
   it("backfills the PINNED id when the install response omits the pack summary", async () => {

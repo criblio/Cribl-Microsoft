@@ -20,8 +20,12 @@
  *
  * The ladder, in order:
  *   1. POST {source, id}              - the plain install, id pinned.
- *   2. PATCH /packs/{id} {source}    - on conflict: the documented upgrade.
- *   3. DELETE /packs/{id} + POST     - last resort; the DELETE's status and
+ *   2. Delete the NAMED conflicting pack + retry (bounded) - the conflict
+ *      message names the blocking pack, which can be a stray under a
+ *      DIFFERENT id (live 2026-07-13: strays from the id-guessing era
+ *      blocked every reinstall while the expected id "did not exist").
+ *   3. PATCH /packs/{id} {source}    - the documented upgrade.
+ *   4. DELETE /packs/{id} + POST     - last resort; the DELETE's status and
  *      body are CAPTURED and reported, never swallowed.
  * Whatever rung succeeds, a returned pack id must MATCH the requested one
  * (sanitize-tolerant compare) - a server-side rename is deleted and reported
@@ -74,6 +78,30 @@ export async function installViaConflictLadder(
   const installBody = { source, id: expectedId };
   let outcome = interpretInstallResponse(...(await transport.post(installBody)));
 
+  // Rung 2: the conflict message NAMES the blocking pack. When that is a
+  // DIFFERENT id than ours, it is a stray copy of this very pack (Cribl
+  // matches on content, not id - live 2026-07-13: id-guessed strays blocked
+  // every reinstall while the expected id "did not exist"). Delete the named
+  // stray and retry; bounded, because several strays can accumulate.
+  let strayDetail = "";
+  for (
+    let attempt = 0;
+    attempt < 3 &&
+    outcome.kind === "conflict" &&
+    outcome.conflictingPackId !== undefined &&
+    !samePackId(outcome.conflictingPackId, expectedId);
+    attempt++
+  ) {
+    const strayId = outcome.conflictingPackId;
+    const [delStatus, delBody] = await transport.deletePack(strayId);
+    if (delStatus < 200 || delStatus >= 300) {
+      strayDetail += ` (conflicting pack '${strayId}' could not be deleted: HTTP ${delStatus} ${delBody.slice(0, 120)})`;
+      break;
+    }
+    strayDetail += ` (deleted conflicting stray pack '${strayId}')`;
+    outcome = interpretInstallResponse(...(await transport.post(installBody)));
+  }
+
   let upgradeDetail = "";
   let deleteDetail = "";
   if (outcome.kind === "conflict") {
@@ -101,7 +129,8 @@ export async function installViaConflictLadder(
   if (outcome.kind !== "installed") {
     throw new Error(
       outcome.kind === "conflict"
-        ? `Pack install still conflicts after upgrade and delete-and-retry${upgradeDetail}${deleteDetail}`
+        ? `Pack install still conflicts after upgrade and delete-and-retry` +
+          ` (conflict: ${outcome.detail})${strayDetail}${upgradeDetail}${deleteDetail}`
         : outcome.error,
     );
   }

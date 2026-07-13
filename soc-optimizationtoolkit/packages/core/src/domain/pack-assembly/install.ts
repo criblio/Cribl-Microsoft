@@ -102,7 +102,14 @@ export interface InstalledPack {
 /** Outcome of interpreting the install (POST) response. */
 export type InstallOutcome =
   | { kind: "installed"; pack: InstalledPack }
-  | { kind: "conflict" }
+  | {
+      kind: "conflict";
+      /** The raw conflict message (trimmed) - never discarded (live
+       * 2026-07-13: the blind conflict path hid which pack was blocking). */
+      detail: string;
+      /** The pack id the server NAMED as conflicting, when parseable. */
+      conflictingPackId?: string;
+    }
   | { kind: "error"; error: string };
 
 function firstItem(body: string): Record<string, unknown> {
@@ -132,7 +139,18 @@ export function interpretInstallResponse(status: number, body: string): InstallO
     };
   }
   if (status === 500 && body.includes("conflicts with existing Pack")) {
-    return { kind: "conflict" };
+    // The message usually NAMES the blocking pack ("... conflicts with
+    // existing Pack <id>") - a stray from an earlier failed install can
+    // carry a different id than ours (server-derived from the randomized
+    // upload filename), so the named id is the only way to find it.
+    const named = body.match(
+      /conflicts with existing Pack:?\s*["']?([A-Za-z0-9][A-Za-z0-9_.-]*)/,
+    );
+    return {
+      kind: "conflict",
+      detail: body.slice(0, 300),
+      ...(named !== null ? { conflictingPackId: named[1] } : {}),
+    };
   }
   return { kind: "error", error: `Install failed (${status}): ${body.slice(0, 200)}` };
 }

@@ -50,8 +50,24 @@ describe("install response interpretation", () => {
     expect(out).toEqual({ kind: "installed", pack: { id: "p", displayName: "Palo", version: "1.0.0" } });
   });
 
-  it("detects the duplicate-conflict signal (500 + message)", () => {
-    expect(interpretInstallResponse(500, "pack conflicts with existing Pack foo")).toEqual({ kind: "conflict" });
+  it("detects the duplicate-conflict signal (500 + message) and NAMES the blocking pack", () => {
+    expect(interpretInstallResponse(500, "pack conflicts with existing Pack foo")).toEqual({
+      kind: "conflict",
+      detail: "pack conflicts with existing Pack foo",
+      conflictingPackId: "foo",
+    });
+    // JSON body with a quoted id (the live shape) still yields the name.
+    expect(
+      interpretInstallResponse(
+        500,
+        '{"status":"error","message":"MS conflicts with existing Pack \'fi8Xk-Zscaler_Internet_Sentinel_1\'"}',
+      ),
+    ).toMatchObject({ conflictingPackId: "fi8Xk-Zscaler_Internet_Sentinel_1" });
+    // A message that names nothing stays a conflict without a parsed id.
+    expect(interpretInstallResponse(500, "conflicts with existing Pack")).toEqual({
+      kind: "conflict",
+      detail: "conflicts with existing Pack",
+    });
   });
 
   it("returns error for other non-2xx responses", () => {
