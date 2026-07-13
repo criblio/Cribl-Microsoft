@@ -4156,3 +4156,49 @@ details[open] > summary::before {
 .numbered-section-collapsed .numbered-section-head {
   margin-bottom: 0;
 }
+
+/* DCR update preview chips (2026-07-13): color-coded columns - changes
+   first, unchanged collapsed. Backgrounds are translucent so both themes
+   keep contrast; the border carries the status color. */
+.dcr-chip-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 8px 0;
+}
+.dcr-chip-legend {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.dcr-col-chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  border: 1px solid var(--border, #33415c);
+  font-size: 0.78rem;
+  color: var(--text, #dbe4f0);
+  background: rgba(128, 128, 128, 0.08);
+}
+.dcr-col-type {
+  font-size: 0.7rem;
+  color: var(--text-dim, #8b9cb8);
+}
+.dcr-col-added {
+  border-color: #2e9e5b;
+  background: rgba(46, 158, 91, 0.14);
+}
+.dcr-col-removed {
+  border-color: #c04a4a;
+  background: rgba(192, 74, 74, 0.14);
+  text-decoration: line-through;
+}
+.dcr-col-retyped {
+  border-color: #c98a2b;
+  background: rgba(201, 138, 43, 0.14);
+}
+.dcr-col-unchanged {
+  opacity: 0.75;
+}

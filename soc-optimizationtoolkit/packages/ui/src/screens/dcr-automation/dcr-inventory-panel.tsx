@@ -18,11 +18,7 @@ import {
 } from "@soc/core";
 import type { DcrInventoryEntry, DcrUpdatePreview } from "@soc/core";
 import { usePorts } from "../../ports-context";
-
-/** Render a column list compactly: "Name:type, Name:type". */
-function columnList(columns: ReadonlyArray<{ name: string; type: string }>): string {
-  return columns.map((c) => `${c.name}:${c.type}`).join(", ");
-}
+import { mergePreviewColumns, summarizePreview } from "./dcr-inventory-state";
 
 export function DcrInventoryPanel() {
   const { ports, config } = usePorts();
@@ -36,6 +32,9 @@ export function DcrInventoryPanel() {
   const [previewLocation, setPreviewLocation] = useState("");
   const [newColName, setNewColName] = useState("");
   const [newColType, setNewColType] = useState("string");
+  // Unchanged columns are collapsed by default - 150+ identical chips add
+  // nothing to the decision (user feedback 2026-07-13).
+  const [showUnchanged, setShowUnchanged] = useState(false);
 
   const scopeReady =
     config.subscriptionId !== "" && config.resourceGroup !== "";
@@ -261,46 +260,65 @@ export function DcrInventoryPanel() {
                   Close
                 </button>
               </div>
-              <p className="field-hint">
-                Table schema (current): {preview.tableColumns.length} columns.
-              </p>
-              <p className="field-hint">
-                DCR declaration BEFORE: {preview.currentDcrColumns.length}{" "}
-                columns - {columnList(preview.currentDcrColumns) || "none"}
-              </p>
-              <p className="field-hint">
-                DCR declaration AFTER: {preview.rebuiltDcrColumns.length}{" "}
-                columns - {columnList(preview.rebuiltDcrColumns) || "none"}
-              </p>
-              {preview.diff.added.length === 0 &&
-              preview.diff.removed.length === 0 &&
-              preview.diff.retyped.length === 0 ? (
-                <p className="panel-desc">
-                  In sync - the DCR already matches the table schema
-                  ({preview.diff.unchanged} columns).
-                </p>
-              ) : (
-                <>
-                  {preview.diff.added.length > 0 && (
-                    <p className="panel-desc">
-                      Added by the update: {columnList(preview.diff.added)}
-                    </p>
-                  )}
-                  {preview.diff.removed.length > 0 && (
-                    <p className="panel-desc">
-                      Removed by the update: {columnList(preview.diff.removed)}
-                    </p>
-                  )}
-                  {preview.diff.retyped.length > 0 && (
-                    <p className="panel-desc">
-                      Retyped:{" "}
-                      {preview.diff.retyped
-                        .map((r) => `${r.name} (${r.from} to ${r.to})`)
-                        .join(", ")}
-                    </p>
-                  )}
-                </>
-              )}
+              <p className="panel-desc">{summarizePreview(preview)}</p>
+              {(() => {
+                const chips = mergePreviewColumns(preview);
+                const changed = chips.filter((c) => c.status !== "unchanged");
+                const unchanged = chips.filter((c) => c.status === "unchanged");
+                return (
+                  <>
+                    {changed.length > 0 && (
+                      <p className="field-hint dcr-chip-legend">
+                        <span className="dcr-col-chip dcr-col-added">added</span>
+                        <span className="dcr-col-chip dcr-col-removed">removed</span>
+                        <span className="dcr-col-chip dcr-col-retyped">retyped</span>
+                        <span className="dcr-col-chip dcr-col-unchanged">unchanged</span>
+                      </p>
+                    )}
+                    <div className="dcr-chip-grid">
+                      {changed.map((c) => (
+                        <span
+                          key={`${c.status}-${c.name}`}
+                          className={`dcr-col-chip dcr-col-${c.status}`}
+                          title={
+                            c.status === "retyped"
+                              ? `${c.name}: ${c.fromType} becomes ${c.type}`
+                              : `${c.name} (${c.type}) - ${c.status} by this update`
+                          }
+                        >
+                          {c.name}
+                          <span className="dcr-col-type">
+                            {c.status === "retyped"
+                              ? `${c.fromType} to ${c.type}`
+                              : c.type}
+                          </span>
+                        </span>
+                      ))}
+                      {showUnchanged &&
+                        unchanged.map((c) => (
+                          <span
+                            key={`u-${c.name}`}
+                            className="dcr-col-chip dcr-col-unchanged"
+                            title={`${c.name} (${c.type}) - unchanged`}
+                          >
+                            {c.name}
+                            <span className="dcr-col-type">{c.type}</span>
+                          </span>
+                        ))}
+                    </div>
+                    {unchanged.length > 0 && (
+                      <button
+                        className="gap-reset-button"
+                        onClick={() => setShowUnchanged((v) => !v)}
+                      >
+                        {showUnchanged
+                          ? "Hide unchanged columns"
+                          : `Show ${unchanged.length} unchanged column${unchanged.length === 1 ? "" : "s"}`}
+                      </button>
+                    )}
+                  </>
+                );
+              })()}
               {preview.table.endsWith("_CL") ? (
                 <div className="panel-controls">
                   <input
