@@ -76,6 +76,16 @@ export interface PackInventoryScreenProps {
 
 export function PackInventoryScreen({ refreshToken = 0 }: PackInventoryScreenProps) {
   const { ports } = usePorts();
+  // Every button narrates to the Logs page (user request 2026-07-13).
+  const logger = ports.logger;
+  const logInfo = useCallback(
+    (line: string) => logger?.info(`pack-maintenance: ${line}`),
+    [logger],
+  );
+  const logError = useCallback(
+    (line: string) => logger?.error(`pack-maintenance: ${line}`),
+    [logger],
+  );
   const packStore = ports.packs;
   const packInstall = ports.packInstall;
 
@@ -145,6 +155,7 @@ export function PackInventoryScreen({ refreshToken = 0 }: PackInventoryScreenPro
       }
       setError("");
       setNotice("");
+      logInfo(`downloading ${pack.record.crblFileName}`);
       try {
         const bytes = packBytes(pack);
         await ports.artifacts.save(
@@ -152,12 +163,14 @@ export function PackInventoryScreen({ refreshToken = 0 }: PackInventoryScreenPro
           "application/octet-stream",
           bytes,
         );
+        logInfo(`download dispatched (${pack.record.crblFileName}, ${bytes.length} bytes)`);
         setNotice(`Download dispatched (${pack.record.crblFileName}).`);
       } catch (err) {
+        logError(`download of ${pack.record.crblFileName} failed: ${String(err)}`);
         setError(`Download failed: ${String(err)}`);
       }
     },
-    [findPack, ports.artifacts],
+    [findPack, ports.artifacts, logInfo, logError],
   );
 
   const remove = useCallback(
@@ -175,17 +188,20 @@ export function PackInventoryScreen({ refreshToken = 0 }: PackInventoryScreenPro
       setBusy(true);
       setError("");
       setNotice("");
+      logInfo(`deleting build record ${id}`);
       try {
         await packStore.delete(id);
+        logInfo(`deleted build record ${id}`);
         setNotice(`Deleted build ${id}.`);
         await load();
       } catch (err) {
+        logError(`delete of build record ${id} failed: ${String(err)}`);
         setError(`Delete failed: ${String(err)}`);
       } finally {
         setBusy(false);
       }
     },
-    [packStore, packs, load],
+    [packStore, packs, load, logInfo, logError],
   );
 
   // ---- Pack maintenance (user request 2026-07-13): reconstruct the pack's
@@ -219,6 +235,9 @@ export function PackInventoryScreen({ refreshToken = 0 }: PackInventoryScreenPro
       setBusy(true);
       setError("");
       setNotice("");
+      logInfo(
+        `rebuilding '${pack.record.packName}' with ${maintEdits.size} mapping edit(s)`,
+      );
       try {
         // Next version: above the highest INSTALLED copy and this record.
         const version = nextPackVersion([
@@ -239,16 +258,21 @@ export function PackInventoryScreen({ refreshToken = 0 }: PackInventoryScreenPro
           }),
           definition: nextDef,
         });
+        logInfo(
+          `assembled ${assembled.crblFileName} (${assembled.crbl.length} bytes), record saved`,
+        );
         if (packInstall !== undefined && selectedGroup !== "") {
           const installed = await packInstall.install(
             selectedGroup,
             assembled.crblFileName,
             assembled.crbl,
           );
+          logInfo(`rebuilt v${version} and installed '${installed.id}' on ${selectedGroup}`);
           setNotice(
             `Rebuilt v${version} and installed '${installed.id}' on ${selectedGroup}.`,
           );
         } else {
+          logInfo(`rebuilt v${version} - record saved, no group selected`);
           setNotice(
             `Rebuilt v${version} - record saved. Select a worker group to install.`,
           );
@@ -257,12 +281,13 @@ export function PackInventoryScreen({ refreshToken = 0 }: PackInventoryScreenPro
         setMaintEdits(new Map());
         await load();
       } catch (err) {
+        logError(`rebuild of '${pack.record.packName}' failed: ${String(err)}`);
         setError(`Rebuild failed: ${String(err)}`);
       } finally {
         setBusy(false);
       }
     },
-    [findPack, packStore, snapshot, maintEdits, packInstall, selectedGroup, load],
+    [findPack, packStore, snapshot, maintEdits, packInstall, selectedGroup, load, logInfo, logError],
   );
 
   const install = useCallback(
@@ -278,21 +303,24 @@ export function PackInventoryScreen({ refreshToken = 0 }: PackInventoryScreenPro
       setBusy(true);
       setError("");
       setNotice("");
+      logInfo(`installing ${pack.record.crblFileName} to ${selectedGroup}`);
       try {
         const installed = await packInstall.install(
           selectedGroup,
           pack.record.crblFileName,
           packBytes(pack),
         );
+        logInfo(`installed '${installed.id}' on ${selectedGroup}`);
         setNotice(`Installed '${installed.id}' on ${selectedGroup}.`);
         await load();
       } catch (err) {
+        logError(`install of ${pack.record.crblFileName} to ${selectedGroup} failed: ${String(err)}`);
         setError(`Install failed: ${String(err)}`);
       } finally {
         setBusy(false);
       }
     },
-    [packInstall, selectedGroup, findPack, load],
+    [packInstall, selectedGroup, findPack, load, logInfo, logError],
   );
 
   if (packStore === undefined) {

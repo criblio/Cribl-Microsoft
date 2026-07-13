@@ -24,6 +24,16 @@ import { mergePreviewColumns, summarizePreview } from "./dcr-inventory-state";
 
 export function DcrInventoryPanel() {
   const { ports, config } = usePorts();
+  // Every button narrates to the Logs page (user request 2026-07-13).
+  const logger = ports.logger;
+  const logInfo = useCallback(
+    (line: string) => logger?.info(`dcr-inventory: ${line}`),
+    [logger],
+  );
+  const logError = useCallback(
+    (line: string) => logger?.error(`dcr-inventory: ${line}`),
+    [logger],
+  );
   const [entries, setEntries] = useState<DcrInventoryEntry[] | null>(null);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -91,27 +101,30 @@ export function DcrInventoryPanel() {
       setBusy(true);
       setError("");
       setNotice("");
+      logInfo(`previewing update of '${entry.name}' from table ${table}`);
       try {
-        setPreview(
-          await previewDcrUpdate(ports.azure, {
-            ...scope(),
-            dcrName: entry.name,
-            table,
-            location: entry.location,
-            dceResourceId: entry.dataCollectionEndpointId || undefined,
-          }),
-        );
+        const next = await previewDcrUpdate(ports.azure, {
+          ...scope(),
+          dcrName: entry.name,
+          table,
+          location: entry.location,
+          dceResourceId: entry.dataCollectionEndpointId || undefined,
+        });
+        setPreview(next);
+        logInfo(`preview of '${entry.name}': ${summarizePreview(next)}`);
         setPreviewLocation(entry.location);
         setPreviewDce(entry.dataCollectionEndpointId);
         setNewColName("");
       } catch (err) {
-        setError(err instanceof Error ? err.message : String(err));
+        const message = err instanceof Error ? err.message : String(err);
+        logError(`preview of '${entry.name}' failed: ${message}`);
+        setError(message);
         setPreview(null);
       } finally {
         setBusy(false);
       }
     },
-    [ports.azure, scope],
+    [ports.azure, scope, logInfo, logError],
   );
 
   // Apply = the PUT-over-existing-name upsert, then re-preview so the panel
@@ -121,6 +134,7 @@ export function DcrInventoryPanel() {
     setBusy(true);
     setError("");
     setNotice("");
+    logInfo(`updating '${preview.dcrName}' in place from table ${preview.table}`);
     try {
       const result = await updateDcrInPlace(ports.azure, {
         ...scope(),
@@ -129,6 +143,9 @@ export function DcrInventoryPanel() {
         location: previewLocation,
         dceResourceId: previewDce || undefined,
       });
+      logInfo(
+        `updated '${result.dcrName}' in place (${result.columnCount} columns, ${result.provisioningState})`,
+      );
       setNotice(
         `Updated '${result.dcrName}' in place (${result.columnCount} columns, ` +
           `${result.provisioningState}).`,
@@ -143,11 +160,13 @@ export function DcrInventoryPanel() {
         }),
       );
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      const message = err instanceof Error ? err.message : String(err);
+      logError(`update of '${preview.dcrName}' failed: ${message}`);
+      setError(message);
     } finally {
       setBusy(false);
     }
-  }, [ports.azure, scope, preview, previewLocation, previewDce]);
+  }, [ports.azure, scope, preview, previewLocation, previewDce, logInfo, logError]);
 
   // Add a custom column to the (custom) table AND apply the DCR update in
   // one action (user request 2026-07-13: "add a new field to the DCR and
@@ -160,6 +179,9 @@ export function DcrInventoryPanel() {
     setBusy(true);
     setError("");
     setNotice("");
+    logInfo(
+      `adding field '${columnName}' (${newColType}) to ${preview.table} and updating '${preview.dcrName}'`,
+    );
     try {
       const added = await addTableColumn(ports.azure, {
         ...scope(),
@@ -179,10 +201,18 @@ export function DcrInventoryPanel() {
         });
       } catch (err) {
         dcrUpdated = false;
+        logError(
+          `column '${columnName}' added to ${preview.table} but the DCR update failed: ${err instanceof Error ? err.message : String(err)}`,
+        );
         setError(
           `Column added to ${preview.table}, but the DCR update failed: ` +
             `${err instanceof Error ? err.message : String(err)} - ` +
             "use Apply update below to retry.",
+        );
+      }
+      if (dcrUpdated) {
+        logInfo(
+          `added '${finalName}' (${newColType}) to ${preview.table} and updated '${preview.dcrName}'`,
         );
       }
       setNotice(
@@ -202,30 +232,35 @@ export function DcrInventoryPanel() {
         }),
       );
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      const message = err instanceof Error ? err.message : String(err);
+      logError(`add field '${columnName}' to ${preview.table} failed: ${message}`);
+      setError(message);
     } finally {
       setBusy(false);
     }
-  }, [ports.azure, scope, preview, previewLocation, previewDce, newColName, newColType]);
+  }, [ports.azure, scope, preview, previewLocation, previewDce, newColName, newColType, logInfo, logError]);
 
   const load = useCallback(async () => {
     setBusy(true);
     setError("");
     setPreview(null);
+    logInfo(`listing DCRs in resource group '${inventoryRg}'`);
     try {
-      setEntries(
-        await listDcrInventory(ports.azure, {
-          subscriptionId: config.subscriptionId,
-          resourceGroup: inventoryRg,
-        }),
-      );
+      const listed = await listDcrInventory(ports.azure, {
+        subscriptionId: config.subscriptionId,
+        resourceGroup: inventoryRg,
+      });
+      setEntries(listed);
+      logInfo(`found ${listed.length} DCR(s) in '${inventoryRg}'`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      const message = err instanceof Error ? err.message : String(err);
+      logError(`listing DCRs in '${inventoryRg}' failed: ${message}`);
+      setError(message);
       setEntries(null);
     } finally {
       setBusy(false);
     }
-  }, [ports.azure, config.subscriptionId, inventoryRg]);
+  }, [ports.azure, config.subscriptionId, inventoryRg, logInfo, logError]);
 
   if (!scopeReady) {
     return (
@@ -267,8 +302,8 @@ export function DcrInventoryPanel() {
           </span>
         )}
       </div>
-      {error !== "" && <pre className="result">{error}</pre>}
-      {notice !== "" && <p className="panel-desc">{notice}</p>}
+      {preview === null && error !== "" && <pre className="result">{error}</pre>}
+      {preview === null && notice !== "" && <p className="panel-desc">{notice}</p>}
       {entries !== null && entries.length === 0 && (
         <p className="panel-desc">No Data Collection Rules in this resource group.</p>
       )}
@@ -362,6 +397,8 @@ export function DcrInventoryPanel() {
                   Close
                 </button>
               </div>
+              {error !== "" && <pre className="result">{error}</pre>}
+              {notice !== "" && <p className="panel-desc">{notice}</p>}
               <p className="panel-desc">{summarizePreview(preview)}</p>
               {(() => {
                 const chips = mergePreviewColumns(preview);
