@@ -73,12 +73,27 @@ async function pathExists(filePath) {
  * @param {string} srcDir - directory (relative to cwd) whose contents are packed
  */
 async function tarToFile(cwd, outPath, srcDir) {
-  const relOut = (relative(cwd, outPath) || outPath).replace(/\\/g, '/');
+  // Run tar FROM INSIDE the staging dir with a colon-free RELATIVE output
+  // path and no -C at all (live 2026-07-13 diagnosis, two failure modes on
+  // Windows): GNU tar treats a colon in any path as remote-host syntax
+  // ("Cannot connect to C: resolve failed"), and its -C resolution differed
+  // between launch contexts ("package-build: Cannot open"). Same-drive
+  // relative paths sidestep both, on GNU tar and bsdtar alike. The
+  // pre-check turns a missing staging dir into a diagnosable stderr.
+  const absSrc = join(cwd, srcDir);
+  if (!(await pathExists(absSrc))) {
+    return { code: 2, stderr: `tarToFile: staging dir missing: ${absSrc}` };
+  }
+  const relOut = relative(absSrc, outPath).replace(/\\/g, '/');
   return new Promise((resolve, reject) => {
-    const child = spawn('tar', ['-czf', relOut, '-C', srcDir, '.'], {
-      cwd,
-      stdio: ['ignore', 'ignore', 'pipe'],
-    });
+    const child = spawn(
+      'tar',
+      ['-czf', relOut, '--exclude', relOut, '.'],
+      {
+        cwd: absSrc,
+        stdio: ['ignore', 'ignore', 'pipe'],
+      },
+    );
     let stderr = '';
     child.stderr?.setEncoding('utf8');
     child.stderr?.on('data', (chunk) => {
