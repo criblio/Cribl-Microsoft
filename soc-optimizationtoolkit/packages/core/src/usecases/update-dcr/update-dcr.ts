@@ -358,25 +358,39 @@ export async function previewDcrUpdate(
 }
 
 // ---------------------------------------------------------------------------
-// Add a custom column to a custom (_CL) table
+// Add a custom column to a table
 // ---------------------------------------------------------------------------
 
-/** Column types the Log Analytics tables API accepts for custom columns. */
+/**
+ * The tables API version for SCHEMA EDITS. Deliberately newer than the
+ * schema-read version (research 2026-07-13): the 2023-09-01 reference
+ * documents adding custom columns to built-in Microsoft tables, and
+ * CommonSecurityLog went through a 2023 schema migration - edits against
+ * the older 2022-10-01 version returned opaque InternalServerErrors.
+ */
+export const TABLES_EDIT_API_VERSION = "2023-09-01";
+
+/**
+ * Column types the Log Analytics tables API accepts for custom columns
+ * (ColumnTypeEnum in the 2023-09-01 reference - note dateTime's casing).
+ */
 export const CUSTOM_COLUMN_TYPES = [
   "string",
   "int",
   "long",
   "real",
   "boolean",
-  "datetime",
+  "dateTime",
   "dynamic",
 ] as const;
 
 /**
- * Add one custom column to a CUSTOM (_CL) table. Native Azure table schemas
- * are fixed - this throws for them with the reason. PATCHes only the schema
- * columns (never plan/retention), then the caller re-previews and updates
- * the DCR so the new column becomes ingestable.
+ * Add one custom column to a table. Custom (_CL) tables take any valid
+ * name; built-in Azure tables require the _CF suffix (appended
+ * automatically). PATCHes only the schema columns (never plan/retention),
+ * handling the 202 long-running response by polling the table's
+ * provisioningState; the caller then re-previews and updates the DCR so
+ * the new column becomes ingestable.
  */
 export async function addTableColumn(
   azure: AzureManagement,
@@ -386,6 +400,8 @@ export async function addTableColumn(
     workspaceName: string;
     table: string;
     column: { name: string; type: string };
+    /** Poll attempts for a 202 long-running schema update (default 5). */
+    maxPollAttempts?: number;
   },
 ): Promise<{ table: string; columnName: string; columnCount: number }> {
   // Native tables DO accept custom columns (user correction 2026-07-13) -
@@ -415,7 +431,7 @@ export async function addTableColumn(
   const current = await azure.request({
     method: "GET",
     path: tablePath,
-    apiVersion: LOG_ANALYTICS_API_VERSION,
+    apiVersion: TABLES_EDIT_API_VERSION,
   });
   if (current.status < 200 || current.status >= 300) {
     throw new Error(`fetch table '${input.table}': HTTP ${current.status}`);
@@ -440,24 +456,49 @@ export async function addTableColumn(
   const patch = await azure.request({
     method: "PATCH",
     path: tablePath,
-    apiVersion: LOG_ANALYTICS_API_VERSION,
+    apiVersion: TABLES_EDIT_API_VERSION,
     body: { properties: { schema: { name: input.table, columns } } },
   });
   if (patch.status < 200 || patch.status >= 300) {
-    // Azure rejects schema changes on SOME built-in tables with an opaque
-    // InternalServerError (live 2026-07-13: CommonSecurityLog) - the
-    // security-solution tables do not accept custom columns.
+    // The portal's Edit schema succeeds on built-in tables (research
+    // 2026-07-13), so a rejection here is either a table lock
+    // (provisioningState Updating) or a genuinely restricted table -
+    // Azure reports both as opaque errors.
     const nativeHint = !isCustomTable
-      ? " - note: some built-in tables, notably the security tables" +
-        " (CommonSecurityLog, SecurityEvent), do not accept custom columns;" +
-        " use the table's DeviceCustom*/FlexString fields or a custom (_CL)" +
-        " side table instead"
+      ? " - the table may be locked by an in-progress schema operation" +
+        " (retry shortly) or restricted; the table's DeviceCustom*/Flex*" +
+        " fields or a custom (_CL) side table are the fallback"
       : "";
     throw new Error(
       `add column to '${input.table}': HTTP ${patch.status} ` +
         JSON.stringify(patch.body).slice(0, 300) +
         nativeHint,
     );
+  }
+
+  // 202 = long-running schema update: poll until the table unlocks
+  // (provisioningState Succeeded) so the follow-up DCR update sees the
+  // new column.
+  if (patch.status === 202) {
+    const maxAttempts = input.maxPollAttempts ?? 5;
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      const poll = await azure.request({
+        method: "GET",
+        path: tablePath,
+        apiVersion: TABLES_EDIT_API_VERSION,
+      });
+      const state = String(
+        prop(prop(poll.body, "properties"), "provisioningState") ?? "",
+      );
+      if (state.toLowerCase() === "succeeded") break;
+      if (attempt === maxAttempts - 1) {
+        throw new Error(
+          `table '${input.table}' schema update accepted but still ` +
+            `'${state || "unknown"}' after ${maxAttempts} poll attempts - ` +
+            "retry the DCR update once it settles",
+        );
+      }
+    }
   }
   return { table: input.table, columnName: name, columnCount: columns.length };
 }

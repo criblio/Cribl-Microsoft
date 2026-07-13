@@ -217,6 +217,33 @@ describe("updateDcrInPlace", () => {
     expect(preview.diff.added.map((c) => c.name)).toContain("RiskScore_CF");
   });
 
+  it("polls a 202 long-running schema update until the table unlocks", async () => {
+    // 2023-09-01 tables API: schema edits can return 202 Accepted; the
+    // follow-up DCR update must not run while the table is locked
+    // (provisioningState Updating).
+    const azure = new FakeAzureManagement();
+    azure.respondWith(
+      {
+        status: 200,
+        body: { properties: { schema: { columns: [] } } },
+      },
+      { status: 202, body: {} },
+      { status: 200, body: { properties: { provisioningState: "Updating" } } },
+      { status: 200, body: { properties: { provisioningState: "Succeeded" } } },
+    );
+    const result = await addTableColumn(azure, {
+      subscriptionId: "sub",
+      resourceGroup: "rg",
+      workspaceName: "ws",
+      table: "Acme_CL",
+      column: { name: "Slow", type: "string" },
+    });
+    expect(result.columnName).toBe("Slow");
+    // The edit rides the newer tables api-version.
+    const patch = azure.calls.find((c) => c.method === "PATCH");
+    expect(patch?.apiVersion).toBe("2023-09-01");
+  });
+
   it("addTableColumn PATCHes a custom table and refuses duplicates", async () => {
     const scope = {
       subscriptionId: "sub",
