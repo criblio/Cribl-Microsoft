@@ -444,9 +444,19 @@ export async function addTableColumn(
     body: { properties: { schema: { name: input.table, columns } } },
   });
   if (patch.status < 200 || patch.status >= 300) {
+    // Azure rejects schema changes on SOME built-in tables with an opaque
+    // InternalServerError (live 2026-07-13: CommonSecurityLog) - the
+    // security-solution tables do not accept custom columns.
+    const nativeHint = !isCustomTable
+      ? " - note: some built-in tables, notably the security tables" +
+        " (CommonSecurityLog, SecurityEvent), do not accept custom columns;" +
+        " use the table's DeviceCustom*/FlexString fields or a custom (_CL)" +
+        " side table instead"
+      : "";
     throw new Error(
       `add column to '${input.table}': HTTP ${patch.status} ` +
-        JSON.stringify(patch.body).slice(0, 300),
+        JSON.stringify(patch.body).slice(0, 300) +
+        nativeHint,
     );
   }
   return { table: input.table, columnName: name, columnCount: columns.length };
