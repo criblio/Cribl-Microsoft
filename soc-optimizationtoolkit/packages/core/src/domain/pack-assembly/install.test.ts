@@ -63,6 +63,14 @@ describe("install response interpretation", () => {
         '{"status":"error","message":"MS conflicts with existing Pack \'fi8Xk-Zscaler_Internet_Sentinel_1\'"}',
       ),
     ).toMatchObject({ conflictingPackId: "fi8Xk-Zscaler_Internet_Sentinel_1" });
+    // The VERBATIM live 2026-07-13 body: escaped quotes around the id and a
+    // sentence following it.
+    expect(
+      interpretInstallResponse(
+        500,
+        '{"status":"error","message":"failed to install: Pack Id conflicts with existing Pack \\"ms-sentinel\\". Pack Ids are case-insensitive and must be unique."}',
+      ),
+    ).toMatchObject({ conflictingPackId: "ms-sentinel" });
     // A message that names nothing stays a conflict without a parsed id.
     expect(interpretInstallResponse(500, "conflicts with existing Pack")).toEqual({
       kind: "conflict",
@@ -114,5 +122,14 @@ describe("deployed status is TRUTH FROM THE PACKS API", () => {
       { group: "wg2", packs: [] },
     ]);
     expect(groups).toEqual(["wg1"]);
+  });
+
+  it("matches deployed pack ids CASE-INSENSITIVELY", () => {
+    // "Pack Ids are case-insensitive and must be unique" (live 2026-07-13:
+    // an installed "ms-sentinel" read as free for "MS-Sentinel" and the
+    // install then conflicted).
+    const list = [{ id: "ms-sentinel", displayName: "MS Sentinel", version: "1.0.0" }];
+    expect(isPackDeployed(list, "MS-Sentinel")).toBe(true);
+    expect(isPackDeployed([{ id: "MS-Sentinel@2", displayName: "", version: "" }], "ms-sentinel")).toBe(true);
   });
 });

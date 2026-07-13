@@ -143,13 +143,17 @@ export function interpretInstallResponse(status: number, body: string): InstallO
     // existing Pack <id>") - a stray from an earlier failed install can
     // carry a different id than ours (server-derived from the randomized
     // upload filename), so the named id is the only way to find it.
+    // The quote class includes backslash: a raw JSON body carries the id as
+    // \"ms-sentinel\" (escaped quotes - the live 2026-07-13 shape).
     const named = body.match(
-      /conflicts with existing Pack:?\s*["']?([A-Za-z0-9][A-Za-z0-9_.-]*)/,
+      /conflicts with existing Pack:?\s*[\\"']*([A-Za-z0-9][A-Za-z0-9_.-]*)/,
     );
     return {
       kind: "conflict",
       detail: body.slice(0, 300),
-      ...(named !== null ? { conflictingPackId: named[1] } : {}),
+      ...(named !== null
+        ? { conflictingPackId: named[1].replace(/\.+$/, "") }
+        : {}),
     };
   }
   return { kind: "error", error: `Install failed (${status}): ${body.slice(0, 200)}` };
@@ -219,10 +223,17 @@ export function parsePackListResponse(status: number, body: string): PackListRes
 /**
  * DEPLOYED-STATUS TRUTH FROM THE PACKS API (not local storage): a pack id is
  * deployed on a worker group iff the group's packs list contains it. Matches on
- * exact id or the packName-derived id prefix (Cribl ids can carry a suffix).
+ * exact id or the packName-derived id prefix (Cribl ids can carry a suffix),
+ * CASE-INSENSITIVELY - "Pack Ids are case-insensitive and must be unique"
+ * (live 2026-07-13: an installed "ms-sentinel" made the pre-check report
+ * "MS-Sentinel" as free, and the install then conflicted).
  */
 export function isPackDeployed(packs: InstalledPack[], packId: string): boolean {
-  return packs.some((p) => p.id === packId || p.id.startsWith(`${packId}@`) || p.id.startsWith(`${packId}.`));
+  const want = packId.toLowerCase();
+  return packs.some((p) => {
+    const id = p.id.toLowerCase();
+    return id === want || id.startsWith(`${want}@`) || id.startsWith(`${want}.`);
+  });
 }
 
 /**

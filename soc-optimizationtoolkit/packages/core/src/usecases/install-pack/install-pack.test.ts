@@ -93,6 +93,39 @@ describe("installViaConflictLadder", () => {
     ]);
   });
 
+  it("targets the NAMED case-variant id in the upgrade rung", async () => {
+    // The exact live 2026-07-13 failure: an installed "ms-sentinel" blocks
+    // "MS-Sentinel" (ids are case-insensitive) but PATCH/DELETE on our
+    // spelling report not-installed. The rungs must use the server's.
+    const caseConflict: [number, string] = [
+      500,
+      '{"status":"error","message":"failed to install: Pack Id conflicts with existing Pack \\"ms-sentinel\\". Pack Ids are case-insensitive and must be unique."}',
+    ];
+    const t = transport({
+      posts: [caseConflict],
+      upgrade: [200, installedBody("ms-sentinel")],
+    });
+    const pack = await installViaConflictLadder("MS-Sentinel_1.0.0.crbl", "src.crbl", t);
+    // The installed spelling is accepted (same id per Cribl), never a stray.
+    expect(pack.id).toBe("ms-sentinel");
+    expect(t.upgradedIds).toEqual(["ms-sentinel"]);
+    expect(t.deletedIds).toEqual([]);
+  });
+
+  it("deletes the NAMED case-variant id when the upgrade fails", async () => {
+    const caseConflict: [number, string] = [
+      500,
+      '{"message":"Pack Id conflicts with existing Pack \\"ms-sentinel\\"."}',
+    ];
+    const t = transport({
+      posts: [caseConflict, [200, installedBody()]],
+      upgrade: [500, "failed to upgrade: exploded"],
+    });
+    const pack = await installViaConflictLadder("MS-Sentinel_1.0.0.crbl", "src.crbl", t);
+    expect(pack.id).toBe("MS-Sentinel");
+    expect(t.deletedIds).toEqual(["ms-sentinel"]);
+  });
+
   it("deletes the NAMED conflicting stray and retries when the conflict names a different id", async () => {
     // The expected id is not installed (PATCH/DELETE on it would fail); the
     // blocker is the stray the server names. Delete THAT and retry.

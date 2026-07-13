@@ -105,8 +105,16 @@ export async function installViaConflictLadder(
   let upgradeDetail = "";
   let deleteDetail = "";
   if (outcome.kind === "conflict") {
+    // Target the id the server NAMED when it is a case variant of ours -
+    // "Pack Ids are case-insensitive and must be unique", but the per-pack
+    // API routes want the INSTALLED spelling (live 2026-07-13: PATCH/DELETE
+    // on "MS-Sentinel" reported not-installed while "ms-sentinel" was the
+    // blocking pack).
+    const named = outcome.conflictingPackId;
+    const targetId =
+      named !== undefined && samePackId(named, expectedId) ? named : expectedId;
     const upgraded = interpretInstallResponse(
-      ...(await transport.upgradePack(expectedId, { source })),
+      ...(await transport.upgradePack(targetId, { source })),
     );
     if (upgraded.kind === "installed") {
       outcome = upgraded;
@@ -115,10 +123,10 @@ export async function installViaConflictLadder(
         upgraded.kind === "error"
           ? ` (upgrade attempt: ${upgraded.error})`
           : " (upgrade attempt also conflicted)";
-      const [delStatus, delBody] = await transport.deletePack(expectedId);
+      const [delStatus, delBody] = await transport.deletePack(targetId);
       if (delStatus < 200 || delStatus >= 300) {
         deleteDetail =
-          ` (existing pack '${expectedId}' could not be deleted: HTTP ${delStatus}` +
+          ` (existing pack '${targetId}' could not be deleted: HTTP ${delStatus}` +
           ` ${delBody.slice(0, 200)} - if its pipelines are referenced by` +
           " routes outside the pack, detach those routes in Cribl and retry)";
       }
