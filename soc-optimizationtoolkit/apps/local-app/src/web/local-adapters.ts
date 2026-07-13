@@ -187,19 +187,23 @@ function asPortResponse(label: string, payload: unknown): PortHttpResponse {
 export class LocalAzureManagement implements AzureManagement {
   async request(opts: AzureManagementRequest): Promise<PortHttpResponse> {
     const label = `POST /api/azure/request (${opts.method} ${opts.path})`;
-    const payload = await hostJson(
-      label,
-      '/api/azure/request',
-      jsonInit('POST', {
-        method: opts.method,
-        path: opts.path,
-        apiVersion: opts.apiVersion,
-        body: opts.body,
-        query: opts.query,
-      }),
-      PROXY_TIMEOUT_MS
+    return armThrottleAware(async () =>
+      asPortResponse(
+        label,
+        await hostJson(
+          label,
+          '/api/azure/request',
+          jsonInit('POST', {
+            method: opts.method,
+            path: opts.path,
+            apiVersion: opts.apiVersion,
+            body: opts.body,
+            query: opts.query,
+          }),
+          PROXY_TIMEOUT_MS
+        )
+      )
     );
-    return asPortResponse(label, payload);
   }
 
   /**
@@ -211,14 +215,35 @@ export class LocalAzureManagement implements AzureManagement {
    */
   async requestUrl(opts: AzureManagementUrlRequest): Promise<PortHttpResponse> {
     const label = `POST /api/azure/request-url (${opts.method} ${opts.url})`;
-    const payload = await hostJson(
-      label,
-      '/api/azure/request-url',
-      jsonInit('POST', { method: opts.method, url: opts.url }),
-      PROXY_TIMEOUT_MS
+    return armThrottleAware(async () =>
+      asPortResponse(
+        label,
+        await hostJson(
+          label,
+          '/api/azure/request-url',
+          jsonInit('POST', { method: opts.method, url: opts.url }),
+          PROXY_TIMEOUT_MS
+        )
+      )
     );
-    return asPortResponse(label, payload);
   }
+}
+
+/**
+ * ARM THROTTLING backoff (mirrors the cloud adapter, live 2026-07-13): a
+ * throttled tenant answers 429 - retry up to three times with 2s/4s/8s
+ * waits so a deploy degrades to slower instead of failed. Retry-After is
+ * not visible through the host relay; the exponential fallback covers it.
+ */
+async function armThrottleAware(
+  send: () => Promise<PortHttpResponse>,
+): Promise<PortHttpResponse> {
+  let response = await send();
+  for (let attempt = 1; attempt <= 3 && response.status === 429; attempt++) {
+    await new Promise((resolve) => setTimeout(resolve, 2 ** attempt * 1000));
+    response = await send();
+  }
+  return response;
 }
 
 // ---------------------------------------------------------------------------

@@ -250,14 +250,38 @@ export class PlatformAzureManagement implements AzureManagement {
     if (!this.tokenEnsured) {
       await this.ensureArmToken();
     }
-    const first = await this.send(opts);
+    const first = await this.throttleAware(() => this.send(opts));
     if (first.status !== 401) {
       return first;
     }
     // 401: the stored token was rejected (expired or evicted). Re-acquire
     // ONCE and retry the request once; whatever comes back is the answer.
     await this.ensureArmToken();
-    return this.send(opts);
+    return this.throttleAware(() => this.send(opts));
+  }
+
+  /**
+   * ARM THROTTLING (live 2026-07-13: a deploy died on its FIRST read with
+   * HTTP 429 "Too many requests"): retry 429s up to three times, honoring
+   * Retry-After when ARM sends one (seconds form) and otherwise backing off
+   * 2s/4s/8s, capped at 30s per wait. Applies to every ARM call this
+   * adapter makes - deploys, browsing, role grants - so a throttled tenant
+   * degrades to slower instead of failed.
+   */
+  private async throttleAware(
+    send: () => Promise<ArmResponse>,
+  ): Promise<ArmResponse> {
+    let response = await send();
+    for (let attempt = 1; attempt <= 3 && response.status === 429; attempt++) {
+      const retryAfter = response.retryAfterSeconds;
+      const waitMs = Math.min(
+        (retryAfter !== undefined ? retryAfter : 2 ** attempt) * 1000,
+        30000,
+      );
+      await new Promise((resolve) => setTimeout(resolve, waitMs));
+      response = await send();
+    }
+    return response;
   }
 
   /**
@@ -279,22 +303,28 @@ export class PlatformAzureManagement implements AzureManagement {
     if (!this.tokenEnsured) {
       await this.ensureArmToken();
     }
-    const first = await this.sendUrl(opts);
+    const first = await this.throttleAware(() => this.sendUrl(opts));
     if (first.status !== 401) {
       return first;
     }
     await this.ensureArmToken();
-    return this.sendUrl(opts);
+    return this.throttleAware(() => this.sendUrl(opts));
   }
 
-  private async sendUrl(opts: AzureManagementUrlRequest): Promise<PortHttpResponse> {
+  private async sendUrl(
+    opts: AzureManagementUrlRequest,
+  ): Promise<ArmResponse> {
     // No body and no headers: a nextLink carries its full query string, and
     // the proxy injects Authorization server-side.
     const res = await fetchWithTimeout(opts.url, { method: opts.method }, ARM_TIMEOUT_MS);
-    return { status: res.status, body: await readPortBody(res) };
+    return {
+      status: res.status,
+      body: await readPortBody(res),
+      retryAfterSeconds: retryAfterSecondsOf(res),
+    };
   }
 
-  private async send(opts: AzureManagementRequest): Promise<PortHttpResponse> {
+  private async send(opts: AzureManagementRequest): Promise<ArmResponse> {
     const params = new URLSearchParams({ ...(opts.query ?? {}), 'api-version': opts.apiVersion });
     const init: RequestInit = { method: opts.method };
     if (opts.body !== undefined) {
@@ -304,8 +334,25 @@ export class PlatformAzureManagement implements AzureManagement {
       init.body = JSON.stringify(opts.body);
     }
     const res = await fetchWithTimeout(`${ARM_BASE_URL}${opts.path}?${params.toString()}`, init, ARM_TIMEOUT_MS);
-    return { status: res.status, body: await readPortBody(res) };
+    return {
+      status: res.status,
+      body: await readPortBody(res),
+      retryAfterSeconds: retryAfterSecondsOf(res),
+    };
   }
+}
+
+/** A PortHttpResponse plus the throttle hint the retry loop consumes. */
+interface ArmResponse extends PortHttpResponse {
+  retryAfterSeconds?: number;
+}
+
+/** Parse a Retry-After response header (seconds form) or undefined. */
+function retryAfterSecondsOf(res: Response): number | undefined {
+  const raw = res.headers.get('retry-after');
+  if (raw === null) return undefined;
+  const seconds = Number(raw);
+  return Number.isFinite(seconds) && seconds > 0 ? seconds : undefined;
 }
 
 // ---------------------------------------------------------------------------
