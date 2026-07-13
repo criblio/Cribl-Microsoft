@@ -195,9 +195,7 @@ export function PackInventoryScreen({ refreshToken = 0 }: PackInventoryScreenPro
           pack.record.crblFileName,
           packBytes(pack),
         );
-        setNotice(
-          `Installed ${installed.displayName || installed.id} on ${selectedGroup}.`,
-        );
+        setNotice(`Installed '${installed.id}' on ${selectedGroup}.`);
         await load();
       } catch (err) {
         setError(`Install failed: ${String(err)}`);

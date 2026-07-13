@@ -23,8 +23,10 @@
 #                                        installed packs (deployed-status truth),
 #                                        PUT ?filename= uploads the .crbl bytes,
 #                                        POST installs the returned source
-#   /packs/{id} (delete)               - in /m/{groupId} context: the
-#                                        duplicate-conflict delete-and-retry
+#   /packs/{id} (patch/delete)         - in /m/{groupId} context: PATCH is the
+#                                        documented in-place pack upgrade (the
+#                                        duplicate-conflict reinstall), DELETE
+#                                        the last-resort conflict cleanup
 #
 # LEAST PRIVILEGE / same-PR honesty: Unit 19's pack surface installs a
 # self-contained .crbl. The pack's breakers.yml, outputs.yml, and any secret
@@ -79,10 +81,11 @@ policies:
   # bytes, POST installs the returned randomized source.
   - object: '/m/:gid/packs'
     actions: ['GET', 'PUT', 'POST']
-  # Delete an existing pack by id - only used for the duplicate-conflict
-  # delete-and-retry before re-installing.
+  # Existing pack by id: PATCH is the documented in-place upgrade (the
+  # duplicate-conflict reinstall path - id and route references preserved);
+  # DELETE is the last-resort conflict cleanup.
   - object: '/m/:gid/packs/*'
-    actions: ['DELETE']
+    actions: ['PATCH', 'DELETE']
   # Unit 20 source wiring: read the group's routes and PUT the merged config
   # back (wireSource prepends the Sentinel + optional Lake routes in evaluation
   # order). GET + PUT only - the wiring never deletes a route.

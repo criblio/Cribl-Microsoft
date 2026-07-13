@@ -1682,8 +1682,9 @@ function criblBodyText(body: unknown): string {
  * upload protocol and its decision rules are @soc/core's: the binary PUT
  * ?filename= (raw octet-stream; the platform proxy injects auth), then the
  * randomized `source` drives installViaConflictLadder (plain POST, then the
- * documented force overwrite, then delete-and-retry with the delete's refusal
- * reported). Deployed status is read from each group's live packs list via
+ * documented PATCH in-place upgrade, then delete-and-retry with the delete's
+ * refusal reported; a server-side rename is rejected). Deployed status is
+ * read from each group's live packs list via
  * listDeployedPacks - never from local storage, and a failed listing THROWS
  * instead of reading as "no packs". JSON ops reuse the injected CriblClient
  * (auth, groupId prefixing); only the binary PUT is done directly.
@@ -1724,6 +1725,15 @@ export class PlatformPackInstall implements PackInstallClient {
         const res = await this.cribl.request({
           method: 'POST',
           path: '/packs',
+          groupId: group,
+          body,
+        });
+        return [res.status, criblBodyText(res.body)];
+      },
+      upgradePack: async (packId, body) => {
+        const res = await this.cribl.request({
+          method: 'PATCH',
+          path: `/packs/${encodeURIComponent(packId)}`,
           groupId: group,
           body,
         });

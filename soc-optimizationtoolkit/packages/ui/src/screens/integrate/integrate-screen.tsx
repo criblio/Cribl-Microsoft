@@ -759,11 +759,13 @@ export function IntegrateScreen({
             assembled.crblFileName,
             assembled.crbl,
           );
-          push(`Installed ${installed.displayName || installed.id} on ${group}.`);
+          // Report the pack ID, not the display name (live 2026-07-13: a
+          // server-side rename hid behind the pretty displayName).
+          push(`Installed '${installed.id}' on ${group}.`);
           installs.push({
             group,
             ok: true,
-            detail: `installed (${installed.displayName || installed.id})`,
+            detail: `installed as '${installed.id}'`,
           });
         } catch (err) {
           push(

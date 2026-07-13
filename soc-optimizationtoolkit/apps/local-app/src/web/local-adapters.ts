@@ -1122,8 +1122,9 @@ function bytesToBase64(bytes: Uint8Array): string {
  * here (browser side): the binary upload rides POST /api/cribl/upload (the host
  * PUTs the octet-stream to the leader), parseUploadResponse reads the randomized
  * source, then installViaConflictLadder drives the JSON POST install (plain,
- * then force overwrite, then delete-and-retry with the delete's refusal
- * reported) over the shared CriblClient (LocalCriblClient over
+ * then the documented PATCH in-place upgrade, then delete-and-retry with the
+ * delete's refusal reported; a server-side rename is rejected) over the
+ * shared CriblClient (LocalCriblClient over
  * /api/cribl/request). Deployed status is the live packs list per group via
  * listDeployedPacks - never local storage, and a failed listing THROWS instead
  * of reading as "no packs".
@@ -1162,6 +1163,15 @@ export class LocalPackInstall implements PackInstallClient {
         const res = await this.cribl.request({
           method: 'POST',
           path: '/packs',
+          groupId: group,
+          body,
+        });
+        return [res.status, criblBodyText(res.body)];
+      },
+      upgradePack: async (packId, body) => {
+        const res = await this.cribl.request({
+          method: 'PATCH',
+          path: `/packs/${encodeURIComponent(packId)}`,
           groupId: group,
           body,
         });
