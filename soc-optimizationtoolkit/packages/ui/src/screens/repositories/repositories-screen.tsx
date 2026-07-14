@@ -19,7 +19,11 @@
  */
 
 import { useCallback, useEffect, useReducer, useState } from "react";
-import { patPolicyFor } from "@soc/core";
+import {
+  KQL_VALIDATION_TABLES_DIR,
+  parseKqlValidationTable,
+  patPolicyFor,
+} from "@soc/core";
 import type { ContentPlatform } from "@soc/core";
 import { usePorts } from "../../ports-context";
 import {
@@ -77,6 +81,13 @@ export function RepositoriesScreen({ platform }: RepositoriesScreenProps) {
   const [elasticFiles, setElasticFiles] = useState<number | null>(null);
   const [elasticError, setElasticError] = useState("");
   const [elasticChecking, setElasticChecking] = useState(false);
+
+  // KQL-validation schema tables (the top schema-resolution tier): listing
+  // count + one end-to-end definition read through the same content port.
+  const [schemaTables, setSchemaTables] = useState<number | null>(null);
+  const [schemaProbe, setSchemaProbe] = useState("");
+  const [schemaError, setSchemaError] = useState("");
+  const [schemaChecking, setSchemaChecking] = useState(false);
 
   // Load the stored status once on mount (hasPat + login; never the token).
   useEffect(() => {
@@ -147,6 +158,42 @@ export function RepositoriesScreen({ platform }: RepositoriesScreenProps) {
     }
   }, [content]);
 
+  // Schema-tables reachability: list the KqlvalidationsTests/CustomTables
+  // directory (the top schema-resolution tier) and read ONE definition end to
+  // end - proves both the api.github.com listing and the raw-file read+parse
+  // path the tier actually uses. NOTE the listing caps at 1000 entries (the
+  // GitHub contents API limit); the tier's direct exact-name reads are not
+  // capped, so the count is a floor.
+  const checkSchemaTables = useCallback(async () => {
+    if (content === undefined) {
+      return;
+    }
+    setSchemaChecking(true);
+    setSchemaError("");
+    try {
+      const files = await content.listRepoFiles(KQL_VALIDATION_TABLES_DIR);
+      setSchemaTables(files.length);
+      const first = files[0];
+      if (first !== undefined) {
+        const text = await content.readFile(first.path);
+        const columns = text !== null ? parseKqlValidationTable(text) : null;
+        setSchemaProbe(
+          columns !== null
+            ? `probe read ${first.name}: ${columns.length} column(s) parsed`
+            : `probe read ${first.name}: unreadable or unexpected shape`,
+        );
+      } else {
+        setSchemaProbe("");
+      }
+    } catch (err) {
+      setSchemaTables(null);
+      setSchemaProbe("");
+      setSchemaError(String(err));
+    } finally {
+      setSchemaChecking(false);
+    }
+  }, [content]);
+
   // Elastic reachability: probe a well-known package's test-pipeline files
   // (nginx/access) - proves github.com/elastic/integrations is reachable AND the
   // on-demand sample-fetch path works end to end (never a bulk mirror).
@@ -201,6 +248,32 @@ export function RepositoriesScreen({ platform }: RepositoriesScreenProps) {
     elasticFiles !== null
       ? "numbered-section-badge-complete"
       : "numbered-section-badge-current";
+  const schemaBadgeClass =
+    schemaTables !== null
+      ? "numbered-section-badge-complete"
+      : "numbered-section-badge-current";
+  const schemaStatus =
+    schemaError !== ""
+      ? {
+          tone: "error",
+          label: "Could not reach the schema tables",
+          detail: schemaError,
+        }
+      : schemaTables !== null
+        ? {
+            tone: "ok",
+            label: "Schema tables reachable",
+            detail:
+              `${schemaTables} table definition(s) listed (listing caps at 1000; ` +
+              `direct reads are uncapped)${schemaProbe !== "" ? `; ${schemaProbe}` : ""}. ` +
+              "Defined tables resolve from here first during analysis.",
+          }
+        : {
+            tone: "warn",
+            label: "Not checked yet",
+            detail:
+              "Refresh to verify the Sentinel repo's KQL-validation table schemas are reachable with your token.",
+          };
   const elasticStatus =
     elasticError !== ""
       ? {
@@ -382,6 +455,44 @@ export function RepositoriesScreen({ platform }: RepositoriesScreenProps) {
               disabled={elasticChecking}
             >
               {elasticChecking ? "Checking..." : "Refresh"}
+            </button>
+          </div>
+        </section>
+      )}
+
+      {content !== undefined && (
+        <section className="numbered-section">
+          <div className="numbered-section-head">
+            <span className={`numbered-section-badge ${schemaBadgeClass}`}>
+              {sampleSource !== undefined ? 4 : 3}
+            </span>
+            <h2 className="numbered-section-title">
+              Schema tables (KQL validation)
+            </h2>
+          </div>
+          <p className="panel-desc">
+            The table schemas Microsoft&apos;s own CI validates every solution&apos;s
+            KQL against ({KQL_VALIDATION_TABLES_DIR} in the Sentinel repo). When a
+            destination table is defined there, the DCR Gap Analysis and the
+            coverage sections resolve its schema from here FIRST - ahead of the
+            solution&apos;s connector definitions, the bundled snapshot, and
+            sample-derived schemas. The check lists the directory and reads one
+            definition end to end.
+          </p>
+          <div className={`reachability reachability-${schemaStatus.tone}`}>
+            <span className="reachability-dot" aria-hidden="true" />
+            <div>
+              <span className="reachability-label">{schemaStatus.label}</span>
+              <p className="panel-desc">{schemaStatus.detail}</p>
+            </div>
+          </div>
+          <div className="panel-controls">
+            <button
+              className="next-action-button"
+              onClick={() => void checkSchemaTables()}
+              disabled={schemaChecking}
+            >
+              {schemaChecking ? "Checking..." : "Refresh"}
             </button>
           </div>
         </section>
