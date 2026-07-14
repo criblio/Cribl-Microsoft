@@ -460,6 +460,23 @@ export type { RepositoriesScreenProps } from "./screens/repositories/repositorie
 export { ArchitectureScreen } from "./screens/architecture/architecture-screen";
 export { MappingCatalogScreen } from "./screens/mapping-catalog/mapping-catalog-screen";
 export { EventHubDiscoveryScreen } from "./screens/eventhub-discovery/eventhub-discovery-screen";
+
+// SIEM Migration (porting-plan Unit 26, ENG-40 + GUI-22): the rebuilt
+// migration analyzer - upload a Splunk/QRadar export, map its data sources
+// to Sentinel solutions, enrich with the solutions' analytics rules, pivot
+// into Sentinel Integration via the preserved solution deep link, and keep
+// the plan across navigation (ContentCache persistence).
+export { SiemMigrationScreen } from "./screens/siem-migration/siem-migration-screen";
+export type { SiemMigrationScreenProps } from "./screens/siem-migration/siem-migration-screen";
+export {
+  SIEM_MIGRATION_PLAN_KEY,
+  confidenceTone,
+  identifierSummary,
+  mappedSources,
+  migrationStatTiles,
+  unmappedSources,
+} from "./screens/siem-migration/siem-migration-state";
+export type { MigrationStatTile } from "./screens/siem-migration/siem-migration-state";
 export {
   derivePatFormView,
   deriveReachabilityStatus,

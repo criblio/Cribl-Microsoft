@@ -34,6 +34,7 @@ import {
   RepositoriesScreen,
   SettingsScreen,
   SetupWizard,
+  SiemMigrationScreen,
   commitNoticeText,
   formatScopeChip,
   logLineToEntry,
@@ -889,6 +890,29 @@ export function LocalApp() {
     </>
   );
 
+  // SIEM Migration (porting-plan Unit 26): upload a Splunk/QRadar detection
+  // export, map its data sources to Sentinel solutions, and pivot each into
+  // Sentinel Integration. The plan persists via ContentCache, so bouncing
+  // between this screen and Integrate loses nothing. requires 'none': the
+  // static knowledge bases work offline; the fuzzy tier and rule enrichment
+  // engage when the content ports are reachable.
+  const renderSiemMigration = (nav: AppFrameNav) => (
+    <>
+      <header className="local-header">
+        <h1 className="local-title">SIEM Migration</h1>
+        <p className="local-subtitle">
+          Analyze a Splunk or IBM QRadar detection-rule export: identify the
+          data sources the rules depend on, map them to Microsoft Sentinel
+          solutions and tables, review the solutions&apos; own analytics
+          rules, and pivot straight into Sentinel Integration per solution.
+        </p>
+      </header>
+      <PortsProvider ports={ports} config={activeAzureConfig ?? EMPTY_AZURE_CONFIG}>
+        <SiemMigrationScreen onOpenIntegration={() => nav.navigate('integrate')} />
+      </PortsProvider>
+    </>
+  );
+
   // Vendor Mapping Catalog: the documented source-field -> Sentinel-column
   // suggestions the analysis applies. Pure bundled data; no ports, no IO.
   const mappingCatalogView = (
@@ -1045,6 +1069,7 @@ export function LocalApp() {
     { id: 'repositories', label: 'Repositories', requires: 'none', section: 'tools', render: () => repositoriesView },
     { id: 'logs', label: 'Logs', requires: 'none', section: 'tools', render: () => logsView },
     { id: 'settings', label: 'Settings', requires: 'none', section: 'tools', render: () => settingsView },
+    { id: 'siem-migration', label: 'SIEM Migration', requires: 'none', section: 'development', render: renderSiemMigration },
     { id: 'preflight', label: 'Permission Verification', requires: 'azure', section: 'development', render: renderPreflight },
     { id: 'eventhub-discovery', label: 'Event Hub Discovery', requires: 'azure', section: 'development', render: () => eventHubDiscoveryView },
     { id: 'architecture', label: 'Architecture Patterns', requires: 'none', section: 'development', render: () => architectureView },
