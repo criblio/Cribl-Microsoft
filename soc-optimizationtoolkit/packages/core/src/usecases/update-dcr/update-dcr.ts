@@ -893,12 +893,36 @@ async function patchTableColumns(
   operation: string,
   isCustomTable: boolean,
 ): Promise<void> {
-  const patch = await azure.request({
+  let patch = await azure.request({
     method: "PATCH",
     path: tablePath,
     apiVersion: TABLES_EDIT_API_VERSION,
     body: { properties: { schema: { name: input.table, columns } } },
   });
+  if (patch.status < 200 || patch.status >= 300) {
+    // Second attempt mirrors Microsoft's DOCUMENTED add-column-to-an-
+    // Azure-table example VERBATIM (create-custom-table.md PowerShell tab):
+    // PUT at 2021-12-01-preview with the full column flags - the portal-
+    // equivalent shape (user report 2026-07-13: the portal succeeds where
+    // our PATCH 500s).
+    patch = await azure.request({
+      method: "PUT",
+      path: tablePath,
+      apiVersion: "2021-12-01-preview",
+      body: {
+        properties: {
+          schema: {
+            name: input.table,
+            columns: columns.map((c) => ({
+              ...c,
+              isDefaultDisplay: false,
+              isHidden: false,
+            })),
+          },
+        },
+      },
+    });
+  }
   if (patch.status < 200 || patch.status >= 300) {
     // VERIFY the lock hypothesis instead of guessing (user request
     // 2026-07-13): the table's provisioningState says whether an

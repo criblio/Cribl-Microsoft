@@ -231,6 +231,7 @@ describe("updateDcrInPlace", () => {
     azure.respondWith(
       { status: 200, body: { properties: { schema: { columns: [] } } } },
       { status: 500, body: { error: { code: "InternalServerError" } } },
+      { status: 500, body: { error: { code: "InternalServerError" } } },
       { status: 200, body: { properties: { provisioningState: "Succeeded" } } },
     );
     await expect(
@@ -246,6 +247,7 @@ describe("updateDcrInPlace", () => {
     const azure2 = new FakeAzureManagement();
     azure2.respondWith(
       { status: 200, body: { properties: { schema: { columns: [] } } } },
+      { status: 500, body: {} },
       { status: 500, body: {} },
       { status: 200, body: { properties: { provisioningState: "Updating" } } },
     );
@@ -588,5 +590,34 @@ describe("addDcrField (restricted tables - pure DCR change)", () => {
     expect(
       pickExtensionColumn("string", new Set(["flexstring1", "flexstring2"]), new Set(["flexstring1", "flexstring2"])),
     ).toBeNull();
+  });
+});
+
+describe("documented PUT fallback for table adds", () => {
+  it("retries a refused PATCH as the docs' PUT at 2021-12-01-preview", async () => {
+    const azure = new FakeAzureManagement();
+    azure.respondWith(
+      { status: 200, body: { properties: { schema: { columns: [] } } } },
+      { status: 500, body: { error: { code: "InternalServerError" } } },
+      { status: 200, body: {} },
+    );
+    const result = await addTableColumn(azure, {
+      subscriptionId: "sub",
+      resourceGroup: "rg",
+      workspaceName: "ws",
+      table: "CommonSecurityLog",
+      column: { name: "ztest", type: "string" },
+    });
+    expect(result.columnName).toBe("ztest_CF");
+    const put = azure.calls.find((c) => c.method === "PUT");
+    expect(put?.apiVersion).toBe("2021-12-01-preview");
+    const body = put!.body as {
+      properties: { schema: { columns: Array<{ name: string; isHidden?: boolean }> } };
+    };
+    expect(body.properties.schema.columns[0]).toMatchObject({
+      name: "ztest_CF",
+      isHidden: false,
+      isDefaultDisplay: false,
+    });
   });
 });

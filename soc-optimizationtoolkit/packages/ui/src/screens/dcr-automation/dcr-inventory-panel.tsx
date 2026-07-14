@@ -251,10 +251,51 @@ export function DcrInventoryPanel() {
     );
     setProgress(`Adding '${columnName}' (${newColType}) to ${preview.table}...`);
     try {
+      let tableAddError = "";
       if (!preview.table.endsWith("_CL")) {
-        // RESTRICTED native table (user direction 2026-07-13): a pure DCR
-        // change - the field joins the stream declaration and the transform
-        // maps it into a free extension column. No table edit at all.
+        // Native table: TRY the table write first (the PATCH-then-
+        // documented-PUT ladder - the portal-equivalent path, user report
+        // 2026-07-13); only when Azure refuses both does the DCR graft
+        // take over.
+        try {
+          const added = await addTableColumn(ports.azure, {
+            ...scope(),
+            table: preview.table,
+            column: { name: columnName, type: newColType },
+          });
+          logInfo(`added '${added.columnName}' to ${preview.table} via the tables API`);
+          setProgress(`Updating DCR '${preview.dcrName}' to accept '${added.columnName}'...`);
+          await updateDcrInPlace(ports.azure, {
+            ...scope(),
+            dcrName: preview.dcrName,
+            table: preview.table,
+            location: previewLocation,
+            dceResourceId: previewDce || undefined,
+          });
+          setNotice(
+            `Added '${added.columnName}' (${newColType}) to ${preview.table} AND ` +
+              `updated '${preview.dcrName}' - the field is ingestable end to end.`,
+          );
+          setNewColName("");
+          setProgress("Refreshing the field list...");
+          setPreview(
+            await previewDcrUpdate(ports.azure, {
+              ...scope(),
+              dcrName: preview.dcrName,
+              table: preview.table,
+              location: previewLocation,
+              dceResourceId: previewDce || undefined,
+            }),
+          );
+          return;
+        } catch (err) {
+          tableAddError = err instanceof Error ? err.message : String(err);
+          logInfo(
+            `table write refused (${tableAddError.slice(0, 160)}) - falling back to the DCR graft`,
+          );
+        }
+        // Fallback: a pure DCR change - the field joins the stream
+        // declaration and the transform maps it into a free extension column.
         setProgress(
           `Adding '${columnName}' to the DCR and mapping it to an extension column...`,
         );
