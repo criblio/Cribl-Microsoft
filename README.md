@@ -43,5 +43,5 @@ Development gates: `npm run typecheck`, `npm run lint`, `npm test`,
 
 ## Security
 
-Never commit credentials. See [SECURITY.md](SECURITY.md) and
-[SECURITY_DISCLAIMER.md](SECURITY_DISCLAIMER.md).
+Never commit credentials - use placeholders in configuration files and
+keep real values in environment variables or Cribl/Azure secret stores.
