@@ -61,9 +61,13 @@ export function DcrInventoryPanel() {
   const [missingActions, setMissingActions] = useState<
     Array<{ action: string; scope: string }>
   >([]);
-  // The check's verdict, rendered in the card (live feedback 2026-07-13:
-  // "I don't think it checked" - the verdict only reached the Logs page).
+  // The check's verdict, rendered in the card AND stamped onto every
+  // failure message (live feedback 2026-07-13: "it should still have told
+  // me if the permissions were correct").
   const [permStatus, setPermStatus] = useState("");
+  const [permVerdict, setPermVerdict] = useState<"unknown" | "ok" | "missing">(
+    "unknown",
+  );
   // Matching (green) columns show by default (user color semantics
   // 2026-07-13: matches ARE the highlight); the toggle hides them when the
   // 150+ chips get in the way of the changes.
@@ -111,6 +115,18 @@ export function DcrInventoryPanel() {
     [config.subscriptionId, config.resourceGroup, config.workspaceName, inventoryRg],
   );
 
+  // Stamped onto every mutation failure so a 4xx/5xx can never read as a
+  // permission mystery: the verdict from the pre-check travels with it.
+  const permNote = useCallback(
+    () =>
+      permVerdict === "ok"
+        ? " [RBAC write permissions were verified before this attempt - this failure is NOT a permissions problem]"
+        : permVerdict === "missing"
+          ? " [the app registration is missing write permissions - see the list above]"
+          : " [RBAC permissions could not be verified beforehand]",
+    [permVerdict],
+  );
+
   // Read-only before/after: the DCR's live declaration vs the declaration a
   // rebuild from the table's current schema would install.
   const openPreview = useCallback(
@@ -141,12 +157,14 @@ export function DcrInventoryPanel() {
         });
         setMissingActions(perms.missing);
         if (perms.missing.length > 0) {
+          setPermVerdict("missing");
           setPermStatus("");
           logError(
             "permission check: missing " +
               perms.missing.map((m) => `${m.action} at ${m.scope}`).join("; "),
           );
         } else if (perms.indeterminate) {
+          setPermVerdict("unknown");
           setPermStatus(
             "Permission check unavailable (the RBAC permissions API was unreadable) - write actions were NOT verified.",
           );
@@ -154,6 +172,7 @@ export function DcrInventoryPanel() {
             "permission check: RBAC permissions API unreadable - proceeding without the pre-check",
           );
         } else {
+          setPermVerdict("ok");
           setPermStatus(
             "Write permissions verified: DCR update and table schema edits are granted.",
           );
@@ -208,12 +227,12 @@ export function DcrInventoryPanel() {
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       logError(`update of '${preview.dcrName}' failed: ${message}`);
-      setError(message);
+      setError(message + permNote());
     } finally {
       setProgress("");
       setBusy(false);
     }
-  }, [ports.azure, scope, preview, previewLocation, previewDce, logInfo, logError]);
+  }, [ports.azure, scope, preview, previewLocation, previewDce, logInfo, logError, permNote]);
 
   // Add a custom column to the (custom) table AND apply the DCR update in
   // one action (user request 2026-07-13: "add a new field to the DCR and
@@ -284,12 +303,12 @@ export function DcrInventoryPanel() {
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       logError(`add field '${columnName}' to ${preview.table} failed: ${message}`);
-      setError(message);
+      setError(message + permNote());
     } finally {
       setProgress("");
       setBusy(false);
     }
-  }, [ports.azure, scope, preview, previewLocation, previewDce, newColName, newColType, logInfo, logError]);
+  }, [ports.azure, scope, preview, previewLocation, previewDce, newColName, newColType, logInfo, logError, permNote]);
 
   // Remove a CUSTOM column from the table AND apply the DCR update in one
   // action (user request 2026-07-13) - the field disappears end to end.
@@ -355,12 +374,12 @@ export function DcrInventoryPanel() {
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       logError(`remove field '${columnName}' from ${preview.table} failed: ${message}`);
-      setError(message);
+      setError(message + permNote());
     } finally {
       setProgress("");
       setBusy(false);
     }
-  }, [ports.azure, scope, preview, previewLocation, previewDce, removeColName, logInfo, logError]);
+  }, [ports.azure, scope, preview, previewLocation, previewDce, removeColName, logInfo, logError, permNote]);
 
   const load = useCallback(async () => {
     setBusy(true);
