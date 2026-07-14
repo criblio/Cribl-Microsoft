@@ -1,0 +1,328 @@
+{
+  "name": "CrowdStrike_Network_Events_CL",
+  "description": "Auto-generated from Sentinel Content Hub for CrowdStrike_Network_Events_CL",
+  "retentionInDays": 30,
+  "totalRetentionInDays": 90,
+  "columns": [
+    {
+      "name": "TimeGenerated",
+      "type": "datetime",
+      "description": "The timestamp (UTC) reflecting the time in which the event was generated."
+    },
+    {
+      "name": "event_simpleName",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "timestamp",
+      "type": "long",
+      "description": ""
+    },
+    {
+      "name": "aip",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "aid",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "UserName",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "event_platform",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ContextTimeStamp",
+      "type": "real",
+      "description": ""
+    },
+    {
+      "name": "name",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ConfigBuild",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "CrowdStrikeId",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ConfigStateHash",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ContextProcessId",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ContextThreadId",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "BoundingLimitCount",
+      "type": "long",
+      "description": ""
+    },
+    {
+      "name": "BoundingLimitDuration",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "Entitlements",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "EffectiveTransmissionClass",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "cid",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "OciContainerId",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "TreeId",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ConnectionDirection",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "RemotePort",
+      "type": "long",
+      "description": ""
+    },
+    {
+      "name": "LocalAddressIP6",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "RemoteAddressIP6",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "LocalPort",
+      "type": "long",
+      "description": ""
+    },
+    {
+      "name": "Protocol",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "RemoteAddressString",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "FirewallAction",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "NegateLocalAddress",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "RemoteAddressMaskIP6",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "LocalAddressMaskIP6",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "NegateRemoteAddress",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "IcmpCode",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "IcmpType",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "LocalAddressIP4",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "RemoteAddressIP4",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "RemoteAddressMaskIP4",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "LocalAddressMaskIP4",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "PhysicalAddress",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ConnectionFlags",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "InContext",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "EventOrigin",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "InterfaceIndex",
+      "type": "long",
+      "description": ""
+    },
+    {
+      "name": "NetLuidIndex",
+      "type": "long",
+      "description": ""
+    },
+    {
+      "name": "NeighborList",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "TcpConnectErrorCode",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "InterfaceAlias",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "NegateInterface",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "IsUnique",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "LocalPortRangeStart",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "LocalPortRangeOperation",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "RemotePortRangeOperation",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "RemotePortRangeStart",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "HbfwRuleId",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "NetworkProfile",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "PolicyIdentifier",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "HbfwRuleFlags",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ImageFileName",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "CommandLine",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "RuleAction",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "RuleMatchCount",
+      "type": "long",
+      "description": ""
+    },
+    {
+      "name": "RuleMatchCountSinceLastReport",
+      "type": "long",
+      "description": ""
+    },
+    {
+      "name": "AdditionalFields",
+      "type": "dynamic",
+      "description": ""
+    }
+  ]
+}

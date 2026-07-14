@@ -1,0 +1,733 @@
+{
+  "name": "CrowdStrike_Process_Events_CL",
+  "description": "Auto-generated from Sentinel Content Hub for CrowdStrike_Process_Events_CL",
+  "retentionInDays": 30,
+  "totalRetentionInDays": 90,
+  "columns": [
+    {
+      "name": "TimeGenerated",
+      "type": "datetime",
+      "description": "The timestamp (UTC) reflecting the time in which the event was generated."
+    },
+    {
+      "name": "event_simpleName",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "timestamp",
+      "type": "long",
+      "description": ""
+    },
+    {
+      "name": "aip",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "aid",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "UserName",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "event_platform",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ContextTimeStamp",
+      "type": "real",
+      "description": ""
+    },
+    {
+      "name": "name",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ConfigBuild",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "CrowdStrikeId",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ConfigStateHash",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ContextProcessId",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ContextThreadId",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "BoundingLimitCount",
+      "type": "long",
+      "description": ""
+    },
+    {
+      "name": "BoundingLimitDuration",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "Entitlements",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "EffectiveTransmissionClass",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "cid",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "OciContainerId",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "TreeId",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "UserSid",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ParentBaseFileName",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "SHA256HashData",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "MD5HashData",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "SHA1HashData",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "CommandLine",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "InjecteeImageFileName",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "InjectorImageFileName",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "IntegrityLevel",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ParentProcessId",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "TargetProcessId",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ConHostProcessId",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "WritingProcessId",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "SourceProcessId",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "TargetFileName",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ImageFileName",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "WritingProcessImageFileName",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "WritingProcessCommandLine",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "OriginalFilename",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ProcessStartTime",
+      "type": "real",
+      "description": ""
+    },
+    {
+      "name": "ProcessEndTime",
+      "type": "real",
+      "description": ""
+    },
+    {
+      "name": "ModuleName",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "AuthenticationId",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "TokenType",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "RpcClientProcessId",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ParentCommandLine",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "TemplateInstanceId",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ParentImageFileName",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "PatternId",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "Tags",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ProcessGroupId",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "RawProcessId",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "SyntheticPR2Flags",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ImageSubsystem",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "SourceThreadId",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "AuthenticodeHashData",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "SessionId",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ParentAuthenticationId",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "SignInfoFlags",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "CallStackModuleNamesVersion",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "CsaProcessDataCollectionInstanceId",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "CallStackModuleNames",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "CreateProcessType",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ZoneIdentifier",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "HostUrl",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "TargetThreadId",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "SignatureErrorState",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ModuleCharacteristics",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "PublicKeys",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ExtendedKeyUsages",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "SignatureState",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "MappedFromUserMode",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "FileSigningTime",
+      "type": "real",
+      "description": ""
+    },
+    {
+      "name": "Certificate",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "FileIdentifier",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ExecutableBytes",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "LoadingProcessOriginalFilename",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ModuleTagsAsString",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ImageDirectoryClassification",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ParentProcessPatternIdList",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ModuleLoadMechanism",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "PatternIdList",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ScreenshotsTakenCount",
+      "type": "long",
+      "description": ""
+    },
+    {
+      "name": "ExitCode",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "NetworkListenCount",
+      "type": "long",
+      "description": ""
+    },
+    {
+      "name": "SuspiciousRawDiskReadCount",
+      "type": "long",
+      "description": ""
+    },
+    {
+      "name": "NetworkBindCount",
+      "type": "long",
+      "description": ""
+    },
+    {
+      "name": "NetworkRecvAcceptCount",
+      "type": "long",
+      "description": ""
+    },
+    {
+      "name": "ContextData",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "NewExecutableWrittenCount",
+      "type": "long",
+      "description": ""
+    },
+    {
+      "name": "ExeAndServiceCount",
+      "type": "long",
+      "description": ""
+    },
+    {
+      "name": "NetworkCloseCount",
+      "type": "long",
+      "description": ""
+    },
+    {
+      "name": "SuspectStackCount",
+      "type": "long",
+      "description": ""
+    },
+    {
+      "name": "CLICreationCount",
+      "type": "long",
+      "description": ""
+    },
+    {
+      "name": "UnsignedModuleLoadCount",
+      "type": "long",
+      "description": ""
+    },
+    {
+      "name": "UserTime",
+      "type": "long",
+      "description": ""
+    },
+    {
+      "name": "AllocateVirtualMemoryCount",
+      "type": "long",
+      "description": ""
+    },
+    {
+      "name": "ServiceEventCount",
+      "type": "long",
+      "description": ""
+    },
+    {
+      "name": "SnapshotFileOpenCount",
+      "type": "long",
+      "description": ""
+    },
+    {
+      "name": "RemovableDiskFileWrittenCount",
+      "type": "long",
+      "description": ""
+    },
+    {
+      "name": "InjectedDllCount",
+      "type": "long",
+      "description": ""
+    },
+    {
+      "name": "ModuleLoadCount",
+      "type": "long",
+      "description": ""
+    },
+    {
+      "name": "UserMemoryProtectExecutableCount",
+      "type": "long",
+      "description": ""
+    },
+    {
+      "name": "NetworkCapableAsepWriteCount",
+      "type": "long",
+      "description": ""
+    },
+    {
+      "name": "DnsRequestCount",
+      "type": "long",
+      "description": ""
+    },
+    {
+      "name": "ArchiveFileWrittenCount",
+      "type": "long",
+      "description": ""
+    },
+    {
+      "name": "SetThreadContextCount",
+      "type": "long",
+      "description": ""
+    },
+    {
+      "name": "SuspiciousCredentialModuleLoadCount",
+      "type": "long",
+      "description": ""
+    },
+    {
+      "name": "FileDeletedCount",
+      "type": "long",
+      "description": ""
+    },
+    {
+      "name": "UserMemoryAllocateExecutableCount",
+      "type": "long",
+      "description": ""
+    },
+    {
+      "name": "DirectoryCreatedCount",
+      "type": "long",
+      "description": ""
+    },
+    {
+      "name": "NetworkConnectCountUdp",
+      "type": "long",
+      "description": ""
+    },
+    {
+      "name": "QueueApcCount",
+      "type": "long",
+      "description": ""
+    },
+    {
+      "name": "SuspiciousFontLoadCount",
+      "type": "long",
+      "description": ""
+    },
+    {
+      "name": "ConHostId",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "NetworkConnectCount",
+      "type": "long",
+      "description": ""
+    },
+    {
+      "name": "BinaryExecutableWrittenCount",
+      "type": "long",
+      "description": ""
+    },
+    {
+      "name": "CycleTime",
+      "type": "long",
+      "description": ""
+    },
+    {
+      "name": "PrivilegedProcessHandleCount",
+      "type": "long",
+      "description": ""
+    },
+    {
+      "name": "MaxThreadCount",
+      "type": "long",
+      "description": ""
+    },
+    {
+      "name": "GenericFileWrittenCount",
+      "type": "long",
+      "description": ""
+    },
+    {
+      "name": "ScriptEngineInvocationCount",
+      "type": "long",
+      "description": ""
+    },
+    {
+      "name": "RunDllInvocationCount",
+      "type": "long",
+      "description": ""
+    },
+    {
+      "name": "CreateProcessCount",
+      "type": "long",
+      "description": ""
+    },
+    {
+      "name": "KernelTime",
+      "type": "long",
+      "description": ""
+    },
+    {
+      "name": "DirectoryEnumeratedCount",
+      "type": "long",
+      "description": ""
+    },
+    {
+      "name": "AsepWrittenCount",
+      "type": "long",
+      "description": ""
+    },
+    {
+      "name": "SuspiciousDnsRequestCount",
+      "type": "long",
+      "description": ""
+    },
+    {
+      "name": "DocumentFileWrittenCount",
+      "type": "long",
+      "description": ""
+    },
+    {
+      "name": "ProtectVirtualMemoryCount",
+      "type": "long",
+      "description": ""
+    },
+    {
+      "name": "UserMemoryProtectExecutableRemoteCount",
+      "type": "long",
+      "description": ""
+    },
+    {
+      "name": "UserMemoryAllocateExecutableRemoteCount",
+      "type": "long",
+      "description": ""
+    },
+    {
+      "name": "ExecutableDeletedCount",
+      "type": "long",
+      "description": ""
+    },
+    {
+      "name": "RegKeySecurityDecreasedCount",
+      "type": "long",
+      "description": ""
+    },
+    {
+      "name": "InjectedThreadCount",
+      "type": "long",
+      "description": ""
+    },
+    {
+      "name": "NetworkModuleLoadCount",
+      "type": "long",
+      "description": ""
+    },
+    {
+      "name": "ThreadStartAddress",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ThreadExecutionControlType",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "PayloadClassification",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "PayloadClassificationFlags",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "MemoryDescriptionFlags",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "WellKnownTargetFunction",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "RemoteAddressIP4",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "AdditionalFields",
+      "type": "dynamic",
+      "description": ""
+    }
+  ]
+}

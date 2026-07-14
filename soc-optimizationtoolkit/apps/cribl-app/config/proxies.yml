@@ -1,0 +1,115 @@
+# External API declaration. Declare domains your app needs to reach.
+# At install time, admins see exactly which endpoints the app will use.
+
+# api.example.com:
+#   paths:
+#     allowlist:
+#       - /v1/
+#       - /api/public/
+#     blocklist:
+#       - /v1/internal/
+#       - /api/admin/
+#   headers:
+#     inject:
+#       Authorization: '`Bearer ${kv.api_key}`'
+#       X-API-Version: '2024-01'
+#     allowlist:
+#       - Content-Type
+#       - x-request-id
+#       - x-*
+#     blocklist:
+#       - X-Sensitive-Header
+#       - Cookie
+#   timeout: 30000
+#   # Verify the upstream TLS certificate chain. Leave as `true` for production
+#   # endpoints. Set to `false` only when targeting trusted internal endpoints
+#   # that present self-signed or otherwise untrusted certificates.
+#   rejectUnauthorized: true
+
+# Azure AD token endpoint (client_credentials flow using client_secret_basic).
+# The proxy strips any Authorization header the browser sends, so the Basic
+# credential - base64(clientId:clientSecret), written encrypted to the app KV
+# store by the harness - is injected server-side at request time.
+# The headers allowlist forwards ONLY Content-Type/Accept: the browser's Origin
+# header must not reach Azure AD, or it rejects confidential-client token
+# redemption with AADSTS9002326 (cross-origin redemption is SPA-only).
+login.microsoftonline.com:
+  timeout: 30000
+  headers:
+    inject:
+      Authorization: '`Basic ${kv.azureBasic}`'
+    allowlist:
+      - Content-Type
+      - Accept
+
+# Azure Resource Manager. The ARM bearer token is stored encrypted in the app
+# KV store (azureArmToken) after the token flow above and injected here
+# server-side, because client-sent Authorization headers are stripped by the
+# proxy and must never be set in app code.
+management.azure.com:
+  timeout: 30000
+  headers:
+    inject:
+      Authorization: '`Bearer ${kv.azureArmToken}`'
+    allowlist:
+      - Content-Type
+      - Accept
+
+# Microsoft Graph. The ingestion service-principal picker (role-assignment step)
+# enumerates servicePrincipals here. A SEPARATE Graph-audience bearer token is
+# stored encrypted under azureGraphToken (the ARM token's audience does not work
+# for Graph) via the same client_credentials flow as azureArmToken, and injected
+# server-side because client-sent Authorization headers are stripped by the
+# proxy. Only Content-Type/Accept are forwarded so the browser's Origin cannot
+# reach Graph. Reading the directory REQUIRES the app registration to have
+# Application.Read.All (or Directory.Read.All) consented; without it Graph returns
+# 403 and the picker falls back to manual object-id entry.
+graph.microsoft.com:
+  timeout: 30000
+  headers:
+    inject:
+      Authorization: '`Bearer ${kv.azureGraphToken}`'
+    allowlist:
+      - Content-Type
+      - Accept
+  rejectUnauthorized: true
+
+# GitHub REST API (Microsoft Sentinel content: solution index, per-solution
+# tree queries, connector JSON) - porting-plan Unit 14. The GitHub personal
+# access token lives in the encrypted, write-only KV entry githubPat (validated
+# with GET /user before it is stored, exactly like azureBasic/azureArmToken) and
+# is injected server-side as a Bearer credential; the browser never sets an
+# Authorization header (the proxy strips any it sends). Only Content-Type/Accept
+# are forwarded so the browser's Origin header cannot reach GitHub. A User-Agent
+# is INJECTED server-side because the GitHub API rejects any request without one
+# with HTTP 403, and the browser cannot set User-Agent (a forbidden fetch header)
+# nor would the allowlist forward it. A PAT is
+# effectively REQUIRED here: the hosted app shares one egress IP across tenants,
+# so GitHub's 60 req/hr anonymous per-IP limit is unreliable. Fetches are LAZY
+# and per-solution (never a whole-repo mirror) to stay under the 100 req/min
+# proxy budget and the 30s per-request timeout.
+api.github.com:
+  timeout: 30000
+  headers:
+    inject:
+      Authorization: '`Bearer ${kv.githubPat}`'
+      User-Agent: 'cribl-soc-optimization-toolkit'
+    allowlist:
+      - Content-Type
+      - Accept
+  rejectUnauthorized: true
+
+# GitHub raw content host (immutable per-commit file bytes: connector JSON,
+# solution metadata, sample data). Same server-side githubPat injection and the
+# same Origin-suppressing allowlist as api.github.com; commit-pinned URLs make
+# the bytes safe to cache by solution + commit SHA.
+raw.githubusercontent.com:
+  timeout: 30000
+  headers:
+    inject:
+      Authorization: '`Bearer ${kv.githubPat}`'
+      User-Agent: 'cribl-soc-optimization-toolkit'
+    allowlist:
+      - Content-Type
+      - Accept
+  rejectUnauthorized: true

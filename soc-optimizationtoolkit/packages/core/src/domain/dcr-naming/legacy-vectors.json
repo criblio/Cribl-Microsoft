@@ -1,0 +1,2486 @@
+[
+  {
+    "table": "ADAssessmentRecommendation",
+    "mode": "direct",
+    "prefix": "dcr-",
+    "suffix": "",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-ADAsse-eastus"
+  },
+  {
+    "table": "ADAssessmentRecommendation",
+    "mode": "dce",
+    "prefix": "dcr-",
+    "suffix": "",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-ADAssessmentRecommendation-eastus"
+  },
+  {
+    "table": "ADSecurityAssessmentRecommendation",
+    "mode": "direct",
+    "prefix": "dcr-",
+    "suffix": "",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-ADSecu-eastus"
+  },
+  {
+    "table": "ADSecurityAssessmentRecommendation",
+    "mode": "dce",
+    "prefix": "dcr-",
+    "suffix": "",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-ADSecurityAssessmentRecommendation-eastus"
+  },
+  {
+    "table": "ASimAuditEventLogs",
+    "mode": "direct",
+    "prefix": "dcr-",
+    "suffix": "",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-ASimAuditEventLogs-eastus"
+  },
+  {
+    "table": "ASimAuditEventLogs",
+    "mode": "dce",
+    "prefix": "dcr-",
+    "suffix": "",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-ASimAuditEventLogs-eastus"
+  },
+  {
+    "table": "ASimAuthenticationEventLogs",
+    "mode": "direct",
+    "prefix": "dcr-",
+    "suffix": "",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-ASimAu-eastus"
+  },
+  {
+    "table": "ASimAuthenticationEventLogs",
+    "mode": "dce",
+    "prefix": "dcr-",
+    "suffix": "",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-ASimAuthenticationEventLogs-eastus"
+  },
+  {
+    "table": "ASimDhcpEventLogs",
+    "mode": "direct",
+    "prefix": "dcr-",
+    "suffix": "",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-ASimDhcpEventLogs-eastus"
+  },
+  {
+    "table": "ASimDhcpEventLogs",
+    "mode": "dce",
+    "prefix": "dcr-",
+    "suffix": "",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-ASimDhcpEventLogs-eastus"
+  },
+  {
+    "table": "ASimDnsActivityLogs",
+    "mode": "direct",
+    "prefix": "dcr-",
+    "suffix": "",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-ASimDnsActivityLogs-eastus"
+  },
+  {
+    "table": "ASimDnsActivityLogs",
+    "mode": "dce",
+    "prefix": "dcr-",
+    "suffix": "",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-ASimDnsActivityLogs-eastus"
+  },
+  {
+    "table": "ASimFileEventLogs",
+    "mode": "direct",
+    "prefix": "dcr-",
+    "suffix": "",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-ASimFileEventLogs-eastus"
+  },
+  {
+    "table": "ASimFileEventLogs",
+    "mode": "dce",
+    "prefix": "dcr-",
+    "suffix": "",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-ASimFileEventLogs-eastus"
+  },
+  {
+    "table": "ASimNetworkSessionLogs",
+    "mode": "direct",
+    "prefix": "dcr-",
+    "suffix": "",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-ASimNe-eastus"
+  },
+  {
+    "table": "ASimNetworkSessionLogs",
+    "mode": "dce",
+    "prefix": "dcr-",
+    "suffix": "",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-ASimNetworkSessionLogs-eastus"
+  },
+  {
+    "table": "ASimProcessEventLogs",
+    "mode": "direct",
+    "prefix": "dcr-",
+    "suffix": "",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-ASimPr-eastus"
+  },
+  {
+    "table": "ASimProcessEventLogs",
+    "mode": "dce",
+    "prefix": "dcr-",
+    "suffix": "",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-ASimProcessEventLogs-eastus"
+  },
+  {
+    "table": "ASimRegistryEventLogs",
+    "mode": "direct",
+    "prefix": "dcr-",
+    "suffix": "",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-ASimRe-eastus"
+  },
+  {
+    "table": "ASimRegistryEventLogs",
+    "mode": "dce",
+    "prefix": "dcr-",
+    "suffix": "",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-ASimRegistryEventLogs-eastus"
+  },
+  {
+    "table": "ASimUserManagementActivityLogs",
+    "mode": "direct",
+    "prefix": "dcr-",
+    "suffix": "",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-ASimUs-eastus"
+  },
+  {
+    "table": "ASimUserManagementActivityLogs",
+    "mode": "dce",
+    "prefix": "dcr-",
+    "suffix": "",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-ASimUserManagementActivityLogs-eastus"
+  },
+  {
+    "table": "ASimWebSessionLogs",
+    "mode": "direct",
+    "prefix": "dcr-",
+    "suffix": "",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-ASimWebSessionLogs-eastus"
+  },
+  {
+    "table": "ASimWebSessionLogs",
+    "mode": "dce",
+    "prefix": "dcr-",
+    "suffix": "",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-ASimWebSessionLogs-eastus"
+  },
+  {
+    "table": "AWSCloudTrail",
+    "mode": "direct",
+    "prefix": "dcr-",
+    "suffix": "",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-AWSCloudTrail-eastus"
+  },
+  {
+    "table": "AWSCloudTrail",
+    "mode": "dce",
+    "prefix": "dcr-",
+    "suffix": "",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-AWSCloudTrail-eastus"
+  },
+  {
+    "table": "AWSCloudWatch",
+    "mode": "direct",
+    "prefix": "dcr-",
+    "suffix": "",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-AWSCloudWatch-eastus"
+  },
+  {
+    "table": "AWSCloudWatch",
+    "mode": "dce",
+    "prefix": "dcr-",
+    "suffix": "",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-AWSCloudWatch-eastus"
+  },
+  {
+    "table": "AWSGuardDuty",
+    "mode": "direct",
+    "prefix": "dcr-",
+    "suffix": "",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-AWSGuardDuty-eastus"
+  },
+  {
+    "table": "AWSGuardDuty",
+    "mode": "dce",
+    "prefix": "dcr-",
+    "suffix": "",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-AWSGuardDuty-eastus"
+  },
+  {
+    "table": "AWSVPCFlow",
+    "mode": "direct",
+    "prefix": "dcr-",
+    "suffix": "",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-AWSVPCFlow-eastus"
+  },
+  {
+    "table": "AWSVPCFlow",
+    "mode": "dce",
+    "prefix": "dcr-",
+    "suffix": "",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-AWSVPCFlow-eastus"
+  },
+  {
+    "table": "Anomalies",
+    "mode": "direct",
+    "prefix": "dcr-",
+    "suffix": "",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-Anomalies-eastus"
+  },
+  {
+    "table": "Anomalies",
+    "mode": "dce",
+    "prefix": "dcr-",
+    "suffix": "",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-Anomalies-eastus"
+  },
+  {
+    "table": "AzureActivity",
+    "mode": "direct",
+    "prefix": "dcr-",
+    "suffix": "",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-AzureActivity-eastus"
+  },
+  {
+    "table": "AzureActivity",
+    "mode": "dce",
+    "prefix": "dcr-",
+    "suffix": "",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-AzureActivity-eastus"
+  },
+  {
+    "table": "AzureAssessmentRecommendation",
+    "mode": "direct",
+    "prefix": "dcr-",
+    "suffix": "",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-AzureA-eastus"
+  },
+  {
+    "table": "AzureAssessmentRecommendation",
+    "mode": "dce",
+    "prefix": "dcr-",
+    "suffix": "",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-AzureAssessmentRecommendation-eastus"
+  },
+  {
+    "table": "AzureDiagnostics",
+    "mode": "direct",
+    "prefix": "dcr-",
+    "suffix": "",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-AzureDiagnostics-eastus"
+  },
+  {
+    "table": "AzureDiagnostics",
+    "mode": "dce",
+    "prefix": "dcr-",
+    "suffix": "",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-AzureDiagnostics-eastus"
+  },
+  {
+    "table": "CommonSecurityLog",
+    "mode": "direct",
+    "prefix": "dcr-",
+    "suffix": "",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-CommonSecurityLog-eastus"
+  },
+  {
+    "table": "CommonSecurityLog",
+    "mode": "dce",
+    "prefix": "dcr-",
+    "suffix": "",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-CommonSecurityLog-eastus"
+  },
+  {
+    "table": "DeviceEvents",
+    "mode": "direct",
+    "prefix": "dcr-",
+    "suffix": "",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-DeviceEvents-eastus"
+  },
+  {
+    "table": "DeviceEvents",
+    "mode": "dce",
+    "prefix": "dcr-",
+    "suffix": "",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-DeviceEvents-eastus"
+  },
+  {
+    "table": "DeviceFileEvents",
+    "mode": "direct",
+    "prefix": "dcr-",
+    "suffix": "",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-DeviceFileEvents-eastus"
+  },
+  {
+    "table": "DeviceFileEvents",
+    "mode": "dce",
+    "prefix": "dcr-",
+    "suffix": "",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-DeviceFileEvents-eastus"
+  },
+  {
+    "table": "DeviceTvmSecureConfigurationAssessmentKB",
+    "mode": "direct",
+    "prefix": "dcr-",
+    "suffix": "",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-Device-eastus"
+  },
+  {
+    "table": "DeviceTvmSecureConfigurationAssessmentKB",
+    "mode": "dce",
+    "prefix": "dcr-",
+    "suffix": "",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-DeviceTvmSecureConfigurationAssessmentKB-eastus"
+  },
+  {
+    "table": "DeviceTvmSoftwareVulnerabilitiesKB",
+    "mode": "direct",
+    "prefix": "dcr-",
+    "suffix": "",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-Device-eastus"
+  },
+  {
+    "table": "DeviceTvmSoftwareVulnerabilitiesKB",
+    "mode": "dce",
+    "prefix": "dcr-",
+    "suffix": "",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-DeviceTvmSoftwareVulnerabilitiesKB-eastus"
+  },
+  {
+    "table": "Event",
+    "mode": "direct",
+    "prefix": "dcr-",
+    "suffix": "",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-Event-eastus"
+  },
+  {
+    "table": "Event",
+    "mode": "dce",
+    "prefix": "dcr-",
+    "suffix": "",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-Event-eastus"
+  },
+  {
+    "table": "ExchangeAssessmentRecommendation",
+    "mode": "direct",
+    "prefix": "dcr-",
+    "suffix": "",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-Exchan-eastus"
+  },
+  {
+    "table": "ExchangeAssessmentRecommendation",
+    "mode": "dce",
+    "prefix": "dcr-",
+    "suffix": "",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-ExchangeAssessmentRecommendation-eastus"
+  },
+  {
+    "table": "ExchangeOnlineAssessmentRecommendation",
+    "mode": "direct",
+    "prefix": "dcr-",
+    "suffix": "",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-Exchan-eastus"
+  },
+  {
+    "table": "ExchangeOnlineAssessmentRecommendation",
+    "mode": "dce",
+    "prefix": "dcr-",
+    "suffix": "",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-ExchangeOnlineAssessmentRecommendation-eastus"
+  },
+  {
+    "table": "GCPAuditLogs",
+    "mode": "direct",
+    "prefix": "dcr-",
+    "suffix": "",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-GCPAuditLogs-eastus"
+  },
+  {
+    "table": "GCPAuditLogs",
+    "mode": "dce",
+    "prefix": "dcr-",
+    "suffix": "",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-GCPAuditLogs-eastus"
+  },
+  {
+    "table": "GoogleCloudSCC",
+    "mode": "direct",
+    "prefix": "dcr-",
+    "suffix": "",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-GoogleCloudSCC-eastus"
+  },
+  {
+    "table": "GoogleCloudSCC",
+    "mode": "dce",
+    "prefix": "dcr-",
+    "suffix": "",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-GoogleCloudSCC-eastus"
+  },
+  {
+    "table": "SCCMAssessmentRecommendation",
+    "mode": "direct",
+    "prefix": "dcr-",
+    "suffix": "",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-SCCMAs-eastus"
+  },
+  {
+    "table": "SCCMAssessmentRecommendation",
+    "mode": "dce",
+    "prefix": "dcr-",
+    "suffix": "",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-SCCMAssessmentRecommendation-eastus"
+  },
+  {
+    "table": "SCOMAssessmentRecommendation",
+    "mode": "direct",
+    "prefix": "dcr-",
+    "suffix": "",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-SCOMAs-eastus"
+  },
+  {
+    "table": "SCOMAssessmentRecommendation",
+    "mode": "dce",
+    "prefix": "dcr-",
+    "suffix": "",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-SCOMAssessmentRecommendation-eastus"
+  },
+  {
+    "table": "SPAssessmentRecommendation",
+    "mode": "direct",
+    "prefix": "dcr-",
+    "suffix": "",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-SPAsse-eastus"
+  },
+  {
+    "table": "SPAssessmentRecommendation",
+    "mode": "dce",
+    "prefix": "dcr-",
+    "suffix": "",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-SPAssessmentRecommendation-eastus"
+  },
+  {
+    "table": "SQLAssessmentRecommendation",
+    "mode": "direct",
+    "prefix": "dcr-",
+    "suffix": "",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-SQLAss-eastus"
+  },
+  {
+    "table": "SQLAssessmentRecommendation",
+    "mode": "dce",
+    "prefix": "dcr-",
+    "suffix": "",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-SQLAssessmentRecommendation-eastus"
+  },
+  {
+    "table": "SecurityEvent",
+    "mode": "direct",
+    "prefix": "dcr-",
+    "suffix": "",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-SecurityEvent-eastus"
+  },
+  {
+    "table": "SecurityEvent",
+    "mode": "dce",
+    "prefix": "dcr-",
+    "suffix": "",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-SecurityEvent-eastus"
+  },
+  {
+    "table": "SfBAssessmentRecommendation",
+    "mode": "direct",
+    "prefix": "dcr-",
+    "suffix": "",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-SfBAss-eastus"
+  },
+  {
+    "table": "SfBAssessmentRecommendation",
+    "mode": "dce",
+    "prefix": "dcr-",
+    "suffix": "",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-SfBAssessmentRecommendation-eastus"
+  },
+  {
+    "table": "SfBOnlineAssessmentRecommendation",
+    "mode": "direct",
+    "prefix": "dcr-",
+    "suffix": "",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-SfBOnl-eastus"
+  },
+  {
+    "table": "SfBOnlineAssessmentRecommendation",
+    "mode": "dce",
+    "prefix": "dcr-",
+    "suffix": "",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-SfBOnlineAssessmentRecommendation-eastus"
+  },
+  {
+    "table": "SharePointOnlineAssessmentRecommendation",
+    "mode": "direct",
+    "prefix": "dcr-",
+    "suffix": "",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-ShareP-eastus"
+  },
+  {
+    "table": "SharePointOnlineAssessmentRecommendation",
+    "mode": "dce",
+    "prefix": "dcr-",
+    "suffix": "",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-SharePointOnlineAssessmentRecommendation-eastus"
+  },
+  {
+    "table": "Syslog",
+    "mode": "direct",
+    "prefix": "dcr-",
+    "suffix": "",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-Syslog-eastus"
+  },
+  {
+    "table": "Syslog",
+    "mode": "dce",
+    "prefix": "dcr-",
+    "suffix": "",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-Syslog-eastus"
+  },
+  {
+    "table": "UCClient",
+    "mode": "direct",
+    "prefix": "dcr-",
+    "suffix": "",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-UCClient-eastus"
+  },
+  {
+    "table": "UCClient",
+    "mode": "dce",
+    "prefix": "dcr-",
+    "suffix": "",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-UCClient-eastus"
+  },
+  {
+    "table": "UCClientReadinessStatus",
+    "mode": "direct",
+    "prefix": "dcr-",
+    "suffix": "",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-UCClie-eastus"
+  },
+  {
+    "table": "UCClientReadinessStatus",
+    "mode": "dce",
+    "prefix": "dcr-",
+    "suffix": "",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-UCClientReadinessStatus-eastus"
+  },
+  {
+    "table": "UCClientUpdateStatus",
+    "mode": "direct",
+    "prefix": "dcr-",
+    "suffix": "",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-UCClie-eastus"
+  },
+  {
+    "table": "UCClientUpdateStatus",
+    "mode": "dce",
+    "prefix": "dcr-",
+    "suffix": "",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-UCClientUpdateStatus-eastus"
+  },
+  {
+    "table": "UCDOAggregatedStatus",
+    "mode": "direct",
+    "prefix": "dcr-",
+    "suffix": "",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-UCDOAg-eastus"
+  },
+  {
+    "table": "UCDOAggregatedStatus",
+    "mode": "dce",
+    "prefix": "dcr-",
+    "suffix": "",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-UCDOAggregatedStatus-eastus"
+  },
+  {
+    "table": "UCDOStatus",
+    "mode": "direct",
+    "prefix": "dcr-",
+    "suffix": "",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-UCDOStatus-eastus"
+  },
+  {
+    "table": "UCDOStatus",
+    "mode": "dce",
+    "prefix": "dcr-",
+    "suffix": "",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-UCDOStatus-eastus"
+  },
+  {
+    "table": "UCDeviceAlert",
+    "mode": "direct",
+    "prefix": "dcr-",
+    "suffix": "",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-UCDeviceAlert-eastus"
+  },
+  {
+    "table": "UCDeviceAlert",
+    "mode": "dce",
+    "prefix": "dcr-",
+    "suffix": "",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-UCDeviceAlert-eastus"
+  },
+  {
+    "table": "UCServiceUpdateStatus",
+    "mode": "direct",
+    "prefix": "dcr-",
+    "suffix": "",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-UCServ-eastus"
+  },
+  {
+    "table": "UCServiceUpdateStatus",
+    "mode": "dce",
+    "prefix": "dcr-",
+    "suffix": "",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-UCServiceUpdateStatus-eastus"
+  },
+  {
+    "table": "UCUpdateAlert",
+    "mode": "direct",
+    "prefix": "dcr-",
+    "suffix": "",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-UCUpdateAlert-eastus"
+  },
+  {
+    "table": "UCUpdateAlert",
+    "mode": "dce",
+    "prefix": "dcr-",
+    "suffix": "",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-UCUpdateAlert-eastus"
+  },
+  {
+    "table": "WindowsClientAssessmentRecommendation",
+    "mode": "direct",
+    "prefix": "dcr-",
+    "suffix": "",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-Window-eastus"
+  },
+  {
+    "table": "WindowsClientAssessmentRecommendation",
+    "mode": "dce",
+    "prefix": "dcr-",
+    "suffix": "",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-WindowsClientAssessmentRecommendation-eastus"
+  },
+  {
+    "table": "WindowsEvent",
+    "mode": "direct",
+    "prefix": "dcr-",
+    "suffix": "",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-WindowsEvent-eastus"
+  },
+  {
+    "table": "WindowsEvent",
+    "mode": "dce",
+    "prefix": "dcr-",
+    "suffix": "",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-WindowsEvent-eastus"
+  },
+  {
+    "table": "WindowsServerAssessmentRecommendation",
+    "mode": "direct",
+    "prefix": "dcr-",
+    "suffix": "",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-Window-eastus"
+  },
+  {
+    "table": "WindowsServerAssessmentRecommendation",
+    "mode": "dce",
+    "prefix": "dcr-",
+    "suffix": "",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-WindowsServerAssessmentRecommendation-eastus"
+  },
+  {
+    "table": "ADAssessmentRecommendation",
+    "mode": "direct",
+    "prefix": "dcr-cribl-",
+    "suffix": "prod",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-cribl-ADAsse-eastus-prod"
+  },
+  {
+    "table": "ADAssessmentRecommendation",
+    "mode": "dce",
+    "prefix": "dcr-cribl-",
+    "suffix": "prod",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-cribl-ADAssessmentRecommendation-eastus-prod"
+  },
+  {
+    "table": "ADSecurityAssessmentRecommendation",
+    "mode": "direct",
+    "prefix": "dcr-cribl-",
+    "suffix": "prod",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-cribl-ADSecu-eastus-prod"
+  },
+  {
+    "table": "ADSecurityAssessmentRecommendation",
+    "mode": "dce",
+    "prefix": "dcr-cribl-",
+    "suffix": "prod",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-cribl-ADSecurityAssessmentRecommendation-eastus-prod"
+  },
+  {
+    "table": "ASimAuditEventLogs",
+    "mode": "direct",
+    "prefix": "dcr-cribl-",
+    "suffix": "prod",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-cribl-ASimAu-eastus-prod"
+  },
+  {
+    "table": "ASimAuditEventLogs",
+    "mode": "dce",
+    "prefix": "dcr-cribl-",
+    "suffix": "prod",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-cribl-ASimAuditEventLogs-eastus-prod"
+  },
+  {
+    "table": "ASimAuthenticationEventLogs",
+    "mode": "direct",
+    "prefix": "dcr-cribl-",
+    "suffix": "prod",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-cribl-ASimAu-eastus-prod"
+  },
+  {
+    "table": "ASimAuthenticationEventLogs",
+    "mode": "dce",
+    "prefix": "dcr-cribl-",
+    "suffix": "prod",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-cribl-ASimAuthenticationEventLogs-eastus-prod"
+  },
+  {
+    "table": "ASimDhcpEventLogs",
+    "mode": "direct",
+    "prefix": "dcr-cribl-",
+    "suffix": "prod",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-cribl-ASimDh-eastus-prod"
+  },
+  {
+    "table": "ASimDhcpEventLogs",
+    "mode": "dce",
+    "prefix": "dcr-cribl-",
+    "suffix": "prod",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-cribl-ASimDhcpEventLogs-eastus-prod"
+  },
+  {
+    "table": "ASimDnsActivityLogs",
+    "mode": "direct",
+    "prefix": "dcr-cribl-",
+    "suffix": "prod",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-cribl-ASimDn-eastus-prod"
+  },
+  {
+    "table": "ASimDnsActivityLogs",
+    "mode": "dce",
+    "prefix": "dcr-cribl-",
+    "suffix": "prod",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-cribl-ASimDnsActivityLogs-eastus-prod"
+  },
+  {
+    "table": "ASimFileEventLogs",
+    "mode": "direct",
+    "prefix": "dcr-cribl-",
+    "suffix": "prod",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-cribl-ASimFi-eastus-prod"
+  },
+  {
+    "table": "ASimFileEventLogs",
+    "mode": "dce",
+    "prefix": "dcr-cribl-",
+    "suffix": "prod",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-cribl-ASimFileEventLogs-eastus-prod"
+  },
+  {
+    "table": "ASimNetworkSessionLogs",
+    "mode": "direct",
+    "prefix": "dcr-cribl-",
+    "suffix": "prod",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-cribl-ASimNe-eastus-prod"
+  },
+  {
+    "table": "ASimNetworkSessionLogs",
+    "mode": "dce",
+    "prefix": "dcr-cribl-",
+    "suffix": "prod",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-cribl-ASimNetworkSessionLogs-eastus-prod"
+  },
+  {
+    "table": "ASimProcessEventLogs",
+    "mode": "direct",
+    "prefix": "dcr-cribl-",
+    "suffix": "prod",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-cribl-ASimPr-eastus-prod"
+  },
+  {
+    "table": "ASimProcessEventLogs",
+    "mode": "dce",
+    "prefix": "dcr-cribl-",
+    "suffix": "prod",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-cribl-ASimProcessEventLogs-eastus-prod"
+  },
+  {
+    "table": "ASimRegistryEventLogs",
+    "mode": "direct",
+    "prefix": "dcr-cribl-",
+    "suffix": "prod",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-cribl-ASimRe-eastus-prod"
+  },
+  {
+    "table": "ASimRegistryEventLogs",
+    "mode": "dce",
+    "prefix": "dcr-cribl-",
+    "suffix": "prod",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-cribl-ASimRegistryEventLogs-eastus-prod"
+  },
+  {
+    "table": "ASimUserManagementActivityLogs",
+    "mode": "direct",
+    "prefix": "dcr-cribl-",
+    "suffix": "prod",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-cribl-ASimUs-eastus-prod"
+  },
+  {
+    "table": "ASimUserManagementActivityLogs",
+    "mode": "dce",
+    "prefix": "dcr-cribl-",
+    "suffix": "prod",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-cribl-ASimUserManagementActivityLogs-eastus-prod"
+  },
+  {
+    "table": "ASimWebSessionLogs",
+    "mode": "direct",
+    "prefix": "dcr-cribl-",
+    "suffix": "prod",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-cribl-ASimWe-eastus-prod"
+  },
+  {
+    "table": "ASimWebSessionLogs",
+    "mode": "dce",
+    "prefix": "dcr-cribl-",
+    "suffix": "prod",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-cribl-ASimWebSessionLogs-eastus-prod"
+  },
+  {
+    "table": "AWSCloudTrail",
+    "mode": "direct",
+    "prefix": "dcr-cribl-",
+    "suffix": "prod",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-cribl-AWSClo-eastus-prod"
+  },
+  {
+    "table": "AWSCloudTrail",
+    "mode": "dce",
+    "prefix": "dcr-cribl-",
+    "suffix": "prod",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-cribl-AWSCloudTrail-eastus-prod"
+  },
+  {
+    "table": "AWSCloudWatch",
+    "mode": "direct",
+    "prefix": "dcr-cribl-",
+    "suffix": "prod",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-cribl-AWSClo-eastus-prod"
+  },
+  {
+    "table": "AWSCloudWatch",
+    "mode": "dce",
+    "prefix": "dcr-cribl-",
+    "suffix": "prod",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-cribl-AWSCloudWatch-eastus-prod"
+  },
+  {
+    "table": "AWSGuardDuty",
+    "mode": "direct",
+    "prefix": "dcr-cribl-",
+    "suffix": "prod",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-cribl-AWSGua-eastus-prod"
+  },
+  {
+    "table": "AWSGuardDuty",
+    "mode": "dce",
+    "prefix": "dcr-cribl-",
+    "suffix": "prod",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-cribl-AWSGuardDuty-eastus-prod"
+  },
+  {
+    "table": "AWSVPCFlow",
+    "mode": "direct",
+    "prefix": "dcr-cribl-",
+    "suffix": "prod",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-cribl-AWSVPC-eastus-prod"
+  },
+  {
+    "table": "AWSVPCFlow",
+    "mode": "dce",
+    "prefix": "dcr-cribl-",
+    "suffix": "prod",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-cribl-AWSVPCFlow-eastus-prod"
+  },
+  {
+    "table": "Anomalies",
+    "mode": "direct",
+    "prefix": "dcr-cribl-",
+    "suffix": "prod",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-cribl-Anomal-eastus-prod"
+  },
+  {
+    "table": "Anomalies",
+    "mode": "dce",
+    "prefix": "dcr-cribl-",
+    "suffix": "prod",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-cribl-Anomalies-eastus-prod"
+  },
+  {
+    "table": "AzureActivity",
+    "mode": "direct",
+    "prefix": "dcr-cribl-",
+    "suffix": "prod",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-cribl-AzureA-eastus-prod"
+  },
+  {
+    "table": "AzureActivity",
+    "mode": "dce",
+    "prefix": "dcr-cribl-",
+    "suffix": "prod",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-cribl-AzureActivity-eastus-prod"
+  },
+  {
+    "table": "AzureAssessmentRecommendation",
+    "mode": "direct",
+    "prefix": "dcr-cribl-",
+    "suffix": "prod",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-cribl-AzureA-eastus-prod"
+  },
+  {
+    "table": "AzureAssessmentRecommendation",
+    "mode": "dce",
+    "prefix": "dcr-cribl-",
+    "suffix": "prod",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-cribl-AzureAssessmentRecommendation-eastus-prod"
+  },
+  {
+    "table": "AzureDiagnostics",
+    "mode": "direct",
+    "prefix": "dcr-cribl-",
+    "suffix": "prod",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-cribl-AzureD-eastus-prod"
+  },
+  {
+    "table": "AzureDiagnostics",
+    "mode": "dce",
+    "prefix": "dcr-cribl-",
+    "suffix": "prod",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-cribl-AzureDiagnostics-eastus-prod"
+  },
+  {
+    "table": "CommonSecurityLog",
+    "mode": "direct",
+    "prefix": "dcr-cribl-",
+    "suffix": "prod",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-cribl-CSL-eastus-prod"
+  },
+  {
+    "table": "CommonSecurityLog",
+    "mode": "dce",
+    "prefix": "dcr-cribl-",
+    "suffix": "prod",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-cribl-CommonSecurityLog-eastus-prod"
+  },
+  {
+    "table": "DeviceEvents",
+    "mode": "direct",
+    "prefix": "dcr-cribl-",
+    "suffix": "prod",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-cribl-DevEvt-eastus-prod"
+  },
+  {
+    "table": "DeviceEvents",
+    "mode": "dce",
+    "prefix": "dcr-cribl-",
+    "suffix": "prod",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-cribl-DeviceEvents-eastus-prod"
+  },
+  {
+    "table": "DeviceFileEvents",
+    "mode": "direct",
+    "prefix": "dcr-cribl-",
+    "suffix": "prod",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-cribl-Device-eastus-prod"
+  },
+  {
+    "table": "DeviceFileEvents",
+    "mode": "dce",
+    "prefix": "dcr-cribl-",
+    "suffix": "prod",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-cribl-DeviceFileEvents-eastus-prod"
+  },
+  {
+    "table": "DeviceTvmSecureConfigurationAssessmentKB",
+    "mode": "direct",
+    "prefix": "dcr-cribl-",
+    "suffix": "prod",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-cribl-Device-eastus-prod"
+  },
+  {
+    "table": "DeviceTvmSecureConfigurationAssessmentKB",
+    "mode": "dce",
+    "prefix": "dcr-cribl-",
+    "suffix": "prod",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-cribl-DeviceTvmSecureConfigurationAssessmentKB-eastus-prod"
+  },
+  {
+    "table": "DeviceTvmSoftwareVulnerabilitiesKB",
+    "mode": "direct",
+    "prefix": "dcr-cribl-",
+    "suffix": "prod",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-cribl-Device-eastus-prod"
+  },
+  {
+    "table": "DeviceTvmSoftwareVulnerabilitiesKB",
+    "mode": "dce",
+    "prefix": "dcr-cribl-",
+    "suffix": "prod",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-cribl-DeviceTvmSoftwareVulnerabilitiesKB-eastus-prod"
+  },
+  {
+    "table": "Event",
+    "mode": "direct",
+    "prefix": "dcr-cribl-",
+    "suffix": "prod",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-cribl-Event-eastus-prod"
+  },
+  {
+    "table": "Event",
+    "mode": "dce",
+    "prefix": "dcr-cribl-",
+    "suffix": "prod",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-cribl-Event-eastus-prod"
+  },
+  {
+    "table": "ExchangeAssessmentRecommendation",
+    "mode": "direct",
+    "prefix": "dcr-cribl-",
+    "suffix": "prod",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-cribl-Exchan-eastus-prod"
+  },
+  {
+    "table": "ExchangeAssessmentRecommendation",
+    "mode": "dce",
+    "prefix": "dcr-cribl-",
+    "suffix": "prod",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-cribl-ExchangeAssessmentRecommendation-eastus-prod"
+  },
+  {
+    "table": "ExchangeOnlineAssessmentRecommendation",
+    "mode": "direct",
+    "prefix": "dcr-cribl-",
+    "suffix": "prod",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-cribl-Exchan-eastus-prod"
+  },
+  {
+    "table": "ExchangeOnlineAssessmentRecommendation",
+    "mode": "dce",
+    "prefix": "dcr-cribl-",
+    "suffix": "prod",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-cribl-ExchangeOnlineAssessmentRecommendation-eastus-prod"
+  },
+  {
+    "table": "GCPAuditLogs",
+    "mode": "direct",
+    "prefix": "dcr-cribl-",
+    "suffix": "prod",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-cribl-GCPAud-eastus-prod"
+  },
+  {
+    "table": "GCPAuditLogs",
+    "mode": "dce",
+    "prefix": "dcr-cribl-",
+    "suffix": "prod",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-cribl-GCPAuditLogs-eastus-prod"
+  },
+  {
+    "table": "GoogleCloudSCC",
+    "mode": "direct",
+    "prefix": "dcr-cribl-",
+    "suffix": "prod",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-cribl-Google-eastus-prod"
+  },
+  {
+    "table": "GoogleCloudSCC",
+    "mode": "dce",
+    "prefix": "dcr-cribl-",
+    "suffix": "prod",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-cribl-GoogleCloudSCC-eastus-prod"
+  },
+  {
+    "table": "SCCMAssessmentRecommendation",
+    "mode": "direct",
+    "prefix": "dcr-cribl-",
+    "suffix": "prod",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-cribl-SCCMAs-eastus-prod"
+  },
+  {
+    "table": "SCCMAssessmentRecommendation",
+    "mode": "dce",
+    "prefix": "dcr-cribl-",
+    "suffix": "prod",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-cribl-SCCMAssessmentRecommendation-eastus-prod"
+  },
+  {
+    "table": "SCOMAssessmentRecommendation",
+    "mode": "direct",
+    "prefix": "dcr-cribl-",
+    "suffix": "prod",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-cribl-SCOMAs-eastus-prod"
+  },
+  {
+    "table": "SCOMAssessmentRecommendation",
+    "mode": "dce",
+    "prefix": "dcr-cribl-",
+    "suffix": "prod",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-cribl-SCOMAssessmentRecommendation-eastus-prod"
+  },
+  {
+    "table": "SPAssessmentRecommendation",
+    "mode": "direct",
+    "prefix": "dcr-cribl-",
+    "suffix": "prod",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-cribl-SPAsse-eastus-prod"
+  },
+  {
+    "table": "SPAssessmentRecommendation",
+    "mode": "dce",
+    "prefix": "dcr-cribl-",
+    "suffix": "prod",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-cribl-SPAssessmentRecommendation-eastus-prod"
+  },
+  {
+    "table": "SQLAssessmentRecommendation",
+    "mode": "direct",
+    "prefix": "dcr-cribl-",
+    "suffix": "prod",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-cribl-SQLAss-eastus-prod"
+  },
+  {
+    "table": "SQLAssessmentRecommendation",
+    "mode": "dce",
+    "prefix": "dcr-cribl-",
+    "suffix": "prod",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-cribl-SQLAssessmentRecommendation-eastus-prod"
+  },
+  {
+    "table": "SecurityEvent",
+    "mode": "direct",
+    "prefix": "dcr-cribl-",
+    "suffix": "prod",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-cribl-SecEvt-eastus-prod"
+  },
+  {
+    "table": "SecurityEvent",
+    "mode": "dce",
+    "prefix": "dcr-cribl-",
+    "suffix": "prod",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-cribl-SecurityEvent-eastus-prod"
+  },
+  {
+    "table": "SfBAssessmentRecommendation",
+    "mode": "direct",
+    "prefix": "dcr-cribl-",
+    "suffix": "prod",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-cribl-SfBAss-eastus-prod"
+  },
+  {
+    "table": "SfBAssessmentRecommendation",
+    "mode": "dce",
+    "prefix": "dcr-cribl-",
+    "suffix": "prod",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-cribl-SfBAssessmentRecommendation-eastus-prod"
+  },
+  {
+    "table": "SfBOnlineAssessmentRecommendation",
+    "mode": "direct",
+    "prefix": "dcr-cribl-",
+    "suffix": "prod",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-cribl-SfBOnl-eastus-prod"
+  },
+  {
+    "table": "SfBOnlineAssessmentRecommendation",
+    "mode": "dce",
+    "prefix": "dcr-cribl-",
+    "suffix": "prod",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-cribl-SfBOnlineAssessmentRecommendation-eastus-prod"
+  },
+  {
+    "table": "SharePointOnlineAssessmentRecommendation",
+    "mode": "direct",
+    "prefix": "dcr-cribl-",
+    "suffix": "prod",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-cribl-ShareP-eastus-prod"
+  },
+  {
+    "table": "SharePointOnlineAssessmentRecommendation",
+    "mode": "dce",
+    "prefix": "dcr-cribl-",
+    "suffix": "prod",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-cribl-SharePointOnlineAssessmentRecommendation-eastus-prod"
+  },
+  {
+    "table": "Syslog",
+    "mode": "direct",
+    "prefix": "dcr-cribl-",
+    "suffix": "prod",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-cribl-Syslog-eastus-prod"
+  },
+  {
+    "table": "Syslog",
+    "mode": "dce",
+    "prefix": "dcr-cribl-",
+    "suffix": "prod",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-cribl-Syslog-eastus-prod"
+  },
+  {
+    "table": "UCClient",
+    "mode": "direct",
+    "prefix": "dcr-cribl-",
+    "suffix": "prod",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-cribl-UCClient-eastus-prod"
+  },
+  {
+    "table": "UCClient",
+    "mode": "dce",
+    "prefix": "dcr-cribl-",
+    "suffix": "prod",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-cribl-UCClient-eastus-prod"
+  },
+  {
+    "table": "UCClientReadinessStatus",
+    "mode": "direct",
+    "prefix": "dcr-cribl-",
+    "suffix": "prod",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-cribl-UCClie-eastus-prod"
+  },
+  {
+    "table": "UCClientReadinessStatus",
+    "mode": "dce",
+    "prefix": "dcr-cribl-",
+    "suffix": "prod",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-cribl-UCClientReadinessStatus-eastus-prod"
+  },
+  {
+    "table": "UCClientUpdateStatus",
+    "mode": "direct",
+    "prefix": "dcr-cribl-",
+    "suffix": "prod",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-cribl-UCClie-eastus-prod"
+  },
+  {
+    "table": "UCClientUpdateStatus",
+    "mode": "dce",
+    "prefix": "dcr-cribl-",
+    "suffix": "prod",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-cribl-UCClientUpdateStatus-eastus-prod"
+  },
+  {
+    "table": "UCDOAggregatedStatus",
+    "mode": "direct",
+    "prefix": "dcr-cribl-",
+    "suffix": "prod",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-cribl-UCDOAg-eastus-prod"
+  },
+  {
+    "table": "UCDOAggregatedStatus",
+    "mode": "dce",
+    "prefix": "dcr-cribl-",
+    "suffix": "prod",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-cribl-UCDOAggregatedStatus-eastus-prod"
+  },
+  {
+    "table": "UCDOStatus",
+    "mode": "direct",
+    "prefix": "dcr-cribl-",
+    "suffix": "prod",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-cribl-UCDOSt-eastus-prod"
+  },
+  {
+    "table": "UCDOStatus",
+    "mode": "dce",
+    "prefix": "dcr-cribl-",
+    "suffix": "prod",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-cribl-UCDOStatus-eastus-prod"
+  },
+  {
+    "table": "UCDeviceAlert",
+    "mode": "direct",
+    "prefix": "dcr-cribl-",
+    "suffix": "prod",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-cribl-UCDevi-eastus-prod"
+  },
+  {
+    "table": "UCDeviceAlert",
+    "mode": "dce",
+    "prefix": "dcr-cribl-",
+    "suffix": "prod",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-cribl-UCDeviceAlert-eastus-prod"
+  },
+  {
+    "table": "UCServiceUpdateStatus",
+    "mode": "direct",
+    "prefix": "dcr-cribl-",
+    "suffix": "prod",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-cribl-UCServ-eastus-prod"
+  },
+  {
+    "table": "UCServiceUpdateStatus",
+    "mode": "dce",
+    "prefix": "dcr-cribl-",
+    "suffix": "prod",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-cribl-UCServiceUpdateStatus-eastus-prod"
+  },
+  {
+    "table": "UCUpdateAlert",
+    "mode": "direct",
+    "prefix": "dcr-cribl-",
+    "suffix": "prod",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-cribl-UCUpda-eastus-prod"
+  },
+  {
+    "table": "UCUpdateAlert",
+    "mode": "dce",
+    "prefix": "dcr-cribl-",
+    "suffix": "prod",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-cribl-UCUpdateAlert-eastus-prod"
+  },
+  {
+    "table": "WindowsClientAssessmentRecommendation",
+    "mode": "direct",
+    "prefix": "dcr-cribl-",
+    "suffix": "prod",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-cribl-Window-eastus-prod"
+  },
+  {
+    "table": "WindowsClientAssessmentRecommendation",
+    "mode": "dce",
+    "prefix": "dcr-cribl-",
+    "suffix": "prod",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-cribl-WindowsClientAssessmentRecommendation-eastus-prod"
+  },
+  {
+    "table": "WindowsEvent",
+    "mode": "direct",
+    "prefix": "dcr-cribl-",
+    "suffix": "prod",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-cribl-WinEvt-eastus-prod"
+  },
+  {
+    "table": "WindowsEvent",
+    "mode": "dce",
+    "prefix": "dcr-cribl-",
+    "suffix": "prod",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-cribl-WindowsEvent-eastus-prod"
+  },
+  {
+    "table": "WindowsServerAssessmentRecommendation",
+    "mode": "direct",
+    "prefix": "dcr-cribl-",
+    "suffix": "prod",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-cribl-Window-eastus-prod"
+  },
+  {
+    "table": "WindowsServerAssessmentRecommendation",
+    "mode": "dce",
+    "prefix": "dcr-cribl-",
+    "suffix": "prod",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-cribl-WindowsServerAssessmentRecommendation-eastus-prod"
+  },
+  {
+    "table": "App_CL",
+    "mode": "direct",
+    "prefix": "dcr-",
+    "suffix": "",
+    "location": "eastus",
+    "custom": true,
+    "expected": "dcr-App-eastus"
+  },
+  {
+    "table": "App_CL",
+    "mode": "dce",
+    "prefix": "dcr-",
+    "suffix": "",
+    "location": "eastus",
+    "custom": true,
+    "expected": "dcr-App-eastus"
+  },
+  {
+    "table": "App_CL",
+    "mode": "direct",
+    "prefix": "dcr-cribl-",
+    "suffix": "prod",
+    "location": "eastus",
+    "custom": true,
+    "expected": "dcr-cribl-App-eastus-prod"
+  },
+  {
+    "table": "App_CL",
+    "mode": "dce",
+    "prefix": "dcr-cribl-",
+    "suffix": "prod",
+    "location": "eastus",
+    "custom": true,
+    "expected": "dcr-cribl-App-eastus-prod"
+  },
+  {
+    "table": "CloudFlare_CL",
+    "mode": "direct",
+    "prefix": "dcr-",
+    "suffix": "",
+    "location": "eastus",
+    "custom": true,
+    "expected": "dcr-CloudFlare-eastus"
+  },
+  {
+    "table": "CloudFlare_CL",
+    "mode": "dce",
+    "prefix": "dcr-",
+    "suffix": "",
+    "location": "eastus",
+    "custom": true,
+    "expected": "dcr-CloudFlare-eastus"
+  },
+  {
+    "table": "CloudFlare_CL",
+    "mode": "direct",
+    "prefix": "dcr-cribl-",
+    "suffix": "prod",
+    "location": "eastus",
+    "custom": true,
+    "expected": "dcr-cribl-CloudF-eastus-prod"
+  },
+  {
+    "table": "CloudFlare_CL",
+    "mode": "dce",
+    "prefix": "dcr-cribl-",
+    "suffix": "prod",
+    "location": "eastus",
+    "custom": true,
+    "expected": "dcr-cribl-CloudFlare-eastus-prod"
+  },
+  {
+    "table": "MyVeryLongCustomApplicationName_CL",
+    "mode": "direct",
+    "prefix": "dcr-",
+    "suffix": "",
+    "location": "eastus",
+    "custom": true,
+    "expected": "dcr-MyVery-eastus"
+  },
+  {
+    "table": "MyVeryLongCustomApplicationName_CL",
+    "mode": "dce",
+    "prefix": "dcr-",
+    "suffix": "",
+    "location": "eastus",
+    "custom": true,
+    "expected": "dcr-MyVeryLongCustomApplicationName-eastus"
+  },
+  {
+    "table": "MyVeryLongCustomApplicationName_CL",
+    "mode": "direct",
+    "prefix": "dcr-cribl-",
+    "suffix": "prod",
+    "location": "eastus",
+    "custom": true,
+    "expected": "dcr-cribl-MyVery-eastus-prod"
+  },
+  {
+    "table": "MyVeryLongCustomApplicationName_CL",
+    "mode": "dce",
+    "prefix": "dcr-cribl-",
+    "suffix": "prod",
+    "location": "eastus",
+    "custom": true,
+    "expected": "dcr-cribl-MyVeryLongCustomApplicationName-eastus-prod"
+  },
+  {
+    "table": "EnterpriseSecurityTelemetryAggregationPipeline_CL",
+    "mode": "direct",
+    "prefix": "dcr-",
+    "suffix": "",
+    "location": "eastus",
+    "custom": true,
+    "expected": "dcr-Enterp-eastus"
+  },
+  {
+    "table": "EnterpriseSecurityTelemetryAggregationPipeline_CL",
+    "mode": "dce",
+    "prefix": "dcr-",
+    "suffix": "",
+    "location": "eastus",
+    "custom": true,
+    "expected": "dcr-EnterpriseSecurityTelemetryAggregationPipeline-eastus"
+  },
+  {
+    "table": "EnterpriseSecurityTelemetryAggregationPipeline_CL",
+    "mode": "direct",
+    "prefix": "dcr-cribl-",
+    "suffix": "prod",
+    "location": "eastus",
+    "custom": true,
+    "expected": "dcr-cribl-Enterp-eastus-prod"
+  },
+  {
+    "table": "EnterpriseSecurityTelemetryAggregationPipeline_CL",
+    "mode": "dce",
+    "prefix": "dcr-cribl-",
+    "suffix": "prod",
+    "location": "eastus",
+    "custom": true,
+    "expected": "dcr-cribl-EnterpriseSecurityTelemetryAggregationPipe-eastus-prod"
+  },
+  {
+    "table": "EnterpriseSecurityTelemetryAggregationPipelineExtendedForTesting_CL",
+    "mode": "direct",
+    "prefix": "dcr-",
+    "suffix": "",
+    "location": "eastus",
+    "custom": true,
+    "expected": "dcr-Enterp-eastus"
+  },
+  {
+    "table": "EnterpriseSecurityTelemetryAggregationPipelineExtendedForTesting_CL",
+    "mode": "dce",
+    "prefix": "dcr-",
+    "suffix": "",
+    "location": "eastus",
+    "custom": true,
+    "expected": "dcr-EnterpriseSecurityTelemetryAggregationPipelineExtende-eastus"
+  },
+  {
+    "table": "EnterpriseSecurityTelemetryAggregationPipelineExtendedForTesting_CL",
+    "mode": "direct",
+    "prefix": "dcr-cribl-",
+    "suffix": "prod",
+    "location": "eastus",
+    "custom": true,
+    "expected": "dcr-cribl-Enterp-eastus-prod"
+  },
+  {
+    "table": "EnterpriseSecurityTelemetryAggregationPipelineExtendedForTesting_CL",
+    "mode": "dce",
+    "prefix": "dcr-cribl-",
+    "suffix": "prod",
+    "location": "eastus",
+    "custom": true,
+    "expected": "dcr-cribl-EnterpriseSecurityTelemetryAggregationPipe-eastus-prod"
+  },
+  {
+    "table": "Cisco9300DeviceLogs_CL",
+    "mode": "direct",
+    "prefix": "dcr-",
+    "suffix": "",
+    "location": "eastus",
+    "custom": true,
+    "expected": "dcr-Cisco9300DeviceLogs-eastus"
+  },
+  {
+    "table": "Cisco9300DeviceLogs_CL",
+    "mode": "dce",
+    "prefix": "dcr-",
+    "suffix": "",
+    "location": "eastus",
+    "custom": true,
+    "expected": "dcr-Cisco9300DeviceLogs-eastus"
+  },
+  {
+    "table": "Cisco9300DeviceLogs_CL",
+    "mode": "direct",
+    "prefix": "dcr-cribl-",
+    "suffix": "prod",
+    "location": "eastus",
+    "custom": true,
+    "expected": "dcr-cribl-Cisco9-eastus-prod"
+  },
+  {
+    "table": "Cisco9300DeviceLogs_CL",
+    "mode": "dce",
+    "prefix": "dcr-cribl-",
+    "suffix": "prod",
+    "location": "eastus",
+    "custom": true,
+    "expected": "dcr-cribl-Cisco9300DeviceLogs-eastus-prod"
+  },
+  {
+    "table": "F5BigIP_CL",
+    "mode": "direct",
+    "prefix": "dcr-",
+    "suffix": "",
+    "location": "eastus",
+    "custom": true,
+    "expected": "dcr-F5BigIP-eastus"
+  },
+  {
+    "table": "F5BigIP_CL",
+    "mode": "dce",
+    "prefix": "dcr-",
+    "suffix": "",
+    "location": "eastus",
+    "custom": true,
+    "expected": "dcr-F5BigIP-eastus"
+  },
+  {
+    "table": "F5BigIP_CL",
+    "mode": "direct",
+    "prefix": "dcr-cribl-",
+    "suffix": "prod",
+    "location": "eastus",
+    "custom": true,
+    "expected": "dcr-cribl-F5BigIP-eastus-prod"
+  },
+  {
+    "table": "F5BigIP_CL",
+    "mode": "dce",
+    "prefix": "dcr-cribl-",
+    "suffix": "prod",
+    "location": "eastus",
+    "custom": true,
+    "expected": "dcr-cribl-F5BigIP-eastus-prod"
+  },
+  {
+    "table": "Log4jShellEvents_CL",
+    "mode": "direct",
+    "prefix": "dcr-",
+    "suffix": "",
+    "location": "eastus",
+    "custom": true,
+    "expected": "dcr-Log4jShellEvents-eastus"
+  },
+  {
+    "table": "Log4jShellEvents_CL",
+    "mode": "dce",
+    "prefix": "dcr-",
+    "suffix": "",
+    "location": "eastus",
+    "custom": true,
+    "expected": "dcr-Log4jShellEvents-eastus"
+  },
+  {
+    "table": "Log4jShellEvents_CL",
+    "mode": "direct",
+    "prefix": "dcr-cribl-",
+    "suffix": "prod",
+    "location": "eastus",
+    "custom": true,
+    "expected": "dcr-cribl-Log4jS-eastus-prod"
+  },
+  {
+    "table": "Log4jShellEvents_CL",
+    "mode": "dce",
+    "prefix": "dcr-cribl-",
+    "suffix": "prod",
+    "location": "eastus",
+    "custom": true,
+    "expected": "dcr-cribl-Log4jShellEvents-eastus-prod"
+  },
+  {
+    "table": "my-app-logs_CL",
+    "mode": "direct",
+    "prefix": "dcr-",
+    "suffix": "",
+    "location": "eastus",
+    "custom": true,
+    "expected": "dcr-my-app-logs-eastus"
+  },
+  {
+    "table": "my-app-logs_CL",
+    "mode": "dce",
+    "prefix": "dcr-",
+    "suffix": "",
+    "location": "eastus",
+    "custom": true,
+    "expected": "dcr-my-app-logs-eastus"
+  },
+  {
+    "table": "my-app-logs_CL",
+    "mode": "direct",
+    "prefix": "dcr-cribl-",
+    "suffix": "prod",
+    "location": "eastus",
+    "custom": true,
+    "expected": "dcr-cribl-my-app-eastus-prod"
+  },
+  {
+    "table": "my-app-logs_CL",
+    "mode": "dce",
+    "prefix": "dcr-cribl-",
+    "suffix": "prod",
+    "location": "eastus",
+    "custom": true,
+    "expected": "dcr-cribl-my-app-logs-eastus-prod"
+  },
+  {
+    "table": "my_app_logs_CL",
+    "mode": "direct",
+    "prefix": "dcr-",
+    "suffix": "",
+    "location": "eastus",
+    "custom": true,
+    "expected": "dcr-my_app_logs-eastus"
+  },
+  {
+    "table": "my_app_logs_CL",
+    "mode": "dce",
+    "prefix": "dcr-",
+    "suffix": "",
+    "location": "eastus",
+    "custom": true,
+    "expected": "dcr-my_app_logs-eastus"
+  },
+  {
+    "table": "my_app_logs_CL",
+    "mode": "direct",
+    "prefix": "dcr-cribl-",
+    "suffix": "prod",
+    "location": "eastus",
+    "custom": true,
+    "expected": "dcr-cribl-my_app-eastus-prod"
+  },
+  {
+    "table": "my_app_logs_CL",
+    "mode": "dce",
+    "prefix": "dcr-cribl-",
+    "suffix": "prod",
+    "location": "eastus",
+    "custom": true,
+    "expected": "dcr-cribl-my_app_logs-eastus-prod"
+  },
+  {
+    "table": "MYTABLE_cl",
+    "mode": "direct",
+    "prefix": "dcr-",
+    "suffix": "",
+    "location": "eastus",
+    "custom": true,
+    "expected": "dcr-MYTABLE-eastus"
+  },
+  {
+    "table": "MYTABLE_cl",
+    "mode": "dce",
+    "prefix": "dcr-",
+    "suffix": "",
+    "location": "eastus",
+    "custom": true,
+    "expected": "dcr-MYTABLE-eastus"
+  },
+  {
+    "table": "MYTABLE_cl",
+    "mode": "direct",
+    "prefix": "dcr-cribl-",
+    "suffix": "prod",
+    "location": "eastus",
+    "custom": true,
+    "expected": "dcr-cribl-MYTABLE-eastus-prod"
+  },
+  {
+    "table": "MYTABLE_cl",
+    "mode": "dce",
+    "prefix": "dcr-cribl-",
+    "suffix": "prod",
+    "location": "eastus",
+    "custom": true,
+    "expected": "dcr-cribl-MYTABLE-eastus-prod"
+  },
+  {
+    "table": "MyApp_CL_CL",
+    "mode": "direct",
+    "prefix": "dcr-",
+    "suffix": "",
+    "location": "eastus",
+    "custom": true,
+    "expected": "dcr-MyApp_CL-eastus"
+  },
+  {
+    "table": "MyApp_CL_CL",
+    "mode": "dce",
+    "prefix": "dcr-",
+    "suffix": "",
+    "location": "eastus",
+    "custom": true,
+    "expected": "dcr-MyApp_CL-eastus"
+  },
+  {
+    "table": "MyApp_CL_CL",
+    "mode": "direct",
+    "prefix": "dcr-cribl-",
+    "suffix": "prod",
+    "location": "eastus",
+    "custom": true,
+    "expected": "dcr-cribl-MyApp_CL-eastus-prod"
+  },
+  {
+    "table": "MyApp_CL_CL",
+    "mode": "dce",
+    "prefix": "dcr-cribl-",
+    "suffix": "prod",
+    "location": "eastus",
+    "custom": true,
+    "expected": "dcr-cribl-MyApp_CL-eastus-prod"
+  },
+  {
+    "table": "CloudFlare",
+    "mode": "direct",
+    "prefix": "dcr-",
+    "suffix": "",
+    "location": "eastus",
+    "custom": true,
+    "expected": "dcr-CloudFlare-eastus"
+  },
+  {
+    "table": "CloudFlare",
+    "mode": "dce",
+    "prefix": "dcr-",
+    "suffix": "",
+    "location": "eastus",
+    "custom": true,
+    "expected": "dcr-CloudFlare-eastus"
+  },
+  {
+    "table": "CloudFlare",
+    "mode": "direct",
+    "prefix": "dcr-cribl-",
+    "suffix": "prod",
+    "location": "eastus",
+    "custom": true,
+    "expected": "dcr-cribl-CloudF-eastus-prod"
+  },
+  {
+    "table": "CloudFlare",
+    "mode": "dce",
+    "prefix": "dcr-cribl-",
+    "suffix": "prod",
+    "location": "eastus",
+    "custom": true,
+    "expected": "dcr-cribl-CloudFlare-eastus-prod"
+  },
+  {
+    "table": "DeviceNetworkEvents",
+    "mode": "direct",
+    "prefix": "dcr-",
+    "suffix": "",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-DeviceNetworkEvents-eastus"
+  },
+  {
+    "table": "DeviceNetworkEventsA",
+    "mode": "direct",
+    "prefix": "dcr-",
+    "suffix": "",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-Device-eastus"
+  },
+  {
+    "table": "CommonSecurityLog",
+    "mode": "direct",
+    "prefix": "dcr-",
+    "suffix": "production",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-CSL-eastus-production"
+  },
+  {
+    "table": "SecurityEvent",
+    "mode": "direct",
+    "prefix": "dcr-",
+    "suffix": "production",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-SecEvt-eastus-production"
+  },
+  {
+    "table": "WindowsEvent",
+    "mode": "direct",
+    "prefix": "dcr-",
+    "suffix": "production",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-WinEvt-eastus-production"
+  },
+  {
+    "table": "DeviceEvents",
+    "mode": "direct",
+    "prefix": "dcr-",
+    "suffix": "production",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-DevEvt-eastus-production"
+  },
+  {
+    "table": "BehaviorAnalytics",
+    "mode": "direct",
+    "prefix": "dcr-",
+    "suffix": "production",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-BehAna-eastus-production"
+  },
+  {
+    "table": "Syslog",
+    "mode": "direct",
+    "prefix": "dcr-verylongprefixname-",
+    "suffix": "",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-verylongprefixname-Syslog"
+  },
+  {
+    "table": "AnyTable",
+    "mode": "direct",
+    "prefix": "dcr-extremely-long-prefix-name-here-",
+    "suffix": "",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-extremely-long-prefix-name"
+  },
+  {
+    "table": "App_CL",
+    "mode": "direct",
+    "prefix": "dcr-extremely-long-prefix-name-here-",
+    "suffix": "",
+    "location": "eastus",
+    "custom": true,
+    "expected": "dcr-extremely-long-prefix-name"
+  },
+  {
+    "table": "SecurityEvent",
+    "mode": "direct",
+    "prefix": "dcr-",
+    "suffix": " ",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-SecurityEvent-eastus"
+  },
+  {
+    "table": "SecurityEvent",
+    "mode": "direct",
+    "prefix": "dcr-",
+    "suffix": "",
+    "location": "westeurope",
+    "custom": false,
+    "expected": "dcr-SecurityEvent-westeurope"
+  },
+  {
+    "table": "ASimNetworkSessionLogs",
+    "mode": "direct",
+    "prefix": "dcr-",
+    "suffix": "",
+    "location": "westeurope",
+    "custom": false,
+    "expected": "dcr-ASimNe-westeurope"
+  },
+  {
+    "table": "CommonSecurityLog",
+    "mode": "direct",
+    "prefix": "dcr-",
+    "suffix": "",
+    "location": "westeurope",
+    "custom": false,
+    "expected": "dcr-CSL-westeurope"
+  },
+  {
+    "table": "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT",
+    "mode": "dce",
+    "prefix": "dcr-",
+    "suffix": "",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT-eastus"
+  },
+  {
+    "table": "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT",
+    "mode": "dce",
+    "prefix": "dcr-",
+    "suffix": "",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dcr-TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT-eastus"
+  },
+  {
+    "table": "EnterpriseSecurityTelemetryAggregationPipelineExtendedForTesting_CL",
+    "mode": "dce",
+    "prefix": "dcr-",
+    "suffix": "prod",
+    "location": "eastus",
+    "custom": true,
+    "expected": "dcr-EnterpriseSecurityTelemetryAggregationPipelineEx-eastus-prod"
+  },
+  {
+    "table": "SecurityEvent",
+    "mode": "dce-endpoint",
+    "prefix": "dce-",
+    "suffix": "",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dce-SecurityEvent-eastus"
+  },
+  {
+    "table": "ASimNetworkSessionLogs",
+    "mode": "dce-endpoint",
+    "prefix": "dce-",
+    "suffix": "",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dce-ASimNetworkSessionLogs-eastus"
+  },
+  {
+    "table": "CommonSecurityLog",
+    "mode": "dce-endpoint",
+    "prefix": "dce-",
+    "suffix": "prod",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dce-CommonSecurityLog-eastus-prod"
+  },
+  {
+    "table": "CloudFlare_CL",
+    "mode": "dce-endpoint",
+    "prefix": "dce-",
+    "suffix": "",
+    "location": "eastus",
+    "custom": true,
+    "expected": "dce-CloudFlare-eastus"
+  },
+  {
+    "table": "EnterpriseSecurityTelemetryAggregationPipelineExtendedForTesting_CL",
+    "mode": "dce-endpoint",
+    "prefix": "dce-",
+    "suffix": "",
+    "location": "eastus",
+    "custom": true,
+    "expected": "dce-EnterpriseSecurityTelemetryAggregationPipelineExtendedForTesting-eastus"
+  },
+  {
+    "table": "SecurityEvent",
+    "mode": "dce-endpoint",
+    "prefix": "dce-cribl-",
+    "suffix": "prod",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dce-cribl-SecurityEvent-eastus-prod"
+  },
+  {
+    "table": "SecurityEvent",
+    "mode": "dce-endpoint",
+    "prefix": "dce-",
+    "suffix": " ",
+    "location": "eastus",
+    "custom": false,
+    "expected": "dce-SecurityEvent-eastus"
+  }
+]

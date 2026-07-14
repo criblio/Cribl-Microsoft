@@ -1,0 +1,27 @@
+export {
+  assignDcrRoles,
+  assignDcrRoleStepName,
+  buildRoleAssignmentRequest,
+  matchDcrsToTables,
+  ASSIGN_DCR_ROLE_JOB_KIND,
+  ASSIGN_DCR_ROLE_STEP_PREFIX,
+  DEFAULT_PRINCIPAL_NOT_FOUND_ATTEMPTS,
+  DEFAULT_PRINCIPAL_NOT_FOUND_DELAY_MS,
+  MONITORING_METRICS_PUBLISHER_ROLE_ID,
+  PRINCIPAL_NOT_FOUND_ERROR_CODE,
+  ROLE_ASSIGNMENT_EXISTS_ERROR_CODE,
+  ROLE_ASSIGNMENTS_API_VERSION,
+} from "./assign-dcr-role";
+export type {
+  AssignDcrRoleInput,
+  AssignDcrRoleOutcome,
+  AssignDcrRolePorts,
+  AssignDcrRoleRetry,
+  DcrRoleAssignmentResult,
+  DcrRoleMatchScope,
+  DcrRoleTarget,
+  DcrTableMatch,
+  MatchDcrsToTablesOptions,
+  RoleAssignmentArmRequest,
+  RoleAssignmentRequestInput,
+} from "./assign-dcr-role";

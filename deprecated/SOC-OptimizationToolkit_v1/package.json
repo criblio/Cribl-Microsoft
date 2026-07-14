@@ -1,0 +1,41 @@
+{
+  "name": "soc-optimization-toolkit",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Cribl SOC Optimization Toolkit for Microsoft Sentinel (greenfield consolidation). See CONTEXT.md.",
+  "packageManager": "pnpm@9.15.0",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "build": "turbo run build",
+    "typecheck": "turbo run typecheck",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "validate": "pnpm lint && pnpm typecheck && pnpm test",
+    "dev:desktop": "pnpm --filter desktop dev",
+    "import:assets": "node scripts/import-assets.mjs",
+    "prepare": "husky"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.17.0",
+    "@types/node": "^22.10.2",
+    "@vitest/coverage-v8": "^2.1.8",
+    "eslint": "^9.17.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^15.2.11",
+    "prettier": "^3.4.2",
+    "tsx": "^4.19.2",
+    "turbo": "^2.3.3",
+    "typescript": "^5.7.2",
+    "typescript-eslint": "^8.18.1",
+    "vitest": "^2.1.8"
+  },
+  "lint-staged": {
+    "*.{ts,tsx,js,mjs,cjs,json,md,yml,yaml}": "prettier --write",
+    "*.{ts,tsx}": "eslint --fix --max-warnings 0"
+  }
+}

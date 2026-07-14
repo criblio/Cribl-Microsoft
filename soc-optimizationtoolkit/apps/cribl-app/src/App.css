@@ -1,0 +1,171 @@
+/*
+ * Cloud-shell chrome only. The shared @soc/ui class conventions (reset/body,
+ * panel, field, run-button, status, result, ...) moved verbatim to
+ * packages/ui/src/styles.css and are imported in main.tsx as
+ * "@soc/ui/styles.css" BEFORE this file.
+ *
+ * THEMING (Unit 6.5): every color consumes the shared tokens styles.css
+ * defines on :root (same token -> legacy-hex mapping documented there), so
+ * the connection bar, notices, and badges re-theme with [data-theme='dark']
+ * exactly like the shared screens - no hex value is duplicated here.
+ */
+
+.harness {
+  max-width: 880px;
+  margin: 0 auto;
+  padding: 32px 16px 64px;
+}
+
+.harness-header {
+  margin-bottom: 24px;
+}
+
+.harness-title {
+  font-size: 22px;
+  font-weight: 600;
+  line-height: 28px;
+  color: var(--text-strong);
+}
+
+.harness-subtitle {
+  margin-top: 8px;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 22px;
+  color: var(--text-muted);
+}
+
+.discovery {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 480px;
+  margin-top: 4px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.change-request {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 4px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.change-request .panel-desc,
+.change-request .panel-controls {
+  margin-bottom: 0;
+}
+
+.connection-bar {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  padding: 16px 24px;
+  margin-bottom: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.connection-bar-main {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.connection-select {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 220px;
+}
+
+.connection-select select,
+.connection-rename-input {
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 20px;
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+}
+
+.connection-select select:focus,
+.connection-rename-input:focus {
+  outline: none;
+  border-color: var(--border-focus);
+}
+
+.connection-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.secret-badge {
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 20px;
+  padding: 2px 10px;
+  border: 1px solid var(--border);
+  white-space: nowrap;
+  margin-left: auto;
+}
+
+.secret-badge-stored {
+  color: var(--ok);
+  border-color: var(--ok-border);
+  background: var(--ok-bg);
+}
+
+.secret-badge-none {
+  color: var(--text-faint);
+  border-color: var(--border);
+  background: var(--surface-raised);
+}
+
+.connection-notice {
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--warn);
+  background: var(--warn-bg);
+  border: 1px solid var(--warn-border);
+  padding: 8px 12px;
+}
+
+.connection-hint {
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--error-strong);
+  background: var(--error-bg);
+  border: 1px solid var(--error-border);
+  padding: 8px 12px;
+}
+
+/* The consolidated poll's connection-bar badge (frame nav replaced the old
+ * view tabs; the platform-link status renders beside the secret badge). */
+.link-badge {
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 20px;
+  padding: 2px 10px;
+  border: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.link-badge-ok {
+  color: var(--ok);
+  border-color: var(--ok-border);
+  background: var(--ok-bg);
+}
+
+.link-badge-off {
+  color: var(--text-faint);
+  border-color: var(--border);
+  background: var(--surface-raised);
+}

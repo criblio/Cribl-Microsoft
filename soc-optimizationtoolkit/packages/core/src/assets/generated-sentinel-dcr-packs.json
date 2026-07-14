@@ -1,0 +1,1189 @@
+[
+ {
+  "id": "sentinel-dcr-cloudflare",
+  "vendor": "Cloudflare",
+  "solutionKeywords": [
+   "cloudflare"
+  ],
+  "provenance": "Microsoft Sentinel solution DCR transform (Cloudflare)",
+  "docUrl": "https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/Cloudflare/Data%20Connectors",
+  "mappings": [
+   {
+    "sourceName": "Type",
+    "destName": "LogType",
+    "doc": "Sentinel solution DCR (CloudflareLog_CCF -> CloudflareV2_CL): Type projected to LogType"
+   }
+  ]
+ },
+ {
+  "id": "sentinel-dcr-netskope",
+  "vendor": "Netskope",
+  "solutionKeywords": [
+   "netskope"
+  ],
+  "provenance": "Microsoft Sentinel solution DCR transform (Netskopev2)",
+  "docUrl": "https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/Netskopev2/Data%20Connectors",
+  "mappings": [
+   {
+    "sourceName": "app_session_id",
+    "destName": "app_sessionid",
+    "doc": "Sentinel solution DCR (NetskopeAlertsEvents_RestAPI_CCP -> NetskopeAlerts_CL): app_session_id projected to app_sessionid"
+   },
+   {
+    "sourceName": "browser_session_id",
+    "destName": "browser_sessionid",
+    "doc": "Sentinel solution DCR (NetskopeAlertsEvents_RestAPI_CCP -> NetskopeAlerts_CL): browser_session_id projected to browser_sessionid"
+   },
+   {
+    "sourceName": "connection_id",
+    "destName": "connectionid",
+    "doc": "Sentinel solution DCR (NetskopeAlertsEvents_RestAPI_CCP -> NetskopeAlerts_CL): connection_id projected to connectionid"
+   },
+   {
+    "sourceName": "dlp_incident_id",
+    "destName": "dlp_incidentid",
+    "doc": "Sentinel solution DCR (NetskopeAlertsEvents_RestAPI_CCP -> NetskopeAlerts_CL): dlp_incident_id projected to dlp_incidentid"
+   },
+   {
+    "sourceName": "dlp_parent_id",
+    "destName": "dlp_parentid",
+    "doc": "Sentinel solution DCR (NetskopeAlertsEvents_RestAPI_CCP -> NetskopeAlerts_CL): dlp_parent_id projected to dlp_parentid"
+   },
+   {
+    "sourceName": "latest_incident_id",
+    "destName": "latest_incidentid",
+    "doc": "Sentinel solution DCR (NetskopeAlertsEvents_RestAPI_CCP -> NetskopeEventsDLP_CL): latest_incident_id projected to latest_incidentid"
+   },
+   {
+    "sourceName": "request_id",
+    "destName": "requestid",
+    "doc": "Sentinel solution DCR (NetskopeAlertsEvents_RestAPI_CCP -> NetskopeAlerts_CL): request_id projected to requestid"
+   },
+   {
+    "sourceName": "transaction_id",
+    "destName": "transactionid",
+    "doc": "Sentinel solution DCR (NetskopeAlertsEvents_RestAPI_CCP -> NetskopeAlerts_CL): transaction_id projected to transactionid"
+   }
+  ]
+ },
+ {
+  "id": "sentinel-dcr-okta",
+  "vendor": "Okta",
+  "solutionKeywords": [
+   "okta"
+  ],
+  "provenance": "Microsoft Sentinel solution DCR transform (Okta Single Sign-On)",
+  "docUrl": "https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/Okta%20Single%20Sign-On/Data%20Connectors",
+  "mappings": [
+   {
+    "sourceName": "displayMessage",
+    "destName": "EventMessage",
+    "doc": "Sentinel solution DCR (OktaNativePollerConnectorV2 -> OktaV2_CL): displayMessage projected to EventMessage"
+   },
+   {
+    "sourceName": "eventType",
+    "destName": "EventOriginalType",
+    "doc": "Sentinel solution DCR (OktaNativePollerConnectorV2 -> OktaV2_CL): eventType projected to EventOriginalType"
+   },
+   {
+    "sourceName": "published",
+    "destName": "TimeGenerated",
+    "doc": "Sentinel solution DCR (OktaNativePollerConnectorV2 -> OktaV2_CL): published projected to TimeGenerated"
+   },
+   {
+    "sourceName": "severity",
+    "destName": "OriginalSeverity",
+    "doc": "Sentinel solution DCR (OktaNativePollerConnectorV2 -> OktaV2_CL): severity projected to OriginalSeverity"
+   },
+   {
+    "sourceName": "target",
+    "destName": "OriginalTarget",
+    "doc": "Sentinel solution DCR (OktaNativePollerConnectorV2 -> OktaV2_CL): target projected to OriginalTarget"
+   },
+   {
+    "sourceName": "userId",
+    "destName": "ActorUserId",
+    "doc": "Sentinel solution DCR (OktaNativePollerConnectorV2 -> OktaV2_CL): userId projected to ActorUserId"
+   },
+   {
+    "sourceName": "username",
+    "destName": "ActorUsername",
+    "doc": "Sentinel solution DCR (OktaNativePollerConnectorV2 -> OktaV2_CL): username projected to ActorUsername"
+   },
+   {
+    "sourceName": "uuid",
+    "destName": "EventOriginalUid",
+    "doc": "Sentinel solution DCR (OktaNativePollerConnectorV2 -> OktaV2_CL): uuid projected to EventOriginalUid"
+   }
+  ]
+ },
+ {
+  "id": "sentinel-dcr-palo-alto-cortex-xdr",
+  "vendor": "Palo Alto Cortex XDR",
+  "solutionKeywords": [
+   "cortex xdr"
+  ],
+  "provenance": "Microsoft Sentinel solution DCR transform (Palo Alto Cortex XDR CCP)",
+  "docUrl": "https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/Palo%20Alto%20Cortex%20XDR%20CCP/Data%20Connectors",
+  "mappings": [
+   {
+    "sourceName": "action_country",
+    "destName": "ActionCountry",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Alerts_CL): action_country projected to ActionCountry"
+   },
+   {
+    "sourceName": "action_external_hostname",
+    "destName": "ActionExternalHostname",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Alerts_CL): action_external_hostname projected to ActionExternalHostname"
+   },
+   {
+    "sourceName": "action_file_macro_sha256",
+    "destName": "ActionFileMacroSha256",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Alerts_CL): action_file_macro_sha256 projected to ActionFileMacroSha256"
+   },
+   {
+    "sourceName": "action_file_md5",
+    "destName": "ActionFileMd5",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Alerts_CL): action_file_md5 projected to ActionFileMd5"
+   },
+   {
+    "sourceName": "action_file_name",
+    "destName": "ActionFileName",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Alerts_CL): action_file_name projected to ActionFileName"
+   },
+   {
+    "sourceName": "action_file_path",
+    "destName": "ActionFilePath",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Alerts_CL): action_file_path projected to ActionFilePath"
+   },
+   {
+    "sourceName": "action_file_sha256",
+    "destName": "ActionFileSha256",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Alerts_CL): action_file_sha256 projected to ActionFileSha256"
+   },
+   {
+    "sourceName": "action_local_ip",
+    "destName": "ActionLocalIp",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Alerts_CL): action_local_ip projected to ActionLocalIp"
+   },
+   {
+    "sourceName": "action_local_ip_v6",
+    "destName": "ActionLocalIpV6",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Alerts_CL): action_local_ip_v6 projected to ActionLocalIpV6"
+   },
+   {
+    "sourceName": "action_local_port",
+    "destName": "ActionLocalPort",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Alerts_CL): action_local_port projected to ActionLocalPort"
+   },
+   {
+    "sourceName": "action_pretty",
+    "destName": "ActionPretty",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Alerts_CL): action_pretty projected to ActionPretty"
+   },
+   {
+    "sourceName": "action_process_causality_id",
+    "destName": "ActionProcessCausalityId",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Alerts_CL): action_process_causality_id projected to ActionProcessCausalityId"
+   },
+   {
+    "sourceName": "action_process_image_command_line",
+    "destName": "ActionProcessImageCommandLine",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Alerts_CL): action_process_image_command_line projected to ActionProcessImageCommandLine"
+   },
+   {
+    "sourceName": "action_process_image_name",
+    "destName": "ActionProcessImageName",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Alerts_CL): action_process_image_name projected to ActionProcessImageName"
+   },
+   {
+    "sourceName": "action_process_image_sha256",
+    "destName": "ActionProcessImageSha256",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Alerts_CL): action_process_image_sha256 projected to ActionProcessImageSha256"
+   },
+   {
+    "sourceName": "action_process_instance_id",
+    "destName": "ActionProcessInstanceId",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Alerts_CL): action_process_instance_id projected to ActionProcessInstanceId"
+   },
+   {
+    "sourceName": "action_process_signature_status",
+    "destName": "ActionProcessSignatureStatus",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Alerts_CL): action_process_signature_status projected to ActionProcessSignatureStatus"
+   },
+   {
+    "sourceName": "action_process_signature_vendor",
+    "destName": "ActionProcessSignatureVendor",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Alerts_CL): action_process_signature_vendor projected to ActionProcessSignatureVendor"
+   },
+   {
+    "sourceName": "action_registry_data",
+    "destName": "ActionRegistryData",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Alerts_CL): action_registry_data projected to ActionRegistryData"
+   },
+   {
+    "sourceName": "action_registry_full_key",
+    "destName": "ActionRegistryFullKey",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Alerts_CL): action_registry_full_key projected to ActionRegistryFullKey"
+   },
+   {
+    "sourceName": "action_registry_key_name",
+    "destName": "ActionRegistryKeyName",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Alerts_CL): action_registry_key_name projected to ActionRegistryKeyName"
+   },
+   {
+    "sourceName": "action_registry_value_name",
+    "destName": "ActionRegistryValueName",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Alerts_CL): action_registry_value_name projected to ActionRegistryValueName"
+   },
+   {
+    "sourceName": "action_remote_ip",
+    "destName": "ActionRemoteIp",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Alerts_CL): action_remote_ip projected to ActionRemoteIp"
+   },
+   {
+    "sourceName": "action_remote_ip_v6",
+    "destName": "ActionRemoteIpV6",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Alerts_CL): action_remote_ip_v6 projected to ActionRemoteIpV6"
+   },
+   {
+    "sourceName": "action_remote_port",
+    "destName": "ActionRemotePort",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Alerts_CL): action_remote_port projected to ActionRemotePort"
+   },
+   {
+    "sourceName": "actor_causality_id",
+    "destName": "ActorCausalityId",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Alerts_CL): actor_causality_id projected to ActorCausalityId"
+   },
+   {
+    "sourceName": "actor_process_causality_id",
+    "destName": "ActorProcessCausalityId",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Alerts_CL): actor_process_causality_id projected to ActorProcessCausalityId"
+   },
+   {
+    "sourceName": "actor_process_command_line",
+    "destName": "ActorProcessCommandLine",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Alerts_CL): actor_process_command_line projected to ActorProcessCommandLine"
+   },
+   {
+    "sourceName": "actor_process_image_md5",
+    "destName": "ActorProcessImageMd5",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Alerts_CL): actor_process_image_md5 projected to ActorProcessImageMd5"
+   },
+   {
+    "sourceName": "actor_process_image_name",
+    "destName": "ActorProcessImageName",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Alerts_CL): actor_process_image_name projected to ActorProcessImageName"
+   },
+   {
+    "sourceName": "actor_process_image_path",
+    "destName": "ActorProcessImagePath",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Alerts_CL): actor_process_image_path projected to ActorProcessImagePath"
+   },
+   {
+    "sourceName": "actor_process_image_sha256",
+    "destName": "ActorProcessImageSha256",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Alerts_CL): actor_process_image_sha256 projected to ActorProcessImageSha256"
+   },
+   {
+    "sourceName": "actor_process_instance_id",
+    "destName": "ActorProcessInstanceId",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Alerts_CL): actor_process_instance_id projected to ActorProcessInstanceId"
+   },
+   {
+    "sourceName": "actor_process_os_pid",
+    "destName": "ActorProcessOsPid",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Alerts_CL): actor_process_os_pid projected to ActorProcessOsPid"
+   },
+   {
+    "sourceName": "actor_process_signature_status",
+    "destName": "ActorProcessSignatureStatus",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Alerts_CL): actor_process_signature_status projected to ActorProcessSignatureStatus"
+   },
+   {
+    "sourceName": "actor_process_signature_vendor",
+    "destName": "ActorProcessSignatureVendor",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Alerts_CL): actor_process_signature_vendor projected to ActorProcessSignatureVendor"
+   },
+   {
+    "sourceName": "actor_thread_thread_id",
+    "destName": "ActorThreadThreadId",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Alerts_CL): actor_thread_thread_id projected to ActorThreadThreadId"
+   },
+   {
+    "sourceName": "agent_data_collection_status",
+    "destName": "AgentDataCollectionStatus",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Alerts_CL): agent_data_collection_status projected to AgentDataCollectionStatus"
+   },
+   {
+    "sourceName": "agent_fqdn",
+    "destName": "AgentFQDN",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Alerts_CL): agent_fqdn projected to AgentFQDN"
+   },
+   {
+    "sourceName": "agent_id",
+    "destName": "AgentId",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Endpoints_CL): agent_id projected to AgentId"
+   },
+   {
+    "sourceName": "agent_os_type",
+    "destName": "AgentOSType",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Alerts_CL): agent_os_type projected to AgentOSType"
+   },
+   {
+    "sourceName": "agent_status",
+    "destName": "AgentStatus",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Endpoints_CL): agent_status projected to AgentStatus"
+   },
+   {
+    "sourceName": "agent_type",
+    "destName": "AgentType",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Endpoints_CL): agent_type projected to AgentType"
+   },
+   {
+    "sourceName": "agent_version",
+    "destName": "AgentVersion",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Alerts_CL): agent_version projected to AgentVersion"
+   },
+   {
+    "sourceName": "alert_categories",
+    "destName": "AlertCategories",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Incidents_CL): alert_categories projected to AlertCategories"
+   },
+   {
+    "sourceName": "alert_count",
+    "destName": "AlertCount",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Incidents_CL): alert_count projected to AlertCount"
+   },
+   {
+    "sourceName": "alert_domain",
+    "destName": "AlertDomain",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Alerts_CL): alert_domain projected to AlertDomain"
+   },
+   {
+    "sourceName": "alert_id",
+    "destName": "AlertId",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Alerts_CL): alert_id projected to AlertId"
+   },
+   {
+    "sourceName": "alerts_grouping_status",
+    "destName": "AlertsGroupingStatus",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Incidents_CL): alerts_grouping_status projected to AlertsGroupingStatus"
+   },
+   {
+    "sourceName": "assigned_user_mail",
+    "destName": "AssignedUserMail",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Incidents_CL): assigned_user_mail projected to AssignedUserMail"
+   },
+   {
+    "sourceName": "assigned_user_pretty_name",
+    "destName": "assignedUserPrettyName",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Incidents_CL): assigned_user_pretty_name projected to assignedUserPrettyName"
+   },
+   {
+    "sourceName": "attempt_counter",
+    "destName": "AttemptCounter",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Alerts_CL): attempt_counter projected to AttemptCounter"
+   },
+   {
+    "sourceName": "AUDIT_ASSET_JSON",
+    "destName": "AuditAssetJSON",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Audit_Management_CL): AUDIT_ASSET_JSON projected to AuditAssetJSON"
+   },
+   {
+    "sourceName": "AUDIT_ASSET_NAMES",
+    "destName": "AuditAssetNames",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Audit_Management_CL): AUDIT_ASSET_NAMES projected to AuditAssetNames"
+   },
+   {
+    "sourceName": "AUDIT_CASE_ID",
+    "destName": "AuditCaseId",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Audit_Management_CL): AUDIT_CASE_ID projected to AuditCaseId"
+   },
+   {
+    "sourceName": "AUDIT_DESCRIPTION",
+    "destName": "AuditDescription",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Audit_Management_CL): AUDIT_DESCRIPTION projected to AuditDescription"
+   },
+   {
+    "sourceName": "AUDIT_ENTITY",
+    "destName": "AuditEntity",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Audit_Management_CL): AUDIT_ENTITY projected to AuditEntity"
+   },
+   {
+    "sourceName": "AUDIT_ENTITY_SUBTYPE",
+    "destName": "AuditEntitySubtype",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Audit_Management_CL): AUDIT_ENTITY_SUBTYPE projected to AuditEntitySubtype"
+   },
+   {
+    "sourceName": "AUDIT_HOSTNAME",
+    "destName": "AuditHostName",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Audit_Management_CL): AUDIT_HOSTNAME projected to AuditHostName"
+   },
+   {
+    "sourceName": "AUDIT_ID",
+    "destName": "AuditId",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Audit_Management_CL): AUDIT_ID projected to AuditId"
+   },
+   {
+    "sourceName": "AUDIT_INSERT_TIME",
+    "destName": "AuditInsertTime",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Audit_Management_CL): AUDIT_INSERT_TIME projected to AuditInsertTime"
+   },
+   {
+    "sourceName": "AUDIT_OWNER_EMAIL",
+    "destName": "AuditOwnerEmail",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Audit_Management_CL): AUDIT_OWNER_EMAIL projected to AuditOwnerEmail"
+   },
+   {
+    "sourceName": "AUDIT_OWNER_NAME",
+    "destName": "AuditOwnerName",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Audit_Management_CL): AUDIT_OWNER_NAME projected to AuditOwnerName"
+   },
+   {
+    "sourceName": "AUDIT_REASON",
+    "destName": "AuditReason",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Audit_Management_CL): AUDIT_REASON projected to AuditReason"
+   },
+   {
+    "sourceName": "AUDIT_RESULT",
+    "destName": "AuditResult",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Audit_Management_CL): AUDIT_RESULT projected to AuditResult"
+   },
+   {
+    "sourceName": "AUDIT_SESSION_ID",
+    "destName": "AuditSessionId",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Audit_Management_CL): AUDIT_SESSION_ID projected to AuditSessionId"
+   },
+   {
+    "sourceName": "AUDIT_SEVERITY",
+    "destName": "AuditSeverity",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Audit_Management_CL): AUDIT_SEVERITY projected to AuditSeverity"
+   },
+   {
+    "sourceName": "AUDIT_SOURCE_IP",
+    "destName": "AuditSourceIp",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Audit_Management_CL): AUDIT_SOURCE_IP projected to AuditSourceIp"
+   },
+   {
+    "sourceName": "AUDIT_USER_AGENT",
+    "destName": "AuditUserAgent",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Audit_Management_CL): AUDIT_USER_AGENT projected to AuditUserAgent"
+   },
+   {
+    "sourceName": "AUDIT_USER_ROLES",
+    "destName": "AuditUserRoles",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Audit_Management_CL): AUDIT_USER_ROLES projected to AuditUserRoles"
+   },
+   {
+    "sourceName": "bioc_indicator",
+    "destName": "BiocIndicator",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Alerts_CL): bioc_indicator projected to BiocIndicator"
+   },
+   {
+    "sourceName": "causality_actor_causality_id",
+    "destName": "CausalityActorCausalityId",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Alerts_CL): causality_actor_causality_id projected to CausalityActorCausalityId"
+   },
+   {
+    "sourceName": "causality_actor_process_command_line",
+    "destName": "CausalityActorProcessCommandLine",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Alerts_CL): causality_actor_process_command_line projected to CausalityActorProcessCommandLine"
+   },
+   {
+    "sourceName": "causality_actor_process_image_md5",
+    "destName": "CausalityActorProcessImageMd5",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Alerts_CL): causality_actor_process_image_md5 projected to CausalityActorProcessImageMd5"
+   },
+   {
+    "sourceName": "causality_actor_process_image_name",
+    "destName": "CausalityActorProcessImageName",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Alerts_CL): causality_actor_process_image_name projected to CausalityActorProcessImageName"
+   },
+   {
+    "sourceName": "causality_actor_process_image_path",
+    "destName": "CausalityActorProcessImagePath",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Alerts_CL): causality_actor_process_image_path projected to CausalityActorProcessImagePath"
+   },
+   {
+    "sourceName": "causality_actor_process_image_sha256",
+    "destName": "CausalityActorProcessImageSha256",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Alerts_CL): causality_actor_process_image_sha256 projected to CausalityActorProcessImageSha256"
+   },
+   {
+    "sourceName": "causality_actor_process_signature_status",
+    "destName": "CausalityActorProcessSignatureStatus",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Alerts_CL): causality_actor_process_signature_status projected to CausalityActorProcessSignatureStatus"
+   },
+   {
+    "sourceName": "cloud_provider",
+    "destName": "CloudProvider",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Alerts_CL): cloud_provider projected to CloudProvider"
+   },
+   {
+    "sourceName": "cluster_name",
+    "destName": "ClusterName",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Alerts_CL): cluster_name projected to ClusterName"
+   },
+   {
+    "sourceName": "container_id",
+    "destName": "ContainerId",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Alerts_CL): container_id projected to ContainerId"
+   },
+   {
+    "sourceName": "container_name",
+    "destName": "ContainerName",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Alerts_CL): container_name projected to ContainerName"
+   },
+   {
+    "sourceName": "creation_time",
+    "destName": "CreationTime",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Incidents_CL): creation_time projected to CreationTime"
+   },
+   {
+    "sourceName": "critical_severity_alert_count",
+    "destName": "CriticalSeverityAlertCount",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Incidents_CL): critical_severity_alert_count projected to CriticalSeverityAlertCount"
+   },
+   {
+    "sourceName": "detection_time",
+    "destName": "DetectionTime",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Incidents_CL): detection_time projected to DetectionTime"
+   },
+   {
+    "sourceName": "detection_timestamp",
+    "destName": "DetectionTimestamp",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Alerts_CL): detection_timestamp projected to DetectionTimestamp"
+   },
+   {
+    "sourceName": "dns_query_name",
+    "destName": "DnsQueryName",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Alerts_CL): dns_query_name projected to DnsQueryName"
+   },
+   {
+    "sourceName": "dst_action_external_hostname",
+    "destName": "DstActionExternalHostname",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Alerts_CL): dst_action_external_hostname projected to DstActionExternalHostname"
+   },
+   {
+    "sourceName": "dst_action_external_port",
+    "destName": "DstActionExternalPort",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Alerts_CL): dst_action_external_port projected to DstActionExternalPort"
+   },
+   {
+    "sourceName": "end_match_attempt_ts",
+    "destName": "EndMatchAttempt",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Alerts_CL): end_match_attempt_ts projected to EndMatchAttempt"
+   },
+   {
+    "sourceName": "endpoint_id",
+    "destName": "EndpointId",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Alerts_CL): endpoint_id projected to EndpointId"
+   },
+   {
+    "sourceName": "event_id",
+    "destName": "EventId",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Alerts_CL): event_id projected to EventId"
+   },
+   {
+    "sourceName": "event_timestamp",
+    "destName": "EventTimestamp",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Alerts_CL): event_timestamp projected to EventTimestamp"
+   },
+   {
+    "sourceName": "event_type",
+    "destName": "EventType",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Alerts_CL): event_type projected to EventType"
+   },
+   {
+    "sourceName": "external_id",
+    "destName": "ExternalId",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Alerts_CL): external_id projected to ExternalId"
+   },
+   {
+    "sourceName": "fw_email_recipient",
+    "destName": "FwEmailRecipient",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Alerts_CL): fw_email_recipient projected to FwEmailRecipient"
+   },
+   {
+    "sourceName": "fw_email_sender",
+    "destName": "FwEmailSender",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Alerts_CL): fw_email_sender projected to FwEmailSender"
+   },
+   {
+    "sourceName": "fw_email_subject",
+    "destName": "FwEmailSubject",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Alerts_CL): fw_email_subject projected to FwEmailSubject"
+   },
+   {
+    "sourceName": "fw_is_phishing",
+    "destName": "FwIsPhishing",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Alerts_CL): fw_is_phishing projected to FwIsPhishing"
+   },
+   {
+    "sourceName": "fw_rule",
+    "destName": "FwRule",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Alerts_CL): fw_rule projected to FwRule"
+   },
+   {
+    "sourceName": "fw_rule_id",
+    "destName": "FwRuleId",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Alerts_CL): fw_rule_id projected to FwRuleId"
+   },
+   {
+    "sourceName": "fw_url_domain",
+    "destName": "FwUrlDomain",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Alerts_CL): fw_url_domain projected to FwUrlDomain"
+   },
+   {
+    "sourceName": "high_severity_alert_count",
+    "destName": "HighSeverityAlertCount",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Incidents_CL): high_severity_alert_count projected to HighSeverityAlertCount"
+   },
+   {
+    "sourceName": "host_count",
+    "destName": "HostCount",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Incidents_CL): host_count projected to HostCount"
+   },
+   {
+    "sourceName": "host_ip",
+    "destName": "HostIp",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Alerts_CL): host_ip projected to HostIp"
+   },
+   {
+    "sourceName": "host_name",
+    "destName": "HostName",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Alerts_CL): host_name projected to HostName"
+   },
+   {
+    "sourceName": "identity_type",
+    "destName": "IdentityType",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Alerts_CL): identity_type projected to IdentityType"
+   },
+   {
+    "sourceName": "image_id",
+    "destName": "ImageId",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Alerts_CL): image_id projected to ImageId"
+   },
+   {
+    "sourceName": "image_name",
+    "destName": "ImageName",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Alerts_CL): image_name projected to ImageName"
+   },
+   {
+    "sourceName": "incident_id",
+    "destName": "IncidentId",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Incidents_CL): incident_id projected to IncidentId"
+   },
+   {
+    "sourceName": "incident_name",
+    "destName": "IncidentName",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Incidents_CL): incident_name projected to IncidentName"
+   },
+   {
+    "sourceName": "incident_sources",
+    "destName": "IncidentSources",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Incidents_CL): incident_sources projected to IncidentSources"
+   },
+   {
+    "sourceName": "ip",
+    "destName": "IpAddress",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Endpoints_CL): ip projected to IpAddress"
+   },
+   {
+    "sourceName": "is_whitelisted",
+    "destName": "Whitelisted",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Alerts_CL): is_whitelisted projected to Whitelisted"
+   },
+   {
+    "sourceName": "last_seen",
+    "destName": "LastSeen",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Endpoints_CL): last_seen projected to LastSeen"
+   },
+   {
+    "sourceName": "local_insert_ts",
+    "destName": "LocalInsert",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Alerts_CL): local_insert_ts projected to LocalInsert"
+   },
+   {
+    "sourceName": "low_severity_alert_count",
+    "destName": "LowSeverityAlertCount",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Incidents_CL): low_severity_alert_count projected to LowSeverityAlertCount"
+   },
+   {
+    "sourceName": "mac",
+    "destName": "MacAddress",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Alerts_CL): mac projected to MacAddress"
+   },
+   {
+    "sourceName": "malicious_urls",
+    "destName": "MaliciousUrls",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Alerts_CL): malicious_urls projected to MaliciousUrls"
+   },
+   {
+    "sourceName": "manual_description",
+    "destName": "ManualDescription",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Incidents_CL): manual_description projected to ManualDescription"
+   },
+   {
+    "sourceName": "manual_score",
+    "destName": "ManualScore",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Incidents_CL): manual_score projected to ManualScore"
+   },
+   {
+    "sourceName": "manual_severity",
+    "destName": "ManualSeverity",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Incidents_CL): manual_severity projected to ManualSeverity"
+   },
+   {
+    "sourceName": "matching_service_rule_id",
+    "destName": "MatchingServiceRuleId",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Alerts_CL): matching_service_rule_id projected to MatchingServiceRuleId"
+   },
+   {
+    "sourceName": "matching_status",
+    "destName": "MatchingStatus",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Alerts_CL): matching_status projected to MatchingStatus"
+   },
+   {
+    "sourceName": "med_severity_alert_count",
+    "destName": "MedSeverityAlertCount",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Incidents_CL): med_severity_alert_count projected to MedSeverityAlertCount"
+   },
+   {
+    "sourceName": "mitre_tactic_id_and_name",
+    "destName": "MitreTacticIdAndName",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Alerts_CL): mitre_tactic_id_and_name projected to MitreTacticIdAndName"
+   },
+   {
+    "sourceName": "mitre_tactics_ids_and_names",
+    "destName": "MitreTacticsIdsAndNames",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Incidents_CL): mitre_tactics_ids_and_names projected to MitreTacticsIdsAndNames"
+   },
+   {
+    "sourceName": "mitre_technique_id_and_name",
+    "destName": "MitreTechniqueIdAndName",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Alerts_CL): mitre_technique_id_and_name projected to MitreTechniqueIdAndName"
+   },
+   {
+    "sourceName": "mitre_techniques_ids_and_names",
+    "destName": "MitreTechniquesIdsAndNames",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Incidents_CL): mitre_techniques_ids_and_names projected to MitreTechniquesIdsAndNames"
+   },
+   {
+    "sourceName": "modification_time",
+    "destName": "ModificationTime",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Incidents_CL): modification_time projected to ModificationTime"
+   },
+   {
+    "sourceName": "module_id",
+    "destName": "ModuleId",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Alerts_CL): module_id projected to ModuleId"
+   },
+   {
+    "sourceName": "operation_name",
+    "destName": "OperationName",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Alerts_CL): operation_name projected to OperationName"
+   },
+   {
+    "sourceName": "operational_status",
+    "destName": "OperationalStatus",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Endpoints_CL): operational_status projected to OperationalStatus"
+   },
+   {
+    "sourceName": "original_tags",
+    "destName": "OriginalTags",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Incidents_CL): original_tags projected to OriginalTags"
+   },
+   {
+    "sourceName": "os_actor_causality_id",
+    "destName": "OsActorCausalityId",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Alerts_CL): os_actor_causality_id projected to OsActorCausalityId"
+   },
+   {
+    "sourceName": "os_actor_effective_username",
+    "destName": "OsActorEffectiveUsername",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Alerts_CL): os_actor_effective_username projected to OsActorEffectiveUsername"
+   },
+   {
+    "sourceName": "os_actor_process_causality_id",
+    "destName": "OsActorProcessCausalityId",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Alerts_CL): os_actor_process_causality_id projected to OsActorProcessCausalityId"
+   },
+   {
+    "sourceName": "os_actor_process_command_line",
+    "destName": "OsActorProcessCommandLine",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Alerts_CL): os_actor_process_command_line projected to OsActorProcessCommandLine"
+   },
+   {
+    "sourceName": "os_actor_process_image_name",
+    "destName": "OsActorProcessImageName",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Alerts_CL): os_actor_process_image_name projected to OsActorProcessImageName"
+   },
+   {
+    "sourceName": "os_actor_process_image_path",
+    "destName": "OsActorProcessImagePath",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Alerts_CL): os_actor_process_image_path projected to OsActorProcessImagePath"
+   },
+   {
+    "sourceName": "os_actor_process_image_sha256",
+    "destName": "OsActorProcessImageSha256",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Alerts_CL): os_actor_process_image_sha256 projected to OsActorProcessImageSha256"
+   },
+   {
+    "sourceName": "os_actor_process_os_pid",
+    "destName": "OsActorProcessOsPid",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Alerts_CL): os_actor_process_os_pid projected to OsActorProcessOsPid"
+   },
+   {
+    "sourceName": "os_actor_process_signature_status",
+    "destName": "OsActorProcessSignatureStatus",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Alerts_CL): os_actor_process_signature_status projected to OsActorProcessSignatureStatus"
+   },
+   {
+    "sourceName": "os_actor_process_signature_vendor",
+    "destName": "OsActorProcessSignatureVendor",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Alerts_CL): os_actor_process_signature_vendor projected to OsActorProcessSignatureVendor"
+   },
+   {
+    "sourceName": "os_actor_thread_thread_id",
+    "destName": "OsActorThreadThreadId",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Alerts_CL): os_actor_thread_thread_id projected to OsActorThreadThreadId"
+   },
+   {
+    "sourceName": "resolve_comment",
+    "destName": "ResolveComment",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Incidents_CL): resolve_comment projected to ResolveComment"
+   },
+   {
+    "sourceName": "resolved_timestamp",
+    "destName": "ResolvedTimestamp",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Incidents_CL): resolved_timestamp projected to ResolvedTimestamp"
+   },
+   {
+    "sourceName": "resource_type",
+    "destName": "ResourceType",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Alerts_CL): resource_type projected to ResourceType"
+   },
+   {
+    "sourceName": "rule_based_score",
+    "destName": "RuleBasedScore",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Incidents_CL): rule_based_score projected to RuleBasedScore"
+   },
+   {
+    "sourceName": "TYPE",
+    "destName": "AgentType",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Audit_Agent_CL): TYPE projected to AgentType"
+   },
+   {
+    "sourceName": "user_agent",
+    "destName": "UserAgent",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Alerts_CL): user_agent projected to UserAgent"
+   },
+   {
+    "sourceName": "user_count",
+    "destName": "UserCount",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Incidents_CL): user_count projected to UserCount"
+   },
+   {
+    "sourceName": "user_name",
+    "destName": "UserName",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Alerts_CL): user_name projected to UserName"
+   },
+   {
+    "sourceName": "wildfire_hits",
+    "destName": "WildfireHits",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Incidents_CL): wildfire_hits projected to WildfireHits"
+   },
+   {
+    "sourceName": "xdr_url",
+    "destName": "XdrUrl",
+    "doc": "Sentinel solution DCR (CortexXDR_ccp -> PaloAltoCortexXDR_Incidents_CL): xdr_url projected to XdrUrl"
+   }
+  ]
+ },
+ {
+  "id": "sentinel-dcr-sentinelone",
+  "vendor": "SentinelOne",
+  "solutionKeywords": [
+   "sentinelone",
+   "sentinel one"
+  ],
+  "provenance": "Microsoft Sentinel solution DCR transform (SentinelOne)",
+  "docUrl": "https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/SentinelOne/Data%20Connectors",
+  "mappings": [
+   {
+    "sourceName": "createdAt",
+    "destName": "TimeGenerated",
+    "doc": "Sentinel solution DCR (SentinelOneV2_ccf -> SentinelOneActivities_CL): createdAt projected to TimeGenerated"
+   }
+  ]
+ },
+ {
+  "id": "sentinel-dcr-zscaler",
+  "vendor": "Zscaler",
+  "solutionKeywords": [
+   "zscaler"
+  ],
+  "provenance": "Microsoft Sentinel solution DCR transform (Zscaler Internet Access)",
+  "docUrl": "https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/Zscaler%20Internet%20Access/Data%20Connectors",
+  "mappings": [
+   {
+    "sourceName": "act",
+    "destName": "DeviceAction",
+    "doc": "Sentinel solution DCR (CloudNSSAuditLogs_ccp -> CommonSecurityLog): act projected to DeviceAction"
+   },
+   {
+    "sourceName": "app",
+    "destName": "ApplicationProtocol",
+    "doc": "Sentinel solution DCR (CloudNSSEmailDLPLogs_ccp -> CommonSecurityLog): app projected to ApplicationProtocol"
+   },
+   {
+    "sourceName": "cat",
+    "destName": "DeviceEventCategory",
+    "doc": "Sentinel solution DCR (CloudNSSAuditLogs_ccp -> CommonSecurityLog): cat projected to DeviceEventCategory"
+   },
+   {
+    "sourceName": "cfp1",
+    "destName": "DeviceCustomFloatingPoint1",
+    "doc": "Sentinel solution DCR (CloudNSSTunnelLogs_ccp -> CommonSecurityLog): cfp1 projected to DeviceCustomFloatingPoint1"
+   },
+   {
+    "sourceName": "cfp1Label",
+    "destName": "DeviceCustomFloatingPoint1Label",
+    "doc": "Sentinel solution DCR (CloudNSSTunnelLogs_ccp -> CommonSecurityLog): cfp1Label projected to DeviceCustomFloatingPoint1Label"
+   },
+   {
+    "sourceName": "cn1",
+    "destName": "DeviceCustomNumber1",
+    "doc": "Sentinel solution DCR (CloudNSSCASBCRMLogs_ccp -> CommonSecurityLog): cn1 projected to DeviceCustomNumber1"
+   },
+   {
+    "sourceName": "cn1Label",
+    "destName": "DeviceCustomNumber1Label",
+    "doc": "Sentinel solution DCR (CloudNSSCASBCRMLogs_ccp -> CommonSecurityLog): cn1Label projected to DeviceCustomNumber1Label"
+   },
+   {
+    "sourceName": "cn2",
+    "destName": "DeviceCustomNumber2",
+    "doc": "Sentinel solution DCR (CloudNSSCASBCRMLogs_ccp -> CommonSecurityLog): cn2 projected to DeviceCustomNumber2"
+   },
+   {
+    "sourceName": "cn2Label",
+    "destName": "DeviceCustomNumber2Label",
+    "doc": "Sentinel solution DCR (CloudNSSCASBCRMLogs_ccp -> CommonSecurityLog): cn2Label projected to DeviceCustomNumber2Label"
+   },
+   {
+    "sourceName": "cn3",
+    "destName": "DeviceCustomNumber3",
+    "doc": "Sentinel solution DCR (CloudNSSEndpointDLPLogs_ccp -> CommonSecurityLog): cn3 projected to DeviceCustomNumber3"
+   },
+   {
+    "sourceName": "cn3Label",
+    "destName": "DeviceCustomNumber3Label",
+    "doc": "Sentinel solution DCR (CloudNSSFWLogs_ccp -> CommonSecurityLog): cn3Label projected to DeviceCustomNumber3Label"
+   },
+   {
+    "sourceName": "cs1",
+    "destName": "DeviceCustomString1",
+    "doc": "Sentinel solution DCR (CloudNSSAuditLogs_ccp -> CommonSecurityLog): cs1 projected to DeviceCustomString1"
+   },
+   {
+    "sourceName": "cs1Label",
+    "destName": "DeviceCustomString1Label",
+    "doc": "Sentinel solution DCR (CloudNSSAuditLogs_ccp -> CommonSecurityLog): cs1Label projected to DeviceCustomString1Label"
+   },
+   {
+    "sourceName": "cs2",
+    "destName": "DeviceCustomString2",
+    "doc": "Sentinel solution DCR (CloudNSSAuditLogs_ccp -> CommonSecurityLog): cs2 projected to DeviceCustomString2"
+   },
+   {
+    "sourceName": "cs2Label",
+    "destName": "DeviceCustomString2Label",
+    "doc": "Sentinel solution DCR (CloudNSSAuditLogs_ccp -> CommonSecurityLog): cs2Label projected to DeviceCustomString2Label"
+   },
+   {
+    "sourceName": "cs3",
+    "destName": "DeviceCustomString3",
+    "doc": "Sentinel solution DCR (CloudNSSAuditLogs_ccp -> CommonSecurityLog): cs3 projected to DeviceCustomString3"
+   },
+   {
+    "sourceName": "cs3Label",
+    "destName": "DeviceCustomString3Label",
+    "doc": "Sentinel solution DCR (CloudNSSAuditLogs_ccp -> CommonSecurityLog): cs3Label projected to DeviceCustomString3Label"
+   },
+   {
+    "sourceName": "cs4",
+    "destName": "DeviceCustomString4",
+    "doc": "Sentinel solution DCR (CloudNSSAuditLogs_ccp -> CommonSecurityLog): cs4 projected to DeviceCustomString4"
+   },
+   {
+    "sourceName": "cs4Label",
+    "destName": "DeviceCustomString4Label",
+    "doc": "Sentinel solution DCR (CloudNSSAuditLogs_ccp -> CommonSecurityLog): cs4Label projected to DeviceCustomString4Label"
+   },
+   {
+    "sourceName": "cs5",
+    "destName": "DeviceCustomString5",
+    "doc": "Sentinel solution DCR (CloudNSSAuditLogs_ccp -> CommonSecurityLog): cs5 projected to DeviceCustomString5"
+   },
+   {
+    "sourceName": "cs5Label",
+    "destName": "DeviceCustomString5Label",
+    "doc": "Sentinel solution DCR (CloudNSSAuditLogs_ccp -> CommonSecurityLog): cs5Label projected to DeviceCustomString5Label"
+   },
+   {
+    "sourceName": "cs6",
+    "destName": "DeviceCustomString6",
+    "doc": "Sentinel solution DCR (CloudNSSCASBActivityLogs_ccp -> CommonSecurityLog): cs6 projected to DeviceCustomString6"
+   },
+   {
+    "sourceName": "cs6Label",
+    "destName": "DeviceCustomString6Label",
+    "doc": "Sentinel solution DCR (CloudNSSCASBActivityLogs_ccp -> CommonSecurityLog): cs6Label projected to DeviceCustomString6Label"
+   },
+   {
+    "sourceName": "deviceDirection",
+    "destName": "CommunicationDirection",
+    "doc": "Sentinel solution DCR (CloudNSSFWLogs_ccp -> CommonSecurityLog): deviceDirection projected to CommunicationDirection"
+   },
+   {
+    "sourceName": "dhost",
+    "destName": "DestinationHostName",
+    "doc": "Sentinel solution DCR (CloudNSSCASBCRMLogs_ccp -> CommonSecurityLog): dhost projected to DestinationHostName"
+   },
+   {
+    "sourceName": "dpt",
+    "destName": "DestinationPort",
+    "doc": "Sentinel solution DCR (CloudNSSDNSLogs_ccp -> CommonSecurityLog): dpt projected to DestinationPort"
+   },
+   {
+    "sourceName": "dst",
+    "destName": "DestinationIP",
+    "doc": "Sentinel solution DCR (CloudNSSDNSLogs_ccp -> CommonSecurityLog): dst projected to DestinationIP"
+   },
+   {
+    "sourceName": "dtz",
+    "destName": "DeviceTimeZone",
+    "doc": "Sentinel solution DCR (CloudNSSCASBCRMLogs_ccp -> CommonSecurityLog): dtz projected to DeviceTimeZone"
+   },
+   {
+    "sourceName": "dvchost",
+    "destName": "DeviceName",
+    "doc": "Sentinel solution DCR (CloudNSSDNSLogs_ccp -> CommonSecurityLog): dvchost projected to DeviceName"
+   },
+   {
+    "sourceName": "externalId",
+    "destName": "ExtID",
+    "doc": "Sentinel solution DCR (CloudNSSWebLogs_ccp -> CommonSecurityLog): externalId projected to ExtID"
+   },
+   {
+    "sourceName": "fname",
+    "destName": "FileName",
+    "doc": "Sentinel solution DCR (CloudNSSCASBCRMLogs_ccp -> CommonSecurityLog): fname projected to FileName"
+   },
+   {
+    "sourceName": "fsize",
+    "destName": "FileSize",
+    "doc": "Sentinel solution DCR (CloudNSSCASBCRMLogs_ccp -> CommonSecurityLog): fsize projected to FileSize"
+   },
+   {
+    "sourceName": "in_bytes",
+    "destName": "ReceivedBytes",
+    "doc": "Sentinel solution DCR (CloudNSSFWLogs_ccp -> CommonSecurityLog): in_bytes projected to ReceivedBytes"
+   },
+   {
+    "sourceName": "inbytes",
+    "destName": "ReceivedBytes",
+    "doc": "Sentinel solution DCR (CloudNSSTunnelLogs_ccp -> CommonSecurityLog): inbytes projected to ReceivedBytes"
+   },
+   {
+    "sourceName": "name",
+    "destName": "Activity",
+    "doc": "Sentinel solution DCR (CloudNSSAuditLogs_ccp -> CommonSecurityLog): name projected to Activity"
+   },
+   {
+    "sourceName": "out",
+    "destName": "SentBytes",
+    "doc": "Sentinel solution DCR (CloudNSSTunnelLogs_ccp -> CommonSecurityLog): out projected to SentBytes"
+   },
+   {
+    "sourceName": "out_bytes",
+    "destName": "SentBytes",
+    "doc": "Sentinel solution DCR (CloudNSSFWLogs_ccp -> CommonSecurityLog): out_bytes projected to SentBytes"
+   },
+   {
+    "sourceName": "outcome",
+    "destName": "EventOutcome",
+    "doc": "Sentinel solution DCR (CloudNSSAuditLogs_ccp -> CommonSecurityLog): outcome projected to EventOutcome"
+   },
+   {
+    "sourceName": "product",
+    "destName": "DeviceProduct",
+    "doc": "Sentinel solution DCR (CloudNSSAuditLogs_ccp -> CommonSecurityLog): product projected to DeviceProduct"
+   },
+   {
+    "sourceName": "proto",
+    "destName": "Protocol",
+    "doc": "Sentinel solution DCR (CloudNSSFWLogs_ccp -> CommonSecurityLog): proto projected to Protocol"
+   },
+   {
+    "sourceName": "request",
+    "destName": "RequestURL",
+    "doc": "Sentinel solution DCR (CloudNSSWebLogs_ccp -> CommonSecurityLog): request projected to RequestURL"
+   },
+   {
+    "sourceName": "rt",
+    "destName": "ReceiptTime",
+    "doc": "Sentinel solution DCR (CloudNSSEndpointDLPLogs_ccp -> CommonSecurityLog): rt projected to ReceiptTime"
+   },
+   {
+    "sourceName": "Severity",
+    "destName": "LogSeverity",
+    "doc": "Sentinel solution DCR (CloudNSSAuditLogs_ccp -> CommonSecurityLog): Severity projected to LogSeverity"
+   },
+   {
+    "sourceName": "shost",
+    "destName": "SourceHostName",
+    "doc": "Sentinel solution DCR (CloudNSSFWLogs_ccp -> CommonSecurityLog): shost projected to SourceHostName"
+   },
+   {
+    "sourceName": "spriv",
+    "destName": "SourceUserPrivileges",
+    "doc": "Sentinel solution DCR (CloudNSSDNSLogs_ccp -> CommonSecurityLog): spriv projected to SourceUserPrivileges"
+   },
+   {
+    "sourceName": "spt",
+    "destName": "SourcePort",
+    "doc": "Sentinel solution DCR (CloudNSSFWLogs_ccp -> CommonSecurityLog): spt projected to SourcePort"
+   },
+   {
+    "sourceName": "src",
+    "destName": "SourceIP",
+    "doc": "Sentinel solution DCR (CloudNSSAuditLogs_ccp -> CommonSecurityLog): src projected to SourceIP"
+   },
+   {
+    "sourceName": "suid",
+    "destName": "SourceUserID",
+    "doc": "Sentinel solution DCR (CloudNSSDNSLogs_ccp -> CommonSecurityLog): suid projected to SourceUserID"
+   },
+   {
+    "sourceName": "suser",
+    "destName": "SourceUserName",
+    "doc": "Sentinel solution DCR (CloudNSSAuditLogs_ccp -> CommonSecurityLog): suser projected to SourceUserName"
+   },
+   {
+    "sourceName": "vendor",
+    "destName": "DeviceVendor",
+    "doc": "Sentinel solution DCR (CloudNSSAuditLogs_ccp -> CommonSecurityLog): vendor projected to DeviceVendor"
+   },
+   {
+    "sourceName": "version",
+    "destName": "DeviceVersion",
+    "doc": "Sentinel solution DCR (CloudNSSAuditLogs_ccp -> CommonSecurityLog): version projected to DeviceVersion"
+   }
+  ]
+ }
+]

@@ -1,0 +1,3594 @@
+[
+ {
+  "id": "generated-abnormal_security",
+  "vendor": "Abnormal AI",
+  "solutionKeywords": [
+   "abnormal ai",
+   "abnormal"
+  ],
+  "provenance": "Generated from elastic/integrations abnormal_security pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/abnormal_security",
+  "mappings": [
+   {
+    "sourceName": "abxMessageIdStr",
+    "destName": "ExternalID",
+    "ecs": "event.id"
+   },
+   {
+    "sourceName": "action",
+    "destName": "DeviceAction",
+    "ecs": "event.action"
+   },
+   {
+    "sourceName": "affectedEmployee",
+    "destName": "SourceUserName",
+    "ecs": "user.email"
+   },
+   {
+    "sourceName": "caseId",
+    "destName": "ExternalID",
+    "ecs": "event.id"
+   },
+   {
+    "sourceName": "fromName",
+    "destName": "SourceUserName",
+    "ecs": "user.name"
+   },
+   {
+    "sourceName": "messageId",
+    "destName": "ExternalID",
+    "ecs": "event.id"
+   },
+   {
+    "sourceName": "not_analyzed_reason",
+    "destName": "Reason",
+    "ecs": "event.reason"
+   },
+   {
+    "sourceName": "recipientName",
+    "destName": "DestinationUserName",
+    "ecs": "destination.user.name"
+   },
+   {
+    "sourceName": "senderIpAddress",
+    "destName": "SourceIP",
+    "ecs": "source.ip"
+   },
+   {
+    "sourceName": "sourceIp",
+    "destName": "SourceIP",
+    "ecs": "source.ip"
+   },
+   {
+    "sourceName": "vendorCaseId",
+    "destName": "ExternalID",
+    "ecs": "event.id"
+   }
+  ]
+ },
+ {
+  "id": "generated-amazon_security_lake",
+  "vendor": "Amazon Security Lake",
+  "solutionKeywords": [
+   "amazon security lake",
+   "amazon security"
+  ],
+  "provenance": "Generated from elastic/integrations amazon_security_lake pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/amazon_security_lake",
+  "mappings": [
+   {
+    "sourceName": "activity_name",
+    "destName": "DeviceAction",
+    "ecs": "event.action"
+   },
+   {
+    "sourceName": "message",
+    "destName": "Message",
+    "ecs": "message"
+   },
+   {
+    "sourceName": "severity_id",
+    "destName": "LogSeverity",
+    "ecs": "event.severity"
+   }
+  ]
+ },
+ {
+  "id": "generated-anthropic",
+  "vendor": "Anthropic",
+  "solutionKeywords": [
+   "anthropic"
+  ],
+  "provenance": "Generated from elastic/integrations anthropic pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/anthropic",
+  "mappings": [
+   {
+    "sourceName": "filename",
+    "destName": "FileName",
+    "ecs": "file.name"
+   },
+   {
+    "sourceName": "id",
+    "destName": "ExternalID",
+    "ecs": "event.id"
+   },
+   {
+    "sourceName": "type",
+    "destName": "DeviceAction",
+    "ecs": "event.action"
+   }
+  ]
+ },
+ {
+  "id": "generated-atlassian_bitbucket",
+  "vendor": "Atlassian Bitbucket",
+  "solutionKeywords": [
+   "atlassian bitbucket",
+   "atlassian"
+  ],
+  "provenance": "Generated from elastic/integrations atlassian_bitbucket pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/atlassian_bitbucket",
+  "mappings": [
+   {
+    "sourceName": "method",
+    "destName": "SourceUserName",
+    "ecs": "user.name"
+   },
+   {
+    "sourceName": "source",
+    "destName": "SourceIP",
+    "ecs": "source.ip"
+   }
+  ]
+ },
+ {
+  "id": "generated-atlassian_confluence",
+  "vendor": "Atlassian Confluence",
+  "solutionKeywords": [
+   "atlassian confluence",
+   "atlassian"
+  ],
+  "provenance": "Generated from elastic/integrations atlassian_confluence pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/atlassian_confluence",
+  "mappings": [
+   {
+    "sourceName": "remoteAddress",
+    "destName": "SourceIP",
+    "ecs": "source.ip"
+   },
+   {
+    "sourceName": "source",
+    "destName": "SourceIP",
+    "ecs": "source.ip"
+   },
+   {
+    "sourceName": "summary",
+    "destName": "DeviceAction",
+    "ecs": "event.action"
+   }
+  ]
+ },
+ {
+  "id": "generated-atlassian_jira",
+  "vendor": "Atlassian Jira",
+  "solutionKeywords": [
+   "atlassian jira",
+   "atlassian"
+  ],
+  "provenance": "Generated from elastic/integrations atlassian_jira pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/atlassian_jira",
+  "mappings": [
+   {
+    "sourceName": "id",
+    "destName": "ExternalID",
+    "ecs": "event.id"
+   },
+   {
+    "sourceName": "remoteAddress",
+    "destName": "SourceIP",
+    "ecs": "source.ip"
+   },
+   {
+    "sourceName": "source",
+    "destName": "SourceIP",
+    "ecs": "source.ip"
+   },
+   {
+    "sourceName": "summary",
+    "destName": "DeviceAction",
+    "ecs": "event.action"
+   }
+  ]
+ },
+ {
+  "id": "generated-authentik",
+  "vendor": "authentik",
+  "solutionKeywords": [
+   "authentik"
+  ],
+  "provenance": "Generated from elastic/integrations authentik pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/authentik",
+  "mappings": [
+   {
+    "sourceName": "action",
+    "destName": "DeviceAction",
+    "ecs": "event.action"
+   },
+   {
+    "sourceName": "client_ip",
+    "destName": "SourceIP",
+    "ecs": "source.ip"
+   },
+   {
+    "sourceName": "email",
+    "destName": "SourceUserName",
+    "ecs": "user.email"
+   },
+   {
+    "sourceName": "pk",
+    "destName": "ExternalID",
+    "ecs": "event.id"
+   },
+   {
+    "sourceName": "username",
+    "destName": "SourceUserName",
+    "ecs": "user.name"
+   }
+  ]
+ },
+ {
+  "id": "generated-aws",
+  "vendor": "AWS",
+  "solutionKeywords": [
+   "aws"
+  ],
+  "provenance": "Generated from elastic/integrations aws pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/aws",
+  "mappings": [
+   {
+    "sourceName": "action",
+    "destName": "DeviceAction",
+    "ecs": "event.action"
+   },
+   {
+    "sourceName": "description",
+    "destName": "Message",
+    "ecs": "message"
+   },
+   {
+    "sourceName": "dest_ip",
+    "destName": "DestinationIP",
+    "ecs": "destination.ip"
+   },
+   {
+    "sourceName": "dest_port",
+    "destName": "DestinationPort",
+    "ecs": "destination.port"
+   },
+   {
+    "sourceName": "eventID",
+    "destName": "ExternalID",
+    "ecs": "event.id"
+   },
+   {
+    "sourceName": "eventName",
+    "destName": "DeviceAction",
+    "ecs": "event.action"
+   },
+   {
+    "sourceName": "Id",
+    "destName": "ExternalID",
+    "ecs": "event.id"
+   },
+   {
+    "sourceName": "message",
+    "destName": "Message",
+    "ecs": "message"
+   },
+   {
+    "sourceName": "sourceIPAddress",
+    "destName": "SourceIP",
+    "ecs": "source.ip"
+   },
+   {
+    "sourceName": "src_ip",
+    "destName": "SourceIP",
+    "ecs": "source.ip"
+   },
+   {
+    "sourceName": "src_port",
+    "destName": "SourcePort",
+    "ecs": "source.port"
+   },
+   {
+    "sourceName": "srcaddr",
+    "destName": "SourceIP",
+    "ecs": "source.ip"
+   },
+   {
+    "sourceName": "srcport",
+    "destName": "SourcePort",
+    "ecs": "source.port"
+   },
+   {
+    "sourceName": "userAgent",
+    "destName": "RequestClientApplication",
+    "ecs": "user_agent.original"
+   }
+  ]
+ },
+ {
+  "id": "generated-axonius",
+  "vendor": "Axonius",
+  "solutionKeywords": [
+   "axonius"
+  ],
+  "provenance": "Generated from elastic/integrations axonius pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/axonius",
+  "mappings": [
+   {
+    "sourceName": "action_if_exists",
+    "destName": "DeviceAction",
+    "ecs": "event.action"
+   },
+   {
+    "sourceName": "email",
+    "destName": "SourceUserName",
+    "ecs": "user.email"
+   },
+   {
+    "sourceName": "id",
+    "destName": "ExternalID",
+    "ecs": "event.id"
+   },
+   {
+    "sourceName": "plugin_name",
+    "destName": "ExternalID",
+    "ecs": "event.id"
+   },
+   {
+    "sourceName": "user_name",
+    "destName": "SourceUserName",
+    "ecs": "user.name"
+   }
+  ]
+ },
+ {
+  "id": "generated-azure",
+  "vendor": "Azure",
+  "solutionKeywords": [
+   "azure logs"
+  ],
+  "provenance": "Generated from elastic/integrations azure pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/azure",
+  "mappings": [
+   {
+    "sourceName": "EventName",
+    "destName": "DeviceAction",
+    "ecs": "event.action"
+   },
+   {
+    "sourceName": "operationName",
+    "destName": "DeviceAction",
+    "ecs": "event.action"
+   },
+   {
+    "sourceName": "resultSignature",
+    "destName": "EventOutcome",
+    "ecs": "http.response.status_code"
+   }
+  ]
+ },
+ {
+  "id": "generated-beelzebub",
+  "vendor": "Beelzebub",
+  "solutionKeywords": [
+   "beelzebub"
+  ],
+  "provenance": "Generated from elastic/integrations beelzebub pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/beelzebub",
+  "mappings": [
+   {
+    "sourceName": "HTTPMethod",
+    "destName": "RequestMethod",
+    "ecs": "http.request.method"
+   },
+   {
+    "sourceName": "ID",
+    "destName": "ExternalID",
+    "ecs": "event.id"
+   },
+   {
+    "sourceName": "msg",
+    "destName": "Reason",
+    "ecs": "event.reason"
+   },
+   {
+    "sourceName": "SourceIp",
+    "destName": "SourceIP",
+    "ecs": "source.ip"
+   },
+   {
+    "sourceName": "SourcePort",
+    "destName": "SourcePort",
+    "ecs": "source.port"
+   },
+   {
+    "sourceName": "UserAgent",
+    "destName": "RequestClientApplication",
+    "ecs": "user_agent.original"
+   }
+  ]
+ },
+ {
+  "id": "generated-beyondtrust_epm",
+  "vendor": "BeyondTrust EPM",
+  "solutionKeywords": [
+   "beyondtrust epm",
+   "beyondtrust"
+  ],
+  "provenance": "Generated from elastic/integrations beyondtrust_epm pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/beyondtrust_epm",
+  "mappings": [
+   {
+    "sourceName": "action",
+    "destName": "DeviceAction",
+    "ecs": "event.action"
+   },
+   {
+    "sourceName": "details",
+    "destName": "Message",
+    "ecs": "message"
+   },
+   {
+    "sourceName": "id",
+    "destName": "ExternalID",
+    "ecs": "event.id"
+   },
+   {
+    "sourceName": "message",
+    "destName": "Message",
+    "ecs": "message"
+   },
+   {
+    "sourceName": "reason",
+    "destName": "Reason",
+    "ecs": "event.reason"
+   },
+   {
+    "sourceName": "user",
+    "destName": "SourceUserName",
+    "ecs": "user.name"
+   }
+  ]
+ },
+ {
+  "id": "generated-beyondtrust_isi",
+  "vendor": "BeyondTrust ISI",
+  "solutionKeywords": [
+   "beyondtrust isi",
+   "beyondtrust"
+  ],
+  "provenance": "Generated from elastic/integrations beyondtrust_isi pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/beyondtrust_isi",
+  "mappings": [
+   {
+    "sourceName": "definitionSummary",
+    "destName": "Message",
+    "ecs": "message"
+   },
+   {
+    "sourceName": "incidentId",
+    "destName": "ExternalID",
+    "ecs": "event.id"
+   }
+  ]
+ },
+ {
+  "id": "generated-box_events",
+  "vendor": "Box",
+  "solutionKeywords": [
+   "box events"
+  ],
+  "provenance": "Generated from elastic/integrations box_events pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/box_events",
+  "mappings": [
+   {
+    "sourceName": "event_id",
+    "destName": "ExternalID",
+    "ecs": "event.id"
+   },
+   {
+    "sourceName": "event_type",
+    "destName": "DeviceAction",
+    "ecs": "event.action"
+   },
+   {
+    "sourceName": "ip_address",
+    "destName": "SourceIP",
+    "ecs": "client.ip"
+   }
+  ]
+ },
+ {
+  "id": "generated-carbon_black_cloud",
+  "vendor": "VMware Carbon Black",
+  "solutionKeywords": [
+   "carbon black",
+   "carbonblack"
+  ],
+  "provenance": "Generated from elastic/integrations carbon_black_cloud pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/carbon_black_cloud",
+  "mappings": [
+   {
+    "sourceName": "action",
+    "destName": "DeviceAction",
+    "ecs": "event.action"
+   },
+   {
+    "sourceName": "clientIp",
+    "destName": "SourceIP",
+    "ecs": "client.ip"
+   },
+   {
+    "sourceName": "description",
+    "destName": "Reason",
+    "ecs": "event.reason"
+   },
+   {
+    "sourceName": "eventId",
+    "destName": "ExternalID",
+    "ecs": "event.id"
+   },
+   {
+    "sourceName": "id",
+    "destName": "ExternalID",
+    "ecs": "event.id"
+   },
+   {
+    "sourceName": "process_pid",
+    "destName": "SourceProcessId",
+    "ecs": "process.pid"
+   },
+   {
+    "sourceName": "reason",
+    "destName": "Reason",
+    "ecs": "event.reason"
+   }
+  ]
+ },
+ {
+  "id": "generated-cato_networks",
+  "vendor": "Cato Networks",
+  "solutionKeywords": [
+   "cato networks",
+   "cato"
+  ],
+  "provenance": "Generated from elastic/integrations cato_networks pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/cato_networks",
+  "mappings": [
+   {
+    "sourceName": "admin",
+    "destName": "SourceUserName",
+    "ecs": "user.name"
+   },
+   {
+    "sourceName": "dest_ip",
+    "destName": "DestinationIP",
+    "ecs": "destination.ip"
+   },
+   {
+    "sourceName": "dest_port",
+    "destName": "DestinationPort",
+    "ecs": "destination.port"
+   },
+   {
+    "sourceName": "domain_name",
+    "destName": "DestinationHostName",
+    "ecs": "url.domain"
+   },
+   {
+    "sourceName": "event_id",
+    "destName": "ExternalID",
+    "ecs": "event.id"
+   },
+   {
+    "sourceName": "full_path_url",
+    "destName": "RequestURL",
+    "ecs": "url.full"
+   },
+   {
+    "sourceName": "http_request_method",
+    "destName": "RequestMethod",
+    "ecs": "http.request.method"
+   },
+   {
+    "sourceName": "internal_id",
+    "destName": "ExternalID",
+    "ecs": "event.id"
+   },
+   {
+    "sourceName": "internalId",
+    "destName": "ExternalID",
+    "ecs": "event.id"
+   },
+   {
+    "sourceName": "server_ip",
+    "destName": "DestinationIP",
+    "ecs": "server.ip"
+   },
+   {
+    "sourceName": "src_port",
+    "destName": "SourcePort",
+    "ecs": "source.port"
+   },
+   {
+    "sourceName": "url",
+    "destName": "RequestURL",
+    "ecs": "url.full"
+   },
+   {
+    "sourceName": "user_agent",
+    "destName": "RequestClientApplication",
+    "ecs": "user_agent.original"
+   }
+  ]
+ },
+ {
+  "id": "generated-checkpoint_email",
+  "vendor": "Check Point Harmony Email & Collaboration",
+  "solutionKeywords": [
+   "check point harmony email & collaboration",
+   "check"
+  ],
+  "provenance": "Generated from elastic/integrations checkpoint_email pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/checkpoint_email",
+  "mappings": [
+   {
+    "sourceName": "description",
+    "destName": "Message",
+    "ecs": "message"
+   },
+   {
+    "sourceName": "entityId",
+    "destName": "ExternalID",
+    "ecs": "event.id"
+   },
+   {
+    "sourceName": "eventId",
+    "destName": "ExternalID",
+    "ecs": "event.id"
+   }
+  ]
+ },
+ {
+  "id": "generated-checkpoint_harmony_endpoint",
+  "vendor": "Check Point Harmony Endpoint",
+  "solutionKeywords": [
+   "check point harmony endpoint",
+   "check"
+  ],
+  "provenance": "Generated from elastic/integrations checkpoint_harmony_endpoint pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/checkpoint_harmony_endpoint",
+  "mappings": [
+   {
+    "sourceName": "action",
+    "destName": "DeviceAction",
+    "ecs": "event.action"
+   },
+   {
+    "sourceName": "file_name",
+    "destName": "FileName",
+    "ecs": "file.name"
+   },
+   {
+    "sourceName": "file_size",
+    "destName": "FileSize",
+    "ecs": "file.size"
+   },
+   {
+    "sourceName": "id",
+    "destName": "ExternalID",
+    "ecs": "event.id"
+   },
+   {
+    "sourceName": "resource",
+    "destName": "RequestURL",
+    "ecs": "url.original"
+   },
+   {
+    "sourceName": "src_user_name",
+    "destName": "SourceUserName",
+    "ecs": "user.name"
+   }
+  ]
+ },
+ {
+  "id": "generated-cisco_duo",
+  "vendor": "Cisco Duo",
+  "solutionKeywords": [
+   "cisco duo",
+   "duo security",
+   "cisco secure application"
+  ],
+  "provenance": "Generated from elastic/integrations cisco_duo pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/cisco_duo",
+  "mappings": [
+   {
+    "sourceName": "action",
+    "destName": "DeviceAction",
+    "ecs": "event.action"
+   },
+   {
+    "sourceName": "activity_id",
+    "destName": "ExternalID",
+    "ecs": "event.id"
+   },
+   {
+    "sourceName": "email",
+    "destName": "SourceUserName",
+    "ecs": "user.email"
+   },
+   {
+    "sourceName": "reason",
+    "destName": "Reason",
+    "ecs": "event.reason"
+   },
+   {
+    "sourceName": "sekey",
+    "destName": "ExternalID",
+    "ecs": "event.id"
+   },
+   {
+    "sourceName": "telephony_id",
+    "destName": "ExternalID",
+    "ecs": "event.id"
+   },
+   {
+    "sourceName": "username",
+    "destName": "SourceUserName",
+    "ecs": "user.name"
+   }
+  ]
+ },
+ {
+  "id": "generated-claroty_ctd",
+  "vendor": "Claroty CTD",
+  "solutionKeywords": [
+   "claroty ctd",
+   "claroty"
+  ],
+  "provenance": "Generated from elastic/integrations claroty_ctd pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/claroty_ctd",
+  "mappings": [
+   {
+    "sourceName": "description",
+    "destName": "Message",
+    "ecs": "message"
+   },
+   {
+    "sourceName": "dst_port",
+    "destName": "DestinationPort",
+    "ecs": "destination.port"
+   },
+   {
+    "sourceName": "id",
+    "destName": "ExternalID",
+    "ecs": "event.id"
+   }
+  ]
+ },
+ {
+  "id": "generated-claroty_xdome",
+  "vendor": "Claroty xDome",
+  "solutionKeywords": [
+   "claroty xdome",
+   "claroty"
+  ],
+  "provenance": "Generated from elastic/integrations claroty_xdome pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/claroty_xdome",
+  "mappings": [
+   {
+    "sourceName": "authentication_user_list",
+    "destName": "SourceUserName",
+    "ecs": "user.name"
+   },
+   {
+    "sourceName": "description",
+    "destName": "Message",
+    "ecs": "message"
+   },
+   {
+    "sourceName": "dest_device_name",
+    "destName": "DestinationIP",
+    "ecs": "destination.ip"
+   },
+   {
+    "sourceName": "dest_ip",
+    "destName": "DestinationIP",
+    "ecs": "destination.ip"
+   },
+   {
+    "sourceName": "dest_port",
+    "destName": "DestinationPort",
+    "ecs": "destination.port"
+   },
+   {
+    "sourceName": "event_id",
+    "destName": "ExternalID",
+    "ecs": "event.id"
+   },
+   {
+    "sourceName": "source_ip",
+    "destName": "SourceIP",
+    "ecs": "source.ip"
+   },
+   {
+    "sourceName": "source_port",
+    "destName": "SourcePort",
+    "ecs": "source.port"
+   },
+   {
+    "sourceName": "visibility_score",
+    "destName": "LogSeverity",
+    "ecs": "event.severity"
+   }
+  ]
+ },
+ {
+  "id": "generated-cloudflare_logpush",
+  "vendor": "Cloudflare",
+  "solutionKeywords": [
+   "cloudflare"
+  ],
+  "provenance": "Generated from elastic/integrations cloudflare_logpush pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/cloudflare_logpush",
+  "mappings": [
+   {
+    "sourceName": "Action",
+    "destName": "DeviceAction",
+    "ecs": "event.action"
+   },
+   {
+    "sourceName": "ActionType",
+    "destName": "DeviceAction",
+    "ecs": "event.action"
+   },
+   {
+    "sourceName": "ActorEmail",
+    "destName": "SourceUserName",
+    "ecs": "user.email"
+   },
+   {
+    "sourceName": "ActorIP",
+    "destName": "SourceIP",
+    "ecs": "source.ip"
+   },
+   {
+    "sourceName": "AppDomain",
+    "destName": "DestinationHostName",
+    "ecs": "url.domain"
+   },
+   {
+    "sourceName": "Application",
+    "destName": "ExternalID",
+    "ecs": "event.id"
+   },
+   {
+    "sourceName": "AssetLink",
+    "destName": "RequestURL",
+    "ecs": "url.original"
+   },
+   {
+    "sourceName": "BlockedFileHash",
+    "destName": "FileHash",
+    "ecs": "file.hash.sha256"
+   },
+   {
+    "sourceName": "BlockedFileName",
+    "destName": "FileName",
+    "ecs": "file.name"
+   },
+   {
+    "sourceName": "BlockedFileSize",
+    "destName": "FileSize",
+    "ecs": "file.size"
+   },
+   {
+    "sourceName": "BytesReceived",
+    "destName": "ReceivedBytes",
+    "ecs": "destination.bytes"
+   },
+   {
+    "sourceName": "BytesSent",
+    "destName": "SentBytes",
+    "ecs": "source.bytes"
+   },
+   {
+    "sourceName": "ClientIP",
+    "destName": "SourceIP",
+    "ecs": "source.ip"
+   },
+   {
+    "sourceName": "ClientPort",
+    "destName": "SourcePort",
+    "ecs": "source.port"
+   },
+   {
+    "sourceName": "ClientProto",
+    "destName": "Protocol",
+    "ecs": "network.transport"
+   },
+   {
+    "sourceName": "ClientRequestHost",
+    "destName": "DestinationHostName",
+    "ecs": "url.domain"
+   },
+   {
+    "sourceName": "ClientRequestMethod",
+    "destName": "RequestMethod",
+    "ecs": "http.request.method"
+   },
+   {
+    "sourceName": "ClientRequestReferer",
+    "destName": "RequestContext",
+    "ecs": "http.request.referrer"
+   },
+   {
+    "sourceName": "ClientRequestUserAgent",
+    "destName": "RequestClientApplication",
+    "ecs": "user_agent.original"
+   },
+   {
+    "sourceName": "DestAddr",
+    "destName": "DestinationIP",
+    "ecs": "destination.ip"
+   },
+   {
+    "sourceName": "DestinationIP",
+    "destName": "DestinationIP",
+    "ecs": "destination.ip"
+   },
+   {
+    "sourceName": "DestinationPort",
+    "destName": "DestinationPort",
+    "ecs": "destination.port"
+   },
+   {
+    "sourceName": "DstIP",
+    "destName": "DestinationIP",
+    "ecs": "destination.ip"
+   },
+   {
+    "sourceName": "DstPort",
+    "destName": "DestinationPort",
+    "ecs": "destination.port"
+   },
+   {
+    "sourceName": "EdgeResponseStatus",
+    "destName": "EventOutcome",
+    "ecs": "http.response.status_code"
+   },
+   {
+    "sourceName": "Email",
+    "destName": "SourceUserName",
+    "ecs": "user.email"
+   },
+   {
+    "sourceName": "Event",
+    "destName": "DeviceAction",
+    "ecs": "event.action"
+   },
+   {
+    "sourceName": "EventType",
+    "destName": "DeviceAction",
+    "ecs": "event.action"
+   },
+   {
+    "sourceName": "HTTPMethod",
+    "destName": "RequestMethod",
+    "ecs": "http.request.method"
+   },
+   {
+    "sourceName": "HTTPStatusCode",
+    "destName": "EventOutcome",
+    "ecs": "http.response.status_code"
+   },
+   {
+    "sourceName": "ID",
+    "destName": "ExternalID",
+    "ecs": "event.id"
+   },
+   {
+    "sourceName": "InstanceID",
+    "destName": "ExternalID",
+    "ecs": "event.id"
+   },
+   {
+    "sourceName": "IPAddress",
+    "destName": "SourceIP",
+    "ecs": "client.ip"
+   },
+   {
+    "sourceName": "IPDestinationAddress",
+    "destName": "DestinationIP",
+    "ecs": "destination.ip"
+   },
+   {
+    "sourceName": "IPProtocolName",
+    "destName": "Protocol",
+    "ecs": "network.transport"
+   },
+   {
+    "sourceName": "IPSourceAddress",
+    "destName": "SourceIP",
+    "ecs": "source.ip"
+   },
+   {
+    "sourceName": "Method",
+    "destName": "RequestMethod",
+    "ecs": "http.request.method"
+   },
+   {
+    "sourceName": "OriginIP",
+    "destName": "DestinationIP",
+    "ecs": "destination.ip"
+   },
+   {
+    "sourceName": "OriginPort",
+    "destName": "DestinationPort",
+    "ecs": "destination.port"
+   },
+   {
+    "sourceName": "OriginProto",
+    "destName": "Protocol",
+    "ecs": "network.transport"
+   },
+   {
+    "sourceName": "Protocol",
+    "destName": "ApplicationProtocol",
+    "ecs": "network.protocol"
+   },
+   {
+    "sourceName": "QueryName",
+    "destName": "DestinationDnsDomain",
+    "ecs": "dns.question.name"
+   },
+   {
+    "sourceName": "RayID",
+    "destName": "ExternalID",
+    "ecs": "event.id"
+   },
+   {
+    "sourceName": "Referer",
+    "destName": "RequestContext",
+    "ecs": "http.request.referrer"
+   },
+   {
+    "sourceName": "Referrer",
+    "destName": "RequestContext",
+    "ecs": "http.request.referrer"
+   },
+   {
+    "sourceName": "SessionID",
+    "destName": "ExternalID",
+    "ecs": "event.id"
+   },
+   {
+    "sourceName": "SourceIP",
+    "destName": "SourceIP",
+    "ecs": "source.ip"
+   },
+   {
+    "sourceName": "SourcePort",
+    "destName": "SourcePort",
+    "ecs": "source.port"
+   },
+   {
+    "sourceName": "SrcAddr",
+    "destName": "SourceIP",
+    "ecs": "source.ip"
+   },
+   {
+    "sourceName": "SrcIP",
+    "destName": "SourceIP",
+    "ecs": "source.ip"
+   },
+   {
+    "sourceName": "Transport",
+    "destName": "Protocol",
+    "ecs": "network.transport"
+   },
+   {
+    "sourceName": "URL",
+    "destName": "RequestURL",
+    "ecs": "url.original"
+   },
+   {
+    "sourceName": "UserAgent",
+    "destName": "RequestClientApplication",
+    "ecs": "user_agent.original"
+   }
+  ]
+ },
+ {
+  "id": "generated-crowdstrike",
+  "vendor": "CrowdStrike",
+  "solutionKeywords": [
+   "crowdstrike"
+  ],
+  "provenance": "Generated from elastic/integrations crowdstrike pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/crowdstrike",
+  "mappings": [
+   {
+    "sourceName": "ContextBaseFileName",
+    "destName": "ProcessName",
+    "ecs": "process.name"
+   },
+   {
+    "sourceName": "Description",
+    "destName": "Message",
+    "ecs": "message"
+   },
+   {
+    "sourceName": "DetectDescription",
+    "destName": "Message",
+    "ecs": "message"
+   },
+   {
+    "sourceName": "DomainName",
+    "destName": "DestinationDnsDomain",
+    "ecs": "dns.question.name"
+   },
+   {
+    "sourceName": "DownloadServer",
+    "destName": "DestinationHostName",
+    "ecs": "url.domain"
+   },
+   {
+    "sourceName": "EtwRawProcessId",
+    "destName": "SourceProcessId",
+    "ecs": "process.pid"
+   },
+   {
+    "sourceName": "event_simpleName",
+    "destName": "DeviceAction",
+    "ecs": "event.action"
+   },
+   {
+    "sourceName": "eventId",
+    "destName": "ExternalID",
+    "ecs": "event.id"
+   },
+   {
+    "sourceName": "eventType",
+    "destName": "DeviceAction",
+    "ecs": "event.action"
+   },
+   {
+    "sourceName": "FilePath",
+    "destName": "FilePath",
+    "ecs": "file.path"
+   },
+   {
+    "sourceName": "GrandParentImageFilePath",
+    "destName": "FilePath",
+    "ecs": "file.path"
+   },
+   {
+    "sourceName": "id",
+    "destName": "ExternalID",
+    "ecs": "event.id"
+   },
+   {
+    "sourceName": "image_file_name",
+    "destName": "FilePath",
+    "ecs": "file.path"
+   },
+   {
+    "sourceName": "indicator_id",
+    "destName": "ExternalID",
+    "ecs": "event.id"
+   },
+   {
+    "sourceName": "LocalAddressIP4",
+    "destName": "SourceIP",
+    "ecs": "source.ip"
+   },
+   {
+    "sourceName": "LocalAddressIP6",
+    "destName": "SourceIP",
+    "ecs": "source.ip"
+   },
+   {
+    "sourceName": "LocalIP",
+    "destName": "SourceIP",
+    "ecs": "source.ip"
+   },
+   {
+    "sourceName": "LocalPort",
+    "destName": "SourcePort",
+    "ecs": "source.port"
+   },
+   {
+    "sourceName": "ObjectName",
+    "destName": "FilePath",
+    "ecs": "file.path"
+   },
+   {
+    "sourceName": "ParentImageFilePath",
+    "destName": "FilePath",
+    "ecs": "file.path"
+   },
+   {
+    "sourceName": "PatternDispositionDescription",
+    "destName": "DeviceAction",
+    "ecs": "event.action"
+   },
+   {
+    "sourceName": "policy_statement",
+    "destName": "Message",
+    "ecs": "message"
+   },
+   {
+    "sourceName": "process_id",
+    "destName": "SourceProcessId",
+    "ecs": "process.pid"
+   },
+   {
+    "sourceName": "ProcessId",
+    "destName": "SourceProcessId",
+    "ecs": "process.pid"
+   },
+   {
+    "sourceName": "RawProcessId",
+    "destName": "SourceProcessId",
+    "ecs": "process.pid"
+   },
+   {
+    "sourceName": "RemoteAddressIP4",
+    "destName": "DestinationIP",
+    "ecs": "destination.ip"
+   },
+   {
+    "sourceName": "RemoteAddressIP6",
+    "destName": "DestinationIP",
+    "ecs": "destination.ip"
+   },
+   {
+    "sourceName": "SHA256HashData",
+    "destName": "FileHash",
+    "ecs": "file.hash.sha256"
+   },
+   {
+    "sourceName": "SHA256String",
+    "destName": "FileHash",
+    "ecs": "file.hash.sha256"
+   },
+   {
+    "sourceName": "Size",
+    "destName": "FileSize",
+    "ecs": "file.size"
+   },
+   {
+    "sourceName": "source_account_name",
+    "destName": "SourceUserName",
+    "ecs": "source.user.name"
+   },
+   {
+    "sourceName": "TargetFileName",
+    "destName": "FilePath",
+    "ecs": "file.path"
+   },
+   {
+    "sourceName": "user_name",
+    "destName": "SourceUserName",
+    "ecs": "user.name"
+   },
+   {
+    "sourceName": "UserName",
+    "destName": "SourceUserName",
+    "ecs": "user.name"
+   },
+   {
+    "sourceName": "UserPrincipal",
+    "destName": "SourceUserName",
+    "ecs": "user.email"
+   }
+  ]
+ },
+ {
+  "id": "generated-cursor",
+  "vendor": "Cursor",
+  "solutionKeywords": [
+   "cursor"
+  ],
+  "provenance": "Generated from elastic/integrations cursor pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/cursor",
+  "mappings": [
+   {
+    "sourceName": "event_id",
+    "destName": "ExternalID",
+    "ecs": "event.id"
+   },
+   {
+    "sourceName": "event_type",
+    "destName": "DeviceAction",
+    "ecs": "event.action"
+   },
+   {
+    "sourceName": "ip_address",
+    "destName": "SourceIP",
+    "ecs": "source.ip"
+   },
+   {
+    "sourceName": "user_email",
+    "destName": "SourceUserName",
+    "ecs": "user.email"
+   }
+  ]
+ },
+ {
+  "id": "generated-cyberark_epm",
+  "vendor": "CyberArk EPM",
+  "solutionKeywords": [
+   "cyberark epm",
+   "cyberark"
+  ],
+  "provenance": "Generated from elastic/integrations cyberark_epm pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/cyberark_epm",
+  "mappings": [
+   {
+    "sourceName": "Administrator",
+    "destName": "SourceUserName",
+    "ecs": "user.email"
+   },
+   {
+    "sourceName": "Description",
+    "destName": "Message",
+    "ecs": "message"
+   },
+   {
+    "sourceName": "fileName",
+    "destName": "FileName",
+    "ecs": "file.name"
+   },
+   {
+    "sourceName": "filePath",
+    "destName": "FilePath",
+    "ecs": "file.path"
+   },
+   {
+    "sourceName": "fileSize",
+    "destName": "FileSize",
+    "ecs": "file.size"
+   },
+   {
+    "sourceName": "LoggedFrom",
+    "destName": "SourceIP",
+    "ecs": "source.ip"
+   },
+   {
+    "sourceName": "sourceName",
+    "destName": "FilePath",
+    "ecs": "file.path"
+   },
+   {
+    "sourceName": "userName",
+    "destName": "SourceUserName",
+    "ecs": "user.name"
+   }
+  ]
+ },
+ {
+  "id": "generated-cyera",
+  "vendor": "Cyera",
+  "solutionKeywords": [
+   "cyera"
+  ],
+  "provenance": "Generated from elastic/integrations cyera pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/cyera",
+  "mappings": [
+   {
+    "sourceName": "name",
+    "destName": "Message",
+    "ecs": "message"
+   },
+   {
+    "sourceName": "uid",
+    "destName": "ExternalID",
+    "ecs": "event.id"
+   }
+  ]
+ },
+ {
+  "id": "generated-dataminr_pulse",
+  "vendor": "Dataminr Pulse",
+  "solutionKeywords": [
+   "dataminr pulse",
+   "dataminr"
+  ],
+  "provenance": "Generated from elastic/integrations dataminr_pulse pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/dataminr_pulse",
+  "mappings": [
+   {
+    "sourceName": "alertId",
+    "destName": "ExternalID",
+    "ecs": "event.id"
+   },
+   {
+    "sourceName": "headline",
+    "destName": "Message",
+    "ecs": "message"
+   }
+  ]
+ },
+ {
+  "id": "generated-eset_protect",
+  "vendor": "ESET PROTECT",
+  "solutionKeywords": [
+   "eset protect",
+   "eset"
+  ],
+  "provenance": "Generated from elastic/integrations eset_protect pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/eset_protect",
+  "mappings": [
+   {
+    "sourceName": "circumstances",
+    "destName": "Reason",
+    "ecs": "event.reason"
+   },
+   {
+    "sourceName": "event",
+    "destName": "Message",
+    "ecs": "message"
+   },
+   {
+    "sourceName": "process_name",
+    "destName": "ProcessName",
+    "ecs": "process.name"
+   },
+   {
+    "sourceName": "source_address",
+    "destName": "SourceIP",
+    "ecs": "source.ip"
+   },
+   {
+    "sourceName": "source_port",
+    "destName": "SourcePort",
+    "ecs": "source.port"
+   },
+   {
+    "sourceName": "target_address",
+    "destName": "DestinationIP",
+    "ecs": "destination.ip"
+   },
+   {
+    "sourceName": "target_port",
+    "destName": "DestinationPort",
+    "ecs": "destination.port"
+   },
+   {
+    "sourceName": "uuid",
+    "destName": "ExternalID",
+    "ecs": "event.id"
+   }
+  ]
+ },
+ {
+  "id": "generated-extrahop",
+  "vendor": "ExtraHop",
+  "solutionKeywords": [
+   "extrahop"
+  ],
+  "provenance": "Generated from elastic/integrations extrahop pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/extrahop",
+  "mappings": [
+   {
+    "sourceName": "name",
+    "destName": "Message",
+    "ecs": "message"
+   },
+   {
+    "sourceName": "title",
+    "destName": "Message",
+    "ecs": "message"
+   }
+  ]
+ },
+ {
+  "id": "generated-f5_bigip",
+  "vendor": "F5 BIG-IP",
+  "solutionKeywords": [
+   "f5 big-ip"
+  ],
+  "provenance": "Generated from elastic/integrations f5_bigip pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/f5_bigip",
+  "mappings": [
+   {
+    "sourceName": "application",
+    "destName": "ApplicationProtocol",
+    "ecs": "network.application"
+   },
+   {
+    "sourceName": "http_method",
+    "destName": "RequestMethod",
+    "ecs": "http.request.method"
+   },
+   {
+    "sourceName": "method",
+    "destName": "RequestMethod",
+    "ecs": "http.request.method"
+   }
+  ]
+ },
+ {
+  "id": "generated-gitlab",
+  "vendor": "GitLab",
+  "solutionKeywords": [
+   "gitlab"
+  ],
+  "provenance": "Generated from elastic/integrations gitlab pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/gitlab",
+  "mappings": [
+   {
+    "sourceName": "action",
+    "destName": "DeviceAction",
+    "ecs": "event.action"
+   },
+   {
+    "sourceName": "correlation_id",
+    "destName": "ExternalID",
+    "ecs": "event.id"
+   },
+   {
+    "sourceName": "message",
+    "destName": "Message",
+    "ecs": "message"
+   },
+   {
+    "sourceName": "method",
+    "destName": "RequestMethod",
+    "ecs": "http.request.method"
+   },
+   {
+    "sourceName": "msg",
+    "destName": "Message",
+    "ecs": "message"
+   },
+   {
+    "sourceName": "pid",
+    "destName": "SourceProcessId",
+    "ecs": "process.pid"
+   },
+   {
+    "sourceName": "remote_ip",
+    "destName": "SourceIP",
+    "ecs": "source.ip"
+   },
+   {
+    "sourceName": "request_method",
+    "destName": "RequestMethod",
+    "ecs": "http.request.method"
+   },
+   {
+    "sourceName": "status",
+    "destName": "EventOutcome",
+    "ecs": "http.response.status_code"
+   },
+   {
+    "sourceName": "ua",
+    "destName": "RequestClientApplication",
+    "ecs": "user_agent.original"
+   },
+   {
+    "sourceName": "username",
+    "destName": "SourceUserName",
+    "ecs": "user.name"
+   },
+   {
+    "sourceName": "worker_id",
+    "destName": "ProcessName",
+    "ecs": "process.name"
+   }
+  ]
+ },
+ {
+  "id": "generated-goflow2",
+  "vendor": "GoFlow2",
+  "solutionKeywords": [
+   "goflow2 logs",
+   "goflow2"
+  ],
+  "provenance": "Generated from elastic/integrations goflow2 pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/goflow2",
+  "mappings": [
+   {
+    "sourceName": "dst_addr",
+    "destName": "DestinationIP",
+    "ecs": "destination.ip"
+   },
+   {
+    "sourceName": "dst_port",
+    "destName": "DestinationPort",
+    "ecs": "destination.port"
+   },
+   {
+    "sourceName": "src_addr",
+    "destName": "SourceIP",
+    "ecs": "source.ip"
+   },
+   {
+    "sourceName": "src_port",
+    "destName": "SourcePort",
+    "ecs": "source.port"
+   },
+   {
+    "sourceName": "type",
+    "destName": "DeviceAction",
+    "ecs": "event.action"
+   }
+  ]
+ },
+ {
+  "id": "generated-google_workspace",
+  "vendor": "Google Workspace",
+  "solutionKeywords": [
+   "google workspace"
+  ],
+  "provenance": "Generated from elastic/integrations google_workspace pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/google_workspace",
+  "mappings": [
+   {
+    "sourceName": "alertId",
+    "destName": "ExternalID",
+    "ecs": "event.id"
+   },
+   {
+    "sourceName": "ipAddress",
+    "destName": "SourceIP",
+    "ecs": "source.ip"
+   },
+   {
+    "sourceName": "source",
+    "destName": "DeviceAction",
+    "ecs": "event.action"
+   },
+   {
+    "sourceName": "type",
+    "destName": "DeviceAction",
+    "ecs": "event.action"
+   }
+  ]
+ },
+ {
+  "id": "generated-hashicorp_vault",
+  "vendor": "Hashicorp Vault",
+  "solutionKeywords": [
+   "hashicorp vault",
+   "hashicorp"
+  ],
+  "provenance": "Generated from elastic/integrations hashicorp_vault pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/hashicorp_vault",
+  "mappings": [
+   {
+    "sourceName": "@message",
+    "destName": "Message",
+    "ecs": "message"
+   },
+   {
+    "sourceName": "error",
+    "destName": "Message",
+    "ecs": "message"
+   }
+  ]
+ },
+ {
+  "id": "generated-ironscales",
+  "vendor": "IRONSCALES",
+  "solutionKeywords": [
+   "ironscales"
+  ],
+  "provenance": "Generated from elastic/integrations ironscales pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/ironscales",
+  "mappings": [
+   {
+    "sourceName": "incident_id",
+    "destName": "ExternalID",
+    "ecs": "event.id"
+   },
+   {
+    "sourceName": "incidentID",
+    "destName": "ExternalID",
+    "ecs": "event.id"
+   }
+  ]
+ },
+ {
+  "id": "generated-island_browser",
+  "vendor": "Island Browser",
+  "solutionKeywords": [
+   "island browser",
+   "island"
+  ],
+  "provenance": "Generated from elastic/integrations island_browser pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/island_browser",
+  "mappings": [
+   {
+    "sourceName": "actionType",
+    "destName": "DeviceAction",
+    "ecs": "event.action"
+   },
+   {
+    "sourceName": "email",
+    "destName": "SourceUserName",
+    "ecs": "user.email"
+   },
+   {
+    "sourceName": "firstName",
+    "destName": "SourceUserName",
+    "ecs": "user.name"
+   },
+   {
+    "sourceName": "id",
+    "destName": "ExternalID",
+    "ecs": "event.id"
+   },
+   {
+    "sourceName": "publicIp",
+    "destName": "SourceTranslatedAddress",
+    "ecs": "source.nat.ip"
+   },
+   {
+    "sourceName": "screenshotFileName",
+    "destName": "FileName",
+    "ecs": "file.name"
+   },
+   {
+    "sourceName": "shortTopLevelUrl",
+    "destName": "DestinationHostName",
+    "ecs": "url.domain"
+   },
+   {
+    "sourceName": "sourceIp",
+    "destName": "SourceIP",
+    "ecs": "source.ip"
+   },
+   {
+    "sourceName": "topLevelUrl",
+    "destName": "RequestURL",
+    "ecs": "url.original"
+   },
+   {
+    "sourceName": "userName",
+    "destName": "SourceUserName",
+    "ecs": "user.name"
+   },
+   {
+    "sourceName": "websiteTopLevelUrl",
+    "destName": "RequestURL",
+    "ecs": "url.original"
+   }
+  ]
+ },
+ {
+  "id": "generated-jamf_protect",
+  "vendor": "Jamf Protect",
+  "solutionKeywords": [
+   "jamf protect",
+   "jamf"
+  ],
+  "provenance": "Generated from elastic/integrations jamf_protect pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/jamf_protect",
+  "mappings": [
+   {
+    "sourceName": "action",
+    "destName": "DeviceAction",
+    "ecs": "event.action"
+   },
+   {
+    "sourceName": "alertId",
+    "destName": "ExternalID",
+    "ecs": "event.id"
+   },
+   {
+    "sourceName": "hostName",
+    "destName": "DestinationDnsDomain",
+    "ecs": "dns.question.name"
+   },
+   {
+    "sourceName": "uuid",
+    "destName": "ExternalID",
+    "ecs": "event.id"
+   }
+  ]
+ },
+ {
+  "id": "generated-lastpass",
+  "vendor": "LastPass",
+  "solutionKeywords": [
+   "lastpass"
+  ],
+  "provenance": "Generated from elastic/integrations lastpass pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/lastpass",
+  "mappings": [
+   {
+    "sourceName": "IP_Address",
+    "destName": "SourceIP",
+    "ecs": "source.ip"
+   },
+   {
+    "sourceName": "Username",
+    "destName": "SourceUserName",
+    "ecs": "user.email"
+   }
+  ]
+ },
+ {
+  "id": "generated-macos",
+  "vendor": "macOS Security",
+  "solutionKeywords": [
+   "macos security events",
+   "macos"
+  ],
+  "provenance": "Generated from elastic/integrations macos pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/macos",
+  "mappings": [
+   {
+    "sourceName": "eventMessage",
+    "destName": "Message",
+    "ecs": "message"
+   },
+   {
+    "sourceName": "processID",
+    "destName": "SourceProcessId",
+    "ecs": "process.pid"
+   }
+  ]
+ },
+ {
+  "id": "generated-mattermost",
+  "vendor": "Mattermost",
+  "solutionKeywords": [
+   "mattermost"
+  ],
+  "provenance": "Generated from elastic/integrations mattermost pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/mattermost",
+  "mappings": [
+   {
+    "sourceName": "api_path",
+    "destName": "RequestURL",
+    "ecs": "url.original"
+   },
+   {
+    "sourceName": "client",
+    "destName": "RequestClientApplication",
+    "ecs": "user_agent.original"
+   },
+   {
+    "sourceName": "event",
+    "destName": "DeviceAction",
+    "ecs": "event.action"
+   },
+   {
+    "sourceName": "ip_address",
+    "destName": "SourceIP",
+    "ecs": "source.ip"
+   }
+  ]
+ },
+ {
+  "id": "generated-menlo",
+  "vendor": "Menlo Security",
+  "solutionKeywords": [
+   "menlo security",
+   "menlo"
+  ],
+  "provenance": "Generated from elastic/integrations menlo pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/menlo",
+  "mappings": [
+   {
+    "sourceName": "domain",
+    "destName": "DestinationHostName",
+    "ecs": "url.domain"
+   },
+   {
+    "sourceName": "full_session_id",
+    "destName": "ExternalID",
+    "ecs": "event.id"
+   },
+   {
+    "sourceName": "pe_action",
+    "destName": "DeviceAction",
+    "ecs": "event.action"
+   },
+   {
+    "sourceName": "pe_reason",
+    "destName": "Reason",
+    "ecs": "event.reason"
+   },
+   {
+    "sourceName": "protocol",
+    "destName": "ApplicationProtocol",
+    "ecs": "network.protocol"
+   },
+   {
+    "sourceName": "referer",
+    "destName": "RequestContext",
+    "ecs": "http.request.referrer"
+   },
+   {
+    "sourceName": "request_type",
+    "destName": "RequestMethod",
+    "ecs": "http.request.method"
+   },
+   {
+    "sourceName": "response_code",
+    "destName": "EventOutcome",
+    "ecs": "http.response.status_code"
+   },
+   {
+    "sourceName": "top_url",
+    "destName": "RequestURL",
+    "ecs": "url.original"
+   },
+   {
+    "sourceName": "url",
+    "destName": "RequestURL",
+    "ecs": "url.original"
+   },
+   {
+    "sourceName": "user-agent",
+    "destName": "RequestClientApplication",
+    "ecs": "user_agent.original"
+   },
+   {
+    "sourceName": "userid",
+    "destName": "SourceUserName",
+    "ecs": "user.name"
+   }
+  ]
+ },
+ {
+  "id": "generated-microsoft_defender_endpoint",
+  "vendor": "Microsoft Defender for Endpoint",
+  "solutionKeywords": [
+   "microsoft defender for endpoint",
+   "microsoft defender"
+  ],
+  "provenance": "Generated from elastic/integrations microsoft_defender_endpoint pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/microsoft_defender_endpoint",
+  "mappings": [
+   {
+    "sourceName": "category",
+    "destName": "DeviceAction",
+    "ecs": "event.action"
+   },
+   {
+    "sourceName": "CveBatchTitle",
+    "destName": "Message",
+    "ecs": "message"
+   },
+   {
+    "sourceName": "id",
+    "destName": "ExternalID",
+    "ecs": "event.id"
+   },
+   {
+    "sourceName": "requestor",
+    "destName": "SourceUserName",
+    "ecs": "user.email"
+   },
+   {
+    "sourceName": "title",
+    "destName": "Message",
+    "ecs": "message"
+   },
+   {
+    "sourceName": "type",
+    "destName": "DeviceAction",
+    "ecs": "event.action"
+   }
+  ]
+ },
+ {
+  "id": "generated-neon_cyber",
+  "vendor": "Neon Cyber",
+  "solutionKeywords": [
+   "neon cyber",
+   "neon"
+  ],
+  "provenance": "Generated from elastic/integrations neon_cyber pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/neon_cyber",
+  "mappings": [
+   {
+    "sourceName": "ua",
+    "destName": "RequestClientApplication",
+    "ecs": "user_agent.original"
+   },
+   {
+    "sourceName": "url",
+    "destName": "RequestURL",
+    "ecs": "url.original"
+   }
+  ]
+ },
+ {
+  "id": "generated-netskope",
+  "vendor": "Netskope",
+  "solutionKeywords": [
+   "netskope"
+  ],
+  "provenance": "Generated from elastic/integrations netskope pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/netskope",
+  "mappings": [
+   {
+    "sourceName": "_id",
+    "destName": "ExternalID",
+    "ecs": "event.id"
+   },
+   {
+    "sourceName": "action",
+    "destName": "DeviceAction",
+    "ecs": "event.action"
+   },
+   {
+    "sourceName": "client_bytes",
+    "destName": "SentBytes",
+    "ecs": "source.bytes"
+   },
+   {
+    "sourceName": "cs-username",
+    "destName": "SourceUserName",
+    "ecs": "user.email"
+   },
+   {
+    "sourceName": "dstport",
+    "destName": "DestinationPort",
+    "ecs": "destination.port"
+   },
+   {
+    "sourceName": "id",
+    "destName": "ExternalID",
+    "ecs": "event.id"
+   },
+   {
+    "sourceName": "server_bytes",
+    "destName": "ReceivedBytes",
+    "ecs": "destination.bytes"
+   },
+   {
+    "sourceName": "url",
+    "destName": "RequestURL",
+    "ecs": "url.original"
+   },
+   {
+    "sourceName": "useragent",
+    "destName": "RequestClientApplication",
+    "ecs": "user_agent.original"
+   },
+   {
+    "sourceName": "x-cs-src-port",
+    "destName": "SourcePort",
+    "ecs": "source.port"
+   },
+   {
+    "sourceName": "x-transaction-id",
+    "destName": "ExternalID",
+    "ecs": "event.id"
+   }
+  ]
+ },
+ {
+  "id": "generated-nextron_thor",
+  "vendor": "Nextron THOR Cloud",
+  "solutionKeywords": [
+   "nextron thor cloud",
+   "nextron"
+  ],
+  "provenance": "Generated from elastic/integrations nextron_thor pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/nextron_thor",
+  "mappings": [
+   {
+    "sourceName": "file",
+    "destName": "FilePath",
+    "ecs": "file.path"
+   },
+   {
+    "sourceName": "message",
+    "destName": "Message",
+    "ecs": "message"
+   },
+   {
+    "sourceName": "user",
+    "destName": "SourceUserName",
+    "ecs": "user.name"
+   }
+  ]
+ },
+ {
+  "id": "generated-opencanary",
+  "vendor": "OpenCanary",
+  "solutionKeywords": [
+   "opencanary"
+  ],
+  "provenance": "Generated from elastic/integrations opencanary pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/opencanary",
+  "mappings": [
+   {
+    "sourceName": "dst_host",
+    "destName": "DestinationIP",
+    "ecs": "destination.ip"
+   },
+   {
+    "sourceName": "dst_port",
+    "destName": "DestinationPort",
+    "ecs": "destination.port"
+   },
+   {
+    "sourceName": "src_host",
+    "destName": "SourceIP",
+    "ecs": "source.ip"
+   },
+   {
+    "sourceName": "src_port",
+    "destName": "SourcePort",
+    "ecs": "source.port"
+   }
+  ]
+ },
+ {
+  "id": "generated-panw_cortex_xdr",
+  "vendor": "Palo Alto Cortex XDR",
+  "solutionKeywords": [
+   "cortex xdr",
+   "cortex"
+  ],
+  "provenance": "Generated from elastic/integrations panw_cortex_xdr pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/panw_cortex_xdr",
+  "mappings": [
+   {
+    "sourceName": "action",
+    "destName": "DeviceAction",
+    "ecs": "event.action"
+   },
+   {
+    "sourceName": "description",
+    "destName": "Reason",
+    "ecs": "event.reason"
+   },
+   {
+    "sourceName": "external_id",
+    "destName": "ExternalID",
+    "ecs": "event.id"
+   },
+   {
+    "sourceName": "incident_id",
+    "destName": "ExternalID",
+    "ecs": "event.id"
+   },
+   {
+    "sourceName": "name",
+    "destName": "Message",
+    "ecs": "message"
+   }
+  ]
+ },
+ {
+  "id": "generated-ping_one",
+  "vendor": "PingOne",
+  "solutionKeywords": [
+   "pingone"
+  ],
+  "provenance": "Generated from elastic/integrations ping_one pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/ping_one",
+  "mappings": [
+   {
+    "sourceName": "correlationId",
+    "destName": "ExternalID",
+    "ecs": "event.id"
+   },
+   {
+    "sourceName": "id",
+    "destName": "ExternalID",
+    "ecs": "event.id"
+   }
+  ]
+ },
+ {
+  "id": "generated-prisma_cloud",
+  "vendor": "Palo Alto Prisma Cloud",
+  "solutionKeywords": [
+   "palo alto prisma cloud",
+   "palo alto"
+  ],
+  "provenance": "Generated from elastic/integrations prisma_cloud pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/prisma_cloud",
+  "mappings": [
+   {
+    "sourceName": "resourceName",
+    "destName": "SourceUserName",
+    "ecs": "user.email"
+   },
+   {
+    "sourceName": "user",
+    "destName": "SourceUserName",
+    "ecs": "user.email"
+   }
+  ]
+ },
+ {
+  "id": "generated-proofpoint_365totalprotection",
+  "vendor": "Proofpoint 365 Total Protection",
+  "solutionKeywords": [
+   "proofpoint 365 total protection",
+   "proofpoint"
+  ],
+  "provenance": "Generated from elastic/integrations proofpoint_365totalprotection pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/proofpoint_365totalprotection",
+  "mappings": [
+   {
+    "sourceName": "destination_ip",
+    "destName": "DestinationIP",
+    "ecs": "destination.ip"
+   },
+   {
+    "sourceName": "source_ip",
+    "destName": "SourceIP",
+    "ecs": "source.ip"
+   }
+  ]
+ },
+ {
+  "id": "generated-proofpoint_essentials",
+  "vendor": "Proofpoint Essentials",
+  "solutionKeywords": [
+   "proofpoint essentials",
+   "proofpoint"
+  ],
+  "provenance": "Generated from elastic/integrations proofpoint_essentials pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/proofpoint_essentials",
+  "mappings": [
+   {
+    "sourceName": "clickIP",
+    "destName": "DestinationIP",
+    "ecs": "destination.ip"
+   },
+   {
+    "sourceName": "GUID",
+    "destName": "ExternalID",
+    "ecs": "event.id"
+   },
+   {
+    "sourceName": "id",
+    "destName": "ExternalID",
+    "ecs": "event.id"
+   },
+   {
+    "sourceName": "senderIP",
+    "destName": "SourceIP",
+    "ecs": "source.ip"
+   },
+   {
+    "sourceName": "userAgent",
+    "destName": "RequestClientApplication",
+    "ecs": "user_agent.original"
+   }
+  ]
+ },
+ {
+  "id": "generated-proofpoint_on_demand",
+  "vendor": "Proofpoint On Demand",
+  "solutionKeywords": [
+   "proofpoint on demand",
+   "proofpoint"
+  ],
+  "provenance": "Generated from elastic/integrations proofpoint_on_demand pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/proofpoint_on_demand",
+  "mappings": [
+   {
+    "sourceName": "data",
+    "destName": "Message",
+    "ecs": "message"
+   },
+   {
+    "sourceName": "final_action",
+    "destName": "DeviceAction",
+    "ecs": "event.action"
+   },
+   {
+    "sourceName": "guid",
+    "destName": "ExternalID",
+    "ecs": "event.id"
+   },
+   {
+    "sourceName": "id",
+    "destName": "ExternalID",
+    "ecs": "event.id"
+   }
+  ]
+ },
+ {
+  "id": "generated-proofpoint_tap",
+  "vendor": "Proofpoint TAP",
+  "solutionKeywords": [
+   "proofpoint tap",
+   "proofpoint"
+  ],
+  "provenance": "Generated from elastic/integrations proofpoint_tap pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/proofpoint_tap",
+  "mappings": [
+   {
+    "sourceName": "clickIP",
+    "destName": "DestinationIP",
+    "ecs": "destination.ip"
+   },
+   {
+    "sourceName": "id",
+    "destName": "ExternalID",
+    "ecs": "event.id"
+   },
+   {
+    "sourceName": "senderIP",
+    "destName": "SourceIP",
+    "ecs": "source.ip"
+   },
+   {
+    "sourceName": "url",
+    "destName": "RequestURL",
+    "ecs": "url.full"
+   },
+   {
+    "sourceName": "userAgent",
+    "destName": "RequestClientApplication",
+    "ecs": "user_agent.original"
+   }
+  ]
+ },
+ {
+  "id": "generated-qualys_vmdr",
+  "vendor": "Qualys VMDR",
+  "solutionKeywords": [
+   "qualys vmdr",
+   "qualys"
+  ],
+  "provenance": "Generated from elastic/integrations qualys_vmdr pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/qualys_vmdr",
+  "mappings": [
+   {
+    "sourceName": "Action",
+    "destName": "DeviceAction",
+    "ecs": "event.action"
+   },
+   {
+    "sourceName": "Details",
+    "destName": "Message",
+    "ecs": "message"
+   },
+   {
+    "sourceName": "QID",
+    "destName": "ExternalID",
+    "ecs": "event.id"
+   },
+   {
+    "sourceName": "User IP",
+    "destName": "SourceIP",
+    "ecs": "source.ip"
+   },
+   {
+    "sourceName": "User Name",
+    "destName": "SourceUserName",
+    "ecs": "user.name"
+   }
+  ]
+ },
+ {
+  "id": "generated-sentinel_one",
+  "vendor": "SentinelOne",
+  "solutionKeywords": [
+   "sentinelone",
+   "sentinel one"
+  ],
+  "provenance": "Generated from elastic/integrations sentinel_one pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/sentinel_one",
+  "mappings": [
+   {
+    "sourceName": "agentIp",
+    "destName": "SourceIP",
+    "ecs": "source.ip"
+   },
+   {
+    "sourceName": "dstIp",
+    "destName": "DestinationIP",
+    "ecs": "destination.ip"
+   },
+   {
+    "sourceName": "dstPort",
+    "destName": "DestinationPort",
+    "ecs": "destination.port"
+   },
+   {
+    "sourceName": "fileSize",
+    "destName": "FileSize",
+    "ecs": "file.size"
+   },
+   {
+    "sourceName": "id",
+    "destName": "ExternalID",
+    "ecs": "event.id"
+   },
+   {
+    "sourceName": "name",
+    "destName": "Message",
+    "ecs": "message"
+   },
+   {
+    "sourceName": "networkUrl",
+    "destName": "RequestURL",
+    "ecs": "url.full"
+   },
+   {
+    "sourceName": "pid",
+    "destName": "SourceProcessId",
+    "ecs": "process.pid"
+   },
+   {
+    "sourceName": "primaryDescription",
+    "destName": "Message",
+    "ecs": "message"
+   },
+   {
+    "sourceName": "processName",
+    "destName": "ProcessName",
+    "ecs": "process.name"
+   },
+   {
+    "sourceName": "srcIp",
+    "destName": "SourceIP",
+    "ecs": "source.ip"
+   },
+   {
+    "sourceName": "srcPort",
+    "destName": "SourcePort",
+    "ecs": "source.port"
+   }
+  ]
+ },
+ {
+  "id": "generated-slack",
+  "vendor": "Slack",
+  "solutionKeywords": [
+   "slack logs",
+   "slack"
+  ],
+  "provenance": "Generated from elastic/integrations slack pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/slack",
+  "mappings": [
+   {
+    "sourceName": "action",
+    "destName": "DeviceAction",
+    "ecs": "event.action"
+   },
+   {
+    "sourceName": "id",
+    "destName": "ExternalID",
+    "ecs": "event.id"
+   }
+  ]
+ },
+ {
+  "id": "generated-snort",
+  "vendor": "Snort",
+  "solutionKeywords": [
+   "snort"
+  ],
+  "provenance": "Generated from elastic/integrations snort pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/snort",
+  "mappings": [
+   {
+    "sourceName": "dst_addr",
+    "destName": "DestinationIP",
+    "ecs": "destination.ip"
+   },
+   {
+    "sourceName": "dst_port",
+    "destName": "DestinationPort",
+    "ecs": "destination.port"
+   },
+   {
+    "sourceName": "iface",
+    "destName": "DeviceInboundInterface",
+    "ecs": "observer.ingress.interface.name"
+   },
+   {
+    "sourceName": "src_addr",
+    "destName": "SourceIP",
+    "ecs": "source.ip"
+   },
+   {
+    "sourceName": "src_port",
+    "destName": "SourcePort",
+    "ecs": "source.port"
+   }
+  ]
+ },
+ {
+  "id": "generated-sophos_central",
+  "vendor": "Sophos Central",
+  "solutionKeywords": [
+   "sophos central",
+   "sophos"
+  ],
+  "provenance": "Generated from elastic/integrations sophos_central pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/sophos_central",
+  "mappings": [
+   {
+    "sourceName": "description",
+    "destName": "Message",
+    "ecs": "message"
+   },
+   {
+    "sourceName": "event_service_event_id",
+    "destName": "ExternalID",
+    "ecs": "event.id"
+   },
+   {
+    "sourceName": "id",
+    "destName": "ExternalID",
+    "ecs": "event.id"
+   },
+   {
+    "sourceName": "name",
+    "destName": "DeviceAction",
+    "ecs": "event.action"
+   }
+  ]
+ },
+ {
+  "id": "generated-suricata",
+  "vendor": "Suricata",
+  "solutionKeywords": [
+   "suricata"
+  ],
+  "provenance": "Generated from elastic/integrations suricata pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/suricata",
+  "mappings": [
+   {
+    "sourceName": "app_proto",
+    "destName": "ApplicationProtocol",
+    "ecs": "network.protocol"
+   },
+   {
+    "sourceName": "dest_ip",
+    "destName": "DestinationIP",
+    "ecs": "destination.ip"
+   },
+   {
+    "sourceName": "dest_port",
+    "destName": "DestinationPort",
+    "ecs": "destination.port"
+   },
+   {
+    "sourceName": "event_type",
+    "destName": "ApplicationProtocol",
+    "ecs": "network.protocol"
+   },
+   {
+    "sourceName": "src_ip",
+    "destName": "SourceIP",
+    "ecs": "source.ip"
+   },
+   {
+    "sourceName": "src_port",
+    "destName": "SourcePort",
+    "ecs": "source.port"
+   }
+  ]
+ },
+ {
+  "id": "generated-symantec_endpoint_security",
+  "vendor": "Symantec Endpoint Security",
+  "solutionKeywords": [
+   "symantec endpoint security",
+   "symantec"
+  ],
+  "provenance": "Generated from elastic/integrations symantec_endpoint_security pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/symantec_endpoint_security",
+  "mappings": [
+   {
+    "sourceName": "collector_device_ip",
+    "destName": "DestinationIP",
+    "ecs": "destination.ip"
+   },
+   {
+    "sourceName": "device_ip",
+    "destName": "SourceIP",
+    "ecs": "source.ip"
+   },
+   {
+    "sourceName": "message",
+    "destName": "Message",
+    "ecs": "message"
+   },
+   {
+    "sourceName": "reason",
+    "destName": "Reason",
+    "ecs": "event.reason"
+   },
+   {
+    "sourceName": "uuid",
+    "destName": "ExternalID",
+    "ecs": "event.id"
+   }
+  ]
+ },
+ {
+  "id": "generated-sysdig",
+  "vendor": "Sysdig",
+  "solutionKeywords": [
+   "sysdig"
+  ],
+  "provenance": "Generated from elastic/integrations sysdig pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/sysdig",
+  "mappings": [
+   {
+    "sourceName": "id",
+    "destName": "ExternalID",
+    "ecs": "event.id"
+   },
+   {
+    "sourceName": "name",
+    "destName": "Message",
+    "ecs": "message"
+   }
+  ]
+ },
+ {
+  "id": "generated-tanium",
+  "vendor": "Tanium",
+  "solutionKeywords": [
+   "tanium"
+  ],
+  "provenance": "Generated from elastic/integrations tanium pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/tanium",
+  "mappings": [
+   {
+    "sourceName": "action",
+    "destName": "DeviceAction",
+    "ecs": "event.action"
+   },
+   {
+    "sourceName": "Computer IP",
+    "destName": "SourceIP",
+    "ecs": "source.ip"
+   },
+   {
+    "sourceName": "Event Id",
+    "destName": "ExternalID",
+    "ecs": "event.id"
+   },
+   {
+    "sourceName": "id",
+    "destName": "ExternalID",
+    "ecs": "event.id"
+   },
+   {
+    "sourceName": "User Name",
+    "destName": "SourceUserName",
+    "ecs": "user.name"
+   },
+   {
+    "sourceName": "userName",
+    "destName": "SourceUserName",
+    "ecs": "user.name"
+   }
+  ]
+ },
+ {
+  "id": "generated-teleport",
+  "vendor": "Teleport",
+  "solutionKeywords": [
+   "teleport"
+  ],
+  "provenance": "Generated from elastic/integrations teleport pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/teleport",
+  "mappings": [
+   {
+    "sourceName": "db_uri",
+    "destName": "RequestURL",
+    "ecs": "url.original"
+   },
+   {
+    "sourceName": "db_user",
+    "destName": "SourceUserName",
+    "ecs": "user.name"
+   },
+   {
+    "sourceName": "error",
+    "destName": "Message",
+    "ecs": "message"
+   },
+   {
+    "sourceName": "event",
+    "destName": "DeviceAction",
+    "ecs": "event.action"
+   },
+   {
+    "sourceName": "file_path",
+    "destName": "FilePath",
+    "ecs": "file.path"
+   },
+   {
+    "sourceName": "login",
+    "destName": "SourceUserName",
+    "ecs": "user.name"
+   },
+   {
+    "sourceName": "message",
+    "destName": "Message",
+    "ecs": "message"
+   },
+   {
+    "sourceName": "method",
+    "destName": "RequestMethod",
+    "ecs": "http.request.method"
+   },
+   {
+    "sourceName": "participants",
+    "destName": "SourceUserName",
+    "ecs": "user.name"
+   },
+   {
+    "sourceName": "path",
+    "destName": "FilePath",
+    "ecs": "file.path"
+   },
+   {
+    "sourceName": "pid",
+    "destName": "SourceProcessId",
+    "ecs": "process.pid"
+   },
+   {
+    "sourceName": "program",
+    "destName": "ProcessName",
+    "ecs": "process.name"
+   },
+   {
+    "sourceName": "proto",
+    "destName": "ApplicationProtocol",
+    "ecs": "network.protocol"
+   },
+   {
+    "sourceName": "rx",
+    "destName": "ReceivedBytes",
+    "ecs": "destination.bytes"
+   },
+   {
+    "sourceName": "status_code",
+    "destName": "EventOutcome",
+    "ecs": "http.response.status_code"
+   },
+   {
+    "sourceName": "tx",
+    "destName": "SentBytes",
+    "ecs": "source.bytes"
+   },
+   {
+    "sourceName": "uid",
+    "destName": "ExternalID",
+    "ecs": "event.id"
+   },
+   {
+    "sourceName": "updated_by",
+    "destName": "SourceUserName",
+    "ecs": "user.name"
+   },
+   {
+    "sourceName": "user_agent",
+    "destName": "RequestClientApplication",
+    "ecs": "user_agent.original"
+   },
+   {
+    "sourceName": "username",
+    "destName": "SourceUserName",
+    "ecs": "user.name"
+   }
+  ]
+ },
+ {
+  "id": "generated-tenable_io",
+  "vendor": "Tenable Vulnerability Management",
+  "solutionKeywords": [
+   "tenable vulnerability management",
+   "tenable"
+  ],
+  "provenance": "Generated from elastic/integrations tenable_io pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/tenable_io",
+  "mappings": [
+   {
+    "sourceName": "finding_id",
+    "destName": "ExternalID",
+    "ecs": "event.id"
+   },
+   {
+    "sourceName": "id",
+    "destName": "ExternalID",
+    "ecs": "event.id"
+   }
+  ]
+ },
+ {
+  "id": "generated-tencent_cloud",
+  "vendor": "Tencent Cloud",
+  "solutionKeywords": [
+   "tencent cloud",
+   "tencent"
+  ],
+  "provenance": "Generated from elastic/integrations tencent_cloud pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/tencent_cloud",
+  "mappings": [
+   {
+    "sourceName": "__SOURCE__",
+    "destName": "SourceIP",
+    "ecs": "source.ip"
+   },
+   {
+    "sourceName": "eventName",
+    "destName": "DeviceAction",
+    "ecs": "event.action"
+   },
+   {
+    "sourceName": "http_host",
+    "destName": "DestinationHostName",
+    "ecs": "url.domain"
+   },
+   {
+    "sourceName": "http_user_agent",
+    "destName": "RequestClientApplication",
+    "ecs": "user_agent.original"
+   },
+   {
+    "sourceName": "http_x_forwarded_for",
+    "destName": "SourceIP",
+    "ecs": "source.ip"
+   },
+   {
+    "sourceName": "httpMethod",
+    "destName": "RequestMethod",
+    "ecs": "http.request.method"
+   },
+   {
+    "sourceName": "protocol_type",
+    "destName": "ApplicationProtocol",
+    "ecs": "network.protocol"
+   },
+   {
+    "sourceName": "remote_addr",
+    "destName": "SourceIP",
+    "ecs": "source.ip"
+   },
+   {
+    "sourceName": "remote_port",
+    "destName": "SourcePort",
+    "ecs": "source.port"
+   },
+   {
+    "sourceName": "remoteIp",
+    "destName": "SourceIP",
+    "ecs": "source.ip"
+   },
+   {
+    "sourceName": "reqMethod",
+    "destName": "RequestMethod",
+    "ecs": "http.request.method"
+   },
+   {
+    "sourceName": "request_method",
+    "destName": "RequestMethod",
+    "ecs": "http.request.method"
+   },
+   {
+    "sourceName": "requestID",
+    "destName": "ExternalID",
+    "ecs": "event.id"
+   },
+   {
+    "sourceName": "requestUri",
+    "destName": "RequestURL",
+    "ecs": "url.original"
+   },
+   {
+    "sourceName": "resHttpCode",
+    "destName": "EventOutcome",
+    "ecs": "http.response.status_code"
+   },
+   {
+    "sourceName": "SCF_Message",
+    "destName": "Message",
+    "ecs": "message"
+   },
+   {
+    "sourceName": "SCF_StatusCode",
+    "destName": "EventOutcome",
+    "ecs": "http.response.status_code"
+   },
+   {
+    "sourceName": "server_addr",
+    "destName": "DestinationIP",
+    "ecs": "destination.ip"
+   },
+   {
+    "sourceName": "server_name",
+    "destName": "DestinationHostName",
+    "ecs": "url.domain"
+   },
+   {
+    "sourceName": "server_port",
+    "destName": "DestinationPort",
+    "ecs": "destination.port"
+   },
+   {
+    "sourceName": "sourceIPAddress",
+    "destName": "SourceIP",
+    "ecs": "source.ip"
+   },
+   {
+    "sourceName": "status",
+    "destName": "EventOutcome",
+    "ecs": "http.response.status_code"
+   },
+   {
+    "sourceName": "stgw_request_id",
+    "destName": "ExternalID",
+    "ecs": "event.id"
+   },
+   {
+    "sourceName": "upstream_status",
+    "destName": "EventOutcome",
+    "ecs": "http.response.status_code"
+   },
+   {
+    "sourceName": "userAgent",
+    "destName": "RequestClientApplication",
+    "ecs": "user_agent.original"
+   }
+  ]
+ },
+ {
+  "id": "generated-ti_flashpoint",
+  "vendor": "Flashpoint",
+  "solutionKeywords": [
+   "flashpoint"
+  ],
+  "provenance": "Generated from elastic/integrations ti_flashpoint pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/ti_flashpoint",
+  "mappings": [
+   {
+    "sourceName": "description",
+    "destName": "Message",
+    "ecs": "message"
+   },
+   {
+    "sourceName": "id",
+    "destName": "ExternalID",
+    "ecs": "event.id"
+   }
+  ]
+ },
+ {
+  "id": "generated-ti_recordedfuture",
+  "vendor": "Recorded Future",
+  "solutionKeywords": [
+   "recorded future",
+   "recorded"
+  ],
+  "provenance": "Generated from elastic/integrations ti_recordedfuture pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/ti_recordedfuture",
+  "mappings": [
+   {
+    "sourceName": "fragment",
+    "destName": "Message",
+    "ecs": "message"
+   },
+   {
+    "sourceName": "id",
+    "destName": "ExternalID",
+    "ecs": "event.id"
+   }
+  ]
+ },
+ {
+  "id": "generated-traefik",
+  "vendor": "Traefik",
+  "solutionKeywords": [
+   "traefik"
+  ],
+  "provenance": "Generated from elastic/integrations traefik pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/traefik",
+  "mappings": [
+   {
+    "sourceName": "ClientHost",
+    "destName": "SourceIP",
+    "ecs": "source.ip"
+   },
+   {
+    "sourceName": "ClientPort",
+    "destName": "SourcePort",
+    "ecs": "source.port"
+   },
+   {
+    "sourceName": "DownstreamStatus",
+    "destName": "EventOutcome",
+    "ecs": "http.response.status_code"
+   },
+   {
+    "sourceName": "entryPointName",
+    "destName": "DeviceInboundInterface",
+    "ecs": "observer.ingress.interface.name"
+   },
+   {
+    "sourceName": "OriginStatus",
+    "destName": "EventOutcome",
+    "ecs": "http.response.status_code"
+   },
+   {
+    "sourceName": "request_User-Agent",
+    "destName": "RequestClientApplication",
+    "ecs": "user_agent.original"
+   },
+   {
+    "sourceName": "RequestAddr",
+    "destName": "DestinationHostName",
+    "ecs": "url.domain"
+   },
+   {
+    "sourceName": "RequestHost",
+    "destName": "DestinationHostName",
+    "ecs": "url.domain"
+   },
+   {
+    "sourceName": "RequestMethod",
+    "destName": "RequestMethod",
+    "ecs": "http.request.method"
+   },
+   {
+    "sourceName": "ServiceName",
+    "destName": "DeviceOutboundInterface",
+    "ecs": "observer.egress.interface.name"
+   }
+  ]
+ },
+ {
+  "id": "generated-trend_micro_vision_one",
+  "vendor": "TrendAI Vision One",
+  "solutionKeywords": [
+   "trendai vision one",
+   "trendai"
+  ],
+  "provenance": "Generated from elastic/integrations trend_micro_vision_one pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/trend_micro_vision_one",
+  "mappings": [
+   {
+    "sourceName": "clientIp",
+    "destName": "SourceIP",
+    "ecs": "client.ip"
+   },
+   {
+    "sourceName": "dpt",
+    "destName": "DestinationPort",
+    "ecs": "destination.port"
+   },
+   {
+    "sourceName": "dst",
+    "destName": "DestinationIP",
+    "ecs": "destination.ip"
+   },
+   {
+    "sourceName": "eventId",
+    "destName": "ExternalID",
+    "ecs": "event.id"
+   },
+   {
+    "sourceName": "fileHashSha256",
+    "destName": "FileHash",
+    "ecs": "file.hash.sha256"
+   },
+   {
+    "sourceName": "fileName",
+    "destName": "FileName",
+    "ecs": "file.name"
+   },
+   {
+    "sourceName": "fileSize",
+    "destName": "FileSize",
+    "ecs": "file.size"
+   },
+   {
+    "sourceName": "id",
+    "destName": "ExternalID",
+    "ecs": "event.id"
+   },
+   {
+    "sourceName": "logonUser",
+    "destName": "SourceUserName",
+    "ecs": "user.name"
+   },
+   {
+    "sourceName": "model",
+    "destName": "Message",
+    "ecs": "message"
+   },
+   {
+    "sourceName": "objectFileHashSha256",
+    "destName": "FileHash",
+    "ecs": "file.hash.sha256"
+   },
+   {
+    "sourceName": "objectFilePath",
+    "destName": "FilePath",
+    "ecs": "file.path"
+   },
+   {
+    "sourceName": "objectName",
+    "destName": "FilePath",
+    "ecs": "file.path"
+   },
+   {
+    "sourceName": "objectPort",
+    "destName": "DestinationPort",
+    "ecs": "destination.port"
+   },
+   {
+    "sourceName": "principalName",
+    "destName": "SourceUserName",
+    "ecs": "user.email"
+   },
+   {
+    "sourceName": "processFileSize",
+    "destName": "FileSize",
+    "ecs": "file.size"
+   },
+   {
+    "sourceName": "processPid",
+    "destName": "SourceProcessId",
+    "ecs": "process.pid"
+   },
+   {
+    "sourceName": "request",
+    "destName": "RequestURL",
+    "ecs": "url.original"
+   },
+   {
+    "sourceName": "requestMethod",
+    "destName": "RequestMethod",
+    "ecs": "http.request.method"
+   },
+   {
+    "sourceName": "serverProtocol",
+    "destName": "ApplicationProtocol",
+    "ecs": "network.protocol"
+   },
+   {
+    "sourceName": "spt",
+    "destName": "SourcePort",
+    "ecs": "source.port"
+   },
+   {
+    "sourceName": "src",
+    "destName": "SourceIP",
+    "ecs": "source.ip"
+   },
+   {
+    "sourceName": "suid",
+    "destName": "SourceUserName",
+    "ecs": "user.name"
+   },
+   {
+    "sourceName": "userAgent",
+    "destName": "RequestClientApplication",
+    "ecs": "user_agent.original"
+   },
+   {
+    "sourceName": "uuid",
+    "destName": "ExternalID",
+    "ecs": "event.id"
+   },
+   {
+    "sourceName": "workbenchLink",
+    "destName": "RequestURL",
+    "ecs": "url.original"
+   }
+  ]
+ },
+ {
+  "id": "generated-wiz",
+  "vendor": "Wiz",
+  "solutionKeywords": [
+   "wiz"
+  ],
+  "provenance": "Generated from elastic/integrations wiz pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/wiz",
+  "mappings": [
+   {
+    "sourceName": "description",
+    "destName": "Message",
+    "ecs": "message"
+   },
+   {
+    "sourceName": "id",
+    "destName": "ExternalID",
+    "ecs": "event.id"
+   }
+  ]
+ },
+ {
+  "id": "generated-workday",
+  "vendor": "Workday",
+  "solutionKeywords": [
+   "workday"
+  ],
+  "provenance": "Generated from elastic/integrations workday pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/workday",
+  "mappings": [
+   {
+    "sourceName": "ipAddress",
+    "destName": "SourceIP",
+    "ecs": "source.ip"
+   },
+   {
+    "sourceName": "systemAccount",
+    "destName": "SourceUserName",
+    "ecs": "user.name"
+   },
+   {
+    "sourceName": "userAgent",
+    "destName": "RequestClientApplication",
+    "ecs": "user_agent.original"
+   }
+  ]
+ },
+ {
+  "id": "generated-xm_cyber",
+  "vendor": "XM Cyber",
+  "solutionKeywords": [
+   "xm cyber"
+  ],
+  "provenance": "Generated from elastic/integrations xm_cyber pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/xm_cyber",
+  "mappings": [
+   {
+    "sourceName": "_id",
+    "destName": "ExternalID",
+    "ecs": "event.id"
+   },
+   {
+    "sourceName": "details",
+    "destName": "Message",
+    "ecs": "message"
+   },
+   {
+    "sourceName": "id",
+    "destName": "ExternalID",
+    "ecs": "event.id"
+   }
+  ]
+ },
+ {
+  "id": "generated-zeek",
+  "vendor": "Zeek",
+  "solutionKeywords": [
+   "zeek"
+  ],
+  "provenance": "Generated from elastic/integrations zeek pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/zeek",
+  "mappings": [
+   {
+    "sourceName": "command",
+    "destName": "DeviceAction",
+    "ecs": "event.action"
+   },
+   {
+    "sourceName": "conn_uids",
+    "destName": "ExternalID",
+    "ecs": "event.id"
+   },
+   {
+    "sourceName": "host",
+    "destName": "DestinationHostName",
+    "ecs": "url.domain"
+   },
+   {
+    "sourceName": "message",
+    "destName": "Message",
+    "ecs": "message"
+   },
+   {
+    "sourceName": "method",
+    "destName": "DeviceAction",
+    "ecs": "event.action"
+   },
+   {
+    "sourceName": "orig_ip_bytes",
+    "destName": "SentBytes",
+    "ecs": "source.bytes"
+   },
+   {
+    "sourceName": "proto",
+    "destName": "Protocol",
+    "ecs": "network.transport"
+   },
+   {
+    "sourceName": "query",
+    "destName": "DestinationDnsDomain",
+    "ecs": "dns.question.name"
+   },
+   {
+    "sourceName": "resp_ip_bytes",
+    "destName": "ReceivedBytes",
+    "ecs": "destination.bytes"
+   },
+   {
+    "sourceName": "rx_hosts",
+    "destName": "SourceIP",
+    "ecs": "client.ip"
+   },
+   {
+    "sourceName": "service",
+    "destName": "ApplicationProtocol",
+    "ecs": "network.protocol"
+   },
+   {
+    "sourceName": "sha256",
+    "destName": "FileHash",
+    "ecs": "file.hash.sha256"
+   },
+   {
+    "sourceName": "status_code",
+    "destName": "EventOutcome",
+    "ecs": "http.response.status_code"
+   },
+   {
+    "sourceName": "tx_hosts",
+    "destName": "DestinationIP",
+    "ecs": "server.ip"
+   },
+   {
+    "sourceName": "uid",
+    "destName": "ExternalID",
+    "ecs": "event.id"
+   },
+   {
+    "sourceName": "uri",
+    "destName": "RequestURL",
+    "ecs": "url.original"
+   },
+   {
+    "sourceName": "user_agent",
+    "destName": "RequestClientApplication",
+    "ecs": "user_agent.original"
+   },
+   {
+    "sourceName": "username",
+    "destName": "SourceUserName",
+    "ecs": "user.name"
+   }
+  ]
+ },
+ {
+  "id": "generated-zoom",
+  "vendor": "Zoom",
+  "solutionKeywords": [
+   "zoom"
+  ],
+  "provenance": "Generated from elastic/integrations zoom pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/zoom",
+  "mappings": [
+   {
+    "sourceName": "action",
+    "destName": "DeviceAction",
+    "ecs": "event.action"
+   },
+   {
+    "sourceName": "activity_category",
+    "destName": "DeviceAction",
+    "ecs": "event.action"
+   },
+   {
+    "sourceName": "activity_detail",
+    "destName": "DeviceAction",
+    "ecs": "event.action"
+   },
+   {
+    "sourceName": "ip_address",
+    "destName": "SourceIP",
+    "ecs": "source.ip"
+   },
+   {
+    "sourceName": "operator",
+    "destName": "SourceUserName",
+    "ecs": "user.name"
+   },
+   {
+    "sourceName": "operator_email",
+    "destName": "SourceUserName",
+    "ecs": "user.email"
+   }
+  ]
+ },
+ {
+  "id": "generated-zscaler_zia",
+  "vendor": "Zscaler",
+  "solutionKeywords": [
+   "zscaler"
+  ],
+  "provenance": "Generated from elastic/integrations zscaler_zia pipeline fixtures (vendor->ECS) + curated ECS->CommonSecurityLog bridge",
+  "docUrl": "https://github.com/elastic/integrations/tree/96400ccea7056b462c1baad1c2cbffe7fb961bf4/packages/zscaler_zia",
+  "mappings": [
+   {
+    "sourceName": "actiontaken",
+    "destName": "DeviceAction",
+    "ecs": "event.action"
+   },
+   {
+    "sourceName": "adminid",
+    "destName": "SourceUserName",
+    "ecs": "user.email"
+   },
+   {
+    "sourceName": "cdip",
+    "destName": "DestinationIP",
+    "ecs": "destination.ip"
+   },
+   {
+    "sourceName": "clientip",
+    "destName": "SourceIP",
+    "ecs": "source.ip"
+   },
+   {
+    "sourceName": "clt_sip",
+    "destName": "SourceIP",
+    "ecs": "source.ip"
+   },
+   {
+    "sourceName": "cltintip",
+    "destName": "SourceTranslatedAddress",
+    "ecs": "source.nat.ip"
+   },
+   {
+    "sourceName": "cltip",
+    "destName": "SourceIP",
+    "ecs": "source.ip"
+   },
+   {
+    "sourceName": "cltsourceport",
+    "destName": "SourcePort",
+    "ecs": "source.port"
+   },
+   {
+    "sourceName": "csip",
+    "destName": "SourceIP",
+    "ecs": "source.ip"
+   },
+   {
+    "sourceName": "destinationip",
+    "destName": "DestinationIP",
+    "ecs": "destination.ip"
+   },
+   {
+    "sourceName": "deviceowner",
+    "destName": "SourceUserName",
+    "ecs": "user.name"
+   },
+   {
+    "sourceName": "dns_req",
+    "destName": "DestinationDnsDomain",
+    "ecs": "dns.question.name"
+   },
+   {
+    "sourceName": "filedstpath",
+    "destName": "FilePath",
+    "ecs": "file.path"
+   },
+   {
+    "sourceName": "filesha",
+    "destName": "FileHash",
+    "ecs": "file.hash.sha256"
+   },
+   {
+    "sourceName": "host",
+    "destName": "DestinationHostName",
+    "ecs": "url.domain"
+   },
+   {
+    "sourceName": "hostname",
+    "destName": "DestinationHostName",
+    "ecs": "url.domain"
+   },
+   {
+    "sourceName": "inbytes",
+    "destName": "ReceivedBytes",
+    "ecs": "destination.bytes"
+   },
+   {
+    "sourceName": "login",
+    "destName": "SourceUserName",
+    "ecs": "user.email"
+   },
+   {
+    "sourceName": "outbytes",
+    "destName": "SentBytes",
+    "ecs": "source.bytes"
+   },
+   {
+    "sourceName": "reason",
+    "destName": "Reason",
+    "ecs": "event.reason"
+   },
+   {
+    "sourceName": "record_id",
+    "destName": "ExternalID",
+    "ecs": "event.id"
+   },
+   {
+    "sourceName": "recordid",
+    "destName": "ExternalID",
+    "ecs": "event.id"
+   },
+   {
+    "sourceName": "reqmethod",
+    "destName": "RequestMethod",
+    "ecs": "http.request.method"
+   },
+   {
+    "sourceName": "serverip",
+    "destName": "DestinationIP",
+    "ecs": "destination.ip"
+   },
+   {
+    "sourceName": "sha256",
+    "destName": "FileHash",
+    "ecs": "file.hash.sha256"
+   },
+   {
+    "sourceName": "sourceip",
+    "destName": "SourceIP",
+    "ecs": "source.ip"
+   },
+   {
+    "sourceName": "sourceport",
+    "destName": "SourcePort",
+    "ecs": "source.port"
+   },
+   {
+    "sourceName": "src_ip",
+    "destName": "SourceIP",
+    "ecs": "source.ip"
+   },
+   {
+    "sourceName": "srv_dip",
+    "destName": "DestinationIP",
+    "ecs": "destination.ip"
+   },
+   {
+    "sourceName": "srv_dport",
+    "destName": "SourcePort",
+    "ecs": "source.port"
+   },
+   {
+    "sourceName": "tsip",
+    "destName": "SourceTranslatedAddress",
+    "ecs": "source.nat.ip"
+   },
+   {
+    "sourceName": "user",
+    "destName": "SourceUserName",
+    "ecs": "user.email"
+   },
+   {
+    "sourceName": "useragent",
+    "destName": "RequestClientApplication",
+    "ecs": "user_agent.original"
+   }
+  ]
+ }
+]

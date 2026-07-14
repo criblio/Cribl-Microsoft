@@ -1,0 +1,104 @@
+/**
+ * field-matcher domain module barrel - porting-plan Unit 13 (ENG-04/05/03).
+ *
+ * The phased field matcher (Phase 0 overrides + the 6-strategy scoring ladder), its verbatim knowledge bases, the per-table
+ * overflow config, and the bundled SchemaCatalog adapter over the pre-extracted
+ * DCR/custom column sets. The GAP-ANALYSIS FOUNDATION. All pure.
+ */
+
+export type {
+  SourceField,
+  DestField,
+  MatchConfidence,
+  MatchAction,
+  FieldMatch,
+  OverflowConfig,
+  MatchResult,
+} from "./models";
+
+export type { EventCategory } from "./knowledge-bases";
+export {
+  ALIAS_TABLE,
+  REVERSE_ALIAS,
+  COALESCE_PRIORITY,
+  EVENT_TYPE_BOOSTS,
+  VALUE_NORMALIZATIONS,
+  classifyEventType,
+} from "./knowledge-bases";
+
+export {
+  normalize,
+  stripAffixes,
+  STANDARD_COLUMNS,
+  scoreMatch,
+  typeValueBoost,
+} from "./scoring";
+
+export {
+  TABLE_OVERFLOW_FIELDS,
+  SKIP_OVERFLOW_FIELDS,
+  getOverflowConfig,
+} from "./overflow";
+
+export type { VendorMapping, SampleFieldInput } from "./match-fields";
+export { matchFields, matchSampleToSchema } from "./match-fields";
+
+// Close-match suggester (missing-field buttons in the coverage sections)
+export type { CloseMatchCandidate, CloseMatchRow } from "./close-matches";
+export { nameTokens, suggestCloseMatches } from "./close-matches";
+
+// Learned reviewer decisions (highest-priority Phase 0 tier)
+export type { LearnedDiffRow, LearnedMapping } from "./learned-mappings";
+export {
+  LEARNED_MAPPING_DESCRIPTION,
+  diffLearnedMappings,
+  learnedMappingsCacheKey,
+  learnedToVendorMappings,
+  mergeLearnedMappings,
+  parseLearnedMappings,
+} from "./learned-mappings";
+
+// Documented per-vendor mapping packs (Phase 0 knowledge)
+export type {
+  VendorLabelEnrichment,
+  VendorMappingPack,
+  VendorPackEntry,
+} from "./vendor-mapping-packs";
+export {
+  CEF_CATALOG_PACK,
+  VENDOR_MAPPING_PACKS,
+  foldEntriesBySource,
+  vendorLabelEnrichments,
+  vendorMappingsForSolution,
+  vendorPacksForSolution,
+} from "./vendor-mapping-packs";
+
+export {
+  DCR_SCHEMA_SYSTEM_COLUMNS,
+  normalizeTableNames,
+  resolveSchemaFromCatalog,
+  bundledCatalogTableNames,
+  createBundledSchemaCatalog,
+} from "./bundled-schema-catalog";
+
+// Solution-aware schema tier (Wave E): the solution's own table ARM
+// resources resolve ahead of the bundled snapshot.
+export type { SolutionTableSchema } from "./solution-schema-catalog";
+export {
+  createSolutionSchemaCatalog,
+  tablesFromArmJson,
+} from "./solution-schema-catalog";
+
+// NOTE: match-to-catalog's matchSampleToTable (the legacy direct-catalog
+// match path) is deliberately NOT re-exported: the app goes through
+// analyzeSamples, and the name collides with gap-analysis' log-type router
+// (exported as matchSampleLogTypeToTable). Its characterization tests import
+// it from the module directly.
+export {
+  parsedSampleToSourceFields,
+  matchParsedSampleToColumns,
+} from "./match-to-catalog";
+
+// Overflow triage: unmappable vs outranked vs reviewable (per gap report)
+export type { OverflowTriage, OverflowTriageEntry } from "./overflow-triage";
+export { EMPTY_OVERFLOW_TRIAGE, triageOverflow } from "./overflow-triage";

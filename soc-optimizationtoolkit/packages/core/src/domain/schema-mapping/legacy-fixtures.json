@@ -1,0 +1,5494 @@
+[
+  {
+    "table": "Syslog",
+    "inputColumns": [
+      {
+        "name": "TenantId",
+        "laType": "string"
+      },
+      {
+        "name": "CollectorHostName",
+        "laType": "string"
+      },
+      {
+        "name": "Computer",
+        "laType": "string"
+      },
+      {
+        "name": "EventTime",
+        "laType": "dateTime"
+      },
+      {
+        "name": "Facility",
+        "laType": "string"
+      },
+      {
+        "name": "HostIP",
+        "laType": "string"
+      },
+      {
+        "name": "HostName",
+        "laType": "string"
+      },
+      {
+        "name": "ProcessID",
+        "laType": "int"
+      },
+      {
+        "name": "ProcessName",
+        "laType": "string"
+      },
+      {
+        "name": "SeverityLevel",
+        "laType": "string"
+      },
+      {
+        "name": "SourceSystem",
+        "laType": "string"
+      },
+      {
+        "name": "SyslogMessage",
+        "laType": "string"
+      },
+      {
+        "name": "TimeGenerated",
+        "laType": "dateTime"
+      },
+      {
+        "name": "MG",
+        "laType": "string"
+      },
+      {
+        "name": "Type",
+        "laType": "string"
+      },
+      {
+        "name": "_ResourceId",
+        "laType": "string"
+      }
+    ],
+    "expected": {
+      "columns": [
+        {
+          "name": "CollectorHostName",
+          "dcrType": "string"
+        },
+        {
+          "name": "Computer",
+          "dcrType": "string"
+        },
+        {
+          "name": "EventTime",
+          "dcrType": "datetime"
+        },
+        {
+          "name": "Facility",
+          "dcrType": "string"
+        },
+        {
+          "name": "HostIP",
+          "dcrType": "string"
+        },
+        {
+          "name": "HostName",
+          "dcrType": "string"
+        },
+        {
+          "name": "ProcessID",
+          "dcrType": "int"
+        },
+        {
+          "name": "ProcessName",
+          "dcrType": "string"
+        },
+        {
+          "name": "SeverityLevel",
+          "dcrType": "string"
+        },
+        {
+          "name": "SyslogMessage",
+          "dcrType": "string"
+        },
+        {
+          "name": "TimeGenerated",
+          "dcrType": "datetime"
+        }
+      ],
+      "dropped": [
+        "TenantId",
+        "SourceSystem",
+        "MG",
+        "Type",
+        "_ResourceId"
+      ]
+    }
+  },
+  {
+    "table": "SecurityEvent",
+    "inputColumns": [
+      {
+        "name": "TenantId",
+        "laType": "string"
+      },
+      {
+        "name": "AccessMask",
+        "laType": "string"
+      },
+      {
+        "name": "Account",
+        "laType": "string"
+      },
+      {
+        "name": "AccountDomain",
+        "laType": "string"
+      },
+      {
+        "name": "AccountExpires",
+        "laType": "string"
+      },
+      {
+        "name": "AccountName",
+        "laType": "string"
+      },
+      {
+        "name": "AccountSessionIdentifier",
+        "laType": "string"
+      },
+      {
+        "name": "AccountType",
+        "laType": "string"
+      },
+      {
+        "name": "Activity",
+        "laType": "string"
+      },
+      {
+        "name": "AdditionalInfo",
+        "laType": "string"
+      },
+      {
+        "name": "AdditionalInfo2",
+        "laType": "string"
+      },
+      {
+        "name": "AllowedToDelegateTo",
+        "laType": "string"
+      },
+      {
+        "name": "Attributes",
+        "laType": "string"
+      },
+      {
+        "name": "AuditPolicyChanges",
+        "laType": "string"
+      },
+      {
+        "name": "AuditsDiscarded",
+        "laType": "int"
+      },
+      {
+        "name": "AuthenticationLevel",
+        "laType": "int"
+      },
+      {
+        "name": "AuthenticationPackageName",
+        "laType": "string"
+      },
+      {
+        "name": "AuthenticationProvider",
+        "laType": "string"
+      },
+      {
+        "name": "AuthenticationServer",
+        "laType": "string"
+      },
+      {
+        "name": "AuthenticationService",
+        "laType": "int"
+      },
+      {
+        "name": "AuthenticationType",
+        "laType": "string"
+      },
+      {
+        "name": "AzureDeploymentID",
+        "laType": "string"
+      },
+      {
+        "name": "CACertificateHash",
+        "laType": "string"
+      },
+      {
+        "name": "CalledStationID",
+        "laType": "string"
+      },
+      {
+        "name": "CallerProcessId",
+        "laType": "string"
+      },
+      {
+        "name": "CallerProcessName",
+        "laType": "string"
+      },
+      {
+        "name": "CallingStationID",
+        "laType": "string"
+      },
+      {
+        "name": "CAPublicKeyHash",
+        "laType": "string"
+      },
+      {
+        "name": "CategoryId",
+        "laType": "string"
+      },
+      {
+        "name": "CertificateDatabaseHash",
+        "laType": "string"
+      },
+      {
+        "name": "Channel",
+        "laType": "string"
+      },
+      {
+        "name": "ClassId",
+        "laType": "string"
+      },
+      {
+        "name": "ClassName",
+        "laType": "string"
+      },
+      {
+        "name": "ClientAddress",
+        "laType": "string"
+      },
+      {
+        "name": "ClientIPAddress",
+        "laType": "string"
+      },
+      {
+        "name": "ClientName",
+        "laType": "string"
+      },
+      {
+        "name": "CommandLine",
+        "laType": "string"
+      },
+      {
+        "name": "CompatibleIds",
+        "laType": "string"
+      },
+      {
+        "name": "Computer",
+        "laType": "string"
+      },
+      {
+        "name": "Correlation",
+        "laType": "string"
+      },
+      {
+        "name": "DCDNSName",
+        "laType": "string"
+      },
+      {
+        "name": "DeviceDescription",
+        "laType": "string"
+      },
+      {
+        "name": "DeviceId",
+        "laType": "string"
+      },
+      {
+        "name": "DisplayName",
+        "laType": "string"
+      },
+      {
+        "name": "Disposition",
+        "laType": "string"
+      },
+      {
+        "name": "DomainBehaviorVersion",
+        "laType": "string"
+      },
+      {
+        "name": "DomainName",
+        "laType": "string"
+      },
+      {
+        "name": "DomainPolicyChanged",
+        "laType": "string"
+      },
+      {
+        "name": "DomainSid",
+        "laType": "string"
+      },
+      {
+        "name": "EAPType",
+        "laType": "string"
+      },
+      {
+        "name": "ElevatedToken",
+        "laType": "string"
+      },
+      {
+        "name": "ErrorCode",
+        "laType": "int"
+      },
+      {
+        "name": "EventData",
+        "laType": "string"
+      },
+      {
+        "name": "EventID",
+        "laType": "int"
+      },
+      {
+        "name": "EventLevelName",
+        "laType": "string"
+      },
+      {
+        "name": "EventRecordId",
+        "laType": "string"
+      },
+      {
+        "name": "EventSourceName",
+        "laType": "string"
+      },
+      {
+        "name": "ExtendedQuarantineState",
+        "laType": "string"
+      },
+      {
+        "name": "FailureReason",
+        "laType": "string"
+      },
+      {
+        "name": "FileHash",
+        "laType": "string"
+      },
+      {
+        "name": "FilePath",
+        "laType": "string"
+      },
+      {
+        "name": "FilePathNoUser",
+        "laType": "string"
+      },
+      {
+        "name": "Filter",
+        "laType": "string"
+      },
+      {
+        "name": "ForceLogoff",
+        "laType": "string"
+      },
+      {
+        "name": "Fqbn",
+        "laType": "string"
+      },
+      {
+        "name": "FullyQualifiedSubjectMachineName",
+        "laType": "string"
+      },
+      {
+        "name": "FullyQualifiedSubjectUserName",
+        "laType": "string"
+      },
+      {
+        "name": "GroupMembership",
+        "laType": "string"
+      },
+      {
+        "name": "HandleId",
+        "laType": "string"
+      },
+      {
+        "name": "HardwareIds",
+        "laType": "string"
+      },
+      {
+        "name": "HomeDirectory",
+        "laType": "string"
+      },
+      {
+        "name": "HomePath",
+        "laType": "string"
+      },
+      {
+        "name": "IpAddress",
+        "laType": "string"
+      },
+      {
+        "name": "IpPort",
+        "laType": "string"
+      },
+      {
+        "name": "KeyLength",
+        "laType": "int"
+      },
+      {
+        "name": "Keywords",
+        "laType": "string"
+      },
+      {
+        "name": "Level",
+        "laType": "string"
+      },
+      {
+        "name": "LmPackageName",
+        "laType": "string"
+      },
+      {
+        "name": "LocationInformation",
+        "laType": "string"
+      },
+      {
+        "name": "LockoutDuration",
+        "laType": "string"
+      },
+      {
+        "name": "LockoutObservationWindow",
+        "laType": "string"
+      },
+      {
+        "name": "LockoutThreshold",
+        "laType": "string"
+      },
+      {
+        "name": "LoggingResult",
+        "laType": "string"
+      },
+      {
+        "name": "LogonHours",
+        "laType": "string"
+      },
+      {
+        "name": "LogonID",
+        "laType": "string"
+      },
+      {
+        "name": "LogonProcessName",
+        "laType": "string"
+      },
+      {
+        "name": "LogonType",
+        "laType": "int"
+      },
+      {
+        "name": "LogonTypeName",
+        "laType": "string"
+      },
+      {
+        "name": "MachineAccountQuota",
+        "laType": "string"
+      },
+      {
+        "name": "MachineInventory",
+        "laType": "string"
+      },
+      {
+        "name": "MachineLogon",
+        "laType": "string"
+      },
+      {
+        "name": "ManagementGroupName",
+        "laType": "string"
+      },
+      {
+        "name": "MandatoryLabel",
+        "laType": "string"
+      },
+      {
+        "name": "MaxPasswordAge",
+        "laType": "string"
+      },
+      {
+        "name": "MemberName",
+        "laType": "string"
+      },
+      {
+        "name": "MemberSid",
+        "laType": "string"
+      },
+      {
+        "name": "MinPasswordAge",
+        "laType": "string"
+      },
+      {
+        "name": "MinPasswordLength",
+        "laType": "string"
+      },
+      {
+        "name": "MixedDomainMode",
+        "laType": "string"
+      },
+      {
+        "name": "NASIdentifier",
+        "laType": "string"
+      },
+      {
+        "name": "NASIPv4Address",
+        "laType": "string"
+      },
+      {
+        "name": "NASIPv6Address",
+        "laType": "string"
+      },
+      {
+        "name": "NASPort",
+        "laType": "string"
+      },
+      {
+        "name": "NASPortType",
+        "laType": "string"
+      },
+      {
+        "name": "NetworkPolicyName",
+        "laType": "string"
+      },
+      {
+        "name": "NewDate",
+        "laType": "string"
+      },
+      {
+        "name": "NewMaxUsers",
+        "laType": "string"
+      },
+      {
+        "name": "NewProcessId",
+        "laType": "string"
+      },
+      {
+        "name": "NewProcessName",
+        "laType": "string"
+      },
+      {
+        "name": "NewRemark",
+        "laType": "string"
+      },
+      {
+        "name": "NewShareFlags",
+        "laType": "string"
+      },
+      {
+        "name": "NewTime",
+        "laType": "string"
+      },
+      {
+        "name": "NewUacValue",
+        "laType": "string"
+      },
+      {
+        "name": "NewValue",
+        "laType": "string"
+      },
+      {
+        "name": "NewValueType",
+        "laType": "string"
+      },
+      {
+        "name": "ObjectName",
+        "laType": "string"
+      },
+      {
+        "name": "ObjectServer",
+        "laType": "string"
+      },
+      {
+        "name": "ObjectType",
+        "laType": "string"
+      },
+      {
+        "name": "ObjectValueName",
+        "laType": "string"
+      },
+      {
+        "name": "OemInformation",
+        "laType": "string"
+      },
+      {
+        "name": "OldMaxUsers",
+        "laType": "string"
+      },
+      {
+        "name": "OldRemark",
+        "laType": "string"
+      },
+      {
+        "name": "OldShareFlags",
+        "laType": "string"
+      },
+      {
+        "name": "OldUacValue",
+        "laType": "string"
+      },
+      {
+        "name": "OldValue",
+        "laType": "string"
+      },
+      {
+        "name": "OldValueType",
+        "laType": "string"
+      },
+      {
+        "name": "Opcode",
+        "laType": "string"
+      },
+      {
+        "name": "OperationType",
+        "laType": "string"
+      },
+      {
+        "name": "PackageName",
+        "laType": "string"
+      },
+      {
+        "name": "ParentProcessName",
+        "laType": "string"
+      },
+      {
+        "name": "PasswordHistoryLength",
+        "laType": "string"
+      },
+      {
+        "name": "PasswordLastSet",
+        "laType": "string"
+      },
+      {
+        "name": "PasswordProperties",
+        "laType": "string"
+      },
+      {
+        "name": "PreviousDate",
+        "laType": "string"
+      },
+      {
+        "name": "PreviousTime",
+        "laType": "string"
+      },
+      {
+        "name": "PrimaryGroupId",
+        "laType": "string"
+      },
+      {
+        "name": "PrivateKeyUsageCount",
+        "laType": "string"
+      },
+      {
+        "name": "PrivilegeList",
+        "laType": "string"
+      },
+      {
+        "name": "Process",
+        "laType": "string"
+      },
+      {
+        "name": "ProcessId",
+        "laType": "string"
+      },
+      {
+        "name": "ProcessName",
+        "laType": "string"
+      },
+      {
+        "name": "ProfilePath",
+        "laType": "string"
+      },
+      {
+        "name": "Properties",
+        "laType": "string"
+      },
+      {
+        "name": "ProtocolSequence",
+        "laType": "string"
+      },
+      {
+        "name": "ProxyPolicyName",
+        "laType": "string"
+      },
+      {
+        "name": "QuarantineHelpURL",
+        "laType": "string"
+      },
+      {
+        "name": "QuarantineSessionID",
+        "laType": "string"
+      },
+      {
+        "name": "QuarantineSessionIdentifier",
+        "laType": "string"
+      },
+      {
+        "name": "QuarantineState",
+        "laType": "string"
+      },
+      {
+        "name": "QuarantineSystemHealthResult",
+        "laType": "string"
+      },
+      {
+        "name": "RelativeTargetName",
+        "laType": "string"
+      },
+      {
+        "name": "RemoteIpAddress",
+        "laType": "string"
+      },
+      {
+        "name": "RemotePort",
+        "laType": "string"
+      },
+      {
+        "name": "Requester",
+        "laType": "string"
+      },
+      {
+        "name": "RequestId",
+        "laType": "string"
+      },
+      {
+        "name": "RestrictedAdminMode",
+        "laType": "string"
+      },
+      {
+        "name": "RowsDeleted",
+        "laType": "string"
+      },
+      {
+        "name": "SamAccountName",
+        "laType": "string"
+      },
+      {
+        "name": "ScriptPath",
+        "laType": "string"
+      },
+      {
+        "name": "SecurityDescriptor",
+        "laType": "string"
+      },
+      {
+        "name": "ServiceAccount",
+        "laType": "string"
+      },
+      {
+        "name": "ServiceFileName",
+        "laType": "string"
+      },
+      {
+        "name": "ServiceName",
+        "laType": "string"
+      },
+      {
+        "name": "ServiceStartType",
+        "laType": "int"
+      },
+      {
+        "name": "ServiceType",
+        "laType": "string"
+      },
+      {
+        "name": "SessionName",
+        "laType": "string"
+      },
+      {
+        "name": "ShareLocalPath",
+        "laType": "string"
+      },
+      {
+        "name": "ShareName",
+        "laType": "string"
+      },
+      {
+        "name": "SidHistory",
+        "laType": "string"
+      },
+      {
+        "name": "SourceSystem",
+        "laType": "string"
+      },
+      {
+        "name": "Status",
+        "laType": "string"
+      },
+      {
+        "name": "StorageAccount",
+        "laType": "string"
+      },
+      {
+        "name": "SubcategoryId",
+        "laType": "string"
+      },
+      {
+        "name": "Subject",
+        "laType": "string"
+      },
+      {
+        "name": "SubjectAccount",
+        "laType": "string"
+      },
+      {
+        "name": "SubjectDomainName",
+        "laType": "string"
+      },
+      {
+        "name": "SubjectKeyIdentifier",
+        "laType": "string"
+      },
+      {
+        "name": "SubjectLogonId",
+        "laType": "string"
+      },
+      {
+        "name": "SubjectMachineName",
+        "laType": "string"
+      },
+      {
+        "name": "SubjectMachineSID",
+        "laType": "string"
+      },
+      {
+        "name": "SubjectUserName",
+        "laType": "string"
+      },
+      {
+        "name": "SubjectUserSid",
+        "laType": "string"
+      },
+      {
+        "name": "SubStatus",
+        "laType": "string"
+      },
+      {
+        "name": "SystemProcessId",
+        "laType": "int"
+      },
+      {
+        "name": "SystemThreadId",
+        "laType": "int"
+      },
+      {
+        "name": "SystemUserId",
+        "laType": "string"
+      },
+      {
+        "name": "TableId",
+        "laType": "string"
+      },
+      {
+        "name": "TargetAccount",
+        "laType": "string"
+      },
+      {
+        "name": "TargetDomainName",
+        "laType": "string"
+      },
+      {
+        "name": "TargetInfo",
+        "laType": "string"
+      },
+      {
+        "name": "TargetLinkedLogonId",
+        "laType": "string"
+      },
+      {
+        "name": "TargetLogonId",
+        "laType": "string"
+      },
+      {
+        "name": "TargetOutboundDomainName",
+        "laType": "string"
+      },
+      {
+        "name": "TargetOutboundUserName",
+        "laType": "string"
+      },
+      {
+        "name": "TargetServerName",
+        "laType": "string"
+      },
+      {
+        "name": "TargetSid",
+        "laType": "string"
+      },
+      {
+        "name": "TargetUser",
+        "laType": "string"
+      },
+      {
+        "name": "TargetUserName",
+        "laType": "string"
+      },
+      {
+        "name": "TargetUserSid",
+        "laType": "string"
+      },
+      {
+        "name": "Task",
+        "laType": "int"
+      },
+      {
+        "name": "TemplateContent",
+        "laType": "string"
+      },
+      {
+        "name": "TemplateDSObjectFQDN",
+        "laType": "string"
+      },
+      {
+        "name": "TemplateInternalName",
+        "laType": "string"
+      },
+      {
+        "name": "TemplateOID",
+        "laType": "string"
+      },
+      {
+        "name": "TemplateSchemaVersion",
+        "laType": "string"
+      },
+      {
+        "name": "TemplateVersion",
+        "laType": "string"
+      },
+      {
+        "name": "TimeGenerated",
+        "laType": "dateTime"
+      },
+      {
+        "name": "TokenElevationType",
+        "laType": "string"
+      },
+      {
+        "name": "TransmittedServices",
+        "laType": "string"
+      },
+      {
+        "name": "Type",
+        "laType": "string"
+      },
+      {
+        "name": "UserAccountControl",
+        "laType": "string"
+      },
+      {
+        "name": "UserParameters",
+        "laType": "string"
+      },
+      {
+        "name": "UserPrincipalName",
+        "laType": "string"
+      },
+      {
+        "name": "UserWorkstations",
+        "laType": "string"
+      },
+      {
+        "name": "VendorIds",
+        "laType": "string"
+      },
+      {
+        "name": "Version",
+        "laType": "int"
+      },
+      {
+        "name": "VirtualAccount",
+        "laType": "string"
+      },
+      {
+        "name": "Workstation",
+        "laType": "string"
+      },
+      {
+        "name": "WorkstationName",
+        "laType": "string"
+      },
+      {
+        "name": "MG",
+        "laType": "string"
+      },
+      {
+        "name": "PartitionKey",
+        "laType": "string"
+      },
+      {
+        "name": "RowKey",
+        "laType": "string"
+      },
+      {
+        "name": "AzureTableName",
+        "laType": "string"
+      },
+      {
+        "name": "SourceComputerId",
+        "laType": "string"
+      },
+      {
+        "name": "TimeCollected",
+        "laType": "dateTime"
+      },
+      {
+        "name": "_ResourceId",
+        "laType": "string"
+      }
+    ],
+    "expected": {
+      "columns": [
+        {
+          "name": "AccessMask",
+          "dcrType": "string"
+        },
+        {
+          "name": "Account",
+          "dcrType": "string"
+        },
+        {
+          "name": "AccountDomain",
+          "dcrType": "string"
+        },
+        {
+          "name": "AccountExpires",
+          "dcrType": "string"
+        },
+        {
+          "name": "AccountName",
+          "dcrType": "string"
+        },
+        {
+          "name": "AccountSessionIdentifier",
+          "dcrType": "string"
+        },
+        {
+          "name": "AccountType",
+          "dcrType": "string"
+        },
+        {
+          "name": "Activity",
+          "dcrType": "string"
+        },
+        {
+          "name": "AdditionalInfo",
+          "dcrType": "string"
+        },
+        {
+          "name": "AdditionalInfo2",
+          "dcrType": "string"
+        },
+        {
+          "name": "AllowedToDelegateTo",
+          "dcrType": "string"
+        },
+        {
+          "name": "Attributes",
+          "dcrType": "string"
+        },
+        {
+          "name": "AuditPolicyChanges",
+          "dcrType": "string"
+        },
+        {
+          "name": "AuditsDiscarded",
+          "dcrType": "int"
+        },
+        {
+          "name": "AuthenticationLevel",
+          "dcrType": "int"
+        },
+        {
+          "name": "AuthenticationPackageName",
+          "dcrType": "string"
+        },
+        {
+          "name": "AuthenticationProvider",
+          "dcrType": "string"
+        },
+        {
+          "name": "AuthenticationServer",
+          "dcrType": "string"
+        },
+        {
+          "name": "AuthenticationService",
+          "dcrType": "int"
+        },
+        {
+          "name": "AuthenticationType",
+          "dcrType": "string"
+        },
+        {
+          "name": "CACertificateHash",
+          "dcrType": "string"
+        },
+        {
+          "name": "CalledStationID",
+          "dcrType": "string"
+        },
+        {
+          "name": "CallerProcessId",
+          "dcrType": "string"
+        },
+        {
+          "name": "CallerProcessName",
+          "dcrType": "string"
+        },
+        {
+          "name": "CallingStationID",
+          "dcrType": "string"
+        },
+        {
+          "name": "CAPublicKeyHash",
+          "dcrType": "string"
+        },
+        {
+          "name": "CategoryId",
+          "dcrType": "string"
+        },
+        {
+          "name": "CertificateDatabaseHash",
+          "dcrType": "string"
+        },
+        {
+          "name": "Channel",
+          "dcrType": "string"
+        },
+        {
+          "name": "ClassId",
+          "dcrType": "string"
+        },
+        {
+          "name": "ClassName",
+          "dcrType": "string"
+        },
+        {
+          "name": "ClientAddress",
+          "dcrType": "string"
+        },
+        {
+          "name": "ClientIPAddress",
+          "dcrType": "string"
+        },
+        {
+          "name": "ClientName",
+          "dcrType": "string"
+        },
+        {
+          "name": "CommandLine",
+          "dcrType": "string"
+        },
+        {
+          "name": "CompatibleIds",
+          "dcrType": "string"
+        },
+        {
+          "name": "Computer",
+          "dcrType": "string"
+        },
+        {
+          "name": "Correlation",
+          "dcrType": "string"
+        },
+        {
+          "name": "DCDNSName",
+          "dcrType": "string"
+        },
+        {
+          "name": "DeviceDescription",
+          "dcrType": "string"
+        },
+        {
+          "name": "DeviceId",
+          "dcrType": "string"
+        },
+        {
+          "name": "DisplayName",
+          "dcrType": "string"
+        },
+        {
+          "name": "Disposition",
+          "dcrType": "string"
+        },
+        {
+          "name": "DomainBehaviorVersion",
+          "dcrType": "string"
+        },
+        {
+          "name": "DomainName",
+          "dcrType": "string"
+        },
+        {
+          "name": "DomainPolicyChanged",
+          "dcrType": "string"
+        },
+        {
+          "name": "DomainSid",
+          "dcrType": "string"
+        },
+        {
+          "name": "EAPType",
+          "dcrType": "string"
+        },
+        {
+          "name": "ElevatedToken",
+          "dcrType": "string"
+        },
+        {
+          "name": "ErrorCode",
+          "dcrType": "int"
+        },
+        {
+          "name": "EventData",
+          "dcrType": "string"
+        },
+        {
+          "name": "EventID",
+          "dcrType": "int"
+        },
+        {
+          "name": "EventLevelName",
+          "dcrType": "string"
+        },
+        {
+          "name": "EventRecordId",
+          "dcrType": "string"
+        },
+        {
+          "name": "EventSourceName",
+          "dcrType": "string"
+        },
+        {
+          "name": "ExtendedQuarantineState",
+          "dcrType": "string"
+        },
+        {
+          "name": "FailureReason",
+          "dcrType": "string"
+        },
+        {
+          "name": "FileHash",
+          "dcrType": "string"
+        },
+        {
+          "name": "FilePath",
+          "dcrType": "string"
+        },
+        {
+          "name": "FilePathNoUser",
+          "dcrType": "string"
+        },
+        {
+          "name": "Filter",
+          "dcrType": "string"
+        },
+        {
+          "name": "ForceLogoff",
+          "dcrType": "string"
+        },
+        {
+          "name": "Fqbn",
+          "dcrType": "string"
+        },
+        {
+          "name": "FullyQualifiedSubjectMachineName",
+          "dcrType": "string"
+        },
+        {
+          "name": "FullyQualifiedSubjectUserName",
+          "dcrType": "string"
+        },
+        {
+          "name": "GroupMembership",
+          "dcrType": "string"
+        },
+        {
+          "name": "HandleId",
+          "dcrType": "string"
+        },
+        {
+          "name": "HardwareIds",
+          "dcrType": "string"
+        },
+        {
+          "name": "HomeDirectory",
+          "dcrType": "string"
+        },
+        {
+          "name": "HomePath",
+          "dcrType": "string"
+        },
+        {
+          "name": "IpAddress",
+          "dcrType": "string"
+        },
+        {
+          "name": "IpPort",
+          "dcrType": "string"
+        },
+        {
+          "name": "KeyLength",
+          "dcrType": "int"
+        },
+        {
+          "name": "Keywords",
+          "dcrType": "string"
+        },
+        {
+          "name": "Level",
+          "dcrType": "string"
+        },
+        {
+          "name": "LmPackageName",
+          "dcrType": "string"
+        },
+        {
+          "name": "LocationInformation",
+          "dcrType": "string"
+        },
+        {
+          "name": "LockoutDuration",
+          "dcrType": "string"
+        },
+        {
+          "name": "LockoutObservationWindow",
+          "dcrType": "string"
+        },
+        {
+          "name": "LockoutThreshold",
+          "dcrType": "string"
+        },
+        {
+          "name": "LoggingResult",
+          "dcrType": "string"
+        },
+        {
+          "name": "LogonHours",
+          "dcrType": "string"
+        },
+        {
+          "name": "LogonID",
+          "dcrType": "string"
+        },
+        {
+          "name": "LogonProcessName",
+          "dcrType": "string"
+        },
+        {
+          "name": "LogonType",
+          "dcrType": "int"
+        },
+        {
+          "name": "LogonTypeName",
+          "dcrType": "string"
+        },
+        {
+          "name": "MachineAccountQuota",
+          "dcrType": "string"
+        },
+        {
+          "name": "MachineInventory",
+          "dcrType": "string"
+        },
+        {
+          "name": "MachineLogon",
+          "dcrType": "string"
+        },
+        {
+          "name": "MandatoryLabel",
+          "dcrType": "string"
+        },
+        {
+          "name": "MaxPasswordAge",
+          "dcrType": "string"
+        },
+        {
+          "name": "MemberName",
+          "dcrType": "string"
+        },
+        {
+          "name": "MemberSid",
+          "dcrType": "string"
+        },
+        {
+          "name": "MinPasswordAge",
+          "dcrType": "string"
+        },
+        {
+          "name": "MinPasswordLength",
+          "dcrType": "string"
+        },
+        {
+          "name": "MixedDomainMode",
+          "dcrType": "string"
+        },
+        {
+          "name": "NASIdentifier",
+          "dcrType": "string"
+        },
+        {
+          "name": "NASIPv4Address",
+          "dcrType": "string"
+        },
+        {
+          "name": "NASIPv6Address",
+          "dcrType": "string"
+        },
+        {
+          "name": "NASPort",
+          "dcrType": "string"
+        },
+        {
+          "name": "NASPortType",
+          "dcrType": "string"
+        },
+        {
+          "name": "NetworkPolicyName",
+          "dcrType": "string"
+        },
+        {
+          "name": "NewDate",
+          "dcrType": "string"
+        },
+        {
+          "name": "NewMaxUsers",
+          "dcrType": "string"
+        },
+        {
+          "name": "NewProcessId",
+          "dcrType": "string"
+        },
+        {
+          "name": "NewProcessName",
+          "dcrType": "string"
+        },
+        {
+          "name": "NewRemark",
+          "dcrType": "string"
+        },
+        {
+          "name": "NewShareFlags",
+          "dcrType": "string"
+        },
+        {
+          "name": "NewTime",
+          "dcrType": "string"
+        },
+        {
+          "name": "NewUacValue",
+          "dcrType": "string"
+        },
+        {
+          "name": "NewValue",
+          "dcrType": "string"
+        },
+        {
+          "name": "NewValueType",
+          "dcrType": "string"
+        },
+        {
+          "name": "ObjectName",
+          "dcrType": "string"
+        },
+        {
+          "name": "ObjectServer",
+          "dcrType": "string"
+        },
+        {
+          "name": "ObjectType",
+          "dcrType": "string"
+        },
+        {
+          "name": "ObjectValueName",
+          "dcrType": "string"
+        },
+        {
+          "name": "OemInformation",
+          "dcrType": "string"
+        },
+        {
+          "name": "OldMaxUsers",
+          "dcrType": "string"
+        },
+        {
+          "name": "OldRemark",
+          "dcrType": "string"
+        },
+        {
+          "name": "OldShareFlags",
+          "dcrType": "string"
+        },
+        {
+          "name": "OldUacValue",
+          "dcrType": "string"
+        },
+        {
+          "name": "OldValue",
+          "dcrType": "string"
+        },
+        {
+          "name": "OldValueType",
+          "dcrType": "string"
+        },
+        {
+          "name": "Opcode",
+          "dcrType": "string"
+        },
+        {
+          "name": "OperationType",
+          "dcrType": "string"
+        },
+        {
+          "name": "PackageName",
+          "dcrType": "string"
+        },
+        {
+          "name": "ParentProcessName",
+          "dcrType": "string"
+        },
+        {
+          "name": "PasswordHistoryLength",
+          "dcrType": "string"
+        },
+        {
+          "name": "PasswordLastSet",
+          "dcrType": "string"
+        },
+        {
+          "name": "PasswordProperties",
+          "dcrType": "string"
+        },
+        {
+          "name": "PreviousDate",
+          "dcrType": "string"
+        },
+        {
+          "name": "PreviousTime",
+          "dcrType": "string"
+        },
+        {
+          "name": "PrimaryGroupId",
+          "dcrType": "string"
+        },
+        {
+          "name": "PrivateKeyUsageCount",
+          "dcrType": "string"
+        },
+        {
+          "name": "PrivilegeList",
+          "dcrType": "string"
+        },
+        {
+          "name": "Process",
+          "dcrType": "string"
+        },
+        {
+          "name": "ProcessId",
+          "dcrType": "string"
+        },
+        {
+          "name": "ProcessName",
+          "dcrType": "string"
+        },
+        {
+          "name": "ProfilePath",
+          "dcrType": "string"
+        },
+        {
+          "name": "Properties",
+          "dcrType": "string"
+        },
+        {
+          "name": "ProtocolSequence",
+          "dcrType": "string"
+        },
+        {
+          "name": "ProxyPolicyName",
+          "dcrType": "string"
+        },
+        {
+          "name": "QuarantineHelpURL",
+          "dcrType": "string"
+        },
+        {
+          "name": "QuarantineSessionID",
+          "dcrType": "string"
+        },
+        {
+          "name": "QuarantineSessionIdentifier",
+          "dcrType": "string"
+        },
+        {
+          "name": "QuarantineState",
+          "dcrType": "string"
+        },
+        {
+          "name": "QuarantineSystemHealthResult",
+          "dcrType": "string"
+        },
+        {
+          "name": "RelativeTargetName",
+          "dcrType": "string"
+        },
+        {
+          "name": "RemoteIpAddress",
+          "dcrType": "string"
+        },
+        {
+          "name": "RemotePort",
+          "dcrType": "string"
+        },
+        {
+          "name": "Requester",
+          "dcrType": "string"
+        },
+        {
+          "name": "RequestId",
+          "dcrType": "string"
+        },
+        {
+          "name": "RestrictedAdminMode",
+          "dcrType": "string"
+        },
+        {
+          "name": "RowsDeleted",
+          "dcrType": "string"
+        },
+        {
+          "name": "SamAccountName",
+          "dcrType": "string"
+        },
+        {
+          "name": "ScriptPath",
+          "dcrType": "string"
+        },
+        {
+          "name": "SecurityDescriptor",
+          "dcrType": "string"
+        },
+        {
+          "name": "ServiceAccount",
+          "dcrType": "string"
+        },
+        {
+          "name": "ServiceFileName",
+          "dcrType": "string"
+        },
+        {
+          "name": "ServiceName",
+          "dcrType": "string"
+        },
+        {
+          "name": "ServiceStartType",
+          "dcrType": "int"
+        },
+        {
+          "name": "ServiceType",
+          "dcrType": "string"
+        },
+        {
+          "name": "SessionName",
+          "dcrType": "string"
+        },
+        {
+          "name": "ShareLocalPath",
+          "dcrType": "string"
+        },
+        {
+          "name": "ShareName",
+          "dcrType": "string"
+        },
+        {
+          "name": "SidHistory",
+          "dcrType": "string"
+        },
+        {
+          "name": "Status",
+          "dcrType": "string"
+        },
+        {
+          "name": "SubcategoryId",
+          "dcrType": "string"
+        },
+        {
+          "name": "Subject",
+          "dcrType": "string"
+        },
+        {
+          "name": "SubjectAccount",
+          "dcrType": "string"
+        },
+        {
+          "name": "SubjectDomainName",
+          "dcrType": "string"
+        },
+        {
+          "name": "SubjectKeyIdentifier",
+          "dcrType": "string"
+        },
+        {
+          "name": "SubjectLogonId",
+          "dcrType": "string"
+        },
+        {
+          "name": "SubjectMachineName",
+          "dcrType": "string"
+        },
+        {
+          "name": "SubjectMachineSID",
+          "dcrType": "string"
+        },
+        {
+          "name": "SubjectUserName",
+          "dcrType": "string"
+        },
+        {
+          "name": "SubjectUserSid",
+          "dcrType": "string"
+        },
+        {
+          "name": "SubStatus",
+          "dcrType": "string"
+        },
+        {
+          "name": "SystemProcessId",
+          "dcrType": "int"
+        },
+        {
+          "name": "SystemThreadId",
+          "dcrType": "int"
+        },
+        {
+          "name": "SystemUserId",
+          "dcrType": "string"
+        },
+        {
+          "name": "TableId",
+          "dcrType": "string"
+        },
+        {
+          "name": "TargetAccount",
+          "dcrType": "string"
+        },
+        {
+          "name": "TargetDomainName",
+          "dcrType": "string"
+        },
+        {
+          "name": "TargetInfo",
+          "dcrType": "string"
+        },
+        {
+          "name": "TargetLinkedLogonId",
+          "dcrType": "string"
+        },
+        {
+          "name": "TargetLogonId",
+          "dcrType": "string"
+        },
+        {
+          "name": "TargetOutboundDomainName",
+          "dcrType": "string"
+        },
+        {
+          "name": "TargetOutboundUserName",
+          "dcrType": "string"
+        },
+        {
+          "name": "TargetServerName",
+          "dcrType": "string"
+        },
+        {
+          "name": "TargetSid",
+          "dcrType": "string"
+        },
+        {
+          "name": "TargetUser",
+          "dcrType": "string"
+        },
+        {
+          "name": "TargetUserName",
+          "dcrType": "string"
+        },
+        {
+          "name": "TargetUserSid",
+          "dcrType": "string"
+        },
+        {
+          "name": "Task",
+          "dcrType": "int"
+        },
+        {
+          "name": "TemplateContent",
+          "dcrType": "string"
+        },
+        {
+          "name": "TemplateDSObjectFQDN",
+          "dcrType": "string"
+        },
+        {
+          "name": "TemplateInternalName",
+          "dcrType": "string"
+        },
+        {
+          "name": "TemplateOID",
+          "dcrType": "string"
+        },
+        {
+          "name": "TemplateSchemaVersion",
+          "dcrType": "string"
+        },
+        {
+          "name": "TemplateVersion",
+          "dcrType": "string"
+        },
+        {
+          "name": "TimeGenerated",
+          "dcrType": "datetime"
+        },
+        {
+          "name": "TokenElevationType",
+          "dcrType": "string"
+        },
+        {
+          "name": "TransmittedServices",
+          "dcrType": "string"
+        },
+        {
+          "name": "UserAccountControl",
+          "dcrType": "string"
+        },
+        {
+          "name": "UserParameters",
+          "dcrType": "string"
+        },
+        {
+          "name": "UserPrincipalName",
+          "dcrType": "string"
+        },
+        {
+          "name": "UserWorkstations",
+          "dcrType": "string"
+        },
+        {
+          "name": "VendorIds",
+          "dcrType": "string"
+        },
+        {
+          "name": "Version",
+          "dcrType": "int"
+        },
+        {
+          "name": "VirtualAccount",
+          "dcrType": "string"
+        },
+        {
+          "name": "Workstation",
+          "dcrType": "string"
+        },
+        {
+          "name": "WorkstationName",
+          "dcrType": "string"
+        }
+      ],
+      "dropped": [
+        "TenantId",
+        "AzureDeploymentID",
+        "ManagementGroupName",
+        "SourceSystem",
+        "StorageAccount",
+        "Type",
+        "MG",
+        "PartitionKey",
+        "RowKey",
+        "AzureTableName",
+        "SourceComputerId",
+        "TimeCollected",
+        "_ResourceId"
+      ]
+    }
+  },
+  {
+    "table": "CommonSecurityLog",
+    "inputColumns": [
+      {
+        "name": "TenantId",
+        "laType": "string"
+      },
+      {
+        "name": "TimeGenerated",
+        "laType": "dateTime"
+      },
+      {
+        "name": "DeviceVendor",
+        "laType": "string"
+      },
+      {
+        "name": "DeviceProduct",
+        "laType": "string"
+      },
+      {
+        "name": "DeviceVersion",
+        "laType": "string"
+      },
+      {
+        "name": "DeviceEventClassID",
+        "laType": "string"
+      },
+      {
+        "name": "Activity",
+        "laType": "string"
+      },
+      {
+        "name": "LogSeverity",
+        "laType": "string"
+      },
+      {
+        "name": "OriginalLogSeverity",
+        "laType": "string"
+      },
+      {
+        "name": "AdditionalExtensions",
+        "laType": "string"
+      },
+      {
+        "name": "DeviceAction",
+        "laType": "string"
+      },
+      {
+        "name": "ApplicationProtocol",
+        "laType": "string"
+      },
+      {
+        "name": "EventCount",
+        "laType": "int"
+      },
+      {
+        "name": "DestinationDnsDomain",
+        "laType": "string"
+      },
+      {
+        "name": "DestinationServiceName",
+        "laType": "string"
+      },
+      {
+        "name": "DestinationTranslatedAddress",
+        "laType": "string"
+      },
+      {
+        "name": "DestinationTranslatedPort",
+        "laType": "int"
+      },
+      {
+        "name": "CommunicationDirection",
+        "laType": "string"
+      },
+      {
+        "name": "DeviceDnsDomain",
+        "laType": "string"
+      },
+      {
+        "name": "DeviceExternalID",
+        "laType": "string"
+      },
+      {
+        "name": "DeviceFacility",
+        "laType": "string"
+      },
+      {
+        "name": "DeviceInboundInterface",
+        "laType": "string"
+      },
+      {
+        "name": "DeviceNtDomain",
+        "laType": "string"
+      },
+      {
+        "name": "DeviceOutboundInterface",
+        "laType": "string"
+      },
+      {
+        "name": "DevicePayloadId",
+        "laType": "string"
+      },
+      {
+        "name": "ProcessName",
+        "laType": "string"
+      },
+      {
+        "name": "DeviceTranslatedAddress",
+        "laType": "string"
+      },
+      {
+        "name": "DestinationHostName",
+        "laType": "string"
+      },
+      {
+        "name": "DestinationMACAddress",
+        "laType": "string"
+      },
+      {
+        "name": "DestinationNTDomain",
+        "laType": "string"
+      },
+      {
+        "name": "DestinationProcessId",
+        "laType": "int"
+      },
+      {
+        "name": "DestinationUserPrivileges",
+        "laType": "string"
+      },
+      {
+        "name": "DestinationProcessName",
+        "laType": "string"
+      },
+      {
+        "name": "DestinationPort",
+        "laType": "int"
+      },
+      {
+        "name": "DestinationIP",
+        "laType": "string"
+      },
+      {
+        "name": "DeviceTimeZone",
+        "laType": "string"
+      },
+      {
+        "name": "DestinationUserID",
+        "laType": "string"
+      },
+      {
+        "name": "DestinationUserName",
+        "laType": "string"
+      },
+      {
+        "name": "DeviceAddress",
+        "laType": "string"
+      },
+      {
+        "name": "DeviceName",
+        "laType": "string"
+      },
+      {
+        "name": "DeviceMacAddress",
+        "laType": "string"
+      },
+      {
+        "name": "ProcessID",
+        "laType": "int"
+      },
+      {
+        "name": "EndTime",
+        "laType": "dateTime"
+      },
+      {
+        "name": "ExternalID",
+        "laType": "int"
+      },
+      {
+        "name": "ExtID",
+        "laType": "string"
+      },
+      {
+        "name": "FileCreateTime",
+        "laType": "string"
+      },
+      {
+        "name": "FileHash",
+        "laType": "string"
+      },
+      {
+        "name": "FileID",
+        "laType": "string"
+      },
+      {
+        "name": "FileModificationTime",
+        "laType": "string"
+      },
+      {
+        "name": "FilePath",
+        "laType": "string"
+      },
+      {
+        "name": "FilePermission",
+        "laType": "string"
+      },
+      {
+        "name": "FileType",
+        "laType": "string"
+      },
+      {
+        "name": "FileName",
+        "laType": "string"
+      },
+      {
+        "name": "FileSize",
+        "laType": "int"
+      },
+      {
+        "name": "ReceivedBytes",
+        "laType": "long"
+      },
+      {
+        "name": "Message",
+        "laType": "string"
+      },
+      {
+        "name": "OldFileCreateTime",
+        "laType": "string"
+      },
+      {
+        "name": "OldFileHash",
+        "laType": "string"
+      },
+      {
+        "name": "OldFileID",
+        "laType": "string"
+      },
+      {
+        "name": "OldFileModificationTime",
+        "laType": "string"
+      },
+      {
+        "name": "OldFileName",
+        "laType": "string"
+      },
+      {
+        "name": "OldFilePath",
+        "laType": "string"
+      },
+      {
+        "name": "OldFilePermission",
+        "laType": "string"
+      },
+      {
+        "name": "OldFileSize",
+        "laType": "int"
+      },
+      {
+        "name": "OldFileType",
+        "laType": "string"
+      },
+      {
+        "name": "SentBytes",
+        "laType": "long"
+      },
+      {
+        "name": "EventOutcome",
+        "laType": "string"
+      },
+      {
+        "name": "Protocol",
+        "laType": "string"
+      },
+      {
+        "name": "Reason",
+        "laType": "string"
+      },
+      {
+        "name": "RequestURL",
+        "laType": "string"
+      },
+      {
+        "name": "RequestClientApplication",
+        "laType": "string"
+      },
+      {
+        "name": "RequestContext",
+        "laType": "string"
+      },
+      {
+        "name": "RequestCookies",
+        "laType": "string"
+      },
+      {
+        "name": "RequestMethod",
+        "laType": "string"
+      },
+      {
+        "name": "ReceiptTime",
+        "laType": "string"
+      },
+      {
+        "name": "SourceHostName",
+        "laType": "string"
+      },
+      {
+        "name": "SourceMACAddress",
+        "laType": "string"
+      },
+      {
+        "name": "SourceNTDomain",
+        "laType": "string"
+      },
+      {
+        "name": "SourceDnsDomain",
+        "laType": "string"
+      },
+      {
+        "name": "SourceServiceName",
+        "laType": "string"
+      },
+      {
+        "name": "SourceTranslatedAddress",
+        "laType": "string"
+      },
+      {
+        "name": "SourceTranslatedPort",
+        "laType": "int"
+      },
+      {
+        "name": "SourceProcessId",
+        "laType": "int"
+      },
+      {
+        "name": "SourceUserPrivileges",
+        "laType": "string"
+      },
+      {
+        "name": "SourceProcessName",
+        "laType": "string"
+      },
+      {
+        "name": "SourcePort",
+        "laType": "int"
+      },
+      {
+        "name": "SourceIP",
+        "laType": "string"
+      },
+      {
+        "name": "StartTime",
+        "laType": "dateTime"
+      },
+      {
+        "name": "SourceUserID",
+        "laType": "string"
+      },
+      {
+        "name": "SourceUserName",
+        "laType": "string"
+      },
+      {
+        "name": "EventType",
+        "laType": "int"
+      },
+      {
+        "name": "DeviceEventCategory",
+        "laType": "string"
+      },
+      {
+        "name": "DeviceCustomIPv6Address1",
+        "laType": "string"
+      },
+      {
+        "name": "DeviceCustomIPv6Address1Label",
+        "laType": "string"
+      },
+      {
+        "name": "DeviceCustomIPv6Address2",
+        "laType": "string"
+      },
+      {
+        "name": "DeviceCustomIPv6Address2Label",
+        "laType": "string"
+      },
+      {
+        "name": "DeviceCustomIPv6Address3",
+        "laType": "string"
+      },
+      {
+        "name": "DeviceCustomIPv6Address3Label",
+        "laType": "string"
+      },
+      {
+        "name": "DeviceCustomIPv6Address4",
+        "laType": "string"
+      },
+      {
+        "name": "DeviceCustomIPv6Address4Label",
+        "laType": "string"
+      },
+      {
+        "name": "DeviceCustomFloatingPoint1",
+        "laType": "real"
+      },
+      {
+        "name": "DeviceCustomFloatingPoint1Label",
+        "laType": "string"
+      },
+      {
+        "name": "DeviceCustomFloatingPoint2",
+        "laType": "real"
+      },
+      {
+        "name": "DeviceCustomFloatingPoint2Label",
+        "laType": "string"
+      },
+      {
+        "name": "DeviceCustomFloatingPoint3",
+        "laType": "real"
+      },
+      {
+        "name": "DeviceCustomFloatingPoint3Label",
+        "laType": "string"
+      },
+      {
+        "name": "DeviceCustomFloatingPoint4",
+        "laType": "real"
+      },
+      {
+        "name": "DeviceCustomFloatingPoint4Label",
+        "laType": "string"
+      },
+      {
+        "name": "DeviceCustomNumber1",
+        "laType": "int"
+      },
+      {
+        "name": "FieldDeviceCustomNumber1",
+        "laType": "long"
+      },
+      {
+        "name": "DeviceCustomNumber1Label",
+        "laType": "string"
+      },
+      {
+        "name": "DeviceCustomNumber2",
+        "laType": "int"
+      },
+      {
+        "name": "FieldDeviceCustomNumber2",
+        "laType": "long"
+      },
+      {
+        "name": "DeviceCustomNumber2Label",
+        "laType": "string"
+      },
+      {
+        "name": "DeviceCustomNumber3",
+        "laType": "int"
+      },
+      {
+        "name": "FieldDeviceCustomNumber3",
+        "laType": "long"
+      },
+      {
+        "name": "DeviceCustomNumber3Label",
+        "laType": "string"
+      },
+      {
+        "name": "DeviceCustomString1",
+        "laType": "string"
+      },
+      {
+        "name": "DeviceCustomString1Label",
+        "laType": "string"
+      },
+      {
+        "name": "DeviceCustomString2",
+        "laType": "string"
+      },
+      {
+        "name": "DeviceCustomString2Label",
+        "laType": "string"
+      },
+      {
+        "name": "DeviceCustomString3",
+        "laType": "string"
+      },
+      {
+        "name": "DeviceCustomString3Label",
+        "laType": "string"
+      },
+      {
+        "name": "DeviceCustomString4",
+        "laType": "string"
+      },
+      {
+        "name": "DeviceCustomString4Label",
+        "laType": "string"
+      },
+      {
+        "name": "DeviceCustomString5",
+        "laType": "string"
+      },
+      {
+        "name": "DeviceCustomString5Label",
+        "laType": "string"
+      },
+      {
+        "name": "DeviceCustomString6",
+        "laType": "string"
+      },
+      {
+        "name": "DeviceCustomString6Label",
+        "laType": "string"
+      },
+      {
+        "name": "DeviceCustomDate1",
+        "laType": "string"
+      },
+      {
+        "name": "DeviceCustomDate1Label",
+        "laType": "string"
+      },
+      {
+        "name": "DeviceCustomDate2",
+        "laType": "string"
+      },
+      {
+        "name": "DeviceCustomDate2Label",
+        "laType": "string"
+      },
+      {
+        "name": "FlexDate1",
+        "laType": "string"
+      },
+      {
+        "name": "FlexDate1Label",
+        "laType": "string"
+      },
+      {
+        "name": "FlexNumber1",
+        "laType": "int"
+      },
+      {
+        "name": "FlexNumber1Label",
+        "laType": "string"
+      },
+      {
+        "name": "FlexNumber2",
+        "laType": "int"
+      },
+      {
+        "name": "FlexNumber2Label",
+        "laType": "string"
+      },
+      {
+        "name": "FlexString1",
+        "laType": "string"
+      },
+      {
+        "name": "FlexString1Label",
+        "laType": "string"
+      },
+      {
+        "name": "FlexString2",
+        "laType": "string"
+      },
+      {
+        "name": "FlexString2Label",
+        "laType": "string"
+      },
+      {
+        "name": "RemoteIP",
+        "laType": "string"
+      },
+      {
+        "name": "RemotePort",
+        "laType": "string"
+      },
+      {
+        "name": "MaliciousIP",
+        "laType": "string"
+      },
+      {
+        "name": "ThreatSeverity",
+        "laType": "int"
+      },
+      {
+        "name": "IndicatorThreatType",
+        "laType": "string"
+      },
+      {
+        "name": "ThreatDescription",
+        "laType": "string"
+      },
+      {
+        "name": "ThreatConfidence",
+        "laType": "string"
+      },
+      {
+        "name": "ReportReferenceLink",
+        "laType": "string"
+      },
+      {
+        "name": "MaliciousIPLongitude",
+        "laType": "real"
+      },
+      {
+        "name": "MaliciousIPLatitude",
+        "laType": "real"
+      },
+      {
+        "name": "MaliciousIPCountry",
+        "laType": "string"
+      },
+      {
+        "name": "Computer",
+        "laType": "string"
+      },
+      {
+        "name": "SimplifiedDeviceAction",
+        "laType": "string"
+      },
+      {
+        "name": "CollectorHostName",
+        "laType": "string"
+      },
+      {
+        "name": "SourceSystem",
+        "laType": "string"
+      },
+      {
+        "name": "Type",
+        "laType": "string"
+      },
+      {
+        "name": "_ResourceId",
+        "laType": "string"
+      }
+    ],
+    "expected": {
+      "columns": [
+        {
+          "name": "TimeGenerated",
+          "dcrType": "datetime"
+        },
+        {
+          "name": "DeviceVendor",
+          "dcrType": "string"
+        },
+        {
+          "name": "DeviceProduct",
+          "dcrType": "string"
+        },
+        {
+          "name": "DeviceVersion",
+          "dcrType": "string"
+        },
+        {
+          "name": "DeviceEventClassID",
+          "dcrType": "string"
+        },
+        {
+          "name": "Activity",
+          "dcrType": "string"
+        },
+        {
+          "name": "LogSeverity",
+          "dcrType": "string"
+        },
+        {
+          "name": "OriginalLogSeverity",
+          "dcrType": "string"
+        },
+        {
+          "name": "AdditionalExtensions",
+          "dcrType": "string"
+        },
+        {
+          "name": "DeviceAction",
+          "dcrType": "string"
+        },
+        {
+          "name": "ApplicationProtocol",
+          "dcrType": "string"
+        },
+        {
+          "name": "EventCount",
+          "dcrType": "int"
+        },
+        {
+          "name": "DestinationDnsDomain",
+          "dcrType": "string"
+        },
+        {
+          "name": "DestinationServiceName",
+          "dcrType": "string"
+        },
+        {
+          "name": "DestinationTranslatedAddress",
+          "dcrType": "string"
+        },
+        {
+          "name": "DestinationTranslatedPort",
+          "dcrType": "int"
+        },
+        {
+          "name": "CommunicationDirection",
+          "dcrType": "string"
+        },
+        {
+          "name": "DeviceDnsDomain",
+          "dcrType": "string"
+        },
+        {
+          "name": "DeviceExternalID",
+          "dcrType": "string"
+        },
+        {
+          "name": "DeviceFacility",
+          "dcrType": "string"
+        },
+        {
+          "name": "DeviceInboundInterface",
+          "dcrType": "string"
+        },
+        {
+          "name": "DeviceNtDomain",
+          "dcrType": "string"
+        },
+        {
+          "name": "DeviceOutboundInterface",
+          "dcrType": "string"
+        },
+        {
+          "name": "DevicePayloadId",
+          "dcrType": "string"
+        },
+        {
+          "name": "ProcessName",
+          "dcrType": "string"
+        },
+        {
+          "name": "DeviceTranslatedAddress",
+          "dcrType": "string"
+        },
+        {
+          "name": "DestinationHostName",
+          "dcrType": "string"
+        },
+        {
+          "name": "DestinationMACAddress",
+          "dcrType": "string"
+        },
+        {
+          "name": "DestinationNTDomain",
+          "dcrType": "string"
+        },
+        {
+          "name": "DestinationProcessId",
+          "dcrType": "int"
+        },
+        {
+          "name": "DestinationUserPrivileges",
+          "dcrType": "string"
+        },
+        {
+          "name": "DestinationProcessName",
+          "dcrType": "string"
+        },
+        {
+          "name": "DestinationPort",
+          "dcrType": "int"
+        },
+        {
+          "name": "DestinationIP",
+          "dcrType": "string"
+        },
+        {
+          "name": "DeviceTimeZone",
+          "dcrType": "string"
+        },
+        {
+          "name": "DestinationUserID",
+          "dcrType": "string"
+        },
+        {
+          "name": "DestinationUserName",
+          "dcrType": "string"
+        },
+        {
+          "name": "DeviceAddress",
+          "dcrType": "string"
+        },
+        {
+          "name": "DeviceName",
+          "dcrType": "string"
+        },
+        {
+          "name": "DeviceMacAddress",
+          "dcrType": "string"
+        },
+        {
+          "name": "ProcessID",
+          "dcrType": "int"
+        },
+        {
+          "name": "EndTime",
+          "dcrType": "datetime"
+        },
+        {
+          "name": "ExternalID",
+          "dcrType": "int"
+        },
+        {
+          "name": "ExtID",
+          "dcrType": "string"
+        },
+        {
+          "name": "FileCreateTime",
+          "dcrType": "string"
+        },
+        {
+          "name": "FileHash",
+          "dcrType": "string"
+        },
+        {
+          "name": "FileID",
+          "dcrType": "string"
+        },
+        {
+          "name": "FileModificationTime",
+          "dcrType": "string"
+        },
+        {
+          "name": "FilePath",
+          "dcrType": "string"
+        },
+        {
+          "name": "FilePermission",
+          "dcrType": "string"
+        },
+        {
+          "name": "FileType",
+          "dcrType": "string"
+        },
+        {
+          "name": "FileName",
+          "dcrType": "string"
+        },
+        {
+          "name": "FileSize",
+          "dcrType": "int"
+        },
+        {
+          "name": "ReceivedBytes",
+          "dcrType": "long"
+        },
+        {
+          "name": "Message",
+          "dcrType": "string"
+        },
+        {
+          "name": "OldFileCreateTime",
+          "dcrType": "string"
+        },
+        {
+          "name": "OldFileHash",
+          "dcrType": "string"
+        },
+        {
+          "name": "OldFileID",
+          "dcrType": "string"
+        },
+        {
+          "name": "OldFileModificationTime",
+          "dcrType": "string"
+        },
+        {
+          "name": "OldFileName",
+          "dcrType": "string"
+        },
+        {
+          "name": "OldFilePath",
+          "dcrType": "string"
+        },
+        {
+          "name": "OldFilePermission",
+          "dcrType": "string"
+        },
+        {
+          "name": "OldFileSize",
+          "dcrType": "int"
+        },
+        {
+          "name": "OldFileType",
+          "dcrType": "string"
+        },
+        {
+          "name": "SentBytes",
+          "dcrType": "long"
+        },
+        {
+          "name": "EventOutcome",
+          "dcrType": "string"
+        },
+        {
+          "name": "Protocol",
+          "dcrType": "string"
+        },
+        {
+          "name": "Reason",
+          "dcrType": "string"
+        },
+        {
+          "name": "RequestURL",
+          "dcrType": "string"
+        },
+        {
+          "name": "RequestClientApplication",
+          "dcrType": "string"
+        },
+        {
+          "name": "RequestContext",
+          "dcrType": "string"
+        },
+        {
+          "name": "RequestCookies",
+          "dcrType": "string"
+        },
+        {
+          "name": "RequestMethod",
+          "dcrType": "string"
+        },
+        {
+          "name": "ReceiptTime",
+          "dcrType": "string"
+        },
+        {
+          "name": "SourceHostName",
+          "dcrType": "string"
+        },
+        {
+          "name": "SourceMACAddress",
+          "dcrType": "string"
+        },
+        {
+          "name": "SourceNTDomain",
+          "dcrType": "string"
+        },
+        {
+          "name": "SourceDnsDomain",
+          "dcrType": "string"
+        },
+        {
+          "name": "SourceServiceName",
+          "dcrType": "string"
+        },
+        {
+          "name": "SourceTranslatedAddress",
+          "dcrType": "string"
+        },
+        {
+          "name": "SourceTranslatedPort",
+          "dcrType": "int"
+        },
+        {
+          "name": "SourceProcessId",
+          "dcrType": "int"
+        },
+        {
+          "name": "SourceUserPrivileges",
+          "dcrType": "string"
+        },
+        {
+          "name": "SourceProcessName",
+          "dcrType": "string"
+        },
+        {
+          "name": "SourcePort",
+          "dcrType": "int"
+        },
+        {
+          "name": "SourceIP",
+          "dcrType": "string"
+        },
+        {
+          "name": "StartTime",
+          "dcrType": "datetime"
+        },
+        {
+          "name": "SourceUserID",
+          "dcrType": "string"
+        },
+        {
+          "name": "SourceUserName",
+          "dcrType": "string"
+        },
+        {
+          "name": "EventType",
+          "dcrType": "int"
+        },
+        {
+          "name": "DeviceEventCategory",
+          "dcrType": "string"
+        },
+        {
+          "name": "DeviceCustomIPv6Address1",
+          "dcrType": "string"
+        },
+        {
+          "name": "DeviceCustomIPv6Address1Label",
+          "dcrType": "string"
+        },
+        {
+          "name": "DeviceCustomIPv6Address2",
+          "dcrType": "string"
+        },
+        {
+          "name": "DeviceCustomIPv6Address2Label",
+          "dcrType": "string"
+        },
+        {
+          "name": "DeviceCustomIPv6Address3",
+          "dcrType": "string"
+        },
+        {
+          "name": "DeviceCustomIPv6Address3Label",
+          "dcrType": "string"
+        },
+        {
+          "name": "DeviceCustomIPv6Address4",
+          "dcrType": "string"
+        },
+        {
+          "name": "DeviceCustomIPv6Address4Label",
+          "dcrType": "string"
+        },
+        {
+          "name": "DeviceCustomFloatingPoint1",
+          "dcrType": "real"
+        },
+        {
+          "name": "DeviceCustomFloatingPoint1Label",
+          "dcrType": "string"
+        },
+        {
+          "name": "DeviceCustomFloatingPoint2",
+          "dcrType": "real"
+        },
+        {
+          "name": "DeviceCustomFloatingPoint2Label",
+          "dcrType": "string"
+        },
+        {
+          "name": "DeviceCustomFloatingPoint3",
+          "dcrType": "real"
+        },
+        {
+          "name": "DeviceCustomFloatingPoint3Label",
+          "dcrType": "string"
+        },
+        {
+          "name": "DeviceCustomFloatingPoint4",
+          "dcrType": "real"
+        },
+        {
+          "name": "DeviceCustomFloatingPoint4Label",
+          "dcrType": "string"
+        },
+        {
+          "name": "DeviceCustomNumber1",
+          "dcrType": "int"
+        },
+        {
+          "name": "FieldDeviceCustomNumber1",
+          "dcrType": "long"
+        },
+        {
+          "name": "DeviceCustomNumber1Label",
+          "dcrType": "string"
+        },
+        {
+          "name": "DeviceCustomNumber2",
+          "dcrType": "int"
+        },
+        {
+          "name": "FieldDeviceCustomNumber2",
+          "dcrType": "long"
+        },
+        {
+          "name": "DeviceCustomNumber2Label",
+          "dcrType": "string"
+        },
+        {
+          "name": "DeviceCustomNumber3",
+          "dcrType": "int"
+        },
+        {
+          "name": "FieldDeviceCustomNumber3",
+          "dcrType": "long"
+        },
+        {
+          "name": "DeviceCustomNumber3Label",
+          "dcrType": "string"
+        },
+        {
+          "name": "DeviceCustomString1",
+          "dcrType": "string"
+        },
+        {
+          "name": "DeviceCustomString1Label",
+          "dcrType": "string"
+        },
+        {
+          "name": "DeviceCustomString2",
+          "dcrType": "string"
+        },
+        {
+          "name": "DeviceCustomString2Label",
+          "dcrType": "string"
+        },
+        {
+          "name": "DeviceCustomString3",
+          "dcrType": "string"
+        },
+        {
+          "name": "DeviceCustomString3Label",
+          "dcrType": "string"
+        },
+        {
+          "name": "DeviceCustomString4",
+          "dcrType": "string"
+        },
+        {
+          "name": "DeviceCustomString4Label",
+          "dcrType": "string"
+        },
+        {
+          "name": "DeviceCustomString5",
+          "dcrType": "string"
+        },
+        {
+          "name": "DeviceCustomString5Label",
+          "dcrType": "string"
+        },
+        {
+          "name": "DeviceCustomString6",
+          "dcrType": "string"
+        },
+        {
+          "name": "DeviceCustomString6Label",
+          "dcrType": "string"
+        },
+        {
+          "name": "DeviceCustomDate1",
+          "dcrType": "string"
+        },
+        {
+          "name": "DeviceCustomDate1Label",
+          "dcrType": "string"
+        },
+        {
+          "name": "DeviceCustomDate2",
+          "dcrType": "string"
+        },
+        {
+          "name": "DeviceCustomDate2Label",
+          "dcrType": "string"
+        },
+        {
+          "name": "FlexDate1",
+          "dcrType": "string"
+        },
+        {
+          "name": "FlexDate1Label",
+          "dcrType": "string"
+        },
+        {
+          "name": "FlexNumber1",
+          "dcrType": "int"
+        },
+        {
+          "name": "FlexNumber1Label",
+          "dcrType": "string"
+        },
+        {
+          "name": "FlexNumber2",
+          "dcrType": "int"
+        },
+        {
+          "name": "FlexNumber2Label",
+          "dcrType": "string"
+        },
+        {
+          "name": "FlexString1",
+          "dcrType": "string"
+        },
+        {
+          "name": "FlexString1Label",
+          "dcrType": "string"
+        },
+        {
+          "name": "FlexString2",
+          "dcrType": "string"
+        },
+        {
+          "name": "FlexString2Label",
+          "dcrType": "string"
+        },
+        {
+          "name": "RemoteIP",
+          "dcrType": "string"
+        },
+        {
+          "name": "RemotePort",
+          "dcrType": "string"
+        },
+        {
+          "name": "MaliciousIP",
+          "dcrType": "string"
+        },
+        {
+          "name": "ThreatSeverity",
+          "dcrType": "int"
+        },
+        {
+          "name": "IndicatorThreatType",
+          "dcrType": "string"
+        },
+        {
+          "name": "ThreatDescription",
+          "dcrType": "string"
+        },
+        {
+          "name": "ThreatConfidence",
+          "dcrType": "string"
+        },
+        {
+          "name": "ReportReferenceLink",
+          "dcrType": "string"
+        },
+        {
+          "name": "MaliciousIPLongitude",
+          "dcrType": "real"
+        },
+        {
+          "name": "MaliciousIPLatitude",
+          "dcrType": "real"
+        },
+        {
+          "name": "MaliciousIPCountry",
+          "dcrType": "string"
+        },
+        {
+          "name": "Computer",
+          "dcrType": "string"
+        },
+        {
+          "name": "SimplifiedDeviceAction",
+          "dcrType": "string"
+        },
+        {
+          "name": "CollectorHostName",
+          "dcrType": "string"
+        }
+      ],
+      "dropped": [
+        "TenantId",
+        "SourceSystem",
+        "Type",
+        "_ResourceId"
+      ]
+    }
+  },
+  {
+    "table": "ASimDnsActivityLogs",
+    "inputColumns": [
+      {
+        "name": "TenantId",
+        "laType": "string"
+      },
+      {
+        "name": "AdditionalFields",
+        "laType": "dynamic"
+      },
+      {
+        "name": "DnsFlags",
+        "laType": "string"
+      },
+      {
+        "name": "DnsFlagsAuthenticated",
+        "laType": "boolean"
+      },
+      {
+        "name": "DnsFlagsAuthoritative",
+        "laType": "boolean"
+      },
+      {
+        "name": "DnsFlagsCheckingDisabled",
+        "laType": "boolean"
+      },
+      {
+        "name": "DnsFlagsRecursionAvailable",
+        "laType": "boolean"
+      },
+      {
+        "name": "DnsFlagsRecursionDesired",
+        "laType": "boolean"
+      },
+      {
+        "name": "DnsFlagsTruncated",
+        "laType": "boolean"
+      },
+      {
+        "name": "DnsFlagsZ",
+        "laType": "boolean"
+      },
+      {
+        "name": "DnsNetworkDuration",
+        "laType": "int"
+      },
+      {
+        "name": "DnsQuery",
+        "laType": "string"
+      },
+      {
+        "name": "DnsQueryClass",
+        "laType": "int"
+      },
+      {
+        "name": "DnsQueryClassName",
+        "laType": "string"
+      },
+      {
+        "name": "DnsQueryType",
+        "laType": "int"
+      },
+      {
+        "name": "DnsQueryTypeName",
+        "laType": "string"
+      },
+      {
+        "name": "DnsResponseCode",
+        "laType": "int"
+      },
+      {
+        "name": "DnsResponseIpCity",
+        "laType": "string"
+      },
+      {
+        "name": "DnsResponseIpCountry",
+        "laType": "string"
+      },
+      {
+        "name": "DnsResponseIpLatitude",
+        "laType": "real"
+      },
+      {
+        "name": "DnsResponseIpLongitude",
+        "laType": "real"
+      },
+      {
+        "name": "DnsResponseIpRegion",
+        "laType": "string"
+      },
+      {
+        "name": "DnsResponseName",
+        "laType": "string"
+      },
+      {
+        "name": "DnsSessionId",
+        "laType": "string"
+      },
+      {
+        "name": "Dst",
+        "laType": "string"
+      },
+      {
+        "name": "DstDescription",
+        "laType": "string"
+      },
+      {
+        "name": "DstDeviceType",
+        "laType": "string"
+      },
+      {
+        "name": "DstDomain",
+        "laType": "string"
+      },
+      {
+        "name": "DstDomainType",
+        "laType": "string"
+      },
+      {
+        "name": "DstDvcId",
+        "laType": "string"
+      },
+      {
+        "name": "DstDvcIdType",
+        "laType": "string"
+      },
+      {
+        "name": "DstDvcScope",
+        "laType": "string"
+      },
+      {
+        "name": "DstDvcScopeId",
+        "laType": "string"
+      },
+      {
+        "name": "DstFQDN",
+        "laType": "string"
+      },
+      {
+        "name": "DstGeoCity",
+        "laType": "string"
+      },
+      {
+        "name": "DstGeoCountry",
+        "laType": "string"
+      },
+      {
+        "name": "DstGeoLatitude",
+        "laType": "real"
+      },
+      {
+        "name": "DstGeoLongitude",
+        "laType": "real"
+      },
+      {
+        "name": "DstGeoRegion",
+        "laType": "string"
+      },
+      {
+        "name": "DstHostname",
+        "laType": "string"
+      },
+      {
+        "name": "DstIpAddr",
+        "laType": "string"
+      },
+      {
+        "name": "DstOriginalRiskLevel",
+        "laType": "string"
+      },
+      {
+        "name": "DstPortNumber",
+        "laType": "int"
+      },
+      {
+        "name": "DstRiskLevel",
+        "laType": "int"
+      },
+      {
+        "name": "Dvc",
+        "laType": "string"
+      },
+      {
+        "name": "DvcAction",
+        "laType": "string"
+      },
+      {
+        "name": "DvcDescription",
+        "laType": "string"
+      },
+      {
+        "name": "DvcDomain",
+        "laType": "string"
+      },
+      {
+        "name": "DvcDomainType",
+        "laType": "string"
+      },
+      {
+        "name": "DvcFQDN",
+        "laType": "string"
+      },
+      {
+        "name": "DvcHostname",
+        "laType": "string"
+      },
+      {
+        "name": "DvcId",
+        "laType": "string"
+      },
+      {
+        "name": "DvcIdType",
+        "laType": "string"
+      },
+      {
+        "name": "DvcInterface",
+        "laType": "string"
+      },
+      {
+        "name": "DvcIpAddr",
+        "laType": "string"
+      },
+      {
+        "name": "DvcMacAddr",
+        "laType": "string"
+      },
+      {
+        "name": "DvcOriginalAction",
+        "laType": "string"
+      },
+      {
+        "name": "DvcOs",
+        "laType": "string"
+      },
+      {
+        "name": "DvcOsVersion",
+        "laType": "string"
+      },
+      {
+        "name": "DvcScope",
+        "laType": "string"
+      },
+      {
+        "name": "DvcScopeId",
+        "laType": "string"
+      },
+      {
+        "name": "DvcZone",
+        "laType": "string"
+      },
+      {
+        "name": "EventCount",
+        "laType": "int"
+      },
+      {
+        "name": "EventEndTime",
+        "laType": "dateTime"
+      },
+      {
+        "name": "EventMessage",
+        "laType": "string"
+      },
+      {
+        "name": "EventOriginalSeverity",
+        "laType": "string"
+      },
+      {
+        "name": "EventOriginalType",
+        "laType": "string"
+      },
+      {
+        "name": "EventOriginalUid",
+        "laType": "string"
+      },
+      {
+        "name": "EventOwner",
+        "laType": "string"
+      },
+      {
+        "name": "EventProduct",
+        "laType": "string"
+      },
+      {
+        "name": "EventProductVersion",
+        "laType": "string"
+      },
+      {
+        "name": "EventReportUrl",
+        "laType": "string"
+      },
+      {
+        "name": "EventResult",
+        "laType": "string"
+      },
+      {
+        "name": "EventResultDetails",
+        "laType": "string"
+      },
+      {
+        "name": "EventSchemaVersion",
+        "laType": "string"
+      },
+      {
+        "name": "EventSeverity",
+        "laType": "string"
+      },
+      {
+        "name": "EventStartTime",
+        "laType": "dateTime"
+      },
+      {
+        "name": "EventSubType",
+        "laType": "string"
+      },
+      {
+        "name": "EventType",
+        "laType": "string"
+      },
+      {
+        "name": "EventVendor",
+        "laType": "string"
+      },
+      {
+        "name": "NetworkProtocol",
+        "laType": "string"
+      },
+      {
+        "name": "NetworkProtocolVersion",
+        "laType": "string"
+      },
+      {
+        "name": "RuleName",
+        "laType": "string"
+      },
+      {
+        "name": "RuleNumber",
+        "laType": "int"
+      },
+      {
+        "name": "SourceSystem",
+        "laType": "string"
+      },
+      {
+        "name": "Src",
+        "laType": "string"
+      },
+      {
+        "name": "SrcDescription",
+        "laType": "string"
+      },
+      {
+        "name": "SrcDeviceType",
+        "laType": "string"
+      },
+      {
+        "name": "SrcDomain",
+        "laType": "string"
+      },
+      {
+        "name": "SrcDomainType",
+        "laType": "string"
+      },
+      {
+        "name": "SrcDvcId",
+        "laType": "string"
+      },
+      {
+        "name": "SrcDvcIdType",
+        "laType": "string"
+      },
+      {
+        "name": "SrcDvcScope",
+        "laType": "string"
+      },
+      {
+        "name": "SrcDvcScopeId",
+        "laType": "string"
+      },
+      {
+        "name": "SrcFQDN",
+        "laType": "string"
+      },
+      {
+        "name": "SrcGeoCity",
+        "laType": "string"
+      },
+      {
+        "name": "SrcGeoCountry",
+        "laType": "string"
+      },
+      {
+        "name": "SrcGeoLatitude",
+        "laType": "real"
+      },
+      {
+        "name": "SrcGeoLongitude",
+        "laType": "real"
+      },
+      {
+        "name": "SrcGeoRegion",
+        "laType": "string"
+      },
+      {
+        "name": "SrcHostname",
+        "laType": "string"
+      },
+      {
+        "name": "SrcIpAddr",
+        "laType": "string"
+      },
+      {
+        "name": "SrcOriginalRiskLevel",
+        "laType": "string"
+      },
+      {
+        "name": "SrcOriginalUserType",
+        "laType": "string"
+      },
+      {
+        "name": "SrcPortNumber",
+        "laType": "int"
+      },
+      {
+        "name": "SrcProcessGuid",
+        "laType": "string"
+      },
+      {
+        "name": "SrcProcessId",
+        "laType": "string"
+      },
+      {
+        "name": "SrcProcessName",
+        "laType": "string"
+      },
+      {
+        "name": "SrcRiskLevel",
+        "laType": "int"
+      },
+      {
+        "name": "SrcUserId",
+        "laType": "string"
+      },
+      {
+        "name": "SrcUserIdType",
+        "laType": "string"
+      },
+      {
+        "name": "SrcUsername",
+        "laType": "string"
+      },
+      {
+        "name": "SrcUsernameType",
+        "laType": "string"
+      },
+      {
+        "name": "SrcUserScope",
+        "laType": "string"
+      },
+      {
+        "name": "SrcUserScopeId",
+        "laType": "string"
+      },
+      {
+        "name": "SrcUserSessionId",
+        "laType": "string"
+      },
+      {
+        "name": "SrcUserType",
+        "laType": "string"
+      },
+      {
+        "name": "ThreatCategory",
+        "laType": "string"
+      },
+      {
+        "name": "ThreatConfidence",
+        "laType": "int"
+      },
+      {
+        "name": "ThreatField",
+        "laType": "string"
+      },
+      {
+        "name": "ThreatFirstReportedTime",
+        "laType": "dateTime"
+      },
+      {
+        "name": "ThreatId",
+        "laType": "string"
+      },
+      {
+        "name": "ThreatIpAddr",
+        "laType": "string"
+      },
+      {
+        "name": "ThreatIsActive",
+        "laType": "boolean"
+      },
+      {
+        "name": "ThreatLastReportedTime",
+        "laType": "dateTime"
+      },
+      {
+        "name": "ThreatName",
+        "laType": "string"
+      },
+      {
+        "name": "ThreatOriginalConfidence",
+        "laType": "string"
+      },
+      {
+        "name": "ThreatOriginalRiskLevel",
+        "laType": "int"
+      },
+      {
+        "name": "ThreatRiskLevel",
+        "laType": "int"
+      },
+      {
+        "name": "TimeGenerated",
+        "laType": "dateTime"
+      },
+      {
+        "name": "TransactionIdHex",
+        "laType": "string"
+      },
+      {
+        "name": "UrlCategory",
+        "laType": "string"
+      },
+      {
+        "name": "Type",
+        "laType": "string"
+      },
+      {
+        "name": "_ResourceId",
+        "laType": "string"
+      }
+    ],
+    "expected": {
+      "columns": [
+        {
+          "name": "AdditionalFields",
+          "dcrType": "dynamic"
+        },
+        {
+          "name": "DnsFlags",
+          "dcrType": "string"
+        },
+        {
+          "name": "DnsFlagsAuthenticated",
+          "dcrType": "boolean"
+        },
+        {
+          "name": "DnsFlagsAuthoritative",
+          "dcrType": "boolean"
+        },
+        {
+          "name": "DnsFlagsCheckingDisabled",
+          "dcrType": "boolean"
+        },
+        {
+          "name": "DnsFlagsRecursionAvailable",
+          "dcrType": "boolean"
+        },
+        {
+          "name": "DnsFlagsRecursionDesired",
+          "dcrType": "boolean"
+        },
+        {
+          "name": "DnsFlagsTruncated",
+          "dcrType": "boolean"
+        },
+        {
+          "name": "DnsFlagsZ",
+          "dcrType": "boolean"
+        },
+        {
+          "name": "DnsNetworkDuration",
+          "dcrType": "int"
+        },
+        {
+          "name": "DnsQuery",
+          "dcrType": "string"
+        },
+        {
+          "name": "DnsQueryClass",
+          "dcrType": "int"
+        },
+        {
+          "name": "DnsQueryClassName",
+          "dcrType": "string"
+        },
+        {
+          "name": "DnsQueryType",
+          "dcrType": "int"
+        },
+        {
+          "name": "DnsQueryTypeName",
+          "dcrType": "string"
+        },
+        {
+          "name": "DnsResponseCode",
+          "dcrType": "int"
+        },
+        {
+          "name": "DnsResponseIpCity",
+          "dcrType": "string"
+        },
+        {
+          "name": "DnsResponseIpCountry",
+          "dcrType": "string"
+        },
+        {
+          "name": "DnsResponseIpLatitude",
+          "dcrType": "real"
+        },
+        {
+          "name": "DnsResponseIpLongitude",
+          "dcrType": "real"
+        },
+        {
+          "name": "DnsResponseIpRegion",
+          "dcrType": "string"
+        },
+        {
+          "name": "DnsResponseName",
+          "dcrType": "string"
+        },
+        {
+          "name": "DnsSessionId",
+          "dcrType": "string"
+        },
+        {
+          "name": "Dst",
+          "dcrType": "string"
+        },
+        {
+          "name": "DstDescription",
+          "dcrType": "string"
+        },
+        {
+          "name": "DstDeviceType",
+          "dcrType": "string"
+        },
+        {
+          "name": "DstDomain",
+          "dcrType": "string"
+        },
+        {
+          "name": "DstDomainType",
+          "dcrType": "string"
+        },
+        {
+          "name": "DstDvcId",
+          "dcrType": "string"
+        },
+        {
+          "name": "DstDvcIdType",
+          "dcrType": "string"
+        },
+        {
+          "name": "DstDvcScope",
+          "dcrType": "string"
+        },
+        {
+          "name": "DstDvcScopeId",
+          "dcrType": "string"
+        },
+        {
+          "name": "DstFQDN",
+          "dcrType": "string"
+        },
+        {
+          "name": "DstGeoCity",
+          "dcrType": "string"
+        },
+        {
+          "name": "DstGeoCountry",
+          "dcrType": "string"
+        },
+        {
+          "name": "DstGeoLatitude",
+          "dcrType": "real"
+        },
+        {
+          "name": "DstGeoLongitude",
+          "dcrType": "real"
+        },
+        {
+          "name": "DstGeoRegion",
+          "dcrType": "string"
+        },
+        {
+          "name": "DstHostname",
+          "dcrType": "string"
+        },
+        {
+          "name": "DstIpAddr",
+          "dcrType": "string"
+        },
+        {
+          "name": "DstOriginalRiskLevel",
+          "dcrType": "string"
+        },
+        {
+          "name": "DstPortNumber",
+          "dcrType": "int"
+        },
+        {
+          "name": "DstRiskLevel",
+          "dcrType": "int"
+        },
+        {
+          "name": "Dvc",
+          "dcrType": "string"
+        },
+        {
+          "name": "DvcAction",
+          "dcrType": "string"
+        },
+        {
+          "name": "DvcDescription",
+          "dcrType": "string"
+        },
+        {
+          "name": "DvcDomain",
+          "dcrType": "string"
+        },
+        {
+          "name": "DvcDomainType",
+          "dcrType": "string"
+        },
+        {
+          "name": "DvcFQDN",
+          "dcrType": "string"
+        },
+        {
+          "name": "DvcHostname",
+          "dcrType": "string"
+        },
+        {
+          "name": "DvcId",
+          "dcrType": "string"
+        },
+        {
+          "name": "DvcIdType",
+          "dcrType": "string"
+        },
+        {
+          "name": "DvcInterface",
+          "dcrType": "string"
+        },
+        {
+          "name": "DvcIpAddr",
+          "dcrType": "string"
+        },
+        {
+          "name": "DvcMacAddr",
+          "dcrType": "string"
+        },
+        {
+          "name": "DvcOriginalAction",
+          "dcrType": "string"
+        },
+        {
+          "name": "DvcOs",
+          "dcrType": "string"
+        },
+        {
+          "name": "DvcOsVersion",
+          "dcrType": "string"
+        },
+        {
+          "name": "DvcScope",
+          "dcrType": "string"
+        },
+        {
+          "name": "DvcScopeId",
+          "dcrType": "string"
+        },
+        {
+          "name": "DvcZone",
+          "dcrType": "string"
+        },
+        {
+          "name": "EventCount",
+          "dcrType": "int"
+        },
+        {
+          "name": "EventEndTime",
+          "dcrType": "datetime"
+        },
+        {
+          "name": "EventMessage",
+          "dcrType": "string"
+        },
+        {
+          "name": "EventOriginalSeverity",
+          "dcrType": "string"
+        },
+        {
+          "name": "EventOriginalType",
+          "dcrType": "string"
+        },
+        {
+          "name": "EventOriginalUid",
+          "dcrType": "string"
+        },
+        {
+          "name": "EventOwner",
+          "dcrType": "string"
+        },
+        {
+          "name": "EventProduct",
+          "dcrType": "string"
+        },
+        {
+          "name": "EventProductVersion",
+          "dcrType": "string"
+        },
+        {
+          "name": "EventReportUrl",
+          "dcrType": "string"
+        },
+        {
+          "name": "EventResult",
+          "dcrType": "string"
+        },
+        {
+          "name": "EventResultDetails",
+          "dcrType": "string"
+        },
+        {
+          "name": "EventSchemaVersion",
+          "dcrType": "string"
+        },
+        {
+          "name": "EventSeverity",
+          "dcrType": "string"
+        },
+        {
+          "name": "EventStartTime",
+          "dcrType": "datetime"
+        },
+        {
+          "name": "EventSubType",
+          "dcrType": "string"
+        },
+        {
+          "name": "EventType",
+          "dcrType": "string"
+        },
+        {
+          "name": "EventVendor",
+          "dcrType": "string"
+        },
+        {
+          "name": "NetworkProtocol",
+          "dcrType": "string"
+        },
+        {
+          "name": "NetworkProtocolVersion",
+          "dcrType": "string"
+        },
+        {
+          "name": "RuleName",
+          "dcrType": "string"
+        },
+        {
+          "name": "RuleNumber",
+          "dcrType": "int"
+        },
+        {
+          "name": "Src",
+          "dcrType": "string"
+        },
+        {
+          "name": "SrcDescription",
+          "dcrType": "string"
+        },
+        {
+          "name": "SrcDeviceType",
+          "dcrType": "string"
+        },
+        {
+          "name": "SrcDomain",
+          "dcrType": "string"
+        },
+        {
+          "name": "SrcDomainType",
+          "dcrType": "string"
+        },
+        {
+          "name": "SrcDvcId",
+          "dcrType": "string"
+        },
+        {
+          "name": "SrcDvcIdType",
+          "dcrType": "string"
+        },
+        {
+          "name": "SrcDvcScope",
+          "dcrType": "string"
+        },
+        {
+          "name": "SrcDvcScopeId",
+          "dcrType": "string"
+        },
+        {
+          "name": "SrcFQDN",
+          "dcrType": "string"
+        },
+        {
+          "name": "SrcGeoCity",
+          "dcrType": "string"
+        },
+        {
+          "name": "SrcGeoCountry",
+          "dcrType": "string"
+        },
+        {
+          "name": "SrcGeoLatitude",
+          "dcrType": "real"
+        },
+        {
+          "name": "SrcGeoLongitude",
+          "dcrType": "real"
+        },
+        {
+          "name": "SrcGeoRegion",
+          "dcrType": "string"
+        },
+        {
+          "name": "SrcHostname",
+          "dcrType": "string"
+        },
+        {
+          "name": "SrcIpAddr",
+          "dcrType": "string"
+        },
+        {
+          "name": "SrcOriginalRiskLevel",
+          "dcrType": "string"
+        },
+        {
+          "name": "SrcOriginalUserType",
+          "dcrType": "string"
+        },
+        {
+          "name": "SrcPortNumber",
+          "dcrType": "int"
+        },
+        {
+          "name": "SrcProcessGuid",
+          "dcrType": "string"
+        },
+        {
+          "name": "SrcProcessId",
+          "dcrType": "string"
+        },
+        {
+          "name": "SrcProcessName",
+          "dcrType": "string"
+        },
+        {
+          "name": "SrcRiskLevel",
+          "dcrType": "int"
+        },
+        {
+          "name": "SrcUserId",
+          "dcrType": "string"
+        },
+        {
+          "name": "SrcUserIdType",
+          "dcrType": "string"
+        },
+        {
+          "name": "SrcUsername",
+          "dcrType": "string"
+        },
+        {
+          "name": "SrcUsernameType",
+          "dcrType": "string"
+        },
+        {
+          "name": "SrcUserScope",
+          "dcrType": "string"
+        },
+        {
+          "name": "SrcUserScopeId",
+          "dcrType": "string"
+        },
+        {
+          "name": "SrcUserSessionId",
+          "dcrType": "string"
+        },
+        {
+          "name": "SrcUserType",
+          "dcrType": "string"
+        },
+        {
+          "name": "ThreatCategory",
+          "dcrType": "string"
+        },
+        {
+          "name": "ThreatConfidence",
+          "dcrType": "int"
+        },
+        {
+          "name": "ThreatField",
+          "dcrType": "string"
+        },
+        {
+          "name": "ThreatFirstReportedTime",
+          "dcrType": "datetime"
+        },
+        {
+          "name": "ThreatId",
+          "dcrType": "string"
+        },
+        {
+          "name": "ThreatIpAddr",
+          "dcrType": "string"
+        },
+        {
+          "name": "ThreatIsActive",
+          "dcrType": "boolean"
+        },
+        {
+          "name": "ThreatLastReportedTime",
+          "dcrType": "datetime"
+        },
+        {
+          "name": "ThreatName",
+          "dcrType": "string"
+        },
+        {
+          "name": "ThreatOriginalConfidence",
+          "dcrType": "string"
+        },
+        {
+          "name": "ThreatOriginalRiskLevel",
+          "dcrType": "int"
+        },
+        {
+          "name": "ThreatRiskLevel",
+          "dcrType": "int"
+        },
+        {
+          "name": "TimeGenerated",
+          "dcrType": "datetime"
+        },
+        {
+          "name": "TransactionIdHex",
+          "dcrType": "string"
+        },
+        {
+          "name": "UrlCategory",
+          "dcrType": "string"
+        }
+      ],
+      "dropped": [
+        "TenantId",
+        "SourceSystem",
+        "Type",
+        "_ResourceId"
+      ]
+    }
+  },
+  {
+    "table": "AWSCloudTrail",
+    "inputColumns": [
+      {
+        "name": "TenantId",
+        "laType": "string"
+      },
+      {
+        "name": "TimeGenerated",
+        "laType": "dateTime"
+      },
+      {
+        "name": "EventVersion",
+        "laType": "string"
+      },
+      {
+        "name": "EventSource",
+        "laType": "string"
+      },
+      {
+        "name": "EventTypeName",
+        "laType": "string"
+      },
+      {
+        "name": "EventName",
+        "laType": "string"
+      },
+      {
+        "name": "AwsEventId",
+        "laType": "guid"
+      },
+      {
+        "name": "UserIdentityType",
+        "laType": "string"
+      },
+      {
+        "name": "UserIdentityPrincipalid",
+        "laType": "string"
+      },
+      {
+        "name": "UserIdentityArn",
+        "laType": "string"
+      },
+      {
+        "name": "UserIdentityAccountId",
+        "laType": "string"
+      },
+      {
+        "name": "UserIdentityInvokedBy",
+        "laType": "string"
+      },
+      {
+        "name": "UserIdentityAccessKeyId",
+        "laType": "string"
+      },
+      {
+        "name": "UserIdentityUserName",
+        "laType": "string"
+      },
+      {
+        "name": "SessionMfaAuthenticated",
+        "laType": "boolean"
+      },
+      {
+        "name": "SessionCreationDate",
+        "laType": "dateTime"
+      },
+      {
+        "name": "SessionIssuerType",
+        "laType": "string"
+      },
+      {
+        "name": "SessionIssuerPrincipalId",
+        "laType": "string"
+      },
+      {
+        "name": "SessionIssuerArn",
+        "laType": "string"
+      },
+      {
+        "name": "SessionIssuerAccountId",
+        "laType": "string"
+      },
+      {
+        "name": "SessionIssuerUserName",
+        "laType": "string"
+      },
+      {
+        "name": "EC2RoleDelivery",
+        "laType": "string"
+      },
+      {
+        "name": "AWSRegion",
+        "laType": "string"
+      },
+      {
+        "name": "SourceIpAddress",
+        "laType": "string"
+      },
+      {
+        "name": "UserAgent",
+        "laType": "string"
+      },
+      {
+        "name": "ErrorCode",
+        "laType": "string"
+      },
+      {
+        "name": "ErrorMessage",
+        "laType": "string"
+      },
+      {
+        "name": "RequestParameters",
+        "laType": "string"
+      },
+      {
+        "name": "ResponseElements",
+        "laType": "string"
+      },
+      {
+        "name": "AdditionalEventData",
+        "laType": "string"
+      },
+      {
+        "name": "SharedEventId",
+        "laType": "guid"
+      },
+      {
+        "name": "AwsRequestId",
+        "laType": "guid"
+      },
+      {
+        "name": "AwsRequestId_",
+        "laType": "string"
+      },
+      {
+        "name": "Resources",
+        "laType": "string"
+      },
+      {
+        "name": "APIVersion",
+        "laType": "string"
+      },
+      {
+        "name": "ReadOnly",
+        "laType": "boolean"
+      },
+      {
+        "name": "RecipientAccountId",
+        "laType": "string"
+      },
+      {
+        "name": "ServiceEventDetails",
+        "laType": "string"
+      },
+      {
+        "name": "VpcEndpointId",
+        "laType": "string"
+      },
+      {
+        "name": "ManagementEvent",
+        "laType": "boolean"
+      },
+      {
+        "name": "OperationName",
+        "laType": "string"
+      },
+      {
+        "name": "Category",
+        "laType": "string"
+      },
+      {
+        "name": "TlsVersion",
+        "laType": "string"
+      },
+      {
+        "name": "CipherSuite",
+        "laType": "string"
+      },
+      {
+        "name": "ClientProvidedHostHeader",
+        "laType": "string"
+      },
+      {
+        "name": "IpProtocol",
+        "laType": "string"
+      },
+      {
+        "name": "SourcePort",
+        "laType": "string"
+      },
+      {
+        "name": "DestinationPort",
+        "laType": "string"
+      },
+      {
+        "name": "CidrIp",
+        "laType": "string"
+      },
+      {
+        "name": "UserIdentityUserId",
+        "laType": "string"
+      },
+      {
+        "name": "UserIdentityStoreArn",
+        "laType": "string"
+      },
+      {
+        "name": "SourceSystem",
+        "laType": "string"
+      },
+      {
+        "name": "Type",
+        "laType": "string"
+      },
+      {
+        "name": "_ResourceId",
+        "laType": "string"
+      }
+    ],
+    "expected": {
+      "columns": [
+        {
+          "name": "TimeGenerated",
+          "dcrType": "datetime"
+        },
+        {
+          "name": "EventVersion",
+          "dcrType": "string"
+        },
+        {
+          "name": "EventSource",
+          "dcrType": "string"
+        },
+        {
+          "name": "EventTypeName",
+          "dcrType": "string"
+        },
+        {
+          "name": "EventName",
+          "dcrType": "string"
+        },
+        {
+          "name": "UserIdentityType",
+          "dcrType": "string"
+        },
+        {
+          "name": "UserIdentityPrincipalid",
+          "dcrType": "string"
+        },
+        {
+          "name": "UserIdentityArn",
+          "dcrType": "string"
+        },
+        {
+          "name": "UserIdentityAccountId",
+          "dcrType": "string"
+        },
+        {
+          "name": "UserIdentityInvokedBy",
+          "dcrType": "string"
+        },
+        {
+          "name": "UserIdentityAccessKeyId",
+          "dcrType": "string"
+        },
+        {
+          "name": "UserIdentityUserName",
+          "dcrType": "string"
+        },
+        {
+          "name": "SessionMfaAuthenticated",
+          "dcrType": "boolean"
+        },
+        {
+          "name": "SessionCreationDate",
+          "dcrType": "datetime"
+        },
+        {
+          "name": "SessionIssuerType",
+          "dcrType": "string"
+        },
+        {
+          "name": "SessionIssuerPrincipalId",
+          "dcrType": "string"
+        },
+        {
+          "name": "SessionIssuerArn",
+          "dcrType": "string"
+        },
+        {
+          "name": "SessionIssuerAccountId",
+          "dcrType": "string"
+        },
+        {
+          "name": "SessionIssuerUserName",
+          "dcrType": "string"
+        },
+        {
+          "name": "EC2RoleDelivery",
+          "dcrType": "string"
+        },
+        {
+          "name": "AWSRegion",
+          "dcrType": "string"
+        },
+        {
+          "name": "SourceIpAddress",
+          "dcrType": "string"
+        },
+        {
+          "name": "UserAgent",
+          "dcrType": "string"
+        },
+        {
+          "name": "ErrorCode",
+          "dcrType": "string"
+        },
+        {
+          "name": "ErrorMessage",
+          "dcrType": "string"
+        },
+        {
+          "name": "RequestParameters",
+          "dcrType": "string"
+        },
+        {
+          "name": "ResponseElements",
+          "dcrType": "string"
+        },
+        {
+          "name": "AdditionalEventData",
+          "dcrType": "string"
+        },
+        {
+          "name": "AwsRequestId_",
+          "dcrType": "string"
+        },
+        {
+          "name": "Resources",
+          "dcrType": "string"
+        },
+        {
+          "name": "APIVersion",
+          "dcrType": "string"
+        },
+        {
+          "name": "ReadOnly",
+          "dcrType": "boolean"
+        },
+        {
+          "name": "RecipientAccountId",
+          "dcrType": "string"
+        },
+        {
+          "name": "ServiceEventDetails",
+          "dcrType": "string"
+        },
+        {
+          "name": "VpcEndpointId",
+          "dcrType": "string"
+        },
+        {
+          "name": "ManagementEvent",
+          "dcrType": "boolean"
+        },
+        {
+          "name": "OperationName",
+          "dcrType": "string"
+        },
+        {
+          "name": "Category",
+          "dcrType": "string"
+        },
+        {
+          "name": "TlsVersion",
+          "dcrType": "string"
+        },
+        {
+          "name": "CipherSuite",
+          "dcrType": "string"
+        },
+        {
+          "name": "ClientProvidedHostHeader",
+          "dcrType": "string"
+        },
+        {
+          "name": "IpProtocol",
+          "dcrType": "string"
+        },
+        {
+          "name": "SourcePort",
+          "dcrType": "string"
+        },
+        {
+          "name": "DestinationPort",
+          "dcrType": "string"
+        },
+        {
+          "name": "CidrIp",
+          "dcrType": "string"
+        },
+        {
+          "name": "UserIdentityUserId",
+          "dcrType": "string"
+        },
+        {
+          "name": "UserIdentityStoreArn",
+          "dcrType": "string"
+        }
+      ],
+      "dropped": [
+        "TenantId",
+        "AwsEventId",
+        "SharedEventId",
+        "AwsRequestId",
+        "SourceSystem",
+        "Type",
+        "_ResourceId"
+      ]
+    }
+  },
+  {
+    "table": "AWSCloudWatch",
+    "inputColumns": [
+      {
+        "name": "TenantId",
+        "laType": "string"
+      },
+      {
+        "name": "ExtractedTime",
+        "laType": "dateTime"
+      },
+      {
+        "name": "TimeGenerated",
+        "laType": "dateTime"
+      },
+      {
+        "name": "Message",
+        "laType": "string"
+      },
+      {
+        "name": "SourceSystem",
+        "laType": "string"
+      },
+      {
+        "name": "Type",
+        "laType": "string"
+      },
+      {
+        "name": "_ResourceId",
+        "laType": "string"
+      }
+    ],
+    "expected": {
+      "columns": [
+        {
+          "name": "ExtractedTime",
+          "dcrType": "datetime"
+        },
+        {
+          "name": "TimeGenerated",
+          "dcrType": "datetime"
+        },
+        {
+          "name": "Message",
+          "dcrType": "string"
+        }
+      ],
+      "dropped": [
+        "TenantId",
+        "SourceSystem",
+        "Type",
+        "_ResourceId"
+      ]
+    }
+  },
+  {
+    "table": "WindowsEvent",
+    "inputColumns": [
+      {
+        "name": "TenantId",
+        "laType": "string"
+      },
+      {
+        "name": "Channel",
+        "laType": "string"
+      },
+      {
+        "name": "Computer",
+        "laType": "string"
+      },
+      {
+        "name": "Correlation",
+        "laType": "string"
+      },
+      {
+        "name": "EventData",
+        "laType": "dynamic"
+      },
+      {
+        "name": "EventID",
+        "laType": "int"
+      },
+      {
+        "name": "EventLevel",
+        "laType": "int"
+      },
+      {
+        "name": "EventLevelName",
+        "laType": "string"
+      },
+      {
+        "name": "EventOriginId",
+        "laType": "string"
+      },
+      {
+        "name": "EventRecordId",
+        "laType": "string"
+      },
+      {
+        "name": "Keywords",
+        "laType": "string"
+      },
+      {
+        "name": "ManagementGroupName",
+        "laType": "string"
+      },
+      {
+        "name": "Opcode",
+        "laType": "string"
+      },
+      {
+        "name": "Provider",
+        "laType": "string"
+      },
+      {
+        "name": "RawEventData",
+        "laType": "string"
+      },
+      {
+        "name": "SystemProcessId",
+        "laType": "int"
+      },
+      {
+        "name": "SystemThreadId",
+        "laType": "int"
+      },
+      {
+        "name": "SystemUserId",
+        "laType": "string"
+      },
+      {
+        "name": "Task",
+        "laType": "int"
+      },
+      {
+        "name": "TimeGenerated",
+        "laType": "dateTime"
+      },
+      {
+        "name": "Version",
+        "laType": "int"
+      },
+      {
+        "name": "Type",
+        "laType": "string"
+      },
+      {
+        "name": "_ResourceId",
+        "laType": "string"
+      }
+    ],
+    "expected": {
+      "columns": [
+        {
+          "name": "Channel",
+          "dcrType": "string"
+        },
+        {
+          "name": "Computer",
+          "dcrType": "string"
+        },
+        {
+          "name": "Correlation",
+          "dcrType": "string"
+        },
+        {
+          "name": "EventData",
+          "dcrType": "dynamic"
+        },
+        {
+          "name": "EventID",
+          "dcrType": "int"
+        },
+        {
+          "name": "EventLevel",
+          "dcrType": "int"
+        },
+        {
+          "name": "EventLevelName",
+          "dcrType": "string"
+        },
+        {
+          "name": "EventRecordId",
+          "dcrType": "string"
+        },
+        {
+          "name": "Keywords",
+          "dcrType": "string"
+        },
+        {
+          "name": "Opcode",
+          "dcrType": "string"
+        },
+        {
+          "name": "Provider",
+          "dcrType": "string"
+        },
+        {
+          "name": "RawEventData",
+          "dcrType": "string"
+        },
+        {
+          "name": "SystemProcessId",
+          "dcrType": "int"
+        },
+        {
+          "name": "SystemThreadId",
+          "dcrType": "int"
+        },
+        {
+          "name": "SystemUserId",
+          "dcrType": "string"
+        },
+        {
+          "name": "Task",
+          "dcrType": "int"
+        },
+        {
+          "name": "TimeGenerated",
+          "dcrType": "datetime"
+        },
+        {
+          "name": "Version",
+          "dcrType": "int"
+        }
+      ],
+      "dropped": [
+        "TenantId",
+        "EventOriginId",
+        "ManagementGroupName",
+        "Type",
+        "_ResourceId"
+      ]
+    }
+  },
+  {
+    "table": "AzureActivity",
+    "inputColumns": [
+      {
+        "name": "TenantId",
+        "laType": "string"
+      },
+      {
+        "name": "ActivityStatus",
+        "laType": "string"
+      },
+      {
+        "name": "ActivityStatusValue",
+        "laType": "string"
+      },
+      {
+        "name": "ActivitySubstatus",
+        "laType": "string"
+      },
+      {
+        "name": "ActivitySubstatusValue",
+        "laType": "string"
+      },
+      {
+        "name": "Authorization",
+        "laType": "string"
+      },
+      {
+        "name": "Authorization_d",
+        "laType": "dynamic"
+      },
+      {
+        "name": "Caller",
+        "laType": "string"
+      },
+      {
+        "name": "CallerIpAddress",
+        "laType": "string"
+      },
+      {
+        "name": "Category",
+        "laType": "string"
+      },
+      {
+        "name": "CategoryValue",
+        "laType": "string"
+      },
+      {
+        "name": "Claims",
+        "laType": "string"
+      },
+      {
+        "name": "Claims_d",
+        "laType": "dynamic"
+      },
+      {
+        "name": "CorrelationId",
+        "laType": "string"
+      },
+      {
+        "name": "EventDataId",
+        "laType": "string"
+      },
+      {
+        "name": "EventSubmissionTimestamp",
+        "laType": "dateTime"
+      },
+      {
+        "name": "Hierarchy",
+        "laType": "string"
+      },
+      {
+        "name": "HTTPRequest",
+        "laType": "string"
+      },
+      {
+        "name": "Level",
+        "laType": "string"
+      },
+      {
+        "name": "OperationId",
+        "laType": "string"
+      },
+      {
+        "name": "OperationName",
+        "laType": "string"
+      },
+      {
+        "name": "OperationNameValue",
+        "laType": "string"
+      },
+      {
+        "name": "Properties",
+        "laType": "string"
+      },
+      {
+        "name": "Properties_d",
+        "laType": "dynamic"
+      },
+      {
+        "name": "Resource",
+        "laType": "string"
+      },
+      {
+        "name": "ResourceGroup",
+        "laType": "string"
+      },
+      {
+        "name": "ResourceId",
+        "laType": "string"
+      },
+      {
+        "name": "ResourceProvider",
+        "laType": "string"
+      },
+      {
+        "name": "ResourceProviderValue",
+        "laType": "string"
+      },
+      {
+        "name": "SourceSystem",
+        "laType": "string"
+      },
+      {
+        "name": "SubscriptionId",
+        "laType": "string"
+      },
+      {
+        "name": "TimeGenerated",
+        "laType": "dateTime"
+      },
+      {
+        "name": "Type",
+        "laType": "string"
+      },
+      {
+        "name": "_SubscriptionId",
+        "laType": "string"
+      },
+      {
+        "name": "_ResourceId",
+        "laType": "string"
+      }
+    ],
+    "expected": {
+      "columns": [
+        {
+          "name": "ActivityStatus",
+          "dcrType": "string"
+        },
+        {
+          "name": "ActivityStatusValue",
+          "dcrType": "string"
+        },
+        {
+          "name": "ActivitySubstatus",
+          "dcrType": "string"
+        },
+        {
+          "name": "ActivitySubstatusValue",
+          "dcrType": "string"
+        },
+        {
+          "name": "Authorization",
+          "dcrType": "string"
+        },
+        {
+          "name": "Authorization_d",
+          "dcrType": "dynamic"
+        },
+        {
+          "name": "Caller",
+          "dcrType": "string"
+        },
+        {
+          "name": "CallerIpAddress",
+          "dcrType": "string"
+        },
+        {
+          "name": "Category",
+          "dcrType": "string"
+        },
+        {
+          "name": "CategoryValue",
+          "dcrType": "string"
+        },
+        {
+          "name": "Claims",
+          "dcrType": "string"
+        },
+        {
+          "name": "Claims_d",
+          "dcrType": "dynamic"
+        },
+        {
+          "name": "CorrelationId",
+          "dcrType": "string"
+        },
+        {
+          "name": "EventDataId",
+          "dcrType": "string"
+        },
+        {
+          "name": "EventSubmissionTimestamp",
+          "dcrType": "datetime"
+        },
+        {
+          "name": "Hierarchy",
+          "dcrType": "string"
+        },
+        {
+          "name": "HTTPRequest",
+          "dcrType": "string"
+        },
+        {
+          "name": "Level",
+          "dcrType": "string"
+        },
+        {
+          "name": "OperationId",
+          "dcrType": "string"
+        },
+        {
+          "name": "OperationName",
+          "dcrType": "string"
+        },
+        {
+          "name": "OperationNameValue",
+          "dcrType": "string"
+        },
+        {
+          "name": "Properties",
+          "dcrType": "string"
+        },
+        {
+          "name": "Properties_d",
+          "dcrType": "dynamic"
+        },
+        {
+          "name": "Resource",
+          "dcrType": "string"
+        },
+        {
+          "name": "ResourceGroup",
+          "dcrType": "string"
+        },
+        {
+          "name": "ResourceId",
+          "dcrType": "string"
+        },
+        {
+          "name": "ResourceProvider",
+          "dcrType": "string"
+        },
+        {
+          "name": "ResourceProviderValue",
+          "dcrType": "string"
+        },
+        {
+          "name": "SubscriptionId",
+          "dcrType": "string"
+        },
+        {
+          "name": "TimeGenerated",
+          "dcrType": "datetime"
+        }
+      ],
+      "dropped": [
+        "TenantId",
+        "SourceSystem",
+        "Type",
+        "_SubscriptionId",
+        "_ResourceId"
+      ]
+    }
+  },
+  {
+    "table": "SyntheticTypeMatrix",
+    "inputColumns": [
+      {
+        "name": "TimeGenerated",
+        "laType": "dateTime"
+      },
+      {
+        "name": "ColString",
+        "laType": "string"
+      },
+      {
+        "name": "ColInt",
+        "laType": "int"
+      },
+      {
+        "name": "ColInt32",
+        "laType": "int32"
+      },
+      {
+        "name": "ColInteger",
+        "laType": "integer"
+      },
+      {
+        "name": "ColLong",
+        "laType": "long"
+      },
+      {
+        "name": "ColInt64",
+        "laType": "int64"
+      },
+      {
+        "name": "ColBigint",
+        "laType": "bigint"
+      },
+      {
+        "name": "ColReal",
+        "laType": "real"
+      },
+      {
+        "name": "ColDouble",
+        "laType": "double"
+      },
+      {
+        "name": "ColFloat",
+        "laType": "float"
+      },
+      {
+        "name": "ColDecimal",
+        "laType": "decimal"
+      },
+      {
+        "name": "ColBool",
+        "laType": "bool"
+      },
+      {
+        "name": "ColBoolean",
+        "laType": "boolean"
+      },
+      {
+        "name": "ColDateTimeApiCasing",
+        "laType": "dateTime"
+      },
+      {
+        "name": "ColDatetimeLower",
+        "laType": "datetime"
+      },
+      {
+        "name": "ColTimestamp",
+        "laType": "timestamp"
+      },
+      {
+        "name": "ColDate",
+        "laType": "date"
+      },
+      {
+        "name": "ColTime",
+        "laType": "time"
+      },
+      {
+        "name": "ColDynamic",
+        "laType": "dynamic"
+      },
+      {
+        "name": "ColObject",
+        "laType": "object"
+      },
+      {
+        "name": "ColJson",
+        "laType": "json"
+      },
+      {
+        "name": "ColUnknownType",
+        "laType": "sbyte"
+      },
+      {
+        "name": "ColGuid",
+        "laType": "guid"
+      },
+      {
+        "name": "ColUniqueIdentifier",
+        "laType": "uniqueidentifier"
+      },
+      {
+        "name": "ColUuid",
+        "laType": "uuid"
+      },
+      {
+        "name": "TenantId",
+        "laType": "string"
+      },
+      {
+        "name": "SourceSystem",
+        "laType": "string"
+      },
+      {
+        "name": "MG",
+        "laType": "string"
+      },
+      {
+        "name": "ManagementGroupName",
+        "laType": "string"
+      },
+      {
+        "name": "_ResourceId",
+        "laType": "string"
+      },
+      {
+        "name": "Type",
+        "laType": "string"
+      },
+      {
+        "name": "_SubscriptionId",
+        "laType": "string"
+      },
+      {
+        "name": "_ItemId",
+        "laType": "string"
+      },
+      {
+        "name": "_IsBillable",
+        "laType": "boolean"
+      },
+      {
+        "name": "_BilledSize",
+        "laType": "real"
+      },
+      {
+        "name": "PartitionKey",
+        "laType": "string"
+      },
+      {
+        "name": "RowKey",
+        "laType": "string"
+      },
+      {
+        "name": "StorageAccount",
+        "laType": "string"
+      },
+      {
+        "name": "AzureDeploymentID",
+        "laType": "string"
+      },
+      {
+        "name": "AzureTableName",
+        "laType": "string"
+      },
+      {
+        "name": "TimeCollected",
+        "laType": "dateTime"
+      },
+      {
+        "name": "SourceComputerId",
+        "laType": "string"
+      },
+      {
+        "name": "EventOriginId",
+        "laType": "string"
+      },
+      {
+        "name": "sourcesystem",
+        "laType": "string"
+      }
+    ],
+    "expected": {
+      "columns": [
+        {
+          "name": "TimeGenerated",
+          "dcrType": "datetime"
+        },
+        {
+          "name": "ColString",
+          "dcrType": "string"
+        },
+        {
+          "name": "ColInt",
+          "dcrType": "int"
+        },
+        {
+          "name": "ColInt32",
+          "dcrType": "int"
+        },
+        {
+          "name": "ColInteger",
+          "dcrType": "int"
+        },
+        {
+          "name": "ColLong",
+          "dcrType": "long"
+        },
+        {
+          "name": "ColInt64",
+          "dcrType": "long"
+        },
+        {
+          "name": "ColBigint",
+          "dcrType": "long"
+        },
+        {
+          "name": "ColReal",
+          "dcrType": "real"
+        },
+        {
+          "name": "ColDouble",
+          "dcrType": "real"
+        },
+        {
+          "name": "ColFloat",
+          "dcrType": "real"
+        },
+        {
+          "name": "ColDecimal",
+          "dcrType": "real"
+        },
+        {
+          "name": "ColBool",
+          "dcrType": "boolean"
+        },
+        {
+          "name": "ColBoolean",
+          "dcrType": "boolean"
+        },
+        {
+          "name": "ColDateTimeApiCasing",
+          "dcrType": "datetime"
+        },
+        {
+          "name": "ColDatetimeLower",
+          "dcrType": "datetime"
+        },
+        {
+          "name": "ColTimestamp",
+          "dcrType": "datetime"
+        },
+        {
+          "name": "ColDate",
+          "dcrType": "datetime"
+        },
+        {
+          "name": "ColTime",
+          "dcrType": "datetime"
+        },
+        {
+          "name": "ColDynamic",
+          "dcrType": "dynamic"
+        },
+        {
+          "name": "ColObject",
+          "dcrType": "dynamic"
+        },
+        {
+          "name": "ColJson",
+          "dcrType": "dynamic"
+        },
+        {
+          "name": "ColUnknownType",
+          "dcrType": "string"
+        }
+      ],
+      "dropped": [
+        "ColGuid",
+        "ColUniqueIdentifier",
+        "ColUuid",
+        "TenantId",
+        "SourceSystem",
+        "MG",
+        "ManagementGroupName",
+        "_ResourceId",
+        "Type",
+        "_SubscriptionId",
+        "_ItemId",
+        "_IsBillable",
+        "_BilledSize",
+        "PartitionKey",
+        "RowKey",
+        "StorageAccount",
+        "AzureDeploymentID",
+        "AzureTableName",
+        "TimeCollected",
+        "SourceComputerId",
+        "EventOriginId",
+        "sourcesystem"
+      ]
+    }
+  }
+]

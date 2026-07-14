@@ -1,0 +1,27 @@
+{
+  "_note": "SYNTHESIZED fixture. No connector in the Azure/Azure-Sentinel repo uses a top-level tables[] array with columns (that structure lives only in separate *_tables.json table-definition files, e.g. properties.schema.columns). This minimal fixture exercises decoder Format 1 (connectorJson.tables[].columns) and BOTH column-key variants: name/type and columnName/columnType. Types are chosen to exercise the normalizeDcrType superset (str, number, array, guid, Integer, DateTime).",
+  "title": "Example Vendor Connector",
+  "tables": [
+    {
+      "name": "ExampleVendor_Auth_CL",
+      "description": "Authentication events (name/type column variant).",
+      "columns": [
+        { "name": "TimeGenerated", "type": "datetime" },
+        { "name": "UserName", "type": "string" },
+        { "name": "SessionId", "type": "guid" },
+        { "name": "AttemptCount", "type": "Integer" },
+        { "name": "Payload", "type": "array" }
+      ]
+    },
+    {
+      "name": "ExampleVendor_Network_CL",
+      "description": "Network events (columnName/columnType column variant).",
+      "columns": [
+        { "columnName": "SrcIp", "columnType": "str" },
+        { "columnName": "DstPort", "columnType": "number" },
+        { "columnName": "BytesSent", "columnType": "int64" },
+        { "columnName": "EventTime", "columnType": "DateTime" }
+      ]
+    }
+  ]
+}

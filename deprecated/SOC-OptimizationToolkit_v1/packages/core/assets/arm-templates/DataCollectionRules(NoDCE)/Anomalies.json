@@ -1,0 +1,198 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "dataCollectionRuleName": {
+            "type": "string",
+            "metadata": {
+                "description": "Specifies the name of the Data Collection Rule to create."
+            }
+        },
+        "location": {
+            "defaultValue": "[resourceGroup().location]",
+            "type": "string",
+            "metadata": {
+                "description": "Specifies the location in which to create the Data Collection Rule."
+            }
+        },
+        "workspaceResourceId": {
+            "type": "string",
+            "metadata": {
+                "description": "Specifies the Azure resource ID of the Log Analytics workspace to use."
+            }
+        }
+    },
+    "resources": [{
+        "type": "Microsoft.Insights/dataCollectionRules",
+        "apiVersion": "2023-03-11",
+        "name": "[parameters('dataCollectionRuleName')]",
+        "location": "[parameters('location')]",
+        "kind": "Direct",
+        "properties": {
+            "streamDeclarations": {
+                "Custom-Anomalies": {
+                    "columns": [{
+                            "name": "ActivityInsights",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "AnomalyDetails",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "AnomalyReasons",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "AnomalyTemplateId",
+                            "type": "string"
+                        },
+                        {
+                            "name": "AnomalyTemplateName",
+                            "type": "string"
+                        },
+                        {
+                            "name": "AnomalyTemplateVersion",
+                            "type": "string"
+                        },
+                        {
+                            "name": "Description",
+                            "type": "string"
+                        },
+                        {
+                            "name": "DestinationDevice",
+                            "type": "string"
+                        },
+                        {
+                            "name": "DestinationIpAddress",
+                            "type": "string"
+                        },
+                        {
+                            "name": "DestinationLocation",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "DeviceInsights",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "EndTime",
+                            "type": "datetime"
+                        },
+                        {
+                            "name": "Entities",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "ExtendedLinks",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "ExtendedProperties",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "Id",
+                            "type": "string"
+                        },
+                        {
+                            "name": "RuleConfigVersion",
+                            "type": "string"
+                        },
+                        {
+                            "name": "RuleId",
+                            "type": "string"
+                        },
+                        {
+                            "name": "RuleName",
+                            "type": "string"
+                        },
+                        {
+                            "name": "RuleStatus",
+                            "type": "string"
+                        },
+                        {
+                            "name": "Score",
+                            "type": "real"
+                        },
+                        {
+                            "name": "SourceDevice",
+                            "type": "string"
+                        },
+                        {
+                            "name": "SourceIpAddress",
+                            "type": "string"
+                        },
+                        {
+                            "name": "SourceLocation",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "SourceSystem",
+                            "type": "string"
+                        },
+                        {
+                            "name": "StartTime",
+                            "type": "datetime"
+                        },
+                        {
+                            "name": "Tactics",
+                            "type": "string"
+                        },
+                        {
+                            "name": "Techniques",
+                            "type": "string"
+                        },
+                        {
+                            "name": "TimeGenerated",
+                            "type": "datetime"
+                        },
+                        {
+                            "name": "UserInsights",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "UserName",
+                            "type": "string"
+                        },
+                        {
+                            "name": "UserPrincipalName",
+                            "type": "string"
+                        },
+                        {
+                            "name": "VendorName",
+                            "type": "string"
+                        },
+                        {
+                            "name": "WorkspaceId",
+                            "type": "string"
+                        }
+                    ]
+                }
+            },
+            "destinations": {
+                "logAnalytics": [{
+                    "workspaceResourceId": "[parameters('workspaceResourceId')]",
+                    "name": "logAnalyticsWorkspace"
+                }]
+            },
+            "dataFlows": [{
+                    "streams": [
+                        "Custom-Anomalies"
+                    ],
+                    "destinations": [
+                        "logAnalyticsWorkspace"
+                    ],
+                    "transformKql": "source",
+                    "outputStream": "Microsoft-Anomalies"
+                }
+            ]
+        }
+    }],
+    "outputs": {
+        "dataCollectionRuleId": {
+            "type": "string",
+            "value": "[resourceId('Microsoft.Insights/dataCollectionRules', parameters('dataCollectionRuleName'))]"
+        }
+    }
+}

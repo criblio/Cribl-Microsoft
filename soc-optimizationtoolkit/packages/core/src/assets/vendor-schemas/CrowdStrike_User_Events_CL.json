@@ -1,0 +1,163 @@
+{
+  "name": "CrowdStrike_User_Events_CL",
+  "description": "Auto-generated from Sentinel Content Hub for CrowdStrike_User_Events_CL",
+  "retentionInDays": 30,
+  "totalRetentionInDays": 90,
+  "columns": [
+    {
+      "name": "TimeGenerated",
+      "type": "datetime",
+      "description": "The timestamp (UTC) reflecting the time in which the event was generated."
+    },
+    {
+      "name": "event_simpleName",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "timestamp",
+      "type": "long",
+      "description": ""
+    },
+    {
+      "name": "aip",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "aid",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "UserName",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "event_platform",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ContextTimeStamp",
+      "type": "real",
+      "description": ""
+    },
+    {
+      "name": "name",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ConfigBuild",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "CrowdStrikeId",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ConfigStateHash",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ContextProcessId",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "ContextThreadId",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "BoundingLimitCount",
+      "type": "long",
+      "description": ""
+    },
+    {
+      "name": "BoundingLimitDuration",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "Entitlements",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "EffectiveTransmissionClass",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "cid",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "OciContainerId",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "TreeId",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "UserRid",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "GroupRid",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "InterfaceVersion",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "RpcClientThreadId",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "RpcOpNum",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "InterfaceGuid",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "RpcClientProcessId",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "RpcNestingLevel",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "DomainSid",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "name": "AdditionalFields",
+      "type": "dynamic",
+      "description": ""
+    }
+  ]
+}

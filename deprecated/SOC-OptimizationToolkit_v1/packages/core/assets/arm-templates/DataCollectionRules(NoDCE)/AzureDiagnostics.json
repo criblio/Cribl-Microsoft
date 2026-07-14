@@ -1,0 +1,150 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "dataCollectionRuleName": {
+            "type": "string",
+            "metadata": {
+                "description": "Specifies the name of the Data Collection Rule to create."
+            }
+        },
+        "location": {
+            "defaultValue": "[resourceGroup().location]",
+            "type": "string",
+            "metadata": {
+                "description": "Specifies the location in which to create the Data Collection Rule."
+            }
+        },
+        "workspaceResourceId": {
+            "type": "string",
+            "metadata": {
+                "description": "Specifies the Azure resource ID of the Log Analytics workspace to use."
+            }
+        }
+    },
+    "resources": [{
+        "type": "Microsoft.Insights/dataCollectionRules",
+        "apiVersion": "2023-03-11",
+        "name": "[parameters('dataCollectionRuleName')]",
+        "location": "[parameters('location')]",
+        "kind": "Direct",
+        "properties": {
+            "streamDeclarations": {
+                "Custom-AzureDiagnostics": {
+                    "columns": [{
+                            "name": "AdditionalFields",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "CallerIPAddress",
+                            "type": "string"
+                        },
+                        {
+                            "name": "Category",
+                            "type": "string"
+                        },
+                        {
+                            "name": "CorrelationId",
+                            "type": "string"
+                        },
+                        {
+                            "name": "DurationMs",
+                            "type": "long"
+                        },
+                        {
+                            "name": "Level",
+                            "type": "string"
+                        },
+                        {
+                            "name": "Location",
+                            "type": "string"
+                        },
+                        {
+                            "name": "Message",
+                            "type": "string"
+                        },
+                        {
+                            "name": "OperationName",
+                            "type": "string"
+                        },
+                        {
+                            "name": "OperationVersion",
+                            "type": "string"
+                        },
+                        {
+                            "name": "Resource",
+                            "type": "string"
+                        },
+                        {
+                            "name": "ResourceGroup",
+                            "type": "string"
+                        },
+                        {
+                            "name": "ResourceProvider",
+                            "type": "string"
+                        },
+                        {
+                            "name": "ResourceType",
+                            "type": "string"
+                        },
+                        {
+                            "name": "ResultDescription",
+                            "type": "string"
+                        },
+                        {
+                            "name": "ResultSignature",
+                            "type": "string"
+                        },
+                        {
+                            "name": "ResultType",
+                            "type": "string"
+                        },
+                        {
+                            "name": "SourceSystem",
+                            "type": "string"
+                        },
+                        {
+                            "name": "SubscriptionId",
+                            "type": "string"
+                        },
+                        {
+                            "name": "TimeGenerated",
+                            "type": "datetime"
+                        },
+                        {
+                            "name": "TenantId",
+                            "type": "string"
+                        },
+                        {
+                            "name": "Type",
+                            "type": "string"
+                        }
+                    ]
+                }
+            },
+            "destinations": {
+                "logAnalytics": [{
+                    "workspaceResourceId": "[parameters('workspaceResourceId')]",
+                    "name": "logAnalyticsWorkspace"
+                }]
+            },
+            "dataFlows": [{
+                    "streams": [
+                        "Custom-AzureDiagnostics"
+                    ],
+                    "destinations": [
+                        "logAnalyticsWorkspace"
+                    ],
+                    "transformKql": "source",
+                    "outputStream": "Microsoft-AzureDiagnostics"
+                }
+            ]
+        }
+    }],
+    "outputs": {
+        "dataCollectionRuleId": {
+            "type": "string",
+            "value": "[resourceId('Microsoft.Insights/dataCollectionRules', parameters('dataCollectionRuleName'))]"
+        }
+    }
+}

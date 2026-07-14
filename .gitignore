@@ -15,6 +15,20 @@ knowledge.md
 *-backup.json
 *.bak
 
+# DCR Automation generated output (regenerated on every deployment)
+Azure/CustomDeploymentTemplates/DCR-Automation/core/generated-templates/
+Azure/CustomDeploymentTemplates/DCR-Automation/core/cribl-dcr-configs/
+Azure/CustomDeploymentTemplates/DCR-Automation/dev/generated-templates/
+Azure/CustomDeploymentTemplates/DCR-Automation/dev/cribl-dcr-configs/
+
+# User-specific DCR Automation config (contains credentials and selections)
+Azure/CustomDeploymentTemplates/DCR-Automation/core/azure-parameters.json
+Azure/CustomDeploymentTemplates/DCR-Automation/core/NativeTableList.json
+Azure/CustomDeploymentTemplates/DCR-Automation/core/CustomTableList.json
+Azure/CustomDeploymentTemplates/DCR-Automation/dev/azure-parameters.json
+Azure/CustomDeploymentTemplates/DCR-Automation/dev/NativeTableList.json
+Azure/CustomDeploymentTemplates/DCR-Automation/dev/CustomTableList.json
+
 
 # Test output and results
 test-results/
@@ -36,6 +50,10 @@ regression-test-results/
 # Log directories
 logs/
 **/logs/
+# But keep SOURCE directories named "logs" (the SOC toolkit's diagnostics
+# viewer lives in packages/ui/src/screens/logs; runtime log data is under
+# apps/local-app/data/, ignored by that app's own .gitignore)
+!soc-optimizationtoolkit/packages/ui/src/screens/logs/
 
 # Temporary marker files
 .cribl-collection-in-progress
