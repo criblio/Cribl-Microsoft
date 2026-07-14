@@ -484,9 +484,16 @@ export function RuleCoverageSection({
         if (schemaUnion.length === 0) {
           // Without a resolvable destination schema every field classifies
           // "unknown" and the percentages are meaningless - say so instead
-          // of rendering an empty-denominator 100%.
+          // of rendering an empty-denominator 100%. The count suffix makes a
+          // report of this message self-diagnosing: reports carrying 0
+          // destination columns = the gap analysis predates schema
+          // derivation (or never ran against this table) - Re-Analyze first.
+          const reportColumns = reports.reduce(
+            (n, r) => n + r.destSchema.length,
+            0,
+          );
           setSchemaNote(
-            `No schema could be resolved for destination table(s) ${destinationTableNamesFromReports(reports).join(", ")} - fields cannot be classified and coverage percentages would be meaningless. Re-run the DCR Gap Analysis or check the destination table selection.`,
+            `No schema could be resolved for destination table(s) ${destinationTableNamesFromReports(reports).join(", ")} - fields cannot be classified and coverage percentages would be meaningless. Re-run the DCR Gap Analysis (section 3) first - its report supplies the schema (including derived custom-table schemas) - then re-run this analysis. Diagnostic: ${reports.length} gap report(s) carried ${reportColumns} destination column(s); the schema catalog resolved none.`,
           );
           return;
         }
