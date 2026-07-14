@@ -331,10 +331,10 @@ contextBridge.exposeInMainWorld('api', {
     githubClear: (): Promise<{ success: boolean }> =>
       ipcRenderer.invoke('auth:github-clear'),
     azureStatus: (): Promise<{
-      loggedIn: boolean; accountId: string; subscriptionId: string; subscriptionName: string; tenantId: string;
+      loggedIn: boolean; accountId: string; subscriptionId: string; subscriptionName: string; tenantId: string; error?: string;
     }> => ipcRenderer.invoke('auth:azure-status'),
     azureLogin: (): Promise<{
-      loggedIn: boolean; accountId: string; subscriptionId: string; subscriptionName: string; tenantId: string;
+      loggedIn: boolean; accountId: string; subscriptionId: string; subscriptionName: string; tenantId: string; error?: string;
     }> => ipcRenderer.invoke('auth:azure-login'),
     azureSetSubscription: (subscriptionId: string): Promise<{ success: boolean }> =>
       ipcRenderer.invoke('auth:azure-set-subscription', { subscriptionId }),
