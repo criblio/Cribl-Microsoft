@@ -104,6 +104,7 @@ export interface AzureAuth {
   subscriptionId: string;
   subscriptionName: string;
   tenantId: string;
+  error?: string;            // populated when detection/login fails; surfaces PowerShell/Az errors to the UI
 }
 
 export interface AuthStatus {
@@ -1109,11 +1110,26 @@ async function checkAzureSession(): Promise<AzureAuth> {
   const result = await runPowershell(
     "try { $ctx = Get-AzContext -ErrorAction Stop; if ($ctx -and $ctx.Account) { " +
     "$ctx.Account.Id + '|' + $ctx.Subscription.Id + '|' + $ctx.Subscription.Name + '|' + $ctx.Tenant.Id " +
-    "} else { 'NOT_LOGGED_IN' } } catch { 'NOT_LOGGED_IN' }"
+    "} else { 'NOT_LOGGED_IN' } } catch { 'AZ_MODULE_ERROR:' + $_.Exception.Message }"
   );
 
-  if (!result.ok || result.output.includes('NOT_LOGGED_IN') || !result.output.includes('|')) {
-    return { loggedIn: false, accountId: '', subscriptionId: '', subscriptionName: '', tenantId: '' };
+  const base = { loggedIn: false, accountId: '', subscriptionId: '', subscriptionName: '', tenantId: '' };
+
+  if (!result.ok) {
+    logger.error('auth', 'Azure session detection failed: PowerShell did not run', result.output);
+    return { ...base, error: `PowerShell failed: ${result.output || 'unknown error'}` };
+  }
+  if (result.output.startsWith('AZ_MODULE_ERROR:')) {
+    const msg = result.output.substring('AZ_MODULE_ERROR:'.length).trim();
+    logger.error('auth', 'Azure session detection failed: Az module error', msg);
+    return { ...base, error: `Az PowerShell module error: ${msg}. Is the Az module installed?` };
+  }
+  if (result.output.includes('NOT_LOGGED_IN')) {
+    return base; // normal: user hasn't run Connect-AzAccount yet; UI supplies friendly message
+  }
+  if (!result.output.includes('|')) {
+    logger.error('auth', 'Azure session detection returned malformed output', result.output);
+    return { ...base, error: `Unexpected PowerShell output: ${result.output.substring(0, 200)}` };
   }
 
   const parts = result.output.split('|');

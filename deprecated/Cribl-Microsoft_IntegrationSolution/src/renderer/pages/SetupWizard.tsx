@@ -102,6 +102,7 @@ function SetupWizard({ onComplete }: SetupWizardProps) {
   const [azureTenant, setAzureTenant] = useState('');
   const [azureChecking, setAzureChecking] = useState(false);
   const [azureSkipped, setAzureSkipped] = useState(false);
+  const [azureError, setAzureError] = useState('');
 
   // Mode
   const [selectedMode, setSelectedMode] = useState('');
@@ -205,6 +206,7 @@ function SetupWizard({ onComplete }: SetupWizardProps) {
   const checkAzure = async () => {
     if (!window.api) return;
     setAzureChecking(true);
+    setAzureError('');
     try {
       const status = await window.api.auth.azureStatus();
       setAzureConnected(status.loggedIn);
@@ -212,8 +214,13 @@ function SetupWizard({ onComplete }: SetupWizardProps) {
         setAzureAccount(status.accountId);
         setAzureSubscription(status.subscriptionName || status.subscriptionId);
         setAzureTenant(status.tenantId);
+      } else {
+        setAzureError(status.error || 'No active Azure session detected. Run Connect-AzAccount in PowerShell first, then retry.');
       }
-    } catch { /* skip */ }
+    } catch (err) {
+      console.error('[SetupWizard] Azure session detection failed:', err);
+      setAzureError(err instanceof Error ? err.message : String(err));
+    }
     setAzureChecking(false);
   };
 
@@ -221,6 +228,7 @@ function SetupWizard({ onComplete }: SetupWizardProps) {
   const loginAzure = async () => {
     if (!window.api) return;
     setAzureChecking(true);
+    setAzureError('');
     try {
       const result = await window.api.auth.azureLogin();
       setAzureConnected(result.loggedIn);
@@ -228,8 +236,13 @@ function SetupWizard({ onComplete }: SetupWizardProps) {
         setAzureAccount(result.accountId);
         setAzureSubscription(result.subscriptionName || result.subscriptionId);
         setAzureTenant(result.tenantId);
+      } else {
+        setAzureError(result.error || 'Azure login did not complete.');
       }
-    } catch { /* skip */ }
+    } catch (err) {
+      console.error('[SetupWizard] Azure login failed:', err);
+      setAzureError(err instanceof Error ? err.message : String(err));
+    }
     setAzureChecking(false);
   };
 
@@ -505,6 +518,13 @@ function SetupWizard({ onComplete }: SetupWizardProps) {
                     {azureChecking ? 'Detecting...' : 'Detect Existing Session'}
                   </button>
                 </div>
+
+                {azureError && (
+                  <div style={{ ...s.status(false), marginTop: '12px', marginBottom: 0 }}>
+                    <div style={s.dot(false)} />
+                    <span style={{ wordBreak: 'break-word' }}>{azureError}</span>
+                  </div>
+                )}
               </div>
             )}
 

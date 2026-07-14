@@ -1,0 +1,63 @@
+{
+  "workerAffinity": false,
+  "ttl": "4h",
+  "id": "Azure_vNet_FlowLogs_sajpedersoncribl",
+  "schedule": {
+    "enabled": true,
+    "resumeMissed": true,
+    "cronSchedule": "15 * * * *",
+    "run": {
+      "mode": "run",
+      "earliest": "-75m",
+      "logLevel": "info",
+      "rescheduleDroppedTasks": true,
+      "timeRangeType": "relative",
+      "latest": "-15m",
+      "jobTimeout": "0",
+      "maxTaskReschedule": 1
+    },
+    "skippable": false,
+    "maxConcurrentRuns": 10
+  },
+  "savedState": {},
+  "type": "collection",
+  "collector": {
+    "destructive": false,
+    "encoding": "utf8",
+    "type": "azure_blob",
+    "conf": {
+      "includeMetadata": true,
+      "tenantId": "fa882ef2-67af-42c1-80e4-62e2735043d2",
+      "clientId": "8a4b13ab-f1c5-498c-a4ae-85f220a0439b",
+      "extractors": [],
+      "includeTags": false,
+      "recurse": true,
+      "authType": "clientSecret",
+      "maxBatchSize": 10,
+      "path": "flowLogResourceID=/${*}/${*}/${_time:y=%Y}/${_time:m=%m}/${_time:d=%d}/${_time:h=%H}",
+      "storageAccountName": "sajpedersoncribl",
+      "parquetChunkDownloadTimeout": 600,
+      "clientTextSecret": "Azure_vNet_Flowlogs_Secret",
+      "azureCloud": "azure",
+      "containerName": "insights-logs-flowlogflowevent",
+      "parquetChunkSizeMB": 5
+    }
+  },
+  "input": {
+    "preprocess": {
+      "disabled": true
+    },
+    "breakerRulesets": [
+      "Azure_vNet_FlowLogs"
+    ],
+    "pipeline": "Azure_vNet_FlowLogs_PreProcessing",
+    "throttleRatePerSec": "0",
+    "sendToRoutes": true,
+    "staleChannelFlushMs": 10000,
+    "type": "collection"
+  },
+  "removeFields": [],
+  "resumeOnBoot": false,
+  "streamtags": [],
+  "ignoreGroupJobsLimit": false
+}

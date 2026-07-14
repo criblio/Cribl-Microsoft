@@ -8,6 +8,7 @@
 import { IpcMain } from 'electron';
 import { spawn } from 'child_process';
 import fs from 'fs';
+import os from 'os';
 import path from 'path';
 import {
   configDir as appConfigDir, azureParametersPath,
@@ -236,19 +237,103 @@ interface DeployOptions {
 }
 
 // ---------------------------------------------------------------------------
+// Temp Working Directory for DCR Automation
+// ---------------------------------------------------------------------------
+// The PS script reads inputs from and writes outputs to its working directory.
+// To keep the linked git repo clean, we copy the read-only PS scripts and template
+// files into a temp directory, write user-specific inputs there, run the script,
+// then copy the generated destination configs out to app data and clean up.
+
+// Files in <repo>/core/ that the PS script reads but never modifies.
+// These are copied into the temp dir so the script can find them.
+const READ_ONLY_CORE_FILES = [
+  'Create-TableDCRs.ps1',
+  'Generate-CriblDestinations.ps1',
+  'Output-Helper.ps1',
+  'operation-parameters.json',
+  'cribl-parameters.json',
+  'dcr-template-direct.json',
+  'dcr-template-with-dce.json',
+  'dst-cribl-template.json',
+];
+
+interface DeployTempDir {
+  root: string;        // Temp dir root (contains Run-DCRAutomation.ps1 + core/)
+  coreDir: string;     // <root>/core
+  scriptPath: string;  // <root>/Run-DCRAutomation.ps1
+}
+
+/** Create an isolated temp working dir for a DCR Automation run. */
+function prepareDeployTempDir(): DeployTempDir | null {
+  const repoCwd = dcrAutomationCwd();
+  const repoScript = dcrAutomationScript();
+  if (!repoCwd || !repoScript) return null;
+
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'cribl-dcr-deploy-'));
+  const coreDir = path.join(root, 'core');
+  fs.mkdirSync(coreDir, { recursive: true });
+
+  // Copy entry-point script
+  const tempScriptPath = path.join(root, 'Run-DCRAutomation.ps1');
+  fs.copyFileSync(repoScript, tempScriptPath);
+
+  // Copy read-only PS files and templates from <repo>/core/
+  for (const fileName of READ_ONLY_CORE_FILES) {
+    const src = path.join(repoCwd, 'core', fileName);
+    if (fs.existsSync(src)) {
+      fs.copyFileSync(src, path.join(coreDir, fileName));
+    }
+  }
+
+  return { root, coreDir, scriptPath: tempScriptPath };
+}
+
+/** After the PS script finishes, copy generated destination configs to app data. */
+function harvestDeployOutputs(tempCoreDir: string): { saved: number } {
+  const tempCriblDir = path.join(tempCoreDir, 'cribl-dcr-configs');
+  const destAppDataDir = getCriblConfigDir();
+  if (!fs.existsSync(tempCriblDir)) return { saved: 0 };
+  if (!fs.existsSync(destAppDataDir)) fs.mkdirSync(destAppDataDir, { recursive: true });
+
+  let saved = 0;
+  // Copy top-level files (cribl-dcr-config.json, etc.)
+  for (const entry of fs.readdirSync(tempCriblDir, { withFileTypes: true })) {
+    const srcPath = path.join(tempCriblDir, entry.name);
+    const dstPath = path.join(destAppDataDir, entry.name);
+    if (entry.isFile()) {
+      fs.copyFileSync(srcPath, dstPath);
+      saved++;
+    } else if (entry.isDirectory()) {
+      // Recurse into destinations/
+      if (!fs.existsSync(dstPath)) fs.mkdirSync(dstPath, { recursive: true });
+      for (const sub of fs.readdirSync(srcPath, { withFileTypes: true })) {
+        if (sub.isFile()) {
+          fs.copyFileSync(path.join(srcPath, sub.name), path.join(dstPath, sub.name));
+          saved++;
+        }
+      }
+    }
+  }
+  return { saved };
+}
+
+/** Best-effort recursive cleanup of the temp dir. */
+function cleanupTempDir(tempRoot: string): void {
+  try { fs.rmSync(tempRoot, { recursive: true, force: true }); }
+  catch (err) { logger.warn('azure-deploy', `Failed to remove temp dir ${tempRoot}`, err); }
+}
+
+// ---------------------------------------------------------------------------
 // Auto-generate custom table schema files from Sentinel repo
 // ---------------------------------------------------------------------------
 // The PS DCR automation script needs schema files in custom-table-schemas/
 // to create _CL tables. This function reads the Sentinel repo's table
 // definition JSON files and converts them to the format the PS script expects.
 
-async function generateCustomTableSchemas(tables: string[]): Promise<number> {
+async function generateCustomTableSchemas(tables: string[], targetCoreDir: string): Promise<number> {
   if (!sentinelRepo.isRepoReady()) return 0;
 
-  // Determine where to write schema files
-  const cwd = dcrAutomationCwd();
-  if (!cwd) return 0;
-  const schemasDir = path.join(cwd, 'core', 'custom-table-schemas');
+  const schemasDir = path.join(targetCoreDir, 'custom-table-schemas');
   if (!fs.existsSync(schemasDir)) fs.mkdirSync(schemasDir, { recursive: true });
 
   let generated = 0;
@@ -325,20 +410,10 @@ function mapColumnType(sentinelType: string): string {
 
 function runDcrAutomation(
   options: DeployOptions,
+  tempDir: DeployTempDir,
   sender: Electron.WebContents,
 ): Promise<DeployResult> {
   return new Promise((resolve) => {
-    const scriptPath = dcrAutomationScript();
-    const cwd = dcrAutomationCwd();
-
-    if (!scriptPath || !fs.existsSync(scriptPath)) {
-      resolve({
-        success: false, destinations: [],
-        error: 'DCR Automation script not found. Link the Cribl-Microsoft repository in Settings to enable DCR deployment.',
-      });
-      return;
-    }
-
     const id = `deploy-${Date.now()}`;
 
     // Read Azure parameters from the app config and pass as CLI overrides
@@ -346,7 +421,7 @@ function runDcrAutomation(
     const azParams = readAzureParameters();
     const psArgs = [
       '-NoProfile', '-ExecutionPolicy', 'Bypass',
-      '-File', scriptPath,
+      '-File', tempDir.scriptPath,
       '-NonInteractive',
       '-Mode', options.mode,
     ];
@@ -367,6 +442,7 @@ function runDcrAutomation(
     if (!sender.isDestroyed()) {
       sender.send('ps:output', { id, stream: 'stdout', data: `> Running DCR Automation: ${options.mode}\n` });
       sender.send('ps:output', { id, stream: 'stdout', data: `> Tables: ${options.tables.join(', ')}\n` });
+      sender.send('ps:output', { id, stream: 'stdout', data: `> Working dir (temp): ${tempDir.root}\n` });
       if (azParams) {
         sender.send('ps:output', { id, stream: 'stdout', data: `> Resource Group: ${azParams.resourceGroupName}\n` });
         sender.send('ps:output', { id, stream: 'stdout', data: `> Workspace: ${azParams.workspaceName}\n` });
@@ -375,16 +451,13 @@ function runDcrAutomation(
 
     // Use pwsh (PowerShell 7+) because Create-TableDCRs.ps1 uses ?? null-coalescing operator
     const proc = spawn('pwsh', psArgs, {
-      cwd: cwd || undefined,
+      cwd: tempDir.root,
       env: { ...process.env },
       windowsHide: true,
     });
 
-    let output = '';
-
     proc.stdout?.on('data', (data: Buffer) => {
       const text = data.toString();
-      output += text;
       if (!sender.isDestroyed()) {
         sender.send('ps:output', { id, stream: 'stdout', data: text });
       }
@@ -392,7 +465,6 @@ function runDcrAutomation(
 
     proc.stderr?.on('data', (data: Buffer) => {
       const text = data.toString();
-      output += text;
       if (!sender.isDestroyed()) {
         sender.send('ps:output', { id, stream: 'stderr', data: text });
       }
@@ -403,8 +475,20 @@ function runDcrAutomation(
         sender.send('ps:exit', { id, code });
       }
 
+      // Always copy outputs to app data, even on partial failure
+      let saved = 0;
+      try {
+        ({ saved } = harvestDeployOutputs(tempDir.coreDir));
+      } catch (err) {
+        logger.error('azure-deploy', 'Failed to harvest deploy outputs', err);
+      }
+
       if (code === 0) {
-        // Read generated destinations
+        if (!sender.isDestroyed() && saved > 0) {
+          sender.send('ps:output', { id, stream: 'stdout',
+            data: `> Saved ${saved} destination config file(s) to app data\n` });
+        }
+        // Read generated destinations from app data
         const destinations = readGeneratedDestinations();
         // Filter to only the tables we deployed
         const relevant = destinations.filter((d) =>
@@ -414,8 +498,10 @@ function runDcrAutomation(
             return dStripped === tStripped || dStripped.includes(tStripped) || tStripped.includes(dStripped);
           })
         );
+        cleanupTempDir(tempDir.root);
         resolve({ success: true, destinations: relevant });
       } else {
+        cleanupTempDir(tempDir.root);
         resolve({ success: false, destinations: [], error: `DCR Automation exited with code ${code}` });
       }
     });
@@ -425,6 +511,7 @@ function runDcrAutomation(
         sender.send('ps:output', { id, stream: 'stderr', data: `Error: ${err.message}\n` });
         sender.send('ps:exit', { id, code: -1 });
       }
+      cleanupTempDir(tempDir.root);
       resolve({ success: false, destinations: [], error: err.message });
     });
   });
@@ -540,45 +627,56 @@ export function registerAzureDeployHandlers(ipcMain: IpcMain) {
     return results;
   });
 
-  // Deploy DCRs and custom tables for specific tables
-  // For custom _CL tables:
-  //   1. Auto-generate schema files from the Sentinel repo
-  //   2. Write the table names to CustomTableList.json (so PS script processes them)
-  //   3. Run the PS DCR automation
+  // Deploy DCRs and custom tables for specific tables.
+  // Inputs are written to an isolated temp directory so the linked git repo
+  // is never modified. After the PS script runs, generated destination configs
+  // are copied to %APPDATA%/.cribl-microsoft/cribl-dcr-configs/ and the temp
+  // directory is removed.
   ipcMain.handle('azure:deploy-dcrs', async (event, options: DeployOptions) => {
     const customTables = options.tables.filter((t) => t.endsWith('_CL'));
     const nativeTables = options.tables.filter((t) => !t.endsWith('_CL'));
 
-    if (customTables.length > 0) {
-      const cwd = dcrAutomationCwd();
-      if (cwd) {
-        // Generate schema files from Sentinel repo
-        try {
-          const generated = await generateCustomTableSchemas(customTables);
-          if (generated > 0 && !event.sender.isDestroyed()) {
-            event.sender.send('ps:output', {
-              id: `pre-${Date.now()}`, stream: 'stdout',
-              data: `> Generated ${generated} custom table schema(s) from Sentinel Content Hub\n`,
-            });
-          }
-        } catch (err) { logger.warn('azure-deploy', 'Custom table schema generation failed', err); }
+    const tempDir = prepareDeployTempDir();
+    if (!tempDir) {
+      return {
+        success: false, destinations: [],
+        error: 'DCR Automation script not found. Link the Cribl-Microsoft repository in Settings.',
+      };
+    }
 
-        // Write custom tables to CustomTableList.json so the PS script processes them
-        const customListPath = path.join(cwd, 'core', 'CustomTableList.json');
-        fs.writeFileSync(customListPath, JSON.stringify(customTables, null, 4));
-      }
+    if (customTables.length > 0) {
+      try {
+        const generated = await generateCustomTableSchemas(customTables, tempDir.coreDir);
+        if (generated > 0 && !event.sender.isDestroyed()) {
+          event.sender.send('ps:output', {
+            id: `pre-${Date.now()}`, stream: 'stdout',
+            data: `> Generated ${generated} custom table schema(s) from Sentinel Content Hub\n`,
+          });
+        }
+      } catch (err) { logger.warn('azure-deploy', 'Custom table schema generation failed', err); }
+
+      // Write CustomTableList.json into the temp dir
+      fs.writeFileSync(
+        path.join(tempDir.coreDir, 'CustomTableList.json'),
+        JSON.stringify(customTables, null, 4),
+      );
     }
 
     if (nativeTables.length > 0) {
-      const cwd = dcrAutomationCwd();
-      if (cwd) {
-        // Write native tables to NativeTableList.json
-        const nativeListPath = path.join(cwd, 'core', 'NativeTableList.json');
-        fs.writeFileSync(nativeListPath, JSON.stringify(nativeTables, null, 4));
-      }
+      // Write NativeTableList.json into the temp dir
+      fs.writeFileSync(
+        path.join(tempDir.coreDir, 'NativeTableList.json'),
+        JSON.stringify(nativeTables, null, 4),
+      );
+    } else {
+      // PS script expects the file to exist even if empty
+      fs.writeFileSync(
+        path.join(tempDir.coreDir, 'NativeTableList.json'),
+        '[]',
+      );
     }
 
-    return runDcrAutomation(options, event.sender);
+    return runDcrAutomation(options, tempDir, event.sender);
   });
 
   // Preview Azure resources that would be created for given tables
