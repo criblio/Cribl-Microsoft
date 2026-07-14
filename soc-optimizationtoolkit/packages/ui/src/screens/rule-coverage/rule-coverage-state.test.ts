@@ -35,6 +35,7 @@ import {
   isRuleYamlFileName,
   missingFieldChips,
   parseCustomRuleUploads,
+  resolveSchemaUnion,
   ruleFieldSet,
   severityTone,
 } from "./rule-coverage-state";
@@ -488,5 +489,42 @@ describe("end-to-end over the real analyzer", () => {
     for (const chip of missingFieldChips(report.summary)) {
       expect(["TargetUserName", "DeviceName"]).toContain(chip);
     }
+  });
+});
+
+describe("resolveSchemaUnion", () => {
+  it("includes each report's OWN destSchema even when the catalog misses (derived schemas)", async () => {
+    // Live regression 2026-07-14: Cloudflare_CL derived 81 columns in the
+    // gap analysis while coverage still said "No schema could be resolved" -
+    // the union only consulted the catalog, and a DERIVED schema exists only
+    // on the report.
+    const report = gapReport({
+      tableName: "Cloudflare_CL",
+      fieldMappings: [],
+      destSchema: [
+        { name: "ClientIP", type: "string" },
+        { name: "TimeGenerated", type: "datetime" },
+      ],
+    });
+    const missCatalog = { resolveSchema: async () => null };
+    const union = await resolveSchemaUnion(missCatalog, [report]);
+    expect(union).toContain("ClientIP");
+    expect(union).toContain("TimeGenerated");
+  });
+
+  it("still unions catalog-resolved schemas across destination tables", async () => {
+    const reports = [
+      gapReport({ tableName: "TableA", fieldMappings: [], destSchema: [] }),
+      gapReport({ tableName: "TableB", fieldMappings: [], destSchema: [] }),
+    ];
+    const catalog = {
+      resolveSchema: async (table: string) =>
+        table === "TableA"
+          ? [{ name: "ColA", type: "string" }]
+          : [{ name: "ColB", type: "string" }],
+    };
+    const union = await resolveSchemaUnion(catalog, reports);
+    expect(union).toContain("ColA");
+    expect(union).toContain("ColB");
   });
 });

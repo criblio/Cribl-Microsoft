@@ -317,6 +317,7 @@ export {
   isRuleYamlFileName,
   missingFieldChips,
   parseCustomRuleUploads,
+  resolveSchemaUnion,
   ruleFieldSet,
   severityTone,
 } from "./screens/rule-coverage/rule-coverage-state";
