@@ -608,15 +608,39 @@ async function patchTableColumns(
     body: { properties: { schema: { name: input.table, columns } } },
   });
   if (patch.status < 200 || patch.status >= 300) {
-    // The portal's Edit schema succeeds on built-in tables (research
-    // 2026-07-13), so a rejection here is either a table lock
-    // (provisioningState Updating) or a genuinely restricted table -
-    // Azure reports both as opaque errors.
+    // VERIFY the lock hypothesis instead of guessing (user request
+    // 2026-07-13): the table's provisioningState says whether an
+    // in-progress schema operation is holding it.
+    let lockVerdict = "";
+    try {
+      const probe = await azure.request({
+        method: "GET",
+        path: tablePath,
+        apiVersion: TABLES_EDIT_API_VERSION,
+      });
+      const state = String(
+        prop(prop(probe.body, "properties"), "provisioningState") ?? "",
+      );
+      if (/^(updating|inprogress)$/i.test(state)) {
+        lockVerdict =
+          ` - VERIFIED: the table IS locked by an in-progress schema` +
+          ` operation (provisioningState '${state}'); retry once it settles`;
+      } else if (state !== "") {
+        lockVerdict =
+          ` - VERIFIED: the table is NOT locked (provisioningState` +
+          ` '${state}'), so this operation appears to be RESTRICTED for` +
+          ` this table`;
+      }
+    } catch {
+      // The probe is best-effort; the generic hint below stands.
+    }
     const nativeHint = !isCustomTable
-      ? " - the table may be locked by an in-progress schema operation" +
-        " (retry shortly) or restricted; the table's DeviceCustom*/Flex*" +
-        " fields or a custom (_CL) side table are the fallback"
-      : "";
+      ? (lockVerdict ||
+          " - the table may be locked by an in-progress schema operation" +
+            " (retry shortly) or restricted") +
+        "; the table's DeviceCustom*/Flex* fields or a custom (_CL) side" +
+        " table are the fallback"
+      : lockVerdict;
     throw new Error(
       `${operation} on '${input.table}': HTTP ${patch.status} ` +
         JSON.stringify(patch.body).slice(0, 300) +

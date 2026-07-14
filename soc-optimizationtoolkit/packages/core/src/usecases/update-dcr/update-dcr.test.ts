@@ -219,6 +219,42 @@ describe("updateDcrInPlace", () => {
     expect(preview.diff.added.map((c) => c.name)).toContain("RiskScore_CF");
   });
 
+  it("VERIFIES the lock hypothesis when a schema edit fails", async () => {
+    // The failure probe reads provisioningState: Succeeded = not locked,
+    // so the error states the operation is restricted, not "maybe locked".
+    const azure = new FakeAzureManagement();
+    azure.respondWith(
+      { status: 200, body: { properties: { schema: { columns: [] } } } },
+      { status: 500, body: { error: { code: "InternalServerError" } } },
+      { status: 200, body: { properties: { provisioningState: "Succeeded" } } },
+    );
+    await expect(
+      addTableColumn(azure, {
+        subscriptionId: "sub",
+        resourceGroup: "rg",
+        workspaceName: "ws",
+        table: "CommonSecurityLog",
+        column: { name: "ztest", type: "string" },
+      }),
+    ).rejects.toThrow(/VERIFIED: the table is NOT locked.*RESTRICTED for this table/);
+
+    const azure2 = new FakeAzureManagement();
+    azure2.respondWith(
+      { status: 200, body: { properties: { schema: { columns: [] } } } },
+      { status: 500, body: {} },
+      { status: 200, body: { properties: { provisioningState: "Updating" } } },
+    );
+    await expect(
+      addTableColumn(azure2, {
+        subscriptionId: "sub",
+        resourceGroup: "rg",
+        workspaceName: "ws",
+        table: "CommonSecurityLog",
+        column: { name: "ztest", type: "string" },
+      }),
+    ).rejects.toThrow(/VERIFIED: the table IS locked.*retry once it settles/);
+  });
+
   it("polls a 202 long-running schema update until the table unlocks", async () => {
     // 2023-09-01 tables API: schema edits can return 202 Accepted; the
     // follow-up DCR update must not run while the table is locked
