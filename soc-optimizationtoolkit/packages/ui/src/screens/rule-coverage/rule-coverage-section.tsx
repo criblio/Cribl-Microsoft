@@ -324,7 +324,9 @@ function CoverageSectionBody({
             )}
             {item.unknown.length > 0 && (
               <div className="coverage-line coverage-line-unknown">
-                Unknown (computed or other-table): {item.unknown.join(", ")}
+                No action needed (query-computed or joined-table):{" "}
+                {item.unknown.join(", ")}
+                <InfoTip text="Names this rule references that are NOT columns of the destination table: variables the query computes itself (extend/summarize aliases, like CompleteUrl = strcat(...)) or columns it reads from OTHER tables it joins (watchlists, IdentityInfo, threat intel). There is nothing for the pipeline to supply, so they are excluded from the coverage percentage. Worth a quick scan for a real vendor field hiding under a different spelling - if you spot one, map a source onto it in the Gap Analysis." />
               </div>
             )}
             {item.queries.length > 0 && (
