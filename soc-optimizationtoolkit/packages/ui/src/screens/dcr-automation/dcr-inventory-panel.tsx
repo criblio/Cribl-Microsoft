@@ -11,7 +11,9 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   CUSTOM_COLUMN_TYPES,
+  DCR_WRITE_ACTION,
   addTableColumn,
+  checkDcrUpdatePermissions,
   listDcrInventory,
   listResourceGroups,
   previewDcrUpdate,
@@ -52,6 +54,13 @@ export function DcrInventoryPanel() {
   const [newColName, setNewColName] = useState("");
   const [newColType, setNewColType] = useState("string");
   const [removeColName, setRemoveColName] = useState("");
+  // Pre-update permission check (user request 2026-07-13): the write
+  // actions are verified when the preview opens; missing ones disable the
+  // mutating buttons with the exact action and scope named. Fail-open when
+  // the permissions API is unreadable.
+  const [missingActions, setMissingActions] = useState<
+    Array<{ action: string; scope: string }>
+  >([]);
   // Matching (green) columns show by default (user color semantics
   // 2026-07-13: matches ARE the highlight); the toggle hides them when the
   // 150+ chips get in the way of the changes.
@@ -120,6 +129,26 @@ export function DcrInventoryPanel() {
         setPreviewLocation(entry.location);
         setPreviewDce(entry.dataCollectionEndpointId);
         setNewColName("");
+        // Verify the write permissions BEFORE any mutation is offered.
+        const perms = await checkDcrUpdatePermissions(ports.azure, {
+          subscriptionId: config.subscriptionId,
+          dcrResourceGroup: inventoryRg,
+          workspaceResourceGroup: config.resourceGroup,
+          includeTableEdit: true,
+        });
+        setMissingActions(perms.missing);
+        if (perms.missing.length > 0) {
+          logError(
+            "permission check: missing " +
+              perms.missing.map((m) => `${m.action} at ${m.scope}`).join("; "),
+          );
+        } else if (perms.indeterminate) {
+          logInfo(
+            "permission check: RBAC permissions API unreadable - proceeding without the pre-check",
+          );
+        } else {
+          logInfo("permission check: all write actions granted");
+        }
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         logError(`preview of '${entry.name}' failed: ${message}`);
@@ -129,7 +158,7 @@ export function DcrInventoryPanel() {
         setBusy(false);
       }
     },
-    [ports.azure, scope, logInfo, logError],
+    [ports.azure, scope, config.subscriptionId, config.resourceGroup, inventoryRg, logInfo, logError],
   );
 
   // Apply = the PUT-over-existing-name upsert, then re-preview so the panel
@@ -480,6 +509,17 @@ export function DcrInventoryPanel() {
                   Close
                 </button>
               </div>
+              {missingActions.length > 0 && (
+                <pre className="result">
+                  {[
+                    "Missing permissions - grant these to the app registration before updating:",
+                    ...missingActions.map(
+                      (m) => `  ${m.action}${"\n"}    at ${m.scope}`,
+                    ),
+                    "(Monitoring Contributor covers the DCR action; Log Analytics Contributor covers the table action.)",
+                  ].join("\n")}
+                </pre>
+              )}
               {busy && progress !== "" && (
                 <p className="panel-desc dcr-progress-line">{progress}</p>
               )}
@@ -514,8 +554,16 @@ export function DcrInventoryPanel() {
                       <button
                         className="run-button"
                         onClick={() => void addColumn()}
-                        disabled={busy || newColName.trim() === ""}
-                        title="Adds the field to the table AND applies the DCR update - ingestable end to end."
+                        disabled={
+                          busy ||
+                          newColName.trim() === "" ||
+                          missingActions.length > 0
+                        }
+                        title={
+                          missingActions.length > 0
+                            ? "Blocked: the app registration is missing write permissions - see the list above."
+                            : "Adds the field to the table AND applies the DCR update - ingestable end to end."
+                        }
                       >
                         Add to table and DCR
                       </button>
@@ -557,8 +605,16 @@ export function DcrInventoryPanel() {
                           <button
                             className="gap-reset-button"
                             onClick={() => void removeColumn()}
-                            disabled={busy || removeColName === ""}
-                            title="Removes the custom field from the table AND applies the DCR update - gone end to end."
+                            disabled={
+                              busy ||
+                              removeColName === "" ||
+                              missingActions.length > 0
+                            }
+                            title={
+                              missingActions.length > 0
+                                ? "Blocked: the app registration is missing write permissions - see the list above."
+                                : "Removes the custom field from the table AND applies the DCR update - gone end to end."
+                            }
                           >
                             Remove from table and DCR
                           </button>
@@ -629,7 +685,15 @@ export function DcrInventoryPanel() {
                 <button
                   className="run-button"
                   onClick={() => void applyUpdate()}
-                  disabled={busy}
+                  disabled={
+                    busy ||
+                    missingActions.some((m) => m.action === DCR_WRITE_ACTION)
+                  }
+                  title={
+                    missingActions.some((m) => m.action === DCR_WRITE_ACTION)
+                      ? `Blocked: ${DCR_WRITE_ACTION} is not granted at the DCR's resource group.`
+                      : undefined
+                  }
                 >
                   Apply update to {preview.dcrName}
                 </button>

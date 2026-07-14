@@ -20,6 +20,9 @@ import {
   buildDceDcrRequest,
   buildDirectDcrRequest,
 } from "../../domain/dcr-request";
+import { hasEffectiveAction } from "../../domain/azure-permissions";
+import type { PermissionsResponse } from "../../domain/azure-permissions";
+import { RBAC_PERMISSIONS_API_VERSION } from "../permission-preflight";
 import { selectSchemaColumns } from "../../domain/schema-mapping";
 import type { LogAnalyticsColumn } from "../../domain/schema-mapping";
 import { LOG_ANALYTICS_API_VERSION } from "../onboard-table";
@@ -207,6 +210,109 @@ export async function updateDcrInPlace(
     columnCount: columns.length,
     provisioningState: state,
   };
+}
+
+// ---------------------------------------------------------------------------
+// Permission check: verify the write actions BEFORE attempting an update
+// ---------------------------------------------------------------------------
+
+/** The write action a DCR update PUTs with. */
+export const DCR_WRITE_ACTION = "Microsoft.Insights/dataCollectionRules/write";
+/** The write action a table schema edit PATCHes with. */
+export const TABLE_WRITE_ACTION =
+  "Microsoft.OperationalInsights/workspaces/tables/write";
+
+/** Result of the pre-update permission check. */
+export interface DcrUpdatePermissionCheck {
+  /** True when every checked write action is granted. */
+  granted: boolean;
+  /** The missing actions, each with the scope it was checked at. */
+  missing: Array<{ action: string; scope: string }>;
+  /**
+   * True when the RBAC permissions API itself was unreadable - the check is
+   * FAIL-OPEN then (granted true, nothing blocked): the real update carries
+   * its own ARM error, and an unreadable permissions endpoint must not
+   * paralyze a principal that can in fact write.
+   */
+  indeterminate: boolean;
+}
+
+async function effectivePermissionsAt(
+  azure: AzureManagement,
+  scope: string,
+): Promise<PermissionsResponse | null> {
+  try {
+    const response = await azure.request({
+      method: "GET",
+      path: `${scope}/providers/Microsoft.Authorization/permissions`,
+      apiVersion: RBAC_PERMISSIONS_API_VERSION,
+    });
+    if (response.status < 200 || response.status >= 300) return null;
+    const value = prop(response.body, "value");
+    if (!Array.isArray(value)) return null;
+    return {
+      value: value.map((element) => ({
+        actions: Array.isArray(prop(element, "actions"))
+          ? (prop(element, "actions") as string[])
+          : [],
+        notActions: Array.isArray(prop(element, "notActions"))
+          ? (prop(element, "notActions") as string[])
+          : [],
+        dataActions: [],
+        notDataActions: [],
+      })),
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Check the caller's effective RBAC permissions for a DCR update BEFORE
+ * attempting it (user request 2026-07-13): dataCollectionRules/write at the
+ * DCR's resource group, plus workspaces/tables/write at the workspace's
+ * group when a table schema edit is part of the action.
+ */
+export async function checkDcrUpdatePermissions(
+  azure: AzureManagement,
+  input: {
+    subscriptionId: string;
+    /** The resource group the DCR lives in (the PUT scope). */
+    dcrResourceGroup: string;
+    /** The workspace's resource group (table edits land here). */
+    workspaceResourceGroup?: string;
+    /** Also require the table schema-edit action (add/remove field). */
+    includeTableEdit?: boolean;
+  },
+): Promise<DcrUpdatePermissionCheck> {
+  const rgScope = (rg: string) =>
+    `/subscriptions/${input.subscriptionId}/resourceGroups/${rg}`;
+  const dcrScope = rgScope(input.dcrResourceGroup);
+  const missing: Array<{ action: string; scope: string }> = [];
+  let indeterminate = false;
+
+  const dcrPerms = await effectivePermissionsAt(azure, dcrScope);
+  if (dcrPerms === null) {
+    indeterminate = true;
+  } else if (!hasEffectiveAction(dcrPerms, DCR_WRITE_ACTION)) {
+    missing.push({ action: DCR_WRITE_ACTION, scope: dcrScope });
+  }
+
+  if (input.includeTableEdit === true && input.workspaceResourceGroup) {
+    const tableScope = rgScope(input.workspaceResourceGroup);
+    // Same scope: reuse the response instead of a second GET.
+    const tablePerms =
+      tableScope === dcrScope
+        ? dcrPerms
+        : await effectivePermissionsAt(azure, tableScope);
+    if (tablePerms === null) {
+      indeterminate = true;
+    } else if (!hasEffectiveAction(tablePerms, TABLE_WRITE_ACTION)) {
+      missing.push({ action: TABLE_WRITE_ACTION, scope: tableScope });
+    }
+  }
+
+  return { granted: missing.length === 0, missing, indeterminate };
 }
 
 // ---------------------------------------------------------------------------

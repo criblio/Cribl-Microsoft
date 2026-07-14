@@ -7,6 +7,7 @@ import { describe, expect, it } from "vitest";
 import { FakeAzureManagement } from "../../testing/fake-azure-management";
 import {
   addTableColumn,
+  checkDcrUpdatePermissions,
   diffColumns,
   previewDcrUpdate,
   removeTableColumn,
@@ -391,5 +392,76 @@ describe("updateDcrInPlace", () => {
     await expect(updateDcrInPlace(azure2, INPUT)).rejects.toThrow(
       /update DCR 'dcr-someone-else-made': HTTP 409/,
     );
+  });
+});
+
+describe("checkDcrUpdatePermissions", () => {
+  const SCOPE = {
+    subscriptionId: "sub",
+    dcrResourceGroup: "dcr-rg",
+    workspaceResourceGroup: "ws-rg",
+  };
+  const grantAll = { status: 200, body: { value: [{ actions: ["*"], notActions: [] }] } };
+  const readOnly = {
+    status: 200,
+    body: { value: [{ actions: ["*/read"], notActions: [] }] },
+  };
+
+  it("grants when the write actions are effective at both scopes", async () => {
+    const azure = new FakeAzureManagement();
+    azure.respondWith(grantAll, grantAll);
+    const check = await checkDcrUpdatePermissions(azure, {
+      ...SCOPE,
+      includeTableEdit: true,
+    });
+    expect(check).toEqual({ granted: true, missing: [], indeterminate: false });
+    // Two scopes = two permission GETs, each at its resource group.
+    expect(azure.calls.map((c) => c.path)).toEqual([
+      "/subscriptions/sub/resourceGroups/dcr-rg/providers/Microsoft.Authorization/permissions",
+      "/subscriptions/sub/resourceGroups/ws-rg/providers/Microsoft.Authorization/permissions",
+    ]);
+  });
+
+  it("names each missing write action with its scope", async () => {
+    const azure = new FakeAzureManagement();
+    azure.respondWith(readOnly, readOnly);
+    const check = await checkDcrUpdatePermissions(azure, {
+      ...SCOPE,
+      includeTableEdit: true,
+    });
+    expect(check.granted).toBe(false);
+    expect(check.missing).toEqual([
+      {
+        action: "Microsoft.Insights/dataCollectionRules/write",
+        scope: "/subscriptions/sub/resourceGroups/dcr-rg",
+      },
+      {
+        action: "Microsoft.OperationalInsights/workspaces/tables/write",
+        scope: "/subscriptions/sub/resourceGroups/ws-rg",
+      },
+    ]);
+  });
+
+  it("reuses one GET when the DCR and workspace share a resource group", async () => {
+    const azure = new FakeAzureManagement();
+    azure.respondWith(grantAll);
+    const check = await checkDcrUpdatePermissions(azure, {
+      subscriptionId: "sub",
+      dcrResourceGroup: "rg",
+      workspaceResourceGroup: "rg",
+      includeTableEdit: true,
+    });
+    expect(check.granted).toBe(true);
+    expect(azure.calls.length).toBe(1);
+  });
+
+  it("fails OPEN when the permissions API is unreadable", async () => {
+    const azure = new FakeAzureManagement();
+    azure.respondWith({ status: 403, body: {} });
+    const check = await checkDcrUpdatePermissions(azure, {
+      ...SCOPE,
+      includeTableEdit: false,
+    });
+    expect(check).toEqual({ granted: true, missing: [], indeterminate: true });
   });
 });
