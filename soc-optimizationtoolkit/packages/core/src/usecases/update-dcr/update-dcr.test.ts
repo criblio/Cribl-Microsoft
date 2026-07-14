@@ -6,6 +6,7 @@
 import { describe, expect, it } from "vitest";
 import { FakeAzureManagement } from "../../testing/fake-azure-management";
 import {
+  addDcrField,
   addTableColumn,
   checkDcrUpdatePermissions,
   diffColumns,
@@ -43,6 +44,7 @@ describe("updateDcrInPlace", () => {
     const azure = new FakeAzureManagement();
     azure.respondWith(
       TABLE_SCHEMA,
+      { status: 200, body: { properties: {} } },
       { status: 200, body: { properties: { provisioningState: "Succeeded" } } },
     );
     const result = await updateDcrInPlace(azure, INPUT);
@@ -60,6 +62,7 @@ describe("updateDcrInPlace", () => {
     const azure = new FakeAzureManagement();
     azure.respondWith(
       TABLE_SCHEMA,
+      { status: 200, body: { properties: {} } },
       { status: 200, body: { properties: { provisioningState: "Succeeded" } } },
     );
     await updateDcrInPlace(azure, { ...INPUT, dcrResourceGroup: "other-rg" });
@@ -73,6 +76,7 @@ describe("updateDcrInPlace", () => {
     const azure = new FakeAzureManagement();
     azure.respondWith(
       TABLE_SCHEMA,
+      { status: 200, body: { properties: {} } },
       { status: 200, body: { properties: { provisioningState: "Succeeded" } } },
     );
     await updateDcrInPlace(azure, {
@@ -95,6 +99,7 @@ describe("updateDcrInPlace", () => {
     const azure = new FakeAzureManagement();
     azure.respondWith(
       TABLE_SCHEMA,
+      { status: 200, body: { properties: {} } },
       { status: 200, body: { properties: { provisioningState: "Updating" } } },
       { status: 200, body: { properties: { provisioningState: "Succeeded" } } },
     );
@@ -424,7 +429,11 @@ describe("updateDcrInPlace", () => {
     );
 
     const azure2 = new FakeAzureManagement();
-    azure2.respondWith(TABLE_SCHEMA, { status: 409, body: { error: "busy" } });
+    azure2.respondWith(
+      TABLE_SCHEMA,
+      { status: 200, body: { properties: {} } },
+      { status: 409, body: { error: "busy" } },
+    );
     await expect(updateDcrInPlace(azure2, INPUT)).rejects.toThrow(
       /update DCR 'dcr-someone-else-made': HTTP 409/,
     );
@@ -499,5 +508,85 @@ describe("checkDcrUpdatePermissions", () => {
       includeTableEdit: false,
     });
     expect(check).toEqual({ granted: true, missing: [], indeterminate: true });
+  });
+});
+
+describe("addDcrField (restricted tables - pure DCR change)", () => {
+  it("grafts the field into the declaration and maps it to a free extension column", async () => {
+    const azure = new FakeAzureManagement();
+    azure.respondWith(
+      // Live DCR: FlexString1 already assigned by an earlier graft.
+      {
+        status: 200,
+        body: {
+          properties: {
+            streamDeclarations: {
+              "Custom-SecurityEvent": {
+                columns: [{ name: "TimeGenerated", type: "datetime" }],
+              },
+            },
+            dataFlows: [
+              { transformKql: "source | extend FlexString1 = old, FlexString1Label = 'old' | project-away old" },
+            ],
+          },
+        },
+      },
+      {
+        status: 200,
+        body: {
+          properties: {
+            schema: {
+              standardColumns: [
+                { name: "TimeGenerated", type: "datetime" },
+                { name: "FlexString1", type: "string" },
+                { name: "FlexString1Label", type: "string" },
+                { name: "FlexString2", type: "string" },
+                { name: "FlexString2Label", type: "string" },
+              ],
+            },
+          },
+        },
+      },
+      { status: 200, body: { properties: { provisioningState: "Succeeded" } } },
+    );
+    const result = await addDcrField(azure, {
+      ...INPUT,
+      column: { name: "ztest", type: "string" },
+    });
+    // FlexString1 is taken by the live transform - the graft takes 2.
+    expect(result.mappedTo).toBe("FlexString2");
+    expect(result.labelColumn).toBe("FlexString2Label");
+    const put = azure.calls.find((c) => c.method === "PUT");
+    const body = put!.body as {
+      properties: {
+        streamDeclarations: Record<string, { columns: Array<{ name: string }> }>;
+        dataFlows: Array<{ transformKql: string }>;
+      };
+    };
+    const names = body.properties.streamDeclarations["Custom-SecurityEvent"].columns.map(
+      (c) => c.name,
+    );
+    expect(names).toContain("ztest");
+    // The existing transform SURVIVES with the new mapping appended.
+    expect(body.properties.dataFlows[0].transformKql).toBe(
+      "source | extend FlexString1 = old, FlexString1Label = 'old' | project-away old " +
+        "| extend FlexString2 = ztest, FlexString2Label = 'ztest' | project-away ztest",
+    );
+  });
+
+  it("pickExtensionColumn walks the type ladders and respects taken slots", async () => {
+    const schema = new Set(["flexstring1", "flexstring2", "flexnumber1", "flexdate1"]);
+    const { pickExtensionColumn } = await import("./update-dcr");
+    expect(pickExtensionColumn("string", new Set(), schema)?.column).toBe("FlexString1");
+    expect(
+      pickExtensionColumn("string", new Set(["flexstring1"]), schema)?.column,
+    ).toBe("FlexString2");
+    expect(pickExtensionColumn("long", new Set(), schema)?.column).toBe("FlexNumber1");
+    expect(pickExtensionColumn("dateTime", new Set(), schema)?.column).toBe("FlexDate1");
+    // Non-string types on the string ladder coerce.
+    expect(pickExtensionColumn("boolean", new Set(), schema)?.coerce).toBe(true);
+    expect(
+      pickExtensionColumn("string", new Set(["flexstring1", "flexstring2"]), new Set(["flexstring1", "flexstring2"])),
+    ).toBeNull();
   });
 });

@@ -159,6 +159,54 @@ export async function updateDcrInPlace(
     `/subscriptions/${input.subscriptionId}` +
     `/resourceGroups/${input.dcrResourceGroup ?? input.resourceGroup}` +
     `/providers/Microsoft.Insights/dataCollectionRules/${input.dcrName}`;
+
+  // PRESERVE the live transform and any input-only declaration columns
+  // (grafted field mappings from addDcrField, hand-added transforms) - a
+  // rebuild must never wipe them (research gap closed 2026-07-13).
+  try {
+    const live = await azure.request({
+      method: "GET",
+      path: dcrPath,
+      apiVersion: request.apiVersion,
+    });
+    if (live.status >= 200 && live.status < 300) {
+      const liveColumns = declarationColumns(live.body);
+      const liveFlows = prop(prop(live.body, "properties"), "dataFlows");
+      const liveTransform = String(
+        (Array.isArray(liveFlows)
+          ? prop(liveFlows[0], "transformKql")
+          : undefined) ?? "source",
+      );
+      const properties = (
+        request.body as unknown as { properties: Record<string, unknown> }
+      ).properties;
+      const declarations = properties["streamDeclarations"] as Record<
+        string,
+        { columns: Array<{ name: string; type: string }> }
+      >;
+      const declared = declarations[request.streamName].columns;
+      const names = new Set(declared.map((c) => c.name.toLowerCase()));
+      const transformLower = liveTransform.toLowerCase();
+      for (const column of liveColumns) {
+        // Only TRANSFORM-REFERENCED extras survive (grafted input fields);
+        // a column that merely vanished from the table is a real removal.
+        if (
+          !names.has(column.name.toLowerCase()) &&
+          transformLower.includes(column.name.toLowerCase())
+        ) {
+          declared.push({ name: column.name, type: column.type });
+          names.add(column.name.toLowerCase());
+        }
+      }
+      const dataFlows = properties["dataFlows"] as Array<
+        Record<string, unknown>
+      >;
+      dataFlows[0]["transformKql"] = liveTransform;
+    }
+  } catch {
+    // Best-effort: an unreadable live DCR falls back to the pure rebuild.
+  }
+
   const putResponse = await azure.request({
     method: request.method,
     path: dcrPath,
@@ -209,6 +257,233 @@ export async function updateDcrInPlace(
     table: input.table,
     columnCount: columns.length,
     provisioningState: state,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// DCR-only field add: restricted tables (user direction 2026-07-13 - "the
+// DCR automation should handle any table or DCR changes")
+// ---------------------------------------------------------------------------
+
+/**
+ * CommonSecurityLog-style extension columns, in assignment preference order
+ * per value type. A field that cannot live as its own table column rides in
+ * one of these, with the companion Label column carrying its real name.
+ */
+const EXTENSION_LADDERS: Record<string, string[]> = {
+  string: [
+    "FlexString1",
+    "FlexString2",
+    "DeviceCustomString1",
+    "DeviceCustomString2",
+    "DeviceCustomString3",
+    "DeviceCustomString4",
+    "DeviceCustomString5",
+    "DeviceCustomString6",
+  ],
+  number: [
+    "FlexNumber1",
+    "FlexNumber2",
+    "DeviceCustomNumber1",
+    "DeviceCustomNumber2",
+    "DeviceCustomNumber3",
+  ],
+  date: ["FlexDate1", "DeviceCustomDate1", "DeviceCustomDate2"],
+};
+
+/**
+ * Pick the next FREE extension column for a value type: present in the
+ * table schema, not already assigned. Non-string/number/date types coerce
+ * to the string ladder. Null = every candidate is taken or absent.
+ */
+export function pickExtensionColumn(
+  type: string,
+  taken: ReadonlySet<string>,
+  schemaColumns: ReadonlySet<string>,
+): { column: string; coerce: boolean } | null {
+  const ladder =
+    type === "int" || type === "long" || type === "real"
+      ? EXTENSION_LADDERS.number
+      : type === "dateTime"
+        ? EXTENSION_LADDERS.date
+        : EXTENSION_LADDERS.string;
+  for (const column of ladder) {
+    const key = column.toLowerCase();
+    if (schemaColumns.has(key) && !taken.has(key)) {
+      return {
+        column,
+        coerce: ladder === EXTENSION_LADDERS.string && type !== "string",
+      };
+    }
+  }
+  return null;
+}
+
+/** Extension columns already ASSIGNED in a transform ("FlexString1 =" ...). */
+function assignedExtensionColumns(transformKql: string): Set<string> {
+  const taken = new Set<string>();
+  const pattern =
+    /(FlexString[0-9]|FlexNumber[0-9]|FlexDate[0-9]|DeviceCustom[A-Za-z]+[0-9])\s*=/g;
+  for (const m of transformKql.matchAll(pattern)) {
+    taken.add(m[1].toLowerCase());
+  }
+  return taken;
+}
+
+/** Result of the DCR-only field add. */
+export interface AddDcrFieldResult {
+  dcrName: string;
+  table: string;
+  /** The sender-side input field added to the stream declaration. */
+  inputField: string;
+  /** The table extension column the transform maps it into. */
+  mappedTo: string;
+  /** The companion Label column set to the field name ("" = none exists). */
+  labelColumn: string;
+}
+
+/**
+ * Add a field WITHOUT touching the table (restricted tables like
+ * CommonSecurityLog): the field joins the DCR's stream declaration (senders
+ * may post it) and the dataFlow's transformKql maps it into the next free
+ * extension column, with the companion Label column set to the field name.
+ * A pure DCR PUT - the proven-working operation on these tables. The
+ * existing transform and any input-only declaration columns SURVIVE.
+ */
+export async function addDcrField(
+  azure: AzureManagement,
+  input: UpdateDcrInput & { column: { name: string; type: string } },
+): Promise<AddDcrFieldResult> {
+  const name = input.column.name.trim();
+  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) {
+    throw new Error(
+      `field name '${name}' is invalid - letters, digits, and underscores only, not starting with a digit`,
+    );
+  }
+  const workspacePath =
+    `/subscriptions/${input.subscriptionId}` +
+    `/resourceGroups/${input.resourceGroup}` +
+    `/providers/Microsoft.OperationalInsights/workspaces/${input.workspaceName}`;
+  const dcrPath =
+    `/subscriptions/${input.subscriptionId}` +
+    `/resourceGroups/${input.dcrResourceGroup ?? input.resourceGroup}` +
+    `/providers/Microsoft.Insights/dataCollectionRules/${input.dcrName}`;
+  const isCustom = input.table.endsWith("_CL");
+
+  const dcrResponse = await azure.request({
+    method: "GET",
+    path: dcrPath,
+    apiVersion: "2023-03-11",
+  });
+  if (dcrResponse.status < 200 || dcrResponse.status >= 300) {
+    throw new Error(`fetch DCR '${input.dcrName}': HTTP ${dcrResponse.status}`);
+  }
+  const currentColumns = declarationColumns(dcrResponse.body);
+  const flows = prop(prop(dcrResponse.body, "properties"), "dataFlows");
+  const currentTransform = String(
+    (Array.isArray(flows) ? prop(flows[0], "transformKql") : undefined) ??
+      "source",
+  );
+
+  const tableResponse = await azure.request({
+    method: "GET",
+    path: `${workspacePath}/tables/${input.table}`,
+    apiVersion: LOG_ANALYTICS_API_VERSION,
+  });
+  if (tableResponse.status < 200 || tableResponse.status >= 300) {
+    throw new Error(
+      `fetch schema for table '${input.table}': HTTP ${tableResponse.status}`,
+    );
+  }
+  const schema = prop(prop(tableResponse.body, "properties"), "schema");
+  const tableColumns = resolveTableColumns(schema, isCustom);
+  if (tableColumns === null) {
+    throw new Error(
+      `table '${input.table}' has no usable column source in its schema response`,
+    );
+  }
+  const schemaSet = new Set(tableColumns.map((c) => c.name.toLowerCase()));
+  if (schemaSet.has(name.toLowerCase())) {
+    throw new Error(
+      `'${name}' is already a column on '${input.table}' - update the DCR in place instead`,
+    );
+  }
+  const pick = pickExtensionColumn(
+    input.column.type,
+    assignedExtensionColumns(currentTransform),
+    schemaSet,
+  );
+  if (pick === null) {
+    throw new Error(
+      `no free extension column on '${input.table}' for type '${input.column.type}' - ` +
+        "every Flex/DeviceCustom slot is assigned; use a custom (_CL) side table",
+    );
+  }
+  const labelColumn = schemaSet.has(`${pick.column.toLowerCase()}label`)
+    ? `${pick.column}Label`
+    : "";
+
+  // Rebuild the body, then graft: preserved extras + the new input field in
+  // the declaration, and the mapping appended to the preserved transform.
+  const requestInput = {
+    table: input.table,
+    columns: tableColumns,
+    location: input.location,
+    workspaceResourceId: workspacePath,
+    dcrName: input.dcrName,
+    tableMode: isCustom ? ("custom" as const) : ("native" as const),
+  };
+  const request =
+    input.dceResourceId !== undefined && input.dceResourceId !== ""
+      ? buildDceDcrRequest({
+          ...requestInput,
+          dataCollectionEndpointId: input.dceResourceId,
+        })
+      : buildDirectDcrRequest(requestInput);
+  const properties = (request.body as unknown as { properties: Record<string, unknown> })
+    .properties;
+  const declarations = properties["streamDeclarations"] as Record<
+    string,
+    { columns: Array<{ name: string; type: string }> }
+  >;
+  const declared = declarations[request.streamName].columns;
+  const declaredNames = new Set(declared.map((c) => c.name.toLowerCase()));
+  for (const column of currentColumns) {
+    if (!declaredNames.has(column.name.toLowerCase())) {
+      declared.push({ name: column.name, type: column.type });
+      declaredNames.add(column.name.toLowerCase());
+    }
+  }
+  if (!declaredNames.has(name.toLowerCase())) {
+    declared.push({
+      name,
+      type: input.column.type === "dateTime" ? "datetime" : input.column.type,
+    });
+  }
+  const valueExpr = pick.coerce ? `tostring(${name})` : name;
+  const labelClause = labelColumn !== "" ? `, ${labelColumn} = '${name}'` : "";
+  const mapping = `| extend ${pick.column} = ${valueExpr}${labelClause} | project-away ${name}`;
+  const dataFlows = properties["dataFlows"] as Array<Record<string, unknown>>;
+  dataFlows[0]["transformKql"] = `${currentTransform} ${mapping}`;
+
+  const putResponse = await azure.request({
+    method: request.method,
+    path: dcrPath,
+    apiVersion: request.apiVersion,
+    body: request.body,
+  });
+  if (putResponse.status < 200 || putResponse.status >= 300) {
+    throw new Error(
+      `add DCR field '${name}': HTTP ${putResponse.status} ` +
+        JSON.stringify(putResponse.body).slice(0, 300),
+    );
+  }
+  return {
+    dcrName: input.dcrName,
+    table: input.table,
+    inputField: name,
+    mappedTo: pick.column,
+    labelColumn,
   };
 }
 
@@ -452,6 +727,23 @@ export async function previewDcrUpdate(
         })
       : buildDirectDcrRequest(previewInput);
   const rebuiltDcrColumns = declarationColumns(request.body);
+  // Grafted input-only columns (referenced by the live transform) SURVIVE
+  // an update - the preview unions them so they never read as removals; a
+  // column that merely vanished from the table stays a real removal.
+  const dcrFlows = prop(prop(dcrResponse.body, "properties"), "dataFlows");
+  const liveTransform = String(
+    (Array.isArray(dcrFlows) ? prop(dcrFlows[0], "transformKql") : undefined) ??
+      "source",
+  ).toLowerCase();
+  const rebuiltNames = new Set(rebuiltDcrColumns.map((c) => c.name.toLowerCase()));
+  for (const column of currentDcrColumns) {
+    if (
+      !rebuiltNames.has(column.name.toLowerCase()) &&
+      liveTransform.includes(column.name.toLowerCase())
+    ) {
+      rebuiltDcrColumns.push(column);
+    }
+  }
 
   return {
     dcrName: input.dcrName,

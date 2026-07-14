@@ -12,6 +12,7 @@ import { useCallback, useEffect, useState } from "react";
 import {
   CUSTOM_COLUMN_TYPES,
   DCR_WRITE_ACTION,
+  addDcrField,
   addTableColumn,
   checkDcrUpdatePermissions,
   listDcrInventory,
@@ -250,6 +251,47 @@ export function DcrInventoryPanel() {
     );
     setProgress(`Adding '${columnName}' (${newColType}) to ${preview.table}...`);
     try {
+      if (!preview.table.endsWith("_CL")) {
+        // RESTRICTED native table (user direction 2026-07-13): a pure DCR
+        // change - the field joins the stream declaration and the transform
+        // maps it into a free extension column. No table edit at all.
+        setProgress(
+          `Adding '${columnName}' to the DCR and mapping it to an extension column...`,
+        );
+        const grafted = await addDcrField(ports.azure, {
+          ...scope(),
+          dcrName: preview.dcrName,
+          table: preview.table,
+          location: previewLocation,
+          dceResourceId: previewDce || undefined,
+          column: { name: columnName, type: newColType },
+        });
+        const labelPart =
+          grafted.labelColumn !== ""
+            ? ` with ${grafted.labelColumn} = '${grafted.inputField}'`
+            : "";
+        logInfo(
+          `added DCR input field '${grafted.inputField}' mapped to ${grafted.mappedTo}${labelPart} on '${grafted.dcrName}'`,
+        );
+        setNotice(
+          `Added '${grafted.inputField}' to the DCR input and mapped it to ` +
+            `${grafted.mappedTo}${labelPart}. The table schema is unchanged ` +
+            `(Azure restricts it). Query: ${preview.table} | where ` +
+            `${grafted.labelColumn || grafted.mappedTo} == '${grafted.inputField}'`,
+        );
+        setNewColName("");
+        setProgress("Refreshing the field list...");
+        setPreview(
+          await previewDcrUpdate(ports.azure, {
+            ...scope(),
+            dcrName: preview.dcrName,
+            table: preview.table,
+            location: previewLocation,
+            dceResourceId: previewDce || undefined,
+          }),
+        );
+        return;
+      }
       const added = await addTableColumn(ports.azure, {
         ...scope(),
         table: preview.table,
@@ -602,9 +644,11 @@ export function DcrInventoryPanel() {
                     </div>
                     {nativeTable && (
                       <p className="field-hint">
-                        {preview.table} is a native table: custom fields are
-                        named with the _CF suffix (added automatically), e.g.
-                        MyField_CF.
+                        {preview.table} is a native table: the field is added
+                        to the DCR input and mapped into a free extension
+                        column (FlexString/DeviceCustom*) with its Label set
+                        to the field name - the table schema itself is never
+                        changed.
                       </p>
                     )}
                     {(() => {
