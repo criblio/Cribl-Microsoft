@@ -3667,7 +3667,13 @@ button.journey-step-main:hover .journey-step-label {
   z-index: 40;
   top: calc(100% + 2px);
   left: 0;
-  right: 0;
+  /* Size to CONTENT, not the (often narrow) trigger - full option labels
+     stay readable (live feedback 2026-07-13: worker group names truncated
+     to "def...", "Azu..."). */
+  right: auto;
+  min-width: 100%;
+  width: max-content;
+  max-width: 340px;
   display: flex;
   flex-direction: column;
   border: 1px solid var(--border);
