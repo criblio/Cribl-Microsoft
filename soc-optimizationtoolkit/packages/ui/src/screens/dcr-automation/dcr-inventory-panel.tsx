@@ -696,27 +696,6 @@ export function DcrInventoryPanel() {
                 );
               })()}
               <p className="panel-desc">{summarizePreview(preview)}</p>
-              {pendingRemove !== "" && (
-                <div className="panel-controls">
-                  <span className="field-label">
-                    Remove '{pendingRemove}' from the table and DCR?
-                  </span>
-                  <button
-                    className="gap-reset-button"
-                    disabled={busy}
-                    onClick={() => {
-                      const name = pendingRemove;
-                      setPendingRemove("");
-                      void removeColumn(name);
-                    }}
-                  >
-                    Remove
-                  </button>
-                  <button className="run-button" disabled={busy} onClick={() => setPendingRemove("")}>
-                    Cancel
-                  </button>
-                </div>
-              )}
               {(() => {
                 const chips = mergePreviewColumns(preview);
                 const nativeT = !preview.table.endsWith("_CL");
@@ -750,15 +729,14 @@ export function DcrInventoryPanel() {
                               : c.type}
                           </span>
                           {c.status !== "removed" && canRemove(c.name) && (
-                            <button
-                              className="dcr-col-x"
-                              aria-label={`Remove ${c.name}`}
-                              title={`Remove ${c.name} from the table and DCR`}
-                              disabled={busy}
-                              onClick={() => setPendingRemove(c.name)}
-                            >
-                              x
-                            </button>
+                            pendingRemove === c.name ? (
+                              <>
+                                <button className="dcr-col-x dcr-col-x-confirm" disabled={busy} title="Confirm: remove from table and DCR" onClick={() => { setPendingRemove(""); void removeColumn(c.name); }}>remove?</button>
+                                <button className="dcr-col-x" disabled={busy} title="Cancel" onClick={() => setPendingRemove("")}>no</button>
+                              </>
+                            ) : (
+                              <button className="dcr-col-x" aria-label={`Remove ${c.name}`} title={`Remove ${c.name} from the table and DCR`} disabled={busy} onClick={() => setPendingRemove(c.name)}>x</button>
+                            )
                           )}
                         </span>
                       ))}
@@ -772,15 +750,14 @@ export function DcrInventoryPanel() {
                             {c.name}
                             <span className="dcr-col-type">{c.type}</span>
                             {canRemove(c.name) && (
-                              <button
-                                className="dcr-col-x"
-                                aria-label={`Remove ${c.name}`}
-                                title={`Remove ${c.name} from the table and DCR`}
-                                disabled={busy}
-                                onClick={() => setPendingRemove(c.name)}
-                              >
-                                x
-                              </button>
+                              pendingRemove === c.name ? (
+                                <>
+                                  <button className="dcr-col-x dcr-col-x-confirm" disabled={busy} title="Confirm: remove from table and DCR" onClick={() => { setPendingRemove(""); void removeColumn(c.name); }}>remove?</button>
+                                  <button className="dcr-col-x" disabled={busy} title="Cancel" onClick={() => setPendingRemove("")}>no</button>
+                                </>
+                              ) : (
+                                <button className="dcr-col-x" aria-label={`Remove ${c.name}`} title={`Remove ${c.name} from the table and DCR`} disabled={busy} onClick={() => setPendingRemove(c.name)}>x</button>
+                              )
                             )}
                           </span>
                         ))}

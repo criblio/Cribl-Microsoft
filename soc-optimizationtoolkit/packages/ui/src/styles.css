@@ -4212,6 +4212,11 @@ details[open] > summary::before {
   cursor: pointer;
   opacity: 0.6;
 }
+.dcr-col-x-confirm {
+  color: #c04a4a;
+  font-weight: 600;
+  opacity: 1;
+}
 .dcr-col-x:hover {
   opacity: 1;
   color: #c04a4a;
