@@ -26,7 +26,11 @@
  * Pure: no IO, no fetch, no React, no Date, no crypto, no Math.random.
  */
 
-import { analyticRuleToContentItem, parseRuleUploadFile } from "@soc/core";
+import {
+  analyticRuleToContentItem,
+  parseRuleUploadFile,
+  unionSchemaColumns,
+} from "@soc/core";
 import type {
   ContentItem,
   ContentItemType,
@@ -34,6 +38,7 @@ import type {
   CoverageSummary,
   GapReport,
   ItemCoverage,
+  SchemaCatalog,
 } from "@soc/core";
 
 // ---------------------------------------------------------------------------
@@ -103,6 +108,34 @@ export function destinationTableNamesFromReports(
   reports: readonly GapReport[],
 ): string[] {
   return [...new Set(reports.map((report) => report.tableName))].sort();
+}
+
+/**
+ * Union the destination schemas the analyzer classifies against: each
+ * report's OWN destSchema first - the analysis's source of truth, and the
+ * only place a DERIVED schema exists (an unresolvable _CL destination
+ * defined by the sample + content references resolves NOWHERE else; live
+ * regression 2026-07-14: Cloudflare_CL derived 81 columns in the gap
+ * analysis while this section still said "No schema could be resolved") -
+ * then each table through the SchemaCatalog for sibling-table completeness.
+ */
+export async function resolveSchemaUnion(
+  catalog: SchemaCatalog,
+  reports: readonly GapReport[],
+): Promise<string[]> {
+  const schemas: Array<Array<{ name: string }>> = [];
+  for (const report of reports) {
+    if (report.destSchema.length > 0) {
+      schemas.push(report.destSchema.map((c) => ({ name: c.name })));
+    }
+  }
+  for (const table of destinationTableNamesFromReports(reports)) {
+    const columns = await catalog.resolveSchema(table);
+    if (columns !== null) {
+      schemas.push(columns.map((c) => ({ name: c.name })));
+    }
+  }
+  return unionSchemaColumns(schemas);
 }
 
 // ---------------------------------------------------------------------------

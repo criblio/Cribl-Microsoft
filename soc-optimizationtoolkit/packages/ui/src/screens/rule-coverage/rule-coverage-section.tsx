@@ -52,7 +52,6 @@ import {
   parseParserYaml,
   parserFieldSynonyms,
   suggestCloseMatches,
-  unionSchemaColumns,
 } from "@soc/core";
 import type { CloseMatchCandidate } from "@soc/core";
 import type {
@@ -80,6 +79,7 @@ import {
   isRuleYamlFileName,
   missingFieldChips,
   parseCustomRuleUploads,
+  resolveSchemaUnion,
   ruleFieldSet,
 } from "./rule-coverage-state";
 import type { CoverageSectionView } from "./rule-coverage-state";
@@ -240,25 +240,6 @@ async function fetchParserFunctions(
     }
   }
   return { parsers, unparsed };
-}
-
-/**
- * Union the schemas of every destination table (the analyzer's schemaUnion):
- * a rule referencing a sibling table's column classifies
- * missing-from-reduced-schema, not unknown.
- */
-async function resolveSchemaUnion(
-  catalog: SchemaCatalog,
-  tableNames: readonly string[],
-): Promise<string[]> {
-  const schemas: Array<Array<{ name: string }>> = [];
-  for (const table of tableNames) {
-    const columns = await catalog.resolveSchema(table);
-    if (columns !== null) {
-      schemas.push(columns.map((c) => ({ name: c.name })));
-    }
-  }
-  return unionSchemaColumns(schemas);
 }
 
 /** One expandable coverage section (rule section or workbook section). */
@@ -496,10 +477,10 @@ export function RuleCoverageSection({
         const items = mergeCustomContentItems(repoAndWorkbooks, custom);
         onContentRequirementsChange?.(deriveContentRequirements(items));
 
-        const schemaUnion = await resolveSchemaUnion(
-          activeCatalog,
-          destinationTableNamesFromReports(reports),
-        );
+        // The union includes each report's OWN destSchema, so DERIVED
+        // schemas (unresolvable _CL destinations defined by the sample +
+        // content references) classify fields here too.
+        const schemaUnion = await resolveSchemaUnion(activeCatalog, reports);
         if (schemaUnion.length === 0) {
           // Without a resolvable destination schema every field classifies
           // "unknown" and the percentages are meaningless - say so instead
