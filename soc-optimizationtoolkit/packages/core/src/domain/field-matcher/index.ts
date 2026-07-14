@@ -102,3 +102,8 @@ export {
 // Overflow triage: unmappable vs outranked vs reviewable (per gap report)
 export type { OverflowTriage, OverflowTriageEntry } from "./overflow-triage";
 export { EMPTY_OVERFLOW_TRIAGE, triageOverflow } from "./overflow-triage";
+
+// Derived custom-table schemas: when a _CL destination resolves nowhere,
+// derive the schema from the sample + the content's referenced columns.
+export type { DerivedTableSchema } from "./derive-schema-from-sample";
+export { deriveCustomTableSchema } from "./derive-schema-from-sample";

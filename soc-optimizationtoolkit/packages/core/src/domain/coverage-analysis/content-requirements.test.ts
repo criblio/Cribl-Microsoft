@@ -34,6 +34,25 @@ describe("deriveContentRequirements", () => {
     expect(req.catchAllKeys.size).toBe(0);
   });
 
+  it("keeps the first-seen ORIGINAL casing per column (schema derivation needs it)", () => {
+    const req = deriveContentRequirements([
+      item(['Tbl\n| where ClientIP == "1"\n| extend x = split(RequestURL, "/")']),
+      item(['Tbl\n| where CLIENTIP == "2"']),
+    ]);
+    expect(req.columnNames?.get("clientip")).toBe("ClientIP");
+    expect(req.columnNames?.get("requesturl")).toBe("RequestURL");
+  });
+
+  it("merge keeps the first part's casing per column (rules before workbooks)", () => {
+    const rules = deriveContentRequirements([item(["Tbl | where ClientIP == '1'"])]);
+    const workbooks = deriveContentRequirements([
+      item(['Tbl\n| where CLIENTIP == "2"\n| extend x = split(OtherColumn, "/")']),
+    ]);
+    const merged = mergeContentRequirements([rules, workbooks]);
+    expect(merged.columnNames?.get("clientip")).toBe("ClientIP");
+    expect(merged.columnNames?.get("othercolumn")).toBe("OtherColumn");
+  });
+
   it("extracts catch-all keys from extract() literals and dynamic access", () => {
     const req = deriveContentRequirements([
       item([

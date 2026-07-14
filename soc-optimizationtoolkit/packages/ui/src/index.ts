@@ -431,25 +431,6 @@ export {
 } from "./screens/logs/logs-state";
 export type { LogFilterInputs } from "./screens/logs/logs-state";
 
-// Options (porting-plan Unit 4): the two @soc/core option forms rendered
-// from their field descriptors through the generic OptionFieldRow (the
-// descriptor-driven pattern later units reuse), with validate-on-save
-// per-field errors, a dirty indicator, and merge-preserving persistence
-// through shell-provided load/save callbacks over one stored blob.
-export { OptionFieldRow, OptionsScreen } from "./screens/options/options-screen";
-export type {
-  OptionFieldRowProps,
-  OptionsScreenProps,
-} from "./screens/options/options-screen";
-export {
-  defaultOptionsState,
-  isOptionsStateDirty,
-  patchFromState,
-  stateFromOptions,
-  validateOptionsState,
-} from "./screens/options/options-state";
-export type { OptionsFormState } from "./screens/options/options-state";
-
 // Sentinel content browser + Repositories/PAT settings (porting-plan Unit 14):
 // the lazy GitHub solution browser (search, deprecation badges, the preserved
 // `#/?solution=` deep link) and the PAT settings page (13-step walkthrough,
@@ -479,6 +460,23 @@ export type { RepositoriesScreenProps } from "./screens/repositories/repositorie
 export { ArchitectureScreen } from "./screens/architecture/architecture-screen";
 export { MappingCatalogScreen } from "./screens/mapping-catalog/mapping-catalog-screen";
 export { EventHubDiscoveryScreen } from "./screens/eventhub-discovery/eventhub-discovery-screen";
+
+// SIEM Migration (porting-plan Unit 26, ENG-40 + GUI-22): the rebuilt
+// migration analyzer - upload a Splunk/QRadar export, map its data sources
+// to Sentinel solutions, enrich with the solutions' analytics rules, pivot
+// into Sentinel Integration via the preserved solution deep link, and keep
+// the plan across navigation (ContentCache persistence).
+export { SiemMigrationScreen } from "./screens/siem-migration/siem-migration-screen";
+export type { SiemMigrationScreenProps } from "./screens/siem-migration/siem-migration-screen";
+export {
+  SIEM_MIGRATION_PLAN_KEY,
+  confidenceTone,
+  identifierSummary,
+  mappedSources,
+  migrationStatTiles,
+  unmappedSources,
+} from "./screens/siem-migration/siem-migration-state";
+export type { MigrationStatTile } from "./screens/siem-migration/siem-migration-state";
 export {
   derivePatFormView,
   deriveReachabilityStatus,
@@ -616,6 +614,47 @@ export type {
 } from "./screens/setup-wizard/leader-connect-step";
 export { UploadWalkthroughStep } from "./screens/setup-wizard/upload-walkthrough-step";
 export type { UploadWalkthroughStepProps } from "./screens/setup-wizard/upload-walkthrough-step";
+
+// Setup page Azure sections (the promoted Diagnostics panels 3 and 4): the
+// App-registration connect form (shell-injected connect mechanics) and the
+// resource-selection + role-grant section (discovery, the az role script,
+// and effective-permission validation over ports.azure/ports.secrets), plus
+// the reusable change-request block and the pure decision layer behind them.
+// Both render as HomeScreen setupSections in the shells.
+export { AzureConnectSection } from "./screens/setup-wizard/azure-connect-section";
+export type {
+  AzureConnectResult,
+  AzureConnectSectionProps,
+} from "./screens/setup-wizard/azure-connect-section";
+export { AzureResourcesSection } from "./screens/setup-wizard/azure-resources-section";
+export type { AzureResourcesSectionProps } from "./screens/setup-wizard/azure-resources-section";
+export { ChangeRequestBlock } from "./screens/setup-wizard/change-request-block";
+export type { ChangeRequestBlockProps } from "./screens/setup-wizard/change-request-block";
+export {
+  RESOURCE_GROUPS_API_VERSION,
+  ROLE_SCRIPT_FILENAME,
+  SUBSCRIPTIONS_API_VERSION,
+  WORKSPACES_API_VERSION,
+  armFailureMessage,
+  connectInputIssue,
+  evaluateScopeLines,
+  parseResourceGroupOptions,
+  parseSubscriptionOptions,
+  parseWorkspaceOptions,
+  permissionScopeChecks,
+  scriptCopyFeedback,
+  scriptDownloadFeedback,
+  storedCredentialReport,
+  wrapRoleScript,
+} from "./screens/setup-wizard/azure-setup-state";
+export type {
+  AzureConnectInput,
+  ResourceGroupOption,
+  ScopeCheck,
+  StoredCredentialReport,
+  SubscriptionOption,
+  WorkspaceOption,
+} from "./screens/setup-wizard/azure-setup-state";
 export {
   GET_STARTED_MODE_UNAVAILABLE_REASON,
   GET_STARTED_NO_MODE_REASON,

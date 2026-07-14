@@ -124,6 +124,20 @@ export interface GapReport {
   overflowTriage: OverflowTriage;
   /** Combined matcher + gap warnings (incl. the data-loss footgun). */
   warnings: string[];
+  /**
+   * Present when destSchema was DERIVED (no schema resolved anywhere for a
+   * custom _CL destination, so the sample + the content's referenced columns
+   * define the table). Deploying creates the table with destSchema.
+   */
+  schemaDerivation?: SchemaDerivationNote;
+}
+
+/** The review-facing account of a derived destination schema. */
+export interface SchemaDerivationNote {
+  /** One-line status ("derived N columns from the sample..."). */
+  summary: string;
+  /** Detail lines (content columns added, excluded field names). */
+  notes: string[];
 }
 
 // VERBATIM InfoTip domain text from the legacy SentinelIntegration.tsx tiles.
@@ -189,6 +203,8 @@ export interface BuildGapReportInput {
   routeCondition?: string;
   /** The resolved destination schema for the dest-column dropdown. */
   destSchema: FieldRef[];
+  /** Present when destSchema was derived from the sample (+ content refs). */
+  schemaDerivation?: SchemaDerivationNote;
 }
 
 /**
@@ -332,5 +348,8 @@ export function buildGapReport(input: BuildGapReportInput): GapReport {
     overflowLossy,
     overflowTriage,
     warnings,
+    ...(input.schemaDerivation !== undefined
+      ? { schemaDerivation: input.schemaDerivation }
+      : {}),
   };
 }

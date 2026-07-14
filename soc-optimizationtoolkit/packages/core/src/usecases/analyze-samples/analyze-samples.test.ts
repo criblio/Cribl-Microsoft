@@ -102,7 +102,11 @@ describe("analyzeSamples (chunked DCR gap analysis)", () => {
     expect(report.warnings.some((w) => w.includes("AdditionalData_d"))).toBe(true);
   });
 
-  it("degrades gracefully for an unknown table (no schema, no DCR flow)", async () => {
+  it("DERIVES the schema from the sample for an unknown CUSTOM (_CL) table", async () => {
+    // User use case 2026-07-14 (CCF solutions like Cloudflare): a _CL
+    // destination with no schema anywhere is not a dead end - the sample
+    // defines the table, seeded with the content's referenced columns, and
+    // the deploy creates it from destSchema.
     const [report] = await collectGapReports(makePorts(), {
       solutionName: SOLUTION,
       samples: [
@@ -112,9 +116,40 @@ describe("analyzeSamples (chunked DCR gap analysis)", () => {
           content: '{"foo":"bar","n":1}',
         },
       ],
+      contentColumnNames: ["RuleColumn"],
+    });
+    // foo, n, the rule-referenced column, and the appended TimeGenerated.
+    expect(report.destFieldCount).toBe(4);
+    expect(report.schemaDerivation?.summary).toContain("CREATE the custom table");
+    expect(
+      report.warnings.some((w) => w.includes("No destination schema")),
+    ).toBe(false);
+    // Sample fields map 1:1 onto their own derived columns.
+    const foo = report.fieldMappings.find((m) => m.source === "foo");
+    expect(foo?.dest).toBe("foo");
+    // destSchema is what the Integrate deploy passes as customSchema.
+    const names = report.destSchema.map((c) => c.name);
+    expect(names).toContain("RuleColumn");
+    expect(report.destSchema[report.destSchema.length - 1]).toEqual({
+      name: "TimeGenerated",
+      type: "datetime",
+    });
+    expect(report.dcrRenames).toEqual([]);
+  });
+
+  it("does NOT derive for an unknown NATIVE table (all-unmatched stays honest)", async () => {
+    const [report] = await collectGapReports(makePorts(), {
+      solutionName: SOLUTION,
+      samples: [
+        {
+          logType: "mystery",
+          tableName: "NonexistentNativeTable",
+          content: '{"foo":"bar","n":1}',
+        },
+      ],
     });
     expect(report.destFieldCount).toBe(0);
-    expect(report.dcrRenames).toEqual([]);
+    expect(report.schemaDerivation).toBeUndefined();
     expect(report.warnings.some((w) => w.includes("No destination schema"))).toBe(
       true,
     );

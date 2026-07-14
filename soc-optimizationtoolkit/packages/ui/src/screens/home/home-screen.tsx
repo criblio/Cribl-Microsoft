@@ -21,12 +21,17 @@
  *
  * Cross-links are PROPS, not shell-sniffing prose: the shell passes its
  * JourneyLinks (merged over SHARED_JOURNEY_LINKS) - the cloud shell binds
- * the connect stage to its Diagnostics harness route (panel 3, until Unit
- * 9 promotes it), the local shell passes config-file guidance text with no
- * route. Mount inside a PortsProvider: the embedded RecentRuns reads the
- * JobStore through the ports context.
+ * the connect stage to the setup sections it renders HERE, the local shell
+ * passes config-file guidance text with no route. The SETUP SECTIONS are
+ * likewise composition props ({@link HomeScreenProps.setupSections}): the
+ * cloud shell passes the Azure connect + resource sections and the GitHub
+ * token surface; the local shell passes its config-file guidance and the
+ * GitHub token surface. Mount inside a PortsProvider: the embedded
+ * RecentRuns - and every ports-driven setup section - reads through the
+ * ports context.
  */
 
+import type { ReactNode } from "react";
 import { deriveJourney, readinessChips } from "@soc/core";
 import type { JourneyFacts } from "@soc/core";
 import { JourneyStepper } from "../../frame/journey-stepper";
@@ -52,6 +57,13 @@ export interface HomeScreenProps {
   settingsRouteId?: string;
   /** Bump to reload the embedded RecentRuns list. */
   runsRefreshToken?: number;
+  /**
+   * Shell-composed setup sections (Azure connect, resource selection, the
+   * GitHub token surface, config-file guidance...) rendered between the
+   * journey rails and the mode note. Composition stays with the shell so
+   * this screen never names shell-specific surfaces.
+   */
+  setupSections?: ReactNode;
 }
 
 export function HomeScreen({
@@ -60,6 +72,7 @@ export function HomeScreen({
   onNavigate,
   settingsRouteId = "settings",
   runsRefreshToken = 0,
+  setupSections,
 }: HomeScreenProps) {
   const journey = deriveJourney(facts);
   const action = deriveNextActionView(facts, links);
@@ -130,6 +143,8 @@ export function HomeScreen({
           onNavigate={onNavigate}
         />
       </section>
+
+      {setupSections}
 
       <section className="panel">
         <h2 className="panel-title">Mode</h2>

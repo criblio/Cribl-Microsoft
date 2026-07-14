@@ -15,8 +15,8 @@
  * Cross-links are DATA, not shell-sniffing prose (parity keep-list): each
  * shell passes a {@link JourneyLinks} map binding stage ids to its own
  * routes and guidance - e.g. the cloud shell points the connect stage at
- * the Diagnostics harness (panel 3) until Unit 9 promotes it, while the
- * local shell has no connect route and supplies config-file guidance text.
+ * the Setup page's App registration and connect section, while the local
+ * shell has no connect route and supplies config-file guidance text.
  * {@link SHARED_JOURNEY_LINKS} carries the bindings that are identical in
  * both shells so they cannot drift.
  *
@@ -43,9 +43,17 @@ export type JourneyLinks = Partial<Record<JourneyStageId, JourneyLink>>;
  * notably 'connect', which differs per shell by design.
  */
 export const SHARED_JOURNEY_LINKS: JourneyLinks = {
-  target: { routeId: "azure-target" },
+  target: {
+    routeId: "home",
+    hint:
+      "Choose the target in the Select resources and grant permissions section " +
+      "on Setup; the Integrate page's Azure Resources section commits the deploy scope.",
+  },
   ready: {
-    hint: "Summarized by the readiness chips on Home; the preflight report ships later.",
+    routeId: "preflight",
+    hint:
+      "Summarized by the readiness chips on Setup; Permission Verification has " +
+      "the full effective-permissions report.",
   },
   "choose-content": {
     routeId: "dcr-automation",
@@ -53,19 +61,16 @@ export const SHARED_JOURNEY_LINKS: JourneyLinks = {
   },
   configure: {
     routeId: "dcr-automation",
-    hint: "Per-run overrides live on the run screen; saved defaults in Options.",
+    hint: "Per-run overrides live on the run screen.",
   },
   review: {
-    routeId: "review",
     hint:
-      "Preview exactly what a deploy run would create (live ARM truth); " +
-      "acknowledging the preview arms the Deploy handoff on that screen.",
+      "The standalone Review screen is retired from the menu; the Integrate " +
+      "page's Deploy section reports exactly what a run creates.",
   },
   deploy: {
     routeId: "dcr-automation",
-    hint:
-      "Run single or batch on DCR Automation. The Review stage previews what a " +
-      "run would create - recommended, never required (read-ahead).",
+    hint: "Run single or batch on DCR Automation.",
   },
 };
 
