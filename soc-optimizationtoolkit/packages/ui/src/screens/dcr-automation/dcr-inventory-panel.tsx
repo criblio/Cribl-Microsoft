@@ -54,7 +54,9 @@ export function DcrInventoryPanel() {
   const [progress, setProgress] = useState("");
   const [newColName, setNewColName] = useState("");
   const [newColType, setNewColType] = useState("string");
-  const [removeColName, setRemoveColName] = useState("");
+  // Chip-level removal (user UX 2026-07-13): x on a removable chip,
+  // inline confirm, gone.
+  const [pendingRemove, setPendingRemove] = useState("");
   // Pre-update permission check (user request 2026-07-13): the write
   // actions are verified when the preview opens; missing ones disable the
   // mutating buttons with the exact action and scope named. Fail-open when
@@ -395,9 +397,8 @@ export function DcrInventoryPanel() {
 
   // Remove a CUSTOM column from the table AND apply the DCR update in one
   // action (user request 2026-07-13) - the field disappears end to end.
-  const removeColumn = useCallback(async () => {
-    if (preview === null || removeColName === "") return;
-    const columnName = removeColName;
+  const removeColumn = useCallback(async (columnName: string) => {
+    if (preview === null || columnName === "") return;
     setBusy(true);
     setError("");
     setNotice("");
@@ -443,7 +444,6 @@ export function DcrInventoryPanel() {
             `updated '${preview.dcrName}' - the field is gone end to end.`
           : `Removed '${removed.columnName}' from ${preview.table}.`,
       );
-      setRemoveColName("");
       setProgress("Refreshing the field list...");
       setPreview(
         await previewDcrUpdate(ports.azure, {
@@ -462,7 +462,7 @@ export function DcrInventoryPanel() {
       setProgress("");
       setBusy(false);
     }
-  }, [ports.azure, scope, preview, previewLocation, previewDce, removeColName, logInfo, logError, permNote]);
+  }, [ports.azure, scope, preview, previewLocation, previewDce, logInfo, logError, permNote]);
 
   const load = useCallback(async () => {
     setBusy(true);
@@ -692,58 +692,36 @@ export function DcrInventoryPanel() {
                         changed.
                       </p>
                     )}
-                    {(() => {
-                      // Removable = the table's CUSTOM columns only: _CF
-                      // fields on native tables, everything except
-                      // TimeGenerated on _CL tables.
-                      const removable = preview.tableColumns
-                        .filter((c) =>
-                          nativeTable
-                            ? c.name.endsWith("_CF")
-                            : c.name.toLowerCase() !== "timegenerated",
-                        )
-                        .map((c) => c.name)
-                        .sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
-                      if (removable.length === 0) return null;
-                      return (
-                        <div className="panel-controls">
-                          <select
-                            aria-label="Column to remove"
-                            value={removeColName}
-                            onChange={(ev) => setRemoveColName(ev.target.value)}
-                          >
-                            <option value="">Select a field to remove...</option>
-                            {removable.map((n) => (
-                              <option key={n} value={n}>
-                                {n}
-                              </option>
-                            ))}
-                          </select>
-                          <button
-                            className="gap-reset-button"
-                            onClick={() => void removeColumn()}
-                            disabled={
-                              busy ||
-                              removeColName === "" ||
-                              missingActions.length > 0
-                            }
-                            title={
-                              missingActions.length > 0
-                                ? "Blocked: the app registration is missing write permissions - see the list above."
-                                : "Removes the custom field from the table AND applies the DCR update - gone end to end."
-                            }
-                          >
-                            Remove from table and DCR
-                          </button>
-                        </div>
-                      );
-                    })()}
                   </>
                 );
               })()}
               <p className="panel-desc">{summarizePreview(preview)}</p>
+              {pendingRemove !== "" && (
+                <div className="panel-controls">
+                  <span className="field-label">
+                    Remove '{pendingRemove}' from the table and DCR?
+                  </span>
+                  <button
+                    className="gap-reset-button"
+                    disabled={busy}
+                    onClick={() => {
+                      const name = pendingRemove;
+                      setPendingRemove("");
+                      void removeColumn(name);
+                    }}
+                  >
+                    Remove
+                  </button>
+                  <button className="run-button" disabled={busy} onClick={() => setPendingRemove("")}>
+                    Cancel
+                  </button>
+                </div>
+              )}
               {(() => {
                 const chips = mergePreviewColumns(preview);
+                const nativeT = !preview.table.endsWith("_CL");
+                const canRemove = (n: string) =>
+                  nativeT ? n.endsWith("_CF") : n.toLowerCase() !== "timegenerated";
                 const changed = chips.filter((c) => c.status !== "unchanged");
                 const unchanged = chips.filter((c) => c.status === "unchanged");
                 return (
@@ -771,6 +749,17 @@ export function DcrInventoryPanel() {
                               ? `${c.fromType} to ${c.type}`
                               : c.type}
                           </span>
+                          {c.status !== "removed" && canRemove(c.name) && (
+                            <button
+                              className="dcr-col-x"
+                              aria-label={`Remove ${c.name}`}
+                              title={`Remove ${c.name} from the table and DCR`}
+                              disabled={busy}
+                              onClick={() => setPendingRemove(c.name)}
+                            >
+                              x
+                            </button>
+                          )}
                         </span>
                       ))}
                       {showUnchanged &&
@@ -782,6 +771,17 @@ export function DcrInventoryPanel() {
                           >
                             {c.name}
                             <span className="dcr-col-type">{c.type}</span>
+                            {canRemove(c.name) && (
+                              <button
+                                className="dcr-col-x"
+                                aria-label={`Remove ${c.name}`}
+                                title={`Remove ${c.name} from the table and DCR`}
+                                disabled={busy}
+                                onClick={() => setPendingRemove(c.name)}
+                              >
+                                x
+                              </button>
+                            )}
                           </span>
                         ))}
                     </div>

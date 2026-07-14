@@ -37,7 +37,11 @@ export function DcrAutomationScreen({
   singleDisabledReason,
 }: DcrAutomationScreenProps) {
   const singleDisabled = singleDisabledReason !== undefined;
-  const [selected, setSelected] = useState<DcrTab>(initialDcrTab(singleDisabled));
+  // Inventory first (user direction 2026-07-13): the operational view is
+  // the landing tab whenever the shell provides it.
+  const [selected, setSelected] = useState<DcrTab>(
+    inventory !== undefined ? "inventory" : initialDcrTab(singleDisabled),
+  );
   const active = resolveActiveDcrTab(selected, singleDisabled);
 
   return (

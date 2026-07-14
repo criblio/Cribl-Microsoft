@@ -4202,6 +4202,20 @@ details[open] > summary::before {
   border-color: #c04a4a;
   background: rgba(192, 74, 74, 0.16);
 }
+.dcr-col-x {
+  border: none;
+  background: none;
+  color: inherit;
+  font-size: 0.75rem;
+  line-height: 1;
+  padding: 0 2px;
+  cursor: pointer;
+  opacity: 0.6;
+}
+.dcr-col-x:hover {
+  opacity: 1;
+  color: #c04a4a;
+}
 .dcr-col-unchanged {
   border-color: #2e9e5b;
   background: rgba(46, 158, 91, 0.14);
