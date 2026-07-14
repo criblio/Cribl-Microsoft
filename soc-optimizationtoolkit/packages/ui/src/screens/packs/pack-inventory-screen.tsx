@@ -31,7 +31,7 @@ import type {
 } from "@soc/core";
 import { usePorts } from "../../ports-context";
 import type { DeployedGroupPacks, StoredPack } from "../../ports-context";
-import { SearchableSelect } from "../../components/searchable-select";
+import { SearchableMultiSelect } from "../../components/searchable-select";
 import {
   PACK_INVENTORY_EMPTY_REASON,
   PACK_INVENTORY_UNAVAILABLE_REASON,
@@ -92,7 +92,8 @@ export function PackInventoryScreen({ refreshToken = 0 }: PackInventoryScreenPro
   const [packs, setPacks] = useState<StoredPack[] | null>(null);
   const [snapshot, setSnapshot] = useState<DeployedGroupPacks[]>([]);
   const [groups, setGroups] = useState<CriblGroupSummary[]>([]);
-  const [selectedGroup, setSelectedGroup] = useState("");
+  // MULTI-destination install (user request 2026-07-13).
+  const [selectedGroups, setSelectedGroups] = useState<string[]>([]);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
@@ -116,8 +117,8 @@ export function PackInventoryScreen({ refreshToken = 0 }: PackInventoryScreenPro
           // Edge fleets cannot host installed packs: Stream worker groups only.
           const gs = (await ports.cribl.listGroups()).filter(isStreamWorkerGroup);
           setGroups(gs);
-          if (selectedGroup === "" && gs.length > 0) {
-            setSelectedGroup(gs[0].id);
+          if (selectedGroups.length === 0 && gs.length > 0) {
+            setSelectedGroups([gs[0].id]);
           }
           setSnapshot(await packInstall.listDeployed(gs.map((g) => g.id)));
         } catch (err) {
@@ -128,7 +129,7 @@ export function PackInventoryScreen({ refreshToken = 0 }: PackInventoryScreenPro
     } catch (err) {
       setError(String(err));
     }
-  }, [packStore, packInstall, ports.cribl, selectedGroup]);
+  }, [packStore, packInstall, ports.cribl, selectedGroups]);
 
   useEffect(() => {
     void load();
@@ -270,20 +271,31 @@ export function PackInventoryScreen({ refreshToken = 0 }: PackInventoryScreenPro
         logInfo(
           `assembled ${assembled.crblFileName} (${assembled.crbl.length} bytes), record saved`,
         );
-        if (packInstall !== undefined && selectedGroup !== "") {
-          const installed = await packInstall.install(
-            selectedGroup,
-            assembled.crblFileName,
-            assembled.crbl,
-          );
-          logInfo(`rebuilt v${version} and installed '${installed.id}' on ${selectedGroup}`);
-          setNotice(
-            `Rebuilt v${version} and installed '${installed.id}' on ${selectedGroup}.`,
-          );
+        if (packInstall !== undefined && selectedGroups.length > 0) {
+          const results: string[] = [];
+          for (const group of selectedGroups) {
+            setAction({
+              id,
+              line: `Installing v${version} to ${group} (${results.length + 1}/${selectedGroups.length})...`,
+            });
+            try {
+              const installed = await packInstall.install(
+                group,
+                assembled.crblFileName,
+                assembled.crbl,
+              );
+              logInfo(`rebuilt v${version} and installed '${installed.id}' on ${group}`);
+              results.push(`${group}: installed '${installed.id}'`);
+            } catch (err) {
+              logError(`install of v${version} to ${group} failed: ${String(err)}`);
+              results.push(`${group}: FAILED - ${String(err)}`);
+            }
+          }
+          setNotice(`Rebuilt v${version}. ${results.join("; ")}`);
         } else {
           logInfo(`rebuilt v${version} - record saved, no group selected`);
           setNotice(
-            `Rebuilt v${version} - record saved. Select a worker group to install.`,
+            `Rebuilt v${version} - record saved. Select worker group(s) to install.`,
           );
         }
         setMaintainId(null);
@@ -297,12 +309,12 @@ export function PackInventoryScreen({ refreshToken = 0 }: PackInventoryScreenPro
         setBusy(false);
       }
     },
-    [findPack, packStore, snapshot, maintEdits, packInstall, selectedGroup, load, logInfo, logError],
+    [findPack, packStore, snapshot, maintEdits, packInstall, selectedGroups, load, logInfo, logError],
   );
 
   const install = useCallback(
     async (id: string) => {
-      if (packInstall === undefined || selectedGroup === "") {
+      if (packInstall === undefined || selectedGroups.length === 0) {
         return;
       }
       const pack = findPack(id);
@@ -313,26 +325,33 @@ export function PackInventoryScreen({ refreshToken = 0 }: PackInventoryScreenPro
       setBusy(true);
       setError("");
       setNotice("");
-      logInfo(`installing ${pack.record.crblFileName} to ${selectedGroup}`);
-      setAction({ id, line: `Installing to ${selectedGroup}...` });
-      try {
-        const installed = await packInstall.install(
-          selectedGroup,
-          pack.record.crblFileName,
-          packBytes(pack),
-        );
-        logInfo(`installed '${installed.id}' on ${selectedGroup}`);
-        setNotice(`Installed '${installed.id}' on ${selectedGroup}.`);
-        await load();
-      } catch (err) {
-        logError(`install of ${pack.record.crblFileName} to ${selectedGroup} failed: ${String(err)}`);
-        setError(`Install failed: ${String(err)}`);
-      } finally {
-        setAction(null);
-        setBusy(false);
+      const bytes = packBytes(pack);
+      const results: string[] = [];
+      for (const group of selectedGroups) {
+        logInfo(`installing ${pack.record.crblFileName} to ${group}`);
+        setAction({
+          id,
+          line: `Installing to ${group} (${results.length + 1}/${selectedGroups.length})...`,
+        });
+        try {
+          const installed = await packInstall.install(
+            group,
+            pack.record.crblFileName,
+            bytes,
+          );
+          logInfo(`installed '${installed.id}' on ${group}`);
+          results.push(`${group}: installed '${installed.id}'`);
+        } catch (err) {
+          logError(`install to ${group} failed: ${String(err)}`);
+          results.push(`${group}: FAILED - ${String(err)}`);
+        }
       }
+      setNotice(results.join("; "));
+      await load();
+      setAction(null);
+      setBusy(false);
     },
-    [packInstall, selectedGroup, findPack, load, logInfo, logError],
+    [packInstall, selectedGroups, findPack, load, logInfo, logError],
   );
 
   if (packStore === undefined) {
@@ -352,11 +371,11 @@ export function PackInventoryScreen({ refreshToken = 0 }: PackInventoryScreenPro
         {groups.length > 0 && packInstall !== undefined && (
           <label className="field">
             <span className="field-label">Deploy target</span>
-            <SearchableSelect
+            <SearchableMultiSelect
               options={groups.map((g) => ({ value: g.id, label: g.id }))}
-              value={selectedGroup}
-              onChange={setSelectedGroup}
-              placeholder="Select a worker group..."
+              values={selectedGroups}
+              onChange={setSelectedGroups}
+              placeholder="Select worker groups..."
               ariaLabel="Filter worker groups"
             />
           </label>
@@ -419,9 +438,9 @@ export function PackInventoryScreen({ refreshToken = 0 }: PackInventoryScreenPro
                 <button
                   className="run-button"
                   onClick={() => void install(row.id)}
-                  disabled={busy || selectedGroup === ""}
+                  disabled={busy || selectedGroups.length === 0}
                 >
-                  Install to {selectedGroup || "group"}
+                  Install to {selectedGroups.length || "no"} group{selectedGroups.length === 1 ? "" : "s"}
                 </button>
               )}
               <button
@@ -515,7 +534,7 @@ export function PackInventoryScreen({ refreshToken = 0 }: PackInventoryScreenPro
                         disabled={busy}
                       >
                         Rebuild next version
-                        {selectedGroup !== "" ? ` and install to ${selectedGroup}` : ""}
+                        {selectedGroups.length > 0 ? ` and install to ${selectedGroups.length} group${selectedGroups.length === 1 ? "" : "s"}` : ""}
                       </button>
                       {maintEdits.size > 0 && (
                         <span className="field-hint">
