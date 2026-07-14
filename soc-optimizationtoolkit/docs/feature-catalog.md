@@ -988,6 +988,7 @@ Reader-noted gaps: 1) The React renderer (src/renderer, ~pages like SentinelInte
 
 ### ENG-40. SIEM migration analyzer (Splunk/QRadar)
 
+- STATUS: SHIPPED 2026-07-14 (Unit 26) as `core/domain/siem-migration` + `usecases/siem-migration`. Corrections vs this entry: the report is styled HTML (not Markdown), delivered via ArtifactSink; `siem:build-pack` did NOT port (dead code - the shipped hand-off is the solution deep link).
 - Source: `Cribl-Microsoft_IntegrationSolution/src/main/ipc/siem-migration.ts` | Maturity: dev | Category: reporting | Verdict: **direct**
 - Parses Splunk savedsearches JSON exports (macro resolution, filter-macro detection) and QRadar rule CSV exports into normalized rules; identifies data sources from queries, fuzzy-maps them to Sentinel solutions, enriches with each solution's analytics rules, builds MITRE ATT&CK tactic/technique coverage, produces a MigrationPlan, exports a styled HTML migration report, and can directly build Cribl packs for mapped solutions (siem:build-pack) using the tiered sample resolver.
 - In/Out: In: Splunk/QRadar export content. Out: MigrationPlan (data sources, solution mappings, rule enrichment, MITRE coverage), HTML report file, built packs.
@@ -1267,6 +1268,7 @@ Reader-noted gaps: All business logic the renderer drives lives outside this sub
 
 ### GUI-22. SIEM migration analysis and report export
 
+- STATUS: SHIPPED 2026-07-14 (Unit 26) as `@soc/ui` SiemMigrationScreen in BOTH shells: plan persists across navigation (siem-migration-plan~v1), pivot via the preserved solution deep link, HTML (not Markdown) report via ArtifactSink.
 - Source: `Cribl-Microsoft_IntegrationSolution/src/renderer/pages/SiemMigration.tsx` | Maturity: production | Category: reporting | Verdict: **needs-redesign**
 - Upload a Splunk detection-rule JSON export or QRadar CSV (platform auto-detected by extension); the parsed MigrationPlan shows total/enabled rules and building blocks, data sources grouped by mapped Sentinel solution with confidence badges and per-group rule counts, unmapped sources, MITRE ATT&CK tactic coverage tiles, matched Sentinel analytics rules per solution with severity/tactics, a Configure button deep-linking each solution into the Sentinel Integration workflow, and a Download Migration Report action producing a Markdown report in Downloads.
 - In/Out: In: Splunk JSON / QRadar CSV export file. Out: MigrationPlan (dataSources, mappings, MITRE coverage, Sentinel rule matches), Markdown report file, deep-link handoff.

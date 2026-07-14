@@ -1,5 +1,12 @@
 # Spike Harness Test Plan (Live Preview + Installed)
 
+> HISTORICAL NOTE (2026-07-14): this plan documents the ORIGINAL seven-panel
+> Phase 1 harness. Panels 3 (App registration and connect) and 4 (Select
+> resources and grant permissions) were promoted to the Setup page as shared
+> @soc/ui sections; the Diagnostics view now has five panels (globals, KV,
+> token, ARM, download). Panel numbers below refer to the pre-promotion
+> harness; the platform findings remain valid.
+
 Manual validation of the Phase 1 platform assumptions against a real Cribl.Cloud org and Azure tenant. Run the numbered tests in order; record the result of each. The goal is not to test the app - it is to confirm the platform behaves the way the code assumes, so the real feature UI can be built on it.
 
 The tests that most matter (they de-risk load-bearing assumptions) are flagged CRITICAL.

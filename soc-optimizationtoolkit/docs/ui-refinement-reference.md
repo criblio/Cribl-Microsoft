@@ -15,22 +15,25 @@ The dark-mode work already tokenized all colors into CSS custom properties, ever
 
 ## Functional-area map (legacy page -> new screens -> unit)
 
+"Built yet?" refreshed 2026-07-14 (post Setup-page consolidation, nav prune,
+and the Unit 26 ship).
+
 | Functional area | Legacy page(s) | New app screen(s) | Porting unit | Built yet? |
 |---|---|---|---|---|
-| First-run setup | `SetupWizard.tsx` (676) | AuaGate, ModeSelect, Home | Unit 6.5, 22 | partial (gate/mode/Home done) |
-| Sentinel Integration (flagship) | `SentinelIntegration.tsx` (3477) | Home + Integrate arc: Targeting, Onboard, Review, Batch, (content/pipeline/deploy to come) | Units 2,5,6,7 built; 11-20 to come | partial |
-| Azure targeting | SentinelIntegration Azure sections | AzureTargetingScreen | Unit 2 | yes |
-| Deployment review | SentinelIntegration preview | ReviewScreen | Unit 7 | yes |
-| Batch / DCR deploy | SentinelIntegration deploy, `DcrAutomation.tsx` | BatchDeployScreen | Unit 6 | yes |
-| Options / naming | (settings-embedded) | OptionsScreen | Unit 4 | yes |
+| First-run setup | `SetupWizard.tsx` (676) | AuaGate, ModeSelect, Setup page (connect + resources + GitHub sections) | Unit 6.5, 22 | yes |
+| Sentinel Integration (flagship) | `SentinelIntegration.tsx` (3477) | IntegrateScreen (single-page arc: solution, samples, gap analysis, coverage, deploy, pack) | Units 2-20, 23 | yes |
+| Azure targeting | SentinelIntegration Azure sections | AzureTargetingScreen (composed by Integrate; standalone nav item retired 2026-07-14) | Unit 2 | yes |
+| Deployment review | SentinelIntegration preview | ReviewScreen (standalone nav item retired 2026-07-14; folds into the Integrate flow) | Unit 7 | component only |
+| Batch / DCR deploy | SentinelIntegration deploy, `DcrAutomation.tsx` | DCR Automation (Single/Batch/Inventory) | Unit 6 | yes |
+| Options / naming | (settings-embedded) | RETIRED 2026-07-14 (OptionsScreen deleted; appOptions defaults persist, inline edits remain) | Unit 4 | retired |
 | Data Flow / monitoring | `DataFlow.tsx` (615) | validate/monitor stages | Unit 21 | no |
-| Pack Builder | `PackBuilder/*` (Browser/Scaffold/Manager) | pack + pipeline screens | Units 17,19 | no |
-| Packs inventory | `Packs.tsx` (408) | pack inventory | Unit 19 | no |
-| Repositories / content | `RepoSetup.tsx` (527) | content + PAT + solution browser | Unit 14 | no |
-| SIEM Migration | `SiemMigration.tsx` (359) | migration analyzer | Unit 26 | no |
-| Discovery | `Discovery.tsx` (164) | discovery tools | Unit 24 | no |
+| Pack Builder | `PackBuilder/*` (Browser/Scaffold/Manager) | pipeline preview + pack build in Integrate | Units 17,19 | yes |
+| Packs inventory | `Packs.tsx` (408) | Pack Maintenance | Unit 19 | yes |
+| Repositories / content | `RepoSetup.tsx` (527) | Repositories screen (+ Setup section) + solution browser | Unit 14 | yes |
+| SIEM Migration | `SiemMigration.tsx` (359) | SiemMigrationScreen (persistent plan, Integrate pivot) | Unit 26 | yes (2026-07-14) |
+| Discovery | `Discovery.tsx` (164) | Event Hub Discovery | Unit 24 | partial (Event Hubs) |
 | Labs | `LabAutomation.tsx` (585) | labs | Units 25-27 area | no |
-| Rule + workbook coverage | SentinelIntegration analysis sections | coverage panel (+ NEW workbook) | Unit 23 | no |
+| Rule + workbook coverage | SentinelIntegration analysis sections | rule + workbook coverage sections in Integrate | Unit 23 | yes |
 | Settings | `Settings.tsx` (164) | SettingsScreen | Unit 6.5 | yes |
 | Diagnostics/deps | `DepsCheck.tsx` (273) | (platform-provided; harness = diagnostics) | dropped/harness | n/a |
 
