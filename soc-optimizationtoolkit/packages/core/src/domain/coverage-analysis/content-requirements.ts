@@ -38,6 +38,14 @@ export interface ContentRequirements {
   opaqueCatchAll: boolean;
   /** How many content items (rules + workbook queries) were read. */
   itemCount: number;
+  /**
+   * OPTIONAL lowercased name -> first-seen ORIGINAL casing for {@link
+   * columns}. KQL column references are case-sensitive, so consumers that
+   * CREATE columns from content references (derived custom-table schemas)
+   * need the canonical spelling, not the matching key. Optional so existing
+   * requirement literals stay valid.
+   */
+  columnNames?: ReadonlyMap<string, string>;
 }
 
 /** The catch-all column names content mines keys out of. */
@@ -58,7 +66,10 @@ export const EMPTY_CONTENT_REQUIREMENTS: ContentRequirements = {
  * base column IS required - dropping the raw field breaks the derivation.
  * Over-capture is safe here: an extra name only prevents a drop.
  */
-function transformationBaseColumns(kql: string, columns: Set<string>): void {
+function transformationBaseColumns(
+  kql: string,
+  addColumn: (name: string) => void,
+): void {
   const cleaned = kql
     .replace(/"[^"]*"/g, '""')
     .replace(/'[^']*'/g, "''");
@@ -70,7 +81,7 @@ function transformationBaseColumns(kql: string, columns: Set<string>): void {
     for (const m of cleaned.matchAll(pattern)) {
       const name = m[1];
       if (name.length > 1 && !KQL_BUILTINS.has(name.toLowerCase())) {
-        columns.add(name.toLowerCase());
+        addColumn(name);
       }
     }
   }
@@ -94,17 +105,28 @@ export function deriveContentRequirements(
   items: readonly ContentItem[],
 ): ContentRequirements {
   const columns = new Set<string>();
+  // Lowercased -> first-seen ORIGINAL casing (KQL is case-sensitive; schema
+  // derivation creates columns under the canonical spelling).
+  const columnNames = new Map<string, string>();
   const catchAllKeys = new Set<string>();
   let opaqueCatchAll = false;
   let itemCount = 0;
+
+  const addColumn = (name: string): void => {
+    const lower = name.toLowerCase();
+    columns.add(lower);
+    if (!columnNames.has(lower)) {
+      columnNames.set(lower, name);
+    }
+  };
 
   for (const item of items) {
     for (const kql of item.queries) {
       itemCount++;
       for (const field of extractKqlFields(kql)) {
-        columns.add(field.toLowerCase());
+        addColumn(field);
       }
-      transformationBaseColumns(kql, columns);
+      transformationBaseColumns(kql, addColumn);
       for (const catchAll of CATCH_ALL_COLUMNS) {
         if (!kql.includes(catchAll)) continue;
         // OPAQUE only when content PARSES the catch-all (live regression
@@ -138,25 +160,30 @@ export function deriveContentRequirements(
     }
   }
 
-  return { columns, catchAllKeys, opaqueCatchAll, itemCount };
+  return { columns, catchAllKeys, opaqueCatchAll, itemCount, columnNames };
 }
 
 /**
  * Merge requirements from several sources (the rules instance and the
- * workbooks instance report independently).
+ * workbooks instance report independently). Column casing: first part wins
+ * per name (rules before workbooks, matching the section order).
  */
 export function mergeContentRequirements(
   parts: readonly ContentRequirements[],
 ): ContentRequirements {
   const columns = new Set<string>();
+  const columnNames = new Map<string, string>();
   const catchAllKeys = new Set<string>();
   let opaqueCatchAll = false;
   let itemCount = 0;
   for (const part of parts) {
     for (const c of part.columns) columns.add(c);
+    for (const [lower, original] of part.columnNames ?? []) {
+      if (!columnNames.has(lower)) columnNames.set(lower, original);
+    }
     for (const k of part.catchAllKeys) catchAllKeys.add(k);
     opaqueCatchAll = opaqueCatchAll || part.opaqueCatchAll;
     itemCount += part.itemCount;
   }
-  return { columns, catchAllKeys, opaqueCatchAll, itemCount };
+  return { columns, catchAllKeys, opaqueCatchAll, itemCount, columnNames };
 }

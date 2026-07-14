@@ -565,6 +565,12 @@ export function MappingReviewSection({
             ...learnedToVendorMappings(learned),
             ...vendorMappingsForSolution(solutionName),
           ],
+          // Canonical rule/workbook column names: consumed only when a
+          // custom _CL destination resolves no schema anywhere - the derived
+          // schema then accommodates the solution's content references.
+          contentColumnNames: [
+            ...(contentRequirements?.columnNames?.values() ?? []),
+          ],
         },
       );
       setReports(produced);
@@ -589,6 +595,7 @@ export function MappingReviewSection({
     profile,
     tableOverrides,
     learned,
+    contentRequirements,
     logger,
   ]);
 
@@ -971,6 +978,15 @@ export function MappingReviewSection({
 
             {report.routeCondition !== "true" && (
               <div className="gap-route">Route: {report.routeCondition}</div>
+            )}
+
+            {report.schemaDerivation !== undefined && (
+              <p className="gap-derived-schema">
+                {report.schemaDerivation.summary}
+                {report.schemaDerivation.notes.length > 0 && (
+                  <InfoTip text={report.schemaDerivation.notes.join("\n")} />
+                )}
+              </p>
             )}
 
             {report.warnings.map((warning, index) => (

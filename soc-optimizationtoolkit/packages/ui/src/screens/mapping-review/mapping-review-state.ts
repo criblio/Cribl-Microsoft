@@ -528,6 +528,12 @@ export interface RequirementsForAssessment {
   catchAllKeys: ReadonlySet<string>;
   opaqueCatchAll: boolean;
   itemCount: number;
+  /**
+   * OPTIONAL canonical casing per lowercased column (core
+   * ContentRequirements.columnNames): schema derivation for unresolved _CL
+   * destinations creates columns under these spellings.
+   */
+  columnNames?: ReadonlyMap<string, string>;
 }
 
 /** One table's unused-overflow assessment. */

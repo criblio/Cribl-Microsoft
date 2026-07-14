@@ -31,10 +31,12 @@
 import { parseSampleContent } from "../../domain/sample-parsing/index";
 import { matchSolutionName } from "../../domain/sample-acquisition/index";
 import {
+  deriveCustomTableSchema,
   matchParsedSampleToColumns,
   parsedSampleToSourceFields,
 } from "../../domain/field-matcher/index";
 import type { VendorMapping } from "../../domain/field-matcher/index";
+import { isCustomTableName } from "../../domain/custom-table/index";
 import {
   analyzeDcrGap,
   buildGapReport,
@@ -91,6 +93,14 @@ export interface AnalyzeSamplesInput {
    * this one otherwise each read every DCR file per analysis.
    */
   dcrFlows?: ReadonlyMap<string, DcrFlow>;
+  /**
+   * Column names (CANONICAL casing) the solution's analytics rules and
+   * workbooks reference (ContentRequirements.columnNames values). Consumed
+   * ONLY when a custom _CL destination resolves no schema anywhere: the
+   * derived schema then includes these columns so the created table
+   * accommodates the content (see deriveCustomTableSchema).
+   */
+  contentColumnNames?: readonly string[];
 }
 
 /** Build the DCR flow to use when the solution has no DCR for a table. */
@@ -203,6 +213,34 @@ export async function* analyzeSamples(
         error: errText(err),
       });
     }
+
+    // DERIVED SCHEMA (user use case 2026-07-14): a custom _CL destination
+    // with no schema ANYWHERE (not live, not in the solution's connector
+    // JSONs, not bundled - e.g. a CCF solution whose table only materializes
+    // when Microsoft's connector is enabled) is not a dead end: the sample
+    // itself defines the table, seeded with the columns the solution's rules
+    // and workbooks reference so the created table accommodates the content.
+    // The derived columns flow through the SAME matcher/report/deploy path
+    // as a resolved schema (the Integrate deploy passes destSchema as
+    // onboardTable's customSchema, so deploying CREATES this table).
+    let schemaDerivation;
+    if (
+      (columns === null || columns.length === 0) &&
+      isCustomTableName(sample.tableName)
+    ) {
+      const derived = deriveCustomTableSchema(
+        parsed,
+        input.contentColumnNames ?? [],
+      );
+      columns = derived.columns;
+      schemaDerivation = { summary: derived.summary, notes: derived.notes };
+      ports.logger?.info("analyze-samples: derived schema from sample", {
+        table: sample.tableName,
+        columns: derived.columns.length,
+        contentColumns: derived.contentColumns.length,
+      });
+    }
+
     const destSchema: FieldRef[] = (columns ?? []).map((c) => ({
       name: c.name,
       type: c.type,
@@ -263,6 +301,7 @@ export async function* analyzeSamples(
       gap,
       routeCondition: generateRouteCondition(flow.eventSimpleNames),
       destSchema,
+      ...(schemaDerivation !== undefined ? { schemaDerivation } : {}),
     });
   }
 }

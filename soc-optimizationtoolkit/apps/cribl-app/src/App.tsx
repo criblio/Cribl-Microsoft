@@ -741,6 +741,18 @@ function App() {
   const [liveSecretProfileId, setLiveSecretProfileId] = useState<string | null>(null);
   const [liveSecretIdentity, setLiveSecretIdentity] = useState<LiveSecretIdentity | null>(null);
 
+  // SECRET VERIFICATION (user direction 2026-07-14): instead of a standing
+  // "secret not entered this session" warning, VERIFY the stored secret once
+  // per connection per session - acquiring an ARM token with the stored
+  // azureBasic slot is the definitive probe. Success marks the secret live
+  // (and stores a fresh azureArmToken, same as a connect); only a VERIFIED
+  // failure surfaces a notice. 'idle' = nothing to probe yet (no identity).
+  const [secretProbe, setSecretProbe] = useState<
+    | { state: 'idle' | 'checking' | 'live' | 'missing' }
+    | { state: 'failed'; detail: string }
+  >({ state: 'idle' });
+  const probedProfileRef = useRef<string | null>(null);
+
   // A transient message surfaced after a switch / clear (e.g. "enter the secret
   // for this connection"). Cleared once a secret is saved or a no-clear switch
   // happens.
@@ -1040,11 +1052,58 @@ function App() {
 
   // Save-secret success: record which connection (and identity) the live secret
   // now belongs to, and clear any outstanding "enter the secret" notice.
-  const handleSecretSaved = (profileId: string, savedTenantId: string, savedClientId: string) => {
-    setLiveSecretProfileId(profileId);
-    setLiveSecretIdentity({ tenantId: savedTenantId, clientId: savedClientId });
-    setSwitchNotice('');
-  };
+  const handleSecretSaved = useCallback(
+    (profileId: string, savedTenantId: string, savedClientId: string) => {
+      setLiveSecretProfileId(profileId);
+      setLiveSecretIdentity({ tenantId: savedTenantId, clientId: savedClientId });
+      setSwitchNotice('');
+    },
+    [],
+  );
+
+  // The one-shot secret probe per connection per session (ref-guarded so
+  // re-renders never re-fire it; a profile switch probes the new profile).
+  // Skips honestly when there is no identity to probe with - the journey's
+  // connect stage covers that case without a warning.
+  useEffect(() => {
+    const profileId = store.activeProfileId;
+    if (!hydrated || profileId === null) return;
+    if (activeConfig.tenantId.trim() === '' || activeConfig.clientId.trim() === '') return;
+    if (liveSecretProfileId === profileId) return;
+    if (probedProfileRef.current === profileId) return;
+    probedProfileRef.current = profileId;
+    let cancelled = false;
+    setSecretProbe({ state: 'checking' });
+    void (async () => {
+      try {
+        const keys = await appStateStore.list('azure');
+        if (cancelled) return;
+        if (!keys.includes('azureBasic')) {
+          setSecretProbe({ state: 'missing' });
+          return;
+        }
+        const token = await acquireArmToken(activeConfig.tenantId);
+        await appStateStore.set('azureArmToken', token.access_token, { encrypted: true });
+        if (cancelled) return;
+        handleSecretSaved(profileId, activeConfig.tenantId, activeConfig.clientId);
+        setSecretProbe({ state: 'live' });
+      } catch (err) {
+        if (!cancelled) {
+          setSecretProbe({ state: 'failed', detail: String(err) });
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    hydrated,
+    store.activeProfileId,
+    activeConfig.tenantId,
+    activeConfig.clientId,
+    liveSecretProfileId,
+    handleSecretSaved,
+  ]);
 
   // The Setup connect section's shell-specific connect mechanics (promoted
   // verbatim from Diagnostics panel 3): write the encrypted, write-only
@@ -1229,7 +1288,14 @@ function App() {
     mode: phase.mode,
     identityPresent:
       activeConfig.tenantId.trim() !== '' && activeConfig.clientId.trim() !== '',
-    secretLive: secretLive && !identityDrifted ? 'live' : 'unknown',
+    // The probe resolves the honest 'unknown': a verified token acquisition
+    // reads 'live' (via secretLive), a verified miss/failure reads 'missing'.
+    secretLive:
+      secretLive && !identityDrifted
+        ? 'live'
+        : secretProbe.state === 'missing' || secretProbe.state === 'failed'
+          ? 'missing'
+          : 'unknown',
     scopeCommitted:
       activeConfig.subscriptionId.trim() !== '' &&
       activeConfig.resourceGroup.trim() !== '' &&
@@ -1237,6 +1303,21 @@ function App() {
     criblReachable:
       platformLink === 'ok' ? true : platformLink === 'checking...' ? undefined : false,
   };
+
+  // The VERIFIED secret notice (user direction 2026-07-14 - replaces the
+  // speculative "not entered this session" warning): null while the secret
+  // is live, the probe is still running, or there is nothing to probe yet.
+  // Only a VERIFIED absence/failure warns.
+  const secretNotice = secretLive
+    ? null
+    : secretProbe.state === 'missing'
+      ? 'No client secret is stored for this connection (verified just now). Enter it ' +
+        'in the App registration and connect section on Setup and Save and connect.'
+      : secretProbe.state === 'failed'
+        ? 'The stored client secret FAILED verification just now - token acquisition ' +
+          'was refused. Re-enter the secret in the App registration and connect ' +
+          `section on Setup. Detail: ${secretProbe.detail}`
+        : null;
 
   // The connection bar: shell chrome that stays visible within the frame,
   // above whatever screen is active. Connection select/create/rename/delete,
@@ -1302,7 +1383,16 @@ function App() {
             )}
           </div>
           <span className={`secret-badge ${secretLive ? 'secret-badge-stored' : 'secret-badge-none'}`}>
-            secret: {secretLive ? 'stored (this session)' : 'not entered'}
+            secret:{' '}
+            {secretLive
+              ? 'live (verified)'
+              : secretProbe.state === 'checking'
+                ? 'verifying...'
+                : secretProbe.state === 'missing'
+                  ? 'not stored'
+                  : secretProbe.state === 'failed'
+                    ? 'failed verification'
+                    : 'unknown'}
           </span>
           <span
             className="scope-chip"
@@ -1494,13 +1584,8 @@ function App() {
           gap-analysis and rule-coverage sections arrive in later units.
         </p>
       </header>
-      {!secretLive && (
-        <p className="connection-notice">
-          This connection&apos;s client secret has not been entered this
-          session. A secret connected in an earlier session may still be live
-          server-side; if the deploy fails acquiring a token, re-enter the
-          secret in the App registration and connect section on Setup first.
-        </p>
+      {secretNotice !== null && (
+        <p className="connection-notice">{secretNotice}</p>
       )}
       <PortsProvider ports={cloudPorts} config={activeConfig}>
         <IntegrateScreen
@@ -1550,13 +1635,8 @@ function App() {
         </section>
       ) : (
         <>
-          {!secretLive && (
-            <p className="connection-notice">
-              This connection&apos;s client secret has not been entered this session. A secret
-              connected in an earlier session may still be live server-side; if the run fails
-              acquiring a token, re-enter the secret in the App registration and connect
-              section on Setup first.
-            </p>
+          {secretNotice !== null && (
+            <p className="connection-notice">{secretNotice}</p>
           )}
           <PortsProvider ports={cloudPorts} config={activeConfig}>
             <OnboardTableScreen
@@ -1607,13 +1687,8 @@ function App() {
         </section>
       ) : (
         <>
-          {!secretLive && (
-            <p className="connection-notice">
-              This connection&apos;s client secret has not been entered this session. A secret
-              connected in an earlier session may still be live server-side; if the run fails
-              acquiring a token, re-enter the secret in the App registration and connect
-              section on Setup first.
-            </p>
+          {secretNotice !== null && (
+            <p className="connection-notice">{secretNotice}</p>
           )}
           <PortsProvider ports={cloudPorts} config={activeConfig}>
             <BatchDeployScreen

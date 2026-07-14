@@ -2432,6 +2432,18 @@ button.journey-step-main:hover .journey-step-label {
   color: var(--text-faint);
 }
 
+/* Derived-schema status: informational (the deploy CREATES the table), not
+   a warning - ok tones, warning-bar sizing. */
+.gap-derived-schema {
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--ok-strong);
+  border: 1px solid var(--ok-border);
+  background: var(--ok-bg);
+  padding: 6px 10px;
+  margin: 8px 0 0;
+}
+
 .mapping-review-stale {
   font-size: 13px;
   line-height: 20px;
