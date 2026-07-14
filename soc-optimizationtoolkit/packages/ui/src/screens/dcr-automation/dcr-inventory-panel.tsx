@@ -61,6 +61,9 @@ export function DcrInventoryPanel() {
   const [missingActions, setMissingActions] = useState<
     Array<{ action: string; scope: string }>
   >([]);
+  // The check's verdict, rendered in the card (live feedback 2026-07-13:
+  // "I don't think it checked" - the verdict only reached the Logs page).
+  const [permStatus, setPermStatus] = useState("");
   // Matching (green) columns show by default (user color semantics
   // 2026-07-13: matches ARE the highlight); the toggle hides them when the
   // 150+ chips get in the way of the changes.
@@ -138,15 +141,22 @@ export function DcrInventoryPanel() {
         });
         setMissingActions(perms.missing);
         if (perms.missing.length > 0) {
+          setPermStatus("");
           logError(
             "permission check: missing " +
               perms.missing.map((m) => `${m.action} at ${m.scope}`).join("; "),
           );
         } else if (perms.indeterminate) {
+          setPermStatus(
+            "Permission check unavailable (the RBAC permissions API was unreadable) - write actions were NOT verified.",
+          );
           logInfo(
             "permission check: RBAC permissions API unreadable - proceeding without the pre-check",
           );
         } else {
+          setPermStatus(
+            "Write permissions verified: DCR update and table schema edits are granted.",
+          );
           logInfo("permission check: all write actions granted");
         }
       } catch (err) {
@@ -509,6 +519,9 @@ export function DcrInventoryPanel() {
                   Close
                 </button>
               </div>
+              {permStatus !== "" && (
+                <p className="field-hint">{permStatus}</p>
+              )}
               {missingActions.length > 0 && (
                 <pre className="result">
                   {[
