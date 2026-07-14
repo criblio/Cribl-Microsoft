@@ -56,7 +56,8 @@ describe("deriveNextActionView", () => {
       SHARED_JOURNEY_LINKS,
     );
     expect(view?.stageId).toBe("target");
-    expect(view?.routeId).toBe("azure-target");
+    expect(view?.routeId).toBe("home");
+    expect(view?.hint).toBe(SHARED_JOURNEY_LINKS.target?.hint);
   });
 
   it("renders no button when the stage has no route in this shell (local connect)", () => {
@@ -74,11 +75,11 @@ describe("deriveNextActionView", () => {
     );
   });
 
-  it("carries the cloud connect cross-link route (harness panel 3 until Unit 9)", () => {
+  it("carries the cloud connect cross-link route (the Setup page's connect section)", () => {
     const cloudLinks = mergeJourneyLinks({
       connect: {
-        routeId: "harness",
-        hint: "Identity entry lives in Diagnostics panel 3 until the Connect step ships.",
+        routeId: "home",
+        hint: "Identity entry lives in the App registration and connect section of Setup.",
       },
     });
     const view = deriveNextActionView(
@@ -86,7 +87,7 @@ describe("deriveNextActionView", () => {
       cloudLinks,
     );
     expect(view?.stageId).toBe("connect");
-    expect(view?.routeId).toBe("harness");
+    expect(view?.routeId).toBe("home");
   });
 
   it("is null exactly when the core reports nothing actionable", () => {

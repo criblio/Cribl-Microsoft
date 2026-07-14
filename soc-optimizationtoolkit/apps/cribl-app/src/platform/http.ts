@@ -85,9 +85,9 @@ export interface ArmTokenResult {
 // Run the client_credentials/ARM-scope token request for the given tenant. The
 // app sets no Authorization header: proxies.yml injects Basic ${kv.azureBasic}
 // server-side (the active connection's secret). Returns the parsed token so the
-// connect action (panel 3), resource discovery and the permission preflight
-// (panel 4), and the token panel (panel 5) share one implementation. The tenant
-// comes from the ACTIVE connection's config.
+// Setup page's connect action, the ports adapters (resource discovery and the
+// permission preflight), and the Diagnostics token panel share one
+// implementation. The tenant comes from the ACTIVE connection's config.
 //
 // This is a proxied EXTERNAL request (login.microsoftonline.com through the
 // platform proxy): the proxy enforces a 30s server-side timeout, and like all
@@ -117,7 +117,7 @@ async function acquireToken(tenantId: string, scope: string): Promise<ArmTokenRe
   const tenant = tenantId.trim();
   if (tenant === '') {
     throw new Error(
-      'The active connection has no tenant ID - enter the tenant ID in panel 3 (it is remembered per connection), then retry'
+      'The active connection has no tenant ID - enter the tenant ID in the App registration and connect section on Setup (it is remembered per connection), then retry'
     );
   }
   const form = new URLSearchParams({

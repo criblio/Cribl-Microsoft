@@ -19,7 +19,6 @@ import {
   ArchitectureScreen,
   MappingCatalogScreen,
   AuaGate,
-  AzureTargetingScreen,
   EventHubDiscoveryScreen,
   BatchDeployScreen,
   DcrAutomationScreen,
@@ -29,12 +28,10 @@ import {
   IntegrateScreen,
   LogsScreen,
   OnboardTableScreen,
-  OptionsScreen,
   PackInventoryScreen,
   PortsProvider,
   RbacPreflightPanel,
   RepositoriesScreen,
-  ReviewScreen,
   SettingsScreen,
   SetupWizard,
   commitNoticeText,
@@ -61,7 +58,6 @@ import {
   DEFAULT_THEME_CHOICE,
   EMPTY_AZURE_CONFIG,
   computeInvalidation,
-  deriveJourney,
   hasAzure,
   hasCribl,
   parseAcceptanceRecord,
@@ -124,12 +120,6 @@ const BATCH_PACING: BatchPacing = {
   sleep: (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)),
 };
 
-// The Review screen's generated-at token supplier (porting-plan Unit 7):
-// the SHELL owns the clock - @soc/core echoes the token verbatim onto the
-// preview so the staleness marker can render a generation time without core
-// ever reading Date. Module scope keeps the identity stable across renders.
-const REVIEW_GENERATED_AT = () => new Date().toISOString();
-
 // The Logs screen's data source: flush anything the browser logger still
 // holds, then read the host log tail back and re-parse the pinned line
 // format into entries (unparseable lines stay visible as info entries).
@@ -166,24 +156,32 @@ const APP_OPTIONS_KEY = 'appOptions';
 
 // This shell's journey stage bindings (ux-flow-plan 4.4, Unit 6.5): the
 // shared bindings plus the LOCAL-specific connect guidance - this shell has
-// no in-app identity surface until Unit 22, so the connect stage renders the
-// config-file path as guidance text with no route. Cross-links are DATA
-// passed to the shared screens; shared prose never names shell-specific UI.
+// no in-app identity surface, so the connect stage renders the config-file
+// path as guidance text with no route (the same guidance renders as a Setup
+// section). Cross-links are DATA passed to the shared screens; shared prose
+// never names shell-specific UI.
 const SHELL_LINK_OVERRIDES: JourneyLinks = {
   connect: {
     hint:
       'The identity (tenant, client, secret) lives in config/local-config.json: edit the ' +
-      'file, restart the host, then reload this page. A guided connect step ships in a ' +
-      'later unit.',
+      'file, restart the host, then reload this page. The Azure identity section on Setup ' +
+      'restates this guidance.',
+  },
+  // The shared target binding points at Setup's resource selection, which is
+  // cloud-only; on local the target commits from the Integrate page.
+  target: {
+    routeId: 'integrate',
+    hint:
+      "Choose and commit the target in the Integrate page's Azure Resources section " +
+      '(Use this target).',
   },
 };
 // Full mode: the integrate-arc stages the single-page Integrate flagship
 // serves (choose-content / configure / deploy) cross-link to the 'integrate'
-// route - Home's Integrate rail opens the one page (legacy-flow-analysis.md).
-// 'review' stays bound to the dedicated Review screen (SHARED_JOURNEY_LINKS);
-// its Integrate-page section is coming-soon. In cribl-only / air-gapped these
-// stages render 'not-yet-available' (non-navigable), so the binding is inert
-// where the 'both'-gated route is hidden.
+// route - Setup's Integrate rail opens the one page (legacy-flow-analysis.md).
+// In cribl-only / air-gapped these stages render 'not-yet-available'
+// (non-navigable), so the binding is inert where the 'both'-gated route is
+// hidden.
 const JOURNEY_LINKS = mergeJourneyLinks({
   ...SHELL_LINK_OVERRIDES,
   'choose-content': {
@@ -192,11 +190,11 @@ const JOURNEY_LINKS = mergeJourneyLinks({
   },
   configure: {
     routeId: 'integrate',
-    hint: 'Configure Azure resources and Cribl on the Integrate page; saved defaults live in Options.',
+    hint: 'Configure Azure resources and Cribl on the Integrate page.',
   },
   deploy: {
     routeId: 'integrate',
-    hint: 'Deploy the native table on the Integrate page. The Review stage previews what a run would create.',
+    hint: 'Deploy the native table on the Integrate page.',
   },
 });
 
@@ -212,13 +210,13 @@ const AZURE_ONLY_JOURNEY_LINKS = mergeJourneyLinks({
   },
   configure: {
     routeId: 'dcr-automation',
-    hint: 'Per-run overrides live on DCR Automation; saved defaults in Options.',
+    hint: 'Per-run overrides live on DCR Automation.',
   },
   deploy: {
     routeId: 'dcr-automation',
     hint:
       'Run on DCR Automation - template-only in this mode; ARM bodies download as one ' +
-      'artifact. The Review stage previews what a run would create.',
+      'artifact.',
   },
 });
 
@@ -378,17 +376,17 @@ export function LocalApp() {
     };
   }, []);
 
-  // The Options screen's storage callbacks (the small shared load/save this
-  // shell owns): one plain host-secrets entry, read raw so the screen can
-  // merge saves through applyOptionsPatch, with the shell's parsed copy
-  // refreshed on every save so onboarding defaults follow immediately.
-  const loadAppOptions = useCallback(() => ports.secrets.get(APP_OPTIONS_KEY), []);
+  // The options save callback (the small shared save this shell owns): one
+  // plain host-secrets entry, with the shell's parsed copy refreshed on every
+  // save so onboarding defaults follow immediately. The dedicated Options
+  // screen was RETIRED (2026-07-14, never used); deployment/naming defaults
+  // apply from DEFAULT_APP_OPTIONS and inline edits persist through here.
   const saveAppOptions = useCallback(async (serialized: string) => {
     await ports.secrets.set(APP_OPTIONS_KEY, serialized);
     setAppOptions(parseAppOptions(serialized));
   }, []);
   // Persist an inline OperationOptions edit (the Integrate page's DCE capability
-  // toggle) through the same appOptions entry the Options screen uses.
+  // toggle) through the same appOptions entry.
   const persistOperation = useCallback(
     (operation: OperationOptions) => {
       void saveAppOptions(serializeAppOptions({ ...appOptions, operation }));
@@ -448,7 +446,8 @@ export function LocalApp() {
         : { ...load.config.azure, ...scopeOverride }
       : null;
 
-  // The EXPLICIT scope commit from the Azure Targeting screen: persist the
+  // The EXPLICIT scope commit from the Integrate page's Azure Resources
+  // section (the AzureTargetingScreen cascade it composes): persist the
   // three scope fields as a plain override entry, then surface the
   // invalidation consequences computed by @soc/core (a pure scope change
   // stales cached permission results only; nothing else is cached locally
@@ -594,32 +593,43 @@ export function LocalApp() {
       activeAzureConfig.workspaceName.trim() !== '',
   };
 
-  // The Review screen's disabled-control hint comes from journey-state's
-  // deploy stage (Unit 7 amendment: the single missing thing - identity or
-  // scope - is journey data, never per-screen prose). The preview needs the
-  // same live-ARM prerequisites as a deploy run, so one hint serves both.
-  const deployStage = deriveJourney(journeyFacts).integrate.find(
-    (stage) => stage.id === 'deploy'
+  // The Setup page's shell-composed sections: this shell has no in-app
+  // identity surface (the host config file owns it), so the Azure section is
+  // GUIDANCE prose - the config-file pointer the connect journey hint also
+  // carries - plus the GitHub token surface so everything setup-shaped lives
+  // on one page. Rendered inside HomeScreen, which sits in the PortsProvider.
+  const setupSections = (
+    <>
+      <section className="panel">
+        <h2 className="panel-title">Azure identity</h2>
+        <p className="panel-desc">
+          The identity this host deploys with (tenant ID, client ID, client
+          secret) lives in config/local-config.json: edit the file, restart
+          the host, then reload this page. Non-secret fields show on the
+          Settings screen; the Permission Verification screen reports what
+          the identity can actually do. Choose and commit the target scope in
+          the Integrate page&apos;s Azure Resources section.
+        </p>
+      </section>
+      <RepositoriesScreen platform="local" />
+    </>
   );
-  const reviewJourneyHint =
-    deployStage !== undefined && deployStage.status === 'blocked'
-      ? (deployStage.blockedReason ?? null)
-      : null;
 
-  // The Home route (ux-flow-plan 4.3, Unit 6.5): the state-aware landing
-  // surface BOTH shells open on every launch. Facts in, rails and the single
-  // next action out - position is derived from persisted state on every
-  // render, so resume is automatic. Mounted in a PortsProvider for the
-  // embedded RecentRuns (falls back to the empty config while the host
-  // config loads; the runs list never reads the config).
+  // The Setup route (ux-flow-plan 4.3, Unit 6.5 + the 2026-07-14 promotion):
+  // the state-aware landing surface BOTH shells open on every launch. Facts
+  // in, rails and the single next action out - position is derived from
+  // persisted state on every render, so resume is automatic. Mounted in a
+  // PortsProvider for the embedded RecentRuns and the GitHub token section
+  // (falls back to the empty config while the host config loads; neither
+  // reads the config).
   const renderHome = (nav: AppFrameNav) => (
     <>
       <header className="local-header">
-        <h1 className="local-title">Home</h1>
+        <h1 className="local-title">Setup</h1>
         <p className="local-subtitle">
-          Where this install is on the journey and the single next action.
-          Every stage is visible and navigable; commits stay gated inside
-          their screens.
+          Where this install is on the journey, the single next action, and
+          the setup tasks: the Azure identity guidance and GitHub content
+          access on one page.
         </p>
       </header>
       <PortsProvider ports={ports} config={activeAzureConfig ?? EMPTY_AZURE_CONFIG}>
@@ -627,6 +637,7 @@ export function LocalApp() {
           facts={journeyFacts}
           links={phase.mode === 'azure-only' ? AZURE_ONLY_JOURNEY_LINKS : JOURNEY_LINKS}
           onNavigate={nav.navigate}
+          setupSections={setupSections}
         />
       </PortsProvider>
     </>
@@ -640,9 +651,9 @@ export function LocalApp() {
   // Azure and deploys to Cribl in one page). No hard wall: controls stay
   // visible and gate at the commit actions inside the composed screens
   // (read-ahead); the host-config loading/error branches match the other
-  // ports-backed routes. The standalone Onboard / Azure Targeting / Batch /
-  // Review routes stay registered - this page composes and supersedes them.
-  const renderIntegrate = (nav: AppFrameNav) => (
+  // ports-backed routes. This page composes and supersedes the standalone
+  // Azure Targeting / Review surfaces (their nav items are retired).
+  const renderIntegrate = () => (
     <>
       <header className="local-header">
         <h1 className="local-title">Integrate</h1>
@@ -676,7 +687,6 @@ export function LocalApp() {
             onCommitScope={handleCommitScope}
             criblDefaults={appOptions.cribl}
             operationDefaults={appOptions.operation}
-            onOpenOptions={() => nav.navigate('options')}
             onOperationChange={persistOperation}
             roleGuidance={ROLE_GUIDANCE}
             mode={phase.mode}
@@ -730,7 +740,7 @@ export function LocalApp() {
   // (workspace fetch; in DCE mode one batch-wide DCE plus the AMPLS
   // association when public access is disabled) plus one step per table.
   // The shell injects the pacing hooks and the persisted Unit 4 options.
-  const renderBatch = (nav: AppFrameNav) => (
+  const batchView = (
     <>
       <header className="local-header">
         <h1 className="local-title">Batch onboarding</h1>
@@ -763,7 +773,6 @@ export function LocalApp() {
             pacing={BATCH_PACING}
             operationDefaults={appOptions.operation}
             criblDefaults={appOptions.cribl}
-            onOpenOptions={() => nav.navigate('options')}
             forcedTemplateOnly={!hasCribl(phase.mode)}
           />
         </PortsProvider>
@@ -776,10 +785,10 @@ export function LocalApp() {
   // single "DCR Automation" page). Single onboards one table live to Cribl, so
   // it needs a Cribl connection; in modes without Cribl the Single tab is
   // disabled and Batch (template-only) is the usable mode.
-  const renderDcrAutomation = (nav: AppFrameNav) => (
+  const renderDcrAutomation = () => (
     <DcrAutomationScreen
       single={onboardView}
-      batch={renderBatch(nav)}
+      batch={batchView}
       inventory={
         <PortsProvider ports={ports} config={activeAzureConfig ?? EMPTY_AZURE_CONFIG}>
           <DcrInventoryPanel />
@@ -791,114 +800,6 @@ export function LocalApp() {
           : 'Single-table onboarding creates a Cribl destination, so it needs a live Cribl connection. Batch supports template-only export without Cribl.'
       }
     />
-  );
-
-  // The Review route (porting-plan Unit 7, ux-flow-plan 5.2): the Integrate
-  // arc's REVIEW stage - live-ARM deployment preview through the host's ARM
-  // proxy, with the staleness marker and the acknowledge gate arming the
-  // handoff to DCR Automation. Controls stay visible and disable with the
-  // journey-state hint (identity/scope - the same prerequisites a deploy
-  // run needs); the host-config loading/error branches match the other
-  // ports-backed routes.
-  const renderReview = (nav: AppFrameNav) => (
-    <>
-      <header className="local-header">
-        <h1 className="local-title">Review deployment</h1>
-        <p className="local-subtitle">
-          Preview exactly what a deploy run would create - predicted DCR/DCE
-          names (the same names deployment uses), Exists vs Will create from
-          live Azure, and the ARM request bodies - then acknowledge the
-          preview to arm the Deploy handoff. Read-only: checking never
-          deploys anything.
-        </p>
-      </header>
-      {load.state === 'loading' && (
-        <p className="local-subtitle">Loading host configuration...</p>
-      )}
-      {load.state === 'error' && (
-        <>
-          <div className="local-error">
-            Could not load the host configuration: {load.message}
-          </div>
-          <div className="panel-controls">
-            <button className="run-button" onClick={() => void reload()}>
-              Retry
-            </button>
-          </div>
-        </>
-      )}
-      {load.state === 'loaded' && activeAzureConfig !== null && (
-        <PortsProvider ports={ports} config={activeAzureConfig}>
-          <ReviewScreen
-            generatedAtToken={REVIEW_GENERATED_AT}
-            operationDefaults={appOptions.operation}
-            journeyBlockedReason={reviewJourneyHint}
-            onOpenOptions={() => nav.navigate('options')}
-            onProceedToDeploy={() => nav.navigate('dcr-automation')}
-            deploySurfaceLabel="DCR Automation"
-          />
-        </PortsProvider>
-      )}
-    </>
-  );
-
-  // The Options route (porting-plan Unit 4): deployment and naming defaults
-  // as typed forms over one plain host-secrets entry. requires: 'none' -
-  // options are app configuration, editable in every mode. No PortsProvider
-  // needed: the screen's only IO is the two storage callbacks above.
-  const optionsView = (
-    <>
-      <header className="local-header">
-        <h1 className="local-title">Options</h1>
-        <p className="local-subtitle">
-          Deployment and naming defaults for onboarding and deployment jobs:
-          Direct vs DCE mode, timeouts, template handling, custom-table
-          retention, Private Link, and Cribl destination naming.
-        </p>
-      </header>
-      <OptionsScreen loadOptions={loadAppOptions} saveOptions={saveAppOptions} />
-    </>
-  );
-
-  // The Azure Targeting route (Unit 2): browse subscriptions, workspaces,
-  // and resource groups through the host's ARM proxy, create what is
-  // missing, and commit the scope explicitly. The host config file keeps the
-  // identity; the committed scope persists as a plain override entry.
-  const targetingView = (
-    <>
-      <header className="local-header">
-        <h1 className="local-title">Azure targeting</h1>
-        <p className="local-subtitle">
-          Browse the subscription, workspace, and resource-group cascade,
-          create what is missing, enable Sentinel, then commit the scope with
-          Use this target. The identity (tenant, client, secret) stays in
-          config/local-config.json; only the committed scope is stored here.
-        </p>
-      </header>
-      {load.state === 'loading' && (
-        <p className="local-subtitle">Loading host configuration...</p>
-      )}
-      {load.state === 'error' && (
-        <>
-          <div className="local-error">
-            Could not load the host configuration: {load.message}
-          </div>
-          <div className="panel-controls">
-            <button className="run-button" onClick={() => void reload()}>
-              Retry
-            </button>
-          </div>
-        </>
-      )}
-      {load.state === 'loaded' && activeAzureConfig !== null && (
-        <PortsProvider ports={ports} config={activeAzureConfig}>
-          <AzureTargetingScreen
-            offline={!hasAzure(phase.mode)}
-            onCommitScope={handleCommitScope}
-          />
-        </PortsProvider>
-      )}
-    </>
   );
 
   // The Logs route (porting-plan Unit 3): the shared diagnostics viewer over
@@ -947,7 +848,7 @@ export function LocalApp() {
             ...(scopeOverride !== null
               ? {
                   tip:
-                    'Committed from the Azure Targeting screen; it overrides the\n' +
+                    "Committed from the Integrate page's Azure Resources section; it overrides the\n" +
                     'scope fields in config/local-config.json (identity fields\n' +
                     'always come from the file).',
                 }
@@ -1119,35 +1020,33 @@ export function LocalApp() {
   );
 
   // Route table, SECTIONED per ux-flow-plan 4.4: journey steps in dependency
-  // order - Home, then Integrate (the single-page flagship, the PRIMARY
-  // journey route), then the standalone Azure Targeting, Onboard, Batch
-  // Onboard, and Review screens the Integrate page composes and supersedes
-  // but which stay reachable during the transition - then tools. This shell
-  // has no diagnostics section (the Spike Harness is cloud-only). Integrate
-  // and Onboard need BOTH live sides; batch-onboard relaxes to
+  // order - Setup (home, now carrying the identity guidance + GitHub
+  // sections), then Integrate (the single-page flagship, the PRIMARY journey
+  // route), then DCR Automation and Pack Maintenance - then tools. This
+  // shell has no diagnostics section (the Spike Harness is cloud-only).
+  // Integrate and Onboard need BOTH live sides; batch-onboard relaxes to
   // 'azure' (recorded Unit 6.5 decision) - in azure-only mode templateOnly
   // is FORCED on because no live Cribl connection exists to deploy
-  // destinations to. Review (Unit 7) requires 'azure' (its truth is live
-  // ARM) and sits after the screens serving Choose/Configure, mirroring the
-  // integrate arc's stage order.
+  // destinations to.
+  // NAV PRUNE (user directives 2026-07-14, mirrors the cloud shell): Options
+  // RETIRED (never used; defaults persist via appOptions), the standalone
+  // Azure Targeting item RETIRED (the Integrate page composes the same
+  // cascade), the standalone Review item RETIRED (its preview folds into the
+  // Integrate flow), and Preflight is relabeled Permission Verification.
   // SECTION SPLIT (user directive 2026-07-09, mirrors the cloud shell): only
   // Setup (home) and Sentinel Integration are ACTIVE; unvalidated features
   // park in DEVELOPMENT and move out one at a time as they pass live
-  // testing. Options, Repositories, Logs, and Settings stay under Tools
-  // because the two active screens depend on them.
+  // testing.
   const routes: AppRoute[] = [
     { id: 'home', label: 'Setup', requires: 'none', section: 'journey', render: renderHome },
     { id: 'integrate', label: 'Sentinel Integration', requires: 'both', section: 'journey', render: renderIntegrate },
     { id: 'dcr-automation', label: 'DCR Automation', requires: 'azure', section: 'journey', render: renderDcrAutomation },
     { id: 'packs', label: 'Pack Maintenance', requires: 'cribl', section: 'journey', render: () => packsView },
-    { id: 'options', label: 'Options', requires: 'none', section: 'tools', render: () => optionsView },
     { id: 'repositories', label: 'Repositories', requires: 'none', section: 'tools', render: () => repositoriesView },
     { id: 'logs', label: 'Logs', requires: 'none', section: 'tools', render: () => logsView },
     { id: 'settings', label: 'Settings', requires: 'none', section: 'tools', render: () => settingsView },
-    { id: 'azure-target', label: 'Azure Targeting', requires: 'azure', section: 'development', render: () => targetingView },
-    { id: 'preflight', label: 'Preflight', requires: 'azure', section: 'development', render: renderPreflight },
+    { id: 'preflight', label: 'Permission Verification', requires: 'azure', section: 'development', render: renderPreflight },
     { id: 'eventhub-discovery', label: 'Event Hub Discovery', requires: 'azure', section: 'development', render: () => eventHubDiscoveryView },
-    { id: 'review', label: 'Review', requires: 'azure', section: 'development', render: renderReview },
     { id: 'architecture', label: 'Architecture Patterns', requires: 'none', section: 'development', render: () => architectureView },
     { id: 'mapping-catalog', label: 'Mapping Catalog', requires: 'none', section: 'development', render: () => mappingCatalogView },
   ];
@@ -1158,7 +1057,7 @@ export function LocalApp() {
     <div className="scope-bar">
       <span
         className="scope-chip"
-        title="The committed Azure target scope (subscription / resource group / workspace). Change it from the Azure Targeting screen - browsing there never changes it until you click Use this target."
+        title="The committed Azure target scope (subscription / resource group / workspace). Change it from the Integrate page's Azure Resources section - browsing there never changes it until you click Use this target."
       >
         target:{' '}
         {formatScopeChip(

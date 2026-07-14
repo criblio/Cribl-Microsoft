@@ -59,12 +59,13 @@ describe("buildStepperItems", () => {
     expect(item?.routeId).toBeNull();
   });
 
-  it("routes the shipped review stage to the review screen (Unit 7)", () => {
+  it("renders the review stage unlinked (the standalone Review screen is retired)", () => {
     const journey = deriveJourney(facts());
     const review = stage(journey.integrate, "review");
     expect(review.status).toBe("available");
     const [item] = buildStepperItems([review], SHARED_JOURNEY_LINKS);
-    expect(item?.routeId).toBe("review");
+    expect(item?.routeId).toBeNull();
+    expect(item?.hint).toBe(SHARED_JOURNEY_LINKS.review?.hint);
   });
 
   it("keeps the route on blocked stages (read-ahead: navigable, gated at commit)", () => {

@@ -6,7 +6,8 @@ import {
   ArchitectureScreen,
   MappingCatalogScreen,
   AuaGate,
-  AzureTargetingScreen,
+  AzureConnectSection,
+  AzureResourcesSection,
   BatchDeployScreen,
   DcrAutomationScreen,
   DcrInventoryPanel,
@@ -17,12 +18,10 @@ import {
   LogsScreen,
   ModeSelect,
   OnboardTableScreen,
-  OptionsScreen,
   PackInventoryScreen,
   PortsProvider,
   RbacPreflightPanel,
   RepositoriesScreen,
-  ReviewScreen,
   SettingsScreen,
   commitNoticeText,
   formatScopeChip,
@@ -33,6 +32,7 @@ import {
 import type {
   AppFrameNav,
   AppRoute,
+  AzureConnectResult,
   CommitScopeOutcome,
   JourneyLinks,
   LoadableAcceptance,
@@ -40,19 +40,14 @@ import type {
   ThemeControl,
 } from '@soc/ui';
 import {
-  allGranted,
-  appRegistrationRequest,
   commitTargetScope,
   computeInvalidation,
   DEFAULT_APP_OPTIONS,
   DEFAULT_THEME_CHOICE,
-  deriveJourney,
-  deriveResourceGroup,
   hasAzure,
   hasCribl,
   EMPTY_AZURE_CONFIG,
   EMPTY_PROFILE_STORE,
-  evaluatePermissions,
   getActiveConfig,
   getActiveProfile,
   parseAcceptanceRecord,
@@ -66,10 +61,6 @@ import {
   serializeThemeChoice,
   removeProfile,
   renameProfile,
-  renderRoleAssignmentCli,
-  REQUIRED_ACTIONS,
-  resourceCreationRequest,
-  roleAssignmentRequest,
   serializeAcceptanceRecord,
   serializeAppMode,
   serializeProfileStore,
@@ -83,13 +74,12 @@ import type {
   AppOptions,
   OperationOptions,
   AzureConfig,
+  AzureSetupPath,
   BatchPacing,
   ChangeRequestContext,
   ConnectionProfile,
   JourneyFacts,
-  PermissionsResponse,
   ProfileStore,
-  RequiredAction,
   SetupPath as PreflightSetupPath,
   TargetScope,
   ThemeChoice,
@@ -112,11 +102,13 @@ import { PlatformLogger } from './platform/logger';
 // active connection's non-secret config.
 const APP_NAME = 'SOC Optimization Toolkit';
 
-// Phase 1 harness: seven sequential diagnostics panels that exercise the Cribl
+// Phase 1 harness: five sequential diagnostics panels that exercise the Cribl
 // App Platform surface (globals, KV store, proxy header injection, Azure AD
-// token flow, ARM calls, iframe download behavior), now driven by named
-// connection profiles. A connection bar at the top selects the ACTIVE profile;
-// all config-bearing panels read and write the active profile's config.
+// token flow, ARM calls, iframe download behavior), driven by named connection
+// profiles. A connection bar at the top selects the ACTIVE profile. The former
+// panels 3 and 4 (App registration and connect / resource selection and role
+// grant) were PROMOTED to the Setup page as shared @soc/ui sections
+// (AzureConnectSection / AzureResourcesSection).
 //
 // PLATFORM CONSTRAINT: proxies.yml injects auth from the FIXED keys
 // kv.azureBasic (Basic, the client secret) and kv.azureArmToken (Bearer), and
@@ -151,12 +143,6 @@ const BATCH_PACING: BatchPacing = {
   sleep: (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)),
 };
 
-// The Review screen's generated-at token supplier (porting-plan Unit 7):
-// the SHELL owns the clock - @soc/core echoes the token verbatim onto the
-// preview so the staleness marker can render a generation time without core
-// ever reading Date. Module scope keeps the identity stable across renders.
-const REVIEW_GENERATED_AT = () => new Date().toISOString();
-
 // The AzureConfig fields the Onboard screen cannot run without. tenantId
 // drives the ARM token flow; the rest address the workspace the DCR targets.
 const ONBOARD_REQUIRED_FIELDS = [
@@ -169,25 +155,23 @@ const ONBOARD_REQUIRED_FIELDS = [
 
 // This shell's journey stage bindings (ux-flow-plan 4.4, Unit 6.5): the
 // shared bindings plus the CLOUD-specific connect cross-link - identity
-// entry lives in Diagnostics panel 3 (App registration and connect) until
-// Unit 9 promotes it to a product Connect step. Cross-links are DATA passed
-// to the shared screens; shared prose never names shell-specific UI.
+// entry lives in the App registration and connect section of the Setup page.
+// Cross-links are DATA passed to the shared screens; shared prose never
+// names shell-specific UI.
 const SHELL_LINK_OVERRIDES: JourneyLinks = {
   connect: {
-    routeId: 'harness',
+    routeId: 'home',
     hint:
-      'Identity entry lives in panel 3 (App registration and connect) of the Diagnostics ' +
-      'view until the product Connect step ships: Save and connect stores the secret and ' +
-      'verifies it by acquiring an ARM token.',
+      'Identity entry lives in the App registration and connect section of the Setup ' +
+      'page: Save and connect stores the secret and verifies it by acquiring an ARM token.',
   },
 };
 // Full mode: the integrate-arc stages the single-page Integrate flagship
 // serves (choose-content / configure / deploy) cross-link to the 'integrate'
-// route - Home's Integrate rail opens the one page (legacy-flow-analysis.md).
-// 'review' stays bound to the dedicated Review screen (SHARED_JOURNEY_LINKS);
-// its Integrate-page section is coming-soon. In cribl-only / air-gapped these
-// stages render 'not-yet-available' (non-navigable), so the binding is inert
-// where the 'both'-gated route is hidden.
+// route - Setup's Integrate rail opens the one page (legacy-flow-analysis.md).
+// In cribl-only / air-gapped these stages render 'not-yet-available'
+// (non-navigable), so the binding is inert where the 'both'-gated route is
+// hidden.
 const JOURNEY_LINKS = mergeJourneyLinks({
   ...SHELL_LINK_OVERRIDES,
   'choose-content': {
@@ -196,11 +180,11 @@ const JOURNEY_LINKS = mergeJourneyLinks({
   },
   configure: {
     routeId: 'integrate',
-    hint: 'Configure Azure resources and Cribl on the Integrate page; saved defaults live in Options.',
+    hint: 'Configure Azure resources and Cribl on the Integrate page.',
   },
   deploy: {
     routeId: 'integrate',
-    hint: 'Deploy the native table on the Integrate page. The Review stage previews what a run would create.',
+    hint: 'Deploy the native table on the Integrate page.',
   },
 });
 
@@ -216,13 +200,13 @@ const AZURE_ONLY_JOURNEY_LINKS = mergeJourneyLinks({
   },
   configure: {
     routeId: 'dcr-automation',
-    hint: 'Per-run overrides live on DCR Automation; saved defaults in Options.',
+    hint: 'Per-run overrides live on DCR Automation.',
   },
   deploy: {
     routeId: 'dcr-automation',
     hint:
       'Run on DCR Automation - template-only in this mode; ARM bodies download as one ' +
-      'artifact. The Review stage previews what a run would create.',
+      'artifact.',
   },
 });
 
@@ -230,8 +214,8 @@ const AZURE_ONLY_JOURNEY_LINKS = mergeJourneyLinks({
 // (shell-provided pointer for the shared Onboard footer - the local shell
 // passes its own).
 const ROLE_GUIDANCE =
-  'grant it following the role guidance in panel 4 (Select resources and grant permissions) ' +
-  'of the Diagnostics view.';
+  'grant it following the role guidance in the Select resources and grant permissions ' +
+  'section of the Setup page.';
 
 // Shared runner state for a panel: status line plus a monospace output area.
 // The task either resolves to the output text (status ok) or throws; thrown
@@ -468,20 +452,12 @@ function KvStorePanel() {
   );
 }
 
-// The coarse setup path shared by panel 3 (connect) and panel 4 (resource
-// selection and role assignment). The az CLI role-assignment script for the
-// chosen path is rendered in panel 4 by renderRoleAssignmentCli from @soc/core -
-// the single source of truth for the setup-path RBAC role model - from the
-// SELECTED (or bootstrap-typed) subscription and the derived/selected resource
-// group. Blank fields stay as <placeholders> so a partial copy is still visibly
-// incomplete.
-type SetupPath = 'existing' | 'lab-new-rg' | 'lab-byo-rg';
-
-// Map the coarse shell setup path (persisted on AzureConfig) to the DEFAULT
-// core preflight SetupPath the RBAC panel opens on. 'existing' defaults to the
-// resource-group WRITE path (what deploy-readiness turns on); the operator can
-// switch to the subscription-scope read path inside the panel.
-function defaultPreflightPath(path: SetupPath): PreflightSetupPath {
+// Map the coarse shell setup path (persisted on AzureConfig, edited in the
+// Setup page's connect section) to the DEFAULT core preflight SetupPath the
+// RBAC panel opens on. 'existing' defaults to the resource-group WRITE path
+// (what deploy-readiness turns on); the operator can switch to the
+// subscription-scope read path inside the panel.
+function defaultPreflightPath(path: AzureSetupPath): PreflightSetupPath {
   switch (path) {
     case 'existing':
       return 'existing-rg';
@@ -492,1051 +468,7 @@ function defaultPreflightPath(path: SetupPath): PreflightSetupPath {
   }
 }
 
-// Reusable "generate a change request" block for operators who must ASK another
-// team to perform a setup step (create the app registration, assign roles, or
-// create resources) rather than doing it themselves. The ticket body and the
-// Mermaid architecture diagram embedded in it come entirely from @soc/core via
-// the `generate` closure; this component only handles rendering, clipboard
-// copy, and download. The generated text is shown in a monospace <pre>; the
-// embedded diagram is a fenced mermaid block whose source is plain text, so it
-// pastes safely anywhere and renders wherever Markdown+Mermaid is supported.
-interface ChangeRequestBlockProps {
-  title: string;
-  description: string;
-  // Downloaded filename.
-  filename: string;
-  generate: () => string;
-}
-
-function ChangeRequestBlock({ title, description, filename, generate }: ChangeRequestBlockProps) {
-  const [text, setText] = useState('');
-  const [feedback, setFeedback] = useState('');
-
-  const copy = async () => {
-    try {
-      await navigator.clipboard.writeText(text);
-      setFeedback('Copied to clipboard.');
-    } catch (err) {
-      setFeedback(`Copy failed: ${String(err)}`);
-    }
-  };
-
-  // Download the ticket as plain text so it can be attached or pasted into a
-  // ticketing system without the terminal multi-line paste prompt.
-  const download = () => {
-    const blob = new Blob([text], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement('a');
-    anchor.href = url;
-    anchor.download = filename;
-    document.body.appendChild(anchor);
-    anchor.click();
-    anchor.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 10000);
-    setFeedback(`Download dispatched (${filename}).`);
-  };
-
-  return (
-    <div className="change-request">
-      <span className="field-label">{title}</span>
-      <p className="panel-desc">{description}</p>
-      <div className="panel-controls">
-        <button
-          className="run-button"
-          onClick={() => {
-            setText(generate());
-            setFeedback('');
-          }}
-        >
-          Generate change request
-        </button>
-        {text !== '' && (
-          <>
-            <button className="run-button" onClick={() => void copy()}>
-              Copy
-            </button>
-            <button className="run-button" onClick={download}>
-              Download {filename}
-            </button>
-          </>
-        )}
-      </div>
-      {text !== '' && <pre className="result">{text}</pre>}
-      {feedback !== '' && <p className="panel-desc">{feedback}</p>}
-    </div>
-  );
-}
-
-// Panel 3: create the Entra app registration, then CONNECT this app to it. The
-// identity inputs (tenant ID, client ID, client secret) plus a single primary
-// action, Save and connect, write the encrypted write-only azureBasic entry
-// (base64 of clientId:clientSecret), acquire an ARM token, and store it under
-// azureArmToken so proxies.yml can inject Bearer server-side. Resource selection
-// and role assignment moved to panel 4; this panel no longer takes a
-// subscription/resource group or renders the az script.
-interface AppRegistrationConnectPanelProps {
-  activeProfileId: string | null;
-  secretLive: boolean;
-  onSecretSaved: (profileId: string, tenantId: string, clientId: string) => void;
-  onConnected: () => void;
-  clientId: string;
-  onClientIdChange: (value: string) => void;
-  tenantId: string;
-  onTenantIdChange: (value: string) => void;
-  setupPath: SetupPath;
-  onSetupPathChange: (value: SetupPath) => void;
-  // The active connection's change-request context (app name + non-secret
-  // config), used to generate the app-registration ticket for the IAM team.
-  ctx: ChangeRequestContext;
-}
-
-function AppRegistrationConnectPanel({
-  activeProfileId,
-  secretLive,
-  onSecretSaved,
-  onConnected,
-  clientId,
-  onClientIdChange,
-  tenantId,
-  onTenantIdChange,
-  setupPath,
-  onSetupPathChange,
-  ctx,
-}: AppRegistrationConnectPanelProps) {
-  const [clientSecret, setClientSecret] = useState('');
-  const [status, output, run] = useRunner();
-
-  // Save and connect: write the encrypted, write-only azureBasic entry, then
-  // acquire an ARM token and store it encrypted under azureArmToken. The app
-  // sets no Authorization header - the proxy injects both server-side. Once
-  // azureBasic is written the secret is marked live for this connection (badge +
-  // identity tracking) even if the token step fails; a full success additionally
-  // tells the parent a connect happened so panel 4 can auto-run discovery.
-  const saveAndConnect = () =>
-    run(async () => {
-      if (clientId.trim() === '' || clientSecret === '') {
-        throw new Error('Client ID and client secret are both required to connect.');
-      }
-      if (tenantId.trim() === '') {
-        throw new Error('Tenant ID is required to acquire an ARM token - enter it above, then Save and connect.');
-      }
-      const basicRes = await fetch(kvUrl('azureBasic?encrypted=true'), {
-        method: 'PUT',
-        body: btoa(`${clientId}:${clientSecret}`),
-      });
-      const basicText = await basicRes.text();
-      if (!basicRes.ok) {
-        throw new Error(`PUT azureBasic?encrypted=true: HTTP ${basicRes.status}\nbody: ${basicText}`);
-      }
-      // The encrypted slot is populated now, so mark the secret live and clear
-      // the input regardless of whether the token step below succeeds.
-      setClientSecret('');
-      if (activeProfileId !== null) {
-        onSecretSaved(activeProfileId, tenantId, clientId);
-      }
-      const token = await acquireArmToken(tenantId);
-      const putRes = await fetch(kvUrl('azureArmToken?encrypted=true'), {
-        method: 'PUT',
-        body: token.access_token,
-      });
-      if (!putRes.ok) {
-        throw new Error(
-          'Client secret saved, but the ARM token could not be stored.\n' +
-            `PUT azureArmToken?encrypted=true: HTTP ${putRes.status}\n${await putRes.text()}`
-        );
-      }
-      onConnected();
-      return [
-        'Connected.',
-        '  client secret: saved (encrypted, write-only) for this connection',
-        `  ARM token: acquired and stored encrypted (expires_in ${token.expires_in ?? '(missing)'})`,
-        '',
-        'Next: panel 4 discovers subscriptions, selects your resources, and grants roles.',
-      ].join('\n');
-    });
-
-  return (
-    <Panel
-      index={3}
-      title="App registration and connect"
-      status={status}
-      output={output}
-      actionLabel="Save and connect"
-      onAction={() => void saveAndConnect()}
-    >
-      <p className="panel-desc">
-        Create the Entra app registration, then connect this app to it with the tenant ID, client ID,
-        and a client secret. Azure roles are granted in panel 4, after you discover your subscription.
-      </p>
-      <ChangeRequestBlock
-        title="Cannot create the app registration yourself? Generate a change request"
-        description={
-          'Produce a paste-ready ticket for the team that manages Entra ID. It asks them to create a ' +
-          'single-tenant daemon confidential client (no redirect URI), create a client secret, and ' +
-          'securely share the tenant id, client id, and secret. The current tenant/client ids are ' +
-          'included; blank fields appear as clear placeholders.'
-        }
-        filename="app-registration-request.txt"
-        generate={() => appRegistrationRequest(ctx)}
-      />
-      <ol className="setup-steps">
-        <li>
-          In Entra ID, open App registrations and select New registration. Single tenant;
-          no redirect URI is needed (this is a daemon-style confidential client).
-        </li>
-        <li>
-          Record the Directory (tenant) ID and Application (client) ID from the Overview page.
-        </li>
-        <li>
-          Under Certificates and secrets, create a New client secret and copy its value
-          immediately - it is shown only once.
-        </li>
-        <li>
-          Enter the tenant ID, client ID, and client secret below, choose your setup path,
-          then Save and connect.
-        </li>
-      </ol>
-      <div className="path-options">
-        <label className="path-option">
-          <input
-            type="radio"
-            name="setup-path"
-            checked={setupPath === 'existing'}
-            onChange={() => onSetupPathChange('existing')}
-          />
-          <span>I have an existing Log Analytics workspace to target</span>
-        </label>
-        <label className="path-option">
-          <input
-            type="radio"
-            name="setup-path"
-            checked={setupPath === 'lab-new-rg'}
-            onChange={() => onSetupPathChange('lab-new-rg')}
-          />
-          <span>No workspace yet - a lab will create its own resource group and workspace</span>
-        </label>
-        <label className="path-option">
-          <input
-            type="radio"
-            name="setup-path"
-            checked={setupPath === 'lab-byo-rg'}
-            onChange={() => onSetupPathChange('lab-byo-rg')}
-          />
-          <span>No workspace yet - deploy a lab into a pre-created resource group</span>
-        </label>
-      </div>
-      {setupPath === 'existing' && (
-        <p className="panel-desc">
-          Least privilege for an existing environment: Monitoring Contributor and Log Analytics
-          Contributor scoped to the workspace resource group, plus Reader on the subscription.
-          Nothing is granted subscription-wide beyond read.
-        </p>
-      )}
-      {setupPath === 'lab-new-rg' && (
-        <p className="panel-desc">
-          Requires <strong>Contributor at the subscription scope</strong> (resource group creation is
-          a subscription-level action, and it covers all workspace and DCR operations inside the lab,
-          so no workspace resource group is needed) and{' '}
-          <strong>RBAC Administrator at the subscription scope</strong> for the lab TTL self-destruct.
-          Assign RBAC Administrator in the portal with the condition &quot;Constrain roles and
-          principal types&quot;: only Contributor and Monitoring Metrics Publisher, only to service
-          principals.
-        </p>
-      )}
-      {setupPath === 'lab-byo-rg' && (
-        <p className="panel-desc">
-          Least privilege for labs: an admin pre-creates an empty lab resource group and grants
-          Contributor on it - the lab deploys its workspace there with no subscription-scope rights.
-          The admin also pre-assigns the TTL self-destruct identity its delete rights on that group.
-        </p>
-      )}
-      <div className="form-grid">
-        <label className="field">
-          <span className="field-label">Directory (tenant) ID</span>
-          <input
-            type="text"
-            value={tenantId}
-            onChange={(e) => onTenantIdChange(e.target.value)}
-            autoComplete="off"
-            spellCheck={false}
-          />
-        </label>
-        <label className="field">
-          <span className="field-label">Application (client) ID</span>
-          <input
-            type="text"
-            value={clientId}
-            onChange={(e) => onClientIdChange(e.target.value)}
-            autoComplete="off"
-            spellCheck={false}
-          />
-        </label>
-        <label className="field">
-          <span className="field-label">Client secret</span>
-          <input
-            type="password"
-            value={clientSecret}
-            onChange={(e) => setClientSecret(e.target.value)}
-            autoComplete="new-password"
-            placeholder={secretLive ? 'stored for this connection - enter a new value to replace' : ''}
-          />
-        </label>
-      </div>
-      <p className="panel-desc">
-        Save and connect combines the client secret with the client ID as base64(clientId:clientSecret)
-        and writes it to the encrypted, write-only KV entry azureBasic, then acquires an Azure AD ARM
-        token (grant_type=client_credentials, ARM scope) and stores it encrypted under azureArmToken.
-        The app never sets an Authorization header - the platform proxy injects the secret and token
-        server-side per proxies.yml, and the secret can never be read back. azureBasic is a single
-        shared slot, so only one connection&apos;s secret is live at a time: switching connections clears
-        it and you re-enter and reconnect here. If a secret is already stored the field stays blank -
-        enter a new value only to replace it. The client ID, tenant ID, and setup path are non-secret
-        configuration remembered per connection in the plain azureProfiles KV entry. The connection
-        badge above shows whether this connection&apos;s secret is live this session.
-      </p>
-    </Panel>
-  );
-}
-
-// Permission preflight: the RBAC permissions API returns the caller's EFFECTIVE
-// allowed actions at a scope, which is the only sound signal (customers use
-// custom/lookalike roles, so role names cannot be trusted). @soc/core evaluates
-// the response against the actions each setup path actually performs.
-const PERMISSIONS_API_VERSION = '2022-04-01';
-
-function subscriptionScopeUrl(sub: string): string {
-  return (
-    `https://management.azure.com/subscriptions/${encodeURIComponent(sub)}` +
-    `/providers/Microsoft.Authorization/permissions?api-version=${PERMISSIONS_API_VERSION}`
-  );
-}
-
-function resourceGroupScopeUrl(sub: string, rg: string): string {
-  return (
-    `https://management.azure.com/subscriptions/${encodeURIComponent(sub)}` +
-    `/resourceGroups/${encodeURIComponent(rg)}` +
-    `/providers/Microsoft.Authorization/permissions?api-version=${PERMISSIONS_API_VERSION}`
-  );
-}
-
-// GET one scope's RBAC permissions (no Authorization header - the proxy injects
-// Bearer ${kv.azureArmToken}) and evaluate the required actions with the pure
-// @soc/core evaluator. Returns one summary line plus one line per required
-// action. 401 and 403 get actionable messages rather than raw bodies.
-async function checkScope(
-  scopeLabel: string,
-  url: string,
-  required: RequiredAction[]
-): Promise<string[]> {
-  const res = await fetch(url);
-  if (res.status === 401) {
-    return [
-      `${scopeLabel}: HTTP 401 - the ARM token was rejected (expired, or the proxy did not inject it).`,
-      '  Re-check here (or re-run panel 5) to acquire a fresh token, then retry.',
-    ];
-  }
-  if (res.status === 403) {
-    return [
-      `${scopeLabel}: HTTP 403 - the service principal cannot even read permissions at this scope.`,
-      '  Grant it at least Reader on this scope so the preflight can evaluate effective actions.',
-    ];
-  }
-  const text = await res.text();
-  if (!res.ok) {
-    return [`${scopeLabel}: HTTP ${res.status}\n${text}`];
-  }
-  let parsed: PermissionsResponse;
-  try {
-    const body = JSON.parse(text) as Partial<PermissionsResponse>;
-    parsed = { value: Array.isArray(body.value) ? body.value : [] };
-  } catch {
-    return [`${scopeLabel}: could not parse permissions response\n${text}`];
-  }
-  const results = evaluatePermissions(parsed, required);
-  const lines = [
-    `${scopeLabel}: ${allGranted(results) ? 'all required actions granted' : 'MISSING required actions'}`,
-  ];
-  for (const result of results) {
-    lines.push(`  [${result.granted ? 'ok' : 'missing'}] ${result.label} (${result.action})`);
-  }
-  return lines;
-}
-
-// Run the scope check(s) the selected panel-3 setup path requires, mapping the
-// panel-3 SetupPath to the @soc/core required-action set keys. A blank scope
-// input reports that the scope is needed for validation rather than failing.
-async function validatePermissionsForPath(path: SetupPath, sub: string, rg: string): Promise<string[]> {
-  if (path === 'existing') {
-    const lines: string[] = [];
-    if (sub === '') {
-      lines.push(
-        'Subscription scope: select a subscription above to validate subscription-level reads (existing-subscription).'
-      );
-    } else {
-      lines.push(
-        ...(await checkScope(
-          'Subscription scope (existing-subscription)',
-          subscriptionScopeUrl(sub),
-          REQUIRED_ACTIONS['existing-subscription']
-        ))
-      );
-    }
-    if (sub === '' || rg === '') {
-      lines.push(
-        'Resource group scope: select a subscription and workspace above to validate RG-level writes (existing-rg).'
-      );
-    } else {
-      lines.push(
-        ...(await checkScope(
-          'Resource group scope (existing-rg)',
-          resourceGroupScopeUrl(sub, rg),
-          REQUIRED_ACTIONS['existing-rg']
-        ))
-      );
-    }
-    return lines;
-  }
-  if (path === 'lab-new-rg') {
-    if (sub === '') {
-      return [
-        'Subscription scope: select a subscription above to validate subscription-level lab creation (lab-new-rg-subscription).',
-      ];
-    }
-    return checkScope(
-      'Subscription scope (lab-new-rg-subscription)',
-      subscriptionScopeUrl(sub),
-      REQUIRED_ACTIONS['lab-new-rg-subscription']
-    );
-  }
-  // lab-byo-rg: the pre-created lab resource group scope only.
-  if (sub === '' || rg === '') {
-    return [
-      'Resource group scope: select a subscription and lab resource group above to validate RG-level lab deployment (lab-byo-rg).',
-    ];
-  }
-  return checkScope(
-    'Resource group scope (lab-byo-rg)',
-    resourceGroupScopeUrl(sub, rg),
-    REQUIRED_ACTIONS['lab-byo-rg']
-  );
-}
-
-// Discovery option shapes populated from ARM list responses. Kept minimal - only
-// the fields the dropdowns render or use to derive shared config.
-interface SubscriptionOption {
-  subscriptionId: string;
-  displayName: string;
-}
-interface WorkspaceOption {
-  name: string;
-  id: string;
-}
-interface ResourceGroupOption {
-  name: string;
-}
-
-// GET an ARM list endpoint with no Authorization header (proxies.yml injects
-// Bearer ${kv.azureArmToken}). Returns the raw body on success, or an actionable
-// message for 401/403/other non-ok so each caller renders one clear line.
-type ArmGetResult = { ok: true; text: string } | { ok: false; message: string };
-
-async function armGetJson(url: string, label: string): Promise<ArmGetResult> {
-  const res = await fetch(url);
-  if (res.status === 401) {
-    return {
-      ok: false,
-      message:
-        `${label}: HTTP 401 - the ARM token was rejected (expired, or the proxy did not inject it). ` +
-        'Click Discover / refresh from Azure again to acquire a fresh token, then retry.',
-    };
-  }
-  if (res.status === 403) {
-    return {
-      ok: false,
-      message:
-        `${label}: HTTP 403 - the service principal is not authorized at this scope. ` +
-        'Grant it at least Reader (run the role assignment script in panel 4), wait for propagation, then retry.',
-    };
-  }
-  const text = await res.text();
-  if (!res.ok) {
-    return { ok: false, message: `${label}: HTTP ${res.status}\n${text}` };
-  }
-  return { ok: true, text };
-}
-
-// Panel 4: discover the subscriptions this app registration can see, SELECT the
-// subscription (and, per setup path, the workspace or resource group), then
-// generate the az role-assignment script and validate the caller's EFFECTIVE
-// permissions. Discovery needs an ARM token, which the connect action in panel 3
-// acquires; this panel re-acquires one on demand too. It writes the shared
-// subscription/resource-group state and auto-runs discovery once after a
-// successful connect (connectNonce). When discovery returns ZERO subscriptions a
-// fresh service principal cannot list any, so a one-time bootstrap subscription
-// text input appears - the only place a subscription is typed - to scope the
-// role script until Reader is granted. The panel is keyed by the active profile
-// id in App, so switching connections remounts it and clears all cached
-// discovery and permission-validation state.
-interface ResourceSelectionPanelProps {
-  clientId: string;
-  tenantId: string;
-  setupPath: SetupPath;
-  subscriptionId: string;
-  onSubscriptionIdChange: (value: string) => void;
-  rgName: string;
-  onRgNameChange: (value: string) => void;
-  workspaceName: string;
-  onWorkspaceNameChange: (value: string) => void;
-  connectNonce: number;
-  // The active connection's change-request context (app name + non-secret
-  // config), used to generate the role-assignment and resource-creation tickets.
-  ctx: ChangeRequestContext;
-}
-
-function ResourceSelectionPanel({
-  clientId,
-  tenantId,
-  setupPath,
-  subscriptionId,
-  onSubscriptionIdChange,
-  rgName,
-  onRgNameChange,
-  workspaceName,
-  onWorkspaceNameChange,
-  connectNonce,
-  ctx,
-}: ResourceSelectionPanelProps) {
-  const [stored, setStored] = useState('checking stored credentials...');
-  const [validating, setValidating] = useState(false);
-  const [scriptFeedback, setScriptFeedback] = useState('');
-  const [discoverStatus, discoverOutput, runDiscover] = useRunner();
-
-  // Resource discovery state. Each list is null until its query has run; an
-  // empty array means the query succeeded but returned nothing. For subscriptions
-  // an empty array is the bootstrap signal (dropdown hidden, text input shown).
-  // Lists are cached in React state only - never persisted, and a connection
-  // switch remounts this panel (via its key), which discards them.
-  const [subscriptions, setSubscriptions] = useState<SubscriptionOption[] | null>(null);
-  const [workspaces, setWorkspaces] = useState<WorkspaceOption[] | null>(null);
-  const [resourceGroups, setResourceGroups] = useState<ResourceGroupOption[] | null>(null);
-  const [dependentStatus, setDependentStatus] = useState('');
-
-  // Run the setup-path-dependent query for a chosen subscription:
-  //   existing   -> Log Analytics workspaces (selecting one also sets rgName)
-  //   lab-byo-rg -> resource groups
-  //   lab-new-rg -> nothing (the lab creates its own resource group)
-  // Clears the previous dependent lists first so stale options never linger.
-  const loadDependent = useCallback(async (sub: string, path: SetupPath) => {
-    setWorkspaces(null);
-    setResourceGroups(null);
-    if (sub === '') {
-      setDependentStatus('');
-      return;
-    }
-    if (path === 'lab-new-rg') {
-      setDependentStatus(
-        'This setup path creates its own resource group in the lab, so no resource selection is needed here.'
-      );
-      return;
-    }
-    if (path === 'existing') {
-      setDependentStatus('Listing Log Analytics workspaces...');
-      try {
-        const result = await armGetJson(
-          `https://management.azure.com/subscriptions/${encodeURIComponent(sub)}` +
-            '/providers/Microsoft.OperationalInsights/workspaces?api-version=2023-09-01',
-          'Workspaces'
-        );
-        if (!result.ok) {
-          setDependentStatus(result.message);
-          return;
-        }
-        const parsed = JSON.parse(result.text) as {
-          value?: Array<{ name?: string; id?: string }>;
-        };
-        const list: WorkspaceOption[] = (parsed.value ?? [])
-          .filter(
-            (w): w is { name: string; id: string } =>
-              typeof w.name === 'string' && w.name !== '' && typeof w.id === 'string' && w.id !== ''
-          )
-          .map((w) => ({ name: w.name, id: w.id }));
-        setWorkspaces(list);
-        setDependentStatus(
-          list.length === 0
-            ? 'No Log Analytics workspaces found in this subscription. Create one, or choose a different subscription.'
-            : `Found ${list.length} workspace(s). Selecting one sets the workspace and its resource group.`
-        );
-      } catch (err) {
-        setDependentStatus(`Workspace discovery error: ${String(err)}`);
-      }
-      return;
-    }
-    // lab-byo-rg: list the resource groups so the user can pick the pre-created one.
-    setDependentStatus('Listing resource groups...');
-    try {
-      const result = await armGetJson(
-        `https://management.azure.com/subscriptions/${encodeURIComponent(sub)}` +
-          '/resourcegroups?api-version=2021-04-01',
-        'Resource groups'
-      );
-      if (!result.ok) {
-        setDependentStatus(result.message);
-        return;
-      }
-      const parsed = JSON.parse(result.text) as { value?: Array<{ name?: string }> };
-      const list: ResourceGroupOption[] = (parsed.value ?? [])
-        .filter((g): g is { name: string } => typeof g.name === 'string' && g.name !== '')
-        .map((g) => ({ name: g.name }));
-      setResourceGroups(list);
-      setDependentStatus(
-        list.length === 0
-          ? 'No resource groups found in this subscription.'
-          : `Found ${list.length} resource group(s). Selecting one sets the resource group.`
-      );
-    } catch (err) {
-      setDependentStatus(`Resource group discovery error: ${String(err)}`);
-    }
-  }, []);
-
-  // Discover / refresh: acquire an ARM token (needs the connected secret), store
-  // it so the proxy injects it as Bearer, then list subscriptions. A 401/403
-  // returns an actionable message and leaves the dropdown hidden. An EMPTY list
-  // is NOT an error: it means the service principal has no role assignments yet,
-  // so the bootstrap subscription input is revealed (subscriptions === []).
-  const discover = useCallback(
-    () =>
-      runDiscover(async () => {
-        setSubscriptions(null);
-        setWorkspaces(null);
-        setResourceGroups(null);
-        setDependentStatus('');
-        const token = await acquireArmToken(tenantId);
-        // Store the token BEFORE the ARM GET so proxies.yml can inject it as
-        // Bearer (the app sends no Authorization header), same as panel 5.
-        const putRes = await fetch(kvUrl('azureArmToken?encrypted=true'), {
-          method: 'PUT',
-          body: token.access_token,
-        });
-        if (!putRes.ok) {
-          throw new Error(`PUT azureArmToken: HTTP ${putRes.status}\n${await putRes.text()}`);
-        }
-        const result = await armGetJson(
-          'https://management.azure.com/subscriptions?api-version=2022-12-01',
-          'Subscriptions'
-        );
-        if (!result.ok) {
-          // 401/403: a token/authorization problem, not an empty tenant. Leave
-          // subscriptions null so the bootstrap input does NOT appear.
-          return result.message;
-        }
-        const parsed = JSON.parse(result.text) as {
-          value?: Array<{ displayName?: string; subscriptionId?: string }>;
-        };
-        const list: SubscriptionOption[] = (parsed.value ?? [])
-          .filter(
-            (s): s is { subscriptionId: string; displayName?: string } =>
-              typeof s.subscriptionId === 'string' && s.subscriptionId !== ''
-          )
-          .map((s) => ({ subscriptionId: s.subscriptionId, displayName: s.displayName ?? '(no displayName)' }));
-        setSubscriptions(list);
-        if (list.length === 0) {
-          return (
-            'No subscriptions returned. This app registration has no role assignments yet, so it ' +
-            'cannot list any subscription. Enter your subscription ID below to scope the role ' +
-            'assignment script, run it (it grants Reader), wait a couple of minutes for propagation, ' +
-            'then Discover / refresh from Azure again.'
-          );
-        }
-        // If the already-selected subscription is among the discovered set, load
-        // its dependent list so a returning user sees the dependent dropdown now.
-        const current = subscriptionId.trim();
-        if (current !== '' && list.some((s) => s.subscriptionId === current)) {
-          await loadDependent(current, setupPath);
-        }
-        return `Discovered ${list.length} subscription(s). Choose one below.`;
-      }),
-    [tenantId, subscriptionId, setupPath, loadDependent, runDiscover]
-  );
-
-  // Selecting a subscription sets the shared subscriptionId and re-runs the
-  // dependent query for the current setup path.
-  const onSubscriptionSelect = (value: string) => {
-    onSubscriptionIdChange(value);
-    void loadDependent(value, setupPath);
-  };
-
-  // Selecting a workspace sets the shared workspaceName and derives the resource
-  // group from the workspace's ARM id (via @soc/core) so the user never types it.
-  const onWorkspaceSelect = (name: string) => {
-    onWorkspaceNameChange(name);
-    const match = (workspaces ?? []).find((w) => w.name === name);
-    if (match) {
-      onRgNameChange(deriveResourceGroup(match.id));
-    }
-  };
-
-  // When the setup path changes, the dependent query type changes (workspaces vs
-  // resource groups vs none), so clear the now-irrelevant dependent lists; if a
-  // subscription has already been discovered and selected, re-run the query for
-  // the new path. The ref guard makes this fire ONLY on an actual setupPath
-  // change, never when discovery repopulates subscriptions.
-  const prevSetupPathRef = useRef(setupPath);
-  useEffect(() => {
-    if (prevSetupPathRef.current === setupPath) {
-      return;
-    }
-    prevSetupPathRef.current = setupPath;
-    setWorkspaces(null);
-    setResourceGroups(null);
-    setDependentStatus('');
-    const current = subscriptionId.trim();
-    if (subscriptions !== null && current !== '') {
-      void loadDependent(current, setupPath);
-    }
-  }, [setupPath, subscriptions, subscriptionId, loadDependent]);
-
-  // Report what already exists in THIS app context's KV store. The store is
-  // scoped per app ID: Live Preview (__dev__ prefix) and the installed app
-  // have separate stores, so credentials saved in one are absent in the other.
-  // The tenant ID reflects the ACTIVE connection's config (remembered in the
-  // azureProfiles entry), not a global key.
-  const buildKvReport = useCallback(async (): Promise<{
-    lines: string[];
-    azureBasicPresent: boolean;
-    tenant: string;
-  }> => {
-    const keysRes = await fetch(`${window.CRIBL_API_URL}/kvstore/keys`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prefix: 'azure' }),
-    });
-    const keysText = await keysRes.text();
-    const tenant = tenantId.trim();
-    const azureBasicPresent = keysText.includes('azureBasic');
-    const lines = [
-      `Stored in KV for app ID ${window.CRIBL_APP_ID ?? '(unknown)'}:`,
-      azureBasicPresent
-        ? '  client secret: stored (encrypted, not shown) - NOTE this is a single shared slot, not per connection'
-        : '  client secret: not saved - Save and connect in panel 3 to store it',
-      tenant !== ''
-        ? `  tenant ID: ${tenant} (remembered in this connection)`
-        : '  tenant ID: not saved - enter it in panel 3 (remembered per connection)',
-      keysText.includes('azureArmToken')
-        ? '  azureArmToken: present (encrypted) - a token has been acquired in this context'
-        : '  azureArmToken: not yet acquired - run the token panel or re-check here',
-    ];
-    return { lines, azureBasicPresent, tenant };
-  }, [tenantId]);
-
-  // Auto-run on mount and after a save: report KV state only (no network to Azure).
-  const checkStored = useCallback(async () => {
-    try {
-      const { lines } = await buildKvReport();
-      setStored(lines.join('\n'));
-    } catch (err) {
-      setStored(`stored-credentials check failed: ${String(err)}`);
-    }
-  }, [buildKvReport]);
-
-  useEffect(() => {
-    void checkStored();
-  }, [checkStored]);
-
-  // Auto-run discovery ONCE after a successful connect in panel 3, and refresh
-  // the stored-credentials KV report at the same time so it reflects the just-
-  // saved secret/token instead of staying stale until a manual Re-check.
-  // connectNonce increments on each connect; the ref guard fires only on an
-  // actual increment, never on mount (prev === current) or on unrelated
-  // re-renders (e.g. when checkStored's identity changes as tenantId changes).
-  // Declared AFTER discover and checkStored so both are in scope (no TDZ).
-  const prevConnectNonceRef = useRef(connectNonce);
-  useEffect(() => {
-    if (prevConnectNonceRef.current === connectNonce) {
-      return;
-    }
-    prevConnectNonceRef.current = connectNonce;
-    void discover();
-    void checkStored();
-  }, [connectNonce, discover, checkStored]);
-
-  // Combined preflight: the KV report, then (if credentials are present) acquire
-  // a token, store it so the proxy can inject it as Bearer, and validate the
-  // caller's EFFECTIVE permissions at the scope(s) the selected setup path uses.
-  const recheckAndValidate = useCallback(async () => {
-    setValidating(true);
-    try {
-      const report = await buildKvReport();
-      const baseLines = report.lines;
-      const credsPresent = report.azureBasicPresent && report.tenant !== '';
-      if (!credsPresent) {
-        setStored(
-          [
-            ...baseLines,
-            '',
-            'Permission validation skipped: connect first in panel 3 (Save and connect stores the',
-            'client secret and tenant ID). Validation acquires a token, which needs the encrypted',
-            'azureBasic entry plus a tenant ID on the active connection.',
-          ].join('\n')
-        );
-        return;
-      }
-      setStored([...baseLines, '', 'Permission validation: acquiring token and querying scopes...'].join('\n'));
-      const validationLines: string[] = [];
-      try {
-        const token = await acquireArmToken(tenantId);
-        // Store the token BEFORE the permissions GET so proxies.yml can inject
-        // it as Bearer (the app sends no Authorization header), like panel 5.
-        const putRes = await fetch(kvUrl('azureArmToken?encrypted=true'), {
-          method: 'PUT',
-          body: token.access_token,
-        });
-        if (!putRes.ok) {
-          throw new Error(`PUT azureArmToken: HTTP ${putRes.status}\n${await putRes.text()}`);
-        }
-        validationLines.push(
-          ...(await validatePermissionsForPath(setupPath, subscriptionId.trim(), rgName.trim()))
-        );
-      } catch (err) {
-        validationLines.push(`Permission validation error: ${String(err)}`);
-      }
-      setStored([...baseLines, '', 'Permission validation:', ...validationLines].join('\n'));
-    } catch (err) {
-      setStored(`stored-credentials check failed: ${String(err)}`);
-    } finally {
-      setValidating(false);
-    }
-  }, [buildKvReport, tenantId, setupPath, subscriptionId, rgName]);
-
-  // The az role-assignment script for the selected setup path, built from the
-  // SELECTED (or bootstrap-typed) subscription and the derived/selected resource
-  // group. Blank fields stay as <placeholders> so a partial copy is visibly
-  // incomplete. Copy/download report via a small feedback line (no runner).
-  const script = renderRoleAssignmentCli(setupPath, {
-    clientId,
-    subscriptionId,
-    resourceGroup: rgName,
-  });
-  const copyScript = async () => {
-    try {
-      await navigator.clipboard.writeText(script);
-      setScriptFeedback(
-        script.includes('<')
-          ? 'Copied - NOTE: some fields are blank, so the script still contains <placeholders>.'
-          : 'Copied to clipboard. Run it in a shell with az logged into the test tenant.'
-      );
-    } catch (err) {
-      setScriptFeedback(`Copy failed: ${String(err)}`);
-    }
-  };
-  // Download avoids the terminal multi-line paste prompt and lets the script be
-  // reviewed and re-run: bash assign-roles.sh, or run the az lines in PowerShell.
-  const downloadScript = () => {
-    const body = `#!/usr/bin/env bash\nset -euo pipefail\n\n${script}\n`;
-    const blob = new Blob([body], { type: 'application/x-sh' });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement('a');
-    anchor.href = url;
-    anchor.download = 'assign-roles.sh';
-    document.body.appendChild(anchor);
-    anchor.click();
-    anchor.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 10000);
-    setScriptFeedback(
-      script.includes('<')
-        ? 'Download dispatched (assign-roles.sh) - NOTE: some fields are blank, so it still contains <placeholders>.'
-        : 'Download dispatched (assign-roles.sh). Run: bash assign-roles.sh (or run the az lines in PowerShell).'
-    );
-  };
-
-  return (
-    <section className="panel">
-      <h2 className="panel-title">4. Select resources and grant permissions</h2>
-      <p className="panel-desc">
-        Discover the subscriptions this app registration can see, select the subscription and (for the
-        existing and bring-your-own-RG paths) the target resource, then generate and run the role
-        assignment script and validate the effective permissions. Discovery runs automatically once
-        after you Save and connect in panel 3; use Discover / refresh from Azure to re-run it after
-        granting roles.
-      </p>
-      <ChangeRequestBlock
-        title="Cannot assign roles yourself? Generate a change request"
-        description={
-          'The human-readable companion to the az CLI script below: a paste-ready ticket asking a team ' +
-          'with RBAC rights to assign exactly the roles this setup path requires, at the named scopes, ' +
-          'with a justification per role. Blank fields appear as clear placeholders.'
-        }
-        filename="role-assignment-request.txt"
-        generate={() => roleAssignmentRequest(ctx)}
-      />
-      <ChangeRequestBlock
-        title="Need a resource group or Event Hub created? Generate a change request"
-        description={
-          'A paste-ready ticket asking for the Azure resources this app needs but you may lack rights ' +
-          'to create: for the new-lab-RG path a resource group with a mandatory TTL auto-delete, plus ' +
-          'an Event Hub namespace for the diagnostic-settings export path.'
-        }
-        filename="resource-creation-request.txt"
-        generate={() => resourceCreationRequest(ctx)}
-      />
-      <div className="panel-controls">
-        <button
-          className="run-button"
-          onClick={() => void discover()}
-          disabled={discoverStatus === 'running'}
-        >
-          Discover / refresh from Azure
-        </button>
-        <span className={`status status-${discoverStatus}`}>{discoverStatus}</span>
-      </div>
-      {discoverOutput !== '' && <pre className="result">{discoverOutput}</pre>}
-      <div className="form-grid">
-        {subscriptions === null && (
-          <label className="field">
-            <span className="field-label">Subscription</span>
-            <select disabled value="">
-              <option value="">Click Discover / refresh from Azure above to load...</option>
-            </select>
-            <span className="field-hint">
-              The selectors fill from live discovery. Connect in panel 3 first, then Discover.
-            </span>
-          </label>
-        )}
-        {subscriptions !== null && subscriptions.length > 0 && (
-          <label className="field">
-            <span className="field-label">Subscription</span>
-            <select value={subscriptionId} onChange={(e) => onSubscriptionSelect(e.target.value)}>
-              <option value="">Select a subscription...</option>
-              {subscriptions.map((s) => (
-                <option key={s.subscriptionId} value={s.subscriptionId}>
-                  {s.displayName} ({s.subscriptionId})
-                </option>
-              ))}
-            </select>
-          </label>
-        )}
-        {subscriptions !== null && subscriptions.length === 0 && (
-          <label className="field">
-            <span className="field-label">Subscription ID (one-time bootstrap)</span>
-            <input
-              type="text"
-              value={subscriptionId}
-              onChange={(e) => onSubscriptionIdChange(e.target.value)}
-              autoComplete="off"
-              spellCheck={false}
-              placeholder="find it via 'az account list' or the Azure portal"
-            />
-            <span className="field-hint">
-              Discovery found no subscriptions, so this app registration has no role assignments yet.
-              Type the subscription ID here to scope the role script below - this is the only place a
-              subscription is typed. After you grant Reader and Discover / refresh from Azure again,
-              the dropdown replaces it.
-            </span>
-          </label>
-        )}
-        {setupPath === 'existing' &&
-          (workspaces !== null && workspaces.length > 0 ? (
-            <label className="field">
-              <span className="field-label">Log Analytics workspace</span>
-              <select value={workspaceName} onChange={(e) => onWorkspaceSelect(e.target.value)}>
-                <option value="">Select a workspace...</option>
-                {workspaces.map((w) => (
-                  <option key={w.id} value={w.name}>
-                    {w.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-          ) : (
-            <label className="field">
-              <span className="field-label">Log Analytics workspace</span>
-              <select disabled value="">
-                <option value="">
-                  {subscriptionId === ''
-                    ? 'Select a subscription first...'
-                    : 'Waiting for workspace discovery...'}
-                </option>
-              </select>
-            </label>
-          ))}
-        {setupPath === 'lab-byo-rg' &&
-          (resourceGroups !== null && resourceGroups.length > 0 ? (
-            <label className="field">
-              <span className="field-label">Resource group</span>
-              <select value={rgName} onChange={(e) => onRgNameChange(e.target.value)}>
-                <option value="">Select a resource group...</option>
-                {resourceGroups.map((g) => (
-                  <option key={g.name} value={g.name}>
-                    {g.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-          ) : (
-            <label className="field">
-              <span className="field-label">Resource group</span>
-              <select disabled value="">
-                <option value="">
-                  {subscriptionId === ''
-                    ? 'Select a subscription first...'
-                    : 'Waiting for resource group discovery...'}
-                </option>
-              </select>
-            </label>
-          ))}
-      </div>
-      {dependentStatus !== '' && (
-        <div className="discovery-result">
-          <span className="field-label">
-            {setupPath === 'existing'
-              ? 'Workspace discovery'
-              : setupPath === 'lab-byo-rg'
-                ? 'Resource group discovery'
-                : 'Setup path'}
-          </span>
-          <pre className="result">{dependentStatus}</pre>
-        </div>
-      )}
-      <div className="discovery-result">
-        <span className="field-label">Role assignment script</span>
-        <pre className="result">{script}</pre>
-      </div>
-      <div className="panel-controls">
-        <button className="run-button" onClick={() => void copyScript()}>
-          Copy az CLI script
-        </button>
-        <button className="run-button" onClick={downloadScript}>
-          Download assign-roles.sh
-        </button>
-      </div>
-      {scriptFeedback !== '' && <p className="panel-desc">{scriptFeedback}</p>}
-      <p className="panel-desc">
-        The script is generated from the selected (or bootstrap) subscription and the derived resource
-        group. Copy or download it - download avoids the terminal multi-line paste prompt and lets you
-        review it first. If you paste, choose Paste (not Paste as one line, which would join the
-        commands). Role assignments can take a couple of minutes to propagate; Discover / refresh from
-        Azure again afterward.
-      </p>
-      <pre className="result">{stored}</pre>
-      <div className="panel-controls">
-        <button
-          className="run-button"
-          onClick={() => void recheckAndValidate()}
-          disabled={validating}
-        >
-          Re-check and validate permissions
-        </button>
-      </div>
-      <p className="panel-desc">
-        Re-check and validate permissions reports the stored KV state and then, if the connection is
-        made, acquires a token and checks the caller&apos;s EFFECTIVE Azure permissions for the selected
-        setup path and resources - it evaluates the actions actually allowed (via the RBAC permissions
-        API), not role names, so custom or lookalike roles are handled correctly.
-      </p>
-    </section>
-  );
-}
-
-// Panel 5: client_credentials token flow. The app never sets Authorization;
+// Panel 3: client_credentials token flow. The app never sets Authorization;
 // proxies.yml injects Basic ${kv.azureBasic} server-side (the proxy strips
 // any Authorization header the client sends). The tenant is the ACTIVE
 // connection's tenant ID.
@@ -1544,8 +476,8 @@ function TokenAcquisitionPanel({ tenantId }: { tenantId: string }) {
   const [status, output, run] = useRunner();
   const acquire = () =>
     run(async () => {
-      // Shared with the panel 3 connect and panel 4 discovery/preflight so the
-      // token flow lives in one place.
+      // Shared with the Setup page's connect action so the token flow lives
+      // in one place.
       const token = await acquireArmToken(tenantId);
       const putRes = await fetch(kvUrl('azureArmToken?encrypted=true'), {
         method: 'PUT',
@@ -1566,7 +498,7 @@ function TokenAcquisitionPanel({ tenantId }: { tenantId: string }) {
 
   return (
     <Panel
-      index={5}
+      index={3}
       title="Token acquisition (via proxy header injection)"
       status={status}
       output={output}
@@ -1574,8 +506,8 @@ function TokenAcquisitionPanel({ tenantId }: { tenantId: string }) {
       onAction={() => void acquire()}
     >
       <p className="panel-desc">
-        Save and connect (panel 3) already acquires and stores a token; this panel is an explicit
-        re-acquire and diagnostic. Uses the active connection&apos;s tenant ID, then POSTs
+        Save and connect (on the Setup page) already acquires and stores a token; this panel is an
+        explicit re-acquire and diagnostic. Uses the active connection&apos;s tenant ID, then POSTs
         grant_type=client_credentials with the ARM scope to login.microsoftonline.com. No Authorization
         header is set by the app - the proxy injects Basic auth from kv.azureBasic per proxies.yml. On
         success the access token is stored encrypted under azureArmToken.
@@ -1584,7 +516,7 @@ function TokenAcquisitionPanel({ tenantId }: { tenantId: string }) {
   );
 }
 
-// Panel 6: ARM subscriptions list. Bearer token is injected server-side from
+// Panel 4: ARM subscriptions list. Bearer token is injected server-side from
 // kv.azureArmToken; the app sends no Authorization header.
 function ArmCallPanel() {
   const [status, output, run] = useRunner();
@@ -1610,7 +542,7 @@ function ArmCallPanel() {
 
   return (
     <Panel
-      index={6}
+      index={4}
       title="ARM call (Bearer injected from KV)"
       status={status}
       output={output}
@@ -1626,7 +558,7 @@ function ArmCallPanel() {
   );
 }
 
-// Panel 7: does the sandboxed iframe allow programmatic downloads? The only
+// Panel 5: does the sandboxed iframe allow programmatic downloads? The only
 // reliable signal is the file appearing in the browser's downloads.
 function ArtifactDownloadPanel() {
   const [status, output, run] = useRunner();
@@ -1656,7 +588,7 @@ function ArtifactDownloadPanel() {
 
   return (
     <Panel
-      index={7}
+      index={5}
       title="Artifact download (iframe sandbox spike)"
       status={status}
       output={output}
@@ -1687,11 +619,11 @@ interface LiveSecretIdentity {
 }
 
 function App() {
-  // The whole harness is now driven by a ProfileStore of named connections. The
-  // ACTIVE profile's non-secret config feeds every config-bearing panel. The
+  // The whole app is driven by a ProfileStore of named connections. The
+  // ACTIVE profile's non-secret config feeds every config-bearing surface. The
   // store is hydrated from, and debounce-autosaved to, the plain 'azureProfiles'
   // KV entry. Client secrets are NEVER part of this state - they are handled
-  // write-only by the connect action in panel 3 and tracked per session by
+  // write-only by the Setup page's connect action and tracked per session by
   // liveSecretProfileId.
   const [store, setStore] = useState<ProfileStore>(EMPTY_PROFILE_STORE);
   const [hydrated, setHydrated] = useState(false);
@@ -1706,8 +638,9 @@ function App() {
 
   // The parsed deployment/naming options (porting-plan Unit 4). Hydrated
   // from the plain appOptions KV entry alongside acceptance and mode;
-  // refreshed by the Options screen's save callback. The tolerant codec
-  // makes a failed read equal "defaults", never a crash.
+  // refreshed by saveAppOptions (the Integrate page's DCE toggle persists
+  // through it). The tolerant codec makes a failed read equal "defaults",
+  // never a crash.
   const [appOptions, setAppOptions] = useState<AppOptions>(DEFAULT_APP_OPTIONS);
 
   // Theme (porting-plan dark-mode note, lands with Unit 6.5). The CHOICE
@@ -1784,17 +717,17 @@ function App() {
     };
   }, []);
 
-  // The Options screen's storage callbacks (the small shared load/save this
-  // shell owns): one plain KV entry, read raw so the screen can merge saves
-  // through applyOptionsPatch, with the shell's parsed copy refreshed on
-  // every save so onboarding defaults follow immediately.
-  const loadAppOptions = useCallback(() => appStateStore.get(APP_OPTIONS_KEY), []);
+  // The options save callback (the small shared save this shell owns): one
+  // plain KV entry, with the shell's parsed copy refreshed on every save so
+  // onboarding defaults follow immediately. The dedicated Options screen was
+  // RETIRED (2026-07-14, never used); deployment/naming defaults apply from
+  // DEFAULT_APP_OPTIONS and the surviving inline edits persist through here.
   const saveAppOptions = useCallback(async (serialized: string) => {
     await appStateStore.set(APP_OPTIONS_KEY, serialized);
     setAppOptions(parseAppOptions(serialized));
   }, []);
   // Persist an inline OperationOptions edit (the Integrate page's DCE capability
-  // toggle) through the same appOptions entry the Options screen uses.
+  // toggle) through the same appOptions entry.
   const persistOperation = useCallback(
     (operation: OperationOptions) => {
       void saveAppOptions(serializeAppOptions({ ...appOptions, operation }));
@@ -1813,10 +746,11 @@ function App() {
   // happens.
   const [switchNotice, setSwitchNotice] = useState('');
 
-  // Bumped by panel 3 on a full successful connect (secret written + token
-  // acquired). Panel 4 watches this to auto-run resource discovery exactly once
-  // per connect. Non-persisted; survives panel-4 remounts so a connect made
-  // while panel 4 is mounted triggers its discovery effect.
+  // Bumped on a full successful connect (secret written + token acquired).
+  // The Setup page's resources section watches this to auto-run resource
+  // discovery exactly once per connect. Non-persisted; survives section
+  // remounts so a connect made while the section is mounted triggers its
+  // discovery effect.
   const [connectNonce, setConnectNonce] = useState(0);
   const handleConnected = useCallback(() => setConnectNonce((n) => n + 1), []);
 
@@ -1973,13 +907,13 @@ function App() {
   });
 
   // Fields the Onboard screen still needs. Non-empty means the screen is
-  // replaced by a message pointing at panels 3 and 4 in the harness view.
+  // replaced by a message pointing at the Setup page's sections.
   const missingOnboardFields = ONBOARD_REQUIRED_FIELDS.filter(
     (field) => activeConfig[field].trim() === ''
   );
-  // The change-request context handed to panels 3 and 4: the fixed app name plus
-  // the active connection's non-secret config. Re-derived each render so the
-  // generated tickets and their embedded diagrams reflect the current inputs.
+  // The change-request context handed to the Setup sections: the fixed app name
+  // plus the active connection's non-secret config. Re-derived each render so
+  // the generated tickets and their embedded diagrams reflect the current inputs.
   const changeRequestCtx: ChangeRequestContext = { appName: APP_NAME, config: activeConfig };
   const secretLive = liveSecretProfileId !== null && liveSecretProfileId === store.activeProfileId;
   // The live secret is still marked stored, but the active connection's identity
@@ -2021,7 +955,7 @@ function App() {
         setLiveSecretProfileId(null);
         setLiveSecretIdentity(null);
         setSwitchNotice(
-          'Switched connection - enter the client secret for this connection in panel 3 and Save and connect to authenticate.'
+          'Switched connection - enter the client secret for this connection in the App registration and connect section on Setup and Save and connect to authenticate.'
         );
       } else {
         setSwitchNotice('');
@@ -2084,7 +1018,7 @@ function App() {
     void kvDelete('azureArmToken');
     setLiveSecretProfileId(null);
     setLiveSecretIdentity(null);
-    setSwitchNotice('Stored secret cleared - re-enter the client secret in panel 3 and Save and connect to re-authenticate.');
+    setSwitchNotice('Stored secret cleared - re-enter the client secret in the App registration and connect section on Setup and Save and connect to re-authenticate.');
   };
 
   const startRename = () => {
@@ -2112,7 +1046,60 @@ function App() {
     setSwitchNotice('');
   };
 
-  // The EXPLICIT scope commit from the Azure Targeting screen: the ONE way a
+  // The Setup connect section's shell-specific connect mechanics (promoted
+  // verbatim from Diagnostics panel 3): write the encrypted, write-only
+  // azureBasic entry (base64 of clientId:clientSecret), then VERIFY the
+  // secret by acquiring an ARM token and storing it encrypted under
+  // azureArmToken so proxies.yml can inject Bearer server-side. The secret is
+  // marked live for this connection as soon as azureBasic is written (badge +
+  // identity tracking) even if the token step fails; a full success bumps
+  // connectNonce so the resources section auto-runs discovery. Resolves a
+  // result object, never throws (the section honors secretStored on partial
+  // failures).
+  const connectAzure = async (input: {
+    tenantId: string;
+    clientId: string;
+    clientSecret: string;
+  }): Promise<AzureConnectResult> => {
+    try {
+      await appStateStore.set('azureBasic', btoa(`${input.clientId}:${input.clientSecret}`), {
+        encrypted: true,
+      });
+    } catch (err) {
+      return { ok: false, secretStored: false, message: String(err) };
+    }
+    // The encrypted slot is populated now, so mark the secret live regardless
+    // of whether the token step below succeeds.
+    if (store.activeProfileId !== null) {
+      handleSecretSaved(store.activeProfileId, input.tenantId, input.clientId);
+    }
+    try {
+      const token = await acquireArmToken(input.tenantId);
+      await appStateStore.set('azureArmToken', token.access_token, { encrypted: true });
+      handleConnected();
+      return {
+        ok: true,
+        secretStored: true,
+        message: [
+          'Connected.',
+          '  client secret: saved (encrypted, write-only) for this connection',
+          `  ARM token: acquired and stored encrypted (expires_in ${token.expires_in ?? '(missing)'})`,
+          '',
+          'Next: the Select resources and grant permissions section below discovers',
+          'subscriptions, selects your resources, and grants roles.',
+        ].join('\n'),
+      };
+    } catch (err) {
+      return {
+        ok: false,
+        secretStored: true,
+        message: `Client secret saved, but the connect verification failed.\n${String(err)}`,
+      };
+    }
+  };
+
+  // The EXPLICIT scope commit from the Integrate page's Azure Resources
+  // section (the AzureTargetingScreen cascade it composes): the ONE way a
   // browsed subscription/RG/workspace becomes the active target. Runs the pure
   // @soc/core commitTargetScope (MERGE into the active profile - identity
   // fields survive untouched), persists via the store autosave, applies the
@@ -2251,18 +1238,6 @@ function App() {
       platformLink === 'ok' ? true : platformLink === 'checking...' ? undefined : false,
   };
 
-  // The Review screen's disabled-control hint comes from journey-state's
-  // deploy stage (Unit 7 amendment: the single missing thing - identity or
-  // scope - is journey data, never per-screen prose). The preview needs the
-  // same live-ARM prerequisites as a deploy run, so one hint serves both.
-  const deployStage = deriveJourney(journeyFacts).integrate.find(
-    (stage) => stage.id === 'deploy'
-  );
-  const reviewJourneyHint =
-    deployStage !== undefined && deployStage.status === 'blocked'
-      ? (deployStage.blockedReason ?? null)
-      : null;
-
   // The connection bar: shell chrome that stays visible within the frame,
   // above whatever screen is active. Connection select/create/rename/delete,
   // the live-secret badge, and the consolidated poll's platform-link badge.
@@ -2331,7 +1306,7 @@ function App() {
           </span>
           <span
             className="scope-chip"
-            title="The committed Azure target scope (subscription / resource group / workspace) of the active connection. Change it from the Azure Targeting screen - browsing there never changes it until you click Use this target."
+            title="The committed Azure target scope (subscription / resource group / workspace) of the active connection. Change it from the Integrate page's Azure Resources section (Use this target) or the Setup page's resource selection."
           >
             target:{' '}
             {formatScopeChip({
@@ -2358,11 +1333,11 @@ function App() {
       </div>
   );
 
-  // The Phase 1 diagnostics panels, intact, now living behind the frame's
-  // Diagnostics route (retitled from Spike Harness and demoted below the
-  // journey and tools sections - ux-flow-plan 3.3). Panel 3 doubles as the
-  // journey's Connect surface until Unit 9 promotes it; panel 4's discovery
-  // stays a diagnostic (Azure Targeting is the product path).
+  // The Phase 1 diagnostics panels, now living behind the frame's Diagnostics
+  // route (retitled from Spike Harness and demoted below the journey and
+  // tools sections - ux-flow-plan 3.3). The former panels 3 and 4 (connect /
+  // resource selection) were promoted to the Setup page; what remains is pure
+  // platform diagnostics.
   const harnessView = (
     <>
       <header className="harness-header">
@@ -2370,28 +1345,52 @@ function App() {
         <p className="harness-subtitle">
           Sequential diagnostics for the Cribl App Platform: globals, KV store semantics,
           proxy header injection, Azure AD token flow, ARM access, and iframe download behavior.
-          Pick or create a connection above, then run the panels top to bottom. Panel 3
-          (App registration and connect) is also the journey&apos;s Connect step until a
-          dedicated Connect screen ships.
+          Pick or create a connection above, then run the panels top to bottom. Identity entry
+          and resource selection live on the Setup page.
         </p>
       </header>
       <PlatformGlobalsPanel />
       <KvStorePanel />
-      <AppRegistrationConnectPanel
-        key={store.activeProfileId ?? 'none'}
-        activeProfileId={store.activeProfileId}
-        secretLive={secretLive}
-        onSecretSaved={handleSecretSaved}
-        onConnected={handleConnected}
-        clientId={activeConfig.clientId}
-        onClientIdChange={(v) => updateField({ clientId: v })}
+      <TokenAcquisitionPanel tenantId={activeConfig.tenantId} />
+      <ArmCallPanel />
+      <ArtifactDownloadPanel />
+    </>
+  );
+
+  // The Setup page's shell-composed sections (the promoted Diagnostics panels
+  // 3 and 4 plus the GitHub token surface): Azure connect (shell mechanics
+  // injected via connectAzure), resource selection + role grant (ports-driven),
+  // and the Repositories/PAT surface so everything setup-shaped lives on one
+  // page. Keyed by the active profile so switching connections remounts them
+  // and discards cached discovery and validation state.
+  const setupSections = (
+    <>
+      <AzureConnectSection
+        key={`connect-${store.activeProfileId ?? 'none'}`}
         tenantId={activeConfig.tenantId}
         onTenantIdChange={(v) => updateField({ tenantId: v })}
+        clientId={activeConfig.clientId}
+        onClientIdChange={(v) => updateField({ clientId: v })}
         setupPath={activeConfig.setupPath}
         onSetupPathChange={(v) => updateField({ setupPath: v })}
+        secretLive={secretLive}
         ctx={changeRequestCtx}
+        onConnect={connectAzure}
+        storageNote={
+          'Save and connect combines the client secret with the client ID as ' +
+          'base64(clientId:clientSecret) and writes it to the encrypted, write-only KV entry ' +
+          'azureBasic, then acquires an Azure AD ARM token (grant_type=client_credentials, ARM ' +
+          'scope) and stores it encrypted under azureArmToken. The app never sets an Authorization ' +
+          'header - the platform proxy injects the secret and token server-side per proxies.yml, ' +
+          'and the secret can never be read back. azureBasic is a single shared slot, so only one ' +
+          "connection's secret is live at a time: switching connections clears it and you re-enter " +
+          'and reconnect here. If a secret is already stored the field stays blank - enter a new ' +
+          'value only to replace it. The client ID, tenant ID, and setup path are non-secret ' +
+          'configuration remembered per connection in the plain azureProfiles KV entry. The ' +
+          "connection bar above shows whether this connection's secret is live this session."
+        }
       />
-      <ResourceSelectionPanel
+      <AzureResourcesSection
         key={`resources-${store.activeProfileId ?? 'none'}`}
         clientId={activeConfig.clientId}
         tenantId={activeConfig.tenantId}
@@ -2404,26 +1403,28 @@ function App() {
         onWorkspaceNameChange={(v) => updateField({ workspaceName: v })}
         connectNonce={connectNonce}
         ctx={changeRequestCtx}
+        storageContextLabel={`Stored in KV for app ID ${window.CRIBL_APP_ID ?? '(unknown)'}:`}
       />
-      <TokenAcquisitionPanel tenantId={activeConfig.tenantId} />
-      <ArmCallPanel />
-      <ArtifactDownloadPanel />
+      <RepositoriesScreen platform="cloud" />
     </>
   );
 
-  // The Home route (ux-flow-plan 4.3, Unit 6.5): the state-aware landing
-  // surface BOTH shells open on every launch. Facts in, rails and the single
-  // next action out - position is derived from persisted state on every
-  // render, so resume is automatic and there is no wizard-progress blob to
-  // drift. Mounted in a PortsProvider for the embedded RecentRuns.
+  // The Setup route (ux-flow-plan 4.3, Unit 6.5 + the 2026-07-14 promotion):
+  // the state-aware landing surface BOTH shells open on every launch. Facts
+  // in, rails and the single next action out - position is derived from
+  // persisted state on every render, so resume is automatic and there is no
+  // wizard-progress blob to drift. The setup sections (Azure connect,
+  // resource selection + role grant, GitHub token) render right on this page,
+  // so the journey's Connect and Target stages resolve here. Mounted in a
+  // PortsProvider for the embedded RecentRuns and the ports-driven sections.
   const renderHome = (nav: AppFrameNav) => (
     <>
       <header className="harness-header">
-        <h1 className="harness-title">Home</h1>
+        <h1 className="harness-title">Setup</h1>
         <p className="harness-subtitle">
-          Where this install is on the journey and the single next action.
-          Every stage is visible and navigable; commits stay gated inside
-          their screens.
+          Where this install is on the journey, the single next action, and
+          every setup task on one page: connect the Entra app registration,
+          select Azure resources and grant roles, and connect GitHub content.
         </p>
       </header>
       <PortsProvider ports={cloudPorts} config={activeConfig}>
@@ -2431,6 +1432,7 @@ function App() {
           facts={journeyFacts}
           links={phase.mode === 'azure-only' ? AZURE_ONLY_JOURNEY_LINKS : JOURNEY_LINKS}
           onNavigate={nav.navigate}
+          setupSections={setupSections}
         />
       </PortsProvider>
     </>
@@ -2442,8 +1444,8 @@ function App() {
   // actions + live probes; Cribl capability probes) and renders per-capability
   // dots + Retry / Switch account. On the CLOUD shell the Cribl side is
   // granted-by-platform (mode 'cloud'), so criblShellMode is 'cloud'. Switch
-  // account clears the live secret for this session and returns to the connect
-  // step (Diagnostics panel 3). requires 'azure' - the Azure side is the
+  // account clears the live secret for this session and returns to the Setup
+  // page's connect section. requires 'azure' - the Azure side is the
   // informative half here; INFORMATIONAL, it never gates the deploy partition.
   const renderPreflight = (nav: AppFrameNav) => (
     <>
@@ -2464,7 +1466,7 @@ function App() {
           onSwitchAccount={() => {
             setLiveSecretProfileId(null);
             setLiveSecretIdentity(null);
-            nav.navigate('harness');
+            nav.navigate('home');
           }}
         />
       </PortsProvider>
@@ -2479,9 +1481,9 @@ function App() {
   // Azure and deploys to Cribl in one page). No hard wall: controls stay
   // visible and gate at the commit actions inside the composed screens
   // (read-ahead). Keyed by the active profile so switching connections drops
-  // in-page deploy state. The standalone Onboard / Azure Targeting / Batch /
-  // Review routes stay registered - this page composes and supersedes them.
-  const renderIntegrate = (nav: AppFrameNav) => (
+  // in-page deploy state. This page composes and supersedes the standalone
+  // Azure Targeting / Review surfaces (their nav items are retired).
+  const renderIntegrate = () => (
     <>
       <header className="harness-header">
         <h1 className="harness-title">Integrate</h1>
@@ -2497,7 +1499,7 @@ function App() {
           This connection&apos;s client secret has not been entered this
           session. A secret connected in an earlier session may still be live
           server-side; if the deploy fails acquiring a token, re-enter the
-          secret in panel 3 (Save and connect) of the Diagnostics view first.
+          secret in the App registration and connect section on Setup first.
         </p>
       )}
       <PortsProvider ports={cloudPorts} config={activeConfig}>
@@ -2508,7 +1510,6 @@ function App() {
           onCommitScope={handleCommitScope}
           criblDefaults={appOptions.cribl}
           operationDefaults={appOptions.operation}
-          onOpenOptions={() => nav.navigate('options')}
           onOperationChange={persistOperation}
           roleGuidance={ROLE_GUIDANCE}
           mode={phase.mode}
@@ -2517,34 +1518,8 @@ function App() {
     </>
   );
 
-  // The Azure Targeting route (Unit 2): the product path for choosing where
-  // DCRs deploy. Keyed by the active profile so switching connections resets
-  // all browse state. requires: 'azure' gates it to modes with a live Azure
-  // side; the screen's offline branch stays wired for the day the route table
-  // exposes it in artifact-only modes.
-  const renderTargeting = () => (
-    <>
-      <header className="harness-header">
-        <h1 className="harness-title">Azure targeting</h1>
-        <p className="harness-subtitle">
-          Browse subscriptions, workspaces, and resource groups; create what is
-          missing; enable Sentinel; then commit the scope with Use this target.
-          Browsing never changes the committed target - the chip in the
-          connection bar always shows what is committed.
-        </p>
-      </header>
-      <PortsProvider ports={cloudPorts} config={activeConfig}>
-        <AzureTargetingScreen
-          key={`target-${store.activeProfileId ?? 'none'}`}
-          offline={!hasAzure(phase.mode)}
-          onCommitScope={handleCommitScope}
-        />
-      </PortsProvider>
-    </>
-  );
-
   // The Onboard route: gated on the five config fields the use-case cannot
-  // run without; the escape hatch navigates to the harness through the frame.
+  // run without; the escape hatch navigates to Setup through the frame.
   const renderOnboard = (nav: AppFrameNav) => (
     <>
       <header className="harness-header">
@@ -2560,22 +1535,16 @@ function App() {
           <h2 className="panel-title">Connection incomplete</h2>
           <p className="panel-desc">
             The active connection is missing required configuration:{' '}
-            {missingOnboardFields.join(', ')}. Home shows the whole journey and names the
-            single next step. Connect first in panel 3 (App registration and connect) of the
-            Diagnostics view - that fills the tenant and client ids. Then choose WHERE to
-            deploy on the Azure Targeting screen: browse the subscription, workspace, and
-            resource group cascade and click Use this target to commit the scope. The Run
-            action unlocks once all five fields are set.
+            {missingOnboardFields.join(', ')}. Setup shows the whole journey and names the
+            single next step. Connect first in the App registration and connect section on
+            Setup - that fills the tenant and client ids. Then choose WHERE to deploy in the
+            Select resources and grant permissions section (or commit a scope from the
+            Integrate page&apos;s Azure Resources section). The Run action unlocks once all
+            five fields are set.
           </p>
           <div className="panel-controls">
             <button className="run-button" onClick={() => nav.navigate('home')}>
-              Open Home
-            </button>
-            <button className="run-button" onClick={() => nav.navigate('azure-target')}>
-              Open Azure Targeting
-            </button>
-            <button className="run-button" onClick={() => nav.navigate('harness')}>
-              Open Diagnostics
+              Open Setup
             </button>
           </div>
         </section>
@@ -2585,8 +1554,8 @@ function App() {
             <p className="connection-notice">
               This connection&apos;s client secret has not been entered this session. A secret
               connected in an earlier session may still be live server-side; if the run fails
-              acquiring a token, re-enter the secret in panel 3 (Save and connect) of the
-              Diagnostics view first.
+              acquiring a token, re-enter the secret in the App registration and connect
+              section on Setup first.
             </p>
           )}
           <PortsProvider ports={cloudPorts} config={activeConfig}>
@@ -2625,20 +1594,14 @@ function App() {
           <h2 className="panel-title">Connection incomplete</h2>
           <p className="panel-desc">
             The active connection is missing required configuration:{' '}
-            {missingOnboardFields.join(', ')}. Home shows the whole journey and names the
-            single next step: connect first in panel 3 (App registration and connect) of the
-            Diagnostics view, then commit a target scope on the Azure Targeting screen. The
-            Run action unlocks once all five fields are set.
+            {missingOnboardFields.join(', ')}. Setup shows the whole journey and names the
+            single next step: connect first in the App registration and connect section on
+            Setup, then choose the target in the Select resources and grant permissions
+            section. The Run action unlocks once all five fields are set.
           </p>
           <div className="panel-controls">
             <button className="run-button" onClick={() => nav.navigate('home')}>
-              Open Home
-            </button>
-            <button className="run-button" onClick={() => nav.navigate('azure-target')}>
-              Open Azure Targeting
-            </button>
-            <button className="run-button" onClick={() => nav.navigate('harness')}>
-              Open Diagnostics
+              Open Setup
             </button>
           </div>
         </section>
@@ -2648,8 +1611,8 @@ function App() {
             <p className="connection-notice">
               This connection&apos;s client secret has not been entered this session. A secret
               connected in an earlier session may still be live server-side; if the run fails
-              acquiring a token, re-enter the secret in panel 3 (Save and connect) of the
-              Diagnostics view first.
+              acquiring a token, re-enter the secret in the App registration and connect
+              section on Setup first.
             </p>
           )}
           <PortsProvider ports={cloudPorts} config={activeConfig}>
@@ -2658,7 +1621,6 @@ function App() {
               pacing={BATCH_PACING}
               operationDefaults={appOptions.operation}
               criblDefaults={appOptions.cribl}
-              onOpenOptions={() => nav.navigate('options')}
               forcedTemplateOnly={!hasCribl(phase.mode)}
             />
           </PortsProvider>
@@ -2687,58 +1649,6 @@ function App() {
           : 'Single-table onboarding creates a Cribl destination, so it needs a live Cribl connection. Batch supports template-only export without Cribl.'
       }
     />
-  );
-
-  // The Review route (porting-plan Unit 7, ux-flow-plan 5.2): the Integrate
-  // arc's REVIEW stage - live-ARM deployment preview with the staleness
-  // marker and the acknowledge gate arming the handoff to DCR Automation.
-  // No "connection incomplete" wall here: the screen keeps every control
-  // visible and disables them with the journey-state hint (the same
-  // identity/scope prerequisites a deploy run needs). Keyed by the active
-  // profile so switching connections drops the generated preview (stale
-  // cross-profile previews were a legacy hazard class).
-  const renderReview = (nav: AppFrameNav) => (
-    <>
-      <header className="harness-header">
-        <h1 className="harness-title">Review deployment</h1>
-        <p className="harness-subtitle">
-          Preview exactly what a deploy run would create - predicted DCR/DCE
-          names (the same names deployment uses), Exists vs Will create from
-          live Azure, and the ARM request bodies - then acknowledge the
-          preview to arm the Deploy handoff. Read-only: checking never
-          deploys anything.
-        </p>
-      </header>
-      <PortsProvider ports={cloudPorts} config={activeConfig}>
-        <ReviewScreen
-          key={`review-${store.activeProfileId ?? 'none'}`}
-          generatedAtToken={REVIEW_GENERATED_AT}
-          operationDefaults={appOptions.operation}
-          journeyBlockedReason={reviewJourneyHint}
-          onOpenOptions={() => nav.navigate('options')}
-          onProceedToDeploy={() => nav.navigate('dcr-automation')}
-          deploySurfaceLabel="DCR Automation"
-        />
-      </PortsProvider>
-    </>
-  );
-
-  // The Options route (porting-plan Unit 4): deployment and naming defaults
-  // as typed forms over the plain appOptions KV entry. requires: 'none' -
-  // options are app configuration, editable in every mode. No PortsProvider
-  // needed: the screen's only IO is the two storage callbacks above.
-  const optionsView = (
-    <>
-      <header className="harness-header">
-        <h1 className="harness-title">Options</h1>
-        <p className="harness-subtitle">
-          Deployment and naming defaults for onboarding and deployment jobs:
-          Direct vs DCE mode, timeouts, template handling, custom-table
-          retention, Private Link, and Cribl destination naming.
-        </p>
-      </header>
-      <OptionsScreen loadOptions={loadAppOptions} saveOptions={saveAppOptions} />
-    </>
   );
 
   // The Logs route (porting-plan Unit 3): the shared diagnostics viewer over
@@ -2914,40 +1824,34 @@ function App() {
   );
 
   // The frame's route table, SECTIONED per ux-flow-plan 4.4: journey steps
-  // in dependency order - Home, then Integrate (the single-page flagship, the
-  // PRIMARY journey route), then the standalone Azure Targeting, Onboard,
-  // DCR Automation, and Review screens the Integrate page composes and
-  // supersedes but which stay reachable during the transition - then tools
-  // (Options, Logs, Settings), then Diagnostics last (the Spike
-  // Harness retitled; panel 4's discovery stays a diagnostic - the targeting
-  // screen is the product path). Requirements still drive mode-aware
-  // navigation via the ONE @soc/core filterNavItems pass; grouping is
-  // presentation only. Onboard needs BOTH live sides (it deploys to Azure
-  // and Cribl in one run); batch-onboard relaxes to 'azure' (recorded Unit
-  // 6.5 decision) - in azure-only mode templateOnly is FORCED on because no
-  // live Cribl connection exists to deploy destinations to. Review (Unit 7)
-  // requires 'azure' (its truth is live ARM) and sits after the screens
-  // serving Choose/Configure, mirroring the integrate arc's stage order.
+  // in dependency order - Setup (home, now carrying the connect + resource +
+  // GitHub sections), then Integrate (the single-page flagship, the PRIMARY
+  // journey route), then DCR Automation and Pack Maintenance - then tools
+  // (Repositories, Logs, Settings), then Diagnostics last. Requirements
+  // still drive mode-aware navigation via the ONE @soc/core filterNavItems
+  // pass; grouping is presentation only. Onboard needs BOTH live sides (it
+  // deploys to Azure and Cribl in one run); batch-onboard relaxes to 'azure'
+  // (recorded Unit 6.5 decision) - in azure-only mode templateOnly is FORCED
+  // on because no live Cribl connection exists to deploy destinations to.
+  // NAV PRUNE (user directives 2026-07-14): Options RETIRED (never used;
+  // defaults persist via appOptions), the standalone Azure Targeting item
+  // RETIRED (the Integrate page composes the same cascade and Setup selects
+  // resources), the standalone Review item RETIRED (its preview folds into
+  // the Integrate flow), and Preflight is relabeled Permission Verification.
   // SECTION SPLIT (user directive 2026-07-09): only Setup (home) and
   // Sentinel Integration are ACTIVE. Every feature not yet validated live
   // parks in the DEVELOPMENT section - still reachable, moved back into
-  // journey/tools one item at a time as it passes live testing. Options,
-  // Repositories, Logs, and Settings stay under Tools because the two active
-  // screens depend on them (GitHub token, saved defaults, connections,
-  // diagnostics).
+  // journey/tools one item at a time as it passes live testing.
   const routes: AppRoute[] = [
     { id: 'home', label: 'Setup', requires: 'none', section: 'journey', render: renderHome },
     { id: 'integrate', label: 'Sentinel Integration', requires: 'both', section: 'journey', render: renderIntegrate },
     { id: 'dcr-automation', label: 'DCR Automation', requires: 'azure', section: 'journey', render: renderDcrAutomation },
     { id: 'packs', label: 'Pack Maintenance', requires: 'cribl', section: 'journey', render: () => packsView },
-    { id: 'options', label: 'Options', requires: 'none', section: 'tools', render: () => optionsView },
     { id: 'repositories', label: 'Repositories', requires: 'none', section: 'tools', render: () => repositoriesView },
     { id: 'logs', label: 'Logs', requires: 'none', section: 'tools', render: () => logsView },
     { id: 'settings', label: 'Settings', requires: 'none', section: 'tools', render: () => settingsView },
-    { id: 'azure-target', label: 'Azure Targeting', requires: 'azure', section: 'development', render: renderTargeting },
-    { id: 'preflight', label: 'Preflight', requires: 'azure', section: 'development', render: renderPreflight },
+    { id: 'preflight', label: 'Permission Verification', requires: 'azure', section: 'development', render: renderPreflight },
     { id: 'eventhub-discovery', label: 'Event Hub Discovery', requires: 'azure', section: 'development', render: () => eventHubDiscoveryView },
-    { id: 'review', label: 'Review', requires: 'azure', section: 'development', render: renderReview },
     { id: 'architecture', label: 'Architecture Patterns', requires: 'none', section: 'development', render: () => architectureView },
     { id: 'mapping-catalog', label: 'Mapping Catalog', requires: 'none', section: 'development', render: () => mappingCatalogView },
     { id: 'harness', label: 'Diagnostics', requires: 'none', section: 'diagnostics', render: () => harnessView },
