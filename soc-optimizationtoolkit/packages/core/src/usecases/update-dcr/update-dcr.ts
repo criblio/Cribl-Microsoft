@@ -769,6 +769,13 @@ export async function previewDcrUpdate(
 export const TABLES_EDIT_API_VERSION = "2023-09-01";
 
 /**
+ * The tables api-version for SCHEMA WRITES - live-confirmed 2026-07-13:
+ * the documented PUT at this version added a _CF column to
+ * CommonSecurityLog where PATCH at 2022-10-01 and 2023-09-01 both 500ed.
+ */
+export const TABLES_WRITE_API_VERSION = "2021-12-01-preview";
+
+/**
  * Column types the Log Analytics tables API accepts for custom columns
  * (ColumnTypeEnum in the 2023-09-01 reference - note dateTime's casing).
  */
@@ -893,36 +900,28 @@ async function patchTableColumns(
   operation: string,
   isCustomTable: boolean,
 ): Promise<void> {
-  let patch = await azure.request({
-    method: "PATCH",
+  // THE ONE schema-write call (live-confirmed 2026-07-13 on
+  // CommonSecurityLog): PUT at 2021-12-01-preview with the full column
+  // flags - Microsoft's documented add-column-to-an-Azure-table shape.
+  // The PATCH at newer api-versions consistently 500s on security tables
+  // while this PUT succeeds, so ONLY this call is used.
+  const patch = await azure.request({
+    method: "PUT",
     path: tablePath,
-    apiVersion: TABLES_EDIT_API_VERSION,
-    body: { properties: { schema: { name: input.table, columns } } },
-  });
-  if (patch.status < 200 || patch.status >= 300) {
-    // Second attempt mirrors Microsoft's DOCUMENTED add-column-to-an-
-    // Azure-table example VERBATIM (create-custom-table.md PowerShell tab):
-    // PUT at 2021-12-01-preview with the full column flags - the portal-
-    // equivalent shape (user report 2026-07-13: the portal succeeds where
-    // our PATCH 500s).
-    patch = await azure.request({
-      method: "PUT",
-      path: tablePath,
-      apiVersion: "2021-12-01-preview",
-      body: {
-        properties: {
-          schema: {
-            name: input.table,
-            columns: columns.map((c) => ({
-              ...c,
-              isDefaultDisplay: false,
-              isHidden: false,
-            })),
-          },
+    apiVersion: TABLES_WRITE_API_VERSION,
+    body: {
+      properties: {
+        schema: {
+          name: input.table,
+          columns: columns.map((c) => ({
+            ...c,
+            isDefaultDisplay: false,
+            isHidden: false,
+          })),
         },
       },
-    });
-  }
+    },
+  });
   if (patch.status < 200 || patch.status >= 300) {
     // VERIFY the lock hypothesis instead of guessing (user request
     // 2026-07-13): the table's provisioningState says whether an

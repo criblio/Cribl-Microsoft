@@ -178,7 +178,7 @@ describe("updateDcrInPlace", () => {
       column: { name: "RiskScore", type: "long" },
     });
     expect(result.columnName).toBe("RiskScore_CF");
-    const patch = azure.calls.find((c) => c.method === "PATCH");
+    const patch = azure.calls.find((c) => c.method === "PUT" && c.path.includes("/tables/"));
     const body = patch!.body as {
       properties: { schema: { columns: Array<{ name: string }> } };
     };
@@ -231,7 +231,6 @@ describe("updateDcrInPlace", () => {
     azure.respondWith(
       { status: 200, body: { properties: { schema: { columns: [] } } } },
       { status: 500, body: { error: { code: "InternalServerError" } } },
-      { status: 500, body: { error: { code: "InternalServerError" } } },
       { status: 200, body: { properties: { provisioningState: "Succeeded" } } },
     );
     await expect(
@@ -247,7 +246,6 @@ describe("updateDcrInPlace", () => {
     const azure2 = new FakeAzureManagement();
     azure2.respondWith(
       { status: 200, body: { properties: { schema: { columns: [] } } } },
-      { status: 500, body: {} },
       { status: 500, body: {} },
       { status: 200, body: { properties: { provisioningState: "Updating" } } },
     );
@@ -285,8 +283,8 @@ describe("updateDcrInPlace", () => {
     });
     expect(result.columnName).toBe("Slow");
     // The edit rides the newer tables api-version.
-    const patch = azure.calls.find((c) => c.method === "PATCH");
-    expect(patch?.apiVersion).toBe("2023-09-01");
+    const patch = azure.calls.find((c) => c.method === "PUT" && c.path.includes("/tables/"));
+    expect(patch?.apiVersion).toBe("2021-12-01-preview");
   });
 
   it("addTableColumn PATCHes a custom table and refuses duplicates", async () => {
@@ -316,7 +314,7 @@ describe("updateDcrInPlace", () => {
       column: { name: "RiskScore", type: "long" },
     });
     expect(result.columnCount).toBe(2);
-    const patch = azure.calls.find((c) => c.method === "PATCH");
+    const patch = azure.calls.find((c) => c.method === "PUT" && c.path.includes("/tables/"));
     expect(patch).toBeDefined();
     expect(patch!.path.endsWith("/tables/Acme_CL")).toBe(true);
     const body = patch!.body as {
@@ -372,7 +370,7 @@ describe("updateDcrInPlace", () => {
     );
     const result = await removeTableColumn(azure, { ...scope, columnName: "gone" });
     expect(result.columnName).toBe("Gone");
-    const patch = azure.calls.find((c) => c.method === "PATCH");
+    const patch = azure.calls.find((c) => c.method === "PUT" && c.path.includes("/tables/"));
     const body = patch!.body as {
       properties: { schema: { columns: Array<{ name: string }> } };
     };
@@ -593,12 +591,11 @@ describe("addDcrField (restricted tables - pure DCR change)", () => {
   });
 });
 
-describe("documented PUT fallback for table adds", () => {
-  it("retries a refused PATCH as the docs' PUT at 2021-12-01-preview", async () => {
+describe("the ONE schema-write call (live-confirmed 2026-07-13)", () => {
+  it("writes schema ONLY as the documented PUT at 2021-12-01-preview", async () => {
     const azure = new FakeAzureManagement();
     azure.respondWith(
       { status: 200, body: { properties: { schema: { columns: [] } } } },
-      { status: 500, body: { error: { code: "InternalServerError" } } },
       { status: 200, body: {} },
     );
     const result = await addTableColumn(azure, {
@@ -609,6 +606,8 @@ describe("documented PUT fallback for table adds", () => {
       column: { name: "ztest", type: "string" },
     });
     expect(result.columnName).toBe("ztest_CF");
+    // NEVER a PATCH: that method 500s on security tables.
+    expect(azure.calls.some((c) => c.method === "PATCH")).toBe(false);
     const put = azure.calls.find((c) => c.method === "PUT");
     expect(put?.apiVersion).toBe("2021-12-01-preview");
     const body = put!.body as {
