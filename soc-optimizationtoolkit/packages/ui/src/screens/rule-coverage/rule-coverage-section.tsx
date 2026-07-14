@@ -45,6 +45,7 @@ import {
   analyticRuleToContentItem,
   analyzeContentCoverage,
   createBundledSchemaCatalog,
+  createKqlValidationSchemaCatalog,
   deriveContentRequirements,
   createSolutionSchemaCatalog,
   mergeCustomContentItems,
@@ -358,14 +359,18 @@ export function RuleCoverageSection({
 }: RuleCoverageSectionProps) {
   const { ports } = usePorts();
   const activeContent = content ?? ports.content;
-  // Wave E: same solution-aware schema tier the mapping review resolves with,
-  // so both panels see identical columns for a solution's custom tables.
-  // Without a content port the base catalog serves alone.
+  // Same schema ladder the mapping review resolves with (KQL-validation
+  // tier -> Wave E solution tier -> bundled), so both panels see identical
+  // columns for a solution's custom tables. Without a content port the base
+  // catalog serves alone.
   const activeCatalog = useMemo(() => {
     const base = catalog ?? createBundledSchemaCatalog();
     return activeContent === undefined
       ? base
-      : createSolutionSchemaCatalog(activeContent, solutionName, base);
+      : createKqlValidationSchemaCatalog(
+          activeContent,
+          createSolutionSchemaCatalog(activeContent, solutionName, base),
+        );
   }, [activeContent, solutionName, catalog]);
   // What this instance covers. Custom-YAML upload and the RULE-badge report are
   // rules-only concerns; workbooks are a separate diagnostic.

@@ -89,6 +89,15 @@ export {
   tablesFromArmJson,
 } from "./solution-schema-catalog";
 
+// KQL-validation schema tier (2026-07-14): the Azure-Sentinel repo's own
+// CI-validated table schemas resolve FIRST when a table is defined there.
+export {
+  KQL_VALIDATION_TABLES_DIR,
+  createKqlValidationSchemaCatalog,
+  mapValidationColumnType,
+  parseKqlValidationTable,
+} from "./kql-validation-schema-catalog";
+
 // NOTE: match-to-catalog's matchSampleToTable (the legacy direct-catalog
 // match path) is deliberately NOT re-exported: the app goes through
 // analyzeSamples, and the name collides with gap-analysis' log-type router

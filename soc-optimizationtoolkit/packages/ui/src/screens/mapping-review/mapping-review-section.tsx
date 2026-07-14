@@ -60,6 +60,7 @@ import {
   DEFAULT_GAP_PROFILE,
   collectGapReports,
   createBundledSchemaCatalog,
+  createKqlValidationSchemaCatalog,
   createSolutionSchemaCatalog,
   detectVendorIdentity,
   dropSavingsLine,
@@ -275,15 +276,21 @@ export function MappingReviewSection({
   logger,
 }: MappingReviewSectionProps) {
   const activeContent = content ?? EMPTY_SENTINEL_CONTENT;
-  // Wave E: the solution's OWN table ARM definitions resolve ahead of the
-  // bundled snapshot (or the injected catalog) - CCP custom tables work even
-  // when absent from the bundle. Degrades to the base catalog on any failure.
+  // Schema ladder (outermost wins): the Azure-Sentinel repo's CI-VALIDATED
+  // table schemas (KqlvalidationsTests/CustomTables - the schema the
+  // solution's rules were written against; user direction 2026-07-14) ->
+  // Wave E solution connector-ARM tables -> the bundled snapshot (or the
+  // injected catalog). Sample-DERIVED schemas remain the analyzeSamples
+  // fallback for tables none of these define. Degrades tier by tier.
   const activeCatalog = useMemo(
     () =>
-      createSolutionSchemaCatalog(
+      createKqlValidationSchemaCatalog(
         activeContent,
-        solutionName,
-        catalog ?? createBundledSchemaCatalog(),
+        createSolutionSchemaCatalog(
+          activeContent,
+          solutionName,
+          catalog ?? createBundledSchemaCatalog(),
+        ),
       ),
     [activeContent, solutionName, catalog],
   );
