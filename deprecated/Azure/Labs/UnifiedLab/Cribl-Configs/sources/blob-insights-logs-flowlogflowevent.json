@@ -27,8 +27,8 @@
     "type": "azure_blob",
     "conf": {
       "includeMetadata": true,
-      "tenantId": "fa882ef2-67af-42c1-80e4-62e2735043d2",
-      "clientId": "8a4b13ab-f1c5-498c-a4ae-85f220a0439b",
+      "tenantId": "00000000-0000-0000-0000-000000000000",
+      "clientId": "00000000-0000-0000-0000-000000000000",
       "extractors": [],
       "includeTags": false,
       "recurse": true,
