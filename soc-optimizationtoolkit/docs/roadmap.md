@@ -79,6 +79,6 @@ Exit: solution browsed -> samples -> pipeline -> pack -> installed destination e
 
 ## Phase 7: Long tail, parity audit, archival
 
-- SIEM migration analyzer (ENG-40, GUI-22), monitoring dashboard (GUI-18), guided-doc flows (DOC-02 through DOC-06 as in-app checklists), Power BI/Search connector story (DOC-07).
+- SIEM migration analyzer (ENG-40, GUI-22) - SHIPPED 2026-07-14, pulled forward by user directive (porting-plan Unit 26; core domain/siem-migration + SiemMigrationScreen in both shells, plan persisted across navigation, deep-link pivot into Sentinel Integration). Remaining long tail: monitoring dashboard (GUI-18), guided-doc flows (DOC-02 through DOC-06 as in-app checklists), Power BI/Search connector story (DOC-07).
 - Parity audit against this catalog; mark every feature domain superseded or explicitly dropped.
 - Archival endgame: migrate remaining assets into packages/core, tag legacy-final, remove Cribl-Microsoft_IntegrationSolution/, Azure PowerShell trees, and SOC-OptimizationToolkit_v1/ from main; retire the stale v1 CI workflow and root launchers (workspace CI exists from Phase 1).

@@ -330,7 +330,21 @@ Phase 3 exit check (roadmap): solution browsed -> samples -> pipeline -> pack ->
 - External surface: reuses Unit 14 GitHub entries; snapshots/alerts in KV.
 - Depends on: Units 14, 19.
 
-#### Unit 26: SIEM migration analyzer (M/L) - Phase 7
+#### Unit 26: SIEM migration analyzer (M/L) - Phase 7 - SHIPPED 2026-07-14
+
+SHIPPED (pulled forward by user directive) with these deltas from the plan
+below: the normalization fix landed as the ONE normalizeSourceKey (pinned);
+the report stayed HTML (injected generation date, delivered via the
+ArtifactSink port in both shells - the catalog's "Markdown" label was the
+error); content sniffing was ADDED after pinning the extension rule and
+platform detection auto-selects on upload; the plan PERSISTS to the
+siem-migration-plan~v1 ContentCache entry (rawSearch excerpts capped) so
+state survives navigation; the pivot uses the preserved
+buildSolutionDeepLink contract + shell navigation; QRadar identification
+gained a reverse table lookup (the legacy silently relied on the fuzzy tier
+for parser-resolved extensions); the sanitized customer export fixtures
+were NOT vendored - synthetic fixtures pin the parsers instead (vendor the
+sanitized excerpts if a regression ever needs the real shapes).
 
 - Covers: ENG-40, GUI-22.
 - Legacy sources: `IS/siem-migration.ts` (964), `IS-R/pages/SiemMigration.tsx` (359).
