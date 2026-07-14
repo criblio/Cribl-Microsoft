@@ -96,6 +96,9 @@ export function PackInventoryScreen({ refreshToken = 0 }: PackInventoryScreenPro
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
+  // In-card progress line (user feedback 2026-07-13: delete gave no visible
+  // progress) - rendered ON the card being acted on.
+  const [action, setAction] = useState<{ id: string; line: string } | null>(null);
 
   const load = useCallback(async () => {
     if (packStore === undefined) {
@@ -156,6 +159,7 @@ export function PackInventoryScreen({ refreshToken = 0 }: PackInventoryScreenPro
       setError("");
       setNotice("");
       logInfo(`downloading ${pack.record.crblFileName}`);
+      setAction({ id, line: "Assembling the .crbl for download..." });
       try {
         const bytes = packBytes(pack);
         await ports.artifacts.save(
@@ -168,6 +172,8 @@ export function PackInventoryScreen({ refreshToken = 0 }: PackInventoryScreenPro
       } catch (err) {
         logError(`download of ${pack.record.crblFileName} failed: ${String(err)}`);
         setError(`Download failed: ${String(err)}`);
+      } finally {
+        setAction(null);
       }
     },
     [findPack, ports.artifacts, logInfo, logError],
@@ -189,6 +195,7 @@ export function PackInventoryScreen({ refreshToken = 0 }: PackInventoryScreenPro
       setError("");
       setNotice("");
       logInfo(`deleting build record ${id}`);
+      setAction({ id, line: "Deleting build record..." });
       try {
         await packStore.delete(id);
         logInfo(`deleted build record ${id}`);
@@ -198,6 +205,7 @@ export function PackInventoryScreen({ refreshToken = 0 }: PackInventoryScreenPro
         logError(`delete of build record ${id} failed: ${String(err)}`);
         setError(`Delete failed: ${String(err)}`);
       } finally {
+        setAction(null);
         setBusy(false);
       }
     },
@@ -238,6 +246,7 @@ export function PackInventoryScreen({ refreshToken = 0 }: PackInventoryScreenPro
       logInfo(
         `rebuilding '${pack.record.packName}' with ${maintEdits.size} mapping edit(s)`,
       );
+      setAction({ id, line: "Rebuilding the next version..." });
       try {
         // Next version: above the highest INSTALLED copy and this record.
         const version = nextPackVersion([
@@ -284,6 +293,7 @@ export function PackInventoryScreen({ refreshToken = 0 }: PackInventoryScreenPro
         logError(`rebuild of '${pack.record.packName}' failed: ${String(err)}`);
         setError(`Rebuild failed: ${String(err)}`);
       } finally {
+        setAction(null);
         setBusy(false);
       }
     },
@@ -304,6 +314,7 @@ export function PackInventoryScreen({ refreshToken = 0 }: PackInventoryScreenPro
       setError("");
       setNotice("");
       logInfo(`installing ${pack.record.crblFileName} to ${selectedGroup}`);
+      setAction({ id, line: `Installing to ${selectedGroup}...` });
       try {
         const installed = await packInstall.install(
           selectedGroup,
@@ -317,6 +328,7 @@ export function PackInventoryScreen({ refreshToken = 0 }: PackInventoryScreenPro
         logError(`install of ${pack.record.crblFileName} to ${selectedGroup} failed: ${String(err)}`);
         setError(`Install failed: ${String(err)}`);
       } finally {
+        setAction(null);
         setBusy(false);
       }
     },
@@ -392,6 +404,9 @@ export function PackInventoryScreen({ refreshToken = 0 }: PackInventoryScreenPro
                 ? "cached bytes"
                 : "regenerated on download"}
             </p>
+            {action?.id === row.id && (
+              <p className="panel-desc dcr-progress-line">{action.line}</p>
+            )}
             <div className="panel-controls">
               <button
                 className="run-button"
