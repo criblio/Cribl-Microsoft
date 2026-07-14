@@ -2,6 +2,7 @@
   "name": "@soc/core",
   "private": true,
   "version": "0.0.0",
+  "license": "Apache-2.0",
   "type": "module",
   "main": "src/index.ts",
   "types": "src/index.ts",

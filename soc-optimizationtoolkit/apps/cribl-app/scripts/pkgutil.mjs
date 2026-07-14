@@ -188,6 +188,12 @@ export async function createAppPack(dev = false, outPath = undefined) {
     await cp(policiesPath, join(buildDir, 'default', 'policies.yml'));
   }
 
+  // Ship the license inside the deployed app (Apache-2.0, repo root).
+  const licensePath = join(rootDir, '..', '..', '..', 'LICENSE');
+  if (await pathExists(licensePath)) {
+    await cp(licensePath, join(buildDir, 'LICENSE'));
+  }
+
   const rootPackageJson = JSON.parse(
     await readFile(join(rootDir, 'package.json'), 'utf8')
   );
