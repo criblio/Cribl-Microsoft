@@ -159,14 +159,18 @@ function errText(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
+/** The response body as a string (for error-message matching). */
+function bodyText(res: PortHttpResponse): string {
+  try {
+    return typeof res.body === "string" ? res.body : JSON.stringify(res.body);
+  } catch {
+    return String(res.body);
+  }
+}
+
 /** Render a failed ARM response as the outcome detail (status + body). */
 function failDetail(res: PortHttpResponse): string {
-  let body: string;
-  try {
-    body = typeof res.body === "string" ? res.body : JSON.stringify(res.body);
-  } catch {
-    body = String(res.body);
-  }
+  const body = bodyText(res);
   return `HTTP ${res.status}${body && body !== "null" ? ` ${body}` : ""}`;
 }
 
@@ -491,21 +495,48 @@ export async function installSolution(
           "(contentId / contentProductId / version)",
       };
     }
-    const res = await azure.request({
-      method: "PUT",
-      path: `${workspaceInsightsScope(ws)}/contentPackages/${packageId}`,
-      apiVersion: SECURITY_INSIGHTS_API_VERSION,
-      body: {
-        properties: {
-          contentId,
-          contentProductId,
-          contentKind,
-          contentSchemaVersion,
-          displayName: name,
-          version,
-        },
+    // Short-circuit: the product package already reports an installed version.
+    const installedVersion = str(prop(props, "installedVersion"));
+    if (installedVersion !== "") {
+      return {
+        name: displayName,
+        ok: true,
+        detail: `already installed (version ${installedVersion})`,
+      };
+    }
+    // The install resource name is the short contentId (== the product
+    // package name); the RP enforces one contentPackages resource per
+    // contentId. Ref: learn.microsoft.com Content Package - Install.
+    const body = {
+      properties: {
+        contentId,
+        contentProductId,
+        contentKind,
+        contentSchemaVersion,
+        displayName: name,
+        version,
       },
-    });
+    };
+    const put = () =>
+      azure.request({
+        method: "PUT",
+        path: `${workspaceInsightsScope(ws)}/contentPackages/${contentId}`,
+        apiVersion: SECURITY_INSIGHTS_API_VERSION,
+        body,
+      });
+    let res = await put();
+    // A prior partial/failed attempt can leave an ORPHAN contentPackages
+    // resource that already owns this contentId under a different name (the
+    // versioned contentProductId), so the RP refuses a second association with
+    // "contentId ... is already associated with another package". Delete the
+    // orphan(s) - two Solutions never share a contentId, so it can only be a
+    // stale copy of THIS solution - then retry the install once.
+    if (res.status === 400 && /already associated with another package/i.test(bodyText(res))) {
+      logger?.info("content-install: clearing orphaned package association", { contentId });
+      await deleteContentPackage(azure, ws, contentProductId);
+      await deleteContentPackage(azure, ws, contentId);
+      res = await put();
+    }
     logger?.info("content-install: solution install PUT", {
       packageId,
       status: res.status,
@@ -515,5 +546,23 @@ export async function installSolution(
       : { name: displayName, ok: false, detail: failDetail(res) };
   } catch (err) {
     return { name: displayName, ok: false, detail: errText(err) };
+  }
+}
+
+/** Uninstall (DELETE) a contentPackages resource by name; best-effort, never throws. */
+async function deleteContentPackage(
+  azure: AzureManagement,
+  ws: WorkspaceScope,
+  name: string,
+): Promise<void> {
+  if (name === "") return;
+  try {
+    await azure.request({
+      method: "DELETE",
+      path: `${workspaceInsightsScope(ws)}/contentPackages/${name}`,
+      apiVersion: SECURITY_INSIGHTS_API_VERSION,
+    });
+  } catch {
+    /* best-effort - a retry PUT still surfaces any real failure */
   }
 }

@@ -246,6 +246,75 @@ describe("installSolution", () => {
     expect(body.properties.contentSchemaVersion).toBe("3.0.0");
   });
 
+  it("short-circuits when the product package already reports installedVersion", async () => {
+    const azure = new FakeAzureManagement();
+    azure.respondWith({
+      status: 200,
+      body: {
+        properties: {
+          contentId: "c",
+          contentProductId: "c-sl",
+          contentKind: "Solution",
+          version: "2.0.3",
+          installedVersion: "2.0.3",
+        },
+      },
+    });
+    const outcome = await installSolution(azure, WS, "c", "Cloudflare");
+    expect(outcome.ok).toBe(true);
+    expect(outcome.detail).toContain("already installed (version 2.0.3)");
+    // Only the product-package GET - no install PUT is attempted.
+    expect(azure.calls).toHaveLength(1);
+  });
+
+  it("clears an orphaned association then retries the install on conflict", async () => {
+    const azure = new FakeAzureManagement();
+    azure.respondWith(
+      {
+        status: 200,
+        body: {
+          properties: {
+            contentId: "azuresentinel.azure-sentinel-solution-cloudflare",
+            contentProductId: "azuresentinel.azure-sentinel-solution-cloudflare-sl-xyz",
+            contentKind: "Solution",
+            contentSchemaVersion: "3.0.0",
+            displayName: "Cloudflare (Deprecated)",
+            version: "2.0.3",
+          },
+        },
+      },
+      // First install PUT: the RP refuses - contentId owned by another package.
+      {
+        status: 400,
+        body: {
+          error: {
+            code: "BadRequestException",
+            message:
+              "contentId azuresentinel.azure-sentinel-solution-cloudflare is " +
+              "already associated with another package",
+          },
+        },
+      },
+      { status: 200, body: {} }, // DELETE the versioned-name orphan
+      { status: 204, body: {} }, // DELETE the contentId-name (idempotent)
+      { status: 200, body: { properties: { installedVersion: "2.0.3" } } }, // retry PUT
+    );
+    const outcome = await installSolution(
+      azure,
+      WS,
+      "azuresentinel.azure-sentinel-solution-cloudflare",
+      "Cloudflare (Deprecated)",
+    );
+    expect(outcome.ok).toBe(true);
+    expect(outcome.detail).toContain("installed (version 2.0.3)");
+    const methods = azure.calls.map((c) => c.method);
+    expect(methods).toEqual(["GET", "PUT", "DELETE", "DELETE", "PUT"]);
+    // The orphan under the versioned contentProductId name is deleted.
+    expect(azure.calls[2].path).toContain(
+      "/contentPackages/azuresentinel.azure-sentinel-solution-cloudflare-sl-xyz",
+    );
+  });
+
   it("reports the install PUT failure verbatim, never throwing", async () => {
     const azure = new FakeAzureManagement();
     azure.respondWith(
