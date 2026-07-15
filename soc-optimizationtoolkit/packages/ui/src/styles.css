@@ -2317,6 +2317,45 @@ button.journey-step-main:hover .journey-step-label {
   font-size: 12px;
   color: var(--warn);
 }
+/* Logs-Ingestion fit tags (Cribl delivery via the Azure Logs Ingestion API). */
+.ingestion-badge {
+  flex: 0 0 auto;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 2px 6px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+.ingestion-badge-recommended {
+  color: var(--ok-strong);
+  background: var(--ok-bg);
+  border: 1px solid var(--ok-border);
+}
+.ingestion-badge-supported {
+  color: var(--accent-strong);
+  background: var(--accent-bg);
+  border: 1px solid var(--accent-border);
+}
+.ingestion-badge-legacy {
+  color: var(--text-muted);
+  background: var(--surface-raised);
+  border: 1px solid var(--border-subtle);
+}
+/* Make the Recommended solutions stand out in the list (the ones to use). */
+.solution-browser-item-recommended {
+  background: var(--ok-bg);
+  box-shadow: inset 3px 0 0 0 var(--ok);
+}
+.solution-browser-legend {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
 .solution-browser-detail {
   display: flex;
   flex-direction: column;

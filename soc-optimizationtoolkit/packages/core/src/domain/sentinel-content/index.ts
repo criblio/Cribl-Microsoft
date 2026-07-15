@@ -37,6 +37,22 @@ export {
   sanitizeLogTypeId,
 } from "./connector-decoder";
 
+// Logs Ingestion API fit classification (Recommended / Supported / Legacy)
+export type { IngestionTier, IngestionClass } from "./ingestion-class";
+export {
+  CCF_PUSH_KINDS,
+  CCF_PULL_KINDS,
+  detectConnectorKinds,
+  classifyConnectorIngestion,
+  classifySolutionIngestion,
+  ingestionTierLabel,
+} from "./ingestion-class";
+export type { SolutionIngestion } from "./ingestion-classification";
+export {
+  lookupSolutionIngestion,
+  ingestionTierReason,
+} from "./ingestion-classification";
+
 // File-selection persistence filter (verbatim extension/dir sets)
 export {
   BLOCKED_EXTENSIONS,

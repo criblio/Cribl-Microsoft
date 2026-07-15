@@ -21,12 +21,17 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
+  classifyConnectorIngestion,
+  classifySolutionIngestion,
   connectorsCacheKey,
   decodeConnector,
+  ingestionTierLabel,
+  ingestionTierReason,
+  lookupSolutionIngestion,
   solutionIndexCacheKey,
   toVendorLogTypes,
 } from "@soc/core";
-import type { SolutionRef } from "@soc/core";
+import type { IngestionClass, SolutionRef } from "@soc/core";
 import { usePorts } from "../../ports-context";
 import {
   buildSolutionDeepLink,
@@ -55,6 +60,13 @@ const CONNECTOR_DECODE_CAP = 5;
 interface SolutionDetail {
   connectorCount: number;
   logTypes: string[];
+  /**
+   * The tier computed LIVE from this solution's decoded connectors - the
+   * fallback authority for a solution missing from the shipped map (a brand-
+   * new one). null when no connector decoded. Optional so pre-existing cache
+   * entries (without it) still load.
+   */
+  ingestion?: IngestionClass | null;
 }
 
 type DetailState =
@@ -143,6 +155,7 @@ export function SolutionBrowser({ onSelect }: SolutionBrowserProps) {
         }
         const files = await content.listConnectorFiles(name);
         const logTypes = new Set<string>();
+        const classes: IngestionClass[] = [];
         for (const file of files.slice(0, CONNECTOR_DECODE_CAP)) {
           const text = await content.readFile(file.path);
           if (text === null) {
@@ -158,10 +171,12 @@ export function SolutionBrowser({ onSelect }: SolutionBrowserProps) {
           for (const vlt of toVendorLogTypes(decoded)) {
             logTypes.add(vlt.name);
           }
+          classes.push(classifyConnectorIngestion(parsed));
         }
         const built: SolutionDetail = {
           connectorCount: files.length,
           logTypes: [...logTypes].sort((a, b) => a.localeCompare(b)),
+          ingestion: classes.length > 0 ? classifySolutionIngestion(classes) : null,
         };
         if (cache !== undefined) {
           await cache.set(cacheKey, built);
@@ -285,6 +300,24 @@ export function SolutionBrowser({ onSelect }: SolutionBrowserProps) {
               {selected.name}
             </span>
             {(() => {
+              // Shipped tier is authoritative for known solutions; the live
+              // tier (decoded connectors) covers a solution missing from the
+              // shipped map.
+              const ing =
+                lookupSolutionIngestion(selected.name) ??
+                (detail.phase === "loaded"
+                  ? detail.detail.ingestion ?? null
+                  : null);
+              return ing !== null ? (
+                <span
+                  className={`ingestion-badge ingestion-badge-${ing.tier}`}
+                  title={ingestionTierReason(ing.tier, ing.kind)}
+                >
+                  {ingestionTierLabel(ing.tier)}
+                </span>
+              ) : null;
+            })()}
+            {(() => {
               const badge = deprecationBadge(selected);
               return badge !== null ? (
                 <span className="solution-browser-badge" title={badge.reason}>
@@ -374,14 +407,36 @@ export function SolutionBrowser({ onSelect }: SolutionBrowserProps) {
               {counts.deprecated} deprecated. Showing {visible.length}.
             </p>
           )}
+          <p className="solution-browser-legend">
+            Cribl delivery fit (Azure Logs Ingestion API):{" "}
+            <span className="ingestion-badge ingestion-badge-recommended">
+              Recommended
+            </span>{" "}
+            CCF Push{" "}
+            <span className="ingestion-badge ingestion-badge-supported">
+              Supported
+            </span>{" "}
+            CCF pull / custom-table DCR{" "}
+            <span className="ingestion-badge ingestion-badge-legacy">Legacy</span>{" "}
+            agent / Functions
+          </p>
           <ul className="solution-browser-list">
             {visible.map((solution) => {
               // The list only renders while NOTHING is selected (selecting
               // switches to the selected-solution card), so rows carry no
               // selected state of their own.
               const badge = deprecationBadge(solution);
+              // Logs-Ingestion fit from the shipped map (instant, no fetch).
+              const ingestion = lookupSolutionIngestion(solution.name);
+              const recommended = ingestion?.tier === "recommended";
               return (
-                <li key={solution.path} className="solution-browser-item">
+                <li
+                  key={solution.path}
+                  className={
+                    "solution-browser-item" +
+                    (recommended ? " solution-browser-item-recommended" : "")
+                  }
+                >
                   <button
                     className="solution-browser-item-button"
                     onClick={() => select(solution)}
@@ -389,6 +444,14 @@ export function SolutionBrowser({ onSelect }: SolutionBrowserProps) {
                     <span className="solution-browser-item-name">
                       {solution.name}
                     </span>
+                    {ingestion !== null && (
+                      <span
+                        className={`ingestion-badge ingestion-badge-${ingestion.tier}`}
+                        title={ingestionTierReason(ingestion.tier, ingestion.kind)}
+                      >
+                        {ingestionTierLabel(ingestion.tier)}
+                      </span>
+                    )}
                     {badge !== null && (
                       <span
                         className="solution-browser-badge"
