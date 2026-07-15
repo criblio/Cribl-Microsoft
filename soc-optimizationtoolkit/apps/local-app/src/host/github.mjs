@@ -213,9 +213,27 @@ export function createGithubProxy(dataDir, logger) {
       if (token !== '') {
         headers.Authorization = `Bearer ${token}`;
       }
+      let res = await fetchTextWithTimeout(url, { method: 'GET', headers });
+      // RATE LIMITING (live report 2026-07-15: parallel per-solution reads
+      // trip GitHub's 429/limited-403) - honor Retry-After / x-ratelimit-reset
+      // with a capped backoff before the short 5xx-blip retries.
+      for (let attempt = 0; attempt < 4; attempt++) {
+        const limited =
+          res.status === 429 || (res.status === 403 && res.retryAfter !== null);
+        if (!limited) break;
+        let waitMs;
+        if (res.retryAfter !== null) {
+          waitMs = Math.min(res.retryAfter * 1000, 20000);
+        } else if (res.rateLimitReset !== null) {
+          waitMs = Math.min(Math.max(res.rateLimitReset * 1000 - Date.now(), 0), 20000);
+        } else {
+          waitMs = Math.min(1000 * 2 ** attempt, 20000);
+        }
+        await new Promise((resolve) => setTimeout(resolve, waitMs));
+        res = await fetchTextWithTimeout(url, { method: 'GET', headers });
+      }
       // Transient GitHub 5xx blips (502 Bad Gateway pages) are routine -
       // retry a couple of times before answering (mirrors the cloud shell).
-      let res = await fetchTextWithTimeout(url, { method: 'GET', headers });
       for (const delay of [500, 1500]) {
         if (![500, 502, 503, 504].includes(res.status)) break;
         await new Promise((resolve) => setTimeout(resolve, delay));

@@ -119,15 +119,25 @@ export function readJsonBody(req, maxBytes = MAX_BODY_BYTES) {
  * @param {string} url
  * @param {RequestInit} [init]
  * @param {number} [timeoutMs]
- * @returns {Promise<{ status: number, ok: boolean, text: string }>}
+ * @returns {Promise<{ status: number, ok: boolean, text: string, retryAfter: number|null, rateLimitReset: number|null }>}
  */
 export async function fetchTextWithTimeout(url, init = {}, timeoutMs = DEFAULT_UPSTREAM_TIMEOUT_MS) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const res = await fetch(url, { ...init, signal: controller.signal });
+    // Surface the rate-limit headers so callers can honor Retry-After /
+    // x-ratelimit-reset on GitHub 429s (live report 2026-07-15).
+    const retryAfterRaw = Number(res.headers.get('retry-after'));
+    const resetRaw = Number(res.headers.get('x-ratelimit-reset'));
     // res.text() shares the abort signal: aborting mid-body rejects it too.
-    return { status: res.status, ok: res.ok, text: await res.text() };
+    return {
+      status: res.status,
+      ok: res.ok,
+      text: await res.text(),
+      retryAfter: Number.isFinite(retryAfterRaw) && retryAfterRaw > 0 ? retryAfterRaw : null,
+      rateLimitReset: Number.isFinite(resetRaw) && resetRaw > 0 ? resetRaw : null,
+    };
   } catch (err) {
     if (controller.signal.aborted) {
       throw new Error(`request to ${new URL(url).host} timed out after ${timeoutMs / 1000}s`);

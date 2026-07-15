@@ -146,6 +146,24 @@ export interface InstalledContentState {
   installedWorkbookNames: ReadonlySet<string>;
   /** Non-fatal notes (a listing that failed degrades to "unknown", not error). */
   notes: string[];
+  /**
+   * True when a probe returned the "workspace is not onboarded to Microsoft
+   * Sentinel" error - the SecurityInsights provider rejects every content
+   * call until Sentinel is enabled on the workspace. The UI turns this into
+   * an actionable Enable action instead of a raw ARM error.
+   */
+  notOnboarded: boolean;
+}
+
+/** Detect the ARM "not onboarded to Microsoft Sentinel" rejection. */
+export function isNotOnboardedError(body: unknown): boolean {
+  let text: string;
+  try {
+    text = typeof body === "string" ? body : JSON.stringify(body);
+  } catch {
+    return false;
+  }
+  return /not onboarded to Microsoft Sentinel/i.test(text);
 }
 
 /**
@@ -162,6 +180,7 @@ export async function installedContentState(
 ): Promise<InstalledContentState> {
   const scope = workspaceInsightsScope(ws);
   const notes: string[] = [];
+  let notOnboarded = false;
 
   let solutionInstalled = false;
   let installedSolutionVersion: string | null = null;
@@ -185,7 +204,8 @@ export async function installedContentState(
         installedSolutionVersion = typeof v === "string" ? v : null;
       }
     } catch (err) {
-      notes.push(`Could not read installed solutions: ${errText(err)}`);
+      if (isNotOnboardedError(errText(err))) notOnboarded = true;
+      else notes.push(`Could not read installed solutions: ${errText(err)}`);
     }
   }
 
@@ -205,7 +225,8 @@ export async function installedContentState(
       if (typeof name === "string") installedRuleNames.add(name.toLowerCase());
     }
   } catch (err) {
-    notes.push(`Could not read installed analytics rules: ${errText(err)}`);
+    if (isNotOnboardedError(errText(err))) notOnboarded = true;
+    else notes.push(`Could not read installed analytics rules: ${errText(err)}`);
   }
 
   const installedWorkbookNames = new Set<string>();
@@ -230,6 +251,8 @@ export async function installedContentState(
       if (typeof name === "string") installedWorkbookNames.add(name.toLowerCase());
     }
   } catch (err) {
+    // Workbooks live under Microsoft.Insights, not SecurityInsights, so this
+    // path never raises the not-onboarded error; a failure is a plain note.
     notes.push(`Could not read installed workbooks: ${errText(err)}`);
   }
 
@@ -237,6 +260,7 @@ export async function installedContentState(
     solutionInstalled,
     rules: installedRuleNames.size,
     workbooks: installedWorkbookNames.size,
+    notOnboarded,
   });
 
   return {
@@ -245,6 +269,7 @@ export async function installedContentState(
     installedRuleNames,
     installedWorkbookNames,
     notes,
+    notOnboarded,
   };
 }
 

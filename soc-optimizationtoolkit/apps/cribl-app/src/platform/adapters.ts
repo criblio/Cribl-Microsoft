@@ -919,9 +919,46 @@ const GITHUB_JSON_ACCEPT = 'application/vnd.github+json';
 // sample_data listing degraded the whole Sentinel browse tier).
 const GITHUB_RETRY_STATUSES = new Set([500, 502, 503, 504]);
 const GITHUB_RETRY_DELAYS_MS = [500, 1500];
+// RATE LIMITING (live report 2026-07-15: coverage + content-install fire many
+// parallel reads per solution and trip GitHub's rate/secondary limits ->
+// HTTP 429 "Too many requests", and 403 for the primary limit). These need a
+// LONGER, header-driven backoff than the 5xx blips, so they get their own
+// retry budget honoring Retry-After / x-ratelimit-reset.
+const GITHUB_RATE_LIMIT_ATTEMPTS = 4;
+const GITHUB_RATE_LIMIT_CAP_MS = 20000;
+
+/** Whether a response is a GitHub rate-limit rejection (429, or 403 with a limit header). */
+function isRateLimited(res: Response): boolean {
+  if (res.status === 429) return true;
+  if (res.status !== 403) return false;
+  return (
+    res.headers.get('retry-after') !== null ||
+    res.headers.get('x-ratelimit-remaining') === '0'
+  );
+}
+
+/** How long to wait for a rate-limited response: Retry-After, else reset delta, else exponential. */
+function rateLimitWaitMs(res: Response, attempt: number): number {
+  const retryAfter = Number(res.headers.get('retry-after'));
+  if (Number.isFinite(retryAfter) && retryAfter > 0) {
+    return Math.min(retryAfter * 1000, GITHUB_RATE_LIMIT_CAP_MS);
+  }
+  const reset = Number(res.headers.get('x-ratelimit-reset'));
+  if (Number.isFinite(reset) && reset > 0) {
+    const deltaMs = reset * 1000 - Date.now();
+    if (deltaMs > 0) return Math.min(deltaMs, GITHUB_RATE_LIMIT_CAP_MS);
+  }
+  return Math.min(1000 * 2 ** attempt, GITHUB_RATE_LIMIT_CAP_MS);
+}
 
 async function githubFetchWithRetry(url: string, init: RequestInit): Promise<Response> {
   let res = await fetchWithTimeout(url, init, GITHUB_TIMEOUT_MS);
+  // First: the header-driven rate-limit backoff (429 / limited 403).
+  for (let attempt = 0; attempt < GITHUB_RATE_LIMIT_ATTEMPTS && isRateLimited(res); attempt++) {
+    await new Promise((resolve) => setTimeout(resolve, rateLimitWaitMs(res, attempt)));
+    res = await fetchWithTimeout(url, init, GITHUB_TIMEOUT_MS);
+  }
+  // Then: the short 5xx-blip retries.
   for (const delay of GITHUB_RETRY_DELAYS_MS) {
     if (!GITHUB_RETRY_STATUSES.has(res.status)) {
       return res;

@@ -128,6 +128,27 @@ describe("installedContentState", () => {
     expect(state.solutionInstalled).toBe(false);
     expect(state.installedRuleNames.size).toBe(0);
     expect(state.notes.some((n) => n.includes("analytics rules"))).toBe(true);
+    expect(state.notOnboarded).toBe(false);
+  });
+
+  it("flags a not-onboarded workspace instead of a raw ARM note", async () => {
+    const azure = new FakeAzureManagement();
+    const notOnboarded = {
+      error: {
+        code: "BadRequest",
+        message:
+          "Workspace 'law' is not onboarded to Microsoft Sentinel. Please onboard through the portal.",
+      },
+    };
+    azure.respondWith(
+      { status: 400, body: notOnboarded }, // packages
+      { status: 400, body: notOnboarded }, // alertRules
+      { status: 200, body: { value: [] } }, // workbooks (Insights, unaffected)
+    );
+    const state = await installedContentState(azure, WS, "cf-id");
+    expect(state.notOnboarded).toBe(true);
+    // The raw ARM error is NOT pushed as a note - the UI shows an Enable action.
+    expect(state.notes.some((n) => n.includes("not onboarded"))).toBe(false);
   });
 });
 

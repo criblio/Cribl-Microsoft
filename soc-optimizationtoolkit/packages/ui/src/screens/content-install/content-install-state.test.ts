@@ -39,6 +39,7 @@ function state(over: Partial<InstalledContentState>): InstalledContentState {
     installedRuleNames: new Set(),
     installedWorkbookNames: new Set(),
     notes: [],
+    notOnboarded: false,
     ...over,
   };
 }

@@ -11,6 +11,7 @@ export {
   WORKBOOKS_INSTALL_API_VERSION,
   WORKSPACE_READ_API_VERSION,
   fetchWorkspaceLocation,
+  isNotOnboardedError,
   installAnalyticRule,
   installParser,
   installSolution,
