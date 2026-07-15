@@ -133,11 +133,19 @@ describe("installedContentState", () => {
 
   it("flags a not-onboarded workspace instead of a raw ARM note", async () => {
     const azure = new FakeAzureManagement();
+    // The EXACT double-encoded shape ARM returns live (2026-07-15): the outer
+    // message is itself a JSON string containing the not-onboarded error.
     const notOnboarded = {
       error: {
         code: "BadRequest",
-        message:
-          "Workspace 'law' is not onboarded to Microsoft Sentinel. Please onboard through the portal.",
+        message: JSON.stringify({
+          error: {
+            code: "BadRequest",
+            message:
+              "Workspace 'law-jpederson-eastus' is not onboarded to Microsoft Sentinel. " +
+              "Please onboard through the portal or use the OnboardingStates ARM api to onboard to Sentinel.",
+          },
+        }),
       },
     };
     azure.respondWith(
