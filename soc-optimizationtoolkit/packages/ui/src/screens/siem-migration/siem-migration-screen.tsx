@@ -25,12 +25,18 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   analyzeSiemExport,
   detectSiemPlatform,
+  enrichPlanWithAnalyticRules,
+  fetchSolutionAnalyticRules,
   generateMigrationReport,
   migrationReportFileName,
   parseMigrationPlan,
   serializeMigrationPlan,
 } from "@soc/core";
-import type { MigrationPlan, SiemPlatform } from "@soc/core";
+import type {
+  MigrationPlan,
+  SentinelAnalyticRuleMatch,
+  SiemPlatform,
+} from "@soc/core";
 import { usePorts } from "../../ports-context";
 import { buildSolutionDeepLink } from "../solution-browser/browser-state";
 import { InfoTip } from "../../components/info-tip";
@@ -40,6 +46,7 @@ import {
   identifierSummary,
   mappedSources,
   migrationStatTiles,
+  rulesBySolutionFromPlan,
   unmappedSources,
 } from "./siem-migration-state";
 
@@ -57,9 +64,23 @@ export function SiemMigrationScreen({ onOpenIntegration }: SiemMigrationScreenPr
   const [platform, setPlatform] = useState<SiemPlatform>("splunk");
   const [plan, setPlan] = useState<MigrationPlan | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
+  const [analyzeProgress, setAnalyzeProgress] = useState("");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  // LAZY per-solution rule enrichment (the 2026-07-14 stall fix: eager
+  // enrichment meant hundreds of sequential GitHub reads before the plan
+  // rendered). The accumulated map feeds the pure enrich fold; per-card
+  // progress renders AT the control (the twice-learned placement rule).
+  const rulesBySolutionRef = useRef(new Map<string, SentinelAnalyticRuleMatch[]>());
+  const solutionNamesRef = useRef<string[] | null>(null);
+  const [loadedSolutions, setLoadedSolutions] = useState<ReadonlySet<string>>(
+    new Set(),
+  );
+  const [enrichProgress, setEnrichProgress] = useState<Record<string, string>>(
+    {},
+  );
 
   // Restore the persisted plan once on mount (the bounce-back contract).
   const cache = ports.contentCache;
@@ -74,6 +95,10 @@ export function SiemMigrationScreen({ onOpenIntegration }: SiemMigrationScreenPr
         if (restored !== null) {
           setPlan(restored);
           setPlatform(restored.platform);
+          // Re-seed the lazy-enrichment accumulator so already-loaded
+          // solutions render their rules (and offer Reload, not Load).
+          rulesBySolutionRef.current = rulesBySolutionFromPlan(restored);
+          setLoadedSolutions(new Set(rulesBySolutionRef.current.keys()));
           setNotice(`Restored the saved analysis of ${restored.fileName}.`);
         }
       } catch {
@@ -101,8 +126,13 @@ export function SiemMigrationScreen({ onOpenIntegration }: SiemMigrationScreenPr
   const analyze = useCallback(
     async (content: string, fileName: string) => {
       setAnalyzing(true);
+      setAnalyzeProgress("Parsing the export and matching Sentinel solutions...");
       setError("");
       setNotice("");
+      // A fresh analysis invalidates the lazily-loaded rule enrichment.
+      rulesBySolutionRef.current = new Map();
+      setLoadedSolutions(new Set());
+      setEnrichProgress({});
       try {
         const detected = detectSiemPlatform(fileName, content);
         setPlatform(detected);
@@ -112,6 +142,9 @@ export function SiemMigrationScreen({ onOpenIntegration }: SiemMigrationScreenPr
         );
         setPlan(produced);
         persist(produced);
+        setNotice(
+          "Analysis complete. Load each solution's Sentinel rules on its card below (fetched on demand).",
+        );
         ports.logger?.info("siem-migration: analysis complete", {
           fileName,
           platform: detected,
@@ -122,9 +155,55 @@ export function SiemMigrationScreen({ onOpenIntegration }: SiemMigrationScreenPr
         ports.logger?.error(`siem-migration: analysis failed: ${String(err)}`);
       } finally {
         setAnalyzing(false);
+        setAnalyzeProgress("");
       }
     },
     [ports, persist],
+  );
+
+  // Load ONE solution's Sentinel analytics rules on demand (capped reads,
+  // per-card progress). The accumulated map re-folds into the plan purely,
+  // so previously loaded solutions keep their rules.
+  const loadSolutionRules = useCallback(
+    async (solutionName: string) => {
+      const contentPort = ports.content;
+      if (plan === null || contentPort === undefined) return;
+      const key = solutionName.toLowerCase();
+      setEnrichProgress((p) => ({ ...p, [key]: "Listing rule files..." }));
+      try {
+        if (solutionNamesRef.current === null) {
+          solutionNamesRef.current = (await contentPort.listSolutions()).map(
+            (s) => s.name,
+          );
+        }
+        const matches = await fetchSolutionAnalyticRules(
+          contentPort,
+          solutionNamesRef.current,
+          solutionName,
+          (read, total) =>
+            setEnrichProgress((p) => ({
+              ...p,
+              [key]: `Reading rules (${read}/${total})...`,
+            })),
+        );
+        rulesBySolutionRef.current.set(key, matches);
+        setLoadedSolutions(new Set(rulesBySolutionRef.current.keys()));
+        const next = enrichPlanWithAnalyticRules(plan, rulesBySolutionRef.current);
+        setPlan(next);
+        persist(next);
+        setEnrichProgress((p) => {
+          const { [key]: _done, ...rest } = p;
+          return rest;
+        });
+      } catch (err) {
+        setEnrichProgress((p) => ({ ...p, [key]: `Failed: ${String(err)}` }));
+        ports.logger?.warn("siem-migration: rule load failed", {
+          solution: solutionName,
+          error: String(err),
+        });
+      }
+    },
+    [plan, ports, persist],
   );
 
   const onFileChosen = useCallback(
@@ -166,6 +245,9 @@ export function SiemMigrationScreen({ onOpenIntegration }: SiemMigrationScreenPr
 
   const clearPlan = useCallback(() => {
     setPlan(null);
+    rulesBySolutionRef.current = new Map();
+    setLoadedSolutions(new Set());
+    setEnrichProgress({});
     setNotice("Saved analysis cleared.");
     persist(null);
   }, [persist]);
@@ -212,6 +294,9 @@ export function SiemMigrationScreen({ onOpenIntegration }: SiemMigrationScreenPr
           <span className={`status status-${analyzing ? "running" : plan !== null ? "ok" : "idle"}`}>
             {analyzing ? "running" : plan !== null ? "ok" : "idle"}
           </span>
+          {analyzeProgress !== "" && (
+            <span className="field-hint">{analyzeProgress}</span>
+          )}
         </div>
         {error !== "" && <pre className="result">{error}</pre>}
         {notice !== "" && <p className="panel-desc">{notice}</p>}
@@ -268,7 +353,7 @@ export function SiemMigrationScreen({ onOpenIntegration }: SiemMigrationScreenPr
                 {" - sources: "}
                 {identifierSummary(ds)}
               </p>
-              {ds.sentinelAnalyticRules.length > 0 && (
+              {ds.sentinelAnalyticRules.length > 0 ? (
                 <details className="gap-handles">
                   <summary>
                     {ds.sentinelAnalyticRules.length} Sentinel analytics rule(s) ship with this solution
@@ -282,6 +367,31 @@ export function SiemMigrationScreen({ onOpenIntegration }: SiemMigrationScreenPr
                     ))}
                   </div>
                 </details>
+              ) : loadedSolutions.has(ds.sentinelSolution.toLowerCase()) &&
+                enrichProgress[ds.sentinelSolution.toLowerCase()] === undefined ? (
+                <p className="panel-desc">
+                  No analytics rules found in the solution repo.
+                </p>
+              ) : (
+                <div className="panel-controls">
+                  <button
+                    className="run-button"
+                    disabled={
+                      ports.content === undefined ||
+                      enrichProgress[ds.sentinelSolution.toLowerCase()] !==
+                        undefined
+                    }
+                    onClick={() => void loadSolutionRules(ds.sentinelSolution)}
+                  >
+                    Load Sentinel rules
+                  </button>
+                  {enrichProgress[ds.sentinelSolution.toLowerCase()] !==
+                    undefined && (
+                    <span className="field-hint">
+                      {enrichProgress[ds.sentinelSolution.toLowerCase()]}
+                    </span>
+                  )}
+                </div>
               )}
             </div>
           ))}

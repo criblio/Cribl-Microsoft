@@ -13,7 +13,11 @@
  * Pure: no IO, no fetch, no React.
  */
 
-import type { IdentifiedDataSource, MigrationPlan } from "@soc/core";
+import type {
+  IdentifiedDataSource,
+  MigrationPlan,
+  SentinelAnalyticRuleMatch,
+} from "@soc/core";
 
 /** The plain persistence key for the analyzed plan (ContentCache port). */
 export const SIEM_MIGRATION_PLAN_KEY = "siem-migration-plan~v1";
@@ -73,4 +77,23 @@ export function identifierSummary(
   const shown = ds.platformIdentifiers.slice(0, cap).join(", ");
   const extra = ds.platformIdentifiers.length - cap;
   return extra > 0 ? `${shown} +${extra}` : shown;
+}
+
+/**
+ * Rebuild the accumulated per-solution rule map from a (restored) plan, so
+ * lazily-loaded enrichment survives the bounce-back restore. Keys are
+ * LOWERCASED solution names (the enrichPlanWithAnalyticRules contract).
+ * Loaded-but-empty solutions are indistinguishable from never-loaded after a
+ * restore - they simply offer Load again (harmless).
+ */
+export function rulesBySolutionFromPlan(
+  plan: MigrationPlan,
+): Map<string, SentinelAnalyticRuleMatch[]> {
+  const map = new Map<string, SentinelAnalyticRuleMatch[]>();
+  for (const ds of plan.dataSources) {
+    if (ds.sentinelSolution !== "" && ds.sentinelAnalyticRules.length > 0) {
+      map.set(ds.sentinelSolution.toLowerCase(), ds.sentinelAnalyticRules);
+    }
+  }
+  return map;
 }

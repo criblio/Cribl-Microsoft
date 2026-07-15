@@ -1,12 +1,17 @@
 /**
- * Pins for the analyzeSiemExport usecase (Unit 26): fuzzy mapping + rule
- * enrichment over the SentinelContent port, with the legacy graceful
- * degradation (no port / unreachable content = static maps only).
+ * Pins for the analyzeSiemExport usecase (Unit 26): fast analysis (ONE
+ * content call - enrichment is per-solution and on demand after the
+ * 2026-07-14 stall regression), the legacy graceful degradation (no port /
+ * unreachable content = static maps only), and the per-solution rule fetch.
  */
 
 import { describe, expect, it } from "vitest";
 import { FakeSentinelContent } from "../../testing/index";
-import { analyzeSiemExport } from "./analyze-siem-export";
+import { enrichPlanWithAnalyticRules } from "../../domain/siem-migration/index";
+import {
+  analyzeSiemExport,
+  fetchSolutionAnalyticRules,
+} from "./analyze-siem-export";
 
 const SPLUNK_EXPORT = JSON.stringify({
   result: {
@@ -37,7 +42,7 @@ describe("analyzeSiemExport", () => {
     expect(plan.totalSentinelRules).toBe(0);
   });
 
-  it("enriches mapped solutions with their analytics rules through the port", async () => {
+  it("does NOT enrich eagerly (the 2026-07-14 stall fix): rules load per solution on demand", async () => {
     const content = new FakeSentinelContent({
       files: {
         "Solutions/Okta Single Sign-On/Analytic Rules/rule1.yaml": RULE_YAML,
@@ -51,12 +56,52 @@ describe("analyzeSiemExport", () => {
     const okta = plan.dataSources.find(
       (d) => d.sentinelSolution === "Okta Single Sign-On",
     );
-    expect(okta?.sentinelAnalyticRules).toHaveLength(1);
-    expect(okta?.sentinelAnalyticRules[0]).toMatchObject({
-      name: "Okta Rule One",
-      severity: "High",
+    expect(okta?.sentinelAnalyticRules).toEqual([]);
+    expect(plan.totalSentinelRules).toBe(0);
+
+    // The on-demand path: one solution's rules, folded in purely.
+    const matches = await fetchSolutionAnalyticRules(
+      content,
+      ["Okta Single Sign-On"],
+      "Okta Single Sign-On",
+    );
+    expect(matches).toHaveLength(1);
+    expect(matches[0]).toMatchObject({ name: "Okta Rule One", severity: "High" });
+    const enriched = enrichPlanWithAnalyticRules(
+      plan,
+      new Map([["okta single sign-on", matches]]),
+    );
+    expect(enriched.totalSentinelRules).toBe(1);
+    expect(
+      enriched.dataSources.find((d) => d.sentinelSolution === "Okta Single Sign-On")
+        ?.sentinelAnalyticRules,
+    ).toHaveLength(1);
+  });
+
+  it("fetchSolutionAnalyticRules reports progress and fuzzy-matches the dir name", async () => {
+    const content = new FakeSentinelContent({
+      files: {
+        "Solutions/Okta Single Sign-On/Analytic Rules/rule1.yaml": RULE_YAML,
+        "Solutions/Okta Single Sign-On/Analytic Rules/rule2.yaml": RULE_YAML,
+        "Solutions/Okta Single Sign-On/Data Connectors/conn.json": "{}",
+      },
     });
-    expect(plan.totalSentinelRules).toBe(1);
+    const ticks: Array<[number, number]> = [];
+    const matches = await fetchSolutionAnalyticRules(
+      content,
+      ["Okta Single Sign-On"],
+      "okta single signon", // fuzzy: normalized containment
+      (read, total) => ticks.push([read, total]),
+    );
+    expect(matches).toHaveLength(2);
+    expect(ticks).toEqual([
+      [1, 2],
+      [2, 2],
+    ]);
+    // No matching directory resolves to [] (never throws).
+    await expect(
+      fetchSolutionAnalyticRules(content, ["Okta Single Sign-On"], "Zebra Firewall"),
+    ).resolves.toEqual([]);
   });
 
   it("fuzzy-maps unmapped sources against the live solution list", async () => {
