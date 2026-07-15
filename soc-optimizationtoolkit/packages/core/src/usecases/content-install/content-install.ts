@@ -70,6 +70,47 @@ function workspaceInsightsScope(ws: WorkspaceScope): string {
 
 /** Log Analytics workspace api-version (read the region for regional installs). */
 export const WORKSPACE_READ_API_VERSION = "2023-09-01";
+/**
+ * Sentinel onboarding api-version. The MODERN onboarding method (the one the
+ * "not onboarded" error itself recommends) is a PUT of the SecurityInsights
+ * onboardingStates/default resource - NOT the legacy
+ * Microsoft.OperationsManagement/solutions the old enableSentinel used, which
+ * Azure has deprecated and which silently no-ops in many regions.
+ */
+export const SENTINEL_ONBOARDING_API_VERSION = "2024-03-01";
+
+/** One onboarding attempt's outcome. */
+export interface OnboardOutcome {
+  ok: boolean;
+  detail: string;
+}
+
+/**
+ * Onboard a workspace to Microsoft Sentinel via the SecurityInsights
+ * onboardingStates PUT (the current, RP-recognized method). Idempotent: a
+ * PUT on an already-onboarded workspace returns 2xx. Resolves an outcome and
+ * never throws so the UI can report success/failure precisely.
+ */
+export async function onboardSentinelWorkspace(
+  azure: AzureManagement,
+  ws: WorkspaceScope,
+  logger?: Logger,
+): Promise<OnboardOutcome> {
+  try {
+    const res = await azure.request({
+      method: "PUT",
+      path: `${workspaceInsightsScope(ws)}/onboardingStates/default`,
+      apiVersion: SENTINEL_ONBOARDING_API_VERSION,
+      body: { properties: {} },
+    });
+    logger?.info("content-install: sentinel onboarding PUT", { status: res.status });
+    return is2xx(res.status)
+      ? { ok: true, detail: "Microsoft Sentinel enabled on the workspace." }
+      : { ok: false, detail: failDetail(res) };
+  } catch (err) {
+    return { ok: false, detail: errText(err) };
+  }
+}
 
 /**
  * Read the workspace's Azure region (workbooks are regional; the solution

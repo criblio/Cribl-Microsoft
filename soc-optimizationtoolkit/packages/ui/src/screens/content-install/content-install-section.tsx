@@ -22,7 +22,7 @@ import {
   availableParsers,
   availableWorkbooks,
   alertRuleResourceFromParsed,
-  enableSentinel,
+  onboardSentinelWorkspace,
   fetchWorkspaceLocation,
   findSolutionCatalogEntry,
   installAnalyticRule,
@@ -305,31 +305,31 @@ export function ContentInstallSection({
 
   // Enable Microsoft Sentinel on the workspace (the not-onboarded remedy):
   // the SecurityInsights provider rejects every content call until Sentinel
-  // is enabled. Reuses the same idempotent enableSentinel the Azure Targeting
-  // screen offers, then reloads.
+  // is onboarded. Uses the MODERN onboardingStates PUT (the method the error
+  // itself recommends), reports the outcome, and reloads on success. The
+  // legacy OperationsManagement/solutions method silently no-ops in many
+  // regions, which is why the old Enable "did nothing".
   const doEnableSentinel = useCallback(async () => {
     if (!canInstall) return;
     setBusy("onboard");
     setOnboardError("");
     setProgress("Enabling Microsoft Sentinel on the workspace...");
     try {
-      await enableSentinel(
-        ports.azure,
-        {
-          subscriptionId: config.subscriptionId,
-          resourceGroup: config.resourceGroup,
-          workspaceName: config.workspaceName,
-        },
-        ports.logger,
-      );
-      await load();
+      const outcome = await onboardSentinelWorkspace(ports.azure, scope, ports.logger);
+      if (outcome.ok) {
+        setProgress(outcome.detail);
+        await load();
+      } else {
+        setProgress("");
+        setOnboardError(`Enable failed: ${outcome.detail}`);
+      }
     } catch (err) {
+      setProgress("");
       setOnboardError(String(err));
     } finally {
       setBusy("");
-      setProgress("");
     }
-  }, [canInstall, ports, config, load]);
+  }, [canInstall, ports, scope, load]);
 
   if (content === undefined) {
     return (

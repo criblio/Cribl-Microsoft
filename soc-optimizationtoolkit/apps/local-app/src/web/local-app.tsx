@@ -89,6 +89,9 @@ import type {
 import { fetchWithTimeout, makeLocalPorts } from './local-adapters';
 import { HostLogger } from './logger';
 
+/** Build-time app version from package.json (Vite define). */
+declare const __APP_VERSION__: string;
+
 // Map the coarse setup path (persisted on AzureConfig) to the DEFAULT core
 // preflight SetupPath the RBAC panel opens on. 'existing' defaults to the
 // resource-group WRITE path; the operator can switch inside the panel.
@@ -1106,7 +1109,7 @@ export function LocalApp() {
       routes={routes}
       topBar={topBar}
       initialRouteId="home"
-      footerNote="local host"
+      footerNote={`local host - v${__APP_VERSION__}`}
       themeControl={themeControl}
     />
   );

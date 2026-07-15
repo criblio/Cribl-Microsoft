@@ -19,6 +19,8 @@ declare global {
     readonly CRIBL_APP_ID?: string;
     readonly getCriblUser: () => Promise<CriblUser>;
   }
+  /** Build-time app version from package.json (Vite define). */
+  const __APP_VERSION__: string;
 }
 
 export {};

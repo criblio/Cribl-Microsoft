@@ -13,6 +13,7 @@ import {
   installWorkbook,
   installSolution,
   installedContentState,
+  onboardSentinelWorkspace,
 } from "./content-install";
 import type { WorkspaceScope } from "./content-install";
 
@@ -157,6 +158,30 @@ describe("installedContentState", () => {
     expect(state.notOnboarded).toBe(true);
     // The raw ARM error is NOT pushed as a note - the UI shows an Enable action.
     expect(state.notes.some((n) => n.includes("not onboarded"))).toBe(false);
+  });
+});
+
+describe("onboardSentinelWorkspace", () => {
+  it("PUTs the modern onboardingStates/default resource and reports success", async () => {
+    const azure = new FakeAzureManagement();
+    azure.respondWith({ status: 200, body: {} });
+    const outcome = await onboardSentinelWorkspace(azure, WS);
+    expect(outcome.ok).toBe(true);
+    const call = azure.calls[0];
+    expect(call.method).toBe("PUT");
+    expect(call.path).toContain(
+      "/providers/Microsoft.SecurityInsights/onboardingStates/default",
+    );
+    expect(call.apiVersion).toBe("2024-03-01");
+    expect(call.body).toEqual({ properties: {} });
+  });
+
+  it("reports the failure verbatim without throwing", async () => {
+    const azure = new FakeAzureManagement();
+    azure.respondWith({ status: 403, body: { error: "Forbidden" } });
+    const outcome = await onboardSentinelWorkspace(azure, WS);
+    expect(outcome.ok).toBe(false);
+    expect(outcome.detail).toContain("HTTP 403");
   });
 });
 

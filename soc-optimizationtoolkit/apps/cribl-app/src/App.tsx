@@ -1964,7 +1964,7 @@ function App() {
       mode={phase.mode}
       routes={routes}
       topBar={connectionBar}
-      footerNote="v1.0.0"
+      footerNote={`v${__APP_VERSION__}`}
       initialRouteId="home"
       themeControl={themeControl}
     />

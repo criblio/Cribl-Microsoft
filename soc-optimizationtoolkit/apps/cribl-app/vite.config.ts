@@ -6,6 +6,14 @@ import react from '@vitejs/plugin-react'
 // @ts-ignore
 import { servePackageTgz } from './scripts/pkgutil.mjs'
 
+// The app version shown in the always-visible sidebar footer, read from THIS
+// app's package.json (the package script bumps it on every build, so the
+// footer tracks the installed .tgz). Injected as a build-time constant so the
+// bundle never imports the whole package.json.
+const APP_VERSION: string = JSON.parse(
+  readFileSync(new URL('./package.json', import.meta.url), 'utf-8'),
+).version
+
 const packageEndpointPlugin = () => ({
   name: 'vite-plugin-package-endpoint',
   configureServer(server: ViteDevServer) {
@@ -84,6 +92,9 @@ const injectScriptFromQueryPlugin = () => {
 export default defineConfig({
   plugins: [react(), packageEndpointPlugin(), injectScriptFromQueryPlugin()],
   base: './',
+  define: {
+    __APP_VERSION__: JSON.stringify(APP_VERSION),
+  },
   server: {
     cors: true,
   },
