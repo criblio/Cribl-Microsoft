@@ -56,9 +56,11 @@ const injectScriptFromQueryPlugin = () => {
       initScriptUrl = initScriptUrl || url.searchParams.get('init');
       const root = process.cwd();
       let appName;
+      let appVersion;
       try {
-        const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf-8')) as { name?: string };
+        const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf-8')) as { name?: string; version?: string };
         appName = pkg.name;
+        appVersion = pkg.version;
       } catch {
         /* ignore missing or invalid package.json */
       }
@@ -76,6 +78,16 @@ const injectScriptFromQueryPlugin = () => {
           children: CONFIG_CHANGED_BRIDGE,
           injectTo: 'head-prepend' as const,
         });
+        // Inject the version fresh on every dev reload so live preview tracks
+        // package.json (bumped each build) rather than the frozen build-time
+        // define. The package.json watcher above reloads the page on change.
+        if (appVersion) {
+          tags.push({
+            tag: 'script',
+            children: `window.__APP_VERSION_RUNTIME__ = ${JSON.stringify(appVersion)};`,
+            injectTo: 'head-prepend' as const,
+          });
+        }
       }
       if (initScriptUrl) {
         tags.push({

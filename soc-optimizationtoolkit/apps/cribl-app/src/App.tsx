@@ -1964,7 +1964,7 @@ function App() {
       mode={phase.mode}
       routes={routes}
       topBar={connectionBar}
-      footerNote={`v${__APP_VERSION__}`}
+      footerNote={`v${window.__APP_VERSION_RUNTIME__ ?? __APP_VERSION__}`}
       initialRouteId="home"
       themeControl={themeControl}
     />
