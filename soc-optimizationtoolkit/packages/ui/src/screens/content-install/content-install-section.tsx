@@ -89,6 +89,10 @@ export function ContentInstallSection({
   const [wbSel, setWbSel] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState<"" | "solution" | "rules" | "workbooks" | "onboard">("");
   const [outcomes, setOutcomes] = useState<ContentInstallOutcome[]>([]);
+  // Which install produced the current outcomes, so feedback renders AT the
+  // button that was clicked rather than in one block at the bottom of the
+  // section (rendering it far away was why the install "did nothing").
+  const [outcomeSource, setOutcomeSource] = useState<"" | "solution" | "rules" | "workbooks">("");
   const [progress, setProgress] = useState("");
   const [onboardError, setOnboardError] = useState("");
   const ruleFileRef = useRef<HTMLInputElement | null>(null);
@@ -166,6 +170,7 @@ export function ContentInstallSection({
     setRuleSel(new Set());
     setWbSel(new Set());
     setOutcomes([]);
+    setOutcomeSource("");
   }, [solutionName]);
 
   const allRules = useMemo(() => [...rules, ...customRules], [rules, customRules]);
@@ -239,6 +244,7 @@ export function ContentInstallSection({
   const doInstallSolution = useCallback(async () => {
     if (catalog === null || !canInstall) return;
     setBusy("solution");
+    setOutcomeSource("solution");
     setOutcomes([]);
     try {
       setProgress(`Installing solution ${catalog.displayName}...`);
@@ -260,6 +266,7 @@ export function ContentInstallSection({
   const doInstallRules = useCallback(async () => {
     if (mintId === undefined || !canInstall) return;
     setBusy("rules");
+    setOutcomeSource("rules");
     setOutcomes([]);
     try {
       const selected = ruleSplit.installable.filter((r) => ruleSel.has(r.name));
@@ -281,6 +288,7 @@ export function ContentInstallSection({
   const doInstallWorkbooks = useCallback(async () => {
     if (mintId === undefined || !canInstall) return;
     setBusy("workbooks");
+    setOutcomeSource("workbooks");
     setOutcomes([]);
     try {
       const selected = wbSplit.installable.filter((w) => wbSel.has(w.displayName));
@@ -353,6 +361,33 @@ export function ContentInstallSection({
 
   const grouped = partitionOutcomes(outcomes);
 
+  // Progress + per-item outcomes for one install control, rendered directly
+  // beneath the button that triggered it (never in a distant block).
+  const renderFeedback = (source: "solution" | "rules" | "workbooks") => (
+    <>
+      {busy === source && progress !== "" && (
+        <p className="panel-desc">{progress}</p>
+      )}
+      {outcomeSource === source && outcomes.length > 0 && (
+        <div className="content-install-outcomes">
+          <p className="panel-desc">
+            <strong>{summarizeInstallOutcomes(outcomes)}</strong>
+          </p>
+          {grouped.failed.map((o, i) => (
+            <p key={`f-${i}`} className="match-warning match-warning-overflow-loss">
+              {o.name}: {o.detail}
+            </p>
+          ))}
+          {grouped.ok.map((o, i) => (
+            <p key={`o-${i}`} className="content-install-ok">
+              {o.name}: {o.detail}
+            </p>
+          ))}
+        </div>
+      )}
+    </>
+  );
+
   return (
     <div className="content-install">
       {!scopeCommitted && (
@@ -395,6 +430,9 @@ export function ContentInstallSection({
               {busy === "onboard" ? "Enabling..." : "Enable Microsoft Sentinel"}
             </button>
           </div>
+          {busy === "onboard" && progress !== "" && (
+            <p className="panel-desc">{progress}</p>
+          )}
           {onboardError !== "" && <pre className="result">{onboardError}</pre>}
         </div>
       )}
@@ -421,18 +459,21 @@ export function ContentInstallSection({
             {catalog.version}.
           </p>
         ) : (
-          <div className="panel-controls">
-            <span className="panel-desc">
-              {catalog.displayName} {catalog.version} - not installed.
-            </span>
-            <button
-              className="run-button"
-              onClick={() => void doInstallSolution()}
-              disabled={!canInstall || busy !== ""}
-            >
-              {busy === "solution" ? "Installing..." : "Install solution"}
-            </button>
-          </div>
+          <>
+            <div className="panel-controls">
+              <span className="panel-desc">
+                {catalog.displayName} {catalog.version} - not installed.
+              </span>
+              <button
+                className="run-button"
+                onClick={() => void doInstallSolution()}
+                disabled={!canInstall || busy !== ""}
+              >
+                {busy === "solution" ? "Installing..." : "Install solution"}
+              </button>
+            </div>
+            {renderFeedback("solution")}
+          </>
         )}
       </section>
 
@@ -467,6 +508,7 @@ export function ContentInstallSection({
         uploadAccept=".yaml,.yml,.json,.kql,.txt"
         onUpload={onUploadRules}
         uploadLabel="Upload custom rules"
+        feedback={renderFeedback("rules")}
       />
 
       {/* WORKBOOKS */}
@@ -488,6 +530,7 @@ export function ContentInstallSection({
         uploadAccept=".json"
         onUpload={onUploadWorkbooks}
         uploadLabel="Upload custom workbooks"
+        feedback={renderFeedback("workbooks")}
       />
 
       {parsers.length > 0 && (
@@ -495,25 +538,6 @@ export function ContentInstallSection({
           {parsers.length} solution parser(s) will be installed automatically
           with any rules or workbooks that depend on them.
         </p>
-      )}
-
-      {progress !== "" && <p className="panel-desc">{progress}</p>}
-      {outcomes.length > 0 && (
-        <div className="content-install-outcomes">
-          <p className="panel-desc">
-            <strong>{summarizeInstallOutcomes(outcomes)}</strong>
-          </p>
-          {grouped.failed.map((o, i) => (
-            <p key={`f-${i}`} className="match-warning match-warning-overflow-loss">
-              {o.name}: {o.detail}
-            </p>
-          ))}
-          {grouped.ok.map((o, i) => (
-            <p key={`o-${i}`} className="content-install-ok">
-              {o.name}: {o.detail}
-            </p>
-          ))}
-        </div>
       )}
     </div>
   );
@@ -536,6 +560,7 @@ function ContentGroup({
   uploadAccept,
   onUpload,
   uploadLabel,
+  feedback,
 }: {
   title: string;
   tip: string;
@@ -552,6 +577,8 @@ function ContentGroup({
   uploadAccept: string;
   onUpload: (files: FileList | null) => void | Promise<void>;
   uploadLabel: string;
+  /** Progress + outcome for this group's install, rendered under its button. */
+  feedback?: React.ReactNode;
 }) {
   const selectedCount = installable.filter(
     (i) => selection.has(i.name) && i.disabled !== true,
@@ -622,6 +649,7 @@ function ContentGroup({
               aria-label={uploadLabel}
             />
           </div>
+          {feedback}
         </>
       )}
     </section>
