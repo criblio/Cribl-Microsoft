@@ -9,6 +9,7 @@ import { describe, expect, it } from "vitest";
 import { FakeAzureManagement } from "../../testing/index";
 import type { ParsedAnalyticRule } from "../../domain/coverage-analysis/index";
 import {
+  fetchSolutionDeploymentStatus,
   installAnalyticRule,
   installWorkbook,
   installSolution,
@@ -208,5 +209,74 @@ describe("installSolution", () => {
     const outcome = await installSolution(azure, WS, "pkg", "Sol");
     expect(outcome.ok).toBe(false);
     expect(outcome.detail).toContain("no deployable template");
+  });
+});
+
+describe("fetchSolutionDeploymentStatus", () => {
+  it("returns a null state when no deployment record exists (404)", async () => {
+    const azure = new FakeAzureManagement();
+    azure.respondWith({ status: 404, body: { error: "not found" } });
+    const status = await fetchSolutionDeploymentStatus(azure, WS, "cloudflare.pkg");
+    expect(status).toEqual({ state: null, error: null });
+  });
+
+  it("reports a Succeeded deployment with no error", async () => {
+    const azure = new FakeAzureManagement();
+    azure.respondWith({
+      status: 200,
+      body: { properties: { provisioningState: "Succeeded" } },
+    });
+    const status = await fetchSolutionDeploymentStatus(azure, WS, "cloudflare.pkg");
+    expect(status).toEqual({ state: "Succeeded", error: null });
+  });
+
+  it("drills into deployment operations for the specific failure", async () => {
+    const azure = new FakeAzureManagement();
+    azure.respondWith(
+      {
+        status: 200,
+        body: {
+          properties: {
+            provisioningState: "Failed",
+            // The deployment-level message is the generic pointer; the real
+            // cause lives in the operations list.
+            error: {
+              code: "DeploymentFailed",
+              message:
+                "At least one resource deployment operation failed. Please " +
+                "list deployment operations for details.",
+            },
+          },
+        },
+      },
+      {
+        status: 200,
+        body: {
+          value: [
+            {
+              properties: {
+                provisioningState: "Failed",
+                targetResource: {
+                  resourceType: "Microsoft.OperationalInsights/workspaces/savedSearches",
+                },
+                statusMessage: {
+                  error: {
+                    code: "BadRequest",
+                    message: "The parser function alias already exists.",
+                  },
+                },
+              },
+            },
+          ],
+        },
+      },
+    );
+    const status = await fetchSolutionDeploymentStatus(azure, WS, "cloudflare.pkg");
+    expect(status.state).toBe("Failed");
+    expect(status.error).toContain("The parser function alias already exists.");
+    expect(status.error).toContain("savedSearches");
+    // GET the deployment, then GET its operations.
+    expect(azure.calls).toHaveLength(2);
+    expect(azure.calls[1].path).toContain("/operations");
   });
 });

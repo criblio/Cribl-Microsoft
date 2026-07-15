@@ -1,6 +1,7 @@
 export type {
   InstalledContentState,
   OnboardOutcome,
+  SolutionDeploymentStatus,
   WorkbookInstallSpec,
   WorkspaceScope,
 } from "./content-install";
@@ -12,6 +13,7 @@ export {
   SENTINEL_ONBOARDING_API_VERSION,
   WORKBOOKS_INSTALL_API_VERSION,
   WORKSPACE_READ_API_VERSION,
+  fetchSolutionDeploymentStatus,
   fetchWorkspaceLocation,
   isNotOnboardedError,
   installAnalyticRule,
