@@ -22,6 +22,7 @@ import {
   availableParsers,
   availableWorkbooks,
   alertRuleResourceFromParsed,
+  enableSentinel,
   fetchWorkspaceLocation,
   findSolutionCatalogEntry,
   installAnalyticRule,
@@ -86,9 +87,10 @@ export function ContentInstallSection({
   // Selections (by display name) and per-group busy/outcome state.
   const [ruleSel, setRuleSel] = useState<Set<string>>(new Set());
   const [wbSel, setWbSel] = useState<Set<string>>(new Set());
-  const [busy, setBusy] = useState<"" | "solution" | "rules" | "workbooks">("");
+  const [busy, setBusy] = useState<"" | "solution" | "rules" | "workbooks" | "onboard">("");
   const [outcomes, setOutcomes] = useState<ContentInstallOutcome[]>([]);
   const [progress, setProgress] = useState("");
+  const [onboardError, setOnboardError] = useState("");
   const ruleFileRef = useRef<HTMLInputElement | null>(null);
   const wbFileRef = useRef<HTMLInputElement | null>(null);
 
@@ -301,6 +303,34 @@ export function ContentInstallSection({
     }
   }, [mintId, canInstall, wbSplit, wbSel, installParsers, ports, scope, load]);
 
+  // Enable Microsoft Sentinel on the workspace (the not-onboarded remedy):
+  // the SecurityInsights provider rejects every content call until Sentinel
+  // is enabled. Reuses the same idempotent enableSentinel the Azure Targeting
+  // screen offers, then reloads.
+  const doEnableSentinel = useCallback(async () => {
+    if (!canInstall) return;
+    setBusy("onboard");
+    setOnboardError("");
+    setProgress("Enabling Microsoft Sentinel on the workspace...");
+    try {
+      await enableSentinel(
+        ports.azure,
+        {
+          subscriptionId: config.subscriptionId,
+          resourceGroup: config.resourceGroup,
+          workspaceName: config.workspaceName,
+        },
+        ports.logger,
+      );
+      await load();
+    } catch (err) {
+      setOnboardError(String(err));
+    } finally {
+      setBusy("");
+      setProgress("");
+    }
+  }, [canInstall, ports, config, load]);
+
   if (content === undefined) {
     return (
       <p className="panel-desc">
@@ -345,6 +375,26 @@ export function ContentInstallSection({
         )}
       </div>
       {loadError !== "" && <pre className="result">{loadError}</pre>}
+      {installed !== null && installed.notOnboarded && (
+        <div className="connection-notice">
+          <p>
+            This workspace is not onboarded to Microsoft Sentinel, so its
+            content cannot be read or installed yet. Enable Sentinel (a
+            one-time, idempotent step) to continue - or do it in Select Azure
+            Resources.
+          </p>
+          <div className="panel-controls">
+            <button
+              className="run-button"
+              onClick={() => void doEnableSentinel()}
+              disabled={!canInstall || busy !== ""}
+            >
+              {busy === "onboard" ? "Enabling..." : "Enable Microsoft Sentinel"}
+            </button>
+          </div>
+          {onboardError !== "" && <pre className="result">{onboardError}</pre>}
+        </div>
+      )}
       {installed !== null &&
         installed.notes.map((note, i) => (
           <p key={i} className="field-hint">{note}</p>
