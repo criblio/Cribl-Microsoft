@@ -103,6 +103,65 @@ export async function findSolutionCatalogEntry(
 }
 
 /**
+ * Normalize a solution name to a deprecation-match key: strip a "(Deprecated)"
+ * / "(Legacy)" marker, then normalize. The Content Hub package displayName
+ * ("Cloudflare (Deprecated)") and the repo folder name ("Cloudflare") both
+ * reduce to the same key, so a repo-listed solution can be matched against the
+ * authoritative Content Hub deprecation flag.
+ */
+export function deprecatedSolutionKey(name: string): string {
+  return normName(name.replace(/\(?\s*(?:deprecated|legacy)\s*\)?/gi, ""));
+}
+
+/**
+ * The AUTHORITATIVE set of deprecated solutions from the workspace's Content
+ * Hub catalog (contentProductPackages) - a package is deprecated when its
+ * properties.isDeprecated is set or its displayName carries a Deprecated /
+ * Legacy marker. Returned as {@link deprecatedSolutionKey} keys so the solution
+ * browser (which lists REPO folder names) can tag rows the repo heuristics
+ * miss - e.g. Cloudflare, deprecated in the Hub but current in the repo.
+ * Best-effort: a failed listing yields an empty set (no tags), never throws.
+ */
+export async function listDeprecatedContentHubSolutions(
+  azure: AzureManagement,
+  ws: WorkspaceScope,
+  logger?: Logger,
+): Promise<Set<string>> {
+  const scope =
+    `/subscriptions/${ws.subscriptionId}/resourceGroups/${ws.resourceGroup}` +
+    `/providers/Microsoft.OperationalInsights/workspaces/${ws.workspaceName}` +
+    "/providers/Microsoft.SecurityInsights/contentProductPackages";
+  const keys = new Set<string>();
+  let packages: unknown[];
+  try {
+    packages = await listAllPages(
+      azure,
+      { method: "GET", path: scope, apiVersion: SECURITY_INSIGHTS_API_VERSION },
+      "list content product packages",
+    );
+  } catch (err) {
+    logger?.warn("content-install: deprecated-solutions listing failed", {
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return keys;
+  }
+  for (const p of packages) {
+    const props = prop(p, "properties");
+    const displayName = str(prop(props, "displayName"));
+    const isDep = prop(props, "isDeprecated");
+    const deprecated =
+      isDep === true ||
+      (typeof isDep === "string" && isDep.toLowerCase() === "true") ||
+      /\b(?:deprecated|legacy)\b/i.test(displayName);
+    if (deprecated && displayName !== "") keys.add(deprecatedSolutionKey(displayName));
+  }
+  logger?.info("content-install: content hub deprecated solutions", {
+    count: keys.size,
+  });
+  return keys;
+}
+
+/**
  * Read a solution's shipped analytics rules from the Sentinel repo (first
  * rule-directory variant that yields YAMLs), parsed for install. Capped.
  */

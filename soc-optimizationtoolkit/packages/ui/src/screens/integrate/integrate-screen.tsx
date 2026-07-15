@@ -996,7 +996,12 @@ export function IntegrateScreen({
 
   // ---- Section bodies (built sections only) -----------------------------
 
-  const solutionBody = <SolutionBrowser onSelect={handleSolutionChange} />;
+  const solutionBody = (
+    <SolutionBrowser
+      onSelect={handleSolutionChange}
+      scopeCommitted={scopeCommitted}
+    />
+  );
 
   const sampleDataBody = (
     <>

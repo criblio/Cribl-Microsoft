@@ -29,5 +29,7 @@ export {
   availableAnalyticRules,
   availableParsers,
   availableWorkbooks,
+  deprecatedSolutionKey,
   findSolutionCatalogEntry,
+  listDeprecatedContentHubSolutions,
 } from "./available-content";
