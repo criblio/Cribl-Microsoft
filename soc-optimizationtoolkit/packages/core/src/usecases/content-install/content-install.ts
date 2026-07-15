@@ -155,7 +155,13 @@ export interface InstalledContentState {
   notOnboarded: boolean;
 }
 
-/** Detect the ARM "not onboarded to Microsoft Sentinel" rejection. */
+/**
+ * Detect the ARM "not onboarded to Microsoft Sentinel" rejection across its
+ * phrasings: the SecurityInsights provider returns a 400 whose (sometimes
+ * double-encoded) body says the workspace is not onboarded and points at the
+ * OnboardingStates API / quickstart. Match any of those signals so a wording
+ * change or nested-JSON escaping never drops it back to a raw note.
+ */
 export function isNotOnboardedError(body: unknown): boolean {
   let text: string;
   try {
@@ -163,7 +169,12 @@ export function isNotOnboardedError(body: unknown): boolean {
   } catch {
     return false;
   }
-  return /not onboarded to Microsoft Sentinel/i.test(text);
+  return (
+    /not onboarded to Microsoft Sentinel/i.test(text) ||
+    /onboard(?:ed|ing)?[^.]{0,40}(?:to )?(?:Microsoft )?Sentinel/i.test(text) ||
+    /sentinel-onboarding-states/i.test(text) ||
+    /OnboardingStates/i.test(text)
+  );
 }
 
 /**
