@@ -34,7 +34,11 @@
  */
 
 import { KQL_BUILTINS } from "./kql-builtins";
-import type { ContentItem, ParsedAnalyticRule } from "./models";
+import type {
+  ContentItem,
+  ParsedAnalyticRule,
+  ParsedEntityMapping,
+} from "./models";
 
 /**
  * Parse ONE AnalyticRule YAML document with the pinned regex extraction.
@@ -93,7 +97,104 @@ export function parseAnalyticRuleYaml(
     if (cm[1] && !KQL_BUILTINS.has(cm[1].toLowerCase())) entityFields.push(cm[1]);
   }
 
-  return { id, name, severity, tactics, dataTypes, query, entityFields, fileName };
+  // --- INSTALL fields (content-enablement, 2026-07-14): additive optional
+  // extraction with the same tolerant single-purpose regexes; a miss leaves
+  // the field absent and the coverage path is untouched. ---
+  const single = (key: string): string | undefined => {
+    const value = content.match(new RegExp(`^${key}:\\s*(.+)$`, "m"))?.[1]?.trim();
+    if (value === undefined || value === "" || value === "|" || value === ">") {
+      return undefined;
+    }
+    return value.replace(/^['"]|['"]$/g, "");
+  };
+  const block = (key: string): string | undefined => {
+    const m = content.match(
+      new RegExp(`^${key}:\\s*[|>]-?\\s*\\n([\\s\\S]*?)(?=^[a-zA-Z]|(?![\\s\\S]))`, "m"),
+    );
+    const text = m?.[1]
+      ?.split("\n")
+      .map((line) => line.replace(/^ {2,4}/, ""))
+      .join("\n")
+      .trim();
+    return text === undefined || text === "" ? undefined : text;
+  };
+  const list = (key: string): string[] => {
+    const out: string[] = [];
+    const m = content.match(new RegExp(`^${key}:\\s*\\n((?:\\s+-\\s+.+\\n?)*)`, "m"));
+    if (m) {
+      for (const line of m[1].split("\n")) {
+        const item = line.match(/^\s+-\s+(.+)/)?.[1]?.trim();
+        if (item) out.push(item);
+      }
+    }
+    return out;
+  };
+
+  const kind = single("kind");
+  const description = block("description") ?? single("description");
+  const queryFrequency = single("queryFrequency");
+  const queryPeriod = single("queryPeriod");
+  const triggerOperator = single("triggerOperator");
+  const thresholdRaw = single("triggerThreshold");
+  const triggerThreshold =
+    thresholdRaw !== undefined && Number.isFinite(Number(thresholdRaw))
+      ? Number(thresholdRaw)
+      : undefined;
+  const techniques = list("relevantTechniques");
+  const version = single("version");
+  const entityMappings = parseEntityMappings(content);
+
+  return {
+    id,
+    name,
+    severity,
+    tactics,
+    dataTypes,
+    query,
+    entityFields,
+    fileName,
+    ...(kind !== undefined ? { kind } : {}),
+    ...(description !== undefined ? { description } : {}),
+    ...(queryFrequency !== undefined ? { queryFrequency } : {}),
+    ...(queryPeriod !== undefined ? { queryPeriod } : {}),
+    ...(triggerOperator !== undefined ? { triggerOperator } : {}),
+    ...(triggerThreshold !== undefined ? { triggerThreshold } : {}),
+    ...(techniques.length > 0 ? { techniques } : {}),
+    ...(version !== undefined ? { version } : {}),
+    ...(entityMappings.length > 0 ? { entityMappings } : {}),
+  };
+}
+
+/**
+ * Tolerant structured parse of the `entityMappings:` block: each
+ * `- entityType:` entry with its identifier/columnName pairs (paired in
+ * document order). Anything surprising yields [] - the rule still installs,
+ * just without entity mappings.
+ */
+function parseEntityMappings(content: string): ParsedEntityMapping[] {
+  const blockMatch = content.match(
+    /^entityMappings:\s*\n([\s\S]*?)(?=^[a-zA-Z]|(?![\s\S]))/m,
+  );
+  if (!blockMatch) return [];
+  const out: ParsedEntityMapping[] = [];
+  const entries = blockMatch[1].split(/(?=^\s*-\s+entityType:)/m);
+  for (const entry of entries) {
+    const entityType = entry.match(/entityType:\s*(.+)/)?.[1]?.trim();
+    if (!entityType) continue;
+    const fieldMappings: Array<{ identifier: string; columnName: string }> = [];
+    const identifiers = [...entry.matchAll(/identifier:\s*(\w+)/g)];
+    const columns = [...entry.matchAll(/columnName:\s*(\w+)/g)];
+    for (let i = 0; i < Math.min(identifiers.length, columns.length); i++) {
+      fieldMappings.push({
+        identifier: identifiers[i][1],
+        columnName: columns[i][1],
+      });
+    }
+    if (fieldMappings.length > 0) {
+      out.push({ entityType, fieldMappings });
+    }
+  }
+  return out;
 }
 
 /**

@@ -22,6 +22,7 @@ export type {
   CoverageSummary,
   CoverageReport,
   ParsedAnalyticRule,
+  ParsedEntityMapping,
   WorkbookQueryExtraction,
 } from "./models";
 
