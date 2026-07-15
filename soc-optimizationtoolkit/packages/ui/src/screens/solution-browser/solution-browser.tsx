@@ -25,13 +25,15 @@ import {
   classifySolutionIngestion,
   connectorsCacheKey,
   decodeConnector,
+  deprecatedSolutionKey,
   ingestionTierLabel,
   ingestionTierReason,
+  listDeprecatedContentHubSolutions,
   lookupSolutionIngestion,
   solutionIndexCacheKey,
   toVendorLogTypes,
 } from "@soc/core";
-import type { IngestionClass, SolutionRef } from "@soc/core";
+import type { IngestionClass, SolutionRef, WorkspaceScope } from "@soc/core";
 import { usePorts } from "../../ports-context";
 import {
   buildSolutionDeepLink,
@@ -49,6 +51,13 @@ export interface SolutionBrowserProps {
    * readiness pill. Called on every selection change.
    */
   onSelect?: (solution: SolutionRef | null) => void;
+  /**
+   * When true (an Azure target scope is committed), the browser cross-
+   * references the Content Hub catalog for AUTHORITATIVE deprecation - the
+   * repo folder heuristics miss solutions the Hub deprecated (e.g. Cloudflare,
+   * current in the repo but deprecated as a Content Hub package).
+   */
+  scopeCommitted?: boolean;
 }
 
 // The cap on how many connector files a selected solution decodes for the
@@ -75,12 +84,15 @@ type DetailState =
   | { phase: "loaded"; detail: SolutionDetail }
   | { phase: "error"; message: string };
 
-export function SolutionBrowser({ onSelect }: SolutionBrowserProps) {
-  const { ports } = usePorts();
+export function SolutionBrowser({ onSelect, scopeCommitted }: SolutionBrowserProps) {
+  const { ports, config } = usePorts();
   const content = ports.content;
   const cache = ports.contentCache;
 
   const [solutions, setSolutions] = useState<SolutionRef[] | null>(null);
+  // Authoritative Content Hub deprecation keys (populated when a scope is
+  // committed); merged into the repo deprecation signal below.
+  const [hubDeprecated, setHubDeprecated] = useState<Set<string>>(new Set());
   const [commitSha, setCommitSha] = useState<string | null>(null);
   const [loadError, setLoadError] = useState("");
   const [query, setQuery] = useState("");
@@ -132,6 +144,55 @@ export function SolutionBrowser({ onSelect }: SolutionBrowserProps) {
   useEffect(() => {
     void loadIndex();
   }, [loadIndex]);
+
+  // Cross-reference the Content Hub catalog for authoritative deprecation once
+  // a scope is committed (the repo folder heuristics miss Hub-deprecated
+  // solutions like Cloudflare). Best-effort: a failure leaves the set empty.
+  useEffect(() => {
+    if (
+      scopeCommitted !== true ||
+      config.subscriptionId === "" ||
+      config.resourceGroup === "" ||
+      config.workspaceName === ""
+    ) {
+      setHubDeprecated(new Set());
+      return;
+    }
+    let cancelled = false;
+    const scope: WorkspaceScope = {
+      subscriptionId: config.subscriptionId,
+      resourceGroup: config.resourceGroup,
+      workspaceName: config.workspaceName,
+      location: "",
+    };
+    void listDeprecatedContentHubSolutions(ports.azure, scope, ports.logger).then(
+      (set) => {
+        if (!cancelled) setHubDeprecated(set);
+      },
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    scopeCommitted,
+    config.subscriptionId,
+    config.resourceGroup,
+    config.workspaceName,
+    ports.azure,
+    ports.logger,
+  ]);
+
+  // Repo index + the authoritative Content Hub deprecation, merged: a solution
+  // the Hub flags is marked deprecated even when the repo folder is not.
+  const mergedSolutions = useMemo<SolutionRef[] | null>(() => {
+    if (solutions === null) return null;
+    if (hubDeprecated.size === 0) return solutions;
+    return solutions.map((s) =>
+      s.deprecated !== true && hubDeprecated.has(deprecatedSolutionKey(s.name))
+        ? { ...s, deprecated: true, deprecationReason: "Deprecated in the Microsoft Content Hub" }
+        : s,
+    );
+  }, [solutions, hubDeprecated]);
 
   // Fetch (and cache) one solution's connector detail on demand.
   const loadDetail = useCallback(
@@ -240,19 +301,19 @@ export function SolutionBrowser({ onSelect }: SolutionBrowserProps) {
   }, [solutions, deepLinkName, selectedName, select]);
 
   const counts = useMemo(
-    () => (solutions === null ? null : solutionCounts(solutions)),
-    [solutions],
+    () => (mergedSolutions === null ? null : solutionCounts(mergedSolutions)),
+    [mergedSolutions],
   );
   const visible = useMemo(
     () =>
-      solutions === null
+      mergedSolutions === null
         ? []
-        : filterSolutions(solutions, { query, hideDeprecated }),
-    [solutions, query, hideDeprecated],
+        : filterSolutions(mergedSolutions, { query, hideDeprecated }),
+    [mergedSolutions, query, hideDeprecated],
   );
   const selected = useMemo(
-    () => resolveSelectedSolution(solutions ?? [], selectedName),
-    [solutions, selectedName],
+    () => resolveSelectedSolution(mergedSolutions ?? [], selectedName),
+    [mergedSolutions, selectedName],
   );
 
   if (content === undefined) {
