@@ -496,7 +496,13 @@ export async function installSolution(
       status: res.status,
     });
     return is2xx(res.status)
-      ? { name: displayName, ok: true, detail: "solution deployment accepted" }
+      ? {
+          name: displayName,
+          ok: true,
+          detail:
+            "solution deployment started - it runs asynchronously and can take " +
+            "a minute; reload to see it as installed",
+        }
       : { name: displayName, ok: false, detail: failDetail(res) };
   } catch (err) {
     return { name: displayName, ok: false, detail: errText(err) };

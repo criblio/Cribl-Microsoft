@@ -112,11 +112,14 @@ export function ContentInstallSection({
     config.workspaceName !== "";
 
   // Load the catalog entry, installed state, and available content on demand.
-  const load = useCallback(async () => {
+  // keepOutcomes preserves the just-set install outcomes when an install
+  // handler refreshes state in its finally (clearing them there was the
+  // "install did nothing" bug: the outcome flashed then the reload wiped it).
+  const load = useCallback(async (keepOutcomes = false) => {
     if (content === undefined || solutionName.trim() === "") return;
     setLoading(true);
     setLoadError("");
-    setOutcomes([]);
+    if (!keepOutcomes) setOutcomes([]);
     try {
       const entry = scopeCommitted
         ? await findSolutionCatalogEntry(ports.azure, scope, solutionName, ports.logger)
@@ -250,7 +253,7 @@ export function ContentInstallSection({
     } finally {
       setBusy("");
       setProgress("");
-      void load();
+      void load(true); // keep the install outcome visible through the refresh
     }
   }, [catalog, canInstall, ports, scope, load]);
 
@@ -271,7 +274,7 @@ export function ContentInstallSection({
     } finally {
       setBusy("");
       setProgress("");
-      void load();
+      void load(true); // keep the install outcome visible through the refresh
     }
   }, [mintId, canInstall, ruleSplit, ruleSel, installParsers, ports, scope, load]);
 
@@ -299,7 +302,7 @@ export function ContentInstallSection({
     } finally {
       setBusy("");
       setProgress("");
-      void load();
+      void load(true); // keep the install outcome visible through the refresh
     }
   }, [mintId, canInstall, wbSplit, wbSel, installParsers, ports, scope, load]);
 
