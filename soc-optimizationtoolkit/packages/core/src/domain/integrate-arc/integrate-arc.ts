@@ -69,6 +69,7 @@ export type IntegrateSectionId =
   | "gap-analysis"
   | "rule-coverage"
   | "workbook-coverage"
+  | "enable-content"
   | "deploy";
 
 /**
@@ -203,8 +204,26 @@ export const INTEGRATE_SECTIONS: readonly IntegrateSection[] = [
     built: true,
   },
   {
-    id: "azure-resources",
+    id: "enable-content",
     number: 6,
+    title: "Enable Sentinel Content",
+    infoTip:
+      "Enable the solution's content in your workspace: install the Content " +
+      "Hub solution itself, its analytics rules, and its workbooks - choosing " +
+      "which of each you want. The app checks what is already installed so you " +
+      "only see what is installable, and upload your own custom analytics " +
+      "rules or workbooks to install alongside. Parsers the rules and " +
+      "workbooks depend on are installed automatically. Informational and " +
+      "independent of the Cribl deploy - it never blocks a deploy.",
+    requires: "azure",
+    // INFORMATIONAL, same contract as the coverage sections: unconditionally
+    // complete, absent from SectionInputs, never gates a deploy. Content
+    // enablement is a Sentinel-side install parallel to the Cribl pipeline.
+    built: true,
+  },
+  {
+    id: "azure-resources",
+    number: 7,
     title: "Select Azure Resources",
     infoTip:
       "Choose the subscription, Log Analytics workspace, resource group, and " +
@@ -215,7 +234,7 @@ export const INTEGRATE_SECTIONS: readonly IntegrateSection[] = [
   },
   {
     id: "cribl-config",
-    number: 7,
+    number: 8,
     title: "Configure Cribl",
     infoTip:
       "Select the Cribl worker group(s) that will run the pipelines and name " +
@@ -226,7 +245,7 @@ export const INTEGRATE_SECTIONS: readonly IntegrateSection[] = [
   },
   {
     id: "deploy",
-    number: 8,
+    number: 9,
     title: "Deploy",
     infoTip:
       "Review the readiness pills - Solution, Samples, Mappings, Workspace, " +
@@ -353,6 +372,8 @@ const COMING_SOON_REASONS: Readonly<Record<IntegrateSectionId, string>> = {
   "rule-coverage": "",
   // workbook-coverage is BUILT; it is never coming-soon.
   "workbook-coverage": "",
+  // enable-content is BUILT; it is never coming-soon.
+  "enable-content": "",
   deploy: "",
 };
 
@@ -392,6 +413,11 @@ function sectionComplete(
     case "workbook-coverage":
       // INFORMATIONAL, same contract as rule-coverage: unconditionally complete,
       // no SectionInputs signal, never gates a deploy.
+      return true;
+    case "enable-content":
+      // INFORMATIONAL, same contract as the coverage sections: content
+      // enablement is a Sentinel-side install parallel to the Cribl deploy,
+      // unconditionally complete, no SectionInputs signal, never gates a deploy.
       return true;
     case "deploy":
       return inputs.deployCompleted;

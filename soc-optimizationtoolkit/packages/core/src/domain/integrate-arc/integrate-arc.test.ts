@@ -87,6 +87,7 @@ const BUILT_IDS: readonly IntegrateSectionId[] = [
   "gap-analysis",
   "rule-coverage",
   "workbook-coverage",
+  "enable-content",
   "deploy",
 ];
 // Unit 23 shipped rule-coverage; every section is built now. Kept as a named
@@ -102,9 +103,9 @@ function statusOf(id: IntegrateSectionId, i: SectionInputs): SectionStatus {
 // ---------------------------------------------------------------------------
 
 describe("INTEGRATE_SECTIONS metadata", () => {
-  it("has eight sections numbered 1..8 in page order", () => {
+  it("has nine sections numbered 1..9 in page order", () => {
     expect(INTEGRATE_SECTIONS.map((s) => s.number)).toEqual([
-      1, 2, 3, 4, 5, 6, 7, 8,
+      1, 2, 3, 4, 5, 6, 7, 8, 9,
     ]);
     expect(INTEGRATE_SECTIONS.map((s) => s.id)).toEqual([
       "solution",
@@ -114,6 +115,9 @@ describe("INTEGRATE_SECTIONS metadata", () => {
       "gap-analysis",
       "rule-coverage",
       "workbook-coverage",
+      // Enable Sentinel Content follows the coverage arc (you review what the
+      // rules/workbooks need, then install them); Sentinel-side + informational.
+      "enable-content",
       // Azure Resources and Cribl Config FOLLOW the analysis arc (user
       // direction 2026-07-13): detected tables prefill the deploy and the
       // pack is built from the approved mappings.
@@ -452,10 +456,10 @@ describe("read-ahead and single-current invariants", () => {
     }
   });
 
-  it("deriveSectionStatuses preserves page order and covers all eight", () => {
+  it("deriveSectionStatuses preserves page order and covers all nine", () => {
     const resolved = deriveSectionStatuses(inputs());
     expect(resolved.map((r) => r.section.number)).toEqual([
-      1, 2, 3, 4, 5, 6, 7, 8,
+      1, 2, 3, 4, 5, 6, 7, 8, 9,
     ]);
   });
 });

@@ -2486,6 +2486,46 @@ button.journey-step-main:hover .journey-step-label {
   background: var(--warn-bg);
 }
 
+/* Enable Sentinel Content (content-install section). */
+.content-install-group {
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+  margin-top: 12px;
+}
+.content-install-title {
+  font-size: 14px;
+  font-weight: 700;
+  margin: 0 0 8px;
+}
+.content-install-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 260px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 10px;
+  margin-bottom: 8px;
+}
+.content-install-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+.content-install-row .field-hint {
+  margin-left: auto;
+}
+.content-install-installed,
+.content-install-ok {
+  font-size: 13px;
+  color: var(--ok-strong);
+}
+.content-install-outcomes {
+  margin-top: 10px;
+}
+
 .mapping-review-stale {
   font-size: 13px;
   line-height: 20px;

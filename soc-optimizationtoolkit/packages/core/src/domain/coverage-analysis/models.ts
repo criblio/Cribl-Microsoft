@@ -186,6 +186,32 @@ export interface ParsedAnalyticRule {
   /** Entity-mapping `columnName:` fields, KQL-builtin names filtered out. */
   entityFields: string[];
   fileName: string;
+
+  // --- INSTALL fields (content-enablement, 2026-07-14) - all OPTIONAL and
+  // additive so the coverage path's pinned extraction is unchanged. ---
+  /** Rule kind (Scheduled | NRT | ...). Absent = Scheduled by convention. */
+  kind?: string;
+  /** Description text (block or single-line form). */
+  description?: string;
+  /** Raw YAML duration (e.g. "1h", "PT1H") - converted at install time. */
+  queryFrequency?: string;
+  /** Raw YAML duration - converted at install time. */
+  queryPeriod?: string;
+  /** Raw YAML operator (gt/lt/eq/ne or the ARM spelling). */
+  triggerOperator?: string;
+  triggerThreshold?: number;
+  /** relevantTechniques (e.g. T1078). */
+  techniques?: string[];
+  /** Rule content version (e.g. 1.0.3). */
+  version?: string;
+  /** Structured entity mappings (tolerant parse; absent when unparseable). */
+  entityMappings?: ParsedEntityMapping[];
+}
+
+/** One structured entity mapping parsed from the rule YAML. */
+export interface ParsedEntityMapping {
+  entityType: string;
+  fieldMappings: Array<{ identifier: string; columnName: string }>;
 }
 
 // ---------------------------------------------------------------------------

@@ -462,6 +462,25 @@ export { ArchitectureScreen } from "./screens/architecture/architecture-screen";
 export { MappingCatalogScreen } from "./screens/mapping-catalog/mapping-catalog-screen";
 export { EventHubDiscoveryScreen } from "./screens/eventhub-discovery/eventhub-discovery-screen";
 
+// Enable Sentinel Content (user feature 2026-07-14): install the solution,
+// its analytics rules, and its workbooks (choosing which), with installed-
+// state detection, custom uploads, auto parser dependency, and per-item
+// install outcomes. Rendered as Integrate section 6.
+export { ContentInstallSection } from "./screens/content-install/content-install-section";
+export type { ContentInstallSectionProps } from "./screens/content-install/content-install-section";
+export {
+  partitionOutcomes,
+  selectAll,
+  selectionLabel,
+  splitRules,
+  splitWorkbooks,
+  toggleName,
+} from "./screens/content-install/content-install-state";
+export type {
+  SelectableRule,
+  SelectableWorkbook,
+} from "./screens/content-install/content-install-state";
+
 // SIEM Migration (porting-plan Unit 26, ENG-40 + GUI-22): the rebuilt
 // migration analyzer - upload a Splunk/QRadar export, map its data sources
 // to Sentinel solutions, enrich with the solutions' analytics rules, pivot

@@ -110,6 +110,7 @@ import { derivePipelinePreview } from "../pipeline-preview/pipeline-preview-stat
 import type { EnrichmentField } from "../pipeline-preview/pipeline-preview-state";
 import { SolutionBrowser } from "../solution-browser/solution-browser";
 import { RuleCoverageSection } from "../rule-coverage/rule-coverage-section";
+import { ContentInstallSection } from "../content-install/content-install-section";
 import {
   SearchableMultiSelect,
   SearchableSelect,
@@ -1085,6 +1086,17 @@ export function IntegrateScreen({
     />
   );
 
+  // Enable Sentinel Content (section 6): install the solution, its analytics
+  // rules, and its workbooks - Sentinel-side, informational, never gates the
+  // deploy. Keyed by solution so switching solutions resets its state.
+  const enableContentBody = (
+    <ContentInstallSection
+      key={`content-${solution?.name ?? "none"}`}
+      solutionName={solution?.name ?? ""}
+      scopeCommitted={scopeCommitted}
+    />
+  );
+
   const azureResourcesBody = (
     <>
       <AzureTargetingScreen offline={offline} onCommitScope={onCommitScope} />
@@ -1488,6 +1500,8 @@ export function IntegrateScreen({
         return ruleCoverageBody;
       case "workbook-coverage":
         return workbookCoverageBody;
+      case "enable-content":
+        return enableContentBody;
       case "deploy":
         return deployBody;
       default:
