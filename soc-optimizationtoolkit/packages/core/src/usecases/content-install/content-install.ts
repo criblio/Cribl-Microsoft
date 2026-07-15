@@ -473,12 +473,9 @@ export async function installSolution(
         detail: "the product package returned no deployable template (packagedContent)",
       };
     }
-    const deploymentName = `sentinel-solution-${packageId}`.slice(0, 64);
     const res = await azure.request({
       method: "PUT",
-      path:
-        `/subscriptions/${ws.subscriptionId}/resourceGroups/${ws.resourceGroup}` +
-        `/providers/Microsoft.Resources/deployments/${deploymentName}`,
+      path: solutionDeploymentPath(ws, packageId),
       apiVersion: DEPLOYMENTS_API_VERSION,
       body: {
         properties: {
@@ -506,5 +503,125 @@ export async function installSolution(
       : { name: displayName, ok: false, detail: failDetail(res) };
   } catch (err) {
     return { name: displayName, ok: false, detail: errText(err) };
+  }
+}
+
+/** The deployment resource name for a solution install (bounded to 64 chars). */
+function solutionDeploymentName(packageId: string): string {
+  return `sentinel-solution-${packageId}`.slice(0, 64);
+}
+
+/** Full ARM id of the Microsoft.Resources/deployments used for a solution. */
+function solutionDeploymentPath(ws: WorkspaceScope, packageId: string): string {
+  return (
+    `/subscriptions/${ws.subscriptionId}/resourceGroups/${ws.resourceGroup}` +
+    `/providers/Microsoft.Resources/deployments/${solutionDeploymentName(packageId)}`
+  );
+}
+
+/** Flatten an ARM error object ({code, message, details[]}) to one line. */
+function renderArmError(err: unknown): string {
+  const parts: string[] = [];
+  const code = prop(err, "code");
+  const message = prop(err, "message");
+  if (typeof code === "string" && code !== "") parts.push(code);
+  if (typeof message === "string" && message !== "") parts.push(message);
+  const details = prop(err, "details");
+  if (Array.isArray(details)) {
+    for (const d of details) {
+      const dm = prop(d, "message");
+      if (typeof dm === "string" && dm !== "") parts.push(dm);
+    }
+  }
+  return parts.join(" - ");
+}
+
+/** The terminal (or in-flight) state of a solution's install deployment. */
+export interface SolutionDeploymentStatus {
+  /**
+   * The deployment's provisioningState (Succeeded | Failed | Canceled |
+   * Running | Accepted | ...); null when NO deployment record exists (the
+   * solution was never install-attempted, or ARM aged the record out).
+   */
+  state: string | null;
+  /** Specific failure detail when the deployment Failed/Canceled; else null. */
+  error: string | null;
+}
+
+/**
+ * Read the result of a solution install's async ARM deployment. The install
+ * PUT only returns "Accepted" - the deployment then provisions in the
+ * background and CAN FAIL after acceptance (a failed deployment looks
+ * identical to a pending one at PUT time, which is why an install can report
+ * "started" yet never install). This reads the deployment's terminal state
+ * and, when it failed, drills into the deployment OPERATIONS to surface the
+ * specific resource error (the deployment-level message is usually the
+ * generic "list deployment operations for details"). Never throws.
+ */
+export async function fetchSolutionDeploymentStatus(
+  azure: AzureManagement,
+  ws: WorkspaceScope,
+  packageId: string,
+  logger?: Logger,
+): Promise<SolutionDeploymentStatus> {
+  try {
+    const res = await azure.request({
+      method: "GET",
+      path: solutionDeploymentPath(ws, packageId),
+      apiVersion: DEPLOYMENTS_API_VERSION,
+    });
+    if (res.status === 404) return { state: null, error: null };
+    if (!is2xx(res.status)) return { state: null, error: failDetail(res) };
+    const props = prop(res.body, "properties");
+    const stateRaw = prop(props, "provisioningState");
+    const state = typeof stateRaw === "string" ? stateRaw : null;
+    if (state !== null && /^(failed|canceled)$/i.test(state)) {
+      let error = renderArmError(prop(props, "error"));
+      if (error === "" || /list deployment operations/i.test(error)) {
+        const opError = await fetchFailedOperationError(azure, ws, packageId);
+        if (opError !== "") error = opError;
+      }
+      logger?.info("content-install: solution deployment failed", { packageId, state });
+      return {
+        state,
+        error: error !== "" ? error : "deployment failed (no error detail returned)",
+      };
+    }
+    return { state, error: null };
+  } catch (err) {
+    return { state: null, error: errText(err) };
+  }
+}
+
+/** Pull the first failed deployment operations' resource errors (best-effort). */
+async function fetchFailedOperationError(
+  azure: AzureManagement,
+  ws: WorkspaceScope,
+  packageId: string,
+): Promise<string> {
+  try {
+    const res = await azure.request({
+      method: "GET",
+      path: `${solutionDeploymentPath(ws, packageId)}/operations`,
+      apiVersion: DEPLOYMENTS_API_VERSION,
+    });
+    if (!is2xx(res.status)) return "";
+    const value = prop(res.body, "value");
+    if (!Array.isArray(value)) return "";
+    const messages: string[] = [];
+    for (const op of value) {
+      const opProps = prop(op, "properties");
+      const opState = prop(opProps, "provisioningState");
+      if (typeof opState !== "string" || !/^failed$/i.test(opState)) continue;
+      const statusMessage = prop(opProps, "statusMessage");
+      const errObj = prop(statusMessage, "error") ?? statusMessage;
+      const rendered = renderArmError(errObj);
+      const resType = prop(prop(opProps, "targetResource"), "resourceType");
+      const label = typeof resType === "string" && resType !== "" ? `${resType}: ` : "";
+      if (rendered !== "") messages.push(`${label}${rendered}`);
+    }
+    return messages.slice(0, 3).join(" | ");
+  } catch {
+    return "";
   }
 }
