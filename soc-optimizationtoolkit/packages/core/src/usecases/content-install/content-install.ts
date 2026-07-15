@@ -478,6 +478,10 @@ export async function installSolution(
     const contentKind = str(prop(props, "contentKind")) || "Solution";
     const version = str(prop(props, "version"));
     const name = str(prop(props, "displayName")) || displayName;
+    // Required by the live 2025-09-01 install API (the REST reference lists it
+    // as optional, but the RP rejects the PUT without it). Sourced from the
+    // product package; default to the current Content Hub schema version.
+    const contentSchemaVersion = str(prop(props, "contentSchemaVersion")) || "3.0.0";
     if (contentId === "" || contentProductId === "" || version === "") {
       return {
         name: displayName,
@@ -496,6 +500,7 @@ export async function installSolution(
           contentId,
           contentProductId,
           contentKind,
+          contentSchemaVersion,
           displayName: name,
           version,
         },

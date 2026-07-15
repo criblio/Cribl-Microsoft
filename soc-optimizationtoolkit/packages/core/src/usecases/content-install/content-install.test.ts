@@ -196,6 +196,7 @@ describe("installSolution", () => {
             contentId: "cloudflare.pkg",
             contentProductId: "cloudflare.pkg-sl-abc123",
             contentKind: "Solution",
+            contentSchemaVersion: "3.0.0",
             displayName: "Cloudflare (Deprecated)",
             version: "2.0.3",
           },
@@ -218,9 +219,31 @@ describe("installSolution", () => {
       contentId: "cloudflare.pkg",
       contentProductId: "cloudflare.pkg-sl-abc123",
       contentKind: "Solution",
+      contentSchemaVersion: "3.0.0",
       displayName: "Cloudflare (Deprecated)",
       version: "2.0.3",
     });
+  });
+
+  it("defaults contentSchemaVersion when the product package omits it", async () => {
+    const azure = new FakeAzureManagement();
+    azure.respondWith(
+      {
+        status: 200,
+        body: {
+          properties: {
+            contentId: "c",
+            contentProductId: "c-sl",
+            contentKind: "Solution",
+            version: "1.0.0",
+          },
+        },
+      },
+      { status: 200, body: {} },
+    );
+    await installSolution(azure, WS, "c", "Sol");
+    const body = azure.calls[1].body as { properties: { contentSchemaVersion: string } };
+    expect(body.properties.contentSchemaVersion).toBe("3.0.0");
   });
 
   it("reports the install PUT failure verbatim, never throwing", async () => {
