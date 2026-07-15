@@ -23,7 +23,6 @@ import {
   availableWorkbooks,
   alertRuleResourceFromParsed,
   onboardSentinelWorkspace,
-  fetchSolutionDeploymentStatus,
   fetchWorkspaceLocation,
   findSolutionCatalogEntry,
   installAnalyticRule,
@@ -43,7 +42,6 @@ import type {
   ParsedAnalyticRule,
   ParserResource,
   SolutionCatalogEntry,
-  SolutionDeploymentStatus,
   WorkspaceScope,
 } from "@soc/core";
 import { usePorts } from "../../ports-context";
@@ -77,9 +75,6 @@ export function ContentInstallSection({
   const [loadError, setLoadError] = useState("");
   const [catalog, setCatalog] = useState<SolutionCatalogEntry | null>(null);
   const [installed, setInstalled] = useState<InstalledContentState | null>(null);
-  // Result of the LAST solution-install deployment (async ARM): a Failed
-  // state here explains why "install started" never became "installed".
-  const [deployStatus, setDeployStatus] = useState<SolutionDeploymentStatus | null>(null);
   const [rules, setRules] = useState<ParsedAnalyticRule[]>([]);
   const [workbooks, setWorkbooks] = useState<AvailableWorkbook[]>([]);
   const [parsers, setParsers] = useState<ParserResource[]>([]);
@@ -138,13 +133,6 @@ export function ContentInstallSection({
         ? await installedContentState(ports.azure, scope, entry?.contentId, ports.logger)
         : null;
       setInstalled(state);
-      // When the solution is NOT installed, read the last install deployment's
-      // terminal state so a background failure is surfaced (not silent).
-      const deploy =
-        scopeCommitted && entry !== null && entry.installedVersion === null
-          ? await fetchSolutionDeploymentStatus(ports.azure, scope, entry.packageId, ports.logger)
-          : null;
-      setDeployStatus(deploy);
       const [repoRules, repoWorkbooks, repoParsers] = await Promise.all([
         availableAnalyticRules(content, solutionName),
         availableWorkbooks(content, solutionName),
@@ -174,7 +162,6 @@ export function ContentInstallSection({
   useEffect(() => {
     setCatalog(null);
     setInstalled(null);
-    setDeployStatus(null);
     setRules([]);
     setWorkbooks([]);
     setParsers([]);
@@ -486,24 +473,6 @@ export function ContentInstallSection({
               </button>
             </div>
             {renderFeedback("solution")}
-            {busy !== "solution" &&
-              deployStatus !== null &&
-              deployStatus.state !== null &&
-              /^(failed|canceled)$/i.test(deployStatus.state) && (
-                <p className="match-warning match-warning-overflow-loss">
-                  The last install deployment {deployStatus.state.toLowerCase()}:{" "}
-                  {deployStatus.error ?? "no error detail returned"}
-                </p>
-              )}
-            {busy !== "solution" &&
-              deployStatus !== null &&
-              deployStatus.state !== null &&
-              /^(running|accepted)$/i.test(deployStatus.state) && (
-                <p className="field-hint">
-                  A previous install deployment is still {deployStatus.state.toLowerCase()};
-                  reload in a moment to see the result.
-                </p>
-              )}
           </>
         )}
       </section>

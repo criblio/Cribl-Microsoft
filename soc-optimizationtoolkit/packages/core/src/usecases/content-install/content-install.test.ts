@@ -9,7 +9,6 @@ import { describe, expect, it } from "vitest";
 import { FakeAzureManagement } from "../../testing/index";
 import type { ParsedAnalyticRule } from "../../domain/coverage-analysis/index";
 import {
-  fetchSolutionDeploymentStatus,
   installAnalyticRule,
   installWorkbook,
   installSolution,
@@ -187,96 +186,71 @@ describe("onboardSentinelWorkspace", () => {
 });
 
 describe("installSolution", () => {
-  it("fetches packagedContent then deploys it, reporting acceptance", async () => {
-    const azure = new FakeAzureManagement();
-    azure.respondWith(
-      { status: 200, body: { properties: { packagedContent: { resources: [] } } } },
-      { status: 200, body: {} },
-    );
-    const outcome = await installSolution(azure, WS, "cloudflare.pkg", "Cloudflare");
-    expect(outcome.ok).toBe(true);
-    const [get, put] = azure.calls;
-    expect(get.path).toContain("/contentProductPackages/cloudflare.pkg");
-    expect(put.method).toBe("PUT");
-    expect(put.path).toContain("/Microsoft.Resources/deployments/");
-    const body = put.body as { properties: { template: unknown } };
-    expect(body.properties.template).toEqual({ resources: [] });
-  });
-
-  it("fails honestly when the package has no deployable template", async () => {
-    const azure = new FakeAzureManagement();
-    azure.respondWith({ status: 200, body: { properties: {} } });
-    const outcome = await installSolution(azure, WS, "pkg", "Sol");
-    expect(outcome.ok).toBe(false);
-    expect(outcome.detail).toContain("no deployable template");
-  });
-});
-
-describe("fetchSolutionDeploymentStatus", () => {
-  it("returns a null state when no deployment record exists (404)", async () => {
-    const azure = new FakeAzureManagement();
-    azure.respondWith({ status: 404, body: { error: "not found" } });
-    const status = await fetchSolutionDeploymentStatus(azure, WS, "cloudflare.pkg");
-    expect(status).toEqual({ state: null, error: null });
-  });
-
-  it("reports a Succeeded deployment with no error", async () => {
-    const azure = new FakeAzureManagement();
-    azure.respondWith({
-      status: 200,
-      body: { properties: { provisioningState: "Succeeded" } },
-    });
-    const status = await fetchSolutionDeploymentStatus(azure, WS, "cloudflare.pkg");
-    expect(status).toEqual({ state: "Succeeded", error: null });
-  });
-
-  it("drills into deployment operations for the specific failure", async () => {
+  it("installs via the contentPackages PUT, sourcing fields from the product package", async () => {
     const azure = new FakeAzureManagement();
     azure.respondWith(
       {
         status: 200,
         body: {
           properties: {
-            provisioningState: "Failed",
-            // The deployment-level message is the generic pointer; the real
-            // cause lives in the operations list.
-            error: {
-              code: "DeploymentFailed",
-              message:
-                "At least one resource deployment operation failed. Please " +
-                "list deployment operations for details.",
-            },
+            contentId: "cloudflare.pkg",
+            contentProductId: "cloudflare.pkg-sl-abc123",
+            contentKind: "Solution",
+            displayName: "Cloudflare (Deprecated)",
+            version: "2.0.3",
           },
         },
       },
+      { status: 200, body: { properties: { installedVersion: "2.0.3" } } },
+    );
+    const outcome = await installSolution(azure, WS, "cloudflare.pkg", "Cloudflare");
+    expect(outcome.ok).toBe(true);
+    expect(outcome.detail).toContain("installed (version 2.0.3)");
+    const [get, put] = azure.calls;
+    expect(get.path).toContain("/contentProductPackages/cloudflare.pkg");
+    expect(put.method).toBe("PUT");
+    // The first-class install operation - NOT a Microsoft.Resources/deployments.
+    expect(put.path).toContain("/contentPackages/cloudflare.pkg");
+    expect(put.path).not.toContain("/Microsoft.Resources/deployments/");
+    expect(put.apiVersion).toBe("2025-09-01");
+    const body = put.body as { properties: Record<string, unknown> };
+    expect(body.properties).toEqual({
+      contentId: "cloudflare.pkg",
+      contentProductId: "cloudflare.pkg-sl-abc123",
+      contentKind: "Solution",
+      displayName: "Cloudflare (Deprecated)",
+      version: "2.0.3",
+    });
+  });
+
+  it("reports the install PUT failure verbatim, never throwing", async () => {
+    const azure = new FakeAzureManagement();
+    azure.respondWith(
       {
         status: 200,
         body: {
-          value: [
-            {
-              properties: {
-                provisioningState: "Failed",
-                targetResource: {
-                  resourceType: "Microsoft.OperationalInsights/workspaces/savedSearches",
-                },
-                statusMessage: {
-                  error: {
-                    code: "BadRequest",
-                    message: "The parser function alias already exists.",
-                  },
-                },
-              },
-            },
-          ],
+          properties: {
+            contentId: "c",
+            contentProductId: "c-sl",
+            contentKind: "Solution",
+            version: "1.0.0",
+          },
         },
       },
+      { status: 400, body: { error: "bad" } },
     );
-    const status = await fetchSolutionDeploymentStatus(azure, WS, "cloudflare.pkg");
-    expect(status.state).toBe("Failed");
-    expect(status.error).toContain("The parser function alias already exists.");
-    expect(status.error).toContain("savedSearches");
-    // GET the deployment, then GET its operations.
-    expect(azure.calls).toHaveLength(2);
-    expect(azure.calls[1].path).toContain("/operations");
+    const outcome = await installSolution(azure, WS, "c", "Sol");
+    expect(outcome.ok).toBe(false);
+    expect(outcome.detail).toContain("HTTP 400");
+  });
+
+  it("fails honestly when the product package lacks required install fields", async () => {
+    const azure = new FakeAzureManagement();
+    azure.respondWith({ status: 200, body: { properties: {} } });
+    const outcome = await installSolution(azure, WS, "pkg", "Sol");
+    expect(outcome.ok).toBe(false);
+    expect(outcome.detail).toContain("missing required install fields");
+    // No install PUT is attempted when the package is unusable.
+    expect(azure.calls).toHaveLength(1);
   });
 });
