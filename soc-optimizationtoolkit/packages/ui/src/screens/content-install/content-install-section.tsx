@@ -291,6 +291,34 @@ export function ContentInstallSection({
     setOutcomeSource("workbooks");
     setOutcomes([]);
     try {
+      // Workbooks are REGIONAL: the PUT needs a non-empty location or the API
+      // rejects it with "A payload is required." Ensure the workspace region is
+      // known (fetch it on demand if the earlier load did not), and fail with a
+      // clear message rather than sending an empty location.
+      let loc = location ?? "";
+      if (loc === "") {
+        loc =
+          (await fetchWorkspaceLocation(
+            ports.azure,
+            config.subscriptionId,
+            config.resourceGroup,
+            config.workspaceName,
+          )) ?? "";
+        if (loc !== "") setLocation(loc);
+      }
+      if (loc === "") {
+        setOutcomes([
+          {
+            name: "Workbooks",
+            ok: false,
+            detail:
+              "the workspace region could not be determined; regional " +
+              "workbooks cannot be installed without it (reload and retry)",
+          },
+        ]);
+        return;
+      }
+      const wbScope: WorkspaceScope = { ...scope, location: loc };
       const selected = wbSplit.installable.filter((w) => wbSel.has(w.displayName));
       const parserOutcomes = await installParsers();
       const wbOutcomes: ContentInstallOutcome[] = [];
@@ -300,7 +328,7 @@ export function ContentInstallSection({
         wbOutcomes.push(
           await installWorkbook(
             ports.azure,
-            scope,
+            wbScope,
             { displayName: wb.displayName, serializedData: wb.serializedData },
             mintId,
           ),
@@ -312,7 +340,18 @@ export function ContentInstallSection({
       setProgress("");
       void load(true); // keep the install outcome visible through the refresh
     }
-  }, [mintId, canInstall, wbSplit, wbSel, installParsers, ports, scope, load]);
+  }, [
+    mintId,
+    canInstall,
+    wbSplit,
+    wbSel,
+    installParsers,
+    ports,
+    scope,
+    load,
+    location,
+    config,
+  ]);
 
   // Enable Microsoft Sentinel on the workspace (the not-onboarded remedy):
   // the SecurityInsights provider rejects every content call until Sentinel
@@ -360,6 +399,16 @@ export function ContentInstallSection({
   }
 
   const grouped = partitionOutcomes(outcomes);
+
+  // "Is the solution installed?" - the AUTHORITATIVE signal is the installed
+  // contentPackages list (installedContentState.solutionInstalled), NOT the
+  // catalog's installedVersion: installedVersion is an EXPANDABLE property the
+  // contentProductPackages LIST omits, so it reads null even when installed.
+  const solutionInstalledVersion =
+    installed?.installedSolutionVersion ?? catalog?.installedVersion ?? null;
+  const solutionIsInstalled =
+    catalog !== null &&
+    (installed?.solutionInstalled === true || catalog.installedVersion !== null);
 
   // Progress + per-item outcomes for one install control, rendered directly
   // beneath the button that triggered it (never in a distant block).
@@ -453,10 +502,13 @@ export function ContentInstallSection({
               ? "Load to look up this solution in Content Hub."
               : "Commit a target scope, then load to look up the Content Hub package."}
           </p>
-        ) : catalog.installedVersion !== null ? (
+        ) : solutionIsInstalled ? (
           <p className="content-install-installed">
-            Installed (version {catalog.installedVersion}). Latest available:{" "}
-            {catalog.version}.
+            Installed
+            {solutionInstalledVersion !== null
+              ? ` (version ${solutionInstalledVersion})`
+              : ""}
+            . Latest available: {catalog.version}.
           </p>
         ) : (
           <>

@@ -90,6 +90,31 @@ describe("parseAnalyticRuleYaml - field extraction", () => {
   });
 });
 
+describe("CRLF line endings (real Azure-Sentinel rules; fixed 2026-07-16)", () => {
+  // JS regex `.` never matches `\r`, so the list pattern `.+\n` matched ZERO
+  // items on a CRLF file - dropping `tactics`. That made the install PUT send
+  // techniques with an empty tactics field, which Azure rejects ("No valid
+  // tactic corresponding to the technique ...").
+  const CRLF = [
+    "id: 11111111-2222-3333-4444-555555555555",
+    "name: CRLF Rule",
+    "severity: Medium",
+    "tactics:",
+    "  - InitialAccess",
+    "relevantTechniques:",
+    "  - T1190",
+    "query: |",
+    "  Table | take 1",
+    "",
+  ].join("\r\n");
+
+  it("extracts tactics (and techniques) despite CRLF", () => {
+    const r = parseAnalyticRuleYaml(CRLF, "crlf.yaml");
+    expect(r.tactics).toEqual(["InitialAccess"]);
+    expect(r.techniques).toEqual(["T1190"]);
+  });
+});
+
 describe("entity columnName builtins filter (verbatim legacy behavior)", () => {
   it("drops a columnName that is a KQL builtin (e.g. Type)", () => {
     const yaml = `name: R
