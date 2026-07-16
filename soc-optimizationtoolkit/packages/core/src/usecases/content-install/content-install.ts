@@ -174,6 +174,27 @@ function failDetail(res: PortHttpResponse): string {
   return `HTTP ${res.status}${body && body !== "null" ? ` ${body}` : ""}`;
 }
 
+/**
+ * A rule PUT is validated against the workspace: Azure compiles the query and
+ * rejects it when a table it reads does not exist yet ("Failed to run the
+ * analytics rule query. One of the tables does not exist."). That is a
+ * workflow dependency, not a tooling bug - the source's data table is created
+ * when ingestion is set up (its DCR / custom table) and data arrives. Turn the
+ * opaque message into actionable guidance, keeping the raw error for reference.
+ */
+function ruleFailureDetail(res: PortHttpResponse): string {
+  const text = bodyText(res);
+  if (/does not exist|Failed to run the analytics rule query/i.test(text)) {
+    return (
+      "the rule's data table does not exist in the workspace yet - set up " +
+      "ingestion for this source first (create its DCR / custom table and let " +
+      "data arrive), then install the rule. Raw error: " +
+      failDetail(res)
+    );
+  }
+  return failDetail(res);
+}
+
 function is2xx(status: number): boolean {
   return status >= 200 && status < 300;
 }
@@ -360,7 +381,7 @@ export async function installAnalyticRule(
     });
     return is2xx(res.status)
       ? { name: rule.name, ok: true, detail: `installed (${resource.kind})` }
-      : { name: rule.name, ok: false, detail: failDetail(res) };
+      : { name: rule.name, ok: false, detail: ruleFailureDetail(res) };
   } catch (err) {
     return { name: rule.name, ok: false, detail: errText(err) };
   }
