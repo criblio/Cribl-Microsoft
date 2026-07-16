@@ -51,9 +51,16 @@ import type {
  * Do NOT compromise core purity for the convenience of a runtime YAML library.
  */
 export function parseAnalyticRuleYaml(
-  content: string,
+  contentRaw: string,
   fileName: string,
 ): ParsedAnalyticRule {
+  // Normalize CRLF -> LF up front. JS regex `.` never matches `\r`, so a
+  // list pattern like `(?:\s+-\s+.+\n)*` (tactics, dataTypes) silently matches
+  // ZERO items on a CRLF file - `.+` stops before `\r` and the required `\n`
+  // can't match `\r`. That dropped `tactics` on CRLF rules, so Azure rejected
+  // the install ("No valid tactic corresponding to the technique ..."):
+  // techniques were sent with an empty tactics field.
+  const content = contentRaw.replace(/\r\n?/g, "\n");
   const id = content.match(/^id:\s*(.+)/m)?.[1]?.trim() || "";
   const name =
     content
