@@ -68,6 +68,24 @@ describe("installAnalyticRule", () => {
     expect(outcome.detail).toContain("HTTP 400");
   });
 
+  it("gives actionable guidance when the rule's data table does not exist", async () => {
+    const azure = new FakeAzureManagement();
+    azure.respondWith({
+      status: 400,
+      body: {
+        error: {
+          code: "BadRequest",
+          message:
+            "Failed to run the analytics rule query. One of the tables does not exist.",
+        },
+      },
+    });
+    const outcome = await installAnalyticRule(azure, WS, rule({}), mintId);
+    expect(outcome.ok).toBe(false);
+    expect(outcome.detail).toContain("does not exist in the workspace yet");
+    expect(outcome.detail).toContain("Raw error");
+  });
+
   it("skips unsupported kinds without any ARM call", async () => {
     const azure = new FakeAzureManagement();
     const outcome = await installAnalyticRule(azure, WS, rule({ kind: "Fusion" }), mintId);
