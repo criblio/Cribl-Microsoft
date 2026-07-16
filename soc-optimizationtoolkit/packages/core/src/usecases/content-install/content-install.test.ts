@@ -10,6 +10,7 @@ import { FakeAzureManagement } from "../../testing/index";
 import type { ParsedAnalyticRule } from "../../domain/coverage-analysis/index";
 import {
   installAnalyticRule,
+  installParser,
   installWorkbook,
   installSolution,
   installedContentState,
@@ -89,6 +90,77 @@ describe("installWorkbook", () => {
     expect(outcome).toEqual({ name: "Overview", ok: true, detail: "installed" });
     expect(azure.calls[0].path).toContain("/providers/Microsoft.Insights/workbooks/");
     expect(azure.calls[0].apiVersion).toBe("2021-08-01");
+  });
+
+  it("fails clearly (no PUT) when the workbook content is empty", async () => {
+    const azure = new FakeAzureManagement();
+    const outcome = await installWorkbook(
+      azure,
+      WS,
+      { displayName: "Empty", serializedData: "   " },
+      mintId,
+    );
+    expect(outcome.ok).toBe(false);
+    expect(outcome.detail).toContain("empty");
+    expect(azure.calls).toHaveLength(0);
+  });
+
+  it("fails clearly (no PUT) when the workspace region is unknown", async () => {
+    const azure = new FakeAzureManagement();
+    const outcome = await installWorkbook(
+      azure,
+      { ...WS, location: "" },
+      { displayName: "WB", serializedData: '{"items":[]}' },
+      mintId,
+    );
+    expect(outcome.ok).toBe(false);
+    expect(outcome.detail).toContain("region");
+    expect(azure.calls).toHaveLength(0);
+  });
+});
+
+describe("installParser (duplicate-alias safety)", () => {
+  const parser = {
+    alias: "Cloudflare",
+    displayName: "Cloudflare",
+    query: "T | take 1",
+    functionParameters: "",
+  };
+
+  it("PUTs the function when no other resource provides the alias", async () => {
+    const azure = new FakeAzureManagement();
+    azure.respondWith(
+      { status: 200, body: { value: [] } }, // list savedSearches: none
+      { status: 200, body: {} }, // PUT ours
+    );
+    const outcome = await installParser(azure, WS, parser);
+    expect(outcome).toEqual({ name: "Cloudflare (parser)", ok: true, detail: "installed" });
+    expect(azure.calls[1].method).toBe("PUT");
+    expect(azure.calls[1].path).toContain("/savedSearches/parser-cloudflare");
+  });
+
+  it("defers to another provider and deletes our duplicate copy", async () => {
+    const azure = new FakeAzureManagement();
+    azure.respondWith(
+      {
+        status: 200,
+        body: {
+          value: [
+            // The solution's own parser under a DIFFERENT resource name.
+            { name: "cloudflare.sol.func", properties: { functionAlias: "Cloudflare" } },
+            // Our earlier deterministic copy - the duplicate to remove.
+            { name: "parser-cloudflare", properties: { functionAlias: "Cloudflare" } },
+          ],
+        },
+      },
+      { status: 200, body: {} }, // DELETE ours
+    );
+    const outcome = await installParser(azure, WS, parser);
+    expect(outcome.ok).toBe(true);
+    expect(outcome.detail).toContain("already provided");
+    expect(azure.calls[0].method).toBe("GET");
+    expect(azure.calls[1].method).toBe("DELETE");
+    expect(azure.calls[1].path).toContain("/savedSearches/parser-cloudflare");
   });
 });
 

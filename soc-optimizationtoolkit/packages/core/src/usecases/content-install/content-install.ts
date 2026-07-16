@@ -383,6 +383,23 @@ export async function installWorkbook(
   spec: WorkbookInstallSpec,
   mintId: () => string,
 ): Promise<ContentInstallOutcome> {
+  // The workbooks API rejects an empty body with "A payload is required." Fail
+  // with a precise reason rather than that opaque message if the content or
+  // region is missing (both are required: serializedData and a regional location).
+  if (spec.serializedData.trim() === "") {
+    return {
+      name: spec.displayName,
+      ok: false,
+      detail: "the workbook content was empty (nothing to install)",
+    };
+  }
+  if (ws.location.trim() === "") {
+    return {
+      name: spec.displayName,
+      ok: false,
+      detail: "the workspace region is unknown; regional workbooks need it",
+    };
+  }
   const body = workbookResourceBody({
     displayName: spec.displayName,
     serializedData: spec.serializedData,
@@ -416,6 +433,14 @@ export async function installWorkbook(
  * installed (they query the function by alias), not as a user choice - so
  * the UI reports them but never asks. The savedSearch id is derived from the
  * alias (deterministic + idempotent: a re-install PUTs over the same id).
+ *
+ * DUPLICATE-ALIAS SAFETY: the SecurityInsights RP lets two savedSearches
+ * carry the SAME functionAlias under different resource names (the solution's
+ * own parser + ours), and a query that references the alias then fails to
+ * compile ("Detected multiple functions with the same name"). So before
+ * creating ours, look for an EXISTING function with this alias from another
+ * source; if one exists, delete our deterministic copy (if any) and defer to
+ * it - leaving exactly one provider.
  */
 export async function installParser(
   azure: AzureManagement,
@@ -423,18 +448,56 @@ export async function installParser(
   parser: ParserResource,
 ): Promise<ContentInstallOutcome> {
   const searchId = `parser-${parser.alias}`.toLowerCase().replace(/[^a-z0-9-]/g, "-");
+  const searchPath = `${workspaceResourceId(ws)}/savedSearches/${searchId}`;
+  const label = `${parser.displayName} (parser)`;
   try {
+    // Which resources already provide this alias? (Best-effort: if the listing
+    // fails, fall through to a plain idempotent PUT.)
+    const aliasLc = parser.alias.toLowerCase();
+    let othersProvideAlias = false;
+    try {
+      const all = await listAllPages(
+        azure,
+        {
+          method: "GET",
+          path: `${workspaceResourceId(ws)}/savedSearches`,
+          apiVersion: SAVED_SEARCHES_API_VERSION,
+        },
+        "list saved searches",
+      );
+      othersProvideAlias = all.some((s) => {
+        const name = str(prop(s, "name")).toLowerCase();
+        const alias = str(prop(prop(s, "properties"), "functionAlias")).toLowerCase();
+        return alias === aliasLc && name !== searchId;
+      });
+    } catch {
+      /* listing unavailable - fall through to the plain PUT below */
+    }
+    if (othersProvideAlias) {
+      // Another resource already provides this function. Remove OUR own copy
+      // (deterministic id) if it exists so exactly one remains, and defer.
+      try {
+        await azure.request({
+          method: "DELETE",
+          path: searchPath,
+          apiVersion: SAVED_SEARCHES_API_VERSION,
+        });
+      } catch {
+        /* best-effort cleanup */
+      }
+      return { name: label, ok: true, detail: "already provided by the solution" };
+    }
     const res = await azure.request({
       method: "PUT",
-      path: `${workspaceResourceId(ws)}/savedSearches/${searchId}`,
+      path: searchPath,
       apiVersion: SAVED_SEARCHES_API_VERSION,
       body: parserResourceBody(parser),
     });
     return is2xx(res.status)
-      ? { name: `${parser.displayName} (parser)`, ok: true, detail: "installed" }
-      : { name: `${parser.displayName} (parser)`, ok: false, detail: failDetail(res) };
+      ? { name: label, ok: true, detail: "installed" }
+      : { name: label, ok: false, detail: failDetail(res) };
   } catch (err) {
-    return { name: `${parser.displayName} (parser)`, ok: false, detail: errText(err) };
+    return { name: label, ok: false, detail: errText(err) };
   }
 }
 
