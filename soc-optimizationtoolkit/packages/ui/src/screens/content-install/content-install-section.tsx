@@ -22,6 +22,7 @@ import {
   availableParsers,
   availableWorkbooks,
   alertRuleResourceFromParsed,
+  ensureRuleDataTable,
   onboardSentinelWorkspace,
   fetchWorkspaceLocation,
   findSolutionCatalogEntry,
@@ -270,6 +271,22 @@ export function ContentInstallSection({
     setOutcomes([]);
     try {
       const selected = ruleSplit.installable.filter((r) => ruleSel.has(r.name));
+      // Auto-create the custom (_CL) tables the selected rules read, from the
+      // CustomTables repo schema, so rule-query validation ("One of the tables
+      // does not exist") passes instead of forcing ingestion setup first.
+      // Only creations/failures are surfaced (an existing table is silent).
+      const tableOutcomes: ContentInstallOutcome[] = [];
+      if (content !== undefined) {
+        const dataTypes = [...new Set(selected.flatMap((r) => r.dataTypes ?? []))];
+        let ti = 0;
+        for (const dt of dataTypes) {
+          setProgress(`Ensuring table ${++ti}/${dataTypes.length}: ${dt}...`);
+          const t = await ensureRuleDataTable(ports.azure, content, scope, dt, ports.logger);
+          if (t.created || !t.ok) {
+            tableOutcomes.push({ name: `Table ${t.table}`, ok: t.ok, detail: t.detail });
+          }
+        }
+      }
       const parserOutcomes = await installParsers();
       const ruleOutcomes: ContentInstallOutcome[] = [];
       let done = 0;
@@ -277,13 +294,13 @@ export function ContentInstallSection({
         setProgress(`Installing rule ${++done}/${selected.length}: ${rule.name}...`);
         ruleOutcomes.push(await installAnalyticRule(ports.azure, scope, rule, mintId));
       }
-      setOutcomes([...parserOutcomes, ...ruleOutcomes]);
+      setOutcomes([...tableOutcomes, ...parserOutcomes, ...ruleOutcomes]);
     } finally {
       setBusy("");
       setProgress("");
       void load(true); // keep the install outcome visible through the refresh
     }
-  }, [mintId, canInstall, ruleSplit, ruleSel, installParsers, ports, scope, load]);
+  }, [mintId, canInstall, ruleSplit, ruleSel, installParsers, ports, scope, load, content]);
 
   const doInstallWorkbooks = useCallback(async () => {
     if (mintId === undefined || !canInstall) return;
@@ -532,7 +549,7 @@ export function ContentInstallSection({
       {/* ANALYTICS RULES */}
       <ContentGroup
         title="Analytics rules"
-        tip="Install the solution's analytics rules (Scheduled and NRT). Already-installed rules are shown for reference; only installable ones are selectable. Parsers the rules query are installed automatically."
+        tip="Install the solution's analytics rules (Scheduled and NRT). Already-installed rules are shown for reference; only installable ones are selectable. Parsers the rules query are installed automatically, and any custom (_CL) table a rule reads is created from the CustomTables repo schema if it does not exist yet."
         installable={ruleSplit.installable.map((r) => ({
           name: r.name,
           detail: alertRuleResourceFromParsed(r).supported
