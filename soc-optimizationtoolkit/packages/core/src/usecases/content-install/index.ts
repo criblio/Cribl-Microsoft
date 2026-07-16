@@ -21,6 +21,12 @@ export {
   onboardSentinelWorkspace,
   workspaceResourceId,
 } from "./content-install";
+export type { EnsureTableOutcome } from "./ensure-tables";
+export {
+  customTableExists,
+  ensureRuleDataTable,
+  resolveCustomTableSchema,
+} from "./ensure-tables";
 export type {
   AvailableWorkbook,
   SolutionCatalogEntry,
