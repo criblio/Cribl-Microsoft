@@ -48,10 +48,13 @@ export const LAB_ROLE_ASSIGNMENTS_API_VERSION = "2022-04-01";
 /**
  * Built-in "Contributor" role definition GUID - the role the legacy script
  * granted the Logic App's managed identity so it can delete its own resource
- * group. Fixed Azure identifier; do not change.
+ * group. Fixed Azure identifier; do not change. VERIFIED LIVE 2026-07-17
+ * against az role definition list (an earlier revision shipped a wrong GUID
+ * here, which failed constrained-RBAC ABAC conditions with
+ * AuthorizationFailed - the condition checks the requested role id).
  */
 export const CONTRIBUTOR_ROLE_DEFINITION_ID =
-  "b24988ac-9c94-4bd6-b8f0-b3a2255c8d84";
+  "b24988ac-6180-42a0-ab88-20f7382dd24c";
 
 /** TTL settings for one lab (legacy timeToLive block; enabled is implicit). */
 export interface LabTtlSettings {
