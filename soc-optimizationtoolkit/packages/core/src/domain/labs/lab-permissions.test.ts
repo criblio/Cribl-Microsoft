@@ -126,6 +126,39 @@ describe("analyzeRoleAssignmentGrant (the ABAC condition analysis)", () => {
     expect(analysis.conditions).toHaveLength(1);
   });
 
+  it("conditional-constrains-principals when the condition pins principal ids", () => {
+    const analysis = analyzeRoleAssignmentGrant({
+      value: [
+        {
+          actions: [RA_WRITE],
+          notActions: [],
+          // "Constrain roles and principals": role list even INCLUDES
+          // Contributor, but the pinned principal ids can never match the
+          // deploy-time TTL identity - still blocked.
+          condition:
+            `(@Request[Microsoft.Authorization/roleAssignments:RoleDefinitionId] ForAnyOfAnyValues:GuidEquals {${CONTRIBUTOR_ROLE_DEFINITION_ID}}) AND ` +
+            "(@Request[Microsoft.Authorization/roleAssignments:PrincipalId] ForAnyOfAnyValues:GuidEquals {00000000-0000-0000-0000-000000000001})",
+        },
+      ],
+    });
+    expect(analysis.kind).toBe("conditional-constrains-principals");
+  });
+
+  it("a principal-TYPE constraint does not count as principal pinning", () => {
+    const analysis = analyzeRoleAssignmentGrant({
+      value: [
+        {
+          actions: [RA_WRITE],
+          notActions: [],
+          condition:
+            `(@Request[Microsoft.Authorization/roleAssignments:RoleDefinitionId] ForAnyOfAnyValues:GuidEquals {${CONTRIBUTOR_ROLE_DEFINITION_ID}}) AND ` +
+            "(@Request[Microsoft.Authorization/roleAssignments:PrincipalType] ForAnyOfAnyValues:StringEqualsIgnoreCase {'ServicePrincipal'})",
+        },
+      ],
+    });
+    expect(analysis.kind).toBe("conditional-allows-contributor");
+  });
+
   it("not-granted when nothing grants the action (Contributor's notActions deny it)", () => {
     const analysis = analyzeRoleAssignmentGrant({
       value: [{ actions: ["*"], notActions: ["Microsoft.Authorization/*/Write"] }],

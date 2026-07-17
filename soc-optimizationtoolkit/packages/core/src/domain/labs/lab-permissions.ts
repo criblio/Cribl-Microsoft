@@ -185,6 +185,14 @@ export type RoleAssignmentGrantKind =
   | "unconditional"
   | "conditional-allows-contributor"
   | "conditional-blocks-contributor"
+  /**
+   * The condition pins SPECIFIC principal ids ("Constrain roles and
+   * principals") - unsatisfiable by design for the lab: the TTL identity is
+   * created at deploy time and can never be in a pre-pinned list. The
+   * feature-catalog permission design calls this out explicitly; the fix is
+   * switching the condition to principal TYPES.
+   */
+  | "conditional-constrains-principals"
   | "not-granted";
 
 /** The TTL-grant analysis result. */
@@ -270,13 +278,23 @@ export function analyzeRoleAssignmentGrant(
   if (conditions.length === 0) {
     return { kind: "not-granted", conditions };
   }
-  const allows = conditions.some((condition) =>
-    condition.toLowerCase().includes(CONTRIBUTOR_ROLE_DEFINITION_ID.toLowerCase()),
-  );
-  return {
-    kind: allows ? "conditional-allows-contributor" : "conditional-blocks-contributor",
-    conditions,
-  };
+  // A condition pinning specific principal IDs (the portal's "Constrain
+  // roles and principals" template uses the roleAssignments:PrincipalId
+  // attribute) can never match the deploy-time TTL identity - regardless of
+  // its role list. PrincipalTYPE constraints are fine (we send
+  // principalType: ServicePrincipal on the PUT).
+  const pinsPrincipalIds = (condition: string): boolean =>
+    condition.toLowerCase().includes("roleassignments:principalid]");
+  const hasContributor = (condition: string): boolean =>
+    condition.toLowerCase().includes(CONTRIBUTOR_ROLE_DEFINITION_ID.toLowerCase());
+
+  if (conditions.some((c) => hasContributor(c) && !pinsPrincipalIds(c))) {
+    return { kind: "conditional-allows-contributor", conditions };
+  }
+  if (conditions.some(pinsPrincipalIds)) {
+    return { kind: "conditional-constrains-principals", conditions };
+  }
+  return { kind: "conditional-blocks-contributor", conditions };
 }
 
 /**
@@ -294,3 +312,20 @@ export const ROLE_CONDITION_REMEDIATION =
   `Contributor (${CONTRIBUTOR_ROLE_DEFINITION_ID}) to the allowed roles for ` +
   "service principals - or grant the role manually after each deploy using the " +
   "az command the run prints.";
+
+/**
+ * The remediation for a principals-pinning condition ("Constrain roles and
+ * principals"): unsatisfiable by design, because the TTL Logic App identity
+ * does not exist until deploy time and cannot be pre-listed. The condition
+ * must constrain principal TYPES instead (the app sends principalType
+ * ServicePrincipal on every grant).
+ */
+export const ROLE_CONDITION_PRINCIPALS_REMEDIATION =
+  "The app's RBAC Administrator grant carries a role-assignment condition that " +
+  "pins SPECIFIC principal ids ('Constrain roles and principals'). That can " +
+  "never match the lab's TTL identity, which is created at deploy time. Ask an " +
+  "admin to re-author the condition as 'Constrain roles and principal types': " +
+  `allowed roles Contributor (${CONTRIBUTOR_ROLE_DEFINITION_ID}) and Monitoring ` +
+  "Metrics Publisher (3913510d-42f4-4e42-8a64-420c390055eb), allowed principal " +
+  "type ServicePrincipal - or grant the role manually after each deploy using " +
+  "the az command the run prints.";

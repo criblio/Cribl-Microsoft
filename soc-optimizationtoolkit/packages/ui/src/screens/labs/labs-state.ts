@@ -450,6 +450,13 @@ export function permissionCheckLines(outcome: LabPermissionCheckOutcome): string
           "deploy WILL fail at ttl-role-assignment.",
       );
       break;
+    case "conditional-constrains-principals":
+      lines.push(
+        "TTL grant: the conditional (ABAC) assignment pins SPECIFIC principal " +
+          "ids - unsatisfiable for the deploy-time TTL identity; the deploy " +
+          "WILL fail at ttl-role-assignment.",
+      );
+      break;
     case "not-granted":
       lines.push(
         "TTL grant: roleAssignments/write is not granted at this scope - " +

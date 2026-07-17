@@ -25,6 +25,7 @@ import {
   labRequiredActions,
   parseLabPermissionsResponse,
   ROLE_ASSIGNMENTS_WRITE_ACTION,
+  ROLE_CONDITION_PRINCIPALS_REMEDIATION,
   ROLE_CONDITION_REMEDIATION,
   type RoleAssignmentGrantAnalysis,
 } from "../../domain/labs/lab-permissions";
@@ -113,8 +114,14 @@ export async function checkLabPermissions(
     roleAssignmentGrant,
     notes,
   };
-  if (roleAssignmentGrant.kind === "conditional-blocks-contributor") {
-    outcome.roleConditionRemediation = ROLE_CONDITION_REMEDIATION;
+  if (
+    roleAssignmentGrant.kind === "conditional-blocks-contributor" ||
+    roleAssignmentGrant.kind === "conditional-constrains-principals"
+  ) {
+    outcome.roleConditionRemediation =
+      roleAssignmentGrant.kind === "conditional-constrains-principals"
+        ? ROLE_CONDITION_PRINCIPALS_REMEDIATION
+        : ROLE_CONDITION_REMEDIATION;
     const row = checks.find((c) => c.action === ROLE_ASSIGNMENTS_WRITE_ACTION);
     if (row !== undefined) {
       row.granted = false;

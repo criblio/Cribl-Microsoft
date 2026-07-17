@@ -928,9 +928,11 @@ export async function provisionLab(
     const bodyText = JSON.stringify(response.body) ?? "";
     const abacHint = /ABAC condition/i.test(bodyText)
       ? " The app's RBAC Administrator grant carries a role-assignment condition " +
-        "that does not allow assigning Contributor - ask an admin to add " +
+        "that does not allow this assignment - ask an admin to add " +
         `Contributor (${CONTRIBUTOR_ROLE_DEFINITION_ID}) to the condition's ` +
-        "allowed roles for service principals (or run the az command below). " +
+        "allowed roles for service principals; if the condition pins SPECIFIC " +
+        "principal ids, it must be re-authored to principal TYPES instead (the " +
+        "TTL identity is created at deploy time and cannot be pre-listed). " +
         "Use the Labs screen's permission check to verify before re-running."
       : "";
     const error =
