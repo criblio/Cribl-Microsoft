@@ -3,6 +3,8 @@ import {
   canDeployFoundation,
   criblBundleArtifact,
   defaultLabFormState,
+  flowLogPackResultLines,
+  formatLabInventoryRow,
   formatLabPhaseLine,
   initialLabSteps,
   labPlanArtifact,
@@ -139,6 +141,68 @@ describe("permissionCheckLines", () => {
       notes: [],
     });
     expect(lines.some((l) => l.includes("without a condition"))).toBe(true);
+  });
+});
+
+describe("formatLabInventoryRow", () => {
+  const base = {
+    name: "rg-lab-FlowLogLab",
+    location: "eastus",
+    managedBy: "SOC-OptimizationToolkit",
+    ttlEnabled: true,
+    expiresAt: "2026-07-19T12:00:00Z",
+    userEmail: "user@example.com",
+    remainingHours: 48,
+    expired: false,
+  };
+
+  it("shows relative expiry and the warning recipient", () => {
+    expect(formatLabInventoryRow(base)).toBe(
+      "rg-lab-FlowLogLab (eastus) - expires in 48h (2026-07-19T12:00:00Z) - warns user@example.com",
+    );
+  });
+
+  it("flags expired labs loudly", () => {
+    expect(
+      formatLabInventoryRow({ ...base, remainingHours: -2.4, expired: true }),
+    ).toContain("EXPIRED 2h ago");
+  });
+
+  it("is honest about missing TTLs", () => {
+    expect(
+      formatLabInventoryRow({
+        ...base,
+        ttlEnabled: false,
+        remainingHours: null,
+        expiresAt: "",
+        userEmail: "",
+      }),
+    ).toContain("NO TTL");
+  });
+});
+
+describe("flowLogPackResultLines", () => {
+  it("summarizes install, secret, and deploy honestly", () => {
+    const lines = flowLogPackResultLines("AzureFlowLogs_0.0.3.crbl", "default", {
+      secret: "created",
+      commitVersion: "abc123",
+      deployed: true,
+    });
+    expect(lines[0]).toContain("AzureFlowLogs_0.0.3.crbl");
+    expect(lines[0]).toContain("'default'");
+    expect(lines.some((l) => l.includes("secret Azure_vNet_Flowlogs_Secret created"))).toBe(true);
+    expect(lines.some((l) => l.includes("deployed (abc123)"))).toBe(true);
+  });
+
+  it("carries the nonfatal commit error and the skipped-secret warning", () => {
+    const lines = flowLogPackResultLines("AzureFlowLogs_0.0.3.crbl", "default", {
+      secret: "skipped",
+      commitVersion: null,
+      deployed: false,
+      commitError: "commit: HTTP 400",
+    });
+    expect(lines.some((l) => l.includes("ensure the Azure_vNet_Flowlogs_Secret"))).toBe(true);
+    expect(lines.some((l) => l.includes("commit: HTTP 400"))).toBe(true);
   });
 });
 

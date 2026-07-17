@@ -13,9 +13,11 @@ import {
   buildLabPlan,
   labTtlInstants,
   provisionLabStepsFor,
+  type FinalizeFlowLogPackOutcome,
   type JobStep,
   type LabComponentFlags,
   type LabCriblBundle,
+  type LabInventoryEntry,
   type LabMode,
   type LabOnPremConnection,
   type LabPermissionCheckOutcome,
@@ -472,6 +474,63 @@ export function permissionCheckLines(outcome: LabPermissionCheckOutcome): string
   for (const note of outcome.notes) {
     lines.push(`Note: ${note}`);
   }
+  return lines;
+}
+
+/**
+ * One inventory row's display text: name, location, honest expiry status
+ * (relative hours), and the warning recipient when recorded.
+ */
+export function formatLabInventoryRow(entry: LabInventoryEntry): string {
+  let expiry: string;
+  if (entry.remainingHours === null) {
+    expiry = entry.ttlEnabled ? "TTL enabled, no expiry recorded" : "NO TTL (legacy?)";
+  } else if (entry.expired) {
+    expiry = `EXPIRED ${Math.abs(Math.round(entry.remainingHours))}h ago - deletion imminent`;
+  } else if (entry.remainingHours < 1) {
+    expiry = `expires in ${Math.max(1, Math.round(entry.remainingHours * 60))}m`;
+  } else {
+    expiry = `expires in ${Math.round(entry.remainingHours)}h (${entry.expiresAt})`;
+  }
+  const email = entry.userEmail !== "" ? ` - warns ${entry.userEmail}` : "";
+  return `${entry.name} (${entry.location}) - ${expiry}${email}`;
+}
+
+/** Honest line-by-line summary of a flow-log pack install + finalize. */
+export function flowLogPackResultLines(
+  crblFileName: string,
+  groupId: string,
+  outcome: FinalizeFlowLogPackOutcome,
+): string[] {
+  const lines: string[] = [
+    `Installed ${crblFileName} into worker group '${groupId}'.`,
+  ];
+  switch (outcome.secret) {
+    case "created":
+      lines.push("Cribl text secret Azure_vNet_Flowlogs_Secret created.");
+      break;
+    case "updated":
+      lines.push("Cribl text secret Azure_vNet_Flowlogs_Secret updated.");
+      break;
+    case "skipped":
+      lines.push(
+        "Secret step skipped - ensure the Azure_vNet_Flowlogs_Secret text secret " +
+          "exists in the group or the collector cannot authenticate.",
+      );
+      break;
+  }
+  if (outcome.deployed && outcome.commitVersion !== null) {
+    lines.push(`Committed and deployed (${outcome.commitVersion}).`);
+  } else if (outcome.commitError !== undefined) {
+    lines.push(
+      `Commit/deploy did not complete: ${outcome.commitError} - commit and deploy ` +
+        "manually in Cribl (single-instance leaders reject group commits).",
+    );
+  }
+  lines.push(
+    "The pack ships the Azure_vNet_FlowLogs breaker, the preprocessing pipeline, " +
+      "and the hourly collector job wired to your storage account.",
+  );
   return lines;
 }
 

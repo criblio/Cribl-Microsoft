@@ -15,4 +15,6 @@ export * from "./lab-gateway";
 export * from "./lab-privatelink";
 export * from "./lab-cribl";
 export * from "./lab-permissions";
+export * from "./lab-inventory";
+export * from "./lab-flowlog-pack";
 export * from "./lab-plan";

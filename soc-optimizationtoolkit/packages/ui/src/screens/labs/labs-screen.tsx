@@ -16,12 +16,21 @@
  * and drives IO through the ports (ZERO direct fetch here).
  */
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   LAB_PROFILES,
+  assembleFlowLogPack,
   checkLabPermissions,
+  destroyLab,
+  extendLabTtl,
+  finalizeFlowLogPack,
+  listLabs,
+  listSubscriptions,
   provisionLab,
+  type AzureSubscription,
+  type CriblGroupSummary,
   type JobStep,
+  type LabInventoryEntry,
   type LabResourceGroupMode,
   type LabType,
   type ProvisionLabResult,
@@ -31,6 +40,8 @@ import {
   canDeployFoundation,
   criblBundleArtifact,
   defaultLabFormState,
+  flowLogPackResultLines,
+  formatLabInventoryRow,
   formatLabPhaseLine,
   initialLabSteps,
   labPlanArtifact,
@@ -56,6 +67,28 @@ export function LabsScreen() {
   const [checkingPerms, setCheckingPerms] = useState(false);
   const [permLines, setPermLines] = useState<string[]>([]);
   const [permError, setPermError] = useState("");
+  // Subscription selection: defaults to the active connection's target and
+  // feeds the plan, the permission check, the deploy, and the inventory.
+  const [subscriptionId, setSubscriptionId] = useState(config.subscriptionId);
+  const [subscriptions, setSubscriptions] = useState<AzureSubscription[] | null>(null);
+  const [subError, setSubError] = useState("");
+  // Inventory of running labs.
+  const [labs, setLabs] = useState<LabInventoryEntry[] | null>(null);
+  const [loadingLabs, setLoadingLabs] = useState(false);
+  const [labsError, setLabsError] = useState("");
+  const [extendHours, setExtendHours] = useState("72");
+  const [confirmDestroy, setConfirmDestroy] = useState("");
+  const [inventoryNotice, setInventoryNotice] = useState("");
+  // Flow-log pack deployment.
+  const [groups, setGroups] = useState<CriblGroupSummary[] | null>(null);
+  const [groupId, setGroupId] = useState("");
+  const [groupsError, setGroupsError] = useState("");
+  const [packStorageAccount, setPackStorageAccount] = useState("");
+  const [packSecret, setPackSecret] = useState("");
+  const [packScheduleEnabled, setPackScheduleEnabled] = useState(true);
+  const [deployingPack, setDeployingPack] = useState(false);
+  const [packLines, setPackLines] = useState<string[]>([]);
+  const [packError, setPackError] = useState("");
 
   const set = useCallback(
     <K extends keyof LabFormState>(key: K, value: LabFormState[K]) => {
@@ -65,9 +98,174 @@ export function LabsScreen() {
   );
 
   const plan = useMemo(
-    () => labPlanFromForm(form, config.subscriptionId),
-    [form, config.subscriptionId],
+    () => labPlanFromForm(form, subscriptionId),
+    [form, subscriptionId],
   );
+
+  // Load the subscription list once (one cheap ARM GET; the selector falls
+  // back to the connection's target when the list is unavailable).
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const subs = await listSubscriptions(ports.azure, ports.logger);
+        if (!cancelled) {
+          setSubscriptions(subs);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setSubError(err instanceof Error ? err.message : String(err));
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [ports.azure, ports.logger]);
+
+  const refreshLabs = useCallback(async () => {
+    if (loadingLabs || subscriptionId === "") {
+      return;
+    }
+    setLoadingLabs(true);
+    setLabsError("");
+    setInventoryNotice("");
+    setConfirmDestroy("");
+    try {
+      setLabs(
+        await listLabs(
+          ports.azure,
+          { subscriptionId, nowIso: new Date().toISOString() },
+          ports.logger,
+        ),
+      );
+    } catch (err) {
+      setLabs(null);
+      setLabsError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setLoadingLabs(false);
+    }
+  }, [loadingLabs, subscriptionId, ports.azure, ports.logger]);
+
+  const extendLab = useCallback(
+    async (name: string) => {
+      setInventoryNotice("");
+      const hours = Number(extendHours);
+      if (!Number.isInteger(hours) || hours < 1) {
+        setInventoryNotice("Extend hours must be a positive whole number.");
+        return;
+      }
+      try {
+        const outcome = await extendLabTtl(
+          ports.azure,
+          {
+            subscriptionId,
+            resourceGroupName: name,
+            ttl: { hours, warningHours: 24, userEmail: "" },
+            nowIso: new Date().toISOString(),
+          },
+          ports.logger,
+        );
+        setInventoryNotice(`${name}: TTL extended to ${outcome.expiresAt}.`);
+        await refreshLabs();
+      } catch (err) {
+        setInventoryNotice(
+          `${name}: extend failed - ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
+    },
+    [extendHours, subscriptionId, ports.azure, ports.logger, refreshLabs],
+  );
+
+  const destroyLabNow = useCallback(
+    async (name: string) => {
+      setInventoryNotice("");
+      try {
+        await destroyLab(
+          ports.azure,
+          { subscriptionId, resourceGroupName: name },
+          ports.logger,
+        );
+        setInventoryNotice(
+          `${name}: deletion ACCEPTED - Azure deletes the group and everything ` +
+            "in it asynchronously (it lingers in the list until done).",
+        );
+        setConfirmDestroy("");
+        await refreshLabs();
+      } catch (err) {
+        setInventoryNotice(
+          `${name}: destroy failed - ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
+    },
+    [subscriptionId, ports.azure, ports.logger, refreshLabs],
+  );
+
+  const loadGroups = useCallback(async () => {
+    setGroupsError("");
+    try {
+      const found = await ports.cribl.listGroups();
+      setGroups(found);
+      if (found.length > 0 && groupId === "") {
+        setGroupId(found[0].id);
+      }
+    } catch (err) {
+      setGroups(null);
+      setGroupsError(
+        `Worker groups unavailable (is a Cribl connection active?): ` +
+          (err instanceof Error ? err.message : String(err)),
+      );
+    }
+  }, [ports.cribl, groupId]);
+
+  const deployFlowLogPack = useCallback(async () => {
+    if (deployingPack || groupId === "" || ports.packInstall === undefined) {
+      return;
+    }
+    setDeployingPack(true);
+    setPackError("");
+    setPackLines([]);
+    try {
+      const storageAccountName =
+        packStorageAccount.trim() !== ""
+          ? packStorageAccount.trim()
+          : (result?.storage?.accountName ?? plan.names.storageAccount);
+      const pack = assembleFlowLogPack(
+        {
+          storageAccountName,
+          tenantId: config.tenantId,
+          clientId: config.clientId,
+          scheduleEnabled: packScheduleEnabled,
+        },
+        Date.now(),
+      );
+      await ports.packInstall.install(groupId, pack.crblFileName, pack.crbl);
+      const outcome = await finalizeFlowLogPack(
+        ports.cribl,
+        { groupId, clientSecret: packSecret },
+        ports.logger,
+      );
+      setPackLines(flowLogPackResultLines(pack.crblFileName, groupId, outcome));
+      setPackSecret("");
+    } catch (err) {
+      setPackError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setDeployingPack(false);
+    }
+  }, [
+    deployingPack,
+    groupId,
+    ports.packInstall,
+    ports.cribl,
+    ports.logger,
+    packStorageAccount,
+    packSecret,
+    packScheduleEnabled,
+    result,
+    plan.names.storageAccount,
+    config.tenantId,
+    config.clientId,
+  ]);
   const profile = LAB_PROFILES.find((p) => p.id === form.labType);
   const nameRows = useMemo(
     () => labResourceNameRows(plan.names, plan.flags),
@@ -81,7 +279,7 @@ export function LabsScreen() {
   const expiryPreview = ttlExpiryPreview(form, new Date().toISOString());
 
   const runPermissionCheck = useCallback(async () => {
-    if (checkingPerms || config.subscriptionId === "") {
+    if (checkingPerms || subscriptionId === "") {
       return;
     }
     setCheckingPerms(true);
@@ -91,7 +289,7 @@ export function LabsScreen() {
       const outcome = await checkLabPermissions(
         ports.azure,
         {
-          subscriptionId: config.subscriptionId,
+          subscriptionId,
           resourceGroupName: plan.resourceGroupName,
           rgMode: form.rgMode,
           flags: plan.flags,
@@ -106,7 +304,7 @@ export function LabsScreen() {
     } finally {
       setCheckingPerms(false);
     }
-  }, [checkingPerms, config.subscriptionId, ports.azure, ports.logger, plan, form.rgMode]);
+  }, [checkingPerms, subscriptionId, ports.azure, ports.logger, plan, form.rgMode]);
 
   const downloadPlan = useCallback(async () => {
     setSaveNotice("");
@@ -133,7 +331,7 @@ export function LabsScreen() {
       const outcome = await provisionLab(
         { azure: ports.azure, jobs: ports.jobs, logger: ports.logger },
         {
-          subscriptionId: config.subscriptionId,
+          subscriptionId,
           resourceGroupName: plan.resourceGroupName,
           location: form.location.trim(),
           baseObjectName: form.baseObjectName.trim(),
@@ -168,7 +366,7 @@ export function LabsScreen() {
     } finally {
       setDeploying(false);
     }
-  }, [deploying, gate.ok, ports, config, plan, form]);
+  }, [deploying, gate.ok, ports, config, plan, form, subscriptionId]);
 
   const downloadCriblConfigs = useCallback(async () => {
     if (result?.criblConfigs === undefined) {
@@ -188,6 +386,111 @@ export function LabsScreen() {
 
   return (
     <>
+      <div className="panel">
+        <h2 className="panel-title">Subscription and running labs</h2>
+        <p className="panel-desc">
+          Everything below operates in the selected subscription. The
+          inventory lists resource groups tagged as labs (this app or the
+          legacy UnifiedLab), soonest self-destruct first.
+        </p>
+        <label className="field">
+          <span className="field-label">Subscription</span>
+          {subscriptions !== null && subscriptions.length > 0 ? (
+            <select
+              value={subscriptionId}
+              onChange={(e) => setSubscriptionId(e.target.value)}
+            >
+              {subscriptions.map((sub) => (
+                <option key={sub.subscriptionId} value={sub.subscriptionId}>
+                  {sub.displayName} ({sub.subscriptionId})
+                </option>
+              ))}
+              {!subscriptions.some((s) => s.subscriptionId === subscriptionId) &&
+                subscriptionId !== "" && (
+                  <option value={subscriptionId}>{subscriptionId}</option>
+                )}
+            </select>
+          ) : (
+            <input
+              type="text"
+              value={subscriptionId}
+              onChange={(e) => setSubscriptionId(e.target.value)}
+              autoComplete="off"
+              spellCheck={false}
+            />
+          )}
+          {subError !== "" && (
+            <span className="field-hint eh-warning">
+              Subscription list unavailable ({subError}) - enter an id directly.
+            </span>
+          )}
+        </label>
+        <div className="panel-controls">
+          <button
+            className="run-button"
+            onClick={() => void refreshLabs()}
+            disabled={loadingLabs || subscriptionId === ""}
+          >
+            {loadingLabs
+              ? "Loading labs..."
+              : labs === null
+                ? "List running labs"
+                : "Refresh labs"}
+          </button>
+          <label className="field">
+            <span className="field-label">Extend by (hours)</span>
+            <input
+              type="text"
+              value={extendHours}
+              onChange={(e) => setExtendHours(e.target.value)}
+              autoComplete="off"
+              spellCheck={false}
+            />
+          </label>
+        </div>
+        {labsError !== "" && <pre className="result">{labsError}</pre>}
+        {labs !== null && labs.length === 0 && (
+          <p className="field-hint">No running labs found in this subscription.</p>
+        )}
+        {labs !== null &&
+          labs.map((lab) => (
+            <div className="discovery-result" key={lab.name}>
+              <span className={lab.expired ? "field-hint eh-warning" : "field-hint"}>
+                {formatLabInventoryRow(lab)}
+              </span>
+              <div className="panel-controls">
+                <button className="run-button" onClick={() => void extendLab(lab.name)}>
+                  Extend TTL
+                </button>
+                {confirmDestroy === lab.name ? (
+                  <>
+                    <button
+                      className="run-button"
+                      onClick={() => void destroyLabNow(lab.name)}
+                    >
+                      CONFIRM destroy {lab.name}
+                    </button>
+                    <button
+                      className="run-button"
+                      onClick={() => setConfirmDestroy("")}
+                    >
+                      Cancel
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    className="run-button"
+                    onClick={() => setConfirmDestroy(lab.name)}
+                  >
+                    Destroy...
+                  </button>
+                )}
+              </div>
+            </div>
+          ))}
+        {inventoryNotice !== "" && <p className="field-hint">{inventoryNotice}</p>}
+      </div>
+
       <div className="panel">
         <h2 className="panel-title">1. Lab profile</h2>
         <p className="panel-desc">
@@ -467,7 +770,7 @@ export function LabsScreen() {
           <button
             className="run-button"
             onClick={() => void runPermissionCheck()}
-            disabled={checkingPerms || config.subscriptionId === ""}
+            disabled={checkingPerms || subscriptionId === ""}
           >
             {checkingPerms ? "Checking permissions..." : "Check permissions"}
           </button>
@@ -533,6 +836,93 @@ export function LabsScreen() {
             )}
           </>
         )}
+      </div>
+
+      <div className="panel">
+        <h2 className="panel-title">5. Deploy the vNet flow-log pack to Cribl</h2>
+        <p className="panel-desc">
+          Assembles the AzureFlowLogs pack in-app - the Azure_vNet_FlowLogs
+          event breaker, the flow-tuple preprocessing pipeline, and the hourly
+          blob collector job wired to your storage account - and installs it
+          into the selected worker group, then commits and deploys. The
+          collector authenticates with the Azure_vNet_Flowlogs_Secret text
+          secret; provide the app registration's client secret below to create
+          it, or leave blank if it already exists in the group.
+        </p>
+        <div className="panel-controls">
+          <button className="run-button" onClick={() => void loadGroups()}>
+            {groups === null ? "Load worker groups" : "Reload worker groups"}
+          </button>
+          {groupsError !== "" && (
+            <span className="field-hint eh-warning">{groupsError}</span>
+          )}
+        </div>
+        {groups !== null && groups.length > 0 && (
+          <label className="field">
+            <span className="field-label">Worker group (where to deploy)</span>
+            <select value={groupId} onChange={(e) => setGroupId(e.target.value)}>
+              {groups.map((group) => (
+                <option key={group.id} value={group.id}>
+                  {group.id}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+        <label className="field">
+          <span className="field-label">Storage account</span>
+          <input
+            type="text"
+            value={packStorageAccount}
+            onChange={(e) => setPackStorageAccount(e.target.value)}
+            placeholder={result?.storage?.accountName ?? plan.names.storageAccount}
+            autoComplete="off"
+            spellCheck={false}
+          />
+          <span className="field-hint">
+            Defaults to the lab's deployed storage account when left blank.
+          </span>
+        </label>
+        <label className="field">
+          <span className="field-label">
+            Azure client secret for Azure_vNet_Flowlogs_Secret (transient, optional)
+          </span>
+          <input
+            type="password"
+            value={packSecret}
+            onChange={(e) => setPackSecret(e.target.value)}
+            autoComplete="new-password"
+          />
+        </label>
+        <label className="integrate-check">
+          <input
+            type="checkbox"
+            checked={packScheduleEnabled}
+            onChange={(e) => setPackScheduleEnabled(e.target.checked)}
+          />
+          <span className="integrate-check-text">
+            Enable the hourly collector schedule immediately
+          </span>
+        </label>
+        <div className="panel-controls">
+          <button
+            className="next-action-button"
+            onClick={() => void deployFlowLogPack()}
+            disabled={
+              deployingPack || groupId === "" || ports.packInstall === undefined
+            }
+          >
+            {deployingPack ? "Installing pack..." : "Install pack and deploy"}
+          </button>
+          {ports.packInstall === undefined && (
+            <span className="field-hint">
+              This shell did not provide a pack install client - a wiring gap,
+              not a runtime state.
+            </span>
+          )}
+        </div>
+        {packError !== "" && <pre className="result">{packError}</pre>}
+        {packLines.length > 0 && <pre className="result">{packLines.join("\n")}</pre>}
       </div>
     </>
   );
