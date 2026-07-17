@@ -462,6 +462,11 @@ export { ArchitectureScreen } from "./screens/architecture/architecture-screen";
 export { MappingCatalogScreen } from "./screens/mapping-catalog/mapping-catalog-screen";
 export { EventHubDiscoveryScreen } from "./screens/eventhub-discovery/eventhub-discovery-screen";
 
+// Labs (roadmap Phase 5, LAB-01/02/13/14): app-provisioned disposable Azure
+// lab environments - the 8 UnifiedLab profiles as a planning surface plus the
+// live foundation deploy with the mandatory TTL self-destruct.
+export { LabsScreen } from "./screens/labs/labs-screen";
+
 // Enable Sentinel Content (user feature 2026-07-14): install the solution,
 // its analytics rules, and its workbooks (choosing which), with installed-
 // state detection, custom uploads, auto parser dependency, and per-item
