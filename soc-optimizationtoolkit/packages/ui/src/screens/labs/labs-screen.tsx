@@ -19,6 +19,7 @@
 import { useCallback, useMemo, useState } from "react";
 import {
   LAB_PROFILES,
+  checkLabPermissions,
   provisionLab,
   type JobStep,
   type LabResourceGroupMode,
@@ -37,6 +38,7 @@ import {
   labResourceNameRows,
   labRunResultLines,
   onPremFromForm,
+  permissionCheckLines,
   ttlExpiryPreview,
   vmPasswordMissing,
   type LabFormState,
@@ -51,6 +53,9 @@ export function LabsScreen() {
   const [result, setResult] = useState<ProvisionLabResult | null>(null);
   const [deployError, setDeployError] = useState("");
   const [saveNotice, setSaveNotice] = useState("");
+  const [checkingPerms, setCheckingPerms] = useState(false);
+  const [permLines, setPermLines] = useState<string[]>([]);
+  const [permError, setPermError] = useState("");
 
   const set = useCallback(
     <K extends keyof LabFormState>(key: K, value: LabFormState[K]) => {
@@ -74,6 +79,34 @@ export function LabsScreen() {
   // The expiry preview needs a wall clock; minted HERE (the impure component
   // layer - core and labs-state stay clock-free).
   const expiryPreview = ttlExpiryPreview(form, new Date().toISOString());
+
+  const runPermissionCheck = useCallback(async () => {
+    if (checkingPerms || config.subscriptionId === "") {
+      return;
+    }
+    setCheckingPerms(true);
+    setPermError("");
+    setPermLines([]);
+    try {
+      const outcome = await checkLabPermissions(
+        ports.azure,
+        {
+          subscriptionId: config.subscriptionId,
+          resourceGroupName: plan.resourceGroupName,
+          rgMode: form.rgMode,
+          flags: plan.flags,
+        },
+        ports.logger,
+      );
+      setPermLines(permissionCheckLines(outcome));
+    } catch (err) {
+      setPermError(
+        `Permission check unavailable: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    } finally {
+      setCheckingPerms(false);
+    }
+  }, [checkingPerms, config.subscriptionId, ports.azure, ports.logger, plan, form.rgMode]);
 
   const downloadPlan = useCallback(async () => {
     setSaveNotice("");
@@ -431,11 +464,27 @@ export function LabsScreen() {
           </p>
         ))}
         <div className="panel-controls">
+          <button
+            className="run-button"
+            onClick={() => void runPermissionCheck()}
+            disabled={checkingPerms || config.subscriptionId === ""}
+          >
+            {checkingPerms ? "Checking permissions..." : "Check permissions"}
+          </button>
+          <span className="field-hint">
+            Evaluates the app registration's EFFECTIVE actions for this
+            profile (never role names), including whether a conditional RBAC
+            grant would block the TTL self-destruct role assignment.
+          </span>
           <button className="run-button" onClick={() => void downloadPlan()}>
             Download plan (JSON)
           </button>
           {saveNotice !== "" && <span className="field-hint">{saveNotice}</span>}
         </div>
+        {permError !== "" && <pre className="result">{permError}</pre>}
+        {permLines.length > 0 && (
+          <pre className="result">{permLines.join("\n")}</pre>
+        )}
       </div>
 
       <div className="panel">

@@ -18,6 +18,7 @@ import {
   type LabCriblBundle,
   type LabMode,
   type LabOnPremConnection,
+  type LabPermissionCheckOutcome,
   type LabPhase,
   type LabPlan,
   type LabPlanInput,
@@ -414,6 +415,55 @@ export function labRunResultLines(result: ProvisionLabResult): string[] {
         `required Cribl secrets: ${bundle.requiredSecrets.map((s) => s.name).join(", ") || "none"}. ` +
         "Download the bundle below.",
     );
+  }
+  return lines;
+}
+
+/**
+ * Render the permission-check outcome as honest, line-by-line text: one
+ * [OK]/[MISSING] row per profile action, then the TTL-grant condition
+ * analysis (the ABAC case a live deploy fails on), remediation, and notes.
+ */
+export function permissionCheckLines(outcome: LabPermissionCheckOutcome): string[] {
+  const lines: string[] = [`Permissions evaluated at ${outcome.scope}`];
+  for (const check of outcome.checks) {
+    lines.push(`[${check.granted ? "OK" : "MISSING"}] ${check.label} (${check.action})`);
+  }
+  switch (outcome.roleAssignmentGrant.kind) {
+    case "unconditional":
+      lines.push(
+        "TTL grant: roleAssignments/write is held without a condition - the " +
+          "self-destruct grant will succeed.",
+      );
+      break;
+    case "conditional-allows-contributor":
+      lines.push(
+        "TTL grant: roleAssignments/write is held through a CONDITIONAL " +
+          "(ABAC) assignment whose condition appears to allow Contributor - " +
+          "expected to succeed (best-effort textual check).",
+      );
+      break;
+    case "conditional-blocks-contributor":
+      lines.push(
+        "TTL grant: roleAssignments/write is held ONLY through a conditional " +
+          "(ABAC) assignment that does NOT appear to allow Contributor - the " +
+          "deploy WILL fail at ttl-role-assignment.",
+      );
+      break;
+    case "not-granted":
+      lines.push(
+        "TTL grant: roleAssignments/write is not granted at this scope - " +
+          "create-new mode needs a (constrained) RBAC Administrator " +
+          "assignment; bring-your-own mode expects an admin to grant the TTL " +
+          "identity manually after deploy.",
+      );
+      break;
+  }
+  if (outcome.roleConditionRemediation !== undefined) {
+    lines.push(outcome.roleConditionRemediation);
+  }
+  for (const note of outcome.notes) {
+    lines.push(`Note: ${note}`);
   }
   return lines;
 }

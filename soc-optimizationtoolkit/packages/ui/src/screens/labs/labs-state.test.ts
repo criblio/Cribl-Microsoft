@@ -10,6 +10,7 @@ import {
   labResourceNameRows,
   labRunResultLines,
   onPremFromForm,
+  permissionCheckLines,
   ttlExpiryPreview,
   vmPasswordMissing,
 } from "./labs-state";
@@ -96,6 +97,48 @@ describe("onPremFromForm", () => {
       addressSpaces: ["10.0.0.0/24", "10.1.0.0/24"],
       sharedKey: "psk",
     });
+  });
+});
+
+describe("permissionCheckLines", () => {
+  it("renders per-action rows and the ABAC verdict with remediation", () => {
+    const lines = permissionCheckLines({
+      scope: `/subscriptions/${SUB}`,
+      checks: [
+        {
+          action: "Microsoft.Logic/workflows/write",
+          label: "Deploy the TTL self-destruct watchdog",
+          granted: true,
+        },
+        {
+          action: "Microsoft.Authorization/roleAssignments/write",
+          label: "Grant the TTL identity its delete role",
+          granted: false,
+        },
+      ],
+      roleAssignmentGrant: {
+        kind: "conditional-blocks-contributor",
+        conditions: ["(...GuidEquals {3913510d-...})"],
+      },
+      roleConditionRemediation: "Ask an admin to edit the condition.",
+      notes: ["a note"],
+    });
+    expect(lines[0]).toContain("evaluated at /subscriptions/");
+    expect(lines[1]).toContain("[OK] Deploy the TTL self-destruct watchdog");
+    expect(lines[2]).toContain("[MISSING] Grant the TTL identity its delete role");
+    expect(lines.some((l) => l.includes("WILL fail at ttl-role-assignment"))).toBe(true);
+    expect(lines.some((l) => l === "Ask an admin to edit the condition.")).toBe(true);
+    expect(lines.some((l) => l === "Note: a note")).toBe(true);
+  });
+
+  it("reports the clean unconditional case", () => {
+    const lines = permissionCheckLines({
+      scope: `/subscriptions/${SUB}`,
+      checks: [],
+      roleAssignmentGrant: { kind: "unconditional", conditions: [] },
+      notes: [],
+    });
+    expect(lines.some((l) => l.includes("without a condition"))).toBe(true);
   });
 });
 

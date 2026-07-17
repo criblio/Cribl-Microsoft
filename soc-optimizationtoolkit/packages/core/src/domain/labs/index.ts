@@ -14,4 +14,5 @@ export * from "./lab-compute";
 export * from "./lab-gateway";
 export * from "./lab-privatelink";
 export * from "./lab-cribl";
+export * from "./lab-permissions";
 export * from "./lab-plan";

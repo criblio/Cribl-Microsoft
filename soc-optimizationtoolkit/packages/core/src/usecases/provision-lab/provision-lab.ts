@@ -79,6 +79,7 @@ import type { AzureManagement } from "../../ports/azure-management";
 import type { JobRecord, JobStep, JobStore } from "../../ports/job-store";
 import type { Logger } from "../../ports/logger";
 import {
+  CONTRIBUTOR_ROLE_DEFINITION_ID,
   buildResourceGroupGetRequest,
   buildResourceGroupPatchTagsRequest,
   buildResourceGroupPutRequest,
@@ -922,12 +923,24 @@ export async function provisionLab(
     }
     const command = manualLabRoleCommand(sub, rg, result.principalId);
     result.manualRoleAssignmentCommand = command;
+    // A constrained RBAC Administrator grant whose ABAC condition does not
+    // allow assigning Contributor fails exactly here - name the fix.
+    const bodyText = JSON.stringify(response.body) ?? "";
+    const abacHint = /ABAC condition/i.test(bodyText)
+      ? " The app's RBAC Administrator grant carries a role-assignment condition " +
+        "that does not allow assigning Contributor - ask an admin to add " +
+        `Contributor (${CONTRIBUTOR_ROLE_DEFINITION_ID}) to the condition's ` +
+        "allowed roles for service principals (or run the az command below). " +
+        "Use the Labs screen's permission check to verify before re-running."
+      : "";
     const error =
       httpErrorText(
         `grant Contributor to the TTL identity on '${rg}'`,
         response.status,
         response.body,
-      ) + ` - the lab CANNOT self-delete until an admin grants the role: ${command}`;
+      ) +
+      abacHint +
+      ` - the lab CANNOT self-delete until an admin grants the role: ${command}`;
     errors.push(error);
     await setStep("ttl-role-assignment", "failed", error);
     const afterRole = stepNames.slice(stepNames.indexOf("ttl-role-assignment") + 1);
