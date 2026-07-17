@@ -15,7 +15,9 @@ import {
   provisionLabStepsFor,
   type JobStep,
   type LabComponentFlags,
+  type LabCriblBundle,
   type LabMode,
+  type LabOnPremConnection,
   type LabPhase,
   type LabPlan,
   type LabPlanInput,
@@ -37,6 +39,12 @@ export interface LabFormState {
   ttlHours: string;
   ttlWarningHours: string;
   ttlEmail: string;
+  /** TRANSIENT VM admin password (profiles that deploy test VMs). */
+  vmPassword: string;
+  /** Optional on-premises VPN details (profiles that deploy a gateway). */
+  onPremGatewayIp: string;
+  onPremAddressSpace: string;
+  onPremSharedKey: string;
 }
 
 /**
@@ -56,6 +64,10 @@ export function defaultLabFormState(): LabFormState {
     ttlHours: "72",
     ttlWarningHours: "24",
     ttlEmail: "",
+    vmPassword: "",
+    onPremGatewayIp: "",
+    onPremAddressSpace: "",
+    onPremSharedKey: "",
   };
 }
 
@@ -96,13 +108,15 @@ export function labPlanFromForm(form: LabFormState, subscriptionId: string): Lab
 }
 
 /**
- * Foundation deploy gate: the plan must validate and the shell must provide
- * the GUID minter (absent minter = a shell wiring gap surfaced as a reason,
- * the same convention as the role-assignment step).
+ * Deploy gate: the plan must validate, the shell must provide the GUID
+ * minter (absent minter = a shell wiring gap surfaced as a reason, the same
+ * convention as the role-assignment step), and a profile that deploys test
+ * VMs needs the transient admin password.
  */
 export function canDeployFoundation(
   plan: LabPlan,
   hasMinter: boolean,
+  vmPasswordMissing = false,
 ): { ok: boolean; reason: string } {
   if (plan.errors.length > 0) {
     return { ok: false, reason: "Resolve the validation errors above first." };
@@ -114,7 +128,37 @@ export function canDeployFoundation(
         "This shell did not provide a role-assignment id minter (mintAssignmentName) - a wiring gap, not a runtime state.",
     };
   }
+  if (vmPasswordMissing) {
+    return {
+      ok: false,
+      reason:
+        "This profile deploys test VMs - enter the transient VM admin password first.",
+    };
+  }
   return { ok: true, reason: "" };
+}
+
+/** True when the profile deploys VMs but the form holds no password yet. */
+export function vmPasswordMissing(plan: LabPlan, form: LabFormState): boolean {
+  return plan.flags.virtualMachines.deployVMs && form.vmPassword.trim() === "";
+}
+
+/**
+ * The optional on-premises connection from the form: undefined when every
+ * field is blank (the connection step then reports itself skipped).
+ */
+export function onPremFromForm(form: LabFormState): LabOnPremConnection | undefined {
+  const ip = form.onPremGatewayIp.trim();
+  const space = form.onPremAddressSpace.trim();
+  const key = form.onPremSharedKey.trim();
+  if (ip === "" && space === "" && key === "") {
+    return undefined;
+  }
+  return {
+    gatewayIpAddress: ip,
+    addressSpaces: space === "" ? [] : space.split(",").map((s) => s.trim()),
+    sharedKey: key,
+  };
 }
 
 /** "Phase 4 - Monitoring: Log Analytics, Microsoft Sentinel, Private Link" */
@@ -291,5 +335,97 @@ export function labRunResultLines(result: ProvisionLabResult): string[] {
       );
     }
   }
+  if (result.privateLink !== undefined) {
+    lines.push(
+      `Private Link: ${result.privateLink.amplsName} with endpoint ` +
+        `${result.privateLink.privateEndpointName}` +
+        (result.privateLink.dnsZoneLinked ? " (DNS zone linked)" : ""),
+    );
+  }
+  if (result.analytics !== undefined) {
+    if (result.analytics.namespaceName !== undefined) {
+      lines.push(
+        resourceLine(
+          "Event Hub namespace",
+          result.analytics.namespaceName,
+          result.analytics.namespaceCreated === true,
+        ),
+      );
+      for (const hub of result.analytics.hubs ?? []) {
+        lines.push(resourceLine("Event Hub", hub.name, hub.created));
+      }
+    }
+    if (result.analytics.adxClusterName !== undefined) {
+      lines.push(
+        resourceLine(
+          "ADX cluster",
+          result.analytics.adxClusterName,
+          result.analytics.adxClusterCreated === true,
+        ) +
+          (result.analytics.adxClusterUri !== undefined &&
+          result.analytics.adxClusterUri !== ""
+            ? ` (${result.analytics.adxClusterUri})`
+            : ""),
+      );
+    }
+  }
+  if (result.flowLogs !== undefined) {
+    lines.push(
+      `${result.flowLogs.flowLogs.length} flow log(s) via Network Watcher ` +
+        result.flowLogs.networkWatcher,
+    );
+  }
+  if (result.compute !== undefined) {
+    for (const vm of result.compute.vms) {
+      lines.push(resourceLine("Test VM", vm.name, vm.created));
+    }
+    if (result.compute.autoShutdownConfigured) {
+      lines.push("VM auto-shutdown schedules configured (daily, cost control).");
+    }
+  }
+  if (result.dcrs !== undefined) {
+    for (const dcr of result.dcrs) {
+      if (dcr.error !== undefined) {
+        lines.push(`DCR for ${dcr.table} FAILED: ${dcr.error}`);
+      } else {
+        lines.push(
+          `DCR ${dcr.dcrName} (${dcr.table}${dcr.reused ? ", reused" : ""}): ` +
+            `immutable id ${dcr.immutableId}, ingest ${dcr.logsIngestionEndpoint}`,
+        );
+      }
+    }
+  }
+  if (result.gateway !== undefined) {
+    lines.push(
+      `VPN gateway ${result.gateway.gatewayName}: ` +
+        (result.gateway.gatewayReady
+          ? "ready"
+          : `still provisioning (${result.gateway.provisioningState || "state unknown"})`),
+    );
+    if (result.gateway.connectionName !== undefined) {
+      lines.push(`Site-to-site connection deployed: ${result.gateway.connectionName}`);
+    }
+  }
+  if (result.criblConfigs !== undefined) {
+    const bundle = result.criblConfigs;
+    lines.push(
+      `Cribl configs generated: ${bundle.adxDestinations.length} destination(s), ` +
+        `${bundle.eventHubSources.length + bundle.blobSources.length} source(s); ` +
+        `required Cribl secrets: ${bundle.requiredSecrets.map((s) => s.name).join(", ") || "none"}. ` +
+        "Download the bundle below.",
+    );
+  }
   return lines;
+}
+
+/** The downloadable Cribl config bundle artifact (deterministic per run). */
+export function criblBundleArtifact(
+  bundle: LabCriblBundle,
+  labType: LabType,
+  labMode: LabMode,
+): { filename: string; json: string } {
+  return {
+    filename: `lab-cribl-configs-${labType}-${labMode}.json`,
+    json: JSON.stringify(bundle, null, 2),
+  };
 }

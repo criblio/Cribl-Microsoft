@@ -1,14 +1,15 @@
 /**
- * LabsScreen - roadmap Phase 5 (LAB-01/02/03/04/05/13/14): provision
- * disposable Azure lab environments from the app. Ships the full PLANNING
- * surface (the 8 UnifiedLab profiles, public/private mode, the two
- * resource-group permission modes, validation, planned resource names,
- * phases, permissions, plan download) and DEPLOYS phases 1-3 live: the lab
- * resource group with the MANDATORY TTL self-destruct watchdog, the storage
- * phase (account, pattern containers, notification queue, Event Grid blob
- * wiring), and the networking phase (NSGs + VNet). The remaining phases
- * (monitoring, analytics, flow logs, compute, DCRs, Cribl wiring, VPN
- * gateway) land as sibling steps in subsequent slices per the roadmap.
+ * LabsScreen - roadmap Phase 5: provision disposable Azure lab environments
+ * from the app. Ships the full PLANNING surface (the 8 UnifiedLab profiles,
+ * public/private mode, the two resource-group permission modes, validation,
+ * planned resource names, phases, permissions, plan download) and deploys
+ * ALL TEN legacy phases live through the @soc/core provisionLab engine:
+ * foundation with the MANDATORY TTL self-destruct, storage + Event Grid,
+ * networking, Log Analytics + Sentinel (+ AMPLS in private mode), Event Hub
+ * + ADX, flow logs, test VMs (transient password input), Direct DCRs for the
+ * four Sentinel natives, the generated Cribl config bundle (downloadable via
+ * the ArtifactSink), and the VPN gateway with the optional site-to-site
+ * connection.
  *
  * All lab knowledge is @soc/core (domain/labs + the provisionLab usecase);
  * decisions live in the pure labs-state module; this component only renders
@@ -27,6 +28,7 @@ import {
 import { usePorts } from "../../ports-context";
 import {
   canDeployFoundation,
+  criblBundleArtifact,
   defaultLabFormState,
   formatLabPhaseLine,
   initialLabSteps,
@@ -34,7 +36,9 @@ import {
   labPlanFromForm,
   labResourceNameRows,
   labRunResultLines,
+  onPremFromForm,
   ttlExpiryPreview,
+  vmPasswordMissing,
   type LabFormState,
 } from "./labs-state";
 
@@ -65,7 +69,7 @@ export function LabsScreen() {
     [plan],
   );
   const hasMinter = ports.mintAssignmentName !== undefined;
-  const gate = canDeployFoundation(plan, hasMinter);
+  const gate = canDeployFoundation(plan, hasMinter, vmPasswordMissing(plan, form));
 
   // The expiry preview needs a wall clock; minted HERE (the impure component
   // layer - core and labs-state stay clock-free).
@@ -108,6 +112,10 @@ export function LabsScreen() {
           },
           flags: plan.flags,
           names: plan.names,
+          tenantId: config.tenantId,
+          clientId: config.clientId,
+          vmAdminPassword: form.vmPassword,
+          onPrem: onPremFromForm(form),
           nowIso: new Date().toISOString(),
           mintAssignmentName: ports.mintAssignmentName,
           // The legacy 4-char random collision suffix; randomness lives in
@@ -127,7 +135,23 @@ export function LabsScreen() {
     } finally {
       setDeploying(false);
     }
-  }, [deploying, gate.ok, ports, config.subscriptionId, plan, form]);
+  }, [deploying, gate.ok, ports, config, plan, form]);
+
+  const downloadCriblConfigs = useCallback(async () => {
+    if (result?.criblConfigs === undefined) {
+      return;
+    }
+    setSaveNotice("");
+    const artifact = criblBundleArtifact(result.criblConfigs, form.labType, form.labMode);
+    try {
+      await ports.artifacts.save(artifact.filename, "application/json", artifact.json);
+      setSaveNotice(`Saved ${artifact.filename} through the artifact sink.`);
+    } catch (err) {
+      setSaveNotice(
+        `Could not save: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+  }, [result, form.labType, form.labMode, ports.artifacts]);
 
   return (
     <>
@@ -309,6 +333,66 @@ export function LabsScreen() {
             recipient.
           </span>
         </label>
+        {plan.flags.virtualMachines.deployVMs && (
+          <label className="field">
+            <span className="field-label">VM admin password (transient)</span>
+            <input
+              type="password"
+              value={form.vmPassword}
+              onChange={(e) => set("vmPassword", e.target.value)}
+              autoComplete="new-password"
+            />
+            <span className="field-hint">
+              Used once for the test VMs (localadmin) and never stored. A
+              re-run that finds the VMs already deployed does not need it.
+            </span>
+          </label>
+        )}
+        {plan.flags.infrastructure.deployVPN && (
+          <>
+            <span className="field-label">
+              On-premises VPN connection (optional)
+            </span>
+            <p className="field-hint">
+              Leave blank to deploy the gateway only; fill all three to also
+              create the lng-onprem local gateway and the IPsec site-to-site
+              connection.
+            </p>
+            <label className="field">
+              <span className="field-label">On-prem VPN device public IP</span>
+              <input
+                type="text"
+                value={form.onPremGatewayIp}
+                onChange={(e) => set("onPremGatewayIp", e.target.value)}
+                autoComplete="off"
+                spellCheck={false}
+              />
+            </label>
+            <label className="field">
+              <span className="field-label">On-prem address spaces (CIDR, comma-separated)</span>
+              <input
+                type="text"
+                value={form.onPremAddressSpace}
+                onChange={(e) => set("onPremAddressSpace", e.target.value)}
+                autoComplete="off"
+                spellCheck={false}
+              />
+            </label>
+            <label className="field">
+              <span className="field-label">IPsec shared key (transient)</span>
+              <input
+                type="password"
+                value={form.onPremSharedKey}
+                onChange={(e) => set("onPremSharedKey", e.target.value)}
+                autoComplete="new-password"
+              />
+              <span className="field-hint">
+                Sent only to the ARM connection resource; must match the key
+                on your on-premises device.
+              </span>
+            </label>
+          </>
+        )}
         {plan.errors.map((error) => (
           <p className="field-hint eh-warning" key={error}>
             {error}
@@ -357,14 +441,15 @@ export function LabsScreen() {
       <div className="panel">
         <h2 className="panel-title">4. Deploy</h2>
         <p className="panel-desc">
-          Deploys the profile's foundation, storage, networking, and
-          monitoring phases live: the resource group (created, or TTL-extended
-          if it exists) with the TTL self-destruct watchdog and its delete
-          permission, the storage account with its pattern containers,
-          notification queue, and Event Grid blob wiring, the NSGs and virtual
-          network, then the Log Analytics workspace with Microsoft Sentinel.
-          The remaining phases (Private Link, analytics, flow logs, compute,
-          DCRs, Cribl wiring, VPN gateway) arrive in upcoming releases.
+          Deploys every phase the profile requires, in the legacy UnifiedLab
+          order: the TTL-guarded resource group foundation, storage with the
+          Cribl ingestion patterns, networking, Log Analytics with Sentinel
+          (plus Private Link in private mode), Event Hub and ADX, vNet flow
+          logs, traffic-generating test VMs, Direct DCRs for the four
+          Sentinel-native tables, the generated Cribl configuration bundle,
+          and the VPN gateway. Long-running resources (ADX 10-15 minutes, VPN
+          gateway 30-45 minutes) are polled while this screen stays open; a
+          re-run resumes from whatever already finished.
         </p>
         <div className="panel-controls">
           <button
@@ -388,7 +473,16 @@ export function LabsScreen() {
         )}
         {deployError !== "" && <pre className="result">{deployError}</pre>}
         {result !== null && (
-          <pre className="result">{labRunResultLines(result).join("\n")}</pre>
+          <>
+            <pre className="result">{labRunResultLines(result).join("\n")}</pre>
+            {result.criblConfigs !== undefined && (
+              <div className="panel-controls">
+                <button className="run-button" onClick={() => void downloadCriblConfigs()}>
+                  Download Cribl configs (JSON)
+                </button>
+              </div>
+            )}
+          </>
         )}
       </div>
     </>

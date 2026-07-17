@@ -241,6 +241,12 @@ export interface LabSubnet {
   addressPrefix: string;
   /** Human description shown in previews. */
   description?: string;
+  /**
+   * Emit privateEndpointNetworkPolicies Disabled on the subnet - required by
+   * private endpoints. Set on the PrivateLinkSubnet default; the legacy
+   * flipped it lazily with a second VNet write when deploying AMPLS.
+   */
+  disablePrivateEndpointNetworkPolicies?: boolean;
 }
 
 /** The legacy default subnet layout (azure-parameters.json, verbatim). */
@@ -268,6 +274,7 @@ export const DEFAULT_LAB_SUBNETS: readonly LabSubnet[] = [
     name: "PrivateLinkSubnet",
     addressPrefix: "10.198.30.128/27",
     description: "Private endpoints for storage, Event Hub, ADX",
+    disablePrivateEndpointNetworkPolicies: true,
   },
 ] as const;
 

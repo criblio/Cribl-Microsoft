@@ -215,6 +215,9 @@ export function buildVnetPutRequest(input: VnetPutInput): AzureManagementRequest
       name: subnet.name,
       properties: {
         addressPrefix: subnet.addressPrefix,
+        ...(subnet.disablePrivateEndpointNetworkPolicies === true
+          ? { privateEndpointNetworkPolicies: "Disabled" }
+          : {}),
         ...(nsgName !== undefined
           ? {
               networkSecurityGroup: {

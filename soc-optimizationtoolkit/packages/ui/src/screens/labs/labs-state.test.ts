@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   canDeployFoundation,
+  criblBundleArtifact,
   defaultLabFormState,
   formatLabPhaseLine,
   initialLabSteps,
@@ -8,7 +9,9 @@ import {
   labPlanFromForm,
   labResourceNameRows,
   labRunResultLines,
+  onPremFromForm,
   ttlExpiryPreview,
+  vmPasswordMissing,
 } from "./labs-state";
 import { labDeploymentConfig } from "@soc/core";
 import type { ProvisionLabResult } from "@soc/core";
@@ -54,14 +57,63 @@ describe("labPlanFromForm", () => {
 });
 
 describe("canDeployFoundation", () => {
-  it("gates on validation errors, then on the shell minter", () => {
+  it("gates on validation errors, then on the shell minter, then the VM password", () => {
     const good = labPlanFromForm(validForm(), SUB);
     expect(canDeployFoundation(good, true).ok).toBe(true);
     expect(canDeployFoundation(good, false).ok).toBe(false);
     expect(canDeployFoundation(good, false).reason).toContain("mintAssignmentName");
+    expect(canDeployFoundation(good, true, true).ok).toBe(false);
+    expect(canDeployFoundation(good, true, true).reason).toContain("password");
 
     const bad = labPlanFromForm({ ...validForm(), baseObjectName: "" }, SUB);
     expect(canDeployFoundation(bad, true).ok).toBe(false);
+  });
+});
+
+describe("vmPasswordMissing", () => {
+  it("requires the password only for profiles that deploy VMs", () => {
+    const sentinel = labPlanFromForm(validForm(), SUB);
+    expect(vmPasswordMissing(sentinel, validForm())).toBe(false);
+
+    const flowlog = { ...validForm(), labType: "FlowLogLab" as const };
+    const plan = labPlanFromForm(flowlog, SUB);
+    expect(vmPasswordMissing(plan, flowlog)).toBe(true);
+    expect(vmPasswordMissing(plan, { ...flowlog, vmPassword: "pw-1!" })).toBe(false);
+  });
+});
+
+describe("onPremFromForm", () => {
+  it("returns undefined for an all-blank form, else the parsed connection", () => {
+    expect(onPremFromForm(validForm())).toBeUndefined();
+    const filled = onPremFromForm({
+      ...validForm(),
+      onPremGatewayIp: "203.0.113.10",
+      onPremAddressSpace: "10.0.0.0/24, 10.1.0.0/24",
+      onPremSharedKey: "psk",
+    });
+    expect(filled).toEqual({
+      gatewayIpAddress: "203.0.113.10",
+      addressSpaces: ["10.0.0.0/24", "10.1.0.0/24"],
+      sharedKey: "psk",
+    });
+  });
+});
+
+describe("criblBundleArtifact", () => {
+  it("names the bundle after the profile and serializes it", () => {
+    const artifact = criblBundleArtifact(
+      {
+        adxDestinations: [],
+        eventHubSources: [],
+        blobSources: [],
+        sentinelDcrs: [],
+        requiredSecrets: [],
+      },
+      "FlowLogLab",
+      "public",
+    );
+    expect(artifact.filename).toBe("lab-cribl-configs-FlowLogLab-public.json");
+    expect(JSON.parse(artifact.json).requiredSecrets).toEqual([]);
   });
 });
 
@@ -118,6 +170,8 @@ describe("initialLabSteps", () => {
       "ttl-role-assignment",
       "log-analytics",
       "microsoft-sentinel",
+      "data-collection-rules",
+      "cribl-configs",
     ]);
     expect(sentinel.every((s) => s.status === "pending")).toBe(true);
 
@@ -186,6 +240,67 @@ describe("labRunResultLines", () => {
       lines.some((l) => l.includes("sacribllabcribl-events") && l.includes("blobCreated")),
     ).toBe(true);
     expect(lines.some((l) => l === "Virtual network deployed: vnet-cribllab-eastus")).toBe(true);
+  });
+
+  it("summarizes the later-phase outcomes when they ran", () => {
+    const lines = labRunResultLines({
+      ...base,
+      privateLink: {
+        amplsName: "ampls-cribllab-eastus",
+        privateEndpointName: "pe-ampls-cribllab",
+        dnsZoneLinked: true,
+      },
+      analytics: {
+        namespaceName: "evhns-cribllab-eastus",
+        namespaceCreated: true,
+        hubs: [{ name: "logs-hub", created: true }],
+        adxClusterName: "adx1",
+        adxClusterCreated: true,
+        adxClusterUri: "https://adx",
+        adxDatabase: "CriblLogs",
+      },
+      flowLogs: {
+        networkWatcher: "NetworkWatcherRG/NetworkWatcher_eastus",
+        flowLogs: [{ name: "FlowLog-vnet", created: true }],
+      },
+      compute: {
+        vms: [{ name: "cribllab-vm-security", created: true }],
+        autoShutdownConfigured: true,
+      },
+      dcrs: [
+        {
+          table: "SecurityEvent",
+          dcrName: "dcr-SecurityEvent-eastus",
+          immutableId: "imm-1",
+          logsIngestionEndpoint: "https://e",
+          stream: "Custom-SecurityEvent",
+          reused: false,
+        },
+      ],
+      gateway: {
+        publicIpName: "pip-cribllab-vpn-eastus",
+        gatewayName: "vpngw-cribllab-eastus",
+        gatewayReady: true,
+        provisioningState: "Succeeded",
+        connectionName: "conn-azure-to-onprem",
+      },
+      criblConfigs: {
+        adxDestinations: [{}],
+        eventHubSources: [{}],
+        blobSources: [],
+        sentinelDcrs: [],
+        requiredSecrets: [{ name: "Azure_Client_Secret", purpose: "x" }],
+      },
+    });
+    expect(lines.some((l) => l.includes("ampls-cribllab-eastus"))).toBe(true);
+    expect(lines.some((l) => l.includes("Event Hub namespace created"))).toBe(true);
+    expect(lines.some((l) => l.includes("ADX cluster created"))).toBe(true);
+    expect(lines.some((l) => l.includes("1 flow log(s)"))).toBe(true);
+    expect(lines.some((l) => l.includes("Test VM created: cribllab-vm-security"))).toBe(true);
+    expect(lines.some((l) => l.includes("DCR dcr-SecurityEvent-eastus"))).toBe(true);
+    expect(lines.some((l) => l.includes("VPN gateway vpngw-cribllab-eastus: ready"))).toBe(true);
+    expect(lines.some((l) => l.includes("Site-to-site connection deployed"))).toBe(true);
+    expect(lines.some((l) => l.includes("Cribl configs generated"))).toBe(true);
   });
 
   it("summarizes the monitoring outcome when the phase ran", () => {
