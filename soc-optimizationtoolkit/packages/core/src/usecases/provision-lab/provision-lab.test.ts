@@ -38,7 +38,9 @@ function input(overrides?: Partial<ProvisionLabInput>): ProvisionLabInput {
     baseObjectName: "cribllab",
     rgMode: "create-new",
     ttl: { hours: 72, warningHours: 24, userEmail: "user@example.com" },
-    flags: labDeploymentConfig("SentinelLab", "public"),
+    // EventHubLab (public) needs only phase 5, which is not implemented yet,
+    // so its job is foundation-only - the baseline the foundation tests use.
+    flags: labDeploymentConfig("EventHubLab", "public"),
     names: NAMES,
     nowIso: NOW,
     mintAssignmentName: () => "guid-1",
@@ -62,10 +64,17 @@ const FOUNDATION_OK = [
 
 describe("provisionLabStepsFor", () => {
   it("includes only the phases the profile requires", () => {
+    expect(provisionLabStepsFor(labDeploymentConfig("EventHubLab", "public"))).toEqual([
+      "resource-group",
+      "ttl-logic-app",
+      "ttl-role-assignment",
+    ]);
     expect(provisionLabStepsFor(labDeploymentConfig("SentinelLab", "public"))).toEqual([
       "resource-group",
       "ttl-logic-app",
       "ttl-role-assignment",
+      "log-analytics",
+      "microsoft-sentinel",
     ]);
     expect(
       provisionLabStepsFor(labDeploymentConfig("BlobQueueLab", "public")),
@@ -87,6 +96,15 @@ describe("provisionLabStepsFor", () => {
       "network-security-groups",
       "virtual-network",
     ]);
+  });
+
+  it("a private monitoring profile carries the honest private-link placeholder", () => {
+    const steps = provisionLabStepsFor(labDeploymentConfig("SentinelLab", "private"));
+    expect(steps).toContain("private-link");
+    // Public mode never carries it.
+    expect(
+      provisionLabStepsFor(labDeploymentConfig("SentinelLab", "public")),
+    ).not.toContain("private-link");
   });
 });
 
@@ -447,6 +465,100 @@ describe("provisionLab - networking phase (BasicInfrastructure)", () => {
       input({ flags: labDeploymentConfig("BasicInfrastructure", "public") }),
     );
     expect(result.ok).toBe(true);
+  });
+});
+
+describe("provisionLab - monitoring phase (SentinelLab)", () => {
+  it("creates the workspace and enables Sentinel (the default profile end-to-end)", async () => {
+    const azure = new FakeAzureManagement();
+    azure.respondWith(
+      ...FOUNDATION_OK,
+      { status: 404, body: {} }, // GET workspace - missing
+      {
+        status: 200,
+        body: {
+          location: "eastus",
+          properties: { provisioningState: "Succeeded", customerId: "cid-1" },
+        },
+      }, // createWorkspace PUT (already Succeeded - no poll)
+      {
+        status: 200,
+        body: { location: "eastus", id: "/ws-id" },
+      }, // enableSentinel: GET workspace for location
+      { status: 404, body: {} }, // enableSentinel: solution pre-check
+      { status: 200, body: {} }, // enableSentinel: solution PUT
+    );
+    const jobs = new FakeJobStore();
+
+    const result = await provisionLab(
+      { azure, jobs },
+      input({ flags: labDeploymentConfig("SentinelLab", "public") }),
+    );
+
+    expect(result.ok).toBe(true);
+    expect(result.monitoring?.workspaceName).toBe("law-cribllab-eastus");
+    expect(result.monitoring?.workspaceCreated).toBe(true);
+    expect(result.monitoring?.sentinelEnabled).toBe(true);
+    expect(result.monitoring?.sentinelAlreadyEnabled).toBe(false);
+
+    const record = (await jobs.list())[0];
+    expect(record.steps.map((s) => `${s.name}:${s.status}`)).toEqual([
+      "resource-group:succeeded",
+      "ttl-logic-app:succeeded",
+      "ttl-role-assignment:succeeded",
+      "log-analytics:succeeded",
+      "microsoft-sentinel:succeeded",
+    ]);
+  });
+
+  it("reuses an existing workspace and reports Sentinel already enabled", async () => {
+    const azure = new FakeAzureManagement();
+    azure.respondWith(
+      ...FOUNDATION_OK,
+      { status: 200, body: { location: "eastus" } }, // GET workspace - exists
+      { status: 200, body: { location: "eastus", id: "/ws-id" } }, // enableSentinel GET
+      { status: 200, body: {} }, // solution pre-check - already there
+    );
+
+    const result = await provisionLab(
+      { azure },
+      input({ flags: labDeploymentConfig("SentinelLab", "public") }),
+    );
+
+    expect(result.ok).toBe(true);
+    expect(result.monitoring?.workspaceCreated).toBe(false);
+    expect(result.monitoring?.sentinelAlreadyEnabled).toBe(true);
+  });
+
+  it("skips Sentinel when the workspace fails, and reports the private-link placeholder", async () => {
+    const azure = new FakeAzureManagement();
+    azure.respondWith(
+      ...FOUNDATION_OK,
+      // SentinelLab PRIVATE also deploys networking (phase 3 before 4).
+      { status: 404, body: {} }, // GET NSG security
+      { status: 201, body: {} },
+      { status: 404, body: {} }, // GET NSG o11y
+      { status: 201, body: {} },
+      { status: 404, body: {} }, // GET NSG privatelink
+      { status: 201, body: {} },
+      { status: 200, body: { properties: { provisioningState: "Succeeded" } } }, // PUT VNet
+      { status: 500, body: { error: { code: "InternalServerError" } } }, // GET workspace
+    );
+    const jobs = new FakeJobStore();
+
+    const result = await provisionLab(
+      { azure, jobs },
+      input({ flags: labDeploymentConfig("SentinelLab", "private") }),
+    );
+
+    expect(result.ok).toBe(false);
+    const record = (await jobs.list())[0];
+    const byName = new Map(record.steps.map((s) => [s.name, s]));
+    expect(byName.get("log-analytics")?.status).toBe("failed");
+    expect(byName.get("microsoft-sentinel")?.status).toBe("skipped");
+    expect(byName.get("microsoft-sentinel")?.detail).toBe("prerequisite-failed");
+    expect(byName.get("private-link")?.status).toBe("skipped");
+    expect(byName.get("private-link")?.detail).toContain("not implemented");
   });
 });
 

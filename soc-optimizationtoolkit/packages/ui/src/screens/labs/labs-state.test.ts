@@ -116,6 +116,8 @@ describe("initialLabSteps", () => {
       "resource-group",
       "ttl-logic-app",
       "ttl-role-assignment",
+      "log-analytics",
+      "microsoft-sentinel",
     ]);
     expect(sentinel.every((s) => s.status === "pending")).toBe(true);
 
@@ -184,5 +186,23 @@ describe("labRunResultLines", () => {
       lines.some((l) => l.includes("sacribllabcribl-events") && l.includes("blobCreated")),
     ).toBe(true);
     expect(lines.some((l) => l === "Virtual network deployed: vnet-cribllab-eastus")).toBe(true);
+  });
+
+  it("summarizes the monitoring outcome when the phase ran", () => {
+    const lines = labRunResultLines({
+      ...base,
+      monitoring: {
+        workspaceName: "law-cribllab-eastus",
+        workspaceCreated: true,
+        sentinelEnabled: true,
+        sentinelAlreadyEnabled: false,
+      },
+    });
+    expect(
+      lines.some((l) => l === "Log Analytics workspace created: law-cribllab-eastus"),
+    ).toBe(true);
+    expect(
+      lines.some((l) => l === "Microsoft Sentinel enabled on the workspace."),
+    ).toBe(true);
   });
 });

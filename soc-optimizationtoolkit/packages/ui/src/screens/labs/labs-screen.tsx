@@ -357,13 +357,14 @@ export function LabsScreen() {
       <div className="panel">
         <h2 className="panel-title">4. Deploy</h2>
         <p className="panel-desc">
-          Deploys the profile's foundation, storage, and networking phases
-          live: the resource group (created, or TTL-extended if it exists)
-          with the TTL self-destruct watchdog and its delete permission, then
-          the storage account with its pattern containers, notification queue,
-          and Event Grid blob wiring, then the NSGs and virtual network. The
-          remaining phases (monitoring, analytics, flow logs, compute, DCRs,
-          Cribl wiring, VPN gateway) arrive in upcoming releases.
+          Deploys the profile's foundation, storage, networking, and
+          monitoring phases live: the resource group (created, or TTL-extended
+          if it exists) with the TTL self-destruct watchdog and its delete
+          permission, the storage account with its pattern containers,
+          notification queue, and Event Grid blob wiring, the NSGs and virtual
+          network, then the Log Analytics workspace with Microsoft Sentinel.
+          The remaining phases (Private Link, analytics, flow logs, compute,
+          DCRs, Cribl wiring, VPN gateway) arrive in upcoming releases.
         </p>
         <div className="panel-controls">
           <button

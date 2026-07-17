@@ -275,5 +275,21 @@ export function labRunResultLines(result: ProvisionLabResult): string[] {
     }
     lines.push(`Virtual network deployed: ${result.networking.vnetName}`);
   }
+  if (result.monitoring !== undefined) {
+    lines.push(
+      resourceLine(
+        "Log Analytics workspace",
+        result.monitoring.workspaceName,
+        result.monitoring.workspaceCreated,
+      ),
+    );
+    if (result.monitoring.sentinelEnabled) {
+      lines.push(
+        result.monitoring.sentinelAlreadyEnabled
+          ? "Microsoft Sentinel was already enabled on the workspace."
+          : "Microsoft Sentinel enabled on the workspace.",
+      );
+    }
+  }
   return lines;
 }

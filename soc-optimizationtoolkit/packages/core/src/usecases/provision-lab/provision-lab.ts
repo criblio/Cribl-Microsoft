@@ -23,6 +23,14 @@
  * recorded redesign). The legacy execution order (Storage before
  * Networking) is preserved.
  *
+ * Phase 4 - Monitoring (LAB-06, when the profile deploys Log Analytics or
+ * Sentinel): the workspace via the EXISTING createWorkspace usecase (legacy
+ * PerGB2018/90-day defaults, attempt-bounded provisioning poll) and Sentinel
+ * via the EXISTING enableSentinel usecase (idempotent SecurityInsights
+ * solution at the workspace's ACTUAL location). Private Link (AMPLS) is NOT
+ * implemented yet: a private-mode profile carries a 'private-link' step
+ * reported 'skipped' with the reason, never silently dropped.
+ *
  * Failure semantics (the first-class 'skipped' convention):
  * - A resource-group failure skips EVERYTHING behind it.
  * - A TTL watchdog/grant failure skips all later phases: the TTL mandate
@@ -105,6 +113,11 @@ import {
   parseVnetProvisioningState,
   type LabNetworkSecuritySettings,
 } from "../../domain/labs/lab-networking";
+import {
+  WORKSPACE_API_VERSION,
+  createWorkspace,
+  enableSentinel,
+} from "../azure-discovery";
 
 /** JobStore `kind` for records created by {@link provisionLab}. */
 export const PROVISION_LAB_JOB_KIND = "provision-lab";
@@ -130,10 +143,15 @@ export const LAB_NETWORKING_STEPS = [
   "virtual-network",
 ] as const;
 
+/** Phase 4 step names (present when the profile deploys monitoring). */
+export const LAB_MONITORING_STEPS = ["log-analytics", "microsoft-sentinel"] as const;
+
 /**
- * The job's step list for a flag set: foundation always; the storage and
- * networking steps only when the profile's phase gating requires them (the
- * same isLabPhaseRequired the legacy orchestrator used).
+ * The job's step list for a flag set: foundation always; the storage,
+ * networking, and monitoring steps only when the profile's phase gating
+ * requires them (the same isLabPhaseRequired the legacy orchestrator used).
+ * A private-mode monitoring profile also carries a 'private-link' step so
+ * the not-yet-implemented AMPLS work is REPORTED, never silently dropped.
  */
 export function provisionLabStepsFor(flags: LabComponentFlags): string[] {
   const steps: string[] = [...LAB_FOUNDATION_STEPS];
@@ -142,6 +160,12 @@ export function provisionLabStepsFor(flags: LabComponentFlags): string[] {
   }
   if (isLabPhaseRequired(3, flags)) {
     steps.push(...LAB_NETWORKING_STEPS);
+  }
+  if (isLabPhaseRequired(4, flags)) {
+    steps.push(...LAB_MONITORING_STEPS);
+    if (flags.monitoring.deployPrivateLink) {
+      steps.push("private-link");
+    }
   }
   return steps;
 }
@@ -244,6 +268,17 @@ export interface LabNetworkingOutcome {
   nsgs: LabResourceOutcome[];
 }
 
+/** Monitoring phase outcome (present when the phase ran). */
+export interface LabMonitoringOutcome {
+  workspaceName: string;
+  /** True when this run created the workspace (false = already existed). */
+  workspaceCreated: boolean;
+  /** True when Sentinel is enabled on the workspace after this run. */
+  sentinelEnabled: boolean;
+  /** True when the SecurityInsights solution already existed. */
+  sentinelAlreadyEnabled: boolean;
+}
+
 /** The provisioning outcome (also embedded as the job result). */
 export interface ProvisionLabResult {
   /** Full ARM id of the lab resource group. */
@@ -270,6 +305,8 @@ export interface ProvisionLabResult {
   storage?: LabStorageOutcome;
   /** Networking phase outcome (only when the profile ran the phase). */
   networking?: LabNetworkingOutcome;
+  /** Monitoring phase outcome (only when the profile ran the phase). */
+  monitoring?: LabMonitoringOutcome;
   /** True when every non-skipped step succeeded. */
   ok: boolean;
 }
@@ -1069,6 +1106,109 @@ export async function provisionLab(
         errors.push(error);
         await setStep("virtual-network", "failed", error);
       }
+    }
+  }
+
+  // ==========================================================================
+  // PHASE 4: Monitoring (Log Analytics + Sentinel via the existing usecases)
+  // ==========================================================================
+  if (hasStep("log-analytics")) {
+    const monitoring: LabMonitoringOutcome = {
+      workspaceName: input.names.logAnalytics,
+      workspaceCreated: false,
+      sentinelEnabled: false,
+      sentinelAlreadyEnabled: false,
+    };
+    result.monitoring = monitoring;
+    let workspaceReady = false;
+
+    // --- log-analytics --------------------------------------------------------
+    if (
+      !input.flags.monitoring.deployLogAnalytics &&
+      !input.flags.monitoring.deploySentinel
+    ) {
+      await skipSteps(["log-analytics"], NOT_REQUESTED);
+    } else {
+      await setStep("log-analytics", "running");
+      const getWorkspace = await azure.request({
+        method: "GET",
+        path:
+          `/subscriptions/${sub}/resourceGroups/${rg}` +
+          `/providers/Microsoft.OperationalInsights/workspaces/${monitoring.workspaceName}`,
+        apiVersion: WORKSPACE_API_VERSION,
+      });
+      if (is2xx(getWorkspace.status)) {
+        workspaceReady = true;
+        await setStep("log-analytics", "succeeded", "already existed");
+      } else if (getWorkspace.status === 404) {
+        try {
+          await createWorkspace(
+            azure,
+            {
+              subscriptionId: sub,
+              resourceGroup: rg,
+              name: monitoring.workspaceName,
+              location: input.location,
+              maxPollAttempts: maxAttempts,
+            },
+            logger,
+          );
+          monitoring.workspaceCreated = true;
+          workspaceReady = true;
+          await setStep("log-analytics", "succeeded", "created (PerGB2018, 90-day retention)");
+        } catch (err) {
+          const error = err instanceof Error ? err.message : String(err);
+          errors.push(error);
+          await setStep("log-analytics", "failed", error);
+        }
+      } else {
+        const error = httpErrorText(
+          `read workspace '${monitoring.workspaceName}'`,
+          getWorkspace.status,
+          getWorkspace.body,
+        );
+        errors.push(error);
+        await setStep("log-analytics", "failed", error);
+      }
+    }
+
+    // --- microsoft-sentinel ---------------------------------------------------
+    if (!input.flags.monitoring.deploySentinel) {
+      await skipSteps(["microsoft-sentinel"], NOT_REQUESTED);
+    } else if (!workspaceReady) {
+      await skipSteps(["microsoft-sentinel"], PREREQUISITE_FAILED);
+    } else {
+      await setStep("microsoft-sentinel", "running");
+      try {
+        const enabled = await enableSentinel(
+          azure,
+          {
+            subscriptionId: sub,
+            resourceGroup: rg,
+            workspaceName: monitoring.workspaceName,
+          },
+          logger,
+        );
+        monitoring.sentinelEnabled = true;
+        monitoring.sentinelAlreadyEnabled = enabled.alreadyEnabled;
+        await setStep(
+          "microsoft-sentinel",
+          "succeeded",
+          enabled.alreadyEnabled ? "already enabled" : `enabled (${enabled.solutionName})`,
+        );
+      } catch (err) {
+        const error = err instanceof Error ? err.message : String(err);
+        errors.push(error);
+        await setStep("microsoft-sentinel", "failed", error);
+      }
+    }
+
+    // --- private-link (honest placeholder) --------------------------------------
+    if (hasStep("private-link")) {
+      await skipSteps(
+        ["private-link"],
+        "Private Link (AMPLS) is not implemented in-app yet - coming in a later slice",
+      );
     }
   }
 
