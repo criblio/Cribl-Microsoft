@@ -12,6 +12,8 @@
 import {
   buildLabPlan,
   labTtlInstants,
+  provisionLabStepsFor,
+  type JobStep,
   type LabComponentFlags,
   type LabMode,
   type LabPhase,
@@ -20,7 +22,7 @@ import {
   type LabResourceGroupMode,
   type LabResourceNames,
   type LabType,
-  type ProvisionLabFoundationResult,
+  type ProvisionLabResult,
 } from "@soc/core";
 
 /** The Labs screen's raw control values (all strings straight from inputs). */
@@ -204,10 +206,21 @@ export function labPlanArtifact(plan: LabPlan): { filename: string; json: string
   };
 }
 
-/** Honest, line-by-line summary of a foundation deployment outcome. */
-export function foundationResultLines(
-  result: ProvisionLabFoundationResult,
-): string[] {
+/** The pre-seeded pending step list for a plan's deploy run. */
+export function initialLabSteps(flags: LabComponentFlags): JobStep[] {
+  return provisionLabStepsFor(flags).map((name) => ({
+    name,
+    status: "pending" as const,
+  }));
+}
+
+/** One created/reused resource line ("created" vs "existed"). */
+function resourceLine(label: string, name: string, created: boolean): string {
+  return `${label} ${created ? "created" : "already existed"}: ${name}`;
+}
+
+/** Honest, line-by-line summary of a lab deployment outcome. */
+export function labRunResultLines(result: ProvisionLabResult): string[] {
   const lines: string[] = [];
   lines.push(
     result.resourceGroupCreated
@@ -234,6 +247,33 @@ export function foundationResultLines(
       "Watchdog could NOT be granted delete permission - the lab will not self-destruct until an admin runs:",
     );
     lines.push(result.manualRoleAssignmentCommand);
+  }
+  if (result.storage !== undefined) {
+    lines.push(
+      resourceLine(
+        "Storage account",
+        result.storage.accountName,
+        result.storage.accountCreated,
+      ),
+    );
+    for (const container of result.storage.containers) {
+      lines.push(resourceLine("Container", container.name, container.created));
+    }
+    for (const queue of result.storage.queues) {
+      lines.push(resourceLine("Queue", queue.name, queue.created));
+    }
+    if (result.storage.eventGridTopic !== undefined) {
+      lines.push(
+        `Event Grid system topic: ${result.storage.eventGridTopic} ` +
+          `(subscriptions: ${(result.storage.eventGridSubscriptions ?? []).join(", ")})`,
+      );
+    }
+  }
+  if (result.networking !== undefined) {
+    for (const nsg of result.networking.nsgs) {
+      lines.push(resourceLine("NSG", nsg.name, nsg.created));
+    }
+    lines.push(`Virtual network deployed: ${result.networking.vnetName}`);
   }
   return lines;
 }

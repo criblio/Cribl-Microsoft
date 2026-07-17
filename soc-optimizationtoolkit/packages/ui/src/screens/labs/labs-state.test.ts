@@ -3,13 +3,15 @@ import {
   canDeployFoundation,
   defaultLabFormState,
   formatLabPhaseLine,
-  foundationResultLines,
+  initialLabSteps,
   labPlanArtifact,
   labPlanFromForm,
   labResourceNameRows,
+  labRunResultLines,
   ttlExpiryPreview,
 } from "./labs-state";
-import type { ProvisionLabFoundationResult } from "@soc/core";
+import { labDeploymentConfig } from "@soc/core";
+import type { ProvisionLabResult } from "@soc/core";
 
 const SUB = "11111111-2222-3333-4444-555555555555";
 const NOW = "2026-07-16T12:00:00.000Z";
@@ -107,8 +109,24 @@ describe("labPlanArtifact", () => {
   });
 });
 
-describe("foundationResultLines", () => {
-  const base: ProvisionLabFoundationResult = {
+describe("initialLabSteps", () => {
+  it("pre-seeds pending steps for exactly the profile's phases", () => {
+    const sentinel = initialLabSteps(labDeploymentConfig("SentinelLab", "public"));
+    expect(sentinel.map((s) => s.name)).toEqual([
+      "resource-group",
+      "ttl-logic-app",
+      "ttl-role-assignment",
+    ]);
+    expect(sentinel.every((s) => s.status === "pending")).toBe(true);
+
+    const flowlog = initialLabSteps(labDeploymentConfig("FlowLogLab", "public"));
+    expect(flowlog.map((s) => s.name)).toContain("storage-account");
+    expect(flowlog.map((s) => s.name)).toContain("virtual-network");
+  });
+});
+
+describe("labRunResultLines", () => {
+  const base: ProvisionLabResult = {
     resourceGroupId: `/subscriptions/${SUB}/resourceGroups/rg-lab-SentinelLab`,
     resourceGroupCreated: true,
     ttlExpiresAt: "2026-07-19T12:00:00Z",
@@ -121,14 +139,14 @@ describe("foundationResultLines", () => {
   };
 
   it("summarizes a clean create honestly", () => {
-    const lines = foundationResultLines(base);
+    const lines = labRunResultLines(base);
     expect(lines[0]).toContain("Resource group created");
     expect(lines.some((l) => l.includes("self-destruct expires"))).toBe(true);
     expect(lines.some((l) => l.includes("can now self-delete"))).toBe(true);
   });
 
   it("surfaces the manual grant command when the role step failed", () => {
-    const lines = foundationResultLines({
+    const lines = labRunResultLines({
       ...base,
       roleAssigned: false,
       manualRoleAssignmentCommand: "az role assignment create --assignee-object-id principal-1",
@@ -139,7 +157,32 @@ describe("foundationResultLines", () => {
   });
 
   it("says TTL extended for a reused group", () => {
-    const lines = foundationResultLines({ ...base, resourceGroupCreated: false });
+    const lines = labRunResultLines({ ...base, resourceGroupCreated: false });
     expect(lines[0]).toContain("TTL extended");
+  });
+
+  it("summarizes storage and networking outcomes when those phases ran", () => {
+    const lines = labRunResultLines({
+      ...base,
+      storage: {
+        accountName: "sacribllabcribl",
+        accountCreated: true,
+        containers: [{ name: "criblqueuesource", created: true }],
+        queues: [{ name: "blob-notifications", created: false }],
+        eventGridTopic: "sacribllabcribl-events",
+        eventGridSubscriptions: ["blobCreated"],
+      },
+      networking: {
+        vnetName: "vnet-cribllab-eastus",
+        nsgs: [{ name: "nsg-cribllab-SecuritySubnet-eastus", created: true }],
+      },
+    });
+    expect(lines.some((l) => l === "Storage account created: sacribllabcribl")).toBe(true);
+    expect(lines.some((l) => l === "Container created: criblqueuesource")).toBe(true);
+    expect(lines.some((l) => l === "Queue already existed: blob-notifications")).toBe(true);
+    expect(
+      lines.some((l) => l.includes("sacribllabcribl-events") && l.includes("blobCreated")),
+    ).toBe(true);
+    expect(lines.some((l) => l === "Virtual network deployed: vnet-cribllab-eastus")).toBe(true);
   });
 });

@@ -1,37 +1,39 @@
 /**
- * LabsScreen - roadmap Phase 5 (LAB-01/02/13/14): provision disposable Azure
- * lab environments from the app. This first slice ships the full PLANNING
+ * LabsScreen - roadmap Phase 5 (LAB-01/02/03/04/05/13/14): provision
+ * disposable Azure lab environments from the app. Ships the full PLANNING
  * surface (the 8 UnifiedLab profiles, public/private mode, the two
  * resource-group permission modes, validation, planned resource names,
- * phases, permissions, plan download) and DEPLOYS the foundation phase live:
- * the lab resource group with the MANDATORY TTL self-destruct watchdog.
- * The remaining phases (storage, networking, monitoring, analytics, flow
- * logs, compute, DCRs, Cribl wiring, VPN gateway) land as resumable jobs in
- * subsequent slices per the roadmap.
+ * phases, permissions, plan download) and DEPLOYS phases 1-3 live: the lab
+ * resource group with the MANDATORY TTL self-destruct watchdog, the storage
+ * phase (account, pattern containers, notification queue, Event Grid blob
+ * wiring), and the networking phase (NSGs + VNet). The remaining phases
+ * (monitoring, analytics, flow logs, compute, DCRs, Cribl wiring, VPN
+ * gateway) land as sibling steps in subsequent slices per the roadmap.
  *
- * All lab knowledge is @soc/core (domain/labs + the provisionLabFoundation
- * usecase); decisions live in the pure labs-state module; this component only
- * renders and drives IO through the ports (ZERO direct fetch here).
+ * All lab knowledge is @soc/core (domain/labs + the provisionLab usecase);
+ * decisions live in the pure labs-state module; this component only renders
+ * and drives IO through the ports (ZERO direct fetch here).
  */
 
 import { useCallback, useMemo, useState } from "react";
 import {
   LAB_PROFILES,
-  provisionLabFoundation,
+  provisionLab,
   type JobStep,
   type LabResourceGroupMode,
   type LabType,
-  type ProvisionLabFoundationResult,
+  type ProvisionLabResult,
 } from "@soc/core";
 import { usePorts } from "../../ports-context";
 import {
   canDeployFoundation,
   defaultLabFormState,
   formatLabPhaseLine,
-  foundationResultLines,
+  initialLabSteps,
   labPlanArtifact,
   labPlanFromForm,
   labResourceNameRows,
+  labRunResultLines,
   ttlExpiryPreview,
   type LabFormState,
 } from "./labs-state";
@@ -42,7 +44,7 @@ export function LabsScreen() {
   const [form, setForm] = useState<LabFormState>(defaultLabFormState);
   const [deploying, setDeploying] = useState(false);
   const [steps, setSteps] = useState<JobStep[]>([]);
-  const [result, setResult] = useState<ProvisionLabFoundationResult | null>(null);
+  const [result, setResult] = useState<ProvisionLabResult | null>(null);
   const [deployError, setDeployError] = useState("");
   const [saveNotice, setSaveNotice] = useState("");
 
@@ -82,16 +84,16 @@ export function LabsScreen() {
     }
   }, [plan, ports.artifacts]);
 
-  const deployFoundation = useCallback(async () => {
+  const deployLab = useCallback(async () => {
     if (deploying || !gate.ok || ports.mintAssignmentName === undefined) {
       return;
     }
     setDeploying(true);
     setDeployError("");
     setResult(null);
-    setSteps([]);
+    setSteps(initialLabSteps(plan.flags));
     try {
-      const outcome = await provisionLabFoundation(
+      const outcome = await provisionLab(
         { azure: ports.azure, jobs: ports.jobs, logger: ports.logger },
         {
           subscriptionId: config.subscriptionId,
@@ -104,16 +106,18 @@ export function LabsScreen() {
             warningHours: Number(form.ttlWarningHours),
             userEmail: form.ttlEmail.trim(),
           },
+          flags: plan.flags,
+          names: plan.names,
           nowIso: new Date().toISOString(),
           mintAssignmentName: ports.mintAssignmentName,
+          // The legacy 4-char random collision suffix; randomness lives in
+          // the impure component layer, never in core.
+          mintStorageSuffix: () => Math.random().toString(36).slice(2, 6),
           retry: { sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)) },
           onProgress: (step) => {
-            setSteps((prev) => {
-              const next = prev.filter((s) => s.name !== step.name);
-              return [...next, step].sort(
-                (a, b) => stepOrder(a.name) - stepOrder(b.name),
-              );
-            });
+            setSteps((prev) =>
+              prev.map((s) => (s.name === step.name ? step : s)),
+            );
           },
         },
       );
@@ -123,7 +127,7 @@ export function LabsScreen() {
     } finally {
       setDeploying(false);
     }
-  }, [deploying, gate.ok, ports, config.subscriptionId, plan.resourceGroupName, form]);
+  }, [deploying, gate.ok, ports, config.subscriptionId, plan, form]);
 
   return (
     <>
@@ -351,20 +355,23 @@ export function LabsScreen() {
       </div>
 
       <div className="panel">
-        <h2 className="panel-title">4. Deploy the foundation</h2>
+        <h2 className="panel-title">4. Deploy</h2>
         <p className="panel-desc">
-          Deploys phase 1 live: the resource group (created, or TTL-extended if
-          it exists) and the TTL self-destruct watchdog with its delete
-          permission. The remaining phases of this profile arrive in upcoming
-          releases; this foundation is what every profile starts from.
+          Deploys the profile's foundation, storage, and networking phases
+          live: the resource group (created, or TTL-extended if it exists)
+          with the TTL self-destruct watchdog and its delete permission, then
+          the storage account with its pattern containers, notification queue,
+          and Event Grid blob wiring, then the NSGs and virtual network. The
+          remaining phases (monitoring, analytics, flow logs, compute, DCRs,
+          Cribl wiring, VPN gateway) arrive in upcoming releases.
         </p>
         <div className="panel-controls">
           <button
             className="next-action-button"
-            onClick={() => void deployFoundation()}
+            onClick={() => void deployLab()}
             disabled={deploying || !gate.ok}
           >
-            {deploying ? "Deploying foundation..." : "Deploy foundation"}
+            {deploying ? "Deploying lab..." : "Deploy lab"}
           </button>
           {!gate.ok && <span className="field-hint">{gate.reason}</span>}
         </div>
@@ -380,23 +387,9 @@ export function LabsScreen() {
         )}
         {deployError !== "" && <pre className="result">{deployError}</pre>}
         {result !== null && (
-          <pre className="result">{foundationResultLines(result).join("\n")}</pre>
+          <pre className="result">{labRunResultLines(result).join("\n")}</pre>
         )}
       </div>
     </>
   );
-}
-
-/** Stable render order for the three foundation steps. */
-function stepOrder(name: string): number {
-  switch (name) {
-    case "resource-group":
-      return 0;
-    case "ttl-logic-app":
-      return 1;
-    case "ttl-role-assignment":
-      return 2;
-    default:
-      return 3;
-  }
 }

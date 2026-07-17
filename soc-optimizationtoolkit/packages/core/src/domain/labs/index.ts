@@ -6,4 +6,6 @@ export * from "./lab-naming";
 export * from "./lab-validation";
 export * from "./lab-profiles";
 export * from "./lab-foundation";
+export * from "./lab-storage";
+export * from "./lab-networking";
 export * from "./lab-plan";
