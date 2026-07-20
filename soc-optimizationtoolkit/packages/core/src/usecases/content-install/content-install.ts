@@ -174,6 +174,39 @@ function failDetail(res: PortHttpResponse): string {
   return `HTTP ${res.status}${body && body !== "null" ? ` ${body}` : ""}`;
 }
 
+/** Re-serialize JSON text with no insignificant whitespace; original on failure. */
+function compactJson(text: string): string {
+  try {
+    return JSON.stringify(JSON.parse(text));
+  } catch {
+    return text;
+  }
+}
+
+/**
+ * The workbooks PUT can fail with the opaque ARM "A payload is required." when
+ * the Cribl.Cloud app proxy drops a request body over its (undocumented,
+ * ~8-24KB) size limit before ARM sees it - so ARM answers as if the body were
+ * empty. The workbook JSON is contract-valid; the blocker is transport size.
+ * Turn that into an actionable message (with the minified size) pointing at
+ * the manual-install workaround; other failures render verbatim.
+ */
+function workbookFailureDetail(res: PortHttpResponse, minifiedBytes: number): string {
+  const text = bodyText(res);
+  if (/a payload is required|request body must not be empty/i.test(text)) {
+    const kb = Math.max(1, Math.round(minifiedBytes / 1024));
+    return (
+      `the workbook (~${kb} KB minified) exceeds the Cribl.Cloud app-proxy ` +
+      "request-body limit, so Azure received an empty body (\"A payload is " +
+      "required\"). Large workbooks cannot be installed through the app - add " +
+      "this one manually in the Sentinel portal (Workbooks > Add workbook > " +
+      "Advanced Editor > paste the template), or ask Cribl to raise the " +
+      "app-proxy body limit."
+    );
+  }
+  return failDetail(res);
+}
+
 /**
  * A rule PUT is validated against the workspace: Azure compiles the query and
  * rejects it when a table it reads does not exist yet ("Failed to run the
@@ -421,9 +454,16 @@ export async function installWorkbook(
       detail: "the workspace region is unknown; regional workbooks need it",
     };
   }
+  // MINIFY the workbook JSON (repo templates are pretty-printed; stripping the
+  // insignificant whitespace shrinks them 30-50%). This is the only lever the
+  // app has against the Cribl.Cloud app-proxy request-body limit that drops
+  // large bodies before ARM sees them (ARM then answers "A payload is
+  // required" - verified 2026-07-20). Rescues borderline workbooks; a truly
+  // large one still exceeds the cap and gets the actionable message below.
+  const serializedData = compactJson(spec.serializedData);
   const body = workbookResourceBody({
     displayName: spec.displayName,
-    serializedData: spec.serializedData,
+    serializedData,
     workspaceResourceId: workspaceResourceId(ws),
     location: ws.location,
   });
@@ -438,7 +478,11 @@ export async function installWorkbook(
     });
     return is2xx(res.status)
       ? { name: spec.displayName, ok: true, detail: "installed" }
-      : { name: spec.displayName, ok: false, detail: failDetail(res) };
+      : {
+          name: spec.displayName,
+          ok: false,
+          detail: workbookFailureDetail(res, serializedData.length),
+        };
   } catch (err) {
     return { name: spec.displayName, ok: false, detail: errText(err) };
   }
