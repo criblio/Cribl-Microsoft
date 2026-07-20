@@ -160,8 +160,9 @@ describe("installWorkbook", () => {
       mintId,
     );
     expect(outcome.ok).toBe(false);
+    expect(outcome.code).toBe("workbook-proxy-limit");
     expect(outcome.detail).toContain("app-proxy request-body limit");
-    expect(outcome.detail).toContain("Sentinel portal");
+    expect(outcome.detail).toContain("Defender portal");
   });
 });
 

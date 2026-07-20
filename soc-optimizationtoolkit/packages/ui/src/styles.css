@@ -2564,6 +2564,33 @@ button.journey-step-main:hover .journey-step-label {
 .content-install-outcomes {
   margin-top: 10px;
 }
+/* Highlighted remedy when a workbook exceeds the app-proxy body limit. */
+.workbook-portal-install {
+  margin: 8px 0;
+  padding: 12px 14px;
+  border-radius: 6px;
+  border: 1px solid var(--accent-border);
+  border-left: 3px solid var(--accent);
+  background: var(--accent-bg);
+}
+.workbook-portal-install-head {
+  margin: 0 0 4px;
+  font-size: 13px;
+  color: var(--accent-strong);
+}
+.workbook-portal-steps {
+  margin: 8px 0 10px;
+  padding-left: 20px;
+  font-size: 12px;
+  line-height: 19px;
+  color: var(--text-muted);
+}
+.workbook-portal-steps li {
+  margin-bottom: 4px;
+}
+.workbook-portal-steps strong {
+  color: var(--text);
+}
 
 .mapping-review-stale {
   font-size: 13px;

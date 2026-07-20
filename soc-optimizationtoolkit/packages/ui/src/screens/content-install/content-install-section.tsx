@@ -439,11 +439,22 @@ export function ContentInstallSection({
           <p className="panel-desc">
             <strong>{summarizeInstallOutcomes(outcomes)}</strong>
           </p>
-          {grouped.failed.map((o, i) => (
-            <p key={`f-${i}`} className="match-warning match-warning-overflow-loss">
-              {o.name}: {o.detail}
-            </p>
-          ))}
+          {grouped.failed.map((o, i) =>
+            o.code === "workbook-proxy-limit" ? (
+              <WorkbookPortalInstall
+                key={`f-${i}`}
+                name={o.name}
+                detail={o.detail}
+                serializedData={
+                  allWorkbooks.find((w) => w.displayName === o.name)?.serializedData ?? ""
+                }
+              />
+            ) : (
+              <p key={`f-${i}`} className="match-warning match-warning-overflow-loss">
+                {o.name}: {o.detail}
+              </p>
+            ),
+          )}
           {grouped.ok.map((o, i) => (
             <p key={`o-${i}`} className="content-install-ok">
               {o.name}: {o.detail}
@@ -722,5 +733,72 @@ function ContentGroup({
         </>
       )}
     </section>
+  );
+}
+
+/**
+ * A highlighted remedy for a workbook the app proxy can't carry (its body
+ * exceeds the Cribl.Cloud app-proxy request-body limit). Gives the Defender-
+ * portal install steps and a one-click copy of the workbook template to paste
+ * there - so a too-large workbook is a clear "do this instead", not a dead end.
+ */
+function WorkbookPortalInstall({
+  name,
+  detail,
+  serializedData,
+}: {
+  name: string;
+  detail: string;
+  serializedData: string;
+}) {
+  const [copied, setCopied] = useState(false);
+  const copy = useCallback(() => {
+    void navigator.clipboard
+      .writeText(serializedData)
+      .then(() => {
+        setCopied(true);
+        window.setTimeout(() => setCopied(false), 2000);
+      })
+      .catch(() => setCopied(false));
+  }, [serializedData]);
+
+  return (
+    <div className="workbook-portal-install">
+      <p className="workbook-portal-install-head">
+        <strong>{name}</strong> - too large for the app; install from the Defender portal
+      </p>
+      <p className="field-hint">{detail}</p>
+      <ol className="workbook-portal-steps">
+        <li>
+          Copy the workbook template (button below), then open the{" "}
+          <a href="https://security.microsoft.com" target="_blank" rel="noreferrer">
+            Microsoft Defender portal
+          </a>{" "}
+          and go to <strong>Microsoft Sentinel &gt; Threat management &gt; Workbooks</strong>.
+        </li>
+        <li>
+          Select <strong>+ Add workbook</strong>, then <strong>Edit</strong>, then open the
+          Advanced Editor (the <code className="code-chip">&lt;/&gt;</code> icon).
+        </li>
+        <li>
+          Set <strong>Template Type</strong> to <strong>Gallery Template</strong>, replace the
+          contents with the copied template, and select <strong>Apply</strong>.
+        </li>
+        <li>
+          Select <strong>Done Editing</strong>, then <strong>Save</strong>; name it and choose
+          the resource group and location.
+        </li>
+      </ol>
+      <div className="panel-controls">
+        <button className="run-button" onClick={copy} disabled={serializedData === ""}>
+          {copied ? "Copied!" : "Copy workbook template"}
+        </button>
+        {serializedData === "" && (
+          <span className="field-hint">
+            Template unavailable here - reload solution content, then retry.
+          </span>
+        )}
+      </div>
+    </div>
   );
 }
