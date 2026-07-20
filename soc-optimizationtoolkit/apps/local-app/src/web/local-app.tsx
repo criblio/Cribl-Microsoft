@@ -1087,6 +1087,10 @@ export function LocalApp() {
   // park in DEVELOPMENT and move out one at a time as they pass live
   // testing.
   const routes: AppRoute[] = [
+    // Architecture Patterns is the JOURNEY landing item (user directive
+    // 2026-07-20): users arrive here first to learn how the ingestion works
+    // before setting anything up. requires:'none' so it is always reachable.
+    { id: 'architecture', label: 'Architecture Patterns', requires: 'none', section: 'journey', render: () => architectureView },
     { id: 'home', label: 'Setup', requires: 'none', section: 'journey', render: renderHome },
     { id: 'integrate', label: 'Sentinel Integration', requires: 'both', section: 'journey', render: renderIntegrate },
     { id: 'dcr-automation', label: 'DCR Automation', requires: 'azure', section: 'journey', render: renderDcrAutomation },
@@ -1098,7 +1102,6 @@ export function LocalApp() {
     { id: 'siem-migration', label: 'SIEM Migration', requires: 'none', section: 'development', render: renderSiemMigration },
     { id: 'preflight', label: 'Permission Verification', requires: 'azure', section: 'development', render: renderPreflight },
     { id: 'eventhub-discovery', label: 'Event Hub Discovery', requires: 'azure', section: 'development', render: () => eventHubDiscoveryView },
-    { id: 'architecture', label: 'Architecture Patterns', requires: 'none', section: 'development', render: () => architectureView },
     { id: 'mapping-catalog', label: 'Mapping Catalog', requires: 'none', section: 'development', render: () => mappingCatalogView },
   ];
 
@@ -1131,7 +1134,7 @@ export function LocalApp() {
       mode={phase.mode}
       routes={routes}
       topBar={topBar}
-      initialRouteId="home"
+      initialRouteId="architecture"
       footerNote={`local host - v${__APP_VERSION__}`}
       themeControl={themeControl}
     />

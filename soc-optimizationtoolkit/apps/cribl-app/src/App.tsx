@@ -1964,6 +1964,10 @@ function App() {
   // parks in the DEVELOPMENT section - still reachable, moved back into
   // journey/tools one item at a time as it passes live testing.
   const routes: AppRoute[] = [
+    // Architecture Patterns is the JOURNEY landing item (user directive
+    // 2026-07-20): users arrive here first to learn how the ingestion works
+    // before setting anything up. requires:'none' so it is always reachable.
+    { id: 'architecture', label: 'Architecture Patterns', requires: 'none', section: 'journey', render: () => architectureView },
     { id: 'home', label: 'Setup', requires: 'none', section: 'journey', render: renderHome },
     { id: 'integrate', label: 'Sentinel Integration', requires: 'both', section: 'journey', render: renderIntegrate },
     { id: 'dcr-automation', label: 'DCR Automation', requires: 'azure', section: 'journey', render: renderDcrAutomation },
@@ -1975,7 +1979,6 @@ function App() {
     { id: 'siem-migration', label: 'SIEM Migration', requires: 'none', section: 'development', render: renderSiemMigration },
     { id: 'preflight', label: 'Permission Verification', requires: 'azure', section: 'development', render: renderPreflight },
     { id: 'eventhub-discovery', label: 'Event Hub Discovery', requires: 'azure', section: 'development', render: () => eventHubDiscoveryView },
-    { id: 'architecture', label: 'Architecture Patterns', requires: 'none', section: 'development', render: () => architectureView },
     { id: 'mapping-catalog', label: 'Mapping Catalog', requires: 'none', section: 'development', render: () => mappingCatalogView },
     { id: 'harness', label: 'Diagnostics', requires: 'none', section: 'diagnostics', render: () => harnessView },
   ];
@@ -1988,7 +1991,7 @@ function App() {
       routes={routes}
       topBar={connectionBar}
       footerNote={`v${window.__APP_VERSION_RUNTIME__ ?? __APP_VERSION__}`}
-      initialRouteId="home"
+      initialRouteId="architecture"
       themeControl={themeControl}
     />
   );
