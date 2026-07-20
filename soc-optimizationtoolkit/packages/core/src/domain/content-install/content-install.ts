@@ -35,6 +35,13 @@ export interface ContentInstallOutcome {
   ok: boolean;
   /** Success detail ("created") or the verbatim failure (HTTP status + body). */
   detail: string;
+  /**
+   * Optional machine-readable failure classifier so the UI can render a
+   * tailored remedy instead of string-matching `detail`. Currently:
+   * "workbook-proxy-limit" - the workbook body exceeded the Cribl.Cloud
+   * app-proxy request-body limit; the UI shows Defender-portal install steps.
+   */
+  code?: string;
 }
 
 /** "N installed, M failed" (+ skip note when present). */

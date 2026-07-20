@@ -191,20 +191,23 @@ function compactJson(text: string): string {
  * Turn that into an actionable message (with the minified size) pointing at
  * the manual-install workaround; other failures render verbatim.
  */
-function workbookFailureDetail(res: PortHttpResponse, minifiedBytes: number): string {
+function workbookFailureDetail(
+  res: PortHttpResponse,
+  minifiedBytes: number,
+): { detail: string; code?: string } {
   const text = bodyText(res);
   if (/a payload is required|request body must not be empty/i.test(text)) {
     const kb = Math.max(1, Math.round(minifiedBytes / 1024));
-    return (
-      `the workbook (~${kb} KB minified) exceeds the Cribl.Cloud app-proxy ` +
-      "request-body limit, so Azure received an empty body (\"A payload is " +
-      "required\"). Large workbooks cannot be installed through the app - add " +
-      "this one manually in the Sentinel portal (Workbooks > Add workbook > " +
-      "Advanced Editor > paste the template), or ask Cribl to raise the " +
-      "app-proxy body limit."
-    );
+    return {
+      code: "workbook-proxy-limit",
+      detail:
+        `the workbook (~${kb} KB minified) exceeds the Cribl.Cloud app-proxy ` +
+        "request-body limit, so Azure received an empty body. Install it from " +
+        "the Defender portal instead (steps below), or ask Cribl to raise the " +
+        "app-proxy body limit.",
+    };
   }
-  return failDetail(res);
+  return { detail: failDetail(res) };
 }
 
 /**
@@ -476,13 +479,16 @@ export async function installWorkbook(
       apiVersion: WORKBOOKS_INSTALL_API_VERSION,
       body,
     });
-    return is2xx(res.status)
-      ? { name: spec.displayName, ok: true, detail: "installed" }
-      : {
-          name: spec.displayName,
-          ok: false,
-          detail: workbookFailureDetail(res, serializedData.length),
-        };
+    if (is2xx(res.status)) {
+      return { name: spec.displayName, ok: true, detail: "installed" };
+    }
+    const failure = workbookFailureDetail(res, serializedData.length);
+    return {
+      name: spec.displayName,
+      ok: false,
+      detail: failure.detail,
+      ...(failure.code !== undefined ? { code: failure.code } : {}),
+    };
   } catch (err) {
     return { name: spec.displayName, ok: false, detail: errText(err) };
   }
