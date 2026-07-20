@@ -135,6 +135,34 @@ describe("installWorkbook", () => {
     expect(outcome.detail).toContain("region");
     expect(azure.calls).toHaveLength(0);
   });
+
+  it("minifies the serializedData in the PUT body", async () => {
+    const azure = new FakeAzureManagement();
+    azure.respondWith({ status: 200, body: {} });
+    const pretty = '{\n  "version": "Notebook/1.0",\n  "items": [\n    { "a": 1 }\n  ]\n}';
+    await installWorkbook(azure, WS, { displayName: "WB", serializedData: pretty }, mintId);
+    const body = azure.calls[0].body as { properties: { serializedData: string } };
+    expect(body.properties.serializedData).toBe(
+      '{"version":"Notebook/1.0","items":[{"a":1}]}',
+    );
+  });
+
+  it("explains the app-proxy body limit on 'A payload is required'", async () => {
+    const azure = new FakeAzureManagement();
+    azure.respondWith({
+      status: 400,
+      body: { error: { code: "BadRequest", message: "A payload is required." } },
+    });
+    const outcome = await installWorkbook(
+      azure,
+      WS,
+      { displayName: "Big", serializedData: '{"items":[]}' },
+      mintId,
+    );
+    expect(outcome.ok).toBe(false);
+    expect(outcome.detail).toContain("app-proxy request-body limit");
+    expect(outcome.detail).toContain("Sentinel portal");
+  });
 });
 
 describe("installParser (duplicate-alias safety)", () => {
