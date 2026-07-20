@@ -15,6 +15,7 @@ import {
   EventHubDiscoveryScreen,
   HomeScreen,
   IntegrateScreen,
+  LabsScreen,
   LogsScreen,
   ModeSelect,
   OnboardTableScreen,
@@ -1776,6 +1777,27 @@ function App() {
     </>
   );
 
+  // Labs (roadmap Phase 5, LAB-01/02/13/14): provision disposable Azure lab
+  // environments - the 8 UnifiedLab profiles as a planning surface (naming,
+  // validation, phases, permissions, plan download) plus the live foundation
+  // deploy: the lab resource group with the MANDATORY TTL self-destruct
+  // watchdog. requires: 'azure' - everything here is ARM.
+  const labsView = (
+    <>
+      <header className="harness-header">
+        <h1 className="harness-title">Labs</h1>
+        <p className="harness-subtitle">
+          Provision a disposable Azure lab environment for Cribl integration
+          testing. Pick a profile, review the plan, and deploy the foundation -
+          every app-provisioned lab self-destructs when its TTL expires.
+        </p>
+      </header>
+      <PortsProvider ports={cloudPorts} config={activeConfig}>
+        <LabsScreen />
+      </PortsProvider>
+    </>
+  );
+
   // SIEM Migration (porting-plan Unit 26): upload a Splunk/QRadar detection
   // export, map its data sources to Sentinel solutions, and pivot each into
   // Sentinel Integration. The plan persists via ContentCache, so bouncing
@@ -1947,6 +1969,7 @@ function App() {
     { id: 'dcr-automation', label: 'DCR Automation', requires: 'azure', section: 'journey', render: renderDcrAutomation },
     { id: 'packs', label: 'Pack Maintenance', requires: 'cribl', section: 'journey', render: () => packsView },
     { id: 'repositories', label: 'Repositories', requires: 'none', section: 'tools', render: () => repositoriesView },
+    { id: 'labs', label: 'Labs', requires: 'azure', section: 'tools', render: () => labsView },
     { id: 'logs', label: 'Logs', requires: 'none', section: 'tools', render: () => logsView },
     { id: 'settings', label: 'Settings', requires: 'none', section: 'tools', render: () => settingsView },
     { id: 'siem-migration', label: 'SIEM Migration', requires: 'none', section: 'development', render: renderSiemMigration },

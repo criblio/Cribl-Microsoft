@@ -87,6 +87,17 @@ describe("alertRuleResourceFromParsed", () => {
     expect(props.templateVersion).toBe("1.0.2");
   });
 
+  it("reduces sub-techniques to parent techniques (T#### format) and dedupes", () => {
+    const res = alertRuleResourceFromParsed(
+      rule({ techniques: ["T1204.002", "T1071.001", "T1071.004", "T1078", "None"] }),
+    );
+    expect(res.supported).toBe(true);
+    if (!res.supported) return;
+    const props = res.body.properties as Record<string, unknown>;
+    // T1071.001 + T1071.004 collapse to one T1071; sub-suffixes dropped.
+    expect(props.techniques).toEqual(["T1204", "T1071", "T1078"]);
+  });
+
   it("OMITS the scheduling block for NRT (not on the NRT schema)", () => {
     const res = alertRuleResourceFromParsed(rule({ kind: "NRT" }));
     expect(res.supported).toBe(true);

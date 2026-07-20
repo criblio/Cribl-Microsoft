@@ -17,3 +17,4 @@ export * from "./dcr-inventory";
 export * from "./update-dcr";
 export * from "./siem-migration";
 export * from "./content-install";
+export * from "./provision-lab";
