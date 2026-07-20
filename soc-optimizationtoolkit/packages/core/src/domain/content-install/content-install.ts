@@ -113,6 +113,19 @@ function cleanTactics(values: readonly string[] | undefined): string[] {
   return cleanList(values).map((t) => t.replace(/\s+/g, ""));
 }
 
+/**
+ * The alertRules `techniques` field accepts ONLY parent technique ids in the
+ * T#### format; a sub-technique (T####.###) is rejected ("The technique
+ * 'T1204.002' is invalid. The expected format is 'T####'."). Reduce each
+ * relevantTechnique to its parent (drop the ".###" suffix) and dedupe, so a
+ * rule that lists sub-techniques still installs with its parent techniques.
+ */
+function parentTechniques(values: readonly string[] | undefined): string[] {
+  return [
+    ...new Set(cleanList(values).map((t) => t.split(".")[0].trim())),
+  ].filter((t) => t !== "");
+}
+
 const GUID_RULE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** The ARM alertRules PUT body, or an honest unsupported reason. */
@@ -153,7 +166,7 @@ export function alertRuleResourceFromParsed(
     suppressionEnabled: false,
     suppressionDuration: "PT5H",
     tactics: cleanTactics(rule.tactics),
-    techniques: cleanList(rule.techniques),
+    techniques: parentTechniques(rule.techniques),
     ...(rule.entityMappings !== undefined && rule.entityMappings.length > 0
       ? { entityMappings: rule.entityMappings }
       : {}),
