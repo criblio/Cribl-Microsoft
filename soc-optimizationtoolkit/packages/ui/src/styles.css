@@ -3999,6 +3999,119 @@ button.journey-step-main:hover .journey-step-label {
 .arch-arrowhead {
   fill: var(--text-muted);
 }
+
+/* ---- Interactive data-flow canvas (React Flow + dagre) ------------------- */
+.arch-flow-canvas {
+  height: 460px;
+  width: 100%;
+  margin: 12px 0 16px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--surface);
+}
+.arch-flow-node {
+  min-width: 148px;
+  max-width: 210px;
+  padding: 8px 12px;
+  border-radius: 12px;
+  border: 1.4px solid var(--border);
+  background: var(--surface-raised);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.18);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  text-align: center;
+  cursor: grab;
+}
+.arch-flow-node:active {
+  cursor: grabbing;
+}
+.arch-flow-node-tier {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+.arch-flow-node-label {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text);
+  line-height: 15px;
+}
+.arch-flow-node-source {
+  border-color: var(--text-faint);
+}
+.arch-flow-node-cribl {
+  border-color: var(--accent);
+  background: var(--accent-bg);
+}
+.arch-flow-node-cribl .arch-flow-node-tier {
+  color: var(--accent-strong);
+}
+.arch-flow-node-azure {
+  border-color: var(--info-cyan);
+}
+.arch-flow-node-destination {
+  border-color: var(--ok);
+  background: var(--ok-bg);
+}
+.arch-flow-node-destination .arch-flow-node-tier {
+  color: var(--ok-strong);
+}
+/* Read-only graph: hide the connection handles. */
+.arch-flow-handle {
+  opacity: 0;
+  pointer-events: none;
+  min-width: 1px;
+  min-height: 1px;
+  width: 1px;
+  height: 1px;
+  border: none;
+}
+/* The flowing "pipe": a dashed edge animated in CSS (Firefox-safe, not SMIL). */
+.arch-flow-pipe {
+  stroke: var(--accent);
+  stroke-width: 2;
+  fill: none;
+  opacity: 0.5;
+  stroke-dasharray: 7 9;
+  animation: arch-flow-dash 1s linear infinite;
+}
+@keyframes arch-flow-dash {
+  to {
+    stroke-dashoffset: -16;
+  }
+}
+/* The data packets riding the exact edge path via <animateMotion>. */
+.arch-flow-dot {
+  fill: var(--accent-strong);
+  filter: drop-shadow(0 0 3px var(--accent));
+}
+.arch-flow-edge-label {
+  position: absolute;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: var(--surface);
+  padding: 1px 5px;
+  border-radius: 4px;
+  border: 1px solid var(--border-subtle);
+  pointer-events: none;
+  white-space: nowrap;
+}
+/* Theme the React Flow controls to match the app. */
+.arch-flow-canvas .react-flow__controls-button {
+  background: var(--surface-raised);
+  border-bottom: 1px solid var(--border-subtle);
+  color: var(--text);
+  fill: var(--text);
+}
+.arch-flow-canvas .react-flow__controls-button:hover {
+  background: var(--surface);
+}
 .arch-considerations {
   margin: 0 0 0 18px;
   padding: 0;

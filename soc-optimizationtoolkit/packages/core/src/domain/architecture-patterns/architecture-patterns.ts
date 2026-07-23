@@ -477,3 +477,49 @@ export function catalogLabel(id: string): string {
   const resource = AZURE_RESOURCES.find((r) => r.id === id);
   return resource !== undefined ? resource.label : id;
 }
+
+/** A node's canonical merge key: its label reduced to lowercase alphanumerics. */
+function canonicalNodeKey(label: string): string {
+  return label.toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+/**
+ * Merge several patterns' tiered diagrams into ONE canonical graph for the
+ * interactive dataflow view: nodes with the same label collapse (so shared
+ * endpoints - Log sources, Cribl Stream, Sentinel - appear once and the
+ * distinct middle paths fan through them), and edges dedupe by endpoint pair.
+ * Node ids in the result are the canonical keys (stable across patterns), so
+ * edges reference them directly. Pure - order of `patterns` sets first-wins
+ * label/tier and edge-label.
+ */
+export function unifyPatternDiagrams(
+  patterns: readonly ArchitecturePattern[],
+): PatternDiagram {
+  const nodes = new Map<string, DiagramNode>();
+  const edges = new Map<string, DiagramEdge>();
+  for (const pattern of patterns) {
+    // Local node id -> canonical key, for remapping this pattern's edges.
+    const localToKey = new Map<string, string>();
+    for (const node of pattern.diagram.nodes) {
+      const key = canonicalNodeKey(node.label);
+      localToKey.set(node.id, key);
+      if (!nodes.has(key)) {
+        nodes.set(key, { id: key, label: node.label, tier: node.tier });
+      }
+    }
+    for (const edge of pattern.diagram.edges) {
+      const from = localToKey.get(edge.from);
+      const to = localToKey.get(edge.to);
+      if (from === undefined || to === undefined || from === to) continue;
+      const key = `${from} ${to}`;
+      if (!edges.has(key)) {
+        edges.set(key, {
+          from,
+          to,
+          ...(edge.label !== undefined ? { label: edge.label } : {}),
+        });
+      }
+    }
+  }
+  return { nodes: [...nodes.values()], edges: [...edges.values()] };
+}

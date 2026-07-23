@@ -5,6 +5,7 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { LocalApp } from './local-app';
+import '@xyflow/react/dist/style.css';
 import '@soc/ui/styles.css';
 import './local.css';
 

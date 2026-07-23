@@ -24,4 +24,5 @@ export {
   expandResources,
   recommendPatterns,
   catalogLabel,
+  unifyPatternDiagrams,
 } from "./architecture-patterns";
