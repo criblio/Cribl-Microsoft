@@ -15,7 +15,9 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@soc/core": "*"
+    "@dagrejs/dagre": "^3.0.0",
+    "@soc/core": "*",
+    "@xyflow/react": "^12.11.2"
   },
   "peerDependencies": {
     "react": "^19.0.0"

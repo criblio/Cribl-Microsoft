@@ -14,6 +14,7 @@ import {
   catalogLabel,
   expandResources,
   recommendPatterns,
+  unifyPatternDiagrams,
 } from "./architecture-patterns";
 
 const PRODUCT_IDS = new Set(CRIBL_PRODUCTS.map((p) => p.id));
@@ -133,5 +134,38 @@ describe("catalogLabel", () => {
     expect(catalogLabel("stream")).toBe("Cribl Stream");
     expect(catalogLabel("event-hub")).toBe("Azure Event Hub");
     expect(catalogLabel("mystery")).toBe("mystery");
+  });
+});
+
+describe("unifyPatternDiagrams", () => {
+  it("returns an empty graph for no patterns", () => {
+    expect(unifyPatternDiagrams([])).toEqual({ nodes: [], edges: [] });
+  });
+
+  it("merges shared-label nodes across patterns and dedupes edges", () => {
+    const directDcr = ARCHITECTURE_PATTERNS.find((p) => p.id === "direct-dcr");
+    const eventHub = ARCHITECTURE_PATTERNS.find((p) => p.id === "event-hub-fanin");
+    expect(directDcr && eventHub).toBeTruthy();
+    const unified = unifyPatternDiagrams([directDcr!, eventHub!]);
+
+    // "Cribl Stream" and "Sentinel / LA" appear in both -> one node each.
+    const labels = unified.nodes.map((n) => n.label);
+    expect(labels.filter((l) => l === "Cribl Stream")).toHaveLength(1);
+    expect(labels.filter((l) => l === "Sentinel / LA")).toHaveLength(1);
+
+    // Node ids are canonical keys and edges reference them.
+    const streamKey = unified.nodes.find((n) => n.label === "Cribl Stream")?.id;
+    expect(streamKey).toBe("criblstream");
+    expect(unified.edges.every((e) => e.from !== e.to)).toBe(true);
+    // Every edge endpoint resolves to a node in the unified set.
+    const ids = new Set(unified.nodes.map((n) => n.id));
+    expect(unified.edges.every((e) => ids.has(e.from) && ids.has(e.to))).toBe(true);
+  });
+
+  it("carries a single canonical graph for one pattern (idempotent shape)", () => {
+    const p = ARCHITECTURE_PATTERNS.find((x) => x.id === "direct-dcr")!;
+    const unified = unifyPatternDiagrams([p]);
+    expect(unified.nodes).toHaveLength(p.diagram.nodes.length);
+    expect(unified.edges).toHaveLength(p.diagram.edges.length);
   });
 });
