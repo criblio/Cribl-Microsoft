@@ -104,7 +104,20 @@ export function HomeScreen({
               <div className="panel-controls">
                 <button
                   className="next-action-button"
-                  onClick={() => onNavigate(actionRouteId)}
+                  onClick={() => {
+                    onNavigate(actionRouteId);
+                    // Same-route actions (connect lives ON Setup) would
+                    // otherwise appear to do nothing: scroll to the target
+                    // section after navigation settles.
+                    const anchorId = action.anchorId;
+                    if (anchorId !== null) {
+                      window.setTimeout(() => {
+                        document
+                          .getElementById(anchorId)
+                          ?.scrollIntoView({ behavior: "smooth", block: "start" });
+                      }, 60);
+                    }
+                  }}
                 >
                   {action.label}
                 </button>

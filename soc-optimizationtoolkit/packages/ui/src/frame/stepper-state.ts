@@ -31,6 +31,13 @@ export interface JourneyLink {
   routeId?: string;
   /** Guidance microcopy (e.g. the cross-link or config-file hint). */
   hint?: string;
+  /**
+   * Element id to scroll into view after navigating - the fix for
+   * same-route actions (user report 2026-07-28: Home's "Enter your Azure
+   * identity" routed to the page the user was already on and appeared to do
+   * nothing). The shell owns the id; the target section wraps itself in it.
+   */
+  anchorId?: string;
 }
 
 /** Stage id -> shell binding. Stages without an entry render unlinked. */

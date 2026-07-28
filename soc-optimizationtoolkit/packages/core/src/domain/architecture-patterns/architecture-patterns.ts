@@ -187,13 +187,15 @@ export const ARCHITECTURE_PATTERNS: readonly ArchitecturePattern[] = [
       nodes: [
         { id: "src", label: "Log sources", tier: "source" },
         { id: "stream", label: "Cribl Stream (vNet)", tier: "cribl" },
-        { id: "dce", label: "DCE via AMPLS", tier: "azure" },
+        { id: "dce", label: "Data Collection Endpoint", tier: "azure" },
+        { id: "dcrdce", label: "DCE-based DCR", tier: "azure" },
         { id: "law", label: "Sentinel / LA", tier: "destination" },
       ],
       edges: [
         { from: "src", to: "stream" },
-        { from: "stream", to: "dce", label: "private endpoint" },
-        { from: "dce", to: "law", label: "DCR" },
+        { from: "stream", to: "dce", label: "private endpoint (AMPLS)" },
+        { from: "dce", to: "dcrdce" },
+        { from: "dcrdce", to: "law" },
       ],
     },
   },
@@ -211,13 +213,14 @@ export const ARCHITECTURE_PATTERNS: readonly ArchitecturePattern[] = [
       "Give each worker group its own consumer group to avoid partition contention.",
       "Route the full stream to cheap storage and only the security-relevant subset to Sentinel.",
       "This repo's Event Hub discovery tooling enumerates existing hubs and generates Stream sources.",
+      "Public-path ingestion uses Kind:Direct DCRs; a Data Collection Endpoint is only needed when Private Link ingestion is in play (see the Private ingestion pattern).",
     ],
     diagram: {
       nodes: [
         { id: "diag", label: "Azure diagnostics", tier: "source" },
         { id: "eh", label: "Event Hub", tier: "source" },
         { id: "stream", label: "Cribl Stream", tier: "cribl" },
-        { id: "dcr", label: "DCR", tier: "azure" },
+        { id: "dcr", label: "Kind:Direct DCR", tier: "azure" },
         { id: "law", label: "Sentinel / LA", tier: "destination" },
       ],
       edges: [
@@ -248,13 +251,15 @@ export const ARCHITECTURE_PATTERNS: readonly ArchitecturePattern[] = [
         { id: "entra", label: "Entra ID diagnostics", tier: "source" },
         { id: "eh", label: "Event Hub", tier: "source" },
         { id: "stream", label: "Cribl Stream", tier: "cribl" },
+        { id: "dcr", label: "Kind:Direct DCR", tier: "azure" },
         { id: "cl", label: "Custom _CL + alias", tier: "azure" },
         { id: "sentinel", label: "Sentinel content", tier: "destination" },
       ],
       edges: [
         { from: "entra", to: "eh" },
         { from: "eh", to: "stream" },
-        { from: "stream", to: "cl", label: "schema preserved" },
+        { from: "stream", to: "dcr", label: "schema preserved" },
+        { from: "dcr", to: "cl" },
         { from: "cl", to: "sentinel", label: "function alias" },
       ],
     },
@@ -278,7 +283,7 @@ export const ARCHITECTURE_PATTERNS: readonly ArchitecturePattern[] = [
         { id: "hosts", label: "Endpoints / servers", tier: "source" },
         { id: "edge", label: "Cribl Edge fleet", tier: "cribl" },
         { id: "stream", label: "Cribl Stream", tier: "cribl" },
-        { id: "dcr", label: "DCR", tier: "azure" },
+        { id: "dcr", label: "Kind:Direct DCR", tier: "azure" },
         { id: "law", label: "Sentinel / LA", tier: "destination" },
       ],
       edges: [
@@ -391,7 +396,7 @@ export const ARCHITECTURE_PATTERNS: readonly ArchitecturePattern[] = [
         { id: "flow", label: "vNet flow logs", tier: "source" },
         { id: "blob", label: "Storage account", tier: "source" },
         { id: "stream", label: "Stream collector", tier: "cribl" },
-        { id: "dcr", label: "DCR", tier: "azure" },
+        { id: "dcr", label: "Kind:Direct DCR", tier: "azure" },
         { id: "law", label: "Sentinel / LA", tier: "destination" },
       ],
       edges: [
@@ -522,4 +527,254 @@ export function unifyPatternDiagrams(
     }
   }
   return { nodes: [...nodes.values()], edges: [...edges.values()] };
+}
+
+// ---------------------------------------------------------------------------
+// Per-node info: purpose text + vendor documentation links (user feature
+// 2026-07-28) - surfaced by the interactive diagram's "i" popovers.
+// ---------------------------------------------------------------------------
+
+/** One vendor documentation link. */
+export interface DiagramDocLink {
+  label: string;
+  url: string;
+}
+
+/** A diagram node's purpose text plus its vendor documentation links. */
+export interface DiagramNodeInfo {
+  /** What this component does in the flow, in a sentence or two. */
+  purpose: string;
+  docs: readonly DiagramDocLink[];
+}
+
+const MS = "https://learn.microsoft.com";
+const CRIBL = "https://docs.cribl.io";
+
+/**
+ * Node info keyed by the SAME canonical label key the diagram merge uses, so
+ * every unified node resolves exactly one entry. The completeness test pins
+ * that every catalog node label has one.
+ */
+const DIAGRAM_NODE_INFO: Record<string, DiagramNodeInfo> = {
+  [canonicalNodeKey("Log sources")]: {
+    purpose:
+      "The upstream feeds - syslog, agents, APIs, appliances - that Cribl collects, shapes, and routes.",
+    docs: [{ label: "Cribl Stream sources", url: CRIBL + "/stream/sources/" }],
+  },
+  [canonicalNodeKey("Cribl Stream")]: {
+    purpose:
+      "The routing and shaping engine: reduces, enriches, and routes events between any source and destination.",
+    docs: [{ label: "Cribl Stream docs", url: CRIBL + "/stream/" }],
+  },
+  [canonicalNodeKey("Cribl Stream (vNet)")]: {
+    purpose:
+      "Cribl Stream workers deployed inside the virtual network so ingestion can ride private endpoints instead of public egress.",
+    docs: [
+      { label: "Cribl Stream docs", url: CRIBL + "/stream/" },
+      {
+        label: "Azure Monitor Private Link",
+        url: MS + "/azure/azure-monitor/logs/private-link-security",
+      },
+    ],
+  },
+  [canonicalNodeKey("Kind:Direct DCR")]: {
+    purpose:
+      "A Data Collection Rule with direct ingestion endpoints (Kind:Direct): clients post straight to the DCR's logs-ingestion endpoint - no Data Collection Endpoint needed on the public path. Requires Cribl Stream 4.14+.",
+    docs: [
+      {
+        label: "Data collection rules overview",
+        url: MS + "/azure/azure-monitor/essentials/data-collection-rule-overview",
+      },
+      {
+        label: "Logs Ingestion API",
+        url: MS + "/azure/azure-monitor/logs/logs-ingestion-api-overview",
+      },
+      {
+        label: "Cribl Microsoft Sentinel destination",
+        url: CRIBL + "/stream/destinations-sentinel/",
+      },
+    ],
+  },
+  [canonicalNodeKey("Data Collection Endpoint")]: {
+    purpose:
+      "The regional ingestion endpoint non-Direct DCRs post through. Needed when Private Link is in play: the DCE joins an Azure Monitor Private Link Scope so ingestion never leaves the vNet.",
+    docs: [
+      {
+        label: "Data collection endpoints",
+        url: MS + "/azure/azure-monitor/essentials/data-collection-endpoint-overview",
+      },
+      {
+        label: "Azure Monitor Private Link",
+        url: MS + "/azure/azure-monitor/logs/private-link-security",
+      },
+    ],
+  },
+  [canonicalNodeKey("DCE-based DCR")]: {
+    purpose:
+      "A Data Collection Rule addressed through a Data Collection Endpoint (not Kind:Direct). The DCE fronts ingestion, so this is the shape Private Link deployments use; names allow 64 characters vs 30 for Direct.",
+    docs: [
+      {
+        label: "Data collection rules overview",
+        url: MS + "/azure/azure-monitor/essentials/data-collection-rule-overview",
+      },
+      {
+        label: "Data collection endpoints",
+        url: MS + "/azure/azure-monitor/essentials/data-collection-endpoint-overview",
+      },
+    ],
+  },
+  [canonicalNodeKey("Sentinel / LA")]: {
+    purpose:
+      "The Log Analytics workspace with Microsoft Sentinel enabled - where shaped events land and detections run.",
+    docs: [
+      { label: "Microsoft Sentinel overview", url: MS + "/azure/sentinel/overview" },
+      {
+        label: "Log Analytics workspaces",
+        url: MS + "/azure/azure-monitor/logs/log-analytics-workspace-overview",
+      },
+    ],
+  },
+  [canonicalNodeKey("Azure diagnostics")]: {
+    purpose:
+      "Azure platform and resource diagnostic settings exporting logs and metrics - the native way every Azure service emits telemetry.",
+    docs: [
+      {
+        label: "Diagnostic settings",
+        url: MS + "/azure/azure-monitor/essentials/diagnostic-settings",
+      },
+    ],
+  },
+  [canonicalNodeKey("Event Hub")]: {
+    purpose:
+      "The high-throughput streaming buffer Azure services export into; Cribl consumes it with the Kafka-compatible Event Hub source.",
+    docs: [
+      { label: "Azure Event Hubs", url: MS + "/azure/event-hubs/event-hubs-about" },
+      {
+        label: "Cribl Azure Event Hubs source",
+        url: CRIBL + "/stream/sources-azure-event-hubs/",
+      },
+    ],
+  },
+  [canonicalNodeKey("Entra ID diagnostics")]: {
+    purpose:
+      "Entra ID sign-in and audit log exports streamed to Event Hub via diagnostic settings.",
+    docs: [
+      {
+        label: "Stream Entra logs to Event Hub",
+        url: MS + "/entra/identity/monitoring-health/howto-stream-logs-to-event-hub",
+      },
+    ],
+  },
+  [canonicalNodeKey("Custom _CL + alias")]: {
+    purpose:
+      "A custom Log Analytics table (_CL) receiving the rerouted events, fronted by a KQL function alias named like the native table so existing Sentinel content keeps resolving.",
+    docs: [
+      {
+        label: "Create custom tables",
+        url: MS + "/azure/azure-monitor/logs/create-custom-table",
+      },
+      {
+        label: "KQL functions (aliases)",
+        url: MS + "/azure/azure-monitor/logs/functions",
+      },
+    ],
+  },
+  [canonicalNodeKey("Sentinel content")]: {
+    purpose:
+      "The analytics rules, workbooks, and hunting content that keep working against the rerouted data through the function alias.",
+    docs: [
+      { label: "Microsoft Sentinel overview", url: MS + "/azure/sentinel/overview" },
+    ],
+  },
+  [canonicalNodeKey("Endpoints / servers")]: {
+    purpose:
+      "The hosts where collection starts - files, journals, metrics, Windows events - running Cribl Edge instead of per-host agents.",
+    docs: [{ label: "Cribl Edge docs", url: CRIBL + "/edge/" }],
+  },
+  [canonicalNodeKey("Cribl Edge fleet")]: {
+    purpose:
+      "Managed Cribl Edge nodes collecting on the hosts and forwarding to Stream worker groups - one control plane on the same leader.",
+    docs: [{ label: "Cribl Edge docs", url: CRIBL + "/edge/" }],
+  },
+  [canonicalNodeKey("Blob archive")]: {
+    purpose:
+      "Cheap full-fidelity storage in Azure Blob: everything lands here while Sentinel receives only the reduced hot subset; replay rehydrates on demand.",
+    docs: [
+      {
+        label: "Azure Blob Storage",
+        url: MS + "/azure/storage/blobs/storage-blobs-introduction",
+      },
+      {
+        label: "Cribl Azure Blob destination",
+        url: CRIBL + "/stream/destinations-azure-blob/",
+      },
+    ],
+  },
+  [canonicalNodeKey("Sentinel (reduced)")]: {
+    purpose:
+      "Sentinel receiving only the reduced, security-relevant subset - the cost lever: full fidelity lives in cheaper storage.",
+    docs: [
+      { label: "Microsoft Sentinel overview", url: MS + "/azure/sentinel/overview" },
+    ],
+  },
+  [canonicalNodeKey("Cribl Lake")]: {
+    purpose:
+      "Cribl's managed data lake tier: full-fidelity retention with Search on top, while Sentinel gets the reduced subset.",
+    docs: [{ label: "Cribl Lake docs", url: CRIBL + "/lake/" }],
+  },
+  [canonicalNodeKey("Cribl Search")]: {
+    purpose:
+      "Query data where it lives - blob archives, Lake - without ingesting it first; forward only findings to Sentinel.",
+    docs: [{ label: "Cribl Search docs", url: CRIBL + "/search/" }],
+  },
+  [canonicalNodeKey("Sentinel (findings)")]: {
+    purpose:
+      "Sentinel receiving only search FINDINGS - the archive stays in place and only conclusions are ingested.",
+    docs: [
+      { label: "Microsoft Sentinel overview", url: MS + "/azure/sentinel/overview" },
+    ],
+  },
+  [canonicalNodeKey("vNet flow logs")]: {
+    purpose:
+      "Virtual network flow logs written by Network Watcher - per-tuple network telemetry landing in a storage account.",
+    docs: [
+      {
+        label: "vNet flow logs",
+        url: MS + "/azure/network-watcher/vnet-flow-logs-overview",
+      },
+    ],
+  },
+  [canonicalNodeKey("Storage account")]: {
+    purpose:
+      "The storage account flow logs land in (insights-logs-flowlogflowevent) - the source Cribl's scheduled blob collector reads.",
+    docs: [
+      {
+        label: "Azure Blob Storage",
+        url: MS + "/azure/storage/blobs/storage-blobs-introduction",
+      },
+      {
+        label: "Cribl Azure Blob source",
+        url: CRIBL + "/stream/sources-azure-blob/",
+      },
+    ],
+  },
+  [canonicalNodeKey("Stream collector")]: {
+    purpose:
+      "A scheduled Cribl collection job pulling flow-log blobs on a cron (hourly at :15 over a -75m..-15m window), breaking and flattening them before ingestion.",
+    docs: [
+      { label: "Cribl collectors", url: CRIBL + "/stream/collectors/" },
+      {
+        label: "Cribl Azure Blob source",
+        url: CRIBL + "/stream/sources-azure-blob/",
+      },
+    ],
+  },
+};
+
+/**
+ * The info entry for a node LABEL (the same canonical key the diagram merge
+ * uses), or undefined for labels outside the catalog.
+ */
+export function diagramNodeInfo(label: string): DiagramNodeInfo | undefined {
+  return DIAGRAM_NODE_INFO[canonicalNodeKey(label)];
 }

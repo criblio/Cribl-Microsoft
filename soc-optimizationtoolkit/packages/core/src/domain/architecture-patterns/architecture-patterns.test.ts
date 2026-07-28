@@ -15,6 +15,7 @@ import {
   expandResources,
   recommendPatterns,
   unifyPatternDiagrams,
+  diagramNodeInfo,
 } from "./architecture-patterns";
 
 const PRODUCT_IDS = new Set(CRIBL_PRODUCTS.map((p) => p.id));
@@ -152,6 +153,11 @@ describe("unifyPatternDiagrams", () => {
     const labels = unified.nodes.map((n) => n.label);
     expect(labels.filter((l) => l === "Cribl Stream")).toHaveLength(1);
     expect(labels.filter((l) => l === "Sentinel / LA")).toHaveLength(1);
+    // The 2026-07-28 correctness fix: both patterns ride the PUBLIC ingestion
+    // path, so their DCR nodes are Kind:Direct and MERGE into one node (a
+    // plain "DCR" would wrongly imply a DCE-less non-Direct rule).
+    expect(labels.filter((l) => l === "Kind:Direct DCR")).toHaveLength(1);
+    expect(labels.filter((l) => l === "DCR")).toHaveLength(0);
 
     // Node ids are canonical keys and edges reference them.
     const streamKey = unified.nodes.find((n) => n.label === "Cribl Stream")?.id;
@@ -167,5 +173,41 @@ describe("unifyPatternDiagrams", () => {
     const unified = unifyPatternDiagrams([p]);
     expect(unified.nodes).toHaveLength(p.diagram.nodes.length);
     expect(unified.edges).toHaveLength(p.diagram.edges.length);
+  });
+});
+
+describe("diagramNodeInfo (2026-07-28 info popovers)", () => {
+  it("every catalog node label has a purpose and at least one doc link", () => {
+    for (const pattern of ARCHITECTURE_PATTERNS) {
+      for (const node of pattern.diagram.nodes) {
+        const info = diagramNodeInfo(node.label);
+        expect(info, `missing info for '${node.label}' (${pattern.id})`).toBeDefined();
+        expect(info!.purpose.length).toBeGreaterThan(20);
+        expect(info!.docs.length).toBeGreaterThanOrEqual(1);
+        for (const doc of info!.docs) {
+          expect(doc.url).toMatch(/^https:\/\/(learn\.microsoft\.com|docs\.cribl\.io)\//);
+          expect(doc.label.length).toBeGreaterThan(3);
+        }
+      }
+    }
+  });
+
+  it("resolves by canonical label (case/punctuation insensitive)", () => {
+    expect(diagramNodeInfo("kind:direct dcr")).toBeDefined();
+    expect(diagramNodeInfo("KIND DIRECT DCR")).toBeDefined();
+    expect(diagramNodeInfo("Not A Real Node")).toBeUndefined();
+  });
+
+  it("the private path models DCE and DCE-based DCR as distinct nodes", () => {
+    const privatePattern = ARCHITECTURE_PATTERNS.find(
+      (p) => p.id === "private-ingestion",
+    )!;
+    const labels = privatePattern.diagram.nodes.map((n) => n.label);
+    expect(labels).toContain("Data Collection Endpoint");
+    expect(labels).toContain("DCE-based DCR");
+    // The DCE fronts the DCR: stream -> dce -> dcr -> workspace.
+    const edges = privatePattern.diagram.edges;
+    expect(edges.some((e) => e.from === "dce" && e.to === "dcrdce")).toBe(true);
+    expect(edges.some((e) => e.from === "dcrdce" && e.to === "law")).toBe(true);
   });
 });

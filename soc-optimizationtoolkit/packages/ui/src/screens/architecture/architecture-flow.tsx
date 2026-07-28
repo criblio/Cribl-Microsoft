@@ -13,7 +13,7 @@
  * assets, no unsafe-eval, no unsafe-inline. (See reference_interactive_diagram.)
  */
 
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Background,
   BackgroundVariant,
@@ -32,6 +32,7 @@ import {
   type NodeProps,
 } from "@xyflow/react";
 import Dagre from "@dagrejs/dagre";
+import { diagramNodeInfo } from "@soc/core";
 import type { DiagramTier, PatternDiagram } from "@soc/core";
 // React Flow's stylesheet is imported by the SHELL entry points (cribl-app
 // main.tsx / local-app), matching how @soc/ui/styles.css is loaded - a library
@@ -53,14 +54,66 @@ const TIER_BADGE: Record<DiagramTier, string> = {
   destination: "Sentinel",
 };
 
-/** A tier-colored, draggable node card (React Flow custom node). */
+/**
+ * A tier-colored, draggable node card (React Flow custom node). Nodes with a
+ * catalog info entry carry an "i" button opening a popover with the
+ * component's purpose and vendor documentation links (user feature
+ * 2026-07-28). The popover is plain positioned markup - CSP-safe, no portal,
+ * no external assets - and is marked nodrag/nopan so the canvas does not
+ * intercept clicks inside it.
+ */
 function ArchNodeCard({ data }: NodeProps<ArchNode>) {
+  const [infoOpen, setInfoOpen] = useState(false);
+  const info = diagramNodeInfo(data.label);
   return (
     <div className={`arch-flow-node arch-flow-node-${data.tier}`}>
       <Handle type="target" position={Position.Left} className="arch-flow-handle" />
       <span className="arch-flow-node-tier">{TIER_BADGE[data.tier]}</span>
       <span className="arch-flow-node-label">{data.label}</span>
       <Handle type="source" position={Position.Right} className="arch-flow-handle" />
+      {info !== undefined && (
+        <button
+          type="button"
+          className="arch-flow-info-btn nodrag nopan"
+          aria-label={`About ${data.label}`}
+          aria-expanded={infoOpen}
+          onClick={(event) => {
+            event.stopPropagation();
+            setInfoOpen((open) => !open);
+          }}
+        >
+          i
+        </button>
+      )}
+      {info !== undefined && infoOpen && (
+        <div className="arch-flow-info-pop nodrag nopan">
+          <div className="arch-flow-info-pop-head">
+            <span className="arch-flow-info-pop-title">{data.label}</span>
+            <button
+              type="button"
+              className="arch-flow-info-close"
+              aria-label="Close"
+              onClick={(event) => {
+                event.stopPropagation();
+                setInfoOpen(false);
+              }}
+            >
+              x
+            </button>
+          </div>
+          <p className="arch-flow-info-purpose">{info.purpose}</p>
+          <span className="arch-flow-info-links-label">Documentation</span>
+          <ul className="arch-flow-info-links">
+            {info.docs.map((doc) => (
+              <li key={doc.url}>
+                <a href={doc.url} target="_blank" rel="noopener noreferrer">
+                  {doc.label}
+                </a>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </div>
   );
 }

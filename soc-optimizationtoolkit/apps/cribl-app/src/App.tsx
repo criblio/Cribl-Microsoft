@@ -163,6 +163,9 @@ const ONBOARD_REQUIRED_FIELDS = [
 const SHELL_LINK_OVERRIDES: JourneyLinks = {
   connect: {
     routeId: 'home',
+    // Same-route action: the anchor scrolls Setup down to the section so the
+    // button visibly lands somewhere (user report 2026-07-28).
+    anchorId: 'setup-connect-section',
     hint:
       'Identity entry lives in the App registration and connect section of the Setup ' +
       'page: Save and connect stores the secret and verifies it by acquiring an ARM token.',
@@ -1457,6 +1460,8 @@ function App() {
   // and discards cached discovery and validation state.
   const setupSections = (
     <>
+      {/* The journey's connect action scrolls here (SHELL_LINK_OVERRIDES). */}
+      <div id="setup-connect-section" />
       <AzureConnectSection
         key={`connect-${store.activeProfileId ?? 'none'}`}
         tenantId={activeConfig.tenantId}
