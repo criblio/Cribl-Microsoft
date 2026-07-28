@@ -79,6 +79,14 @@ import type { AzureManagement } from "../../ports/azure-management";
 import type { JobRecord, JobStep, JobStore } from "../../ports/job-store";
 import type { Logger } from "../../ports/logger";
 import {
+  asString,
+  httpErrorText,
+  is2xx,
+  isErrorCode,
+  mergedTags,
+  prop,
+} from "../arm-http";
+import {
   CONTRIBUTOR_ROLE_DEFINITION_ID,
   buildResourceGroupGetRequest,
   buildResourceGroupPatchTagsRequest,
@@ -564,61 +572,6 @@ export interface ProvisionLabResult {
   gateway?: LabGatewayOutcome;
   /** True when every non-skipped step succeeded. */
   ok: boolean;
-}
-
-// ---------------------------------------------------------------------------
-// Shared helpers (same conventions as the sibling usecases)
-// ---------------------------------------------------------------------------
-
-function is2xx(status: number): boolean {
-  return status >= 200 && status < 300;
-}
-
-function prop(value: unknown, key: string): unknown {
-  if (typeof value !== "object" || value === null) {
-    return undefined;
-  }
-  return (value as Record<string, unknown>)[key];
-}
-
-function asString(value: unknown): string {
-  return typeof value === "string" ? value : "";
-}
-
-function httpErrorText(context: string, status: number, body: unknown): string {
-  let raw: string;
-  try {
-    raw = JSON.stringify(body);
-  } catch {
-    raw = String(body);
-  }
-  return `${context}: HTTP ${status} ${raw ?? ""}`.trim();
-}
-
-function armErrorCode(body: unknown): string {
-  const code = asString(prop(prop(body, "error"), "code"));
-  return code !== "" ? code : asString(prop(body, "code"));
-}
-
-function isErrorCode(body: unknown, expected: string): boolean {
-  return armErrorCode(body).toLowerCase() === expected.toLowerCase();
-}
-
-/** Merge existing RG tags with the foundation tags (foundation wins). */
-function mergedTags(
-  existingBody: unknown,
-  foundation: Record<string, string>,
-): Record<string, string> {
-  const existing = prop(existingBody, "tags");
-  const merged: Record<string, string> = {};
-  if (typeof existing === "object" && existing !== null) {
-    for (const [key, value] of Object.entries(existing as Record<string, unknown>)) {
-      if (typeof value === "string") {
-        merged[key] = value;
-      }
-    }
-  }
-  return { ...merged, ...foundation };
 }
 
 /** The az CLI command an admin runs when the app cannot grant the role. */

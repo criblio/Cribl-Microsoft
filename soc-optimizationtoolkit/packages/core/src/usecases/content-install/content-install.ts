@@ -27,6 +27,7 @@ import type { AzureManagement } from "../../ports/azure-management";
 import type { PortHttpResponse } from "../../ports/http";
 import type { Logger } from "../../ports/logger";
 import { listAllPages } from "../azure-discovery/index";
+import { is2xx, prop } from "../arm-http";
 import {
   alertRuleResourceFromParsed,
   parserResourceBody,
@@ -146,11 +147,6 @@ export function workspaceResourceId(ws: WorkspaceScope): string {
   );
 }
 
-function prop(value: unknown, key: string): unknown {
-  if (typeof value !== "object" || value === null) return undefined;
-  return (value as Record<string, unknown>)[key];
-}
-
 function str(value: unknown): string {
   return typeof value === "string" ? value : "";
 }
@@ -229,10 +225,6 @@ function ruleFailureDetail(res: PortHttpResponse): string {
     );
   }
   return failDetail(res);
-}
-
-function is2xx(status: number): boolean {
-  return status >= 200 && status < 300;
 }
 
 // ---------------------------------------------------------------------------

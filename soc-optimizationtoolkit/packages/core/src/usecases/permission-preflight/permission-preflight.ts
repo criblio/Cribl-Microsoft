@@ -66,6 +66,7 @@ import type {
 } from "../../domain/azure-permissions";
 import { DIRECT_DCR_API_VERSION } from "../../domain/dcr-request";
 import { WORKSPACE_API_VERSION } from "../azure-discovery";
+import { httpErrorText, is2xx, prop } from "../arm-http";
 
 // ---------------------------------------------------------------------------
 // Constants (ARM api-versions, endpoint knowledge)
@@ -375,35 +376,12 @@ export interface PermissionPreflightInput {
 }
 
 // ---------------------------------------------------------------------------
-// Shared helpers
+// Shared helpers (HTTP idioms come from usecases/arm-http)
 // ---------------------------------------------------------------------------
-
-function is2xx(status: number): boolean {
-  return status >= 200 && status < 300;
-}
-
-/** Render an HTTP failure as raw, greppable error text. */
-function httpErrorText(context: string, status: number, body: unknown): string {
-  let raw: string;
-  try {
-    raw = JSON.stringify(body);
-  } catch {
-    raw = String(body);
-  }
-  return `${context}: HTTP ${status} ${raw ?? ""}`.trim();
-}
 
 /** Render a thrown value as text. */
 function errText(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
-}
-
-/** Read a property of an unknown value, or undefined when not an object. */
-function prop(value: unknown, key: string): unknown {
-  if (typeof value !== "object" || value === null) {
-    return undefined;
-  }
-  return (value as Record<string, unknown>)[key];
 }
 
 /** Coerce an unknown to a string array (dropping non-strings), [] otherwise. */

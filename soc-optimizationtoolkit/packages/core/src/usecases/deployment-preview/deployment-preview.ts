@@ -83,38 +83,7 @@ import type {
 import type { OperationOptions } from "../../domain/option-forms";
 import { listAllPages } from "../azure-discovery";
 import { DEFAULT_DCE_NAME_PREFIX } from "../onboard-batch";
-
-// ---------------------------------------------------------------------------
-// Shared helpers (same pattern as the sibling usecases)
-// ---------------------------------------------------------------------------
-
-/** Render an HTTP failure as raw, greppable error text. */
-function httpErrorText(context: string, status: number, body: unknown): string {
-  let raw: string;
-  try {
-    raw = JSON.stringify(body);
-  } catch {
-    raw = String(body);
-  }
-  return `${context}: HTTP ${status} ${raw ?? ""}`.trim();
-}
-
-function is2xx(status: number): boolean {
-  return status >= 200 && status < 300;
-}
-
-/** Read a property of an unknown value, or undefined when not an object. */
-function prop(value: unknown, key: string): unknown {
-  if (typeof value !== "object" || value === null) {
-    return undefined;
-  }
-  return (value as Record<string, unknown>)[key];
-}
-
-/** Coerce an unknown field to a string, '' for anything not a string. */
-function asString(value: unknown): string {
-  return typeof value === "string" ? value : "";
-}
+import { asString, httpErrorText, is2xx, prop } from "../arm-http";
 
 /** Legacy default DCR name prefix (same default as the onboard usecases). */
 const DEFAULT_DCR_NAME_PREFIX = "dcr-";

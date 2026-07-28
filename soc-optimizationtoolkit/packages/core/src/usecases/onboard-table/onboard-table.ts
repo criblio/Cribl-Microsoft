@@ -67,6 +67,7 @@ import type { CriblClient } from "../../ports/cribl-client";
 import type { JobRecord, JobStep, JobStore } from "../../ports/job-store";
 import type { Logger } from "../../ports/logger";
 import { redactedLength } from "../../ports/logger";
+import { httpErrorText, is2xx, prop } from "../arm-http";
 import { avoidNameCollision, generateDcrName } from "../../domain/dcr-naming";
 import { selectSchemaColumns } from "../../domain/schema-mapping";
 import type { LogAnalyticsColumn } from "../../domain/schema-mapping";
@@ -283,29 +284,6 @@ export interface OnboardTableOutcome {
    * destination may need a manual commit/deploy in some Cribl modes).
    */
   commitVersion: string | null;
-}
-
-/** Render an HTTP failure as raw, greppable error text. */
-function httpErrorText(context: string, status: number, body: unknown): string {
-  let raw: string;
-  try {
-    raw = JSON.stringify(body);
-  } catch {
-    raw = String(body);
-  }
-  return `${context}: HTTP ${status} ${raw ?? ""}`.trim();
-}
-
-function is2xx(status: number): boolean {
-  return status >= 200 && status < 300;
-}
-
-/** Read a property of an unknown value, or undefined when not an object. */
-function prop(value: unknown, key: string): unknown {
-  if (typeof value !== "object" || value === null) {
-    return undefined;
-  }
-  return (value as Record<string, unknown>)[key];
 }
 
 /** Internal signal: a step failed; message already carries the raw text. */

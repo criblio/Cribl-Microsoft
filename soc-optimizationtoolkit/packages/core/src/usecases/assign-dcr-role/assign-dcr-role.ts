@@ -54,6 +54,7 @@ import { isCustomTableName } from "../../domain/custom-table";
 import { parseResourceId } from "../../domain/azure-resource-id";
 import { DIRECT_DCR_API_VERSION } from "../../domain/dcr-request";
 import { listAllPages } from "../azure-discovery";
+import { asString, httpErrorText, is2xx, isErrorCode, prop } from "../arm-http";
 
 /**
  * "Monitoring Metrics Publisher" built-in role definition GUID, carried
@@ -100,56 +101,8 @@ export const ROLE_ASSIGNMENT_EXISTS_ERROR_CODE = "RoleAssignmentExists";
 export const PRINCIPAL_NOT_FOUND_ERROR_CODE = "PrincipalNotFound";
 
 // ---------------------------------------------------------------------------
-// Shared helpers (same pattern as the sibling usecases)
+// Shared helpers (HTTP idioms come from usecases/arm-http)
 // ---------------------------------------------------------------------------
-
-/** Render an HTTP failure as raw, greppable error text. */
-function httpErrorText(context: string, status: number, body: unknown): string {
-  let raw: string;
-  try {
-    raw = JSON.stringify(body);
-  } catch {
-    raw = String(body);
-  }
-  return `${context}: HTTP ${status} ${raw ?? ""}`.trim();
-}
-
-function is2xx(status: number): boolean {
-  return status >= 200 && status < 300;
-}
-
-/** Read a property of an unknown value, or undefined when not an object. */
-function prop(value: unknown, key: string): unknown {
-  if (typeof value !== "object" || value === null) {
-    return undefined;
-  }
-  return (value as Record<string, unknown>)[key];
-}
-
-/** Coerce an unknown field to a string, '' for anything not a string. */
-function asString(value: unknown): string {
-  return typeof value === "string" ? value : "";
-}
-
-/**
- * Extract the ARM error code from a response body. ARM errors arrive as
- * `{ error: { code, message } }`; some surfaces nest a second `{ error: ... }`.
- * Returns '' when no code is present.
- */
-function armErrorCode(body: unknown): string {
-  const error = prop(body, "error");
-  const code = asString(prop(error, "code"));
-  if (code !== "") {
-    return code;
-  }
-  // Tolerate the single-level `{ code }` shape some ARM proxies flatten to.
-  return asString(prop(body, "code"));
-}
-
-/** Case-insensitive ARM error-code comparison. */
-function isErrorCode(body: unknown, expected: string): boolean {
-  return armErrorCode(body).toLowerCase() === expected.toLowerCase();
-}
 
 /** The last path segment of an ARM resource id (its own name). */
 function lastSegment(resourceId: string): string {

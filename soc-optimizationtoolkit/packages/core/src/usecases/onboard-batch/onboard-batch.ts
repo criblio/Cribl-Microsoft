@@ -82,6 +82,7 @@ import type {
 } from "../../ports/azure-management";
 import type { PortHttpResponse } from "../../ports/http";
 import type { JobRecord, JobStatus, JobStep } from "../../ports/job-store";
+import { httpErrorText, is2xx, prop } from "../arm-http";
 import { generateDcrName } from "../../domain/dcr-naming";
 import type { OperationOptions } from "../../domain/option-forms";
 import { selectSchemaColumns } from "../../domain/schema-mapping";
@@ -373,28 +374,6 @@ export function paceAzureManagement(
   return paced;
 }
 
-/** Render an HTTP failure as raw, greppable error text. */
-function httpErrorText(context: string, status: number, body: unknown): string {
-  let raw: string;
-  try {
-    raw = JSON.stringify(body);
-  } catch {
-    raw = String(body);
-  }
-  return `${context}: HTTP ${status} ${raw ?? ""}`.trim();
-}
-
-function is2xx(status: number): boolean {
-  return status >= 200 && status < 300;
-}
-
-/** Read a property of an unknown value, or undefined when not an object. */
-function prop(value: unknown, key: string): unknown {
-  if (typeof value !== "object" || value === null) {
-    return undefined;
-  }
-  return (value as Record<string, unknown>)[key];
-}
 
 /** Internal signal: a step failed; message already carries the raw text. */
 class StepFailure extends Error {

@@ -23,6 +23,7 @@
 import type { SentinelContent } from "../../ports/sentinel-content";
 import type { AzureManagement } from "../../ports/azure-management";
 import type { Logger } from "../../ports/logger";
+import { asString } from "../arm-http";
 import { ANALYTIC_RULE_DIR_NAMES } from "../../domain/sentinel-content/discovery";
 import {
   analyticRuleToContentItem,
@@ -177,10 +178,6 @@ export interface AcquireWorkbooksInput {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function asString(value: unknown): string {
-  return typeof value === "string" ? value : "";
 }
 
 /**

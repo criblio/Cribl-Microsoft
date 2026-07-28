@@ -20,17 +20,7 @@
 import type { CriblClient } from "../../ports/cribl-client";
 import type { Logger } from "../../ports/logger";
 import { FLOWLOG_SECRET_NAME } from "../../domain/labs/lab-flowlog-pack";
-
-function is2xx(status: number): boolean {
-  return status >= 200 && status < 300;
-}
-
-function prop(value: unknown, key: string): unknown {
-  if (typeof value !== "object" || value === null) {
-    return undefined;
-  }
-  return (value as Record<string, unknown>)[key];
-}
+import { is2xx, prop } from "../arm-http";
 
 /** Input for {@link finalizeFlowLogPack}. */
 export interface FinalizeFlowLogPackInput {

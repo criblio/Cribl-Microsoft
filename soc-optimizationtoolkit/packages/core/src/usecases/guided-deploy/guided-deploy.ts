@@ -38,6 +38,7 @@ import type { JobRecord, JobStatus, JobStep, JobStore } from "../../ports/job-st
 import type { Logger } from "../../ports/logger";
 import type { SentinelDestinationConfig } from "../../domain/sentinel-destination";
 import type { CollectedArmRequest } from "../onboard-batch";
+import { prop } from "../arm-http";
 import { buildAirGapArchive } from "./air-gap-export";
 import {
   canWireSource,
@@ -272,14 +273,6 @@ export function guidedDeployKey(input: GuidedDeployInput): string {
     mode: input.mode,
     sources: input.sources.map((source) => source.id),
   });
-}
-
-/** Read a property of an unknown value, or undefined when not an object. */
-function prop(value: unknown, key: string): unknown {
-  if (typeof value !== "object" || value === null) {
-    return undefined;
-  }
-  return (value as Record<string, unknown>)[key];
 }
 
 /** A prior-run source entry that counts as COMPLETED for resume purposes. */

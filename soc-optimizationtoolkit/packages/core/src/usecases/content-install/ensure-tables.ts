@@ -27,6 +27,7 @@ import {
   parseKqlValidationTable,
 } from "../../domain/field-matcher/index";
 import type { WorkspaceScope } from "./content-install";
+import { is2xx, prop } from "../arm-http";
 
 /** The result of ensuring one dependency table. */
 export interface EnsureTableOutcome {
@@ -46,15 +47,6 @@ function workspacePath(ws: WorkspaceScope): string {
     `/subscriptions/${ws.subscriptionId}/resourceGroups/${ws.resourceGroup}` +
     `/providers/Microsoft.OperationalInsights/workspaces/${ws.workspaceName}`
   );
-}
-
-function prop(value: unknown, key: string): unknown {
-  if (typeof value !== "object" || value === null) return undefined;
-  return (value as Record<string, unknown>)[key];
-}
-
-function is2xx(status: number): boolean {
-  return status >= 200 && status < 300;
 }
 
 /**

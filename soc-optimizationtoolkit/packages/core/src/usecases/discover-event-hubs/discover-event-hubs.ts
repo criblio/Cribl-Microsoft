@@ -15,6 +15,7 @@
 
 import type { AzureManagement } from "../../ports/azure-management";
 import type { Logger } from "../../ports/logger";
+import { is2xx } from "../arm-http";
 import {
   EVENTHUB_DIAG_SETTINGS_KQL,
   EVENTHUB_NAMESPACES_KQL,
@@ -47,10 +48,6 @@ export interface EventHubDiscoveryResult {
   hubs: EventHubInfo[];
   /** Per-namespace soft failures (hub listing denied/failed); never fatal. */
   warnings: string[];
-}
-
-function is2xx(status: number): boolean {
-  return status >= 200 && status < 300;
 }
 
 /**
