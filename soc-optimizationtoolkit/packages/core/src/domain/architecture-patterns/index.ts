@@ -33,6 +33,7 @@ export {
   recommendPatterns,
   catalogLabel,
   unifyPatternDiagrams,
+  applySentinelOverlay,
   diagramNodeInfo,
   criblSourceTypeFromLabel,
 } from "./architecture-patterns";

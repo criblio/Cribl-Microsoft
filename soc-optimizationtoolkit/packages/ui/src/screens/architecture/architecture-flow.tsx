@@ -57,6 +57,10 @@ type ArchNodeData = {
   sourceTypes?: string[];
   /** Per-node info override (live diagrams); catalog nodes resolve by label. */
   info?: DiagramNodeInfo;
+  /** Card badge override (live stage/type captions). */
+  badge?: string;
+  /** Service tags overlapping the bottom-right corner (e.g. Sentinel). */
+  overlays?: readonly string[];
   /** Remove this node from the diagram (the hover x button). */
   onRemove?: (nodeId: string) => void;
 };
@@ -119,7 +123,9 @@ function ArchNodeCard({ id, data }: NodeProps<ArchNode>) {
         position={Position.Left}
         className="arch-flow-handle"
       />
-      <span className="arch-flow-node-tier">{nodeBadge(data.label, data.tier)}</span>
+      <span className="arch-flow-node-tier">
+        {data.badge ?? nodeBadge(data.label, data.tier)}
+      </span>
       <span className="arch-flow-node-label">{data.label}</span>
       {data.sourceTypes !== undefined && data.sourceTypes.length > 0 && (
         <span className="arch-flow-node-chips">
@@ -130,6 +136,17 @@ function ArchNodeCard({ id, data }: NodeProps<ArchNode>) {
           ))}
         </span>
       )}
+      {data.overlays !== undefined &&
+        data.overlays.map((overlay, index) => (
+          <span
+            className="arch-flow-overlay-tag"
+            key={overlay}
+            style={{ bottom: -10 - index * 18 }}
+            title={diagramNodeInfo(overlay)?.purpose ?? overlay}
+          >
+            {overlay}
+          </span>
+        ))}
       <Handle
         type="source"
         id="out"
@@ -439,7 +456,14 @@ function layoutGraph(diagram: PatternDiagram): { nodes: ArchNode[]; edges: FlowE
     id: n.id,
     type: "arch",
     position: { x: n.x, y: n.y },
-    data: { label: n.label, tier: n.tier, sourceTypes: n.sourceTypes, info: n.info },
+    data: {
+      label: n.label,
+      tier: n.tier,
+      sourceTypes: n.sourceTypes,
+      info: n.info,
+      badge: n.badge,
+      overlays: n.overlays,
+    },
   }));
   // A wrap-back edge runs right-to-left in the laid-out flow (its source
   // column sits right of its target column) - the replay/return edges.

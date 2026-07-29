@@ -233,15 +233,31 @@ export function diagramToSvg(diagram: PatternDiagram): string {
           `font-size="8" font-weight="700" letter-spacing="0.4" fill="${PALETTE.accent}">` +
           `${esc(sourceTypeChips(node.sourceTypes).join("  "))}</text>`
         : "";
+    // Service tags (e.g. Sentinel on the workspace) overlap the card's
+    // bottom-right corner - drawn after the rect so they sit on top.
+    const overlays = (node.overlays ?? [])
+      .map((overlay, index) => {
+        const tagW = overlay.length * 5.8 + 14;
+        const tagY = node.height - 10 + index * 18;
+        return (
+          `<rect x="${round(NODE_W - tagW + 10)}" y="${tagY}" width="${round(tagW)}" ` +
+          `height="16" rx="8" fill="${PALETTE.infoCyan}"/>` +
+          `<text x="${round(NODE_W - tagW / 2 + 10)}" y="${tagY + 11}" ` +
+          `text-anchor="middle" font-size="8.5" font-weight="700" ` +
+          `letter-spacing="0.4" fill="#ffffff">${esc(overlay.toUpperCase())}</text>`
+        );
+      })
+      .join("");
     parts.push(
       `<g transform="translate(${node.x},${node.y})">` +
         `<rect width="${NODE_W}" height="${node.height}" rx="12" fill="${style.fill}" ` +
         `stroke="${style.stroke}" stroke-width="1.4"/>` +
         `<text x="${NODE_W / 2}" y="16" text-anchor="middle" font-size="9" ` +
         `font-weight="700" letter-spacing="0.8" fill="${style.badge}">` +
-        `${esc(nodeBadge(node.label, node.tier).toUpperCase())}</text>` +
+        `${esc((node.badge ?? nodeBadge(node.label, node.tier)).toUpperCase())}</text>` +
         label +
         chips +
+        overlays +
         `</g>`,
     );
   }

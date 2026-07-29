@@ -215,6 +215,18 @@ export interface DiagramNode {
    * nodes omit it and resolve through diagramNodeInfo(label) instead.
    */
   info?: DiagramNodeInfo;
+  /**
+   * Card badge override for LIVE diagrams (stage/type caption, e.g.
+   * "collection source", "Event breaker"); catalog nodes omit it and the
+   * renderer derives the badge from the tier/label.
+   */
+  badge?: string;
+  /**
+   * Service tags rendered as small chips OVERLAPPING the card's bottom-right
+   * corner (user direction 2026-07-29: Microsoft Sentinel is a service ON
+   * the workspace, shown as a tag, not a separate node).
+   */
+  overlays?: readonly string[];
 }
 
 /**
@@ -322,6 +334,7 @@ export const ARCHITECTURE_PATTERNS: readonly ArchitecturePattern[] = [
       ],
       edges: [
         { from: "src", to: "stream" },
+        { from: "stream", to: "dns", label: "worker DNS lookup" },
         { from: "dns", to: "dce", label: "resolves to the private IP" },
         { from: "stream", to: "dce", label: "private IP via vNet path (AMPLS)" },
         { from: "dce", to: "dcrdce" },
@@ -439,16 +452,21 @@ export const ARCHITECTURE_PATTERNS: readonly ArchitecturePattern[] = [
       "Replay runs through the same pipelines - shaped identically to the original flow.",
     ],
     diagram: {
+      // The hot subset rides the SAME ingestion path as everything else -
+      // through the Kind:Direct DCR, never straight into the workspace
+      // (user report 2026-07-29).
       nodes: [
         { id: "src", label: "Log sources", tier: "source" },
         { id: "stream", label: "Cribl Stream", tier: "cribl" },
         { id: "blob", label: "Blob archive", tier: "azure" },
+        { id: "dcr", label: "Kind:Direct DCR", tier: "azure" },
         { id: "law", label: "Log Analytics workspace", tier: "destination" },
       ],
       edges: [
         { from: "src", to: "stream" },
         { from: "stream", to: "blob", label: "full fidelity", cost: "economical" },
-        { from: "stream", to: "law", label: "hot subset", cost: "premium" },
+        { from: "stream", to: "dcr", label: "hot subset" },
+        { from: "dcr", to: "law", cost: "premium" },
         { from: "blob", to: "stream", label: "replay (Azure Blob source)" },
       ],
     },
@@ -468,16 +486,20 @@ export const ARCHITECTURE_PATTERNS: readonly ArchitecturePattern[] = [
       "Pair with Cribl Search for investigations over Lake datasets without rehydration.",
     ],
     diagram: {
+      // Same honesty as the blob pattern: the hot subset enters the
+      // workspace through the Kind:Direct DCR.
       nodes: [
         { id: "src", label: "Log sources", tier: "source" },
         { id: "stream", label: "Cribl Stream", tier: "cribl" },
         { id: "lake", label: "Cribl Lake", tier: "destination" },
+        { id: "dcr", label: "Kind:Direct DCR", tier: "azure" },
         { id: "law", label: "Log Analytics workspace", tier: "destination" },
       ],
       edges: [
         { from: "src", to: "stream" },
         { from: "stream", to: "lake", label: "full fidelity", cost: "economical" },
-        { from: "stream", to: "law", label: "hot subset", cost: "premium" },
+        { from: "stream", to: "dcr", label: "hot subset" },
+        { from: "dcr", to: "law", cost: "premium" },
       ],
     },
   },
@@ -931,32 +953,6 @@ export const ARCHITECTURE_PATTERNS: readonly ArchitecturePattern[] = [
     },
   },
   {
-    id: "sentinel-service",
-    title: "Microsoft Sentinel on the workspace",
-    summary:
-      "Sentinel is a SERVICE enabled on a Log Analytics workspace: data lands in workspace tables, and Sentinel's detections, hunting, and incidents run on top of them.",
-    why:
-      "Honest layering: selecting Sentinel stacks the SIEM service on the workspace every ingestion pattern lands in; selecting only Log Analytics draws the workspace without it.",
-    requiresProducts: [],
-    requiresResources: ["sentinel"],
-    considerations: [
-      "Sentinel is enabled ON a workspace (the SecurityInsights solution) - there is no Sentinel without Log Analytics underneath.",
-      "Billing stacks the same way: Log Analytics ingestion per GB, plus Sentinel's analysis charge on the same data.",
-      "Rules, hunting queries, and workbooks live in Sentinel; the events they query live in the workspace tables Cribl fills.",
-    ],
-    diagram: {
-      nodes: [
-        { id: "law", label: "Log Analytics workspace", tier: "destination" },
-        { id: "sentinel", label: "Microsoft Sentinel", tier: "destination" },
-        { id: "content", label: "Sentinel content", tier: "destination" },
-      ],
-      edges: [
-        { from: "law", to: "sentinel", label: "SIEM service on the workspace" },
-        { from: "sentinel", to: "content", label: "rules, hunting, incidents" },
-      ],
-    },
-  },
-  {
     id: "private-blob-endpoint",
     title: "Blob Storage over a private endpoint",
     summary:
@@ -978,6 +974,7 @@ export const ARCHITECTURE_PATTERNS: readonly ArchitecturePattern[] = [
         { id: "blob", label: "Blob archive", tier: "destination" },
       ],
       edges: [
+        { from: "stream", to: "dns", label: "worker DNS lookup" },
         { from: "dns", to: "pe", label: "resolves to the private IP" },
         { from: "stream", to: "pe", label: "private IP via vNet path" },
         { from: "pe", to: "blob", cost: "economical" },
@@ -1006,6 +1003,7 @@ export const ARCHITECTURE_PATTERNS: readonly ArchitecturePattern[] = [
         { id: "stream", label: "Cribl Stream (vNet)", tier: "cribl" },
       ],
       edges: [
+        { from: "stream", to: "dns", label: "worker DNS lookup" },
         { from: "dns", to: "pe", label: "resolves to the private IP" },
         { from: "eh", to: "pe" },
         { from: "pe", to: "stream", label: "Azure Event Hubs source (private)" },
@@ -1034,6 +1032,7 @@ export const ARCHITECTURE_PATTERNS: readonly ArchitecturePattern[] = [
         { id: "adx", label: "Azure Data Explorer", tier: "destination" },
       ],
       edges: [
+        { from: "stream", to: "dns", label: "worker DNS lookup" },
         { from: "dns", to: "pe", label: "resolves to the private IP" },
         { from: "stream", to: "pe", label: "private IP via vNet path" },
         { from: "pe", to: "adx", cost: "economical" },
@@ -1305,6 +1304,35 @@ export function unifyPatternDiagrams(
     }
   }
   return { nodes: [...nodes.values()], edges: [...edges.values()] };
+}
+
+/**
+ * Apply selection-driven SERVICE OVERLAYS to a unified diagram (user
+ * direction 2026-07-29): Microsoft Sentinel is a service ON the workspace,
+ * so when the selection includes Sentinel (directly or implied by the data
+ * lake), the "Log Analytics workspace" node gains a corner tag instead of a
+ * separate chained node. Pure; returns a new diagram, input untouched.
+ */
+export function applySentinelOverlay(
+  diagram: PatternDiagram,
+  selection: ArchitectureSelection,
+): PatternDiagram {
+  if (!expandResources(selection.resources).has("sentinel")) {
+    return diagram;
+  }
+  return {
+    nodes: diagram.nodes.map((node) =>
+      node.label === "Log Analytics workspace"
+        ? {
+            ...node,
+            overlays: [
+              ...new Set([...(node.overlays ?? []), "Microsoft Sentinel"]),
+            ],
+          }
+        : node,
+    ),
+    edges: diagram.edges,
+  };
 }
 
 // ---------------------------------------------------------------------------

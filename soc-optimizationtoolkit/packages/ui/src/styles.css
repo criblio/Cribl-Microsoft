@@ -4042,6 +4042,7 @@ button.journey-step-main:hover .journey-step-label {
   background: var(--surface);
 }
 .arch-flow-node {
+  position: relative;
   min-width: 148px;
   max-width: 210px;
   padding: 8px 12px;
@@ -4886,6 +4887,25 @@ details[open] > summary::before {
   background: var(--accent-bg);
   color: var(--accent-strong);
   white-space: nowrap;
+}
+
+/* Service overlay tags (2026-07-29): a service riding on a resource - e.g.
+ * Microsoft Sentinel enabled ON the Log Analytics workspace - renders as a
+ * solid tag overlapping the card's bottom-right corner. */
+.arch-flow-overlay-tag {
+  position: absolute;
+  right: -12px;
+  font-size: 8.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 2px 8px;
+  border-radius: 8px;
+  background: var(--info-cyan);
+  color: #ffffff;
+  white-space: nowrap;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+  pointer-events: auto;
 }
 
 /* Architecture view tabs (2026-07-29): Reference patterns vs Live. */

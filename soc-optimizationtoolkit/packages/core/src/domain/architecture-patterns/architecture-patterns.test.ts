@@ -14,6 +14,7 @@ import {
   CRIBL_PRODUCTS,
   LOG_SOURCES,
   PRODUCT_WHEN_TO_USE,
+  applySentinelOverlay,
   catalogLabel,
   expandResources,
   recommendPatterns,
@@ -350,40 +351,71 @@ describe("edge cost tiers (2026-07-29)", () => {
     expect(
       merged.edges.find((e) => e.from === "criblstream" && e.to === "blobarchive")?.cost,
     ).toBe("economical");
+    // The hot subset rides the Logs Ingestion API: Stream never writes the
+    // workspace directly - it goes through the Kind:Direct DCR (user report
+    // 2026-07-29: cost-reduction showed Stream -> LogA without a DCR).
     expect(
-      merged.edges.find((e) => e.from === "criblstream" && e.to === "loganalyticsworkspace")
-        ?.cost,
+      merged.edges.some(
+        (e) => e.from === "criblstream" && e.to === "loganalyticsworkspace",
+      ),
+    ).toBe(false);
+    expect(
+      merged.edges.some((e) => e.from === "criblstream" && e.to === "kinddirectdcr"),
+    ).toBe(true);
+    expect(
+      merged.edges.find(
+        (e) => e.from === "kinddirectdcr" && e.to === "loganalyticsworkspace",
+      )?.cost,
     ).toBe("premium");
   });
 });
 
 describe("Sentinel layering and per-service private endpoints (2026-07-29)", () => {
-  it("selecting Sentinel stacks the service on the workspace", () => {
-    const recs = recommendPatterns({ products: ["stream"], resources: ["sentinel"] });
+  it("selecting Sentinel tags the workspace card - no separate node", () => {
+    // Sentinel is a SERVICE riding on the workspace (user directive
+    // 2026-07-29): the overlay tags the Log Analytics card's corner instead
+    // of chaining a "Microsoft Sentinel" node after it.
+    const selection = {
+      products: ["stream"],
+      resources: ["sentinel"],
+    } as const;
+    const recs = recommendPatterns(selection);
     const matches = recs.filter((r) => r.fit === "match");
-    expect(matches.map((r) => r.pattern.id)).toContain("sentinel-service");
-    const unified = unifyPatternDiagrams(matches.map((r) => r.pattern));
+    const unified = applySentinelOverlay(
+      unifyPatternDiagrams(matches.map((r) => r.pattern)),
+      selection,
+    );
     const labels = unified.nodes.map((n) => n.label);
     expect(labels.filter((l) => l === "Log Analytics workspace")).toHaveLength(1);
-    expect(labels).toContain("Microsoft Sentinel");
+    expect(labels).not.toContain("Microsoft Sentinel");
+    const workspace = unified.nodes.find(
+      (n) => n.label === "Log Analytics workspace",
+    )!;
+    expect(workspace.overlays).toEqual(["Microsoft Sentinel"]);
+    // Applying twice never duplicates the tag.
+    const again = applySentinelOverlay(unified, selection);
     expect(
-      unified.edges.some(
-        (e) => e.from === "loganalyticsworkspace" && e.to === "microsoftsentinel",
-      ),
-    ).toBe(true);
+      again.nodes.find((n) => n.label === "Log Analytics workspace")!.overlays,
+    ).toEqual(["Microsoft Sentinel"]);
   });
 
-  it("Log Analytics alone draws the workspace WITHOUT Sentinel", () => {
-    const recs = recommendPatterns({
+  it("Log Analytics alone draws the workspace WITHOUT the Sentinel tag", () => {
+    const selection = {
       products: ["stream"],
       resources: ["log-analytics"],
-    });
+    } as const;
+    const recs = recommendPatterns(selection);
     const matches = recs.filter((r) => r.fit === "match");
-    expect(matches.map((r) => r.pattern.id)).not.toContain("sentinel-service");
-    const unified = unifyPatternDiagrams(matches.map((r) => r.pattern));
+    const unified = applySentinelOverlay(
+      unifyPatternDiagrams(matches.map((r) => r.pattern)),
+      selection,
+    );
     const labels = unified.nodes.map((n) => n.label);
     expect(labels).toContain("Log Analytics workspace");
     expect(labels).not.toContain("Microsoft Sentinel");
+    for (const node of unified.nodes) {
+      expect(node.overlays ?? []).toHaveLength(0);
+    }
   });
 
   it("the blanket private-link resource is replaced by four specific ones", () => {
@@ -413,6 +445,16 @@ describe("Sentinel layering and per-service private endpoints (2026-07-29)", () 
       expect(
         pattern.diagram.edges.some((e) => e.label === "resolves to the private IP"),
         `${patternId}: DNS edge`,
+      ).toBe(true);
+      // The worker reaches OUT to the DNS zone (user report 2026-07-29: the
+      // DNS object floated with nothing connecting the worker to it).
+      const dnsId = pattern.diagram.nodes.find((n) => n.label === dnsLabel)!.id;
+      expect(
+        pattern.diagram.edges.some(
+          (e) =>
+            e.from === "stream" && e.to === dnsId && e.label === "worker DNS lookup",
+        ),
+        `${patternId}: worker lookup edge`,
       ).toBe(true);
       expect(
         pattern.diagram.edges.some((e) => e.label?.includes("vNet path") === true) ||

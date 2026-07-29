@@ -76,6 +76,10 @@ export interface LaidOutNode {
   sourceTypes: string[];
   /** Per-node info override (live diagrams); catalog nodes resolve by label. */
   info?: DiagramNodeInfo;
+  /** Card badge override (live stage/type captions). */
+  badge?: string;
+  /** Service tags overlapping the bottom-right corner (e.g. Sentinel). */
+  overlays?: readonly string[];
 }
 
 /** A routed point on an edge's polyline (dagre's node-avoiding waypoints). */
@@ -166,6 +170,10 @@ export function layoutDiagram(diagram: PatternDiagram): LaidOutDiagram {
       height,
       sourceTypes: typesByNode.get(n.id) ?? [],
       ...(n.info !== undefined ? { info: n.info } : {}),
+      ...(n.badge !== undefined ? { badge: n.badge } : {}),
+      ...(n.overlays !== undefined && n.overlays.length > 0
+        ? { overlays: n.overlays }
+        : {}),
     };
   });
   const edges: LaidOutEdge[] = diagram.edges.map((e) => {
