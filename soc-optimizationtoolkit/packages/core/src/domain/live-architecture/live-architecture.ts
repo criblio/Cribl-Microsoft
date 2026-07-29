@@ -94,19 +94,21 @@ export interface BuildLiveDiagramOptions {
 
 /**
  * Group-scoped Cribl UI pages, appended to `{uiBase}/m/{groupId}`. ONE map
- * so a drifted slug is a one-line fix. /jobs/collectors is pinned verbatim
- * from docs.cribl.io/stream/common-errors; the rest follow the leader SPA's
- * menu structure (Data > Sources/Destinations, Routing > Data Routes,
- * Processing > Pipelines/Knowledge/Packs).
+ * so a drifted slug is a one-line fix. Extracted VERBATIM from the Cribl
+ * 4.x SaaS UI bundle's route registry (2026-07-29 - the guessed menu-name
+ * slugs 404ed): the nav enum is Inputs="inputs", Outputs="outputs",
+ * Routes="routes", Pipelines="pipelines", Packs="p"; collectors render at
+ * inputs/collectors; the Knowledge tab for breakers is "breakerrules".
+ * Item pages confirmed by in-bundle templates: pipelines/{id}, p/{packId}.
  */
 const UI_PAGES = {
-  sources: "/data/sources",
-  collectors: "/jobs/collectors",
-  destinations: "/data/destinations",
-  routes: "/data-routes",
+  sources: "/inputs",
+  collectors: "/inputs/collectors",
+  destinations: "/outputs",
+  routes: "/routes",
   pipelines: "/pipelines",
-  breakers: "/knowledge/breakers",
-  packs: "/packs",
+  breakers: "/knowledge/breakerrules",
+  packs: "/p",
 } as const;
 
 /**

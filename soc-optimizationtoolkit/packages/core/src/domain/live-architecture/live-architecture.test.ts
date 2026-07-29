@@ -590,13 +590,13 @@ describe("Cribl UI resource links (2026-07-29)", () => {
     );
     expect(linkOf.get("routes")).toEqual({
       label: "Open Routes in Cribl (default)",
-      url: `${base}/m/default/data-routes`,
+      url: `${base}/m/default/routes`,
     });
     expect(linkOf.get("in:blob_flowlogs")?.url).toBe(
-      `${base}/m/default/jobs/collectors`,
+      `${base}/m/default/inputs/collectors`,
     );
     expect(linkOf.get("brk:FlowBreaker")?.url).toBe(
-      `${base}/m/default/knowledge/breakers`,
+      `${base}/m/default/knowledge/breakerrules`,
     );
     expect(linkOf.get("pre:blob_pre")?.url).toBe(
       `${base}/m/default/pipelines/blob_pre`,
@@ -608,7 +608,7 @@ describe("Cribl UI resource links (2026-07-29)", () => {
       `${base}/m/default/pipelines/adx_post`,
     );
     expect(linkOf.get("out:adx_dest")?.url).toBe(
-      `${base}/m/default/data/destinations`,
+      `${base}/m/default/outputs`,
     );
     // Each resource link REPLACES the docs list (user: navigate to the
     // resource instead of the documentation reference).
@@ -625,10 +625,10 @@ describe("Cribl UI resource links (2026-07-29)", () => {
     });
     expect(
       diagram.nodes.find((n) => n.id === "in:syslog_pan")?.info?.docs[0]?.url,
-    ).toBe(`${base}/m/default/data/sources`);
+    ).toBe(`${base}/m/default/inputs`);
     expect(
       diagram.nodes.find((n) => n.id === "pack:AzureFlowLogs")?.info?.docs[0]?.url,
-    ).toBe(`${base}/m/default/packs/AzureFlowLogs`);
+    ).toBe(`${base}/m/default/p/AzureFlowLogs`);
   });
 
   it("without uiBase, the documentation links stay", () => {
