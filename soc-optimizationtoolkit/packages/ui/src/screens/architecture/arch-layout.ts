@@ -52,10 +52,26 @@ export interface LaidOutNode {
   y: number;
 }
 
-/** The laid-out diagram: nodes with positions, edges as-is, canvas size. */
+/** A routed point on an edge's polyline (dagre's node-avoiding waypoints). */
+export interface EdgePoint {
+  x: number;
+  y: number;
+}
+
+/**
+ * One laid-out edge: the diagram edge plus dagre's ROUTED waypoints. Long
+ * edges spanning ranks get virtual-node waypoints that dodge the node
+ * columns - renderers that ignore them (the React Flow canvas draws its own
+ * smoothstep) simply use from/to.
+ */
+export interface LaidOutEdge extends DiagramEdge {
+  points: EdgePoint[];
+}
+
+/** The laid-out diagram: nodes with positions, routed edges, canvas size. */
 export interface LaidOutDiagram {
   nodes: LaidOutNode[];
-  edges: DiagramEdge[];
+  edges: LaidOutEdge[];
   width: number;
   height: number;
 }
@@ -82,10 +98,19 @@ export function layoutDiagram(diagram: PatternDiagram): LaidOutDiagram {
       y: p.y - NODE_H / 2,
     };
   });
+  const edges: LaidOutEdge[] = diagram.edges.map((e) => {
+    const routed = g.edge({ v: e.from, w: e.to }) as
+      | { points?: EdgePoint[] }
+      | undefined;
+    return {
+      ...e,
+      points: (routed?.points ?? []).map((p) => ({ x: p.x, y: p.y })),
+    };
+  });
   const size = g.graph();
   return {
     nodes,
-    edges: [...diagram.edges],
+    edges,
     width: size.width ?? 0,
     height: size.height ?? 0,
   };

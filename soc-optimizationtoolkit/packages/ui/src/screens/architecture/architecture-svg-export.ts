@@ -7,7 +7,14 @@
  */
 
 import type { DiagramTier, EdgeCostTier, PatternDiagram } from "@soc/core";
-import { NODE_H, NODE_W, layoutDiagram, nodeBadge, type LaidOutNode } from "./arch-layout";
+import {
+  NODE_H,
+  NODE_W,
+  layoutDiagram,
+  nodeBadge,
+  type EdgePoint,
+  type LaidOutNode,
+} from "./arch-layout";
 
 /**
  * The LIGHT theme tokens from styles.css, hardcoded: getComputedStyle would
@@ -75,25 +82,82 @@ function splitLabel(label: string): [string] | [string, string] {
   return [label.slice(0, split), label.slice(split + 1)];
 }
 
-/** An orthogonal elbow path from a node's right-center to another's left-center. */
-function elbowPath(from: LaidOutNode, to: LaidOutNode): string {
-  const x1 = from.x + NODE_W;
-  const y1 = from.y + NODE_H / 2;
-  const x2 = to.x;
-  const y2 = to.y + NODE_H / 2;
-  if (Math.abs(y1 - y2) < 1) {
-    return `M ${x1} ${y1} H ${x2}`;
+/**
+ * The waypoints an edge is drawn through: dagre's routed points (which
+ * dodge node columns via virtual nodes) when present, else a straight
+ * right-center -> left-center fallback.
+ */
+function edgePoints(
+  points: EdgePoint[],
+  from: LaidOutNode,
+  to: LaidOutNode,
+): EdgePoint[] {
+  if (points.length >= 2) {
+    return points;
   }
-  const midX = (x1 + x2) / 2;
-  const r = 10;
-  const down = y2 > y1;
-  const sign = down ? 1 : -1;
-  return (
-    `M ${x1} ${y1} H ${midX - r} ` +
-    `Q ${midX} ${y1} ${midX} ${y1 + sign * r} ` +
-    `V ${y2 - sign * r} ` +
-    `Q ${midX} ${y2} ${midX + r} ${y2} H ${x2}`
-  );
+  return [
+    { x: from.x + NODE_W, y: from.y + NODE_H / 2 },
+    { x: to.x, y: to.y + NODE_H / 2 },
+  ];
+}
+
+/** Round a coordinate to keep the document byte-stable and small. */
+function round(value: number): number {
+  return Math.round(value * 10) / 10;
+}
+
+/** A smoothed path through the waypoints (quadratic joins at interior points). */
+function routedPath(points: EdgePoint[]): string {
+  const first = points[0];
+  let d = `M ${round(first.x)} ${round(first.y)}`;
+  const r = 8;
+  for (let i = 1; i < points.length - 1; i++) {
+    const prev = points[i - 1];
+    const corner = points[i];
+    const next = points[i + 1];
+    const inLen = Math.hypot(corner.x - prev.x, corner.y - prev.y);
+    const outLen = Math.hypot(next.x - corner.x, next.y - corner.y);
+    if (inLen < 1 || outLen < 1) {
+      continue;
+    }
+    const inT = Math.max(0, 1 - r / inLen);
+    const outT = Math.min(1, r / outLen);
+    const before = {
+      x: prev.x + (corner.x - prev.x) * inT,
+      y: prev.y + (corner.y - prev.y) * inT,
+    };
+    const after = {
+      x: corner.x + (next.x - corner.x) * outT,
+      y: corner.y + (next.y - corner.y) * outT,
+    };
+    d +=
+      ` L ${round(before.x)} ${round(before.y)}` +
+      ` Q ${round(corner.x)} ${round(corner.y)} ${round(after.x)} ${round(after.y)}`;
+  }
+  const last = points[points.length - 1];
+  d += ` L ${round(last.x)} ${round(last.y)}`;
+  return d;
+}
+
+/** The point at half the polyline's total length (the label anchor). */
+function midpointOnPolyline(points: EdgePoint[]): EdgePoint {
+  let total = 0;
+  for (let i = 1; i < points.length; i++) {
+    total += Math.hypot(points[i].x - points[i - 1].x, points[i].y - points[i - 1].y);
+  }
+  let remaining = total / 2;
+  for (let i = 1; i < points.length; i++) {
+    const seg = Math.hypot(points[i].x - points[i - 1].x, points[i].y - points[i - 1].y);
+    if (seg >= remaining && seg > 0) {
+      const t = remaining / seg;
+      return {
+        x: points[i - 1].x + (points[i].x - points[i - 1].x) * t,
+        y: points[i - 1].y + (points[i].y - points[i - 1].y) * t,
+      };
+    }
+    remaining -= seg;
+  }
+  return points[Math.floor(points.length / 2)] ?? points[0];
 }
 
 /** Render the unified diagram as a self-contained SVG document string. */
@@ -112,36 +176,46 @@ export function diagramToSvg(diagram: PatternDiagram): string {
       `<path d="M 0 0 L 10 5 L 0 10 z" fill="${PALETTE.faint}"/></marker></defs>`,
   ];
 
-  // Edges under nodes; labels + cost captions at the midpoint.
+  // THREE passes so nothing strikes through anything (review 2026-07-29):
+  // every edge PATH first, then every label/cost caption (backed) on top of
+  // the lines, then the node cards on top of everything. Labels anchor at
+  // the half-length point of the ROUTED polyline so they sit on their line.
+  const labelParts: string[] = [];
   for (const edge of laidOut.edges) {
     const from = nodeById.get(edge.from);
     const to = nodeById.get(edge.to);
     if (from === undefined || to === undefined) {
       continue;
     }
+    const points = edgePoints(edge.points, from, to);
     parts.push(
-      `<path d="${elbowPath(from, to)}" fill="none" stroke="${edgeStroke(edge.cost)}" ` +
+      `<path d="${routedPath(points)}" fill="none" stroke="${edgeStroke(edge.cost)}" ` +
         `stroke-width="1.6" marker-end="url(#arch-arrow)"/>`,
     );
-    const midX = (from.x + NODE_W + to.x) / 2;
-    const midY = (from.y + NODE_H / 2 + (to.y + NODE_H / 2)) / 2;
+    const anchor = midpointOnPolyline(points);
+    const midX = round(anchor.x);
+    const midY = round(anchor.y);
     if (edge.label !== undefined && edge.label !== "") {
       const backW = edge.label.length * 5.5 + 10;
-      parts.push(
-        `<rect x="${midX - backW / 2}" y="${midY - 14}" width="${backW}" height="14" ` +
-          `fill="${PALETTE.surface}" opacity="0.9"/>`,
+      labelParts.push(
+        `<rect x="${round(midX - backW / 2)}" y="${midY - 14}" width="${round(backW)}" ` +
+          `height="14" rx="3" fill="${PALETTE.surface}" opacity="0.92"/>`,
         `<text x="${midX}" y="${midY - 4}" text-anchor="middle" font-size="10" ` +
           `fill="${PALETTE.muted}">${esc(edge.label)}</text>`,
       );
     }
     if (edge.cost !== undefined) {
-      parts.push(
+      const capW = edge.cost.length * 6 + 8;
+      labelParts.push(
+        `<rect x="${round(midX - capW / 2)}" y="${midY + 1}" width="${round(capW)}" ` +
+          `height="12" rx="3" fill="${PALETTE.surface}" opacity="0.92"/>`,
         `<text x="${midX}" y="${midY + 10}" text-anchor="middle" font-size="8" ` +
           `font-weight="700" letter-spacing="0.5" fill="${edgeStroke(edge.cost)}">` +
           `${edge.cost.toUpperCase()}</text>`,
       );
     }
   }
+  parts.push(...labelParts);
 
   for (const node of laidOut.nodes) {
     const style = TIER_STYLE[node.tier];
