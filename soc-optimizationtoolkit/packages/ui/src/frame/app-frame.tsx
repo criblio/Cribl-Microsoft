@@ -41,6 +41,12 @@ export interface AppFrameNav {
    * hides falls back to the first visible route.
    */
   navigate: (routeId: string) => void;
+  /**
+   * Whether the active mode currently shows this route - lets a screen HIDE
+   * a cross-link instead of navigating into the fallback (2026-07-29, the
+   * architecture deploy buttons).
+   */
+  canNavigate: (routeId: string) => boolean;
 }
 
 /** One entry in the frame's route table. */
@@ -94,14 +100,20 @@ export function AppFrame(props: AppFrameProps) {
   const [routeId, setRouteId] = useState(initialRouteId ?? "");
   const [resetNonces, setResetNonces] = useState<Record<string, number>>({});
 
-  const navigate = useCallback((id: string) => setRouteId(id), []);
-  const nav = useMemo<AppFrameNav>(() => ({ navigate }), [navigate]);
-
   // Filter, then fall back: if the requested route is hidden by the current
   // mode (or unknown), the first visible route renders instead - the frame
   // never shows a screen the mode cannot use. ONE filterNavItems pass;
   // grouping below is presentation only.
   const visible = filterNavItems(mode, routes);
+
+  const navigate = useCallback((id: string) => setRouteId(id), []);
+  // Memoized on the visible id SET (stringified) so nav stays stable across
+  // renders that do not change route visibility.
+  const visibleIdKey = visible.map((route) => route.id).join(",");
+  const nav = useMemo<AppFrameNav>(() => {
+    const ids = new Set(visibleIdKey.split(",").filter((id) => id !== ""));
+    return { navigate, canNavigate: (id: string) => ids.has(id) };
+  }, [navigate, visibleIdKey]);
   const active = visible.find((route) => route.id === routeId) ?? visible[0];
   const activeId = active?.id;
   const sections = groupNavSections(visible);

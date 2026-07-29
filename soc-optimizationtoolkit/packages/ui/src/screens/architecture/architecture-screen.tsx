@@ -37,9 +37,21 @@ import type {
 } from "@soc/core";
 import { SearchableMultiSelect } from "../../components/searchable-select";
 import { ArchitectureFlow } from "./architecture-flow";
+import { PATTERN_DEPLOY_LINKS } from "./deploy-links";
+import { diagramToSvg } from "./architecture-svg-export";
+import { svgToPngBytes } from "./png-export";
 
 /** One pattern's textual rationale + considerations (the diagram is unified). */
-function PatternCard({ pattern }: { pattern: ArchitecturePattern }) {
+function PatternCard({
+  pattern,
+  onNavigate,
+  canNavigate,
+}: {
+  pattern: ArchitecturePattern;
+  onNavigate?: (routeId: string) => void;
+  canNavigate?: (routeId: string) => boolean;
+}) {
+  const deployLink = PATTERN_DEPLOY_LINKS[pattern.id];
   return (
     <div className="arch-card">
       <div className="arch-card-head">
@@ -55,6 +67,22 @@ function PatternCard({ pattern }: { pattern: ArchitecturePattern }) {
           <li key={index}>{line}</li>
         ))}
       </ul>
+      {deployLink !== undefined &&
+        onNavigate !== undefined &&
+        ((canNavigate?.(deployLink.routeId) ?? true) ? (
+          <button
+            type="button"
+            className="arch-deploy-btn"
+            onClick={() => onNavigate(deployLink.routeId)}
+          >
+            {deployLink.label}
+          </button>
+        ) : (
+          <span className="field-hint">
+            Deployable from this app once an Azure connection is configured
+            (see Setup).
+          </span>
+        ))}
     </div>
   );
 }
@@ -93,11 +121,29 @@ function NearMissCard({ rec }: { rec: PatternRecommendation }) {
   );
 }
 
-export function ArchitectureScreen() {
+export interface ArchitectureScreenProps {
+  /** Navigate to a deploy surface. Absent = deploy buttons never render. */
+  onNavigate?: (routeId: string) => void;
+  /** Route visibility in the active mode. Absent = assume visible. */
+  canNavigate?: (routeId: string) => boolean;
+  /** Save an artifact (download). Absent = export buttons never render. */
+  onExport?: (
+    name: string,
+    mimeType: string,
+    data: string | Uint8Array,
+  ) => Promise<void>;
+}
+
+export function ArchitectureScreen({
+  onNavigate,
+  canNavigate,
+  onExport,
+}: ArchitectureScreenProps = {}) {
   const [products, setProducts] = useState<string[]>([]);
   const [resources, setResources] = useState<string[]>([]);
   const [sources, setSources] = useState<string[]>([]);
   const [solutionSources, setSolutionSources] = useState<string[]>([]);
+  const [exportNote, setExportNote] = useState("");
 
   // The ~436-solution options come from the SHIPPED classification asset -
   // zero ports, tokens, or network; the hint carries tier + connector kind.
@@ -282,6 +328,48 @@ export function ArchitectureScreen() {
             </p>
           ) : (
             <>
+              {onExport !== undefined && (
+                <div className="arch-export-row">
+                  <button
+                    type="button"
+                    className="arch-export-btn"
+                    onClick={() => {
+                      setExportNote("");
+                      void onExport(
+                        "architecture-diagram.svg",
+                        "image/svg+xml",
+                        diagramToSvg(unifiedDiagram),
+                      )
+                        .then(() => setExportNote("Saved architecture-diagram.svg"))
+                        .catch((err) =>
+                          setExportNote(`Export failed: ${String(err)}`),
+                        );
+                    }}
+                  >
+                    Download SVG
+                  </button>
+                  <button
+                    type="button"
+                    className="arch-export-btn"
+                    onClick={() => {
+                      setExportNote("");
+                      void svgToPngBytes(diagramToSvg(unifiedDiagram))
+                        .then((bytes) =>
+                          onExport("architecture-diagram.png", "image/png", bytes),
+                        )
+                        .then(() => setExportNote("Saved architecture-diagram.png"))
+                        .catch((err) =>
+                          setExportNote(`Export failed: ${String(err)}`),
+                        );
+                    }}
+                  >
+                    Download PNG
+                  </button>
+                  {exportNote !== "" && (
+                    <span className="field-hint">{exportNote}</span>
+                  )}
+                </div>
+              )}
               <ArchitectureFlow diagram={unifiedDiagram} />
               <div className="arch-cost-legend">
                 <span className="arch-flow-cost-badge arch-flow-cost-premium">
@@ -296,7 +384,12 @@ export function ArchitectureScreen() {
             </>
           )}
           {matches.map((rec) => (
-            <PatternCard key={rec.pattern.id} pattern={rec.pattern} />
+            <PatternCard
+              key={rec.pattern.id}
+              pattern={rec.pattern}
+              onNavigate={onNavigate}
+              canNavigate={canNavigate}
+            />
           ))}
           {nears.length > 0 && (
             <div className="arch-near-block">

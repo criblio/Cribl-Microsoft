@@ -4761,3 +4761,35 @@ details[open] > summary::before {
   font-size: 12px;
   color: var(--text-faint);
 }
+
+/* Deploy-this and export actions on the architecture page (2026-07-29). */
+.arch-deploy-btn,
+.arch-export-btn {
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  padding: 4px 12px;
+  border-radius: var(--radius-control, 8px);
+  border: 1px solid var(--accent);
+  background: var(--accent-bg);
+  color: var(--accent-strong);
+  cursor: pointer;
+}
+
+.arch-deploy-btn {
+  margin-top: 6px;
+}
+
+.arch-deploy-btn:hover,
+.arch-export-btn:hover {
+  border-color: var(--accent-strong);
+}
+
+.arch-export-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-bottom: 8px;
+}

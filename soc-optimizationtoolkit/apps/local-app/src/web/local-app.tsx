@@ -956,7 +956,7 @@ export function LocalApp() {
   // Architecture Patterns (roadmap Phase 4 queued item): the data-driven
   // reference-architecture advisor. Pure core recommender + inline-SVG
   // diagrams; no ports, no IO. requires: 'none' - advisory in every mode.
-  const architectureView = (
+  const renderArchitecture = (nav: AppFrameNav) => (
     <>
       <header className="local-header">
         <h1 className="local-title">Architecture Patterns</h1>
@@ -965,7 +965,11 @@ export function LocalApp() {
           is in use; get the matching patterns, diagrams, and considerations.
         </p>
       </header>
-      <ArchitectureScreen />
+      <ArchitectureScreen
+        onNavigate={nav.navigate}
+        canNavigate={nav.canNavigate}
+        onExport={(name, mime, data) => ports.artifacts.save(name, mime, data)}
+      />
     </>
   );
 
@@ -1090,7 +1094,7 @@ export function LocalApp() {
     // Architecture Patterns is the JOURNEY landing item (user directive
     // 2026-07-20): users arrive here first to learn how the ingestion works
     // before setting anything up. requires:'none' so it is always reachable.
-    { id: 'architecture', label: 'Architecture Patterns', requires: 'none', section: 'journey', render: () => architectureView },
+    { id: 'architecture', label: 'Architecture Patterns', requires: 'none', section: 'journey', render: renderArchitecture },
     { id: 'home', label: 'Setup', requires: 'none', section: 'journey', render: renderHome },
     { id: 'integrate', label: 'Sentinel Integration', requires: 'both', section: 'journey', render: renderIntegrate },
     { id: 'dcr-automation', label: 'DCR Automation', requires: 'azure', section: 'journey', render: renderDcrAutomation },
