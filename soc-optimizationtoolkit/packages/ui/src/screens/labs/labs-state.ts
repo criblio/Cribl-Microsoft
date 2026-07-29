@@ -26,6 +26,7 @@ import {
   type LabPlanInput,
   type LabResourceGroupMode,
   type LabResourceNames,
+  type LabTtlSettings,
   type LabType,
   type ProvisionLabResult,
 } from "@soc/core";
@@ -83,6 +84,19 @@ function parseIntStrict(value: string): number {
   return Number(trimmed);
 }
 
+/**
+ * The ONE TTL parse - the plan preview AND the deploy call both use it, so
+ * the two can never disagree on how the hour fields are read (the deploy
+ * previously used a looser Number() and had its own parse path).
+ */
+export function labTtlFromForm(form: LabFormState): LabTtlSettings {
+  return {
+    hours: parseIntStrict(form.ttlHours),
+    warningHours: parseIntStrict(form.ttlWarningHours),
+    userEmail: form.ttlEmail.trim(),
+  };
+}
+
 /** Map the form onto the core plan input (validation runs in buildLabPlan). */
 export function labPlanInputFromForm(
   form: LabFormState,
@@ -97,12 +111,36 @@ export function labPlanInputFromForm(
     existingResourceGroupName: form.existingResourceGroupName.trim(),
     location: form.location.trim(),
     baseObjectName: form.baseObjectName.trim(),
-    ttl: {
-      hours: parseIntStrict(form.ttlHours),
-      warningHours: parseIntStrict(form.ttlWarningHours),
-      userEmail: form.ttlEmail.trim(),
-    },
+    ttl: labTtlFromForm(form),
   };
+}
+
+/** The inventory panel's extend-hours validation (a positive whole number). */
+export function parseExtendHours(
+  value: string,
+): { ok: true; hours: number } | { ok: false; reason: string } {
+  const hours = Number(value);
+  if (!Number.isInteger(hours) || hours < 1) {
+    return { ok: false, reason: "Extend hours must be a positive whole number." };
+  }
+  return { ok: true, hours };
+}
+
+/**
+ * The flow-log pack's storage-account precedence: an explicitly typed name
+ * wins, else the account the deploy actually created (which may carry a
+ * collision suffix), else the planned name.
+ */
+export function packStorageAccountName(
+  typed: string,
+  result: ProvisionLabResult | null,
+  plannedName: string,
+): string {
+  const trimmed = typed.trim();
+  if (trimmed !== "") {
+    return trimmed;
+  }
+  return result?.storage?.accountName ?? plannedName;
 }
 
 /** Build the plan from the form in one step (the screen's single source). */
