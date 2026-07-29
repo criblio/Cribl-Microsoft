@@ -26,6 +26,7 @@ import {
   catalogLabel,
   fetchLiveArchitecture,
   ingestionTierLabel,
+  applySentinelOverlay,
   isStreamWorkerGroup,
   recommendWithSolutions,
   unifyPatternDiagrams,
@@ -303,7 +304,7 @@ function LiveArchitecturePanel({
           {loading
             ? "Reading configuration..."
             : snapshot === null
-              ? "Load live architecture"
+              ? "Load live dataflow"
               : "Refresh"}
         </button>
       </div>
@@ -315,7 +316,7 @@ function LiveArchitecturePanel({
           <ExportRow
             diagram={liveResult.diagram}
             onExport={onExport}
-            baseName={`live-architecture-${snapshot?.groupId ?? "group"}`}
+            baseName={`live-dataflow-${snapshot?.groupId ?? "group"}`}
           />
           <ArchitectureFlow diagram={liveResult.diagram} />
           {liveResult.diagram.nodes.length > 0 && <CostLegend />}
@@ -375,9 +376,16 @@ export function ArchitectureScreen({
   const nears = recommendations.filter((r) => r.fit === "near");
 
   // The single interactive diagram merges every matched pattern's flow.
+  // Sentinel is a SERVICE on the workspace (user directive 2026-07-29):
+  // selecting it tags the Log Analytics card instead of adding a node.
   const unifiedDiagram = useMemo(
-    () => unifyPatternDiagrams(matches.map((m) => m.pattern)),
-    [matches],
+    () =>
+      applySentinelOverlay(unifyPatternDiagrams(matches.map((m) => m.pattern)), {
+        products: products as CriblProduct[],
+        resources: resources as AzureResource[],
+        sources: sources as LogSource[],
+      }),
+    [matches, products, resources, sources],
   );
 
   const hasSelection =
@@ -388,7 +396,7 @@ export function ArchitectureScreen({
 
   return (
     <div className="panel arch-screen">
-      <h2 className="panel-title">Architecture Patterns</h2>
+      <h2 className="panel-title">Dataflow</h2>
       <p className="panel-desc">
         See how data flows from your sources through Cribl into Microsoft
         Sentinel. Select the Cribl products and Azure resources in use and the
@@ -400,7 +408,7 @@ export function ArchitectureScreen({
         anything.
       </p>
 
-      <div className="arch-view-tabs" role="tablist" aria-label="Architecture view">
+      <div className="arch-view-tabs" role="tablist" aria-label="Dataflow view">
         <button
           type="button"
           role="tab"
@@ -421,7 +429,7 @@ export function ArchitectureScreen({
           }
           onClick={() => setViewMode("live")}
         >
-          Live architecture
+          Live dataflow
         </button>
       </div>
 
@@ -572,7 +580,7 @@ export function ArchitectureScreen({
               <ExportRow
                 diagram={unifiedDiagram}
                 onExport={onExport}
-                baseName="architecture-diagram"
+                baseName="dataflow-diagram"
               />
               <ArchitectureFlow diagram={unifiedDiagram} />
               <CostLegend />

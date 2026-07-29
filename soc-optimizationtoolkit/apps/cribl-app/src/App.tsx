@@ -1857,16 +1857,19 @@ function App() {
     </>
   );
 
-  // Architecture Patterns (roadmap Phase 4 queued item): the data-driven
-  // reference-architecture advisor. Pure core recommender + inline-SVG
-  // diagrams; no ports, no IO. requires: 'none' - advisory in every mode.
+  // Dataflow (renamed from Architecture Patterns, user directive 2026-07-29;
+  // the internal item id stays 'architecture' so navigation references hold):
+  // the data-driven reference-architecture advisor plus the Live view. Pure
+  // core recommender + inline-SVG diagrams; the Live tab reads (never
+  // writes) the connected group's config. requires: 'none'.
   const renderArchitecture = (nav: AppFrameNav) => (
     <>
       <header className="harness-header">
-        <h1 className="harness-title">Architecture Patterns</h1>
+        <h1 className="harness-title">Dataflow</h1>
         <p className="harness-subtitle">
-          Reference architectures for your Cribl + Azure footprint. Select what
-          is in use; get the matching patterns, diagrams, and considerations.
+          How data flows across your Cribl + Azure footprint. Select what is
+          in use to get matching patterns, diagrams, and considerations - or
+          draw the live configured flow of a connected worker group.
         </p>
       </header>
       <ArchitectureScreen
@@ -1989,10 +1992,10 @@ function App() {
   // parks in the DEVELOPMENT section - still reachable, moved back into
   // journey/tools one item at a time as it passes live testing.
   const routes: AppRoute[] = [
-    // Architecture Patterns is the JOURNEY landing item (user directive
+    // Dataflow is the JOURNEY landing item (user directive
     // 2026-07-20): users arrive here first to learn how the ingestion works
     // before setting anything up. requires:'none' so it is always reachable.
-    { id: 'architecture', label: 'Architecture Patterns', requires: 'none', section: 'journey', render: renderArchitecture },
+    { id: 'architecture', label: 'Dataflow', requires: 'none', section: 'journey', render: renderArchitecture },
     { id: 'home', label: 'Setup', requires: 'none', section: 'journey', render: renderHome },
     { id: 'integrate', label: 'Sentinel Integration', requires: 'both', section: 'journey', render: renderIntegrate },
     { id: 'dcr-automation', label: 'DCR Automation', requires: 'azure', section: 'journey', render: renderDcrAutomation },
