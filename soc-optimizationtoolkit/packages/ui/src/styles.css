@@ -188,6 +188,9 @@ body {
   line-height: 20px;
   color: var(--text-muted);
   margin-bottom: 12px;
+  /* Readable measure on the wide-viewport tiers: panels stretch with the
+   * content column, prose does not run edge to edge. */
+  max-width: 96ch;
 }
 
 .path-options {
@@ -503,6 +506,30 @@ body {
   max-width: 920px;
   margin: 0 auto;
   padding: 24px 16px 64px;
+}
+
+/* Viewport-tiered content width (user report 2026-07-29: a fixed 920px
+ * column strands most of a large monitor). Laptops keep the compact
+ * layout; wider viewports get progressively more room - panels, tables,
+ * and the interactive diagram stretch with the column, while prose keeps
+ * a readable measure via the .panel-desc cap below. */
+@media (min-width: 1440px) {
+  .app-frame-content {
+    max-width: 1280px;
+    padding: 24px 24px 64px;
+  }
+}
+
+@media (min-width: 1800px) {
+  .app-frame-content {
+    max-width: 1560px;
+  }
+}
+
+@media (min-width: 2400px) {
+  .app-frame-content {
+    max-width: 1920px;
+  }
 }
 
 /* The topBar utility row the frame owns: the theme toggle, right-aligned
