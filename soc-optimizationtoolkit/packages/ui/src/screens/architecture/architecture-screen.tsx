@@ -18,6 +18,7 @@ import { useMemo, useState } from "react";
 import {
   AZURE_RESOURCES,
   CRIBL_PRODUCTS,
+  LOG_SOURCES,
   catalogLabel,
   recommendPatterns,
   unifyPatternDiagrams,
@@ -26,6 +27,7 @@ import type {
   ArchitecturePattern,
   AzureResource,
   CriblProduct,
+  LogSource,
   PatternRecommendation,
 } from "@soc/core";
 import { SearchableMultiSelect } from "../../components/searchable-select";
@@ -67,14 +69,16 @@ function NearMissCard({ rec }: { rec: PatternRecommendation }) {
 export function ArchitectureScreen() {
   const [products, setProducts] = useState<string[]>([]);
   const [resources, setResources] = useState<string[]>([]);
+  const [sources, setSources] = useState<string[]>([]);
 
   const recommendations = useMemo(
     () =>
       recommendPatterns({
         products: products as CriblProduct[],
         resources: resources as AzureResource[],
+        sources: sources as LogSource[],
       }),
-    [products, resources],
+    [products, resources, sources],
   );
   const matches = recommendations.filter((r) => r.fit === "match");
   const nears = recommendations.filter((r) => r.fit === "near");
@@ -85,7 +89,8 @@ export function ArchitectureScreen() {
     [matches],
   );
 
-  const hasSelection = products.length > 0 || resources.length > 0;
+  const hasSelection =
+    products.length > 0 || resources.length > 0 || sources.length > 0;
 
   return (
     <div className="panel arch-screen">
@@ -125,7 +130,27 @@ export function ArchitectureScreen() {
             ariaLabel="Filter Azure resources"
           />
           <span className="field-hint">
-            Selecting Microsoft Sentinel implies its Log Analytics workspace.
+            Sentinel implies its workspace; the data lake implies Sentinel.
+            Event Hub and Blob Storage are listed per ROLE (source vs
+            destination) so the diagram draws the correct side.
+          </span>
+        </label>
+        <label className="field">
+          <span className="field-label">Specific log sources (optional)</span>
+          <SearchableMultiSelect
+            options={LOG_SOURCES.map((s) => ({
+              value: s.id,
+              label: s.label,
+            }))}
+            values={sources}
+            onChange={setSources}
+            placeholder="Select log sources..."
+            ariaLabel="Filter log sources"
+          />
+          <span className="field-hint">
+            The Windows entries are the same data over different collection
+            methods - each draws a different ingress edge (WEF, WEC relay,
+            Cribl Edge, Winlogbeat, Splunk UF, or Azure Monitor Agent).
           </span>
         </label>
       </div>

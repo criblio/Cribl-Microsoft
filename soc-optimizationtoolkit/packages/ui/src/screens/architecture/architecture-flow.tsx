@@ -13,7 +13,7 @@
  * assets, no unsafe-eval, no unsafe-inline. (See reference_interactive_diagram.)
  */
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Background,
   BackgroundVariant,
@@ -46,13 +46,36 @@ type FlowEdge = Edge<FlowEdgeData, "flowing">;
 const NODE_W = 190;
 const NODE_H = 62;
 
-/** The short tier badge shown above a node's label. */
+/** The short tier badge shown above a node's label (non-destination tiers). */
 const TIER_BADGE: Record<DiagramTier, string> = {
   source: "Source",
   cribl: "Cribl",
   azure: "Azure",
-  destination: "Sentinel",
+  destination: "Destination",
 };
+
+/**
+ * The badge for one node. The destination COLUMN hosts more than Sentinel -
+ * Cribl Lake, ADX, downstream consumers (user report 2026-07-29: a card read
+ * "SENTINEL / Cribl Lake") - so destination badges derive from the label;
+ * the other tiers keep their fixed badge.
+ */
+function nodeBadge(label: string, tier: DiagramTier): string {
+  if (tier !== "destination") {
+    return TIER_BADGE[tier];
+  }
+  const lower = label.toLowerCase();
+  if (lower.includes("sentinel")) {
+    return "Sentinel";
+  }
+  if (lower.includes("cribl")) {
+    return "Cribl";
+  }
+  if (lower.includes("azure") || lower.includes("data explorer")) {
+    return "Azure";
+  }
+  return TIER_BADGE.destination;
+}
 
 /**
  * A tier-colored, draggable node card (React Flow custom node). Nodes with a
@@ -64,11 +87,45 @@ const TIER_BADGE: Record<DiagramTier, string> = {
  */
 function ArchNodeCard({ data }: NodeProps<ArchNode>) {
   const [infoOpen, setInfoOpen] = useState(false);
+  const cardRef = useRef<HTMLDivElement | null>(null);
   const info = diagramNodeInfo(data.label);
+
+  // Light-dismiss (user report 2026-07-29: popovers only closed via their x
+  // and stacked up): while open, any pointer-down OUTSIDE this card closes
+  // the popover - which also means opening another node's popover closes
+  // this one. CAPTURE phase so React Flow's pane/drag handlers cannot
+  // swallow the event first; Escape closes too.
+  useEffect(() => {
+    if (!infoOpen) {
+      return;
+    }
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target;
+      if (
+        cardRef.current !== null &&
+        target instanceof Node &&
+        !cardRef.current.contains(target)
+      ) {
+        setInfoOpen(false);
+      }
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setInfoOpen(false);
+      }
+    };
+    document.addEventListener("pointerdown", onPointerDown, true);
+    document.addEventListener("keydown", onKeyDown, true);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown, true);
+      document.removeEventListener("keydown", onKeyDown, true);
+    };
+  }, [infoOpen]);
+
   return (
-    <div className={`arch-flow-node arch-flow-node-${data.tier}`}>
+    <div ref={cardRef} className={`arch-flow-node arch-flow-node-${data.tier}`}>
       <Handle type="target" position={Position.Left} className="arch-flow-handle" />
-      <span className="arch-flow-node-tier">{TIER_BADGE[data.tier]}</span>
+      <span className="arch-flow-node-tier">{nodeBadge(data.label, data.tier)}</span>
       <span className="arch-flow-node-label">{data.label}</span>
       <Handle type="source" position={Position.Right} className="arch-flow-handle" />
       {info !== undefined && (

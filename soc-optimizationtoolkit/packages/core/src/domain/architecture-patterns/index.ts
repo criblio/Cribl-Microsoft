@@ -8,6 +8,7 @@
 export type {
   CriblProduct,
   AzureResource,
+  LogSource,
   CatalogEntry,
   DiagramTier,
   DiagramNode,
@@ -22,6 +23,7 @@ export type {
 export {
   CRIBL_PRODUCTS,
   AZURE_RESOURCES,
+  LOG_SOURCES,
   ARCHITECTURE_PATTERNS,
   expandResources,
   recommendPatterns,

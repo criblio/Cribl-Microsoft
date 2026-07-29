@@ -11,6 +11,7 @@ import {
   ARCHITECTURE_PATTERNS,
   AZURE_RESOURCES,
   CRIBL_PRODUCTS,
+  LOG_SOURCES,
   catalogLabel,
   expandResources,
   recommendPatterns,
@@ -20,6 +21,7 @@ import {
 
 const PRODUCT_IDS = new Set(CRIBL_PRODUCTS.map((p) => p.id));
 const RESOURCE_IDS = new Set(AZURE_RESOURCES.map((r) => r.id));
+const SOURCE_IDS = new Set(LOG_SOURCES.map((s) => s.id));
 
 describe("catalog integrity", () => {
   it("has a meaningful catalog with unique pattern ids", () => {
@@ -28,7 +30,7 @@ describe("catalog integrity", () => {
     expect(ids.size).toBe(ARCHITECTURE_PATTERNS.length);
   });
 
-  it("every requirement references a real product/resource", () => {
+  it("every requirement references a real product/resource/source", () => {
     for (const pattern of ARCHITECTURE_PATTERNS) {
       for (const p of pattern.requiresProducts) {
         expect(PRODUCT_IDS.has(p), `${pattern.id}: unknown product ${p}`).toBe(true);
@@ -36,8 +38,13 @@ describe("catalog integrity", () => {
       for (const r of pattern.requiresResources) {
         expect(RESOURCE_IDS.has(r), `${pattern.id}: unknown resource ${r}`).toBe(true);
       }
+      for (const s of pattern.requiresSources ?? []) {
+        expect(SOURCE_IDS.has(s), `${pattern.id}: unknown source ${s}`).toBe(true);
+      }
       expect(
-        pattern.requiresProducts.length + pattern.requiresResources.length,
+        pattern.requiresProducts.length +
+          pattern.requiresResources.length +
+          (pattern.requiresSources?.length ?? 0),
         `${pattern.id}: needs at least one requirement`,
       ).toBeGreaterThan(0);
     }
@@ -70,6 +77,11 @@ describe("expandResources", () => {
   });
   it("log-analytics alone does not imply sentinel", () => {
     expect(expandResources(["log-analytics"]).has("sentinel")).toBe(false);
+  });
+  it("the data lake implies sentinel AND its workspace", () => {
+    const expanded = expandResources(["sentinel-data-lake"]);
+    expect(expanded.has("sentinel")).toBe(true);
+    expect(expanded.has("log-analytics")).toBe(true);
   });
 });
 
@@ -131,10 +143,116 @@ describe("recommendPatterns", () => {
 });
 
 describe("catalogLabel", () => {
-  it("resolves product, resource, and unknown ids", () => {
+  it("resolves product, resource, source, and unknown ids", () => {
     expect(catalogLabel("stream")).toBe("Cribl Stream");
-    expect(catalogLabel("event-hub")).toBe("Azure Event Hub");
+    expect(catalogLabel("event-hub")).toBe("Event Hub (source into Cribl)");
+    expect(catalogLabel("palo-alto-syslog")).toBe("Palo Alto NGFW (syslog)");
     expect(catalogLabel("mystery")).toBe("mystery");
+  });
+});
+
+describe("log sources and role-split resources (2026-07-29)", () => {
+  it("source-ingress patterns stay hidden until their source is selected", () => {
+    const withoutSource = recommendPatterns({
+      products: ["stream"],
+      resources: ["sentinel"],
+    });
+    expect(
+      withoutSource.find((r) => r.pattern.id === "windows-wef-ingress"),
+    ).toBeUndefined();
+
+    const withSource = recommendPatterns({
+      products: ["stream"],
+      resources: ["sentinel"],
+      sources: ["windows-wef"],
+    });
+    const matched = withSource.filter((r) => r.fit === "match").map((r) => r.pattern.id);
+    expect(matched).toContain("windows-wef-ingress");
+    expect(matched).toContain("direct-dcr");
+  });
+
+  it("a selected source can still be one product away (Edge missing)", () => {
+    const recs = recommendPatterns({
+      products: ["stream"],
+      resources: ["sentinel"],
+      sources: ["windows-edge"],
+    });
+    const near = recs.find((r) => r.pattern.id === "windows-edge-ingress");
+    expect(near?.fit).toBe("near");
+    expect(near?.missing).toEqual(["edge"]);
+  });
+
+  it("the AMA path matches with no Cribl products at all", () => {
+    const recs = recommendPatterns({
+      products: [],
+      resources: ["sentinel"],
+      sources: ["windows-ama"],
+    });
+    expect(
+      recs.find((r) => r.pattern.id === "windows-ama-direct")?.fit,
+    ).toBe("match");
+  });
+
+  it("Event Hub roles stay DISTINCT nodes in the unified diagram (no cycle)", () => {
+    const fanin = ARCHITECTURE_PATTERNS.find((p) => p.id === "event-hub-fanin")!;
+    const egress = ARCHITECTURE_PATTERNS.find((p) => p.id === "event-hub-egress")!;
+    const unified = unifyPatternDiagrams([fanin, egress]);
+    const labels = unified.nodes.map((n) => n.label);
+    expect(labels).toContain("Event Hub");
+    expect(labels).toContain("Event Hub (egress)");
+    expect(unified.edges.every((e) => e.from !== e.to)).toBe(true);
+  });
+
+  it("ADX disambiguates by product: Stream lands it, Search queries it", () => {
+    const recs = recommendPatterns({
+      products: ["stream", "search"],
+      resources: ["adx"],
+    });
+    const matched = recs.filter((r) => r.fit === "match").map((r) => r.pattern.id);
+    expect(matched).toContain("adx-destination");
+    expect(matched).toContain("adx-search-in-place");
+    // The merged diagram carries ONE ADX node in the land-then-search loop.
+    const unified = unifyPatternDiagrams(
+      recs.filter((r) => r.fit === "match").map((r) => r.pattern),
+    );
+    const adxNodes = unified.nodes.filter((n) => n.label === "Azure Data Explorer");
+    expect(adxNodes).toHaveLength(1);
+    const adxKey = adxNodes[0].id;
+    expect(unified.edges.some((e) => e.to === adxKey)).toBe(true);
+    expect(unified.edges.some((e) => e.from === adxKey)).toBe(true);
+  });
+});
+
+describe("Sentinel data lake (2026-07-29)", () => {
+  it("Stream + data lake matches the tiering pattern with the mirror edge", () => {
+    const recs = recommendPatterns({
+      products: ["stream"],
+      resources: ["sentinel-data-lake"],
+    });
+    const matched = recs.filter((r) => r.fit === "match").map((r) => r.pattern.id);
+    expect(matched).toContain("sentinel-data-lake-tiering");
+    // The implied sentinel/log-analytics ALSO light the backbone pattern.
+    expect(matched).toContain("direct-dcr");
+    const tiering = ARCHITECTURE_PATTERNS.find(
+      (p) => p.id === "sentinel-data-lake-tiering",
+    )!;
+    expect(
+      tiering.diagram.edges.some(
+        (e) => e.label === "tier mirroring (single copy)",
+      ),
+    ).toBe(true);
+  });
+
+  it("Search over the lake rides the lake KQL query API, not the LA query API", () => {
+    const pattern = ARCHITECTURE_PATTERNS.find(
+      (p) => p.id === "search-sentinel-data-lake",
+    )!;
+    expect(
+      pattern.diagram.edges.some((e) => e.label === "lake KQL query API"),
+    ).toBe(true);
+    const considerations = pattern.considerations.join(" ");
+    expect(considerations).toContain("api.securityplatform.microsoft.com");
+    expect(considerations).toContain("api.loganalytics.io");
   });
 });
 
@@ -185,7 +303,9 @@ describe("diagramNodeInfo (2026-07-28 info popovers)", () => {
         expect(info!.purpose.length).toBeGreaterThan(20);
         expect(info!.docs.length).toBeGreaterThanOrEqual(1);
         for (const doc of info!.docs) {
-          expect(doc.url).toMatch(/^https:\/\/(learn\.microsoft\.com|docs\.cribl\.io)\//);
+          expect(doc.url).toMatch(
+            /^https:\/\/(learn\.microsoft\.com|docs\.cribl\.io|packs\.cribl\.io)\//,
+          );
           expect(doc.label.length).toBeGreaterThan(3);
         }
       }
