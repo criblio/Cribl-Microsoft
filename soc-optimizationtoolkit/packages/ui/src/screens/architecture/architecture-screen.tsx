@@ -208,6 +208,8 @@ function CostLegend() {
         economical
       </span>
       <span>low-cost retention or egress path</span>
+      <span className="arch-legend-line-search" aria-hidden="true" />
+      <span>Cribl Search send path - findings return through Stream</span>
     </div>
   );
 }

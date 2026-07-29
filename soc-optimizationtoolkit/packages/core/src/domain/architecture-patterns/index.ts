@@ -14,6 +14,7 @@ export type {
   DiagramNode,
   DiagramEdge,
   EdgeCostTier,
+  EdgeFlowTone,
   PatternDiagram,
   ArchitecturePattern,
   ArchitecturePreset,

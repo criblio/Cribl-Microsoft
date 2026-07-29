@@ -4151,6 +4151,21 @@ button.journey-step-main:hover .journey-step-label {
 .arch-flow-pipe-economical {
   stroke: var(--ok);
 }
+/* The Cribl Search send path (2026-07-29): findings return THROUGH Stream
+ * before landing in the workspace - its own color so the return leg never
+ * reads as the primary ingest flow. Declared after the cost classes so the
+ * tone wins on edges carrying both. */
+.arch-flow-pipe-tone-search {
+  stroke: #9254de;
+}
+.arch-legend-line-search {
+  display: inline-block;
+  width: 22px;
+  height: 3px;
+  border-radius: 2px;
+  background: #9254de;
+  vertical-align: middle;
+}
 .arch-flow-cost-badge {
   font-size: 9px;
   font-weight: 700;

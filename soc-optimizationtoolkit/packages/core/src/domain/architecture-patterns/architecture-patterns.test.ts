@@ -370,6 +370,50 @@ describe("edge cost tiers (2026-07-29)", () => {
   });
 });
 
+describe("Search send path (2026-07-29)", () => {
+  const SEARCH_PATTERN_IDS = [
+    "search-in-place",
+    "search-sentinel-data-lake",
+    "adx-search-in-place",
+  ];
+
+  it("findings return THROUGH Stream and the DCR - never straight to the workspace", () => {
+    for (const id of SEARCH_PATTERN_IDS) {
+      const pattern = ARCHITECTURE_PATTERNS.find((p) => p.id === id)!;
+      const edges = pattern.diagram.edges;
+      expect(
+        edges.some((e) => e.from === "search" && e.to === "law"),
+        `${id}: direct search->workspace edge`,
+      ).toBe(false);
+      expect(
+        edges.find((e) => e.from === "search" && e.to === "stream")?.label,
+        `${id}: send leg`,
+      ).toBe("send findings (Cribl HTTP source)");
+      expect(
+        edges.some((e) => e.from === "stream" && e.to === "dcr"),
+        `${id}: stream->dcr leg`,
+      ).toBe(true);
+      expect(
+        edges.find((e) => e.from === "dcr" && e.to === "law")?.cost,
+        `${id}: workspace leg stays premium`,
+      ).toBe("premium");
+      // Every leg of the send path carries the distinct color tone.
+      for (const e of edges.filter((x) => x.from !== "blob" && x.from !== "sdl" && x.from !== "adx")) {
+        expect(e.tone, `${id}: ${e.from}->${e.to} tone`).toBe("search");
+      }
+    }
+  });
+
+  it("the tone survives the unify merge", () => {
+    const pattern = ARCHITECTURE_PATTERNS.find((p) => p.id === "search-in-place")!;
+    const unified = unifyPatternDiagrams([pattern]);
+    expect(
+      unified.edges.find((e) => e.from === "criblsearch" && e.to === "criblstream")
+        ?.tone,
+    ).toBe("search");
+  });
+});
+
 describe("Sentinel layering and per-service private endpoints (2026-07-29)", () => {
   it("selecting Sentinel tags the workspace card - no separate node", () => {
     // Sentinel is a SERVICE riding on the workspace (user directive

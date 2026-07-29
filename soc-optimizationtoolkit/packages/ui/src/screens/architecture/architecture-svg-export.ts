@@ -6,7 +6,12 @@
  * it stays legible in docs, wikis, and print regardless of the app theme.
  */
 
-import type { DiagramTier, EdgeCostTier, PatternDiagram } from "@soc/core";
+import type {
+  DiagramTier,
+  EdgeCostTier,
+  EdgeFlowTone,
+  PatternDiagram,
+} from "@soc/core";
 import {
   NODE_W,
   layoutDiagram,
@@ -53,6 +58,17 @@ function edgeStroke(cost: EdgeCostTier | undefined): string {
     return PALETTE.ok;
   }
   return PALETTE.faint;
+}
+
+/** The LINE color: a flow tone (the violet Search send path) beats cost. */
+function lineStroke(
+  tone: EdgeFlowTone | undefined,
+  cost: EdgeCostTier | undefined,
+): string {
+  if (tone === "search") {
+    return "#722ed1";
+  }
+  return edgeStroke(cost);
 }
 
 /** Escape a label for XML text/attribute contexts. */
@@ -189,7 +205,8 @@ export function diagramToSvg(diagram: PatternDiagram): string {
     }
     const points = edgePoints(edge.points, from, to);
     parts.push(
-      `<path d="${routedPath(points)}" fill="none" stroke="${edgeStroke(edge.cost)}" ` +
+      `<path d="${routedPath(points)}" fill="none" ` +
+        `stroke="${lineStroke(edge.tone, edge.cost)}" ` +
         `stroke-width="1.6" marker-end="url(#arch-arrow)"/>`,
     );
     const anchor = midpointOnPolyline(points);

@@ -56,6 +56,17 @@ describe("diagramToSvg", () => {
     expect(svg).toContain(">PREMIUM</text>");
   });
 
+  it("draws the Search send path in its own violet, cost caption intact", () => {
+    const searchInPlace = unifyPatternDiagrams([
+      ARCHITECTURE_PATTERNS.find((p) => p.id === "search-in-place")!,
+    ]);
+    const svg = diagramToSvg(searchInPlace);
+    // The tone wins on the LINE (all three send-path legs), while the
+    // premium caption on the DCR leg keeps its warn color.
+    expect(svg).toContain('stroke="#722ed1"');
+    expect(svg).toContain(">PREMIUM</text>");
+  });
+
   it("returns a minimal document for an empty diagram", () => {
     const svg = diagramToSvg({ nodes: [], edges: [] });
     expect(svg.startsWith("<svg ")).toBe(true);

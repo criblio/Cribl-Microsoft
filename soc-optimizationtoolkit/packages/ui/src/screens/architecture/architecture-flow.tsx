@@ -37,6 +37,7 @@ import type {
   DiagramNodeInfo,
   DiagramTier,
   EdgeCostTier,
+  EdgeFlowTone,
   PatternDiagram,
 } from "@soc/core";
 import {
@@ -65,7 +66,12 @@ type ArchNodeData = {
   onRemove?: (nodeId: string) => void;
 };
 type ArchNode = Node<ArchNodeData, "arch">;
-type FlowEdgeData = { label?: string; cost?: EdgeCostTier; reverse?: boolean };
+type FlowEdgeData = {
+  label?: string;
+  cost?: EdgeCostTier;
+  tone?: EdgeFlowTone;
+  reverse?: boolean;
+};
 type FlowEdge = Edge<FlowEdgeData, "flowing">;
 
 /**
@@ -370,7 +376,10 @@ function FlowingEdge({
       <BaseEdge
         id={id}
         path={edgePath}
-        className={`arch-flow-pipe${cost !== undefined ? ` arch-flow-pipe-${cost}` : ""}`}
+        className={
+          `arch-flow-pipe${cost !== undefined ? ` arch-flow-pipe-${cost}` : ""}` +
+          (data?.tone !== undefined ? ` arch-flow-pipe-tone-${data.tone}` : "")
+        }
       />
       {[0, 0.9, 1.8].map((delay, i) => (
         <circle key={i} r={3} className="arch-flow-dot">
@@ -504,7 +513,7 @@ function layoutGraph(diagram: PatternDiagram): { nodes: ArchNode[]; edges: FlowE
       sourceHandle: reverse ? "out-b" : "out",
       targetHandle: reverse ? "in-b" : "in",
       type: "flowing",
-      data: { label: e.label, cost: e.cost, reverse },
+      data: { label: e.label, cost: e.cost, tone: e.tone, reverse },
     };
   });
   return { nodes, edges };

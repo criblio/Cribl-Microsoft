@@ -240,6 +240,15 @@ export interface DiagramNode {
  */
 export type EdgeCostTier = "premium" | "economical";
 
+/**
+ * Distinct line colors for flows whose DIRECTION of travel is easy to
+ * misread. "search" marks the Cribl Search send path (user directive
+ * 2026-07-29): findings return THROUGH Cribl Stream before landing in the
+ * workspace, and that leg draws in its own color so it never reads as the
+ * primary ingest flow.
+ */
+export type EdgeFlowTone = "search";
+
 /** One directed diagram edge (left-to-right flow; optional label). */
 export interface DiagramEdge {
   from: string;
@@ -247,6 +256,8 @@ export interface DiagramEdge {
   label?: string;
   /** Omitted = neutral (no badge, default pipe color). */
   cost?: EdgeCostTier;
+  /** Omitted = default pipe color; set = the flow's distinct line color. */
+  tone?: EdgeFlowTone;
 }
 
 /** A pattern's tiered flow diagram (pure data; the UI renders the SVG). */
@@ -515,17 +526,26 @@ export const ARCHITECTURE_PATTERNS: readonly ArchitecturePattern[] = [
     considerations: [
       "Point Search datasets at the archive containers the blob pattern writes.",
       "Partitioned paths (source/date) keep searches scoped and cheap.",
-      "Findings can be sent to Sentinel as incidents or ingested as a small curated table.",
+      "Findings do NOT go straight to the workspace: the send operator forwards them to a Cribl HTTP source on a Stream worker group, and Stream's routes deliver them through the DCR (the violet path).",
     ],
     diagram: {
       nodes: [
         { id: "blob", label: "Blob archive", tier: "source" },
         { id: "search", label: "Cribl Search", tier: "cribl" },
+        { id: "stream", label: "Cribl Stream", tier: "cribl" },
+        { id: "dcr", label: "Kind:Direct DCR", tier: "azure" },
         { id: "law", label: "Log Analytics workspace", tier: "destination" },
       ],
       edges: [
         { from: "blob", to: "search", label: "query in place" },
-        { from: "search", to: "law", label: "findings only", cost: "premium" },
+        {
+          from: "search",
+          to: "stream",
+          label: "send findings (Cribl HTTP source)",
+          tone: "search",
+        },
+        { from: "stream", to: "dcr", label: "findings only", tone: "search" },
+        { from: "dcr", to: "law", cost: "premium", tone: "search" },
       ],
     },
   },
@@ -606,16 +626,26 @@ export const ARCHITECTURE_PATTERNS: readonly ArchitecturePattern[] = [
       "Long-running lake queries ride the asynchronous jobs endpoint (/lake/kql/jobs); the synchronous endpoint is for interactive exploration.",
       "Cribl Search has no dedicated Sentinel-data-lake dataset provider today - point an API-based provider (Azure API / Generic HTTP API) at the lake query endpoint.",
       "Promote findings to the analytics tier (or ingest a small curated table) so detections and cases can act on them.",
+      "The promotion rides the send operator: findings return to a Cribl HTTP source on a Stream worker group, and Stream delivers them through the DCR (the violet path).",
     ],
     diagram: {
       nodes: [
         { id: "sdl", label: "Sentinel data lake", tier: "source" },
         { id: "search", label: "Cribl Search", tier: "cribl" },
+        { id: "stream", label: "Cribl Stream", tier: "cribl" },
+        { id: "dcr", label: "Kind:Direct DCR", tier: "azure" },
         { id: "law", label: "Log Analytics workspace", tier: "destination" },
       ],
       edges: [
         { from: "sdl", to: "search", label: "lake KQL query API" },
-        { from: "search", to: "law", label: "findings only", cost: "premium" },
+        {
+          from: "search",
+          to: "stream",
+          label: "send findings (Cribl HTTP source)",
+          tone: "search",
+        },
+        { from: "stream", to: "dcr", label: "findings only", tone: "search" },
+        { from: "dcr", to: "law", cost: "premium", tone: "search" },
       ],
     },
   },
@@ -938,17 +968,26 @@ export const ARCHITECTURE_PATTERNS: readonly ArchitecturePattern[] = [
     considerations: [
       "Configure the ADX dataset provider with the cluster URI and an app registration granted Database Viewer.",
       "Pair with the ADX destination pattern for the land-then-search loop: Stream fills the cluster, Search investigates it.",
-      "Findings can be promoted to Sentinel as a curated table or incidents - the bulk stays in ADX.",
+      "Findings can be promoted to Sentinel as a curated table or incidents - the bulk stays in ADX. The promotion rides the send operator back through a Stream worker group (the violet path).",
     ],
     diagram: {
       nodes: [
         { id: "adx", label: "Azure Data Explorer", tier: "source" },
         { id: "search", label: "Cribl Search", tier: "cribl" },
+        { id: "stream", label: "Cribl Stream", tier: "cribl" },
+        { id: "dcr", label: "Kind:Direct DCR", tier: "azure" },
         { id: "law", label: "Log Analytics workspace", tier: "destination" },
       ],
       edges: [
         { from: "adx", to: "search", label: "ADX dataset provider (KQL)" },
-        { from: "search", to: "law", label: "findings only", cost: "premium" },
+        {
+          from: "search",
+          to: "stream",
+          label: "send findings (Cribl HTTP source)",
+          tone: "search",
+        },
+        { from: "stream", to: "dcr", label: "findings only", tone: "search" },
+        { from: "dcr", to: "law", cost: "premium", tone: "search" },
       ],
     },
   },
@@ -1299,6 +1338,7 @@ export function unifyPatternDiagrams(
           to,
           ...(edge.label !== undefined ? { label: edge.label } : {}),
           ...(edge.cost !== undefined ? { cost: edge.cost } : {}),
+          ...(edge.tone !== undefined ? { tone: edge.tone } : {}),
         });
       }
     }
