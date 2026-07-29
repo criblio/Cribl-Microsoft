@@ -4119,8 +4119,17 @@ button.journey-step-main:hover .journey-step-label {
   fill: var(--accent-strong);
   filter: drop-shadow(0 0 3px var(--accent));
 }
-.arch-flow-edge-label {
+/* Positioned wrapper for an edge's label + cost badge (the wrapper owns the
+ * canvas transform; children stack centered). */
+.arch-flow-edge-tags {
   position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  pointer-events: none;
+}
+.arch-flow-edge-label {
   font-size: 10px;
   font-weight: 600;
   color: var(--text-muted);
@@ -4128,8 +4137,44 @@ button.journey-step-main:hover .journey-step-label {
   padding: 1px 5px;
   border-radius: 4px;
   border: 1px solid var(--border-subtle);
-  pointer-events: none;
   white-space: nowrap;
+}
+/* Billing-cost tinting (2026-07-29): premium = analytics-tier per-GB rates,
+ * economical = low-cost store/egress. Pipe stroke + a small badge. */
+.arch-flow-pipe-premium {
+  stroke: var(--warn);
+}
+.arch-flow-pipe-economical {
+  stroke: var(--ok);
+}
+.arch-flow-cost-badge {
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 1px 6px;
+  border-radius: 8px;
+  border: 1px solid;
+  white-space: nowrap;
+}
+.arch-flow-cost-premium {
+  color: var(--warn);
+  background: var(--warn-bg);
+  border-color: var(--warn-border);
+}
+.arch-flow-cost-economical {
+  color: var(--ok-strong);
+  background: var(--ok-bg);
+  border-color: var(--ok-border);
+}
+.arch-cost-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-muted);
+  margin: 6px 0 12px;
 }
 /* Theme the React Flow controls to match the app. */
 .arch-flow-canvas .react-flow__controls-button {

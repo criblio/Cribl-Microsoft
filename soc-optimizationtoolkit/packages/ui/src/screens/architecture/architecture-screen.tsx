@@ -281,7 +281,19 @@ export function ArchitectureScreen() {
                 : "."}
             </p>
           ) : (
-            <ArchitectureFlow diagram={unifiedDiagram} />
+            <>
+              <ArchitectureFlow diagram={unifiedDiagram} />
+              <div className="arch-cost-legend">
+                <span className="arch-flow-cost-badge arch-flow-cost-premium">
+                  premium
+                </span>
+                <span>lands in the analytics tier - billed per GB ingested</span>
+                <span className="arch-flow-cost-badge arch-flow-cost-economical">
+                  economical
+                </span>
+                <span>low-cost retention or egress path</span>
+              </div>
+            </>
           )}
           {matches.map((rec) => (
             <PatternCard key={rec.pattern.id} pattern={rec.pattern} />

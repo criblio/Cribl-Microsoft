@@ -31,51 +31,17 @@ import {
   type Node,
   type NodeProps,
 } from "@xyflow/react";
-import Dagre from "@dagrejs/dagre";
 import { diagramNodeInfo } from "@soc/core";
-import type { DiagramTier, PatternDiagram } from "@soc/core";
+import type { DiagramTier, EdgeCostTier, PatternDiagram } from "@soc/core";
+import { layoutDiagram, nodeBadge } from "./arch-layout";
 // React Flow's stylesheet is imported by the SHELL entry points (cribl-app
 // main.tsx / local-app), matching how @soc/ui/styles.css is loaded - a library
 // component must not side-effect-import CSS (no *.css module in the lib tsc).
 
 type ArchNodeData = { label: string; tier: DiagramTier };
 type ArchNode = Node<ArchNodeData, "arch">;
-type FlowEdgeData = { label?: string };
+type FlowEdgeData = { label?: string; cost?: EdgeCostTier };
 type FlowEdge = Edge<FlowEdgeData, "flowing">;
-
-const NODE_W = 190;
-const NODE_H = 62;
-
-/** The short tier badge shown above a node's label (non-destination tiers). */
-const TIER_BADGE: Record<DiagramTier, string> = {
-  source: "Source",
-  cribl: "Cribl",
-  azure: "Azure",
-  destination: "Destination",
-};
-
-/**
- * The badge for one node. The destination COLUMN hosts more than Sentinel -
- * Cribl Lake, ADX, downstream consumers (user report 2026-07-29: a card read
- * "SENTINEL / Cribl Lake") - so destination badges derive from the label;
- * the other tiers keep their fixed badge.
- */
-function nodeBadge(label: string, tier: DiagramTier): string {
-  if (tier !== "destination") {
-    return TIER_BADGE[tier];
-  }
-  const lower = label.toLowerCase();
-  if (lower.includes("sentinel")) {
-    return "Sentinel";
-  }
-  if (lower.includes("cribl")) {
-    return "Cribl";
-  }
-  if (lower.includes("azure") || lower.includes("data explorer")) {
-    return "Azure";
-  }
-  return TIER_BADGE.destination;
-}
 
 /**
  * A tier-colored, draggable node card (React Flow custom node). Nodes with a
@@ -199,9 +165,15 @@ function FlowingEdge({
     targetPosition,
     borderRadius: 14,
   });
+  const hasLabel = data?.label !== undefined && data.label !== "";
+  const cost = data?.cost;
   return (
     <>
-      <BaseEdge id={id} path={edgePath} className="arch-flow-pipe" />
+      <BaseEdge
+        id={id}
+        path={edgePath}
+        className={`arch-flow-pipe${cost !== undefined ? ` arch-flow-pipe-${cost}` : ""}`}
+      />
       {[0, 0.9, 1.8].map((delay, i) => (
         <circle key={i} r={3} className="arch-flow-dot">
           <animateMotion
@@ -213,15 +185,27 @@ function FlowingEdge({
           />
         </circle>
       ))}
-      {data?.label !== undefined && data.label !== "" && (
+      {(hasLabel || cost !== undefined) && (
         <EdgeLabelRenderer>
           <div
-            className="arch-flow-edge-label nodrag nopan"
+            className="arch-flow-edge-tags nodrag nopan"
             style={{
               transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)`,
             }}
           >
-            {data.label}
+            {hasLabel && <span className="arch-flow-edge-label">{data?.label}</span>}
+            {cost !== undefined && (
+              <span
+                className={`arch-flow-cost-badge arch-flow-cost-${cost}`}
+                title={
+                  cost === "premium"
+                    ? "Lands in the analytics tier - billed per GB ingested"
+                    : "Low-cost retention or egress - avoids analytics-tier billing"
+                }
+              >
+                {cost}
+              </span>
+            )}
           </div>
         </EdgeLabelRenderer>
       )}
@@ -234,29 +218,21 @@ function FlowingEdge({
 const NODE_TYPES = { arch: ArchNodeCard };
 const EDGE_TYPES = { flowing: FlowingEdge };
 
-/** Lay the unified diagram out into left->right tiers with dagre. */
+/** Adapt the shared dagre layout (arch-layout) to React Flow's shapes. */
 function layoutGraph(diagram: PatternDiagram): { nodes: ArchNode[]; edges: FlowEdge[] } {
-  const g = new Dagre.graphlib.Graph().setDefaultEdgeLabel(() => ({}));
-  g.setGraph({ rankdir: "LR", nodesep: 34, ranksep: 96, marginx: 12, marginy: 12 });
-  for (const node of diagram.nodes) g.setNode(node.id, { width: NODE_W, height: NODE_H });
-  for (const edge of diagram.edges) g.setEdge(edge.from, edge.to);
-  Dagre.layout(g);
-
-  const nodes: ArchNode[] = diagram.nodes.map((n) => {
-    const p = g.node(n.id);
-    return {
-      id: n.id,
-      type: "arch",
-      position: { x: p.x - NODE_W / 2, y: p.y - NODE_H / 2 },
-      data: { label: n.label, tier: n.tier },
-    };
-  });
-  const edges: FlowEdge[] = diagram.edges.map((e, i) => ({
+  const laidOut = layoutDiagram(diagram);
+  const nodes: ArchNode[] = laidOut.nodes.map((n) => ({
+    id: n.id,
+    type: "arch",
+    position: { x: n.x, y: n.y },
+    data: { label: n.label, tier: n.tier },
+  }));
+  const edges: FlowEdge[] = laidOut.edges.map((e, i) => ({
     id: `edge-${e.from}-${e.to}-${i}`,
     source: e.from,
     target: e.to,
     type: "flowing",
-    data: { label: e.label },
+    data: { label: e.label, cost: e.cost },
   }));
   return { nodes, edges };
 }
