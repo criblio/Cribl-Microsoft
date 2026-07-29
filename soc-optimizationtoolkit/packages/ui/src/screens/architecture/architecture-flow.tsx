@@ -169,16 +169,85 @@ function ArchNodeCard({ data }: NodeProps<ArchNode>) {
   );
 }
 
+/** A point in flow coordinates. */
+type FlowPoint = { x: number; y: number };
+
+/** Rounded-corner path through orthogonal waypoints (mirrors the exporter). */
+function roundedOrthogonalPath(points: FlowPoint[], r = 12): string {
+  const first = points[0];
+  let d = `M ${first.x} ${first.y}`;
+  for (let i = 1; i < points.length - 1; i++) {
+    const prev = points[i - 1];
+    const corner = points[i];
+    const next = points[i + 1];
+    const inLen = Math.hypot(corner.x - prev.x, corner.y - prev.y);
+    const outLen = Math.hypot(next.x - corner.x, next.y - corner.y);
+    if (inLen < 1 || outLen < 1) {
+      continue;
+    }
+    const inT = Math.max(0, 1 - r / inLen);
+    const outT = Math.min(1, r / outLen);
+    d +=
+      ` L ${prev.x + (corner.x - prev.x) * inT} ${prev.y + (corner.y - prev.y) * inT}` +
+      ` Q ${corner.x} ${corner.y} ${corner.x + (next.x - corner.x) * outT} ${corner.y + (next.y - corner.y) * outT}`;
+  }
+  const last = points[points.length - 1];
+  d += ` L ${last.x} ${last.y}`;
+  return d;
+}
+
+/**
+ * Orthogonal waypoints from S to T passing THROUGH the dragged point P,
+ * honoring the exit axis at the source handle and the entry axis at the
+ * target handle. Near-collinear jogs (under 4px) collapse so the route
+ * stays clean when P lines up with an endpoint.
+ */
+function orthogonalThrough(
+  s: FlowPoint,
+  t: FlowPoint,
+  p: FlowPoint,
+  exitAxis: "h" | "v",
+  enterAxis: "h" | "v",
+): FlowPoint[] {
+  const pts: FlowPoint[] = [s];
+  pts.push(exitAxis === "h" ? { x: p.x, y: s.y } : { x: s.x, y: p.y });
+  pts.push(p);
+  if (enterAxis === "h") {
+    if (Math.abs(p.y - t.y) > 4) {
+      const xj = (p.x + t.x) / 2;
+      pts.push({ x: xj, y: p.y }, { x: xj, y: t.y });
+    }
+  } else if (Math.abs(p.x - t.x) > 4) {
+    pts.push({ x: t.x, y: p.y });
+  }
+  pts.push(t);
+  return pts.filter(
+    (point, i) =>
+      i === 0 || Math.hypot(point.x - pts[i - 1].x, point.y - pts[i - 1].y) > 1,
+  );
+}
+
+/** Snap a coordinate onto a nearby guide (an endpoint axis) within 10px. */
+function snapTo(value: number, guides: readonly number[]): number {
+  for (const guide of guides) {
+    if (Math.abs(value - guide) < 10) {
+      return guide;
+    }
+  }
+  return value;
+}
+
 /**
  * A custom edge that looks like data flowing through a pipe: a dashed pipe
  * animated in CSS (Firefox-safe - not SMIL) plus <animateMotion> packets that
  * ride the exact edge path, so they track the geometry on drag/relayout.
  *
  * BENDABLE (user 2026-07-29): every edge carries a small grab dot at its
- * label anchor. Dragging the dot bends the line through the dragged point (a
- * quadratic whose control the user holds) while both ENDPOINTS stay attached
- * to their nodes - node drags keep updating sourceX/targetX, so the line
- * stays connected. Double-click the dot to reset the bend.
+ * label anchor. Dragging the dot re-routes the line ORTHOGONALLY through
+ * the dragged point - right-angle segments with rounded corners, matching
+ * the diagram's step aesthetic - while both ENDPOINTS stay attached to
+ * their nodes; the drag point snaps onto an endpoint's axis when close so
+ * near-straight routes become exactly straight. Double-click resets.
  */
 function FlowingEdge({
   id,
@@ -210,18 +279,24 @@ function FlowingEdge({
     offset: reverse ? 48 : 20,
   });
 
-  // Bent edges become a quadratic through the dragged control point. The
-  // visible anchor sits ON the curve (t=0.5), not at the control point, so
-  // the dot tracks the line the user sees.
+  // Bent edges re-route orthogonally THROUGH the dragged point, honoring
+  // the axes the handles impose (right/left handles exit and enter
+  // horizontally; the bottom wrap-back handles vertically).
   let edgePath = stepPath;
   let anchorX = stepLabelX;
   let anchorY = stepLabelY + (reverse ? 26 : 0);
   if (bend !== null) {
-    // Control point chosen so the curve passes THROUGH the dragged point:
-    // q = 2*p - (s + t)/2 for a quadratic bezier at t=0.5.
-    const qx = 2 * bend.x - (sourceX + targetX) / 2;
-    const qy = 2 * bend.y - (sourceY + targetY) / 2;
-    edgePath = `M ${sourceX} ${sourceY} Q ${qx} ${qy} ${targetX} ${targetY}`;
+    const exitAxis = sourcePosition === Position.Bottom ? "v" : "h";
+    const enterAxis = targetPosition === Position.Bottom ? "v" : "h";
+    edgePath = roundedOrthogonalPath(
+      orthogonalThrough(
+        { x: sourceX, y: sourceY },
+        { x: targetX, y: targetY },
+        bend,
+        exitAxis,
+        enterAxis,
+      ),
+    );
     anchorX = bend.x;
     anchorY = bend.y;
   }
@@ -282,9 +357,16 @@ function FlowingEdge({
             if (!draggingRef.current) {
               return;
             }
-            setBend(
-              screenToFlowPosition({ x: event.clientX, y: event.clientY }),
-            );
+            const point = screenToFlowPosition({
+              x: event.clientX,
+              y: event.clientY,
+            });
+            // Snap onto an endpoint's axis when close - near-straight
+            // routes become exactly straight (right angles by default).
+            setBend({
+              x: snapTo(point.x, [sourceX, targetX]),
+              y: snapTo(point.y, [sourceY, targetY]),
+            });
           }}
           onPointerUp={(event) => {
             draggingRef.current = false;
