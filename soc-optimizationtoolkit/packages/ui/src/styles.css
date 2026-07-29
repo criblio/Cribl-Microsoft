@@ -4793,3 +4793,26 @@ details[open] > summary::before {
   justify-content: flex-end;
   margin-bottom: 8px;
 }
+
+/* The per-edge bend grab dot (2026-07-29): drag to bend the line through
+ * the dragged point (endpoints stay attached); double-click resets. */
+.arch-flow-bend-dot {
+  position: absolute;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 2px solid var(--surface);
+  opacity: 0.45;
+  cursor: grab;
+  pointer-events: all;
+}
+
+.arch-flow-bend-dot:hover {
+  opacity: 1;
+}
+
+.arch-flow-bend-dot:active {
+  cursor: grabbing;
+  opacity: 1;
+}

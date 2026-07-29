@@ -26,6 +26,7 @@ import {
   getSmoothStepPath,
   useEdgesState,
   useNodesState,
+  useReactFlow,
   type Edge,
   type EdgeProps,
   type Node,
@@ -90,10 +91,37 @@ function ArchNodeCard({ data }: NodeProps<ArchNode>) {
 
   return (
     <div ref={cardRef} className={`arch-flow-node arch-flow-node-${data.tier}`}>
-      <Handle type="target" position={Position.Left} className="arch-flow-handle" />
+      <Handle
+        type="target"
+        id="in"
+        position={Position.Left}
+        className="arch-flow-handle"
+      />
       <span className="arch-flow-node-tier">{nodeBadge(data.label, data.tier)}</span>
       <span className="arch-flow-node-label">{data.label}</span>
-      <Handle type="source" position={Position.Right} className="arch-flow-handle" />
+      <Handle
+        type="source"
+        id="out"
+        position={Position.Right}
+        className="arch-flow-handle"
+      />
+      {/* Bottom handle pair: wrap-back edges (replay/return flows) attach
+          here so a node's IN and OUT lines use visibly separate connection
+          points instead of sharing the left/right pair (user 2026-07-29). */}
+      <Handle
+        type="target"
+        id="in-b"
+        position={Position.Bottom}
+        className="arch-flow-handle"
+        style={{ left: "35%" }}
+      />
+      <Handle
+        type="source"
+        id="out-b"
+        position={Position.Bottom}
+        className="arch-flow-handle"
+        style={{ left: "65%" }}
+      />
       {info !== undefined && (
         <button
           type="button"
@@ -145,6 +173,12 @@ function ArchNodeCard({ data }: NodeProps<ArchNode>) {
  * A custom edge that looks like data flowing through a pipe: a dashed pipe
  * animated in CSS (Firefox-safe - not SMIL) plus <animateMotion> packets that
  * ride the exact edge path, so they track the geometry on drag/relayout.
+ *
+ * BENDABLE (user 2026-07-29): every edge carries a small grab dot at its
+ * label anchor. Dragging the dot bends the line through the dragged point (a
+ * quadratic whose control the user holds) while both ENDPOINTS stay attached
+ * to their nodes - node drags keep updating sourceX/targetX, so the line
+ * stays connected. Double-click the dot to reset the bend.
  */
 function FlowingEdge({
   id,
@@ -156,12 +190,16 @@ function FlowingEdge({
   targetPosition,
   data,
 }: EdgeProps<FlowEdge>) {
+  const { screenToFlowPosition } = useReactFlow();
+  const [bend, setBend] = useState<{ x: number; y: number } | null>(null);
+  const draggingRef = useRef(false);
+
   // Wrap-back edges (e.g. the blob "replay" return into Stream) get a wider
   // clearance so the wrap does not hug the node cards, and their label drops
   // below the line so it cannot stack on the forward edge's label (user
   // report 2026-07-29: overlapping visuals on the cost/archive preset).
   const reverse = data?.reverse === true;
-  const [edgePath, labelX, labelY] = getSmoothStepPath({
+  const [stepPath, stepLabelX, stepLabelY] = getSmoothStepPath({
     sourceX,
     sourceY,
     sourcePosition,
@@ -171,9 +209,25 @@ function FlowingEdge({
     borderRadius: 14,
     offset: reverse ? 48 : 20,
   });
+
+  // Bent edges become a quadratic through the dragged control point. The
+  // visible anchor sits ON the curve (t=0.5), not at the control point, so
+  // the dot tracks the line the user sees.
+  let edgePath = stepPath;
+  let anchorX = stepLabelX;
+  let anchorY = stepLabelY + (reverse ? 26 : 0);
+  if (bend !== null) {
+    // Control point chosen so the curve passes THROUGH the dragged point:
+    // q = 2*p - (s + t)/2 for a quadratic bezier at t=0.5.
+    const qx = 2 * bend.x - (sourceX + targetX) / 2;
+    const qy = 2 * bend.y - (sourceY + targetY) / 2;
+    edgePath = `M ${sourceX} ${sourceY} Q ${qx} ${qy} ${targetX} ${targetY}`;
+    anchorX = bend.x;
+    anchorY = bend.y;
+  }
+
   const hasLabel = data?.label !== undefined && data.label !== "";
   const cost = data?.cost;
-  const labelShift = reverse ? 26 : 0;
   return (
     <>
       <BaseEdge
@@ -192,30 +246,56 @@ function FlowingEdge({
           />
         </circle>
       ))}
-      {(hasLabel || cost !== undefined) && (
-        <EdgeLabelRenderer>
-          <div
-            className="arch-flow-edge-tags nodrag nopan"
-            style={{
-              transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY + labelShift}px)`,
-            }}
-          >
-            {hasLabel && <span className="arch-flow-edge-label">{data?.label}</span>}
-            {cost !== undefined && (
-              <span
-                className={`arch-flow-cost-badge arch-flow-cost-${cost}`}
-                title={
-                  cost === "premium"
-                    ? "Lands in the analytics tier - billed per GB ingested"
-                    : "Low-cost retention or egress - avoids analytics-tier billing"
-                }
-              >
-                {cost}
-              </span>
-            )}
-          </div>
-        </EdgeLabelRenderer>
-      )}
+      <EdgeLabelRenderer>
+        <div
+          className="arch-flow-edge-tags nodrag nopan"
+          style={{
+            transform: `translate(-50%, -50%) translate(${anchorX}px, ${anchorY}px)`,
+          }}
+        >
+          {hasLabel && <span className="arch-flow-edge-label">{data?.label}</span>}
+          {cost !== undefined && (
+            <span
+              className={`arch-flow-cost-badge arch-flow-cost-${cost}`}
+              title={
+                cost === "premium"
+                  ? "Lands in the analytics tier - billed per GB ingested"
+                  : "Low-cost retention or egress - avoids analytics-tier billing"
+              }
+            >
+              {cost}
+            </span>
+          )}
+        </div>
+        <div
+          className="arch-flow-bend-dot nodrag nopan"
+          title="Drag to bend this line; double-click to reset"
+          style={{
+            transform: `translate(-50%, -50%) translate(${anchorX}px, ${anchorY + (hasLabel || cost !== undefined ? 16 : 0)}px)`,
+          }}
+          onPointerDown={(event) => {
+            event.stopPropagation();
+            draggingRef.current = true;
+            (event.target as HTMLElement).setPointerCapture(event.pointerId);
+          }}
+          onPointerMove={(event) => {
+            if (!draggingRef.current) {
+              return;
+            }
+            setBend(
+              screenToFlowPosition({ x: event.clientX, y: event.clientY }),
+            );
+          }}
+          onPointerUp={(event) => {
+            draggingRef.current = false;
+            (event.target as HTMLElement).releasePointerCapture(event.pointerId);
+          }}
+          onDoubleClick={(event) => {
+            event.stopPropagation();
+            setBend(null);
+          }}
+        />
+      </EdgeLabelRenderer>
     </>
   );
 }
@@ -237,17 +317,20 @@ function layoutGraph(diagram: PatternDiagram): { nodes: ArchNode[]; edges: FlowE
   // A wrap-back edge runs right-to-left in the laid-out flow (its source
   // column sits right of its target column) - the replay/return edges.
   const xById = new Map(laidOut.nodes.map((n) => [n.id, n.x]));
-  const edges: FlowEdge[] = laidOut.edges.map((e, i) => ({
-    id: `edge-${e.from}-${e.to}-${i}`,
-    source: e.from,
-    target: e.to,
-    type: "flowing",
-    data: {
-      label: e.label,
-      cost: e.cost,
-      reverse: (xById.get(e.from) ?? 0) > (xById.get(e.to) ?? 0),
-    },
-  }));
+  const edges: FlowEdge[] = laidOut.edges.map((e, i) => {
+    const reverse = (xById.get(e.from) ?? 0) > (xById.get(e.to) ?? 0);
+    return {
+      id: `edge-${e.from}-${e.to}-${i}`,
+      source: e.from,
+      target: e.to,
+      // Wrap-back edges attach at the bottom handle pair so a node's IN and
+      // OUT lines never share the same connection point.
+      sourceHandle: reverse ? "out-b" : "out",
+      targetHandle: reverse ? "in-b" : "in",
+      type: "flowing",
+      data: { label: e.label, cost: e.cost, reverse },
+    };
+  });
   return { nodes, edges };
 }
 
