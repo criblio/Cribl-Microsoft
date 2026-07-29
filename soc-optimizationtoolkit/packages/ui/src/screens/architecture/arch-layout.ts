@@ -53,7 +53,11 @@ export function nodeBadge(label: string, tier: DiagramTier): string {
   if (lower.includes("cribl")) {
     return "Cribl";
   }
-  if (lower.includes("azure") || lower.includes("data explorer")) {
+  if (
+    lower.includes("azure") ||
+    lower.includes("data explorer") ||
+    lower.includes("log analytics")
+  ) {
     return "Azure";
   }
   return TIER_BADGE.destination;

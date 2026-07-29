@@ -32,7 +32,10 @@ export type AzureResource =
   | "blob-storage"
   | "blob-storage-source"
   | "adx"
-  | "private-link"
+  | "private-link-law"
+  | "private-link-blob"
+  | "private-link-eventhub"
+  | "private-link-adx"
   | "entra-diagnostics"
   | "vnet-flow-logs";
 
@@ -125,9 +128,24 @@ export const AZURE_RESOURCES: readonly CatalogEntry<AzureResource>[] = [
     description: "Kusto cluster - Stream destination and/or Cribl Search source.",
   },
   {
-    id: "private-link",
-    label: "Private Link / AMPLS",
-    description: "Private-endpoint ingestion (no public egress).",
+    id: "private-link-law",
+    label: "Private endpoint: Log Analytics (AMPLS)",
+    description: "Workspace ingestion over a private endpoint via an AMPLS.",
+  },
+  {
+    id: "private-link-blob",
+    label: "Private endpoint: Blob Storage",
+    description: "Storage-account access over a private endpoint in the vNet.",
+  },
+  {
+    id: "private-link-eventhub",
+    label: "Private endpoint: Event Hub",
+    description: "Event Hub namespace access over a private endpoint in the vNet.",
+  },
+  {
+    id: "private-link-adx",
+    label: "Private endpoint: ADX",
+    description: "Kusto cluster access over a private endpoint in the vNet.",
   },
   {
     id: "entra-diagnostics",
@@ -202,11 +220,11 @@ export interface DiagramNode {
 /**
  * Relative billing weight of the path an edge lands data on. The RULE
  * (pinned by test): cost annotates edges whose TARGET is a billing
- * destination - analytics-tier targets (Sentinel / LA, Sentinel (reduced),
- * Sentinel (findings), Custom _CL + alias) are "premium" (billed per GB
- * ingested); low-cost store/egress targets (Blob archive, Cribl Lake,
- * Sentinel data lake, Azure Data Explorer, Event Hub (egress)) are
- * "economical". Transit edges carry no cost.
+ * destination - analytics-tier targets (Log Analytics workspace, Custom
+ * _CL + alias) are "premium" (billed per GB ingested); low-cost
+ * store/egress targets (Blob archive, Cribl Lake, Sentinel data lake,
+ * Azure Data Explorer, Event Hub (egress)) are "economical". Transit and
+ * service-layer edges (workspace -> Microsoft Sentinel) carry no cost.
  */
 export type EdgeCostTier = "premium" | "economical";
 
@@ -268,7 +286,7 @@ export const ARCHITECTURE_PATTERNS: readonly ArchitecturePattern[] = [
         { id: "src", label: "Log sources", tier: "source" },
         { id: "stream", label: "Cribl Stream", tier: "cribl" },
         { id: "dcr", label: "Kind:Direct DCR", tier: "azure" },
-        { id: "law", label: "Sentinel / LA", tier: "destination" },
+        { id: "law", label: "Log Analytics workspace", tier: "destination" },
       ],
       edges: [
         { from: "src", to: "stream" },
@@ -285,24 +303,27 @@ export const ARCHITECTURE_PATTERNS: readonly ArchitecturePattern[] = [
     why:
       "Required when policy forbids public ingestion endpoints: the DCE's private endpoint keeps the whole path inside the vNet.",
     requiresProducts: ["stream"],
-    requiresResources: ["log-analytics", "private-link"],
+    requiresResources: ["log-analytics", "private-link-law"],
     considerations: [
-      "Join the DCE to the AMPLS and publish its private DNS zones to the worker vNet.",
+      "Join the DCE to the AMPLS and LINK the privatelink.monitor.azure.com private DNS zone to the worker vNet (or forward to it from your custom DNS) - without the zone, workers resolve the PUBLIC IP and the private path silently never engages.",
+      "Verify from a worker that the ingestion hostname resolves to the PRIVATE IP before cutting over; then disable public network access on the DCE.",
+      "Workers need a NETWORK PATH to the private endpoint's IP: same vNet, peering, or VPN/ExpressRoute, with NSGs allowing 443 to the endpoint subnet.",
       "DCE-based DCR names allow 64 characters (vs 30 for Direct).",
-      "Workers need line of sight to the private endpoint - test DNS resolution from a worker first.",
       "The same per-DCR Monitoring Metrics Publisher grant applies.",
     ],
     diagram: {
       nodes: [
         { id: "src", label: "Log sources", tier: "source" },
         { id: "stream", label: "Cribl Stream (vNet)", tier: "cribl" },
+        { id: "dns", label: "DNS: privatelink.monitor.azure.com", tier: "azure" },
         { id: "dce", label: "Data Collection Endpoint", tier: "azure" },
         { id: "dcrdce", label: "DCE-based DCR", tier: "azure" },
-        { id: "law", label: "Sentinel / LA", tier: "destination" },
+        { id: "law", label: "Log Analytics workspace", tier: "destination" },
       ],
       edges: [
         { from: "src", to: "stream" },
-        { from: "stream", to: "dce", label: "private endpoint (AMPLS)" },
+        { from: "dns", to: "dce", label: "resolves to the private IP" },
+        { from: "stream", to: "dce", label: "private IP via vNet path (AMPLS)" },
         { from: "dce", to: "dcrdce" },
         { from: "dcrdce", to: "law", cost: "premium" },
       ],
@@ -330,7 +351,7 @@ export const ARCHITECTURE_PATTERNS: readonly ArchitecturePattern[] = [
         { id: "eh", label: "Event Hub", tier: "source" },
         { id: "stream", label: "Cribl Stream", tier: "cribl" },
         { id: "dcr", label: "Kind:Direct DCR", tier: "azure" },
-        { id: "law", label: "Sentinel / LA", tier: "destination" },
+        { id: "law", label: "Log Analytics workspace", tier: "destination" },
       ],
       edges: [
         { from: "diag", to: "eh" },
@@ -393,7 +414,7 @@ export const ARCHITECTURE_PATTERNS: readonly ArchitecturePattern[] = [
         { id: "edge", label: "Cribl Edge fleet", tier: "cribl" },
         { id: "stream", label: "Cribl Stream", tier: "cribl" },
         { id: "dcr", label: "Kind:Direct DCR", tier: "azure" },
-        { id: "law", label: "Sentinel / LA", tier: "destination" },
+        { id: "law", label: "Log Analytics workspace", tier: "destination" },
       ],
       edges: [
         { from: "hosts", to: "edge" },
@@ -422,7 +443,7 @@ export const ARCHITECTURE_PATTERNS: readonly ArchitecturePattern[] = [
         { id: "src", label: "Log sources", tier: "source" },
         { id: "stream", label: "Cribl Stream", tier: "cribl" },
         { id: "blob", label: "Blob archive", tier: "azure" },
-        { id: "law", label: "Sentinel (reduced)", tier: "destination" },
+        { id: "law", label: "Log Analytics workspace", tier: "destination" },
       ],
       edges: [
         { from: "src", to: "stream" },
@@ -451,7 +472,7 @@ export const ARCHITECTURE_PATTERNS: readonly ArchitecturePattern[] = [
         { id: "src", label: "Log sources", tier: "source" },
         { id: "stream", label: "Cribl Stream", tier: "cribl" },
         { id: "lake", label: "Cribl Lake", tier: "destination" },
-        { id: "law", label: "Sentinel (reduced)", tier: "destination" },
+        { id: "law", label: "Log Analytics workspace", tier: "destination" },
       ],
       edges: [
         { from: "src", to: "stream" },
@@ -478,7 +499,7 @@ export const ARCHITECTURE_PATTERNS: readonly ArchitecturePattern[] = [
       nodes: [
         { id: "blob", label: "Blob archive", tier: "source" },
         { id: "search", label: "Cribl Search", tier: "cribl" },
-        { id: "law", label: "Sentinel (findings)", tier: "destination" },
+        { id: "law", label: "Log Analytics workspace", tier: "destination" },
       ],
       edges: [
         { from: "blob", to: "search", label: "query in place" },
@@ -508,7 +529,7 @@ export const ARCHITECTURE_PATTERNS: readonly ArchitecturePattern[] = [
         { id: "blob", label: "Storage account", tier: "source" },
         { id: "stream", label: "Stream collector", tier: "cribl" },
         { id: "dcr", label: "Kind:Direct DCR", tier: "azure" },
-        { id: "law", label: "Sentinel / LA", tier: "destination" },
+        { id: "law", label: "Log Analytics workspace", tier: "destination" },
       ],
       edges: [
         { from: "flow", to: "blob" },
@@ -538,7 +559,7 @@ export const ARCHITECTURE_PATTERNS: readonly ArchitecturePattern[] = [
         { id: "src", label: "Log sources", tier: "source" },
         { id: "stream", label: "Cribl Stream", tier: "cribl" },
         { id: "dcr", label: "Kind:Direct DCR", tier: "azure" },
-        { id: "law", label: "Sentinel / LA", tier: "destination" },
+        { id: "law", label: "Log Analytics workspace", tier: "destination" },
         { id: "sdl", label: "Sentinel data lake", tier: "destination" },
       ],
       edges: [
@@ -568,7 +589,7 @@ export const ARCHITECTURE_PATTERNS: readonly ArchitecturePattern[] = [
       nodes: [
         { id: "sdl", label: "Sentinel data lake", tier: "source" },
         { id: "search", label: "Cribl Search", tier: "cribl" },
-        { id: "law", label: "Sentinel (findings)", tier: "destination" },
+        { id: "law", label: "Log Analytics workspace", tier: "destination" },
       ],
       edges: [
         { from: "sdl", to: "search", label: "lake KQL query API" },
@@ -597,7 +618,7 @@ export const ARCHITECTURE_PATTERNS: readonly ArchitecturePattern[] = [
         { id: "pan", label: "Palo Alto NGFW", tier: "source" },
         { id: "stream", label: "Cribl Stream", tier: "cribl" },
         { id: "dcr", label: "Kind:Direct DCR", tier: "azure" },
-        { id: "law", label: "Sentinel / LA", tier: "destination" },
+        { id: "law", label: "Log Analytics workspace", tier: "destination" },
       ],
       edges: [
         { from: "pan", to: "stream", label: "Syslog source (514/6514, CSV/CEF)" },
@@ -627,7 +648,7 @@ export const ARCHITECTURE_PATTERNS: readonly ArchitecturePattern[] = [
         { id: "win", label: "Windows endpoints", tier: "source" },
         { id: "stream", label: "Cribl Stream", tier: "cribl" },
         { id: "dcr", label: "Kind:Direct DCR", tier: "azure" },
-        { id: "law", label: "Sentinel / LA", tier: "destination" },
+        { id: "law", label: "Log Analytics workspace", tier: "destination" },
       ],
       edges: [
         { from: "win", to: "stream", label: "WEF source (Kerberos/mTLS)" },
@@ -657,7 +678,7 @@ export const ARCHITECTURE_PATTERNS: readonly ArchitecturePattern[] = [
         { id: "wec", label: "WEC server", tier: "source" },
         { id: "stream", label: "Cribl Stream", tier: "cribl" },
         { id: "dcr", label: "Kind:Direct DCR", tier: "azure" },
-        { id: "law", label: "Sentinel / LA", tier: "destination" },
+        { id: "law", label: "Log Analytics workspace", tier: "destination" },
       ],
       edges: [
         { from: "win", to: "wec", label: "WEF subscription" },
@@ -689,7 +710,7 @@ export const ARCHITECTURE_PATTERNS: readonly ArchitecturePattern[] = [
         { id: "edge", label: "Cribl Edge fleet", tier: "cribl" },
         { id: "stream", label: "Cribl Stream", tier: "cribl" },
         { id: "dcr", label: "Kind:Direct DCR", tier: "azure" },
-        { id: "law", label: "Sentinel / LA", tier: "destination" },
+        { id: "law", label: "Log Analytics workspace", tier: "destination" },
       ],
       edges: [
         { from: "win", to: "edge", label: "local Event Log read" },
@@ -724,7 +745,7 @@ export const ARCHITECTURE_PATTERNS: readonly ArchitecturePattern[] = [
         { id: "wlb", label: "Winlogbeat agents", tier: "source" },
         { id: "stream", label: "Cribl Stream", tier: "cribl" },
         { id: "dcr", label: "Kind:Direct DCR", tier: "azure" },
-        { id: "law", label: "Sentinel / LA", tier: "destination" },
+        { id: "law", label: "Log Analytics workspace", tier: "destination" },
       ],
       edges: [
         { from: "win", to: "wlb", label: "local Event Log read" },
@@ -757,7 +778,7 @@ export const ARCHITECTURE_PATTERNS: readonly ArchitecturePattern[] = [
         { id: "uf", label: "Splunk UF agents", tier: "source" },
         { id: "stream", label: "Cribl Stream", tier: "cribl" },
         { id: "dcr", label: "Kind:Direct DCR", tier: "azure" },
-        { id: "law", label: "Sentinel / LA", tier: "destination" },
+        { id: "law", label: "Log Analytics workspace", tier: "destination" },
       ],
       edges: [
         { from: "win", to: "uf", label: "local Event Log read" },
@@ -787,7 +808,7 @@ export const ARCHITECTURE_PATTERNS: readonly ArchitecturePattern[] = [
         { id: "win", label: "Windows endpoints", tier: "source" },
         { id: "ama", label: "Azure Monitor Agent", tier: "source" },
         { id: "amadcr", label: "DCR (AMA-managed)", tier: "azure" },
-        { id: "law", label: "Sentinel / LA", tier: "destination" },
+        { id: "law", label: "Log Analytics workspace", tier: "destination" },
       ],
       edges: [
         { from: "win", to: "ama" },
@@ -843,7 +864,7 @@ export const ARCHITECTURE_PATTERNS: readonly ArchitecturePattern[] = [
         { id: "blob", label: "Storage account", tier: "source" },
         { id: "stream", label: "Stream collector", tier: "cribl" },
         { id: "dcr", label: "Kind:Direct DCR", tier: "azure" },
-        { id: "law", label: "Sentinel / LA", tier: "destination" },
+        { id: "law", label: "Log Analytics workspace", tier: "destination" },
       ],
       edges: [
         { from: "blob", to: "stream", label: "Azure Blob source (scheduled)" },
@@ -901,11 +922,121 @@ export const ARCHITECTURE_PATTERNS: readonly ArchitecturePattern[] = [
       nodes: [
         { id: "adx", label: "Azure Data Explorer", tier: "source" },
         { id: "search", label: "Cribl Search", tier: "cribl" },
-        { id: "law", label: "Sentinel (findings)", tier: "destination" },
+        { id: "law", label: "Log Analytics workspace", tier: "destination" },
       ],
       edges: [
         { from: "adx", to: "search", label: "ADX dataset provider (KQL)" },
         { from: "search", to: "law", label: "findings only", cost: "premium" },
+      ],
+    },
+  },
+  {
+    id: "sentinel-service",
+    title: "Microsoft Sentinel on the workspace",
+    summary:
+      "Sentinel is a SERVICE enabled on a Log Analytics workspace: data lands in workspace tables, and Sentinel's detections, hunting, and incidents run on top of them.",
+    why:
+      "Honest layering: selecting Sentinel stacks the SIEM service on the workspace every ingestion pattern lands in; selecting only Log Analytics draws the workspace without it.",
+    requiresProducts: [],
+    requiresResources: ["sentinel"],
+    considerations: [
+      "Sentinel is enabled ON a workspace (the SecurityInsights solution) - there is no Sentinel without Log Analytics underneath.",
+      "Billing stacks the same way: Log Analytics ingestion per GB, plus Sentinel's analysis charge on the same data.",
+      "Rules, hunting queries, and workbooks live in Sentinel; the events they query live in the workspace tables Cribl fills.",
+    ],
+    diagram: {
+      nodes: [
+        { id: "law", label: "Log Analytics workspace", tier: "destination" },
+        { id: "sentinel", label: "Microsoft Sentinel", tier: "destination" },
+        { id: "content", label: "Sentinel content", tier: "destination" },
+      ],
+      edges: [
+        { from: "law", to: "sentinel", label: "SIEM service on the workspace" },
+        { from: "sentinel", to: "content", label: "rules, hunting, incidents" },
+      ],
+    },
+  },
+  {
+    id: "private-blob-endpoint",
+    title: "Blob Storage over a private endpoint",
+    summary:
+      "Stream reaches the storage account through a private endpoint in the vNet: the blob hostname must resolve to the PRIVATE IP, and the workers need a network path to it.",
+    why:
+      "When policy closes the storage account's public endpoint, the archive/collector path stays inside the vNet - but ONLY if DNS and routing are both in place; a missing DNS zone silently falls back to the public IP.",
+    requiresProducts: ["stream"],
+    requiresResources: ["blob-storage", "private-link-blob"],
+    considerations: [
+      "Link the privatelink.blob.core.windows.net private DNS zone to the worker vNet (or forward to it from custom DNS); verify from a worker that the account hostname resolves to the PRIVATE IP.",
+      "Workers need a NETWORK PATH to the endpoint's IP: same vNet, peering, or VPN/ExpressRoute, with NSGs allowing 443 to the endpoint subnet.",
+      "Once the private path is verified, disable public network access on the storage account - the honest test that nothing still rides the public route.",
+    ],
+    diagram: {
+      nodes: [
+        { id: "stream", label: "Cribl Stream (vNet)", tier: "cribl" },
+        { id: "dns", label: "DNS: privatelink.blob.core.windows.net", tier: "azure" },
+        { id: "pe", label: "Private endpoint (Blob)", tier: "azure" },
+        { id: "blob", label: "Blob archive", tier: "destination" },
+      ],
+      edges: [
+        { from: "dns", to: "pe", label: "resolves to the private IP" },
+        { from: "stream", to: "pe", label: "private IP via vNet path" },
+        { from: "pe", to: "blob", cost: "economical" },
+      ],
+    },
+  },
+  {
+    id: "private-eventhub-endpoint",
+    title: "Event Hub over a private endpoint",
+    summary:
+      "Stream consumes the Event Hub namespace through a private endpoint: the servicebus hostname must resolve to the PRIVATE IP, and the workers need a vNet path to it.",
+    why:
+      "Locked-down namespaces (public access disabled) still feed Cribl - the Kafka/AMQP session simply rides the private IP, provided DNS and routing are wired.",
+    requiresProducts: ["stream"],
+    requiresResources: ["event-hub", "private-link-eventhub"],
+    considerations: [
+      "Link the privatelink.servicebus.windows.net private DNS zone to the worker vNet (or forward from custom DNS); verify the namespace hostname resolves to the PRIVATE IP from a worker.",
+      "Workers need a NETWORK PATH to the endpoint's IP (vNet, peering, or VPN/ExpressRoute) with 9093/5671 allowed to the endpoint subnet.",
+      "Disable the namespace's public network access once the private path is verified.",
+    ],
+    diagram: {
+      nodes: [
+        { id: "eh", label: "Event Hub", tier: "source" },
+        { id: "dns", label: "DNS: privatelink.servicebus.windows.net", tier: "azure" },
+        { id: "pe", label: "Private endpoint (Event Hub)", tier: "azure" },
+        { id: "stream", label: "Cribl Stream (vNet)", tier: "cribl" },
+      ],
+      edges: [
+        { from: "dns", to: "pe", label: "resolves to the private IP" },
+        { from: "eh", to: "pe" },
+        { from: "pe", to: "stream", label: "Azure Event Hubs source (private)" },
+      ],
+    },
+  },
+  {
+    id: "private-adx-endpoint",
+    title: "ADX over a private endpoint",
+    summary:
+      "Stream ingests into the Kusto cluster through a private endpoint: the cluster hostname must resolve to the PRIVATE IP, and the workers need a vNet path to it.",
+    why:
+      "Clusters with public access disabled still take Cribl's queued/streaming ingestion over the private IP - DNS zone linkage and a routed path are the two prerequisites.",
+    requiresProducts: ["stream"],
+    requiresResources: ["adx", "private-link-adx"],
+    considerations: [
+      "Link the region-scoped privatelink.kusto.windows.net private DNS zone to the worker vNet (ADX zones are per region); verify the cluster URI resolves to the PRIVATE IP from a worker.",
+      "Workers need a NETWORK PATH to the endpoint's IP with 443 allowed to the endpoint subnet; ADX private endpoints also front the ingestion blob/queue endpoints - all must resolve privately.",
+      "Disable the cluster's public network access once the private path is verified.",
+    ],
+    diagram: {
+      nodes: [
+        { id: "stream", label: "Cribl Stream (vNet)", tier: "cribl" },
+        { id: "dns", label: "DNS: privatelink.kusto.windows.net", tier: "azure" },
+        { id: "pe", label: "Private endpoint (ADX)", tier: "azure" },
+        { id: "adx", label: "Azure Data Explorer", tier: "destination" },
+      ],
+      edges: [
+        { from: "dns", to: "pe", label: "resolves to the private IP" },
+        { from: "stream", to: "pe", label: "private IP via vNet path" },
+        { from: "pe", to: "adx", cost: "economical" },
       ],
     },
   },
@@ -1057,7 +1188,7 @@ export const ARCHITECTURE_PRESETS: readonly ArchitecturePreset[] = [
       "No public ingestion endpoints: a DCE joined to an AMPLS keeps the whole path inside the vNet.",
     selection: {
       products: ["stream"],
-      resources: ["sentinel", "private-link"],
+      resources: ["sentinel", "private-link-law"],
     },
   },
   {
@@ -1271,14 +1402,25 @@ const DIAGRAM_NODE_INFO: Record<string, DiagramNodeInfo> = {
       },
     ],
   },
-  [canonicalNodeKey("Sentinel / LA")]: {
+  [canonicalNodeKey("Log Analytics workspace")]: {
     purpose:
-      "The Log Analytics workspace with Microsoft Sentinel enabled - where shaped events land and detections run.",
+      "The Log Analytics workspace - where shaped events land in tables and analytics-tier billing applies. Microsoft Sentinel, when enabled, is a SERVICE on top of this workspace, not a separate store.",
     docs: [
-      { label: "Microsoft Sentinel overview", url: MS + "/azure/sentinel/overview" },
       {
         label: "Log Analytics workspaces",
         url: MS + "/azure/azure-monitor/logs/log-analytics-workspace-overview",
+      },
+      { label: "Microsoft Sentinel overview", url: MS + "/azure/sentinel/overview" },
+    ],
+  },
+  [canonicalNodeKey("Microsoft Sentinel")]: {
+    purpose:
+      "The SIEM service enabled ON the workspace (the SecurityInsights solution): detections, hunting, incidents, and workbooks running over the workspace tables. Selecting only Log Analytics draws the workspace without it.",
+    docs: [
+      { label: "Microsoft Sentinel overview", url: MS + "/azure/sentinel/overview" },
+      {
+        label: "Enable Sentinel on a workspace",
+        url: MS + "/azure/sentinel/quickstart-onboard",
       },
     ],
   },
@@ -1358,13 +1500,6 @@ const DIAGRAM_NODE_INFO: Record<string, DiagramNodeInfo> = {
       },
     ],
   },
-  [canonicalNodeKey("Sentinel (reduced)")]: {
-    purpose:
-      "Sentinel receiving only the reduced, security-relevant subset - the cost lever: full fidelity lives in cheaper storage.",
-    docs: [
-      { label: "Microsoft Sentinel overview", url: MS + "/azure/sentinel/overview" },
-    ],
-  },
   [canonicalNodeKey("Cribl Lake")]: {
     purpose:
       "Cribl's managed data lake tier: full-fidelity retention with Search on top, while Sentinel gets the reduced subset.",
@@ -1381,11 +1516,90 @@ const DIAGRAM_NODE_INFO: Record<string, DiagramNodeInfo> = {
       },
     ],
   },
-  [canonicalNodeKey("Sentinel (findings)")]: {
+  [canonicalNodeKey("Private endpoint (Blob)")]: {
     purpose:
-      "Sentinel receiving only search FINDINGS - the archive stays in place and only conclusions are ingested.",
+      "The storage account's private endpoint: a NIC with a PRIVATE IP inside the vNet fronting the blob service. Reaching it needs the privatelink DNS zone (so the hostname resolves privately) AND a routed network path from the workers.",
     docs: [
-      { label: "Microsoft Sentinel overview", url: MS + "/azure/sentinel/overview" },
+      {
+        label: "Storage private endpoints",
+        url: MS + "/azure/storage/common/storage-private-endpoints",
+      },
+      {
+        label: "Private endpoint DNS",
+        url: MS + "/azure/private-link/private-endpoint-dns",
+      },
+    ],
+  },
+  [canonicalNodeKey("Private endpoint (Event Hub)")]: {
+    purpose:
+      "The Event Hub namespace's private endpoint: a private IP inside the vNet fronting the servicebus endpoint. Needs the privatelink DNS zone linked and a network path (9093/5671) from the workers.",
+    docs: [
+      {
+        label: "Event Hubs Private Link",
+        url: MS + "/azure/event-hubs/private-link-service",
+      },
+      {
+        label: "Private endpoint DNS",
+        url: MS + "/azure/private-link/private-endpoint-dns",
+      },
+    ],
+  },
+  [canonicalNodeKey("Private endpoint (ADX)")]: {
+    purpose:
+      "The Kusto cluster's private endpoint: private IPs fronting the cluster AND its ingestion blob/queue endpoints. Needs the region-scoped privatelink DNS zones linked and a routed path from the workers.",
+    docs: [
+      {
+        label: "ADX private endpoints",
+        url: MS + "/azure/data-explorer/security-network-private-endpoint",
+      },
+      {
+        label: "Private endpoint DNS",
+        url: MS + "/azure/private-link/private-endpoint-dns",
+      },
+    ],
+  },
+  [canonicalNodeKey("DNS: privatelink.monitor.azure.com")]: {
+    purpose:
+      "The Azure Monitor privatelink DNS zone: linked to the worker vNet (or forwarded from custom DNS) it makes the ingestion hostnames resolve to the PRIVATE IP. Without it, resolution falls back to the public IP and the private path silently never engages.",
+    docs: [
+      {
+        label: "Azure Monitor Private Link DNS",
+        url: MS + "/azure/azure-monitor/logs/private-link-security",
+      },
+      {
+        label: "Private endpoint DNS",
+        url: MS + "/azure/private-link/private-endpoint-dns",
+      },
+    ],
+  },
+  [canonicalNodeKey("DNS: privatelink.blob.core.windows.net")]: {
+    purpose:
+      "The blob privatelink DNS zone: linked to the worker vNet it resolves the storage-account hostname to the private endpoint's IP - the DNS half of the private path (routing is the other half).",
+    docs: [
+      {
+        label: "Private endpoint DNS",
+        url: MS + "/azure/private-link/private-endpoint-dns",
+      },
+    ],
+  },
+  [canonicalNodeKey("DNS: privatelink.servicebus.windows.net")]: {
+    purpose:
+      "The Service Bus / Event Hubs privatelink DNS zone: linked to the worker vNet it resolves the namespace hostname to the private endpoint's IP - the DNS half of the private path.",
+    docs: [
+      {
+        label: "Private endpoint DNS",
+        url: MS + "/azure/private-link/private-endpoint-dns",
+      },
+    ],
+  },
+  [canonicalNodeKey("DNS: privatelink.kusto.windows.net")]: {
+    purpose:
+      "The (region-scoped) Kusto privatelink DNS zone: linked to the worker vNet it resolves the cluster URI to the private endpoint's IP - the DNS half of the private path.",
+    docs: [
+      {
+        label: "Private endpoint DNS",
+        url: MS + "/azure/private-link/private-endpoint-dns",
+      },
     ],
   },
   [canonicalNodeKey("vNet flow logs")]: {

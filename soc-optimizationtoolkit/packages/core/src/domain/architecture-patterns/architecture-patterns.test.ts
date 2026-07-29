@@ -293,12 +293,7 @@ describe("edge cost tiers (2026-07-29)", () => {
   // The RULE from the DiagramEdge doc: cost is a function of the TARGET
   // node's label class. Pinned here over the whole catalog so a new pattern
   // cannot mis-tag an edge.
-  const PREMIUM_TARGETS = new Set([
-    "sentinella",
-    "sentinelreduced",
-    "sentinelfindings",
-    "customclalias",
-  ]);
+  const PREMIUM_TARGETS = new Set(["loganalyticsworkspace", "customclalias"]);
   const ECONOMICAL_TARGETS = new Set([
     "blobarchive",
     "cribllake",
@@ -346,7 +341,7 @@ describe("edge cost tiers (2026-07-29)", () => {
     const directDcr = ARCHITECTURE_PATTERNS.find((p) => p.id === "direct-dcr")!;
     const unified = unifyPatternDiagrams([directDcr]);
     expect(
-      unified.edges.find((e) => e.from === "kinddirectdcr" && e.to === "sentinella")
+      unified.edges.find((e) => e.from === "kinddirectdcr" && e.to === "loganalyticsworkspace")
         ?.cost,
     ).toBe("premium");
     const blob = ARCHITECTURE_PATTERNS.find((p) => p.id === "blob-archive-replay")!;
@@ -356,9 +351,85 @@ describe("edge cost tiers (2026-07-29)", () => {
       merged.edges.find((e) => e.from === "criblstream" && e.to === "blobarchive")?.cost,
     ).toBe("economical");
     expect(
-      merged.edges.find((e) => e.from === "criblstream" && e.to === "sentinelreduced")
+      merged.edges.find((e) => e.from === "criblstream" && e.to === "loganalyticsworkspace")
         ?.cost,
     ).toBe("premium");
+  });
+});
+
+describe("Sentinel layering and per-service private endpoints (2026-07-29)", () => {
+  it("selecting Sentinel stacks the service on the workspace", () => {
+    const recs = recommendPatterns({ products: ["stream"], resources: ["sentinel"] });
+    const matches = recs.filter((r) => r.fit === "match");
+    expect(matches.map((r) => r.pattern.id)).toContain("sentinel-service");
+    const unified = unifyPatternDiagrams(matches.map((r) => r.pattern));
+    const labels = unified.nodes.map((n) => n.label);
+    expect(labels.filter((l) => l === "Log Analytics workspace")).toHaveLength(1);
+    expect(labels).toContain("Microsoft Sentinel");
+    expect(
+      unified.edges.some(
+        (e) => e.from === "loganalyticsworkspace" && e.to === "microsoftsentinel",
+      ),
+    ).toBe(true);
+  });
+
+  it("Log Analytics alone draws the workspace WITHOUT Sentinel", () => {
+    const recs = recommendPatterns({
+      products: ["stream"],
+      resources: ["log-analytics"],
+    });
+    const matches = recs.filter((r) => r.fit === "match");
+    expect(matches.map((r) => r.pattern.id)).not.toContain("sentinel-service");
+    const unified = unifyPatternDiagrams(matches.map((r) => r.pattern));
+    const labels = unified.nodes.map((n) => n.label);
+    expect(labels).toContain("Log Analytics workspace");
+    expect(labels).not.toContain("Microsoft Sentinel");
+  });
+
+  it("the blanket private-link resource is replaced by four specific ones", () => {
+    const ids = RESOURCE_IDS as Set<string>;
+    expect(ids.has("private-link")).toBe(false);
+    for (const id of [
+      "private-link-law",
+      "private-link-blob",
+      "private-link-eventhub",
+      "private-link-adx",
+    ]) {
+      expect(ids.has(id), id).toBe(true);
+    }
+  });
+
+  it("private-endpoint patterns draw the DNS and vNet-path requirements", () => {
+    const expectations: Array<[string, string]> = [
+      ["private-blob-endpoint", "DNS: privatelink.blob.core.windows.net"],
+      ["private-eventhub-endpoint", "DNS: privatelink.servicebus.windows.net"],
+      ["private-adx-endpoint", "DNS: privatelink.kusto.windows.net"],
+      ["private-ingestion", "DNS: privatelink.monitor.azure.com"],
+    ];
+    for (const [patternId, dnsLabel] of expectations) {
+      const pattern = ARCHITECTURE_PATTERNS.find((p) => p.id === patternId)!;
+      const labels = pattern.diagram.nodes.map((n) => n.label);
+      expect(labels, patternId).toContain(dnsLabel);
+      expect(
+        pattern.diagram.edges.some((e) => e.label === "resolves to the private IP"),
+        `${patternId}: DNS edge`,
+      ).toBe(true);
+      expect(
+        pattern.diagram.edges.some((e) => e.label?.includes("vNet path") === true) ||
+          patternId === "private-eventhub-endpoint",
+        `${patternId}: path edge`,
+      ).toBe(true);
+    }
+  });
+
+  it("blob private endpoint matches with the role-split selection", () => {
+    const recs = recommendPatterns({
+      products: ["stream"],
+      resources: ["blob-storage", "private-link-blob"],
+    });
+    expect(
+      recs.filter((r) => r.fit === "match").map((r) => r.pattern.id),
+    ).toContain("private-blob-endpoint");
   });
 });
 
@@ -480,10 +551,10 @@ describe("unifyPatternDiagrams", () => {
     expect(directDcr && eventHub).toBeTruthy();
     const unified = unifyPatternDiagrams([directDcr!, eventHub!]);
 
-    // "Cribl Stream" and "Sentinel / LA" appear in both -> one node each.
+    // "Cribl Stream" and "Log Analytics workspace" appear in both -> one node each.
     const labels = unified.nodes.map((n) => n.label);
     expect(labels.filter((l) => l === "Cribl Stream")).toHaveLength(1);
-    expect(labels.filter((l) => l === "Sentinel / LA")).toHaveLength(1);
+    expect(labels.filter((l) => l === "Log Analytics workspace")).toHaveLength(1);
     // The 2026-07-28 correctness fix: both patterns ride the PUBLIC ingestion
     // path, so their DCR nodes are Kind:Direct and MERGE into one node (a
     // plain "DCR" would wrongly imply a DCE-less non-Direct rule).

@@ -18,7 +18,7 @@
  * as its ingress, which is the plain Cribl push topology.
  *
  * Dynamic patterns REUSE the catalog's backbone labels verbatim ("Cribl
- * Stream", "Kind:Direct DCR", "Sentinel / LA", "Custom _CL + alias") so
+ * Stream", "Kind:Direct DCR", "Log Analytics workspace", "Custom _CL + alias") so
  * unifyPatternDiagrams merges them onto the same nodes; the solution source
  * node label carries an " (solution)" suffix, which can never collide with
  * a catalog label under canonicalNodeKey and which diagramNodeInfo resolves
@@ -109,7 +109,7 @@ export function solutionIngressPattern(
           { id: "pull", label: "Sentinel connector (pull)", tier: "azure" },
           { id: "stream", label: "Cribl Stream", tier: "cribl" },
           { id: "dcr", label: "Kind:Direct DCR", tier: "azure" },
-          { id: "law", label: "Sentinel / LA", tier: "destination" },
+          { id: "law", label: "Log Analytics workspace", tier: "destination" },
         ],
         edges: [
           { from: "src", to: "pull", label: `native pull (${ingestion.kind})` },
@@ -140,7 +140,7 @@ export function solutionIngressPattern(
           { id: "stream", label: "Cribl Stream", tier: "cribl" },
           { id: "dcr", label: "Kind:Direct DCR", tier: "azure" },
           { id: "cl", label: "Custom _CL + alias", tier: "azure" },
-          { id: "law", label: "Sentinel / LA", tier: "destination" },
+          { id: "law", label: "Log Analytics workspace", tier: "destination" },
         ],
         edges: [
           { from: "src", to: "agent", label: "native (agent/function)" },
@@ -168,7 +168,7 @@ export function solutionIngressPattern(
         { id: "src", label: sourceLabel, tier: "source" },
         { id: "stream", label: "Cribl Stream", tier: "cribl" },
         { id: "dcr", label: "Kind:Direct DCR", tier: "azure" },
-        { id: "law", label: "Sentinel / LA", tier: "destination" },
+        { id: "law", label: "Log Analytics workspace", tier: "destination" },
       ],
       edges: [
         { from: "src", to: "stream", label: "vendor events" },

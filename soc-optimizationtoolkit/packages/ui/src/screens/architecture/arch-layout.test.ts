@@ -43,7 +43,7 @@ describe("layoutDiagram", () => {
     // direct-dcr + event-hub-fanin: the Event Hub ingress names its source.
     expect(stream.sourceTypes).toContain("Azure Event Hubs");
     expect(stream.height).toBe(NODE_H + CHIP_ROW_H);
-    const law = laidOut.nodes.find((n) => n.id === "sentinella")!;
+    const law = laidOut.nodes.find((n) => n.id === "loganalyticsworkspace")!;
     expect(law.sourceTypes).toEqual([]);
     expect(law.height).toBe(NODE_H);
   });
@@ -52,7 +52,7 @@ describe("layoutDiagram", () => {
     expect(layoutDiagram(diagram)).toEqual(layoutDiagram(diagram));
     const laidOut = layoutDiagram(diagram);
     expect(
-      laidOut.edges.find((e) => e.from === "kinddirectdcr" && e.to === "sentinella")
+      laidOut.edges.find((e) => e.from === "kinddirectdcr" && e.to === "loganalyticsworkspace")
         ?.cost,
     ).toBe("premium");
   });
@@ -70,14 +70,14 @@ describe("applyDiagramRemovals", () => {
       result.edges.some((e) => e.from === "criblstream" || e.to === "criblstream"),
     ).toBe(false);
     // The untouched nodes stay.
-    expect(result.nodes.some((n) => n.id === "sentinella")).toBe(true);
+    expect(result.nodes.some((n) => n.id === "loganalyticsworkspace")).toBe(true);
   });
 
   it("removing an edge keeps both of its nodes", () => {
-    const key = edgeKey({ from: "kinddirectdcr", to: "sentinella" });
+    const key = edgeKey({ from: "kinddirectdcr", to: "loganalyticsworkspace" });
     const result = applyDiagramRemovals(diagram, new Set(), new Set([key]));
     expect(
-      result.edges.some((e) => e.from === "kinddirectdcr" && e.to === "sentinella"),
+      result.edges.some((e) => e.from === "kinddirectdcr" && e.to === "loganalyticsworkspace"),
     ).toBe(false);
     expect(result.nodes).toHaveLength(diagram.nodes.length);
   });
@@ -98,7 +98,7 @@ describe("sourceTypeChips", () => {
 
 describe("nodeBadge", () => {
   it("derives destination badges from the label", () => {
-    expect(nodeBadge("Sentinel / LA", "destination")).toBe("Sentinel");
+    expect(nodeBadge("Microsoft Sentinel", "destination")).toBe("Sentinel");
     expect(nodeBadge("Cribl Lake", "destination")).toBe("Cribl");
     expect(nodeBadge("Azure Data Explorer", "destination")).toBe("Azure");
     expect(nodeBadge("Downstream consumers", "destination")).toBe("Destination");

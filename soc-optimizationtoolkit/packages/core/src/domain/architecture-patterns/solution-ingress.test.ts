@@ -98,7 +98,7 @@ describe("solutionIngressPattern", () => {
     const labels = unified.nodes.map((n) => n.label);
     expect(labels.filter((l) => l === "Cribl Stream")).toHaveLength(1);
     expect(labels.filter((l) => l === "Kind:Direct DCR")).toHaveLength(1);
-    expect(labels.filter((l) => l === "Sentinel / LA")).toHaveLength(1);
+    expect(labels.filter((l) => l === "Log Analytics workspace")).toHaveLength(1);
     expect(labels).toContain("AbnormalSecurity (solution)");
   });
 

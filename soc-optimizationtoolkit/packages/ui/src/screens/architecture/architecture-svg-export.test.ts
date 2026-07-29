@@ -37,7 +37,7 @@ describe("diagramToSvg", () => {
       nodes: [
         { id: "a", label: "AT&T <edge>", tier: "source" },
         { id: "b", label: "Cribl Stream", tier: "cribl" },
-        { id: "c", label: "Sentinel / LA", tier: "destination" },
+        { id: "c", label: "Log Analytics workspace", tier: "destination" },
       ],
       edges: [
         { from: "a", to: "b", label: "R&D feed" },
