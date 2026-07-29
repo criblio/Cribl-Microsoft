@@ -1,0 +1,369 @@
+/**
+ * live-architecture pins: filter-form parsing, Azure keep rules, flow
+ * assembly (breakers, pre/post pipelines, packs, default resolution,
+ * non-final copies), tolerant section degradation, cost tiers, node
+ * identity, and info completeness.
+ */
+
+import { describe, expect, it } from "vitest";
+import {
+  buildLiveDiagram,
+  isAzureCriblType,
+  isAzureInput,
+  outputCostTier,
+  parseRouteFilterInputs,
+  type LiveArchitectureSnapshot,
+  type LiveSnapshotSection,
+} from "./live-architecture";
+
+const ok = (body: unknown): LiveSnapshotSection => ({ status: 200, body });
+
+/** A realistic snapshot: the FlowLogLab-style wiring plus a non-Azure flow. */
+function labSnapshot(): LiveArchitectureSnapshot {
+  return {
+    groupId: "default",
+    inputs: ok({
+      items: [
+        {
+          id: "flowlog_collector",
+          type: "collection",
+          collector: { type: "azure_blob" },
+          breakerRulesets: ["Azure_vNet_FlowLogs"],
+          pipeline: "Azure_vNet_FlowLogs_PreProcessing",
+        },
+        { id: "syslog_pan", type: "syslog" },
+        { id: "old_input", type: "tcp", disabled: true },
+      ],
+    }),
+    outputs: ok({
+      items: [
+        { id: "sentinel_dest", type: "sentinel" },
+        { id: "splunk_dest", type: "splunk" },
+        { id: "default", type: "default", defaultId: "sentinel_dest" },
+      ],
+    }),
+    routes: ok({
+      id: "default",
+      routes: [
+        {
+          id: "r1",
+          name: "flowlogs",
+          filter: "__inputId=='flowlog_collector'",
+          pipeline: "pack:AzureFlowLogs",
+          output: "sentinel_dest",
+          final: true,
+        },
+        {
+          id: "r2",
+          name: "pan-to-splunk",
+          filter: "__inputId=='syslog_pan'",
+          pipeline: "passthru",
+          output: "splunk_dest",
+          final: true,
+        },
+      ],
+    }),
+    pipelines: ok({
+      items: [
+        {
+          id: "Azure_vNet_FlowLogs_PreProcessing",
+          conf: { functions: [{ id: "eval" }, { id: "unroll" }, { id: "serialize" }] },
+        },
+      ],
+    }),
+    breakers: ok({
+      items: [{ id: "Azure_vNet_FlowLogs", rules: [{ name: "r" }] }],
+    }),
+    packs: ok({ items: [{ id: "AzureFlowLogs", version: "0.0.3" }] }),
+  };
+}
+
+describe("parseRouteFilterInputs", () => {
+  it("parses the single-input forms this app writes", () => {
+    expect(parseRouteFilterInputs("__inputId=='a'")).toEqual({
+      kind: "inputs",
+      ids: ["a"],
+    });
+    expect(parseRouteFilterInputs('__inputId==="a-b"')).toEqual({
+      kind: "inputs",
+      ids: ["a-b"],
+    });
+    expect(parseRouteFilterInputs("  __inputId == 'x'  ")).toEqual({
+      kind: "inputs",
+      ids: ["x"],
+    });
+  });
+
+  it("parses the includes() list form", () => {
+    expect(parseRouteFilterInputs("['a','b'].includes(__inputId)")).toEqual({
+      kind: "inputs",
+      ids: ["a", "b"],
+    });
+  });
+
+  it("missing or true means all inputs; anything else is unparsed", () => {
+    expect(parseRouteFilterInputs(undefined)).toEqual({ kind: "all" });
+    expect(parseRouteFilterInputs("true")).toEqual({ kind: "all" });
+    expect(parseRouteFilterInputs("source=='x'")).toEqual({ kind: "unparsed" });
+  });
+});
+
+describe("isAzureCriblType / isAzureInput / outputCostTier", () => {
+  it("classifies types by prefix plus the known unprefixed names", () => {
+    expect(isAzureCriblType("input", "azure_blob")).toBe(true);
+    expect(isAzureCriblType("input", "eventhub")).toBe(true);
+    expect(isAzureCriblType("input", "office365_mgmt")).toBe(true);
+    expect(isAzureCriblType("input", "syslog")).toBe(false);
+    expect(isAzureCriblType("output", "sentinel")).toBe(true);
+    expect(isAzureCriblType("output", "azure_data_explorer")).toBe(true);
+    expect(isAzureCriblType("output", "splunk")).toBe(false);
+  });
+
+  it("sniffs collection inputs through their inner collector type", () => {
+    expect(
+      isAzureInput({ type: "collection", conf: { collector: { type: "azure_blob" } } }),
+    ).toBe(true);
+    expect(
+      isAzureInput({ type: "collection", conf: { collector: { type: "s3" } } }),
+    ).toBe(false);
+  });
+
+  it("maps output types onto the pinned cost tiers", () => {
+    expect(outputCostTier("sentinel")).toBe("premium");
+    expect(outputCostTier("azure_logs")).toBe("premium");
+    expect(outputCostTier("azure_blob")).toBe("economical");
+    expect(outputCostTier("azure_data_explorer")).toBe("economical");
+    expect(outputCostTier("cribl_lake")).toBe("economical");
+    expect(outputCostTier("splunk")).toBeUndefined();
+  });
+});
+
+describe("buildLiveDiagram - full chain", () => {
+  it("draws the collector chain through the pack into Sentinel", () => {
+    const { diagram, notes } = buildLiveDiagram(labSnapshot(), { azureOnly: true });
+    const ids = diagram.nodes.map((n) => n.id);
+    expect(ids).toEqual(
+      expect.arrayContaining([
+        "in:flowlog_collector",
+        "brk:Azure_vNet_FlowLogs",
+        "pre:Azure_vNet_FlowLogs_PreProcessing",
+        "routes",
+        "pack:AzureFlowLogs",
+        "out:sentinel_dest",
+      ]),
+    );
+    const edgePairs = diagram.edges.map((e) => `${e.from}>${e.to}`);
+    expect(edgePairs).toEqual(
+      expect.arrayContaining([
+        "in:flowlog_collector>brk:Azure_vNet_FlowLogs",
+        "brk:Azure_vNet_FlowLogs>pre:Azure_vNet_FlowLogs_PreProcessing",
+        "pre:Azure_vNet_FlowLogs_PreProcessing>routes",
+        "routes>pack:AzureFlowLogs",
+        "pack:AzureFlowLogs>out:sentinel_dest",
+      ]),
+    );
+    expect(
+      diagram.edges.find((e) => e.to === "out:sentinel_dest")?.cost,
+    ).toBe("premium");
+    // The syslog->splunk flow is filtered by azureOnly; the note says so.
+    expect(ids).not.toContain("in:syslog_pan");
+    expect(notes.some((n) => n.startsWith("Azure filter:"))).toBe(true);
+    // Disabled input skipped with a note.
+    expect(ids).not.toContain("in:old_input");
+    expect(notes.some((n) => n.includes("disabled input"))).toBe(true);
+  });
+
+  it("azureOnly false keeps everything, flows stay whole", () => {
+    const { diagram } = buildLiveDiagram(labSnapshot(), { azureOnly: false });
+    const ids = diagram.nodes.map((n) => n.id);
+    expect(ids).toContain("in:syslog_pan");
+    expect(ids).toContain("out:splunk_dest");
+    // Passthru route: no pipeline node between hub and splunk.
+    expect(
+      diagram.edges.some((e) => e.from === "routes" && e.to === "out:splunk_dest"),
+    ).toBe(true);
+  });
+
+  it("keeps a non-Azure input WHOLE when its output is Azure", () => {
+    const snapshot = labSnapshot();
+    snapshot.routes = ok({
+      routes: [
+        {
+          id: "r1",
+          name: "pan-to-sentinel",
+          filter: "__inputId=='syslog_pan'",
+          output: "sentinel_dest",
+          final: true,
+        },
+      ],
+    });
+    const { diagram } = buildLiveDiagram(snapshot, { azureOnly: true });
+    const ids = diagram.nodes.map((n) => n.id);
+    expect(ids).toContain("in:syslog_pan");
+    expect(ids).toContain("out:sentinel_dest");
+  });
+});
+
+describe("buildLiveDiagram - routing semantics", () => {
+  it("resolves the default output through defaultId", () => {
+    const snapshot = labSnapshot();
+    snapshot.routes = ok({
+      routes: [
+        { id: "r1", name: "to-default", filter: "__inputId=='flowlog_collector'", final: true },
+      ],
+    });
+    const { diagram } = buildLiveDiagram(snapshot, { azureOnly: true });
+    expect(diagram.nodes.some((n) => n.id === "out:sentinel_dest")).toBe(true);
+  });
+
+  it("labels non-final routes as copies and notes them", () => {
+    const snapshot = labSnapshot();
+    snapshot.routes = ok({
+      routes: [
+        {
+          id: "r0",
+          name: "lake-copy",
+          filter: "__inputId=='flowlog_collector'",
+          output: "cribl_lake:flows",
+          final: false,
+        },
+        {
+          id: "r1",
+          name: "flowlogs",
+          filter: "__inputId=='flowlog_collector'",
+          pipeline: "pack:AzureFlowLogs",
+          output: "sentinel_dest",
+          final: true,
+        },
+      ],
+    });
+    const { diagram, notes } = buildLiveDiagram(snapshot, { azureOnly: true });
+    const lakeEdge = diagram.edges.find((e) => e.to === "out:cribl_lake:flows");
+    expect(lakeEdge?.label).toBe("lake-copy (copy)");
+    expect(lakeEdge?.cost).toBe("economical");
+    expect(notes.some((n) => n.includes("Non-final route(s)"))).toBe(true);
+  });
+
+  it("treats unparsed filters as any-input with a note", () => {
+    const snapshot = labSnapshot();
+    snapshot.routes = ok({
+      routes: [
+        {
+          id: "r1",
+          name: "weird",
+          filter: "source.startsWith('x')",
+          output: "sentinel_dest",
+          final: true,
+        },
+      ],
+    });
+    const { diagram, notes } = buildLiveDiagram(snapshot, { azureOnly: false });
+    // Both enabled inputs chain into the hub (the route can match any).
+    expect(diagram.nodes.some((n) => n.id === "in:flowlog_collector")).toBe(true);
+    expect(diagram.nodes.some((n) => n.id === "in:syslog_pan")).toBe(true);
+    expect(notes.some((n) => n.includes("filter not recognized"))).toBe(true);
+  });
+
+  it("notes enabled inputs no route matches (all filters specific)", () => {
+    const snapshot = labSnapshot();
+    snapshot.routes = ok({
+      routes: [
+        {
+          id: "r1",
+          name: "flowlogs",
+          filter: "__inputId=='flowlog_collector'",
+          output: "sentinel_dest",
+          final: true,
+        },
+      ],
+    });
+    const { notes } = buildLiveDiagram(snapshot, { azureOnly: false });
+    expect(notes.some((n) => n.includes("matched by no route") && n.includes("syslog_pan"))).toBe(
+      true,
+    );
+  });
+});
+
+describe("buildLiveDiagram - degradation", () => {
+  it("survives a failed routes section (sources still chain into the hub - no, hub needs routes; empty diagram with notes)", () => {
+    const snapshot = labSnapshot();
+    snapshot.routes = { status: 500, body: { error: "boom" } };
+    const result = buildLiveDiagram(snapshot, { azureOnly: true });
+    expect(result.notes.some((n) => n.includes("Routes returned HTTP 500"))).toBe(true);
+    // No routes -> no triples -> empty diagram, honest note.
+    expect(result.diagram.nodes).toHaveLength(0);
+    expect(result.notes.some((n) => n.startsWith("No Azure-related flows"))).toBe(true);
+  });
+
+  it("survives a missing inputs section with output-driven flows", () => {
+    const snapshot = labSnapshot();
+    snapshot.inputs = undefined;
+    const { diagram, notes } = buildLiveDiagram(snapshot, { azureOnly: true });
+    expect(notes.some((n) => n.includes("Sources could not be fetched"))).toBe(true);
+    expect(diagram.nodes.some((n) => n.id === "out:sentinel_dest")).toBe(true);
+    expect(diagram.nodes.some((n) => n.id.startsWith("in:"))).toBe(false);
+  });
+
+  it("never throws on garbage bodies", () => {
+    const snapshot: LiveArchitectureSnapshot = {
+      groupId: "g",
+      inputs: ok("not an envelope"),
+      outputs: ok(42),
+      routes: ok({ nothing: true }),
+      pipelines: undefined,
+      breakers: { status: 403, body: {} },
+      packs: ok(null),
+    };
+    const result = buildLiveDiagram(snapshot, { azureOnly: false });
+    expect(result.diagram.nodes).toHaveLength(0);
+    expect(result.notes.length).toBeGreaterThanOrEqual(6);
+  });
+});
+
+describe("buildLiveDiagram - identity and info", () => {
+  it("an input and a route pipeline sharing an id stay distinct nodes", () => {
+    const snapshot: LiveArchitectureSnapshot = {
+      groupId: "g",
+      inputs: ok({ items: [{ id: "shared", type: "eventhub" }] }),
+      outputs: ok({ items: [{ id: "dest", type: "sentinel" }] }),
+      routes: ok({
+        routes: [
+          {
+            id: "r1",
+            name: "r1",
+            filter: "__inputId=='shared'",
+            pipeline: "shared",
+            output: "dest",
+            final: true,
+          },
+        ],
+      }),
+      pipelines: ok({ items: [] }),
+      breakers: ok({ items: [] }),
+      packs: ok({ items: [] }),
+    };
+    const { diagram } = buildLiveDiagram(snapshot, { azureOnly: true });
+    const ids = diagram.nodes.map((n) => n.id);
+    expect(ids).toContain("in:shared");
+    expect(ids).toContain("pipe:shared");
+  });
+
+  it("every emitted node carries info with purpose and at least one doc link", () => {
+    const { diagram } = buildLiveDiagram(labSnapshot(), { azureOnly: false });
+    expect(diagram.nodes.length).toBeGreaterThan(0);
+    for (const node of diagram.nodes) {
+      expect(node.info, node.id).toBeDefined();
+      expect(node.info!.purpose.length).toBeGreaterThan(10);
+      expect(node.info!.docs.length).toBeGreaterThanOrEqual(1);
+      for (const doc of node.info!.docs) {
+        expect(doc.url.startsWith("https://")).toBe(true);
+      }
+    }
+  });
+
+  it("is deterministic", () => {
+    expect(buildLiveDiagram(labSnapshot(), { azureOnly: true })).toEqual(
+      buildLiveDiagram(labSnapshot(), { azureOnly: true }),
+    );
+  });
+});

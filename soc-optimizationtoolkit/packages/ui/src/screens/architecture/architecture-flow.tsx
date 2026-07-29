@@ -33,7 +33,12 @@ import {
   type NodeProps,
 } from "@xyflow/react";
 import { diagramNodeInfo } from "@soc/core";
-import type { DiagramTier, EdgeCostTier, PatternDiagram } from "@soc/core";
+import type {
+  DiagramNodeInfo,
+  DiagramTier,
+  EdgeCostTier,
+  PatternDiagram,
+} from "@soc/core";
 import {
   applyDiagramRemovals,
   edgeKey,
@@ -50,6 +55,8 @@ type ArchNodeData = {
   tier: DiagramTier;
   /** The Cribl source types feeding this node (tag row on the card). */
   sourceTypes?: string[];
+  /** Per-node info override (live diagrams); catalog nodes resolve by label. */
+  info?: DiagramNodeInfo;
   /** Remove this node from the diagram (the hover x button). */
   onRemove?: (nodeId: string) => void;
 };
@@ -68,7 +75,9 @@ type FlowEdge = Edge<FlowEdgeData, "flowing">;
 function ArchNodeCard({ id, data }: NodeProps<ArchNode>) {
   const [infoOpen, setInfoOpen] = useState(false);
   const cardRef = useRef<HTMLDivElement | null>(null);
-  const info = diagramNodeInfo(data.label);
+  // Live nodes carry their info inline (composed from real config); catalog
+  // nodes resolve through the label-keyed lookup.
+  const info = data.info ?? diagramNodeInfo(data.label);
 
   // Light-dismiss (user report 2026-07-29: popovers only closed via their x
   // and stacked up): while open, any pointer-down OUTSIDE this card closes
@@ -430,7 +439,7 @@ function layoutGraph(diagram: PatternDiagram): { nodes: ArchNode[]; edges: FlowE
     id: n.id,
     type: "arch",
     position: { x: n.x, y: n.y },
-    data: { label: n.label, tier: n.tier, sourceTypes: n.sourceTypes },
+    data: { label: n.label, tier: n.tier, sourceTypes: n.sourceTypes, info: n.info },
   }));
   // A wrap-back edge runs right-to-left in the laid-out flow (its source
   // column sits right of its target column) - the replay/return edges.

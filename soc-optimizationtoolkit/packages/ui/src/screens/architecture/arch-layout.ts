@@ -8,7 +8,12 @@
 
 import Dagre from "@dagrejs/dagre";
 import { criblSourceTypeFromLabel } from "@soc/core";
-import type { DiagramEdge, DiagramTier, PatternDiagram } from "@soc/core";
+import type {
+  DiagramEdge,
+  DiagramNodeInfo,
+  DiagramTier,
+  PatternDiagram,
+} from "@soc/core";
 
 export const NODE_W = 190;
 export const NODE_H = 62;
@@ -65,6 +70,8 @@ export interface LaidOutNode {
   height: number;
   /** The Cribl source types feeding this node (from its ingress edges). */
   sourceTypes: string[];
+  /** Per-node info override (live diagrams); catalog nodes resolve by label. */
+  info?: DiagramNodeInfo;
 }
 
 /** A routed point on an edge's polyline (dagre's node-avoiding waypoints). */
@@ -154,6 +161,7 @@ export function layoutDiagram(diagram: PatternDiagram): LaidOutDiagram {
       y: p.y - height / 2,
       height,
       sourceTypes: typesByNode.get(n.id) ?? [],
+      ...(n.info !== undefined ? { info: n.info } : {}),
     };
   });
   const edges: LaidOutEdge[] = diagram.edges.map((e) => {

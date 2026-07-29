@@ -18,3 +18,4 @@ export * from "./update-dcr";
 export * from "./siem-migration";
 export * from "./content-install";
 export * from "./provision-lab";
+export * from "./live-architecture";

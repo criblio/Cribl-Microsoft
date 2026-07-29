@@ -192,6 +192,11 @@ export interface DiagramNode {
   id: string;
   label: string;
   tier: DiagramTier;
+  /**
+   * Per-node info for LIVE diagrams (composed from real config); catalog
+   * nodes omit it and resolve through diagramNodeInfo(label) instead.
+   */
+  info?: DiagramNodeInfo;
 }
 
 /**

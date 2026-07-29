@@ -4887,3 +4887,39 @@ details[open] > summary::before {
   color: var(--accent-strong);
   white-space: nowrap;
 }
+
+/* Architecture view tabs (2026-07-29): Reference patterns vs Live. */
+.arch-view-tabs {
+  display: flex;
+  gap: 6px;
+  margin: 2px 0 12px;
+}
+
+.arch-view-tab {
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  padding: 5px 16px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface-raised);
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.arch-view-tab:hover {
+  border-color: var(--accent);
+}
+
+.arch-view-tab-active {
+  border-color: var(--accent);
+  background: var(--accent-bg);
+  color: var(--accent-strong);
+}
+
+.arch-live-notes {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 4px;
+}

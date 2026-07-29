@@ -1873,6 +1873,7 @@ function App() {
         onNavigate={nav.navigate}
         canNavigate={nav.canNavigate}
         onExport={(name, mime, data) => cloudPorts.artifacts.save(name, mime, data)}
+        cribl={cloudPorts.cribl}
       />
     </>
   );

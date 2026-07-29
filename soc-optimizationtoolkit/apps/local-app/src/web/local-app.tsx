@@ -969,6 +969,7 @@ export function LocalApp() {
         onNavigate={nav.navigate}
         canNavigate={nav.canNavigate}
         onExport={(name, mime, data) => ports.artifacts.save(name, mime, data)}
+        cribl={ports.cribl}
       />
     </>
   );

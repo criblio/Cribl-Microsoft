@@ -22,8 +22,11 @@ import {
   LOG_SOURCES,
   PRODUCT_WHEN_TO_USE,
   SOLUTION_INGESTION_ENTRIES,
+  buildLiveDiagram,
   catalogLabel,
+  fetchLiveArchitecture,
   ingestionTierLabel,
+  isStreamWorkerGroup,
   recommendWithSolutions,
   unifyPatternDiagrams,
 } from "@soc/core";
@@ -31,8 +34,12 @@ import type {
   ArchitecturePattern,
   ArchitecturePreset,
   AzureResource,
+  CriblClient,
+  CriblGroupSummary,
   CriblProduct,
+  LiveArchitectureSnapshot,
   LogSource,
+  PatternDiagram,
   PatternRecommendation,
 } from "@soc/core";
 import { SearchableMultiSelect } from "../../components/searchable-select";
@@ -132,18 +139,213 @@ export interface ArchitectureScreenProps {
     mimeType: string,
     data: string | Uint8Array,
   ) => Promise<void>;
+  /** Cribl client for the LIVE view. Absent = the Live tab explains the gap. */
+  cribl?: CriblClient;
+}
+
+type OnExport = ArchitectureScreenProps["onExport"];
+
+/** SVG + PNG download buttons for whichever diagram is active. */
+function ExportRow({
+  diagram,
+  onExport,
+  baseName,
+}: {
+  diagram: PatternDiagram;
+  onExport: OnExport;
+  baseName: string;
+}) {
+  const [note, setNote] = useState("");
+  if (onExport === undefined) {
+    return null;
+  }
+  return (
+    <div className="arch-export-row">
+      <button
+        type="button"
+        className="arch-export-btn"
+        onClick={() => {
+          setNote("");
+          void onExport(`${baseName}.svg`, "image/svg+xml", diagramToSvg(diagram))
+            .then(() => setNote(`Saved ${baseName}.svg`))
+            .catch((err) => setNote(`Export failed: ${String(err)}`));
+        }}
+      >
+        Download SVG
+      </button>
+      <button
+        type="button"
+        className="arch-export-btn"
+        onClick={() => {
+          setNote("");
+          void svgToPngBytes(diagramToSvg(diagram))
+            .then((bytes) => onExport(`${baseName}.png`, "image/png", bytes))
+            .then(() => setNote(`Saved ${baseName}.png`))
+            .catch((err) => setNote(`Export failed: ${String(err)}`));
+        }}
+      >
+        Download PNG
+      </button>
+      {note !== "" && <span className="field-hint">{note}</span>}
+    </div>
+  );
+}
+
+/** The premium/economical badge legend under a canvas. */
+function CostLegend() {
+  return (
+    <div className="arch-cost-legend">
+      <span className="arch-flow-cost-badge arch-flow-cost-premium">premium</span>
+      <span>lands in the analytics tier - billed per GB ingested</span>
+      <span className="arch-flow-cost-badge arch-flow-cost-economical">
+        economical
+      </span>
+      <span>low-cost retention or egress path</span>
+    </div>
+  );
+}
+
+/**
+ * The LIVE view (2026-07-29 user direction): fetch a worker group's real
+ * configuration and draw what exists - sources, event breakers,
+ * pre-processing pipelines, the routing table, packs/pipelines,
+ * post-processing pipelines, destinations - on the same interactive canvas.
+ */
+function LiveArchitecturePanel({
+  cribl,
+  onExport,
+}: {
+  cribl: CriblClient;
+  onExport: OnExport;
+}) {
+  const [groups, setGroups] = useState<CriblGroupSummary[] | null>(null);
+  const [groupId, setGroupId] = useState("");
+  const [liveError, setLiveError] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [snapshot, setSnapshot] = useState<LiveArchitectureSnapshot | null>(null);
+  const [azureOnly, setAzureOnly] = useState(true);
+
+  const loadGroups = async () => {
+    setLiveError("");
+    try {
+      const found = (await cribl.listGroups()).filter(isStreamWorkerGroup);
+      setGroups(found);
+      if (found.length > 0 && groupId === "") {
+        setGroupId(found[0].id);
+      }
+    } catch (err) {
+      setGroups(null);
+      setLiveError(
+        `Worker groups unavailable (is a Cribl connection active?): ` +
+          (err instanceof Error ? err.message : String(err)),
+      );
+    }
+  };
+
+  const loadLive = async () => {
+    if (loading || groupId === "") {
+      return;
+    }
+    setLoading(true);
+    setLiveError("");
+    try {
+      setSnapshot(await fetchLiveArchitecture(cribl, groupId));
+    } catch (err) {
+      setSnapshot(null);
+      setLiveError(
+        `Live configuration unavailable (is a Cribl connection active?): ` +
+          (err instanceof Error ? err.message : String(err)),
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const liveResult = useMemo(
+    () => (snapshot === null ? null : buildLiveDiagram(snapshot, { azureOnly })),
+    [snapshot, azureOnly],
+  );
+
+  return (
+    <>
+      <p className="panel-desc">
+        The REAL flow of the selected worker group: sources, event breakers,
+        pre-processing pipelines, the routing table, packs and pipelines,
+        post-processing pipelines, and destinations - read live from the
+        connected Cribl environment. Nothing here changes any configuration.
+      </p>
+      <div className="panel-controls">
+        <button className="run-button" onClick={() => void loadGroups()}>
+          {groups === null ? "Load worker groups" : "Reload worker groups"}
+        </button>
+        {groups !== null && groups.length > 0 && (
+          <select value={groupId} onChange={(e) => setGroupId(e.target.value)}>
+            {groups.map((group) => (
+              <option key={group.id} value={group.id}>
+                {group.id}
+              </option>
+            ))}
+          </select>
+        )}
+        <label className="integrate-check">
+          <input
+            type="checkbox"
+            checked={azureOnly}
+            onChange={(e) => setAzureOnly(e.target.checked)}
+          />
+          <span className="integrate-check-text">Azure-related only</span>
+        </label>
+        <button
+          className="next-action-button"
+          onClick={() => void loadLive()}
+          disabled={loading || groupId === ""}
+        >
+          {loading
+            ? "Reading configuration..."
+            : snapshot === null
+              ? "Load live architecture"
+              : "Refresh"}
+        </button>
+      </div>
+      {liveError !== "" && (
+        <span className="field-hint eh-warning">{liveError}</span>
+      )}
+      {liveResult !== null && (
+        <>
+          <ExportRow
+            diagram={liveResult.diagram}
+            onExport={onExport}
+            baseName={`live-architecture-${snapshot?.groupId ?? "group"}`}
+          />
+          <ArchitectureFlow diagram={liveResult.diagram} />
+          {liveResult.diagram.nodes.length > 0 && <CostLegend />}
+          {liveResult.notes.length > 0 && (
+            <div className="arch-live-notes">
+              <span className="field-label">Notes</span>
+              {liveResult.notes.map((note) => (
+                <p className="field-hint" key={note}>
+                  {note}
+                </p>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+    </>
+  );
 }
 
 export function ArchitectureScreen({
   onNavigate,
   canNavigate,
   onExport,
+  cribl,
 }: ArchitectureScreenProps = {}) {
   const [products, setProducts] = useState<string[]>([]);
   const [resources, setResources] = useState<string[]>([]);
   const [sources, setSources] = useState<string[]>([]);
   const [solutionSources, setSolutionSources] = useState<string[]>([]);
-  const [exportNote, setExportNote] = useState("");
+  const [viewMode, setViewMode] = useState<"patterns" | "live">("patterns");
 
   // The ~436-solution options come from the SHIPPED classification asset -
   // zero ports, tokens, or network; the hint carries tier + connector kind.
@@ -198,6 +400,42 @@ export function ArchitectureScreen({
         anything.
       </p>
 
+      <div className="arch-view-tabs" role="tablist" aria-label="Architecture view">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={viewMode === "patterns"}
+          className={
+            "arch-view-tab" + (viewMode === "patterns" ? " arch-view-tab-active" : "")
+          }
+          onClick={() => setViewMode("patterns")}
+        >
+          Reference patterns
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={viewMode === "live"}
+          className={
+            "arch-view-tab" + (viewMode === "live" ? " arch-view-tab-active" : "")
+          }
+          onClick={() => setViewMode("live")}
+        >
+          Live architecture
+        </button>
+      </div>
+
+      {viewMode === "live" ? (
+        cribl !== undefined ? (
+          <LiveArchitecturePanel cribl={cribl} onExport={onExport} />
+        ) : (
+          <p className="field-hint">
+            This shell did not provide a Cribl client for the live view - a
+            wiring gap, not a runtime state.
+          </p>
+        )
+      ) : (
+        <>
       <div className="arch-presets">
         <span className="field-label">Common journeys</span>
         <div className="arch-preset-row">
@@ -331,59 +569,13 @@ export function ArchitectureScreen({
             </p>
           ) : (
             <>
-              {onExport !== undefined && (
-                <div className="arch-export-row">
-                  <button
-                    type="button"
-                    className="arch-export-btn"
-                    onClick={() => {
-                      setExportNote("");
-                      void onExport(
-                        "architecture-diagram.svg",
-                        "image/svg+xml",
-                        diagramToSvg(unifiedDiagram),
-                      )
-                        .then(() => setExportNote("Saved architecture-diagram.svg"))
-                        .catch((err) =>
-                          setExportNote(`Export failed: ${String(err)}`),
-                        );
-                    }}
-                  >
-                    Download SVG
-                  </button>
-                  <button
-                    type="button"
-                    className="arch-export-btn"
-                    onClick={() => {
-                      setExportNote("");
-                      void svgToPngBytes(diagramToSvg(unifiedDiagram))
-                        .then((bytes) =>
-                          onExport("architecture-diagram.png", "image/png", bytes),
-                        )
-                        .then(() => setExportNote("Saved architecture-diagram.png"))
-                        .catch((err) =>
-                          setExportNote(`Export failed: ${String(err)}`),
-                        );
-                    }}
-                  >
-                    Download PNG
-                  </button>
-                  {exportNote !== "" && (
-                    <span className="field-hint">{exportNote}</span>
-                  )}
-                </div>
-              )}
+              <ExportRow
+                diagram={unifiedDiagram}
+                onExport={onExport}
+                baseName="architecture-diagram"
+              />
               <ArchitectureFlow diagram={unifiedDiagram} />
-              <div className="arch-cost-legend">
-                <span className="arch-flow-cost-badge arch-flow-cost-premium">
-                  premium
-                </span>
-                <span>lands in the analytics tier - billed per GB ingested</span>
-                <span className="arch-flow-cost-badge arch-flow-cost-economical">
-                  economical
-                </span>
-                <span>low-cost retention or egress path</span>
-              </div>
+              <CostLegend />
             </>
           )}
           {matches.map((rec) => (
@@ -404,6 +596,8 @@ export function ArchitectureScreen({
               ))}
             </div>
           )}
+        </>
+      )}
         </>
       )}
     </div>
