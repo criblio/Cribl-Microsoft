@@ -40,7 +40,7 @@ import { layoutDiagram, nodeBadge } from "./arch-layout";
 
 type ArchNodeData = { label: string; tier: DiagramTier };
 type ArchNode = Node<ArchNodeData, "arch">;
-type FlowEdgeData = { label?: string; cost?: EdgeCostTier };
+type FlowEdgeData = { label?: string; cost?: EdgeCostTier; reverse?: boolean };
 type FlowEdge = Edge<FlowEdgeData, "flowing">;
 
 /**
@@ -156,6 +156,11 @@ function FlowingEdge({
   targetPosition,
   data,
 }: EdgeProps<FlowEdge>) {
+  // Wrap-back edges (e.g. the blob "replay" return into Stream) get a wider
+  // clearance so the wrap does not hug the node cards, and their label drops
+  // below the line so it cannot stack on the forward edge's label (user
+  // report 2026-07-29: overlapping visuals on the cost/archive preset).
+  const reverse = data?.reverse === true;
   const [edgePath, labelX, labelY] = getSmoothStepPath({
     sourceX,
     sourceY,
@@ -164,9 +169,11 @@ function FlowingEdge({
     targetY,
     targetPosition,
     borderRadius: 14,
+    offset: reverse ? 48 : 20,
   });
   const hasLabel = data?.label !== undefined && data.label !== "";
   const cost = data?.cost;
+  const labelShift = reverse ? 26 : 0;
   return (
     <>
       <BaseEdge
@@ -190,7 +197,7 @@ function FlowingEdge({
           <div
             className="arch-flow-edge-tags nodrag nopan"
             style={{
-              transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)`,
+              transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY + labelShift}px)`,
             }}
           >
             {hasLabel && <span className="arch-flow-edge-label">{data?.label}</span>}
@@ -227,12 +234,19 @@ function layoutGraph(diagram: PatternDiagram): { nodes: ArchNode[]; edges: FlowE
     position: { x: n.x, y: n.y },
     data: { label: n.label, tier: n.tier },
   }));
+  // A wrap-back edge runs right-to-left in the laid-out flow (its source
+  // column sits right of its target column) - the replay/return edges.
+  const xById = new Map(laidOut.nodes.map((n) => [n.id, n.x]));
   const edges: FlowEdge[] = laidOut.edges.map((e, i) => ({
     id: `edge-${e.from}-${e.to}-${i}`,
     source: e.from,
     target: e.to,
     type: "flowing",
-    data: { label: e.label, cost: e.cost },
+    data: {
+      label: e.label,
+      cost: e.cost,
+      reverse: (xById.get(e.from) ?? 0) > (xById.get(e.to) ?? 0),
+    },
   }));
   return { nodes, edges };
 }
