@@ -35,3 +35,9 @@ export {
   unifyPatternDiagrams,
   diagramNodeInfo,
 } from "./architecture-patterns";
+export type { SolutionIngressArchetype } from "./solution-ingress";
+export {
+  solutionIngressArchetype,
+  solutionIngressPattern,
+  recommendWithSolutions,
+} from "./solution-ingress";

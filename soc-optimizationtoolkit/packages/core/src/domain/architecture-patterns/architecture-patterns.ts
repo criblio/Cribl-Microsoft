@@ -912,6 +912,12 @@ export interface ArchitectureSelection {
   resources: readonly AzureResource[];
   /** Specific log sources in use (optional; ingress patterns key on these). */
   sources?: readonly LogSource[];
+  /**
+   * Sentinel-solution sources by EXACT shipped-classification name (see
+   * solution-ingress.ts / recommendWithSolutions). Optional; the solution
+   * pickers feed this.
+   */
+  solutionSources?: readonly string[];
 }
 
 /**
@@ -950,12 +956,14 @@ export interface PatternRecommendation {
  */
 export function recommendPatterns(
   selection: ArchitectureSelection,
+  extraPatterns: readonly ArchitecturePattern[] = [],
 ): PatternRecommendation[] {
   const selectedSources = selection.sources ?? [];
   if (
     selection.products.length === 0 &&
     selection.resources.length === 0 &&
-    selectedSources.length === 0
+    selectedSources.length === 0 &&
+    extraPatterns.length === 0
   ) {
     return [];
   }
@@ -965,7 +973,7 @@ export function recommendPatterns(
 
   const matches: PatternRecommendation[] = [];
   const nears: PatternRecommendation[] = [];
-  for (const pattern of ARCHITECTURE_PATTERNS) {
+  for (const pattern of [...ARCHITECTURE_PATTERNS, ...extraPatterns]) {
     const requiredSources = pattern.requiresSources ?? [];
     // Source-ingress patterns never surface unless their source is SELECTED:
     // a near-miss must not suggest adding a source the user did not name.
@@ -1528,6 +1536,34 @@ const DIAGRAM_NODE_INFO: Record<string, DiagramNodeInfo> = {
       },
     ],
   },
+  [canonicalNodeKey("Sentinel connector (pull)")]: {
+    purpose:
+      "A Codeless Connector Framework PULL connector (RestApiPoller, WebSocket, cloud-storage kinds): Sentinel initiates collection on a schedule. Cribl can deliver into the SAME table via the Logs Ingestion API - run one path or events duplicate.",
+    docs: [
+      {
+        label: "Codeless Connector Framework",
+        url: MS + "/azure/sentinel/create-codeless-connector",
+      },
+      {
+        label: "Sentinel data connectors",
+        url: MS + "/azure/sentinel/connect-data-sources",
+      },
+    ],
+  },
+  [canonicalNodeKey("Agent / Functions connector")]: {
+    purpose:
+      "A legacy-class connector: an agent (AMA/legacy Log Analytics agent) or an Azure Functions poller feeds the workspace. There is no native Logs Ingestion target - the Cribl alternative lands in a custom table with a function alias.",
+    docs: [
+      {
+        label: "Sentinel data connectors",
+        url: MS + "/azure/sentinel/connect-data-sources",
+      },
+      {
+        label: "Azure Monitor Agent overview",
+        url: MS + "/azure/azure-monitor/agents/azure-monitor-agent-overview",
+      },
+    ],
+  },
   [canonicalNodeKey("Azure Data Explorer")]: {
     purpose:
       "The Kusto cluster: a Stream DESTINATION for full-fidelity or specialized copies (queued or streaming ingestion) and a Cribl Search SOURCE through the native ADX dataset provider.",
@@ -1549,9 +1585,34 @@ const DIAGRAM_NODE_INFO: Record<string, DiagramNodeInfo> = {
 };
 
 /**
+ * The generic info for a dynamic Sentinel-solution source node (labels end
+ * " (solution)"; see solution-ingress.ts). One entry serves all ~436
+ * solutions - the pattern's why/considerations carry the per-solution story.
+ */
+const SOLUTION_SOURCE_INFO: DiagramNodeInfo = {
+  purpose:
+    "A vendor log source packaged as a Microsoft Sentinel solution. Its data connector's kind decides the drawn Cribl integration point: Push and custom-table connectors take the Logs Ingestion API directly; pull and agent connectors show the native path next to the Cribl alternative.",
+  docs: [
+    {
+      label: "Sentinel content hub catalog",
+      url: MS + "/azure/sentinel/sentinel-solutions-catalog",
+    },
+    {
+      label: "Cribl Microsoft Sentinel destination",
+      url: CRIBL + "/stream/destinations-sentinel/",
+    },
+  ],
+};
+
+/**
  * The info entry for a node LABEL (the same canonical key the diagram merge
- * uses), or undefined for labels outside the catalog.
+ * uses). Dynamic solution-source labels (ending " (solution)") resolve the
+ * generic entry; anything else outside the catalog resolves undefined.
  */
 export function diagramNodeInfo(label: string): DiagramNodeInfo | undefined {
-  return DIAGRAM_NODE_INFO[canonicalNodeKey(label)];
+  const entry = DIAGRAM_NODE_INFO[canonicalNodeKey(label)];
+  if (entry !== undefined) {
+    return entry;
+  }
+  return label.endsWith(" (solution)") ? SOLUTION_SOURCE_INFO : undefined;
 }

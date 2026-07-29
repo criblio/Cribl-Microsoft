@@ -21,8 +21,10 @@ import {
   CRIBL_PRODUCTS,
   LOG_SOURCES,
   PRODUCT_WHEN_TO_USE,
+  SOLUTION_INGESTION_ENTRIES,
   catalogLabel,
-  recommendPatterns,
+  ingestionTierLabel,
+  recommendWithSolutions,
   unifyPatternDiagrams,
 } from "@soc/core";
 import type {
@@ -95,15 +97,31 @@ export function ArchitectureScreen() {
   const [products, setProducts] = useState<string[]>([]);
   const [resources, setResources] = useState<string[]>([]);
   const [sources, setSources] = useState<string[]>([]);
+  const [solutionSources, setSolutionSources] = useState<string[]>([]);
+
+  // The ~436-solution options come from the SHIPPED classification asset -
+  // zero ports, tokens, or network; the hint carries tier + connector kind.
+  const solutionOptions = useMemo(
+    () =>
+      SOLUTION_INGESTION_ENTRIES.map((entry) => ({
+        value: entry.name,
+        label: entry.name,
+        hint:
+          ingestionTierLabel(entry.tier) +
+          (entry.kind !== "" ? ` - ${entry.kind}` : ""),
+      })),
+    [],
+  );
 
   const recommendations = useMemo(
     () =>
-      recommendPatterns({
+      recommendWithSolutions({
         products: products as CriblProduct[],
         resources: resources as AzureResource[],
         sources: sources as LogSource[],
+        solutionSources,
       }),
-    [products, resources, sources],
+    [products, resources, sources, solutionSources],
   );
   const matches = recommendations.filter((r) => r.fit === "match");
   const nears = recommendations.filter((r) => r.fit === "near");
@@ -115,7 +133,10 @@ export function ArchitectureScreen() {
   );
 
   const hasSelection =
-    products.length > 0 || resources.length > 0 || sources.length > 0;
+    products.length > 0 ||
+    resources.length > 0 ||
+    sources.length > 0 ||
+    solutionSources.length > 0;
 
   return (
     <div className="panel arch-screen">
@@ -224,6 +245,22 @@ export function ArchitectureScreen() {
             The Windows entries are the same data over different collection
             methods - each draws a different ingress edge (WEF, WEC relay,
             Cribl Edge, Winlogbeat, Splunk UF, or Azure Monitor Agent).
+          </span>
+        </label>
+        <label className="field">
+          <span className="field-label">Sources from Sentinel solutions (optional)</span>
+          <SearchableMultiSelect
+            options={solutionOptions}
+            values={solutionSources}
+            onChange={setSolutionSources}
+            placeholder="Search the solution catalog..."
+            ariaLabel="Filter Sentinel solutions"
+          />
+          <span className="field-hint">
+            {SOLUTION_INGESTION_ENTRIES.length} solutions from the
+            Azure-Sentinel repo; each solution&apos;s connector kind decides
+            the drawn Cribl integration point (push, native pull, or
+            agent/legacy with the custom-table alternative).
           </span>
         </label>
       </div>

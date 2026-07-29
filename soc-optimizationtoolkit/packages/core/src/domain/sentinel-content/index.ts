@@ -47,8 +47,12 @@ export {
   classifySolutionIngestion,
   ingestionTierLabel,
 } from "./ingestion-class";
-export type { SolutionIngestion } from "./ingestion-classification";
+export type {
+  SolutionIngestion,
+  SolutionIngestionEntry,
+} from "./ingestion-classification";
 export {
+  SOLUTION_INGESTION_ENTRIES,
   lookupSolutionIngestion,
   ingestionTierReason,
 } from "./ingestion-classification";
