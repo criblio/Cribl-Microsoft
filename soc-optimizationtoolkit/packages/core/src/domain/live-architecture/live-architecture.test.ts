@@ -101,6 +101,17 @@ describe("parseRouteFilterInputs", () => {
     });
   });
 
+  it("parses the startsWith prefix form collector routes use", () => {
+    expect(parseRouteFilterInputs("__inputId.startsWith('collection:')")).toEqual({
+      kind: "prefix",
+      value: "collection:",
+    });
+    expect(parseRouteFilterInputs('__inputId.startsWith( "in_" )')).toEqual({
+      kind: "prefix",
+      value: "in_",
+    });
+  });
+
   it("missing or true means all inputs; anything else is unparsed", () => {
     expect(parseRouteFilterInputs(undefined)).toEqual({ kind: "all" });
     expect(parseRouteFilterInputs("true")).toEqual({ kind: "all" });
@@ -365,5 +376,120 @@ describe("buildLiveDiagram - identity and info", () => {
     expect(buildLiveDiagram(labSnapshot(), { azureOnly: true })).toEqual(
       buildLiveDiagram(labSnapshot(), { azureOnly: true }),
     );
+  });
+});
+
+/** A group whose only source is a scheduled collector JOB (/jobs section):
+ * the breaker and pre-processing pipeline nest under the job's `input.`
+ * sub-object, and route filters address it as `collection:{jobId}`. */
+function jobsSnapshot(): LiveArchitectureSnapshot {
+  return {
+    groupId: "default",
+    inputs: ok({ items: [{ id: "syslog_pan", type: "syslog" }] }),
+    outputs: ok({
+      items: [{ id: "adx_dest", type: "azure_data_explorer", pipeline: "adx_post" }],
+    }),
+    routes: ok({
+      routes: [
+        {
+          id: "r1",
+          name: "blob-flows",
+          filter: "__inputId=='collection:blob_flowlogs'",
+          pipeline: "shape_flows",
+          output: "adx_dest",
+          final: true,
+        },
+      ],
+    }),
+    pipelines: ok({
+      items: [
+        { id: "shape_flows", conf: { functions: [{ id: "eval" }] } },
+        { id: "adx_post", conf: { functions: [{ id: "numerify" }] } },
+        { id: "blob_pre", conf: { functions: [{ id: "drop" }] } },
+      ],
+    }),
+    breakers: ok({ items: [{ id: "FlowBreaker", rules: [{ name: "r" }] }] }),
+    packs: ok({ items: [] }),
+    jobs: ok({
+      items: [
+        {
+          id: "blob_flowlogs",
+          type: "collection",
+          collector: { type: "azure_blob" },
+          input: {
+            type: "collection",
+            breakerRulesets: ["FlowBreaker"],
+            pipeline: "blob_pre",
+          },
+        },
+      ],
+    }),
+  };
+}
+
+describe("buildLiveDiagram - collector jobs and stage badges (2026-07-29)", () => {
+  it("chains a job's nested breaker/pre-processing and matches its collection: alias", () => {
+    const { diagram } = buildLiveDiagram(jobsSnapshot(), { azureOnly: true });
+    const edgePairs = diagram.edges.map((e) => `${e.from}>${e.to}`);
+    expect(edgePairs).toEqual(
+      expect.arrayContaining([
+        "in:blob_flowlogs>brk:FlowBreaker",
+        "brk:FlowBreaker>pre:blob_pre",
+        "pre:blob_pre>routes",
+        "routes>pipe:shape_flows",
+        "pipe:shape_flows>post:adx_post",
+        "post:adx_post>out:adx_dest",
+      ]),
+    );
+    expect(diagram.edges.find((e) => e.to === "out:adx_dest")?.cost).toBe("economical");
+    expect(
+      diagram.edges.find((e) => e.from === "routes" && e.to === "pipe:shape_flows")
+        ?.label,
+    ).toBe("blob-flows");
+  });
+
+  it("every stage carries its badge (the seven-stage captions)", () => {
+    const { diagram } = buildLiveDiagram(jobsSnapshot(), { azureOnly: true });
+    const badgeOf = new Map(diagram.nodes.map((n) => [n.id, n.badge]));
+    expect(badgeOf.get("in:blob_flowlogs")).toBe("collection source");
+    expect(badgeOf.get("brk:FlowBreaker")).toBe("Event breaker");
+    expect(badgeOf.get("pre:blob_pre")).toBe("Pre-processing");
+    expect(badgeOf.get("routes")).toBe("Routing table");
+    expect(badgeOf.get("pipe:shape_flows")).toBe("Pipeline");
+    expect(badgeOf.get("post:adx_post")).toBe("Post-processing");
+    expect(badgeOf.get("out:adx_dest")).toBe("azure_data_explorer destination");
+    // The pack stage badge, from the lab wiring.
+    const lab = buildLiveDiagram(labSnapshot(), { azureOnly: true });
+    expect(
+      lab.diagram.nodes.find((n) => n.id === "pack:AzureFlowLogs")?.badge,
+    ).toBe("Pack");
+    expect(
+      lab.diagram.nodes.find((n) => n.id === "out:sentinel_dest")?.badge,
+    ).toBe("sentinel destination");
+  });
+
+  it("a startsWith('collection:') filter consumes only collector jobs", () => {
+    const snapshot = jobsSnapshot();
+    snapshot.routes = ok({
+      routes: [
+        {
+          id: "r1",
+          name: "all-collectors",
+          filter: "__inputId.startsWith('collection:')",
+          output: "adx_dest",
+          final: true,
+        },
+      ],
+    });
+    const { diagram } = buildLiveDiagram(snapshot, { azureOnly: false });
+    const ids = diagram.nodes.map((n) => n.id);
+    expect(ids).toContain("in:blob_flowlogs");
+    expect(ids).not.toContain("in:syslog_pan");
+  });
+
+  it("the collector job's info names the collector type", () => {
+    const { diagram } = buildLiveDiagram(jobsSnapshot(), { azureOnly: true });
+    const job = diagram.nodes.find((n) => n.id === "in:blob_flowlogs")!;
+    expect(job.info?.purpose).toContain("azure_blob");
   });
 });

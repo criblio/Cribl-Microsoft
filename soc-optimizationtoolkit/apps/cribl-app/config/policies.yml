@@ -55,12 +55,14 @@
 # only its READ is declared (least privilege).
 #
 # Live Architecture (2026-07-29, Architecture page's Live view) READS the
-# group's configured flow to draw it - four GET-only additions plus the
+# group's configured flow to draw it - five GET-only additions plus the
 # outputs-list GET, all in /m/{groupId} context, nothing written:
 #   /m/{groupId}/system/inputs (get)   - the configured sources
 #   /m/{groupId}/system/outputs (get)  - the configured destinations (list)
 #   /m/{groupId}/pipelines (get)       - pre/route/post pipeline summaries
 #   /m/{groupId}/lib/breakers (get)    - event breaker rulesets
+#   /m/{groupId}/jobs (get)            - scheduled collectors (their breaker/
+#                                        pipeline config nests under input.)
 # The routes GET and packs GET it also reads are ALREADY declared above.
 
 policies:
@@ -78,6 +80,8 @@ policies:
   - object: '/m/:gid/pipelines'
     actions: ['GET']
   - object: '/m/:gid/lib/breakers'
+    actions: ['GET']
+  - object: '/m/:gid/jobs'
     actions: ['GET']
   # Read an individual destination back (onboard-table verify step GETs
   # /m/{groupId}/system/outputs/{id}).

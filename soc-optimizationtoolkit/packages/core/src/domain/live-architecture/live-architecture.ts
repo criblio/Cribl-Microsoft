@@ -2,7 +2,7 @@
  * live-architecture - the REAL configured flow of a Cribl Stream worker
  * group as a PatternDiagram (2026-07-29 user direction: "showcase what
  * already exists related to an Azure source or destination"). The usecase
- * fetches six config sections per group; EVERYTHING else - tolerant
+ * fetches seven config sections per group; EVERYTHING else - tolerant
  * parsing, flow assembly, Azure filtering, per-node info - happens here so
  * it is fully unit-testable.
  *
@@ -45,7 +45,7 @@ export interface LiveSnapshotSection {
 }
 
 /**
- * The six raw GET responses for one worker group. A section is undefined
+ * The seven raw GET responses for one worker group. A section is undefined
  * when the request REJECTED (transport failure); HTTP errors arrive with
  * their status/body.
  */
@@ -63,6 +63,8 @@ export interface LiveArchitectureSnapshot {
   breakers?: LiveSnapshotSection;
   /** GET /packs */
   packs?: LiveSnapshotSection;
+  /** GET /jobs - scheduled collectors are JOBS, not /system/inputs. */
+  jobs?: LiveSnapshotSection;
 }
 
 export interface BuildLiveDiagramOptions {
@@ -87,6 +89,12 @@ export interface LiveInput {
   /** Pre-processing pipeline id, when configured. */
   pipeline?: string;
   breakerRulesets: readonly string[];
+  /**
+   * The __inputId values this input's events carry - the id itself plus
+   * variants like "collection:{jobId}" for scheduled collector jobs (route
+   * filter attribution matches against these).
+   */
+  aliases: readonly string[];
   conf: Record<string, unknown>;
 }
 
@@ -155,14 +163,16 @@ function asRecord(value: unknown): Record<string, unknown> {
 /** The route filter's consumed inputs, parsed from the cheap known forms. */
 export type RouteFilterInputs =
   | { kind: "inputs"; ids: readonly string[] }
+  | { kind: "prefix"; value: string }
   | { kind: "all" }
   | { kind: "unparsed" };
 
 /**
  * Parse the filter forms this app (and common configs) write:
  * `__inputId=='x'` / `__inputId==="x"`, `['a','b'].includes(__inputId)`,
- * missing or `true` = all inputs; anything else = unparsed (treated as all,
- * with a note - honest over-approximation).
+ * `__inputId.startsWith('collection:')`, missing or `true` = all inputs;
+ * anything else = unparsed (treated as all, with a note - honest
+ * over-approximation).
  */
 export function parseRouteFilterInputs(filter: string | undefined): RouteFilterInputs {
   const trimmed = (filter ?? "").trim();
@@ -179,6 +189,10 @@ export function parseRouteFilterInputs(filter: string | undefined): RouteFilterI
     if (ids.length > 0) {
       return { kind: "inputs", ids };
     }
+  }
+  const prefix = /^__inputId\.startsWith\(\s*['"]([^'"]+)['"]\s*\)$/.exec(trimmed);
+  if (prefix !== null) {
+    return { kind: "prefix", value: prefix[1] };
   }
   return { kind: "unparsed" };
 }
@@ -303,21 +317,34 @@ function parseRoutesSection(
   return routes;
 }
 
-function normalizeInput(item: unknown): LiveInput | null {
+/**
+ * Normalize one input (or collection JOB). Collection jobs nest the event
+ * breaker and pre-processing settings under an `input` sub-object, so both
+ * levels are read; jobs additionally answer to the `collection:{id}`
+ * __inputId alias route filters match on.
+ */
+function normalizeInput(item: unknown, isJob: boolean): LiveInput | null {
   const id = asString(prop(item, "id"));
   if (id === "") {
     return null;
   }
-  const pipeline = asString(prop(item, "pipeline"));
-  const rulesets = prop(item, "breakerRulesets");
+  const nested = prop(item, "input");
+  const pipeline = asString(prop(item, "pipeline")) || asString(prop(nested, "pipeline"));
+  const topRulesets = prop(item, "breakerRulesets");
+  const nestedRulesets = prop(nested, "breakerRulesets");
+  const rulesets = Array.isArray(topRulesets) ? topRulesets : nestedRulesets;
+  const type =
+    asString(prop(item, "type")) ||
+    (isJob ? "collection" : "unknown");
   return {
     id,
-    type: asString(prop(item, "type")) || "unknown",
+    type,
     disabled: prop(item, "disabled") === true,
     ...(pipeline !== "" ? { pipeline } : {}),
     breakerRulesets: Array.isArray(rulesets)
       ? rulesets.filter((r): r is string => typeof r === "string" && r !== "")
       : [],
+    aliases: isJob || type === "collection" ? [id, `collection:${id}`] : [id],
     conf: asRecord(item),
   };
 }
@@ -533,10 +560,18 @@ export function buildLiveDiagram(
   const notes: string[] = [];
 
   // --- 1. Parse every section tolerantly -----------------------------------
-  const inputsAvailable = snapshot.inputs !== undefined;
-  const allInputs = parseSection(snapshot.inputs, "Sources", "the source stage is", notes)
-    .map(normalizeInput)
-    .filter((i): i is LiveInput => i !== null);
+  const inputsAvailable = snapshot.inputs !== undefined || snapshot.jobs !== undefined;
+  const allInputs = [
+    ...parseSection(snapshot.inputs, "Sources", "the source stage is", notes).map(
+      (item) => normalizeInput(item, false),
+    ),
+    ...parseSection(
+      snapshot.jobs,
+      "Collector jobs",
+      "scheduled collector sources are",
+      notes,
+    ).map((item) => normalizeInput(item, true)),
+  ].filter((i): i is LiveInput => i !== null);
   const allOutputs = parseSection(
     snapshot.outputs,
     "Destinations",
@@ -566,6 +601,16 @@ export function buildLiveDiagram(
   const packById = new Map(packs.map((p) => [p.id, p]));
   const outputById = new Map(allOutputs.map((o) => [o.id, o]));
   const inputById = new Map(allInputs.map((i) => [i.id, i]));
+  // Route filters match __inputId, which for collector jobs is the
+  // "collection:{id}" alias - resolve through every alias.
+  const inputByAlias = new Map<string, LiveInput>();
+  for (const input of allInputs) {
+    for (const alias of input.aliases) {
+      if (!inputByAlias.has(alias)) {
+        inputByAlias.set(alias, input);
+      }
+    }
+  }
 
   // --- 2. Disabled skips ----------------------------------------------------
   const disabledInputs = allInputs.filter((i) => i.disabled);
@@ -607,7 +652,7 @@ export function buildLiveDiagram(
     if (parsed.kind === "inputs") {
       consumed = [];
       for (const id of parsed.ids) {
-        const input = inputById.get(id);
+        const input = inputByAlias.get(id) ?? inputById.get(id);
         if (input === undefined) {
           if (inputsAvailable) {
             unknownInputRefs.push(`${route.name}: ${id}`);
@@ -618,6 +663,13 @@ export function buildLiveDiagram(
           consumed.push(input);
         }
       }
+      if (consumed.length === 0) {
+        consumed = [null];
+      }
+    } else if (parsed.kind === "prefix") {
+      consumed = inputs.filter((i) =>
+        i.aliases.some((alias) => alias.startsWith(parsed.value)),
+      );
       if (consumed.length === 0) {
         consumed = [null];
       }
@@ -723,6 +775,7 @@ export function buildLiveDiagram(
       id: "routes",
       label: "Routes",
       tier: "cribl",
+      badge: "Routing table",
       info: routesHubInfo(snapshot.groupId, routes),
     });
   }
@@ -738,6 +791,7 @@ export function buildLiveDiagram(
       id: inputNodeId,
       label: input.id,
       tier: "source",
+      badge: `${input.type} source`,
       info: inputInfo(input),
     });
     let previous = inputNodeId;
@@ -747,6 +801,7 @@ export function buildLiveDiagram(
         id: breakerNodeId,
         label: ruleset,
         tier: "cribl",
+        badge: "Event breaker",
         info: breakerInfo(ruleset, breakerById.get(ruleset)),
       });
       addEdge({ from: previous, to: breakerNodeId });
@@ -758,6 +813,7 @@ export function buildLiveDiagram(
         id: preNodeId,
         label: input.pipeline,
         tier: "cribl",
+        badge: "Pre-processing",
         info: pipelineInfo("Pre-processing", input.pipeline, pipelineById.get(input.pipeline)),
       });
       addEdge({ from: previous, to: preNodeId });
@@ -786,6 +842,7 @@ export function buildLiveDiagram(
         id: packNodeId,
         label: packName,
         tier: "cribl",
+        badge: "Pack",
         info: packInfo(packName, packById.get(packName)),
       });
       addEdge({ from: previous, to: packNodeId, label: routeLabel });
@@ -796,6 +853,7 @@ export function buildLiveDiagram(
         id: pipeNodeId,
         label: pipelineRef,
         tier: "cribl",
+        badge: "Pipeline",
         info: pipelineInfo("Route", pipelineRef, pipelineById.get(pipelineRef)),
       });
       addEdge({ from: previous, to: pipeNodeId, label: routeLabel });
@@ -810,6 +868,7 @@ export function buildLiveDiagram(
         id: `out:${triple.output.id}`,
         label: triple.output.id,
         tier: "destination",
+        badge: `${triple.output.type} destination`,
         info: outputInfo(triple.output),
       };
       costType = triple.output.type;
@@ -819,6 +878,7 @@ export function buildLiveDiagram(
         id: `out:${route.output}`,
         label: `Lake: ${dataset}`,
         tier: "destination",
+        badge: "Cribl Lake",
         info: {
           purpose: `Cribl Lake dataset '${dataset}' (route output reference).`,
           docs: [{ label: "Cribl Lake docs", url: CRIBL + "/lake/" }],
@@ -831,6 +891,7 @@ export function buildLiveDiagram(
         id: `out:${ref}`,
         label: ref,
         tier: "destination",
+        badge: "Destination",
         info: {
           purpose: `Route output '${ref}' could not be resolved to a configured destination.`,
           docs: [{ label: "Cribl Stream destinations", url: CRIBL + "/stream/destinations/" }],
@@ -846,6 +907,7 @@ export function buildLiveDiagram(
         id: postNodeId,
         label: triple.output.pipeline,
         tier: "cribl",
+        badge: "Post-processing",
         info: pipelineInfo(
           "Post-processing",
           triple.output.pipeline,
