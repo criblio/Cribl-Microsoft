@@ -194,11 +194,24 @@ export interface DiagramNode {
   tier: DiagramTier;
 }
 
+/**
+ * Relative billing weight of the path an edge lands data on. The RULE
+ * (pinned by test): cost annotates edges whose TARGET is a billing
+ * destination - analytics-tier targets (Sentinel / LA, Sentinel (reduced),
+ * Sentinel (findings), Custom _CL + alias) are "premium" (billed per GB
+ * ingested); low-cost store/egress targets (Blob archive, Cribl Lake,
+ * Sentinel data lake, Azure Data Explorer, Event Hub (egress)) are
+ * "economical". Transit edges carry no cost.
+ */
+export type EdgeCostTier = "premium" | "economical";
+
 /** One directed diagram edge (left-to-right flow; optional label). */
 export interface DiagramEdge {
   from: string;
   to: string;
   label?: string;
+  /** Omitted = neutral (no badge, default pipe color). */
+  cost?: EdgeCostTier;
 }
 
 /** A pattern's tiered flow diagram (pure data; the UI renders the SVG). */
@@ -255,7 +268,7 @@ export const ARCHITECTURE_PATTERNS: readonly ArchitecturePattern[] = [
       edges: [
         { from: "src", to: "stream" },
         { from: "stream", to: "dcr", label: "logs ingestion API" },
-        { from: "dcr", to: "law" },
+        { from: "dcr", to: "law", cost: "premium" },
       ],
     },
   },
@@ -286,7 +299,7 @@ export const ARCHITECTURE_PATTERNS: readonly ArchitecturePattern[] = [
         { from: "src", to: "stream" },
         { from: "stream", to: "dce", label: "private endpoint (AMPLS)" },
         { from: "dce", to: "dcrdce" },
-        { from: "dcrdce", to: "law" },
+        { from: "dcrdce", to: "law", cost: "premium" },
       ],
     },
   },
@@ -318,7 +331,7 @@ export const ARCHITECTURE_PATTERNS: readonly ArchitecturePattern[] = [
         { from: "diag", to: "eh" },
         { from: "eh", to: "stream", label: "EH source" },
         { from: "stream", to: "dcr" },
-        { from: "dcr", to: "law" },
+        { from: "dcr", to: "law", cost: "premium" },
       ],
     },
   },
@@ -350,7 +363,7 @@ export const ARCHITECTURE_PATTERNS: readonly ArchitecturePattern[] = [
         { from: "entra", to: "eh" },
         { from: "eh", to: "stream" },
         { from: "stream", to: "dcr", label: "schema preserved" },
-        { from: "dcr", to: "cl" },
+        { from: "dcr", to: "cl", cost: "premium" },
         { from: "cl", to: "sentinel", label: "function alias" },
       ],
     },
@@ -381,7 +394,7 @@ export const ARCHITECTURE_PATTERNS: readonly ArchitecturePattern[] = [
         { from: "hosts", to: "edge" },
         { from: "edge", to: "stream" },
         { from: "stream", to: "dcr" },
-        { from: "dcr", to: "law" },
+        { from: "dcr", to: "law", cost: "premium" },
       ],
     },
   },
@@ -408,8 +421,8 @@ export const ARCHITECTURE_PATTERNS: readonly ArchitecturePattern[] = [
       ],
       edges: [
         { from: "src", to: "stream" },
-        { from: "stream", to: "blob", label: "full fidelity" },
-        { from: "stream", to: "law", label: "hot subset" },
+        { from: "stream", to: "blob", label: "full fidelity", cost: "economical" },
+        { from: "stream", to: "law", label: "hot subset", cost: "premium" },
         { from: "blob", to: "stream", label: "replay" },
       ],
     },
@@ -437,8 +450,8 @@ export const ARCHITECTURE_PATTERNS: readonly ArchitecturePattern[] = [
       ],
       edges: [
         { from: "src", to: "stream" },
-        { from: "stream", to: "lake", label: "full fidelity" },
-        { from: "stream", to: "law", label: "hot subset" },
+        { from: "stream", to: "lake", label: "full fidelity", cost: "economical" },
+        { from: "stream", to: "law", label: "hot subset", cost: "premium" },
       ],
     },
   },
@@ -464,7 +477,7 @@ export const ARCHITECTURE_PATTERNS: readonly ArchitecturePattern[] = [
       ],
       edges: [
         { from: "blob", to: "search", label: "query in place" },
-        { from: "search", to: "law", label: "findings only" },
+        { from: "search", to: "law", label: "findings only", cost: "premium" },
       ],
     },
   },
@@ -496,7 +509,7 @@ export const ARCHITECTURE_PATTERNS: readonly ArchitecturePattern[] = [
         { from: "flow", to: "blob" },
         { from: "blob", to: "stream", label: "scheduled collect" },
         { from: "stream", to: "dcr" },
-        { from: "dcr", to: "law" },
+        { from: "dcr", to: "law", cost: "premium" },
       ],
     },
   },
@@ -526,8 +539,8 @@ export const ARCHITECTURE_PATTERNS: readonly ArchitecturePattern[] = [
       edges: [
         { from: "src", to: "stream" },
         { from: "stream", to: "dcr", label: "logs ingestion API" },
-        { from: "dcr", to: "law" },
-        { from: "law", to: "sdl", label: "tier mirroring (single copy)" },
+        { from: "dcr", to: "law", cost: "premium" },
+        { from: "law", to: "sdl", label: "tier mirroring (single copy)", cost: "economical" },
       ],
     },
   },
@@ -554,7 +567,7 @@ export const ARCHITECTURE_PATTERNS: readonly ArchitecturePattern[] = [
       ],
       edges: [
         { from: "sdl", to: "search", label: "lake KQL query API" },
-        { from: "search", to: "law", label: "findings only" },
+        { from: "search", to: "law", label: "findings only", cost: "premium" },
       ],
     },
   },
@@ -584,7 +597,7 @@ export const ARCHITECTURE_PATTERNS: readonly ArchitecturePattern[] = [
       edges: [
         { from: "pan", to: "stream", label: "syslog 514/6514 (CSV/CEF)" },
         { from: "stream", to: "dcr" },
-        { from: "dcr", to: "law" },
+        { from: "dcr", to: "law", cost: "premium" },
       ],
     },
   },
@@ -614,7 +627,7 @@ export const ARCHITECTURE_PATTERNS: readonly ArchitecturePattern[] = [
       edges: [
         { from: "win", to: "stream", label: "WEF (Kerberos/mTLS)" },
         { from: "stream", to: "dcr" },
-        { from: "dcr", to: "law" },
+        { from: "dcr", to: "law", cost: "premium" },
       ],
     },
   },
@@ -645,7 +658,7 @@ export const ARCHITECTURE_PATTERNS: readonly ArchitecturePattern[] = [
         { from: "win", to: "wec", label: "WEF subscription" },
         { from: "wec", to: "stream", label: "Cribl Edge on the WEC" },
         { from: "stream", to: "dcr" },
-        { from: "dcr", to: "law" },
+        { from: "dcr", to: "law", cost: "premium" },
       ],
     },
   },
@@ -677,7 +690,7 @@ export const ARCHITECTURE_PATTERNS: readonly ArchitecturePattern[] = [
         { from: "win", to: "edge", label: "local Event Log read" },
         { from: "edge", to: "stream" },
         { from: "stream", to: "dcr" },
-        { from: "dcr", to: "law" },
+        { from: "dcr", to: "law", cost: "premium" },
       ],
     },
   },
@@ -712,7 +725,7 @@ export const ARCHITECTURE_PATTERNS: readonly ArchitecturePattern[] = [
         { from: "win", to: "wlb", label: "local Event Log read" },
         { from: "wlb", to: "stream", label: "Elastic protocol (Stream as ES)" },
         { from: "stream", to: "dcr" },
-        { from: "dcr", to: "law" },
+        { from: "dcr", to: "law", cost: "premium" },
       ],
     },
   },
@@ -745,7 +758,7 @@ export const ARCHITECTURE_PATTERNS: readonly ArchitecturePattern[] = [
         { from: "win", to: "uf", label: "local Event Log read" },
         { from: "uf", to: "stream", label: "S2S (Splunk TCP)" },
         { from: "stream", to: "dcr" },
-        { from: "dcr", to: "law" },
+        { from: "dcr", to: "law", cost: "premium" },
       ],
     },
   },
@@ -774,7 +787,7 @@ export const ARCHITECTURE_PATTERNS: readonly ArchitecturePattern[] = [
       edges: [
         { from: "win", to: "ama" },
         { from: "ama", to: "amadcr", label: "agent association" },
-        { from: "amadcr", to: "law" },
+        { from: "amadcr", to: "law", cost: "premium" },
       ],
     },
   },
@@ -801,7 +814,7 @@ export const ARCHITECTURE_PATTERNS: readonly ArchitecturePattern[] = [
       ],
       edges: [
         { from: "src", to: "stream" },
-        { from: "stream", to: "eh", label: "EH destination" },
+        { from: "stream", to: "eh", label: "EH destination", cost: "economical" },
         { from: "eh", to: "consumers" },
       ],
     },
@@ -830,7 +843,7 @@ export const ARCHITECTURE_PATTERNS: readonly ArchitecturePattern[] = [
       edges: [
         { from: "blob", to: "stream", label: "scheduled collect" },
         { from: "stream", to: "dcr" },
-        { from: "dcr", to: "law" },
+        { from: "dcr", to: "law", cost: "premium" },
       ],
     },
   },
@@ -856,7 +869,12 @@ export const ARCHITECTURE_PATTERNS: readonly ArchitecturePattern[] = [
       ],
       edges: [
         { from: "src", to: "stream" },
-        { from: "stream", to: "adx", label: "ADX destination (queued/streaming)" },
+        {
+          from: "stream",
+          to: "adx",
+          label: "ADX destination (queued/streaming)",
+          cost: "economical",
+        },
       ],
     },
   },
@@ -882,7 +900,7 @@ export const ARCHITECTURE_PATTERNS: readonly ArchitecturePattern[] = [
       ],
       edges: [
         { from: "adx", to: "search", label: "ADX dataset provider (KQL)" },
-        { from: "search", to: "law", label: "findings only" },
+        { from: "search", to: "law", label: "findings only", cost: "premium" },
       ],
     },
   },
@@ -1026,6 +1044,7 @@ export function unifyPatternDiagrams(
           from,
           to,
           ...(edge.label !== undefined ? { label: edge.label } : {}),
+          ...(edge.cost !== undefined ? { cost: edge.cost } : {}),
         });
       }
     }

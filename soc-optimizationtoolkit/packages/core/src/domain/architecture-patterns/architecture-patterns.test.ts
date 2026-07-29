@@ -223,6 +223,79 @@ describe("log sources and role-split resources (2026-07-29)", () => {
   });
 });
 
+describe("edge cost tiers (2026-07-29)", () => {
+  // The RULE from the DiagramEdge doc: cost is a function of the TARGET
+  // node's label class. Pinned here over the whole catalog so a new pattern
+  // cannot mis-tag an edge.
+  const PREMIUM_TARGETS = new Set([
+    "sentinella",
+    "sentinelreduced",
+    "sentinelfindings",
+    "customclalias",
+  ]);
+  const ECONOMICAL_TARGETS = new Set([
+    "blobarchive",
+    "cribllake",
+    "sentineldatalake",
+    "azuredataexplorer",
+    "eventhubegress",
+  ]);
+  const canonical = (label: string) => label.toLowerCase().replace(/[^a-z0-9]/g, "");
+
+  it("every catalog edge follows the target-class cost rule", () => {
+    for (const pattern of ARCHITECTURE_PATTERNS) {
+      const labelById = new Map(pattern.diagram.nodes.map((n) => [n.id, n.label]));
+      for (const edge of pattern.diagram.edges) {
+        const targetKey = canonical(labelById.get(edge.to) ?? "");
+        if (PREMIUM_TARGETS.has(targetKey)) {
+          expect(edge.cost, `${pattern.id}: ${edge.from}->${edge.to}`).toBe("premium");
+        } else if (ECONOMICAL_TARGETS.has(targetKey)) {
+          expect(edge.cost, `${pattern.id}: ${edge.from}->${edge.to}`).toBe(
+            "economical",
+          );
+        } else {
+          expect(edge.cost, `${pattern.id}: ${edge.from}->${edge.to}`).toBeUndefined();
+        }
+      }
+    }
+  });
+
+  it("no canonical edge pair carries two different costs (first-wins safety)", () => {
+    const seen = new Map<string, string>();
+    for (const pattern of ARCHITECTURE_PATTERNS) {
+      const labelById = new Map(pattern.diagram.nodes.map((n) => [n.id, n.label]));
+      for (const edge of pattern.diagram.edges) {
+        const key = `${canonical(labelById.get(edge.from) ?? "")}>${canonical(labelById.get(edge.to) ?? "")}`;
+        const cost = edge.cost ?? "none";
+        const prior = seen.get(key);
+        if (prior !== undefined) {
+          expect(cost, `conflicting cost on ${key}`).toBe(prior);
+        }
+        seen.set(key, cost);
+      }
+    }
+  });
+
+  it("cost survives the unify merge", () => {
+    const directDcr = ARCHITECTURE_PATTERNS.find((p) => p.id === "direct-dcr")!;
+    const unified = unifyPatternDiagrams([directDcr]);
+    expect(
+      unified.edges.find((e) => e.from === "kinddirectdcr" && e.to === "sentinella")
+        ?.cost,
+    ).toBe("premium");
+    const blob = ARCHITECTURE_PATTERNS.find((p) => p.id === "blob-archive-replay")!;
+    const lake = ARCHITECTURE_PATTERNS.find((p) => p.id === "lake-tiering")!;
+    const merged = unifyPatternDiagrams([blob, lake]);
+    expect(
+      merged.edges.find((e) => e.from === "criblstream" && e.to === "blobarchive")?.cost,
+    ).toBe("economical");
+    expect(
+      merged.edges.find((e) => e.from === "criblstream" && e.to === "sentinelreduced")
+        ?.cost,
+    ).toBe("premium");
+  });
+});
+
 describe("Windows collection methods stay distinct (2026-07-29 bug fix)", () => {
   const byId = (id: string) => ARCHITECTURE_PATTERNS.find((p) => p.id === id)!;
 
