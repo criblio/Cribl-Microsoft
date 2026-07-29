@@ -1862,6 +1862,22 @@ function App() {
   // the data-driven reference-architecture advisor plus the Live view. Pure
   // core recommender + inline-SVG diagrams; the Live tab reads (never
   // writes) the connected group's config. requires: 'none'.
+  // The workspace UI base for the Live view's "open in Cribl" links: this
+  // app runs iframed INSIDE the Cribl.Cloud workspace UI, so the embedding
+  // page's origin (referrer; falls back to our own origin when same-origin)
+  // is the leader UI host, with the /stream product prefix.
+  const criblUiBase = (() => {
+    try {
+      const origin =
+        document.referrer !== ""
+          ? new URL(document.referrer).origin
+          : window.location.origin;
+      return `${origin}/stream`;
+    } catch {
+      return `${window.location.origin}/stream`;
+    }
+  })();
+
   const renderArchitecture = (nav: AppFrameNav) => (
     <>
       <header className="harness-header">
@@ -1877,6 +1893,7 @@ function App() {
         canNavigate={nav.canNavigate}
         onExport={(name, mime, data) => cloudPorts.artifacts.save(name, mime, data)}
         cribl={cloudPorts.cribl}
+        criblUiBase={criblUiBase}
       />
     </>
   );

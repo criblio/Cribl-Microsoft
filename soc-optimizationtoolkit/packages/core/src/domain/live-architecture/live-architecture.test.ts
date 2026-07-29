@@ -8,6 +8,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildLiveDiagram,
+  criblUiBaseFromLeaderUrl,
   isAzureCriblType,
   isAzureInput,
   outputCostTier,
@@ -491,5 +492,148 @@ describe("buildLiveDiagram - collector jobs and stage badges (2026-07-29)", () =
     const { diagram } = buildLiveDiagram(jobsSnapshot(), { azureOnly: true });
     const job = diagram.nodes.find((n) => n.id === "in:blob_flowlogs")!;
     expect(job.info?.purpose).toContain("azure_blob");
+  });
+});
+
+describe("buildLiveDiagram - source/destination focus (2026-07-29)", () => {
+  it("focusSources keeps only that source's flows, with everything in-between", () => {
+    const { diagram, notes } = buildLiveDiagram(labSnapshot(), {
+      azureOnly: false,
+      focusSources: ["flowlog_collector"],
+    });
+    const ids = diagram.nodes.map((n) => n.id);
+    expect(ids).toContain("in:flowlog_collector");
+    expect(ids).toContain("brk:Azure_vNet_FlowLogs");
+    expect(ids).toContain("pre:Azure_vNet_FlowLogs_PreProcessing");
+    expect(ids).toContain("pack:AzureFlowLogs");
+    expect(ids).toContain("out:sentinel_dest");
+    expect(ids).not.toContain("in:syslog_pan");
+    expect(ids).not.toContain("out:splunk_dest");
+    expect(notes.some((n) => n.startsWith("Focus: showing 1 of 2"))).toBe(true);
+  });
+
+  it("focusOutputs keeps only flows into that destination", () => {
+    const { diagram } = buildLiveDiagram(labSnapshot(), {
+      azureOnly: false,
+      focusOutputs: ["splunk_dest"],
+    });
+    const ids = diagram.nodes.map((n) => n.id);
+    expect(ids).toContain("in:syslog_pan");
+    expect(ids).toContain("out:splunk_dest");
+    expect(ids).not.toContain("in:flowlog_collector");
+    expect(ids).not.toContain("out:sentinel_dest");
+  });
+
+  it("matches synthesized lake destinations by their raw route reference", () => {
+    const snapshot = labSnapshot();
+    snapshot.routes = ok({
+      routes: [
+        {
+          id: "r0",
+          name: "lake-copy",
+          filter: "__inputId=='flowlog_collector'",
+          output: "cribl_lake:flows",
+          final: false,
+        },
+        {
+          id: "r1",
+          name: "flowlogs",
+          filter: "__inputId=='flowlog_collector'",
+          pipeline: "pack:AzureFlowLogs",
+          output: "sentinel_dest",
+          final: true,
+        },
+      ],
+    });
+    const { diagram } = buildLiveDiagram(snapshot, {
+      azureOnly: false,
+      focusOutputs: ["cribl_lake:flows"],
+    });
+    const ids = diagram.nodes.map((n) => n.id);
+    expect(ids).toContain("out:cribl_lake:flows");
+    expect(ids).not.toContain("out:sentinel_dest");
+    expect(ids).not.toContain("pack:AzureFlowLogs");
+  });
+
+  it("both filters compose; an empty intersection is honest", () => {
+    const { diagram, notes } = buildLiveDiagram(labSnapshot(), {
+      azureOnly: false,
+      focusSources: ["syslog_pan"],
+      focusOutputs: ["sentinel_dest"],
+    });
+    // syslog_pan only routes to splunk - nothing between the two picks.
+    expect(diagram.nodes).toHaveLength(0);
+    expect(notes.some((n) => n.startsWith("Focus: showing 0 of 2"))).toBe(true);
+  });
+});
+
+describe("Cribl UI resource links (2026-07-29)", () => {
+  it("derives the UI base from a leader URL (cloud gets /stream)", () => {
+    expect(criblUiBaseFromLeaderUrl("https://main-acme.cribl.cloud")).toBe(
+      "https://main-acme.cribl.cloud/stream",
+    );
+    expect(criblUiBaseFromLeaderUrl("http://leader.internal:9000/")).toBe(
+      "http://leader.internal:9000",
+    );
+    expect(criblUiBaseFromLeaderUrl("  ")).toBeUndefined();
+    expect(criblUiBaseFromLeaderUrl("not a url")).toBeUndefined();
+  });
+
+  it("with uiBase, every live node links to ITS page in the Cribl UI", () => {
+    const base = "http://leader.internal:9000";
+    const { diagram } = buildLiveDiagram(jobsSnapshot(), {
+      azureOnly: true,
+      uiBase: base,
+    });
+    const linkOf = new Map(
+      diagram.nodes.map((n) => [n.id, n.info?.docs[0]]),
+    );
+    expect(linkOf.get("routes")).toEqual({
+      label: "Open Routes in Cribl (default)",
+      url: `${base}/m/default/data-routes`,
+    });
+    expect(linkOf.get("in:blob_flowlogs")?.url).toBe(
+      `${base}/m/default/jobs/collectors`,
+    );
+    expect(linkOf.get("brk:FlowBreaker")?.url).toBe(
+      `${base}/m/default/knowledge/breakers`,
+    );
+    expect(linkOf.get("pre:blob_pre")?.url).toBe(
+      `${base}/m/default/pipelines/blob_pre`,
+    );
+    expect(linkOf.get("pipe:shape_flows")?.url).toBe(
+      `${base}/m/default/pipelines/shape_flows`,
+    );
+    expect(linkOf.get("post:adx_post")?.url).toBe(
+      `${base}/m/default/pipelines/adx_post`,
+    );
+    expect(linkOf.get("out:adx_dest")?.url).toBe(
+      `${base}/m/default/data/destinations`,
+    );
+    // Each resource link REPLACES the docs list (user: navigate to the
+    // resource instead of the documentation reference).
+    for (const node of diagram.nodes) {
+      expect(node.info?.docs, node.id).toHaveLength(1);
+    }
+  });
+
+  it("regular sources and packs link to their pages too", () => {
+    const base = "https://main-acme.cribl.cloud/stream";
+    const { diagram } = buildLiveDiagram(labSnapshot(), {
+      azureOnly: false,
+      uiBase: base,
+    });
+    expect(
+      diagram.nodes.find((n) => n.id === "in:syslog_pan")?.info?.docs[0]?.url,
+    ).toBe(`${base}/m/default/data/sources`);
+    expect(
+      diagram.nodes.find((n) => n.id === "pack:AzureFlowLogs")?.info?.docs[0]?.url,
+    ).toBe(`${base}/m/default/packs/AzureFlowLogs`);
+  });
+
+  it("without uiBase, the documentation links stay", () => {
+    const { diagram } = buildLiveDiagram(labSnapshot(), { azureOnly: true });
+    const hub = diagram.nodes.find((n) => n.id === "routes")!;
+    expect(hub.info?.docs[0]?.url).toContain("docs.cribl.io");
   });
 });

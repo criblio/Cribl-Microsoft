@@ -60,6 +60,7 @@ import {
   DEFAULT_THEME_CHOICE,
   EMPTY_AZURE_CONFIG,
   computeInvalidation,
+  criblUiBaseFromLeaderUrl,
   hasAzure,
   hasCribl,
   parseAcceptanceRecord,
@@ -973,6 +974,11 @@ export function LocalApp() {
         canNavigate={nav.canNavigate}
         onExport={(name, mime, data) => ports.artifacts.save(name, mime, data)}
         cribl={ports.cribl}
+        criblUiBase={
+          load.state === 'loaded'
+            ? criblUiBaseFromLeaderUrl(load.config.criblLeaderUrl)
+            : undefined
+        }
       />
     </>
   );

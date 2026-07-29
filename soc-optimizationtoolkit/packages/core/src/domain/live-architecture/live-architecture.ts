@@ -24,6 +24,7 @@
  */
 
 import type {
+  DiagramDocLink,
   DiagramEdge,
   DiagramNode,
   DiagramNodeInfo,
@@ -70,6 +71,69 @@ export interface LiveArchitectureSnapshot {
 export interface BuildLiveDiagramOptions {
   /** Keep only flows whose input OR output is Azure-typed. */
   azureOnly: boolean;
+  /**
+   * Focus on specific sources/destinations (user directive 2026-07-29):
+   * when non-empty, only flows FROM a listed input id / INTO a listed
+   * output reference survive - and each kept flow keeps everything
+   * in-between (breakers, pipelines, the routing table, packs). Output
+   * references match the configured output id, or the raw route reference
+   * for synthesized nodes ("cribl_lake:{ds}", "default"). Both filters
+   * compose with azureOnly.
+   */
+  focusSources?: readonly string[];
+  focusOutputs?: readonly string[];
+  /**
+   * The Cribl leader UI base (origin plus any product prefix, e.g.
+   * "https://main-org.cribl.cloud/stream" or "http://leader:9000"). When
+   * set, every live node's info links to ITS page in the Cribl UI (user
+   * directive 2026-07-29: navigate to the resource, not the docs) instead
+   * of the generic documentation link.
+   */
+  uiBase?: string;
+}
+
+/**
+ * Group-scoped Cribl UI pages, appended to `{uiBase}/m/{groupId}`. ONE map
+ * so a drifted slug is a one-line fix. /jobs/collectors is pinned verbatim
+ * from docs.cribl.io/stream/common-errors; the rest follow the leader SPA's
+ * menu structure (Data > Sources/Destinations, Routing > Data Routes,
+ * Processing > Pipelines/Knowledge/Packs).
+ */
+const UI_PAGES = {
+  sources: "/data/sources",
+  collectors: "/jobs/collectors",
+  destinations: "/data/destinations",
+  routes: "/data-routes",
+  pipelines: "/pipelines",
+  breakers: "/knowledge/breakers",
+  packs: "/packs",
+} as const;
+
+/**
+ * The leader UI base for a configured leader URL: trims, strips trailing
+ * slashes, and appends the /stream product prefix for Cribl.Cloud
+ * workspaces (on-prem leaders serve the Stream UI at the root). Blank or
+ * malformed input yields undefined - the caller simply keeps doc links.
+ */
+export function criblUiBaseFromLeaderUrl(leaderUrl: string): string | undefined {
+  const trimmed = leaderUrl.trim().replace(/\/+$/, "");
+  if (trimmed === "") {
+    return undefined;
+  }
+  try {
+    const host = new URL(trimmed).hostname;
+    return host.endsWith(".cribl.cloud") ? `${trimmed}/stream` : trimmed;
+  } catch {
+    return undefined;
+  }
+}
+
+/** Replace the generic doc links with the node's own Cribl UI page. */
+function withResourceLink(
+  info: DiagramNodeInfo,
+  link: DiagramDocLink | null,
+): DiagramNodeInfo {
+  return link === null ? info : { ...info, docs: [link] };
 }
 
 export interface LiveDiagramResult {
@@ -559,6 +623,16 @@ export function buildLiveDiagram(
 ): LiveDiagramResult {
   const notes: string[] = [];
 
+  // Per-node "Open in Cribl" links (null when no UI base is configured).
+  const uiBase = options.uiBase?.replace(/\/+$/, "") ?? "";
+  const resourceLink = (page: string, label: string): DiagramDocLink | null =>
+    uiBase === ""
+      ? null
+      : {
+          label,
+          url: `${uiBase}/m/${encodeURIComponent(snapshot.groupId)}${page}`,
+        };
+
   // --- 1. Parse every section tolerantly -----------------------------------
   const inputsAvailable = snapshot.inputs !== undefined || snapshot.jobs !== undefined;
   const allInputs = [
@@ -713,7 +787,28 @@ export function buildLiveDiagram(
     notes.push("The 'default' output could not be resolved to a real destination.");
   }
 
-  // --- 5. Azure filter -------------------------------------------------------
+  // --- 5. Focus filter (selected sources/destinations), then Azure filter ---
+  const focusSources = new Set(options.focusSources ?? []);
+  const focusOutputs = new Set(options.focusOutputs ?? []);
+  const outputRef = (triple: FlowTriple): string =>
+    triple.output !== null ? triple.output.id : triple.route.output ?? "default";
+  const inFocus = (triple: FlowTriple): boolean => {
+    if (
+      focusSources.size > 0 &&
+      (triple.input === null || !focusSources.has(triple.input.id))
+    ) {
+      return false;
+    }
+    return focusOutputs.size === 0 || focusOutputs.has(outputRef(triple));
+  };
+  const focused = triples.filter(inFocus);
+  if (focusSources.size > 0 || focusOutputs.size > 0) {
+    notes.push(
+      `Focus: showing ${focused.length} of ${triples.length} flow(s) between ` +
+        `the selected sources and destinations.`,
+    );
+  }
+
   const keep = (triple: FlowTriple): boolean => {
     if (!options.azureOnly) {
       return true;
@@ -723,8 +818,8 @@ export function buildLiveDiagram(
       triple.output !== null && isAzureCriblType("output", triple.output.type);
     return inputAzure || outputAzure;
   };
-  const kept = triples.filter(keep);
-  if (options.azureOnly && kept.length < triples.length) {
+  const kept = focused.filter(keep);
+  if (options.azureOnly && kept.length < focused.length) {
     const keptInputs = new Set(
       kept.filter((t) => t.input !== null).map((t) => t.input!.id),
     );
@@ -776,7 +871,10 @@ export function buildLiveDiagram(
       label: "Routes",
       tier: "cribl",
       badge: "Routing table",
-      info: routesHubInfo(snapshot.groupId, routes),
+      info: withResourceLink(
+        routesHubInfo(snapshot.groupId, routes),
+        resourceLink(UI_PAGES.routes, `Open Routes in Cribl (${snapshot.groupId})`),
+      ),
     });
   }
 
@@ -787,12 +885,19 @@ export function buildLiveDiagram(
       continue;
     }
     const inputNodeId = `in:${input.id}`;
+    const isCollector = input.type.toLowerCase() === "collection";
     addNode({
       id: inputNodeId,
       label: input.id,
       tier: "source",
       badge: `${input.type} source`,
-      info: inputInfo(input),
+      info: withResourceLink(
+        inputInfo(input),
+        resourceLink(
+          isCollector ? UI_PAGES.collectors : UI_PAGES.sources,
+          isCollector ? "Open Collectors in Cribl" : "Open Sources in Cribl",
+        ),
+      ),
     });
     let previous = inputNodeId;
     for (const ruleset of input.breakerRulesets) {
@@ -802,7 +907,10 @@ export function buildLiveDiagram(
         label: ruleset,
         tier: "cribl",
         badge: "Event breaker",
-        info: breakerInfo(ruleset, breakerById.get(ruleset)),
+        info: withResourceLink(
+          breakerInfo(ruleset, breakerById.get(ruleset)),
+          resourceLink(UI_PAGES.breakers, "Open Event Breakers in Cribl"),
+        ),
       });
       addEdge({ from: previous, to: breakerNodeId });
       previous = breakerNodeId;
@@ -814,7 +922,13 @@ export function buildLiveDiagram(
         label: input.pipeline,
         tier: "cribl",
         badge: "Pre-processing",
-        info: pipelineInfo("Pre-processing", input.pipeline, pipelineById.get(input.pipeline)),
+        info: withResourceLink(
+          pipelineInfo("Pre-processing", input.pipeline, pipelineById.get(input.pipeline)),
+          resourceLink(
+            `${UI_PAGES.pipelines}/${encodeURIComponent(input.pipeline)}`,
+            "Open this pipeline in Cribl",
+          ),
+        ),
       });
       addEdge({ from: previous, to: preNodeId });
       previous = preNodeId;
@@ -843,7 +957,13 @@ export function buildLiveDiagram(
         label: packName,
         tier: "cribl",
         badge: "Pack",
-        info: packInfo(packName, packById.get(packName)),
+        info: withResourceLink(
+          packInfo(packName, packById.get(packName)),
+          resourceLink(
+            `${UI_PAGES.packs}/${encodeURIComponent(packName)}`,
+            "Open this pack in Cribl",
+          ),
+        ),
       });
       addEdge({ from: previous, to: packNodeId, label: routeLabel });
       previous = packNodeId;
@@ -854,7 +974,13 @@ export function buildLiveDiagram(
         label: pipelineRef,
         tier: "cribl",
         badge: "Pipeline",
-        info: pipelineInfo("Route", pipelineRef, pipelineById.get(pipelineRef)),
+        info: withResourceLink(
+          pipelineInfo("Route", pipelineRef, pipelineById.get(pipelineRef)),
+          resourceLink(
+            `${UI_PAGES.pipelines}/${encodeURIComponent(pipelineRef)}`,
+            "Open this pipeline in Cribl",
+          ),
+        ),
       });
       addEdge({ from: previous, to: pipeNodeId, label: routeLabel });
       previous = pipeNodeId;
@@ -869,7 +995,10 @@ export function buildLiveDiagram(
         label: triple.output.id,
         tier: "destination",
         badge: `${triple.output.type} destination`,
-        info: outputInfo(triple.output),
+        info: withResourceLink(
+          outputInfo(triple.output),
+          resourceLink(UI_PAGES.destinations, "Open Destinations in Cribl"),
+        ),
       };
       costType = triple.output.type;
     } else if ((route.output ?? "").startsWith("cribl_lake:")) {
@@ -908,10 +1037,16 @@ export function buildLiveDiagram(
         label: triple.output.pipeline,
         tier: "cribl",
         badge: "Post-processing",
-        info: pipelineInfo(
-          "Post-processing",
-          triple.output.pipeline,
-          pipelineById.get(triple.output.pipeline),
+        info: withResourceLink(
+          pipelineInfo(
+            "Post-processing",
+            triple.output.pipeline,
+            pipelineById.get(triple.output.pipeline),
+          ),
+          resourceLink(
+            `${UI_PAGES.pipelines}/${encodeURIComponent(triple.output.pipeline)}`,
+            "Open this pipeline in Cribl",
+          ),
         ),
       });
       addEdge({

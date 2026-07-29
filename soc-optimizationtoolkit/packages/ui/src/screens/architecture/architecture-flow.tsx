@@ -215,7 +215,7 @@ function ArchNodeCard({ id, data }: NodeProps<ArchNode>) {
             </button>
           </div>
           <p className="arch-flow-info-purpose">{info.purpose}</p>
-          <span className="arch-flow-info-links-label">Documentation</span>
+          <span className="arch-flow-info-links-label">Links</span>
           <ul className="arch-flow-info-links">
             {info.docs.map((doc) => (
               <li key={doc.url}>

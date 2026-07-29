@@ -4909,6 +4909,18 @@ details[open] > summary::before {
   pointer-events: auto;
 }
 
+/* Live-view endpoint focus (2026-07-29): pick which sources/destinations
+ * to present; the diagram keeps only the flows between them. */
+.arch-live-focus {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 10px;
+}
+.arch-live-focus .arch-export-btn {
+  align-self: flex-start;
+}
+
 /* Architecture view tabs (2026-07-29): Reference patterns vs Live. */
 .arch-view-tabs {
   display: flex;

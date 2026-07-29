@@ -19,6 +19,7 @@ export type {
 } from "./live-architecture";
 export {
   buildLiveDiagram,
+  criblUiBaseFromLeaderUrl,
   parseRouteFilterInputs,
   isAzureCriblType,
   isAzureInput,

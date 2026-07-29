@@ -14,7 +14,7 @@
  * renders.
  */
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   ARCHITECTURE_PRESETS,
   AZURE_RESOURCES,
@@ -142,6 +142,12 @@ export interface ArchitectureScreenProps {
   ) => Promise<void>;
   /** Cribl client for the LIVE view. Absent = the Live tab explains the gap. */
   cribl?: CriblClient;
+  /**
+   * The Cribl leader UI base (origin + product prefix). When set, live-node
+   * info popovers link to the resource's page in the Cribl UI instead of
+   * the generic docs (user directive 2026-07-29).
+   */
+  criblUiBase?: string;
 }
 
 type OnExport = ArchitectureScreenProps["onExport"];
@@ -215,9 +221,11 @@ function CostLegend() {
 function LiveArchitecturePanel({
   cribl,
   onExport,
+  criblUiBase,
 }: {
   cribl: CriblClient;
   onExport: OnExport;
+  criblUiBase?: string;
 }) {
   const [groups, setGroups] = useState<CriblGroupSummary[] | null>(null);
   const [groupId, setGroupId] = useState("");
@@ -225,6 +233,15 @@ function LiveArchitecturePanel({
   const [loading, setLoading] = useState(false);
   const [snapshot, setSnapshot] = useState<LiveArchitectureSnapshot | null>(null);
   const [azureOnly, setAzureOnly] = useState(true);
+  // Source/destination focus (user directive 2026-07-29): pick which
+  // endpoints to present; the diagram keeps only flows between them, with
+  // everything in-between. Empty = show all. Resets with each new snapshot.
+  const [focusSources, setFocusSources] = useState<string[]>([]);
+  const [focusOutputs, setFocusOutputs] = useState<string[]>([]);
+  useEffect(() => {
+    setFocusSources([]);
+    setFocusOutputs([]);
+  }, [snapshot]);
 
   const loadGroups = async () => {
     setLiveError("");
@@ -262,10 +279,43 @@ function LiveArchitecturePanel({
     }
   };
 
-  const liveResult = useMemo(
-    () => (snapshot === null ? null : buildLiveDiagram(snapshot, { azureOnly })),
-    [snapshot, azureOnly],
+  // The UNFOCUSED build supplies the endpoint pick lists (what could be
+  // shown under the current Azure toggle); the focused build is what draws.
+  const endpointResult = useMemo(
+    () =>
+      snapshot === null
+        ? null
+        : buildLiveDiagram(snapshot, { azureOnly, uiBase: criblUiBase }),
+    [snapshot, azureOnly, criblUiBase],
   );
+  const liveResult = useMemo(
+    () =>
+      snapshot === null
+        ? null
+        : buildLiveDiagram(snapshot, {
+            azureOnly,
+            uiBase: criblUiBase,
+            focusSources,
+            focusOutputs,
+          }),
+    [snapshot, azureOnly, criblUiBase, focusSources, focusOutputs],
+  );
+  const sourceChoices = useMemo(
+    () =>
+      (endpointResult?.diagram.nodes ?? [])
+        .filter((n) => n.id.startsWith("in:"))
+        .map((n) => ({ id: n.id.slice(3), label: n.label, hint: n.badge ?? "" })),
+    [endpointResult],
+  );
+  const destChoices = useMemo(
+    () =>
+      (endpointResult?.diagram.nodes ?? [])
+        .filter((n) => n.id.startsWith("out:"))
+        .map((n) => ({ id: n.id.slice(4), label: n.label, hint: n.badge ?? "" })),
+    [endpointResult],
+  );
+  const toggleIn = (list: string[], id: string): string[] =>
+    list.includes(id) ? list.filter((x) => x !== id) : [...list, id];
 
   return (
     <>
@@ -311,6 +361,72 @@ function LiveArchitecturePanel({
       {liveError !== "" && (
         <span className="field-hint eh-warning">{liveError}</span>
       )}
+      {liveResult !== null && (sourceChoices.length > 1 || destChoices.length > 1) && (
+        <div className="arch-live-focus">
+          {sourceChoices.length > 1 && (
+            <>
+              <span className="field-label">Show only these sources</span>
+              <div className="arch-preset-row">
+                {sourceChoices.map((choice) => (
+                  <button
+                    type="button"
+                    key={choice.id}
+                    title={choice.hint}
+                    className={
+                      "arch-preset-chip" +
+                      (focusSources.includes(choice.id)
+                        ? " arch-preset-chip-active"
+                        : "")
+                    }
+                    onClick={() =>
+                      setFocusSources((prev) => toggleIn(prev, choice.id))
+                    }
+                  >
+                    {choice.label}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+          {destChoices.length > 1 && (
+            <>
+              <span className="field-label">Show only these destinations</span>
+              <div className="arch-preset-row">
+                {destChoices.map((choice) => (
+                  <button
+                    type="button"
+                    key={choice.id}
+                    title={choice.hint}
+                    className={
+                      "arch-preset-chip" +
+                      (focusOutputs.includes(choice.id)
+                        ? " arch-preset-chip-active"
+                        : "")
+                    }
+                    onClick={() =>
+                      setFocusOutputs((prev) => toggleIn(prev, choice.id))
+                    }
+                  >
+                    {choice.label}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+          {(focusSources.length > 0 || focusOutputs.length > 0) && (
+            <button
+              type="button"
+              className="arch-export-btn"
+              onClick={() => {
+                setFocusSources([]);
+                setFocusOutputs([]);
+              }}
+            >
+              Show all flows
+            </button>
+          )}
+        </div>
+      )}
       {liveResult !== null && (
         <>
           <ExportRow
@@ -341,6 +457,7 @@ export function ArchitectureScreen({
   canNavigate,
   onExport,
   cribl,
+  criblUiBase,
 }: ArchitectureScreenProps = {}) {
   const [products, setProducts] = useState<string[]>([]);
   const [resources, setResources] = useState<string[]>([]);
@@ -435,7 +552,11 @@ export function ArchitectureScreen({
 
       {viewMode === "live" ? (
         cribl !== undefined ? (
-          <LiveArchitecturePanel cribl={cribl} onExport={onExport} />
+          <LiveArchitecturePanel
+            cribl={cribl}
+            onExport={onExport}
+            criblUiBase={criblUiBase}
+          />
         ) : (
           <p className="field-hint">
             This shell did not provide a Cribl client for the live view - a
