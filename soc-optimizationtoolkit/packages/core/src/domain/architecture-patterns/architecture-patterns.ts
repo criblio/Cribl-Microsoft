@@ -697,14 +697,20 @@ export const ARCHITECTURE_PATTERNS: readonly ArchitecturePattern[] = [
       "A staged migration can run Winlogbeat and Edge side by side; retire the Beat once Edge owns the host.",
     ],
     diagram: {
+      // The agent is a NODE, not just an edge label: several Windows methods
+      // share the endpoints->Stream pair, and the unify merge dedupes edges
+      // by node pair - distinct transport nodes keep each method visible
+      // when more than one is selected (user report 2026-07-29).
       nodes: [
         { id: "win", label: "Windows endpoints", tier: "source" },
+        { id: "wlb", label: "Winlogbeat agents", tier: "source" },
         { id: "stream", label: "Cribl Stream", tier: "cribl" },
         { id: "dcr", label: "Kind:Direct DCR", tier: "azure" },
         { id: "law", label: "Sentinel / LA", tier: "destination" },
       ],
       edges: [
-        { from: "win", to: "stream", label: "Winlogbeat (Elastic protocol)" },
+        { from: "win", to: "wlb", label: "local Event Log read" },
+        { from: "wlb", to: "stream", label: "Elastic protocol (Stream as ES)" },
         { from: "stream", to: "dcr" },
         { from: "dcr", to: "law" },
       ],
@@ -726,14 +732,18 @@ export const ARCHITECTURE_PATTERNS: readonly ArchitecturePattern[] = [
       "Cooked Splunk events need field extraction in Stream before mapping to SecurityEvent/WindowsEvent.",
     ],
     diagram: {
+      // Distinct transport node for the same reason as the Winlogbeat
+      // pattern: keep every selected Windows method visible at once.
       nodes: [
         { id: "win", label: "Windows endpoints", tier: "source" },
+        { id: "uf", label: "Splunk UF agents", tier: "source" },
         { id: "stream", label: "Cribl Stream", tier: "cribl" },
         { id: "dcr", label: "Kind:Direct DCR", tier: "azure" },
         { id: "law", label: "Sentinel / LA", tier: "destination" },
       ],
       edges: [
-        { from: "win", to: "stream", label: "Splunk UF (S2S)" },
+        { from: "win", to: "uf", label: "local Event Log read" },
+        { from: "uf", to: "stream", label: "S2S (Splunk TCP)" },
         { from: "stream", to: "dcr" },
         { from: "dcr", to: "law" },
       ],
@@ -1310,6 +1320,34 @@ const DIAGRAM_NODE_INFO: Record<string, DiagramNodeInfo> = {
       {
         label: "Cribl Windows Events pack",
         url: PACKS + "/packs/cribl-windows-events",
+      },
+    ],
+  },
+  [canonicalNodeKey("Winlogbeat agents")]: {
+    purpose:
+      "Existing Winlogbeat shippers reading Windows Event Log channels locally. Their Elasticsearch output points at Cribl Stream's Elasticsearch API source - to the Beat, Stream IS Elasticsearch.",
+    docs: [
+      {
+        label: "Cribl Elasticsearch API source",
+        url: CRIBL + "/stream/sources-elastic/",
+      },
+      {
+        label: "Cribl upstream agents guide",
+        url: CRIBL + "/stream/usecase-logging-agents/",
+      },
+    ],
+  },
+  [canonicalNodeKey("Splunk UF agents")]: {
+    purpose:
+      "Existing Splunk Universal Forwarders collecting Windows events. Their outputs.conf targets Cribl Stream's Splunk TCP source over S2S - a config push, not an agent migration; dual-routing to Splunk and Sentinel can run through cutover.",
+    docs: [
+      {
+        label: "Cribl Splunk TCP source",
+        url: CRIBL + "/stream/sources-splunk-tcp/",
+      },
+      {
+        label: "Cribl upstream agents guide",
+        url: CRIBL + "/stream/usecase-logging-agents/",
       },
     ],
   },

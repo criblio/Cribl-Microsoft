@@ -223,6 +223,54 @@ describe("log sources and role-split resources (2026-07-29)", () => {
   });
 });
 
+describe("Windows collection methods stay distinct (2026-07-29 bug fix)", () => {
+  const byId = (id: string) => ARCHITECTURE_PATTERNS.find((p) => p.id === id)!;
+
+  it("WEF, Winlogbeat, and Splunk UF draw three distinct paths into Stream", () => {
+    const unified = unifyPatternDiagrams([
+      byId("windows-wef-ingress"),
+      byId("windows-winlogbeat-ingress"),
+      byId("windows-splunk-uf-ingress"),
+    ]);
+    const intoStream = unified.edges.filter((e) => e.to === "criblstream");
+    expect(intoStream.map((e) => e.from).sort()).toEqual([
+      "splunkufagents",
+      "windowsendpoints",
+      "winlogbeatagents",
+    ]);
+    // The one remaining DIRECT endpoints->Stream edge is the WEF method.
+    expect(
+      intoStream.find((e) => e.from === "windowsendpoints")?.label,
+    ).toBe("WEF (Kerberos/mTLS)");
+  });
+
+  it("all six Windows methods merge with exactly one direct endpoints edge", () => {
+    const unified = unifyPatternDiagrams([
+      byId("windows-wef-ingress"),
+      byId("windows-wec-relay"),
+      byId("windows-edge-ingress"),
+      byId("windows-winlogbeat-ingress"),
+      byId("windows-splunk-uf-ingress"),
+      byId("windows-ama-direct"),
+    ]);
+    const labels = unified.nodes.map((n) => n.label);
+    for (const expected of [
+      "WEC server",
+      "Cribl Edge fleet",
+      "Winlogbeat agents",
+      "Splunk UF agents",
+      "Azure Monitor Agent",
+    ]) {
+      expect(labels).toContain(expected);
+    }
+    expect(
+      unified.edges.filter(
+        (e) => e.from === "windowsendpoints" && e.to === "criblstream",
+      ),
+    ).toHaveLength(1);
+  });
+});
+
 describe("Sentinel data lake (2026-07-29)", () => {
   it("Stream + data lake matches the tiering pattern with the mirror edge", () => {
     const recs = recommendPatterns({
