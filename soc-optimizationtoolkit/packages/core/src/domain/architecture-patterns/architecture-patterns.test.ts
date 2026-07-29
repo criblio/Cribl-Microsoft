@@ -9,9 +9,11 @@ import { describe, expect, it } from "vitest";
 
 import {
   ARCHITECTURE_PATTERNS,
+  ARCHITECTURE_PRESETS,
   AZURE_RESOURCES,
   CRIBL_PRODUCTS,
   LOG_SOURCES,
+  PRODUCT_WHEN_TO_USE,
   catalogLabel,
   expandResources,
   recommendPatterns,
@@ -220,6 +222,70 @@ describe("log sources and role-split resources (2026-07-29)", () => {
     const adxKey = adxNodes[0].id;
     expect(unified.edges.some((e) => e.to === adxKey)).toBe(true);
     expect(unified.edges.some((e) => e.from === adxKey)).toBe(true);
+  });
+});
+
+describe("ARCHITECTURE_PRESETS and PRODUCT_WHEN_TO_USE (2026-07-29)", () => {
+  it("preset ids are unique with real copy", () => {
+    const ids = new Set(ARCHITECTURE_PRESETS.map((p) => p.id));
+    expect(ids.size).toBe(ARCHITECTURE_PRESETS.length);
+    for (const preset of ARCHITECTURE_PRESETS) {
+      expect(preset.label.length).toBeGreaterThan(3);
+      expect(preset.description.length).toBeGreaterThan(20);
+    }
+  });
+
+  it("every preset selection id resolves in the catalogs", () => {
+    for (const preset of ARCHITECTURE_PRESETS) {
+      for (const p of preset.selection.products) {
+        expect(PRODUCT_IDS.has(p), `${preset.id}: ${p}`).toBe(true);
+      }
+      for (const r of preset.selection.resources) {
+        expect(RESOURCE_IDS.has(r), `${preset.id}: ${r}`).toBe(true);
+      }
+      for (const s of preset.selection.sources ?? []) {
+        expect(SOURCE_IDS.has(s), `${preset.id}: ${s}`).toBe(true);
+      }
+    }
+  });
+
+  it("every preset yields at least one full match", () => {
+    for (const preset of ARCHITECTURE_PRESETS) {
+      const recs = recommendPatterns(preset.selection);
+      expect(
+        recs.some((r) => r.fit === "match"),
+        `${preset.id} matched nothing`,
+      ).toBe(true);
+    }
+  });
+
+  it("headline patterns stay pinned to their presets", () => {
+    const matchedIds = (presetId: string): string[] => {
+      const preset = ARCHITECTURE_PRESETS.find((p) => p.id === presetId)!;
+      return recommendPatterns(preset.selection)
+        .filter((r) => r.fit === "match")
+        .map((r) => r.pattern.id);
+    };
+    expect(matchedIds("siem-migration-splunk")).toContain("windows-splunk-uf-ingress");
+    expect(matchedIds("cost-reduction-archive")).toEqual(
+      expect.arrayContaining(["blob-archive-replay", "search-in-place"]),
+    );
+    expect(matchedIds("long-term-retention-sdl")).toContain(
+      "sentinel-data-lake-tiering",
+    );
+    expect(matchedIds("private-regulated")).toContain("private-ingestion");
+    expect(matchedIds("azure-platform-fanin")).toContain("entra-reroute");
+    expect(matchedIds("windows-estate")).toEqual(
+      expect.arrayContaining(["windows-edge-ingress", "windows-wec-relay"]),
+    );
+  });
+
+  it("every product carries when-to-use copy in the shared voice", () => {
+    for (const product of CRIBL_PRODUCTS) {
+      const text = PRODUCT_WHEN_TO_USE[product.id];
+      expect(text.length).toBeGreaterThan(30);
+      expect(text.startsWith("Use ")).toBe(true);
+    }
   });
 });
 

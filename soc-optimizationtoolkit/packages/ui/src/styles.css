@@ -4622,3 +4622,97 @@ details[open] > summary::before {
 .arch-flow-info-links a {
   color: var(--info-cyan);
 }
+
+/* --------------------------------------------------------------------------
+ * Architecture presets + product capability legend (2026-07-29): one-click
+ * journey chips that set every picker, and the Edge/Stream/Lake/Search
+ * what-it-is / when-to-use strip. Token-only colors.
+ * ------------------------------------------------------------------------ */
+
+.arch-presets {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 4px 0 10px;
+}
+
+.arch-preset-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.arch-preset-chip {
+  font-family: inherit;
+  font-size: 12px;
+  padding: 3px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface-raised);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.arch-preset-chip:hover {
+  border-color: var(--accent);
+}
+
+.arch-preset-chip-active {
+  border-color: var(--accent);
+  background: var(--accent-bg);
+  color: var(--accent-strong);
+}
+
+.arch-preset-clear {
+  font-family: inherit;
+  font-size: 12px;
+  border: none;
+  background: none;
+  color: var(--text-faint);
+  cursor: pointer;
+  padding: 3px 6px;
+}
+
+.arch-preset-clear:hover {
+  text-decoration: underline;
+}
+
+.arch-preset-clear:disabled {
+  opacity: 0.5;
+  cursor: default;
+  text-decoration: none;
+}
+
+.arch-legend {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 10px;
+  margin: 0 0 14px;
+}
+
+.arch-legend-item {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 8px 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  background: var(--surface-raised);
+}
+
+.arch-legend-name {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.arch-legend-what {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.arch-legend-when {
+  font-size: 12px;
+  color: var(--text-faint);
+}

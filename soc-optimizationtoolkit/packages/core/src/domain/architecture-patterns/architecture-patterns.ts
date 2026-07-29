@@ -991,6 +991,101 @@ export function recommendPatterns(
   return [...matches, ...nears];
 }
 
+/** A one-click journey preset: applies a whole selection at once. */
+export interface ArchitecturePreset {
+  id: string;
+  label: string;
+  /** One sentence shown as the chip tooltip. */
+  description: string;
+  selection: ArchitectureSelection;
+}
+
+/**
+ * The journey presets - named scenarios that set every picker at once so a
+ * customer starts from a story instead of blank multiselects. Every preset
+ * is pinned to yield at least one full pattern match.
+ */
+export const ARCHITECTURE_PRESETS: readonly ArchitecturePreset[] = [
+  {
+    id: "siem-migration-splunk",
+    label: "SIEM migration from Splunk",
+    description:
+      "Re-point Splunk Universal Forwarders at Stream and dual-route to Splunk and Sentinel through cutover.",
+    selection: {
+      products: ["stream"],
+      resources: ["sentinel"],
+      sources: ["windows-splunk-uf"],
+    },
+  },
+  {
+    id: "cost-reduction-archive",
+    label: "Cost reduction and archive",
+    description:
+      "Full fidelity to cheap blob storage, only the hot subset to Sentinel, search the archive in place.",
+    selection: {
+      products: ["stream", "search"],
+      resources: ["sentinel", "blob-storage"],
+    },
+  },
+  {
+    id: "long-term-retention-sdl",
+    label: "Long-term retention (data lake)",
+    description:
+      "Up to 12 years at lake economics: analytics tables mirror into the Sentinel data lake and Search queries it in place.",
+    selection: {
+      products: ["stream", "search"],
+      resources: ["sentinel-data-lake"],
+    },
+  },
+  {
+    id: "private-regulated",
+    label: "Private and regulated",
+    description:
+      "No public ingestion endpoints: a DCE joined to an AMPLS keeps the whole path inside the vNet.",
+    selection: {
+      products: ["stream"],
+      resources: ["sentinel", "private-link"],
+    },
+  },
+  {
+    id: "azure-platform-fanin",
+    label: "Azure platform logs fan-in",
+    description:
+      "Platform diagnostics and Entra ID exports stream into Event Hubs; Stream tames the volume before Sentinel.",
+    selection: {
+      products: ["stream"],
+      resources: ["sentinel", "event-hub", "entra-diagnostics"],
+    },
+  },
+  {
+    id: "windows-estate",
+    label: "Windows estate onboarding",
+    description:
+      "Cribl Edge on the hosts plus an Edge relay on existing WEC servers - one control plane for Windows collection.",
+    selection: {
+      products: ["stream", "edge"],
+      resources: ["sentinel"],
+      sources: ["windows-edge", "windows-wec"],
+    },
+  },
+];
+
+/**
+ * When to reach for each product - the capability legend's second line. The
+ * "what it is" line reuses CRIBL_PRODUCTS descriptions so the two cannot
+ * drift. Record over the union: compile-time exhaustive.
+ */
+export const PRODUCT_WHEN_TO_USE: Record<CriblProduct, string> = {
+  stream:
+    "Use when data is in motion: reduce, shape, enrich, and route feeds before they bill at the destination.",
+  edge:
+    "Use when collection starts on the hosts: one managed fleet replaces per-endpoint agents and forwards to Stream.",
+  lake:
+    "Use for full-fidelity retention on Cribl.Cloud: keep everything cheaply searchable while Sentinel gets only the hot subset.",
+  search:
+    "Use to investigate data where it lives - blob archives, Lake, ADX, the Sentinel data lake - instead of ingesting it first.",
+};
+
 /** Resolve a product/resource/source id to its display label (missing chips). */
 export function catalogLabel(id: string): string {
   const product = CRIBL_PRODUCTS.find((p) => p.id === id);

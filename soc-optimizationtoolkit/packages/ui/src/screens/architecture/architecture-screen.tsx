@@ -16,15 +16,18 @@
 
 import { useMemo, useState } from "react";
 import {
+  ARCHITECTURE_PRESETS,
   AZURE_RESOURCES,
   CRIBL_PRODUCTS,
   LOG_SOURCES,
+  PRODUCT_WHEN_TO_USE,
   catalogLabel,
   recommendPatterns,
   unifyPatternDiagrams,
 } from "@soc/core";
 import type {
   ArchitecturePattern,
+  ArchitecturePreset,
   AzureResource,
   CriblProduct,
   LogSource,
@@ -51,6 +54,28 @@ function PatternCard({ pattern }: { pattern: ArchitecturePattern }) {
         ))}
       </ul>
     </div>
+  );
+}
+
+/** Order-insensitive equality of a picker state against a preset selection. */
+function sameSet(a: readonly string[], b: readonly string[]): boolean {
+  if (a.length !== b.length) {
+    return false;
+  }
+  const set = new Set(a);
+  return b.every((value) => set.has(value));
+}
+
+function isActivePreset(
+  preset: ArchitecturePreset,
+  products: readonly string[],
+  resources: readonly string[],
+  sources: readonly string[],
+): boolean {
+  return (
+    sameSet(products, preset.selection.products) &&
+    sameSet(resources, preset.selection.resources) &&
+    sameSet(sources, preset.selection.sources ?? [])
   );
 }
 
@@ -102,6 +127,54 @@ export function ArchitectureScreen() {
         pattern's rationale and considerations underneath. Advisory only:
         nothing here deploys anything.
       </p>
+
+      <div className="arch-presets">
+        <span className="field-label">Common journeys</span>
+        <div className="arch-preset-row">
+          {ARCHITECTURE_PRESETS.map((preset) => (
+            <button
+              type="button"
+              key={preset.id}
+              title={preset.description}
+              className={
+                "arch-preset-chip" +
+                (isActivePreset(preset, products, resources, sources)
+                  ? " arch-preset-chip-active"
+                  : "")
+              }
+              onClick={() => {
+                setProducts([...preset.selection.products]);
+                setResources([...preset.selection.resources]);
+                setSources([...(preset.selection.sources ?? [])]);
+              }}
+            >
+              {preset.label}
+            </button>
+          ))}
+          <button
+            type="button"
+            className="arch-preset-clear"
+            disabled={!hasSelection}
+            onClick={() => {
+              setProducts([]);
+              setResources([]);
+              setSources([]);
+            }}
+          >
+            Clear
+          </button>
+        </div>
+      </div>
+
+      <div className="arch-legend">
+        {CRIBL_PRODUCTS.map((product) => (
+          <div className="arch-legend-item" key={product.id}>
+            <span className="arch-legend-name">{product.label}</span>
+            <span className="arch-legend-what">{product.description}</span>
+            <span className="arch-legend-when">{PRODUCT_WHEN_TO_USE[product.id]}</span>
+          </div>
+        ))}
+      </div>
 
       <div className="form-grid arch-pickers">
         <label className="field">
