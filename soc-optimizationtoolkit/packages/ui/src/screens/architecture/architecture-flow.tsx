@@ -449,6 +449,31 @@ function FlowingEdge({
 const NODE_TYPES = { arch: ArchNodeCard };
 const EDGE_TYPES = { flowing: FlowingEdge };
 
+/**
+ * The one fit-to-view configuration (initial fit and every re-fit): a slim
+ * padding so the diagram FILLS the canvas (user report 2026-07-29: too much
+ * whitespace - was 0.15), and a fit-zoom ceiling so tiny diagrams do not
+ * blow up to poster-sized cards. The user can still zoom to maxZoom by hand.
+ */
+const FIT_VIEW_OPTIONS = { padding: 0.06, maxZoom: 1.15, duration: 200 } as const;
+
+/**
+ * Re-fits the viewport whenever the diagram identity or the canvas size
+ * changes (user 2026-07-29: everything should fit the window by default and
+ * keep fitting across monitors/resolutions). Rendered INSIDE <ReactFlow> to
+ * reach its store; the rAF defers the fit until the re-seeded nodes painted.
+ */
+function FitViewController({ signature }: { signature: string }) {
+  const { fitView } = useReactFlow();
+  useEffect(() => {
+    const raf = requestAnimationFrame(() => {
+      void fitView(FIT_VIEW_OPTIONS);
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [signature, fitView]);
+  return null;
+}
+
 /** Adapt the shared dagre layout (arch-layout) to React Flow's shapes. */
 function layoutGraph(diagram: PatternDiagram): { nodes: ArchNode[]; edges: FlowEdge[] } {
   const laidOut = layoutDiagram(diagram);
@@ -529,6 +554,36 @@ export function ArchitectureFlow({ diagram }: ArchitectureFlowProps) {
     setEdges(layouted.edges);
   }, [layouted, setNodes, setEdges]);
 
+  // Canvas-size watcher (ref callback, not an effect: the canvas div mounts
+  // conditionally). A monitor/window/panel resize bumps resizeTick after a
+  // short settle, and the FitViewController re-fits the whole flow into the
+  // new bounds - the dynamic zoom-out-to-fit the user asked for 2026-07-29.
+  const [resizeTick, setResizeTick] = useState(0);
+  const resizeObserverRef = useRef<ResizeObserver | null>(null);
+  const resizeTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const canvasRef = useCallback((el: HTMLDivElement | null) => {
+    resizeObserverRef.current?.disconnect();
+    resizeObserverRef.current = null;
+    clearTimeout(resizeTimerRef.current);
+    if (el === null || typeof ResizeObserver === "undefined") {
+      return;
+    }
+    const observer = new ResizeObserver(() => {
+      clearTimeout(resizeTimerRef.current);
+      resizeTimerRef.current = setTimeout(() => setResizeTick((t) => t + 1), 150);
+    });
+    observer.observe(el);
+    resizeObserverRef.current = observer;
+  }, []);
+
+  // Re-fit on structural change (selection, removals) or canvas resize -
+  // NOT on node drags, which leave the diagram identity untouched.
+  const fitSignature = useMemo(
+    () =>
+      `${effective.nodes.map((n) => n.id).join(",")}|${effective.edges.length}|${resizeTick}`,
+    [effective, resizeTick],
+  );
+
   const removedCount = removedNodes.size + removedEdges.size;
 
   if (diagram.nodes.length === 0) return null;
@@ -552,7 +607,7 @@ export function ArchitectureFlow({ diagram }: ArchitectureFlowProps) {
   }
 
   return (
-    <div className="arch-flow-canvas">
+    <div className="arch-flow-canvas" ref={canvasRef}>
       {removedCount > 0 && (
         <div className="arch-flow-restore-row arch-flow-restore-overlay">
           <button
@@ -587,14 +642,15 @@ export function ArchitectureFlow({ diagram }: ArchitectureFlowProps) {
         nodeTypes={NODE_TYPES}
         edgeTypes={EDGE_TYPES}
         fitView
-        fitViewOptions={{ padding: 0.15 }}
-        minZoom={0.3}
+        fitViewOptions={FIT_VIEW_OPTIONS}
+        minZoom={0.2}
         maxZoom={1.6}
         nodesConnectable={false}
         edgesFocusable={true}
         deleteKeyCode={["Backspace", "Delete"]}
         proOptions={{ hideAttribution: true }}
       >
+        <FitViewController signature={fitSignature} />
         <Background
           variant={BackgroundVariant.Dots}
           gap={18}

@@ -149,7 +149,10 @@ export function layoutDiagram(diagram: PatternDiagram): LaidOutDiagram {
     NODE_H + ((typesByNode.get(nodeId)?.length ?? 0) > 0 ? CHIP_ROW_H : 0);
 
   const g = new Dagre.graphlib.Graph().setDefaultEdgeLabel(() => ({}));
-  g.setGraph({ rankdir: "LR", nodesep: 34, ranksep: 96, marginx: 12, marginy: 12 });
+  // Tightened 2026-07-29 (user report: a lot of whitespace between objects) -
+  // was nodesep 34 / ranksep 96; labels ride the edges with backing pills so
+  // the narrower column gap stays legible.
+  g.setGraph({ rankdir: "LR", nodesep: 24, ranksep: 72, marginx: 10, marginy: 10 });
   for (const node of diagram.nodes) {
     g.setNode(node.id, { width: NODE_W, height: heightOf(node.id) });
   }

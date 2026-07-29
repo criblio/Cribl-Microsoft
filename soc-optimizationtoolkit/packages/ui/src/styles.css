@@ -4030,8 +4030,9 @@ button.journey-step-main:hover .journey-step-label {
 /* ---- Interactive data-flow canvas (React Flow + dagre) ------------------- */
 .arch-flow-canvas {
   /* Sized to the viewport (user direction 2026-07-28: bigger diagram) with a
-     floor for small windows; was a fixed 460px. */
-  height: clamp(460px, 68vh, 760px);
+     floor for small windows; was a fixed 460px. Ceiling raised 2026-07-29 so
+     tall monitors get the room instead of whitespace elsewhere. */
+  height: clamp(460px, 72vh, 1040px);
   width: 100%;
   margin: 12px 0 16px;
   border: 1px solid var(--border-subtle);
