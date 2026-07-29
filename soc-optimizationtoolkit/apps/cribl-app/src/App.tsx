@@ -1862,20 +1862,35 @@ function App() {
   // the data-driven reference-architecture advisor plus the Live view. Pure
   // core recommender + inline-SVG diagrams; the Live tab reads (never
   // writes) the connected group's config. requires: 'none'.
-  // The workspace UI base for the Live view's "open in Cribl" links: this
-  // app runs iframed INSIDE the Cribl.Cloud workspace UI, so the embedding
-  // page's origin (referrer; falls back to our own origin when same-origin)
-  // is the leader UI host, with the /stream product prefix.
+  // The workspace UI base for the Live view's "open in Cribl" links. This
+  // app iframes on a SANDBOXED origin whose server answers EVERY path with
+  // this app - so our own origin is never a valid base (user report
+  // 2026-07-29: the routes link opened a fresh copy of the app at the AUA
+  // gate). The embedder's origin is the truth: ancestorOrigins[0] where
+  // supported, else the referrer's origin when it is NOT ours. When neither
+  // yields a trustworthy origin, stay undefined - the live popovers then
+  // keep their documentation links instead of emitting broken ones.
   const criblUiBase = (() => {
     try {
-      const origin =
-        document.referrer !== ""
-          ? new URL(document.referrer).origin
-          : window.location.origin;
-      return `${origin}/stream`;
+      const own = window.location.origin;
+      const ancestors = (
+        window.location as Location & { ancestorOrigins?: DOMStringList }
+      ).ancestorOrigins;
+      const ancestor =
+        ancestors !== undefined && ancestors.length > 0 ? ancestors[0] : undefined;
+      if (ancestor !== undefined && ancestor !== "" && ancestor !== "null") {
+        return `${ancestor}/stream`;
+      }
+      if (document.referrer !== "") {
+        const ref = new URL(document.referrer).origin;
+        if (ref !== own && ref !== "null") {
+          return `${ref}/stream`;
+        }
+      }
     } catch {
-      return `${window.location.origin}/stream`;
+      // No trustworthy embedder origin - fall through to undefined.
     }
+    return undefined;
   })();
 
   const renderArchitecture = (nav: AppFrameNav) => (
