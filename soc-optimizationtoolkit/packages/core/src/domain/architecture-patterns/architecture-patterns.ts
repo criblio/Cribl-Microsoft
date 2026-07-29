@@ -329,7 +329,7 @@ export const ARCHITECTURE_PATTERNS: readonly ArchitecturePattern[] = [
       ],
       edges: [
         { from: "diag", to: "eh" },
-        { from: "eh", to: "stream", label: "EH source" },
+        { from: "eh", to: "stream", label: "Azure Event Hubs source" },
         { from: "stream", to: "dcr" },
         { from: "dcr", to: "law", cost: "premium" },
       ],
@@ -361,7 +361,7 @@ export const ARCHITECTURE_PATTERNS: readonly ArchitecturePattern[] = [
       ],
       edges: [
         { from: "entra", to: "eh" },
-        { from: "eh", to: "stream" },
+        { from: "eh", to: "stream", label: "Azure Event Hubs source" },
         { from: "stream", to: "dcr", label: "schema preserved" },
         { from: "dcr", to: "cl", cost: "premium" },
         { from: "cl", to: "sentinel", label: "function alias" },
@@ -423,7 +423,7 @@ export const ARCHITECTURE_PATTERNS: readonly ArchitecturePattern[] = [
         { from: "src", to: "stream" },
         { from: "stream", to: "blob", label: "full fidelity", cost: "economical" },
         { from: "stream", to: "law", label: "hot subset", cost: "premium" },
-        { from: "blob", to: "stream", label: "replay" },
+        { from: "blob", to: "stream", label: "replay (Azure Blob source)" },
       ],
     },
   },
@@ -507,7 +507,7 @@ export const ARCHITECTURE_PATTERNS: readonly ArchitecturePattern[] = [
       ],
       edges: [
         { from: "flow", to: "blob" },
-        { from: "blob", to: "stream", label: "scheduled collect" },
+        { from: "blob", to: "stream", label: "Azure Blob source (scheduled)" },
         { from: "stream", to: "dcr" },
         { from: "dcr", to: "law", cost: "premium" },
       ],
@@ -595,7 +595,7 @@ export const ARCHITECTURE_PATTERNS: readonly ArchitecturePattern[] = [
         { id: "law", label: "Sentinel / LA", tier: "destination" },
       ],
       edges: [
-        { from: "pan", to: "stream", label: "syslog 514/6514 (CSV/CEF)" },
+        { from: "pan", to: "stream", label: "Syslog source (514/6514, CSV/CEF)" },
         { from: "stream", to: "dcr" },
         { from: "dcr", to: "law", cost: "premium" },
       ],
@@ -625,7 +625,7 @@ export const ARCHITECTURE_PATTERNS: readonly ArchitecturePattern[] = [
         { id: "law", label: "Sentinel / LA", tier: "destination" },
       ],
       edges: [
-        { from: "win", to: "stream", label: "WEF (Kerberos/mTLS)" },
+        { from: "win", to: "stream", label: "WEF source (Kerberos/mTLS)" },
         { from: "stream", to: "dcr" },
         { from: "dcr", to: "law", cost: "premium" },
       ],
@@ -723,7 +723,7 @@ export const ARCHITECTURE_PATTERNS: readonly ArchitecturePattern[] = [
       ],
       edges: [
         { from: "win", to: "wlb", label: "local Event Log read" },
-        { from: "wlb", to: "stream", label: "Elastic protocol (Stream as ES)" },
+        { from: "wlb", to: "stream", label: "Elasticsearch API source" },
         { from: "stream", to: "dcr" },
         { from: "dcr", to: "law", cost: "premium" },
       ],
@@ -756,7 +756,7 @@ export const ARCHITECTURE_PATTERNS: readonly ArchitecturePattern[] = [
       ],
       edges: [
         { from: "win", to: "uf", label: "local Event Log read" },
-        { from: "uf", to: "stream", label: "S2S (Splunk TCP)" },
+        { from: "uf", to: "stream", label: "Splunk TCP source (S2S)" },
         { from: "stream", to: "dcr" },
         { from: "dcr", to: "law", cost: "premium" },
       ],
@@ -841,7 +841,7 @@ export const ARCHITECTURE_PATTERNS: readonly ArchitecturePattern[] = [
         { id: "law", label: "Sentinel / LA", tier: "destination" },
       ],
       edges: [
-        { from: "blob", to: "stream", label: "scheduled collect" },
+        { from: "blob", to: "stream", label: "Azure Blob source (scheduled)" },
         { from: "stream", to: "dcr" },
         { from: "dcr", to: "law", cost: "premium" },
       ],
@@ -1111,6 +1111,22 @@ export function catalogLabel(id: string): string {
 /** A node's canonical merge key: its label reduced to lowercase alphanumerics. */
 function canonicalNodeKey(label: string): string {
   return label.toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+/**
+ * The Cribl SOURCE TYPE named by an ingress edge label, or null. Ingress
+ * labels follow the "<Source type> source (detail)" convention (2026-07-29
+ * user direction), so "Syslog source (514/6514, CSV/CEF)" yields "Syslog"
+ * and "replay (Azure Blob source)" yields "Azure Blob". Renderers attach
+ * these as tags on the receiving Cribl node.
+ */
+export function criblSourceTypeFromLabel(label: string): string | null {
+  const match = /([A-Za-z][A-Za-z ]*) source\b/.exec(label);
+  if (match === null) {
+    return null;
+  }
+  const type = match[1].trim();
+  return type === "" ? null : type;
 }
 
 /**

@@ -380,7 +380,33 @@ describe("Windows collection methods stay distinct (2026-07-29 bug fix)", () => 
     // The one remaining DIRECT endpoints->Stream edge is the WEF method.
     expect(
       intoStream.find((e) => e.from === "windowsendpoints")?.label,
-    ).toBe("WEF (Kerberos/mTLS)");
+    ).toBe("WEF source (Kerberos/mTLS)");
+  });
+
+  it("every ingress edge into Stream names its Cribl source type", () => {
+    // 2026-07-29 user direction: the visual must say WHICH Cribl source
+    // receives the feed (Syslog source, Splunk TCP source, ...).
+    const expectations: Array<[string, string]> = [
+      ["palo-alto-syslog-ingress", "Syslog source (514/6514, CSV/CEF)"],
+      ["windows-wef-ingress", "WEF source (Kerberos/mTLS)"],
+      ["windows-winlogbeat-ingress", "Elasticsearch API source"],
+      ["windows-splunk-uf-ingress", "Splunk TCP source (S2S)"],
+      ["event-hub-fanin", "Azure Event Hubs source"],
+      ["entra-reroute", "Azure Event Hubs source"],
+      ["vnet-flow-collection", "Azure Blob source (scheduled)"],
+      ["blob-collector", "Azure Blob source (scheduled)"],
+    ];
+    for (const [patternId, label] of expectations) {
+      const pattern = ARCHITECTURE_PATTERNS.find((p) => p.id === patternId)!;
+      expect(
+        pattern.diagram.edges.some((e) => e.label === label),
+        `${patternId}: missing "${label}"`,
+      ).toBe(true);
+    }
+    const replay = ARCHITECTURE_PATTERNS.find((p) => p.id === "blob-archive-replay")!;
+    expect(
+      replay.diagram.edges.some((e) => e.label === "replay (Azure Blob source)"),
+    ).toBe(true);
   });
 
   it("all six Windows methods merge with exactly one direct endpoints edge", () => {

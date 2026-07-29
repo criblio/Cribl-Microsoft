@@ -7,10 +7,21 @@
  */
 
 import Dagre from "@dagrejs/dagre";
+import { criblSourceTypeFromLabel } from "@soc/core";
 import type { DiagramEdge, DiagramTier, PatternDiagram } from "@soc/core";
 
 export const NODE_W = 190;
 export const NODE_H = 62;
+/** Extra card height when a node carries source-type tags (2026-07-29). */
+export const CHIP_ROW_H = 20;
+
+/** The tag row a renderer draws: up to three types plus an overflow count. */
+export function sourceTypeChips(types: readonly string[]): string[] {
+  if (types.length <= 3) {
+    return [...types];
+  }
+  return [...types.slice(0, 3), `+${types.length - 3}`];
+}
 
 /** The short tier badge shown above a node's label (non-destination tiers). */
 const TIER_BADGE: Record<DiagramTier, string> = {
@@ -50,6 +61,10 @@ export interface LaidOutNode {
   tier: DiagramTier;
   x: number;
   y: number;
+  /** Card height: NODE_H, plus the tag row when sourceTypes is non-empty. */
+  height: number;
+  /** The Cribl source types feeding this node (from its ingress edges). */
+  sourceTypes: string[];
 }
 
 /** A routed point on an edge's polyline (dagre's node-avoiding waypoints). */
@@ -76,12 +91,52 @@ export interface LaidOutDiagram {
   height: number;
 }
 
+/** A stable identity for an edge across re-layouts (its endpoint pair). */
+export function edgeKey(edge: Pick<DiagramEdge, "from" | "to">): string {
+  return `${edge.from}>${edge.to}`;
+}
+
+/**
+ * The diagram minus the user's removals (2026-07-29: delete parts of a
+ * diagram and let it re-layout around what is left). Removing a node also
+ * removes every edge touching it; removing an edge leaves its nodes.
+ * Unknown ids are ignored. Pure - the canvas re-runs dagre on the result.
+ */
+export function applyDiagramRemovals(
+  diagram: PatternDiagram,
+  removedNodeIds: ReadonlySet<string>,
+  removedEdgeKeys: ReadonlySet<string>,
+): PatternDiagram {
+  const nodes = diagram.nodes.filter((n) => !removedNodeIds.has(n.id));
+  const kept = new Set(nodes.map((n) => n.id));
+  const edges = diagram.edges.filter(
+    (e) => kept.has(e.from) && kept.has(e.to) && !removedEdgeKeys.has(edgeKey(e)),
+  );
+  return { nodes, edges };
+}
+
 /** dagre LR layout with the canvas's exact parameters. */
 export function layoutDiagram(diagram: PatternDiagram): LaidOutDiagram {
+  // The Cribl source types feeding each node, from its ingress edge labels
+  // (the "<Type> source (...)" convention) - drawn as tags on the card.
+  const typesByNode = new Map<string, string[]>();
+  for (const edge of diagram.edges) {
+    const type = criblSourceTypeFromLabel(edge.label ?? "");
+    if (type === null) {
+      continue;
+    }
+    const existing = typesByNode.get(edge.to) ?? [];
+    if (!existing.includes(type)) {
+      typesByNode.set(edge.to, [...existing, type]);
+    }
+  }
+  const heightOf = (nodeId: string): number =>
+    NODE_H + ((typesByNode.get(nodeId)?.length ?? 0) > 0 ? CHIP_ROW_H : 0);
+
   const g = new Dagre.graphlib.Graph().setDefaultEdgeLabel(() => ({}));
   g.setGraph({ rankdir: "LR", nodesep: 34, ranksep: 96, marginx: 12, marginy: 12 });
   for (const node of diagram.nodes) {
-    g.setNode(node.id, { width: NODE_W, height: NODE_H });
+    g.setNode(node.id, { width: NODE_W, height: heightOf(node.id) });
   }
   for (const edge of diagram.edges) {
     g.setEdge(edge.from, edge.to);
@@ -90,12 +145,15 @@ export function layoutDiagram(diagram: PatternDiagram): LaidOutDiagram {
 
   const nodes: LaidOutNode[] = diagram.nodes.map((n) => {
     const p = g.node(n.id);
+    const height = heightOf(n.id);
     return {
       id: n.id,
       label: n.label,
       tier: n.tier,
       x: p.x - NODE_W / 2,
-      y: p.y - NODE_H / 2,
+      y: p.y - height / 2,
+      height,
+      sourceTypes: typesByNode.get(n.id) ?? [],
     };
   });
   const edges: LaidOutEdge[] = diagram.edges.map((e) => {

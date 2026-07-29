@@ -6,7 +6,16 @@
 
 import { describe, expect, it } from "vitest";
 import { ARCHITECTURE_PATTERNS, unifyPatternDiagrams } from "@soc/core";
-import { NODE_H, NODE_W, layoutDiagram, nodeBadge } from "./arch-layout";
+import {
+  CHIP_ROW_H,
+  NODE_H,
+  NODE_W,
+  applyDiagramRemovals,
+  edgeKey,
+  layoutDiagram,
+  nodeBadge,
+  sourceTypeChips,
+} from "./arch-layout";
 
 describe("layoutDiagram", () => {
   const diagram = unifyPatternDiagrams([
@@ -22,9 +31,21 @@ describe("layoutDiagram", () => {
     for (const node of laidOut.nodes) {
       expect(node.x).toBeGreaterThanOrEqual(0);
       expect(node.y).toBeGreaterThanOrEqual(0);
+      expect(node.height).toBeGreaterThanOrEqual(NODE_H);
       expect(node.x + NODE_W).toBeLessThanOrEqual(laidOut.width);
-      expect(node.y + NODE_H).toBeLessThanOrEqual(laidOut.height);
+      expect(node.y + node.height).toBeLessThanOrEqual(laidOut.height);
     }
+  });
+
+  it("tags the receiving Cribl node with its source types and grows the card", () => {
+    const laidOut = layoutDiagram(diagram);
+    const stream = laidOut.nodes.find((n) => n.id === "criblstream")!;
+    // direct-dcr + event-hub-fanin: the Event Hub ingress names its source.
+    expect(stream.sourceTypes).toContain("Azure Event Hubs");
+    expect(stream.height).toBe(NODE_H + CHIP_ROW_H);
+    const law = laidOut.nodes.find((n) => n.id === "sentinella")!;
+    expect(law.sourceTypes).toEqual([]);
+    expect(law.height).toBe(NODE_H);
   });
 
   it("is deterministic and passes edges through with their cost", () => {
@@ -34,6 +55,44 @@ describe("layoutDiagram", () => {
       laidOut.edges.find((e) => e.from === "kinddirectdcr" && e.to === "sentinella")
         ?.cost,
     ).toBe("premium");
+  });
+});
+
+describe("applyDiagramRemovals", () => {
+  const diagram = unifyPatternDiagrams([
+    ARCHITECTURE_PATTERNS.find((p) => p.id === "direct-dcr")!,
+  ]);
+
+  it("removing a node drops every edge touching it", () => {
+    const result = applyDiagramRemovals(diagram, new Set(["criblstream"]), new Set());
+    expect(result.nodes.some((n) => n.id === "criblstream")).toBe(false);
+    expect(
+      result.edges.some((e) => e.from === "criblstream" || e.to === "criblstream"),
+    ).toBe(false);
+    // The untouched nodes stay.
+    expect(result.nodes.some((n) => n.id === "sentinella")).toBe(true);
+  });
+
+  it("removing an edge keeps both of its nodes", () => {
+    const key = edgeKey({ from: "kinddirectdcr", to: "sentinella" });
+    const result = applyDiagramRemovals(diagram, new Set(), new Set([key]));
+    expect(
+      result.edges.some((e) => e.from === "kinddirectdcr" && e.to === "sentinella"),
+    ).toBe(false);
+    expect(result.nodes).toHaveLength(diagram.nodes.length);
+  });
+
+  it("ignores unknown ids and is identity for empty removals", () => {
+    expect(applyDiagramRemovals(diagram, new Set(["nope"]), new Set(["a>b"]))).toEqual(
+      diagram,
+    );
+  });
+});
+
+describe("sourceTypeChips", () => {
+  it("passes through up to three types and collapses the rest", () => {
+    expect(sourceTypeChips(["Syslog"])).toEqual(["Syslog"]);
+    expect(sourceTypeChips(["A", "B", "C", "D", "E"])).toEqual(["A", "B", "C", "+2"]);
   });
 });
 

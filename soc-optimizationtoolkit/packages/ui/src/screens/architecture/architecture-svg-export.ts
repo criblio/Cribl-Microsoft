@@ -8,10 +8,10 @@
 
 import type { DiagramTier, EdgeCostTier, PatternDiagram } from "@soc/core";
 import {
-  NODE_H,
   NODE_W,
   layoutDiagram,
   nodeBadge,
+  sourceTypeChips,
   type EdgePoint,
   type LaidOutNode,
 } from "./arch-layout";
@@ -96,8 +96,8 @@ function edgePoints(
     return points;
   }
   return [
-    { x: from.x + NODE_W, y: from.y + NODE_H / 2 },
-    { x: to.x, y: to.y + NODE_H / 2 },
+    { x: from.x + NODE_W, y: from.y + from.height / 2 },
+    { x: to.x, y: to.y + to.height / 2 },
   ];
 }
 
@@ -227,14 +227,21 @@ export function diagramToSvg(diagram: PatternDiagram): string {
         : `<text x="${NODE_W / 2}" y="32" text-anchor="middle" font-size="12" ` +
           `font-weight="600" fill="${PALETTE.text}">${esc(lines[0])}` +
           `<tspan x="${NODE_W / 2}" dy="14">${esc(lines[1] ?? "")}</tspan></text>`;
+    const chips =
+      node.sourceTypes.length > 0
+        ? `<text x="${NODE_W / 2}" y="${node.height - 8}" text-anchor="middle" ` +
+          `font-size="8" font-weight="700" letter-spacing="0.4" fill="${PALETTE.accent}">` +
+          `${esc(sourceTypeChips(node.sourceTypes).join("  "))}</text>`
+        : "";
     parts.push(
       `<g transform="translate(${node.x},${node.y})">` +
-        `<rect width="${NODE_W}" height="${NODE_H}" rx="12" fill="${style.fill}" ` +
+        `<rect width="${NODE_W}" height="${node.height}" rx="12" fill="${style.fill}" ` +
         `stroke="${style.stroke}" stroke-width="1.4"/>` +
         `<text x="${NODE_W / 2}" y="16" text-anchor="middle" font-size="9" ` +
         `font-weight="700" letter-spacing="0.8" fill="${style.badge}">` +
         `${esc(nodeBadge(node.label, node.tier).toUpperCase())}</text>` +
         label +
+        chips +
         `</g>`,
     );
   }

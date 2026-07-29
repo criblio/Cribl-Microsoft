@@ -4037,6 +4037,8 @@ button.journey-step-main:hover .journey-step-label {
   border: 1px solid var(--border-subtle);
   border-radius: 8px;
   overflow: hidden;
+  /* Anchors the floating restore chip (element removal, 2026-07-29). */
+  position: relative;
   background: var(--surface);
 }
 .arch-flow-node {
@@ -4815,4 +4817,73 @@ details[open] > summary::before {
 .arch-flow-bend-dot:active {
   cursor: grabbing;
   opacity: 1;
+}
+
+/* Diagram element removal (2026-07-29): hover x on node cards; a restore
+ * chip floats over the canvas while anything is removed. */
+.arch-flow-remove-btn {
+  position: absolute;
+  top: -7px;
+  left: -7px;
+  width: 17px;
+  height: 17px;
+  border-radius: 50%;
+  border: 1.2px solid var(--border);
+  background: var(--surface-raised);
+  color: var(--text-faint);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  opacity: 0;
+}
+
+.arch-flow-node:hover .arch-flow-remove-btn {
+  opacity: 1;
+}
+
+.arch-flow-remove-btn:hover {
+  border-color: var(--error, #d4380d);
+  color: var(--error, #d4380d);
+}
+
+.arch-flow-restore-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 0;
+}
+
+.arch-flow-restore-overlay {
+  position: absolute;
+  top: 8px;
+  left: 10px;
+  z-index: 5;
+  padding: 0;
+}
+
+/* Source-type tags on Cribl cards (2026-07-29): the receiving node grows a
+ * row of small chips naming each Cribl source type feeding it. */
+.arch-flow-node-chips {
+  display: flex;
+  flex-wrap: nowrap;
+  justify-content: center;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.arch-flow-source-chip {
+  font-size: 8.5px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  padding: 1px 6px;
+  border-radius: 7px;
+  border: 1px solid var(--accent);
+  background: var(--accent-bg);
+  color: var(--accent-strong);
+  white-space: nowrap;
 }

@@ -34,6 +34,7 @@ export {
   catalogLabel,
   unifyPatternDiagrams,
   diagramNodeInfo,
+  criblSourceTypeFromLabel,
 } from "./architecture-patterns";
 export type { SolutionIngressArchetype } from "./solution-ingress";
 export {

@@ -190,9 +190,12 @@ export function ArchitectureScreen({
       <p className="panel-desc">
         See how data flows from your sources through Cribl into Microsoft
         Sentinel. Select the Cribl products and Azure resources in use and the
-        diagram below reshapes to match - drag nodes to explore, and read each
-        pattern's rationale and considerations underneath. Advisory only:
-        nothing here deploys anything.
+        diagram below reshapes to match - drag nodes, bend lines with their
+        grab dots, and remove elements (the hover x, or select and press
+        Delete) to sketch YOUR variant; the layout re-flows around what is
+        left and Restore brings pieces back. Edge labels name the exact Cribl
+        source type receiving each feed. Advisory only: nothing here deploys
+        anything.
       </p>
 
       <div className="arch-presets">

@@ -13,7 +13,7 @@
  * assets, no unsafe-eval, no unsafe-inline. (See reference_interactive_diagram.)
  */
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Background,
   BackgroundVariant,
@@ -34,12 +34,25 @@ import {
 } from "@xyflow/react";
 import { diagramNodeInfo } from "@soc/core";
 import type { DiagramTier, EdgeCostTier, PatternDiagram } from "@soc/core";
-import { layoutDiagram, nodeBadge } from "./arch-layout";
+import {
+  applyDiagramRemovals,
+  edgeKey,
+  layoutDiagram,
+  nodeBadge,
+  sourceTypeChips,
+} from "./arch-layout";
 // React Flow's stylesheet is imported by the SHELL entry points (cribl-app
 // main.tsx / local-app), matching how @soc/ui/styles.css is loaded - a library
 // component must not side-effect-import CSS (no *.css module in the lib tsc).
 
-type ArchNodeData = { label: string; tier: DiagramTier };
+type ArchNodeData = {
+  label: string;
+  tier: DiagramTier;
+  /** The Cribl source types feeding this node (tag row on the card). */
+  sourceTypes?: string[];
+  /** Remove this node from the diagram (the hover x button). */
+  onRemove?: (nodeId: string) => void;
+};
 type ArchNode = Node<ArchNodeData, "arch">;
 type FlowEdgeData = { label?: string; cost?: EdgeCostTier; reverse?: boolean };
 type FlowEdge = Edge<FlowEdgeData, "flowing">;
@@ -52,7 +65,7 @@ type FlowEdge = Edge<FlowEdgeData, "flowing">;
  * no external assets - and is marked nodrag/nopan so the canvas does not
  * intercept clicks inside it.
  */
-function ArchNodeCard({ data }: NodeProps<ArchNode>) {
+function ArchNodeCard({ id, data }: NodeProps<ArchNode>) {
   const [infoOpen, setInfoOpen] = useState(false);
   const cardRef = useRef<HTMLDivElement | null>(null);
   const info = diagramNodeInfo(data.label);
@@ -99,6 +112,15 @@ function ArchNodeCard({ data }: NodeProps<ArchNode>) {
       />
       <span className="arch-flow-node-tier">{nodeBadge(data.label, data.tier)}</span>
       <span className="arch-flow-node-label">{data.label}</span>
+      {data.sourceTypes !== undefined && data.sourceTypes.length > 0 && (
+        <span className="arch-flow-node-chips">
+          {sourceTypeChips(data.sourceTypes).map((chip) => (
+            <span className="arch-flow-source-chip" key={chip}>
+              {chip}
+            </span>
+          ))}
+        </span>
+      )}
       <Handle
         type="source"
         id="out"
@@ -122,6 +144,20 @@ function ArchNodeCard({ data }: NodeProps<ArchNode>) {
         className="arch-flow-handle"
         style={{ left: "65%" }}
       />
+      {data.onRemove !== undefined && (
+        <button
+          type="button"
+          className="arch-flow-remove-btn nodrag nopan"
+          aria-label={`Remove ${data.label} from the diagram`}
+          title="Remove from the diagram (the layout adjusts)"
+          onClick={(event) => {
+            event.stopPropagation();
+            data.onRemove?.(id);
+          }}
+        >
+          x
+        </button>
+      )}
       {info !== undefined && (
         <button
           type="button"
@@ -394,7 +430,7 @@ function layoutGraph(diagram: PatternDiagram): { nodes: ArchNode[]; edges: FlowE
     id: n.id,
     type: "arch",
     position: { x: n.x, y: n.y },
-    data: { label: n.label, tier: n.tier },
+    data: { label: n.label, tier: n.tier, sourceTypes: n.sourceTypes },
   }));
   // A wrap-back edge runs right-to-left in the laid-out flow (its source
   // column sits right of its target column) - the replay/return edges.
@@ -422,7 +458,35 @@ export interface ArchitectureFlowProps {
 
 /** The interactive canvas. Empty diagrams render nothing (caller shows a hint). */
 export function ArchitectureFlow({ diagram }: ArchitectureFlowProps) {
-  const layouted = useMemo(() => layoutGraph(diagram), [diagram]);
+  // User removals (2026-07-29): deleted nodes/edges are subtracted from the
+  // diagram and dagre RE-LAYOUTS what is left, so the drawing tightens up
+  // around the remaining flow. Removals reset when the selection changes.
+  const [removedNodes, setRemovedNodes] = useState<ReadonlySet<string>>(new Set());
+  const [removedEdges, setRemovedEdges] = useState<ReadonlySet<string>>(new Set());
+  useEffect(() => {
+    setRemovedNodes(new Set());
+    setRemovedEdges(new Set());
+  }, [diagram]);
+
+  const removeNode = useCallback((nodeId: string) => {
+    setRemovedNodes((prev) => new Set([...prev, nodeId]));
+  }, []);
+
+  const effective = useMemo(
+    () => applyDiagramRemovals(diagram, removedNodes, removedEdges),
+    [diagram, removedNodes, removedEdges],
+  );
+
+  const layouted = useMemo(() => {
+    const graph = layoutGraph(effective);
+    return {
+      nodes: graph.nodes.map((n) => ({
+        ...n,
+        data: { ...n.data, onRemove: removeNode },
+      })),
+      edges: graph.edges,
+    };
+  }, [effective, removeNode]);
   const [nodes, setNodes, onNodesChange] = useNodesState<ArchNode>(layouted.nodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState<FlowEdge>(layouted.edges);
 
@@ -432,15 +496,61 @@ export function ArchitectureFlow({ diagram }: ArchitectureFlowProps) {
     setEdges(layouted.edges);
   }, [layouted, setNodes, setEdges]);
 
+  const removedCount = removedNodes.size + removedEdges.size;
+
   if (diagram.nodes.length === 0) return null;
+
+  if (effective.nodes.length === 0) {
+    return (
+      <div className="arch-flow-restore-row">
+        <span className="field-hint">Everything was removed from the diagram.</span>
+        <button
+          type="button"
+          className="arch-export-btn"
+          onClick={() => {
+            setRemovedNodes(new Set());
+            setRemovedEdges(new Set());
+          }}
+        >
+          Restore the diagram
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="arch-flow-canvas">
+      {removedCount > 0 && (
+        <div className="arch-flow-restore-row arch-flow-restore-overlay">
+          <button
+            type="button"
+            className="arch-export-btn"
+            onClick={() => {
+              setRemovedNodes(new Set());
+              setRemovedEdges(new Set());
+            }}
+          >
+            Restore {removedCount} removed item{removedCount === 1 ? "" : "s"}
+          </button>
+        </div>
+      )}
       <ReactFlow
         nodes={nodes}
         edges={edges}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
+        onNodesDelete={(deleted) => {
+          setRemovedNodes((prev) => new Set([...prev, ...deleted.map((n) => n.id)]));
+        }}
+        onEdgesDelete={(deleted) => {
+          setRemovedEdges(
+            (prev) =>
+              new Set([
+                ...prev,
+                ...deleted.map((e) => edgeKey({ from: e.source, to: e.target })),
+              ]),
+          );
+        }}
         nodeTypes={NODE_TYPES}
         edgeTypes={EDGE_TYPES}
         fitView
@@ -448,8 +558,8 @@ export function ArchitectureFlow({ diagram }: ArchitectureFlowProps) {
         minZoom={0.3}
         maxZoom={1.6}
         nodesConnectable={false}
-        edgesFocusable={false}
-        deleteKeyCode={null}
+        edgesFocusable={true}
+        deleteKeyCode={["Backspace", "Delete"]}
         proOptions={{ hideAttribution: true }}
       >
         <Background
