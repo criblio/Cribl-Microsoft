@@ -1,32 +1,36 @@
-# React + TypeScript + Vite
+# SOC Optimization Toolkit - Cribl App
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+The Cribl.Cloud app target of the SOC Optimization Toolkit: the shared
+@soc/ui screens over the Cribl Apps (Preview) platform bridge.
 
-Currently, two official plugins are available:
+## Install the latest release
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+The latest packaged app is committed at [release/](release/) - one .tgz,
+replaced on every release. Install it without building anything:
 
-## React Compiler
+1. Download the `soc-optimizationtoolkit-<version>.tgz` from `release/`.
+2. In your Cribl.Cloud workspace, open the Apps page and upload the .tgz.
+3. Open the app from the workspace navigation.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Build and package from source
 
-## Expanding the Oxlint configuration
-
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
-
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+```bash
+npm install          # from the soc-optimizationtoolkit/ workspace root
+npm run package      # from apps/cribl-app: builds, mints the next version,
+                     # writes build/<name>-<version>.tgz and refreshes release/
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+`npm run package -- --version=X.Y.Z` pins an explicit version; `--minor` /
+`--major` bump those segments instead of the patch.
+
+## Development
+
+```bash
+npm run dev          # Vite dev server with the local platform harness
+npm run typecheck && npm run test && npm run lint
+```
+
+Configuration shipped inside the pack lives in [config/](config/)
+(`policies.yml` allowlists the product-API routes the app may call;
+`proxies.yml` declares the external proxies). See the repository root
+CLAUDE.md and packages/*/CONTEXT.md for architecture context.
