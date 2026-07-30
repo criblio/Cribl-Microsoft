@@ -4674,6 +4674,38 @@ details[open] > summary::before {
   background: var(--accent);
   color: var(--surface-raised);
 }
+/* Annotation notes (2026-07-30 ergonomics slice): draggable sticky cards,
+ * double-click to edit, exported with the diagram. */
+.arch-flow-note {
+  position: relative;
+  width: 170px;
+  min-height: 44px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--warn);
+  background: var(--warn-bg);
+  cursor: grab;
+}
+.arch-flow-note-text {
+  font-size: 11px;
+  line-height: 14px;
+  color: var(--text);
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+.arch-flow-note-editor {
+  width: 100%;
+  min-height: 56px;
+  font-size: 11px;
+  line-height: 14px;
+  font-family: inherit;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  resize: vertical;
+}
+
 /* Hollow ADD dots between bend anchors (2026-07-30 multi-bend): drag one
  * to insert a new bend and adjust a smaller section of the line. */
 .arch-flow-bend-dot-add {
@@ -5101,6 +5133,15 @@ details[open] > summary::before {
   opacity: 1;
 }
 
+/* Notes keep their delete button DISCOVERABLE (user report 2026-07-30):
+ * faintly visible always, full strength on hover. */
+.arch-flow-note .arch-flow-remove-btn {
+  opacity: 0.6;
+}
+.arch-flow-note:hover .arch-flow-remove-btn {
+  opacity: 1;
+}
+
 .arch-flow-remove-btn:hover {
   border-color: var(--error, #d4380d);
   color: var(--error, #d4380d);
@@ -5119,6 +5160,10 @@ details[open] > summary::before {
   left: 10px;
   z-index: 5;
   padding: 0;
+  /* Stacked controls (2026-07-30): Add note sits UNDER Reset diagram. */
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
 }
 
 /* Source-type tags on Cribl cards (2026-07-29): the receiving node grows a

@@ -52,6 +52,8 @@ import {
   type LaidOutDiagram,
   type LaidOutEdge,
 } from "./arch-layout";
+import { emptyEdits, loadEdits, saveEdits } from "./arch-edits";
+import type { DiagramEditState } from "./arch-edits";
 // React Flow's stylesheet is imported by the SHELL entry points (cribl-app
 // main.tsx / local-app), matching how @soc/ui/styles.css is loaded - a library
 // component must not side-effect-import CSS (no *.css module in the lib tsc).
@@ -88,6 +90,17 @@ type FlowEdgeData = {
   points?: FlowPoint[];
   /** Dagre's reserved collision-free label anchor. */
   labelPoint?: FlowPoint;
+  /** The stable edit key (from>to) - bends/label offsets live UPSTREAM in
+   * the canvas's edit state so undo, persistence, and export all see them. */
+  editKey?: string;
+  bends?: FlowPoint[];
+  labelOffset?: { dx: number; dy: number };
+  onBendsChange?: (editKey: string, bends: FlowPoint[]) => void;
+  onLabelOffsetChange?: (
+    editKey: string,
+    offset: { dx: number; dy: number } | undefined,
+  ) => void;
+  onGestureStart?: () => void;
 };
 type FlowEdge = Edge<FlowEdgeData, "flowing">;
 
@@ -368,42 +381,6 @@ function roundedOrthogonalPath(points: FlowPoint[], r = 12): string {
   return d;
 }
 
-/**
- * Orthogonal waypoints from S to T passing THROUGH every via point in
- * order (2026-07-30: multiple bends per line), honoring the exit axis at
- * the source handle and the entry axis at the target handle. Each via is
- * reached by an L-jog; near-collinear jogs (under 4px) collapse so routes
- * stay clean when a via lines up with its neighbors.
- */
-function orthogonalVia(
-  s: FlowPoint,
-  t: FlowPoint,
-  vias: readonly FlowPoint[],
-  exitAxis: "h" | "v",
-  enterAxis: "h" | "v",
-): FlowPoint[] {
-  const pts: FlowPoint[] = [s];
-  let cur = s;
-  for (const via of vias) {
-    pts.push(exitAxis === "h" ? { x: via.x, y: cur.y } : { x: cur.x, y: via.y });
-    pts.push(via);
-    cur = via;
-  }
-  if (enterAxis === "h") {
-    if (Math.abs(cur.y - t.y) > 4) {
-      const xj = (cur.x + t.x) / 2;
-      pts.push({ x: xj, y: cur.y }, { x: xj, y: t.y });
-    }
-  } else if (Math.abs(cur.x - t.x) > 4) {
-    pts.push({ x: t.x, y: cur.y });
-  }
-  pts.push(t);
-  return pts.filter(
-    (point, i) =>
-      i === 0 || Math.hypot(point.x - pts[i - 1].x, point.y - pts[i - 1].y) > 1,
-  );
-}
-
 /** Snap a coordinate onto a nearby guide (an endpoint axis) within 10px. */
 function snapTo(value: number, guides: readonly number[]): number {
   for (const guide of guides) {
@@ -440,8 +417,16 @@ function FlowingEdge({
   data,
 }: EdgeProps<FlowEdge>) {
   const { screenToFlowPosition } = useReactFlow();
-  const [bends, setBends] = useState<FlowPoint[]>([]);
-  const draggingIndexRef = useRef<number | null>(null);
+  // Bends and label offsets are CONTROLLED (2026-07-30): they live in the
+  // canvas's shared edit state so undo/redo, persistence, and the exporter
+  // all see the same arrangement.
+  const bends = data?.bends ?? [];
+  const editKey = data?.editKey ?? "";
+  const commitBends = (next: FlowPoint[]): void =>
+    data?.onBendsChange?.(editKey, next);
+  const labelDragRef = useRef<{ start: FlowPoint; base: { dx: number; dy: number } } | null>(
+    null,
+  );
 
   // Wrap-back edges (e.g. the blob "replay" return into Stream) get a wider
   // clearance so the wrap does not hug the node cards, and their label drops
@@ -480,19 +465,23 @@ function FlowingEdge({
     anchorX = anchor.x;
     anchorY = anchor.y;
   }
-  // Bent edges re-route orthogonally THROUGH every bend in order, honoring
-  // the axes the handles impose (right/left handles exit and enter
-  // horizontally; the bottom wrap-back handles vertically).
-  if (bends.length > 0) {
-    const exitAxis = sourcePosition === Position.Bottom ? "v" : "h";
-    const enterAxis = targetPosition === Position.Bottom ? "v" : "h";
-    const route = orthogonalVia(
-      { x: sourceX, y: sourceY },
-      { x: targetX, y: targetY },
-      bends,
-      exitAxis,
-      enterAxis,
-    );
+  // SEGMENT-BASED editing (2026-07-30 user report: via-point bends forced
+  // a new right angle on every edit): bends store the INTERIOR CORNERS of
+  // an orthogonal polyline. Each grab dot sits mid-SEGMENT and drags that
+  // segment perpendicular to its axis - the neighboring segments stretch,
+  // no corners are added. Releasing merges collinear corners, so dropping
+  // a section back in line STRAIGHTENS it, and a fully straightened line
+  // returns to the automatic route.
+  const sourcePt: FlowPoint = { x: sourceX, y: sourceY };
+  const targetPt: FlowPoint = { x: targetX, y: targetY };
+  const corners = bends;
+  const polyOf = (c: readonly FlowPoint[]): FlowPoint[] => [
+    sourcePt,
+    ...c,
+    targetPt,
+  ];
+  if (corners.length > 0) {
+    const route = polyOf(corners);
     edgePath = roundedOrthogonalPath(route);
     const anchor = polylineMidpoint(route);
     anchorX = anchor.x;
@@ -502,48 +491,108 @@ function FlowingEdge({
   const hasLabel = data?.label !== undefined && data.label !== "";
   const cost = data?.cost;
 
-  // Grab-dot geometry: solid dots at each bend; hollow ADD dots between
-  // consecutive anchors (or at the label anchor while the line is unbent).
-  const anchors: FlowPoint[] = [
-    { x: sourceX, y: sourceY },
-    ...bends,
-    { x: targetX, y: targetY },
-  ];
-  const insertionPoints: FlowPoint[] =
-    bends.length === 0
-      ? [{ x: anchorX, y: anchorY + (hasLabel || cost !== undefined ? 24 : 0) }]
-      : anchors.slice(0, -1).map((a, i) => ({
-          x: (a.x + anchors[i + 1].x) / 2,
-          y: (a.y + anchors[i + 1].y) / 2,
-        }));
-  const dragMove = (event: React.PointerEvent): void => {
-    const index = draggingIndexRef.current;
-    if (index === null) {
+  const cleanupCorners = (c: readonly FlowPoint[]): FlowPoint[] => {
+    const poly = polyOf(c);
+    const kept: FlowPoint[] = [];
+    for (let i = 1; i < poly.length - 1; i++) {
+      const point = poly[i];
+      const prev = kept.length > 0 ? kept[kept.length - 1] : poly[0];
+      const next = poly[i + 1];
+      const straightV =
+        Math.abs(prev.x - point.x) < 3 && Math.abs(point.x - next.x) < 3;
+      const straightH =
+        Math.abs(prev.y - point.y) < 3 && Math.abs(point.y - next.y) < 3;
+      const tiny = Math.hypot(point.x - prev.x, point.y - prev.y) < 3;
+      if (!straightV && !straightH && !tiny) {
+        kept.push(point);
+      }
+    }
+    return kept;
+  };
+
+  const dragRef = useRef<{ cornerIndex: number; horizontal: boolean } | null>(null);
+  const beginSegmentDrag = (segIndex: number, event: React.PointerEvent): void => {
+    event.stopPropagation();
+    data?.onGestureStart?.();
+    // Seed a clean step route the first time an automatic line is grabbed.
+    let c: FlowPoint[];
+    let seg: number;
+    if (corners.length === 0) {
+      const midX = (sourceX + targetX) / 2;
+      c = [
+        { x: midX, y: sourceY },
+        { x: midX, y: targetY },
+      ];
+      seg = 1;
+    } else {
+      c = [...corners];
+      seg = segIndex;
+    }
+    // Normalize: the dragged segment needs interior corners on BOTH sides,
+    // so endpoint-adjacent segments grow a short stub corner first.
+    let poly = polyOf(c);
+    if (seg === 0) {
+      const dirX = Math.sign(poly[1].x - poly[0].x);
+      const dirY = Math.sign(poly[1].y - poly[0].y);
+      c = [
+        { x: sourceX + dirX * 24, y: sourceY + dirY * 24 },
+        ...c,
+      ];
+      seg += 1;
+      poly = polyOf(c);
+    }
+    if (seg === poly.length - 2) {
+      const n = poly.length;
+      const dirX = Math.sign(poly[n - 1].x - poly[n - 2].x);
+      const dirY = Math.sign(poly[n - 1].y - poly[n - 2].y);
+      c = [...c, { x: targetX - dirX * 24, y: targetY - dirY * 24 }];
+      poly = polyOf(c);
+    }
+    const horizontal = Math.abs(poly[seg].y - poly[seg + 1].y) < 0.5;
+    commitBends(c);
+    dragRef.current = { cornerIndex: seg - 1, horizontal };
+    (event.target as HTMLElement).setPointerCapture(event.pointerId);
+  };
+  const segmentDragMove = (event: React.PointerEvent): void => {
+    const drag = dragRef.current;
+    if (drag === null) {
       return;
     }
     const point = screenToFlowPosition({ x: event.clientX, y: event.clientY });
-    setBends((prev) => {
-      const guidesX = [
-        sourceX,
-        targetX,
-        ...prev.filter((_, i) => i !== index).map((b) => b.x),
-      ];
-      const guidesY = [
-        sourceY,
-        targetY,
-        ...prev.filter((_, i) => i !== index).map((b) => b.y),
-      ];
-      return prev.map((b, i) =>
-        i === index
-          ? { x: snapTo(point.x, guidesX), y: snapTo(point.y, guidesY) }
-          : b,
-      );
-    });
+    const c = [...corners];
+    const j = drag.cornerIndex;
+    if (c[j] === undefined || c[j + 1] === undefined) {
+      return;
+    }
+    if (drag.horizontal) {
+      const y = snapTo(point.y, [sourceY, targetY]);
+      c[j] = { ...c[j], y };
+      c[j + 1] = { ...c[j + 1], y };
+    } else {
+      const x = snapTo(point.x, [sourceX, targetX]);
+      c[j] = { ...c[j], x };
+      c[j + 1] = { ...c[j + 1], x };
+    }
+    commitBends(c);
   };
-  const dragEnd = (event: React.PointerEvent): void => {
-    draggingIndexRef.current = null;
+  const segmentDragEnd = (event: React.PointerEvent): void => {
+    if (dragRef.current !== null) {
+      commitBends(cleanupCorners(corners));
+    }
+    dragRef.current = null;
     (event.target as HTMLElement).releasePointerCapture(event.pointerId);
   };
+
+  // One grab dot per SEGMENT of the edited polyline; unbent lines show a
+  // single dot at the label anchor (grabbing it seeds the step route).
+  const editPoly = polyOf(corners);
+  const segmentDots: FlowPoint[] =
+    corners.length > 0
+      ? editPoly.slice(0, -1).map((a, i) => ({
+          x: (a.x + editPoly[i + 1].x) / 2,
+          y: (a.y + editPoly[i + 1].y) / 2,
+        }))
+      : [{ x: anchorX, y: anchorY + (hasLabel || cost !== undefined ? 24 : 0) }];
   return (
     <>
       <BaseEdge
@@ -572,8 +621,43 @@ function FlowingEdge({
       <EdgeLabelRenderer>
         <div
           className="arch-flow-edge-tags nodrag nopan"
+          title="Drag to nudge this label; double-click to snap it back"
           style={{
-            transform: `translate(-50%, -50%) translate(${anchorX}px, ${anchorY}px)`,
+            transform: `translate(-50%, -50%) translate(${anchorX + (data?.labelOffset?.dx ?? 0)}px, ${anchorY + (data?.labelOffset?.dy ?? 0)}px)`,
+            pointerEvents: "all",
+            cursor: "grab",
+          }}
+          onPointerDown={(event) => {
+            event.stopPropagation();
+            data?.onGestureStart?.();
+            labelDragRef.current = {
+              start: screenToFlowPosition({ x: event.clientX, y: event.clientY }),
+              base: data?.labelOffset ?? { dx: 0, dy: 0 },
+            };
+            (event.target as HTMLElement).setPointerCapture(event.pointerId);
+          }}
+          onPointerMove={(event) => {
+            const drag = labelDragRef.current;
+            if (drag === null) {
+              return;
+            }
+            const point = screenToFlowPosition({
+              x: event.clientX,
+              y: event.clientY,
+            });
+            data?.onLabelOffsetChange?.(editKey, {
+              dx: drag.base.dx + point.x - drag.start.x,
+              dy: drag.base.dy + point.y - drag.start.y,
+            });
+          }}
+          onPointerUp={(event) => {
+            labelDragRef.current = null;
+            (event.target as HTMLElement).releasePointerCapture(event.pointerId);
+          }}
+          onDoubleClick={(event) => {
+            event.stopPropagation();
+            data?.onGestureStart?.();
+            data?.onLabelOffsetChange?.(editKey, undefined);
           }}
         >
           {hasLabel && <span className="arch-flow-edge-label">{data?.label}</span>}
@@ -590,47 +674,29 @@ function FlowingEdge({
             </span>
           )}
         </div>
-        {bends.map((bendPoint, index) => (
+        {segmentDots.map((point, index) => (
           <div
-            key={`bend-${index}`}
+            key={`seg-${index}`}
             className="arch-flow-bend-dot nodrag nopan"
-            title="Drag to move this bend; double-click to remove it"
-            style={{
-              transform: `translate(-50%, -50%) translate(${bendPoint.x}px, ${bendPoint.y}px)`,
-            }}
-            onPointerDown={(event) => {
-              event.stopPropagation();
-              draggingIndexRef.current = index;
-              (event.target as HTMLElement).setPointerCapture(event.pointerId);
-            }}
-            onPointerMove={dragMove}
-            onPointerUp={dragEnd}
-            onDoubleClick={(event) => {
-              event.stopPropagation();
-              setBends((prev) => prev.filter((_, i) => i !== index));
-            }}
-          />
-        ))}
-        {insertionPoints.map((point, index) => (
-          <div
-            key={`add-${index}`}
-            className="arch-flow-bend-dot arch-flow-bend-dot-add nodrag nopan"
-            title="Drag to add a bend here"
+            title="Drag to move this section (neighbors stretch); drop it in line to straighten; double-click to remove its corners"
             style={{
               transform: `translate(-50%, -50%) translate(${point.x}px, ${point.y}px)`,
             }}
-            onPointerDown={(event) => {
+            onPointerDown={(event) => beginSegmentDrag(index, event)}
+            onPointerMove={segmentDragMove}
+            onPointerUp={segmentDragEnd}
+            onDoubleClick={(event) => {
               event.stopPropagation();
-              setBends((prev) => {
-                const next = [...prev];
-                next.splice(index, 0, point);
-                return next;
-              });
-              draggingIndexRef.current = index;
-              (event.target as HTMLElement).setPointerCapture(event.pointerId);
+              if (corners.length === 0) {
+                return;
+              }
+              data?.onGestureStart?.();
+              commitBends(
+                cleanupCorners(
+                  corners.filter((_, i) => i !== index - 1 && i !== index),
+                ),
+              );
             }}
-            onPointerMove={dragMove}
-            onPointerUp={dragEnd}
           />
         ))}
       </EdgeLabelRenderer>
@@ -638,9 +704,56 @@ function FlowingEdge({
   );
 }
 
+type NoteData = {
+  text: string;
+  onChangeText: (noteId: string, text: string) => void;
+  onRemove: (noteId: string) => void;
+};
+type NoteNode = Node<NoteData, "note">;
+type CanvasNode = ArchNode | NoteNode;
+
+/** A free-text annotation sticky (2026-07-30 ergonomics slice): drag to
+ * place, double-click to edit, x to remove. Exports with the diagram. */
+function NoteCard({ id, data }: NodeProps<NoteNode>) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(data.text);
+  const noteId = id.startsWith("note:") ? id.slice("note:".length) : id;
+  return (
+    <div className="arch-flow-note" onDoubleClick={() => setEditing(true)}>
+      {editing ? (
+        <textarea
+          className="arch-flow-note-editor nodrag nopan"
+          value={draft}
+          autoFocus
+          onChange={(event) => setDraft(event.target.value)}
+          onBlur={() => {
+            setEditing(false);
+            data.onChangeText(noteId, draft);
+          }}
+        />
+      ) : (
+        <span className="arch-flow-note-text">
+          {data.text === "" ? "Double-click to edit this note" : data.text}
+        </span>
+      )}
+      <button
+        type="button"
+        className="arch-flow-remove-btn nodrag nopan"
+        aria-label="Remove this note"
+        onClick={(event) => {
+          event.stopPropagation();
+          data.onRemove(noteId);
+        }}
+      >
+        x
+      </button>
+    </div>
+  );
+}
+
 // Defined at module scope: React Flow warns if these objects are recreated per
 // render (it treats them as new type maps).
-const NODE_TYPES = { arch: ArchNodeCard };
+const NODE_TYPES = { arch: ArchNodeCard, note: NoteCard };
 const EDGE_TYPES = { flowing: FlowingEdge };
 
 /**
@@ -765,27 +878,78 @@ export interface ArchitectureFlowProps {
   diagram: PatternDiagram;
   /** Toggle a node's exploded rendering (nodes with expandable=true). */
   onToggleNodeExpand?: (nodeId: string) => void;
+  /**
+   * Persist canvas edits under this key (localStorage): arrangements
+   * survive tab switches and reloads per diagram. Absent = session-only.
+   */
+  storageKey?: string;
+  /** Latest edit state, for the exporter (what you arranged is exported). */
+  onCanvasStateChange?: (state: DiagramEditState) => void;
 }
 
 /** The interactive canvas. Empty diagrams render nothing (caller shows a hint). */
-export function ArchitectureFlow({ diagram, onToggleNodeExpand }: ArchitectureFlowProps) {
-  // User removals (2026-07-29): deleted nodes/edges are subtracted from the
-  // diagram and dagre RE-LAYOUTS what is left, so the drawing tightens up
-  // around the remaining flow. Removals reset when the selection changes.
-  const [removedNodes, setRemovedNodes] = useState<ReadonlySet<string>>(new Set());
-  const [removedEdges, setRemovedEdges] = useState<ReadonlySet<string>>(new Set());
-  useEffect(() => {
-    setRemovedNodes(new Set());
-    setRemovedEdges(new Set());
-  }, [diagram]);
-
-  const removeNode = useCallback((nodeId: string) => {
-    setRemovedNodes((prev) => new Set([...prev, nodeId]));
+export function ArchitectureFlow({
+  diagram,
+  onToggleNodeExpand,
+  storageKey,
+  onCanvasStateChange,
+}: ArchitectureFlowProps) {
+  // ONE edit state (2026-07-30 ergonomics slice): positions, bends, label
+  // offsets, removals, notes - snapshotted for undo/redo, persisted per
+  // storageKey, and handed to the exporter.
+  const [edits, setEdits] = useState<DiagramEditState>(emptyEdits());
+  const historyRef = useRef<DiagramEditState[]>([]);
+  const redoRef = useRef<DiagramEditState[]>([]);
+  const editsRef = useRef(edits);
+  editsRef.current = edits;
+  // Snapshot BEFORE a gesture/operation begins; redo clears on new work.
+  const beginGesture = useCallback(() => {
+    historyRef.current.push(editsRef.current);
+    if (historyRef.current.length > 50) {
+      historyRef.current.shift();
+    }
+    redoRef.current = [];
   }, []);
 
+  // Load persisted edits per diagram key; no key = reset on diagram change.
+  useEffect(() => {
+    historyRef.current = [];
+    redoRef.current = [];
+    setEdits(
+      (storageKey !== undefined ? loadEdits(storageKey) : null) ?? emptyEdits(),
+    );
+  }, [storageKey, diagram]);
+  // Persist (debounced) and surface the latest state for exports.
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  useEffect(() => {
+    onCanvasStateChange?.(edits);
+    if (storageKey === undefined) {
+      return;
+    }
+    clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(() => saveEdits(storageKey, edits), 400);
+    return () => clearTimeout(saveTimerRef.current);
+  }, [edits, storageKey, onCanvasStateChange]);
+
+  const removeNode = useCallback(
+    (nodeId: string) => {
+      beginGesture();
+      setEdits((prev) => ({
+        ...prev,
+        removedNodes: [...new Set([...prev.removedNodes, nodeId])],
+      }));
+    },
+    [beginGesture],
+  );
+
   const effective = useMemo(
-    () => applyDiagramRemovals(diagram, removedNodes, removedEdges),
-    [diagram, removedNodes, removedEdges],
+    () =>
+      applyDiagramRemovals(
+        diagram,
+        new Set(edits.removedNodes),
+        new Set(edits.removedEdges),
+      ),
+    [diagram, edits.removedNodes, edits.removedEdges],
   );
 
   // The REAL canvas aspect steers the serpentine wrap (measured by the
@@ -803,14 +967,105 @@ export function ArchitectureFlow({ diagram, onToggleNodeExpand }: ArchitectureFl
       laidOut: graph.laidOut,
     };
   }, [effective, removeNode, onToggleNodeExpand, canvasAspect]);
-  const [nodes, setNodes, onNodesChange] = useNodesState<ArchNode>(layouted.nodes);
+  const [nodes, setNodes, onNodesChange] = useNodesState<CanvasNode>(
+    layouted.nodes as CanvasNode[],
+  );
   const [edges, setEdges, onEdgesChange] = useEdgesState<FlowEdge>(layouted.edges);
 
-  // Re-seed nodes/edges when the selection (and thus the diagram) changes.
+  // Per-edge edit callbacks (stable): bends and label offsets commit into
+  // the shared edit state.
+  const handleBendsChange = useCallback((key: string, bends: FlowPoint[]) => {
+    setEdits((prev) => ({
+      ...prev,
+      edges: {
+        ...prev.edges,
+        [key]: { ...(prev.edges[key] ?? { bends: [] }), bends },
+      },
+    }));
+  }, []);
+  const handleLabelOffsetChange = useCallback(
+    (key: string, offset: { dx: number; dy: number } | undefined) => {
+      setEdits((prev) => {
+        const existing = prev.edges[key] ?? { bends: [] };
+        return {
+          ...prev,
+          edges: {
+            ...prev.edges,
+            [key]:
+              offset === undefined
+                ? { bends: existing.bends }
+                : { ...existing, labelOffset: offset },
+          },
+        };
+      });
+    },
+    [],
+  );
+  const changeNoteText = useCallback(
+    (noteId: string, text: string) => {
+      beginGesture();
+      setEdits((prev) => ({
+        ...prev,
+        notes: prev.notes.map((n) => (n.id === noteId ? { ...n, text } : n)),
+      }));
+    },
+    [beginGesture],
+  );
+  const removeNote = useCallback(
+    (noteId: string) => {
+      beginGesture();
+      setEdits((prev) => ({
+        ...prev,
+        notes: prev.notes.filter((n) => n.id !== noteId),
+      }));
+    },
+    [beginGesture],
+  );
+
+  // Re-seed when the layout OR the edits change: layouted cards pick up the
+  // dragged positions, edges pick up their bends/label offsets, and notes
+  // join as free-floating nodes.
   useEffect(() => {
-    setNodes(layouted.nodes);
-    setEdges(layouted.edges);
-  }, [layouted, setNodes, setEdges]);
+    const arch: CanvasNode[] = layouted.nodes.map((n) => {
+      const p = edits.positions[n.id];
+      return p !== undefined ? { ...n, position: { x: p.x, y: p.y } } : n;
+    });
+    const noteNodes: CanvasNode[] = edits.notes.map((note) => ({
+      id: `note:${note.id}`,
+      type: "note",
+      position: { x: note.x, y: note.y },
+      data: { text: note.text, onChangeText: changeNoteText, onRemove: removeNote },
+    }));
+    setNodes([...arch, ...noteNodes]);
+    setEdges(
+      layouted.edges.map((e) => {
+        const key = edgeKey({ from: e.source, to: e.target });
+        const edit = edits.edges[key];
+        return {
+          ...e,
+          data: {
+            ...e.data,
+            editKey: key,
+            bends: edit?.bends,
+            labelOffset: edit?.labelOffset,
+            onBendsChange: handleBendsChange,
+            onLabelOffsetChange: handleLabelOffsetChange,
+            onGestureStart: beginGesture,
+          },
+        };
+      }),
+    );
+  }, [
+    layouted,
+    edits,
+    setNodes,
+    setEdges,
+    handleBendsChange,
+    handleLabelOffsetChange,
+    changeNoteText,
+    removeNote,
+    beginGesture,
+  ]);
 
   // Canvas-size watcher (ref callback, not an effect: the canvas div mounts
   // conditionally). A monitor/window/panel resize bumps resizeTick after a
@@ -849,20 +1104,68 @@ export function ArchitectureFlow({ diagram, onToggleNodeExpand }: ArchitectureFl
     [effective, resizeTick],
   );
 
-  const removedCount = removedNodes.size + removedEdges.size;
+  const removedCount = edits.removedNodes.length + edits.removedEdges.length;
 
   // Start fresh (user request 2026-07-30): one button clears EVERY canvas
-  // edit - drags, bent lines, removals - and re-fits the pristine layout.
-  // Bumping the key remounts the React Flow subtree, which is what clears
-  // the per-edge bend state and re-runs the initial fit.
+  // edit and re-fits the pristine layout. Undo can bring the edits back.
   const [resetCount, setResetCount] = useState(0);
   const resetCanvas = useCallback(() => {
-    setRemovedNodes(new Set());
-    setRemovedEdges(new Set());
-    setNodes(layouted.nodes);
-    setEdges(layouted.edges);
+    beginGesture();
+    setEdits(emptyEdits());
     setResetCount((count) => count + 1);
-  }, [layouted, setNodes, setEdges]);
+  }, [beginGesture]);
+
+  // Undo/redo (Ctrl+Z / Ctrl+Y or Ctrl+Shift+Z) over the whole edit state.
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if (!(event.ctrlKey || event.metaKey)) {
+        return;
+      }
+      const target = event.target as HTMLElement | null;
+      if (
+        target !== null &&
+        (target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.isContentEditable)
+      ) {
+        return;
+      }
+      const key = event.key.toLowerCase();
+      if (key === "z" && !event.shiftKey) {
+        const previous = historyRef.current.pop();
+        if (previous !== undefined) {
+          redoRef.current.push(editsRef.current);
+          setEdits(previous);
+          event.preventDefault();
+        }
+      } else if (key === "y" || (key === "z" && event.shiftKey)) {
+        const next = redoRef.current.pop();
+        if (next !== undefined) {
+          historyRef.current.push(editsRef.current);
+          setEdits(next);
+          event.preventDefault();
+        }
+      }
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, []);
+
+  const addNote = useCallback(() => {
+    beginGesture();
+    setEdits((prev) => ({
+      ...prev,
+      notes: [
+        ...prev.notes,
+        {
+          id: `${prev.notes.length + 1}-${resetCount}-${prev.notes.map((n) => n.id).join("").length}`,
+          text: "",
+          x: 24 + prev.notes.length * 28,
+          y: 24 + prev.notes.length * 22,
+        },
+      ],
+    }));
+  }, [beginGesture, resetCount]);
 
   if (diagram.nodes.length === 0) return null;
 
@@ -874,8 +1177,8 @@ export function ArchitectureFlow({ diagram, onToggleNodeExpand }: ArchitectureFl
           type="button"
           className="arch-export-btn"
           onClick={() => {
-            setRemovedNodes(new Set());
-            setRemovedEdges(new Set());
+            beginGesture();
+            setEdits((prev) => ({ ...prev, removedNodes: [], removedEdges: [] }));
           }}
         >
           Restore the diagram
@@ -890,18 +1193,30 @@ export function ArchitectureFlow({ diagram, onToggleNodeExpand }: ArchitectureFl
         <button
           type="button"
           className="arch-export-btn"
-          title="Start fresh: undo drags, bent lines, and removals"
+          title="Start fresh: undo drags, bent lines, labels, notes, and removals (Ctrl+Z undoes the reset)"
           onClick={resetCanvas}
         >
           Reset diagram
+        </button>
+        <button
+          type="button"
+          className="arch-export-btn"
+          title="Add a free-text annotation to the canvas"
+          onClick={addNote}
+        >
+          Add note
         </button>
         {removedCount > 0 && (
           <button
             type="button"
             className="arch-export-btn"
             onClick={() => {
-              setRemovedNodes(new Set());
-              setRemovedEdges(new Set());
+              beginGesture();
+              setEdits((prev) => ({
+                ...prev,
+                removedNodes: [],
+                removedEdges: [],
+              }));
             }}
           >
             Restore {removedCount} removed item{removedCount === 1 ? "" : "s"}
@@ -913,17 +1228,57 @@ export function ArchitectureFlow({ diagram, onToggleNodeExpand }: ArchitectureFl
         edges={edges}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
+        onNodeDragStart={() => beginGesture()}
+        onNodeDragStop={(_event, _node, draggedNodes) => {
+          setEdits((prev) => {
+            const positions = { ...prev.positions };
+            let notes = prev.notes;
+            for (const dragged of draggedNodes) {
+              if (dragged.id.startsWith("note:")) {
+                const noteId = dragged.id.slice("note:".length);
+                notes = notes.map((n) =>
+                  n.id === noteId
+                    ? { ...n, x: dragged.position.x, y: dragged.position.y }
+                    : n,
+                );
+              } else {
+                positions[dragged.id] = {
+                  x: dragged.position.x,
+                  y: dragged.position.y,
+                };
+              }
+            }
+            return { ...prev, positions, notes };
+          });
+        }}
         onNodesDelete={(deleted) => {
-          setRemovedNodes((prev) => new Set([...prev, ...deleted.map((n) => n.id)]));
+          beginGesture();
+          setEdits((prev) => ({
+            ...prev,
+            removedNodes: [
+              ...new Set([
+                ...prev.removedNodes,
+                ...deleted
+                  .filter((n) => !n.id.startsWith("note:"))
+                  .map((n) => n.id),
+              ]),
+            ],
+            notes: prev.notes.filter(
+              (note) => !deleted.some((n) => n.id === `note:${note.id}`),
+            ),
+          }));
         }}
         onEdgesDelete={(deleted) => {
-          setRemovedEdges(
-            (prev) =>
-              new Set([
-                ...prev,
+          beginGesture();
+          setEdits((prev) => ({
+            ...prev,
+            removedEdges: [
+              ...new Set([
+                ...prev.removedEdges,
                 ...deleted.map((e) => edgeKey({ from: e.source, to: e.target })),
               ]),
-          );
+            ],
+          }));
         }}
         nodeTypes={NODE_TYPES}
         edgeTypes={EDGE_TYPES}
@@ -934,6 +1289,10 @@ export function ArchitectureFlow({ diagram, onToggleNodeExpand }: ArchitectureFl
         nodesConnectable={false}
         edgesFocusable={true}
         deleteKeyCode={["Backspace", "Delete"]}
+        snapToGrid
+        snapGrid={[12, 12]}
+        selectionKeyCode="Shift"
+        multiSelectionKeyCode={["Meta", "Control"]}
         proOptions={{ hideAttribution: true }}
       >
         <FitViewController signature={fitSignature} />

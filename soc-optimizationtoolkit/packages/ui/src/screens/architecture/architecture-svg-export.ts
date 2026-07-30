@@ -14,6 +14,7 @@ import type {
 } from "@soc/core";
 import {
   NODE_W,
+  applyDiagramRemovals,
   layoutDiagram,
   nodeBadge,
   polylineMidpoint,
@@ -21,6 +22,7 @@ import {
   type EdgePoint,
   type LaidOutNode,
 } from "./arch-layout";
+import type { DiagramEditState } from "./arch-edits";
 
 /**
  * The LIGHT theme tokens from styles.css, hardcoded: getComputedStyle would
@@ -175,15 +177,79 @@ const LEGEND_ITEMS: Array<{ color: string; dash?: boolean; text: string }> = [
   { color: PALETTE.faint, dash: true, text: "subdued: configured, not flowing" },
 ];
 
-/** Render the unified diagram as a self-contained SVG document string. */
+/** Wrap an annotation note's text into short lines for the sticky card. */
+function wrapNoteText(text: string): string[] {
+  const words = text.split(/\s+/).filter((w) => w !== "");
+  const lines: string[] = [];
+  let line = "";
+  for (const word of words) {
+    if (line !== "" && (line + " " + word).length > 26) {
+      lines.push(line);
+      line = word;
+    } else {
+      line = line === "" ? word : `${line} ${word}`;
+    }
+    if (lines.length === 8) {
+      break;
+    }
+  }
+  if (line !== "" && lines.length < 8) {
+    lines.push(line);
+  }
+  return lines.length > 0 ? lines : [""];
+}
+
+const NOTE_W = 170;
+
+/**
+ * Render the unified diagram as a self-contained SVG document string.
+ * When `edits` is provided (2026-07-30: what you arranged is what you
+ * export), the user's canvas edits apply: removals, dragged positions,
+ * bend routes, label offsets, and annotation notes.
+ */
 export function diagramToSvg(
   diagram: PatternDiagram,
-  options?: { title?: string },
+  options?: { title?: string; edits?: DiagramEditState },
 ): string {
-  const laidOut = layoutDiagram(diagram);
-  const contentWidth = Math.max(laidOut.width, 1);
-  const contentHeight = Math.max(laidOut.height, 1);
-  const empty = diagram.nodes.length === 0;
+  const edits = options?.edits;
+  const effective =
+    edits !== undefined
+      ? applyDiagramRemovals(
+          diagram,
+          new Set(edits.removedNodes),
+          new Set(edits.removedEdges),
+        )
+      : diagram;
+  const laidOut = layoutDiagram(effective);
+  const moved = new Set<string>();
+  if (edits !== undefined) {
+    for (const node of laidOut.nodes) {
+      const p = edits.positions[node.id];
+      if (
+        p !== undefined &&
+        (Math.abs(p.x - node.x) > 1 || Math.abs(p.y - node.y) > 1)
+      ) {
+        node.x = p.x;
+        node.y = p.y;
+        moved.add(node.id);
+      }
+    }
+  }
+  const notes = edits?.notes ?? [];
+  let contentWidth = Math.max(laidOut.width, 1);
+  let contentHeight = Math.max(laidOut.height, 1);
+  for (const node of laidOut.nodes) {
+    contentWidth = Math.max(contentWidth, node.x + NODE_W + 12);
+    contentHeight = Math.max(contentHeight, node.y + node.height + 12);
+  }
+  for (const note of notes) {
+    contentWidth = Math.max(contentWidth, note.x + NOTE_W + 12);
+    contentHeight = Math.max(
+      contentHeight,
+      note.y + 18 + wrapNoteText(note.text).length * 13 + 12,
+    );
+  }
+  const empty = effective.nodes.length === 0 && notes.length === 0;
   // Title block above, legend strip below (only when there is content).
   const topPad = empty ? 0 : options?.title !== undefined ? 30 : 0;
   const legendPad = empty ? 0 : 26;
@@ -208,8 +274,10 @@ export function diagramToSvg(
   if (!empty) {
     parts.push(`<g data-layer="content" transform="translate(0,${topPad})">`);
   }
-  // Stage bands and serpentine row dividers behind everything.
-  for (const band of laidOut.bands ?? []) {
+  // Stage bands and serpentine row dividers behind everything. Bands are
+  // derived from the AUTOMATIC layout - once the user has moved cards, they
+  // no longer describe the drawing, so they drop out.
+  for (const band of moved.size > 0 ? [] : (laidOut.bands ?? [])) {
     parts.push(
       `<rect x="${round(band.left)}" y="2" width="${round(band.right - band.left)}" ` +
         `height="${contentHeight - 4}" rx="12" fill="${PALETTE.accentBg}" ` +
@@ -237,19 +305,41 @@ export function diagramToSvg(
     if (from === undefined || to === undefined) {
       continue;
     }
-    const points = edgePoints(edge.points, from, to);
+    // User edits take precedence (2026-07-30): a bent line exports its bend
+    // route, an edge whose endpoint was dragged re-routes simply between
+    // the live positions, and untouched edges keep dagre's routing with the
+    // reserved label anchor.
+    const edgeEdit = edits?.edges[`${edge.from}>${edge.to}`];
+    const sourcePt = { x: from.x + NODE_W, y: from.y + from.height / 2 };
+    const targetPt = { x: to.x, y: to.y + to.height / 2 };
+    let points: EdgePoint[];
+    let anchor: EdgePoint;
+    if (edgeEdit !== undefined && edgeEdit.bends.length > 0) {
+      // Bends are the INTERIOR CORNERS of the user's polyline - the export
+      // draws exactly what the canvas drew.
+      points = [sourcePt, ...edgeEdit.bends, targetPt];
+      anchor = polylineMidpoint(points);
+    } else if (moved.has(edge.from) || moved.has(edge.to)) {
+      const jogX = (sourcePt.x + targetPt.x) / 2;
+      points = [
+        sourcePt,
+        { x: jogX, y: sourcePt.y },
+        { x: jogX, y: targetPt.y },
+        targetPt,
+      ];
+      anchor = polylineMidpoint(points);
+    } else {
+      points = edgePoints(edge.points, from, to);
+      anchor = edge.labelPoint ?? polylineMidpoint(points);
+    }
     parts.push(
       `<path d="${routedPath(points)}" fill="none" ` +
         `stroke="${lineStroke(edge.tone, edge.cost)}" ` +
         `stroke-width="1.6" marker-end="url(#arch-arrow)"` +
         `${edge.muted === true ? ' stroke-opacity="0.3"' : ""}/>`,
     );
-    // Labels anchor at DAGRE'S reserved label point when present (the layout
-    // keeps that spot clear of cards and other labels - user report
-    // 2026-07-30: overlap); unlabeled edges fall back to the path midpoint.
-    const anchor = edge.labelPoint ?? polylineMidpoint(points);
-    const midX = round(anchor.x);
-    const midY = round(anchor.y);
+    const midX = round(anchor.x + (edgeEdit?.labelOffset?.dx ?? 0));
+    const midY = round(anchor.y + (edgeEdit?.labelOffset?.dy ?? 0));
     let costTop = midY + 1;
     if (edge.label !== undefined && edge.label !== "") {
       const lines = splitLabel(edge.label);
@@ -330,6 +420,23 @@ export function diagramToSvg(
     );
   }
 
+  // Annotation notes render as sticky cards above everything.
+  for (const note of notes) {
+    const lines = wrapNoteText(note.text);
+    const noteH = 14 + lines.length * 13;
+    parts.push(
+      `<g data-note transform="translate(${round(note.x)},${round(note.y)})">` +
+        `<rect width="${NOTE_W}" height="${noteH}" rx="8" fill="${PALETTE.warnBg}" ` +
+        `stroke="${PALETTE.warn}" stroke-opacity="0.45"/>` +
+        `<text x="10" y="16" font-size="10.5" fill="${PALETTE.text}">` +
+        lines
+          .map((line, i) =>
+            i === 0 ? esc(line) : `<tspan x="10" dy="13">${esc(line)}</tspan>`,
+          )
+          .join("") +
+        `</text></g>`,
+    );
+  }
   if (!empty) {
     parts.push("</g>");
   }

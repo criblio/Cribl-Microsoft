@@ -14,7 +14,7 @@
  * renders.
  */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ARCHITECTURE_PRESETS,
   AZURE_RESOURCES,
@@ -45,6 +45,7 @@ import type {
 } from "@soc/core";
 import { SearchableMultiSelect } from "../../components/searchable-select";
 import { ArchitectureFlow } from "./architecture-flow";
+import type { DiagramEditState } from "./arch-edits";
 import { PATTERN_DEPLOY_LINKS } from "./deploy-links";
 import { diagramToSvg } from "./architecture-svg-export";
 import { svgToPngBytes } from "./png-export";
@@ -160,11 +161,14 @@ function ExportRow({
   onExport,
   baseName,
   title,
+  editsRef,
 }: {
   diagram: PatternDiagram;
   onExport: OnExport;
   baseName: string;
   title: string;
+  /** Latest canvas edits - what you arranged is what you export. */
+  editsRef?: React.MutableRefObject<DiagramEditState | null>;
 }) {
   const [note, setNote] = useState("");
   if (onExport === undefined) {
@@ -173,6 +177,7 @@ function ExportRow({
   const svg = () =>
     diagramToSvg(diagram, {
       title: `${title} - ${new Date().toISOString().slice(0, 10)}`,
+      edits: editsRef?.current ?? undefined,
     });
   return (
     <div className="arch-export-row">
@@ -328,6 +333,11 @@ function LiveArchitecturePanel({
     () => (liveResult?.flows ?? []).filter((flow) => !azureOnly || flow.azure),
     [liveResult, azureOnly],
   );
+  // Latest canvas edits, for titled exports that match the arrangement.
+  const liveEditsRef = useRef<DiagramEditState | null>(null);
+  const onLiveCanvasState = useCallback((state: DiagramEditState) => {
+    liveEditsRef.current = state;
+  }, []);
   const toggleNodeExpand = useCallback((nodeId: string) => {
     const toggleIn = (prev: string[], id: string): string[] =>
       prev.includes(id) ? prev.filter((p) => p !== id) : [...prev, id];
@@ -432,10 +442,13 @@ function LiveArchitecturePanel({
             onExport={onExport}
             baseName={`live-dataflow-${snapshot?.groupId ?? "group"}`}
             title={`Live dataflow - worker group '${snapshot?.groupId ?? "group"}'`}
+            editsRef={liveEditsRef}
           />
           <ArchitectureFlow
             diagram={liveResult.diagram}
             onToggleNodeExpand={toggleNodeExpand}
+            storageKey={`live:${snapshot?.groupId ?? "group"}:${azureOnly ? "az" : "all"}`}
+            onCanvasStateChange={onLiveCanvasState}
           />
           {liveResult.diagram.nodes.length > 0 && <CostLegend />}
           {liveResult.notes.length > 0 && (
@@ -506,6 +519,12 @@ export function ArchitectureScreen({
       }),
     [matches, products, resources, sources],
   );
+
+  // Latest canvas edits, for titled exports that match the arrangement.
+  const patternsEditsRef = useRef<DiagramEditState | null>(null);
+  const onPatternsCanvasState = useCallback((state: DiagramEditState) => {
+    patternsEditsRef.current = state;
+  }, []);
 
   const hasSelection =
     products.length > 0 ||
@@ -712,8 +731,13 @@ export function ArchitectureScreen({
                 onExport={onExport}
                 baseName="dataflow-diagram"
                 title="Dataflow - reference patterns"
+                editsRef={patternsEditsRef}
               />
-              <ArchitectureFlow diagram={unifiedDiagram} />
+              <ArchitectureFlow
+                diagram={unifiedDiagram}
+                storageKey={`patterns:${[...products].sort().join("+")}/${[...resources].sort().join("+")}/${[...sources].sort().join("+")}/${[...solutionSources].sort().join("+")}`}
+                onCanvasStateChange={onPatternsCanvasState}
+              />
               <CostLegend />
             </>
           )}
