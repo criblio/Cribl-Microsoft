@@ -246,9 +246,10 @@ export interface DiagramNode {
  * Relative billing weight of the path an edge lands data on. The RULE
  * (pinned by test): cost annotates edges whose TARGET is a billing
  * destination - analytics-tier targets (Log Analytics workspace, Custom
- * _CL + alias) are "premium" (billed per GB ingested); low-cost
- * store/egress targets (Blob archive, Cribl Lake, Sentinel data lake,
- * Azure Data Explorer, Event Hub (egress)) are "economical". Transit and
+ * _CL + alias) and license-billed SIEM targets (Splunk indexers - per-GB
+ * ingest licensing, 2026-07-30) are "premium"; low-cost store/egress
+ * targets (Blob archive, Cribl Lake, Sentinel data lake, Azure Data
+ * Explorer, Event Hub (egress)) are "economical". Transit and
  * service-layer edges (workspace -> Microsoft Sentinel) carry no cost.
  */
 export type EdgeCostTier = "premium" | "economical";
@@ -859,9 +860,9 @@ export const ARCHITECTURE_PATTERNS: readonly ArchitecturePattern[] = [
     id: "splunk-siem-migration",
     title: "Splunk SIEM migration (before and after)",
     summary:
-      "One picture of the whole transition: the BEFORE state (UFs shipping straight to Splunk) stays visible but subdued, while the AFTER state re-points the same UF fleet at Cribl Stream, which dual-writes to Splunk and Sentinel until cutover.",
+      "One picture of the whole transition: the BEFORE state (UFs shipping into Splunk) stays visible but subdued, while the AFTER state re-points the same UF fleet at Cribl Stream, which dual-writes to Splunk and Sentinel until cutover.",
     why:
-      "A SIEM migration is a transition, not a flag day: the collection fleet stays where it is, Stream takes over transport on day one with a zero-risk passthrough, Sentinel fills in parallel, and Splunk retires only after detections prove out.",
+      "A SIEM migration is a transition, not a flag day: the collection fleet stays where it is, Stream takes over transport on day one with a zero-risk passthrough, Sentinel fills in parallel, and the previous SIEM is decommissioned only after detections prove out.",
     requiresProducts: ["stream"],
     requiresResources: ["sentinel"],
     requiresSources: ["windows-splunk-uf"],
@@ -869,8 +870,8 @@ export const ARCHITECTURE_PATTERNS: readonly ArchitecturePattern[] = [
       "Phase 1 - intercept at the HF tier: change outputs.conf on the Heavy Forwarders FIRST - a handful of HFs cover the whole estate while thousands of UFs stay untouched. Stream passes through to the indexers unchanged; rollback is one config push.",
       "Phase 2 - dual-run: add the Sentinel route - map cooked S2S events to SecurityEvent/CommonSecurityLog through the Kind:Direct DCR - while Splunk keeps receiving everything.",
       "Phase 3 - migrate content: convert Splunk saved searches and correlation rules to KQL analytics rules (this app's SIEM Migration screen automates the conversion).",
-      "Phase 4 - validate parity: run both SIEMs against the same feed and compare detections before anything is switched off.",
-      "Phase 5 - cutover and collapse the tiers: drop the Splunk route in Stream, retire the indexers (and the license), then re-point UFs straight at Stream and retire the HFs - Stream absorbs their parsing/routing role. Keep an HF only where it hosts modular inputs or apps, until those are re-homed on Cribl sources or Edge.",
+      "Phase 4 - validate parity: run both SIEMs against the same feed and compare detections before anything is switched off. Dual-run deliberately pays BOTH premium bills (Splunk license and Sentinel analytics) - time-box this phase.",
+      "Phase 5 - cutover and collapse the tiers: drop the Splunk route in Stream and decommission the indexer tier, then re-point UFs straight at Stream and decommission the HFs - Stream absorbs their parsing/routing role. Keep an HF only where it hosts modular inputs or apps, until those are re-homed on Cribl sources or Edge.",
       "The subdued lines are the BEFORE topology: UFs through the HF tier into Splunk, no shaping, no Sentinel. The HF-to-Stream leg is the TEMPORARY bridge - it exists only until UFs point at Stream directly.",
     ],
     diagram: {
@@ -879,7 +880,7 @@ export const ARCHITECTURE_PATTERNS: readonly ArchitecturePattern[] = [
         { id: "uf", label: "Splunk UF agents", tier: "source" },
         { id: "hf", label: "Splunk Heavy Forwarders", tier: "source" },
         { id: "stream", label: "Cribl Stream", tier: "cribl" },
-        { id: "splunk", label: "Splunk indexers (legacy)", tier: "destination" },
+        { id: "splunk", label: "Splunk indexers", tier: "destination" },
         { id: "dcr", label: "Kind:Direct DCR", tier: "azure" },
         { id: "law", label: "Log Analytics workspace", tier: "destination" },
       ],
@@ -891,6 +892,7 @@ export const ARCHITECTURE_PATTERNS: readonly ArchitecturePattern[] = [
           to: "splunk",
           label: "before: parsed to indexers",
           muted: true,
+          cost: "premium",
         },
         {
           from: "hf",
@@ -898,7 +900,12 @@ export const ARCHITECTURE_PATTERNS: readonly ArchitecturePattern[] = [
           label: "during: HF outputs to Stream (temporary)",
         },
         { from: "uf", to: "stream", label: "after: UFs direct to Stream (S2S)" },
-        { from: "stream", to: "splunk", label: "during: dual-run until cutover" },
+        {
+          from: "stream",
+          to: "splunk",
+          label: "during: dual-run until cutover",
+          cost: "premium",
+        },
         { from: "stream", to: "dcr", label: "SecurityEvent / CommonSecurityLog" },
         { from: "dcr", to: "law", cost: "premium" },
       ],
@@ -1871,7 +1878,7 @@ const DIAGRAM_NODE_INFO: Record<string, DiagramNodeInfo> = {
   },
   [canonicalNodeKey("Splunk Heavy Forwarders")]: {
     purpose:
-      "The intermediate Splunk forwarding tier most estates run - parsing, routing, and hosting modular inputs. The migration's fastest intercept point: one outputs.conf change here re-routes the whole estate through Stream, and the tier retires once UFs point at Stream directly and its inputs are re-homed.",
+      "The intermediate Splunk forwarding tier most estates run - parsing, routing, and hosting modular inputs. The migration's fastest intercept point: one outputs.conf change here re-routes the whole estate through Stream, and the tier is decommissioned once UFs point at Stream directly and its inputs are re-homed.",
     docs: [
       {
         label: "Cribl Splunk TCP source",
@@ -1879,9 +1886,9 @@ const DIAGRAM_NODE_INFO: Record<string, DiagramNodeInfo> = {
       },
     ],
   },
-  [canonicalNodeKey("Splunk indexers (legacy)")]: {
+  [canonicalNodeKey("Splunk indexers")]: {
     purpose:
-      "The existing Splunk indexer tier - the BEFORE state of the migration and the dual-run target. Stream's Splunk Load Balanced destination keeps feeding it until detection parity is proven in Sentinel; then this tier (and its license) retires while the UF fleet stays as transport.",
+      "The existing Splunk indexer tier - the before state of this migration and the dual-run target during it. Stream's Splunk Load Balanced destination keeps feeding it until detection parity is proven in Sentinel; the tier is then decommissioned on the customer's schedule while the UF fleet stays on as transport.",
     docs: [
       {
         label: "Cribl Splunk Load Balanced destination",

@@ -294,7 +294,13 @@ describe("edge cost tiers (2026-07-29)", () => {
   // The RULE from the DiagramEdge doc: cost is a function of the TARGET
   // node's label class. Pinned here over the whole catalog so a new pattern
   // cannot mis-tag an edge.
-  const PREMIUM_TARGETS = new Set(["loganalyticsworkspace", "customclalias"]);
+  // Splunk indexers: per-GB license-billed ingest (2026-07-30) - premium
+  // like the analytics tier, stated vendor-neutrally as a billing fact.
+  const PREMIUM_TARGETS = new Set([
+    "loganalyticsworkspace",
+    "customclalias",
+    "splunkindexers",
+  ]);
   const ECONOMICAL_TARGETS = new Set([
     "blobarchive",
     "cribllake",
@@ -385,6 +391,13 @@ describe("Splunk SIEM migration pattern (2026-07-30)", () => {
       (e) => e.from === "hf" && e.to === "splunk",
     )!;
     expect(beforeHfSplunk.muted).toBe(true);
+    // Splunk ingest is license-billed per GB - premium, before AND during
+    // (dual-run pays both bills; the considerations say to time-box it).
+    expect(beforeHfSplunk.cost).toBe("premium");
+    expect(
+      pattern.diagram.edges.find((e) => e.from === "stream" && e.to === "splunk")
+        ?.cost,
+    ).toBe("premium");
     // The HF tier is ALSO the temporary during-migration intercept point.
     const hfBridge = pattern.diagram.edges.find(
       (e) => e.from === "hf" && e.to === "stream",
@@ -421,8 +434,7 @@ describe("Splunk SIEM migration pattern (2026-07-30)", () => {
     const unified = unifyPatternDiagrams(matches.map((r) => r.pattern));
     expect(
       unified.edges.find(
-        (e) =>
-          e.from === "splunkheavyforwarders" && e.to === "splunkindexerslegacy",
+        (e) => e.from === "splunkheavyforwarders" && e.to === "splunkindexers",
       )?.muted,
     ).toBe(true);
   });

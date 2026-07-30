@@ -503,8 +503,8 @@ function FlowingEdge({
               className={`arch-flow-cost-badge arch-flow-cost-${cost}`}
               title={
                 cost === "premium"
-                  ? "Lands in the analytics tier - billed per GB ingested"
-                  : "Low-cost retention or egress - avoids analytics-tier billing"
+                  ? "Per-GB ingest billing - Sentinel analytics tier or SIEM license"
+                  : "Low-cost retention or egress - avoids per-GB ingest billing"
               }
             >
               {cost}

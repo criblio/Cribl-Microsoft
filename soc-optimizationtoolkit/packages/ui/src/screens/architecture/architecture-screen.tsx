@@ -203,7 +203,7 @@ function CostLegend() {
   return (
     <div className="arch-cost-legend">
       <span className="arch-flow-cost-badge arch-flow-cost-premium">premium</span>
-      <span>lands in the analytics tier - billed per GB ingested</span>
+      <span>per-GB ingest billing - Sentinel analytics tier or SIEM license</span>
       <span className="arch-flow-cost-badge arch-flow-cost-economical">
         economical
       </span>
