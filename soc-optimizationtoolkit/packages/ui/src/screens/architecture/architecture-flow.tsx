@@ -746,6 +746,19 @@ export function ArchitectureFlow({ diagram, onToggleNodeExpand }: ArchitectureFl
 
   const removedCount = removedNodes.size + removedEdges.size;
 
+  // Start fresh (user request 2026-07-30): one button clears EVERY canvas
+  // edit - drags, bent lines, removals - and re-fits the pristine layout.
+  // Bumping the key remounts the React Flow subtree, which is what clears
+  // the per-edge bend state and re-runs the initial fit.
+  const [resetCount, setResetCount] = useState(0);
+  const resetCanvas = useCallback(() => {
+    setRemovedNodes(new Set());
+    setRemovedEdges(new Set());
+    setNodes(layouted.nodes);
+    setEdges(layouted.edges);
+    setResetCount((count) => count + 1);
+  }, [layouted, setNodes, setEdges]);
+
   if (diagram.nodes.length === 0) return null;
 
   if (effective.nodes.length === 0) {
@@ -767,9 +780,17 @@ export function ArchitectureFlow({ diagram, onToggleNodeExpand }: ArchitectureFl
   }
 
   return (
-    <div className="arch-flow-canvas" ref={canvasRef}>
-      {removedCount > 0 && (
-        <div className="arch-flow-restore-row arch-flow-restore-overlay">
+    <div className="arch-flow-canvas" ref={canvasRef} key={resetCount}>
+      <div className="arch-flow-restore-row arch-flow-restore-overlay">
+        <button
+          type="button"
+          className="arch-export-btn"
+          title="Start fresh: undo drags, bent lines, and removals"
+          onClick={resetCanvas}
+        >
+          Reset diagram
+        </button>
+        {removedCount > 0 && (
           <button
             type="button"
             className="arch-export-btn"
@@ -780,8 +801,8 @@ export function ArchitectureFlow({ diagram, onToggleNodeExpand }: ArchitectureFl
           >
             Restore {removedCount} removed item{removedCount === 1 ? "" : "s"}
           </button>
-        </div>
-      )}
+        )}
+      </div>
       <ReactFlow
         nodes={nodes}
         edges={edges}
