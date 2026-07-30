@@ -122,6 +122,12 @@ export interface BuildLiveDiagramOptions {
    */
   expandRoutes?: boolean;
   /**
+   * Pack ids whose INTERNAL routing table explodes the same way (only
+   * meaningful for packs already in expandedPacks - the pack hub node only
+   * exists when the pack itself is exploded).
+   */
+  expandedPackRoutes?: readonly string[];
+  /**
    * The Cribl leader UI base (origin plus any product prefix, e.g.
    * "https://main-org.cribl.cloud/stream" or "http://leader:9000"). When
    * set, every live node's info links to ITS page in the Cribl UI (user
@@ -1361,6 +1367,7 @@ export function buildLiveDiagram(
   // as "{pack}/{id}". An EXPLODED pack (expandedPacks) fans out into its
   // internal routing table, pipelines, and destinations.
   const expandedPackIds = new Set(options.expandedPacks ?? []);
+  const expandedPackRouteIds = new Set(options.expandedPackRoutes ?? []);
   let packFlowsDrawn = false;
   const azureSkippedPacks: string[] = [];
   for (const [packId, internals] of packInternals) {
@@ -1439,7 +1446,27 @@ export function buildLiveDiagram(
       }
     } else {
       // Exploded: pack -> internal routing table -> pipeline -> destination.
+      // The internal table explodes ONE level further (expandedPackRoutes,
+      // user report 2026-07-30: the Pack routes node had no explode button):
+      // each internal route becomes its own node, disabled ones subdued.
       const hubId = `routes:${packId}`;
+      const packRoutesExpanded = expandedPackRouteIds.has(packId);
+      const packRoutePosition = new Map(internals.routes.map((r, i) => [r.id, i]));
+      const packRouteEntryInfo = (
+        route: LiveRoute,
+        disabled: boolean,
+      ): DiagramNodeInfo =>
+        withResourceLink(
+          {
+            purpose:
+              `${disabled ? "DISABLED route entry" : "Route entry"} ` +
+              routeLine(route, packRoutePosition.get(route.id) ?? 0, null) +
+              ` (inside pack '${internals.displayName}')` +
+              (disabled ? "\nIt processes nothing until re-enabled." : ""),
+            docs: [{ label: "Cribl routes", url: CRIBL + "/stream/routes/" }],
+          },
+          packResource,
+        );
       addNode({
         id: hubId,
         label: "Pack routes",
@@ -1458,6 +1485,8 @@ export function buildLiveDiagram(
           },
           packResource,
         ),
+        expandable: true,
+        expanded: packRoutesExpanded,
       });
       addEdge({ from: packNodeId, to: hubId });
       const outById = new Map(drawOuts.map((o) => [o.id, o]));
@@ -1466,6 +1495,18 @@ export function buildLiveDiagram(
       for (const route of internals.routes.filter((r) => !r.disabled)) {
         const routeLabel = route.final ? route.name : `${route.name} (copy)`;
         let previous = hubId;
+        if (packRoutesExpanded) {
+          const routeNodeId = `route:${packId}/${route.id}`;
+          addNode({
+            id: routeNodeId,
+            label: routeLabel,
+            tier: "cribl",
+            badge: "Route",
+            info: packRouteEntryInfo(route, false),
+          });
+          addEdge({ from: hubId, to: routeNodeId });
+          previous = routeNodeId;
+        }
         const pipelineRef = route.pipeline ?? "passthru";
         if (pipelineRef !== "passthru" && pipelineRef !== "") {
           const pipeNodeId = `pipe:${packId}/${pipelineRef}`;
@@ -1479,7 +1520,11 @@ export function buildLiveDiagram(
               packResource,
             ),
           });
-          addEdge({ from: previous, to: pipeNodeId, label: routeLabel });
+          addEdge({
+            from: previous,
+            to: pipeNodeId,
+            ...(previous === hubId ? { label: routeLabel } : {}),
+          });
           previous = pipeNodeId;
         }
         const targetRef = route.output ?? "default";
@@ -1496,6 +1541,20 @@ export function buildLiveDiagram(
           ...(previous === hubId ? { label: routeLabel } : {}),
           ...(cost !== undefined ? { cost } : {}),
         });
+      }
+      if (packRoutesExpanded) {
+        for (const route of internals.routes.filter((r) => r.disabled)) {
+          const routeNodeId = `route:${packId}/${route.id}`;
+          addNode({
+            id: routeNodeId,
+            label: `${route.name} (disabled)`,
+            tier: "cribl",
+            badge: "Route (disabled)",
+            muted: true,
+            info: packRouteEntryInfo(route, true),
+          });
+          addEdge({ from: hubId, to: routeNodeId, muted: true });
+        }
       }
       // Outputs no internal route references stay visible off the pack card.
       for (const output of drawOuts.filter((o) => !referenced.has(o.id))) {

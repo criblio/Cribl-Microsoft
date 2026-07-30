@@ -241,10 +241,12 @@ function LiveArchitecturePanel({
   // internal routes/pipelines/destinations. Both reset per snapshot.
   const [selectedFlows, setSelectedFlows] = useState<string[]>([]);
   const [expandedPacks, setExpandedPacks] = useState<string[]>([]);
+  const [expandedPackRoutes, setExpandedPackRoutes] = useState<string[]>([]);
   const [routesExpanded, setRoutesExpanded] = useState(false);
   useEffect(() => {
     setSelectedFlows([]);
     setExpandedPacks([]);
+    setExpandedPackRoutes([]);
     setRoutesExpanded(false);
   }, [snapshot]);
 
@@ -293,9 +295,18 @@ function LiveArchitecturePanel({
             uiBase: criblUiBase,
             selectedFlows,
             expandedPacks,
+            expandedPackRoutes,
             expandRoutes: routesExpanded,
           }),
-    [snapshot, azureOnly, criblUiBase, selectedFlows, expandedPacks, routesExpanded],
+    [
+      snapshot,
+      azureOnly,
+      criblUiBase,
+      selectedFlows,
+      expandedPacks,
+      expandedPackRoutes,
+      routesExpanded,
+    ],
   );
   // The inventory is filter-independent; the Azure toggle narrows the LIST
   // to what it can actually draw.
@@ -308,17 +319,21 @@ function LiveArchitecturePanel({
       prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key],
     );
   const toggleNodeExpand = useCallback((nodeId: string) => {
+    const toggleIn = (prev: string[], id: string): string[] =>
+      prev.includes(id) ? prev.filter((p) => p !== id) : [...prev, id];
     if (nodeId === "routes") {
       setRoutesExpanded((prev) => !prev);
       return;
     }
-    if (!nodeId.startsWith("pack:")) {
+    if (nodeId.startsWith("routes:")) {
+      // A pack's INTERNAL routing table (the hub inside an exploded pack).
+      const packId = nodeId.slice("routes:".length);
+      setExpandedPackRoutes((prev) => toggleIn(prev, packId));
       return;
     }
-    const packId = nodeId.slice("pack:".length);
-    setExpandedPacks((prev) =>
-      prev.includes(packId) ? prev.filter((p) => p !== packId) : [...prev, packId],
-    );
+    if (nodeId.startsWith("pack:")) {
+      setExpandedPacks((prev) => toggleIn(prev, nodeId.slice("pack:".length)));
+    }
   }, []);
 
   return (

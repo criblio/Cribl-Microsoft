@@ -778,6 +778,71 @@ describe("routes popover detail and pack internals (2026-07-30)", () => {
     expect(diagram.nodes.some((n) => n.id === "pack:AllInOne")).toBe(false);
   });
 
+  it("the pack's internal routing table explodes one level further", () => {
+    const snapshot = packSnapshot();
+    snapshot.packDetails = {
+      AllInOne: {
+        ...snapshot.packDetails!.AllInOne,
+        routes: ok({
+          routes: [
+            {
+              id: "r1",
+              name: "pack-route",
+              filter: "true",
+              pipeline: "shape",
+              output: "sent_out",
+              final: true,
+            },
+            {
+              id: "r2",
+              name: "old-pack-route",
+              filter: "false",
+              output: "sent_out",
+              final: true,
+              disabled: true,
+            },
+          ],
+        }),
+      },
+    };
+    // Exploded pack, COLLAPSED internal table: hub is expandable, no route nodes.
+    const collapsed = buildLiveDiagram(snapshot, {
+      azureOnly: true,
+      expandedPacks: ["AllInOne"],
+    });
+    const hub = collapsed.diagram.nodes.find((n) => n.id === "routes:AllInOne")!;
+    expect(hub.expandable).toBe(true);
+    expect(hub.expanded).toBe(false);
+    expect(
+      collapsed.diagram.nodes.some((n) => n.id.startsWith("route:AllInOne/")),
+    ).toBe(false);
+
+    // Exploded internal table: per-route nodes, disabled ones subdued.
+    const { diagram } = buildLiveDiagram(snapshot, {
+      azureOnly: true,
+      expandedPacks: ["AllInOne"],
+      expandedPackRoutes: ["AllInOne"],
+    });
+    expect(diagram.nodes.find((n) => n.id === "routes:AllInOne")?.expanded).toBe(true);
+    const edgePairs = diagram.edges.map((e) => `${e.from}>${e.to}`);
+    expect(edgePairs).toEqual(
+      expect.arrayContaining([
+        "routes:AllInOne>route:AllInOne/r1",
+        "route:AllInOne/r1>pipe:AllInOne/shape",
+        "pipe:AllInOne/shape>out:AllInOne/sent_out",
+        "routes:AllInOne>route:AllInOne/r2",
+      ]),
+    );
+    const r1 = diagram.nodes.find((n) => n.id === "route:AllInOne/r1")!;
+    expect(r1.badge).toBe("Route");
+    expect(r1.info?.purpose).toContain("inside pack 'All In One'");
+    const r2 = diagram.nodes.find((n) => n.id === "route:AllInOne/r2")!;
+    expect(r2.muted).toBe(true);
+    expect(r2.badge).toBe("Route (disabled)");
+    expect(diagram.edges.find((e) => e.to === "route:AllInOne/r2")?.muted).toBe(true);
+    expect(diagram.edges.some((e) => e.from === "route:AllInOne/r2")).toBe(false);
+  });
+
   it("pack-internal nodes link to the pack's Cribl UI page", () => {
     const base = "http://leader.internal:9000";
     const { diagram } = buildLiveDiagram(packSnapshot(), {
