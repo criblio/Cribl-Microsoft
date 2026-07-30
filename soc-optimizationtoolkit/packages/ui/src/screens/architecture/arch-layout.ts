@@ -20,6 +20,24 @@ export const NODE_H = 62;
 /** Extra card height when a node carries source-type tags (2026-07-29). */
 export const CHIP_ROW_H = 20;
 
+/**
+ * The footprint an edge label occupies in the LAYOUT (declared to dagre so
+ * ranks widen only where labels need room). ONE rule shared by the layout,
+ * the renderers, and the overlap regression pin: capped at ~two wrapped
+ * lines so long labels deepen instead of widening the diagram.
+ */
+export function edgeLabelFootprint(
+  label: string,
+  hasCost = false,
+): { width: number; height: number } {
+  const estimated = label.length * 5.5 + 12;
+  return {
+    width: Math.min(estimated, 132),
+    // The cost badge stacks UNDER the label pill - reserve its row too.
+    height: (estimated > 132 ? 30 : 18) + (hasCost ? 14 : 0),
+  };
+}
+
 /** The tag row a renderer draws: up to three types plus an overflow count. */
 export function sourceTypeChips(types: readonly string[]): string[] {
   if (types.length <= 3) {
@@ -123,6 +141,34 @@ export function edgeKey(edge: Pick<DiagramEdge, "from" | "to">): string {
 }
 
 /**
+ * The point at half a polyline's total length - the label anchor fallback
+ * for unlabeled/cost-only edges, shared by BOTH renderers so their labels
+ * sit at identical spots on identical routed paths.
+ */
+export function polylineMidpoint(points: readonly EdgePoint[]): EdgePoint {
+  let total = 0;
+  for (let i = 1; i < points.length; i++) {
+    total += Math.hypot(points[i].x - points[i - 1].x, points[i].y - points[i - 1].y);
+  }
+  let remaining = total / 2;
+  for (let i = 1; i < points.length; i++) {
+    const segment = Math.hypot(
+      points[i].x - points[i - 1].x,
+      points[i].y - points[i - 1].y,
+    );
+    if (segment >= remaining && segment > 0) {
+      const t = remaining / segment;
+      return {
+        x: points[i - 1].x + (points[i].x - points[i - 1].x) * t,
+        y: points[i - 1].y + (points[i].y - points[i - 1].y) * t,
+      };
+    }
+    remaining -= segment;
+  }
+  return points[Math.floor(points.length / 2)] ?? points[0];
+}
+
+/**
  * The diagram minus the user's removals (2026-07-29: delete parts of a
  * diagram and let it re-layout around what is left). Removing a node also
  * removes every edge touching it; removing an edge leaves its nodes.
@@ -165,7 +211,11 @@ export function layoutDiagram(diagram: PatternDiagram): LaidOutDiagram {
   // (2026-07-30 user report: labels struck through cards): the layout
   // reserves room for each label as a virtual node, so ranks widen exactly
   // where a label needs space instead of everywhere.
-  g.setGraph({ rankdir: "LR", nodesep: 26, ranksep: 72, marginx: 10, marginy: 10 });
+  // ranksep 56 (was 72): dagre halves it around the label ranks it inserts,
+  // and the label footprints supply the rest of the separation - the merged
+  // presets were growing too WIDE to use the window well (user report
+  // 2026-07-30).
+  g.setGraph({ rankdir: "LR", nodesep: 26, ranksep: 56, marginx: 10, marginy: 10 });
   for (const node of diagram.nodes) {
     g.setNode(node.id, { width: NODE_W, height: heightOf(node.id) });
   }
@@ -175,12 +225,7 @@ export function layoutDiagram(diagram: PatternDiagram): LaidOutDiagram {
       edge.from,
       edge.to,
       label !== ""
-        ? {
-            // The canvas pill wraps at 150px - reserve the WRAPPED footprint.
-            width: Math.min(label.length * 5.5 + 12, 160),
-            height: label.length * 5.5 > 150 ? 30 : 18,
-            labelpos: "c",
-          }
+        ? { ...edgeLabelFootprint(label, edge.cost !== undefined), labelpos: "c" }
         : {},
     );
   }

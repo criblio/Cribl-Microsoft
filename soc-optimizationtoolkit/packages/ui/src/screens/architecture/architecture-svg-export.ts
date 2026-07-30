@@ -16,6 +16,7 @@ import {
   NODE_W,
   layoutDiagram,
   nodeBadge,
+  polylineMidpoint,
   sourceTypeChips,
   type EdgePoint,
   type LaidOutNode,
@@ -164,26 +165,6 @@ function routedPath(points: EdgePoint[]): string {
   return d;
 }
 
-/** The point at half the polyline's total length (the label anchor). */
-function midpointOnPolyline(points: EdgePoint[]): EdgePoint {
-  let total = 0;
-  for (let i = 1; i < points.length; i++) {
-    total += Math.hypot(points[i].x - points[i - 1].x, points[i].y - points[i - 1].y);
-  }
-  let remaining = total / 2;
-  for (let i = 1; i < points.length; i++) {
-    const seg = Math.hypot(points[i].x - points[i - 1].x, points[i].y - points[i - 1].y);
-    if (seg >= remaining && seg > 0) {
-      const t = remaining / seg;
-      return {
-        x: points[i - 1].x + (points[i].x - points[i - 1].x) * t,
-        y: points[i - 1].y + (points[i].y - points[i - 1].y) * t,
-      };
-    }
-    remaining -= seg;
-  }
-  return points[Math.floor(points.length / 2)] ?? points[0];
-}
 
 /** Render the unified diagram as a self-contained SVG document string. */
 export function diagramToSvg(diagram: PatternDiagram): string {
@@ -222,7 +203,7 @@ export function diagramToSvg(diagram: PatternDiagram): string {
     // Labels anchor at DAGRE'S reserved label point when present (the layout
     // keeps that spot clear of cards and other labels - user report
     // 2026-07-30: overlap); unlabeled edges fall back to the path midpoint.
-    const anchor = edge.labelPoint ?? midpointOnPolyline(points);
+    const anchor = edge.labelPoint ?? polylineMidpoint(points);
     const midX = round(anchor.x);
     const midY = round(anchor.y);
     let costTop = midY + 1;

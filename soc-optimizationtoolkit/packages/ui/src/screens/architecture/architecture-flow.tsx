@@ -45,6 +45,7 @@ import {
   edgeKey,
   layoutDiagram,
   nodeBadge,
+  polylineMidpoint,
   sourceTypeChips,
 } from "./arch-layout";
 // React Flow's stylesheet is imported by the SHELL entry points (cribl-app
@@ -79,6 +80,10 @@ type FlowEdgeData = {
   tone?: EdgeFlowTone;
   muted?: boolean;
   reverse?: boolean;
+  /** Dagre's routed waypoints (dodge cards); endpoints re-pinned live. */
+  points?: FlowPoint[];
+  /** Dagre's reserved collision-free label anchor. */
+  labelPoint?: FlowPoint;
 };
 type FlowEdge = Edge<FlowEdgeData, "flowing">;
 
@@ -442,12 +447,30 @@ function FlowingEdge({
     offset: reverse ? 48 : 20,
   });
 
-  // Bent edges re-route orthogonally THROUGH the dragged point, honoring
-  // the axes the handles impose (right/left handles exit and enter
-  // horizontally; the bottom wrap-back handles vertically).
+  // DEFAULT geometry is dagre's ROUTED path - the same one the SVG export
+  // draws (user report 2026-07-30: the canvas's own smoothstep midpoints
+  // put labels and cost badges on cards). The routed interior dodges the
+  // node columns; endpoints re-pin to the LIVE handle coords so dragged
+  // nodes stay connected; labels sit at dagre's reserved anchor. Smoothstep
+  // remains the fallback for edges without routing.
   let edgePath = stepPath;
   let anchorX = stepLabelX;
   let anchorY = stepLabelY + (reverse ? 26 : 0);
+  const routed = data?.points;
+  if (routed !== undefined && routed.length >= 2) {
+    const pts: FlowPoint[] = [
+      { x: sourceX, y: sourceY },
+      ...routed.slice(1, -1),
+      { x: targetX, y: targetY },
+    ];
+    edgePath = roundedOrthogonalPath(pts);
+    const anchor = data?.labelPoint ?? polylineMidpoint(pts);
+    anchorX = anchor.x;
+    anchorY = anchor.y;
+  }
+  // Bent edges re-route orthogonally THROUGH the dragged point, honoring
+  // the axes the handles impose (right/left handles exit and enter
+  // horizontally; the bottom wrap-back handles vertically).
   if (bend !== null) {
     const exitAxis = sourcePosition === Position.Bottom ? "v" : "h";
     const enterAxis = targetPosition === Position.Bottom ? "v" : "h";
@@ -614,7 +637,15 @@ function layoutGraph(diagram: PatternDiagram): { nodes: ArchNode[]; edges: FlowE
       sourceHandle: reverse ? "out-b" : "out",
       targetHandle: reverse ? "in-b" : "in",
       type: "flowing",
-      data: { label: e.label, cost: e.cost, tone: e.tone, muted: e.muted, reverse },
+      data: {
+        label: e.label,
+        cost: e.cost,
+        tone: e.tone,
+        muted: e.muted,
+        reverse,
+        points: e.points,
+        labelPoint: e.labelPoint,
+      },
     };
   });
   return { nodes, edges };

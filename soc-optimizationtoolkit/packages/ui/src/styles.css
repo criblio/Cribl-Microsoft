@@ -4147,9 +4147,10 @@ button.journey-step-main:hover .journey-step-label {
   border: 1px solid var(--border-subtle);
   /* Long phase labels ("during: HF outputs to Stream (temporary)") WRAP
    * inside a bounded pill instead of striking through the neighbor cards
-   * (user report 2026-07-30). */
+   * (user report 2026-07-30). 120px matches the 132px layout footprint
+   * (edgeLabelFootprint) once padding and border are added. */
   white-space: normal;
-  max-width: 150px;
+  max-width: 120px;
   text-align: center;
   line-height: 12px;
 }

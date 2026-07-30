@@ -17,6 +17,7 @@ import {
   NODE_W,
   applyDiagramRemovals,
   edgeKey,
+  edgeLabelFootprint,
   layoutDiagram,
   nodeBadge,
   sourceTypeChips,
@@ -51,12 +52,16 @@ describe("layoutDiagram", () => {
         .filter((r) => r.fit === "match")
         .map((r) => r.pattern);
       const laidOut = layoutDiagram(unifyPatternDiagrams(matches));
+      const labelBoxes: Array<{ label: string; l: number; t: number; w: number; h: number }> =
+        [];
       for (const edge of laidOut.edges) {
         if (edge.labelPoint === undefined || edge.label === undefined) {
           continue;
         }
-        const w = Math.min(edge.label.length * 5.5 + 12, 160);
-        const h = edge.label.length * 5.5 > 150 ? 30 : 18;
+        const { width: w, height: h } = edgeLabelFootprint(
+          edge.label,
+          edge.cost !== undefined,
+        );
         const left = edge.labelPoint.x - w / 2;
         const top = edge.labelPoint.y - h / 2;
         for (const node of laidOut.nodes) {
@@ -70,6 +75,18 @@ describe("layoutDiagram", () => {
             `${preset.id}: label '${edge.label}' overlaps card '${node.label}'`,
           ).toBe(false);
         }
+        for (const other of labelBoxes) {
+          const overlaps =
+            left < other.l + other.w &&
+            left + w > other.l &&
+            top < other.t + other.h &&
+            top + h > other.t;
+          expect(
+            overlaps,
+            `${preset.id}: label '${edge.label}' overlaps label '${other.label}'`,
+          ).toBe(false);
+        }
+        labelBoxes.push({ label: edge.label, l: left, t: top, w, h });
       }
     }
   });
