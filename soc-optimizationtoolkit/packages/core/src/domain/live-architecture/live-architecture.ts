@@ -26,8 +26,10 @@
 import type {
   DiagramDocLink,
   DiagramEdge,
+  DiagramFact,
   DiagramNode,
   DiagramNodeInfo,
+  DiagramRouteRow,
   EdgeCostTier,
   PatternDiagram,
 } from "../architecture-patterns";
@@ -569,29 +571,39 @@ const OUTPUT_DOC_SLUGS: Record<string, string> = {
   azure_eventhub: "/stream/destinations-azure-event-hubs/",
 };
 
+// Every live popover presents STRUCTURED detail (user direction 2026-07-30:
+// all visual "i" should present cleanly): a one-line purpose, labeled fact
+// rows, and numbered step pills - never prose dumps.
+
 function inputInfo(input: LiveInput): DiagramNodeInfo {
-  const details: string[] = [`Live '${input.type}' source '${input.id}'.`];
+  const facts: DiagramFact[] = [{ label: "Type", value: input.type }];
   const conf = input.conf;
   if (input.type === "collection") {
     const collectorType = asString(prop(prop(conf, "collector"), "type"));
-    const schedule = asString(prop(conf, "schedule")) || asString(prop(prop(conf, "schedule"), "cronSchedule"));
     if (collectorType !== "") {
-      details.push(`Scheduled '${collectorType}' collector${schedule !== "" ? ` (${schedule})` : ""}.`);
+      facts.push({ label: "Collector", value: collectorType });
+    }
+    const schedule =
+      asString(prop(conf, "schedule")) ||
+      asString(prop(prop(conf, "schedule"), "cronSchedule"));
+    if (schedule !== "") {
+      facts.push({ label: "Schedule", value: schedule });
     }
   }
   const container = asString(prop(conf, "containerName"));
   if (container !== "") {
-    details.push(`Container '${container}'.`);
+    facts.push({ label: "Container", value: container });
   }
   if (input.breakerRulesets.length > 0) {
-    details.push(`Event breaker ruleset(s): ${input.breakerRulesets.join(", ")}.`);
+    facts.push({ label: "Event breakers", value: input.breakerRulesets.join(", ") });
   }
   if (input.pipeline !== undefined) {
-    details.push(`Pre-processed by '${input.pipeline}'.`);
+    facts.push({ label: "Pre-processing", value: input.pipeline });
   }
   const slug = INPUT_DOC_SLUGS[input.type.toLowerCase()];
   return {
-    purpose: details.join(" "),
+    purpose: `Live source '${input.id}'.`,
+    facts,
     docs: [
       slug !== undefined
         ? { label: `Cribl ${input.type} source`, url: CRIBL + slug }
@@ -601,13 +613,14 @@ function inputInfo(input: LiveInput): DiagramNodeInfo {
 }
 
 function outputInfo(output: LiveOutput): DiagramNodeInfo {
-  const details: string[] = [`Live '${output.type}' destination '${output.id}'.`];
+  const facts: DiagramFact[] = [{ label: "Type", value: output.type }];
   if (output.pipeline !== undefined) {
-    details.push(`Post-processed by '${output.pipeline}'.`);
+    facts.push({ label: "Post-processing", value: output.pipeline });
   }
   const slug = OUTPUT_DOC_SLUGS[output.type.toLowerCase()];
   return {
-    purpose: details.join(" "),
+    purpose: `Live destination '${output.id}'.`,
+    facts,
     docs: [
       slug !== undefined
         ? { label: `Cribl ${output.type} destination`, url: CRIBL + slug }
@@ -617,32 +630,32 @@ function outputInfo(output: LiveOutput): DiagramNodeInfo {
 }
 
 /**
- * A pipeline popover: the functions BY TYPE, numbered in evaluation order
- * (user report 2026-07-30: "Starts with: ..." was too little), disabled
- * ones marked; capped so a monster pipeline stays readable.
+ * A pipeline popover: one summary line plus the functions BY TYPE as
+ * numbered step pills in evaluation order, disabled ones marked; capped so
+ * a monster pipeline stays readable.
  */
 function pipelineInfo(kind: string, id: string, pipeline: LivePipeline | undefined): DiagramNodeInfo {
-  let purpose: string;
   if (pipeline === undefined) {
-    purpose = `Referenced ${kind.toLowerCase()} pipeline '${id}' (details unavailable).`;
-  } else {
-    const shown = pipeline.functions.slice(0, 15);
-    const lines = shown.map(
-      (f, i) => `${i + 1}. ${f.id}${f.disabled ? " (disabled)" : ""}`,
-    );
-    const more =
-      pipeline.functions.length > shown.length
-        ? `\n+${pipeline.functions.length - shown.length} more`
-        : "";
-    purpose =
-      `${kind} pipeline '${id}': ${pipeline.functionCount} function(s)` +
+    return {
+      purpose: `Referenced ${kind.toLowerCase()} pipeline '${id}' (details unavailable).`,
+      docs: [{ label: "Cribl pipelines", url: CRIBL + "/stream/pipelines/" }],
+    };
+  }
+  const shown = pipeline.functions.slice(0, 15);
+  return {
+    purpose:
+      `${kind} pipeline - ${pipeline.functionCount} function(s)` +
       (pipeline.disabledFunctionCount > 0
         ? ` (${pipeline.disabledFunctionCount} disabled)`
         : "") +
-      (lines.length > 0 ? `.\n${lines.join("\n")}${more}` : ".");
-  }
-  return {
-    purpose,
+      "." +
+      (pipeline.functions.length > shown.length
+        ? ` Showing the first ${shown.length}.`
+        : ""),
+    steps: shown.map((f) => ({
+      name: f.id,
+      ...(f.disabled ? { disabled: true } : {}),
+    })),
     docs: [{ label: "Cribl pipelines", url: CRIBL + "/stream/pipelines/" }],
   };
 }
@@ -651,21 +664,33 @@ function breakerInfo(id: string, breaker: LiveBreaker | undefined): DiagramNodeI
   return {
     purpose:
       breaker !== undefined
-        ? `Event breaker ruleset '${id}': ${breaker.ruleCount} rule(s).` +
-          (breaker.description !== undefined ? ` ${breaker.description}` : "")
+        ? (breaker.description ?? "Event breaker ruleset.")
         : `Referenced event breaker ruleset '${id}' (details unavailable).`,
+    ...(breaker !== undefined
+      ? { facts: [{ label: "Rules", value: String(breaker.ruleCount) }] }
+      : {}),
     docs: [{ label: "Cribl event breakers", url: CRIBL + "/stream/event-breakers/" }],
   };
 }
 
 function packInfo(name: string, pack: LivePack | undefined): DiagramNodeInfo {
+  if (pack === undefined) {
+    return {
+      purpose: `Route references pack '${name}', which is not in the installed pack list.`,
+      docs: [
+        { label: "Cribl packs", url: CRIBL + "/stream/packs/" },
+        { label: "Pack dispensary", url: PACKS + "/" },
+      ],
+    };
+  }
   return {
-    purpose:
-      pack !== undefined
-        ? `Installed pack '${pack.displayName ?? name}'` +
-          (pack.version !== undefined ? ` v${pack.version}` : "") +
-          (pack.description !== undefined ? `. ${pack.description}` : ".")
-        : `Route references pack '${name}', which is not in the installed pack list.`,
+    purpose: pack.description ?? `Installed pack '${pack.displayName ?? name}'.`,
+    facts: [
+      { label: "Pack", value: pack.displayName ?? name },
+      ...(pack.version !== undefined
+        ? [{ label: "Version", value: pack.version }]
+        : []),
+    ],
     docs: [
       { label: "Cribl packs", url: CRIBL + "/stream/packs/" },
       { label: "Pack dispensary", url: PACKS + "/" },
@@ -674,44 +699,44 @@ function packInfo(name: string, pack: LivePack | undefined): DiagramNodeInfo {
 }
 
 /**
- * One route as a popover line: name, the FILTER it matches, the pack or
- * pipeline it runs, and the destination (with the "default" indirection
- * resolved when known) - user directive 2026-07-30.
+ * One route as a VISUAL popover row (user direction 2026-07-30: mirror the
+ * Cribl UI's route table scaled down - bubbles, not text). The filter rides
+ * along for the hover tooltip only.
  */
-function routeLine(
-  route: LiveRoute,
-  index: number,
-  resolvedDefault: string | null,
-): string {
-  const filter = route.filter ?? "true (all events)";
+function routeRow(route: LiveRoute, resolvedDefault: string | null): DiagramRouteRow {
   const pipelineRef = route.pipeline ?? "passthru";
-  const via = pipelineRef.startsWith("pack:")
+  const pipeline = pipelineRef.startsWith("pack:")
     ? `pack ${pipelineRef.slice("pack:".length)}`
-    : `pipeline ${pipelineRef}`;
+    : pipelineRef === ""
+      ? "passthru"
+      : pipelineRef;
   const target = route.output ?? "default";
-  const dest =
-    target === "default" && resolvedDefault !== null
-      ? `default (${resolvedDefault})`
-      : target;
-  return (
-    `${index + 1}. ${route.name}${route.final ? "" : " (copy)"}` +
-    ` - filter: ${filter} - via ${via} -> ${dest}`
-  );
+  return {
+    name: route.name,
+    pipeline,
+    destination:
+      target === "default" && resolvedDefault !== null
+        ? `default (${resolvedDefault})`
+        : target,
+    ...(route.filter !== undefined ? { filter: route.filter } : {}),
+    ...(route.disabled ? { disabled: true } : {}),
+    ...(route.final ? {} : { copy: true }),
+  };
 }
 
 /**
- * An exploded ROUTE NODE's popover text: position, then the pipeline and
- * destination as clean labeled lines - NOT the raw filter expression (user
- * report 2026-07-30: the filter dump was noise; it stays one level up in
- * the routing-table hub's popover).
+ * An exploded ROUTE NODE's popover: position in the purpose line, then the
+ * pipeline and destination as labeled fact rows - NOT the raw filter
+ * expression (user report 2026-07-30: the filter dump was noise; it stays
+ * one level up in the routing-table hub's popover rows).
  */
-function routeEntryPurpose(
+function routeEntryParts(
   route: LiveRoute,
   position: number,
   scope: string,
   resolvedDefault: string | null,
   disabled: boolean,
-): string {
+): { purpose: string; facts: DiagramFact[] } {
   const pipelineRef = route.pipeline ?? "passthru";
   const via = pipelineRef.startsWith("pack:")
     ? `pack ${pipelineRef.slice("pack:".length)}`
@@ -723,13 +748,16 @@ function routeEntryPurpose(
     target === "default" && resolvedDefault !== null
       ? `default (${resolvedDefault})`
       : target;
-  return (
-    `${disabled ? "DISABLED route" : "Route"} '${route.name}' - entry ` +
-    `${position + 1} of ${scope}${route.final ? "" : ", non-final copy"}.` +
-    `\nPipeline: ${via}` +
-    `\nDestination: ${dest}` +
-    (disabled ? "\nIt processes nothing until re-enabled." : "")
-  );
+  return {
+    purpose:
+      `${disabled ? "DISABLED route" : "Route"} - entry ${position + 1} of ` +
+      `${scope}${route.final ? "" : ", non-final copy"}.` +
+      (disabled ? " It processes nothing until re-enabled." : ""),
+    facts: [
+      { label: "Pipeline", value: via },
+      { label: "Destination", value: dest },
+    ],
+  };
 }
 
 function routesHubInfo(
@@ -737,12 +765,15 @@ function routesHubInfo(
   routes: readonly LiveRoute[],
   resolvedDefault: string | null,
 ): DiagramNodeInfo {
-  const lines = routes.slice(0, 10).map((r, i) => routeLine(r, i, resolvedDefault));
-  const more = routes.length > 10 ? `\n+${routes.length - 10} more route(s).` : "";
+  const shown = routes.slice(0, 12);
   return {
     purpose:
       `Routing table for worker group '${groupId}': ${routes.length} route(s), ` +
-      `evaluated top-down.\n${lines.join("\n")}${more}`,
+      `evaluated top-down. Hover a row for its filter.` +
+      (routes.length > shown.length
+        ? ` Showing the first ${shown.length}.`
+        : ""),
+    routes: shown.map((r) => routeRow(r, resolvedDefault)),
     docs: [{ label: "Cribl routes", url: CRIBL + "/stream/routes/" }],
   };
 }
@@ -1070,7 +1101,9 @@ export function buildLiveDiagram(
       tier: "cribl",
       badge: "Routing table",
       info: withResourceLink(
-        routesHubInfo(snapshot.groupId, routes, defaultOutput?.defaultId ?? null),
+        // ALL routes (disabled included, dimmed) - the popover mirrors the
+        // real table, not just the flowing subset.
+        routesHubInfo(snapshot.groupId, allRoutes, defaultOutput?.defaultId ?? null),
         resourceLink(UI_PAGES.routes, `Open Routes in Cribl (${snapshot.groupId})`),
       ),
       expandable: true,
@@ -1202,30 +1235,34 @@ export function buildLiveDiagram(
       });
     }
     const base = packInfo(packId, packById.get(packId));
-    const extra: string[] = [];
+    const extraFacts: DiagramFact[] = [];
     if (internals.inputs.length > 0) {
-      extra.push(
-        `Embedded source(s): ${internals.inputs.map((i) => `${i.id} (${i.type})`).join(", ")}.`,
-      );
+      extraFacts.push({
+        label: "Embedded sources",
+        value: internals.inputs.map((i) => `${i.id} (${i.type})`).join(", "),
+      });
     }
     if (internals.outputs.length > 0) {
-      extra.push(
-        `Embedded destination(s): ${internals.outputs.map((o) => `${o.id} (${o.type})`).join(", ")}.`,
-      );
+      extraFacts.push({
+        label: "Embedded destinations",
+        value: internals.outputs.map((o) => `${o.id} (${o.type})`).join(", "),
+      });
     }
     if (internals.pipelines.length > 0) {
-      extra.push(`${internals.pipelines.length} pack pipeline(s).`);
+      extraFacts.push({
+        label: "Pack pipelines",
+        value: String(internals.pipelines.length),
+      });
     }
-    if (internals.routes.length > 0) {
-      const lines = internals.routes.slice(0, 6).map((r, i) => routeLine(r, i, null));
-      const more =
-        internals.routes.length > 6 ? `\n+${internals.routes.length - 6} more` : "";
-      extra.push(`Pack routes:\n${lines.join("\n")}${more}`);
-    }
-    packEnrichedInfo.set(
-      packId,
-      extra.length > 0 ? { ...base, purpose: `${base.purpose}\n${extra.join("\n")}` } : base,
-    );
+    packEnrichedInfo.set(packId, {
+      ...base,
+      ...(extraFacts.length > 0
+        ? { facts: [...(base.facts ?? []), ...extraFacts] }
+        : {}),
+      ...(internals.routes.length > 0
+        ? { routes: internals.routes.slice(0, 12).map((r) => routeRow(r, null)) }
+        : {}),
+    });
   }
 
   // Egress side: routes -> (pack | pipe | direct) -> post? -> out.
@@ -1239,7 +1276,7 @@ export function buildLiveDiagram(
   const routeEntryInfo = (route: LiveRoute, disabled: boolean): DiagramNodeInfo =>
     withResourceLink(
       {
-        purpose: routeEntryPurpose(
+        ...routeEntryParts(
           route,
           positionByRouteId.get(route.id) ?? 0,
           "the routing table",
@@ -1513,7 +1550,7 @@ export function buildLiveDiagram(
       ): DiagramNodeInfo =>
         withResourceLink(
           {
-            purpose: routeEntryPurpose(
+            ...routeEntryParts(
               route,
               packRoutePosition.get(route.id) ?? 0,
               `pack '${internals.displayName}' routes`,
@@ -1533,11 +1570,9 @@ export function buildLiveDiagram(
           {
             purpose:
               `Routing table INSIDE pack '${internals.displayName}': ` +
-              `${internals.routes.length} route(s), evaluated top-down.\n` +
-              internals.routes
-                .slice(0, 10)
-                .map((r, i) => routeLine(r, i, null))
-                .join("\n"),
+              `${internals.routes.length} route(s), evaluated top-down. ` +
+              `Hover a row for its filter.`,
+            routes: internals.routes.slice(0, 12).map((r) => routeRow(r, null)),
             docs: [{ label: "Cribl routes", url: CRIBL + "/stream/routes/" }],
           },
           packResource,

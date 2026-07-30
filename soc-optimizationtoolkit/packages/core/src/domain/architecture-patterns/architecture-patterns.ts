@@ -1401,11 +1401,48 @@ export interface DiagramDocLink {
   url: string;
 }
 
+/**
+ * One routing-table row rendered VISUALLY in a node popover (2026-07-30
+ * user direction: the routes list should look like the Cribl UI's route
+ * table scaled down - clean bubbles, not a text dump). The filter never
+ * renders inline; it surfaces as the row's hover tooltip.
+ */
+export interface DiagramRouteRow {
+  name: string;
+  /** The pack or pipeline the route runs ("passthru" when none). */
+  pipeline: string;
+  destination: string;
+  /** Full filter expression - shown as the row tooltip only. */
+  filter?: string;
+  disabled?: boolean;
+  /** Non-final route: clones the events and continues down the table. */
+  copy?: boolean;
+}
+
+/** One labeled detail row in a node popover ("Type: eventhub"). */
+export interface DiagramFact {
+  label: string;
+  value: string;
+}
+
+/** One ordered step (a pipeline function) in a node popover. */
+export interface DiagramStep {
+  name: string;
+  disabled?: boolean;
+}
+
 /** A diagram node's purpose text plus its vendor documentation links. */
 export interface DiagramNodeInfo {
   /** What this component does in the flow, in a sentence or two. */
   purpose: string;
   docs: readonly DiagramDocLink[];
+  /** Labeled detail rows drawn under the purpose (2026-07-30: every live
+   * popover presents structured facts, not prose dumps). */
+  facts?: readonly DiagramFact[];
+  /** Numbered step pills (pipeline functions, in evaluation order). */
+  steps?: readonly DiagramStep[];
+  /** Routing-table rows drawn as visual bubbles under the purpose text. */
+  routes?: readonly DiagramRouteRow[];
 }
 
 const MS = "https://learn.microsoft.com";

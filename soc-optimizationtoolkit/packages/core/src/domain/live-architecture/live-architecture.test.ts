@@ -492,7 +492,10 @@ describe("buildLiveDiagram - collector jobs and stage badges (2026-07-29)", () =
   it("the collector job's info names the collector type", () => {
     const { diagram } = buildLiveDiagram(jobsSnapshot(), { azureOnly: true });
     const job = diagram.nodes.find((n) => n.id === "in:blob_flowlogs")!;
-    expect(job.info?.purpose).toContain("azure_blob");
+    expect(job.info?.facts).toContainEqual({
+      label: "Collector",
+      value: "azure_blob",
+    });
   });
 });
 
@@ -569,18 +572,27 @@ describe("buildLiveDiagram - source/destination focus (2026-07-29)", () => {
 });
 
 describe("routes popover detail and pack internals (2026-07-30)", () => {
-  it("the Routes popover lists each route with filter, pack/pipeline, and destination", () => {
+  it("the Routes popover carries VISUAL rows: name, pipeline, destination, filter tooltip", () => {
     const { diagram } = buildLiveDiagram(labSnapshot(), { azureOnly: false });
     const hub = diagram.nodes.find((n) => n.id === "routes")!;
-    expect(hub.info?.purpose).toContain(
-      "1. flowlogs - filter: __inputId=='flowlog_collector' - via pack AzureFlowLogs -> sentinel_dest",
-    );
-    expect(hub.info?.purpose).toContain(
-      "2. pan-to-splunk - filter: __inputId=='syslog_pan' - via pipeline passthru -> splunk_dest",
-    );
+    expect(hub.info?.purpose).toContain("2 route(s), evaluated top-down");
+    expect(hub.info?.routes).toEqual([
+      {
+        name: "flowlogs",
+        pipeline: "pack AzureFlowLogs",
+        destination: "sentinel_dest",
+        filter: "__inputId=='flowlog_collector'",
+      },
+      {
+        name: "pan-to-splunk",
+        pipeline: "passthru",
+        destination: "splunk_dest",
+        filter: "__inputId=='syslog_pan'",
+      },
+    ]);
   });
 
-  it("resolves the default indirection in the popover line", () => {
+  it("resolves the default indirection in the popover row", () => {
     const snapshot = labSnapshot();
     snapshot.routes = ok({
       routes: [
@@ -589,9 +601,12 @@ describe("routes popover detail and pack internals (2026-07-30)", () => {
     });
     const { diagram } = buildLiveDiagram(snapshot, { azureOnly: true });
     const hub = diagram.nodes.find((n) => n.id === "routes")!;
-    expect(hub.info?.purpose).toContain(
-      "1. to-default - filter: __inputId=='flowlog_collector' - via pipeline passthru -> default (sentinel_dest)",
-    );
+    expect(hub.info?.routes?.[0]).toEqual({
+      name: "to-default",
+      pipeline: "passthru",
+      destination: "default (sentinel_dest)",
+      filter: "__inputId=='flowlog_collector'",
+    });
   });
 
   it("installedPackIds parses tolerantly", () => {
@@ -658,12 +673,16 @@ describe("routes popover detail and pack internals (2026-07-30)", () => {
     ).toBe("premium");
     // The pack popover names the internals: endpoints, pipelines, routes.
     const pack = diagram.nodes.find((n) => n.id === "pack:AllInOne")!;
-    expect(pack.info?.purpose).toContain("Embedded source(s): eh_in (eventhub).");
-    expect(pack.info?.purpose).toContain("Embedded destination(s): sent_out (sentinel).");
-    expect(pack.info?.purpose).toContain("1 pack pipeline(s).");
-    expect(pack.info?.purpose).toContain(
-      "1. pack-route - filter: true - via pipeline shape -> sent_out",
-    );
+    expect(pack.info?.facts).toEqual([
+      { label: "Pack", value: "All In One" },
+      { label: "Version", value: "1.0.0" },
+      { label: "Embedded sources", value: "eh_in (eventhub)" },
+      { label: "Embedded destinations", value: "sent_out (sentinel)" },
+      { label: "Pack pipelines", value: "1" },
+    ]);
+    expect(pack.info?.routes).toEqual([
+      { name: "pack-route", pipeline: "shape", destination: "sent_out", filter: "true" },
+    ]);
     // The card is labeled by the pack's DISPLAY NAME and offers explode.
     const packNode = diagram.nodes.find((n) => n.id === "pack:AllInOne")!;
     expect(packNode.label).toBe("All In One");
@@ -726,10 +745,12 @@ describe("routes popover detail and pack internals (2026-07-30)", () => {
     // Exploded: the generic pack -> destination shortcut is gone.
     expect(edgePairs).not.toContain("pack:AllInOne>out:AllInOne/sent_out");
     expect(diagram.nodes.find((n) => n.id === "pack:AllInOne")?.expanded).toBe(true);
-    // The internal routing table popover carries the route detail.
+    // The internal routing table popover carries the route detail as rows.
     expect(
-      diagram.nodes.find((n) => n.id === "routes:AllInOne")?.info?.purpose,
-    ).toContain("1. pack-route - filter: true - via pipeline shape -> sent_out");
+      diagram.nodes.find((n) => n.id === "routes:AllInOne")?.info?.routes,
+    ).toEqual([
+      { name: "pack-route", pipeline: "shape", destination: "sent_out", filter: "true" },
+    ]);
   });
 
   it("inventories every complete flow and honors selectedFlows", () => {
@@ -778,15 +799,17 @@ describe("routes popover detail and pack internals (2026-07-30)", () => {
     expect(diagram.nodes.some((n) => n.id === "pack:AllInOne")).toBe(false);
   });
 
-  it("pipeline popovers list the functions by type in evaluation order", () => {
+  it("pipeline popovers carry the functions as ordered STEPS", () => {
     const { diagram } = buildLiveDiagram(labSnapshot(), { azureOnly: true });
     const pre = diagram.nodes.find(
       (n) => n.id === "pre:Azure_vNet_FlowLogs_PreProcessing",
     )!;
-    expect(pre.info?.purpose).toBe(
-      "Pre-processing pipeline 'Azure_vNet_FlowLogs_PreProcessing': 3 function(s).\n" +
-        "1. eval\n2. unroll\n3. serialize",
-    );
+    expect(pre.info?.purpose).toBe("Pre-processing pipeline - 3 function(s).");
+    expect(pre.info?.steps).toEqual([
+      { name: "eval" },
+      { name: "unroll" },
+      { name: "serialize" },
+    ]);
     // Disabled functions stay in order, marked.
     const snapshot = labSnapshot();
     snapshot.pipelines = ok({
@@ -804,14 +827,17 @@ describe("routes popover detail and pack internals (2026-07-30)", () => {
       ],
     });
     const withDisabled = buildLiveDiagram(snapshot, { azureOnly: true });
-    expect(
-      withDisabled.diagram.nodes.find(
-        (n) => n.id === "pre:Azure_vNet_FlowLogs_PreProcessing",
-      )?.info?.purpose,
-    ).toBe(
-      "Pre-processing pipeline 'Azure_vNet_FlowLogs_PreProcessing': " +
-        "3 function(s) (1 disabled).\n1. eval\n2. drop (disabled)\n3. serialize",
+    const node = withDisabled.diagram.nodes.find(
+      (n) => n.id === "pre:Azure_vNet_FlowLogs_PreProcessing",
+    )!;
+    expect(node.info?.purpose).toBe(
+      "Pre-processing pipeline - 3 function(s) (1 disabled).",
     );
+    expect(node.info?.steps).toEqual([
+      { name: "eval" },
+      { name: "drop", disabled: true },
+      { name: "serialize" },
+    ]);
   });
 
   it("the pack's internal routing table explodes one level further", () => {
@@ -871,11 +897,11 @@ describe("routes popover detail and pack internals (2026-07-30)", () => {
     );
     const r1 = diagram.nodes.find((n) => n.id === "route:AllInOne/r1")!;
     expect(r1.badge).toBe("Route");
-    expect(r1.info?.purpose).toBe(
-      "Route 'pack-route' - entry 1 of pack 'All In One' routes.\n" +
-        "Pipeline: shape\n" +
-        "Destination: sent_out",
-    );
+    expect(r1.info?.purpose).toBe("Route - entry 1 of pack 'All In One' routes.");
+    expect(r1.info?.facts).toEqual([
+      { label: "Pipeline", value: "shape" },
+      { label: "Destination", value: "sent_out" },
+    ]);
     const r2 = diagram.nodes.find((n) => n.id === "route:AllInOne/r2")!;
     expect(r2.muted).toBe(true);
     expect(r2.badge).toBe("Route (disabled)");
@@ -912,12 +938,12 @@ describe("routing-table explode (2026-07-30)", () => {
     expect(r1.label).toBe("flowlogs");
     expect(r1.badge).toBe("Route");
     // CLEAN popover (user report 2026-07-30): pipeline + destination as
-    // labeled lines, NO raw filter expression (that stays on the hub).
-    expect(r1.info?.purpose).toBe(
-      "Route 'flowlogs' - entry 1 of the routing table.\n" +
-        "Pipeline: pack AzureFlowLogs\n" +
-        "Destination: sentinel_dest",
-    );
+    // labeled FACT rows, NO raw filter expression (that stays on the hub).
+    expect(r1.info?.purpose).toBe("Route - entry 1 of the routing table.");
+    expect(r1.info?.facts).toEqual([
+      { label: "Pipeline", value: "pack AzureFlowLogs" },
+      { label: "Destination", value: "sentinel_dest" },
+    ]);
     const edgePairs = diagram.edges.map((e) => `${e.from}>${e.to}`);
     expect(edgePairs).toEqual(
       expect.arrayContaining([
@@ -984,6 +1010,15 @@ describe("routing-table explode (2026-07-30)", () => {
     expect(
       diagram.edges.some((e) => e.from === "route:r3"),
     ).toBe(false);
+    // The hub's visual table shows the disabled row, dimmed.
+    const hub = diagram.nodes.find((n) => n.id === "routes")!;
+    expect(hub.info?.routes?.[2]).toEqual({
+      name: "old-route",
+      pipeline: "passthru",
+      destination: "splunk_dest",
+      filter: "__inputId=='syslog_pan'",
+      disabled: true,
+    });
   });
 });
 

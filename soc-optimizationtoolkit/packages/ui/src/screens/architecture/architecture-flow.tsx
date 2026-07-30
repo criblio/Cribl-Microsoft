@@ -258,6 +258,64 @@ function ArchNodeCard({ id, data }: NodeProps<ArchNode>) {
             </button>
           </div>
           <p className="arch-flow-info-purpose">{info.purpose}</p>
+          {info.facts !== undefined && info.facts.length > 0 && (
+            <div className="arch-flow-info-facts">
+              {info.facts.map((fact) => (
+                <div className="arch-flow-info-fact" key={fact.label}>
+                  <span className="arch-flow-info-fact-label">{fact.label}</span>
+                  <span className="arch-flow-info-fact-value">{fact.value}</span>
+                </div>
+              ))}
+            </div>
+          )}
+          {info.steps !== undefined && info.steps.length > 0 && (
+            <div className="arch-flow-step-rows">
+              {info.steps.map((step, index) => (
+                <div
+                  key={`${step.name}-${index}`}
+                  className={
+                    "arch-flow-step-row" +
+                    (step.disabled === true ? " arch-flow-route-row-disabled" : "")
+                  }
+                >
+                  <span className="arch-flow-step-num">{index + 1}</span>
+                  <span className="arch-flow-step-name">
+                    {step.name}
+                    {step.disabled === true ? " (disabled)" : ""}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+          {info.routes !== undefined && info.routes.length > 0 && (
+            <div className="arch-flow-route-rows">
+              {info.routes.map((row, index) => (
+                <div
+                  key={`${row.name}-${index}`}
+                  className={
+                    "arch-flow-route-row" +
+                    (row.disabled === true ? " arch-flow-route-row-disabled" : "")
+                  }
+                  title={row.filter ?? "true (all events)"}
+                >
+                  <span className="arch-flow-route-row-name">
+                    {index + 1}. {row.name}
+                    {row.copy === true ? " (copy)" : ""}
+                    {row.disabled === true ? " (disabled)" : ""}
+                  </span>
+                  <span className="arch-flow-route-row-chips">
+                    <span className="arch-flow-route-chip arch-flow-route-chip-pipe">
+                      {row.pipeline}
+                    </span>
+                    <span className="arch-flow-route-arrow">-&gt;</span>
+                    <span className="arch-flow-route-chip arch-flow-route-chip-dest">
+                      {row.destination}
+                    </span>
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
           <span className="arch-flow-info-links-label">Links</span>
           <ul className="arch-flow-info-links">
             {info.docs.map((doc) => (

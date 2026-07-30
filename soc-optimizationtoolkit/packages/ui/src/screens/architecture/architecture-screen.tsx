@@ -314,10 +314,6 @@ function LiveArchitecturePanel({
     () => (liveResult?.flows ?? []).filter((flow) => !azureOnly || flow.azure),
     [liveResult, azureOnly],
   );
-  const toggleFlow = (key: string): void =>
-    setSelectedFlows((prev) =>
-      prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key],
-    );
   const toggleNodeExpand = useCallback((nodeId: string) => {
     const toggleIn = (prev: string[], id: string): string[] =>
       prev.includes(id) ? prev.filter((p) => p !== id) : [...prev, id];
@@ -382,20 +378,22 @@ function LiveArchitecturePanel({
       )}
       {liveResult !== null && visibleFlows.length > 1 && (
         <div className="arch-live-focus">
-          <span className="field-label">
-            Flow inventory ({visibleFlows.length}) - check flows to draw only
-            those; unchecked = draw everything
-          </span>
-          {visibleFlows.map((flow) => (
-            <label className="integrate-check" key={flow.key}>
-              <input
-                type="checkbox"
-                checked={selectedFlows.includes(flow.key)}
-                onChange={() => toggleFlow(flow.key)}
-              />
-              <span className="integrate-check-text">{flow.label}</span>
-            </label>
-          ))}
+          <label className="field">
+            <span className="field-label">
+              Flow inventory ({visibleFlows.length}) - select flows to draw
+              only those; empty = draw everything
+            </span>
+            <SearchableMultiSelect
+              options={visibleFlows.map((flow) => ({
+                value: flow.key,
+                label: flow.label,
+              }))}
+              values={selectedFlows}
+              onChange={setSelectedFlows}
+              placeholder="All flows drawn - select to narrow..."
+              ariaLabel="Filter flows"
+            />
+          </label>
           {selectedFlows.length > 0 && (
             <button
               type="button"

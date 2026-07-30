@@ -21,7 +21,10 @@ export type {
   ArchitectureSelection,
   PatternRecommendation,
   DiagramDocLink,
+  DiagramFact,
   DiagramNodeInfo,
+  DiagramRouteRow,
+  DiagramStep,
 } from "./architecture-patterns";
 export {
   CRIBL_PRODUCTS,

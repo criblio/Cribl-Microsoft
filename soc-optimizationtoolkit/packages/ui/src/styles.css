@@ -4654,6 +4654,123 @@ details[open] > summary::before {
   background: var(--accent);
   color: var(--surface-raised);
 }
+/* Labeled fact rows in a popover (2026-07-30): every live "i" presents
+ * structured detail - label column faint, value wraps. */
+.arch-flow-info-facts {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin: 6px 0 8px;
+}
+.arch-flow-info-fact {
+  display: flex;
+  gap: 8px;
+  font-size: 11px;
+  line-height: 15px;
+}
+.arch-flow-info-fact-label {
+  flex: 0 0 92px;
+  font-weight: 600;
+  color: var(--text-faint);
+}
+.arch-flow-info-fact-value {
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+/* Numbered step pills (pipeline functions in evaluation order). */
+.arch-flow-step-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin: 6px 0 8px;
+}
+.arch-flow-step-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 3px 8px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  background: var(--surface);
+}
+.arch-flow-step-num {
+  flex: none;
+  min-width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 1px solid var(--accent);
+  background: var(--accent-bg);
+  color: var(--accent-strong);
+  font-size: 9px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.arch-flow-step-name {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+/* Routing-table rows inside a popover (2026-07-30): the Cribl UI's route
+ * table scaled down - one bubble per route, pipeline and destination as
+ * chips, the filter as the hover tooltip. */
+.arch-flow-route-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin: 6px 0 8px;
+}
+.arch-flow-route-row {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 5px 8px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  background: var(--surface);
+  cursor: help;
+}
+.arch-flow-route-row-disabled {
+  opacity: 0.5;
+}
+.arch-flow-route-row-name {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+.arch-flow-route-row-chips {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.arch-flow-route-chip {
+  font-size: 9.5px;
+  font-weight: 600;
+  padding: 1px 7px;
+  border-radius: 8px;
+  overflow-wrap: anywhere;
+}
+.arch-flow-route-chip-pipe {
+  border: 1px solid var(--accent);
+  background: var(--accent-bg);
+  color: var(--accent-strong);
+}
+.arch-flow-route-chip-dest {
+  border: 1px solid var(--ok);
+  background: var(--ok-bg);
+  color: var(--ok-strong);
+}
+.arch-flow-route-arrow {
+  font-size: 10px;
+  color: var(--text-faint);
+}
+
 /* Disabled routes in the exploded routing table (2026-07-30): present as
  * config, processing nothing - subdued card, faint line, no packets. */
 .arch-flow-node-muted {
