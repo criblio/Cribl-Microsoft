@@ -219,26 +219,41 @@ export function diagramToSvg(diagram: PatternDiagram): string {
         `stroke-width="1.6" marker-end="url(#arch-arrow)"` +
         `${edge.muted === true ? ' stroke-opacity="0.3"' : ""}/>`,
     );
-    const anchor = midpointOnPolyline(points);
+    // Labels anchor at DAGRE'S reserved label point when present (the layout
+    // keeps that spot clear of cards and other labels - user report
+    // 2026-07-30: overlap); unlabeled edges fall back to the path midpoint.
+    const anchor = edge.labelPoint ?? midpointOnPolyline(points);
     const midX = round(anchor.x);
     const midY = round(anchor.y);
+    let costTop = midY + 1;
     if (edge.label !== undefined && edge.label !== "") {
-      const backW = edge.label.length * 5.5 + 10;
+      const lines = splitLabel(edge.label);
+      const backW =
+        Math.max(...lines.map((line) => line.length)) * 5.5 + 10;
+      const backH = lines.length * 12 + 4;
+      const backTop = midY - backH / 2;
       labelParts.push(
-        `<rect x="${round(midX - backW / 2)}" y="${midY - 14}" width="${round(backW)}" ` +
-          `height="14" rx="3" fill="${PALETTE.surface}" opacity="0.92"/>`,
-        `<text x="${midX}" y="${midY - 4}" text-anchor="middle" font-size="10" ` +
-          `fill="${PALETTE.muted}">${esc(edge.label)}</text>`,
+        `<rect x="${round(midX - backW / 2)}" y="${round(backTop)}" ` +
+          `width="${round(backW)}" height="${backH}" rx="3" ` +
+          `fill="${PALETTE.surface}" opacity="0.92"/>`,
+        `<text x="${midX}" y="${round(backTop + 11)}" text-anchor="middle" ` +
+          `font-size="10" fill="${PALETTE.muted}">${esc(lines[0])}` +
+          (lines.length > 1
+            ? `<tspan x="${midX}" dy="12">${esc(lines[1] ?? "")}</tspan>`
+            : "") +
+          `</text>`,
       );
+      costTop = midY + backH / 2 + 1;
     }
     if (edge.cost !== undefined) {
       const capW = edge.cost.length * 6 + 8;
       labelParts.push(
-        `<rect x="${round(midX - capW / 2)}" y="${midY + 1}" width="${round(capW)}" ` +
-          `height="12" rx="3" fill="${PALETTE.surface}" opacity="0.92"/>`,
-        `<text x="${midX}" y="${midY + 10}" text-anchor="middle" font-size="8" ` +
-          `font-weight="700" letter-spacing="0.5" fill="${edgeStroke(edge.cost)}">` +
-          `${edge.cost.toUpperCase()}</text>`,
+        `<rect x="${round(midX - capW / 2)}" y="${round(costTop)}" ` +
+          `width="${round(capW)}" height="12" rx="3" ` +
+          `fill="${PALETTE.surface}" opacity="0.92"/>`,
+        `<text x="${midX}" y="${round(costTop + 9)}" text-anchor="middle" ` +
+          `font-size="8" font-weight="700" letter-spacing="0.5" ` +
+          `fill="${edgeStroke(edge.cost)}">${edge.cost.toUpperCase()}</text>`,
       );
     }
   }

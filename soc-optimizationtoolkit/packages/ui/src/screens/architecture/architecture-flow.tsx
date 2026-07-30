@@ -515,7 +515,7 @@ function FlowingEdge({
           className="arch-flow-bend-dot nodrag nopan"
           title="Drag to bend this line; double-click to reset"
           style={{
-            transform: `translate(-50%, -50%) translate(${anchorX}px, ${anchorY + (hasLabel || cost !== undefined ? 16 : 0)}px)`,
+            transform: `translate(-50%, -50%) translate(${anchorX}px, ${anchorY + (hasLabel || cost !== undefined ? 24 : 0)}px)`,
           }}
           onPointerDown={(event) => {
             event.stopPropagation();

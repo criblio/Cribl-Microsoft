@@ -101,6 +101,12 @@ export interface EdgePoint {
  */
 export interface LaidOutEdge extends DiagramEdge {
   points: EdgePoint[];
+  /**
+   * Where dagre placed the edge LABEL (labels participate in the layout as
+   * virtual nodes, so this spot is clear of cards and other labels). Absent
+   * on unlabeled edges.
+   */
+  labelPoint?: EdgePoint;
 }
 
 /** The laid-out diagram: nodes with positions, routed edges, canvas size. */
@@ -155,14 +161,28 @@ export function layoutDiagram(diagram: PatternDiagram): LaidOutDiagram {
 
   const g = new Dagre.graphlib.Graph().setDefaultEdgeLabel(() => ({}));
   // Tightened 2026-07-29 (user report: a lot of whitespace between objects) -
-  // was nodesep 34 / ranksep 96; labels ride the edges with backing pills so
-  // the narrower column gap stays legible.
-  g.setGraph({ rankdir: "LR", nodesep: 24, ranksep: 72, marginx: 10, marginy: 10 });
+  // was nodesep 34 / ranksep 96. Edge labels are DECLARED to dagre below
+  // (2026-07-30 user report: labels struck through cards): the layout
+  // reserves room for each label as a virtual node, so ranks widen exactly
+  // where a label needs space instead of everywhere.
+  g.setGraph({ rankdir: "LR", nodesep: 26, ranksep: 72, marginx: 10, marginy: 10 });
   for (const node of diagram.nodes) {
     g.setNode(node.id, { width: NODE_W, height: heightOf(node.id) });
   }
   for (const edge of diagram.edges) {
-    g.setEdge(edge.from, edge.to);
+    const label = edge.label ?? "";
+    g.setEdge(
+      edge.from,
+      edge.to,
+      label !== ""
+        ? {
+            // The canvas pill wraps at 150px - reserve the WRAPPED footprint.
+            width: Math.min(label.length * 5.5 + 12, 160),
+            height: label.length * 5.5 > 150 ? 30 : 18,
+            labelpos: "c",
+          }
+        : {},
+    );
   }
   Dagre.layout(g);
 
@@ -189,11 +209,17 @@ export function layoutDiagram(diagram: PatternDiagram): LaidOutDiagram {
   });
   const edges: LaidOutEdge[] = diagram.edges.map((e) => {
     const routed = g.edge({ v: e.from, w: e.to }) as
-      | { points?: EdgePoint[] }
+      | { points?: EdgePoint[]; x?: number; y?: number }
       | undefined;
     return {
       ...e,
       points: (routed?.points ?? []).map((p) => ({ x: p.x, y: p.y })),
+      ...(e.label !== undefined &&
+      e.label !== "" &&
+      routed?.x !== undefined &&
+      routed?.y !== undefined
+        ? { labelPoint: { x: routed.x, y: routed.y } }
+        : {}),
     };
   });
   const size = g.graph();

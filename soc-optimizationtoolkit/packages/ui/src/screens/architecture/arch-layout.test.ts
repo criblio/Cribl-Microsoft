@@ -5,7 +5,12 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { ARCHITECTURE_PATTERNS, unifyPatternDiagrams } from "@soc/core";
+import {
+  ARCHITECTURE_PATTERNS,
+  ARCHITECTURE_PRESETS,
+  recommendPatterns,
+  unifyPatternDiagrams,
+} from "@soc/core";
 import {
   CHIP_ROW_H,
   NODE_H,
@@ -34,6 +39,38 @@ describe("layoutDiagram", () => {
       expect(node.height).toBeGreaterThanOrEqual(NODE_H);
       expect(node.x + NODE_W).toBeLessThanOrEqual(laidOut.width);
       expect(node.y + node.height).toBeLessThanOrEqual(laidOut.height);
+    }
+  });
+
+  it("reserves collision-free spots for edge labels in every preset merge", () => {
+    // 2026-07-30 user report: labels struck through cards. Edge labels are
+    // declared to dagre as virtual nodes; this pins that the reserved label
+    // box never intersects a card, across every preset's merged diagram.
+    for (const preset of ARCHITECTURE_PRESETS) {
+      const matches = recommendPatterns(preset.selection)
+        .filter((r) => r.fit === "match")
+        .map((r) => r.pattern);
+      const laidOut = layoutDiagram(unifyPatternDiagrams(matches));
+      for (const edge of laidOut.edges) {
+        if (edge.labelPoint === undefined || edge.label === undefined) {
+          continue;
+        }
+        const w = Math.min(edge.label.length * 5.5 + 12, 160);
+        const h = edge.label.length * 5.5 > 150 ? 30 : 18;
+        const left = edge.labelPoint.x - w / 2;
+        const top = edge.labelPoint.y - h / 2;
+        for (const node of laidOut.nodes) {
+          const overlaps =
+            left < node.x + NODE_W &&
+            left + w > node.x &&
+            top < node.y + node.height &&
+            top + h > node.y;
+          expect(
+            overlaps,
+            `${preset.id}: label '${edge.label}' overlaps card '${node.label}'`,
+          ).toBe(false);
+        }
+      }
     }
   });
 

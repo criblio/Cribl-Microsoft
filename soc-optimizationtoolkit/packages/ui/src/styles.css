@@ -4145,7 +4145,13 @@ button.journey-step-main:hover .journey-step-label {
   padding: 1px 5px;
   border-radius: 4px;
   border: 1px solid var(--border-subtle);
-  white-space: nowrap;
+  /* Long phase labels ("during: HF outputs to Stream (temporary)") WRAP
+   * inside a bounded pill instead of striking through the neighbor cards
+   * (user report 2026-07-30). */
+  white-space: normal;
+  max-width: 150px;
+  text-align: center;
+  line-height: 12px;
 }
 /* Billing-cost tinting (2026-07-29): premium = analytics-tier per-GB rates,
  * economical = low-cost store/egress. Pipe stroke + a small badge. */
