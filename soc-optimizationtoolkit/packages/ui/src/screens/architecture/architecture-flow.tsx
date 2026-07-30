@@ -369,28 +369,33 @@ function roundedOrthogonalPath(points: FlowPoint[], r = 12): string {
 }
 
 /**
- * Orthogonal waypoints from S to T passing THROUGH the dragged point P,
- * honoring the exit axis at the source handle and the entry axis at the
- * target handle. Near-collinear jogs (under 4px) collapse so the route
- * stays clean when P lines up with an endpoint.
+ * Orthogonal waypoints from S to T passing THROUGH every via point in
+ * order (2026-07-30: multiple bends per line), honoring the exit axis at
+ * the source handle and the entry axis at the target handle. Each via is
+ * reached by an L-jog; near-collinear jogs (under 4px) collapse so routes
+ * stay clean when a via lines up with its neighbors.
  */
-function orthogonalThrough(
+function orthogonalVia(
   s: FlowPoint,
   t: FlowPoint,
-  p: FlowPoint,
+  vias: readonly FlowPoint[],
   exitAxis: "h" | "v",
   enterAxis: "h" | "v",
 ): FlowPoint[] {
   const pts: FlowPoint[] = [s];
-  pts.push(exitAxis === "h" ? { x: p.x, y: s.y } : { x: s.x, y: p.y });
-  pts.push(p);
+  let cur = s;
+  for (const via of vias) {
+    pts.push(exitAxis === "h" ? { x: via.x, y: cur.y } : { x: cur.x, y: via.y });
+    pts.push(via);
+    cur = via;
+  }
   if (enterAxis === "h") {
-    if (Math.abs(p.y - t.y) > 4) {
-      const xj = (p.x + t.x) / 2;
-      pts.push({ x: xj, y: p.y }, { x: xj, y: t.y });
+    if (Math.abs(cur.y - t.y) > 4) {
+      const xj = (cur.x + t.x) / 2;
+      pts.push({ x: xj, y: cur.y }, { x: xj, y: t.y });
     }
-  } else if (Math.abs(p.x - t.x) > 4) {
-    pts.push({ x: t.x, y: p.y });
+  } else if (Math.abs(cur.x - t.x) > 4) {
+    pts.push({ x: t.x, y: cur.y });
   }
   pts.push(t);
   return pts.filter(
@@ -414,12 +419,14 @@ function snapTo(value: number, guides: readonly number[]): number {
  * animated in CSS (Firefox-safe - not SMIL) plus <animateMotion> packets that
  * ride the exact edge path, so they track the geometry on drag/relayout.
  *
- * BENDABLE (user 2026-07-29): every edge carries a small grab dot at its
- * label anchor. Dragging the dot re-routes the line ORTHOGONALLY through
- * the dragged point - right-angle segments with rounded corners, matching
- * the diagram's step aesthetic - while both ENDPOINTS stay attached to
- * their nodes; the drag point snaps onto an endpoint's axis when close so
- * near-straight routes become exactly straight. Double-click resets.
+ * BENDABLE with MULTIPLE waypoints (2026-07-30, was single-bend since
+ * 2026-07-29): solid dots are bends - drag to move one, double-click to
+ * remove it; hollow dots sit between neighbors - drag one to ADD a bend
+ * there, adjusting a smaller section of the line. The route runs
+ * orthogonally through every bend in order (right-angle segments, rounded
+ * corners) while both ENDPOINTS stay attached to their nodes; dragged
+ * points snap onto neighboring axes so near-straight runs become exactly
+ * straight.
  */
 function FlowingEdge({
   id,
@@ -433,8 +440,8 @@ function FlowingEdge({
   data,
 }: EdgeProps<FlowEdge>) {
   const { screenToFlowPosition } = useReactFlow();
-  const [bend, setBend] = useState<{ x: number; y: number } | null>(null);
-  const draggingRef = useRef(false);
+  const [bends, setBends] = useState<FlowPoint[]>([]);
+  const draggingIndexRef = useRef<number | null>(null);
 
   // Wrap-back edges (e.g. the blob "replay" return into Stream) get a wider
   // clearance so the wrap does not hug the node cards, and their label drops
@@ -473,27 +480,70 @@ function FlowingEdge({
     anchorX = anchor.x;
     anchorY = anchor.y;
   }
-  // Bent edges re-route orthogonally THROUGH the dragged point, honoring
+  // Bent edges re-route orthogonally THROUGH every bend in order, honoring
   // the axes the handles impose (right/left handles exit and enter
   // horizontally; the bottom wrap-back handles vertically).
-  if (bend !== null) {
+  if (bends.length > 0) {
     const exitAxis = sourcePosition === Position.Bottom ? "v" : "h";
     const enterAxis = targetPosition === Position.Bottom ? "v" : "h";
-    edgePath = roundedOrthogonalPath(
-      orthogonalThrough(
-        { x: sourceX, y: sourceY },
-        { x: targetX, y: targetY },
-        bend,
-        exitAxis,
-        enterAxis,
-      ),
+    const route = orthogonalVia(
+      { x: sourceX, y: sourceY },
+      { x: targetX, y: targetY },
+      bends,
+      exitAxis,
+      enterAxis,
     );
-    anchorX = bend.x;
-    anchorY = bend.y;
+    edgePath = roundedOrthogonalPath(route);
+    const anchor = polylineMidpoint(route);
+    anchorX = anchor.x;
+    anchorY = anchor.y;
   }
 
   const hasLabel = data?.label !== undefined && data.label !== "";
   const cost = data?.cost;
+
+  // Grab-dot geometry: solid dots at each bend; hollow ADD dots between
+  // consecutive anchors (or at the label anchor while the line is unbent).
+  const anchors: FlowPoint[] = [
+    { x: sourceX, y: sourceY },
+    ...bends,
+    { x: targetX, y: targetY },
+  ];
+  const insertionPoints: FlowPoint[] =
+    bends.length === 0
+      ? [{ x: anchorX, y: anchorY + (hasLabel || cost !== undefined ? 24 : 0) }]
+      : anchors.slice(0, -1).map((a, i) => ({
+          x: (a.x + anchors[i + 1].x) / 2,
+          y: (a.y + anchors[i + 1].y) / 2,
+        }));
+  const dragMove = (event: React.PointerEvent): void => {
+    const index = draggingIndexRef.current;
+    if (index === null) {
+      return;
+    }
+    const point = screenToFlowPosition({ x: event.clientX, y: event.clientY });
+    setBends((prev) => {
+      const guidesX = [
+        sourceX,
+        targetX,
+        ...prev.filter((_, i) => i !== index).map((b) => b.x),
+      ];
+      const guidesY = [
+        sourceY,
+        targetY,
+        ...prev.filter((_, i) => i !== index).map((b) => b.y),
+      ];
+      return prev.map((b, i) =>
+        i === index
+          ? { x: snapTo(point.x, guidesX), y: snapTo(point.y, guidesY) }
+          : b,
+      );
+    });
+  };
+  const dragEnd = (event: React.PointerEvent): void => {
+    draggingIndexRef.current = null;
+    (event.target as HTMLElement).releasePointerCapture(event.pointerId);
+  };
   return (
     <>
       <BaseEdge
@@ -540,41 +590,49 @@ function FlowingEdge({
             </span>
           )}
         </div>
-        <div
-          className="arch-flow-bend-dot nodrag nopan"
-          title="Drag to bend this line; double-click to reset"
-          style={{
-            transform: `translate(-50%, -50%) translate(${anchorX}px, ${anchorY + (hasLabel || cost !== undefined ? 24 : 0)}px)`,
-          }}
-          onPointerDown={(event) => {
-            event.stopPropagation();
-            draggingRef.current = true;
-            (event.target as HTMLElement).setPointerCapture(event.pointerId);
-          }}
-          onPointerMove={(event) => {
-            if (!draggingRef.current) {
-              return;
-            }
-            const point = screenToFlowPosition({
-              x: event.clientX,
-              y: event.clientY,
-            });
-            // Snap onto an endpoint's axis when close - near-straight
-            // routes become exactly straight (right angles by default).
-            setBend({
-              x: snapTo(point.x, [sourceX, targetX]),
-              y: snapTo(point.y, [sourceY, targetY]),
-            });
-          }}
-          onPointerUp={(event) => {
-            draggingRef.current = false;
-            (event.target as HTMLElement).releasePointerCapture(event.pointerId);
-          }}
-          onDoubleClick={(event) => {
-            event.stopPropagation();
-            setBend(null);
-          }}
-        />
+        {bends.map((bendPoint, index) => (
+          <div
+            key={`bend-${index}`}
+            className="arch-flow-bend-dot nodrag nopan"
+            title="Drag to move this bend; double-click to remove it"
+            style={{
+              transform: `translate(-50%, -50%) translate(${bendPoint.x}px, ${bendPoint.y}px)`,
+            }}
+            onPointerDown={(event) => {
+              event.stopPropagation();
+              draggingIndexRef.current = index;
+              (event.target as HTMLElement).setPointerCapture(event.pointerId);
+            }}
+            onPointerMove={dragMove}
+            onPointerUp={dragEnd}
+            onDoubleClick={(event) => {
+              event.stopPropagation();
+              setBends((prev) => prev.filter((_, i) => i !== index));
+            }}
+          />
+        ))}
+        {insertionPoints.map((point, index) => (
+          <div
+            key={`add-${index}`}
+            className="arch-flow-bend-dot arch-flow-bend-dot-add nodrag nopan"
+            title="Drag to add a bend here"
+            style={{
+              transform: `translate(-50%, -50%) translate(${point.x}px, ${point.y}px)`,
+            }}
+            onPointerDown={(event) => {
+              event.stopPropagation();
+              setBends((prev) => {
+                const next = [...prev];
+                next.splice(index, 0, point);
+                return next;
+              });
+              draggingIndexRef.current = index;
+              (event.target as HTMLElement).setPointerCapture(event.pointerId);
+            }}
+            onPointerMove={dragMove}
+            onPointerUp={dragEnd}
+          />
+        ))}
       </EdgeLabelRenderer>
     </>
   );

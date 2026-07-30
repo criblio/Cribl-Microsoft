@@ -4674,6 +4674,17 @@ details[open] > summary::before {
   background: var(--accent);
   color: var(--surface-raised);
 }
+/* Hollow ADD dots between bend anchors (2026-07-30 multi-bend): drag one
+ * to insert a new bend and adjust a smaller section of the line. */
+.arch-flow-bend-dot-add {
+  background: transparent;
+  border-style: dashed;
+  opacity: 0.55;
+}
+.arch-flow-bend-dot-add:hover {
+  opacity: 1;
+}
+
 /* Stage bands (2026-07-30 best-practices pass): faint captioned strips
  * behind the columns - Gestalt grouping by tier, derived from the layout. */
 .arch-flow-band {
