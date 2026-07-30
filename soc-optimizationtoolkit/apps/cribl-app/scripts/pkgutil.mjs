@@ -165,58 +165,66 @@ export async function createAppPack(dev = false, outPath = undefined) {
   const proxiesPath = join(rootDir, 'config', 'proxies.yml');
   const policiesPath = join(rootDir, 'config', 'policies.yml');
 
-  if (await pathExists(buildDir)) {
-    await rm(buildDir, { recursive: true });
-  }
-
-  await mkdir(buildDir, { recursive: true });
-  await mkdir(join(buildDir, 'static'), { recursive: true });
-  await mkdir(join(buildDir, 'default'), { recursive: true });
-
-  if (!dev) {
-    if (!(await pathExists(distDir))) {
-      throw new Error('dist folder not found. Run npm run build first.');
+  // Populating the staging dir is a FUNCTION, not straight-line code: the
+  // external scanner that races the pack step has been observed DELETING
+  // package-build between retry attempts (live 2026-07-30, attempts 3-6 all
+  // "staging dir missing"), so the retry loop below must be able to rebuild
+  // the staging dir from scratch.
+  const stage = async () => {
+    if (await pathExists(buildDir)) {
+      await rm(buildDir, { recursive: true });
     }
-    await cp(distDir, join(buildDir, 'static'), { recursive: true });
-  }
 
-  if (await pathExists(proxiesPath)) {
-    await cp(proxiesPath, join(buildDir, 'default', 'proxies.yml'));
-  }
+    await mkdir(buildDir, { recursive: true });
+    await mkdir(join(buildDir, 'static'), { recursive: true });
+    await mkdir(join(buildDir, 'default'), { recursive: true });
 
-  if (await pathExists(policiesPath)) {
-    await cp(policiesPath, join(buildDir, 'default', 'policies.yml'));
-  }
+    if (!dev) {
+      if (!(await pathExists(distDir))) {
+        throw new Error('dist folder not found. Run npm run build first.');
+      }
+      await cp(distDir, join(buildDir, 'static'), { recursive: true });
+    }
 
-  // Ship the license inside the deployed app (Apache-2.0, repo root).
-  const licensePath = join(rootDir, '..', '..', '..', 'LICENSE');
-  if (await pathExists(licensePath)) {
-    await cp(licensePath, join(buildDir, 'LICENSE'));
-  }
+    if (await pathExists(proxiesPath)) {
+      await cp(proxiesPath, join(buildDir, 'default', 'proxies.yml'));
+    }
 
-  const rootPackageJson = JSON.parse(
-    await readFile(join(rootDir, 'package.json'), 'utf8')
-  );
+    if (await pathExists(policiesPath)) {
+      await cp(policiesPath, join(buildDir, 'default', 'policies.yml'));
+    }
 
-  const packageInfo = Object.fromEntries(
-    ['name', 'version', 'displayName', 'description', 'author', 'license', 'cribl']
-      .filter((k) => rootPackageJson?.[k])
-      .map((k) => [k, rootPackageJson[k]])
-  );
-  packageInfo.cribl = {
-    ...(packageInfo.cribl ?? {}),
-    createAppScriptVersion: CRIBL_CREATE_APP_SCRIPT_VERSION,
+    // Ship the license inside the deployed app (Apache-2.0, repo root).
+    const licensePath = join(rootDir, '..', '..', '..', 'LICENSE');
+    if (await pathExists(licensePath)) {
+      await cp(licensePath, join(buildDir, 'LICENSE'));
+    }
+
+    const rootPackageJson = JSON.parse(
+      await readFile(join(rootDir, 'package.json'), 'utf8')
+    );
+
+    const packageInfo = Object.fromEntries(
+      ['name', 'version', 'displayName', 'description', 'author', 'license', 'cribl']
+        .filter((k) => rootPackageJson?.[k])
+        .map((k) => [k, rootPackageJson[k]])
+    );
+    packageInfo.cribl = {
+      ...(packageInfo.cribl ?? {}),
+      createAppScriptVersion: CRIBL_CREATE_APP_SCRIPT_VERSION,
+    };
+
+    if (dev && packageInfo.name) {
+      packageInfo.name = `__dev__${packageInfo.name}`;
+      packageInfo.displayName = `__dev__${packageInfo.displayName || packageInfo.name}`;
+    }
+
+    await writeFile(
+      join(buildDir, 'package.json'),
+      JSON.stringify(packageInfo, null, 2)
+    );
   };
-
-  if (dev && packageInfo.name) {
-    packageInfo.name = `__dev__${packageInfo.name}`;
-    packageInfo.displayName = `__dev__${packageInfo.displayName || packageInfo.name}`;
-  }
-
-  await writeFile(
-    join(buildDir, 'package.json'),
-    JSON.stringify(packageInfo, null, 2)
-  );
+  await stage();
 
   const cleanup = async () => {
     await rm(buildDir, { recursive: true, force: true }).catch(() => {});
@@ -235,6 +243,12 @@ export async function createAppPack(dev = false, outPath = undefined) {
   try {
     for (let attempt = 1; attempt <= PACK_ATTEMPTS; attempt += 1) {
       await rm(packedPath, { force: true });
+      // The scanner can delete (or gut) the staging dir between attempts -
+      // restage whenever it is missing so retries can actually succeed.
+      if (!(await pathExists(buildDir))) {
+        process.stderr.write('note: staging dir vanished - rebuilding it...\n');
+        await stage();
+      }
       const { code, stderr } = await tarToFile(rootDir, packedPath, 'package-build');
       try {
         // Validate the actual deliverable; a benign tar warning (non-zero exit
