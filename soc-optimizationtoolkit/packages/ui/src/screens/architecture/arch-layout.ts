@@ -133,12 +133,28 @@ export interface LaidOutEdge extends DiagramEdge {
   wrap?: boolean;
 }
 
+/**
+ * A stage band: a contiguous run of rank columns sharing a dominant tier
+ * (Gestalt proximity, 2026-07-30 best-practices pass) - renderers draw a
+ * faint captioned background strip so "everything Cribl" reads at a glance.
+ * DESCRIPTIVE, derived from the actual layout, never a constraint.
+ */
+export interface TierBand {
+  label: string;
+  left: number;
+  right: number;
+}
+
 /** The laid-out diagram: nodes with positions, routed edges, canvas size. */
 export interface LaidOutDiagram {
   nodes: LaidOutNode[];
   edges: LaidOutEdge[];
   width: number;
   height: number;
+  /** Stage bands (single-row layouts only - serpentine rows drop them). */
+  bands?: TierBand[];
+  /** Faint dividers between serpentine rows (y midlines of the gaps). */
+  rowDividers?: number[];
 }
 
 /** A stable identity for an edge across re-layouts (its endpoint pair). */
@@ -198,7 +214,15 @@ export function applyDiagramRemovals(
  * the first pass comes out as an extreme ribbon, and a STILL-extreme
  * ribbon wraps serpentine into rows (2026-07-30 user report: a thin strip
  * with dead bands above and below) so the fitted view uses the window. */
-export function layoutDiagram(diagram: PatternDiagram): LaidOutDiagram {
+export function layoutDiagram(
+  diagram: PatternDiagram,
+  /**
+   * The canvas's width/height ratio (2026-07-30 best-practices pass): the
+   * serpentine wrap folds toward the REAL window shape instead of a
+   * constant, so defaults land near "fills the viewport" on any monitor.
+   */
+  targetAspect = 2.4,
+): LaidOutDiagram {
   const first = layoutDiagramWith(diagram, 56, 26);
   // Aspect-driven gates with an absolute floor: a short simple chain reads
   // straight left-to-right even when its ratio is extreme, but a preset
@@ -208,9 +232,99 @@ export function layoutDiagram(diagram: PatternDiagram): LaidOutDiagram {
   }
   const compact = layoutDiagramWith(diagram, 40, 22);
   if (compact.width > 1200 && compact.width > 3.0 * compact.height) {
-    return serpentineWrap(compact);
+    return serpentineWrap(compact, targetAspect);
   }
   return compact;
+}
+
+/** Cluster laid-out nodes into rank columns by x center (same rank = same
+ * center in LR dagre) - shared by the serpentine wrap and the tier bands. */
+function clusterColumns(
+  nodes: readonly LaidOutNode[],
+): Array<{ center: number; left: number; right: number; ids: string[]; tiers: DiagramTier[] }> {
+  const sorted = [...nodes].sort(
+    (a, b) => a.x + NODE_W / 2 - (b.x + NODE_W / 2),
+  );
+  const columns: Array<{
+    center: number;
+    left: number;
+    right: number;
+    ids: string[];
+    tiers: DiagramTier[];
+  }> = [];
+  for (const node of sorted) {
+    const center = node.x + NODE_W / 2;
+    const last = columns[columns.length - 1];
+    if (last !== undefined && Math.abs(center - last.center) < 8) {
+      last.ids.push(node.id);
+      last.tiers.push(node.tier);
+      last.left = Math.min(last.left, node.x);
+      last.right = Math.max(last.right, node.x + NODE_W);
+    } else {
+      columns.push({
+        center,
+        left: node.x,
+        right: node.x + NODE_W,
+        ids: [node.id],
+        tiers: [node.tier],
+      });
+    }
+  }
+  return columns;
+}
+
+const BAND_LABEL: Record<DiagramTier, string> = {
+  source: "Sources",
+  cribl: "Cribl",
+  azure: "Azure",
+  destination: "Destinations",
+};
+const TIER_ORDER: DiagramTier[] = ["source", "cribl", "azure", "destination"];
+
+/** Stage bands from the dominant tier of each rank column; adjacent runs
+ * merge, boundaries split the gap between neighbors. Undefined when the
+ * diagram does not yield at least two distinct bands. */
+function computeTierBands(nodes: readonly LaidOutNode[]): TierBand[] | undefined {
+  const columns = clusterColumns(nodes);
+  if (columns.length < 2) {
+    return undefined;
+  }
+  const dominant = columns.map((column) => {
+    const counts = new Map<DiagramTier, number>();
+    for (const tier of column.tiers) {
+      counts.set(tier, (counts.get(tier) ?? 0) + 1);
+    }
+    let best: DiagramTier = column.tiers[0];
+    let bestCount = -1;
+    for (const tier of TIER_ORDER) {
+      const count = counts.get(tier) ?? 0;
+      if (count > bestCount) {
+        best = tier;
+        bestCount = count;
+      }
+    }
+    return best;
+  });
+  const bands: TierBand[] = [];
+  for (let i = 0; i < columns.length; i++) {
+    const label = BAND_LABEL[dominant[i]];
+    const last = bands[bands.length - 1];
+    if (last !== undefined && last.label === label) {
+      last.right = columns[i].right + 8;
+    } else {
+      bands.push({ label, left: columns[i].left - 8, right: columns[i].right + 8 });
+    }
+  }
+  if (bands.length < 2) {
+    return undefined;
+  }
+  // Neighbors split the gap between them evenly.
+  for (let i = 1; i < bands.length; i++) {
+    const boundary = (bands[i - 1].right + bands[i].left) / 2;
+    bands[i - 1].right = boundary - 3;
+    bands[i].left = boundary + 3;
+  }
+  return bands;
 }
 
 /** Vertical clearance between serpentine rows - the cross-row connectors
@@ -224,29 +338,18 @@ const ROW_GAP = 90;
  * orthogonal routes through the row gap, staggered so their labels keep
  * clear of each other.
  */
-function serpentineWrap(laidOut: LaidOutDiagram): LaidOutDiagram {
+function serpentineWrap(
+  laidOut: LaidOutDiagram,
+  targetAspect: number,
+): LaidOutDiagram {
   // 1. Cluster nodes into rank columns by x center (same rank = same center).
-  const sorted = [...laidOut.nodes].sort(
-    (a, b) => a.x + NODE_W / 2 - (b.x + NODE_W / 2),
-  );
-  const columns: Array<{ center: number; left: number; right: number; ids: string[] }> = [];
-  for (const node of sorted) {
-    const center = node.x + NODE_W / 2;
-    const last = columns[columns.length - 1];
-    if (last !== undefined && Math.abs(center - last.center) < 8) {
-      last.ids.push(node.id);
-      last.left = Math.min(last.left, node.x);
-      last.right = Math.max(last.right, node.x + NODE_W);
-    } else {
-      columns.push({ center, left: node.x, right: node.x + NODE_W, ids: [node.id] });
-    }
-  }
-  // 2. Pick the row count that lands nearest a balanced 2.4:1 aspect.
+  const columns = clusterColumns(laidOut.nodes);
+  // 2. Pick the row count that lands nearest the target (viewport) aspect.
   let rows = 1;
   let bestScore = Number.POSITIVE_INFINITY;
   for (let r = 2; r <= 3; r++) {
     const aspect = laidOut.width / r / (r * laidOut.height + (r - 1) * ROW_GAP);
-    const score = Math.abs(aspect - 2.4);
+    const score = Math.abs(aspect - targetAspect);
     if (score < bestScore) {
       bestScore = score;
       rows = r;
@@ -360,7 +463,13 @@ function serpentineWrap(laidOut: LaidOutDiagram): LaidOutDiagram {
   });
   const width = Math.max(...nodes.map((n) => n.x + NODE_W)) + 10;
   const height = Math.max(...nodes.map((n) => n.y + n.height)) + 10;
-  return { nodes, edges, width, height };
+  // Continuation cues: a faint divider at each gap's midline. Bands are
+  // dropped - rank columns no longer share one axis.
+  const rowDividers: number[] = [];
+  for (let r = 1; r < rows; r++) {
+    rowDividers.push(rowTop[r] - gapHeight(r) / 2);
+  }
+  return { nodes, edges, width, height, rowDividers };
 }
 
 function layoutDiagramWith(
@@ -447,10 +556,12 @@ function layoutDiagramWith(
     };
   });
   const size = g.graph();
+  const bands = computeTierBands(nodes);
   return {
     nodes,
     edges,
     width: size.width ?? 0,
     height: size.height ?? 0,
+    ...(bands !== undefined ? { bands } : {}),
   };
 }
