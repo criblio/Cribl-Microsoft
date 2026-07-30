@@ -596,10 +596,24 @@ const FIT_VIEW_OPTIONS = { padding: 0.06, maxZoom: 1.15, duration: 200 } as cons
 function FitViewController({ signature }: { signature: string }) {
   const { fitView } = useReactFlow();
   useEffect(() => {
-    const raf = requestAnimationFrame(() => {
-      void fitView(FIT_VIEW_OPTIONS);
+    // TWO frames plus a settle-time backup: a single rAF could fire before
+    // React Flow measured the newly seeded nodes, fitting the STALE bounds
+    // and leaving the new diagram running off screen (user report
+    // 2026-07-30: the long-term-retention preset rendered cut off).
+    let raf2 = 0;
+    const raf1 = requestAnimationFrame(() => {
+      raf2 = requestAnimationFrame(() => {
+        void fitView(FIT_VIEW_OPTIONS);
+      });
     });
-    return () => cancelAnimationFrame(raf);
+    const backup = setTimeout(() => {
+      void fitView(FIT_VIEW_OPTIONS);
+    }, 200);
+    return () => {
+      cancelAnimationFrame(raf1);
+      cancelAnimationFrame(raf2);
+      clearTimeout(backup);
+    };
   }, [signature, fitView]);
   return null;
 }
@@ -627,7 +641,10 @@ function layoutGraph(diagram: PatternDiagram): { nodes: ArchNode[]; edges: FlowE
   // column sits right of its target column) - the replay/return edges.
   const xById = new Map(laidOut.nodes.map((n) => [n.id, n.x]));
   const edges: FlowEdge[] = laidOut.edges.map((e, i) => {
-    const reverse = (xById.get(e.from) ?? 0) > (xById.get(e.to) ?? 0);
+    // Serpentine cross-row edges already snake through the row gap - they
+    // are NOT wrap-backs even though the target sits left of the source.
+    const reverse =
+      e.wrap !== true && (xById.get(e.from) ?? 0) > (xById.get(e.to) ?? 0);
     return {
       id: `edge-${e.from}-${e.to}-${i}`,
       source: e.from,

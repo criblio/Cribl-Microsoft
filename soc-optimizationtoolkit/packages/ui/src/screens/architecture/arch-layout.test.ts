@@ -72,7 +72,8 @@ describe("layoutDiagram", () => {
             top + h > node.y;
           expect(
             overlaps,
-            `${preset.id}: label '${edge.label}' overlaps card '${node.label}'`,
+            `${preset.id}: label '${edge.label}' box(${Math.round(left)},${Math.round(top)},${w}x${h}) ` +
+              `overlaps card '${node.label}' (${Math.round(node.x)},${Math.round(node.y)},${NODE_W}x${node.height})`,
           ).toBe(false);
         }
         for (const other of labelBoxes) {
@@ -88,6 +89,23 @@ describe("layoutDiagram", () => {
         }
         labelBoxes.push({ label: edge.label, l: left, t: top, w, h });
       }
+    }
+  });
+
+  it("no preset merge renders as an extreme ribbon (serpentine wrap)", () => {
+    // 2026-07-30 user report: the long-term-retention preset ran off screen
+    // and left dead bands above and below. Extreme one-row chains wrap into
+    // rows; this pins the resulting aspect ratio as window-friendly for
+    // EVERY preset.
+    for (const preset of ARCHITECTURE_PRESETS) {
+      const matches = recommendPatterns(preset.selection)
+        .filter((r) => r.fit === "match")
+        .map((r) => r.pattern);
+      const laidOut = layoutDiagram(unifyPatternDiagrams(matches));
+      expect(
+        laidOut.width / laidOut.height,
+        `${preset.id}: ${Math.round(laidOut.width)}x${Math.round(laidOut.height)}`,
+      ).toBeLessThan(4.6);
     }
   });
 

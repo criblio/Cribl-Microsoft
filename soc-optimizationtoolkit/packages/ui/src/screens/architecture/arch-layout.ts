@@ -125,6 +125,12 @@ export interface LaidOutEdge extends DiagramEdge {
    * on unlabeled edges.
    */
   labelPoint?: EdgePoint;
+  /**
+   * The edge crosses serpentine rows (2026-07-30): its points already snake
+   * through the row gap, so renderers must NOT treat the right-to-left
+   * direction as a wrap-back (no bottom handles, no reverse offsets).
+   */
+  wrap?: boolean;
 }
 
 /** The laid-out diagram: nodes with positions, routed edges, canvas size. */
@@ -187,8 +193,181 @@ export function applyDiagramRemovals(
   return { nodes, edges };
 }
 
-/** dagre LR layout with the canvas's exact parameters. */
+/** dagre LR layout with the canvas's exact parameters. Long merged chains
+ * (the long-term-retention preset spans ~8 ranks) re-lay-out COMPACT when
+ * the first pass comes out as an extreme ribbon, and a STILL-extreme
+ * ribbon wraps serpentine into rows (2026-07-30 user report: a thin strip
+ * with dead bands above and below) so the fitted view uses the window. */
 export function layoutDiagram(diagram: PatternDiagram): LaidOutDiagram {
+  const first = layoutDiagramWith(diagram, 56, 26);
+  // Aspect-driven gates with an absolute floor: a short simple chain reads
+  // straight left-to-right even when its ratio is extreme, but a preset
+  // merge wider than a typical window compacts, then WRAPS.
+  if (first.width <= 1200 || first.width <= 3.4 * first.height) {
+    return first;
+  }
+  const compact = layoutDiagramWith(diagram, 40, 22);
+  if (compact.width > 1200 && compact.width > 3.0 * compact.height) {
+    return serpentineWrap(compact);
+  }
+  return compact;
+}
+
+/** Vertical clearance between serpentine rows - the cross-row connectors
+ * and their labels run through this band. */
+const ROW_GAP = 90;
+
+/**
+ * Fold an extreme one-row ribbon into 2-3 left-to-right rows. Rank columns
+ * stay intact; each row translates RIGIDLY (so every intra-row routed path
+ * and reserved label spot stays valid); edges that cross rows get synthetic
+ * orthogonal routes through the row gap, staggered so their labels keep
+ * clear of each other.
+ */
+function serpentineWrap(laidOut: LaidOutDiagram): LaidOutDiagram {
+  // 1. Cluster nodes into rank columns by x center (same rank = same center).
+  const sorted = [...laidOut.nodes].sort(
+    (a, b) => a.x + NODE_W / 2 - (b.x + NODE_W / 2),
+  );
+  const columns: Array<{ center: number; left: number; right: number; ids: string[] }> = [];
+  for (const node of sorted) {
+    const center = node.x + NODE_W / 2;
+    const last = columns[columns.length - 1];
+    if (last !== undefined && Math.abs(center - last.center) < 8) {
+      last.ids.push(node.id);
+      last.left = Math.min(last.left, node.x);
+      last.right = Math.max(last.right, node.x + NODE_W);
+    } else {
+      columns.push({ center, left: node.x, right: node.x + NODE_W, ids: [node.id] });
+    }
+  }
+  // 2. Pick the row count that lands nearest a balanced 2.4:1 aspect.
+  let rows = 1;
+  let bestScore = Number.POSITIVE_INFINITY;
+  for (let r = 2; r <= 3; r++) {
+    const aspect = laidOut.width / r / (r * laidOut.height + (r - 1) * ROW_GAP);
+    const score = Math.abs(aspect - 2.4);
+    if (score < bestScore) {
+      bestScore = score;
+      rows = r;
+    }
+  }
+  if (rows === 1 || columns.length < rows + 1) {
+    return laidOut;
+  }
+  // 3. Assign whole columns to rows by accumulated span.
+  const targetSpan = laidOut.width / rows;
+  const rowOfColumn: number[] = [];
+  let row = 0;
+  let rowStart = columns[0].left;
+  for (let i = 0; i < columns.length; i++) {
+    if (row < rows - 1 && columns[i].right - rowStart > targetSpan && i > 0) {
+      row += 1;
+      rowStart = columns[i].left;
+    }
+    rowOfColumn.push(row);
+  }
+  const rowOfNode = new Map<string, number>();
+  const rowDx: number[] = [];
+  for (let r = 0; r < rows; r++) {
+    const first = columns[rowOfColumn.indexOf(r)];
+    rowDx[r] = first !== undefined ? 10 - first.left : 0;
+  }
+  columns.forEach((column, i) => {
+    for (const id of column.ids) {
+      rowOfNode.set(id, rowOfColumn[i]);
+    }
+  });
+  // Size each gap band FROM the crossings it must carry (live 2026-07-30:
+  // five connectors overflowed a fixed 90px band into the next row's cards).
+  const crossBoxHeight = (e: LaidOutEdge): number =>
+    e.label !== undefined
+      ? edgeLabelFootprint(e.label, e.cost !== undefined).height
+      : 12;
+  const gapNeed = new Map<number, number>();
+  for (const e of laidOut.edges) {
+    const rowFrom = rowOfNode.get(e.from) ?? 0;
+    const rowTo = rowOfNode.get(e.to) ?? 0;
+    if (rowFrom !== rowTo) {
+      const lowerRow = Math.max(rowFrom, rowTo);
+      gapNeed.set(
+        lowerRow,
+        (gapNeed.get(lowerRow) ?? 24) + crossBoxHeight(e) + 8,
+      );
+    }
+  }
+  const gapHeight = (r: number): number =>
+    Math.max(ROW_GAP, gapNeed.get(r) ?? 0);
+  const rowTop: number[] = [0];
+  for (let r = 1; r < rows; r++) {
+    rowTop[r] = rowTop[r - 1] + laidOut.height + gapHeight(r);
+  }
+  const translate = (r: number, p: EdgePoint): EdgePoint => ({
+    x: p.x + rowDx[r],
+    y: p.y + rowTop[r],
+  });
+  const nodes = laidOut.nodes.map((n) => {
+    const r = rowOfNode.get(n.id) ?? 0;
+    const moved = translate(r, { x: n.x, y: n.y });
+    return { ...n, x: moved.x, y: moved.y };
+  });
+  const nodeById = new Map(nodes.map((n) => [n.id, n]));
+  // 4. Rebuild edges: intra-row translate rigidly; cross-row snake through
+  //    the gap ABOVE the lower row. Each gap band hands out lanes by the
+  //    ACTUAL label-box heights so cross-row labels never stack.
+  const gapCursor = new Map<number, number>();
+  const edges: LaidOutEdge[] = laidOut.edges.map((e) => {
+    const rowFrom = rowOfNode.get(e.from) ?? 0;
+    const rowTo = rowOfNode.get(e.to) ?? 0;
+    if (rowFrom === rowTo) {
+      return {
+        ...e,
+        points: e.points.map((p) => translate(rowFrom, p)),
+        ...(e.labelPoint !== undefined
+          ? { labelPoint: translate(rowFrom, e.labelPoint) }
+          : {}),
+      };
+    }
+    const from = nodeById.get(e.from);
+    const to = nodeById.get(e.to);
+    if (from === undefined || to === undefined) {
+      return { ...e, points: [] };
+    }
+    const source = { x: from.x + NODE_W, y: from.y + from.height / 2 };
+    const target = { x: to.x, y: to.y + to.height / 2 };
+    const lowerRow = Math.max(rowFrom, rowTo);
+    const gapTop = rowTop[lowerRow] - gapHeight(lowerRow);
+    const boxHeight = crossBoxHeight(e);
+    const laneStart = gapCursor.get(lowerRow) ?? 12;
+    const gapY = gapTop + laneStart + boxHeight / 2;
+    gapCursor.set(lowerRow, laneStart + boxHeight + 8);
+    const points: EdgePoint[] = [
+      source,
+      { x: source.x + 24, y: source.y },
+      { x: source.x + 24, y: gapY },
+      { x: target.x - 24, y: gapY },
+      { x: target.x - 24, y: target.y },
+      target,
+    ];
+    return {
+      ...e,
+      points,
+      wrap: true,
+      ...(e.label !== undefined
+        ? { labelPoint: { x: (source.x + target.x) / 2, y: gapY } }
+        : {}),
+    };
+  });
+  const width = Math.max(...nodes.map((n) => n.x + NODE_W)) + 10;
+  const height = Math.max(...nodes.map((n) => n.y + n.height)) + 10;
+  return { nodes, edges, width, height };
+}
+
+function layoutDiagramWith(
+  diagram: PatternDiagram,
+  ranksep: number,
+  nodesep: number,
+): LaidOutDiagram {
   // The Cribl source types feeding each node, from its ingress edge labels
   // (the "<Type> source (...)" convention) - drawn as tags on the card.
   const typesByNode = new Map<string, string[]>();
@@ -215,7 +394,7 @@ export function layoutDiagram(diagram: PatternDiagram): LaidOutDiagram {
   // and the label footprints supply the rest of the separation - the merged
   // presets were growing too WIDE to use the window well (user report
   // 2026-07-30).
-  g.setGraph({ rankdir: "LR", nodesep: 26, ranksep: 56, marginx: 10, marginy: 10 });
+  g.setGraph({ rankdir: "LR", nodesep, ranksep, marginx: 10, marginy: 10 });
   for (const node of diagram.nodes) {
     g.setNode(node.id, { width: NODE_W, height: heightOf(node.id) });
   }
