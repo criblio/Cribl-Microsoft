@@ -9,6 +9,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildLiveDiagram,
   criblUiBaseFromLeaderUrl,
+  installedPackIds,
   isAzureCriblType,
   isAzureInput,
   outputCostTier,
@@ -564,6 +565,138 @@ describe("buildLiveDiagram - source/destination focus (2026-07-29)", () => {
     // syslog_pan only routes to splunk - nothing between the two picks.
     expect(diagram.nodes).toHaveLength(0);
     expect(notes.some((n) => n.startsWith("Focus: showing 0 of 2"))).toBe(true);
+  });
+});
+
+describe("routes popover detail and pack internals (2026-07-30)", () => {
+  it("the Routes popover lists each route with filter, pack/pipeline, and destination", () => {
+    const { diagram } = buildLiveDiagram(labSnapshot(), { azureOnly: false });
+    const hub = diagram.nodes.find((n) => n.id === "routes")!;
+    expect(hub.info?.purpose).toContain(
+      "1. flowlogs - filter: __inputId=='flowlog_collector' - via pack AzureFlowLogs -> sentinel_dest",
+    );
+    expect(hub.info?.purpose).toContain(
+      "2. pan-to-splunk - filter: __inputId=='syslog_pan' - via pipeline passthru -> splunk_dest",
+    );
+  });
+
+  it("resolves the default indirection in the popover line", () => {
+    const snapshot = labSnapshot();
+    snapshot.routes = ok({
+      routes: [
+        { id: "r1", name: "to-default", filter: "__inputId=='flowlog_collector'", final: true },
+      ],
+    });
+    const { diagram } = buildLiveDiagram(snapshot, { azureOnly: true });
+    const hub = diagram.nodes.find((n) => n.id === "routes")!;
+    expect(hub.info?.purpose).toContain(
+      "1. to-default - filter: __inputId=='flowlog_collector' - via pipeline passthru -> default (sentinel_dest)",
+    );
+  });
+
+  it("installedPackIds parses tolerantly", () => {
+    expect(
+      installedPackIds(ok({ items: [{ id: "A" }, { name: "B" }, {}] })),
+    ).toEqual(["A", "B"]);
+    expect(installedPackIds(undefined)).toEqual([]);
+    expect(installedPackIds({ status: 500, body: {} })).toEqual([]);
+  });
+
+  /** A group whose ONLY flow lives inside an all-inclusive pack. */
+  function packSnapshot(): LiveArchitectureSnapshot {
+    return {
+      groupId: "default",
+      inputs: ok({ items: [] }),
+      outputs: ok({ items: [] }),
+      routes: ok({ routes: [] }),
+      pipelines: ok({ items: [] }),
+      breakers: ok({ items: [] }),
+      packs: ok({ items: [{ id: "AllInOne", version: "1.0.0" }, { id: "OtherPack" }] }),
+      jobs: ok({ items: [] }),
+      packDetails: {
+        AllInOne: {
+          inputs: ok({ items: [{ id: "eh_in", type: "eventhub" }] }),
+          outputs: ok({ items: [{ id: "sent_out", type: "sentinel" }] }),
+          routes: ok({
+            routes: [
+              {
+                id: "r1",
+                name: "pack-route",
+                filter: "true",
+                pipeline: "shape",
+                output: "sent_out",
+                final: true,
+              },
+            ],
+          }),
+          pipelines: ok({ items: [{ id: "shape", conf: { functions: [{ id: "eval" }] } }] }),
+        },
+      },
+    };
+  }
+
+  it("draws an all-inclusive pack's embedded endpoints through the pack card", () => {
+    const { diagram, notes } = buildLiveDiagram(packSnapshot(), { azureOnly: true });
+    const badgeOf = new Map(diagram.nodes.map((n) => [n.id, n.badge]));
+    expect(badgeOf.get("in:AllInOne/eh_in")).toBe("eventhub source");
+    expect(badgeOf.get("pack:AllInOne")).toBe("Pack");
+    expect(badgeOf.get("out:AllInOne/sent_out")).toBe("sentinel destination");
+    const edgePairs = diagram.edges.map((e) => `${e.from}>${e.to}`);
+    expect(edgePairs).toEqual(
+      expect.arrayContaining([
+        "in:AllInOne/eh_in>pack:AllInOne",
+        "pack:AllInOne>out:AllInOne/sent_out",
+      ]),
+    );
+    expect(
+      diagram.edges.find((e) => e.to === "out:AllInOne/sent_out")?.cost,
+    ).toBe("premium");
+    // The pack popover names the internals: endpoints, pipelines, routes.
+    const pack = diagram.nodes.find((n) => n.id === "pack:AllInOne")!;
+    expect(pack.info?.purpose).toContain("Embedded source(s): eh_in (eventhub).");
+    expect(pack.info?.purpose).toContain("Embedded destination(s): sent_out (sentinel).");
+    expect(pack.info?.purpose).toContain("1 pack pipeline(s).");
+    expect(pack.info?.purpose).toContain(
+      "1. pack-route - filter: true - via pipeline shape -> sent_out",
+    );
+    // Honest notes: what was drawn, and the inspection shortfall.
+    expect(
+      notes.some((n) => n.startsWith("Pack 'AllInOne': 1 embedded source(s)")),
+    ).toBe(true);
+    expect(
+      notes.some((n) => n.includes("inspected for 1 of 2 installed pack(s)")),
+    ).toBe(true);
+    // Pack flows drawn -> no misleading "no flows" note.
+    expect(notes.some((n) => n.startsWith("No Azure-related flows"))).toBe(false);
+  });
+
+  it("the Azure filter skips a non-Azure pack's internals with a note", () => {
+    const snapshot = packSnapshot();
+    snapshot.packDetails = {
+      AllInOne: {
+        inputs: ok({ items: [{ id: "syslog_in", type: "syslog" }] }),
+        outputs: ok({ items: [{ id: "splunk_out", type: "splunk" }] }),
+        routes: ok({ routes: [] }),
+        pipelines: ok({ items: [] }),
+      },
+    };
+    const { diagram, notes } = buildLiveDiagram(snapshot, { azureOnly: true });
+    expect(diagram.nodes.some((n) => n.id.startsWith("in:AllInOne"))).toBe(false);
+    expect(
+      notes.some((n) => n.includes("non-Azure pack(s): AllInOne")),
+    ).toBe(true);
+    expect(notes.some((n) => n.startsWith("No Azure-related flows"))).toBe(true);
+  });
+
+  it("pack-internal nodes link to the pack's Cribl UI page", () => {
+    const base = "http://leader.internal:9000";
+    const { diagram } = buildLiveDiagram(packSnapshot(), {
+      azureOnly: true,
+      uiBase: base,
+    });
+    expect(
+      diagram.nodes.find((n) => n.id === "in:AllInOne/eh_in")?.info?.docs[0]?.url,
+    ).toBe(`${base}/m/default/p/AllInOne`);
   });
 });
 

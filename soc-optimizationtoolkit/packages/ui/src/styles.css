@@ -4669,6 +4669,10 @@ details[open] > summary::before {
   line-height: 15px;
   color: var(--text);
   font-weight: 400;
+  /* Live popovers compose per-route / per-pack detail as one line each
+   * (2026-07-30) - honor the newlines. */
+  white-space: pre-line;
+  overflow-wrap: anywhere;
 }
 .arch-flow-info-links-label {
   font-size: 9px;

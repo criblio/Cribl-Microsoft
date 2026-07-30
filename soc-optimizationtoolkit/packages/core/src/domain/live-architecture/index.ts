@@ -7,6 +7,7 @@
 export type {
   LiveSnapshotSection,
   LiveArchitectureSnapshot,
+  LivePackDetail,
   BuildLiveDiagramOptions,
   LiveDiagramResult,
   LiveInput,
@@ -20,6 +21,7 @@ export type {
 export {
   buildLiveDiagram,
   criblUiBaseFromLeaderUrl,
+  installedPackIds,
   parseRouteFilterInputs,
   isAzureCriblType,
   isAzureInput,
