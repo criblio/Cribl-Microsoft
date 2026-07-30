@@ -101,6 +101,29 @@ describe("diagramToSvg", () => {
     expect(svg).not.toContain(">Reduction_Zscaler_Internet_firewall</text>");
   });
 
+  it("applies canvas edits: removals, positions, bends, and notes", () => {
+    const svg = diagramToSvg(DIRECT_DCR, {
+      title: "Edited",
+      edits: {
+        positions: { criblstream: { x: 500, y: 300 } },
+        edges: {
+          "criblstream>kinddirectdcr": { bends: [{ x: 640, y: 260 }] },
+        },
+        removedNodes: ["logsources"],
+        removedEdges: [],
+        notes: [{ id: "1", text: "cutover Q3", x: 40, y: 40 }],
+      },
+    });
+    // The removed card is gone; the dragged card exports at its position.
+    expect(svg).not.toContain("Log sources");
+    expect(svg).toContain('data-node transform="translate(500,300)"');
+    // The annotation exports as a sticky card.
+    expect(svg).toContain("<g data-note");
+    expect(svg).toContain("cutover Q3");
+    // Bands describe the AUTOMATIC layout only - moved cards drop them.
+    expect(svg).not.toContain(">SOURCES</text>");
+  });
+
   it("returns a minimal document for an empty diagram", () => {
     const svg = diagramToSvg({ nodes: [], edges: [] });
     expect(svg.startsWith("<svg ")).toBe(true);
