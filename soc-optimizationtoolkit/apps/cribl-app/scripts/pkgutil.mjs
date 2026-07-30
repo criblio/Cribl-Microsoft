@@ -243,10 +243,17 @@ export async function createAppPack(dev = false, outPath = undefined) {
   try {
     for (let attempt = 1; attempt <= PACK_ATTEMPTS; attempt += 1) {
       await rm(packedPath, { force: true });
-      // The scanner can delete (or gut) the staging dir between attempts -
-      // restage whenever it is missing so retries can actually succeed.
-      if (!(await pathExists(buildDir))) {
-        process.stderr.write('note: staging dir vanished - rebuilding it...\n');
+      // The scanner can delete OR GUT the staging dir between attempts
+      // (live 2026-07-30: repeated 84-byte archives while the dir itself
+      // still existed) - verify the staged CONTENT and rebuild when any of
+      // it is gone so retries can actually succeed.
+      const stagedOk =
+        (await pathExists(join(buildDir, 'package.json'))) &&
+        (dev || (await pathExists(join(buildDir, 'static', 'index.html'))));
+      if (!stagedOk) {
+        process.stderr.write(
+          'note: staging dir missing or gutted - rebuilding it...\n'
+        );
         await stage();
       }
       const { code, stderr } = await tarToFile(rootDir, packedPath, 'package-build');
