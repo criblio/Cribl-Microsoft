@@ -16,6 +16,8 @@ export type {
   ArchitecturePattern,
   ArchitectureSelection,
   PatternRecommendation,
+  DiagramDocLink,
+  DiagramNodeInfo,
 } from "./architecture-patterns";
 export {
   CRIBL_PRODUCTS,
@@ -25,4 +27,5 @@ export {
   recommendPatterns,
   catalogLabel,
   unifyPatternDiagrams,
+  diagramNodeInfo,
 } from "./architecture-patterns";

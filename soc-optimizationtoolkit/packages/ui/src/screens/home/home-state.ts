@@ -37,6 +37,8 @@ export interface NextActionView {
   description: string;
   /** Route the button navigates to; null = no button in this shell. */
   routeId: string | null;
+  /** Element id to scroll to after navigating (same-route actions). */
+  anchorId: string | null;
   /** Shell guidance for the stage (rendered with or without a button). */
   hint: string | null;
 }
@@ -61,6 +63,7 @@ export function deriveNextActionView(
     description: action.description,
     routeId: link?.routeId ?? null,
     hint: link?.hint ?? null,
+    anchorId: link?.anchorId ?? null,
   };
 }
 
