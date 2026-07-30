@@ -80,22 +80,31 @@ function esc(value: string): string {
     .replace(/"/g, "&quot;");
 }
 
-/** Split a long label at the space nearest its middle (two-line rendering). */
+/**
+ * Split a long label at the space (or _ / - / .) nearest its middle; a long
+ * UNBROKEN token hard-splits at the midpoint so it never overhangs the card
+ * (user report 2026-07-30: Reduction_Zscaler_Internet_firewall).
+ */
 function splitLabel(label: string): [string] | [string, string] {
   if (label.length <= 26) {
     return [label];
   }
   const middle = Math.floor(label.length / 2);
   let split = -1;
-  for (let i = 0; i < label.length; i++) {
-    if (label[i] === " " && (split === -1 || Math.abs(i - middle) < Math.abs(split - middle))) {
+  for (let i = 1; i < label.length - 1; i++) {
+    if (
+      " _-.".includes(label[i]) &&
+      (split === -1 || Math.abs(i - middle) < Math.abs(split - middle))
+    ) {
       split = i;
     }
   }
   if (split === -1) {
-    return [label];
+    return [label.slice(0, middle), label.slice(middle)];
   }
-  return [label.slice(0, split), label.slice(split + 1)];
+  return label[split] === " "
+    ? [label.slice(0, split), label.slice(split + 1)]
+    : [label.slice(0, split + 1), label.slice(split + 1)];
 }
 
 /**
@@ -207,7 +216,8 @@ export function diagramToSvg(diagram: PatternDiagram): string {
     parts.push(
       `<path d="${routedPath(points)}" fill="none" ` +
         `stroke="${lineStroke(edge.tone, edge.cost)}" ` +
-        `stroke-width="1.6" marker-end="url(#arch-arrow)"/>`,
+        `stroke-width="1.6" marker-end="url(#arch-arrow)"` +
+        `${edge.muted === true ? ' stroke-opacity="0.3"' : ""}/>`,
     );
     const anchor = midpointOnPolyline(points);
     const midX = round(anchor.x);
@@ -266,7 +276,8 @@ export function diagramToSvg(diagram: PatternDiagram): string {
       })
       .join("");
     parts.push(
-      `<g transform="translate(${node.x},${node.y})">` +
+      `<g transform="translate(${node.x},${node.y})"` +
+        `${node.muted === true ? ' opacity="0.5"' : ""}>` +
         `<rect width="${NODE_W}" height="${node.height}" rx="12" fill="${style.fill}" ` +
         `stroke="${style.stroke}" stroke-width="1.4"/>` +
         `<text x="${NODE_W / 2}" y="16" text-anchor="middle" font-size="9" ` +

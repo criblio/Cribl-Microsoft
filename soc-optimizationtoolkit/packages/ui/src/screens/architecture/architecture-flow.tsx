@@ -65,6 +65,8 @@ type ArchNodeData = {
   /** The card offers an explode/collapse toggle (pack internals). */
   expandable?: boolean;
   expanded?: boolean;
+  /** Render subdued (disabled routes in the exploded routing table). */
+  muted?: boolean;
   /** Remove this node from the diagram (the hover x button). */
   onRemove?: (nodeId: string) => void;
   /** Toggle the node's exploded rendering (the +/- button). */
@@ -75,6 +77,7 @@ type FlowEdgeData = {
   label?: string;
   cost?: EdgeCostTier;
   tone?: EdgeFlowTone;
+  muted?: boolean;
   reverse?: boolean;
 };
 type FlowEdge = Edge<FlowEdgeData, "flowing">;
@@ -127,7 +130,13 @@ function ArchNodeCard({ id, data }: NodeProps<ArchNode>) {
   }, [infoOpen]);
 
   return (
-    <div ref={cardRef} className={`arch-flow-node arch-flow-node-${data.tier}`}>
+    <div
+      ref={cardRef}
+      className={
+        `arch-flow-node arch-flow-node-${data.tier}` +
+        (data.muted === true ? " arch-flow-node-muted" : "")
+      }
+    >
       <Handle
         type="target"
         id="in"
@@ -406,20 +415,23 @@ function FlowingEdge({
         path={edgePath}
         className={
           `arch-flow-pipe${cost !== undefined ? ` arch-flow-pipe-${cost}` : ""}` +
-          (data?.tone !== undefined ? ` arch-flow-pipe-tone-${data.tone}` : "")
+          (data?.tone !== undefined ? ` arch-flow-pipe-tone-${data.tone}` : "") +
+          (data?.muted === true ? " arch-flow-pipe-muted" : "")
         }
       />
-      {[0, 0.9, 1.8].map((delay, i) => (
-        <circle key={i} r={3} className="arch-flow-dot">
-          <animateMotion
-            dur="2.7s"
-            begin={`${delay}s`}
-            repeatCount="indefinite"
-            path={edgePath}
-            calcMode="paced"
-          />
-        </circle>
-      ))}
+      {/* No packet animation on muted edges - a disabled route moves nothing. */}
+      {data?.muted !== true &&
+        [0, 0.9, 1.8].map((delay, i) => (
+          <circle key={i} r={3} className="arch-flow-dot">
+            <animateMotion
+              dur="2.7s"
+              begin={`${delay}s`}
+              repeatCount="indefinite"
+              path={edgePath}
+              calcMode="paced"
+            />
+          </circle>
+        ))}
       <EdgeLabelRenderer>
         <div
           className="arch-flow-edge-tags nodrag nopan"
@@ -527,6 +539,7 @@ function layoutGraph(diagram: PatternDiagram): { nodes: ArchNode[]; edges: FlowE
       overlays: n.overlays,
       expandable: n.expandable,
       expanded: n.expanded,
+      muted: n.muted,
     },
   }));
   // A wrap-back edge runs right-to-left in the laid-out flow (its source
@@ -543,7 +556,7 @@ function layoutGraph(diagram: PatternDiagram): { nodes: ArchNode[]; edges: FlowE
       sourceHandle: reverse ? "out-b" : "out",
       targetHandle: reverse ? "in-b" : "in",
       type: "flowing",
-      data: { label: e.label, cost: e.cost, tone: e.tone, reverse },
+      data: { label: e.label, cost: e.cost, tone: e.tone, muted: e.muted, reverse },
     };
   });
   return { nodes, edges };

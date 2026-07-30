@@ -83,6 +83,8 @@ export interface LaidOutNode {
   /** The card offers an explode/collapse toggle (pack internals). */
   expandable?: boolean;
   expanded?: boolean;
+  /** Render subdued (disabled routes in the exploded routing table). */
+  muted?: boolean;
 }
 
 /** A routed point on an edge's polyline (dagre's node-avoiding waypoints). */
@@ -182,6 +184,7 @@ export function layoutDiagram(diagram: PatternDiagram): LaidOutDiagram {
         : {}),
       ...(n.expandable !== undefined ? { expandable: n.expandable } : {}),
       ...(n.expanded !== undefined ? { expanded: n.expanded } : {}),
+      ...(n.muted !== undefined ? { muted: n.muted } : {}),
     };
   });
   const edges: LaidOutEdge[] = diagram.edges.map((e) => {

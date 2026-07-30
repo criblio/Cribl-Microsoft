@@ -4073,6 +4073,10 @@ button.journey-step-main:hover .journey-step-label {
   font-weight: 600;
   color: var(--text);
   line-height: 15px;
+  /* Long unbroken Cribl ids (Reduction_Zscaler_Internet_firewall) must wrap
+   * inside the card instead of overhanging it (user report 2026-07-30). */
+  max-width: 100%;
+  overflow-wrap: anywhere;
 }
 .arch-flow-node-source {
   border-color: var(--text-faint);
@@ -4649,6 +4653,14 @@ details[open] > summary::before {
 .arch-flow-expand-btn:hover {
   background: var(--accent);
   color: var(--surface-raised);
+}
+/* Disabled routes in the exploded routing table (2026-07-30): present as
+ * config, processing nothing - subdued card, faint line, no packets. */
+.arch-flow-node-muted {
+  opacity: 0.5;
+}
+.arch-flow-pipe-muted {
+  opacity: 0.25;
 }
 .arch-flow-info-pop {
   position: absolute;

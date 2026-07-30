@@ -241,9 +241,11 @@ function LiveArchitecturePanel({
   // internal routes/pipelines/destinations. Both reset per snapshot.
   const [selectedFlows, setSelectedFlows] = useState<string[]>([]);
   const [expandedPacks, setExpandedPacks] = useState<string[]>([]);
+  const [routesExpanded, setRoutesExpanded] = useState(false);
   useEffect(() => {
     setSelectedFlows([]);
     setExpandedPacks([]);
+    setRoutesExpanded(false);
   }, [snapshot]);
 
   const loadGroups = async () => {
@@ -291,8 +293,9 @@ function LiveArchitecturePanel({
             uiBase: criblUiBase,
             selectedFlows,
             expandedPacks,
+            expandRoutes: routesExpanded,
           }),
-    [snapshot, azureOnly, criblUiBase, selectedFlows, expandedPacks],
+    [snapshot, azureOnly, criblUiBase, selectedFlows, expandedPacks, routesExpanded],
   );
   // The inventory is filter-independent; the Azure toggle narrows the LIST
   // to what it can actually draw.
@@ -304,7 +307,11 @@ function LiveArchitecturePanel({
     setSelectedFlows((prev) =>
       prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key],
     );
-  const togglePackExpand = useCallback((nodeId: string) => {
+  const toggleNodeExpand = useCallback((nodeId: string) => {
+    if (nodeId === "routes") {
+      setRoutesExpanded((prev) => !prev);
+      return;
+    }
     if (!nodeId.startsWith("pack:")) {
       return;
     }
@@ -394,7 +401,7 @@ function LiveArchitecturePanel({
           />
           <ArchitectureFlow
             diagram={liveResult.diagram}
-            onToggleNodeExpand={togglePackExpand}
+            onToggleNodeExpand={toggleNodeExpand}
           />
           {liveResult.diagram.nodes.length > 0 && <CostLegend />}
           {liveResult.notes.length > 0 && (

@@ -235,6 +235,11 @@ export interface DiagramNode {
    */
   expandable?: boolean;
   expanded?: boolean;
+  /**
+   * Render subdued (2026-07-30: a DISABLED route in the exploded routing
+   * table draws dimmed - present as config, processing nothing).
+   */
+  muted?: boolean;
 }
 
 /**
@@ -266,6 +271,8 @@ export interface DiagramEdge {
   cost?: EdgeCostTier;
   /** Omitted = default pipe color; set = the flow's distinct line color. */
   tone?: EdgeFlowTone;
+  /** Render subdued, without flow animation (edge into a disabled node). */
+  muted?: boolean;
 }
 
 /** A pattern's tiered flow diagram (pure data; the UI renders the SVG). */

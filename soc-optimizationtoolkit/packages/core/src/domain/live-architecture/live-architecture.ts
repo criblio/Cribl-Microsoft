@@ -115,6 +115,13 @@ export interface BuildLiveDiagramOptions {
    */
   expandedPacks?: readonly string[];
   /**
+   * Explode the group ROUTING TABLE (2026-07-30): each route draws as its
+   * own node between the Routes hub and its pack/pipeline/destination,
+   * carrying the filter and evaluation position in its popover. Collapsed
+   * (default), routes stay edge labels off the single hub.
+   */
+  expandRoutes?: boolean;
+  /**
    * The Cribl leader UI base (origin plus any product prefix, e.g.
    * "https://main-org.cribl.cloud/stream" or "http://leader:9000"). When
    * set, every live node's info links to ITS page in the Cribl UI (user
@@ -993,6 +1000,7 @@ export function buildLiveDiagram(
   };
 
   const hubNeeded = kept.length > 0;
+  const routesExpanded = options.expandRoutes === true;
   if (hubNeeded) {
     addNode({
       id: "routes",
@@ -1003,6 +1011,8 @@ export function buildLiveDiagram(
         routesHubInfo(snapshot.groupId, routes, defaultOutput?.defaultId ?? null),
         resourceLink(UI_PAGES.routes, `Open Routes in Cribl (${snapshot.groupId})`),
       ),
+      expandable: true,
+      expanded: routesExpanded,
     });
   }
 
@@ -1163,10 +1173,40 @@ export function buildLiveDiagram(
       keptRoutes.set(triple.route.id, triple);
     }
   }
+  const positionByRouteId = new Map(allRoutes.map((r, i) => [r.id, i]));
+  const routeEntryInfo = (route: LiveRoute, disabled: boolean): DiagramNodeInfo =>
+    withResourceLink(
+      {
+        purpose:
+          `${disabled ? "DISABLED route entry" : "Route entry"} ` +
+          routeLine(
+            route,
+            positionByRouteId.get(route.id) ?? 0,
+            defaultOutput?.defaultId ?? null,
+          ) +
+          (disabled ? "\nIt processes nothing until re-enabled." : ""),
+        docs: [{ label: "Cribl routes", url: CRIBL + "/stream/routes/" }],
+      },
+      resourceLink(UI_PAGES.routes, `Open Routes in Cribl (${snapshot.groupId})`),
+    );
   for (const triple of keptRoutes.values()) {
     const route = triple.route;
     const routeLabel = route.final ? route.name : `${route.name} (copy)`;
     let previous = "routes";
+    if (routesExpanded) {
+      // Exploded routing table: the route is its OWN node; downstream edges
+      // drop the route-name labels the node now carries.
+      const routeNodeId = `route:${route.id}`;
+      addNode({
+        id: routeNodeId,
+        label: routeLabel,
+        tier: "cribl",
+        badge: "Route",
+        info: routeEntryInfo(route, false),
+      });
+      addEdge({ from: "routes", to: routeNodeId });
+      previous = routeNodeId;
+    }
 
     const pipelineRef = route.pipeline ?? "passthru";
     if (pipelineRef.startsWith("pack:")) {
@@ -1174,7 +1214,7 @@ export function buildLiveDiagram(
       const packNodeId = `pack:${packName}`;
       addNode({
         id: packNodeId,
-        label: packName,
+        label: packById.get(packName)?.displayName ?? packName,
         tier: "cribl",
         badge: "Pack",
         info: withResourceLink(
@@ -1185,7 +1225,11 @@ export function buildLiveDiagram(
           ),
         ),
       });
-      addEdge({ from: previous, to: packNodeId, label: routeLabel });
+      addEdge({
+        from: previous,
+        to: packNodeId,
+        ...(previous === "routes" ? { label: routeLabel } : {}),
+      });
       previous = packNodeId;
     } else if (pipelineRef !== "passthru" && pipelineRef !== "") {
       const pipeNodeId = `pipe:${pipelineRef}`;
@@ -1202,7 +1246,11 @@ export function buildLiveDiagram(
           ),
         ),
       });
-      addEdge({ from: previous, to: pipeNodeId, label: routeLabel });
+      addEdge({
+        from: previous,
+        to: pipeNodeId,
+        ...(previous === "routes" ? { label: routeLabel } : {}),
+      });
       previous = pipeNodeId;
     }
 
@@ -1284,6 +1332,26 @@ export function buildLiveDiagram(
       ...(previous === "routes" ? { label: routeLabel } : {}),
       ...(cost !== undefined ? { cost } : {}),
     });
+  }
+
+  // Exploded routing table also shows what is switched OFF (user directive
+  // 2026-07-30): each disabled route draws as a SUBDUED node off the hub -
+  // present in the config, processing nothing - without pulling its
+  // pack/pipeline/destination chain into the drawing. Skipped when a flow
+  // selection is active (the user asked for specific flows).
+  if (routesExpanded && hubNeeded && selectedFlowKeys.size === 0) {
+    for (const route of disabledRoutes) {
+      const routeNodeId = `route:${route.id}`;
+      addNode({
+        id: routeNodeId,
+        label: `${route.name} (disabled)`,
+        tier: "cribl",
+        badge: "Route (disabled)",
+        muted: true,
+        info: routeEntryInfo(route, true),
+      });
+      addEdge({ from: "routes", to: routeNodeId, muted: true });
+    }
   }
 
   // Pack internals, pass 2: draw each inspected pack's embedded endpoints

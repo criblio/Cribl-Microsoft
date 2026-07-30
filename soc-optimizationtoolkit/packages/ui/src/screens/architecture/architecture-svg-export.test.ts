@@ -67,6 +67,22 @@ describe("diagramToSvg", () => {
     expect(svg).toContain(">PREMIUM</text>");
   });
 
+  it("wraps long unbroken labels onto two lines instead of overhanging", () => {
+    const diagram: PatternDiagram = {
+      nodes: [
+        {
+          id: "a",
+          label: "Reduction_Zscaler_Internet_firewall",
+          tier: "cribl",
+        },
+      ],
+      edges: [],
+    };
+    const svg = diagramToSvg(diagram);
+    expect(svg).toContain("<tspan");
+    expect(svg).not.toContain(">Reduction_Zscaler_Internet_firewall</text>");
+  });
+
   it("returns a minimal document for an empty diagram", () => {
     const svg = diagramToSvg({ nodes: [], edges: [] });
     expect(svg.startsWith("<svg ")).toBe(true);

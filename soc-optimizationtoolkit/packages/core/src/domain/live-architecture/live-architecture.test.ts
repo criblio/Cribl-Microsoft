@@ -790,6 +790,92 @@ describe("routes popover detail and pack internals (2026-07-30)", () => {
   });
 });
 
+describe("routing-table explode (2026-07-30)", () => {
+  it("the hub is expandable; exploded routes become their own nodes", () => {
+    const collapsed = buildLiveDiagram(labSnapshot(), { azureOnly: false });
+    const hub = collapsed.diagram.nodes.find((n) => n.id === "routes")!;
+    expect(hub.expandable).toBe(true);
+    expect(hub.expanded).toBe(false);
+    expect(collapsed.diagram.nodes.some((n) => n.id.startsWith("route:"))).toBe(false);
+
+    const { diagram } = buildLiveDiagram(labSnapshot(), {
+      azureOnly: false,
+      expandRoutes: true,
+    });
+    expect(diagram.nodes.find((n) => n.id === "routes")?.expanded).toBe(true);
+    const r1 = diagram.nodes.find((n) => n.id === "route:r1")!;
+    expect(r1.label).toBe("flowlogs");
+    expect(r1.badge).toBe("Route");
+    expect(r1.info?.purpose).toContain("filter: __inputId=='flowlog_collector'");
+    const edgePairs = diagram.edges.map((e) => `${e.from}>${e.to}`);
+    expect(edgePairs).toEqual(
+      expect.arrayContaining([
+        "routes>route:r1",
+        "route:r1>pack:AzureFlowLogs",
+        "routes>route:r2",
+        "route:r2>out:splunk_dest",
+      ]),
+    );
+    // The route node carries the name; downstream edges drop the label.
+    expect(
+      diagram.edges.find(
+        (e) => e.from === "route:r1" && e.to === "pack:AzureFlowLogs",
+      )?.label,
+    ).toBeUndefined();
+  });
+
+  it("disabled routes draw subdued in the exploded table only", () => {
+    const snapshot = labSnapshot();
+    snapshot.routes = ok({
+      routes: [
+        {
+          id: "r1",
+          name: "flowlogs",
+          filter: "__inputId=='flowlog_collector'",
+          pipeline: "pack:AzureFlowLogs",
+          output: "sentinel_dest",
+          final: true,
+        },
+        {
+          id: "r2",
+          name: "pan-to-splunk",
+          filter: "__inputId=='syslog_pan'",
+          pipeline: "passthru",
+          output: "splunk_dest",
+          final: true,
+        },
+        {
+          id: "r3",
+          name: "old-route",
+          filter: "__inputId=='syslog_pan'",
+          output: "splunk_dest",
+          final: true,
+          disabled: true,
+        },
+      ],
+    });
+    const collapsed = buildLiveDiagram(snapshot, { azureOnly: false });
+    expect(collapsed.diagram.nodes.some((n) => n.id === "route:r3")).toBe(false);
+
+    const { diagram } = buildLiveDiagram(snapshot, {
+      azureOnly: false,
+      expandRoutes: true,
+    });
+    const r3 = diagram.nodes.find((n) => n.id === "route:r3")!;
+    expect(r3.muted).toBe(true);
+    expect(r3.label).toBe("old-route (disabled)");
+    expect(r3.badge).toBe("Route (disabled)");
+    expect(r3.info?.purpose).toContain("DISABLED");
+    // Position numbering reflects the REAL table order.
+    expect(r3.info?.purpose).toContain("3. old-route");
+    expect(diagram.edges.find((e) => e.to === "route:r3")?.muted).toBe(true);
+    // The disabled route pulls no destination chain of its own.
+    expect(
+      diagram.edges.some((e) => e.from === "route:r3"),
+    ).toBe(false);
+  });
+});
+
 describe("Cribl UI resource links (2026-07-29)", () => {
   it("derives the UI base from a leader URL (cloud gets /stream)", () => {
     expect(criblUiBaseFromLeaderUrl("https://main-acme.cribl.cloud")).toBe(
