@@ -906,7 +906,12 @@ describe("routes popover detail and pack internals (2026-07-30)", () => {
     expect(r2.muted).toBe(true);
     expect(r2.badge).toBe("Route (disabled)");
     expect(diagram.edges.find((e) => e.to === "route:AllInOne/r2")?.muted).toBe(true);
-    expect(diagram.edges.some((e) => e.from === "route:AllInOne/r2")).toBe(false);
+    // The disabled pack route links its destination, subdued, no cost.
+    const r2Out = diagram.edges.find(
+      (e) => e.from === "route:AllInOne/r2" && e.to === "out:AllInOne/sent_out",
+    );
+    expect(r2Out?.muted).toBe(true);
+    expect(r2Out?.cost).toBeUndefined();
   });
 
   it("pack-internal nodes link to the pack's Cribl UI page", () => {
@@ -989,6 +994,15 @@ describe("routing-table explode (2026-07-30)", () => {
           final: true,
           disabled: true,
         },
+        {
+          id: "r4",
+          name: "quarantine",
+          filter: "true",
+          pipeline: "quarantine_pipe",
+          output: "splunk_dest",
+          final: true,
+          disabled: true,
+        },
       ],
     });
     const collapsed = buildLiveDiagram(snapshot, { azureOnly: false });
@@ -1006,10 +1020,30 @@ describe("routing-table explode (2026-07-30)", () => {
     // Position numbering reflects the REAL table order.
     expect(r3.info?.purpose).toContain("entry 3 of the routing table");
     expect(diagram.edges.find((e) => e.to === "route:r3")?.muted).toBe(true);
-    // The disabled route pulls no destination chain of its own.
+    // The disabled route's chain stays VISIBLE, subdued (follow-up directive
+    // 2026-07-30): a muted edge links its destination, without cost badges.
+    const r3Out = diagram.edges.find(
+      (e) => e.from === "route:r3" && e.to === "out:splunk_dest",
+    );
+    expect(r3Out?.muted).toBe(true);
+    expect(r3Out?.cost).toBeUndefined();
+    // splunk_dest is shared with the ENABLED r2 flow - it keeps its normal
+    // look; a pipeline referenced ONLY by a disabled route draws muted.
     expect(
-      diagram.edges.some((e) => e.from === "route:r3"),
-    ).toBe(false);
+      diagram.nodes.find((n) => n.id === "out:splunk_dest")?.muted,
+    ).toBeUndefined();
+    const quarantinePipe = diagram.nodes.find((n) => n.id === "pipe:quarantine_pipe")!;
+    expect(quarantinePipe.muted).toBe(true);
+    expect(
+      diagram.edges.find(
+        (e) => e.from === "route:r4" && e.to === "pipe:quarantine_pipe",
+      )?.muted,
+    ).toBe(true);
+    expect(
+      diagram.edges.find(
+        (e) => e.from === "pipe:quarantine_pipe" && e.to === "out:splunk_dest",
+      )?.muted,
+    ).toBe(true);
     // The hub's visual table shows the disabled row, dimmed.
     const hub = diagram.nodes.find((n) => n.id === "routes")!;
     expect(hub.info?.routes?.[2]).toEqual({

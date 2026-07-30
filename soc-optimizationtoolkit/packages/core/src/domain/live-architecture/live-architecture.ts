@@ -1433,10 +1433,12 @@ export function buildLiveDiagram(
   }
 
   // Exploded routing table also shows what is switched OFF (user directive
-  // 2026-07-30): each disabled route draws as a SUBDUED node off the hub -
-  // present in the config, processing nothing - without pulling its
-  // pack/pipeline/destination chain into the drawing. Skipped when a flow
-  // selection is active (the user asked for specific flows).
+  // 2026-07-30): each disabled route draws as a SUBDUED node off the hub,
+  // and its chain stays VISIBLE - subdued edges link the pipeline and the
+  // destination it would use (follow-up directive). Nodes already lit by
+  // enabled flows keep their normal look (addNode is first-wins); nodes
+  // that exist ONLY for a disabled route draw muted. No cost badges - a
+  // disabled route ships nothing. Skipped when a flow selection is active.
   if (routesExpanded && hubNeeded && selectedFlowKeys.size === 0) {
     for (const route of disabledRoutes) {
       const routeNodeId = `route:${route.id}`;
@@ -1449,6 +1451,77 @@ export function buildLiveDiagram(
         info: routeEntryInfo(route, true),
       });
       addEdge({ from: "routes", to: routeNodeId, muted: true });
+      let previous = routeNodeId;
+      const pipelineRef = route.pipeline ?? "passthru";
+      if (pipelineRef.startsWith("pack:")) {
+        const packName = pipelineRef.slice("pack:".length);
+        const packNodeId = `pack:${packName}`;
+        addNode({
+          id: packNodeId,
+          label: packById.get(packName)?.displayName ?? packName,
+          tier: "cribl",
+          badge: "Pack",
+          muted: true,
+          info: withResourceLink(
+            packEnrichedInfo.get(packName) ?? packInfo(packName, packById.get(packName)),
+            resourceLink(
+              `${UI_PAGES.packs}/${encodeURIComponent(packName)}`,
+              "Open this pack in Cribl",
+            ),
+          ),
+        });
+        addEdge({ from: previous, to: packNodeId, muted: true });
+        previous = packNodeId;
+      } else if (pipelineRef !== "passthru" && pipelineRef !== "") {
+        const pipeNodeId = `pipe:${pipelineRef}`;
+        addNode({
+          id: pipeNodeId,
+          label: pipelineRef,
+          tier: "cribl",
+          badge: "Pipeline",
+          muted: true,
+          info: withResourceLink(
+            pipelineInfo("Route", pipelineRef, pipelineById.get(pipelineRef)),
+            resourceLink(
+              `${UI_PAGES.pipelines}/${encodeURIComponent(pipelineRef)}`,
+              "Open this pipeline in Cribl",
+            ),
+          ),
+        });
+        addEdge({ from: previous, to: pipeNodeId, muted: true });
+        previous = pipeNodeId;
+      }
+      const targetRef = route.output ?? "default";
+      const resolved = resolveOutput(route.output);
+      if (resolved !== null) {
+        addNode({
+          id: `out:${resolved.id}`,
+          label: resolved.id,
+          tier: "destination",
+          badge: `${resolved.type} destination`,
+          muted: true,
+          info: withResourceLink(
+            outputInfo(resolved),
+            resourceLink(UI_PAGES.destinations, "Open Destinations in Cribl"),
+          ),
+        });
+        addEdge({ from: previous, to: `out:${resolved.id}`, muted: true });
+      } else if (targetRef.startsWith("cribl_lake:")) {
+        const dataset = targetRef.slice("cribl_lake:".length);
+        addNode({
+          id: `out:${targetRef}`,
+          label: `Lake: ${dataset}`,
+          tier: "destination",
+          badge: "Cribl Lake",
+          muted: true,
+          info: {
+            purpose: `Cribl Lake dataset '${dataset}' (route output reference).`,
+            docs: [{ label: "Cribl Lake docs", url: CRIBL + "/lake/" }],
+          },
+        });
+        addEdge({ from: previous, to: `out:${targetRef}`, muted: true });
+      }
+      // Unresolvable references draw no destination leg.
     }
   }
 
@@ -1646,6 +1719,30 @@ export function buildLiveDiagram(
             info: packRouteEntryInfo(route, true),
           });
           addEdge({ from: hubId, to: routeNodeId, muted: true });
+          // The disabled route's chain stays visible, subdued: pipeline and
+          // destination linked with muted edges, no cost badges.
+          let previous = routeNodeId;
+          const pipelineRef = route.pipeline ?? "passthru";
+          if (pipelineRef !== "passthru" && pipelineRef !== "") {
+            const pipeNodeId = `pipe:${packId}/${pipelineRef}`;
+            addNode({
+              id: pipeNodeId,
+              label: pipelineRef,
+              tier: "cribl",
+              badge: "Pack pipeline",
+              muted: true,
+              info: withResourceLink(
+                pipelineInfo("Pack", pipelineRef, packPipeById.get(pipelineRef)),
+                packResource,
+              ),
+            });
+            addEdge({ from: previous, to: pipeNodeId, muted: true });
+            previous = pipeNodeId;
+          }
+          const target = outById.get(route.output ?? "default");
+          if (target !== undefined) {
+            addEdge({ from: previous, to: emitOutputNode(target), muted: true });
+          }
         }
       }
       // Outputs no internal route references stay visible off the pack card.
