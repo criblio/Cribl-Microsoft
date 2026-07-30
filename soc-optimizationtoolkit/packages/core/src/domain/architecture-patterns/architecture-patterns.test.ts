@@ -307,6 +307,7 @@ describe("edge cost tiers (2026-07-29)", () => {
     "sentineldatalake",
     "azuredataexplorer",
     "eventhubegress",
+    "auxiliaryplantable",
   ]);
   const canonical = (label: string) => label.toLowerCase().replace(/[^a-z0-9]/g, "");
 
@@ -437,6 +438,49 @@ describe("Splunk SIEM migration pattern (2026-07-30)", () => {
         (e) => e.from === "splunkheavyforwarders" && e.to === "splunkindexers",
       )?.muted,
     ).toBe(true);
+  });
+});
+
+describe("workspace log tiers (2026-07-30 cost-reduction realism)", () => {
+  it("splits Analytics vs Auxiliary, summary rules lift aggregates back", () => {
+    const pattern = ARCHITECTURE_PATTERNS.find(
+      (p) => p.id === "workspace-log-tiers",
+    )!;
+    expect(
+      pattern.diagram.edges.find((e) => e.from === "dcr" && e.to === "aux")?.cost,
+    ).toBe("economical");
+    // Summary-rule output bills as Analytics ingest - small on purpose.
+    const summary = pattern.diagram.edges.find(
+      (e) => e.from === "aux" && e.to === "law",
+    )!;
+    expect(summary.label).toContain("summary rules");
+    expect(summary.cost).toBe("premium");
+    const text = pattern.considerations.join(" ");
+    expect(text).toContain("SUMMARY RULES");
+    expect(text).toContain("single-table");
+    expect(text).toContain("Basic plan");
+  });
+
+  it("the cost-reduction preset now yields the full tiering story", () => {
+    const preset = ARCHITECTURE_PRESETS.find(
+      (p) => p.id === "cost-reduction-archive",
+    )!;
+    const matched = recommendPatterns(preset.selection)
+      .filter((r) => r.fit === "match")
+      .map((r) => r.pattern.id);
+    expect(matched).toEqual(
+      expect.arrayContaining([
+        "blob-archive-replay",
+        "search-in-place",
+        "workspace-log-tiers",
+      ]),
+    );
+    // The reduction MECHANISM is stated, not implied.
+    const blob = ARCHITECTURE_PATTERNS.find((p) => p.id === "blob-archive-replay")!;
+    expect(blob.considerations.join(" ")).toContain("BEFORE the DCR");
+    expect(
+      blob.diagram.edges.find((e) => e.from === "stream" && e.to === "dcr")?.label,
+    ).toBe("reduced hot subset");
   });
 });
 

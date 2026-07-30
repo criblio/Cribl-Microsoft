@@ -474,9 +474,11 @@ export const ARCHITECTURE_PATTERNS: readonly ArchitecturePattern[] = [
     requiresProducts: ["stream"],
     requiresResources: ["blob-storage"],
     considerations: [
+      "The reduction itself happens in Stream's pipelines BEFORE the DCR: drop null and duplicate fields, trim raw payloads, aggregate flow records, and sample verbose allow-traffic noise - verbose sources commonly shrink 30-50% before billing starts.",
       "Apply lifecycle policies (cool/archive tiers) to the archive container.",
       "Partition archive paths by source and date so replay filters cheaply.",
       "Replay runs through the same pipelines - shaped identically to the original flow.",
+      "Pair with the workspace log-tiers pattern when high-volume feeds must stay QUERYABLE in the workspace, not just archived.",
     ],
     diagram: {
       // The hot subset rides the SAME ingestion path as everything else -
@@ -492,9 +494,53 @@ export const ARCHITECTURE_PATTERNS: readonly ArchitecturePattern[] = [
       edges: [
         { from: "src", to: "stream" },
         { from: "stream", to: "blob", label: "full fidelity", cost: "economical" },
-        { from: "stream", to: "dcr", label: "hot subset" },
+        { from: "stream", to: "dcr", label: "reduced hot subset" },
         { from: "dcr", to: "law", cost: "premium" },
         { from: "blob", to: "stream", label: "replay (Azure Blob source)" },
+      ],
+    },
+  },
+  {
+    id: "workspace-log-tiers",
+    title: "Workspace log tiers (Analytics vs Auxiliary)",
+    summary:
+      "Stream splits by value INSIDE the workspace too: detections-grade events land on Analytics-plan tables while high-volume low-value telemetry lands on Auxiliary-plan custom tables at a fraction of the rate, with summary rules lifting aggregates back into Analytics.",
+    why:
+      "Blob solves retention, but some high-volume feeds still need to be QUERYABLE in the workspace day to day - the Auxiliary plan keeps them there cheaply, and detections run on summary-rule aggregates instead of raw volume.",
+    requiresProducts: ["stream"],
+    requiresResources: ["sentinel"],
+    considerations: [
+      "Auxiliary-plan tables are custom (_CL) tables fed through the Logs Ingestion API - Stream lands verbose feeds (firewall allow traffic, flow logs, DNS, proxy) there instead of the Analytics plan.",
+      "Auxiliary KQL is limited (single-table queries, reduced operators) and analytics rules cannot target these tables directly - use SUMMARY RULES to aggregate into an Analytics table that detections and workbooks use.",
+      "Summary-rule output is billed as Analytics ingest - the aggregates are small, and that is the point: detections see minutes-grain rollups, not raw volume.",
+      "Interactive retention on the Auxiliary plan is 30 days (long-term retention beyond that is cheap) - keep anything detections need in full fidelity on Analytics.",
+      "The Basic plan sits between the two - more query capability than Auxiliary at a higher rate - when Auxiliary is too restrictive for a feed.",
+      "Pair with the blob archive pattern: blob holds the full-fidelity replay copy; the Auxiliary tier holds what analysts want queryable without rehydration.",
+    ],
+    diagram: {
+      nodes: [
+        { id: "src", label: "Log sources", tier: "source" },
+        { id: "stream", label: "Cribl Stream", tier: "cribl" },
+        { id: "dcr", label: "Kind:Direct DCR", tier: "azure" },
+        { id: "law", label: "Log Analytics workspace", tier: "destination" },
+        { id: "aux", label: "Auxiliary-plan table", tier: "destination" },
+      ],
+      edges: [
+        { from: "src", to: "stream" },
+        { from: "stream", to: "dcr", label: "split by value" },
+        { from: "dcr", to: "law", cost: "premium" },
+        {
+          from: "dcr",
+          to: "aux",
+          label: "high-volume, low-value",
+          cost: "economical",
+        },
+        {
+          from: "aux",
+          to: "law",
+          label: "summary rules (aggregates)",
+          cost: "premium",
+        },
       ],
     },
   },
@@ -1274,7 +1320,7 @@ export const ARCHITECTURE_PRESETS: readonly ArchitecturePreset[] = [
     id: "cost-reduction-archive",
     label: "Cost reduction and archive",
     description:
-      "Full fidelity to cheap blob storage, only the hot subset to Sentinel, search the archive in place.",
+      "Reduce in the pipeline, full fidelity to cheap blob, the hot subset to Sentinel Analytics, high-volume feeds on the Auxiliary plan, search the archive in place.",
     selection: {
       products: ["stream", "search"],
       resources: ["sentinel", "blob-storage"],
@@ -1593,6 +1639,20 @@ const DIAGRAM_NODE_INFO: Record<string, DiagramNodeInfo> = {
         url: MS + "/azure/azure-monitor/logs/log-analytics-workspace-overview",
       },
       { label: "Microsoft Sentinel overview", url: MS + "/azure/sentinel/overview" },
+    ],
+  },
+  [canonicalNodeKey("Auxiliary-plan table")]: {
+    purpose:
+      "A custom (_CL) table on the Auxiliary log plan: ingest at a small fraction of the Analytics-plan rate for high-volume, low-value telemetry. Single-table KQL with limited operators, 30-day interactive retention, no direct analytics rules - summary rules lift aggregates into Analytics tables for detections.",
+    docs: [
+      {
+        label: "Azure Monitor table plans",
+        url: MS + "/azure/azure-monitor/logs/data-platform-logs",
+      },
+      {
+        label: "Summary rules",
+        url: MS + "/azure/azure-monitor/logs/summary-rules",
+      },
     ],
   },
   [canonicalNodeKey("Microsoft Sentinel")]: {
