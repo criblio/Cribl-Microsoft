@@ -102,6 +102,19 @@ export interface BuildLiveDiagramOptions {
   focusSources?: readonly string[];
   focusOutputs?: readonly string[];
   /**
+   * The flow-inventory selection (user direction 2026-07-30: inventory the
+   * complete flows, let the user pick which to render). Keys come from the
+   * result's flows[] list; empty/undefined = draw every flow. Composes
+   * with azureOnly and the focus filters.
+   */
+  selectedFlows?: readonly string[];
+  /**
+   * Pack ids rendered EXPLODED (2026-07-30): the pack card fans out into
+   * its internal routing table, pipelines, and destinations instead of
+   * hiding them in the popover. Non-listed packs stay collapsed.
+   */
+  expandedPacks?: readonly string[];
+  /**
    * The Cribl leader UI base (origin plus any product prefix, e.g.
    * "https://main-org.cribl.cloud/stream" or "http://leader:9000"). When
    * set, every live node's info links to ITS page in the Cribl UI (user
@@ -161,6 +174,23 @@ export interface LiveDiagramResult {
   diagram: PatternDiagram;
   /** User-visible caveats, deduped, stable order. Empty = clean snapshot. */
   notes: string[];
+  /**
+   * The COMPLETE flow inventory (2026-07-30), independent of every filter:
+   * one entry per group flow (input -> route -> destination) and one per
+   * pack with embedded endpoints. The UI lists these for selection; keys
+   * feed BuildLiveDiagramOptions.selectedFlows.
+   */
+  flows: LiveFlowSummary[];
+}
+
+/** One complete flow the group runs, as an inventory row. */
+export interface LiveFlowSummary {
+  /** Stable selection key: "g:{input}>{routeId}>{output}" or "p:{packId}". */
+  key: string;
+  /** Human line: source -> route (via pack/pipeline) -> destination. */
+  label: string;
+  /** True when the flow touches an Azure-typed endpoint. */
+  azure: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -852,11 +882,42 @@ export function buildLiveDiagram(
     notes.push("The 'default' output could not be resolved to a real destination.");
   }
 
-  // --- 5. Focus filter (selected sources/destinations), then Azure filter ---
+  // --- 5. Flow inventory, then the filters (focus -> selection -> Azure) ----
   const focusSources = new Set(options.focusSources ?? []);
   const focusOutputs = new Set(options.focusOutputs ?? []);
   const outputRef = (triple: FlowTriple): string =>
     triple.output !== null ? triple.output.id : triple.route.output ?? "default";
+  const tripleAzure = (triple: FlowTriple): boolean =>
+    (triple.input !== null && isAzureInput(triple.input)) ||
+    (triple.output !== null && isAzureCriblType("output", triple.output.type));
+  const flowKey = (triple: FlowTriple): string =>
+    `g:${triple.input?.id ?? "*"}>${triple.route.id}>${outputRef(triple)}`;
+  const routeVia = (route: LiveRoute): string => {
+    const ref = route.pipeline ?? "passthru";
+    if (ref.startsWith("pack:")) {
+      return ` (pack ${ref.slice("pack:".length)})`;
+    }
+    return ref !== "passthru" && ref !== "" ? ` (pipeline ${ref})` : "";
+  };
+  // The COMPLETE inventory, computed before any filter (user direction
+  // 2026-07-30: list every flow; the user picks which to render).
+  const flows: LiveFlowSummary[] = [];
+  const seenFlowKeys = new Set<string>();
+  for (const triple of triples) {
+    const key = flowKey(triple);
+    if (seenFlowKeys.has(key)) {
+      continue;
+    }
+    seenFlowKeys.add(key);
+    flows.push({
+      key,
+      label:
+        `${triple.input?.id ?? "(any input)"} -> ${triple.route.name}` +
+        `${routeVia(triple.route)} -> ${outputRef(triple)}`,
+      azure: tripleAzure(triple),
+    });
+  }
+
   const inFocus = (triple: FlowTriple): boolean => {
     if (
       focusSources.size > 0 &&
@@ -874,17 +935,19 @@ export function buildLiveDiagram(
     );
   }
 
-  const keep = (triple: FlowTriple): boolean => {
-    if (!options.azureOnly) {
-      return true;
-    }
-    const inputAzure = triple.input !== null && isAzureInput(triple.input);
-    const outputAzure =
-      triple.output !== null && isAzureCriblType("output", triple.output.type);
-    return inputAzure || outputAzure;
-  };
-  const kept = focused.filter(keep);
-  if (options.azureOnly && kept.length < focused.length) {
+  const selectedFlowKeys = new Set(options.selectedFlows ?? []);
+  const chosen =
+    selectedFlowKeys.size === 0
+      ? focused
+      : focused.filter((t) => selectedFlowKeys.has(flowKey(t)));
+  if (selectedFlowKeys.size > 0) {
+    notes.push(
+      `Flow selection: ${chosen.length} of ${focused.length} group flow(s) drawn.`,
+    );
+  }
+
+  const kept = chosen.filter((t) => !options.azureOnly || tripleAzure(t));
+  if (options.azureOnly && kept.length < chosen.length) {
     const keptInputs = new Set(
       kept.filter((t) => t.input !== null).map((t) => t.input!.id),
     );
@@ -1010,7 +1073,10 @@ export function buildLiveDiagram(
     inputs: LiveInput[];
     outputs: LiveOutput[];
     routes: LiveRoute[];
-    pipelineCount: number;
+    pipelines: LivePipeline[];
+    /** The pack card's label: the human display name, else the id. */
+    displayName: string;
+    azure: boolean;
   }
   const packInternals = new Map<string, PackInternals>();
   const packEnrichedInfo = new Map<string, DiagramNodeInfo>();
@@ -1018,32 +1084,51 @@ export function buildLiveDiagram(
   for (const packId of Object.keys(packDetails)) {
     const detail = packDetails[packId];
     const silent: string[] = [];
+    const packInputs = parseSection(
+      detail.inputs,
+      `Pack '${packId}' sources`,
+      "the pack's embedded sources are",
+      notes,
+    )
+      .map((item) => normalizeInput(item, false))
+      .filter((i): i is LiveInput => i !== null)
+      .filter((i) => !i.disabled);
+    const packOutputs = parseSection(
+      detail.outputs,
+      `Pack '${packId}' destinations`,
+      "the pack's embedded destinations are",
+      notes,
+    )
+      .map(normalizeOutput)
+      .filter((o): o is LiveOutput => o !== null);
     const internals: PackInternals = {
-      inputs: parseSection(
-        detail.inputs,
-        `Pack '${packId}' sources`,
-        "the pack's embedded sources are",
-        notes,
-      )
-        .map((item) => normalizeInput(item, false))
-        .filter((i): i is LiveInput => i !== null)
-        .filter((i) => !i.disabled),
-      outputs: parseSection(
-        detail.outputs,
-        `Pack '${packId}' destinations`,
-        "the pack's embedded destinations are",
-        notes,
-      )
-        .map(normalizeOutput)
-        .filter((o): o is LiveOutput => o !== null),
-      // Internal routes/pipelines feed the popover only - parse silently.
-      routes: detail.routes === undefined ? [] : parseRoutesSection(detail.routes, silent),
-      pipelineCount:
+      inputs: packInputs,
+      outputs: packOutputs,
+      // Internal routes/pipelines draw only when exploded - parse silently.
+      routes:
+        detail.routes === undefined ? [] : parseRoutesSection(detail.routes, silent),
+      pipelines:
         detail.pipelines === undefined
-          ? 0
-          : parseSection(detail.pipelines, "", "", silent).length,
+          ? []
+          : parseSection(detail.pipelines, "", "", silent)
+              .map(normalizePipeline)
+              .filter((p): p is LivePipeline => p !== null),
+      displayName: packById.get(packId)?.displayName ?? packId,
+      azure:
+        packInputs.some(isAzureInput) ||
+        packOutputs.some((o) => isAzureCriblType("output", o.type)),
     };
     packInternals.set(packId, internals);
+    if (internals.inputs.length > 0 || internals.outputs.length > 0) {
+      flows.push({
+        key: `p:${packId}`,
+        label:
+          `Pack ${internals.displayName}: ` +
+          `${internals.inputs.map((i) => i.id).join(", ") || "(no sources)"} -> ` +
+          `${internals.outputs.map((o) => o.id).join(", ") || "(no destinations)"}`,
+        azure: internals.azure,
+      });
+    }
     const base = packInfo(packId, packById.get(packId));
     const extra: string[] = [];
     if (internals.inputs.length > 0) {
@@ -1056,8 +1141,8 @@ export function buildLiveDiagram(
         `Embedded destination(s): ${internals.outputs.map((o) => `${o.id} (${o.type})`).join(", ")}.`,
       );
     }
-    if (internals.pipelineCount > 0) {
-      extra.push(`${internals.pipelineCount} pack pipeline(s).`);
+    if (internals.pipelines.length > 0) {
+      extra.push(`${internals.pipelines.length} pack pipeline(s).`);
     }
     if (internals.routes.length > 0) {
       const lines = internals.routes.slice(0, 6).map((r, i) => routeLine(r, i, null));
@@ -1202,19 +1287,22 @@ export function buildLiveDiagram(
   }
 
   // Pack internals, pass 2: draw each inspected pack's embedded endpoints
-  // through the pack card. The pack is the flow unit for the Azure filter
-  // (an all-inclusive pack whose source OR destination is Azure stays whole);
-  // the focus filters address embedded endpoints as "{pack}/{id}".
+  // through the pack card (labeled by the pack's DISPLAY NAME, user report
+  // 2026-07-30). The pack is the flow unit for the Azure filter and the
+  // flow-inventory selection; the focus filters address embedded endpoints
+  // as "{pack}/{id}". An EXPLODED pack (expandedPacks) fans out into its
+  // internal routing table, pipelines, and destinations.
+  const expandedPackIds = new Set(options.expandedPacks ?? []);
   let packFlowsDrawn = false;
   const azureSkippedPacks: string[] = [];
   for (const [packId, internals] of packInternals) {
     if (internals.inputs.length === 0 && internals.outputs.length === 0) {
       continue;
     }
-    const packAzure =
-      internals.inputs.some(isAzureInput) ||
-      internals.outputs.some((o) => isAzureCriblType("output", o.type));
-    if (options.azureOnly && !packAzure) {
+    if (selectedFlowKeys.size > 0 && !selectedFlowKeys.has(`p:${packId}`)) {
+      continue;
+    }
+    if (options.azureOnly && !internals.azure) {
       azureSkippedPacks.push(packId);
       continue;
     }
@@ -1230,6 +1318,7 @@ export function buildLiveDiagram(
     ) {
       continue;
     }
+    const expanded = expandedPackIds.has(packId);
     const packNodeId = `pack:${packId}`;
     const packResource = resourceLink(
       `${UI_PAGES.packs}/${encodeURIComponent(packId)}`,
@@ -1237,13 +1326,15 @@ export function buildLiveDiagram(
     );
     addNode({
       id: packNodeId,
-      label: packId,
+      label: internals.displayName,
       tier: "cribl",
       badge: "Pack",
       info: withResourceLink(
         packEnrichedInfo.get(packId) ?? packInfo(packId, packById.get(packId)),
         packResource,
       ),
+      expandable: true,
+      expanded,
     });
     for (const input of drawIns) {
       const nodeId = `in:${packId}/${input.id}`;
@@ -1256,9 +1347,9 @@ export function buildLiveDiagram(
       });
       addEdge({ from: nodeId, to: packNodeId, label: "pack source" });
     }
-    for (const output of drawOuts) {
+
+    const emitOutputNode = (output: LiveOutput): string => {
       const nodeId = `out:${packId}/${output.id}`;
-      const cost = outputCostTier(output.type);
       addNode({
         id: nodeId,
         label: output.id,
@@ -1266,16 +1357,92 @@ export function buildLiveDiagram(
         badge: `${output.type} destination`,
         info: withResourceLink(outputInfo(output), packResource),
       });
-      addEdge({
-        from: packNodeId,
-        to: nodeId,
-        ...(cost !== undefined ? { cost } : {}),
+      return nodeId;
+    };
+
+    if (!expanded) {
+      for (const output of drawOuts) {
+        const cost = outputCostTier(output.type);
+        addEdge({
+          from: packNodeId,
+          to: emitOutputNode(output),
+          ...(cost !== undefined ? { cost } : {}),
+        });
+      }
+    } else {
+      // Exploded: pack -> internal routing table -> pipeline -> destination.
+      const hubId = `routes:${packId}`;
+      addNode({
+        id: hubId,
+        label: "Pack routes",
+        tier: "cribl",
+        badge: "Routing table",
+        info: withResourceLink(
+          {
+            purpose:
+              `Routing table INSIDE pack '${internals.displayName}': ` +
+              `${internals.routes.length} route(s), evaluated top-down.\n` +
+              internals.routes
+                .slice(0, 10)
+                .map((r, i) => routeLine(r, i, null))
+                .join("\n"),
+            docs: [{ label: "Cribl routes", url: CRIBL + "/stream/routes/" }],
+          },
+          packResource,
+        ),
       });
+      addEdge({ from: packNodeId, to: hubId });
+      const outById = new Map(drawOuts.map((o) => [o.id, o]));
+      const referenced = new Set<string>();
+      const packPipeById = new Map(internals.pipelines.map((p) => [p.id, p]));
+      for (const route of internals.routes.filter((r) => !r.disabled)) {
+        const routeLabel = route.final ? route.name : `${route.name} (copy)`;
+        let previous = hubId;
+        const pipelineRef = route.pipeline ?? "passthru";
+        if (pipelineRef !== "passthru" && pipelineRef !== "") {
+          const pipeNodeId = `pipe:${packId}/${pipelineRef}`;
+          addNode({
+            id: pipeNodeId,
+            label: pipelineRef,
+            tier: "cribl",
+            badge: "Pack pipeline",
+            info: withResourceLink(
+              pipelineInfo("Pack", pipelineRef, packPipeById.get(pipelineRef)),
+              packResource,
+            ),
+          });
+          addEdge({ from: previous, to: pipeNodeId, label: routeLabel });
+          previous = pipeNodeId;
+        }
+        const targetRef = route.output ?? "default";
+        const target = outById.get(targetRef);
+        if (target === undefined) {
+          // Focus-excluded or unresolvable target: skip the leg, not the pack.
+          continue;
+        }
+        referenced.add(target.id);
+        const cost = outputCostTier(target.type);
+        addEdge({
+          from: previous,
+          to: emitOutputNode(target),
+          ...(previous === hubId ? { label: routeLabel } : {}),
+          ...(cost !== undefined ? { cost } : {}),
+        });
+      }
+      // Outputs no internal route references stay visible off the pack card.
+      for (const output of drawOuts.filter((o) => !referenced.has(o.id))) {
+        const cost = outputCostTier(output.type);
+        addEdge({
+          from: packNodeId,
+          to: emitOutputNode(output),
+          ...(cost !== undefined ? { cost } : {}),
+        });
+      }
     }
     if (drawIns.length > 0 || drawOuts.length > 0) {
       packFlowsDrawn = true;
       notes.push(
-        `Pack '${packId}': ${drawIns.length} embedded source(s) and ` +
+        `Pack '${internals.displayName}': ${drawIns.length} embedded source(s) and ` +
           `${drawOuts.length} embedded destination(s) drawn from the pack's own config.`,
       );
     }
@@ -1332,5 +1499,6 @@ export function buildLiveDiagram(
   return {
     diagram: { nodes: [...nodes.values()], edges: [...edges.values()] },
     notes: [...new Set(notes)],
+    flows,
   };
 }

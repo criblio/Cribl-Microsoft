@@ -62,8 +62,13 @@ type ArchNodeData = {
   badge?: string;
   /** Service tags overlapping the bottom-right corner (e.g. Sentinel). */
   overlays?: readonly string[];
+  /** The card offers an explode/collapse toggle (pack internals). */
+  expandable?: boolean;
+  expanded?: boolean;
   /** Remove this node from the diagram (the hover x button). */
   onRemove?: (nodeId: string) => void;
+  /** Toggle the node's exploded rendering (the +/- button). */
+  onToggleExpand?: (nodeId: string) => void;
 };
 type ArchNode = Node<ArchNodeData, "arch">;
 type FlowEdgeData = {
@@ -188,6 +193,29 @@ function ArchNodeCard({ id, data }: NodeProps<ArchNode>) {
           }}
         >
           x
+        </button>
+      )}
+      {data.expandable === true && data.onToggleExpand !== undefined && (
+        <button
+          type="button"
+          className="arch-flow-expand-btn nodrag nopan"
+          aria-label={
+            data.expanded === true
+              ? `Collapse ${data.label}`
+              : `Explode ${data.label} into its internals`
+          }
+          aria-expanded={data.expanded === true}
+          title={
+            data.expanded === true
+              ? "Collapse the pack"
+              : "Explode the pack: show its sources, routes, pipelines, and destinations"
+          }
+          onClick={(event) => {
+            event.stopPropagation();
+            data.onToggleExpand?.(id);
+          }}
+        >
+          {data.expanded === true ? "-" : "+"}
         </button>
       )}
       {info !== undefined && (
@@ -497,6 +525,8 @@ function layoutGraph(diagram: PatternDiagram): { nodes: ArchNode[]; edges: FlowE
       info: n.info,
       badge: n.badge,
       overlays: n.overlays,
+      expandable: n.expandable,
+      expanded: n.expanded,
     },
   }));
   // A wrap-back edge runs right-to-left in the laid-out flow (its source
@@ -521,10 +551,12 @@ function layoutGraph(diagram: PatternDiagram): { nodes: ArchNode[]; edges: FlowE
 
 export interface ArchitectureFlowProps {
   diagram: PatternDiagram;
+  /** Toggle a node's exploded rendering (nodes with expandable=true). */
+  onToggleNodeExpand?: (nodeId: string) => void;
 }
 
 /** The interactive canvas. Empty diagrams render nothing (caller shows a hint). */
-export function ArchitectureFlow({ diagram }: ArchitectureFlowProps) {
+export function ArchitectureFlow({ diagram, onToggleNodeExpand }: ArchitectureFlowProps) {
   // User removals (2026-07-29): deleted nodes/edges are subtracted from the
   // diagram and dagre RE-LAYOUTS what is left, so the drawing tightens up
   // around the remaining flow. Removals reset when the selection changes.
@@ -549,11 +581,11 @@ export function ArchitectureFlow({ diagram }: ArchitectureFlowProps) {
     return {
       nodes: graph.nodes.map((n) => ({
         ...n,
-        data: { ...n.data, onRemove: removeNode },
+        data: { ...n.data, onRemove: removeNode, onToggleExpand: onToggleNodeExpand },
       })),
       edges: graph.edges,
     };
-  }, [effective, removeNode]);
+  }, [effective, removeNode, onToggleNodeExpand]);
   const [nodes, setNodes, onNodesChange] = useNodesState<ArchNode>(layouted.nodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState<FlowEdge>(layouted.edges);
 

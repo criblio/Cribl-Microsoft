@@ -4624,6 +4624,32 @@ details[open] > summary::before {
   background: var(--info-cyan);
   color: var(--surface-raised);
 }
+/* Explode/collapse toggle (2026-07-30): pack cards fan out into their
+ * internal sources/routes/pipelines/destinations. Bottom-left corner so it
+ * never collides with the remove (top-left) or info (top-right) buttons. */
+.arch-flow-expand-btn {
+  position: absolute;
+  bottom: -7px;
+  left: -7px;
+  width: 17px;
+  height: 17px;
+  border-radius: 50%;
+  border: 1.2px solid var(--accent);
+  background: var(--surface-raised);
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+.arch-flow-expand-btn:hover {
+  background: var(--accent);
+  color: var(--surface-raised);
+}
 .arch-flow-info-pop {
   position: absolute;
   top: calc(100% + 8px);

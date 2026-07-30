@@ -10,6 +10,7 @@ export type {
   LivePackDetail,
   BuildLiveDiagramOptions,
   LiveDiagramResult,
+  LiveFlowSummary,
   LiveInput,
   LiveOutput,
   LiveRoute,

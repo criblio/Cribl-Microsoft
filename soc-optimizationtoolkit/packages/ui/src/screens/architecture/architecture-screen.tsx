@@ -14,7 +14,7 @@
  * renders.
  */
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ARCHITECTURE_PRESETS,
   AZURE_RESOURCES,
@@ -235,14 +235,15 @@ function LiveArchitecturePanel({
   const [loading, setLoading] = useState(false);
   const [snapshot, setSnapshot] = useState<LiveArchitectureSnapshot | null>(null);
   const [azureOnly, setAzureOnly] = useState(true);
-  // Source/destination focus (user directive 2026-07-29): pick which
-  // endpoints to present; the diagram keeps only flows between them, with
-  // everything in-between. Empty = show all. Resets with each new snapshot.
-  const [focusSources, setFocusSources] = useState<string[]>([]);
-  const [focusOutputs, setFocusOutputs] = useState<string[]>([]);
+  // Flow-inventory selection (user direction 2026-07-30): the builder
+  // returns EVERY complete flow; the user checks which to render. Nothing
+  // checked = draw them all. expandedPacks explodes a pack card into its
+  // internal routes/pipelines/destinations. Both reset per snapshot.
+  const [selectedFlows, setSelectedFlows] = useState<string[]>([]);
+  const [expandedPacks, setExpandedPacks] = useState<string[]>([]);
   useEffect(() => {
-    setFocusSources([]);
-    setFocusOutputs([]);
+    setSelectedFlows([]);
+    setExpandedPacks([]);
   }, [snapshot]);
 
   const loadGroups = async () => {
@@ -281,15 +282,6 @@ function LiveArchitecturePanel({
     }
   };
 
-  // The UNFOCUSED build supplies the endpoint pick lists (what could be
-  // shown under the current Azure toggle); the focused build is what draws.
-  const endpointResult = useMemo(
-    () =>
-      snapshot === null
-        ? null
-        : buildLiveDiagram(snapshot, { azureOnly, uiBase: criblUiBase }),
-    [snapshot, azureOnly, criblUiBase],
-  );
   const liveResult = useMemo(
     () =>
       snapshot === null
@@ -297,27 +289,30 @@ function LiveArchitecturePanel({
         : buildLiveDiagram(snapshot, {
             azureOnly,
             uiBase: criblUiBase,
-            focusSources,
-            focusOutputs,
+            selectedFlows,
+            expandedPacks,
           }),
-    [snapshot, azureOnly, criblUiBase, focusSources, focusOutputs],
+    [snapshot, azureOnly, criblUiBase, selectedFlows, expandedPacks],
   );
-  const sourceChoices = useMemo(
-    () =>
-      (endpointResult?.diagram.nodes ?? [])
-        .filter((n) => n.id.startsWith("in:"))
-        .map((n) => ({ id: n.id.slice(3), label: n.label, hint: n.badge ?? "" })),
-    [endpointResult],
+  // The inventory is filter-independent; the Azure toggle narrows the LIST
+  // to what it can actually draw.
+  const visibleFlows = useMemo(
+    () => (liveResult?.flows ?? []).filter((flow) => !azureOnly || flow.azure),
+    [liveResult, azureOnly],
   );
-  const destChoices = useMemo(
-    () =>
-      (endpointResult?.diagram.nodes ?? [])
-        .filter((n) => n.id.startsWith("out:"))
-        .map((n) => ({ id: n.id.slice(4), label: n.label, hint: n.badge ?? "" })),
-    [endpointResult],
-  );
-  const toggleIn = (list: string[], id: string): string[] =>
-    list.includes(id) ? list.filter((x) => x !== id) : [...list, id];
+  const toggleFlow = (key: string): void =>
+    setSelectedFlows((prev) =>
+      prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key],
+    );
+  const togglePackExpand = useCallback((nodeId: string) => {
+    if (!nodeId.startsWith("pack:")) {
+      return;
+    }
+    const packId = nodeId.slice("pack:".length);
+    setExpandedPacks((prev) =>
+      prev.includes(packId) ? prev.filter((p) => p !== packId) : [...prev, packId],
+    );
+  }, []);
 
   return (
     <>
@@ -363,66 +358,27 @@ function LiveArchitecturePanel({
       {liveError !== "" && (
         <span className="field-hint eh-warning">{liveError}</span>
       )}
-      {liveResult !== null && (sourceChoices.length > 1 || destChoices.length > 1) && (
+      {liveResult !== null && visibleFlows.length > 1 && (
         <div className="arch-live-focus">
-          {sourceChoices.length > 1 && (
-            <>
-              <span className="field-label">Show only these sources</span>
-              <div className="arch-preset-row">
-                {sourceChoices.map((choice) => (
-                  <button
-                    type="button"
-                    key={choice.id}
-                    title={choice.hint}
-                    className={
-                      "arch-preset-chip" +
-                      (focusSources.includes(choice.id)
-                        ? " arch-preset-chip-active"
-                        : "")
-                    }
-                    onClick={() =>
-                      setFocusSources((prev) => toggleIn(prev, choice.id))
-                    }
-                  >
-                    {choice.label}
-                  </button>
-                ))}
-              </div>
-            </>
-          )}
-          {destChoices.length > 1 && (
-            <>
-              <span className="field-label">Show only these destinations</span>
-              <div className="arch-preset-row">
-                {destChoices.map((choice) => (
-                  <button
-                    type="button"
-                    key={choice.id}
-                    title={choice.hint}
-                    className={
-                      "arch-preset-chip" +
-                      (focusOutputs.includes(choice.id)
-                        ? " arch-preset-chip-active"
-                        : "")
-                    }
-                    onClick={() =>
-                      setFocusOutputs((prev) => toggleIn(prev, choice.id))
-                    }
-                  >
-                    {choice.label}
-                  </button>
-                ))}
-              </div>
-            </>
-          )}
-          {(focusSources.length > 0 || focusOutputs.length > 0) && (
+          <span className="field-label">
+            Flow inventory ({visibleFlows.length}) - check flows to draw only
+            those; unchecked = draw everything
+          </span>
+          {visibleFlows.map((flow) => (
+            <label className="integrate-check" key={flow.key}>
+              <input
+                type="checkbox"
+                checked={selectedFlows.includes(flow.key)}
+                onChange={() => toggleFlow(flow.key)}
+              />
+              <span className="integrate-check-text">{flow.label}</span>
+            </label>
+          ))}
+          {selectedFlows.length > 0 && (
             <button
               type="button"
               className="arch-export-btn"
-              onClick={() => {
-                setFocusSources([]);
-                setFocusOutputs([]);
-              }}
+              onClick={() => setSelectedFlows([])}
             >
               Show all flows
             </button>
@@ -436,7 +392,10 @@ function LiveArchitecturePanel({
             onExport={onExport}
             baseName={`live-dataflow-${snapshot?.groupId ?? "group"}`}
           />
-          <ArchitectureFlow diagram={liveResult.diagram} />
+          <ArchitectureFlow
+            diagram={liveResult.diagram}
+            onToggleNodeExpand={togglePackExpand}
+          />
           {liveResult.diagram.nodes.length > 0 && <CostLegend />}
           {liveResult.notes.length > 0 && (
             <div className="arch-live-notes">

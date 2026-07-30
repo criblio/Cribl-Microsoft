@@ -227,6 +227,14 @@ export interface DiagramNode {
    * the workspace, shown as a tag, not a separate node).
    */
   overlays?: readonly string[];
+  /**
+   * The card offers an explode/collapse toggle (2026-07-30: pack cards
+   * expand into their internal sources/routes/pipelines/destinations).
+   * The renderer surfaces the button; the OWNER of the diagram rebuilds it
+   * with the node expanded. `expanded` reflects the current state.
+   */
+  expandable?: boolean;
+  expanded?: boolean;
 }
 
 /**

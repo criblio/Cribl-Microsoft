@@ -611,7 +611,12 @@ describe("routes popover detail and pack internals (2026-07-30)", () => {
       routes: ok({ routes: [] }),
       pipelines: ok({ items: [] }),
       breakers: ok({ items: [] }),
-      packs: ok({ items: [{ id: "AllInOne", version: "1.0.0" }, { id: "OtherPack" }] }),
+      packs: ok({
+        items: [
+          { id: "AllInOne", displayName: "All In One", version: "1.0.0" },
+          { id: "OtherPack" },
+        ],
+      }),
       jobs: ok({ items: [] }),
       packDetails: {
         AllInOne: {
@@ -659,9 +664,14 @@ describe("routes popover detail and pack internals (2026-07-30)", () => {
     expect(pack.info?.purpose).toContain(
       "1. pack-route - filter: true - via pipeline shape -> sent_out",
     );
+    // The card is labeled by the pack's DISPLAY NAME and offers explode.
+    const packNode = diagram.nodes.find((n) => n.id === "pack:AllInOne")!;
+    expect(packNode.label).toBe("All In One");
+    expect(packNode.expandable).toBe(true);
+    expect(packNode.expanded).toBe(false);
     // Honest notes: what was drawn, and the inspection shortfall.
     expect(
-      notes.some((n) => n.startsWith("Pack 'AllInOne': 1 embedded source(s)")),
+      notes.some((n) => n.startsWith("Pack 'All In One': 1 embedded source(s)")),
     ).toBe(true);
     expect(
       notes.some((n) => n.includes("inspected for 1 of 2 installed pack(s)")),
@@ -686,6 +696,86 @@ describe("routes popover detail and pack internals (2026-07-30)", () => {
       notes.some((n) => n.includes("non-Azure pack(s): AllInOne")),
     ).toBe(true);
     expect(notes.some((n) => n.startsWith("No Azure-related flows"))).toBe(true);
+  });
+
+  it("an exploded pack fans out into routes, pipelines, and destinations", () => {
+    const { diagram } = buildLiveDiagram(packSnapshot(), {
+      azureOnly: true,
+      expandedPacks: ["AllInOne"],
+    });
+    const badgeOf = new Map(diagram.nodes.map((n) => [n.id, n.badge]));
+    expect(badgeOf.get("routes:AllInOne")).toBe("Routing table");
+    expect(badgeOf.get("pipe:AllInOne/shape")).toBe("Pack pipeline");
+    const edgePairs = diagram.edges.map((e) => `${e.from}>${e.to}`);
+    expect(edgePairs).toEqual(
+      expect.arrayContaining([
+        "in:AllInOne/eh_in>pack:AllInOne",
+        "pack:AllInOne>routes:AllInOne",
+        "routes:AllInOne>pipe:AllInOne/shape",
+        "pipe:AllInOne/shape>out:AllInOne/sent_out",
+      ]),
+    );
+    expect(
+      diagram.edges.find(
+        (e) => e.from === "routes:AllInOne" && e.to === "pipe:AllInOne/shape",
+      )?.label,
+    ).toBe("pack-route");
+    expect(
+      diagram.edges.find((e) => e.to === "out:AllInOne/sent_out")?.cost,
+    ).toBe("premium");
+    // Exploded: the generic pack -> destination shortcut is gone.
+    expect(edgePairs).not.toContain("pack:AllInOne>out:AllInOne/sent_out");
+    expect(diagram.nodes.find((n) => n.id === "pack:AllInOne")?.expanded).toBe(true);
+    // The internal routing table popover carries the route detail.
+    expect(
+      diagram.nodes.find((n) => n.id === "routes:AllInOne")?.info?.purpose,
+    ).toContain("1. pack-route - filter: true - via pipeline shape -> sent_out");
+  });
+
+  it("inventories every complete flow and honors selectedFlows", () => {
+    // The inventory is filter-independent: azureOnly still lists both.
+    const inventory = buildLiveDiagram(labSnapshot(), { azureOnly: true }).flows;
+    expect(inventory).toEqual([
+      {
+        key: "g:flowlog_collector>r1>sentinel_dest",
+        label:
+          "flowlog_collector -> flowlogs (pack AzureFlowLogs) -> sentinel_dest",
+        azure: true,
+      },
+      {
+        key: "g:syslog_pan>r2>splunk_dest",
+        label: "syslog_pan -> pan-to-splunk -> splunk_dest",
+        azure: false,
+      },
+    ]);
+    // Pack flows appear as one selectable unit, labeled by display name.
+    expect(
+      buildLiveDiagram(packSnapshot(), { azureOnly: true }).flows,
+    ).toEqual([
+      {
+        key: "p:AllInOne",
+        label: "Pack All In One: eh_in -> sent_out",
+        azure: true,
+      },
+    ]);
+    // Selecting one flow draws only that flow, with an honest note.
+    const { diagram, notes } = buildLiveDiagram(labSnapshot(), {
+      azureOnly: false,
+      selectedFlows: ["g:syslog_pan>r2>splunk_dest"],
+    });
+    const ids = diagram.nodes.map((n) => n.id);
+    expect(ids).toContain("in:syslog_pan");
+    expect(ids).toContain("out:splunk_dest");
+    expect(ids).not.toContain("in:flowlog_collector");
+    expect(notes.some((n) => n.startsWith("Flow selection: 1 of 2"))).toBe(true);
+  });
+
+  it("a flow selection without the pack key skips the pack internals", () => {
+    const { diagram } = buildLiveDiagram(packSnapshot(), {
+      azureOnly: true,
+      selectedFlows: ["g:something>r9>elsewhere"],
+    });
+    expect(diagram.nodes.some((n) => n.id === "pack:AllInOne")).toBe(false);
   });
 
   it("pack-internal nodes link to the pack's Cribl UI page", () => {

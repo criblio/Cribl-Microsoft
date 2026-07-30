@@ -80,6 +80,9 @@ export interface LaidOutNode {
   badge?: string;
   /** Service tags overlapping the bottom-right corner (e.g. Sentinel). */
   overlays?: readonly string[];
+  /** The card offers an explode/collapse toggle (pack internals). */
+  expandable?: boolean;
+  expanded?: boolean;
 }
 
 /** A routed point on an edge's polyline (dagre's node-avoiding waypoints). */
@@ -177,6 +180,8 @@ export function layoutDiagram(diagram: PatternDiagram): LaidOutDiagram {
       ...(n.overlays !== undefined && n.overlays.length > 0
         ? { overlays: n.overlays }
         : {}),
+      ...(n.expandable !== undefined ? { expandable: n.expandable } : {}),
+      ...(n.expanded !== undefined ? { expanded: n.expanded } : {}),
     };
   });
   const edges: LaidOutEdge[] = diagram.edges.map((e) => {
