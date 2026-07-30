@@ -34,6 +34,7 @@ import type {
   AzureManagement,
   AzureManagementRequest,
 } from "../../ports/azure-management";
+import { asString, httpErrorText, is2xx, prop } from "../arm-http";
 import type { LogContext, Logger } from "../../ports/logger";
 import { deriveResourceGroup } from "../../domain/azure-resource-id";
 import { updateActiveConfig, getActiveProfile } from "../../domain/azure-profiles";
@@ -81,36 +82,8 @@ export const DEFAULT_WORKSPACE_POLL_ATTEMPTS = 10;
 export const MAX_LIST_PAGES = 50;
 
 // ---------------------------------------------------------------------------
-// Shared helpers (same pattern as usecases/onboard-table)
+// Shared helpers (HTTP idioms come from usecases/arm-http)
 // ---------------------------------------------------------------------------
-
-/** Render an HTTP failure as raw, greppable error text. */
-function httpErrorText(context: string, status: number, body: unknown): string {
-  let raw: string;
-  try {
-    raw = JSON.stringify(body);
-  } catch {
-    raw = String(body);
-  }
-  return `${context}: HTTP ${status} ${raw ?? ""}`.trim();
-}
-
-function is2xx(status: number): boolean {
-  return status >= 200 && status < 300;
-}
-
-/** Read a property of an unknown value, or undefined when not an object. */
-function prop(value: unknown, key: string): unknown {
-  if (typeof value !== "object" || value === null) {
-    return undefined;
-  }
-  return (value as Record<string, unknown>)[key];
-}
-
-/** Coerce an unknown field to a string, '' for anything not a string. */
-function asString(value: unknown): string {
-  return typeof value === "string" ? value : "";
-}
 
 /** A thrown error's message, for log context (already raw greppable text). */
 function errorText(error: unknown): string {

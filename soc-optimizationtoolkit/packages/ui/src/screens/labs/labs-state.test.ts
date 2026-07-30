@@ -11,7 +11,10 @@ import {
   labPlanFromForm,
   labResourceNameRows,
   labRunResultLines,
+  labTtlFromForm,
   onPremFromForm,
+  packStorageAccountName,
+  parseExtendHours,
   permissionCheckLines,
   ttlExpiryPreview,
   vmPasswordMissing,
@@ -426,5 +429,67 @@ describe("labRunResultLines", () => {
     expect(
       lines.some((l) => l === "Microsoft Sentinel enabled on the workspace."),
     ).toBe(true);
+  });
+});
+
+describe("labTtlFromForm", () => {
+  it("is the ONE ttl parse: strict integers, trimmed email", () => {
+    const form = {
+      ...validForm(),
+      ttlHours: " 48 ",
+      ttlWarningHours: "12",
+      ttlEmail: " user@example.com ",
+    };
+    expect(labTtlFromForm(form)).toEqual({
+      hours: 48,
+      warningHours: 12,
+      userEmail: "user@example.com",
+    });
+  });
+
+  it("rejects non-integer hour fields as NaN (core validation catches them)", () => {
+    const form = { ...validForm(), ttlHours: "72.5" };
+    expect(Number.isNaN(labTtlFromForm(form).hours)).toBe(true);
+  });
+
+  it("feeds labPlanFromForm - the plan and the deploy cannot diverge", () => {
+    const form = { ...validForm(), ttlHours: "72.5" };
+    const plan = labPlanFromForm(form, SUB);
+    expect(plan.errors.length).toBeGreaterThan(0);
+  });
+});
+
+describe("parseExtendHours", () => {
+  it("accepts positive whole numbers", () => {
+    expect(parseExtendHours("72")).toEqual({ ok: true, hours: 72 });
+    expect(parseExtendHours(" 1 ")).toEqual({ ok: true, hours: 1 });
+  });
+
+  it("rejects zero, negatives, fractions, and junk with the reason", () => {
+    for (const bad of ["0", "-3", "1.5", "abc", ""]) {
+      const parsed = parseExtendHours(bad);
+      expect(parsed.ok).toBe(false);
+      if (!parsed.ok) {
+        expect(parsed.reason).toContain("positive whole number");
+      }
+    }
+  });
+});
+
+describe("packStorageAccountName", () => {
+  const deployed = {
+    storage: { accountName: "sacribllabx7q2", accountCreated: true, containers: [], queues: [] },
+  } as unknown as ProvisionLabResult;
+
+  it("prefers the typed name (trimmed)", () => {
+    expect(packStorageAccountName(" satyped ", deployed, "saplanned")).toBe("satyped");
+  });
+
+  it("falls back to the deployed account (collision suffix and all)", () => {
+    expect(packStorageAccountName("", deployed, "saplanned")).toBe("sacribllabx7q2");
+  });
+
+  it("falls back to the planned name when nothing deployed yet", () => {
+    expect(packStorageAccountName("  ", null, "saplanned")).toBe("saplanned");
   });
 });

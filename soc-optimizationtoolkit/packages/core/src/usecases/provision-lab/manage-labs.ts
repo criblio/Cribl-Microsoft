@@ -29,6 +29,7 @@ import {
   type LabInventoryEntry,
 } from "../../domain/labs/lab-inventory";
 import { listAllPages } from "../azure-discovery";
+import { httpErrorText, is2xx, mergedTags } from "../arm-http";
 
 /**
  * List the lab resource groups in a subscription, soonest expiry first.
@@ -77,24 +78,16 @@ export async function extendLabTtl(
   const got = await azure.request(
     buildResourceGroupGetRequest(input.subscriptionId, input.resourceGroupName),
   );
-  if (got.status < 200 || got.status >= 300) {
+  if (!is2xx(got.status)) {
     throw new Error(
-      `read resource group '${input.resourceGroupName}': HTTP ${got.status} ` +
-        JSON.stringify(got.body),
+      httpErrorText(
+        `read resource group '${input.resourceGroupName}'`,
+        got.status,
+        got.body,
+      ),
     );
   }
-  const existing =
-    typeof got.body === "object" && got.body !== null
-      ? (got.body as Record<string, unknown>)["tags"]
-      : undefined;
-  const merged: Record<string, string> = {};
-  if (typeof existing === "object" && existing !== null) {
-    for (const [key, value] of Object.entries(existing as Record<string, unknown>)) {
-      if (typeof value === "string") {
-        merged[key] = value;
-      }
-    }
-  }
+  const merged = mergedTags(got.body, {});
   const ttlSettings: LabTtlSettings = {
     ...input.ttl,
     // Keep the recorded recipient when the caller does not supply one.
@@ -109,10 +102,13 @@ export async function extendLabTtl(
       tags,
     ),
   );
-  if (patch.status < 200 || patch.status >= 300) {
+  if (!is2xx(patch.status)) {
     throw new Error(
-      `extend TTL on '${input.resourceGroupName}': HTTP ${patch.status} ` +
-        JSON.stringify(patch.body),
+      httpErrorText(
+        `extend TTL on '${input.resourceGroupName}'`,
+        patch.status,
+        patch.body,
+      ),
     );
   }
   const instants = labTtlInstants(ttlSettings, input.nowIso);
@@ -142,10 +138,13 @@ export async function destroyLab(
   const response = await azure.request(
     buildResourceGroupDeleteRequest(input.subscriptionId, input.resourceGroupName),
   );
-  if (response.status < 200 || response.status >= 300) {
+  if (!is2xx(response.status)) {
     throw new Error(
-      `destroy lab '${input.resourceGroupName}': HTTP ${response.status} ` +
-        JSON.stringify(response.body),
+      httpErrorText(
+        `destroy lab '${input.resourceGroupName}'`,
+        response.status,
+        response.body,
+      ),
     );
   }
   logger?.info("manage-labs: destroy accepted", {

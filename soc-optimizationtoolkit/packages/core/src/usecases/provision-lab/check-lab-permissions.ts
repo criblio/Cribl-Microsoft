@@ -30,6 +30,7 @@ import {
   type RoleAssignmentGrantAnalysis,
 } from "../../domain/labs/lab-permissions";
 import type { LabComponentFlags } from "../../domain/labs/lab-profiles";
+import { httpErrorText, is2xx } from "../arm-http";
 
 /** Input for {@link checkLabPermissions}. */
 export interface CheckLabPermissionsInput {
@@ -87,10 +88,9 @@ export async function checkLabPermissions(
     scope = subscriptionScope;
     response = await azure.request(buildLabPermissionsGetRequest(scope));
   }
-  if (response.status < 200 || response.status >= 300) {
+  if (!is2xx(response.status)) {
     throw new Error(
-      `fetch RBAC permissions at '${scope}': HTTP ${response.status} ` +
-        JSON.stringify(response.body),
+      httpErrorText(`fetch RBAC permissions at '${scope}'`, response.status, response.body),
     );
   }
 

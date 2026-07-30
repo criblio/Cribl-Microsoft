@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createAppPack } from './pkgutil.mjs';
@@ -81,4 +81,18 @@ await mkdir(buildOutDir, { recursive: true });
 const { cleanup } = await createAppPack(false, tgzPath);
 await cleanup();
 
+// Publish the artifact at a TRACKED path (user directive 2026-07-30): the
+// release/ folder holds exactly the LATEST tgz, replaced on every package,
+// so users install the app straight from the repo without building. build/
+// keeps the (gitignored) history of local runs.
+const releaseDir = join(rootDir, 'release');
+await mkdir(releaseDir, { recursive: true });
+for (const entry of await readdir(releaseDir)) {
+  if (entry.endsWith('.tgz') && entry !== tgzName) {
+    await rm(join(releaseDir, entry), { force: true });
+  }
+}
+await copyFile(tgzPath, join(releaseDir, tgzName));
+
 console.log(`\nPackage created: ${tgzPath}`);
+console.log(`Release copy:    ${join(releaseDir, tgzName)}`);

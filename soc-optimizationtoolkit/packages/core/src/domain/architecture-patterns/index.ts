@@ -8,24 +8,42 @@
 export type {
   CriblProduct,
   AzureResource,
+  LogSource,
   CatalogEntry,
   DiagramTier,
   DiagramNode,
   DiagramEdge,
+  EdgeCostTier,
+  EdgeFlowTone,
   PatternDiagram,
   ArchitecturePattern,
+  ArchitecturePreset,
   ArchitectureSelection,
   PatternRecommendation,
   DiagramDocLink,
+  DiagramFact,
   DiagramNodeInfo,
+  DiagramRouteRow,
+  DiagramStep,
 } from "./architecture-patterns";
 export {
   CRIBL_PRODUCTS,
   AZURE_RESOURCES,
+  LOG_SOURCES,
   ARCHITECTURE_PATTERNS,
+  ARCHITECTURE_PRESETS,
+  PRODUCT_WHEN_TO_USE,
   expandResources,
   recommendPatterns,
   catalogLabel,
   unifyPatternDiagrams,
+  applySentinelOverlay,
   diagramNodeInfo,
+  criblSourceTypeFromLabel,
 } from "./architecture-patterns";
+export type { SolutionIngressArchetype } from "./solution-ingress";
+export {
+  solutionIngressArchetype,
+  solutionIngressPattern,
+  recommendWithSolutions,
+} from "./solution-ingress";

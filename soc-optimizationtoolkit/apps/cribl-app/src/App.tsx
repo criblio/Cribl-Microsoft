@@ -484,7 +484,9 @@ function TokenAcquisitionPanel({ tenantId }: { tenantId: string }) {
       // Shared with the Setup page's connect action so the token flow lives
       // in one place.
       const token = await acquireArmToken(tenantId);
-      const putRes = await fetch(kvUrl('azureArmToken?encrypted=true'), {
+      // fetchWithTimeout, never raw fetch: a detached platform bridge leaves
+      // a raw fetch pending forever (the platform/http.ts contract).
+      const putRes = await fetchWithTimeout(kvUrl('azureArmToken?encrypted=true'), {
         method: 'PUT',
         body: token.access_token,
       });
@@ -528,7 +530,15 @@ function ArmCallPanel() {
   const call = () =>
     run(async () => {
       const started = Date.now();
-      const res = await fetch('https://management.azure.com/subscriptions?api-version=2022-12-01');
+      // DELIBERATELY the raw proxy path, not the AzureManagement port: this
+      // panel diagnoses the proxies.yml Bearer injection itself, so it must
+      // not ride the adapter's token-ensure/401-retry. Still bridge-safe:
+      // fetchWithTimeout at 25s (matching the adapter's ARM timeout).
+      const res = await fetchWithTimeout(
+        'https://management.azure.com/subscriptions?api-version=2022-12-01',
+        undefined,
+        25000
+      );
       const elapsed = Date.now() - started;
       const text = await res.text();
       if (!res.ok) {
@@ -854,7 +864,12 @@ function App() {
     const timer = setTimeout(() => {
       void (async () => {
         try {
-          const res = await fetch(kvUrl('azureProfiles'), { method: 'PUT', body: current });
+          // fetchWithTimeout so a detached bridge fails the attempt loudly
+          // into the catch instead of leaving the PUT pending forever.
+          const res = await fetchWithTimeout(kvUrl('azureProfiles'), {
+            method: 'PUT',
+            body: current,
+          });
           if (res.ok) {
             lastPersistedRef.current = current;
           }
@@ -1842,19 +1857,59 @@ function App() {
     </>
   );
 
-  // Architecture Patterns (roadmap Phase 4 queued item): the data-driven
-  // reference-architecture advisor. Pure core recommender + inline-SVG
-  // diagrams; no ports, no IO. requires: 'none' - advisory in every mode.
-  const architectureView = (
+  // Dataflow (renamed from Architecture Patterns, user directive 2026-07-29;
+  // the internal item id stays 'architecture' so navigation references hold):
+  // the data-driven reference-architecture advisor plus the Live view. Pure
+  // core recommender + inline-SVG diagrams; the Live tab reads (never
+  // writes) the connected group's config. requires: 'none'.
+  // The workspace UI base for the Live view's "open in Cribl" links. This
+  // app iframes on a SANDBOXED origin whose server answers EVERY path with
+  // this app - so our own origin is never a valid base (user report
+  // 2026-07-29: the routes link opened a fresh copy of the app at the AUA
+  // gate). The embedder's origin is the truth: ancestorOrigins[0] where
+  // supported, else the referrer's origin when it is NOT ours. When neither
+  // yields a trustworthy origin, stay undefined - the live popovers then
+  // keep their documentation links instead of emitting broken ones.
+  const criblUiBase = (() => {
+    try {
+      const own = window.location.origin;
+      const ancestors = (
+        window.location as Location & { ancestorOrigins?: DOMStringList }
+      ).ancestorOrigins;
+      const ancestor =
+        ancestors !== undefined && ancestors.length > 0 ? ancestors[0] : undefined;
+      if (ancestor !== undefined && ancestor !== "" && ancestor !== "null") {
+        return `${ancestor}/stream`;
+      }
+      if (document.referrer !== "") {
+        const ref = new URL(document.referrer).origin;
+        if (ref !== own && ref !== "null") {
+          return `${ref}/stream`;
+        }
+      }
+    } catch {
+      // No trustworthy embedder origin - fall through to undefined.
+    }
+    return undefined;
+  })();
+
+  const renderArchitecture = (nav: AppFrameNav) => (
     <>
       <header className="harness-header">
-        <h1 className="harness-title">Architecture Patterns</h1>
+        <h1 className="harness-title">Dataflow</h1>
         <p className="harness-subtitle">
-          Reference architectures for your Cribl + Azure footprint. Select what
-          is in use; get the matching patterns, diagrams, and considerations.
+          How data flows across your Cribl + Azure footprint. Select what is
+          in use to get matching patterns, diagrams, and considerations - or
+          draw the live configured flow of a connected worker group.
         </p>
       </header>
-      <ArchitectureScreen />
+      <ArchitectureScreen
+        onNavigate={nav.navigate}
+        canNavigate={nav.canNavigate}
+        onExport={(name, mime, data) => cloudPorts.artifacts.save(name, mime, data)}
+        cribl={cloudPorts.cribl}
+        criblUiBase={criblUiBase}
+      />
     </>
   );
 
@@ -1969,10 +2024,10 @@ function App() {
   // parks in the DEVELOPMENT section - still reachable, moved back into
   // journey/tools one item at a time as it passes live testing.
   const routes: AppRoute[] = [
-    // Architecture Patterns is the JOURNEY landing item (user directive
+    // Dataflow is the JOURNEY landing item (user directive
     // 2026-07-20): users arrive here first to learn how the ingestion works
     // before setting anything up. requires:'none' so it is always reachable.
-    { id: 'architecture', label: 'Architecture Patterns', requires: 'none', section: 'journey', render: () => architectureView },
+    { id: 'architecture', label: 'Dataflow', requires: 'none', section: 'journey', render: renderArchitecture },
     { id: 'home', label: 'Setup', requires: 'none', section: 'journey', render: renderHome },
     { id: 'integrate', label: 'Sentinel Integration', requires: 'both', section: 'journey', render: renderIntegrate },
     { id: 'dcr-automation', label: 'DCR Automation', requires: 'azure', section: 'journey', render: renderDcrAutomation },

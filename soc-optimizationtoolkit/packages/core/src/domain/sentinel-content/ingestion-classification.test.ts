@@ -6,6 +6,7 @@
 
 import { describe, expect, it } from "vitest";
 import {
+  SOLUTION_INGESTION_ENTRIES,
   ingestionTierReason,
   lookupSolutionIngestion,
 } from "./ingestion-classification";
@@ -39,5 +40,29 @@ describe("ingestionTierReason", () => {
 
   it("gives a Push-specific reason for recommended", () => {
     expect(ingestionTierReason("recommended", "Push").toLowerCase()).toContain("push");
+  });
+});
+
+describe("SOLUTION_INGESTION_ENTRIES (2026-07-29 offline enumeration)", () => {
+  it("lists the shipped catalog sorted case-insensitively", () => {
+    expect(SOLUTION_INGESTION_ENTRIES.length).toBeGreaterThanOrEqual(400);
+    const names = SOLUTION_INGESTION_ENTRIES.map((e) => e.name.toLowerCase());
+    const sorted = [...names].sort((a, b) => a.localeCompare(b));
+    expect(names).toEqual(sorted);
+  });
+
+  it("carries tier and kind per entry", () => {
+    const abnormal = SOLUTION_INGESTION_ENTRIES.find(
+      (e) => e.name === "AbnormalSecurity",
+    );
+    expect(abnormal).toEqual({
+      name: "AbnormalSecurity",
+      tier: "recommended",
+      kind: "Push",
+    });
+    for (const entry of SOLUTION_INGESTION_ENTRIES) {
+      expect(["recommended", "supported", "legacy"]).toContain(entry.tier);
+      expect(typeof entry.kind).toBe("string");
+    }
   });
 });

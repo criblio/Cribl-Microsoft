@@ -24,6 +24,7 @@ import { parseAnalyticRuleYaml } from "../../domain/coverage-analysis/index";
 import type { ParsedAnalyticRule } from "../../domain/coverage-analysis/index";
 import { parserResourceFromYaml } from "../../domain/content-install/index";
 import type { ParserResource } from "../../domain/content-install/index";
+import { prop } from "../arm-http";
 
 /** A Content Hub catalog entry for a solution. */
 export interface SolutionCatalogEntry {
@@ -41,11 +42,6 @@ export interface SolutionCatalogEntry {
 export interface AvailableWorkbook {
   displayName: string;
   serializedData: string;
-}
-
-function prop(value: unknown, key: string): unknown {
-  if (typeof value !== "object" || value === null) return undefined;
-  return (value as Record<string, unknown>)[key];
 }
 
 function str(value: unknown): string {

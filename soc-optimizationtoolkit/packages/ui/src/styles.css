@@ -188,6 +188,9 @@ body {
   line-height: 20px;
   color: var(--text-muted);
   margin-bottom: 12px;
+  /* Readable measure on the wide-viewport tiers: panels stretch with the
+   * content column, prose does not run edge to edge. */
+  max-width: 96ch;
 }
 
 .path-options {
@@ -503,6 +506,30 @@ body {
   max-width: 920px;
   margin: 0 auto;
   padding: 24px 16px 64px;
+}
+
+/* Viewport-tiered content width (user report 2026-07-29: a fixed 920px
+ * column strands most of a large monitor). Laptops keep the compact
+ * layout; wider viewports get progressively more room - panels, tables,
+ * and the interactive diagram stretch with the column, while prose keeps
+ * a readable measure via the .panel-desc cap below. */
+@media (min-width: 1440px) {
+  .app-frame-content {
+    max-width: 1280px;
+    padding: 24px 24px 64px;
+  }
+}
+
+@media (min-width: 1800px) {
+  .app-frame-content {
+    max-width: 1560px;
+  }
+}
+
+@media (min-width: 2400px) {
+  .app-frame-content {
+    max-width: 1920px;
+  }
 }
 
 /* The topBar utility row the frame owns: the theme toggle, right-aligned
@@ -4003,16 +4030,20 @@ button.journey-step-main:hover .journey-step-label {
 /* ---- Interactive data-flow canvas (React Flow + dagre) ------------------- */
 .arch-flow-canvas {
   /* Sized to the viewport (user direction 2026-07-28: bigger diagram) with a
-     floor for small windows; was a fixed 460px. */
-  height: clamp(460px, 68vh, 760px);
+     floor for small windows; was a fixed 460px. Ceiling raised 2026-07-29 so
+     tall monitors get the room instead of whitespace elsewhere. */
+  height: clamp(460px, 72vh, 1040px);
   width: 100%;
   margin: 12px 0 16px;
   border: 1px solid var(--border-subtle);
   border-radius: 8px;
   overflow: hidden;
+  /* Anchors the floating restore chip (element removal, 2026-07-29). */
+  position: relative;
   background: var(--surface);
 }
 .arch-flow-node {
+  position: relative;
   min-width: 148px;
   max-width: 210px;
   padding: 8px 12px;
@@ -4042,6 +4073,10 @@ button.journey-step-main:hover .journey-step-label {
   font-weight: 600;
   color: var(--text);
   line-height: 15px;
+  /* Long unbroken Cribl ids (Reduction_Zscaler_Internet_firewall) must wrap
+   * inside the card instead of overhanging it (user report 2026-07-30). */
+  max-width: 100%;
+  overflow-wrap: anywhere;
 }
 .arch-flow-node-source {
   border-color: var(--text-faint);
@@ -4092,8 +4127,17 @@ button.journey-step-main:hover .journey-step-label {
   fill: var(--accent-strong);
   filter: drop-shadow(0 0 3px var(--accent));
 }
-.arch-flow-edge-label {
+/* Positioned wrapper for an edge's label + cost badge (the wrapper owns the
+ * canvas transform; children stack centered). */
+.arch-flow-edge-tags {
   position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  pointer-events: none;
+}
+.arch-flow-edge-label {
   font-size: 10px;
   font-weight: 600;
   color: var(--text-muted);
@@ -4101,8 +4145,66 @@ button.journey-step-main:hover .journey-step-label {
   padding: 1px 5px;
   border-radius: 4px;
   border: 1px solid var(--border-subtle);
-  pointer-events: none;
+  /* Long phase labels ("during: HF outputs to Stream (temporary)") WRAP
+   * inside a bounded pill instead of striking through the neighbor cards
+   * (user report 2026-07-30). 120px matches the 132px layout footprint
+   * (edgeLabelFootprint) once padding and border are added. */
+  white-space: normal;
+  max-width: 120px;
+  text-align: center;
+  line-height: 12px;
+}
+/* Billing-cost tinting (2026-07-29): premium = analytics-tier per-GB rates,
+ * economical = low-cost store/egress. Pipe stroke + a small badge. */
+.arch-flow-pipe-premium {
+  stroke: var(--warn);
+}
+.arch-flow-pipe-economical {
+  stroke: var(--ok);
+}
+/* The Cribl Search send path (2026-07-29): findings return THROUGH Stream
+ * before landing in the workspace - its own color so the return leg never
+ * reads as the primary ingest flow. Declared after the cost classes so the
+ * tone wins on edges carrying both. */
+.arch-flow-pipe-tone-search {
+  stroke: #9254de;
+}
+.arch-legend-line-search {
+  display: inline-block;
+  width: 22px;
+  height: 3px;
+  border-radius: 2px;
+  background: #9254de;
+  vertical-align: middle;
+}
+.arch-flow-cost-badge {
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 1px 6px;
+  border-radius: 8px;
+  border: 1px solid;
   white-space: nowrap;
+}
+.arch-flow-cost-premium {
+  color: var(--warn);
+  background: var(--warn-bg);
+  border-color: var(--warn-border);
+}
+.arch-flow-cost-economical {
+  color: var(--ok-strong);
+  background: var(--ok-bg);
+  border-color: var(--ok-border);
+}
+.arch-cost-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-muted);
+  margin: 6px 0 12px;
 }
 /* Theme the React Flow controls to match the app. */
 .arch-flow-canvas .react-flow__controls-button {
@@ -4533,6 +4635,174 @@ details[open] > summary::before {
   background: var(--info-cyan);
   color: var(--surface-raised);
 }
+/* Explode/collapse toggle (2026-07-30): pack cards fan out into their
+ * internal sources/routes/pipelines/destinations. Bottom-left corner so it
+ * never collides with the remove (top-left) or info (top-right) buttons. */
+.arch-flow-expand-btn {
+  position: absolute;
+  bottom: -7px;
+  left: -7px;
+  width: 17px;
+  height: 17px;
+  border-radius: 50%;
+  border: 1.2px solid var(--accent);
+  background: var(--surface-raised);
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+.arch-flow-expand-btn:hover {
+  background: var(--accent);
+  color: var(--surface-raised);
+}
+/* Labeled fact rows in a popover (2026-07-30): every live "i" presents
+ * structured detail - label column faint, value wraps. */
+.arch-flow-info-facts {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin: 6px 0 8px;
+}
+.arch-flow-info-fact {
+  display: flex;
+  gap: 8px;
+  font-size: 11px;
+  line-height: 15px;
+}
+.arch-flow-info-fact-label {
+  flex: 0 0 92px;
+  font-weight: 600;
+  color: var(--text-faint);
+}
+.arch-flow-info-fact-value {
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+/* Numbered step pills (pipeline functions in evaluation order). */
+.arch-flow-step-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin: 6px 0 8px;
+}
+.arch-flow-step-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 3px 8px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  background: var(--surface);
+}
+.arch-flow-step-num {
+  flex: none;
+  min-width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 1px solid var(--accent);
+  background: var(--accent-bg);
+  color: var(--accent-strong);
+  font-size: 9px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.arch-flow-step-name {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+/* Routing-table rows inside a popover (2026-07-30): the Cribl UI's route
+ * table scaled down - one bubble per route, pipeline and destination as
+ * chips, the filter as the hover tooltip. */
+.arch-flow-route-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin: 6px 0 8px;
+}
+.arch-flow-route-row {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 5px 8px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  background: var(--surface);
+  cursor: help;
+}
+.arch-flow-route-row-disabled {
+  /* Subdued but still READABLE inside a popover (same logic as the muted
+   * cards: dim, never illegible). */
+  opacity: 0.6;
+}
+.arch-flow-route-row-name {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+.arch-flow-route-row-chips {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.arch-flow-route-chip {
+  font-size: 9.5px;
+  font-weight: 600;
+  padding: 1px 7px;
+  border-radius: 8px;
+  overflow-wrap: anywhere;
+}
+.arch-flow-route-chip-pipe {
+  border: 1px solid var(--accent);
+  background: var(--accent-bg);
+  color: var(--accent-strong);
+}
+.arch-flow-route-chip-dest {
+  border: 1px solid var(--ok);
+  background: var(--ok-bg);
+  color: var(--ok-strong);
+}
+.arch-flow-route-arrow {
+  font-size: 10px;
+  color: var(--text-faint);
+}
+
+/* Disabled routes in the exploded routing table (2026-07-30): present as
+ * config, processing nothing - subdued card, faint line, no packets.
+ * The dimming is per-PIECE, never opacity on the card itself: the info
+ * popover is a child of the card and must stay fully readable (user report
+ * 2026-07-30). */
+.arch-flow-node-muted {
+  border-style: dashed;
+  border-color: var(--border-subtle);
+  background: var(--surface);
+  box-shadow: none;
+}
+/* Only the card's CONTENT dims - the popover and every interactive control
+ * (info, explode, remove) stay fully readable (user directive 2026-07-30,
+ * applied across the board). */
+.arch-flow-node-muted
+  > *:not(.arch-flow-info-pop):not(.arch-flow-info-btn):not(.arch-flow-expand-btn):not(
+    .arch-flow-remove-btn
+  ) {
+  opacity: 0.5;
+}
+.arch-flow-pipe-muted {
+  opacity: 0.25;
+}
 .arch-flow-info-pop {
   position: absolute;
   top: calc(100% + 8px);
@@ -4578,6 +4848,10 @@ details[open] > summary::before {
   line-height: 15px;
   color: var(--text);
   font-weight: 400;
+  /* Live popovers compose per-route / per-pack detail as one line each
+   * (2026-07-30) - honor the newlines. */
+  white-space: pre-line;
+  overflow-wrap: anywhere;
 }
 .arch-flow-info-links-label {
   font-size: 9px;
@@ -4594,4 +4868,289 @@ details[open] > summary::before {
 }
 .arch-flow-info-links a {
   color: var(--info-cyan);
+}
+
+/* --------------------------------------------------------------------------
+ * Architecture presets + product capability legend (2026-07-29): one-click
+ * journey chips that set every picker, and the Edge/Stream/Lake/Search
+ * what-it-is / when-to-use strip. Token-only colors.
+ * ------------------------------------------------------------------------ */
+
+.arch-presets {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 4px 0 10px;
+}
+
+.arch-preset-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.arch-preset-chip {
+  font-family: inherit;
+  font-size: 12px;
+  padding: 3px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface-raised);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.arch-preset-chip:hover {
+  border-color: var(--accent);
+}
+
+.arch-preset-chip-active {
+  border-color: var(--accent);
+  background: var(--accent-bg);
+  color: var(--accent-strong);
+}
+
+.arch-preset-clear {
+  font-family: inherit;
+  font-size: 12px;
+  border: none;
+  background: none;
+  color: var(--text-faint);
+  cursor: pointer;
+  padding: 3px 6px;
+}
+
+.arch-preset-clear:hover {
+  text-decoration: underline;
+}
+
+.arch-preset-clear:disabled {
+  opacity: 0.5;
+  cursor: default;
+  text-decoration: none;
+}
+
+.arch-legend {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 10px;
+  margin: 0 0 14px;
+}
+
+.arch-legend-item {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 8px 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  background: var(--surface-raised);
+}
+
+.arch-legend-name {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.arch-legend-what {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.arch-legend-when {
+  font-size: 12px;
+  color: var(--text-faint);
+}
+
+/* Deploy-this and export actions on the architecture page (2026-07-29). */
+.arch-deploy-btn,
+.arch-export-btn {
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  padding: 4px 12px;
+  border-radius: var(--radius-control, 8px);
+  border: 1px solid var(--accent);
+  background: var(--accent-bg);
+  color: var(--accent-strong);
+  cursor: pointer;
+}
+
+.arch-deploy-btn {
+  margin-top: 6px;
+}
+
+.arch-deploy-btn:hover,
+.arch-export-btn:hover {
+  border-color: var(--accent-strong);
+}
+
+.arch-export-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-bottom: 8px;
+}
+
+/* The per-edge bend grab dot (2026-07-29): drag to bend the line through
+ * the dragged point (endpoints stay attached); double-click resets. */
+.arch-flow-bend-dot {
+  position: absolute;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 2px solid var(--surface);
+  opacity: 0.45;
+  cursor: grab;
+  pointer-events: all;
+}
+
+.arch-flow-bend-dot:hover {
+  opacity: 1;
+}
+
+.arch-flow-bend-dot:active {
+  cursor: grabbing;
+  opacity: 1;
+}
+
+/* Diagram element removal (2026-07-29): hover x on node cards; a restore
+ * chip floats over the canvas while anything is removed. */
+.arch-flow-remove-btn {
+  position: absolute;
+  top: -7px;
+  left: -7px;
+  width: 17px;
+  height: 17px;
+  border-radius: 50%;
+  border: 1.2px solid var(--border);
+  background: var(--surface-raised);
+  color: var(--text-faint);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  opacity: 0;
+}
+
+.arch-flow-node:hover .arch-flow-remove-btn {
+  opacity: 1;
+}
+
+.arch-flow-remove-btn:hover {
+  border-color: var(--error, #d4380d);
+  color: var(--error, #d4380d);
+}
+
+.arch-flow-restore-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 0;
+}
+
+.arch-flow-restore-overlay {
+  position: absolute;
+  top: 8px;
+  left: 10px;
+  z-index: 5;
+  padding: 0;
+}
+
+/* Source-type tags on Cribl cards (2026-07-29): the receiving node grows a
+ * row of small chips naming each Cribl source type feeding it. */
+.arch-flow-node-chips {
+  display: flex;
+  flex-wrap: nowrap;
+  justify-content: center;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.arch-flow-source-chip {
+  font-size: 8.5px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  padding: 1px 6px;
+  border-radius: 7px;
+  border: 1px solid var(--accent);
+  background: var(--accent-bg);
+  color: var(--accent-strong);
+  white-space: nowrap;
+}
+
+/* Service overlay tags (2026-07-29): a service riding on a resource - e.g.
+ * Microsoft Sentinel enabled ON the Log Analytics workspace - renders as a
+ * solid tag overlapping the card's bottom-right corner. */
+.arch-flow-overlay-tag {
+  position: absolute;
+  right: -12px;
+  font-size: 8.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 2px 8px;
+  border-radius: 8px;
+  background: var(--info-cyan);
+  color: #ffffff;
+  white-space: nowrap;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+  pointer-events: auto;
+}
+
+/* Live-view endpoint focus (2026-07-29): pick which sources/destinations
+ * to present; the diagram keeps only the flows between them. */
+.arch-live-focus {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 10px;
+}
+.arch-live-focus .arch-export-btn {
+  align-self: flex-start;
+}
+
+/* Architecture view tabs (2026-07-29): Reference patterns vs Live. */
+.arch-view-tabs {
+  display: flex;
+  gap: 6px;
+  margin: 2px 0 12px;
+}
+
+.arch-view-tab {
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  padding: 5px 16px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface-raised);
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.arch-view-tab:hover {
+  border-color: var(--accent);
+}
+
+.arch-view-tab-active {
+  border-color: var(--accent);
+  background: var(--accent-bg);
+  color: var(--accent-strong);
+}
+
+.arch-live-notes {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 4px;
 }

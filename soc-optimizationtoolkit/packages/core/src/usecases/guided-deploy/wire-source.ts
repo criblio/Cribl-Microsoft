@@ -26,6 +26,7 @@ import {
   type RouteEntry,
   type SourceWiringInput,
 } from "./source-wiring";
+import { is2xx, prop } from "../arm-http";
 
 /** Cribl API paths used by the wiring (pinned from the OpenAPI spec). */
 export const ROUTES_API_PATH = "/routes";
@@ -51,18 +52,6 @@ export interface WireSourceResult {
   deployedGroups: string[];
   /** Non-fatal warnings (e.g. deploy failed on one group). */
   warnings: string[];
-}
-
-function is2xx(status: number): boolean {
-  return status >= 200 && status < 300;
-}
-
-/** Read a property of an unknown value, or undefined when not an object. */
-function prop(value: unknown, key: string): unknown {
-  if (typeof value !== "object" || value === null) {
-    return undefined;
-  }
-  return (value as Record<string, unknown>)[key];
 }
 
 /** Extract the routes array from a /routes GET body ({ id, routes } shape). */

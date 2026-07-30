@@ -41,6 +41,25 @@ for (const [name, cls] of Object.entries(SOLUTIONS)) {
   if (!BY_NORM.has(key)) BY_NORM.set(key, cls);
 }
 
+/** One shipped solution entry, name included (for offline pickers). */
+export interface SolutionIngestionEntry {
+  name: string;
+  tier: IngestionTier;
+  /** The CCF connector kind that drove the tier (e.g. "Push"), or "". */
+  kind: string;
+}
+
+/**
+ * Every shipped solution as a sorted list (case-insensitive by name) - the
+ * OFFLINE enumeration surface: pickers can list all ~436 solutions with
+ * their tier/kind without any port, token, or network access. Computed once
+ * at module load from the same shipped asset the lookup uses.
+ */
+export const SOLUTION_INGESTION_ENTRIES: readonly SolutionIngestionEntry[] =
+  Object.entries(SOLUTIONS)
+    .map(([name, cls]) => ({ name, tier: cls.tier, kind: cls.kind }))
+    .sort((a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase()));
+
 /**
  * The shipped tier for a solution by name (exact match first, then a
  * normalized-name fallback). Returns null when the solution is not in the
