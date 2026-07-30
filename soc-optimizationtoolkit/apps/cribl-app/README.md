@@ -6,11 +6,20 @@ The Cribl.Cloud app target of the SOC Optimization Toolkit: the shared
 ## Install the latest release
 
 The latest packaged app is committed at [release/](release/) - one .tgz,
-replaced on every release. Install it without building anything:
+replaced on every release. Install it without building anything
+(Organization administrator required; Cribl Apps is a Preview capability):
 
 1. Download the `soc-optimizationtoolkit-<version>.tgz` from `release/`.
-2. In your Cribl.Cloud workspace, open the Apps page and upload the .tgz.
-3. Open the app from the workspace navigation.
+2. In your Cribl.Cloud workspace: **Apps** (top navigation) - **Add App**
+   - **Import from File** - select the .tgz.
+3. Review the install summary (the declared external endpoints from
+   `config/proxies.yml` and the product-API policies from
+   `config/policies.yml`) and confirm.
+4. Share it: **Apps** - **Installed** - row actions - **Share** - assign
+   **App user** to the members or teams who should run it.
+5. Users open it from the Apps bar. First run: start at the **Setup**
+   page to connect Azure. Upgrades go through **Apps** - **Installed** -
+   **Upgrade** and preserve the app's KV-stored settings.
 
 ## Build and package from source
 

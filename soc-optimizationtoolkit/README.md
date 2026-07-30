@@ -9,11 +9,21 @@ Cribl + Microsoft Sentinel SOC optimization, delivered as two targets from one s
 
 ## Getting started
 
+**Install without building:** the latest packaged app is committed at
+[apps/cribl-app/release/](apps/cribl-app/release/). A Cribl.Cloud
+Organization administrator installs it via **Apps** - **Add App** -
+**Import from File**, then shares it (**Apps** - **Installed** -
+**Share**) with the members or teams who should run it. The full
+walkthrough, including first-run Azure setup and upgrades, is in the
+repository [QUICK_START.md](../QUICK_START.md).
+
+Working from source:
+
 ```
 npm install
 npm run dev        # cribl-app dev server (live preview inside Cribl)
 npm run build      # build all workspaces
-npm run package    # build and produce the installable cribl-app .tgz
+npm run package    # build the installable cribl-app .tgz + refresh release/
 npm run local      # build and start the local Node-hosted app
 ```
 
