@@ -500,6 +500,21 @@ function serpentineWrap(
   //    carriage-return shape. Gap bands still hand out label lanes by the
   //    ACTUAL box heights so cross-row labels never stack.
   const contentRight = Math.max(...nodes.map((n) => n.x + NODE_W));
+  // Is a vertical corridor at x clear of every card between y1 and y2?
+  // Clear corridors let a cross-row edge take the SHORT direct path
+  // (2026-07-30 user report: lines swept the full width when a short hop
+  // existed); blocked ones fall back to the margin bus.
+  const corridorClear = (x: number, y1: number, y2: number): boolean => {
+    const lo = Math.min(y1, y2);
+    const hi = Math.max(y1, y2);
+    return !nodes.some(
+      (n) =>
+        x > n.x - 6 &&
+        x < n.x + NODE_W + 6 &&
+        hi > n.y &&
+        lo < n.y + n.height,
+    );
+  };
   const gapCursor = new Map<number, number>();
   let marginLane = 0;
   const edges: LaidOutEdge[] = laidOut.edges.map((e) => {
@@ -527,22 +542,44 @@ function serpentineWrap(
     const laneStart = gapCursor.get(lowerRow) ?? 12;
     const gapY = gapTop + laneStart + boxHeight / 2;
     gapCursor.set(lowerRow, laneStart + boxHeight + 8);
-    const laneX = contentRight + 28 + marginLane * 16;
-    marginLane += 1;
-    const points: EdgePoint[] = [
-      source,
-      { x: laneX, y: source.y },
-      { x: laneX, y: gapY },
-      { x: target.x - 24, y: gapY },
-      { x: target.x - 24, y: target.y },
-      target,
-    ];
+    const dropX = source.x + 24;
+    const riseX = target.x - 24;
+    let points: EdgePoint[];
+    let labelX: number;
+    if (
+      corridorClear(dropX, source.y, gapY) &&
+      corridorClear(riseX, gapY, target.y)
+    ) {
+      // Short direct hop: down beside the source, along the gap, up into
+      // the target - the gap run spans only source-to-target columns.
+      points = [
+        source,
+        { x: dropX, y: source.y },
+        { x: dropX, y: gapY },
+        { x: riseX, y: gapY },
+        { x: riseX, y: target.y },
+        target,
+      ];
+      labelX = (dropX + riseX) / 2;
+    } else {
+      const laneX = contentRight + 28 + marginLane * 16;
+      marginLane += 1;
+      points = [
+        source,
+        { x: laneX, y: source.y },
+        { x: laneX, y: gapY },
+        { x: riseX, y: gapY },
+        { x: riseX, y: target.y },
+        target,
+      ];
+      labelX = (laneX + riseX) / 2;
+    }
     return {
       ...e,
       points,
       wrap: true,
       ...(e.label !== undefined
-        ? { labelPoint: { x: (laneX + target.x - 24) / 2, y: gapY } }
+        ? { labelPoint: { x: labelX, y: gapY } }
         : {}),
     };
   });
