@@ -344,32 +344,92 @@ function serpentineWrap(
 ): LaidOutDiagram {
   // 1. Cluster nodes into rank columns by x center (same rank = same center).
   const columns = clusterColumns(laidOut.nodes);
-  // 2. Pick the row count that lands nearest the target (viewport) aspect.
-  let rows = 1;
-  let bestScore = Number.POSITIVE_INFINITY;
-  for (let r = 2; r <= 3; r++) {
-    const aspect = laidOut.width / r / (r * laidOut.height + (r - 1) * ROW_GAP);
-    const score = Math.abs(aspect - targetAspect);
-    if (score < bestScore) {
-      bestScore = score;
-      rows = r;
-    }
-  }
-  if (rows === 1 || columns.length < rows + 1) {
+  if (columns.length < 3) {
     return laidOut;
   }
-  // 3. Assign whole columns to rows by accumulated span.
-  const targetSpan = laidOut.width / rows;
-  const rowOfColumn: number[] = [];
-  let row = 0;
-  let rowStart = columns[0].left;
-  for (let i = 0; i < columns.length; i++) {
-    if (row < rows - 1 && columns[i].right - rowStart > targetSpan && i > 0) {
-      row += 1;
-      rowStart = columns[i].left;
+  const colOfNode = new Map<string, number>();
+  columns.forEach((column, i) => {
+    for (const id of column.ids) {
+      colOfNode.set(id, i);
     }
-    rowOfColumn.push(row);
+  });
+  // 2. Choose the fold line(s) by MINIMUM EDGE CUT (2026-07-30 user report:
+  //    the Splunk migration wrap put Stream a row below its three feeders
+  //    and every feed became a crossing). Candidate boundaries must keep
+  //    rows reasonably width-balanced; among those, fewest severed edges
+  //    wins, aspect distance breaks ties - and if even the best cut severs
+  //    too many edges, the graph is BRANCHY, not a chain: stay unwrapped
+  //    (a wide clean ribbon beats spaghetti).
+  const crossingsFor = (boundaries: number[]): number => {
+    const rowOfCol = (ci: number): number =>
+      boundaries.filter((b) => ci >= b).length;
+    let severed = 0;
+    for (const e of laidOut.edges) {
+      const a = rowOfCol(colOfNode.get(e.from) ?? 0);
+      const b = rowOfCol(colOfNode.get(e.to) ?? 0);
+      if (a !== b) {
+        severed += 1;
+      }
+    }
+    return severed;
+  };
+  const spanOf = (fromCol: number, toCol: number): number =>
+    columns[toCol].right - columns[fromCol].left;
+  interface FoldPlan {
+    boundaries: number[];
+    crossings: number;
+    aspectScore: number;
   }
+  const plans: FoldPlan[] = [];
+  for (let b = 1; b < columns.length; b++) {
+    const w1 = spanOf(0, b - 1);
+    const w2 = spanOf(b, columns.length - 1);
+    const maxW = Math.max(w1, w2);
+    if (Math.min(w1, w2) < 0.25 * maxW) {
+      continue;
+    }
+    plans.push({
+      boundaries: [b],
+      crossings: crossingsFor([b]),
+      aspectScore: Math.abs(maxW / (2 * laidOut.height + ROW_GAP) - targetAspect),
+    });
+  }
+  if (columns.length >= 5) {
+    for (let b1 = 1; b1 < columns.length - 1; b1++) {
+      for (let b2 = b1 + 1; b2 < columns.length; b2++) {
+        const widths = [
+          spanOf(0, b1 - 1),
+          spanOf(b1, b2 - 1),
+          spanOf(b2, columns.length - 1),
+        ];
+        const maxW = Math.max(...widths);
+        if (Math.min(...widths) < 0.2 * maxW) {
+          continue;
+        }
+        plans.push({
+          boundaries: [b1, b2],
+          crossings: crossingsFor([b1, b2]),
+          aspectScore: Math.abs(
+            maxW / (3 * laidOut.height + 2 * ROW_GAP) - targetAspect,
+          ),
+        });
+      }
+    }
+  }
+  if (plans.length === 0) {
+    return laidOut;
+  }
+  plans.sort(
+    (a, b) => a.crossings - b.crossings || a.aspectScore - b.aspectScore,
+  );
+  const plan = plans[0];
+  if (plan.crossings > 5) {
+    return laidOut;
+  }
+  const rows = plan.boundaries.length + 1;
+  const rowOfColumn = columns.map(
+    (_, i) => plan.boundaries.filter((b) => i >= b).length,
+  );
   const rowOfNode = new Map<string, number>();
   const rowDx: number[] = [];
   for (let r = 0; r < rows; r++) {
@@ -415,10 +475,16 @@ function serpentineWrap(
     return { ...n, x: moved.x, y: moved.y };
   });
   const nodeById = new Map(nodes.map((n) => [n.id, n]));
-  // 4. Rebuild edges: intra-row translate rigidly; cross-row snake through
-  //    the gap ABOVE the lower row. Each gap band hands out lanes by the
-  //    ACTUAL label-box heights so cross-row labels never stack.
+  // 4. Rebuild edges. Intra-row edges translate rigidly. Cross-row edges
+  //    ride a RIGHT-MARGIN BUS (2026-07-30: the old mid-diagram drops cut
+  //    through row content): exit the content area to a per-edge lane in
+  //    the right margin, descend outside everything, run leftward along
+  //    the gap band, and enter the target from its left - the classic
+  //    carriage-return shape. Gap bands still hand out label lanes by the
+  //    ACTUAL box heights so cross-row labels never stack.
+  const contentRight = Math.max(...nodes.map((n) => n.x + NODE_W));
   const gapCursor = new Map<number, number>();
+  let marginLane = 0;
   const edges: LaidOutEdge[] = laidOut.edges.map((e) => {
     const rowFrom = rowOfNode.get(e.from) ?? 0;
     const rowTo = rowOfNode.get(e.to) ?? 0;
@@ -444,10 +510,12 @@ function serpentineWrap(
     const laneStart = gapCursor.get(lowerRow) ?? 12;
     const gapY = gapTop + laneStart + boxHeight / 2;
     gapCursor.set(lowerRow, laneStart + boxHeight + 8);
+    const laneX = contentRight + 28 + marginLane * 16;
+    marginLane += 1;
     const points: EdgePoint[] = [
       source,
-      { x: source.x + 24, y: source.y },
-      { x: source.x + 24, y: gapY },
+      { x: laneX, y: source.y },
+      { x: laneX, y: gapY },
       { x: target.x - 24, y: gapY },
       { x: target.x - 24, y: target.y },
       target,
@@ -457,11 +525,13 @@ function serpentineWrap(
       points,
       wrap: true,
       ...(e.label !== undefined
-        ? { labelPoint: { x: (source.x + target.x) / 2, y: gapY } }
+        ? { labelPoint: { x: (laneX + target.x - 24) / 2, y: gapY } }
         : {}),
     };
   });
-  const width = Math.max(...nodes.map((n) => n.x + NODE_W)) + 10;
+  const width =
+    Math.max(contentRight, contentRight + 28 + Math.max(0, marginLane - 1) * 16) +
+    12;
   const height = Math.max(...nodes.map((n) => n.y + n.height)) + 10;
   // Continuation cues: a faint divider at each gap's midline. Bands are
   // dropped - rank columns no longer share one axis.
