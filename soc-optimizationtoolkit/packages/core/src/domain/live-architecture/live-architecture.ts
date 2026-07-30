@@ -246,12 +246,19 @@ export interface LiveRoute {
   disabled: boolean;
 }
 
+/** One pipeline function, in evaluation order. */
+export interface LivePipelineFunction {
+  /** The function TYPE id (eval, serde, drop, ...). */
+  id: string;
+  disabled: boolean;
+}
+
 export interface LivePipeline {
   id: string;
   functionCount: number;
   disabledFunctionCount: number;
-  /** The first few function ids, for the purpose line. */
-  functionIds: readonly string[];
+  /** Every function by type, in order (the popover lists them). */
+  functions: readonly LivePipelineFunction[];
 }
 
 export interface LiveBreaker {
@@ -505,10 +512,12 @@ function normalizePipeline(item: unknown): LivePipeline | null {
     id,
     functionCount: list.length,
     disabledFunctionCount: list.filter((f) => prop(f, "disabled") === true).length,
-    functionIds: list
-      .slice(0, 3)
-      .map((f) => asString(prop(f, "id")))
-      .filter((f) => f !== ""),
+    functions: list
+      .map((f) => ({
+        id: asString(prop(f, "id")),
+        disabled: prop(f, "disabled") === true,
+      }))
+      .filter((f) => f.id !== ""),
   };
 }
 
@@ -607,17 +616,31 @@ function outputInfo(output: LiveOutput): DiagramNodeInfo {
   };
 }
 
+/**
+ * A pipeline popover: the functions BY TYPE, numbered in evaluation order
+ * (user report 2026-07-30: "Starts with: ..." was too little), disabled
+ * ones marked; capped so a monster pipeline stays readable.
+ */
 function pipelineInfo(kind: string, id: string, pipeline: LivePipeline | undefined): DiagramNodeInfo {
-  const purpose =
-    pipeline !== undefined
-      ? `${kind} pipeline '${id}': ${pipeline.functionCount} function(s)` +
-        (pipeline.disabledFunctionCount > 0
-          ? ` (${pipeline.disabledFunctionCount} disabled)`
-          : "") +
-        (pipeline.functionIds.length > 0
-          ? `. Starts with: ${pipeline.functionIds.join(", ")}.`
-          : ".")
-      : `Referenced ${kind.toLowerCase()} pipeline '${id}' (details unavailable).`;
+  let purpose: string;
+  if (pipeline === undefined) {
+    purpose = `Referenced ${kind.toLowerCase()} pipeline '${id}' (details unavailable).`;
+  } else {
+    const shown = pipeline.functions.slice(0, 15);
+    const lines = shown.map(
+      (f, i) => `${i + 1}. ${f.id}${f.disabled ? " (disabled)" : ""}`,
+    );
+    const more =
+      pipeline.functions.length > shown.length
+        ? `\n+${pipeline.functions.length - shown.length} more`
+        : "";
+    purpose =
+      `${kind} pipeline '${id}': ${pipeline.functionCount} function(s)` +
+      (pipeline.disabledFunctionCount > 0
+        ? ` (${pipeline.disabledFunctionCount} disabled)`
+        : "") +
+      (lines.length > 0 ? `.\n${lines.join("\n")}${more}` : ".");
+  }
   return {
     purpose,
     docs: [{ label: "Cribl pipelines", url: CRIBL + "/stream/pipelines/" }],
@@ -673,6 +696,39 @@ function routeLine(
   return (
     `${index + 1}. ${route.name}${route.final ? "" : " (copy)"}` +
     ` - filter: ${filter} - via ${via} -> ${dest}`
+  );
+}
+
+/**
+ * An exploded ROUTE NODE's popover text: position, then the pipeline and
+ * destination as clean labeled lines - NOT the raw filter expression (user
+ * report 2026-07-30: the filter dump was noise; it stays one level up in
+ * the routing-table hub's popover).
+ */
+function routeEntryPurpose(
+  route: LiveRoute,
+  position: number,
+  scope: string,
+  resolvedDefault: string | null,
+  disabled: boolean,
+): string {
+  const pipelineRef = route.pipeline ?? "passthru";
+  const via = pipelineRef.startsWith("pack:")
+    ? `pack ${pipelineRef.slice("pack:".length)}`
+    : pipelineRef === "passthru" || pipelineRef === ""
+      ? "passthru (no processing)"
+      : pipelineRef;
+  const target = route.output ?? "default";
+  const dest =
+    target === "default" && resolvedDefault !== null
+      ? `default (${resolvedDefault})`
+      : target;
+  return (
+    `${disabled ? "DISABLED route" : "Route"} '${route.name}' - entry ` +
+    `${position + 1} of ${scope}${route.final ? "" : ", non-final copy"}.` +
+    `\nPipeline: ${via}` +
+    `\nDestination: ${dest}` +
+    (disabled ? "\nIt processes nothing until re-enabled." : "")
   );
 }
 
@@ -1183,14 +1239,13 @@ export function buildLiveDiagram(
   const routeEntryInfo = (route: LiveRoute, disabled: boolean): DiagramNodeInfo =>
     withResourceLink(
       {
-        purpose:
-          `${disabled ? "DISABLED route entry" : "Route entry"} ` +
-          routeLine(
-            route,
-            positionByRouteId.get(route.id) ?? 0,
-            defaultOutput?.defaultId ?? null,
-          ) +
-          (disabled ? "\nIt processes nothing until re-enabled." : ""),
+        purpose: routeEntryPurpose(
+          route,
+          positionByRouteId.get(route.id) ?? 0,
+          "the routing table",
+          defaultOutput?.defaultId ?? null,
+          disabled,
+        ),
         docs: [{ label: "Cribl routes", url: CRIBL + "/stream/routes/" }],
       },
       resourceLink(UI_PAGES.routes, `Open Routes in Cribl (${snapshot.groupId})`),
@@ -1458,11 +1513,13 @@ export function buildLiveDiagram(
       ): DiagramNodeInfo =>
         withResourceLink(
           {
-            purpose:
-              `${disabled ? "DISABLED route entry" : "Route entry"} ` +
-              routeLine(route, packRoutePosition.get(route.id) ?? 0, null) +
-              ` (inside pack '${internals.displayName}')` +
-              (disabled ? "\nIt processes nothing until re-enabled." : ""),
+            purpose: routeEntryPurpose(
+              route,
+              packRoutePosition.get(route.id) ?? 0,
+              `pack '${internals.displayName}' routes`,
+              null,
+              disabled,
+            ),
             docs: [{ label: "Cribl routes", url: CRIBL + "/stream/routes/" }],
           },
           packResource,

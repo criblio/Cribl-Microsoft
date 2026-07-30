@@ -15,6 +15,7 @@ export type {
   LiveOutput,
   LiveRoute,
   LivePipeline,
+  LivePipelineFunction,
   LiveBreaker,
   LivePack,
   RouteFilterInputs,

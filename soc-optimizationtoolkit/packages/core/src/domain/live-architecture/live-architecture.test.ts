@@ -778,6 +778,42 @@ describe("routes popover detail and pack internals (2026-07-30)", () => {
     expect(diagram.nodes.some((n) => n.id === "pack:AllInOne")).toBe(false);
   });
 
+  it("pipeline popovers list the functions by type in evaluation order", () => {
+    const { diagram } = buildLiveDiagram(labSnapshot(), { azureOnly: true });
+    const pre = diagram.nodes.find(
+      (n) => n.id === "pre:Azure_vNet_FlowLogs_PreProcessing",
+    )!;
+    expect(pre.info?.purpose).toBe(
+      "Pre-processing pipeline 'Azure_vNet_FlowLogs_PreProcessing': 3 function(s).\n" +
+        "1. eval\n2. unroll\n3. serialize",
+    );
+    // Disabled functions stay in order, marked.
+    const snapshot = labSnapshot();
+    snapshot.pipelines = ok({
+      items: [
+        {
+          id: "Azure_vNet_FlowLogs_PreProcessing",
+          conf: {
+            functions: [
+              { id: "eval" },
+              { id: "drop", disabled: true },
+              { id: "serialize" },
+            ],
+          },
+        },
+      ],
+    });
+    const withDisabled = buildLiveDiagram(snapshot, { azureOnly: true });
+    expect(
+      withDisabled.diagram.nodes.find(
+        (n) => n.id === "pre:Azure_vNet_FlowLogs_PreProcessing",
+      )?.info?.purpose,
+    ).toBe(
+      "Pre-processing pipeline 'Azure_vNet_FlowLogs_PreProcessing': " +
+        "3 function(s) (1 disabled).\n1. eval\n2. drop (disabled)\n3. serialize",
+    );
+  });
+
   it("the pack's internal routing table explodes one level further", () => {
     const snapshot = packSnapshot();
     snapshot.packDetails = {
@@ -835,7 +871,11 @@ describe("routes popover detail and pack internals (2026-07-30)", () => {
     );
     const r1 = diagram.nodes.find((n) => n.id === "route:AllInOne/r1")!;
     expect(r1.badge).toBe("Route");
-    expect(r1.info?.purpose).toContain("inside pack 'All In One'");
+    expect(r1.info?.purpose).toBe(
+      "Route 'pack-route' - entry 1 of pack 'All In One' routes.\n" +
+        "Pipeline: shape\n" +
+        "Destination: sent_out",
+    );
     const r2 = diagram.nodes.find((n) => n.id === "route:AllInOne/r2")!;
     expect(r2.muted).toBe(true);
     expect(r2.badge).toBe("Route (disabled)");
@@ -871,7 +911,13 @@ describe("routing-table explode (2026-07-30)", () => {
     const r1 = diagram.nodes.find((n) => n.id === "route:r1")!;
     expect(r1.label).toBe("flowlogs");
     expect(r1.badge).toBe("Route");
-    expect(r1.info?.purpose).toContain("filter: __inputId=='flowlog_collector'");
+    // CLEAN popover (user report 2026-07-30): pipeline + destination as
+    // labeled lines, NO raw filter expression (that stays on the hub).
+    expect(r1.info?.purpose).toBe(
+      "Route 'flowlogs' - entry 1 of the routing table.\n" +
+        "Pipeline: pack AzureFlowLogs\n" +
+        "Destination: sentinel_dest",
+    );
     const edgePairs = diagram.edges.map((e) => `${e.from}>${e.to}`);
     expect(edgePairs).toEqual(
       expect.arrayContaining([
@@ -932,7 +978,7 @@ describe("routing-table explode (2026-07-30)", () => {
     expect(r3.badge).toBe("Route (disabled)");
     expect(r3.info?.purpose).toContain("DISABLED");
     // Position numbering reflects the REAL table order.
-    expect(r3.info?.purpose).toContain("3. old-route");
+    expect(r3.info?.purpose).toContain("entry 3 of the routing table");
     expect(diagram.edges.find((e) => e.to === "route:r3")?.muted).toBe(true);
     // The disabled route pulls no destination chain of its own.
     expect(
