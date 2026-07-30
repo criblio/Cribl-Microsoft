@@ -856,6 +856,48 @@ export const ARCHITECTURE_PATTERNS: readonly ArchitecturePattern[] = [
     },
   },
   {
+    id: "splunk-siem-migration",
+    title: "Splunk SIEM migration (before and after)",
+    summary:
+      "One picture of the whole transition: the BEFORE state (UFs shipping straight to Splunk) stays visible but subdued, while the AFTER state re-points the same UF fleet at Cribl Stream, which dual-writes to Splunk and Sentinel until cutover.",
+    why:
+      "A SIEM migration is a transition, not a flag day: the collection fleet stays where it is, Stream takes over transport on day one with a zero-risk passthrough, Sentinel fills in parallel, and Splunk retires only after detections prove out.",
+    requiresProducts: ["stream"],
+    requiresResources: ["sentinel"],
+    requiresSources: ["windows-splunk-uf"],
+    considerations: [
+      "Phase 1 - intercept: re-point outputs.conf at Stream's Splunk TCP source and PASS THROUGH to the existing indexers unchanged. Nothing about Splunk behaves differently; rollback is one config push.",
+      "Phase 2 - dual-run: add the Sentinel route - map cooked S2S events to SecurityEvent/CommonSecurityLog through the Kind:Direct DCR - while Splunk keeps receiving everything.",
+      "Phase 3 - migrate content: convert Splunk saved searches and correlation rules to KQL analytics rules (this app's SIEM Migration screen automates the conversion).",
+      "Phase 4 - validate parity: run both SIEMs against the same feed and compare detections before anything is switched off.",
+      "Phase 5 - cutover: drop the Splunk route in Stream and retire the indexer tier (and its license). The UF fleet stays - it is now just transport into Stream.",
+      "The subdued line is the BEFORE state: UFs direct to Splunk, no shaping, no Sentinel. It disappears the day outputs.conf moves.",
+    ],
+    diagram: {
+      nodes: [
+        { id: "src", label: "Log sources", tier: "source" },
+        { id: "uf", label: "Splunk UF agents", tier: "source" },
+        { id: "stream", label: "Cribl Stream", tier: "cribl" },
+        { id: "splunk", label: "Splunk indexers (legacy)", tier: "destination" },
+        { id: "dcr", label: "Kind:Direct DCR", tier: "azure" },
+        { id: "law", label: "Log Analytics workspace", tier: "destination" },
+      ],
+      edges: [
+        { from: "src", to: "uf" },
+        {
+          from: "uf",
+          to: "splunk",
+          label: "before: outputs.conf direct",
+          muted: true,
+        },
+        { from: "uf", to: "stream", label: "after: Splunk TCP source (S2S)" },
+        { from: "stream", to: "splunk", label: "during: dual-run until cutover" },
+        { from: "stream", to: "dcr", label: "SecurityEvent / CommonSecurityLog" },
+        { from: "dcr", to: "law", cost: "premium" },
+      ],
+    },
+  },
+  {
     id: "windows-ama-direct",
     title: "Windows Events via Azure Monitor Agent",
     summary:
@@ -1339,7 +1381,12 @@ export function unifyPatternDiagrams(
       const key = canonicalNodeKey(node.label);
       localToKey.set(node.id, key);
       if (!nodes.has(key)) {
-        nodes.set(key, { id: key, label: node.label, tier: node.tier });
+        nodes.set(key, {
+          id: key,
+          label: node.label,
+          tier: node.tier,
+          ...(node.muted === true ? { muted: true } : {}),
+        });
       }
     }
     for (const edge of pattern.diagram.edges) {
@@ -1354,6 +1401,7 @@ export function unifyPatternDiagrams(
           ...(edge.label !== undefined ? { label: edge.label } : {}),
           ...(edge.cost !== undefined ? { cost: edge.cost } : {}),
           ...(edge.tone !== undefined ? { tone: edge.tone } : {}),
+          ...(edge.muted !== undefined ? { muted: edge.muted } : {}),
         });
       }
     }
@@ -1811,6 +1859,16 @@ const DIAGRAM_NODE_INFO: Record<string, DiagramNodeInfo> = {
       {
         label: "Cribl upstream agents guide",
         url: CRIBL + "/stream/usecase-logging-agents/",
+      },
+    ],
+  },
+  [canonicalNodeKey("Splunk indexers (legacy)")]: {
+    purpose:
+      "The existing Splunk indexer tier - the BEFORE state of the migration and the dual-run target. Stream's Splunk Load Balanced destination keeps feeding it until detection parity is proven in Sentinel; then this tier (and its license) retires while the UF fleet stays as transport.",
+    docs: [
+      {
+        label: "Cribl Splunk Load Balanced destination",
+        url: CRIBL + "/stream/destinations-splunk-lb/",
       },
     ],
   },

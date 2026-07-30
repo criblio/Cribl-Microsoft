@@ -370,6 +370,51 @@ describe("edge cost tiers (2026-07-29)", () => {
   });
 });
 
+describe("Splunk SIEM migration pattern (2026-07-30)", () => {
+  it("tells before (subdued), during (dual-run), and after in one diagram", () => {
+    const pattern = ARCHITECTURE_PATTERNS.find(
+      (p) => p.id === "splunk-siem-migration",
+    )!;
+    const before = pattern.diagram.edges.find(
+      (e) => e.from === "uf" && e.to === "splunk",
+    )!;
+    expect(before.muted).toBe(true);
+    expect(before.label).toContain("before");
+    expect(
+      pattern.diagram.edges.find((e) => e.from === "uf" && e.to === "stream")
+        ?.label,
+    ).toContain("after");
+    expect(
+      pattern.diagram.edges.find((e) => e.from === "stream" && e.to === "splunk")
+        ?.label,
+    ).toContain("dual-run");
+    // The after state lands in Sentinel through the DCR at analytics rates.
+    expect(
+      pattern.diagram.edges.find((e) => e.from === "dcr" && e.to === "law")?.cost,
+    ).toBe("premium");
+    // The story is phased - all five phases are in the considerations.
+    const text = pattern.considerations.join(" ");
+    for (const phase of ["Phase 1", "Phase 2", "Phase 3", "Phase 4", "Phase 5"]) {
+      expect(text).toContain(phase);
+    }
+  });
+
+  it("matches the SIEM-migration preset and the muted edge survives unify", () => {
+    const preset = ARCHITECTURE_PRESETS.find(
+      (p) => p.id === "siem-migration-splunk",
+    )!;
+    const recs = recommendPatterns(preset.selection);
+    const matches = recs.filter((r) => r.fit === "match");
+    expect(matches.map((r) => r.pattern.id)).toContain("splunk-siem-migration");
+    const unified = unifyPatternDiagrams(matches.map((r) => r.pattern));
+    expect(
+      unified.edges.find(
+        (e) => e.from === "splunkufagents" && e.to === "splunkindexerslegacy",
+      )?.muted,
+    ).toBe(true);
+  });
+});
+
 describe("Search send path (2026-07-29)", () => {
   const SEARCH_PATTERN_IDS = [
     "search-in-place",
