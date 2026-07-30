@@ -866,17 +866,18 @@ export const ARCHITECTURE_PATTERNS: readonly ArchitecturePattern[] = [
     requiresResources: ["sentinel"],
     requiresSources: ["windows-splunk-uf"],
     considerations: [
-      "Phase 1 - intercept: re-point outputs.conf at Stream's Splunk TCP source and PASS THROUGH to the existing indexers unchanged. Nothing about Splunk behaves differently; rollback is one config push.",
+      "Phase 1 - intercept at the HF tier: change outputs.conf on the Heavy Forwarders FIRST - a handful of HFs cover the whole estate while thousands of UFs stay untouched. Stream passes through to the indexers unchanged; rollback is one config push.",
       "Phase 2 - dual-run: add the Sentinel route - map cooked S2S events to SecurityEvent/CommonSecurityLog through the Kind:Direct DCR - while Splunk keeps receiving everything.",
       "Phase 3 - migrate content: convert Splunk saved searches and correlation rules to KQL analytics rules (this app's SIEM Migration screen automates the conversion).",
       "Phase 4 - validate parity: run both SIEMs against the same feed and compare detections before anything is switched off.",
-      "Phase 5 - cutover: drop the Splunk route in Stream and retire the indexer tier (and its license). The UF fleet stays - it is now just transport into Stream.",
-      "The subdued line is the BEFORE state: UFs direct to Splunk, no shaping, no Sentinel. It disappears the day outputs.conf moves.",
+      "Phase 5 - cutover and collapse the tiers: drop the Splunk route in Stream, retire the indexers (and the license), then re-point UFs straight at Stream and retire the HFs - Stream absorbs their parsing/routing role. Keep an HF only where it hosts modular inputs or apps, until those are re-homed on Cribl sources or Edge.",
+      "The subdued lines are the BEFORE topology: UFs through the HF tier into Splunk, no shaping, no Sentinel. The HF-to-Stream leg is the TEMPORARY bridge - it exists only until UFs point at Stream directly.",
     ],
     diagram: {
       nodes: [
         { id: "src", label: "Log sources", tier: "source" },
         { id: "uf", label: "Splunk UF agents", tier: "source" },
+        { id: "hf", label: "Splunk Heavy Forwarders", tier: "source" },
         { id: "stream", label: "Cribl Stream", tier: "cribl" },
         { id: "splunk", label: "Splunk indexers (legacy)", tier: "destination" },
         { id: "dcr", label: "Kind:Direct DCR", tier: "azure" },
@@ -884,13 +885,19 @@ export const ARCHITECTURE_PATTERNS: readonly ArchitecturePattern[] = [
       ],
       edges: [
         { from: "src", to: "uf" },
+        { from: "uf", to: "hf", label: "before: cooked S2S", muted: true },
         {
-          from: "uf",
+          from: "hf",
           to: "splunk",
-          label: "before: outputs.conf direct",
+          label: "before: parsed to indexers",
           muted: true,
         },
-        { from: "uf", to: "stream", label: "after: Splunk TCP source (S2S)" },
+        {
+          from: "hf",
+          to: "stream",
+          label: "during: HF outputs to Stream (temporary)",
+        },
+        { from: "uf", to: "stream", label: "after: UFs direct to Stream (S2S)" },
         { from: "stream", to: "splunk", label: "during: dual-run until cutover" },
         { from: "stream", to: "dcr", label: "SecurityEvent / CommonSecurityLog" },
         { from: "dcr", to: "law", cost: "premium" },
@@ -1859,6 +1866,16 @@ const DIAGRAM_NODE_INFO: Record<string, DiagramNodeInfo> = {
       {
         label: "Cribl upstream agents guide",
         url: CRIBL + "/stream/usecase-logging-agents/",
+      },
+    ],
+  },
+  [canonicalNodeKey("Splunk Heavy Forwarders")]: {
+    purpose:
+      "The intermediate Splunk forwarding tier most estates run - parsing, routing, and hosting modular inputs. The migration's fastest intercept point: one outputs.conf change here re-routes the whole estate through Stream, and the tier retires once UFs point at Stream directly and its inputs are re-homed.",
+    docs: [
+      {
+        label: "Cribl Splunk TCP source",
+        url: CRIBL + "/stream/sources-splunk-tcp/",
       },
     ],
   },

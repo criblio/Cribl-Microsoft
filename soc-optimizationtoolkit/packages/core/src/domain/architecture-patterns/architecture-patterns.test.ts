@@ -375,11 +375,23 @@ describe("Splunk SIEM migration pattern (2026-07-30)", () => {
     const pattern = ARCHITECTURE_PATTERNS.find(
       (p) => p.id === "splunk-siem-migration",
     )!;
-    const before = pattern.diagram.edges.find(
-      (e) => e.from === "uf" && e.to === "splunk",
+    // The BEFORE topology runs through the Heavy Forwarder tier, subdued.
+    const beforeUfHf = pattern.diagram.edges.find(
+      (e) => e.from === "uf" && e.to === "hf",
     )!;
-    expect(before.muted).toBe(true);
-    expect(before.label).toContain("before");
+    expect(beforeUfHf.muted).toBe(true);
+    expect(beforeUfHf.label).toContain("before");
+    const beforeHfSplunk = pattern.diagram.edges.find(
+      (e) => e.from === "hf" && e.to === "splunk",
+    )!;
+    expect(beforeHfSplunk.muted).toBe(true);
+    // The HF tier is ALSO the temporary during-migration intercept point.
+    const hfBridge = pattern.diagram.edges.find(
+      (e) => e.from === "hf" && e.to === "stream",
+    )!;
+    expect(hfBridge.muted).toBeUndefined();
+    expect(hfBridge.label).toContain("during");
+    expect(hfBridge.label).toContain("temporary");
     expect(
       pattern.diagram.edges.find((e) => e.from === "uf" && e.to === "stream")
         ?.label,
@@ -409,7 +421,8 @@ describe("Splunk SIEM migration pattern (2026-07-30)", () => {
     const unified = unifyPatternDiagrams(matches.map((r) => r.pattern));
     expect(
       unified.edges.find(
-        (e) => e.from === "splunkufagents" && e.to === "splunkindexerslegacy",
+        (e) =>
+          e.from === "splunkheavyforwarders" && e.to === "splunkindexerslegacy",
       )?.muted,
     ).toBe(true);
   });
