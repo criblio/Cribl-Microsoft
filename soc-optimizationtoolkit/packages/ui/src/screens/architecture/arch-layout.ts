@@ -380,12 +380,16 @@ function serpentineWrap(
     crossings: number;
     aspectScore: number;
   }
+  // A fold must EARN its row (2026-07-30 user screenshot: a minimum cut
+  // that isolated "Log sources" won on crossings while saving no width and
+  // wasting a whole band): rows must be genuinely balanced AND the fold
+  // must actually shrink the diagram.
   const plans: FoldPlan[] = [];
   for (let b = 1; b < columns.length; b++) {
     const w1 = spanOf(0, b - 1);
     const w2 = spanOf(b, columns.length - 1);
     const maxW = Math.max(w1, w2);
-    if (Math.min(w1, w2) < 0.25 * maxW) {
+    if (Math.min(w1, w2) < 0.45 * maxW || maxW > 0.75 * laidOut.width) {
       continue;
     }
     plans.push({
@@ -403,7 +407,7 @@ function serpentineWrap(
           spanOf(b2, columns.length - 1),
         ];
         const maxW = Math.max(...widths);
-        if (Math.min(...widths) < 0.2 * maxW) {
+        if (Math.min(...widths) < 0.32 * maxW || maxW > 0.55 * laidOut.width) {
           continue;
         }
         plans.push({
@@ -461,13 +465,26 @@ function serpentineWrap(
   }
   const gapHeight = (r: number): number =>
     Math.max(ROW_GAP, gapNeed.get(r) ?? 0);
-  const rowTop: number[] = [0];
+  // Per-row vertical NORMALIZATION (2026-07-30 user screenshot: short rows
+  // floated mid-band inside the full ribbon height, wasting huge vertical
+  // space): each row is only as tall as its own content - rows shift up by
+  // their content's min-y and stack with exactly the gap bands between.
+  const rowMinY: number[] = Array.from({ length: rows }, () => Number.POSITIVE_INFINITY);
+  const rowMaxY: number[] = Array.from({ length: rows }, () => Number.NEGATIVE_INFINITY);
+  for (const n of laidOut.nodes) {
+    const r = rowOfNode.get(n.id) ?? 0;
+    rowMinY[r] = Math.min(rowMinY[r], n.y);
+    rowMaxY[r] = Math.max(rowMaxY[r], n.y + n.height);
+  }
+  const rowHeight = (r: number): number =>
+    rowMaxY[r] <= rowMinY[r] ? 0 : rowMaxY[r] - rowMinY[r];
+  const rowTop: number[] = [10];
   for (let r = 1; r < rows; r++) {
-    rowTop[r] = rowTop[r - 1] + laidOut.height + gapHeight(r);
+    rowTop[r] = rowTop[r - 1] + rowHeight(r - 1) + gapHeight(r);
   }
   const translate = (r: number, p: EdgePoint): EdgePoint => ({
     x: p.x + rowDx[r],
-    y: p.y + rowTop[r],
+    y: p.y - rowMinY[r] + rowTop[r],
   });
   const nodes = laidOut.nodes.map((n) => {
     const r = rowOfNode.get(n.id) ?? 0;
@@ -483,6 +500,21 @@ function serpentineWrap(
   //    carriage-return shape. Gap bands still hand out label lanes by the
   //    ACTUAL box heights so cross-row labels never stack.
   const contentRight = Math.max(...nodes.map((n) => n.x + NODE_W));
+  // Is a vertical corridor at x clear of every card between y1 and y2?
+  // Clear corridors let a cross-row edge take the SHORT direct path
+  // (2026-07-30 user report: lines swept the full width when a short hop
+  // existed); blocked ones fall back to the margin bus.
+  const corridorClear = (x: number, y1: number, y2: number): boolean => {
+    const lo = Math.min(y1, y2);
+    const hi = Math.max(y1, y2);
+    return !nodes.some(
+      (n) =>
+        x > n.x - 6 &&
+        x < n.x + NODE_W + 6 &&
+        hi > n.y &&
+        lo < n.y + n.height,
+    );
+  };
   const gapCursor = new Map<number, number>();
   let marginLane = 0;
   const edges: LaidOutEdge[] = laidOut.edges.map((e) => {
@@ -510,22 +542,44 @@ function serpentineWrap(
     const laneStart = gapCursor.get(lowerRow) ?? 12;
     const gapY = gapTop + laneStart + boxHeight / 2;
     gapCursor.set(lowerRow, laneStart + boxHeight + 8);
-    const laneX = contentRight + 28 + marginLane * 16;
-    marginLane += 1;
-    const points: EdgePoint[] = [
-      source,
-      { x: laneX, y: source.y },
-      { x: laneX, y: gapY },
-      { x: target.x - 24, y: gapY },
-      { x: target.x - 24, y: target.y },
-      target,
-    ];
+    const dropX = source.x + 24;
+    const riseX = target.x - 24;
+    let points: EdgePoint[];
+    let labelX: number;
+    if (
+      corridorClear(dropX, source.y, gapY) &&
+      corridorClear(riseX, gapY, target.y)
+    ) {
+      // Short direct hop: down beside the source, along the gap, up into
+      // the target - the gap run spans only source-to-target columns.
+      points = [
+        source,
+        { x: dropX, y: source.y },
+        { x: dropX, y: gapY },
+        { x: riseX, y: gapY },
+        { x: riseX, y: target.y },
+        target,
+      ];
+      labelX = (dropX + riseX) / 2;
+    } else {
+      const laneX = contentRight + 28 + marginLane * 16;
+      marginLane += 1;
+      points = [
+        source,
+        { x: laneX, y: source.y },
+        { x: laneX, y: gapY },
+        { x: riseX, y: gapY },
+        { x: riseX, y: target.y },
+        target,
+      ];
+      labelX = (laneX + riseX) / 2;
+    }
     return {
       ...e,
       points,
       wrap: true,
       ...(e.label !== undefined
-        ? { labelPoint: { x: (laneX + target.x - 24) / 2, y: gapY } }
+        ? { labelPoint: { x: labelX, y: gapY } }
         : {}),
     };
   });
