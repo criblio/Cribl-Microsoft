@@ -4735,7 +4735,9 @@ details[open] > summary::before {
   cursor: help;
 }
 .arch-flow-route-row-disabled {
-  opacity: 0.5;
+  /* Subdued but still READABLE inside a popover (same logic as the muted
+   * cards: dim, never illegible). */
+  opacity: 0.6;
 }
 .arch-flow-route-row-name {
   font-size: 11px;
@@ -4772,8 +4774,23 @@ details[open] > summary::before {
 }
 
 /* Disabled routes in the exploded routing table (2026-07-30): present as
- * config, processing nothing - subdued card, faint line, no packets. */
+ * config, processing nothing - subdued card, faint line, no packets.
+ * The dimming is per-PIECE, never opacity on the card itself: the info
+ * popover is a child of the card and must stay fully readable (user report
+ * 2026-07-30). */
 .arch-flow-node-muted {
+  border-style: dashed;
+  border-color: var(--border-subtle);
+  background: var(--surface);
+  box-shadow: none;
+}
+/* Only the card's CONTENT dims - the popover and every interactive control
+ * (info, explode, remove) stay fully readable (user directive 2026-07-30,
+ * applied across the board). */
+.arch-flow-node-muted
+  > *:not(.arch-flow-info-pop):not(.arch-flow-info-btn):not(.arch-flow-expand-btn):not(
+    .arch-flow-remove-btn
+  ) {
   opacity: 0.5;
 }
 .arch-flow-pipe-muted {
