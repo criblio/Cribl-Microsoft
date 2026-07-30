@@ -31,12 +31,28 @@ selection to production:
 
 ## Getting started
 
-Build the Cribl.Cloud app package and upload it to your workspace:
+The latest installable app package is COMMITTED in this repository - no
+build required. See [QUICK_START.md](QUICK_START.md) for the full
+walkthrough; the short version:
+
+1. Download
+   [`soc-optimizationtoolkit/apps/cribl-app/release/`](soc-optimizationtoolkit/apps/cribl-app/release/)
+   (one `.tgz`, always the latest release).
+2. As a Cribl.Cloud **Organization administrator**: **Apps** (top
+   navigation) - **Add App** - **Import from File** - select the `.tgz`,
+   review the declared endpoints and product-API policies, and confirm.
+3. Share the app (**Apps** - **Installed** - **Share**) with the members
+   or teams who should use it, then open it from the Apps bar.
+4. Inside the app, start at **Setup** to connect Azure (Entra app
+   registration, resource targeting, permission validation).
+
+To build from source instead:
 
 ```bash
 cd soc-optimizationtoolkit
 npm install
-npm run package   # writes apps/cribl-app/build/soc-optimizationtoolkit-<version>.tgz
+npm run package   # mints the next version, writes build/<name>-<version>.tgz
+                  # and refreshes apps/cribl-app/release/
 ```
 
 Development gates: `npm run typecheck`, `npm run lint`, `npm test`,
