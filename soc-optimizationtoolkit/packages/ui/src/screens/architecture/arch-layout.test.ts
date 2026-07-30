@@ -92,6 +92,33 @@ describe("layoutDiagram", () => {
     }
   });
 
+  it("derives descriptive stage bands; serpentine rows carry dividers", () => {
+    // Bands need a NON-wrapped layout: the single direct-dcr chain spans
+    // source -> cribl -> azure -> destination columns on one row.
+    const banded = layoutDiagram(
+      unifyPatternDiagrams([
+        ARCHITECTURE_PATTERNS.find((p) => p.id === "direct-dcr")!,
+      ]),
+    );
+    expect(banded.bands).toBeDefined();
+    const labels = (banded.bands ?? []).map((b) => b.label);
+    expect(labels).toContain("Sources");
+    expect(labels).toContain("Cribl");
+    for (let i = 1; i < (banded.bands ?? []).length; i++) {
+      expect(banded.bands![i].left).toBeGreaterThan(banded.bands![i - 1].right);
+    }
+    // A wrapped preset drops bands and gains row dividers instead.
+    const preset = ARCHITECTURE_PRESETS.find(
+      (p) => p.id === "cost-reduction-archive",
+    )!;
+    const matches = recommendPatterns(preset.selection)
+      .filter((r) => r.fit === "match")
+      .map((r) => r.pattern);
+    const wrapped = layoutDiagram(unifyPatternDiagrams(matches));
+    expect(wrapped.bands).toBeUndefined();
+    expect(wrapped.rowDividers?.length ?? 0).toBeGreaterThanOrEqual(1);
+  });
+
   it("no preset merge renders as an extreme ribbon (serpentine wrap)", () => {
     // 2026-07-30 user report: the long-term-retention preset ran off screen
     // and left dead bands above and below. Extreme one-row chains wrap into

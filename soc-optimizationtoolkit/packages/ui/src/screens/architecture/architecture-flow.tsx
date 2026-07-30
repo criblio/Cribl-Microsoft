@@ -21,8 +21,10 @@ import {
   Controls,
   EdgeLabelRenderer,
   Handle,
+  MarkerType,
   Position,
   ReactFlow,
+  ViewportPortal,
   getSmoothStepPath,
   useEdgesState,
   useNodesState,
@@ -47,6 +49,8 @@ import {
   nodeBadge,
   polylineMidpoint,
   sourceTypeChips,
+  type LaidOutDiagram,
+  type LaidOutEdge,
 } from "./arch-layout";
 // React Flow's stylesheet is imported by the SHELL entry points (cribl-app
 // main.tsx / local-app), matching how @soc/ui/styles.css is loaded - a library
@@ -425,6 +429,7 @@ function FlowingEdge({
   targetY,
   sourcePosition,
   targetPosition,
+  markerEnd,
   data,
 }: EdgeProps<FlowEdge>) {
   const { screenToFlowPosition } = useReactFlow();
@@ -494,6 +499,7 @@ function FlowingEdge({
       <BaseEdge
         id={id}
         path={edgePath}
+        markerEnd={markerEnd}
         className={
           `arch-flow-pipe${cost !== undefined ? ` arch-flow-pipe-${cost}` : ""}` +
           (data?.tone !== undefined ? ` arch-flow-pipe-tone-${data.tone}` : "") +
@@ -618,9 +624,29 @@ function FitViewController({ signature }: { signature: string }) {
   return null;
 }
 
+/** The arrowhead color follows the pipe: cost/tone tinted, muted faint. */
+function edgeMarkerColor(e: LaidOutEdge): string {
+  if (e.muted === true) {
+    return "var(--border)";
+  }
+  if (e.tone === "search") {
+    return "#9254de";
+  }
+  if (e.cost === "premium") {
+    return "var(--warn)";
+  }
+  if (e.cost === "economical") {
+    return "var(--ok)";
+  }
+  return "var(--accent)";
+}
+
 /** Adapt the shared dagre layout (arch-layout) to React Flow's shapes. */
-function layoutGraph(diagram: PatternDiagram): { nodes: ArchNode[]; edges: FlowEdge[] } {
-  const laidOut = layoutDiagram(diagram);
+function layoutGraph(
+  diagram: PatternDiagram,
+  targetAspect: number,
+): { nodes: ArchNode[]; edges: FlowEdge[]; laidOut: LaidOutDiagram } {
+  const laidOut = layoutDiagram(diagram, targetAspect);
   const nodes: ArchNode[] = laidOut.nodes.map((n) => ({
     id: n.id,
     type: "arch",
@@ -654,6 +680,15 @@ function layoutGraph(diagram: PatternDiagram): { nodes: ArchNode[]; edges: FlowE
       sourceHandle: reverse ? "out-b" : "out",
       targetHandle: reverse ? "in-b" : "in",
       type: "flowing",
+      // Arrowheads (2026-07-30 best-practices pass): direction must read at
+      // a glance and in static captures - the packet animation alone fails
+      // a paused look and every screenshot.
+      markerEnd: {
+        type: MarkerType.ArrowClosed,
+        width: 13,
+        height: 13,
+        color: edgeMarkerColor(e),
+      },
       data: {
         label: e.label,
         cost: e.cost,
@@ -665,7 +700,7 @@ function layoutGraph(diagram: PatternDiagram): { nodes: ArchNode[]; edges: FlowE
       },
     };
   });
-  return { nodes, edges };
+  return { nodes, edges, laidOut };
 }
 
 export interface ArchitectureFlowProps {
@@ -695,16 +730,21 @@ export function ArchitectureFlow({ diagram, onToggleNodeExpand }: ArchitectureFl
     [diagram, removedNodes, removedEdges],
   );
 
+  // The REAL canvas aspect steers the serpentine wrap (measured by the
+  // same ResizeObserver that triggers re-fits; rounded so tiny resizes do
+  // not thrash the layout).
+  const [canvasAspect, setCanvasAspect] = useState(2.4);
   const layouted = useMemo(() => {
-    const graph = layoutGraph(effective);
+    const graph = layoutGraph(effective, canvasAspect);
     return {
       nodes: graph.nodes.map((n) => ({
         ...n,
         data: { ...n.data, onRemove: removeNode, onToggleExpand: onToggleNodeExpand },
       })),
       edges: graph.edges,
+      laidOut: graph.laidOut,
     };
-  }, [effective, removeNode, onToggleNodeExpand]);
+  }, [effective, removeNode, onToggleNodeExpand, canvasAspect]);
   const [nodes, setNodes, onNodesChange] = useNodesState<ArchNode>(layouted.nodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState<FlowEdge>(layouted.edges);
 
@@ -730,7 +770,14 @@ export function ArchitectureFlow({ diagram, onToggleNodeExpand }: ArchitectureFl
     }
     const observer = new ResizeObserver(() => {
       clearTimeout(resizeTimerRef.current);
-      resizeTimerRef.current = setTimeout(() => setResizeTick((t) => t + 1), 150);
+      resizeTimerRef.current = setTimeout(() => {
+        setResizeTick((t) => t + 1);
+        if (el.clientHeight > 0) {
+          setCanvasAspect(
+            Math.round((el.clientWidth / el.clientHeight) * 10) / 10,
+          );
+        }
+      }, 150);
     });
     observer.observe(el);
     resizeObserverRef.current = observer;
@@ -832,6 +879,32 @@ export function ArchitectureFlow({ diagram, onToggleNodeExpand }: ArchitectureFl
         proOptions={{ hideAttribution: true }}
       >
         <FitViewController signature={fitSignature} />
+        {/* Stage bands + serpentine row dividers: descriptive underlays in
+            flow coordinates, behind the cards (Gestalt grouping and wrap
+            continuation cues - 2026-07-30 best-practices pass). */}
+        <ViewportPortal>
+          {layouted.laidOut.bands?.map((band) => (
+            <div
+              key={`${band.label}-${Math.round(band.left)}`}
+              className="arch-flow-band"
+              style={{
+                left: band.left,
+                top: -34,
+                width: band.right - band.left,
+                height: layouted.laidOut.height + 34,
+              }}
+            >
+              <span className="arch-flow-band-label">{band.label}</span>
+            </div>
+          ))}
+          {layouted.laidOut.rowDividers?.map((y) => (
+            <div
+              key={Math.round(y)}
+              className="arch-flow-row-divider"
+              style={{ left: -10, top: y, width: layouted.laidOut.width + 20 }}
+            />
+          ))}
+        </ViewportPortal>
         <Background
           variant={BackgroundVariant.Dots}
           gap={18}

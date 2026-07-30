@@ -152,20 +152,28 @@ export interface ArchitectureScreenProps {
 
 type OnExport = ArchitectureScreenProps["onExport"];
 
-/** SVG + PNG download buttons for whichever diagram is active. */
+/** SVG + PNG download buttons for whichever diagram is active. Exports
+ * carry a TITLE block and the embedded legend (2026-07-30 best-practices
+ * pass: a diagram that travels must say what it is and carry its key). */
 function ExportRow({
   diagram,
   onExport,
   baseName,
+  title,
 }: {
   diagram: PatternDiagram;
   onExport: OnExport;
   baseName: string;
+  title: string;
 }) {
   const [note, setNote] = useState("");
   if (onExport === undefined) {
     return null;
   }
+  const svg = () =>
+    diagramToSvg(diagram, {
+      title: `${title} - ${new Date().toISOString().slice(0, 10)}`,
+    });
   return (
     <div className="arch-export-row">
       <button
@@ -173,7 +181,7 @@ function ExportRow({
         className="arch-export-btn"
         onClick={() => {
           setNote("");
-          void onExport(`${baseName}.svg`, "image/svg+xml", diagramToSvg(diagram))
+          void onExport(`${baseName}.svg`, "image/svg+xml", svg())
             .then(() => setNote(`Saved ${baseName}.svg`))
             .catch((err) => setNote(`Export failed: ${String(err)}`));
         }}
@@ -185,7 +193,7 @@ function ExportRow({
         className="arch-export-btn"
         onClick={() => {
           setNote("");
-          void svgToPngBytes(diagramToSvg(diagram))
+          void svgToPngBytes(svg())
             .then((bytes) => onExport(`${baseName}.png`, "image/png", bytes))
             .then(() => setNote(`Saved ${baseName}.png`))
             .catch((err) => setNote(`Export failed: ${String(err)}`));
@@ -210,6 +218,12 @@ function CostLegend() {
       <span>low-cost retention or egress path</span>
       <span className="arch-legend-line-search" aria-hidden="true" />
       <span>Cribl Search send path - findings return through Stream</span>
+      <span className="arch-legend-line-muted" aria-hidden="true" />
+      <span>subdued - configured but not flowing (disabled, or a before-state)</span>
+      <span className="arch-legend-copy-tag" aria-hidden="true">
+        (copy)
+      </span>
+      <span>non-final route - clones the events and continues down the table</span>
     </div>
   );
 }
@@ -407,10 +421,17 @@ function LiveArchitecturePanel({
       )}
       {liveResult !== null && (
         <>
+          {liveResult.diagram.nodes.length > 25 && (
+            <p className="field-hint">
+              Large flow ({liveResult.diagram.nodes.length} components) - use
+              the flow inventory above to draw a subset for an easier read.
+            </p>
+          )}
           <ExportRow
             diagram={liveResult.diagram}
             onExport={onExport}
             baseName={`live-dataflow-${snapshot?.groupId ?? "group"}`}
+            title={`Live dataflow - worker group '${snapshot?.groupId ?? "group"}'`}
           />
           <ArchitectureFlow
             diagram={liveResult.diagram}
@@ -679,10 +700,18 @@ export function ArchitectureScreen({
             </p>
           ) : (
             <>
+              {unifiedDiagram.nodes.length > 25 && (
+                <p className="field-hint">
+                  Large diagram ({unifiedDiagram.nodes.length} components) -
+                  narrow the selection or start from a preset for an easier
+                  read; elements can also be removed directly on the canvas.
+                </p>
+              )}
               <ExportRow
                 diagram={unifiedDiagram}
                 onExport={onExport}
                 baseName="dataflow-diagram"
+                title="Dataflow - reference patterns"
               />
               <ArchitectureFlow diagram={unifiedDiagram} />
               <CostLegend />

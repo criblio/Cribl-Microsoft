@@ -28,8 +28,26 @@ describe("diagramToSvg", () => {
 
   it("renders one node group per diagram node", () => {
     const svg = diagramToSvg(DIRECT_DCR);
-    const groups = svg.match(/<g transform="translate\(/g) ?? [];
+    const groups = svg.match(/<g data-node /g) ?? [];
     expect(groups).toHaveLength(DIRECT_DCR.nodes.length);
+  });
+
+  it("carries a title block and an embedded legend", () => {
+    const svg = diagramToSvg(DIRECT_DCR, { title: "Dataflow - test" });
+    expect(svg).toContain(">Dataflow - test</text>");
+    // The legend strip: every semantic that appears on edges has a key row.
+    expect(svg).toContain("premium: per-GB ingest billing");
+    expect(svg).toContain("economical: low-cost store/egress");
+    expect(svg).toContain("Search send path");
+    expect(svg).toContain("subdued: configured, not flowing");
+    // Untitled exports still carry the legend.
+    expect(diagramToSvg(DIRECT_DCR)).toContain("premium: per-GB ingest billing");
+  });
+
+  it("draws stage bands behind multi-tier diagrams", () => {
+    const svg = diagramToSvg(DIRECT_DCR);
+    expect(svg).toContain(">SOURCES</text>");
+    expect(svg).toContain(">CRIBL</text>");
   });
 
   it("escapes XML-hostile labels", () => {

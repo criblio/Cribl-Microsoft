@@ -166,11 +166,29 @@ function routedPath(points: EdgePoint[]): string {
 }
 
 
+/** The legend strip every non-empty export carries (C4 practice: a diagram
+ * that travels must carry its own key). */
+const LEGEND_ITEMS: Array<{ color: string; dash?: boolean; text: string }> = [
+  { color: PALETTE.warn, text: "premium: per-GB ingest billing" },
+  { color: PALETTE.ok, text: "economical: low-cost store/egress" },
+  { color: "#722ed1", text: "Search send path" },
+  { color: PALETTE.faint, dash: true, text: "subdued: configured, not flowing" },
+];
+
 /** Render the unified diagram as a self-contained SVG document string. */
-export function diagramToSvg(diagram: PatternDiagram): string {
+export function diagramToSvg(
+  diagram: PatternDiagram,
+  options?: { title?: string },
+): string {
   const laidOut = layoutDiagram(diagram);
-  const width = Math.max(laidOut.width, 1);
-  const height = Math.max(laidOut.height, 1);
+  const contentWidth = Math.max(laidOut.width, 1);
+  const contentHeight = Math.max(laidOut.height, 1);
+  const empty = diagram.nodes.length === 0;
+  // Title block above, legend strip below (only when there is content).
+  const topPad = empty ? 0 : options?.title !== undefined ? 30 : 0;
+  const legendPad = empty ? 0 : 26;
+  const width = Math.max(contentWidth, empty ? 1 : 560);
+  const height = contentHeight + topPad + legendPad;
   const nodeById = new Map(laidOut.nodes.map((n) => [n.id, n]));
 
   const parts: string[] = [
@@ -181,6 +199,32 @@ export function diagramToSvg(diagram: PatternDiagram): string {
       `markerWidth="7" markerHeight="7" orient="auto-start-reverse">` +
       `<path d="M 0 0 L 10 5 L 0 10 z" fill="${PALETTE.faint}"/></marker></defs>`,
   ];
+  if (!empty && options?.title !== undefined) {
+    parts.push(
+      `<text x="12" y="20" font-size="13" font-weight="700" ` +
+        `fill="${PALETTE.text}">${esc(options.title)}</text>`,
+    );
+  }
+  if (!empty) {
+    parts.push(`<g data-layer="content" transform="translate(0,${topPad})">`);
+  }
+  // Stage bands and serpentine row dividers behind everything.
+  for (const band of laidOut.bands ?? []) {
+    parts.push(
+      `<rect x="${round(band.left)}" y="2" width="${round(band.right - band.left)}" ` +
+        `height="${contentHeight - 4}" rx="12" fill="${PALETTE.accentBg}" ` +
+        `opacity="0.35" stroke="${PALETTE.border}" stroke-opacity="0.5"/>`,
+      `<text x="${round((band.left + band.right) / 2)}" y="14" text-anchor="middle" ` +
+        `font-size="9" font-weight="700" letter-spacing="1.2" ` +
+        `fill="${PALETTE.faint}">${esc(band.label.toUpperCase())}</text>`,
+    );
+  }
+  for (const dividerY of laidOut.rowDividers ?? []) {
+    parts.push(
+      `<line x1="0" y1="${round(dividerY)}" x2="${contentWidth}" y2="${round(dividerY)}" ` +
+        `stroke="${PALETTE.border}" stroke-dasharray="5 5" stroke-opacity="0.7"/>`,
+    );
+  }
 
   // THREE passes so nothing strikes through anything (review 2026-07-29):
   // every edge PATH first, then every label/cost caption (backed) on top of
@@ -272,7 +316,7 @@ export function diagramToSvg(diagram: PatternDiagram): string {
       })
       .join("");
     parts.push(
-      `<g transform="translate(${node.x},${node.y})"` +
+      `<g data-node transform="translate(${node.x},${node.y})"` +
         `${node.muted === true ? ' opacity="0.5"' : ""}>` +
         `<rect width="${NODE_W}" height="${node.height}" rx="12" fill="${style.fill}" ` +
         `stroke="${style.stroke}" stroke-width="1.4"/>` +
@@ -286,6 +330,24 @@ export function diagramToSvg(diagram: PatternDiagram): string {
     );
   }
 
+  if (!empty) {
+    parts.push("</g>");
+  }
+  // The embedded legend strip: every export carries its own key.
+  if (!empty) {
+    let x = 12;
+    const legendY = topPad + contentHeight + 16;
+    for (const item of LEGEND_ITEMS) {
+      parts.push(
+        `<line x1="${x}" y1="${legendY - 3}" x2="${x + 20}" y2="${legendY - 3}" ` +
+          `stroke="${item.color}" stroke-width="2.2"` +
+          `${item.dash === true ? ' stroke-dasharray="4 3" stroke-opacity="0.6"' : ""}/>`,
+        `<text x="${x + 25}" y="${legendY}" font-size="9" ` +
+          `fill="${PALETTE.muted}">${esc(item.text)}</text>`,
+      );
+      x += 25 + item.text.length * 4.6 + 18;
+    }
+  }
   parts.push("</svg>");
   return parts.join("\n");
 }
