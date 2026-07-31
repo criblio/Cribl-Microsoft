@@ -43,11 +43,20 @@ const PALETTE = {
   okStrong: "#389e0d",
   warn: "#d46b08",
   warnBg: "#fff7e6",
+  // Node-category colors (2026-07-31): mirrors the --tier-* light tokens.
+  gold: "#ad8b00",
+  goldBg: "#feffe6",
+  violet: "#722ed1",
+  violetBg: "#f9f0ff",
+  magenta: "#c41d7f",
+  magentaBg: "#fff0f6",
 } as const;
 
 /** Per-tier node styling (mirrors .arch-flow-node-* classes). */
 const TIER_STYLE: Record<DiagramTier, { stroke: string; fill: string; badge: string }> = {
-  source: { stroke: PALETTE.faint, fill: PALETTE.surface, badge: PALETTE.faint },
+  source: { stroke: PALETTE.gold, fill: PALETTE.goldBg, badge: PALETTE.gold },
+  route: { stroke: PALETTE.violet, fill: PALETTE.violetBg, badge: PALETTE.violet },
+  pipeline: { stroke: PALETTE.magenta, fill: PALETTE.magentaBg, badge: PALETTE.magenta },
   cribl: { stroke: PALETTE.accent, fill: PALETTE.accentBg, badge: PALETTE.accent },
   azure: { stroke: PALETTE.infoCyan, fill: PALETTE.surface, badge: PALETTE.infoCyan },
   destination: { stroke: PALETTE.ok, fill: PALETTE.okBg, badge: PALETTE.okStrong },
@@ -69,7 +78,7 @@ function lineStroke(
   cost: EdgeCostTier | undefined,
 ): string {
   if (tone === "search") {
-    return "#722ed1";
+    return PALETTE.violet;
   }
   return edgeStroke(cost);
 }
@@ -170,12 +179,41 @@ function routedPath(points: EdgePoint[]): string {
 
 /** The legend strip every non-empty export carries (C4 practice: a diagram
  * that travels must carry its own key). */
-const LEGEND_ITEMS: Array<{ color: string; dash?: boolean; text: string }> = [
+const LEGEND_ITEMS: Array<{
+  color: string;
+  dash?: boolean;
+  /** Set = a filled node-category swatch instead of an edge line sample. */
+  fill?: string;
+  text: string;
+}> = [
+  { color: PALETTE.gold, fill: PALETTE.goldBg, text: "source" },
+  { color: PALETTE.violet, fill: PALETTE.violetBg, text: "route" },
+  { color: PALETTE.magenta, fill: PALETTE.magentaBg, text: "pipeline / pack" },
+  { color: PALETTE.ok, fill: PALETTE.okBg, text: "destination" },
   { color: PALETTE.warn, text: "premium: per-GB ingest billing" },
   { color: PALETTE.ok, text: "economical: low-cost store/egress" },
-  { color: "#722ed1", text: "Search send path" },
+  { color: PALETTE.violet, text: "Search send path" },
   { color: PALETTE.faint, dash: true, text: "subdued: configured, not flowing" },
 ];
+
+/** Legend items positioned left-to-right, wrapping at the artifact width. */
+function legendLayout(
+  width: number,
+): Array<{ x: number; row: number; item: (typeof LEGEND_ITEMS)[number] }> {
+  const placed: Array<{ x: number; row: number; item: (typeof LEGEND_ITEMS)[number] }> = [];
+  let x = 12;
+  let row = 0;
+  for (const item of LEGEND_ITEMS) {
+    const itemWidth = 25 + item.text.length * 4.6 + 18;
+    if (x > 12 && x + itemWidth > width - 12) {
+      x = 12;
+      row++;
+    }
+    placed.push({ x, row, item });
+    x += itemWidth;
+  }
+  return placed;
+}
 
 /** Wrap an annotation note's text into short lines for the sticky card. */
 function wrapNoteText(text: string): string[] {
@@ -250,10 +288,14 @@ export function diagramToSvg(
     );
   }
   const empty = effective.nodes.length === 0 && notes.length === 0;
-  // Title block above, legend strip below (only when there is content).
+  // Title block above, legend strip below (only when there is content). The
+  // legend wraps at the artifact width, so its height is layout-driven.
   const topPad = empty ? 0 : options?.title !== undefined ? 30 : 0;
-  const legendPad = empty ? 0 : 26;
   const width = Math.max(contentWidth, empty ? 1 : 560);
+  const legendRows = empty
+    ? 0
+    : legendLayout(width)[LEGEND_ITEMS.length - 1].row + 1;
+  const legendPad = empty ? 0 : 26 + (legendRows - 1) * 15;
   const height = contentHeight + topPad + legendPad;
   const nodeById = new Map(laidOut.nodes.map((n) => [n.id, n]));
 
@@ -442,17 +484,26 @@ export function diagramToSvg(
   }
   // The embedded legend strip: every export carries its own key.
   if (!empty) {
-    let x = 12;
-    const legendY = topPad + contentHeight + 16;
-    for (const item of LEGEND_ITEMS) {
+    const legendBase = topPad + contentHeight + 16;
+    for (const { x, row, item } of legendLayout(width)) {
+      const legendY = legendBase + row * 15;
+      if (item.fill !== undefined) {
+        // Node-category swatch: a bordered card chip, not an edge sample.
+        parts.push(
+          `<rect x="${x}" y="${legendY - 9}" width="16" height="11" rx="3" ` +
+            `fill="${item.fill}" stroke="${item.color}" stroke-width="1.5"/>`,
+        );
+      } else {
+        parts.push(
+          `<line x1="${x}" y1="${legendY - 3}" x2="${x + 20}" y2="${legendY - 3}" ` +
+            `stroke="${item.color}" stroke-width="2.2"` +
+            `${item.dash === true ? ' stroke-dasharray="4 3" stroke-opacity="0.6"' : ""}/>`,
+        );
+      }
       parts.push(
-        `<line x1="${x}" y1="${legendY - 3}" x2="${x + 20}" y2="${legendY - 3}" ` +
-          `stroke="${item.color}" stroke-width="2.2"` +
-          `${item.dash === true ? ' stroke-dasharray="4 3" stroke-opacity="0.6"' : ""}/>`,
         `<text x="${x + 25}" y="${legendY}" font-size="9" ` +
           `fill="${PALETTE.muted}">${esc(item.text)}</text>`,
       );
-      x += 25 + item.text.length * 4.6 + 18;
     }
   }
   parts.push("</svg>");

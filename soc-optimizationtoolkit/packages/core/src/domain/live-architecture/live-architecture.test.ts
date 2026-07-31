@@ -1126,3 +1126,21 @@ describe("Cribl UI resource links (2026-07-29)", () => {
     expect(hub.info?.docs[0]?.url).toContain("docs.cribl.io");
   });
 });
+
+describe("node category tiers (2026-07-31 color coding)", () => {
+  it("assigns route/pipeline tiers so every category color-codes", () => {
+    const { diagram } = buildLiveDiagram(labSnapshot(), {
+      azureOnly: false,
+      expandRoutes: true,
+    });
+    const tier = (id: string) => diagram.nodes.find((n) => n.id === id)?.tier;
+    expect(tier("in:flowlog_collector")).toBe("source");
+    expect(tier("routes")).toBe("route");
+    expect(tier("route:r1")).toBe("route");
+    expect(tier("pre:Azure_vNet_FlowLogs_PreProcessing")).toBe("pipeline");
+    expect(tier("pack:AzureFlowLogs")).toBe("pipeline");
+    expect(tier("out:sentinel_dest")).toBe("destination");
+    // Breakers stay neutral Cribl machinery - not one of the four categories.
+    expect(tier("brk:Azure_vNet_FlowLogs")).toBe("cribl");
+  });
+});

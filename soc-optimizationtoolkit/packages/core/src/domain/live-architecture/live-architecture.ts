@@ -1112,7 +1112,7 @@ export function buildLiveDiagram(
     addNode({
       id: "routes",
       label: "Routes",
-      tier: "cribl",
+      tier: "route",
       badge: "Routing table",
       info: withResourceLink(
         // ALL routes (disabled included, dimmed) - the popover mirrors the
@@ -1167,7 +1167,7 @@ export function buildLiveDiagram(
       addNode({
         id: preNodeId,
         label: input.pipeline,
-        tier: "cribl",
+        tier: "pipeline",
         badge: "Pre-processing",
         info: withResourceLink(
           pipelineInfo("Pre-processing", input.pipeline, pipelineById.get(input.pipeline)),
@@ -1312,7 +1312,7 @@ export function buildLiveDiagram(
       addNode({
         id: routeNodeId,
         label: routeLabel,
-        tier: "cribl",
+        tier: "route",
         badge: "Route",
         info: routeEntryInfo(route, false),
       });
@@ -1327,7 +1327,7 @@ export function buildLiveDiagram(
       addNode({
         id: packNodeId,
         label: packById.get(packName)?.displayName ?? packName,
-        tier: "cribl",
+        tier: "pipeline",
         badge: "Pack",
         info: withResourceLink(
           packEnrichedInfo.get(packName) ?? packInfo(packName, packById.get(packName)),
@@ -1348,7 +1348,7 @@ export function buildLiveDiagram(
       addNode({
         id: pipeNodeId,
         label: pipelineRef,
-        tier: "cribl",
+        tier: "pipeline",
         badge: "Pipeline",
         info: withResourceLink(
           pipelineInfo("Route", pipelineRef, pipelineById.get(pipelineRef)),
@@ -1415,7 +1415,7 @@ export function buildLiveDiagram(
       addNode({
         id: postNodeId,
         label: triple.output.pipeline,
-        tier: "cribl",
+        tier: "pipeline",
         badge: "Post-processing",
         info: withResourceLink(
           pipelineInfo(
@@ -1459,7 +1459,7 @@ export function buildLiveDiagram(
       addNode({
         id: routeNodeId,
         label: `${route.name} (disabled)`,
-        tier: "cribl",
+        tier: "route",
         badge: "Route (disabled)",
         muted: true,
         info: routeEntryInfo(route, true),
@@ -1473,7 +1473,7 @@ export function buildLiveDiagram(
         addNode({
           id: packNodeId,
           label: packById.get(packName)?.displayName ?? packName,
-          tier: "cribl",
+          tier: "pipeline",
           badge: "Pack",
           muted: true,
           info: withResourceLink(
@@ -1491,7 +1491,7 @@ export function buildLiveDiagram(
         addNode({
           id: pipeNodeId,
           label: pipelineRef,
-          tier: "cribl",
+          tier: "pipeline",
           badge: "Pipeline",
           muted: true,
           info: withResourceLink(
@@ -1581,7 +1581,7 @@ export function buildLiveDiagram(
     addNode({
       id: packNodeId,
       label: internals.displayName,
-      tier: "cribl",
+      tier: "pipeline",
       badge: "Pack",
       info: withResourceLink(
         packEnrichedInfo.get(packId) ?? packInfo(packId, packById.get(packId)),
@@ -1651,7 +1651,7 @@ export function buildLiveDiagram(
       addNode({
         id: hubId,
         label: "Pack routes",
-        tier: "cribl",
+        tier: "route",
         badge: "Routing table",
         info: withResourceLink(
           {
@@ -1679,7 +1679,7 @@ export function buildLiveDiagram(
           addNode({
             id: routeNodeId,
             label: routeLabel,
-            tier: "cribl",
+            tier: "route",
             badge: "Route",
             info: packRouteEntryInfo(route, false),
           });
@@ -1692,7 +1692,7 @@ export function buildLiveDiagram(
           addNode({
             id: pipeNodeId,
             label: pipelineRef,
-            tier: "cribl",
+            tier: "pipeline",
             badge: "Pack pipeline",
             info: withResourceLink(
               pipelineInfo("Pack", pipelineRef, packPipeById.get(pipelineRef)),
@@ -1727,7 +1727,7 @@ export function buildLiveDiagram(
           addNode({
             id: routeNodeId,
             label: `${route.name} (disabled)`,
-            tier: "cribl",
+            tier: "route",
             badge: "Route (disabled)",
             muted: true,
             info: packRouteEntryInfo(route, true),
@@ -1742,7 +1742,7 @@ export function buildLiveDiagram(
             addNode({
               id: pipeNodeId,
               label: pipelineRef,
-              tier: "cribl",
+              tier: "pipeline",
               badge: "Pack pipeline",
               muted: true,
               info: withResourceLink(

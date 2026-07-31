@@ -94,6 +94,15 @@
    * the large stat number clears the contrast bar on the white surface; the
    * dark theme uses the reference #4db8ff. */
   --info-cyan: #0e7fc2;
+  /* Diagram node-category colors (2026-07-31): Sources, Routes, Pipelines,
+   * and Destinations read by COLOR across every diagram; destinations reuse
+   * --ok, the rest get their own hue. */
+  --tier-source: #ad8b00;
+  --tier-source-bg: #feffe6;
+  --tier-route: #722ed1;
+  --tier-route-bg: #f9f0ff;
+  --tier-pipeline: #c41d7f;
+  --tier-pipeline-bg: #fff0f6;
   /* Load-bearing monospace stack (technical values, counts, summaries,
    * placeholders, the REPOS status line, code chips). Previously several rules
    * referenced var(--font-mono) with no fallback and silently rendered as
@@ -152,6 +161,12 @@
   --purple-border: #3a2f5e;
   --shadow: rgba(0, 0, 0, 0.6);
   --info-cyan: #4db8ff;
+  --tier-source: #d6b83a;
+  --tier-source-bg: #2a2412;
+  --tier-route: #9d6fe0;
+  --tier-route-bg: #1c1730;
+  --tier-pipeline: #e0669f;
+  --tier-pipeline-bg: #2a1220;
 }
 
 * {
@@ -4079,7 +4094,25 @@ button.journey-step-main:hover .journey-step-label {
   overflow-wrap: anywhere;
 }
 .arch-flow-node-source {
-  border-color: var(--text-faint);
+  border-color: var(--tier-source);
+  background: var(--tier-source-bg);
+}
+.arch-flow-node-source .arch-flow-node-tier {
+  color: var(--tier-source);
+}
+.arch-flow-node-route {
+  border-color: var(--tier-route);
+  background: var(--tier-route-bg);
+}
+.arch-flow-node-route .arch-flow-node-tier {
+  color: var(--tier-route);
+}
+.arch-flow-node-pipeline {
+  border-color: var(--tier-pipeline);
+  background: var(--tier-pipeline-bg);
+}
+.arch-flow-node-pipeline .arch-flow-node-tier {
+  color: var(--tier-pipeline);
 }
 .arch-flow-node-cribl {
   border-color: var(--accent);
@@ -4189,6 +4222,32 @@ button.journey-step-main:hover .journey-step-label {
   font-size: 10px;
   font-weight: 600;
   color: var(--text-muted);
+}
+/* Node-category swatches (2026-07-31): the color key for Sources, Routes,
+   Pipelines, and Destinations across every diagram. */
+.arch-legend-node {
+  display: inline-block;
+  width: 16px;
+  height: 11px;
+  border-radius: 3px;
+  border: 1.5px solid var(--border);
+  vertical-align: middle;
+}
+.arch-legend-node-source {
+  border-color: var(--tier-source);
+  background: var(--tier-source-bg);
+}
+.arch-legend-node-route {
+  border-color: var(--tier-route);
+  background: var(--tier-route-bg);
+}
+.arch-legend-node-pipeline {
+  border-color: var(--tier-pipeline);
+  background: var(--tier-pipeline-bg);
+}
+.arch-legend-node-destination {
+  border-color: var(--ok);
+  background: var(--ok-bg);
 }
 .arch-flow-cost-badge {
   font-size: 9px;

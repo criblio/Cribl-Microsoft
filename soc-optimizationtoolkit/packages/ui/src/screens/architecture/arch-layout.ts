@@ -49,6 +49,8 @@ export function sourceTypeChips(types: readonly string[]): string[] {
 /** The short tier badge shown above a node's label (non-destination tiers). */
 const TIER_BADGE: Record<DiagramTier, string> = {
   source: "Source",
+  route: "Route",
+  pipeline: "Pipeline",
   cribl: "Cribl",
   azure: "Azure",
   destination: "Destination",
@@ -275,11 +277,20 @@ function clusterColumns(
 
 const BAND_LABEL: Record<DiagramTier, string> = {
   source: "Sources",
+  route: "Routes",
+  pipeline: "Pipelines",
   cribl: "Cribl",
   azure: "Azure",
   destination: "Destinations",
 };
-const TIER_ORDER: DiagramTier[] = ["source", "cribl", "azure", "destination"];
+const TIER_ORDER: DiagramTier[] = [
+  "source",
+  "route",
+  "pipeline",
+  "cribl",
+  "azure",
+  "destination",
+];
 
 /** Stage bands from the dominant tier of each rank column; adjacent runs
  * merge, boundaries split the gap between neighbors. Undefined when the
