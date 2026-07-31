@@ -81,7 +81,7 @@ describe("diagramToSvg", () => {
     const svg = diagramToSvg(searchInPlace);
     // The tone wins on the LINE (all three send-path legs), while the
     // premium caption on the DCR leg keeps its warn color.
-    expect(svg).toContain('stroke="#722ed1"');
+    expect(svg).toContain('stroke="#08979c"');
     expect(svg).toContain(">PREMIUM</text>");
   });
 

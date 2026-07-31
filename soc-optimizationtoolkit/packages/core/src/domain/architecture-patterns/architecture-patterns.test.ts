@@ -737,6 +737,33 @@ describe("Sentinel data lake (2026-07-29)", () => {
     const considerations = pattern.considerations.join(" ");
     expect(considerations).toContain("api.securityplatform.microsoft.com");
     expect(considerations).toContain("api.loganalytics.io");
+    // The only fitting Cribl Search provider is the GENERIC HTTP API one -
+    // the Azure API provider covers four management endpoints, not KQL.
+    expect(considerations).toContain("GENERIC HTTP API");
+    // Auxiliary tables are reachable pre-onboarding via /search, post via
+    // the lake endpoint (2026-07-31 research).
+    expect(considerations).toContain("/search REST API");
+  });
+
+  it("the lake promotes on demand and supersedes the Auxiliary plan (2026-07-31)", () => {
+    const tiering = ARCHITECTURE_PATTERNS.find(
+      (p) => p.id === "sentinel-data-lake-tiering",
+    )!;
+    const promote = tiering.diagram.edges.find(
+      (e) => e.from === "sdl" && e.to === "law",
+    );
+    expect(promote?.label).toBe("promote on demand (KQL jobs)");
+    // Promoted data bills as analytics ingest - premium on purpose.
+    expect(promote?.cost).toBe("premium");
+    expect(tiering.considerations.join(" ")).toContain(
+      "SUPERSEDES the Auxiliary",
+    );
+    const logTiers = ARCHITECTURE_PATTERNS.find(
+      (p) => p.id === "workspace-log-tiers",
+    )!;
+    expect(logTiers.considerations.join(" ")).toContain(
+      "lake-tier tables",
+    );
   });
 });
 

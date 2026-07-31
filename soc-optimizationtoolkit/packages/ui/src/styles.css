@@ -103,6 +103,9 @@
   --tier-route-bg: #f9f0ff;
   --tier-pipeline: #c41d7f;
   --tier-pipeline-bg: #fff0f6;
+  /* The Cribl Search send-path line: teal, a hue no node category or cost
+   * badge uses (2026-07-31 - violet now belongs to route nodes). */
+  --tone-search: #08979c;
   /* Load-bearing monospace stack (technical values, counts, summaries,
    * placeholders, the REPOS status line, code chips). Previously several rules
    * referenced var(--font-mono) with no fallback and silently rendered as
@@ -167,6 +170,7 @@
   --tier-route-bg: #1c1730;
   --tier-pipeline: #e0669f;
   --tier-pipeline-bg: #2a1220;
+  --tone-search: #33bcb7;
 }
 
 * {
@@ -4198,16 +4202,17 @@ button.journey-step-main:hover .journey-step-label {
 /* The Cribl Search send path (2026-07-29): findings return THROUGH Stream
  * before landing in the workspace - its own color so the return leg never
  * reads as the primary ingest flow. Declared after the cost classes so the
- * tone wins on edges carrying both. */
+ * tone wins on edges carrying both. Teal since 2026-07-31 - the earlier
+ * violet became the ROUTE node color. */
 .arch-flow-pipe-tone-search {
-  stroke: #9254de;
+  stroke: var(--tone-search);
 }
 .arch-legend-line-search {
   display: inline-block;
   width: 22px;
   height: 3px;
   border-radius: 2px;
-  background: #9254de;
+  background: var(--tone-search);
   vertical-align: middle;
 }
 .arch-legend-line-muted {

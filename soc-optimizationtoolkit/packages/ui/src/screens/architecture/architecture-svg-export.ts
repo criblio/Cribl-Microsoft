@@ -50,6 +50,9 @@ const PALETTE = {
   violetBg: "#f9f0ff",
   magenta: "#c41d7f",
   magentaBg: "#fff0f6",
+  // The Search send-path teal (mirrors --tone-search light): violet now
+  // belongs to route NODES, so the tone gets its own hue.
+  teal: "#08979c",
 } as const;
 
 /** Per-tier node styling (mirrors .arch-flow-node-* classes). */
@@ -78,7 +81,7 @@ function lineStroke(
   cost: EdgeCostTier | undefined,
 ): string {
   if (tone === "search") {
-    return PALETTE.violet;
+    return PALETTE.teal;
   }
   return edgeStroke(cost);
 }
@@ -192,7 +195,7 @@ const LEGEND_ITEMS: Array<{
   { color: PALETTE.ok, fill: PALETTE.okBg, text: "destination" },
   { color: PALETTE.warn, text: "premium: per-GB ingest billing" },
   { color: PALETTE.ok, text: "economical: low-cost store/egress" },
-  { color: PALETTE.violet, text: "Search send path" },
+  { color: PALETTE.teal, text: "Search send path" },
   { color: PALETTE.faint, dash: true, text: "subdued: configured, not flowing" },
 ];
 
@@ -303,9 +306,6 @@ export function diagramToSvg(
     `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" ` +
       `viewBox="0 0 ${width} ${height}" font-family="Segoe UI, Helvetica, Arial, sans-serif">`,
     `<rect width="${width}" height="${height}" fill="${PALETTE.surface}"/>`,
-    `<defs><marker id="arch-arrow" viewBox="0 0 10 10" refX="9" refY="5" ` +
-      `markerWidth="7" markerHeight="7" orient="auto-start-reverse">` +
-      `<path d="M 0 0 L 10 5 L 0 10 z" fill="${PALETTE.faint}"/></marker></defs>`,
   ];
   if (!empty && options?.title !== undefined) {
     parts.push(
@@ -377,7 +377,7 @@ export function diagramToSvg(
     parts.push(
       `<path d="${routedPath(points)}" fill="none" ` +
         `stroke="${lineStroke(edge.tone, edge.cost)}" ` +
-        `stroke-width="1.6" marker-end="url(#arch-arrow)"` +
+        `stroke-width="1.6"` +
         `${edge.muted === true ? ' stroke-opacity="0.3"' : ""}/>`,
     );
     const midX = round(anchor.x + (edgeEdit?.labelOffset?.dx ?? 0));
