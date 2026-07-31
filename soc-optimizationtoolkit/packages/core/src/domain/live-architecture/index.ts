@@ -24,8 +24,17 @@ export {
   buildLiveDiagram,
   criblUiBaseFromLeaderUrl,
   installedPackIds,
+  listLiveOutputs,
   parseRouteFilterInputs,
   isAzureCriblType,
   isAzureInput,
   outputCostTier,
 } from "./live-architecture";
+export {
+  buildFleetInventory,
+  parseWorkerInventory,
+  resolveOffloads,
+  type FleetInventory,
+  type FleetOffload,
+  type WorkerRecord,
+} from "./edge-fleets";

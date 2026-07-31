@@ -779,6 +779,20 @@ function routesHubInfo(
 }
 
 /**
+ * The configured outputs from a raw /system/outputs section, tolerantly
+ * parsed - the Edge fleet inventory resolves cribl_tcp/cribl_http offload
+ * targets from these (2026-07-30). Failures yield [].
+ */
+export function listLiveOutputs(
+  section: LiveSnapshotSection | undefined,
+): LiveOutput[] {
+  const silent: string[] = [];
+  return parseSection(section, "", "", silent)
+    .map(normalizeOutput)
+    .filter((o): o is LiveOutput => o !== null);
+}
+
+/**
  * The installed pack ids from a raw /packs response - the usecase uses this
  * to decide which per-pack detail sections to fetch. Tolerant like every
  * other section parse; failures yield [].

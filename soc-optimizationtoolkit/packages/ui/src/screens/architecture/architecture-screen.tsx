@@ -27,7 +27,10 @@ import {
   fetchLiveArchitecture,
   ingestionTierLabel,
   applySentinelOverlay,
+  buildFleetInventory,
+  fetchEdgeFleetData,
   isStreamWorkerGroup,
+  parseWorkerInventory,
   recommendWithSolutions,
   unifyPatternDiagrams,
 } from "@soc/core";
@@ -38,6 +41,7 @@ import type {
   CriblClient,
   CriblGroupSummary,
   CriblProduct,
+  EdgeFleetData,
   LiveArchitectureSnapshot,
   LogSource,
   PatternDiagram,
@@ -467,6 +471,197 @@ function LiveArchitecturePanel({
   );
 }
 
+/**
+ * The EDGE FLEETS view (user direction 2026-07-31): inventory every Cribl
+ * Edge Fleet the leader reports, draw each fleet's real flows (one flow per
+ * source/destination pair through the fleet's routing table), and name the
+ * Cribl Stream worker group each cribl_tcp/cribl_http destination offloads
+ * to - resolved by matching receiver hosts against the leader's worker
+ * inventory.
+ */
+function EdgeFleetsPanel({
+  cribl,
+  onExport,
+  criblUiBase,
+}: {
+  cribl: CriblClient;
+  onExport: OnExport;
+  criblUiBase?: string;
+}) {
+  const [data, setData] = useState<EdgeFleetData | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [fleetsError, setFleetsError] = useState("");
+
+  const loadFleets = async () => {
+    if (loading) {
+      return;
+    }
+    setLoading(true);
+    setFleetsError("");
+    try {
+      setData(await fetchEdgeFleetData(cribl));
+    } catch (err) {
+      setData(null);
+      setFleetsError(
+        `Edge fleet inventory unavailable (is a Cribl connection active?): ` +
+          (err instanceof Error ? err.message : String(err)),
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // One built inventory per fleet, plus its edits holder so titled exports
+  // match the canvas arrangement. Rebuilt per load; the holders are plain
+  // objects (not useRef) because the fleet COUNT is data-driven.
+  const fleetViews = useMemo(() => {
+    if (data === null) {
+      return [];
+    }
+    const workers = parseWorkerInventory(data.workers);
+    return data.fleets.map((fleet) => {
+      const inventory = buildFleetInventory(fleet.id, fleet.snapshot, workers, {
+        uiBase: criblUiBase,
+      });
+      const offloadByOutput = new Map(
+        inventory.offloads.map((offload) => [offload.outputId, offload]),
+      );
+      // Group flows end in the destination id (key g:{input}>{route}>{output});
+      // append the resolved offload group so the LIST answers the question
+      // without opening the diagram.
+      const flowRows = inventory.flows.map((flow) => {
+        const outputId = flow.key.startsWith("g:")
+          ? flow.key.slice(flow.key.lastIndexOf(">") + 1)
+          : "";
+        const offload = offloadByOutput.get(outputId);
+        const suffix =
+          offload !== undefined && offload.workerGroups.length > 0
+            ? ` [offloads to Stream worker group ${offload.workerGroups.join(", ")}]`
+            : "";
+        return { key: flow.key, text: flow.label + suffix };
+      });
+      const editsRef: { current: DiagramEditState | null } = { current: null };
+      return {
+        inventory,
+        flowRows,
+        editsRef,
+        onCanvasState: (state: DiagramEditState) => {
+          editsRef.current = state;
+        },
+      };
+    });
+  }, [data, criblUiBase]);
+
+  return (
+    <>
+      <p className="panel-desc">
+        Every Cribl Edge Fleet on the connected leader, inventoried from its
+        real configuration: one flow per source/destination pair through the
+        fleet's routing table, with each Cribl Stream destination resolved to
+        the worker group that receives the offloaded data. Nothing here
+        changes any configuration.
+      </p>
+      <div className="panel-controls">
+        <button
+          className="run-button"
+          onClick={() => void loadFleets()}
+          disabled={loading}
+        >
+          {loading
+            ? "Reading fleet configurations..."
+            : data === null
+              ? "Load Edge fleets"
+              : "Refresh"}
+        </button>
+      </div>
+      {fleetsError !== "" && (
+        <span className="field-hint eh-warning">{fleetsError}</span>
+      )}
+      {data !== null && fleetViews.length === 0 && (
+        <p className="field-hint">
+          No Edge Fleets reported by this leader - the groups list contains
+          only Stream worker groups.
+        </p>
+      )}
+      {data !== null && data.workers === undefined && fleetViews.length > 0 && (
+        <p className="field-hint eh-warning">
+          The leader's worker inventory could not be read - offload
+          destinations show their raw receiver hosts instead of resolved
+          Stream worker groups.
+        </p>
+      )}
+      {data !== null && data.skippedFleets.length > 0 && (
+        <p className="field-hint">
+          Showing the first {data.fleets.length} fleets;{" "}
+          {data.skippedFleets.length} more not fetched:{" "}
+          {data.skippedFleets.join(", ")}.
+        </p>
+      )}
+      {fleetViews.map(({ inventory, flowRows, editsRef, onCanvasState }) => (
+        <section className="arch-fleet" key={inventory.fleetId}>
+          <h3 className="arch-fleet-title">
+            Edge fleet '{inventory.fleetId}'
+          </h3>
+          {inventory.offloads.length > 0 ? (
+            <div className="arch-fleet-offloads">
+              {inventory.offloads.map((offload) => (
+                <span className="arch-fleet-offload" key={offload.outputId}>
+                  {offload.outputId} ({offload.outputType}) offloads to{" "}
+                  {offload.workerGroups.length > 0
+                    ? `Stream worker group ${offload.workerGroups.join(", ")}`
+                    : offload.hosts.length > 0
+                      ? `${offload.hosts.join(", ")} (unresolved)`
+                      : "(no receivers configured)"}
+                </span>
+              ))}
+            </div>
+          ) : (
+            <p className="field-hint">
+              No Cribl Stream offload destination (cribl_tcp/cribl_http)
+              configured on this fleet.
+            </p>
+          )}
+          {flowRows.length > 0 && (
+            <div className="arch-fleet-flows">
+              <span className="field-label">
+                Flow inventory ({flowRows.length})
+              </span>
+              {flowRows.map((row) => (
+                <p className="field-hint" key={row.key}>
+                  {row.text}
+                </p>
+              ))}
+            </div>
+          )}
+          <ExportRow
+            diagram={inventory.diagram}
+            onExport={onExport}
+            baseName={`edge-fleet-${inventory.fleetId}`}
+            title={`Edge fleet '${inventory.fleetId}' dataflow`}
+            editsRef={editsRef}
+          />
+          <ArchitectureFlow
+            diagram={inventory.diagram}
+            storageKey={`fleet:${inventory.fleetId}`}
+            onCanvasStateChange={onCanvasState}
+          />
+          {inventory.notes.length > 0 && (
+            <div className="arch-live-notes">
+              <span className="field-label">Notes</span>
+              {inventory.notes.map((note) => (
+                <p className="field-hint" key={note}>
+                  {note}
+                </p>
+              ))}
+            </div>
+          )}
+        </section>
+      ))}
+      {fleetViews.length > 0 && <CostLegend />}
+    </>
+  );
+}
+
 export function ArchitectureScreen({
   onNavigate,
   canNavigate,
@@ -478,7 +673,9 @@ export function ArchitectureScreen({
   const [resources, setResources] = useState<string[]>([]);
   const [sources, setSources] = useState<string[]>([]);
   const [solutionSources, setSolutionSources] = useState<string[]>([]);
-  const [viewMode, setViewMode] = useState<"patterns" | "live">("patterns");
+  const [viewMode, setViewMode] = useState<"patterns" | "live" | "fleets">(
+    "patterns",
+  );
 
   // The ~436-solution options come from the SHIPPED classification asset -
   // zero ports, tokens, or network; the hint carries tier + connector kind.
@@ -569,6 +766,17 @@ export function ArchitectureScreen({
         >
           Live dataflow
         </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={viewMode === "fleets"}
+          className={
+            "arch-view-tab" + (viewMode === "fleets" ? " arch-view-tab-active" : "")
+          }
+          onClick={() => setViewMode("fleets")}
+        >
+          Edge fleets
+        </button>
       </div>
 
       {viewMode === "live" ? (
@@ -582,6 +790,19 @@ export function ArchitectureScreen({
           <p className="field-hint">
             This shell did not provide a Cribl client for the live view - a
             wiring gap, not a runtime state.
+          </p>
+        )
+      ) : viewMode === "fleets" ? (
+        cribl !== undefined ? (
+          <EdgeFleetsPanel
+            cribl={cribl}
+            onExport={onExport}
+            criblUiBase={criblUiBase}
+          />
+        ) : (
+          <p className="field-hint">
+            This shell did not provide a Cribl client for the Edge fleet view -
+            a wiring gap, not a runtime state.
           </p>
         )
       ) : (

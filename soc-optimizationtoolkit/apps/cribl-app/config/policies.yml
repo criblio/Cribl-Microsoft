@@ -74,6 +74,11 @@ policies:
   # List Worker Groups / Edge Fleets (CriblClient.listGroups group picker).
   - object: '/master/groups'
     actions: ['GET']
+  # Edge fleet inventory (2026-07-30): the leader's worker/edge-node roster,
+  # read-only, so cribl_tcp/cribl_http offload hosts resolve to the Stream
+  # worker group that receives the fleet's data.
+  - object: '/master/workers'
+    actions: ['GET']
   # Create the Sentinel destination in a Worker Group context (onboard-table
   # step create-cribl-destination); GET added for Live Architecture's
   # destination listing (read-only flow drawing).
