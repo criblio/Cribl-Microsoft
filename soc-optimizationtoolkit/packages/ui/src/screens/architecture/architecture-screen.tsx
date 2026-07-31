@@ -397,7 +397,7 @@ function LiveArchitecturePanel({
           {loading
             ? "Reading configuration..."
             : snapshot === null
-              ? "Load live dataflow"
+              ? "Load Live Workgroup View"
               : "Refresh"}
         </button>
       </div>
@@ -444,8 +444,8 @@ function LiveArchitecturePanel({
           <ExportRow
             diagram={liveResult.diagram}
             onExport={onExport}
-            baseName={`live-dataflow-${snapshot?.groupId ?? "group"}`}
-            title={`Live dataflow - worker group '${snapshot?.groupId ?? "group"}'`}
+            baseName={`live-workgroup-${snapshot?.groupId ?? "group"}`}
+            title={`Live Workgroup View - worker group '${snapshot?.groupId ?? "group"}'`}
             editsRef={liveEditsRef}
           />
           <ArchitectureFlow
@@ -570,7 +570,7 @@ function EdgeFleetsPanel({
           {loading
             ? "Reading fleet configurations..."
             : data === null
-              ? "Load Edge fleets"
+              ? "Load Live Edge View"
               : "Refresh"}
         </button>
       </div>
@@ -637,7 +637,7 @@ function EdgeFleetsPanel({
             diagram={inventory.diagram}
             onExport={onExport}
             baseName={`edge-fleet-${inventory.fleetId}`}
-            title={`Edge fleet '${inventory.fleetId}' dataflow`}
+            title={`Live Edge View - fleet '${inventory.fleetId}'`}
             editsRef={editsRef}
           />
           <ArchitectureFlow
@@ -764,7 +764,7 @@ export function ArchitectureScreen({
           }
           onClick={() => setViewMode("live")}
         >
-          Live dataflow
+          Live Workgroup View
         </button>
         <button
           type="button"
@@ -775,7 +775,7 @@ export function ArchitectureScreen({
           }
           onClick={() => setViewMode("fleets")}
         >
-          Edge fleets
+          Live Edge View
         </button>
       </div>
 
@@ -801,7 +801,7 @@ export function ArchitectureScreen({
           />
         ) : (
           <p className="field-hint">
-            This shell did not provide a Cribl client for the Edge fleet view -
+            This shell did not provide a Cribl client for the Live Edge View -
             a wiring gap, not a runtime state.
           </p>
         )
