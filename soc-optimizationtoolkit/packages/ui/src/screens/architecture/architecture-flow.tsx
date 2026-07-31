@@ -21,7 +21,6 @@ import {
   Controls,
   EdgeLabelRenderer,
   Handle,
-  MarkerType,
   Position,
   ReactFlow,
   ViewportPortal,
@@ -50,7 +49,6 @@ import {
   polylineMidpoint,
   sourceTypeChips,
   type LaidOutDiagram,
-  type LaidOutEdge,
 } from "./arch-layout";
 import { emptyEdits, loadEdits, saveEdits } from "./arch-edits";
 import type { DiagramEditState } from "./arch-edits";
@@ -795,23 +793,6 @@ function FitViewController({ signature }: { signature: string }) {
   return null;
 }
 
-/** The arrowhead color follows the pipe: cost/tone tinted, muted faint. */
-function edgeMarkerColor(e: LaidOutEdge): string {
-  if (e.muted === true) {
-    return "var(--border)";
-  }
-  if (e.tone === "search") {
-    return "#9254de";
-  }
-  if (e.cost === "premium") {
-    return "var(--warn)";
-  }
-  if (e.cost === "economical") {
-    return "var(--ok)";
-  }
-  return "var(--accent)";
-}
-
 /** Adapt the shared dagre layout (arch-layout) to React Flow's shapes. */
 function layoutGraph(
   diagram: PatternDiagram,
@@ -851,15 +832,8 @@ function layoutGraph(
       sourceHandle: reverse ? "out-b" : "out",
       targetHandle: reverse ? "in-b" : "in",
       type: "flowing",
-      // Arrowheads (2026-07-30 best-practices pass): direction must read at
-      // a glance and in static captures - the packet animation alone fails
-      // a paused look and every screenshot.
-      markerEnd: {
-        type: MarkerType.ArrowClosed,
-        width: 13,
-        height: 13,
-        color: edgeMarkerColor(e),
-      },
+      // No arrowheads (user preference 2026-07-31): direction reads from
+      // the left-to-right layout and the packet animation instead.
       data: {
         label: e.label,
         cost: e.cost,

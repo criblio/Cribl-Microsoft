@@ -527,6 +527,7 @@ export const ARCHITECTURE_PATTERNS: readonly ArchitecturePattern[] = [
       "Summary-rule output is billed as Analytics ingest - the aggregates are small, and that is the point: detections see minutes-grain rollups, not raw volume.",
       "Interactive retention on the Auxiliary plan is 30 days (long-term retention beyond that is cheap) - keep anything detections need in full fidelity on Analytics.",
       "The Basic plan sits between the two - more query capability than Auxiliary at a higher rate - when Auxiliary is too restrictive for a feed.",
+      "The Sentinel data lake tier SUPERSEDES the Auxiliary plan: onboarding the workspace to the lake surfaces Auxiliary tables as lake-tier tables and switches their billing to the lake meters. Auxiliary/Basic are not being enhanced further - plan new low-value feeds toward the lake tier where it is available.",
       "Pair with the blob archive pattern: blob holds the full-fidelity replay copy; the Auxiliary tier holds what analysts want queryable without rehydration.",
     ],
     diagram: {
@@ -665,9 +666,11 @@ export const ARCHITECTURE_PATTERNS: readonly ArchitecturePattern[] = [
     requiresProducts: ["stream"],
     requiresResources: ["sentinel-data-lake"],
     considerations: [
-      "Onboard the workspace to the Sentinel data lake first (Defender portal); analytics-tier tables then mirror to the lake automatically - a single copy, no double ingestion cost.",
+      "Onboard the workspace to the Sentinel data lake first (Defender portal); analytics-tier tables then mirror to the lake automatically - a single copy, and mirroring adds NO lake ingestion charge (lake ingestion + data processing meters apply only to lake-tier-ONLY tables).",
       "Set high-volume, low-detection tables to the data-lake-only tier; keep detection-critical tables in the analytics tier where rules and hunting run.",
-      "Lake data is queried with KQL lake exploration and promoted BACK to the analytics tier via one-time or scheduled jobs when an investigation needs it hot.",
+      "Lake economics: storage bills per GB/month at a uniform 6:1 compression assumption once analytics retention ends; KQL lake queries and jobs bill per GB scanned; Jupyter notebook / Spark sessions (advanced data insights) bill per compute hour.",
+      "Lake data is queried with KQL lake exploration and notebooks, and promoted BACK to the analytics tier via one-time or scheduled KQL jobs when an investigation needs it hot - promoted data bills as analytics ingest, so promote windows, not months.",
+      "The lake tier SUPERSEDES the Auxiliary and Basic plans: onboarding surfaces existing Auxiliary tables as lake-tier tables and switches archive/search/auxiliary meters to the lake meters; Microsoft recommends the lake tier for new low-value feeds.",
       "Cribl's reduction still pays for itself at the analytics tier; route full-fidelity copies toward lake-tier tables instead of dropping them.",
     ],
     diagram: {
@@ -683,6 +686,12 @@ export const ARCHITECTURE_PATTERNS: readonly ArchitecturePattern[] = [
         { from: "stream", to: "dcr", label: "logs ingestion API" },
         { from: "dcr", to: "law", cost: "premium" },
         { from: "law", to: "sdl", label: "tier mirroring (single copy)", cost: "economical" },
+        {
+          from: "sdl",
+          to: "law",
+          label: "promote on demand (KQL jobs)",
+          cost: "premium",
+        },
       ],
     },
   },
@@ -698,7 +707,8 @@ export const ARCHITECTURE_PATTERNS: readonly ArchitecturePattern[] = [
     considerations: [
       "The lake has its OWN query endpoint - https://api.securityplatform.microsoft.com/lake/kql/v1/rest/query - NOT the Log Analytics Query API (api.loganalytics.io) that serves analytics-tier queries. Auth is an Entra OAuth bearer token.",
       "Long-running lake queries ride the asynchronous jobs endpoint (/lake/kql/jobs); the synchronous endpoint is for interactive exploration.",
-      "Cribl Search has no dedicated Sentinel-data-lake dataset provider today - point an API-based provider (Azure API / Generic HTTP API) at the lake query endpoint.",
+      "Cribl Search has no dedicated Sentinel-data-lake dataset provider today - use the GENERIC HTTP API dataset provider against the lake query endpoint (configurable endpoints, auth, headers, and request body). The Azure API provider does not fit: it is preconfigured for four management-plane endpoints (VMs, disks, NSGs, web apps), not KQL APIs.",
+      "Auxiliary/lake-tier tables are reachable the same way: before lake onboarding through the Log Analytics /search REST API (single-table KQL, limited operators, time span in the request header); after onboarding they surface in the lake and answer through the lake KQL endpoint.",
       "Promote findings to the analytics tier (or ingest a small curated table) so detections and cases can act on them.",
       "The promotion rides the send operator: findings return to a Cribl HTTP source on a Stream worker group, and Stream delivers them through the DCR (the violet path).",
     ],
@@ -1655,7 +1665,7 @@ const DIAGRAM_NODE_INFO: Record<string, DiagramNodeInfo> = {
   },
   [canonicalNodeKey("Auxiliary-plan table")]: {
     purpose:
-      "A custom (_CL) table on the Auxiliary log plan: ingest at a small fraction of the Analytics-plan rate for high-volume, low-value telemetry. Single-table KQL with limited operators, 30-day interactive retention, no direct analytics rules - summary rules lift aggregates into Analytics tables for detections.",
+      "A custom (_CL) table on the Auxiliary log plan: ingest at a small fraction of the Analytics-plan rate for high-volume, low-value telemetry. Single-table KQL with limited operators, 30-day interactive retention, no direct analytics rules - summary rules lift aggregates into Analytics tables for detections. The Sentinel data lake tier is its successor: onboarding the workspace to the lake surfaces Auxiliary tables as lake-tier tables and switches billing to the lake meters.",
     docs: [
       {
         label: "Azure Monitor table plans",
@@ -1893,7 +1903,7 @@ const DIAGRAM_NODE_INFO: Record<string, DiagramNodeInfo> = {
   },
   [canonicalNodeKey("Sentinel data lake")]: {
     purpose:
-      "Sentinel's long-term lake tier: analytics-tier tables mirror into it (single copy, open Parquet), retention runs to 12 years, and KQL jobs promote data back to the analytics tier on demand. It has its OWN query endpoint (api.securityplatform.microsoft.com/lake/kql) - distinct from the Log Analytics Query API.",
+      "Sentinel's long-term lake tier: analytics-tier tables mirror into it (single copy, open Parquet, mirroring itself adds no lake ingestion charge), retention runs to 12 years, and KQL jobs promote data back to the analytics tier on demand. Storage bills at a uniform 6:1 compression assumption, KQL queries per GB scanned, notebooks (Spark) per compute hour. It has its OWN query endpoint (api.securityplatform.microsoft.com/lake/kql) - distinct from the Log Analytics Query API - and its tier supersedes the Auxiliary/Basic plans.",
     docs: [
       {
         label: "Sentinel data lake overview",
@@ -1906,6 +1916,10 @@ const DIAGRAM_NODE_INFO: Record<string, DiagramNodeInfo> = {
       {
         label: "KQL and the data lake",
         url: MS + "/azure/sentinel/datalake/kql-overview",
+      },
+      {
+        label: "Sentinel billing (data lake meters)",
+        url: MS + "/azure/sentinel/billing",
       },
     ],
   },
