@@ -499,6 +499,17 @@ function EdgeFleetsPanel({
   const [data, setData] = useState<EdgeFleetData | null>(null);
   const [loading, setLoading] = useState(false);
   const [fleetsError, setFleetsError] = useState("");
+  // Per-fleet flow selection (user report 2026-07-31: the Edge view listed
+  // flows instead of SELECTING them like the Workgroup view). Keys are
+  // fleet ids; empty/absent = draw every flow. Reset per load.
+  const [flowSelections, setFlowSelections] = useState<Record<string, string[]>>(
+    {},
+  );
+  // Edits holders keyed by fleet id, OUTSIDE the memo so a flow-selection
+  // rebuild does not discard the latest canvas state feeding exports.
+  const editsHolders = useRef<
+    Record<string, { current: DiagramEditState | null }>
+  >({});
 
   const loadFleets = async () => {
     if (loading) {
@@ -508,6 +519,7 @@ function EdgeFleetsPanel({
     setFleetsError("");
     try {
       setData(await fetchEdgeFleetData(cribl));
+      setFlowSelections({});
     } catch (err) {
       setData(null);
       setFleetsError(
@@ -519,23 +531,24 @@ function EdgeFleetsPanel({
     }
   };
 
-  // One built inventory per fleet, plus its edits holder so titled exports
-  // match the canvas arrangement. Rebuilt per load; the holders are plain
-  // objects (not useRef) because the fleet COUNT is data-driven.
+  // One built inventory per fleet. Rebuilt when the data or a flow
+  // selection changes; the flows inventory itself is selection-independent.
   const fleetViews = useMemo(() => {
     if (data === null) {
       return [];
     }
     const workers = parseWorkerInventory(data.workers);
     return data.fleets.map((fleet) => {
+      const selected = flowSelections[fleet.id] ?? [];
       const inventory = buildFleetInventory(fleet.id, fleet.snapshot, workers, {
         uiBase: criblUiBase,
+        selectedFlows: selected,
       });
       const offloadByOutput = new Map(
         inventory.offloads.map((offload) => [offload.outputId, offload]),
       );
       // Group flows end in the destination id (key g:{input}>{route}>{output});
-      // append the resolved offload group so the LIST answers the question
+      // append the resolved offload group so the PICKER answers the question
       // without opening the diagram.
       const flowRows = inventory.flows.map((flow) => {
         const outputId = flow.key.startsWith("g:")
@@ -548,17 +561,18 @@ function EdgeFleetsPanel({
             : "";
         return { key: flow.key, text: flow.label + suffix };
       });
-      const editsRef: { current: DiagramEditState | null } = { current: null };
+      const editsRef = (editsHolders.current[fleet.id] ??= { current: null });
       return {
         inventory,
         flowRows,
+        selected,
         editsRef,
         onCanvasState: (state: DiagramEditState) => {
           editsRef.current = state;
         },
       };
     });
-  }, [data, criblUiBase]);
+  }, [data, criblUiBase, flowSelections]);
 
   return (
     <>
@@ -605,7 +619,7 @@ function EdgeFleetsPanel({
           {data.skippedFleets.join(", ")}.
         </p>
       )}
-      {fleetViews.map(({ inventory, flowRows, editsRef, onCanvasState }) => (
+      {fleetViews.map(({ inventory, flowRows, selected, editsRef, onCanvasState }) => (
         <section className="arch-fleet" key={inventory.fleetId}>
           <h3 className="arch-fleet-title">
             Edge fleet '{inventory.fleetId}'
@@ -629,16 +643,43 @@ function EdgeFleetsPanel({
               configured on this fleet.
             </p>
           )}
-          {flowRows.length > 0 && (
-            <div className="arch-fleet-flows">
-              <span className="field-label">
-                Flow inventory ({flowRows.length})
-              </span>
-              {flowRows.map((row) => (
-                <p className="field-hint" key={row.key}>
-                  {row.text}
-                </p>
-              ))}
+          {flowRows.length > 1 && (
+            <div className="arch-live-focus">
+              <label className="field">
+                <span className="field-label">
+                  Flow inventory ({flowRows.length}) - select flows to draw
+                  only those; empty = draw everything
+                </span>
+                <SearchableMultiSelect
+                  options={flowRows.map((row) => ({
+                    value: row.key,
+                    label: row.text,
+                  }))}
+                  values={selected}
+                  onChange={(next) =>
+                    setFlowSelections((prev) => ({
+                      ...prev,
+                      [inventory.fleetId]: next,
+                    }))
+                  }
+                  placeholder="All flows drawn - select to narrow..."
+                  ariaLabel={`Filter flows for fleet ${inventory.fleetId}`}
+                />
+              </label>
+              {selected.length > 0 && (
+                <button
+                  type="button"
+                  className="arch-export-btn"
+                  onClick={() =>
+                    setFlowSelections((prev) => ({
+                      ...prev,
+                      [inventory.fleetId]: [],
+                    }))
+                  }
+                >
+                  Show all flows
+                </button>
+              )}
             </div>
           )}
           <ExportRow

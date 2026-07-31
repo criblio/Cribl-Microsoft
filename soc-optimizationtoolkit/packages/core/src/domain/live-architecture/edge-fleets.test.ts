@@ -207,6 +207,29 @@ describe("buildFleetInventory", () => {
     });
   });
 
+  it("selectedFlows narrows the diagram; flows and offloads stay complete", () => {
+    const inventory = buildFleetInventory("edge-default", fleetSnapshot(), WORKERS, {
+      selectedFlows: ["g:file_logs>r1>to_stream"],
+    });
+    const ids = inventory.diagram.nodes.map((n) => n.id);
+    expect(ids).toContain("out:to_stream");
+    expect(ids).not.toContain("out:lb_stream");
+    expect(ids).not.toContain("in:win_events");
+    // The selected flow still ends at its resolved worker group.
+    expect(ids).toContain("wg:prod-stream");
+    expect(
+      inventory.diagram.edges.some(
+        (e) => e.from === "out:to_stream" && e.to === "wg:prod-stream",
+      ),
+    ).toBe(true);
+    // The PICKER inventory and the offload summary describe everything.
+    expect(inventory.flows).toHaveLength(2);
+    expect(inventory.offloads.map((o) => o.outputId)).toEqual([
+      "to_stream",
+      "lb_stream",
+    ]);
+  });
+
   it("notes unresolved receiver hosts and keeps the flows inventory", () => {
     const inventory = buildFleetInventory("edge-default", fleetSnapshot(), []);
     expect(
