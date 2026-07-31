@@ -202,8 +202,20 @@ export const LOG_SOURCES: readonly CatalogEntry<LogSource>[] = [
   },
 ];
 
-/** The diagram column a node renders in, left to right. */
-export type DiagramTier = "source" | "cribl" | "azure" | "destination";
+/**
+ * The functional category a node renders as (color-coded across ALL
+ * diagrams, user directive 2026-07-31): sources, routing tables/routes,
+ * pipelines/packs, and destinations each carry a distinct color; "cribl"
+ * covers the remaining Cribl machinery (products, breakers, worker groups)
+ * and "azure" the Azure plumbing (DCR/DCE/DNS).
+ */
+export type DiagramTier =
+  | "source"
+  | "route"
+  | "pipeline"
+  | "cribl"
+  | "azure"
+  | "destination";
 
 /** One diagram node. Labels stay short; the renderer wraps once if needed. */
 export interface DiagramNode {

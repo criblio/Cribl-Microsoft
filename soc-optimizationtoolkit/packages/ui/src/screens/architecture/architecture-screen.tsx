@@ -215,10 +215,18 @@ function ExportRow({
   );
 }
 
-/** The premium/economical badge legend under a canvas. */
+/** The node-category color key + premium/economical badges under a canvas. */
 function CostLegend() {
   return (
     <div className="arch-cost-legend">
+      <span className="arch-legend-node arch-legend-node-source" aria-hidden="true" />
+      <span>source</span>
+      <span className="arch-legend-node arch-legend-node-route" aria-hidden="true" />
+      <span>route</span>
+      <span className="arch-legend-node arch-legend-node-pipeline" aria-hidden="true" />
+      <span>pipeline / pack</span>
+      <span className="arch-legend-node arch-legend-node-destination" aria-hidden="true" />
+      <span>destination</span>
       <span className="arch-flow-cost-badge arch-flow-cost-premium">premium</span>
       <span>per-GB ingest billing - Sentinel analytics tier or SIEM license</span>
       <span className="arch-flow-cost-badge arch-flow-cost-economical">
