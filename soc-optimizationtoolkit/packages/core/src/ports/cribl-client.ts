@@ -58,6 +58,15 @@ export function isStreamWorkerGroup(group: CriblGroupSummary): boolean {
 }
 
 /**
+ * Whether a group is a Cribl Edge FLEET (2026-07-30 Edge fleet inventory).
+ * Strict, unlike isStreamWorkerGroup's unreported-product tolerance: a
+ * leader that reports no product signal has no fleets to list.
+ */
+export function isEdgeFleet(group: CriblGroupSummary): boolean {
+  return group.product?.toLowerCase() === "edge";
+}
+
+/**
  * Derive a group's product from the fields /master/groups items actually
  * carry, oldest-leader-compatible and in signal order:
  *
