@@ -158,17 +158,21 @@ export interface FleetInventory {
  * Build one fleet's inventory: the fleet's own flows (never Azure-filtered -
  * Edge collects everything) plus the resolved Stream offload targets. Every
  * resolved worker group joins the DIAGRAM as a downstream node so the flow
- * visibly ends at the group receiving the data.
+ * visibly ends at the group receiving the data. selectedFlows narrows what
+ * the DIAGRAM draws (same contract as the Workgroup view: keys from
+ * flows[], empty = draw everything); the returned flows inventory stays
+ * complete either way, and offload notes/chips describe ALL destinations.
  */
 export function buildFleetInventory(
   fleetId: string,
   snapshot: LiveArchitectureSnapshot,
   workers: readonly WorkerRecord[],
-  options?: { uiBase?: string },
+  options?: { uiBase?: string; selectedFlows?: readonly string[] },
 ): FleetInventory {
   const base = buildLiveDiagram(snapshot, {
     azureOnly: false,
     uiBase: options?.uiBase,
+    selectedFlows: options?.selectedFlows,
   });
   const offloads = resolveOffloads(listLiveOutputs(snapshot.outputs), workers);
   const nodes = base.diagram.nodes.map((node) => {

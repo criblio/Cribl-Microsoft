@@ -5348,8 +5348,3 @@ details[open] > summary::before {
   color: var(--accent-strong);
 }
 
-.arch-fleet-flows {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
