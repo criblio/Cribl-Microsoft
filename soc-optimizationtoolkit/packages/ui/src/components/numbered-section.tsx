@@ -13,6 +13,12 @@
  *     section is actionable or fillable now);
  *   - complete            -> green circle with a check (CSS-drawn, so no
  *     emoji or symbol glyph - repo rule);
+ *   - informational       -> muted outlined circle keeping the section NUMBER,
+ *     plus a small "Informational" tag next to the title. A read-only
+ *     diagnostic has nothing to finish, so it must not wear the completion
+ *     check: that made the page claim work the operator had not done (live
+ *     review 2026-08-03). Muted, not dashed - the section IS available to
+ *     use, unlike coming-soon;
  *   - blocked             -> muted number plus an AMBER gating-reason line
  *     naming the single unlock condition (the commit inside the body is
  *     gated; the body still renders - read-ahead);
@@ -89,7 +95,11 @@ export function NumberedSection({
         <span
           className={`numbered-section-badge numbered-section-badge-${status}`}
           aria-label={`Section ${number}${
-            status === "complete" ? ", complete" : ""
+            status === "complete"
+              ? ", complete"
+              : status === "informational"
+                ? ", informational"
+                : ""
           }`}
         >
           {status === "complete" ? (
@@ -99,6 +109,9 @@ export function NumberedSection({
           )}
         </span>
         <h2 className="numbered-section-title">{title}</h2>
+        {status === "informational" && (
+          <span className="numbered-section-info-tag">Informational</span>
+        )}
         <span onClick={(e) => e.stopPropagation()}>
           <InfoTip text={infoTip} />
         </span>

@@ -11,9 +11,12 @@
  *
  *   - {@link wizardViews}: the concrete ordered screen list, GROWN from the core
  *     step list (target -> cribl-side connect -> azure connect -> mode) by
- *     injecting the two connect-phase panels the wizard reuses - the RBAC
- *     preflight (Unit 9) and the Repositories/PAT step (Unit 14) - as the tail
- *     of the Connect phase, right before Mode. Target-specific visibility (the
+ *     injecting the two connect-phase panels the wizard reuses - the
+ *     Repositories/PAT step (Unit 14) at the HEAD of the Connect phase, and the
+ *     RBAC preflight (Unit 9) right before Mode. GitHub leads because it is the
+ *     connection a customer can make without waiting on a change request; the
+ *     preflight trails Azure because it verifies what that step configures.
+ *     Target-specific visibility (the
  *     cribl-side step is the .tgz upload walkthrough for cribl-hosted, the
  *     leader-connect form for local) and mode-gated visibility both come from
  *     the core rules verbatim, so the assembled list can never disagree with
@@ -111,10 +114,23 @@ export function wizardViews(shape: WizardShape): WizardView[] {
   const showConnectPanels =
     shape.mode === null || hasAzure(shape.mode) || hasCribl(shape.mode);
   const views: WizardView[] = [];
+  // GitHub content leads the Connect phase (user direction 2026-08-03).
+  // Azure credentials usually require a change request to another team, so a
+  // customer's first session frequently CANNOT complete the Azure step at all.
+  // The GitHub token needs no such approval and unlocks the whole content path
+  // - solution browsing, samples, gap analysis, rule and workbook coverage,
+  // and pack build/install - none of which touch Azure. Leading with the
+  // connection they can actually make means the first run ends somewhere
+  // useful instead of blocked. Permissions still trail Azure: the preflight
+  // verifies the identity the Azure step configures, so it can only follow it.
+  let repositoriesPlaced = false;
   for (const step of wizardSteps(shape)) {
+    if (step.id !== "target" && !repositoriesPlaced && showConnectPanels) {
+      views.push(makeExtraView("repositories"));
+      repositoriesPlaced = true;
+    }
     if (step.id === "mode" && showConnectPanels) {
       views.push(makeExtraView("preflight"));
-      views.push(makeExtraView("repositories"));
     }
     views.push({
       id: step.id,
@@ -201,12 +217,15 @@ export function isFirstView(shape: WizardShape, viewId: WizardViewId): boolean {
  * connect step so they light the Connect segment exactly like the core connect
  * steps do.
  */
-export function wizardViewProgress(viewId: WizardViewId): WizardSegment[] {
+export function wizardViewProgress(
+  shape: WizardShape,
+  viewId: WizardViewId,
+): WizardSegment[] {
   const stepId: WizardStepId =
     viewId === "preflight" || viewId === "repositories"
       ? "connect-azure"
       : viewId;
-  return wizardProgress(stepId);
+  return wizardProgress(shape, stepId);
 }
 
 // ---------------------------------------------------------------------------

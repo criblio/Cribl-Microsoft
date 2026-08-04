@@ -15,6 +15,33 @@ const opts: SelectOption[] = [
   { value: "wg-3", label: "windows", hint: "fleet-3" },
 ];
 
+describe("filterOptions separator-insensitive matching", () => {
+  const opts = [
+    { value: "cp", label: "Check Point CloudGuard CNAPP" },
+    { value: "pan", label: "Palo Alto Networks" },
+    { value: "rg", label: "rg-jpederson-QuickstartLab" },
+    { value: "cf", label: "Cloudflare" },
+  ];
+
+  it("finds a vendor typed as one word", () => {
+    // user report 2026-08-04: "checkpoint" missed "Check Point" everywhere.
+    expect(filterOptions(opts, "checkpoint").map((o) => o.value)).toEqual(["cp"]);
+    expect(filterOptions(opts, "paloalto").map((o) => o.value)).toEqual(["pan"]);
+  });
+
+  it("finds a hyphenated resource name typed with spaces", () => {
+    expect(filterOptions(opts, "rg jpederson").map((o) => o.value)).toEqual(["rg"]);
+  });
+
+  it("does not let a punctuation-only query match everything", () => {
+    expect(filterOptions(opts, "---")).toEqual([]);
+  });
+
+  it("still rejects a genuine non-match", () => {
+    expect(filterOptions(opts, "zscaler")).toEqual([]);
+  });
+});
+
 describe("filterOptions", () => {
   it("returns all options for a blank or whitespace query", () => {
     expect(filterOptions(opts, "")).toHaveLength(3);

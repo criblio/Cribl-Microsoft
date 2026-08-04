@@ -54,7 +54,7 @@ export const SHARED_JOURNEY_LINKS: JourneyLinks = {
     routeId: "home",
     hint:
       "Choose the target in the Select resources and grant permissions section " +
-      "on Setup; the Integrate page's Azure Resources section commits the deploy scope.",
+      "on Setup; the Sentinel Integration page's Azure Resources section commits the deploy scope.",
   },
   ready: {
     routeId: "preflight",
@@ -72,8 +72,8 @@ export const SHARED_JOURNEY_LINKS: JourneyLinks = {
   },
   review: {
     hint:
-      "The standalone Review screen is retired from the menu; the Integrate " +
-      "page's Deploy section reports exactly what a run creates.",
+      "The standalone Review screen is retired from the menu; the Sentinel " +
+      "Integration page's Deploy section reports exactly what a run creates.",
   },
   deploy: {
     routeId: "dcr-automation",

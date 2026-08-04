@@ -40,6 +40,29 @@ describe("solutionMatchesQuery", () => {
     expect(solutionMatchesQuery("CrowdStrike Falcon", "FALCON")).toBe(true);
     expect(solutionMatchesQuery("Cloudflare", "zscaler")).toBe(false);
   });
+
+  it("ignores separators, so a vendor typed as one word still matches", () => {
+    // REGRESSION PIN (user report 2026-08-04): searching "checkpoint" returned
+    // only the solutions spelled without the space, which made Check Point look
+    // like an email-only vendor and hid everything else.
+    expect(solutionMatchesQuery("Check Point", "checkpoint")).toBe(true);
+    expect(solutionMatchesQuery("Check Point CloudGuard CNAPP", "checkpoint")).toBe(true);
+    expect(solutionMatchesQuery("Checkpoint Email Security", "check point")).toBe(true);
+    expect(solutionMatchesQuery("Palo Alto Networks", "paloalto")).toBe(true);
+    expect(solutionMatchesQuery("Trend Micro Vision One", "trendmicro")).toBe(true);
+  });
+
+  it("does not turn a punctuation-only query into a match-everything", () => {
+    // The collapsed form of "---" is "", and every string contains "" - so the
+    // collapsed pass has to be skipped rather than allowed to match the catalog.
+    expect(solutionMatchesQuery("Cloudflare", "---")).toBe(false);
+    expect(solutionMatchesQuery("Cloudflare", "!!")).toBe(false);
+  });
+
+  it("still rejects a genuine non-match after collapsing", () => {
+    expect(solutionMatchesQuery("Check Point", "zscaler")).toBe(false);
+    expect(solutionMatchesQuery("Cloudflare", "checkpoint")).toBe(false);
+  });
 });
 
 describe("filterSolutions", () => {

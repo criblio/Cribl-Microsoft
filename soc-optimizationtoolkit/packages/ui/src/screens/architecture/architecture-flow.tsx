@@ -84,6 +84,13 @@ type FlowEdgeData = {
   tone?: EdgeFlowTone;
   muted?: boolean;
   reverse?: boolean;
+  /**
+   * False when this diagram is over the animation budget (or the OS asks for
+   * reduced motion), so the edge draws without its moving packets. See
+   * MAX_ANIMATED_EDGES - a large live view otherwise runs enough concurrent
+   * SMIL animations to stop the tab responding.
+   */
+  animate?: boolean;
   /** Dagre's routed waypoints (dodge cards); endpoints re-pinned live. */
   points?: FlowPoint[];
   /** Dagre's reserved collision-free label anchor. */
@@ -113,6 +120,48 @@ type FlowEdge = Edge<FlowEdgeData, "flowing">;
 function ArchNodeCard({ id, data }: NodeProps<ArchNode>) {
   const [infoOpen, setInfoOpen] = useState(false);
   const cardRef = useRef<HTMLDivElement | null>(null);
+  // TOP LAYER (user report 2026-08-04: popovers opened low on the canvas were
+  // cut off). The old `position: absolute; top: 100%; z-index: 20` opened
+  // DOWNWARD ONLY and lived inside React Flow's transformed viewport, so it was
+  // both clipped by the canvas and unable to escape that stacking context - no
+  // z-index could fix it. As a native popover the browser paints it in the top
+  // layer, and placement is computed from the button's viewport rect so it
+  // flips above when there is no room below.
+  const infoBtnRef = useRef<HTMLButtonElement | null>(null);
+  const infoPopRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const pop = infoPopRef.current;
+    const btn = infoBtnRef.current;
+    if (pop === null || btn === null) {
+      return;
+    }
+    const place = (): void => {
+      const anchor = btn.getBoundingClientRect();
+      const tip = pop.getBoundingClientRect();
+      const gap = 8;
+      const edge = 8;
+      const fitsBelow = anchor.bottom + tip.height + gap + edge <= window.innerHeight;
+      const top = fitsBelow ? anchor.bottom + gap : anchor.top - tip.height - gap;
+      const centered = anchor.left + anchor.width / 2 - tip.width / 2;
+      pop.style.top = `${Math.max(edge, top)}px`;
+      pop.style.left = `${Math.max(
+        edge,
+        Math.min(centered, window.innerWidth - tip.width - edge),
+      )}px`;
+    };
+    try {
+      pop.showPopover();
+    } catch {
+      // already open
+    }
+    place();
+    window.addEventListener("scroll", place, { capture: true, passive: true });
+    window.addEventListener("resize", place, { passive: true });
+    return () => {
+      window.removeEventListener("scroll", place, { capture: true });
+      window.removeEventListener("resize", place);
+    };
+  }, [infoOpen]);
   // Live nodes carry their info inline (composed from real config); catalog
   // nodes resolve through the label-keyed lookup.
   const info = data.info ?? diagramNodeInfo(data.label);
@@ -249,6 +298,7 @@ function ArchNodeCard({ id, data }: NodeProps<ArchNode>) {
       )}
       {info !== undefined && (
         <button
+          ref={infoBtnRef}
           type="button"
           className="arch-flow-info-btn nodrag nopan"
           aria-label={`About ${data.label}`}
@@ -262,7 +312,7 @@ function ArchNodeCard({ id, data }: NodeProps<ArchNode>) {
         </button>
       )}
       {info !== undefined && infoOpen && (
-        <div className="arch-flow-info-pop nodrag nopan">
+        <div ref={infoPopRef} popover="manual" className="arch-flow-info-pop nodrag nopan">
           <div className="arch-flow-info-pop-head">
             <span className="arch-flow-info-pop-title">{data.label}</span>
             <button
@@ -603,8 +653,10 @@ function FlowingEdge({
           (data?.muted === true ? " arch-flow-pipe-muted" : "")
         }
       />
-      {/* No packet animation on muted edges - a disabled route moves nothing. */}
+      {/* No packet animation on muted edges - a disabled route moves nothing -
+        * and none at all past the animation budget (see MAX_ANIMATED_EDGES). */}
       {data?.muted !== true &&
+        data?.animate !== false &&
         [0, 0.9, 1.8].map((delay, i) => (
           <circle key={i} r={3} className="arch-flow-dot">
             <animateMotion
@@ -751,6 +803,23 @@ function NoteCard({ id, data }: NodeProps<NoteNode>) {
 
 // Defined at module scope: React Flow warns if these objects are recreated per
 // render (it treats them as new type maps).
+/**
+ * Above this many edges the moving packets are dropped (live audit 2026-08-04).
+ * Each edge runs three indefinite SMIL <animateMotion> elements; a live
+ * worker-group view blew past 250 of them and the tab stopped responding
+ * altogether. Reference patterns sit well under the budget and keep the motion.
+ */
+const MAX_ANIMATED_EDGES = 40;
+
+/** Honor the OS "reduce motion" setting; SMIL cannot be disabled from CSS. */
+function prefersReducedMotion(): boolean {
+  return (
+    typeof window !== "undefined" &&
+    typeof window.matchMedia === "function" &&
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches
+  );
+}
+
 const NODE_TYPES = { arch: ArchNodeCard, note: NoteCard };
 const EDGE_TYPES = { flowing: FlowingEdge };
 
@@ -818,6 +887,19 @@ function layoutGraph(
   // A wrap-back edge runs right-to-left in the laid-out flow (its source
   // column sits right of its target column) - the replay/return edges.
   const xById = new Map(laidOut.nodes.map((n) => [n.id, n.x]));
+  // ANIMATION BUDGET (live audit 2026-08-04). Every non-muted edge renders
+  // THREE indefinite <animateMotion> packets, so a big live worker-group view
+  // (71 components, ~90 edges) asks the browser to run ~270 concurrent SMIL
+  // path animations. SMIL animateMotion is main-thread work that never idles:
+  // the tab stopped answering screenshot requests and dropped clicks entirely,
+  // which made the live view impossible to audit or use.
+  //
+  // Reference-pattern diagrams are small and keep the motion - it is how the
+  // flow direction reads (there are deliberately no arrowheads). Past the
+  // budget the packets are dropped and direction still reads from the
+  // left-to-right layout and the edge labels.
+  const animatePackets =
+    laidOut.edges.length <= MAX_ANIMATED_EDGES && !prefersReducedMotion();
   const edges: FlowEdge[] = laidOut.edges.map((e, i) => {
     // Serpentine cross-row edges already snake through the row gap - they
     // are NOT wrap-backs even though the target sits left of the source.
@@ -842,6 +924,7 @@ function layoutGraph(
         reverse,
         points: e.points,
         labelPoint: e.labelPoint,
+        animate: animatePackets,
       },
     };
   });

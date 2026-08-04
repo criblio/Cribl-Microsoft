@@ -5,7 +5,6 @@ import {
   AppFrame,
   ArchitectureScreen,
   MappingCatalogScreen,
-  AuaGate,
   AzureConnectSection,
   AzureResourcesSection,
   BatchDeployScreen,
@@ -17,13 +16,13 @@ import {
   IntegrateScreen,
   LabsScreen,
   LogsScreen,
-  ModeSelect,
   OnboardTableScreen,
   PackInventoryScreen,
   PortsProvider,
   RbacPreflightPanel,
   RepositoriesScreen,
   SettingsScreen,
+  SetupWizard,
   SiemMigrationScreen,
   commitNoticeText,
   formatScopeChip,
@@ -181,15 +180,15 @@ const JOURNEY_LINKS = mergeJourneyLinks({
   ...SHELL_LINK_OVERRIDES,
   'choose-content': {
     routeId: 'integrate',
-    hint: 'Start on the Integrate page - the single-page flow from Azure resources through deploy.',
+    hint: 'Start on the Sentinel Integration page - the single-page flow from Azure resources through deploy.',
   },
   configure: {
     routeId: 'integrate',
-    hint: 'Configure Azure resources and Cribl on the Integrate page.',
+    hint: 'Configure Azure resources and Cribl on the Sentinel Integration page.',
   },
   deploy: {
     routeId: 'integrate',
-    hint: 'Deploy the native table on the Integrate page.',
+    hint: 'Deploy the native table on the Sentinel Integration page.',
   },
 });
 
@@ -1236,7 +1235,8 @@ function App() {
 
   // The Reconfigure contract (mined from the legacy Settings page): write an
   // EMPTY mode record - which parses back to null, "not yet chosen" - then
-  // reload so the next load lands in ModeSelect. Connections and their
+  // reload so the next load lands in the first-run wizard's mode step.
+  // Connections and their
   // configs are untouched. If the write fails, fall back to an in-session
   // reset so the user still reaches the chooser.
   const handleReconfigure = async () => {
@@ -1261,13 +1261,11 @@ function App() {
       </div>
     );
   }
-  if (phase.phase === 'aua') {
-    return <AuaGate onAccept={handleAccept} />;
-  }
-  if (phase.phase === 'mode-select') {
-    return <ModeSelect onSelect={handleSelectMode} />;
-  }
-
+  // Connections must be hydrated before EITHER the first-run wizard or the
+  // frame renders: both mount screens that read the active connection through
+  // PortsContext. Acceptance and mode come from resolveFramePhase above, so
+  // waiting here never re-shows the agreement to someone who already accepted
+  // (that is the resolveFramePhase loading contract, and it still holds).
   if (!hydrated) {
     return (
       <div className="harness">
@@ -1290,6 +1288,57 @@ function App() {
           )}
         </header>
       </div>
+    );
+  }
+
+  // FIRST RUN (user report 2026-08-03: a fresh install was never walked
+  // through setup). The cloud shell mounts the SAME guided wizard the local
+  // shell uses rather than the bare AuaGate -> ModeSelect pair, which dropped
+  // a brand-new operator straight onto Dataflow with nothing pointing at
+  // Setup. The wizard OWNS acceptance and mode here - it renders the AuaGate
+  // itself while `accepted` is false - and walks the connect path (Azure
+  // identity, permission check, GitHub) before Get Started persists the mode
+  // and enters the frame.
+  //
+  // The target is FIXED to cribl-hosted and locked: this shell only ever runs
+  // installed inside a Cribl.Cloud workspace, so the target is a fact to state,
+  // never a choice to offer (the lockTarget prop exists for exactly this).
+  if (phase.phase === 'aua' || phase.phase === 'mode-select') {
+    return (
+      <PortsProvider ports={cloudPorts} config={activeConfig}>
+        <SetupWizard
+          capabilities={{
+            // Cribl is reachable BY CONSTRUCTION here: the app is served by the
+            // workspace it would talk to. The consolidated platform-link poll is
+            // the honest live signal, and 'checking...' must not read as a
+            // failure, so an unresolved poll counts as connected.
+            hasCribl: platformLink !== 'failed',
+            hasAzure:
+              activeConfig.tenantId.trim() !== '' &&
+              activeConfig.clientId.trim() !== '',
+          }}
+          initialTarget="cribl-hosted"
+          lockTarget
+          // This page only renders because the app is already installed in the
+          // leader, so "where should the toolkit run?" and the .tgz upload
+          // walkthrough are both answered already (user report 2026-08-03).
+          // The cloud first run is Connect GitHub -> Connect Azure -> Check
+          // permissions -> Mode: only steps that can still be acted on.
+          installedInLeader
+          criblShellMode="cloud"
+          contentPlatform="cloud"
+          defaultSetupPath={defaultPreflightPath(activeConfig.setupPath)}
+          azureChangeRequestContext={changeRequestCtx}
+          azureConnectGuidance={
+            'Already have the credentials? Enter the tenant id, client id, and secret in the ' +
+            'App registration and connect section on Setup. The secret is stored encrypted in ' +
+            'the app key-value store and is write-only - it can be replaced but never read back.'
+          }
+          accepted={phase.phase !== 'aua'}
+          onAccept={handleAccept}
+          onGetStarted={handleSelectMode}
+        />
+      </PortsProvider>
     );
   }
 
@@ -1416,7 +1465,7 @@ function App() {
           </span>
           <span
             className="scope-chip"
-            title="The committed Azure target scope (subscription / resource group / workspace) of the active connection. Change it from the Integrate page's Azure Resources section (Use this target) or the Setup page's resource selection."
+            title="The committed Azure target scope (subscription / resource group / workspace) of the active connection. Change it from the Sentinel Integration page's Azure Resources section (Use this target) or the Setup page's resource selection."
           >
             target:{' '}
             {formatScopeChip({
@@ -1598,12 +1647,12 @@ function App() {
   const renderIntegrate = () => (
     <>
       <header className="harness-header">
-        <h1 className="harness-title">Integrate</h1>
+        <h1 className="harness-title">Sentinel Integration</h1>
         <p className="harness-subtitle">
           The single-page integration flow: solution browser, sample data,
-          Azure resources, Cribl configuration, and the operable native-table
-          deploy on one page, with deploy readiness always visible. The
-          gap-analysis and rule-coverage sections arrive in later units.
+          Azure resources, Cribl configuration, gap analysis, rule and
+          workbook coverage, and the operable deploy on one page, with deploy
+          readiness always visible.
         </p>
       </header>
       {secretNotice !== null && (
@@ -1646,7 +1695,7 @@ function App() {
             single next step. Connect first in the App registration and connect section on
             Setup - that fills the tenant and client ids. Then choose WHERE to deploy in the
             Select resources and grant permissions section (or commit a scope from the
-            Integrate page&apos;s Azure Resources section). The Run action unlocks once all
+            Sentinel Integration page&apos;s Azure Resources section). The Run action unlocks once all
             five fields are set.
           </p>
           <div className="panel-controls">

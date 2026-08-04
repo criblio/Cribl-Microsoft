@@ -19,7 +19,7 @@
  * it renders an always-visible unavailable state.
  */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   classifyConnectorIngestion,
   classifySolutionIngestion,
@@ -58,6 +58,22 @@ export interface SolutionBrowserProps {
    * current in the repo but deprecated as a Content Hub package).
    */
   scopeCommitted?: boolean;
+  /**
+   * A selection the HOST already restored from its own persistence, applied
+   * once so the browser agrees with the rest of the page.
+   *
+   * The browser's own refresh-restore is the `#/?solution=` hash, which the
+   * Cribl app iframe does not preserve: the host restores the solution from
+   * the content cache, so every other section scoped itself to "this solution"
+   * and the readiness pill went green while THIS section still showed the
+   * browse list, as though nothing were selected (live review 2026-08-03).
+   *
+   * Arrives AFTER mount - the host reads it asynchronously - so it is applied
+   * by an effect rather than a state initializer, under the same one-shot
+   * discipline as the deep link: consumed once, so it can never re-fire and
+   * silently undo Clear selection.
+   */
+  restoreName?: string | null;
 }
 
 // The cap on how many connector files a selected solution decodes for the
@@ -84,7 +100,11 @@ type DetailState =
   | { phase: "loaded"; detail: SolutionDetail }
   | { phase: "error"; message: string };
 
-export function SolutionBrowser({ onSelect, scopeCommitted }: SolutionBrowserProps) {
+export function SolutionBrowser({
+  onSelect,
+  scopeCommitted,
+  restoreName,
+}: SolutionBrowserProps) {
   const { ports, config } = usePorts();
   const content = ports.content;
   const cache = ports.contentCache;
@@ -282,6 +302,33 @@ export function SolutionBrowser({ onSelect, scopeCommitted }: SolutionBrowserPro
       void loadDetail(selectedName);
     }
   }, [selectedName, loadDetail]);
+
+  // Apply the HOST's restored selection once the index is loaded (see the
+  // restoreName prop docs). Only the local name is set: the host is the SOURCE
+  // of this value, so reporting it back through onSelect would be a redundant
+  // round-trip, and the hash is left alone so the deep-link contract is
+  // untouched. The name resolves against the real index, so the card shows the
+  // true deprecation state rather than whatever stub the host restored. The
+  // ref is consumed only when a restore is actually attempted, so an early
+  // render (index still loading) does not burn it.
+  const restoredRef = useRef(false);
+  useEffect(() => {
+    if (
+      restoredRef.current ||
+      solutions === null ||
+      restoreName === undefined ||
+      restoreName === null ||
+      restoreName === "" ||
+      selectedName !== null
+    ) {
+      return;
+    }
+    restoredRef.current = true;
+    const match = resolveSelectedSolution(mergedSolutions ?? solutions, restoreName);
+    if (match !== null) {
+      setSelectedName(match.name);
+    }
+  }, [solutions, mergedSolutions, restoreName, selectedName]);
 
   // Once the index is present, honor a deep-linked solution ONCE (the preserved
   // `#/?solution=` contract). Sets the selection like a click; the effect above

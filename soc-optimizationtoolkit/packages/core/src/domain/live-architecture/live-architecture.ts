@@ -225,7 +225,27 @@ export interface LiveInput {
    * filter attribution matches against these).
    */
   aliases: readonly string[];
+  /**
+   * QuickConnect wiring: destinations this source feeds DIRECTLY, bypassing the
+   * routing table (user report 2026-08-04 - these flows were invisible in the
+   * live view, which drew every source into the Routes hub). Empty for a
+   * routes-based source.
+   */
+  connections: readonly LiveConnection[];
+  /**
+   * False when the source does NOT feed the routing table. Cribl defaults this
+   * to true; QuickConnect sets it false and populates `connections`.
+   */
+  sendToRoutes: boolean;
   conf: Record<string, unknown>;
+}
+
+/** One QuickConnect link: a source straight to a destination, optionally via a pipeline. */
+export interface LiveConnection {
+  /** The destination id this source feeds. */
+  output: string;
+  /** Pipeline applied on the way, when one was chosen. */
+  pipeline?: string;
 }
 
 export interface LiveOutput {
@@ -482,8 +502,30 @@ function normalizeInput(item: unknown, isJob: boolean): LiveInput | null {
       ? rulesets.filter((r): r is string => typeof r === "string" && r !== "")
       : [],
     aliases: isJob || type === "collection" ? [id, `collection:${id}`] : [id],
+    connections: normalizeConnections(prop(item, "connections") ?? prop(nested, "connections")),
+    // Cribl defaults sendToRoutes to true; only an explicit false (what
+    // QuickConnect writes) takes the source out of the routing table.
+    sendToRoutes:
+      (prop(item, "sendToRoutes") ?? prop(nested, "sendToRoutes")) !== false,
     conf: asRecord(item),
   };
+}
+
+/** Parse an input's QuickConnect `connections` array, dropping malformed entries. */
+function normalizeConnections(raw: unknown): LiveConnection[] {
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+  const connections: LiveConnection[] = [];
+  for (const entry of raw) {
+    const output = asString(prop(entry, "output"));
+    if (output === "") {
+      continue;
+    }
+    const pipeline = asString(prop(entry, "pipeline"));
+    connections.push({ output, ...(pipeline !== "" ? { pipeline } : {}) });
+  }
+  return connections;
 }
 
 function normalizeOutput(item: unknown): LiveOutput | null {
@@ -1006,6 +1048,20 @@ export function buildLiveDiagram(
     (triple.output !== null && isAzureCriblType("output", triple.output.type));
   const flowKey = (triple: FlowTriple): string =>
     `g:${triple.input?.id ?? "*"}>${triple.route.id}>${outputRef(triple)}`;
+  // A QuickConnect link is identified by source, chosen pipeline (or "direct"),
+  // and destination - the three things that make it distinct from its siblings.
+  const quickConnectKey = (input: LiveInput, connection: LiveConnection): string =>
+    `q:${input.id}>${connection.pipeline ?? "direct"}>${connection.output}`;
+  const quickConnectAzure = (
+    input: LiveInput,
+    connection: LiveConnection,
+  ): boolean => {
+    if (isAzureInput(input)) {
+      return true;
+    }
+    const resolved = resolveOutput(connection.output);
+    return resolved !== null && isAzureCriblType("output", resolved.type);
+  };
   const routeVia = (route: LiveRoute): string => {
     const ref = route.pipeline ?? "passthru";
     if (ref.startsWith("pack:")) {
@@ -1030,6 +1086,27 @@ export function buildLiveDiagram(
         `${routeVia(triple.route)} -> ${outputRef(triple)}`,
       azure: tripleAzure(triple),
     });
+  }
+  // QuickConnect flows are first-class inventory entries (user request
+  // 2026-08-04). They are drawn on the canvas, so leaving them out made the
+  // inventory disagree with what was rendered - the count was short and they
+  // could not be selected or filtered. Key prefix "q:", alongside "g:" (group
+  // route flows) and "p:" (packs).
+  for (const input of inputs) {
+    for (const connection of input.connections) {
+      const key = quickConnectKey(input, connection);
+      if (seenFlowKeys.has(key)) {
+        continue;
+      }
+      seenFlowKeys.add(key);
+      const via =
+        connection.pipeline !== undefined ? ` (pipeline ${connection.pipeline})` : "";
+      flows.push({
+        key,
+        label: `${input.id} -> QuickConnect${via} -> ${connection.output}`,
+        azure: quickConnectAzure(input, connection),
+      });
+    }
   }
 
   const inFocus = (triple: FlowTriple): boolean => {
@@ -1059,6 +1136,31 @@ export function buildLiveDiagram(
       `Flow selection: ${chosen.length} of ${focused.length} group flow(s) drawn.`,
     );
   }
+
+  // A QuickConnect link is drawn only if it survives the SAME three filters the
+  // route flows go through - otherwise selecting one flow would still render
+  // every QuickConnect link on the canvas.
+  const quickConnectDrawn = (
+    input: LiveInput,
+    connection: LiveConnection,
+  ): boolean => {
+    if (options.azureOnly && !quickConnectAzure(input, connection)) {
+      return false;
+    }
+    if (focusSources.size > 0 && !focusSources.has(input.id)) {
+      return false;
+    }
+    if (focusOutputs.size > 0 && !focusOutputs.has(connection.output)) {
+      return false;
+    }
+    if (
+      selectedFlowKeys.size > 0 &&
+      !selectedFlowKeys.has(quickConnectKey(input, connection))
+    ) {
+      return false;
+    }
+    return true;
+  };
 
   const kept = chosen.filter((t) => !options.azureOnly || tripleAzure(t));
   if (options.azureOnly && kept.length < chosen.length) {
@@ -1126,11 +1228,11 @@ export function buildLiveDiagram(
   }
 
   // Source side: in -> brk* -> pre? -> routes.
-  for (const triple of kept) {
-    const input = triple.input;
-    if (input === null) {
-      continue;
-    }
+  // The ingress chain for ONE source: its node, breakers, pre-processing
+  // pipeline, any QuickConnect links, and the hand-off to Routes. Extracted
+  // from the triple loop because QuickConnect sources need it too and they are
+  // NOT reachable from a route triple (user report 2026-08-04).
+  const emitSourceChain = (input: LiveInput): void => {
     const inputNodeId = `in:${input.id}`;
     const isCollector = input.type.toLowerCase() === "collection";
     addNode({
@@ -1180,7 +1282,98 @@ export function buildLiveDiagram(
       addEdge({ from: previous, to: preNodeId });
       previous = preNodeId;
     }
-    addEdge({ from: previous, to: "routes" });
+    // QuickConnect (user report 2026-08-04): these sources bypass the routing
+    // table entirely, so drawing them into the Routes hub hid the flow - the
+    // destination looked unfed and the source looked routed. Each connection
+    // is its own edge, through its chosen pipeline when it has one. A source
+    // can legitimately do both (sendToRoutes true AND connections), so the
+    // routes edge is suppressed only when it genuinely bypasses routing.
+    for (const connection of input.connections) {
+      if (!quickConnectDrawn(input, connection)) {
+        continue;
+      }
+      let connPrevious = previous;
+      if (connection.pipeline !== undefined) {
+        const connPipeId = `qc:${connection.pipeline}`;
+        addNode({
+          id: connPipeId,
+          label: connection.pipeline,
+          tier: "pipeline",
+          badge: "QuickConnect",
+          info: withResourceLink(
+            pipelineInfo(
+              "QuickConnect",
+              connection.pipeline,
+              pipelineById.get(connection.pipeline),
+            ),
+            resourceLink(
+              `${UI_PAGES.pipelines}/${encodeURIComponent(connection.pipeline)}`,
+              "Open this pipeline in Cribl",
+            ),
+          ),
+        });
+        addEdge({ from: connPrevious, to: connPipeId });
+        connPrevious = connPipeId;
+      }
+      // The destination node must be created HERE: the route traversal below
+      // only builds nodes for destinations a route targets, so a destination
+      // reachable ONLY by QuickConnect would otherwise be an edge to nowhere.
+      const connOutput = resolveOutput(connection.output);
+      addNode(
+        connOutput !== null
+          ? {
+              id: `out:${connOutput.id}`,
+              label: connOutput.id,
+              tier: "destination",
+              badge: `${connOutput.type} destination`,
+              info: withResourceLink(
+                outputInfo(connOutput),
+                resourceLink(UI_PAGES.destinations, "Open Destinations in Cribl"),
+              ),
+            }
+          : {
+              // Referenced but not present in /system/outputs - reported as
+              // unresolved rather than silently dropped.
+              id: `out:${connection.output}`,
+              label: connection.output,
+              tier: "destination",
+              badge: "unresolved destination",
+            },
+      );
+      addEdge({
+        from: connPrevious,
+        to: `out:${connOutput?.id ?? connection.output}`,
+        label: "QuickConnect",
+      });
+    }
+    // Only when a Routes hub actually exists: a QuickConnect-only group has no
+    // routes, so an edge to "routes" would point at a node that was never added.
+    if (hubNeeded && (input.sendToRoutes || input.connections.length === 0)) {
+      addEdge({ from: previous, to: "routes" });
+    }
+  };
+
+  const drawnInputIds = new Set<string>();
+  for (const triple of kept) {
+    if (triple.input === null || drawnInputIds.has(triple.input.id)) {
+      continue;
+    }
+    drawnInputIds.add(triple.input.id);
+    emitSourceChain(triple.input);
+  }
+  // QuickConnect-only sources: nothing routes them, so the triple loop above
+  // never reaches them and they were entirely absent from the live view - the
+  // exact gap reported. A group wired purely with QuickConnect used to render
+  // an empty diagram.
+  for (const input of inputs) {
+    if (
+      drawnInputIds.has(input.id) ||
+      !input.connections.some((c) => quickConnectDrawn(input, c))
+    ) {
+      continue;
+    }
+    drawnInputIds.add(input.id);
+    emitSourceChain(input);
   }
 
   // Pack internals, pass 1 (user question 2026-07-30): parse each inspected

@@ -129,6 +129,12 @@ export interface RuleCoverageSectionProps {
    */
   onContentRequirementsChange?: (requirements: ContentRequirements) => void;
   /**
+   * The parsed analytic-rule ContentItems, reported so the Sample Data section
+   * can derive which VENDOR log types the solution's detections depend on
+   * without fetching the rules again (user request 2026-08-04).
+   */
+  onContentItemsChange?: (items: ContentItem[]) => void;
+  /**
    * The explicit "Drop unneeded fields" action (user direction 2026-07-12):
    * converts overflow fields required by neither analytics rules nor
    * workbooks (the MERGED requirements - a rules-section click still
@@ -354,6 +360,7 @@ export function RuleCoverageSection({
   contentFilter,
   extraAvailableFields,
   onContentRequirementsChange,
+  onContentItemsChange,
   onDropUnneededFields,
   dropDisabledReason,
 }: RuleCoverageSectionProps) {
@@ -382,7 +389,11 @@ export function RuleCoverageSection({
   // workbooks instance reports from its analyze() (ARM enumeration needs a
   // subscription).
   useEffect(() => {
-    if (!showRules || onContentRequirementsChange === undefined) {
+    if (
+      !showRules ||
+      (onContentRequirementsChange === undefined &&
+        onContentItemsChange === undefined)
+    ) {
       return;
     }
     let cancelled = false;
@@ -390,7 +401,11 @@ export function RuleCoverageSection({
       try {
         const items = await fetchRuleContentItems(activeContent, solutionName);
         if (!cancelled) {
-          onContentRequirementsChange(deriveContentRequirements(items));
+          onContentRequirementsChange?.(deriveContentRequirements(items));
+          // Same already-fetched items feed the Sample Data section's expected
+          // log-type derivation - it must never fetch the rules a second time
+          // (the proxy request budget is shared).
+          onContentItemsChange?.(items);
         }
       } catch {
         // No early requirements - the policy stays blocked (preserve-all).
@@ -399,7 +414,13 @@ export function RuleCoverageSection({
     return () => {
       cancelled = true;
     };
-  }, [showRules, activeContent, solutionName, onContentRequirementsChange]);
+  }, [
+    showRules,
+    activeContent,
+    solutionName,
+    onContentRequirementsChange,
+    onContentItemsChange,
+  ]);
   const showWorkbooks = contentFilter !== "rules";
 
   const [report, setReport] = useState<CoverageReport | null>(null);

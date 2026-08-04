@@ -22,12 +22,14 @@ import {
   targetTradeoffs,
   WIZARD_PHASES,
   WIZARD_TARGETS,
+  wizardPhasesFor,
   wizardProgress,
   wizardSteps,
 } from "./first-run-wizard";
 import type {
   LeaderProfileStore,
   StoredLeaderProfile,
+  WizardShape,
   WizardStepId,
 } from "./first-run-wizard";
 import type { AppMode } from "../app-mode";
@@ -341,8 +343,9 @@ describe("wizard step / skip progression", () => {
 
   it("derives a stable 3-segment progress bar from the current step", () => {
     expect(WIZARD_PHASES).toEqual(["target", "connect", "mode"]);
+    const full: WizardShape = { target: "local", mode: null };
     const statuses = (step: WizardStepId) =>
-      wizardProgress(step).map((s) => s.status);
+      wizardProgress(full, step).map((s) => s.status);
     expect(statuses("target")).toEqual(["current", "upcoming", "upcoming"]);
     expect(statuses("leader-connect")).toEqual([
       "complete",
@@ -356,5 +359,40 @@ describe("wizard step / skip progression", () => {
       "upcoming",
     ]);
     expect(statuses("mode")).toEqual(["complete", "complete", "current"]);
+  });
+
+  it("drops the target step, the cribl-side step, and the Target segment when already installed", () => {
+    // Running inside the leader answers "where should this run?" and "upload
+    // the app" by construction (user report 2026-08-03), so neither step is
+    // shown and the bar describes only the phases that remain.
+    const shape: WizardShape = {
+      target: "cribl-hosted",
+      mode: null,
+      installedInLeader: true,
+    };
+    expect(wizardSteps(shape).map((s) => s.id)).toEqual([
+      "connect-azure",
+      "mode",
+    ]);
+    expect(wizardPhasesFor(shape)).toEqual(["connect", "mode"]);
+    expect(wizardProgress(shape, "connect-azure").map((s) => s.status)).toEqual([
+      "current",
+      "upcoming",
+    ]);
+    expect(wizardProgress(shape, "mode").map((s) => s.status)).toEqual([
+      "complete",
+      "current",
+    ]);
+  });
+
+  it("leaves the local target untouched - it has a real leader to connect to", () => {
+    const shape: WizardShape = { target: "local", mode: null };
+    expect(wizardSteps(shape).map((s) => s.id)).toEqual([
+      "target",
+      "leader-connect",
+      "connect-azure",
+      "mode",
+    ]);
+    expect(wizardPhasesFor(shape)).toEqual(["target", "connect", "mode"]);
   });
 });

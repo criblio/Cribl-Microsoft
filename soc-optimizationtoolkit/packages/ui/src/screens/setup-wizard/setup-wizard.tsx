@@ -28,9 +28,10 @@
  */
 
 import { useState } from "react";
-import { modeCards } from "@soc/core";
+import { appRegistrationRequest, modeCards } from "@soc/core";
 import type {
   AppMode,
+  ChangeRequestContext,
   ContentPlatform,
   CriblShellMode,
   LeaderProfileStore,
@@ -43,6 +44,7 @@ import type {
 import { AuaGate } from "../../frame/aua-gate";
 import { RbacPreflightPanel } from "../preflight/rbac-preflight-panel";
 import { RepositoriesScreen } from "../repositories/repositories-screen";
+import { ChangeRequestBlock } from "./change-request-block";
 import { LeaderConnectStep } from "./leader-connect-step";
 import type { AppliedReconnect } from "./leader-connect-step";
 import { ModeCardGrid } from "./mode-card-grid";
@@ -68,6 +70,13 @@ export interface SetupWizardProps {
   initialTarget?: WizardTarget;
   /** When true the target is fixed by the shell (the Cribl.Cloud app is always cribl-hosted). */
   lockTarget?: boolean;
+  /**
+   * When true this wizard is running INSIDE the leader that hosts it, so the
+   * target step and the cribl-side install step are both dropped - see the
+   * core WizardShape.installedInLeader docs. The Cribl.Cloud shell sets this;
+   * the local host does not (it genuinely has a leader to connect to).
+   */
+  installedInLeader?: boolean;
   /** Cribl shell mode for the composed preflight panel. */
   criblShellMode: CriblShellMode;
   /** Content platform for the composed repositories step. */
@@ -84,6 +93,17 @@ export interface SetupWizardProps {
   connectGuidance?: string;
   /** Guidance for where the Azure service-principal identity is configured. */
   azureConnectGuidance?: string;
+  /**
+   * The active connection's change-request context (app name + non-secret
+   * config). When present, the Azure step renders the app-registration ticket
+   * generator INLINE.
+   *
+   * Azure credentials usually come from another team via a change request, so
+   * for many operators the real action on this step is "ask for them", not
+   * "enter them". Sending them to Setup to find the generator made the one
+   * thing they CAN do here the one thing the step did not offer.
+   */
+  azureChangeRequestContext?: ChangeRequestContext;
   /** The packaged .tgz name for the cribl-hosted upload walkthrough. */
   uploadArtifactName?: string;
   /** Footer signal: GitHub content reachable + PAT valid (defaults false/pending). */
@@ -113,6 +133,7 @@ export function SetupWizard(props: SetupWizardProps) {
     capabilities,
     initialTarget = "local",
     lockTarget = false,
+    installedInLeader = false,
     criblShellMode,
     contentPlatform,
     defaultSetupPath,
@@ -121,6 +142,7 @@ export function SetupWizard(props: SetupWizardProps) {
     onReconnect,
     connectGuidance,
     azureConnectGuidance,
+    azureChangeRequestContext,
     uploadArtifactName,
     repositoriesReachable = false,
     footerOverride,
@@ -137,7 +159,7 @@ export function SetupWizard(props: SetupWizardProps) {
   // The step list is derived with mode UNDECIDED: mode is the output of the
   // flow, not an input to step visibility, so first-run always walks the full
   // connect path regardless of what will be picked at the end.
-  const shape: WizardShape = { target, mode: null };
+  const shape: WizardShape = { target, mode: null, installedInLeader };
   const views = wizardViews(shape);
   // Clamp the cursor so a target switch that drops the current view never
   // strands it (e.g. leaving leader-connect when the target becomes cribl-hosted).
@@ -202,17 +224,20 @@ export function SetupWizard(props: SetupWizardProps) {
     return <AuaGate onAccept={onAccept ?? (() => {})} />;
   }
 
-  const progress = wizardViewProgress(currentViewId);
+  const progress = wizardViewProgress(shape, currentViewId);
 
   return (
     <div className="wizard-screen">
       <div className="wizard-shell">
         <header className="wizard-header">
           <h1 className="wizard-title">Set up the SOC Optimization Toolkit</h1>
+          {/* The summary must describe the steps this run actually shows, in
+            * the order it shows them - an installed-in-leader run never
+            * chooses a target or uploads anything. */}
           <p className="wizard-subtitle">
-            A short first-run flow: choose where the toolkit runs, connect Cribl
-            and Azure, verify access, connect GitHub content, then pick an
-            operating mode.
+            {installedInLeader
+              ? "A short first-run flow: connect GitHub content, connect Azure, verify access, then pick an operating mode."
+              : "A short first-run flow: choose where the toolkit runs, connect GitHub content, connect Cribl and Azure, verify access, then pick an operating mode."}
           </p>
         </header>
 
@@ -251,7 +276,10 @@ export function SetupWizard(props: SetupWizardProps) {
             />
           )}
           {currentViewId === "connect-azure" && (
-            <AzureConnectStep guidance={azureConnectGuidance} />
+            <AzureConnectStep
+              guidance={azureConnectGuidance}
+              changeRequestContext={azureChangeRequestContext}
+            />
           )}
           {currentViewId === "preflight" && (
             <div className="wizard-step">
@@ -272,8 +300,12 @@ export function SetupWizard(props: SetupWizardProps) {
             <div className="wizard-step">
               <h2 className="wizard-step-title">Connect GitHub content</h2>
               <p className="panel-desc">
-                Connect to GitHub for Microsoft Sentinel content. Optional here -
-                you can add or replace the token later from Repositories.
+                Start here: a GitHub token needs no approval from anyone else,
+                and it unlocks the work you can do before Azure access is
+                granted - browsing Sentinel solutions, tagging samples, running
+                gap analysis, reviewing rule and workbook coverage, and building
+                and installing a Cribl pack. None of that touches Azure. You can
+                add or replace the token later from Repositories.
               </p>
               <RepositoriesScreen platform={contentPlatform} />
             </div>
@@ -362,7 +394,13 @@ export function SetupWizard(props: SetupWizardProps) {
  * the permission preflight, which VERIFIES access. Shell-specific specifics
  * (e.g. a config-file path) arrive as guidance text, never hard-coded here.
  */
-function AzureConnectStep({ guidance }: { guidance?: string }) {
+function AzureConnectStep({
+  guidance,
+  changeRequestContext,
+}: {
+  guidance?: string;
+  changeRequestContext?: ChangeRequestContext;
+}) {
   return (
     <div className="wizard-step">
       <h2 className="wizard-step-title">Connect Azure</h2>
@@ -372,6 +410,31 @@ function AzureConnectStep({ guidance }: { guidance?: string }) {
         write-only by the hosting shell and never returned to this page. The
         next step verifies exactly what the identity can do.
       </p>
+      <p className="panel-desc">
+        Skip this if you are waiting on someone else to create the app
+        registration - it commonly takes a change request. Everything on the
+        content path stays available without it, and you can come back through
+        Setup once the credentials arrive. Only deploying to Azure - data
+        collection rules, custom tables, and the Sentinel destination - needs
+        this step.
+      </p>
+      {changeRequestContext !== undefined && (
+        // The actionable half of this step for anyone who does not own Entra:
+        // generate the ticket now, send it, and keep going. Same generator and
+        // wording as the Setup page's App registration section, so the request
+        // does not differ depending on where it was produced.
+        <ChangeRequestBlock
+          title="Someone else owns Entra ID? Generate a change request"
+          description={
+            "Produce a paste-ready ticket for the team that manages Entra ID. It asks them to " +
+            "create a single-tenant daemon confidential client (no redirect URI), create a client " +
+            "secret, and securely share the tenant id, client id, and secret. Send it now and " +
+            "finish this wizard without Azure - the content path does not need it."
+          }
+          filename="app-registration-request.txt"
+          generate={() => appRegistrationRequest(changeRequestContext)}
+        />
+      )}
       {guidance !== undefined && guidance !== "" ? (
         <p className="field-hint">{guidance}</p>
       ) : (

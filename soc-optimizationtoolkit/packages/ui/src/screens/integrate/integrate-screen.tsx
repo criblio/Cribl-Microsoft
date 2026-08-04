@@ -60,6 +60,8 @@ import {
   SENTINEL_SECRET_PLACEHOLDER,
   assemblePack,
   canWireSource,
+  compareLogTypeCoverage,
+  deriveExpectedLogTypes,
   deployedGroups,
   deriveSectionStatuses,
   destinationIdFromOptions,
@@ -74,6 +76,7 @@ import {
   mergeContentRequirements,
 } from "@soc/core";
 import type {
+  ContentItem,
   CriblGroupSummary,
   CriblOptions,
   DcrRoleTarget,
@@ -95,6 +98,11 @@ import type {
 import type { ReactNode } from "react";
 import { usePorts } from "../../ports-context";
 import { NumberedSection } from "../../components/numbered-section";
+import {
+  deriveSampleCoverageView,
+  packShapeSummary,
+  sampleCoverageGateReason,
+} from "../samples/sample-coverage-state";
 import { InfoTip } from "../../components/info-tip";
 import { ReadinessFooter } from "../../components/readiness-footer";
 import { AzureTargetingScreen } from "../azure-targeting/azure-targeting-screen";
@@ -568,6 +576,34 @@ export function IntegrateScreen({
     [gapReports, mappingOverrides, enrichments],
   );
 
+  // Sample-set completeness (user request 2026-08-04). The analytic-rule
+  // ContentItems arrive from the rule-coverage section, which already fetches
+  // and parses them - nothing is fetched twice. Until they do, the view reads
+  // 'unknown' and gates nothing.
+  const [contentItems, setContentItems] = useState<ContentItem[]>([]);
+  const [sampleSetConfirmed, setSampleSetConfirmed] = useState(false);
+  const sampleCoverageView = useMemo(() => {
+    const expected = deriveExpectedLogTypes(contentItems);
+    const coverage = compareLogTypeCoverage(
+      expected,
+      samples.map((s) => s.logType),
+    );
+    return deriveSampleCoverageView(
+      coverage,
+      contentItems.length > 0,
+      samples.length,
+    );
+  }, [contentItems, samples]);
+  // Re-ask whenever the sample set changes: a confirmation given for a
+  // different set of log types is not a confirmation for this one.
+  useEffect(() => {
+    setSampleSetConfirmed(false);
+  }, [samples.length]);
+  const sampleCoverageReason = sampleCoverageGateReason(
+    sampleCoverageView,
+    sampleSetConfirmed,
+  );
+
   // The single unlock condition for the build, in dependency order.
   const packBuildDisabledReason =
     ports.packs === undefined || ports.packInstall === undefined
@@ -582,7 +618,10 @@ export function IntegrateScreen({
               ? "Select at least one worker group."
               : packOverwriteBlocked
                 ? "Acknowledge the pack overwrite above."
-                : null;
+                : // Last, so it never masks a harder prerequisite: the sample
+                  // set is what decides how many routes and pipelines the pack
+                  // gets, so it is confirmed immediately before the build.
+                  sampleCoverageReason;
 
   const buildAndInstallPack = useCallback(async () => {
     const packStore = ports.packs;
@@ -1000,6 +1039,11 @@ export function IntegrateScreen({
     <SolutionBrowser
       onSelect={handleSolutionChange}
       scopeCommitted={scopeCommitted}
+      // Keep this section in agreement with the rest of the page: the solution
+      // restored from the content cache above drives every other section and
+      // the readiness pill, so the browser must show it as selected too rather
+      // than rendering the browse list (live review 2026-08-03).
+      restoreName={solution?.name ?? null}
     />
   );
 
@@ -1017,6 +1061,43 @@ export function IntegrateScreen({
           : {})}
         {...(ports.logger !== undefined ? { logger: ports.logger } : {})}
       />
+      {/* Completeness confirmation (user request 2026-08-04). The app never
+        * said that each unique log type becomes its own routes and pipelines,
+        * so an operator had no way to know a missing sample means missing
+        * routing. State the consequence, compare against what the solution's
+        * detections reference, and ask before the pack build is armed. */}
+      <div className="sample-coverage">
+        <p className="field-hint">{packShapeSummary(samples.length)}</p>
+        <p
+          className={
+            sampleCoverageView.verdict === "gaps"
+              ? "sample-coverage-gaps"
+              : "field-hint"
+          }
+        >
+          {sampleCoverageView.headline}
+        </p>
+        {sampleCoverageView.unreferenced.length > 0 && (
+          <p className="field-hint">
+            Not referenced by any detection (fine - a vendor emits more than one
+            solution detects on): {sampleCoverageView.unreferenced.join(", ")}.
+          </p>
+        )}
+        {sampleCoverageView.requiresAck && (
+          <label className="sample-coverage-ack">
+            <input
+              type="checkbox"
+              checked={sampleSetConfirmed}
+              onChange={(e) => setSampleSetConfirmed(e.target.checked)}
+            />
+            <span>
+              {sampleCoverageView.verdict === "gaps"
+                ? "I understand these log types have no sample, and want to build the pack without them."
+                : "I have no more unique log types to provide."}
+            </span>
+          </label>
+        )}
+      </div>
     </>
   );
 
@@ -1069,6 +1150,7 @@ export function IntegrateScreen({
       reports={gapReports}
       content={ports.content}
       onRuleFieldsChange={setRuleFields}
+      onContentItemsChange={setContentItems}
       contentFilter="rules"
       extraAvailableFields={enrichmentFieldNames}
       onContentRequirementsChange={setRuleRequirements}
@@ -1516,13 +1598,10 @@ export function IntegrateScreen({
 
   return (
     <div className="integrate-page">
-      <header className="integrate-header">
-        <h1 className="integrate-title">Cribl Sentinel Integration</h1>
-        <p className="integrate-subtitle">
-          Configure and deploy a complete Cribl-to-Sentinel integration
-          pipeline.
-        </p>
-      </header>
+      {/* No page header here: both shells already render the route header
+       * ("Sentinel Integration") directly above this screen, so a second
+       * title and description stacked three names for one page. The route
+       * header is the single title. */}
       {resolved.map(({ section, status, reason }) => (
         <NumberedSection
           key={section.id}

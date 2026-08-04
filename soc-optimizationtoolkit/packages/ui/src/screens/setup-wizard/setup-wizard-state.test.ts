@@ -27,14 +27,18 @@ import {
 } from "./setup-wizard-state";
 
 describe("wizardViews", () => {
-  it("injects preflight + repositories before Mode for the local target (mode undecided)", () => {
+  it("leads the Connect phase with repositories and trails Azure with preflight (local, mode undecided)", () => {
+    // ORDER CONTRACT (user direction 2026-08-03): GitHub first, because it is
+    // the connection a customer can make without a change request; the
+    // preflight must still follow connect-azure, since it verifies the
+    // identity that step configures.
     const shape: WizardShape = { target: "local", mode: null };
     expect(wizardViewIds(shape)).toEqual([
       "target",
+      "repositories",
       "leader-connect",
       "connect-azure",
       "preflight",
-      "repositories",
       "mode",
     ]);
   });
@@ -43,12 +47,27 @@ describe("wizardViews", () => {
     const shape: WizardShape = { target: "cribl-hosted", mode: null };
     expect(wizardViewIds(shape)).toEqual([
       "target",
+      "repositories",
       "upload-walkthrough",
       "connect-azure",
       "preflight",
-      "repositories",
       "mode",
     ]);
+  });
+
+  it("never places repositories after connect-azure in any shape that has both", () => {
+    // The point of the reorder: a customer blocked on Azure credentials must
+    // reach the GitHub step first, in every shape that offers both.
+    for (const target of ["local", "cribl-hosted"] as const) {
+      for (const mode of [null, "full", "azure-only", "cribl-only"] as const) {
+        const ids = wizardViewIds({ target, mode });
+        const repos = ids.indexOf("repositories");
+        const azure = ids.indexOf("connect-azure");
+        if (repos !== -1 && azure !== -1) {
+          expect(repos).toBeLessThan(azure);
+        }
+      }
+    }
   });
 
   it("drops the connect panels for a decided air-gapped re-run", () => {
@@ -62,9 +81,9 @@ describe("wizardViews", () => {
     const shape: WizardShape = { target: "local", mode: "azure-only" };
     expect(wizardViewIds(shape)).toEqual([
       "target",
+      "repositories",
       "connect-azure",
       "preflight",
-      "repositories",
       "mode",
     ]);
   });
@@ -93,10 +112,10 @@ describe("navigation", () => {
   const shape: WizardShape = { target: "local", mode: null };
 
   it("advances through the concrete list in order", () => {
-    expect(nextViewId(shape, "target")).toBe("leader-connect");
+    expect(nextViewId(shape, "target")).toBe("repositories");
+    expect(nextViewId(shape, "repositories")).toBe("leader-connect");
     expect(nextViewId(shape, "connect-azure")).toBe("preflight");
-    expect(nextViewId(shape, "preflight")).toBe("repositories");
-    expect(nextViewId(shape, "repositories")).toBe("mode");
+    expect(nextViewId(shape, "preflight")).toBe("mode");
   });
 
   it("returns null past the final view and before the first", () => {
@@ -105,8 +124,9 @@ describe("navigation", () => {
   });
 
   it("steps backward through the list", () => {
-    expect(previousViewId(shape, "mode")).toBe("repositories");
-    expect(previousViewId(shape, "leader-connect")).toBe("target");
+    expect(previousViewId(shape, "mode")).toBe("preflight");
+    expect(previousViewId(shape, "leader-connect")).toBe("repositories");
+    expect(previousViewId(shape, "repositories")).toBe("target");
   });
 
   it("returns null for a view id that is not in the current list", () => {
@@ -139,8 +159,9 @@ describe("resolveCurrentViewId", () => {
 
 describe("wizardViewProgress", () => {
   it("lights the segments by phase, mapping the injected panels to Connect", () => {
-    const at = (id: Parameters<typeof wizardViewProgress>[0]) =>
-      wizardViewProgress(id).map((seg) => `${seg.phase}:${seg.status}`);
+    const shape: WizardShape = { target: "local", mode: null };
+    const at = (id: Parameters<typeof wizardViewProgress>[1]) =>
+      wizardViewProgress(shape, id).map((seg) => `${seg.phase}:${seg.status}`);
     expect(at("target")).toEqual([
       "target:current",
       "connect:upcoming",
@@ -161,6 +182,52 @@ describe("wizardViewProgress", () => {
       "connect:complete",
       "mode:current",
     ]);
+  });
+
+  it("drops the Target segment entirely when already installed in the leader", () => {
+    // The bar must describe the steps this run will actually show; an empty
+    // Target segment would promise a step that never arrives.
+    const shape: WizardShape = {
+      target: "cribl-hosted",
+      mode: null,
+      installedInLeader: true,
+    };
+    const at = (id: Parameters<typeof wizardViewProgress>[1]) =>
+      wizardViewProgress(shape, id).map((seg) => `${seg.phase}:${seg.status}`);
+    expect(at("repositories")).toEqual(["connect:current", "mode:upcoming"]);
+    expect(at("mode")).toEqual(["connect:complete", "mode:current"]);
+  });
+});
+
+describe("installed-in-leader shape", () => {
+  it("drops both the target step and the cribl-side install step", () => {
+    // Running inside the leader answers both questions by construction: there
+    // is one possible target, and nothing left to upload (user report
+    // 2026-08-03).
+    const shape: WizardShape = {
+      target: "cribl-hosted",
+      mode: null,
+      installedInLeader: true,
+    };
+    expect(wizardViewIds(shape)).toEqual([
+      "repositories",
+      "connect-azure",
+      "preflight",
+      "mode",
+    ]);
+  });
+
+  it("still leads with repositories and ends on mode", () => {
+    const shape: WizardShape = {
+      target: "cribl-hosted",
+      mode: null,
+      installedInLeader: true,
+    };
+    expect(isFirstView(shape, "repositories")).toBe(true);
+    expect(isFinalView(shape, "mode")).toBe(true);
+    // A cursor left on the dropped target view clamps to the first real view
+    // instead of stranding the wizard on a blank screen.
+    expect(resolveCurrentViewId(shape, "target")).toBe("repositories");
   });
 });
 

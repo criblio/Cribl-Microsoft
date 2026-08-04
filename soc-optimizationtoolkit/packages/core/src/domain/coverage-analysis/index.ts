@@ -29,6 +29,19 @@ export type {
 // KQL builtins (verbatim) + the relocated field extractor.
 export { KQL_BUILTINS } from "./kql-builtins";
 export { extractKqlFields } from "./extract-kql-fields";
+// Which VENDOR log types a solution's content depends on (user request
+// 2026-08-04): derived from the discriminator literals its rules/parsers/
+// workbooks compare against, since the connector only names the table.
+export type {
+  DiscriminatorValue,
+  ExpectedLogType,
+  LogTypeCoverage,
+} from "./expected-log-types";
+export {
+  compareLogTypeCoverage,
+  deriveExpectedLogTypes,
+  extractDiscriminatorValues,
+} from "./expected-log-types";
 
 // AnalyticRule parsing (pinned regex) + custom-rule merge (dedupe fix).
 export {

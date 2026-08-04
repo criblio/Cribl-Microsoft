@@ -73,6 +73,27 @@ export const SOLUTION_SAMPLE_MAP: Record<string, SampleSourceEntry> = {
     sentinelTable: "CommonSecurityLog",
     sourceFormat: "syslog",
   },
+  // Check Point NGFW / Quantum gateway logs (user request 2026-08-04).
+  //
+  // WHY THIS ENTRY LOOKS ODD: the Content Hub "Check Point" solution is an
+  // AUTOMATION solution - Logic Apps and a Function App calling the Check Point
+  // Management API - not a log connector. Check Point's vendor-branded Hub
+  // solutions are all SaaS products (Harmony Email, Harmony Endpoint, CloudGuard
+  // CNAPP, Cyberint), which is why a catalog search looks email-heavy and no
+  // firewall ingestion solution appears. Gateway logs reach Sentinel through the
+  // GENERIC CEF-via-AMA path into CommonSecurityLog, so there is no vendor
+  // solution to hang samples off - but the vendor raw data is very much real,
+  // and this is precisely the case the Cribl path exists for.
+  //
+  // The Elastic package carries authentic Log Exporter fixtures (RFC 5424 syslog
+  // with bracketed key:"value" pairs) covering traffic, audit, authentication,
+  // packet drops, and both R80.x and R81.x, so nothing here is synthesized.
+  "Check Point": {
+    elasticPackage: "checkpoint",
+    elasticDataStreams: ["firewall"],
+    sentinelTable: "CommonSecurityLog",
+    sourceFormat: "syslog",
+  },
   CiscoASA: {
     elasticPackage: "cisco_asa",
     elasticDataStreams: ["log"],

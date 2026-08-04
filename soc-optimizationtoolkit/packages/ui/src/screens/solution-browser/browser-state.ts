@@ -14,6 +14,8 @@
  */
 
 import type { SolutionRef } from "@soc/core";
+// One separator-insensitive matching rule, shared with the searchable selects.
+import { collapseForSearch } from "../../components/searchable-select-filter";
 
 /**
  * The deep-link query parameter Unit 26 (SIEM migration) relies on:
@@ -33,13 +35,31 @@ export interface SolutionFilter {
   hideDeprecated: boolean;
 }
 
-/** Whether a solution's name matches a (trimmed, lower-cased) search query. */
+/**
+ * Whether a solution's name matches a (trimmed, lower-cased) search query.
+ *
+ * Matches on the raw name first, then on both sides collapsed to alphanumerics.
+ * The collapsed pass is what makes "checkpoint" find "Check Point": a plain
+ * substring test missed it, so searching the vendor as one word returned only
+ * the solutions that happen to spell it without the space ("Checkpoint Email
+ * Security", "Checkpoint Harmony Email and Collaboration") and hid the rest.
+ * That read as "Check Point is only an email vendor" (user report 2026-08-04).
+ */
 export function solutionMatchesQuery(name: string, query: string): boolean {
   const q = query.trim().toLowerCase();
   if (q === "") {
     return true;
   }
-  return name.toLowerCase().includes(q);
+  if (name.toLowerCase().includes(q)) {
+    return true;
+  }
+  const collapsedQuery = collapseForSearch(q);
+  // An all-punctuation query collapses to "" - which every name "contains",
+  // so it would match the whole catalog. The raw test above is its only pass.
+  if (collapsedQuery === "") {
+    return false;
+  }
+  return collapseForSearch(name).includes(collapsedQuery);
 }
 
 /**

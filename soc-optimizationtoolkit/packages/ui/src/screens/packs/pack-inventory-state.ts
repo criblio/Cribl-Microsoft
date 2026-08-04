@@ -271,7 +271,7 @@ export function tablesSummary(tables: readonly string[]): string {
 
 /** Empty-state reason when no builds have been recorded yet. */
 export const PACK_INVENTORY_EMPTY_REASON =
-  "No packs built yet. Build a pack from the Integrate flow; each build is " +
+  "No packs built yet. Build a pack from the Sentinel Integration page; each build is " +
   "recorded here with its destination tables, size, and deployed status.";
 
 /** Explains why the pack surface is unavailable (no store bound). */

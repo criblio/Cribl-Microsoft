@@ -93,6 +93,19 @@ const BUILT_IDS: readonly IntegrateSectionId[] = [
 // Unit 23 shipped rule-coverage; every section is built now. Kept as a named
 // (empty) set so the "no section is coming-soon" invariants read intentionally.
 const NOT_BUILT_IDS: readonly IntegrateSectionId[] = [];
+// The read-only diagnostics: built and usable, but with no completion state of
+// their own, so they resolve to 'informational' and are excluded from any
+// "is the page finished?" reckoning.
+const INFORMATIONAL_IDS: readonly IntegrateSectionId[] = [
+  "rule-coverage",
+  "workbook-coverage",
+  "enable-content",
+];
+// The sections that can actually be finished - the only ones a "fully
+// complete" check may look at.
+const COMPLETABLE_IDS: readonly IntegrateSectionId[] = BUILT_IDS.filter(
+  (id) => !INFORMATIONAL_IDS.includes(id),
+);
 
 function statusOf(id: IntegrateSectionId, i: SectionInputs): SectionStatus {
   return deriveSectionStatus(integrateSection(id), i).status;
@@ -212,9 +225,26 @@ describe("no section is coming-soon now that every section is built", () => {
 // ---------------------------------------------------------------------------
 
 describe("rule-coverage is built and informational", () => {
-  it("is always 'complete' regardless of inputs (never current/blocked/available/coming-soon)", () => {
+  it("is always 'informational', never 'complete' (it has nothing to finish)", () => {
+    // REGRESSION PIN (live review 2026-08-03): these sections used to report
+    // 'complete' unconditionally, so the page wore a green completion check on
+    // a section whose own body read "Run the DCR Gap Analysis first". "Never
+    // gates a deploy" and "the operator finished this" are different facts and
+    // no longer share one status value.
     for (const i of everyInputCombination()) {
-      expect(statusOf("rule-coverage", i)).toBe("complete");
+      expect(statusOf("rule-coverage", i)).toBe("informational");
+    }
+  });
+
+  it("keeps every informational section out of 'complete' and out of 'current'", () => {
+    for (const i of everyInputCombination()) {
+      for (const id of [
+        "rule-coverage",
+        "workbook-coverage",
+        "enable-content",
+      ] as const) {
+        expect(statusOf(id, i)).toBe("informational");
+      }
     }
   });
 
@@ -399,7 +429,10 @@ describe("read-ahead and single-current invariants", () => {
   it("has exactly one 'current' whenever the page is not fully deployed", () => {
     for (const i of everyInputCombination()) {
       const resolved = deriveSectionStatuses(i);
-      const fullyComplete = BUILT_IDS.every(
+      // Only the completable sections count: an informational section is
+      // never 'complete', so including them here would make "fully complete"
+      // unreachable and the invariant vacuous.
+      const fullyComplete = COMPLETABLE_IDS.every(
         (id) => statusOf(id, i) === "complete",
       );
       const currents = resolved.filter((r) => r.status === "current");

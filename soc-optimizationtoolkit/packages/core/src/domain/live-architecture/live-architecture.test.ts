@@ -1144,3 +1144,171 @@ describe("node category tiers (2026-07-31 color coding)", () => {
     expect(tier("brk:Azure_vNet_FlowLogs")).toBe("cribl");
   });
 });
+
+// ---------------------------------------------------------------------------
+// QuickConnect (user report 2026-08-04): sources wired straight to a
+// destination bypass the routing table, and the live view drew every source
+// into the Routes hub - so those flows were invisible and their destinations
+// looked unfed.
+// ---------------------------------------------------------------------------
+
+describe("QuickConnect flows", () => {
+  const quickConnectSnapshot = (
+    connections: unknown,
+    sendToRoutes?: boolean,
+    // A routing table only exists when there are routes; the Routes hub node is
+    // not drawn without one, so tests about the hub must supply a route.
+    withRoute = false,
+  ): LiveArchitectureSnapshot => ({
+    groupId: "default",
+    inputs: ok({
+      items: [
+        {
+          id: "qc_syslog",
+          type: "syslog",
+          connections,
+          ...(sendToRoutes !== undefined ? { sendToRoutes } : {}),
+        },
+      ],
+    }),
+    outputs: ok({ items: [{ id: "sentinel_qc", type: "sentinel" }] }),
+    routes: ok({
+      routes: withRoute
+        ? [{ id: "r1", name: "r1", filter: "true", output: "sentinel_qc", final: true }]
+        : [],
+    }),
+    pipelines: ok({ items: [{ id: "shape_qc" }] }),
+  });
+
+  const edgesOf = (snapshot: LiveArchitectureSnapshot) =>
+    buildLiveDiagram(snapshot, { azureOnly: false }).diagram.edges.map(
+      (e) => `${e.from}->${e.to}`,
+    );
+
+  it("draws the source straight to its destination, not into Routes", () => {
+    const edges = edgesOf(
+      quickConnectSnapshot([{ output: "sentinel_qc" }], false),
+    );
+    expect(edges).toContain("in:qc_syslog->out:sentinel_qc");
+    expect(edges.some((e) => e.endsWith("->routes"))).toBe(false);
+  });
+
+  it("routes through the connection's pipeline when one is chosen", () => {
+    const edges = edgesOf(
+      quickConnectSnapshot(
+        [{ output: "sentinel_qc", pipeline: "shape_qc" }],
+        false,
+      ),
+    );
+    expect(edges).toContain("in:qc_syslog->qc:shape_qc");
+    expect(edges).toContain("qc:shape_qc->out:sentinel_qc");
+  });
+
+  it("creates the destination node even when no route references it", () => {
+    // The route traversal only builds nodes for destinations a route targets,
+    // so without this the QuickConnect edge pointed at a node that never existed.
+    const { diagram } = buildLiveDiagram(
+      quickConnectSnapshot([{ output: "sentinel_qc" }], false),
+      { azureOnly: false },
+    );
+    const node = diagram.nodes.find((n) => n.id === "out:sentinel_qc");
+    expect(node).toBeDefined();
+    expect(node?.tier).toBe("destination");
+  });
+
+  it("keeps the Routes edge when the source ALSO feeds the routing table", () => {
+    const edges = edgesOf(
+      quickConnectSnapshot([{ output: "sentinel_qc" }], true, true),
+    );
+    expect(edges).toContain("in:qc_syslog->out:sentinel_qc");
+    expect(edges).toContain("in:qc_syslog->routes");
+  });
+
+  it("is inert for a source with no connections", () => {
+    const edges = edgesOf(quickConnectSnapshot(undefined, undefined, true));
+    expect(edges).toContain("in:qc_syslog->routes");
+    // Without a QuickConnect link the source reaches the destination only
+    // through the routing table, never directly.
+    expect(edges).not.toContain("in:qc_syslog->out:sentinel_qc");
+  });
+
+  it("reports a connection to a destination that does not exist", () => {
+    const { diagram } = buildLiveDiagram(
+      quickConnectSnapshot([{ output: "ghost_dest" }], false),
+      { azureOnly: false },
+    );
+    const node = diagram.nodes.find((n) => n.id === "out:ghost_dest");
+    expect(node?.badge).toBe("unresolved destination");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// QuickConnect flow inventory (user request 2026-08-04): the inventory is built
+// from route triples, so QuickConnect links were drawn on the canvas but absent
+// from the list - the count was short and they could not be selected.
+// ---------------------------------------------------------------------------
+
+describe("QuickConnect flow inventory", () => {
+  const snapshot = (): LiveArchitectureSnapshot => ({
+    groupId: "default",
+    inputs: ok({
+      items: [
+        {
+          id: "qc_src",
+          type: "syslog",
+          sendToRoutes: false,
+          connections: [
+            { output: "sentinel_qc", pipeline: "shape_qc" },
+            { output: "lake_qc" },
+          ],
+        },
+      ],
+    }),
+    outputs: ok({
+      items: [
+        { id: "sentinel_qc", type: "sentinel" },
+        { id: "lake_qc", type: "filesystem" },
+      ],
+    }),
+    routes: ok({ routes: [] }),
+    pipelines: ok({ items: [{ id: "shape_qc" }] }),
+  });
+
+  it("lists one entry per QuickConnect link, naming source, pipeline and destination", () => {
+    const { flows } = buildLiveDiagram(snapshot(), { azureOnly: false });
+    expect(flows.map((f) => f.key)).toEqual([
+      "q:qc_src>shape_qc>sentinel_qc",
+      "q:qc_src>direct>lake_qc",
+    ]);
+    expect(flows[0]?.label).toBe(
+      "qc_src -> QuickConnect (pipeline shape_qc) -> sentinel_qc",
+    );
+    expect(flows[1]?.label).toBe("qc_src -> QuickConnect -> lake_qc");
+  });
+
+  it("marks a QuickConnect link Azure when either endpoint is Azure", () => {
+    const { flows } = buildLiveDiagram(snapshot(), { azureOnly: false });
+    // sentinel destination is Azure; the filesystem one is not.
+    expect(flows.find((f) => f.key.endsWith("sentinel_qc"))?.azure).toBe(true);
+    expect(flows.find((f) => f.key.endsWith("lake_qc"))?.azure).toBe(false);
+  });
+
+  it("selecting one QuickConnect flow draws only that one", () => {
+    // Without this the selection was ignored for QuickConnect and every link
+    // stayed on the canvas regardless of what was picked.
+    const { diagram } = buildLiveDiagram(snapshot(), {
+      azureOnly: false,
+      selectedFlows: ["q:qc_src>direct>lake_qc"],
+    });
+    const edges = diagram.edges.map((e) => `${e.from}->${e.to}`);
+    expect(edges).toContain("in:qc_src->out:lake_qc");
+    expect(edges.some((e) => e.includes("sentinel_qc"))).toBe(false);
+  });
+
+  it("honors the Azure-only filter for QuickConnect links", () => {
+    const { diagram } = buildLiveDiagram(snapshot(), { azureOnly: true });
+    const edges = diagram.edges.map((e) => `${e.from}->${e.to}`);
+    expect(edges.some((e) => e.includes("sentinel_qc"))).toBe(true);
+    expect(edges.some((e) => e.includes("lake_qc"))).toBe(false);
+  });
+});

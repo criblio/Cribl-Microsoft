@@ -21,7 +21,7 @@
  * ThemeToggle at the top of the content area.
  */
 
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { filterNavItems } from "@soc/core";
 import type { AppMode, NavRequirement } from "@soc/core";
@@ -128,6 +128,26 @@ export function AppFrame(props: AppFrameProps) {
     visitedRef.current.add(activeId);
   }
   const mounted = visible.filter((route) => visitedRef.current.has(route.id));
+
+  // A route change opens the new screen at ITS top. Because routes stay
+  // MOUNTED (keep-alive above) the window keeps whatever offset the previous
+  // screen was scrolled to, so navigating from a scrolled page used to land
+  // mid-content on the next one. Layout effect, so the jump happens before
+  // paint rather than as a visible snap. The FIRST resolved route is skipped:
+  // the page already loads at the top, and skipping leaves any inbound deep
+  // link free to position itself. Home's next-action anchor scroll runs on a
+  // 60ms timeout after navigating, so it still lands where it intends.
+  const scrolledRouteRef = useRef<string | undefined>(undefined);
+  useLayoutEffect(() => {
+    if (activeId === undefined || scrolledRouteRef.current === activeId) {
+      return;
+    }
+    const isFirstRoute = scrolledRouteRef.current === undefined;
+    scrolledRouteRef.current = activeId;
+    if (!isFirstRoute) {
+      window.scrollTo({ top: 0 });
+    }
+  }, [activeId]);
 
   // "Start over" remounts the active screen fresh by bumping its reset nonce:
   // the wrapper key changes, so React discards the old instance (and its state)

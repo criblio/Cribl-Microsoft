@@ -178,7 +178,7 @@ const SHELL_LINK_OVERRIDES: JourneyLinks = {
   target: {
     routeId: 'integrate',
     hint:
-      "Choose and commit the target in the Integrate page's Azure Resources section " +
+      "Choose and commit the target in the Sentinel Integration page's Azure Resources section " +
       '(Use this target).',
   },
 };
@@ -192,15 +192,15 @@ const JOURNEY_LINKS = mergeJourneyLinks({
   ...SHELL_LINK_OVERRIDES,
   'choose-content': {
     routeId: 'integrate',
-    hint: 'Start on the Integrate page - the single-page flow from Azure resources through deploy.',
+    hint: 'Start on the Sentinel Integration page - the single-page flow from Azure resources through deploy.',
   },
   configure: {
     routeId: 'integrate',
-    hint: 'Configure Azure resources and Cribl on the Integrate page.',
+    hint: 'Configure Azure resources and Cribl on the Sentinel Integration page.',
   },
   deploy: {
     routeId: 'integrate',
-    hint: 'Deploy the native table on the Integrate page.',
+    hint: 'Deploy the native table on the Sentinel Integration page.',
   },
 });
 
@@ -556,6 +556,12 @@ export function LocalApp() {
           initialTarget="local"
           criblShellMode="local"
           contentPlatform="local"
+          // The app registration is an Entra ask regardless of where the
+          // toolkit runs, so the local first run offers the same ticket.
+          azureChangeRequestContext={{
+            appName: 'SOC Optimization Toolkit',
+            config: activeAzureConfig ?? EMPTY_AZURE_CONFIG,
+          }}
           defaultSetupPath={defaultPreflightPath(
             activeAzureConfig?.setupPath ?? 'existing',
           )}
@@ -614,7 +620,7 @@ export function LocalApp() {
           the host, then reload this page. Non-secret fields show on the
           Settings screen; the Permission Verification screen reports what
           the identity can actually do. Choose and commit the target scope in
-          the Integrate page&apos;s Azure Resources section.
+          the Sentinel Integration page&apos;s Azure Resources section.
         </p>
       </section>
       <RepositoriesScreen platform="local" />
@@ -662,12 +668,12 @@ export function LocalApp() {
   const renderIntegrate = () => (
     <>
       <header className="local-header">
-        <h1 className="local-title">Integrate</h1>
+        <h1 className="local-title">Sentinel Integration</h1>
         <p className="local-subtitle">
           The single-page integration flow: solution browser, sample data,
-          Azure resources, Cribl configuration, and the operable native-table
-          deploy on one page, with deploy readiness always visible. The
-          gap-analysis and rule-coverage sections arrive in later units.
+          Azure resources, Cribl configuration, gap analysis, rule and
+          workbook coverage, and the operable deploy on one page, with deploy
+          readiness always visible.
         </p>
       </header>
       {load.state === 'loading' && (
@@ -854,7 +860,7 @@ export function LocalApp() {
             ...(scopeOverride !== null
               ? {
                   tip:
-                    "Committed from the Integrate page's Azure Resources section; it overrides the\n" +
+                    "Committed from the Sentinel Integration page's Azure Resources section; it overrides the\n" +
                     'scope fields in config/local-config.json (identity fields\n' +
                     'always come from the file).',
                 }
@@ -1125,7 +1131,7 @@ export function LocalApp() {
     <div className="scope-bar">
       <span
         className="scope-chip"
-        title="The committed Azure target scope (subscription / resource group / workspace). Change it from the Integrate page's Azure Resources section - browsing there never changes it until you click Use this target."
+        title="The committed Azure target scope (subscription / resource group / workspace). Change it from the Sentinel Integration page's Azure Resources section - browsing there never changes it until you click Use this target."
       >
         target:{' '}
         {formatScopeChip(

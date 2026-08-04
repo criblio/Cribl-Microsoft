@@ -12,6 +12,7 @@ export {
   wizardSteps,
   isStepSkippable,
   wizardProgress,
+  wizardPhasesFor,
   WIZARD_PHASES,
 } from "./first-run-wizard";
 export type {

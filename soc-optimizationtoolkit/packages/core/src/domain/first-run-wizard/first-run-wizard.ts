@@ -528,6 +528,18 @@ export interface WizardShape {
   target: WizardTarget;
   /** The operating mode; null means not yet decided (show all connect steps). */
   mode: AppMode | null;
+  /**
+   * TRUE when the wizard is running INSIDE the Cribl leader that hosts it.
+   *
+   * Both step 1 (choose target) and the cribl-side connect step exist to get
+   * the app into a leader. When the reader is already looking at the app from
+   * inside that leader, both are answered by the fact that the page rendered:
+   * asking "where should the toolkit run?" has exactly one possible answer,
+   * and the .tgz upload walkthrough describes work already done (user report
+   * 2026-08-03). Setting this drops both, leaving only steps that can still be
+   * acted on.
+   */
+  installedInLeader?: boolean;
 }
 
 const STEP_LABELS: Readonly<Record<WizardStepId, string>> = {
@@ -557,13 +569,17 @@ const STEP_LABELS: Readonly<Record<WizardStepId, string>> = {
  * azure-only drops the cribl step; full and null show both connect steps.
  */
 export function wizardSteps(shape: WizardShape): WizardStep[] {
-  const { target, mode } = shape;
-  const steps: WizardStep[] = [makeStep("target", false)];
+  const { target, mode, installedInLeader } = shape;
+  // Already inside the leader: the target is a fact, not a choice, and there is
+  // nothing left to install. Both steps drop together - they are two halves of
+  // the same "get this app into a leader" question.
+  const alreadyInstalled = installedInLeader === true;
+  const steps: WizardStep[] = alreadyInstalled ? [] : [makeStep("target", false)];
 
   const showCribl = mode === null || hasCribl(mode);
   const showAzure = mode === null || hasAzure(mode);
 
-  if (showCribl) {
+  if (showCribl && !alreadyInstalled) {
     const criblStepId: WizardStepId =
       target === "cribl-hosted" ? "upload-walkthrough" : "leader-connect";
     steps.push(makeStep(criblStepId, true));
@@ -604,10 +620,26 @@ export interface WizardSegment {
  * the current step's phase are complete, its own phase is current, later phases
  * are upcoming.
  */
-export function wizardProgress(currentStepId: WizardStepId): WizardSegment[] {
+/**
+ * The progress phases actually present for a shape, in WIZARD_PHASES order.
+ *
+ * The bar must describe the steps this run will really show: an installed-in-
+ * leader run has no Target phase, and rendering an empty "Target" segment
+ * would promise a step that never arrives.
+ */
+export function wizardPhasesFor(shape: WizardShape): WizardPhase[] {
+  const present = new Set(wizardSteps(shape).map((step) => step.phase));
+  return WIZARD_PHASES.filter((phase) => present.has(phase));
+}
+
+export function wizardProgress(
+  shape: WizardShape,
+  currentStepId: WizardStepId,
+): WizardSegment[] {
+  const phases = wizardPhasesFor(shape);
   const currentPhase = STEP_PHASE[currentStepId];
-  const currentIndex = WIZARD_PHASES.indexOf(currentPhase);
-  return WIZARD_PHASES.map((phase, index) => {
+  const currentIndex = phases.indexOf(currentPhase);
+  return phases.map((phase, index) => {
     let status: SegmentStatus;
     if (index < currentIndex) {
       status = "complete";

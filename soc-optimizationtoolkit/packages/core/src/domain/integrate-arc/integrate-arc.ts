@@ -107,6 +107,13 @@ export interface IntegrateSection {
    * which are already here.
    */
   shippedInUnit?: number;
+  /**
+   * TRUE for a read-only diagnostic section: it never gates a deploy and has
+   * no completion state of its own, so it resolves to 'informational' rather
+   * than borrowing 'complete'. See the SectionStatus 'informational' docs for
+   * why these two facts had to stop sharing one value.
+   */
+  informational?: boolean;
 }
 
 /**
@@ -180,12 +187,13 @@ export const INTEGRATE_SECTIONS: readonly IntegrateSection[] = [
       "the mapping table's RULE badges but never blocks a deploy.",
     requires: "azure",
     // BUILT NOW (Unit 23): the rule coverage panel renders real content.
-    // INFORMATIONAL - its sectionComplete is unconditionally true, so it never
-    // becomes 'current'/'blocked' and never participates in canDeploy or
+    // INFORMATIONAL - it resolves to 'informational', so it never becomes
+    // 'current'/'blocked' and never participates in canDeploy or
     // canDeployContentPath (rule coverage never gates a deploy). It is not in
     // SectionInputs at all, which structurally guarantees the deploy-gate
     // partition Unit 18 established stays intact.
     built: true,
+    informational: true,
   },
   {
     id: "workbook-coverage",
@@ -199,9 +207,9 @@ export const INTEGRATE_SECTIONS: readonly IntegrateSection[] = [
       "fields may leave workbook tiles empty, but it never blocks a deploy.",
     requires: "azure",
     // BUILT: workbook coverage is its own panel, INFORMATIONAL exactly like
-    // rule-coverage (unconditionally complete, absent from SectionInputs, never
-    // gates a deploy).
+    // rule-coverage (absent from SectionInputs, never gates a deploy).
     built: true,
+    informational: true,
   },
   {
     id: "enable-content",
@@ -216,10 +224,11 @@ export const INTEGRATE_SECTIONS: readonly IntegrateSection[] = [
       "workbooks depend on are installed automatically. Informational and " +
       "independent of the Cribl deploy - it never blocks a deploy.",
     requires: "azure",
-    // INFORMATIONAL, same contract as the coverage sections: unconditionally
-    // complete, absent from SectionInputs, never gates a deploy. Content
-    // enablement is a Sentinel-side install parallel to the Cribl pipeline.
+    // INFORMATIONAL, same contract as the coverage sections: absent from
+    // SectionInputs, never gates a deploy. Content enablement is a
+    // Sentinel-side install parallel to the Cribl pipeline.
     built: true,
+    informational: true,
   },
   {
     id: "azure-resources",
@@ -339,7 +348,22 @@ export type SectionStatus =
   | "current"
   | "available"
   | "blocked"
-  | "coming-soon";
+  | "coming-soon"
+  /**
+   * A read-only diagnostic section: it never gates a deploy and there is
+   * nothing in it to finish, so it has no completion state to report.
+   *
+   * This exists because "never blocks the deploy" and "the operator finished
+   * this" are DIFFERENT facts that were previously carried by the same
+   * 'complete' value. Marking these sections complete made the page claim
+   * work was done that nobody had done - a green check sat on Review Workbook
+   * Coverage while its own body read "Run the DCR Gap Analysis first", and on
+   * Enable Sentinel Content while it reported "None found for this solution"
+   * (live review 2026-08-03). 'complete' now means only what it says, and the
+   * deploy-gate partition (canDeploy / canDeployContentPath) is unchanged:
+   * informational sections were never in it and still are not.
+   */
+  | "informational";
 
 /** A section's resolved status plus a reason for 'blocked' / 'coming-soon'. */
 export interface SectionState {
@@ -401,24 +425,16 @@ function sectionComplete(
       // never blocks canDeploy (only canDeployContentPath).
       return inputs.mappingsApproved === true;
     case "rule-coverage":
-      // INFORMATIONAL (Unit 23): rule + workbook coverage never gates a deploy,
-      // so this section is unconditionally "complete" - it never becomes
-      // 'current'/'blocked'/'available' and never demotes Deploy from 'current'.
-      // There is deliberately NO SectionInputs signal for it: coverage is a
-      // read-only diagnostic that lights the mapping table's RULE badges, and
-      // marking it complete keeps the deploy-gate partition (canDeploy vs
-      // canDeployContentPath) exactly as Unit 18 left it. It may thus only ever
-      // read 'ok' (complete) - never a blocking 'missing'.
-      return true;
     case "workbook-coverage":
-      // INFORMATIONAL, same contract as rule-coverage: unconditionally complete,
-      // no SectionInputs signal, never gates a deploy.
-      return true;
     case "enable-content":
-      // INFORMATIONAL, same contract as the coverage sections: content
-      // enablement is a Sentinel-side install parallel to the Cribl deploy,
-      // unconditionally complete, no SectionInputs signal, never gates a deploy.
-      return true;
+      // INFORMATIONAL: read-only diagnostics with deliberately NO SectionInputs
+      // signal, so there is nothing here that can be "finished" and no honest
+      // completion to report. They resolve to 'informational' in
+      // deriveSectionStatus before this is ever consulted; returning false
+      // keeps sectionActionable from treating "not complete" as "actionable"
+      // if that early return is ever removed. They stay outside canDeploy and
+      // canDeployContentPath exactly as Unit 18 left them.
+      return false;
     case "deploy":
       return inputs.deployCompleted;
     default:
@@ -454,7 +470,13 @@ function sectionActionable(
   section: IntegrateSection,
   inputs: SectionInputs,
 ): boolean {
-  if (!section.built || sectionComplete(section, inputs)) {
+  // An informational section is never actionable: it has no commit to make,
+  // so it must never claim the single 'current' slot from a section that does.
+  if (
+    !section.built ||
+    section.informational === true ||
+    sectionComplete(section, inputs)
+  ) {
     return false;
   }
   if (section.id === "deploy") {
@@ -485,6 +507,8 @@ function currentSectionId(inputs: SectionInputs): IntegrateSectionId | null {
  * Rules (read-ahead, honest):
  *   - not-built section  -> 'coming-soon' with its honest note, ALWAYS,
  *     regardless of inputs (a coming-soon section is never a working teaser).
+ *   - informational      -> 'informational', ALWAYS: a read-only diagnostic
+ *     has nothing to finish, so it reports no completion either way.
  *   - built + complete   -> 'complete'.
  *   - built + incomplete + gated commit (Deploy only) -> 'blocked' with the
  *     single missing prerequisite.
@@ -497,6 +521,11 @@ export function deriveSectionStatus(
 ): SectionState {
   if (!section.built) {
     return { status: "coming-soon", reason: COMING_SOON_REASONS[section.id] };
+  }
+  // Read-only diagnostics report no completion state at all - they are neither
+  // finished nor unfinished, and they never gate a deploy.
+  if (section.informational === true) {
+    return { status: "informational" };
   }
   if (sectionComplete(section, inputs)) {
     return { status: "complete" };

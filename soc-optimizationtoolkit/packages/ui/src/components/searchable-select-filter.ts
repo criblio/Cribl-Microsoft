@@ -12,9 +12,25 @@ export interface SelectOption {
 }
 
 /**
+ * Collapse text to letters and digits, so a search ignores separators.
+ *
+ * Names in this app are separator-heavy and typed from memory: vendors
+ * ("Check Point" vs "checkpoint", "Palo Alto" vs "paloalto") and Azure
+ * resources ("rg-jpederson-QuickstartLab" searched as "rg jpederson").
+ * Shared with the solution browser so both searches obey one rule.
+ */
+export function collapseForSearch(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, "");
+}
+
+/**
  * Case-insensitive substring filter over an option's label AND value (so an id
  * paste matches even when the label is a display name). A blank query returns
  * every option, order preserved. Whitespace-only queries are treated as blank.
+ *
+ * Falls back to a separator-insensitive comparison so "checkpoint" matches
+ * "Check Point" (user report 2026-08-04). A query that collapses to empty
+ * (all punctuation) skips that pass rather than matching every option.
  */
 export function filterOptions(
   options: readonly SelectOption[],
@@ -22,11 +38,17 @@ export function filterOptions(
 ): SelectOption[] {
   const q = query.trim().toLowerCase();
   if (q === "") return [...options];
+  const collapsedQuery = collapseForSearch(q);
+  const matches = (field: string): boolean => {
+    if (field.toLowerCase().includes(q)) return true;
+    if (collapsedQuery === "") return false;
+    return collapseForSearch(field).includes(collapsedQuery);
+  };
   return options.filter(
     (o) =>
-      o.label.toLowerCase().includes(q) ||
-      o.value.toLowerCase().includes(q) ||
-      (o.hint !== undefined && o.hint.toLowerCase().includes(q)),
+      matches(o.label) ||
+      matches(o.value) ||
+      (o.hint !== undefined && matches(o.hint)),
   );
 }
 

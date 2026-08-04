@@ -1006,12 +1006,17 @@ body {
   outline-offset: 1px;
 }
 
+/* Rendered in the TOP LAYER via the popover attribute, so no ancestor
+ * stacking context can paint over it and no ancestor overflow can clip it
+ * (the old absolute + z-index:10000 lost both fights - see info-tip.tsx).
+ * `inset: auto` and `margin: 0` undo the UA popover defaults (inset: 0 and
+ * margin: auto would center it in the viewport); the component sets top/left
+ * from the icon's measured rect. */
 .info-tip-pop {
-  position: absolute;
+  position: fixed;
+  inset: auto;
+  margin: 0;
   z-index: 10000;
-  bottom: calc(100% + 6px);
-  left: 50%;
-  transform: translateX(-50%);
   padding: 10px 12px;
   background: var(--surface);
   border: 1px solid var(--border);
@@ -1023,7 +1028,17 @@ body {
   white-space: pre-wrap;
   width: max-content;
   max-width: 320px;
-  pointer-events: none;
+  /* A tip longer than the room available scrolls itself rather than running
+   * off the page; `contain` keeps that scroll from chaining to the page. */
+  max-height: min(60vh, 420px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/* [popover] is display:none until shown; restore the inline-flow rendering the
+ * tip needs when open. */
+.info-tip-pop:popover-open {
+  display: block;
 }
 
 /* ---------------------------------------------------------------------------
@@ -1320,24 +1335,9 @@ button.journey-step-main:hover .journey-step-label {
   flex-direction: column;
 }
 
-/* Integrate page chrome: a big bold sans page title over a muted subtitle
- * (ui-design-language.md - "Big bold sans-serif page titles"). */
-.integrate-header {
-  margin-bottom: 20px;
-}
-.integrate-title {
-  font-size: 26px;
-  font-weight: 700;
-  line-height: 32px;
-  color: var(--text-strong);
-  margin: 0 0 4px;
-}
-.integrate-subtitle {
-  font-size: 14px;
-  line-height: 20px;
-  color: var(--text-muted);
-  margin: 0;
-}
+/* The .integrate-header/-title/-subtitle rules were dropped with the screen's
+ * own page header: both shells render the route header above this screen, so
+ * the second title was a duplicate. The route header owns the page title. */
 
 .numbered-section {
   border: 1px solid var(--border);
@@ -1421,6 +1421,58 @@ button.journey-step-main:hover .journey-step-label {
 .numbered-section-badge-coming-soon {
   border-style: dashed;
   color: var(--text-faint);
+}
+
+/* informational: a muted OUTLINED circle that keeps the section number. It is
+ * deliberately not the green complete badge (a read-only diagnostic has
+ * nothing to finish, so claiming completion was dishonest) and not the dashed
+ * coming-soon badge (the section is built and usable right now). */
+.numbered-section-badge-informational {
+  border-color: var(--border);
+  background: var(--surface-raised);
+  color: var(--text-muted);
+}
+
+/* Sample-set completeness confirmation (screens/samples/sample-coverage-state):
+ * the consequence line, the derived comparison, and the acknowledgement that
+ * arms the pack build. */
+.sample-coverage {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-subtle);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.sample-coverage-gaps {
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--warn);
+  margin: 0;
+}
+
+.sample-coverage-ack {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--text);
+  cursor: pointer;
+  margin-top: 2px;
+}
+
+.numbered-section-info-tag {
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 18px;
+  padding: 1px 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-raised);
+  color: var(--text-muted);
+  white-space: nowrap;
 }
 
 .numbered-section-coming-soon {
@@ -2315,6 +2367,12 @@ button.journey-step-main:hover .journey-step-label {
   padding: 0;
   max-height: 420px;
   overflow-y: auto;
+  /* This list sits inside a scrolling page which itself sits inside the Cribl
+   * app iframe - three nested scroll regions, so reaching the end of the list
+   * used to hand the wheel to the page and jump the operator somewhere else
+   * mid-search (live review 2026-08-03). `contain` keeps the wheel in the list
+   * until they deliberately move out of it. */
+  overscroll-behavior: contain;
   border: 1px solid var(--border);
   border-radius: 6px;
 }
@@ -3974,8 +4032,19 @@ button.journey-step-main:hover .journey-step-label {
  * self-contained inline-SVG tier diagrams (no external assets; theme-aware
  * via the CSS variables).
  * ------------------------------------------------------------------------- */
+/* The Dataflow pickers are a RESPONSIVE GRID, not the shared 480px form
+ * column. Four stacked selects stranded roughly 60% of a wide viewport and
+ * pushed the diagram - the point of the page - below the fold (live review
+ * 2026-08-03). auto-fit collapses to a single column on narrow viewports, so
+ * the laptop layout is unchanged; only the wasted width is reclaimed.
+ * Overrides .form-grid's flex column and max-width. */
 .arch-pickers {
   margin-bottom: 12px;
+  max-width: none;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 12px 20px;
+  align-items: start;
 }
 .arch-card {
   display: flex;
@@ -4954,11 +5023,14 @@ details[open] > summary::before {
 .arch-flow-pipe-muted {
   opacity: 0.25;
 }
+/* Native popover -> TOP LAYER, so the canvas cannot clip it and React Flow's
+ * transformed viewport cannot trap it (see architecture-flow.tsx). `inset:
+ * auto` and `margin: 0` undo the UA popover defaults; the component sets
+ * top/left from the button's measured rect and flips above when needed. */
 .arch-flow-info-pop {
-  position: absolute;
-  top: calc(100% + 8px);
-  left: 50%;
-  transform: translateX(-50%);
+  position: fixed;
+  inset: auto;
+  margin: 0;
   width: 250px;
   padding: 10px 12px;
   border-radius: 10px;
@@ -4968,6 +5040,15 @@ details[open] > summary::before {
   text-align: left;
   cursor: default;
   z-index: 20;
+  /* A popover taller than the room available scrolls itself instead of
+   * running off the canvas. */
+  max-height: min(70vh, 520px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.arch-flow-info-pop:popover-open {
+  display: block;
 }
 .arch-flow-info-pop-head {
   display: flex;
