@@ -152,8 +152,10 @@ export const INTEGRATE_SECTIONS: readonly IntegrateSection[] = [
       "its log type, or upload one or more files. The format is detected from " +
       "the content (Cribl capture events are unwrapped to their inner _raw), " +
       "and the discovered fields drive the gap analysis and pipeline " +
-      "generation. Browsing a solution's samples arrives with the content " +
-      "browser (Unit 16).",
+      "generation. Browse Samples pulls representative events for the " +
+      "selected solution from the Sentinel and Elastic repositories, so you " +
+      "can start without your own capture. Each unique log type becomes its " +
+      "own routes and pipelines in the pack.",
     requires: "none",
     built: true,
   },

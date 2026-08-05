@@ -1610,7 +1610,6 @@ export function IntegrateScreen({
           status={status}
           infoTip={section.infoTip}
           reason={reason}
-          shippedInUnit={section.shippedInUnit}
         >
           {sectionBody(section.id)}
         </NumberedSection>

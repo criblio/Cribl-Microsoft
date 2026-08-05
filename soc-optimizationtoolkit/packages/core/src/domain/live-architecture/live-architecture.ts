@@ -240,6 +240,45 @@ export interface LiveInput {
   conf: Record<string, unknown>;
 }
 
+/**
+ * Source types whose config exposes `breakerRulesets` - the operator picks the
+ * ruleset. Every other type breaks with Cribl's built-in breaker, which is not
+ * configurable and therefore names nothing to show.
+ *
+ * DERIVED, not hand-written: these are the Input* schemas in the vendored
+ * cribl-openapi.json carrying a breaker property (19 of 68). Re-derive when the
+ * spec is re-vendored rather than editing by hand.
+ */
+export const BREAKER_CONFIGURABLE_INPUT_TYPES: readonly string[] = Object.freeze([
+  "appscope", "azure_blob", "cloudflare_hec", "collection", "crowdstrike",
+  "exec", "file", "http_raw", "kube_logs", "openai_compliance_logs", "s3",
+  "s3_inventory", "security_lake", "splunk", "splunk_hec", "splunk_search",
+  "tcp", "wiz", "wiz_webhook",
+]);
+
+/**
+ * How a source's event breaking is determined.
+ *   named    - one or more rulesets are configured; we can name them.
+ *   default  - the type accepts rulesets but none are set, so Cribl picks.
+ *   built-in - the type exposes no breaker config at all (syslog, HTTP,
+ *              Event Hub, Office 365 ...); breaking happens but is fixed.
+ *
+ * Every source gets ONE of these - breaking is a real stage in the flow, and
+ * omitting it made raw byte streams look like they went straight into a
+ * pipeline (user question 2026-08-04).
+ */
+export type BreakerKind = "named" | "default" | "built-in";
+
+/** Classify a source's event breaking from its type and configured rulesets. */
+export function classifyBreaker(input: LiveInput): BreakerKind {
+  if (input.breakerRulesets.length > 0) {
+    return "named";
+  }
+  return BREAKER_CONFIGURABLE_INPUT_TYPES.includes(input.type.toLowerCase())
+    ? "default"
+    : "built-in";
+}
+
 /** One QuickConnect link: a source straight to a destination, optionally via a pipeline. */
 export interface LiveConnection {
   /** The destination id this source feeds. */
@@ -1249,6 +1288,49 @@ export function buildLiveDiagram(
       ),
     });
     let previous = inputNodeId;
+    // Event breaking is a real stage for EVERY source, so it is always drawn.
+    // Only the naming differs: a configured ruleset is named, an unconfigured
+    // one says Cribl chooses, and a type with no breaker config says built-in.
+    const breakerKind = classifyBreaker(input);
+    if (breakerKind !== "named") {
+      const genericId = `brk:${breakerKind}:${input.id}`;
+      const isBuiltIn = breakerKind === "built-in";
+      addNode({
+        id: genericId,
+        label: "Event Breakers",
+        tier: "cribl",
+        badge: isBuiltIn ? "Built-in" : "Default selection",
+        info: withResourceLink(
+          {
+            purpose: isBuiltIn
+              ? `This ${input.type} source uses Cribl's built-in event breaker. ` +
+                "It has no breaker configuration to choose, so there is no " +
+                "ruleset to name - but breaking still happens here."
+              : `No ruleset is configured on this ${input.type} source, so Cribl ` +
+                "selects one automatically. Assign a ruleset on the source to " +
+                "control how its byte stream is split into events.",
+            facts: [
+              { label: "Source type", value: input.type },
+              {
+                label: "Configurable",
+                value: isBuiltIn ? "no" : "yes - none set",
+              },
+            ],
+            docs: [
+              {
+                label: "Cribl event breakers",
+                url: CRIBL + "/stream/event-breakers/",
+              },
+            ],
+          },
+          isBuiltIn
+            ? null
+            : resourceLink(UI_PAGES.breakers, "Open Event Breakers in Cribl"),
+        ),
+      });
+      addEdge({ from: previous, to: genericId });
+      previous = genericId;
+    }
     for (const ruleset of input.breakerRulesets) {
       const breakerNodeId = `brk:${ruleset}`;
       addNode({
@@ -1292,7 +1374,14 @@ export function buildLiveDiagram(
       if (!quickConnectDrawn(input, connection)) {
         continue;
       }
+      // The QuickConnect label belongs on the edge LEAVING the source chain,
+      // not the one entering the destination: QuickConnect is the wiring
+      // decision made as data leaves the source (bypass the routing table),
+      // and the pipeline is applied along that connection. Labelling the last
+      // hop read as "pipeline, then QuickConnect" - the wrong order (user
+      // report 2026-08-04).
       let connPrevious = previous;
+      let labelPending = true;
       if (connection.pipeline !== undefined) {
         const connPipeId = `qc:${connection.pipeline}`;
         addNode({
@@ -1312,7 +1401,8 @@ export function buildLiveDiagram(
             ),
           ),
         });
-        addEdge({ from: connPrevious, to: connPipeId });
+        addEdge({ from: connPrevious, to: connPipeId, label: "QuickConnect" });
+        labelPending = false;
         connPrevious = connPipeId;
       }
       // The destination node must be created HERE: the route traversal below
@@ -1343,7 +1433,7 @@ export function buildLiveDiagram(
       addEdge({
         from: connPrevious,
         to: `out:${connOutput?.id ?? connection.output}`,
-        label: "QuickConnect",
+        ...(labelPending ? { label: "QuickConnect" } : {}),
       });
     }
     // Only when a Routes hub actually exists: a QuickConnect-only group has no

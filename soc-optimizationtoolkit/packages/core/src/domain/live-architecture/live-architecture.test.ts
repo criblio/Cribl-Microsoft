@@ -7,7 +7,9 @@
 
 import { describe, expect, it } from "vitest";
 import {
+  BREAKER_CONFIGURABLE_INPUT_TYPES,
   buildLiveDiagram,
+  classifyBreaker,
   criblUiBaseFromLeaderUrl,
   installedPackIds,
   isAzureCriblType,
@@ -1189,7 +1191,7 @@ describe("QuickConnect flows", () => {
     const edges = edgesOf(
       quickConnectSnapshot([{ output: "sentinel_qc" }], false),
     );
-    expect(edges).toContain("in:qc_syslog->out:sentinel_qc");
+    expect(edges).toContain("brk:built-in:qc_syslog->out:sentinel_qc");
     expect(edges.some((e) => e.endsWith("->routes"))).toBe(false);
   });
 
@@ -1200,7 +1202,7 @@ describe("QuickConnect flows", () => {
         false,
       ),
     );
-    expect(edges).toContain("in:qc_syslog->qc:shape_qc");
+    expect(edges).toContain("brk:built-in:qc_syslog->qc:shape_qc");
     expect(edges).toContain("qc:shape_qc->out:sentinel_qc");
   });
 
@@ -1220,16 +1222,16 @@ describe("QuickConnect flows", () => {
     const edges = edgesOf(
       quickConnectSnapshot([{ output: "sentinel_qc" }], true, true),
     );
-    expect(edges).toContain("in:qc_syslog->out:sentinel_qc");
-    expect(edges).toContain("in:qc_syslog->routes");
+    expect(edges).toContain("brk:built-in:qc_syslog->out:sentinel_qc");
+    expect(edges).toContain("brk:built-in:qc_syslog->routes");
   });
 
   it("is inert for a source with no connections", () => {
     const edges = edgesOf(quickConnectSnapshot(undefined, undefined, true));
-    expect(edges).toContain("in:qc_syslog->routes");
+    expect(edges).toContain("brk:built-in:qc_syslog->routes");
     // Without a QuickConnect link the source reaches the destination only
     // through the routing table, never directly.
-    expect(edges).not.toContain("in:qc_syslog->out:sentinel_qc");
+    expect(edges).not.toContain("brk:built-in:qc_syslog->out:sentinel_qc");
   });
 
   it("reports a connection to a destination that does not exist", () => {
@@ -1301,7 +1303,7 @@ describe("QuickConnect flow inventory", () => {
       selectedFlows: ["q:qc_src>direct>lake_qc"],
     });
     const edges = diagram.edges.map((e) => `${e.from}->${e.to}`);
-    expect(edges).toContain("in:qc_src->out:lake_qc");
+    expect(edges).toContain("brk:built-in:qc_src->out:lake_qc");
     expect(edges.some((e) => e.includes("sentinel_qc"))).toBe(false);
   });
 
@@ -1310,5 +1312,77 @@ describe("QuickConnect flow inventory", () => {
     const edges = diagram.edges.map((e) => `${e.from}->${e.to}`);
     expect(edges.some((e) => e.includes("sentinel_qc"))).toBe(true);
     expect(edges.some((e) => e.includes("lake_qc"))).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Event breaking (user question 2026-08-04): breaking is a real stage for every
+// source, so it is always drawn. Only the naming differs - a configured ruleset
+// is named, an unconfigured one says Cribl chooses, and a source type with no
+// breaker config at all says built-in.
+// ---------------------------------------------------------------------------
+
+describe("event breaker classification", () => {
+  const withInput = (item: unknown): LiveArchitectureSnapshot => ({
+    groupId: "default",
+    inputs: ok({ items: [item] }),
+    outputs: ok({ items: [{ id: "d", type: "devnull" }] }),
+    routes: ok({
+      routes: [{ id: "r", name: "r", filter: "true", output: "d", final: true }],
+    }),
+  });
+
+  const nodeIds = (s: LiveArchitectureSnapshot) =>
+    buildLiveDiagram(s, { azureOnly: false }).diagram.nodes.map((n) => n.id);
+
+  it("names the ruleset when one is configured", () => {
+    const ids = nodeIds(
+      withInput({ id: "i", type: "tcp", breakerRulesets: ["MyRules"] }),
+    );
+    expect(ids).toContain("brk:MyRules");
+    expect(ids.some((i) => i.startsWith("brk:default:"))).toBe(false);
+  });
+
+  it("says Cribl chooses when the type accepts rulesets but none are set", () => {
+    // tcp exposes breakerRulesets, so an empty list means default selection.
+    const ids = nodeIds(withInput({ id: "i", type: "tcp" }));
+    expect(ids).toContain("brk:default:i");
+  });
+
+  it("says built-in for a type with no breaker config at all", () => {
+    // syslog exposes NO breaker property in the vendored spec - breaking still
+    // happens, it just cannot be configured, so there is no ruleset to name.
+    const ids = nodeIds(withInput({ id: "i", type: "syslog" }));
+    expect(ids).toContain("brk:built-in:i");
+  });
+
+  it("draws a breaking stage for EVERY source", () => {
+    // The gap this closes: a source with no configured ruleset used to chain
+    // straight into a pipeline, as though raw bytes were never broken.
+    for (const type of ["syslog", "tcp", "eventhub", "office365_mgmt", "s3"]) {
+      const ids = nodeIds(withInput({ id: "i", type }));
+      expect(ids.some((i) => i.startsWith("brk:"))).toBe(true);
+    }
+  });
+
+  it("classifies from the type list derived from the vendored spec", () => {
+    const brk = (type: string, rulesets: string[] = []) =>
+      classifyBreaker({
+        id: "i",
+        type,
+        disabled: false,
+        breakerRulesets: rulesets,
+        aliases: ["i"],
+        connections: [],
+        sendToRoutes: true,
+        conf: {},
+      });
+    expect(brk("tcp")).toBe("default");
+    expect(brk("tcp", ["R"])).toBe("named");
+    expect(brk("syslog")).toBe("built-in");
+    expect(brk("eventhub")).toBe("built-in");
+    expect(brk("SPLUNK_HEC")).toBe("default"); // case-insensitive
+    expect(BREAKER_CONFIGURABLE_INPUT_TYPES).toContain("azure_blob");
+    expect(BREAKER_CONFIGURABLE_INPUT_TYPES).not.toContain("syslog");
   });
 });

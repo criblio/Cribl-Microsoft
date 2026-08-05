@@ -22,9 +22,11 @@
  *   - blocked             -> muted number plus an AMBER gating-reason line
  *     naming the single unlock condition (the commit inside the body is
  *     gated; the body still renders - read-ahead);
- *   - coming-soon         -> muted, dashed circle, an "Arrives in Unit N"
- *     note and a short description of what will land, and NO body (a
- *     not-yet-built section is never a working teaser).
+ *   - coming-soon         -> muted, dashed circle, a "Not yet available" note
+ *     and a short description of what will land, and NO body (a not-yet-built
+ *     section is never a working teaser). The note deliberately does NOT name
+ *     a roadmap unit: "Arrives in Unit 16" is internal vocabulary that means
+ *     nothing to the operator reading it (user report 2026-08-04).
  *
  * The InfoTip reuses the shared component, fed the section's point-of-
  * decision help text.
@@ -50,11 +52,6 @@ export interface NumberedSectionProps {
    */
   reason?: string;
   /**
-   * The roadmap unit a coming-soon section ships in - rendered as the
-   * "Arrives in Unit N" note. Present only on not-yet-built sections.
-   */
-  shippedInUnit?: number;
-  /**
    * The section body (built sections only). A coming-soon section renders no
    * body regardless of what is passed here.
    */
@@ -67,7 +64,6 @@ export function NumberedSection({
   status,
   infoTip,
   reason,
-  shippedInUnit,
   children,
 }: NumberedSectionProps) {
   const comingSoon = status === "coming-soon";
@@ -133,9 +129,7 @@ export function NumberedSection({
       {comingSoon ? (
         <div className="numbered-section-comingsoon">
           <span className="numbered-section-comingsoon-badge">
-            {shippedInUnit !== undefined
-              ? `Arrives in Unit ${shippedInUnit}`
-              : "Arrives in a later unit"}
+            Not yet available
           </span>
           {reason !== undefined && reason !== "" && (
             <p className="numbered-section-comingsoon-note">{reason}</p>
