@@ -561,24 +561,10 @@ body {
   margin-bottom: 8px;
 }
 
-/* "Start over" - remounts the active screen with default state (frame keeps
-   visited screens mounted so their state survives navigation otherwise). */
-.app-frame-startover {
-  padding: 4px 12px;
-  font-family: inherit;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--text-muted);
-  background: var(--surface-raised);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-control, 8px);
-  cursor: pointer;
-}
-
-.app-frame-startover:hover {
-  color: var(--text);
-  border-color: var(--accent);
-}
+/* The .app-frame-startover rules were dropped with the "Start over" button
+ * (user report 2026-08-05: it appeared to do nothing). It remounted the active
+ * screen, but almost every screen rehydrates from the KV store on mount, so
+ * the remount reloaded the same persisted state and looked like a no-op. */
 
 .theme-toggle {
   font-family: inherit;

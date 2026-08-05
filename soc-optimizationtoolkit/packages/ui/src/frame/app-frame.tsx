@@ -98,7 +98,6 @@ export function AppFrame(props: AppFrameProps) {
     themeControl,
   } = props;
   const [routeId, setRouteId] = useState(initialRouteId ?? "");
-  const [resetNonces, setResetNonces] = useState<Record<string, number>>({});
 
   // Filter, then fall back: if the requested route is hidden by the current
   // mode (or unknown), the first visible route renders instead - the frame
@@ -147,16 +146,6 @@ export function AppFrame(props: AppFrameProps) {
     if (!isFirstRoute) {
       window.scrollTo({ top: 0 });
     }
-  }, [activeId]);
-
-  // "Start over" remounts the active screen fresh by bumping its reset nonce:
-  // the wrapper key changes, so React discards the old instance (and its state)
-  // and re-runs the screen's default-loading effects.
-  const startOver = useCallback(() => {
-    if (activeId === undefined) {
-      return;
-    }
-    setResetNonces((prev) => ({ ...prev, [activeId]: (prev[activeId] ?? 0) + 1 }));
   }, [activeId]);
 
   return (
@@ -210,16 +199,6 @@ export function AppFrame(props: AppFrameProps) {
                 onThemeChange={themeControl.onThemeChange}
               />
             )}
-            {activeId !== undefined && (
-              <button
-                type="button"
-                className="app-frame-startover"
-                title="Clear this page's inputs and reload it with defaults."
-                onClick={startOver}
-              >
-                Start over
-              </button>
-            )}
           </div>
           {topBar}
           {active === undefined ? (
@@ -232,7 +211,7 @@ export function AppFrame(props: AppFrameProps) {
               const isActive = route.id === activeId;
               return (
                 <div
-                  key={`${route.id}:${resetNonces[route.id] ?? 0}`}
+                  key={route.id}
                   className="app-frame-route"
                   style={isActive ? undefined : { display: "none" }}
                   {...(isActive ? {} : { "aria-hidden": true })}
