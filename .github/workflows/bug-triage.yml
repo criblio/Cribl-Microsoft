@@ -1,0 +1,48 @@
+name: Bug Triage Sweep
+
+# Continuously pull reported bugs in for evaluation: which are new since the
+# last sweep, which have been approved for integration, and when a bug was
+# last reported. State lives in a tracker issue rather than a committed file,
+# because main is protected here and a bot pushing to it would be exactly what
+# that rule forbids.
+
+on:
+  schedule:
+    # 07:00 UTC daily - a sweep before the working day, not on every push.
+    - cron: '0 7 * * *'
+  # Manual runs for when a report needs picking up immediately.
+  workflow_dispatch:
+  # A newly filed or re-labelled issue refreshes the tracker straight away, so
+  # an approval decision is reflected without waiting for the nightly cron.
+  issues:
+    types: [opened, reopened, closed, labeled, unlabeled]
+
+# Least privilege: the sweep reads and writes issues and nothing else. It never
+# touches repository contents, so it cannot push to a protected branch.
+permissions:
+  contents: read
+  issues: write
+
+# A push of decisions should not race the nightly sweep over the same tracker
+# body; the newest run wins and earlier queued ones are dropped.
+concurrency:
+  group: bug-triage
+  cancel-in-progress: true
+
+jobs:
+  sweep:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Sweep reported bugs
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: node .github/bug-triage/triage.mjs

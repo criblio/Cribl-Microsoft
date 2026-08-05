@@ -274,3 +274,7 @@ deploy-*.log
 #
 # Always review before committing configuration files
 # Use template files (.template.json, .example.json) for examples
+# The .*/ catch-all above is for editor and tool dot-directories. .github is
+# repository configuration and must be tracked - soc-toolkit-ci.yml already is,
+# and new workflows were being silently ignored (2026-08-05).
+!.github/
