@@ -1267,34 +1267,29 @@ export function buildLiveDiagram(
   }
 
   // Source side: in -> brk* -> pre? -> routes.
-  // The ingress chain for ONE source: its node, breakers, pre-processing
-  // pipeline, any QuickConnect links, and the hand-off to Routes. Extracted
-  // from the triple loop because QuickConnect sources need it too and they are
-  // NOT reachable from a route triple (user report 2026-08-04).
-  const emitSourceChain = (input: LiveInput): void => {
-    const inputNodeId = `in:${input.id}`;
-    const isCollector = input.type.toLowerCase() === "collection";
-    addNode({
-      id: inputNodeId,
-      label: input.id,
-      tier: "source",
-      badge: `${input.type} source`,
-      info: withResourceLink(
-        inputInfo(input),
-        resourceLink(
-          isCollector ? UI_PAGES.collectors : UI_PAGES.sources,
-          isCollector ? "Open Collectors in Cribl" : "Open Sources in Cribl",
-        ),
-      ),
-    });
-    let previous = inputNodeId;
-    // Event breaking is a real stage for EVERY source, so it is always drawn.
-    // Only the naming differs: a configured ruleset is named, an unconfigured
-    // one says Cribl chooses, and a type with no breaker config says built-in.
-    const breakerKind = classifyBreaker(input);
-    if (breakerKind !== "named") {
-      const genericId = `brk:${breakerKind}:${input.id}`;
-      const isBuiltIn = breakerKind === "built-in";
+  /**
+   * Emit the event-breaking stage for one source and return the node the rest
+   * of its chain should hang off.
+   *
+   * Shared by group-level sources AND pack-embedded ones: the order is the same
+   * wherever a source lives - break, then the source's pre-processing pipeline,
+   * then routes, then the destination's post-processing pipeline, then the
+   * destination (user correction 2026-08-05). Pack sources previously skipped
+   * straight to the pack node, which hid both stages.
+   *
+   * `scope` disambiguates the generic node id so a pack's source cannot collide
+   * with a group source of the same name.
+   */
+  const emitBreakerStage = (
+    input: LiveInput,
+    from: string,
+    scope: string,
+  ): string => {
+    let previous = from;
+    const kind = classifyBreaker(input);
+    if (kind !== "named") {
+      const isBuiltIn = kind === "built-in";
+      const genericId = `brk:${kind}:${scope}`;
       addNode({
         id: genericId,
         label: "Event Breakers",
@@ -1311,10 +1306,7 @@ export function buildLiveDiagram(
                 "control how its byte stream is split into events.",
             facts: [
               { label: "Source type", value: input.type },
-              {
-                label: "Configurable",
-                value: isBuiltIn ? "no" : "yes - none set",
-              },
+              { label: "Configurable", value: isBuiltIn ? "no" : "yes - none set" },
             ],
             docs: [
               {
@@ -1346,6 +1338,30 @@ export function buildLiveDiagram(
       addEdge({ from: previous, to: breakerNodeId });
       previous = breakerNodeId;
     }
+    return previous;
+  };
+
+  // The ingress chain for ONE source: its node, breakers, pre-processing
+  // pipeline, any QuickConnect links, and the hand-off to Routes. Extracted
+  // from the triple loop because QuickConnect sources need it too and they are
+  // NOT reachable from a route triple (user report 2026-08-04).
+  const emitSourceChain = (input: LiveInput): void => {
+    const inputNodeId = `in:${input.id}`;
+    const isCollector = input.type.toLowerCase() === "collection";
+    addNode({
+      id: inputNodeId,
+      label: input.id,
+      tier: "source",
+      badge: `${input.type} source`,
+      info: withResourceLink(
+        inputInfo(input),
+        resourceLink(
+          isCollector ? UI_PAGES.collectors : UI_PAGES.sources,
+          isCollector ? "Open Collectors in Cribl" : "Open Sources in Cribl",
+        ),
+      ),
+    });
+    let previous = emitBreakerStage(input, inputNodeId, input.id);
     if (input.pipeline !== undefined) {
       const preNodeId = `pre:${input.pipeline}`;
       addNode({
@@ -1882,7 +1898,26 @@ export function buildLiveDiagram(
         badge: `${input.type} source`,
         info: withResourceLink(inputInfo(input), packResource),
       });
-      addEdge({ from: nodeId, to: packNodeId, label: "pack source" });
+      // A pack source breaks and pre-processes exactly like a group source
+      // before its events reach the pack's routes (user correction
+      // 2026-08-05); it used to jump straight to the pack node.
+      let previous = emitBreakerStage(input, nodeId, `${packId}/${input.id}`);
+      if (input.pipeline !== undefined) {
+        const prePackId = `pre:${packId}/${input.pipeline}`;
+        addNode({
+          id: prePackId,
+          label: input.pipeline,
+          tier: "pipeline",
+          badge: "Pre-processing",
+          info: withResourceLink(
+            pipelineInfo("Pre-processing", input.pipeline, undefined),
+            packResource,
+          ),
+        });
+        addEdge({ from: previous, to: prePackId });
+        previous = prePackId;
+      }
+      addEdge({ from: previous, to: packNodeId, label: "pack source" });
     }
 
     const emitOutputNode = (output: LiveOutput): string => {

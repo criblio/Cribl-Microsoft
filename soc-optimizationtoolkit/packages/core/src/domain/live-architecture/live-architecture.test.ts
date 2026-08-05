@@ -666,7 +666,8 @@ describe("routes popover detail and pack internals (2026-07-30)", () => {
     const edgePairs = diagram.edges.map((e) => `${e.from}>${e.to}`);
     expect(edgePairs).toEqual(
       expect.arrayContaining([
-        "in:AllInOne/eh_in>pack:AllInOne",
+        "in:AllInOne/eh_in>brk:built-in:AllInOne/eh_in",
+        "brk:built-in:AllInOne/eh_in>pack:AllInOne",
         "pack:AllInOne>out:AllInOne/sent_out",
       ]),
     );
@@ -730,7 +731,8 @@ describe("routes popover detail and pack internals (2026-07-30)", () => {
     const edgePairs = diagram.edges.map((e) => `${e.from}>${e.to}`);
     expect(edgePairs).toEqual(
       expect.arrayContaining([
-        "in:AllInOne/eh_in>pack:AllInOne",
+        "in:AllInOne/eh_in>brk:built-in:AllInOne/eh_in",
+        "brk:built-in:AllInOne/eh_in>pack:AllInOne",
         "pack:AllInOne>routes:AllInOne",
         "routes:AllInOne>pipe:AllInOne/shape",
         "pipe:AllInOne/shape>out:AllInOne/sent_out",
