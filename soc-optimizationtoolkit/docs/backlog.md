@@ -87,9 +87,37 @@ already collects ARM request bodies into one artifact, and `domain/change-reques
 already generates paste-ready tickets. They are currently triggered by mode or by
 hand; the work is triggering them from a permission verdict.
 
-**Step 5 - mode removal.** Delete `AppMode`, `ModeSelect`, the `appMode` KV
-entry, the SetupWizard Mode step, `recommendMode`/`modeCards`, and the
-`hasAzure`/`hasCribl` predicates. Last, so every consumer has already moved.
+**Step 5 - mode removal. PART 1 DONE (2026-08-06).** The journey no longer
+branches on mode: `JourneyFacts.mode` gone, `choose-mode` gone as a stage, the
+arc never pruned, chips always rendered. Four pins assert the opposite of what
+they used to and say so at the assertion.
+
+**Remaining, in dependency order.** Each slice must span core + ui + shells to
+keep the tree compiling - that is what makes them slices rather than one sweep.
+
+1. **`first-run-wizard` + the UI setup wizard.** Attempted and REVERTED rather
+   than left half-done; the findings are worth keeping:
+   - Core is the easy half: delete the mode auto-selection matrix
+     (`MODE_REQUIREMENTS`, `recommendMode`, `modeCards`, `MODE_COPY`,
+     `WIZARD_MODE_ORDER`, `ModeCard`), drop `"mode"` from `WizardStepId` and
+     `WizardPhase`, drop `WizardShape.mode`, and make both connect steps always
+     show. Their skippability is what makes that safe.
+   - `wizardViews` places the preflight view *before* the mode step today. With
+     mode gone the natural anchor is LAST, which also reads better: verify
+     access, then Get Started.
+   - `deriveGetStarted` loses two of its three conditions - reaching the final
+     view becomes the whole gate. `GET_STARTED_NO_MODE_REASON` and
+     `GET_STARTED_MODE_UNAVAILABLE_REASON` go with them.
+   - The long tail is `setup-wizard-state.test.ts`, which pins view LISTS
+     containing `"mode"`, plus `setup-wizard.tsx`'s mode step render and
+     `ModeCardGrid`.
+2. **Frame + Settings.** `ModeSelect`, the mode chip, `MODE_LABELS`/
+   `MODE_OPTIONS`, `resolveFramePhase`'s `mode-select` phase, and Settings'
+   Reconfigure (it currently writes an empty mode record).
+3. **Shells.** The `appMode` KV entry and the `mode` prop threaded into
+   `AppFrame`.
+4. **Delete `domain/app-mode`** last, including the already-dead
+   `filterNavItems`.
 
 **Test note that applies to all of the above.** The mode contracts are pinned
 across at least six state modules (`frame-state`, `stepper-state`,
