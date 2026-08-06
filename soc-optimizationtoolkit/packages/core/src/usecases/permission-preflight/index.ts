@@ -26,3 +26,11 @@ export type {
   LeastPrivilegeRoleDefinition,
   PreflightScopeKind,
 } from "./permission-preflight";
+export {
+  AZURE_ACTION_CAPABILITIES,
+  AZURE_PROBE_CAPABILITIES,
+  CRIBL_PROBE_CAPABILITIES,
+  capabilitiesCheckedForSetupPath,
+  capabilitiesFromReport,
+} from "./capability-mapping";
+export type { CapabilityAuditMeta } from "./capability-mapping";

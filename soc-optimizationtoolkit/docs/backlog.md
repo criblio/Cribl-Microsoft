@@ -15,10 +15,16 @@ refreshes. Decided: cache per connection, re-audit on connection switch, scope
 commit, and secret re-entry; surface the audit's age with a manual refresh; do
 NOT re-audit every launch. Blocked on nothing.
 
-**Prerequisite for step 2 - preflight mapping.** Deliberately deferred in step 1:
-mapping `usecases/permission-preflight` results onto the `Capability` values. It
-needs that usecase's result shape, which is why it was left as a clean seam
-rather than guessed. Mechanical once the shape is in hand. Do this first.
+**Prerequisite for step 2 - preflight mapping. DONE (2026-08-06).**
+`usecases/permission-preflight/capability-mapping.ts` projects a
+`PermissionReport` onto a `CapabilitySet`. Three rules decide every verdict and
+are pinned by tests: writes come only from effective actions (no probe can ever
+grant one - the Reader-not-deployable pin restated in capability terms); reads
+come from probes first, since a 2xx GET outranks the RBAC evaluation and a 403
+does too; and only measurements are recorded, so an unread permissions API
+contributes nothing rather than passing its conservative `granted:false` checks
+through as `denied`. It lives in `usecases/` because the dependency only points
+one way. Step 2 is now unblocked with nothing outstanding.
 
 **Step 3 - nav annotation.** `annotateNavItems(capabilities, routes)` replacing
 `filterNavItems(mode, routes)`, and `AppRoute.requires` becoming
