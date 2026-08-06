@@ -16,6 +16,11 @@ Two rules stated by the user, both binding:
    whole product and are told, per item, what is unavailable and why.
 2. **Every blocked action falls back to "download the thing you'd need someone
    else to run."** This is the general pattern, not a DCR special case.
+3. **The audit informs and offers - it never forbids.** A `denied` verdict
+   annotates the item and offers the fallback artifact, but the action stays
+   attemptable. Azure's own 403 is the real gate. This is the most consequential
+   rule in the model: it makes a stale or wrong audit an inconvenience rather
+   than a blocker, and it is why the caching strategy below can be relaxed.
 
 ## Why this is mostly rewiring
 
@@ -104,23 +109,42 @@ The read capabilities (`dcr.read`, `workspace.read`, `table.read`) have no
 fallback: without them, discovery genuinely cannot run, and the honest UI is to
 say so rather than invent an offline substitute.
 
-## Open decisions
+## Decisions taken 2026-08-06
 
-These are not settled and must be before code moves.
+**1. Pre-audit state: derive it from identity, do not pick one default.**
 
-**1. Pre-audit state.** What does the menu show before any audit has run - on
-first launch, with no credentials? `unknown` everywhere is honest and matches the
-codebase's no-false-ok rule, but reads worse than "connect Azure to unlock
-these". This decides the default of every menu item, so it is the first to
-settle.
+The original framing was wrong - it treated this as one choice trading honesty
+against usability. There are TWO pre-audit states and they deserve different
+copy:
 
-**2. Audit staleness.** Permissions change server-side. Cache per connection and
-re-run on demand, or re-audit every launch? There is a proxy request-budget cost
-either way (the platform allows ~100 req/min shared with the status pollers).
+- **No identity configured** (no tenant, no client id): we KNOW nothing Azure
+  can work. "Connect Azure to enable" is a fact about the connection, not a
+  claim about permissions, so there is no honesty problem.
+- **Identity present, audit not yet run**: genuinely `unknown`, and says so.
 
-**3. Cribl symmetry.** Once `cribl-only` and `air-gapped` disappear, does the
-Cribl side get identical annotate-don't-hide treatment? The preflight already
-measures it, so the data exists; the question is whether the rule is universal.
+This mirrors `JourneyFacts`, which already separates `identityPresent` from
+`secretLive: 'live' | 'unknown' | 'missing'` - the codebase already distinguishes
+"absent" from "not yet proven". Capabilities inherit that discipline.
+
+**2. Audit staleness: cache per connection, refresh on events.**
+
+Re-audit on connection switch, scope commit, and secret re-entry. Surface the
+audit's age and offer a manual refresh. Do NOT re-audit every launch - that taxes
+the shared ~100 req/min proxy budget every session for something that changes
+rarely. This is only safe because of rule 3 above: a stale audit cannot block
+work, so the cost of being slightly out of date is an annotation, not a wall.
+
+## Still open
+
+**Cribl symmetry.** Once `cribl-only` and `air-gapped` disappear, does the Cribl
+side get identical annotate-don't-hide treatment? The recommendation is yes - the
+preflight already measures Cribl capabilities (manage packs, destinations,
+sources, routes), and without it those operators lose their honest signal
+entirely. One asymmetry to absorb: in the cloud shell Cribl capability is granted
+by the platform via `policies.yml`, whereas the local shell connects out to a
+leader - so the MEASUREMENT source differs per shell while the PRESENTATION
+should be identical, exactly as `criblDeploymentType` and the platform-link poll
+are already handled. Not yet confirmed.
 
 ## Sequencing
 
