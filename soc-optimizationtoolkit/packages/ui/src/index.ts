@@ -632,6 +632,12 @@ export {
   refreshLabel,
   useCapabilityAudit,
 } from "./capabilities";
+// Route id -> required capabilities, SHARED by both shells (the render
+// functions are per-shell; what a route needs is one product decision).
+export {
+  ROUTE_CAPABILITIES,
+  capabilitiesForRoute,
+} from "./frame/route-capabilities";
 export type {
   CapabilityAuditOptions,
   CapabilityAuditState,

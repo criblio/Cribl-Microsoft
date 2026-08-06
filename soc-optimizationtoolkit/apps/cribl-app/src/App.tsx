@@ -24,6 +24,7 @@ import {
   SettingsScreen,
   SetupWizard,
   SiemMigrationScreen,
+  capabilitiesForRoute,
   commitNoticeText,
   formatScopeChip,
   mergeJourneyLinks,
@@ -1085,9 +1086,7 @@ function App() {
   // The launch trigger is the hook's own, and it honours the cache, so a return
   // visit to an already-audited connection costs nothing. Re-audits on a
   // connection switch or a scope commit fall out of the audit key changing.
-  // Only the trigger is consumed for now - step 3's nav annotation is the first
-  // consumer of the capabilities themselves.
-  const { audit: auditCapabilities } = useCapabilityAudit({
+  const capabilityAudit = useCapabilityAudit({
     ports: cloudPorts,
     config: activeConfig,
     // Withhold until the connection store has loaded. Before that activeConfig
@@ -1104,6 +1103,7 @@ function App() {
     criblReachable: platformLink !== 'failed',
     now: nowIso,
   });
+  const { audit: auditCapabilities } = capabilityAudit;
 
   // Save-secret success: record which connection (and identity) the live secret
   // now belongs to, and clear any outstanding "enter the secret" notice.
@@ -2105,9 +2105,12 @@ function App() {
   // in dependency order - Setup (home, now carrying the connect + resource +
   // GitHub sections), then Integrate (the single-page flagship, the PRIMARY
   // journey route), then DCR Automation and Pack Maintenance - then tools
-  // (Repositories, Logs, Settings), then Diagnostics last. Requirements
-  // still drive mode-aware navigation via the ONE @soc/core filterNavItems
-  // pass; grouping is presentation only. Onboard needs BOTH live sides (it
+  // (Repositories, Logs, Settings), then Diagnostics last. Requirements are
+  // now CAPABILITIES and no longer decide visibility: every route renders,
+  // annotated with what is unavailable and why (capability-model-plan step 3).
+  // The per-route capability list is shared with the local shell via
+  // capabilitiesForRoute, so the two cannot disagree about what an operator can
+  // do; grouping is presentation only. Onboard needs BOTH live sides (it
   // deploys to Azure and Cribl in one run); batch-onboard relaxes to 'azure'
   // (recorded Unit 6.5 decision) - in azure-only mode templateOnly is FORCED
   // on because no live Cribl connection exists to deploy destinations to.
@@ -2124,20 +2127,20 @@ function App() {
     // Dataflow is the JOURNEY landing item (user directive
     // 2026-07-20): users arrive here first to learn how the ingestion works
     // before setting anything up. requires:'none' so it is always reachable.
-    { id: 'architecture', label: 'Dataflow', requires: 'none', section: 'journey', render: renderArchitecture },
-    { id: 'home', label: 'Setup', requires: 'none', section: 'journey', render: renderHome },
-    { id: 'integrate', label: 'Sentinel Integration', requires: 'both', section: 'journey', render: renderIntegrate },
-    { id: 'dcr-automation', label: 'DCR Automation', requires: 'azure', section: 'journey', render: renderDcrAutomation },
-    { id: 'packs', label: 'Pack Maintenance', requires: 'cribl', section: 'journey', render: () => packsView },
-    { id: 'repositories', label: 'Repositories', requires: 'none', section: 'tools', render: () => repositoriesView },
-    { id: 'labs', label: 'Labs', requires: 'azure', section: 'tools', render: () => labsView },
-    { id: 'logs', label: 'Logs', requires: 'none', section: 'tools', render: () => logsView },
-    { id: 'settings', label: 'Settings', requires: 'none', section: 'tools', render: () => settingsView },
-    { id: 'siem-migration', label: 'SIEM Migration', requires: 'none', section: 'development', render: renderSiemMigration },
-    { id: 'preflight', label: 'Permission Verification', requires: 'azure', section: 'development', render: renderPreflight },
-    { id: 'eventhub-discovery', label: 'Event Hub Discovery', requires: 'azure', section: 'development', render: () => eventHubDiscoveryView },
-    { id: 'mapping-catalog', label: 'Mapping Catalog', requires: 'none', section: 'development', render: () => mappingCatalogView },
-    { id: 'harness', label: 'Diagnostics', requires: 'none', section: 'diagnostics', render: () => harnessView },
+    { id: 'architecture', label: 'Dataflow', requires: capabilitiesForRoute('architecture'), section: 'journey', render: renderArchitecture },
+    { id: 'home', label: 'Setup', requires: capabilitiesForRoute('home'), section: 'journey', render: renderHome },
+    { id: 'integrate', label: 'Sentinel Integration', requires: capabilitiesForRoute('integrate'), section: 'journey', render: renderIntegrate },
+    { id: 'dcr-automation', label: 'DCR Automation', requires: capabilitiesForRoute('dcr-automation'), section: 'journey', render: renderDcrAutomation },
+    { id: 'packs', label: 'Pack Maintenance', requires: capabilitiesForRoute('packs'), section: 'journey', render: () => packsView },
+    { id: 'repositories', label: 'Repositories', requires: capabilitiesForRoute('repositories'), section: 'tools', render: () => repositoriesView },
+    { id: 'labs', label: 'Labs', requires: capabilitiesForRoute('labs'), section: 'tools', render: () => labsView },
+    { id: 'logs', label: 'Logs', requires: capabilitiesForRoute('logs'), section: 'tools', render: () => logsView },
+    { id: 'settings', label: 'Settings', requires: capabilitiesForRoute('settings'), section: 'tools', render: () => settingsView },
+    { id: 'siem-migration', label: 'SIEM Migration', requires: capabilitiesForRoute('siem-migration'), section: 'development', render: renderSiemMigration },
+    { id: 'preflight', label: 'Permission Verification', requires: capabilitiesForRoute('preflight'), section: 'development', render: renderPreflight },
+    { id: 'eventhub-discovery', label: 'Event Hub Discovery', requires: capabilitiesForRoute('eventhub-discovery'), section: 'development', render: () => eventHubDiscoveryView },
+    { id: 'mapping-catalog', label: 'Mapping Catalog', requires: capabilitiesForRoute('mapping-catalog'), section: 'development', render: () => mappingCatalogView },
+    { id: 'harness', label: 'Diagnostics', requires: capabilitiesForRoute('harness'), section: 'diagnostics', render: () => harnessView },
   ];
 
   return (
@@ -2146,6 +2149,8 @@ function App() {
       subtitle="Cribl.Cloud shell"
       mode={phase.mode}
       routes={routes}
+      capabilities={capabilityAudit.capabilities}
+      capabilityContext={capabilityAudit.context}
       topBar={connectionBar}
       footerNote={`v${window.__APP_VERSION_RUNTIME__ ?? __APP_VERSION__}`}
       initialRouteId="architecture"

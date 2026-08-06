@@ -3,13 +3,19 @@
  * acceptance gate and mode selection have passed: a sidebar built from a
  * route table, a mode chip, and a content area.
  *
- * Navigation is DERIVED, never duplicated: the visible items come from
- * @soc/core's filterNavItems over the routes' `requires` declarations, so the
- * nav can never disagree with the mode's capability predicates (the legacy
- * sidebar reimplemented the mode logic inline and was one of four independent
- * mode reads). Unit 6.5 adds SECTION grouping (journey steps first, then
- * tools, then diagnostics - ux-flow-plan 4.4): pure presentation applied
- * AFTER the one filterNavItems pass, so mode filtering is untouched.
+ * Navigation ANNOTATES, it does not filter (capability-model-plan step 3). The
+ * nav renders EVERY route in the table and marks what is unavailable and why,
+ * from @soc/core's annotateNavItems over the routes' `requires` capabilities.
+ * This inverts what the frame used to do - filterNavItems REMOVED what the mode
+ * could not use - and the rule is now the opposite: an operator who declines
+ * every permission still sees the whole product.
+ *
+ * Nothing here is ever DISABLED either. The audit informs and offers; Azure's
+ * own 403 is the real gate, so an annotated route stays clickable and a stale or
+ * wrong audit costs an annotation rather than the ability to work.
+ *
+ * Unit 6.5's SECTION grouping (journey steps first, then tools, then
+ * diagnostics - ux-flow-plan 4.4) is pure presentation over the same full list.
  *
  * The frame is presentation only: the SHELL owns mode persistence and passes
  * the resolved mode down; screens keep doing their IO through PortsContext.
@@ -23,10 +29,12 @@
 
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import { filterNavItems } from "@soc/core";
-import type { AppMode, NavRequirement } from "@soc/core";
+import { annotateNavItems, emptyCapabilitySet } from "@soc/core";
+import type { Capability, CapabilityContext, CapabilitySet } from "@soc/core";
+import type { AppMode } from "@soc/core";
 import {
   MODE_LABELS,
+  NAV_FLAG_LABELS,
   NAV_SECTION_LABELS,
   groupNavSections,
 } from "./frame-state";
@@ -55,8 +63,14 @@ export interface AppRoute {
   id: string;
   /** Sidebar label. */
   label: string;
-  /** What the route needs before it is shown; filtered by the active mode. */
-  requires: NavRequirement;
+  /**
+   * Every capability the route needs. EMPTY means always available - the
+   * generation-only surfaces that work with no connection at all.
+   *
+   * This NO LONGER decides whether the route is shown (capability-model-plan
+   * step 3): every route appears, annotated with what is unavailable and why.
+   */
+  requires: readonly Capability[];
   /** Sidebar section (ux-flow-plan 4.4); defaults to 'tools'. */
   section?: NavSection;
   /** Render the route's content. */
@@ -70,8 +84,23 @@ export interface AppFrameProps {
   subtitle?: string;
   /** The ACTIVE mode; the shell resolves it before mounting the frame. */
   mode: AppMode;
-  /** The full route table; the frame filters it by mode. */
+  /**
+   * The full route table. EVERY entry renders in the nav - the frame annotates
+   * rather than filters (capability-model-plan step 3).
+   */
   routes: readonly AppRoute[];
+  /**
+   * What the connected identity was measured to be able to do. Absent (or
+   * unaudited) is fine and reads honestly as "not checked yet" - the audit
+   * informs, it never gates.
+   */
+  capabilities?: CapabilitySet;
+  /**
+   * The connection facts that resolve anything unmeasured. Absent is treated as
+   * both sides connected, so unmeasured capabilities read "not checked yet"
+   * rather than claiming a connection failure nothing established.
+   */
+  capabilityContext?: CapabilityContext;
   /** Shell chrome rendered above the active screen (e.g. connection bar). */
   topBar?: ReactNode;
   /** Small line in the sidebar footer (e.g. version). */
@@ -92,6 +121,8 @@ export function AppFrame(props: AppFrameProps) {
     subtitle,
     mode,
     routes,
+    capabilities,
+    capabilityContext,
     topBar,
     footerNote,
     initialRouteId,
@@ -99,23 +130,30 @@ export function AppFrame(props: AppFrameProps) {
   } = props;
   const [routeId, setRouteId] = useState(initialRouteId ?? "");
 
-  // Filter, then fall back: if the requested route is hidden by the current
-  // mode (or unknown), the first visible route renders instead - the frame
-  // never shows a screen the mode cannot use. ONE filterNavItems pass;
-  // grouping below is presentation only.
-  const visible = filterNavItems(mode, routes);
+  // ANNOTATE, never filter (capability-model-plan step 3). Every route reaches
+  // the nav; what changes is the note beside it. This is the inversion of the
+  // old filterNavItems pass, which removed what the mode could not use.
+  const annotated = annotateNavItems(
+    routes,
+    capabilities ?? emptyCapabilitySet(),
+    capabilityContext ?? { azureIdentityPresent: true, criblReachable: true },
+  );
+  const annotationById = new Map(
+    annotated.map((entry) => [entry.item.id, entry] as const),
+  );
 
   const navigate = useCallback((id: string) => setRouteId(id), []);
-  // Memoized on the visible id SET (stringified) so nav stays stable across
-  // renders that do not change route visibility.
-  const visibleIdKey = visible.map((route) => route.id).join(",");
+  // Every route in the table is navigable now that none are hidden. canNavigate
+  // answers "does this route exist here?" - the honest question once capability
+  // no longer removes anything, and the one cross-linking screens actually need.
+  const routeIdKey = routes.map((route) => route.id).join(",");
   const nav = useMemo<AppFrameNav>(() => {
-    const ids = new Set(visibleIdKey.split(",").filter((id) => id !== ""));
+    const ids = new Set(routeIdKey.split(",").filter((id) => id !== ""));
     return { navigate, canNavigate: (id: string) => ids.has(id) };
-  }, [navigate, visibleIdKey]);
-  const active = visible.find((route) => route.id === routeId) ?? visible[0];
+  }, [navigate, routeIdKey]);
+  const active = routes.find((route) => route.id === routeId) ?? routes[0];
   const activeId = active?.id;
-  const sections = groupNavSections(visible);
+  const sections = groupNavSections(routes);
 
   // Keep-alive: once a route becomes active it stays MOUNTED (hidden when
   // inactive) so its local state survives navigation - bouncing to another
@@ -126,7 +164,7 @@ export function AppFrame(props: AppFrameProps) {
   if (activeId !== undefined) {
     visitedRef.current.add(activeId);
   }
-  const mounted = visible.filter((route) => visitedRef.current.has(route.id));
+  const mounted = routes.filter((route) => visitedRef.current.has(route.id));
 
   // A route change opens the new screen at ITS top. Because routes stay
   // MOUNTED (keep-alive above) the window keeps whatever offset the previous
@@ -163,17 +201,35 @@ export function AppFrame(props: AppFrameProps) {
               <div className="app-frame-nav-section-label">
                 {NAV_SECTION_LABELS[group.section]}
               </div>
-              {group.items.map((route) => (
-                <button
-                  key={route.id}
-                  className={`app-frame-nav-item${
-                    route.id === active?.id ? " app-frame-nav-item-active" : ""
-                  }`}
-                  onClick={() => setRouteId(route.id)}
-                >
-                  {route.label}
-                </button>
-              ))}
+              {group.items.map((route) => {
+                const entry = annotationById.get(route.id);
+                const availability = entry?.availability ?? "available";
+                // Every route stays CLICKABLE. The audit informs and offers; it
+                // never forbids, and Azure's own 403 is the real gate.
+                return (
+                  <button
+                    key={route.id}
+                    className={
+                      `app-frame-nav-item` +
+                      (route.id === active?.id ? " app-frame-nav-item-active" : "") +
+                      (availability === "available"
+                        ? ""
+                        : ` app-frame-nav-item-${availability}`)
+                    }
+                    onClick={() => setRouteId(route.id)}
+                    title={entry?.reason ?? undefined}
+                  >
+                    <span className="app-frame-nav-item-label">{route.label}</span>
+                    {availability !== "available" && (
+                      <span
+                        className={`app-frame-nav-flag app-frame-nav-flag-${availability}`}
+                      >
+                        {NAV_FLAG_LABELS[availability]}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
             </div>
           ))}
         </nav>
@@ -202,10 +258,10 @@ export function AppFrame(props: AppFrameProps) {
           </div>
           {topBar}
           {active === undefined ? (
-            <p className="panel-desc">
-              No screens are available in this mode. Reconfigure the mode from
-              Settings.
-            </p>
+            // Only reachable with an EMPTY route table, which is a shell wiring
+            // bug rather than a runtime state - capability can no longer empty
+            // the nav, because it no longer removes anything from it.
+            <p className="panel-desc">No screens are registered.</p>
           ) : (
             mounted.map((route) => {
               const isActive = route.id === activeId;

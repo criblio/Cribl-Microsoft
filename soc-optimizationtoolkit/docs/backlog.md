@@ -51,11 +51,35 @@ contributes nothing rather than passing its conservative `granted:false` checks
 through as `denied`. It lives in `usecases/` because the dependency only points
 one way. Step 2 is now unblocked with nothing outstanding.
 
-**Step 3 - nav annotation.** `annotateNavItems(capabilities, routes)` replacing
-`filterNavItems(mode, routes)`, and `AppRoute.requires` becoming
-`Capability[]`. This is where behavior visibly changes: today the frame HIDES
-what the mode cannot use, and the new rule is the opposite - every route
-appears, annotated with what is unavailable and why. Highest-risk step.
+**Step 3 - nav annotation. DONE (2026-08-06).** `annotateNavItems` replaces
+`filterNavItems`, `AppRoute.requires` is `Capability[]`, and the frame renders
+every route with a flag and a reason. Nothing is hidden and nothing is disabled -
+a denied route stays clickable, pinned by DOM tests over the frame (which had no
+direct coverage before this).
+
+Per-route capabilities live in ONE shared `ROUTE_CAPABILITIES` map rather than in
+each shell's route table, so the two shells cannot disagree about what an
+operator can do. Two routes deliberately depart from their old coarse value, and
+both are worth remembering:
+
+- **`preflight` was `azure`, now `[]`.** It is the screen that RUNS the audit, so
+  gating it on permissions is circular - an operator whose audit says "no access"
+  would find the one screen that could correct that finding flagged unavailable.
+- **`eventhub-discovery` was `azure`, now `[]`** - see the taxonomy gap below.
+
+**Taxonomy gap: Resource Graph reads.** Event Hub discovery reads through Azure
+Resource Graph, and the settled 11-capability taxonomy has nothing covering it.
+Mapping it onto `workspace.read` or `dcr.read` would MISREPORT what was checked,
+so the route is unconstrained and the screen keeps reporting its own errors. Two
+honest options when someone picks this up: add a `resourcegraph.read` capability
+(and a preflight probe for it), or accept that discovery-only surfaces stay
+unannotated. Do not quietly reuse a neighbouring capability.
+
+**Not yet done in step 3:** the audit's AGE and a manual re-check still have no
+home. The nav was the intended surface for it, and annotating individual items
+turned out to be the wrong place for a global "checked 5 minutes ago" line - it
+belongs in the frame footer or the connection bar, next to the existing
+secret/target/platform-link chips.
 
 **Step 4 - fallback routing.** Each blocked action wired to its downloadable
 artifact per the plan's table. Most of the machinery exists: `templateOnly`

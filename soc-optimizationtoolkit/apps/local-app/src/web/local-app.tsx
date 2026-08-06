@@ -36,6 +36,7 @@ import {
   SettingsScreen,
   SetupWizard,
   SiemMigrationScreen,
+  capabilitiesForRoute,
   commitNoticeText,
   formatScopeChip,
   logLineToEntry,
@@ -532,9 +533,7 @@ export function LocalApp() {
   // the host and reloading the page - which arrives as a fresh `launch`. The
   // cloud shell needs the explicit trigger precisely because it can save a
   // secret without the page ever reloading.
-  // The result is deliberately unused for now - step 3's nav annotation is its
-  // first consumer. Running and caching the audit is this step's whole job.
-  useCapabilityAudit({
+  const capabilityAudit = useCapabilityAudit({
     ports,
     config: activeAzureConfig ?? EMPTY_AZURE_CONFIG,
     // Withhold until the host config has loaded - until then the config is the
@@ -1150,19 +1149,19 @@ export function LocalApp() {
     // Dataflow is the JOURNEY landing item (user directive
     // 2026-07-20): users arrive here first to learn how the ingestion works
     // before setting anything up. requires:'none' so it is always reachable.
-    { id: 'architecture', label: 'Dataflow', requires: 'none', section: 'journey', render: renderArchitecture },
-    { id: 'home', label: 'Setup', requires: 'none', section: 'journey', render: renderHome },
-    { id: 'integrate', label: 'Sentinel Integration', requires: 'both', section: 'journey', render: renderIntegrate },
-    { id: 'dcr-automation', label: 'DCR Automation', requires: 'azure', section: 'journey', render: renderDcrAutomation },
-    { id: 'packs', label: 'Pack Maintenance', requires: 'cribl', section: 'journey', render: () => packsView },
-    { id: 'repositories', label: 'Repositories', requires: 'none', section: 'tools', render: () => repositoriesView },
-    { id: 'labs', label: 'Labs', requires: 'azure', section: 'tools', render: () => labsView },
-    { id: 'logs', label: 'Logs', requires: 'none', section: 'tools', render: () => logsView },
-    { id: 'settings', label: 'Settings', requires: 'none', section: 'tools', render: () => settingsView },
-    { id: 'siem-migration', label: 'SIEM Migration', requires: 'none', section: 'development', render: renderSiemMigration },
-    { id: 'preflight', label: 'Permission Verification', requires: 'azure', section: 'development', render: renderPreflight },
-    { id: 'eventhub-discovery', label: 'Event Hub Discovery', requires: 'azure', section: 'development', render: () => eventHubDiscoveryView },
-    { id: 'mapping-catalog', label: 'Mapping Catalog', requires: 'none', section: 'development', render: () => mappingCatalogView },
+    { id: 'architecture', label: 'Dataflow', requires: capabilitiesForRoute('architecture'), section: 'journey', render: renderArchitecture },
+    { id: 'home', label: 'Setup', requires: capabilitiesForRoute('home'), section: 'journey', render: renderHome },
+    { id: 'integrate', label: 'Sentinel Integration', requires: capabilitiesForRoute('integrate'), section: 'journey', render: renderIntegrate },
+    { id: 'dcr-automation', label: 'DCR Automation', requires: capabilitiesForRoute('dcr-automation'), section: 'journey', render: renderDcrAutomation },
+    { id: 'packs', label: 'Pack Maintenance', requires: capabilitiesForRoute('packs'), section: 'journey', render: () => packsView },
+    { id: 'repositories', label: 'Repositories', requires: capabilitiesForRoute('repositories'), section: 'tools', render: () => repositoriesView },
+    { id: 'labs', label: 'Labs', requires: capabilitiesForRoute('labs'), section: 'tools', render: () => labsView },
+    { id: 'logs', label: 'Logs', requires: capabilitiesForRoute('logs'), section: 'tools', render: () => logsView },
+    { id: 'settings', label: 'Settings', requires: capabilitiesForRoute('settings'), section: 'tools', render: () => settingsView },
+    { id: 'siem-migration', label: 'SIEM Migration', requires: capabilitiesForRoute('siem-migration'), section: 'development', render: renderSiemMigration },
+    { id: 'preflight', label: 'Permission Verification', requires: capabilitiesForRoute('preflight'), section: 'development', render: renderPreflight },
+    { id: 'eventhub-discovery', label: 'Event Hub Discovery', requires: capabilitiesForRoute('eventhub-discovery'), section: 'development', render: () => eventHubDiscoveryView },
+    { id: 'mapping-catalog', label: 'Mapping Catalog', requires: capabilitiesForRoute('mapping-catalog'), section: 'development', render: () => mappingCatalogView },
   ];
 
   // Frame topBar (GUI-28's Azure half): the committed target scope as a
@@ -1193,6 +1192,8 @@ export function LocalApp() {
       subtitle="Local shell"
       mode={phase.mode}
       routes={routes}
+      capabilities={capabilityAudit.capabilities}
+      capabilityContext={capabilityAudit.context}
       topBar={topBar}
       initialRouteId="architecture"
       footerNote={`local host - v${__APP_VERSION__}`}

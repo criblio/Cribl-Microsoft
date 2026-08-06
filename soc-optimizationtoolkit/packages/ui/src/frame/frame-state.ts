@@ -22,8 +22,9 @@
  *   - {@link isScrolledToBottom}: the acceptance gate's scroll threshold.
  *   - {@link groupNavSections}: the sidebar's section grouping (ux-flow-plan
  *     4.4, Unit 6.5) - journey steps first, then tools, then diagnostics.
- *     Grouping is PRESENTATION only, applied AFTER the one core
- *     filterNavItems pass; mode filtering semantics are unchanged.
+ *     Grouping is PRESENTATION only and never removes anything; since
+ *     capability-model-plan step 3 the nav annotates rather than filters, so
+ *     every route reaches this function.
  *
  * Pure: no IO, no fetch, no React.
  */
@@ -172,18 +173,35 @@ export const NAV_SECTION_LABELS: Readonly<Record<NavSection, string>> = {
   diagnostics: "Diagnostics",
 };
 
-/** One rendered nav group: a section plus its visible routes, in order. */
+/**
+ * The short flag rendered beside a nav item that is not simply available
+ * (capability-model-plan step 3).
+ *
+ * Three distinct words for three distinct facts, and keeping them distinct is
+ * the point: "unchecked" must never read as "no access", because not having
+ * measured is not the same as having been refused. There is no label for
+ * `available` - an available item carries no flag at all.
+ */
+export const NAV_FLAG_LABELS: Readonly<
+  Record<"denied" | "unknown" | "unreachable", string>
+> = {
+  denied: "no access",
+  unknown: "unchecked",
+  unreachable: "not connected",
+};
+
+/** One rendered nav group: a section plus its routes, in order. */
 export interface NavSectionGroup<T> {
   section: NavSection;
   items: T[];
 }
 
 /**
- * Group already-filtered nav items by section for rendering. Runs AFTER the
- * one core filterNavItems pass (grouping never re-filters): sections come
- * out in {@link NAV_SECTION_ORDER}, items keep their route-table order
- * within each section, empty sections are omitted, and items without a
- * section land in {@link DEFAULT_NAV_SECTION}.
+ * Group nav items by section for rendering. Presentation only - it never
+ * removes an item, and since step 3 nothing upstream does either: sections come
+ * out in {@link NAV_SECTION_ORDER}, items keep their route-table order within
+ * each section, empty sections are omitted, and items without a section land in
+ * {@link DEFAULT_NAV_SECTION}.
  */
 export function groupNavSections<T extends { section?: NavSection }>(
   items: readonly T[],
