@@ -3,7 +3,11 @@
  * preflight, projects it onto capabilities, and caches the result per
  * connection. Never throws; a failed audit costs verdicts, never the app.
  */
-export { loadCachedCapabilities, runCapabilityAudit } from "./capability-audit";
+export {
+  loadCachedCapabilities,
+  runCapabilityAudit,
+  saveCapabilityAudit,
+} from "./capability-audit";
 export type {
   CapabilityAuditInput,
   CapabilityAuditPorts,

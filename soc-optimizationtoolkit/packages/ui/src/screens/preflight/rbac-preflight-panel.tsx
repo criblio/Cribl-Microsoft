@@ -27,8 +27,11 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   CRIBL_CAPABILITY_PROBES,
   REQUIRED_ACTIONS,
+  capabilitiesFromSides,
+  capabilityAuditKey,
   runAzurePreflight,
   runCriblPreflight,
+  saveCapabilityAudit,
 } from "@soc/core";
 import type {
   AzurePreflight,
@@ -228,10 +231,43 @@ export function RbacPreflightPanel({
       );
   }, [ports, setupPath, target, criblShellMode, workerGroup]);
 
-  // Auto-run on mount and whenever the setup path or target scope changes.
+  // Auto-run on mount and whenever the setup path or target scope changes. The
+  // panel is a surface the operator navigated to in order to check permissions,
+  // so measuring on arrival is the point - the audit lifecycle's "do not
+  // re-audit every launch" rule governs app STARTUP, not this screen.
   useEffect(() => {
     run();
   }, [run]);
+
+  // Feed the same cache the app-level capability audit reads, so the check the
+  // operator just ran counts and no second audit measures the same thing. The
+  // set carries the connection it was measured against, so if the panel's setup
+  // path differs from the app's the worst case is a later re-audit, never a
+  // wrong answer.
+  useEffect(() => {
+    if (azure.phase !== "done" || azure.result === null) {
+      return;
+    }
+    if (cribl.phase !== "done" || cribl.result === null) {
+      return;
+    }
+    const key = capabilityAuditKey({
+      tenantId: config.tenantId,
+      clientId: config.clientId,
+      subscriptionId: target.subscriptionId,
+      resourceGroup: target.resourceGroup,
+      workspaceName: target.workspaceName,
+      setupPath,
+      criblWorkerGroup: workerGroup,
+    });
+    const set = capabilitiesFromSides(azure.result, cribl.result, {
+      auditedAt: new Date().toISOString(),
+      connectionId: key,
+    });
+    // Fire-and-forget: saveCapabilityAudit swallows backend failures, and a
+    // missed write only costs a re-audit later.
+    void saveCapabilityAudit(ports.contentCache, set, ports.logger);
+  }, [azure, cribl, config.tenantId, config.clientId, target, setupPath, workerGroup, ports]);
 
   const view = derivePreflightView({
     setupPath,

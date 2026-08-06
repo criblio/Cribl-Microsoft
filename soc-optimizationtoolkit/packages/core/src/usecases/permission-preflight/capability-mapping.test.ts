@@ -20,6 +20,7 @@ import {
   CRIBL_PROBE_CAPABILITIES,
   capabilitiesCheckedForSetupPath,
   capabilitiesFromReport,
+  capabilitiesFromSides,
 } from "./capability-mapping";
 import {
   runAzurePreflight,
@@ -469,6 +470,23 @@ describe("over a real preflight report", () => {
     expect(set.verdicts["dcr.write"]).toBe("denied");
     expect(set.verdicts["table.write"]).toBe("denied");
     expect(set.verdicts["arm.deploy"]).toBe("denied");
+  });
+
+  it("projects the same answer from the halves as from the whole report", async () => {
+    // The RBAC preflight panel fires the two side-runners independently and
+    // never assembles a report, so it projects through capabilitiesFromSides.
+    // Both callers must agree, or the panel's cached measurement would mean
+    // something different from the audit's.
+    const azure = new FakeAzureManagement();
+    azure.respondWith(permsResponse(READER), OK, FORBIDDEN, OK);
+    const full = await runPermissionPreflight(
+      { azure, cribl: new FakeCriblClient() },
+      { setupPath: "existing-rg", azure: FULL_TARGET, cribl: { mode: "cloud" } },
+    );
+
+    expect(capabilitiesFromSides(full.azure, full.cribl, META)).toEqual(
+      capabilitiesFromReport(full, META),
+    );
   });
 
   it("a 403 on the DCR list denies only the read it probed", async () => {

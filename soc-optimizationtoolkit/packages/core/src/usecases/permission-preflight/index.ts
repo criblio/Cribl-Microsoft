@@ -32,5 +32,6 @@ export {
   CRIBL_PROBE_CAPABILITIES,
   capabilitiesCheckedForSetupPath,
   capabilitiesFromReport,
+  capabilitiesFromSides,
 } from "./capability-mapping";
 export type { CapabilityAuditMeta } from "./capability-mapping";

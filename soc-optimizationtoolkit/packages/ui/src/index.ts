@@ -616,6 +616,27 @@ export type {
   SidePhase,
 } from "./screens/preflight/preflight-state";
 
+// App-level capability audit (capability-model-plan step 2): the permission
+// audit that will replace app modes as what the product gates on. useCapabilityAudit
+// owns the LIFECYCLE - it loads the cached result, re-measures only when the
+// audited connection changed or the shell reports a secret re-entry, and hands
+// back the capabilities plus the connection facts the domain resolves anything
+// unmeasured from. Launch deliberately reuses a matching cached audit: the check
+// costs real requests against a shared budget and permissions change rarely, and
+// it is safe because the audit informs rather than forbids. Step 3's nav
+// annotation is the intended consumer.
+export {
+  auditStatusTone,
+  deriveCapabilityContext,
+  hasAzureIdentity,
+  refreshLabel,
+  useCapabilityAudit,
+} from "./capabilities";
+export type {
+  CapabilityAuditOptions,
+  CapabilityAuditState,
+} from "./capabilities";
+
 // Setup Wizard (porting-plan Unit 22, GUI-03 delta): the local-app first-run
 // onboarding ASSEMBLED from already-shipped pieces - AuaGate (Unit 1) ->
 // target chooser (core tradeoff data) -> Connect (the .tgz upload walkthrough

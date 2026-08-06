@@ -125,8 +125,15 @@ export async function loadCachedCapabilities(
   }
 }
 
-/** Persist a set; a write failure only costs a re-audit next launch. */
-async function storeCapabilities(
+/**
+ * Persist a set; a write failure only costs a re-audit next launch.
+ *
+ * Exported because the RBAC preflight panel measures the same thing on demand
+ * and should feed the same cache rather than run a competing audit beside it.
+ * Safe for either writer: the set carries the connection it was measured
+ * against, so a set stored for one connection can never be read AS another's.
+ */
+export async function saveCapabilityAudit(
   cache: ContentCache | undefined,
   set: CapabilitySet,
   logger?: Logger,
@@ -211,7 +218,7 @@ export async function runCapabilityAudit(
     auditedAt: input.nowIso,
     connectionId: key,
   });
-  await storeCapabilities(ports.cache, set, logger);
+  await saveCapabilityAudit(ports.cache, set, logger);
 
   logger?.info("capability-audit: audited", {
     trigger: input.trigger,

@@ -189,6 +189,31 @@ function applyCriblProbes(preflight: CriblPreflight, into: Verdicts): void {
 }
 
 /**
+ * Project the two preflight HALVES onto a {@link CapabilitySet}.
+ *
+ * Takes the sides rather than a whole report because the RBAC preflight panel
+ * fires the two side-runners INDEPENDENTLY - so that a slow or failed side never
+ * blanks the other - and therefore never assembles a PermissionReport. Both
+ * callers project through this one function, so the panel's measurement and the
+ * audit's measurement can never disagree about what a probe means.
+ */
+export function capabilitiesFromSides(
+  azure: AzurePreflight,
+  cribl: CriblPreflight,
+  meta: CapabilityAuditMeta,
+): CapabilitySet {
+  const verdicts: Verdicts = {};
+  applyAzureChecks(azure, verdicts);
+  applyAzureProbes(azure, verdicts);
+  applyCriblProbes(cribl, verdicts);
+  return {
+    verdicts,
+    auditedAt: meta.auditedAt,
+    connectionId: meta.connectionId,
+  };
+}
+
+/**
  * Project a permission preflight report onto a {@link CapabilitySet}.
  *
  * Records ONLY what was measured; everything else is left out so the domain
@@ -200,13 +225,5 @@ export function capabilitiesFromReport(
   report: PermissionReport,
   meta: CapabilityAuditMeta,
 ): CapabilitySet {
-  const verdicts: Verdicts = {};
-  applyAzureChecks(report.azure, verdicts);
-  applyAzureProbes(report.azure, verdicts);
-  applyCriblProbes(report.cribl, verdicts);
-  return {
-    verdicts,
-    auditedAt: meta.auditedAt,
-    connectionId: meta.connectionId,
-  };
+  return capabilitiesFromSides(report.azure, report.cribl, meta);
 }
