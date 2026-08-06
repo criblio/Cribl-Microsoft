@@ -1,14 +1,17 @@
 # Backlog
 
-Carried forward from the session ending 2026-08-06 (last commit `4eb4c57`).
-Each item states enough context to be picked up cold. Ordered by priority within
-each group.
+Updated 2026-08-06 (branch `feature/capability-preflight-mapping`). Each item
+states enough context to be picked up cold. Ordered by priority within each
+group.
 
-## 1. Capability model - steps 2 to 5
+## 1. Capability model - COMPLETE, with two follow-ons
 
-Design is settled. See [capability-model-plan.md](capability-model-plan.md);
-every open decision in it is now closed. Step 1 (the pure domain) shipped in
-`56e909f` and nothing consumes it yet.
+All five plan steps have shipped. See
+[capability-model-plan.md](capability-model-plan.md). App modes are gone; what an
+operator can do is measured by a permission audit and annotated, never hidden.
+
+Two things remain, both carried below: step 4 has no UI, and the audit's age has
+no home. Neither blocks anything.
 
 **Step 2 - audit lifecycle. DONE (2026-08-06).** The pure policy
 (`domain/capabilities/audit-lifecycle` - the audit key, the trigger rules, age
@@ -81,43 +84,46 @@ turned out to be the wrong place for a global "checked 5 minutes ago" line - it
 belongs in the frame footer or the connection bar, next to the existing
 secret/target/platform-link chips.
 
-**Step 4 - fallback routing.** Each blocked action wired to its downloadable
-artifact per the plan's table. Most of the machinery exists: `templateOnly`
-already collects ARM request bodies into one artifact, and `domain/change-request`
-already generates paste-ready tickets. They are currently triggered by mode or by
-hand; the work is triggering them from a permission verdict.
+**Step 4 - fallback routing. DECISION LAYER DONE (2026-08-06); UI NOT BUILT.**
+`domain/capabilities/fallback-routing` resolves the tension the plan left: it
+says to force the artifact "from a permission verdict", while rule 3 says the
+audit never forbids. UNREACHABLE forces (there is nowhere to send the request -
+and this is what the old `!hasCribl(mode)` check actually meant); DENIED only
+OFFERS, so the live attempt survives a stale or wrong audit. `unknown` routes
+live. `mustProduceArtifacts` now drives `forcedTemplateOnly` in both shells.
 
-**Step 5 - mode removal. PART 1 DONE (2026-08-06).** The journey no longer
-branches on mode: `JourneyFacts.mode` gone, `choose-mode` gone as a stage, the
-arc never pruned, chips always rendered. Four pins assert the opposite of what
-they used to and say so at the assertion.
+The fallback catalog is data, keyed by a typed `kind` so the routing is a switch
+the compiler checks. Read capabilities map to NOTHING deliberately - without live
+read access discovery cannot run and no artifact substitutes for it.
 
-**Remaining, in dependency order.** Each slice must span core + ui + shells to
-keep the tree compiling - that is what makes them slices rather than one sweep.
+**What remains: nothing RENDERS the offer.** When an action is blocked the
+operator is told so (step 3's annotation) but is not yet handed the artifact. The
+work is presentational over a settled contract: a component that takes a
+`CapabilityFallback` and routes its `kind` to the generator that already exists -
+`templateOnly` for the ARM bodies, `domain/change-request` for the tickets, the
+pack builder for `.crbl`.
 
-1. **`first-run-wizard` + the UI setup wizard.** Attempted and REVERTED rather
-   than left half-done; the findings are worth keeping:
-   - Core is the easy half: delete the mode auto-selection matrix
-     (`MODE_REQUIREMENTS`, `recommendMode`, `modeCards`, `MODE_COPY`,
-     `WIZARD_MODE_ORDER`, `ModeCard`), drop `"mode"` from `WizardStepId` and
-     `WizardPhase`, drop `WizardShape.mode`, and make both connect steps always
-     show. Their skippability is what makes that safe.
-   - `wizardViews` places the preflight view *before* the mode step today. With
-     mode gone the natural anchor is LAST, which also reads better: verify
-     access, then Get Started.
-   - `deriveGetStarted` loses two of its three conditions - reaching the final
-     view becomes the whole gate. `GET_STARTED_NO_MODE_REASON` and
-     `GET_STARTED_MODE_UNAVAILABLE_REASON` go with them.
-   - The long tail is `setup-wizard-state.test.ts`, which pins view LISTS
-     containing `"mode"`, plus `setup-wizard.tsx`'s mode step render and
-     `ModeCardGrid`.
-2. **Frame + Settings.** `ModeSelect`, the mode chip, `MODE_LABELS`/
-   `MODE_OPTIONS`, `resolveFramePhase`'s `mode-select` phase, and Settings'
-   Reconfigure (it currently writes an empty mode record).
-3. **Shells.** The `appMode` KV entry and the `mode` prop threaded into
-   `AppFrame`.
-4. **Delete `domain/app-mode`** last, including the already-dead
-   `filterNavItems`.
+**Step 5 - mode removal. DONE (2026-08-06).** `AppMode`, `APP_MODES`,
+`hasAzure`/`hasCribl`, `NavRequirement`, `filterNavItems`, `ModeSelect`, the mode
+chip, `MODE_LABELS`/`MODE_OPTIONS` and the persisted `appMode` entry are all
+gone. `domain/app-mode` became `domain/app-setup`: the acceptance record only
+ever lived there, and a module named app-mode with no modes in it is exactly the
+stale naming an audit should flag.
+
+**Mode was doing a second job**, and this was the non-obvious part. A null mode
+meant "not yet chosen", which the shells read as "not yet SET UP" - so deleting
+modes would have deleted the signal that decides wizard-or-app. That job now has
+its own name (`SetupRecord`), the same tolerant-and-total parse as its
+neighbours, and the same Reconfigure contract (`{}` reopens the wizard).
+
+`resolveFramePhase` keeps its ORDER; only step 4 is renamed `mode-select` ->
+`setup`, and `ready` stops carrying a mode.
+
+**One-time migration, confirmed live.** An install with an old `appMode` entry
+and no `setupComplete` lands in the wizard ONCE. Only the flag resets -
+connections, tokens, committed target and secret all survive, and the next reload
+goes straight to the app. Correct, non-destructive, and worth a release note,
+because it will happen to every existing install.
 
 **Test note that applies to all of the above.** The mode contracts are pinned
 across at least six state modules (`frame-state`, `stepper-state`,
@@ -159,17 +165,28 @@ connector is enabled.
 
 ## 3. Verification gaps
 
-**First-run wizard as a genuine first run. VERIFIED 2026-08-06.** Walked end to
-end from clean state in the cloud shell on the dev server - AUA, Connect
-(GitHub-first), the optional Connect Azure sub-step with the change-request
-generator inline, the permission check, Mode, then into the app frame. It matches
-what was described from the forced branch; no forced branch was needed.
+**First-run wizard as a genuine first run. VERIFIED 2026-08-06, twice.** Walked
+end to end from clean state in the cloud shell (dev server), and again in the
+LIVE PREVIEW after mode removal - the second walk doubled as the migration test.
+No forced branch needed either time.
 
-One copy mismatch seen while walking it: the header promises four phases
-("connect GitHub content, connect Azure, verify access, then pick an operating
-mode") while the stepper shows two, Connect and Mode, with the other three as
-sub-steps inside Connect. Not wrong, but the header sets up a count the stepper
-does not show.
+The copy mismatch found on the first walk PERSISTS in a smaller form: the header
+lists three phases ("connect GitHub content, connect Azure, verify access") while
+the stepper shows one, Connect, with the rest as sub-steps inside it. The Mode
+phase it used to promise is gone, so the gap narrowed from 4-vs-2 to 3-vs-1, but
+the header still sets up a count the stepper does not show. Either drop the
+enumeration from the header or promote the sub-steps.
+
+**Annotated nav states have never been seen live.** A healthy connection produces
+no flags, so `no access` / `unchecked` / `not connected` are test-verified only
+(DOM tests over the frame). Seeing them needs a connection with missing
+permissions - a second App registration with reduced RBAC would do it, and would
+also exercise step 4's offer path once that UI exists.
+
+**The local shell has never been exercised in a browser.** Every live validation
+so far has been the cloud shell. The local shell compiles and its tests pass, but
+the mode removal touched its gate flow (`resolveFramePhase`, the setup record,
+the wizard's Get Started) and none of that has been run.
 
 **The bug-triage workflow has never run.** `.github/workflows/bug-triage.yml`
 fires daily at 07:00 UTC or on demand. First execution creates three labels
