@@ -44,13 +44,10 @@
 import {
   deriveCloudBaseUrl,
   deriveSelfManagedBaseUrl,
-  hasAzure,
-  hasCribl,
   wizardProgress,
   wizardSteps,
 } from "@soc/core";
 import type {
-  AppMode,
   BaseUrlResult,
   LeaderDeploymentType,
   WizardPhase,
@@ -95,24 +92,24 @@ const EXTRA_VIEW_LABELS: Readonly<Record<WizardExtraViewId, string>> = {
 };
 
 /**
- * The concrete ordered screen list for a target + mode.
+ * The concrete ordered screen list for a target.
  *
  * Grown from the core {@link wizardSteps} list: every core step is kept in
- * order (so target-specific and mode-gated visibility come straight from the
- * core rules), and the two reused connect-phase panels are injected right
- * before the final Mode step - preflight then repositories - so the assembled
- * order is target -> cribl-side connect -> azure connect -> preflight ->
- * repositories -> mode.
+ * order (so target-specific visibility comes straight from the core rules), and
+ * the two reused connect-phase panels are injected around them - repositories
+ * leads the connect phase, the permission check trails it. The assembled order
+ * is target -> repositories -> cribl-side connect -> azure connect -> preflight.
  *
- * The two panels are shown whenever the shape is NOT a decided air-gapped
- * re-run (mode null, or a mode with a live Azure or Cribl link): reusing the
- * app-mode capability predicates exactly as the core step rules do, so a
- * reconfigure straight to air-gapped drops the connect panels rather than
- * offering a permission check for links it will never use.
+ * Both panels always show (capability-model-plan step 5). Mode used to suppress
+ * them for a decided air-gapped re-run; there is no decided mode to suppress
+ * with any more, and the panels are skippable, so an operator who needs neither
+ * connection passes straight through.
  */
 export function wizardViews(shape: WizardShape): WizardView[] {
-  const showConnectPanels =
-    shape.mode === null || hasAzure(shape.mode) || hasCribl(shape.mode);
+  // Connect panels ALWAYS show (capability-model-plan step 5). Mode used to drop
+  // them - a reconfigure straight to air-gapped skipped the connect phase - the
+  // same hiding step 3 removed from the nav.
+  const showConnectPanels = true;
   const views: WizardView[] = [];
   // GitHub content leads the Connect phase (user direction 2026-08-03).
   // Azure credentials usually require a change request to another team, so a
@@ -129,15 +126,20 @@ export function wizardViews(shape: WizardShape): WizardView[] {
       views.push(makeExtraView("repositories"));
       repositoriesPlaced = true;
     }
-    if (step.id === "mode" && showConnectPanels) {
-      views.push(makeExtraView("preflight"));
-    }
     views.push({
       id: step.id,
       label: step.label,
       phase: step.phase,
       skippable: step.skippable,
     });
+  }
+  // The permission check TRAILS the connect steps. It used to be anchored just
+  // before the mode step; with mode gone it becomes the wizard's last view,
+  // which also reads better - verify what the identity can do, then Get
+  // Started. It can only follow the Azure step, since it verifies the identity
+  // that step configures.
+  if (showConnectPanels) {
+    views.push(makeExtraView("preflight"));
   }
   return views;
 }
@@ -199,7 +201,7 @@ export function resolveCurrentViewId(
   return ids.includes(desired) ? desired : (ids[0] ?? "target");
 }
 
-/** Whether a view is the final (Mode) view for the shape. */
+/** Whether a view is the final view for the shape. */
 export function isFinalView(shape: WizardShape, viewId: WizardViewId): boolean {
   const ids = wizardViewIds(shape);
   return ids.length > 0 && ids[ids.length - 1] === viewId;
@@ -335,27 +337,13 @@ export function deriveFooterStatus(
 // Get Started enablement
 // ---------------------------------------------------------------------------
 
-/** Get Started is reachable only on the final Mode view. */
+/** Get Started is reachable only on the final view. */
 export const GET_STARTED_NOT_FINAL_REASON =
-  "Reach the Mode step to finish - use Next to continue.";
-/** No mode picked on the Mode view yet. */
-export const GET_STARTED_NO_MODE_REASON =
-  "Choose an operating mode to continue.";
-/** The picked mode is gated (its required connection is not established). */
-export const GET_STARTED_MODE_UNAVAILABLE_REASON =
-  "The chosen mode needs a connection that is not established - pick an available mode or go back and connect.";
-
-/** The inputs the Get Started gate reads. */
+  "Reach the last step to finish - use Next to continue.";
+/** What the Get Started gate needs. The mode fields went with step 5. */
 export interface GetStartedInput {
-  /** Whether the current view is the final Mode view. */
+  /** Whether the operator is on the wizard's last view. */
   isFinal: boolean;
-  /** The mode chosen on the Mode step, null until one is picked. */
-  chosenMode: AppMode | null;
-  /**
-   * Whether the chosen mode is AVAILABLE for the current capabilities (from the
-   * core modeCards availability flag). Ignored when no mode is chosen.
-   */
-  modeAvailable: boolean;
 }
 
 /** The Get Started gate: ready, or a single always-visible-disabled reason. */
@@ -364,20 +352,18 @@ export type GetStartedGate =
   | { ready: false; reason: string };
 
 /**
- * The Get Started enablement gate. Enabled only on the final Mode view, only
- * once a mode is chosen, and only when that mode is available for the
- * established connections - otherwise a single, specific reason so the button
- * stays visible-but-disabled with an explanation (never a silent dead control).
+ * The Get Started enablement gate. Enabled on the final view only - otherwise a
+ * single, specific reason so the button stays visible-but-disabled with an
+ * explanation (never a silent dead control).
+ *
+ * The two mode conditions are gone (capability-model-plan step 5): finishing no
+ * longer requires choosing a mode, nor that the chosen mode be "available" for
+ * the connections established. What an operator can do is measured by the
+ * capability audit afterwards, not declared here.
  */
 export function deriveGetStarted(input: GetStartedInput): GetStartedGate {
   if (!input.isFinal) {
     return { ready: false, reason: GET_STARTED_NOT_FINAL_REASON };
-  }
-  if (input.chosenMode === null) {
-    return { ready: false, reason: GET_STARTED_NO_MODE_REASON };
-  }
-  if (!input.modeAvailable) {
-    return { ready: false, reason: GET_STARTED_MODE_UNAVAILABLE_REASON };
   }
   return { ready: true };
 }

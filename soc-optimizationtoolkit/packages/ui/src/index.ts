@@ -656,8 +656,6 @@ export { SetupWizard } from "./screens/setup-wizard/setup-wizard";
 export type { SetupWizardProps } from "./screens/setup-wizard/setup-wizard";
 export { TargetChooser } from "./screens/setup-wizard/target-chooser";
 export type { TargetChooserProps } from "./screens/setup-wizard/target-chooser";
-export { ModeCardGrid } from "./screens/setup-wizard/mode-card-grid";
-export type { ModeCardGridProps } from "./screens/setup-wizard/mode-card-grid";
 export { LeaderConnectStep } from "./screens/setup-wizard/leader-connect-step";
 export type {
   AppliedReconnect,
@@ -707,8 +705,6 @@ export type {
   WorkspaceOption,
 } from "./screens/setup-wizard/azure-setup-state";
 export {
-  GET_STARTED_MODE_UNAVAILABLE_REASON,
-  GET_STARTED_NO_MODE_REASON,
   GET_STARTED_NOT_FINAL_REASON,
   deriveFooterStatus,
   deriveGetStarted,

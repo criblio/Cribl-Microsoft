@@ -625,7 +625,11 @@ export function LocalApp() {
             'lives in config/local-config.json; edit the file and restart the host to ' +
             'change it, then use the permission check to verify access.'
           }
-          onGetStarted={handleSelectMode}
+          // The wizard no longer produces a mode (capability-model-plan step
+          // 5). 'full' is what the plan says the app always runs as; the entry
+          // survives only as the "setup complete" signal until slice 3 deletes
+          // appMode outright.
+          onGetStarted={() => handleSelectMode('full')}
         />
       </PortsProvider>
     );

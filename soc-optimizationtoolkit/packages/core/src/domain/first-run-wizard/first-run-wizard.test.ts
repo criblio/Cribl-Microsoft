@@ -15,10 +15,8 @@ import {
   deriveCloudBaseUrl,
   deriveSelfManagedBaseUrl,
   isStepSkippable,
-  modeCards,
   normalizeLeaderBaseUrl,
   planReconnect,
-  recommendMode,
   targetTradeoffs,
   WIZARD_PHASES,
   WIZARD_TARGETS,
@@ -32,71 +30,12 @@ import type {
   WizardShape,
   WizardStepId,
 } from "./first-run-wizard";
-import type { AppMode } from "../app-mode";
 
-describe("mode auto-selection matrix", () => {
-  const truthTable: {
-    hasCribl: boolean;
-    hasAzure: boolean;
-    expected: AppMode;
-  }[] = [
-    { hasCribl: true, hasAzure: true, expected: "full" },
-    { hasCribl: false, hasAzure: true, expected: "azure-only" },
-    { hasCribl: true, hasAzure: false, expected: "cribl-only" },
-    { hasCribl: false, hasAzure: false, expected: "air-gapped" },
-  ];
-
-  for (const row of truthTable) {
-    it(`recommends ${row.expected} for cribl=${row.hasCribl} azure=${row.hasAzure}`, () => {
-      expect(recommendMode(row)).toBe(row.expected);
-    });
-  }
-
-  it("gates each mode card on its required links", () => {
-    const cards = modeCards({ hasCribl: false, hasAzure: false });
-    const byMode = Object.fromEntries(cards.map((c) => [c.mode, c]));
-    // Only air-gapped is available with no links.
-    expect(byMode["full"].available).toBe(false);
-    expect(byMode["azure-only"].available).toBe(false);
-    expect(byMode["cribl-only"].available).toBe(false);
-    expect(byMode["air-gapped"].available).toBe(true);
-  });
-
-  it("makes full available only when both links are present", () => {
-    expect(
-      modeCards({ hasCribl: true, hasAzure: true }).find((c) => c.mode === "full")
-        ?.available,
-    ).toBe(true);
-    expect(
-      modeCards({ hasCribl: true, hasAzure: false }).find(
-        (c) => c.mode === "full",
-      )?.available,
-    ).toBe(false);
-  });
-
-  it("marks exactly one card recommended, and it is always available", () => {
-    for (const hasCribl of [true, false]) {
-      for (const hasAzure of [true, false]) {
-        const cards = modeCards({ hasCribl, hasAzure });
-        const recommended = cards.filter((c) => c.recommended);
-        expect(recommended).toHaveLength(1);
-        expect(recommended[0].mode).toBe(recommendMode({ hasCribl, hasAzure }));
-        // The recommended card is never a gated one.
-        expect(recommended[0].available).toBe(true);
-      }
-    }
-  });
-
-  it("returns one card per mode in the canonical order", () => {
-    const cards = modeCards({ hasCribl: true, hasAzure: true });
-    expect(cards.map((c) => c.mode)).toEqual([
-      "full",
-      "azure-only",
-      "cribl-only",
-      "air-gapped",
-    ]);
-  });
-});
+// The "mode auto-selection matrix" block lived here. It pinned recommendMode
+// (the richest mode both links allow) and modeCards (which cards are gated),
+// both deleted with app modes in capability-model-plan step 5. Nothing replaces
+// it: what an operator can do is now MEASURED by the capability audit rather
+// than recommended from which links happen to be connected.
 
 describe("target chooser tradeoff data", () => {
   it("provides both targets with non-empty can/cannot lists", () => {
@@ -286,113 +225,63 @@ describe("dual-profile swap - validates override set and stored secret together"
 });
 
 describe("wizard step / skip progression", () => {
-  const stepIds = (target: "cribl-hosted" | "local", mode: AppMode | null) =>
-    wizardSteps({ target, mode }).map((s) => s.id);
+  const stepIds = (target: "cribl-hosted" | "local") =>
+    wizardSteps({ target }).map((s) => s.id);
 
-  it("shows both connect steps for full mode on the local target", () => {
-    expect(stepIds("local", "full")).toEqual([
-      "target",
-      "leader-connect",
-      "connect-azure",
-      "mode",
-    ]);
+  // DELIBERATE INVERSION (capability-model-plan step 5). Four pins here asserted
+  // that mode PRUNED the wizard: cribl-only dropped the Azure step, azure-only
+  // dropped the Cribl step, air-gapped dropped both leaving [target, mode].
+  // Both connect steps now always show, and because each is skippable an
+  // operator without one connection passes straight through.
+  it("shows both connect steps on the local target", () => {
+    expect(stepIds("local")).toEqual(["target", "leader-connect", "connect-azure"]);
   });
 
   it("uses the upload walkthrough as the cribl step on the cribl-hosted target", () => {
-    expect(stepIds("cribl-hosted", "full")).toEqual([
-      "target",
-      "upload-walkthrough",
-      "connect-azure",
-      "mode",
-    ]);
+    expect(stepIds("cribl-hosted")).toEqual(["target", "upload-walkthrough", "connect-azure"]);
   });
 
-  it("drops the azure step for cribl-only and the cribl step for azure-only", () => {
-    expect(stepIds("local", "cribl-only")).toEqual([
-      "target",
-      "leader-connect",
-      "mode",
-    ]);
-    expect(stepIds("local", "azure-only")).toEqual([
-      "target",
-      "connect-azure",
-      "mode",
-    ]);
+  it("no longer ends on a mode step", () => {
+    expect(stepIds("local")).not.toContain("mode");
+    expect(stepIds("cribl-hosted")).not.toContain("mode");
   });
 
-  it("drops both connect steps for air-gapped", () => {
-    expect(stepIds("local", "air-gapped")).toEqual(["target", "mode"]);
-  });
-
-  it("shows both connect steps while the mode is undecided", () => {
-    expect(stepIds("local", null)).toEqual([
-      "target",
-      "leader-connect",
-      "connect-azure",
-      "mode",
-    ]);
-  });
-
-  it("makes connect steps skippable but target and mode not", () => {
-    const shape = { target: "local" as const, mode: "full" as AppMode };
+  it("makes connect steps skippable but target not", () => {
+    const shape = { target: "local" as const };
     expect(isStepSkippable(shape, "target")).toBe(false);
     expect(isStepSkippable(shape, "leader-connect")).toBe(true);
     expect(isStepSkippable(shape, "connect-azure")).toBe(true);
-    expect(isStepSkippable(shape, "mode")).toBe(false);
   });
 
-  it("derives a stable 3-segment progress bar from the current step", () => {
-    expect(WIZARD_PHASES).toEqual(["target", "connect", "mode"]);
-    const full: WizardShape = { target: "local", mode: null };
+  it("derives a stable 2-segment progress bar from the current step", () => {
+    // Was 3 segments ending in Mode; the bar is now Target -> Connect.
+    expect(WIZARD_PHASES).toEqual(["target", "connect"]);
+    const full: WizardShape = { target: "local" };
     const statuses = (step: WizardStepId) =>
       wizardProgress(full, step).map((s) => s.status);
-    expect(statuses("target")).toEqual(["current", "upcoming", "upcoming"]);
-    expect(statuses("leader-connect")).toEqual([
-      "complete",
-      "current",
-      "upcoming",
-    ]);
+    expect(statuses("target")).toEqual(["current", "upcoming"]);
+    expect(statuses("leader-connect")).toEqual(["complete", "current"]);
     // A skip that advances from the cribl step to azure stays in the same phase.
-    expect(statuses("connect-azure")).toEqual([
-      "complete",
-      "current",
-      "upcoming",
-    ]);
-    expect(statuses("mode")).toEqual(["complete", "complete", "current"]);
+    expect(statuses("connect-azure")).toEqual(["complete", "current"]);
   });
 
   it("drops the target step, the cribl-side step, and the Target segment when already installed", () => {
     // Running inside the leader answers "where should this run?" and "upload
     // the app" by construction (user report 2026-08-03), so neither step is
     // shown and the bar describes only the phases that remain.
-    const shape: WizardShape = {
-      target: "cribl-hosted",
-      mode: null,
-      installedInLeader: true,
-    };
-    expect(wizardSteps(shape).map((s) => s.id)).toEqual([
-      "connect-azure",
-      "mode",
-    ]);
-    expect(wizardPhasesFor(shape)).toEqual(["connect", "mode"]);
-    expect(wizardProgress(shape, "connect-azure").map((s) => s.status)).toEqual([
-      "current",
-      "upcoming",
-    ]);
-    expect(wizardProgress(shape, "mode").map((s) => s.status)).toEqual([
-      "complete",
-      "current",
-    ]);
+    const shape: WizardShape = { target: "cribl-hosted", installedInLeader: true };
+    expect(wizardSteps(shape).map((s) => s.id)).toEqual(["connect-azure"]);
+    expect(wizardPhasesFor(shape)).toEqual(["connect"]);
+    expect(wizardProgress(shape, "connect-azure").map((s) => s.status)).toEqual(["current"]);
   });
 
   it("leaves the local target untouched - it has a real leader to connect to", () => {
-    const shape: WizardShape = { target: "local", mode: null };
+    const shape: WizardShape = { target: "local" };
     expect(wizardSteps(shape).map((s) => s.id)).toEqual([
       "target",
       "leader-connect",
       "connect-azure",
-      "mode",
     ]);
-    expect(wizardPhasesFor(shape)).toEqual(["target", "connect", "mode"]);
+    expect(wizardPhasesFor(shape)).toEqual(["target", "connect"]);
   });
 });

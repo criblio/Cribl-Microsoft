@@ -36,11 +36,9 @@
  * Pure: no IO, no fetch, no React, no Date, no crypto, no Math.random.
  */
 
-import { hasAzure, hasCribl } from "../app-mode";
-import type { AppMode } from "../app-mode";
 
 // ---------------------------------------------------------------------------
-// 1. Mode auto-selection matrix
+// 1. Wizard capabilities
 // ---------------------------------------------------------------------------
 
 /**
@@ -53,107 +51,6 @@ export interface WizardCapabilities {
   hasCribl: boolean;
   /** A live Azure connection has been established (or will be). */
   hasAzure: boolean;
-}
-
-/**
- * The capability each mode REQUIRES to be selectable. Expressed once, here, so
- * {@link modeCards} availability can never disagree with {@link recommendMode}.
- * air-gapped requires neither - it is always available.
- */
-const MODE_REQUIREMENTS: Readonly<
-  Record<AppMode, { azure: boolean; cribl: boolean }>
-> = {
-  full: { azure: true, cribl: true },
-  "azure-only": { azure: true, cribl: false },
-  "cribl-only": { azure: false, cribl: true },
-  "air-gapped": { azure: false, cribl: false },
-};
-
-/** Whether `caps` satisfy a mode's requirement (both required links present). */
-function modeAvailable(mode: AppMode, caps: WizardCapabilities): boolean {
-  const req = MODE_REQUIREMENTS[mode];
-  return (!req.azure || caps.hasAzure) && (!req.cribl || caps.hasCribl);
-}
-
-/**
- * The recommended mode for a capability pair - the RICHEST mode both links
- * support. Both links -> full; Azure only -> azure-only; Cribl only ->
- * cribl-only; neither -> air-gapped. The result is ALWAYS an available mode
- * (pinned by test), so the recommended card is never a gated one.
- */
-export function recommendMode(caps: WizardCapabilities): AppMode {
-  if (caps.hasAzure && caps.hasCribl) {
-    return "full";
-  }
-  if (caps.hasAzure) {
-    return "azure-only";
-  }
-  if (caps.hasCribl) {
-    return "cribl-only";
-  }
-  return "air-gapped";
-}
-
-/** One selectable mode card for the wizard's mode step. */
-export interface ModeCard {
-  mode: AppMode;
-  /** Human-facing card title. */
-  label: string;
-  /** One-line description of what the mode does. */
-  description: string;
-  /** False when the mode's required link is not connected (card is gated). */
-  available: boolean;
-  /** True for exactly one card: the {@link recommendMode} result. */
-  recommended: boolean;
-}
-
-/** Display copy per mode, kept out of the UI so both shells share one source. */
-const MODE_COPY: Readonly<Record<AppMode, { label: string; description: string }>> =
-  {
-    full: {
-      label: "Full integration",
-      description:
-        "Deploy DCRs to Azure, build and upload packs to Cribl, wire sources, and validate data flow end to end.",
-    },
-    "azure-only": {
-      label: "Azure only",
-      description:
-        "Deploy DCRs and custom tables to Azure; build Cribl packs as downloadable artifacts for manual import.",
-    },
-    "cribl-only": {
-      label: "Cribl only",
-      description:
-        "Upload packs to Cribl and wire sources; generate ARM templates as downloadable artifacts for manual Azure deployment.",
-    },
-    "air-gapped": {
-      label: "Air-gapped (offline)",
-      description:
-        "No live connections; export packs, ARM templates, and deployment instructions as artifacts to apply manually.",
-    },
-  };
-
-/** The canonical mode order for the wizard's card list. */
-export const WIZARD_MODE_ORDER: readonly AppMode[] = [
-  "full",
-  "azure-only",
-  "cribl-only",
-  "air-gapped",
-];
-
-/**
- * The full mode-card matrix for a capability pair: one card per mode in a
- * stable order, each carrying availability and the single recommended flag.
- * The recommended card is always available.
- */
-export function modeCards(caps: WizardCapabilities): ModeCard[] {
-  const recommended = recommendMode(caps);
-  return WIZARD_MODE_ORDER.map((mode) => ({
-    mode,
-    label: MODE_COPY[mode].label,
-    description: MODE_COPY[mode].description,
-    available: modeAvailable(mode, caps),
-    recommended: mode === recommended,
-  }));
 }
 
 // ---------------------------------------------------------------------------
@@ -488,20 +385,19 @@ export type WizardStepId =
   | "upload-walkthrough"
   | "leader-connect"
   | "connect-azure"
-  | "mode";
+;
 
 /**
  * The three STABLE progress segments (the legacy 3-dot bar). Step count varies
  * with target and mode, but the bar is always Target -> Connect -> Mode; every
  * connection/bootstrap step folds into the single Connect segment.
  */
-export type WizardPhase = "target" | "connect" | "mode";
+export type WizardPhase = "target" | "connect";
 
 /** The three progress phases in order. */
 export const WIZARD_PHASES: readonly WizardPhase[] = [
   "target",
   "connect",
-  "mode",
 ];
 
 /** Which of the three phases a step belongs to. */
@@ -510,7 +406,6 @@ const STEP_PHASE: Readonly<Record<WizardStepId, WizardPhase>> = {
   "upload-walkthrough": "connect",
   "leader-connect": "connect",
   "connect-azure": "connect",
-  mode: "mode",
 };
 
 /** One wizard step: its id, label, phase, and whether it can be skipped. */
@@ -526,8 +421,6 @@ export interface WizardStep {
 export interface WizardShape {
   /** The hosting target chosen in step 1. */
   target: WizardTarget;
-  /** The operating mode; null means not yet decided (show all connect steps). */
-  mode: AppMode | null;
   /**
    * TRUE when the wizard is running INSIDE the Cribl leader that hosts it.
    *
@@ -547,7 +440,6 @@ const STEP_LABELS: Readonly<Record<WizardStepId, string>> = {
   "upload-walkthrough": "Upload the app",
   "leader-connect": "Connect leader",
   "connect-azure": "Connect Azure",
-  mode: "Mode",
 };
 
 /**
@@ -569,15 +461,20 @@ const STEP_LABELS: Readonly<Record<WizardStepId, string>> = {
  * azure-only drops the cribl step; full and null show both connect steps.
  */
 export function wizardSteps(shape: WizardShape): WizardStep[] {
-  const { target, mode, installedInLeader } = shape;
+  const { target, installedInLeader } = shape;
   // Already inside the leader: the target is a fact, not a choice, and there is
   // nothing left to install. Both steps drop together - they are two halves of
   // the same "get this app into a leader" question.
   const alreadyInstalled = installedInLeader === true;
   const steps: WizardStep[] = alreadyInstalled ? [] : [makeStep("target", false)];
 
-  const showCribl = mode === null || hasCribl(mode);
-  const showAzure = mode === null || hasAzure(mode);
+  // Both connect steps ALWAYS show (capability-model-plan step 5). Mode used to
+  // prune them - cribl-only dropped the Azure step, air-gapped dropped both -
+  // which is the same hiding step 3 removed from the nav. Each is skippable, so
+  // an operator without one connection passes through rather than being shown a
+  // shorter wizard than the product has.
+  const showCribl = true;
+  const showAzure = true;
 
   if (showCribl && !alreadyInstalled) {
     const criblStepId: WizardStepId =
@@ -587,7 +484,6 @@ export function wizardSteps(shape: WizardShape): WizardStep[] {
   if (showAzure) {
     steps.push(makeStep("connect-azure", true));
   }
-  steps.push(makeStep("mode", false));
   return steps;
 }
 
