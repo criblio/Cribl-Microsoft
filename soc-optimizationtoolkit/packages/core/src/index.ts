@@ -9,7 +9,7 @@
 
 export * from "./ports";
 export * from "./testing";
-export * from "./domain/app-mode";
+export * from "./domain/app-setup";
 export * from "./domain/app-theme";
 export * from "./domain/dcr-naming";
 export * from "./domain/poll-scheduler";

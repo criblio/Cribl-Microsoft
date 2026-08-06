@@ -64,19 +64,14 @@ export type {
   BatchSelection,
 } from "./onboarding/batch/batch-state";
 
-// App frame: chrome, acceptance gate, mode chooser, and their pure state.
+// App frame: chrome, acceptance gate, and their pure state.
 export { AppFrame } from "./frame/app-frame";
 export type { AppFrameNav, AppFrameProps, AppRoute } from "./frame/app-frame";
 export { AuaGate } from "./frame/aua-gate";
 export type { AuaGateProps } from "./frame/aua-gate";
-export { ModeSelect } from "./frame/mode-select";
-export type { ModeSelectProps } from "./frame/mode-select";
 export {
   AUA_SCROLL_SLACK_PX,
   DEFAULT_NAV_SECTION,
-  EMPTY_MODE_RECORD,
-  MODE_LABELS,
-  MODE_OPTIONS,
   NAV_SECTION_LABELS,
   NAV_SECTION_ORDER,
   groupNavSections,
@@ -86,8 +81,7 @@ export {
 export type {
   FramePhase,
   LoadableAcceptance,
-  LoadableMode,
-  ModeOption,
+  LoadableSetup,
   NavSection,
   NavSectionGroup,
 } from "./frame/frame-state";

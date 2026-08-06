@@ -1,7 +1,7 @@
 /**
  * AppFrame - the shared application chrome both shells mount once the
- * acceptance gate and mode selection have passed: a sidebar built from a
- * route table, a mode chip, and a content area.
+ * acceptance gate and first-run setup have passed: a sidebar built from a
+ * route table and a content area.
  *
  * Navigation ANNOTATES, it does not filter (capability-model-plan step 3). The
  * nav renders EVERY route in the table and marks what is unavailable and why,
@@ -31,9 +31,7 @@ import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { annotateNavItems, emptyCapabilitySet } from "@soc/core";
 import type { Capability, CapabilityContext, CapabilitySet } from "@soc/core";
-import type { AppMode } from "@soc/core";
 import {
-  MODE_LABELS,
   NAV_FLAG_LABELS,
   NAV_SECTION_LABELS,
   groupNavSections,
@@ -82,8 +80,6 @@ export interface AppFrameProps {
   title: string;
   /** Shell identifier under the title (e.g. "Cribl.Cloud shell"). */
   subtitle?: string;
-  /** The ACTIVE mode; the shell resolves it before mounting the frame. */
-  mode: AppMode;
   /**
    * The full route table. EVERY entry renders in the nav - the frame annotates
    * rather than filters (capability-model-plan step 3).
@@ -119,7 +115,6 @@ export function AppFrame(props: AppFrameProps) {
   const {
     title,
     subtitle,
-    mode,
     routes,
     capabilities,
     capabilityContext,
@@ -237,12 +232,6 @@ export function AppFrame(props: AppFrameProps) {
           {footerNote !== undefined && (
             <span className="app-frame-footer-note">{footerNote}</span>
           )}
-          <span
-            className={`mode-chip mode-chip-${mode}`}
-            title="The active operating mode. Change it from Settings (Reconfigure)."
-          >
-            {MODE_LABELS[mode]}
-          </span>
         </div>
       </aside>
       <main className="app-frame-main">

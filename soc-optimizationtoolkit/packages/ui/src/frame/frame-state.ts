@@ -1,24 +1,22 @@
 /**
  * Frame state - the PURE decisions behind the shared app frame.
  *
- * The @soc/core app-mode module owns the mode model (parse/serialize,
- * capability predicates, nav filter). This module owns the UI-side decisions
- * layered on top of it, kept out of the components so they are unit-testable
- * without a DOM:
+ * The @soc/core app-setup module owns the persisted facts (acceptance and setup
+ * codecs). This module owns the UI-side decisions layered on top of them, kept
+ * out of the components so they are unit-testable without a DOM:
  *
  *   - {@link resolveFramePhase}: which top-level surface the shell shows
- *     (loading / acceptance gate / mode chooser / the frame). Encodes the
+ *     (loading / acceptance gate / first-run wizard / the frame). Encodes the
  *     never-flash contract: while acceptance is still LOADING the answer is
  *     "loading", never "show the gate" - an already-accepted user must never
  *     see the agreement flash before their saved acceptance arrives.
- *   - {@link EMPTY_MODE_RECORD}: the Reconfigure contract. The legacy
- *     Settings page reset the app by writing an EMPTY object to
- *     integration-mode.json and reloading; writing this constant to the mode
- *     key parses back to null ("not yet chosen"), which routes the next load
- *     into mode selection.
- *   - {@link MODE_LABELS} / {@link MODE_OPTIONS}: the ONE display map and the
- *     ONE chooser list, both keyed by the core AppMode union (the legacy app
- *     had separate label maps in Settings and Sidebar that could drift).
+ *
+ * The mode record, chooser list and label map that lived here went with app
+ * modes (capability-model-plan step 5). The Reconfigure contract survives as
+ * EMPTY_SETUP_RECORD in core: writing an empty object parses back to "not set
+ * up", which routes the next load into the wizard - the same legacy behaviour,
+ * now keyed on setup rather than mode.
+ *
  *   - {@link isScrolledToBottom}: the acceptance gate's scroll threshold.
  *   - {@link groupNavSections}: the sidebar's section grouping (ux-flow-plan
  *     4.4, Unit 6.5) - journey steps first, then tools, then diagnostics.
@@ -29,16 +27,7 @@
  * Pure: no IO, no fetch, no React.
  */
 
-import { APP_MODES } from "@soc/core";
-import type { AcceptanceRecord, AppMode } from "@soc/core";
-
-/**
- * What Reconfigure writes to the persisted mode key: an EMPTY JSON object.
- * parseAppMode reads it as null ("not yet chosen"), so the next load lands in
- * mode selection. This mirrors the legacy contract (Settings wrote `{}` to
- * integration-mode.json and reloaded) so blobs stay legible to both readers.
- */
-export const EMPTY_MODE_RECORD = "{}";
+import type { AcceptanceRecord } from "@soc/core";
 
 /**
  * An acceptance value as the shell holds it: the parsed record, null for
@@ -46,15 +35,19 @@ export const EMPTY_MODE_RECORD = "{}";
  */
 export type LoadableAcceptance = AcceptanceRecord | null | "loading";
 
-/** A mode value as the shell holds it; null means "not yet chosen". */
-export type LoadableMode = AppMode | null | "loading";
+/**
+ * Whether setup is complete, as the shell holds it. null means "not yet set
+ * up". This replaced the persisted AppMode, which carried that meaning only
+ * incidentally (capability-model-plan step 5).
+ */
+export type LoadableSetup = boolean | null | "loading";
 
 /** The top-level surface the shell should render. */
 export type FramePhase =
   | { phase: "loading" }
   | { phase: "aua" }
-  | { phase: "mode-select" }
-  | { phase: "ready"; mode: AppMode };
+  | { phase: "setup" }
+  | { phase: "ready" };
 
 /**
  * Decide which top-level surface to show.
@@ -63,14 +56,18 @@ export type FramePhase =
  *   1. acceptance still loading -> "loading" (NEVER the gate: an accepted
  *      user must not see the agreement flash while their record loads)
  *   2. not accepted -> "aua" (the gate comes before everything else,
- *      including mode selection - even if the mode is still loading)
- *   3. mode still loading -> "loading"
- *   4. mode not yet chosen -> "mode-select"
- *   5. otherwise -> "ready" carrying the narrowed mode
+ *      including setup - even if setup state is still loading)
+ *   3. setup still loading -> "loading"
+ *   4. setup not complete -> "setup" (the first-run wizard)
+ *   5. otherwise -> "ready"
+ *
+ * Step 4 used to be "mode-select", and "ready" used to carry the chosen mode.
+ * The wizard replaced the chooser and the frame no longer has a mode to carry
+ * (capability-model-plan step 5); the ORDER is unchanged.
  */
 export function resolveFramePhase(
   acceptance: LoadableAcceptance,
-  mode: LoadableMode,
+  setup: LoadableSetup,
 ): FramePhase {
   if (acceptance === "loading") {
     return { phase: "loading" };
@@ -78,68 +75,15 @@ export function resolveFramePhase(
   if (acceptance === null) {
     return { phase: "aua" };
   }
-  if (mode === "loading") {
+  if (setup === "loading") {
     return { phase: "loading" };
   }
-  if (mode === null) {
-    return { phase: "mode-select" };
+  if (setup === null || setup === false) {
+    return { phase: "setup" };
   }
-  return { phase: "ready", mode };
+  return { phase: "ready" };
 }
 
-/**
- * The one display label per mode, used by the frame's mode chip and the
- * settings screen alike so the two can never disagree.
- */
-export const MODE_LABELS: Readonly<Record<AppMode, string>> = {
-  full: "Full",
-  "azure-only": "Azure Only",
-  "cribl-only": "Cribl Only",
-  "air-gapped": "Air-Gapped",
-};
-
-/** One selectable mode in the first-run chooser. */
-export interface ModeOption {
-  mode: AppMode;
-  label: string;
-  /** Honest one-liner: what this mode actually enables. */
-  description: string;
-}
-
-/**
- * The chooser list, one entry per core APP_MODES value in the same order.
- * Descriptions state plainly what is live and what falls back to generated
- * artifacts - no mode is oversold.
- */
-export const MODE_OPTIONS: readonly ModeOption[] = [
-  {
-    mode: "full",
-    label: MODE_LABELS.full,
-    description:
-      "Live Azure and live Cribl connections - deployments go directly to both.",
-  },
-  {
-    mode: "azure-only",
-    label: MODE_LABELS["azure-only"],
-    description:
-      "Live Azure connection only - Cribl configuration is generated as downloadable artifacts.",
-  },
-  {
-    mode: "cribl-only",
-    label: MODE_LABELS["cribl-only"],
-    description:
-      "Live Cribl connection only - Azure templates are generated as downloadable artifacts.",
-  },
-  {
-    mode: "air-gapped",
-    label: MODE_LABELS["air-gapped"],
-    description:
-      "No live connections - every change is generated as a downloadable artifact for manual review.",
-  },
-];
-
-/** All modes the chooser must cover (re-exported for the coverage test). */
-export const CHOOSABLE_MODES: readonly AppMode[] = APP_MODES;
 
 /**
  * The sidebar's nav sections (ux-flow-plan 4.4): journey steps in dependency

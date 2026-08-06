@@ -10,7 +10,6 @@ import {
   BatchDeployScreen,
   DcrAutomationScreen,
   DcrInventoryPanel,
-  EMPTY_MODE_RECORD,
   EventHubDiscoveryScreen,
   HomeScreen,
   IntegrateScreen,
@@ -39,7 +38,7 @@ import type {
   CommitScopeOutcome,
   JourneyLinks,
   LoadableAcceptance,
-  LoadableMode,
+  LoadableSetup,
   ThemeControl,
 } from '@soc/ui';
 import {
@@ -47,15 +46,14 @@ import {
   computeInvalidation,
   DEFAULT_APP_OPTIONS,
   DEFAULT_THEME_CHOICE,
-  hasAzure,
-  hasCribl,
   mustProduceArtifacts,
   EMPTY_AZURE_CONFIG,
   EMPTY_PROFILE_STORE,
   getActiveConfig,
   getActiveProfile,
+  EMPTY_SETUP_RECORD,
   parseAcceptanceRecord,
-  parseAppMode,
+  parseSetupRecord,
   parseAppOptions,
   serializeAppOptions,
   parseAzureConfig,
@@ -66,7 +64,7 @@ import {
   removeProfile,
   renameProfile,
   serializeAcceptanceRecord,
-  serializeAppMode,
+  serializeSetupRecord,
   serializeProfileStore,
   setActiveProfile,
   updateActiveConfig,
@@ -74,7 +72,6 @@ import {
 } from '@soc/core';
 import type {
   AcceptanceRecord,
-  AppMode,
   AppOptions,
   OperationOptions,
   AzureConfig,
@@ -128,7 +125,7 @@ type Status = 'idle' | 'running' | 'ok' | 'failed';
 // state, not secrets, and must be readable back on every launch. The codecs
 // (parse/serialize) live in @soc/core app-mode; the shell owns the clock.
 const AUA_ACCEPTANCE_KEY = 'auaAcceptance';
-const APP_MODE_KEY = 'appMode';
+const SETUP_KEY = 'setupComplete';
 // Deployment/naming options (porting-plan Unit 4): ONE plain KV entry,
 // persisted through the same SecretsStore adapter as appMode. Saves go
 // through @soc/core applyOptionsPatch so unmanaged keys in the blob survive.
@@ -198,24 +195,6 @@ const JOURNEY_LINKS = mergeJourneyLinks({
 // azure-only: the Onboard route requires a live Cribl side and is hidden, so
 // the integrate stages bind to DCR Automation - the surface the relaxed
 // 'azure' requirement actually exposes in this mode (templateOnly forced on;
-// the honest copy lives on the screen).
-const AZURE_ONLY_JOURNEY_LINKS = mergeJourneyLinks({
-  ...SHELL_LINK_OVERRIDES,
-  'choose-content': {
-    routeId: 'dcr-automation',
-    hint: 'DCR Automation is this mode\'s onboarding surface; runs are template-only (no live Cribl connection).',
-  },
-  configure: {
-    routeId: 'dcr-automation',
-    hint: 'Per-run overrides live on DCR Automation.',
-  },
-  deploy: {
-    routeId: 'dcr-automation',
-    hint:
-      'Run on DCR Automation - template-only in this mode; ARM bodies download as one ' +
-      'artifact.',
-  },
-});
 
 // Where the operator grants the Monitoring Metrics Publisher role today
 // (shell-provided pointer for the shared Onboard footer - the local shell
@@ -657,7 +636,7 @@ function App() {
   // contract guarantees the agreement gate NEVER flashes for a user whose
   // acceptance is merely still in flight.
   const [acceptance, setAcceptance] = useState<LoadableAcceptance>('loading');
-  const [mode, setMode] = useState<LoadableMode>('loading');
+  const [setupDone, setSetupDone] = useState<LoadableSetup>('loading');
 
   // The parsed deployment/naming options (porting-plan Unit 4). Hydrated
   // from the plain appOptions KV entry alongside acceptance and mode;
@@ -716,7 +695,7 @@ function App() {
     void (async () => {
       const [accRaw, modeRaw, optionsRaw, themeRaw] = await Promise.allSettled([
         appStateStore.get(AUA_ACCEPTANCE_KEY),
-        appStateStore.get(APP_MODE_KEY),
+        appStateStore.get(SETUP_KEY),
         appStateStore.get(APP_OPTIONS_KEY),
         appStateStore.get(APP_THEME_KEY),
       ]);
@@ -726,7 +705,7 @@ function App() {
       setAcceptance(
         parseAcceptanceRecord(accRaw.status === 'fulfilled' ? accRaw.value : null)
       );
-      setMode(parseAppMode(modeRaw.status === 'fulfilled' ? modeRaw.value : null));
+      setSetupDone(parseSetupRecord(modeRaw.status === 'fulfilled' ? modeRaw.value : null) !== null);
       setAppOptions(
         parseAppOptions(optionsRaw.status === 'fulfilled' ? optionsRaw.value : null)
       );
@@ -904,7 +883,7 @@ function App() {
 
   // Which top-level surface to show (loading / AUA gate / mode select /
   // frame). Computed every render from the two loadable states.
-  const phase = resolveFramePhase(acceptance, mode);
+  const phase = resolveFramePhase(acceptance, setupDone);
 
   // Stable accessor for the Logs screen: a fresh snapshot of the module-
   // scoped logger ring on every call (mount and Refresh).
@@ -1288,13 +1267,13 @@ function App() {
 
   // First-run mode choice: persist, then adopt. A failed write holds the
   // mode for this session only and re-asks next launch.
-  const handleSelectMode = async (next: AppMode) => {
+  const handleSetupComplete = async () => {
     try {
-      await appStateStore.set(APP_MODE_KEY, serializeAppMode(next));
+      await appStateStore.set(SETUP_KEY, serializeSetupRecord({ completedAt: nowIso() }));
     } catch {
       // Non-fatal; re-asks next launch.
     }
-    setMode(next);
+    setSetupDone(true);
   };
 
   // The Reconfigure contract (mined from the legacy Settings page): write an
@@ -1305,10 +1284,10 @@ function App() {
   // reset so the user still reaches the chooser.
   const handleReconfigure = async () => {
     try {
-      await appStateStore.set(APP_MODE_KEY, EMPTY_MODE_RECORD);
+      await appStateStore.set(SETUP_KEY, EMPTY_SETUP_RECORD);
       window.location.reload();
     } catch {
-      setMode(null);
+      setSetupDone(null);
     }
   };
 
@@ -1367,7 +1346,7 @@ function App() {
   // The target is FIXED to cribl-hosted and locked: this shell only ever runs
   // installed inside a Cribl.Cloud workspace, so the target is a fact to state,
   // never a choice to offer (the lockTarget prop exists for exactly this).
-  if (phase.phase === 'aua' || phase.phase === 'mode-select') {
+  if (phase.phase === 'aua' || phase.phase === 'setup') {
     return (
       <PortsProvider ports={cloudPorts} config={activeConfig}>
         <SetupWizard
@@ -1404,7 +1383,7 @@ function App() {
           // 5). 'full' is what the plan says the app always runs as; the entry
           // survives only as the "setup complete" signal until slice 3 deletes
           // appMode outright.
-          onGetStarted={() => handleSelectMode('full')}
+          onGetStarted={handleSetupComplete}
         />
       </PortsProvider>
     );
@@ -1422,7 +1401,6 @@ function App() {
   // leader, so a healthy bridge IS Cribl reachability.
   const journeyFacts: JourneyFacts = {
     accepted: typeof acceptance === 'object' && acceptance !== null,
-    mode: phase.mode,
     identityPresent:
       activeConfig.tenantId.trim() !== '' && activeConfig.clientId.trim() !== '',
     // The probe resolves the honest 'unknown': a verified token acquisition
@@ -1659,7 +1637,7 @@ function App() {
       <PortsProvider ports={cloudPorts} config={activeConfig}>
         <HomeScreen
           facts={journeyFacts}
-          links={phase.mode === 'azure-only' ? AZURE_ONLY_JOURNEY_LINKS : JOURNEY_LINKS}
+          links={JOURNEY_LINKS}
           onNavigate={nav.navigate}
           setupSections={setupSections}
         />
@@ -1730,13 +1708,12 @@ function App() {
         <IntegrateScreen
           key={`integrate-${store.activeProfileId ?? 'none'}`}
           scopeCommitted={journeyFacts.scopeCommitted}
-          offline={!hasAzure(phase.mode)}
+          offline={!capabilityAudit.context.azureIdentityPresent}
           onCommitScope={handleCommitScope}
           criblDefaults={appOptions.cribl}
           operationDefaults={appOptions.operation}
           onOperationChange={persistOperation}
           roleGuidance={ROLE_GUIDANCE}
-          mode={phase.mode}
         />
       </PortsProvider>
     </>
@@ -1858,7 +1835,7 @@ function App() {
         </PortsProvider>
       }
       singleDisabledReason={
-        hasCribl(phase.mode)
+        capabilityAudit.context.criblReachable
           ? undefined
           : 'Single-table onboarding creates a Cribl destination, so it needs a live Cribl connection. Batch supports template-only export without Cribl.'
       }
@@ -1887,8 +1864,7 @@ function App() {
             shell: 'cribl-cloud-app',
             application: APP_NAME,
             appId: window.CRIBL_APP_ID ?? null,
-            mode: phase.mode,
-            activeConnection: activeProfile?.name ?? null,
+                    activeConnection: activeProfile?.name ?? null,
             platformLink,
           }}
         />
@@ -2110,7 +2086,6 @@ function App() {
         'Secrets live in the app-scoped KV store; encrypted entries are write-only and can ' +
         'only be replaced, never read back.'
       }
-      mode={phase.mode}
       onReconfigure={handleReconfigure}
       configEditor={{
         label: `Active connection config - ${activeProfile?.name ?? '(none)'}`,
@@ -2167,7 +2142,6 @@ function App() {
     <AppFrame
       title={APP_NAME}
       subtitle="Cribl.Cloud shell"
-      mode={phase.mode}
       routes={routes}
       capabilities={capabilityAudit.capabilities}
       capabilityContext={capabilityAudit.context}

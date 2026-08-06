@@ -6,11 +6,13 @@
  * This module is the remaining pure logic that ASSEMBLES those pieces into a
  * coherent first-run wizard, ported from the legacy SetupWizard.tsx
  * (IS-R/pages/SetupWizard.tsx) step/skip semantics but with its bug classes
- * fixed. Four concerns, all pure data + total functions:
+ * fixed. Pure data + total functions.
  *
- *   1. MODE AUTO-SELECTION MATRIX - {hasCribl, hasAzure} capability booleans
- *      -> the recommended AppMode plus which mode cards are available vs
- *      gated. Reuses the shared AppMode type (no parallel mode enum).
+ *   1. WIZARD CAPABILITIES - the {hasCribl, hasAzure} pair the footer and the
+ *      connect panels read. It used to feed a MODE AUTO-SELECTION MATRIX
+ *      (recommendMode / modeCards), deleted with app modes in
+ *      capability-model-plan step 5: what an operator can do is MEASURED by the
+ *      capability audit, not recommended from which links are connected.
  *
  *   2. TARGET CHOOSER - Cribl-hosted vs local as a typed choice, with the
  *      tradeoff (what each target can / cannot do) carried as DATA the UI
@@ -26,12 +28,12 @@
  *      object field by field, so a cloud override could ride a self-managed
  *      secret).
  *
- *   4. WIZARD STEP / SKIP progression - which steps show per target+mode,
- *      which are skippable, and a stable 3-segment progress derivation. Like
+ *   4. WIZARD STEP / SKIP progression - which steps show per target, which are
+ *      skippable, and a stable 2-segment progress derivation. Like
  *      journey-state, everything is RE-DERIVED from inputs on each call - there
- *      is no stored wizard-progress blob to drift - and step visibility reuses
- *      the app-mode capability predicates (hasAzure/hasCribl) exactly as
- *      firstRunStageIds does.
+ *      is no stored wizard-progress blob to drift. Step visibility no longer
+ *      varies by mode: both connect steps always show, and being skippable is
+ *      what makes that safe.
  *
  * Pure: no IO, no fetch, no React, no Date, no crypto, no Math.random.
  */
@@ -445,7 +447,7 @@ const STEP_LABELS: Readonly<Record<WizardStepId, string>> = {
 /**
  * The steps that show for a target + mode.
  *
- * Rules (reusing the app-mode capability predicates, exactly as
+ * Rules (mode no longer participates, exactly as
  * firstRunStageIds does):
  *   - `target` always shows first and is NOT skippable (a target must be
  *     chosen).

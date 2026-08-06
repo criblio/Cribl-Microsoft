@@ -23,7 +23,6 @@ import {
   BatchDeployScreen,
   DcrAutomationScreen,
   DcrInventoryPanel,
-  EMPTY_MODE_RECORD,
   HomeScreen,
   IntegrateScreen,
   LabsScreen,
@@ -53,7 +52,7 @@ import type {
   CommitScopeOutcome,
   JourneyLinks,
   LoadableAcceptance,
-  LoadableMode,
+  LoadableSetup,
   PlatformInfoRow,
   ThemeControl,
 } from '@soc/ui';
@@ -63,23 +62,21 @@ import {
   EMPTY_AZURE_CONFIG,
   computeInvalidation,
   criblUiBaseFromLeaderUrl,
-  hasAzure,
-  hasCribl,
   mustProduceArtifacts,
+  EMPTY_SETUP_RECORD,
   parseAcceptanceRecord,
-  parseAppMode,
+  parseSetupRecord,
   parseAppOptions,
   serializeAppOptions,
   parseAzureConfig,
   parseThemeChoice,
   resolveTheme,
   serializeAcceptanceRecord,
-  serializeAppMode,
+  serializeSetupRecord,
   serializeThemeChoice,
 } from '@soc/core';
 import type {
   AcceptanceRecord,
-  AppMode,
   AppOptions,
   OperationOptions,
   AzureConfig,
@@ -155,7 +152,7 @@ async function getRecentLogs(): Promise<readonly LogEntry[]> {
 // Acceptance + mode keys in the host secrets store (plain, not encrypted -
 // they must be readable back). Same key names as the cloud shell's KV.
 const AUA_ACCEPTANCE_KEY = 'auaAcceptance';
-const APP_MODE_KEY = 'appMode';
+const SETUP_KEY = 'setupComplete';
 
 // The committed Azure target scope OVERRIDE (plain entry, readable back).
 // The host config file owns the IDENTITY (tenant/client/secret); the
@@ -216,24 +213,6 @@ const JOURNEY_LINKS = mergeJourneyLinks({
 // azure-only: the Onboard route requires a live Cribl side and is hidden, so
 // the integrate stages bind to DCR Automation - the surface the relaxed
 // 'azure' requirement actually exposes in this mode (templateOnly forced on;
-// the honest copy lives on the screen).
-const AZURE_ONLY_JOURNEY_LINKS = mergeJourneyLinks({
-  ...SHELL_LINK_OVERRIDES,
-  'choose-content': {
-    routeId: 'dcr-automation',
-    hint: 'DCR Automation is this mode\'s onboarding surface; runs are template-only (no live Cribl connection).',
-  },
-  configure: {
-    routeId: 'dcr-automation',
-    hint: 'Per-run overrides live on DCR Automation.',
-  },
-  deploy: {
-    routeId: 'dcr-automation',
-    hint:
-      'Run on DCR Automation - template-only in this mode; ARM bodies download as one ' +
-      'artifact.',
-  },
-});
 
 // Where the operator grants the Monitoring Metrics Publisher role today
 // (shell-provided pointer for the shared Onboard footer - the cloud shell
@@ -292,7 +271,7 @@ export function LocalApp() {
   // chosen). resolveFramePhase's loading contract keeps the agreement gate
   // from ever flashing for an already-accepted user.
   const [acceptance, setAcceptance] = useState<LoadableAcceptance>('loading');
-  const [mode, setMode] = useState<LoadableMode>('loading');
+  const [setupDone, setSetupDone] = useState<LoadableSetup>('loading');
 
   // The committed target-scope override (null until hydrated / when none is
   // committed). Tolerant parse: a garbage blob reads as "nothing committed".
@@ -363,7 +342,7 @@ export function LocalApp() {
     void (async () => {
       const [accRaw, modeRaw, scopeRaw, optionsRaw, themeRaw] = await Promise.allSettled([
         ports.secrets.get(AUA_ACCEPTANCE_KEY),
-        ports.secrets.get(APP_MODE_KEY),
+        ports.secrets.get(SETUP_KEY),
         ports.secrets.get(TARGET_SCOPE_KEY),
         ports.secrets.get(APP_OPTIONS_KEY),
         ports.secrets.get(APP_THEME_KEY),
@@ -374,7 +353,7 @@ export function LocalApp() {
       setAcceptance(
         parseAcceptanceRecord(accRaw.status === 'fulfilled' ? accRaw.value : null)
       );
-      setMode(parseAppMode(modeRaw.status === 'fulfilled' ? modeRaw.value : null));
+      setSetupDone(parseSetupRecord(modeRaw.status === 'fulfilled' ? modeRaw.value : null) !== null);
       setScopeOverride(
         parseTargetScope(scopeRaw.status === 'fulfilled' ? scopeRaw.value : null)
       );
@@ -409,7 +388,7 @@ export function LocalApp() {
     [appOptions, saveAppOptions],
   );
 
-  const phase = resolveFramePhase(acceptance, mode);
+  const phase = resolveFramePhase(acceptance, setupDone);
 
   // The ONE budgeted status poller (@soc/ui hook over the @soc/core
   // poll-scheduler). Only the connection-status poll registers for now: a
@@ -501,13 +480,13 @@ export function LocalApp() {
   };
 
   // First-run mode choice: persist, then adopt.
-  const handleSelectMode = async (next: AppMode) => {
+  const handleSetupComplete = async () => {
     try {
-      await ports.secrets.set(APP_MODE_KEY, serializeAppMode(next));
+      await ports.secrets.set(SETUP_KEY, serializeSetupRecord({ completedAt: nowIso() }));
     } catch {
       // Non-fatal; re-asks next launch.
     }
-    setMode(next);
+    setSetupDone(true);
   };
 
   // The Reconfigure contract (mined from the legacy Settings page): write an
@@ -516,10 +495,10 @@ export function LocalApp() {
   // back to an in-session reset so the chooser is still reachable.
   const handleReconfigure = async () => {
     try {
-      await ports.secrets.set(APP_MODE_KEY, EMPTY_MODE_RECORD);
+      await ports.secrets.set(SETUP_KEY, EMPTY_SETUP_RECORD);
       window.location.reload();
     } catch {
-      setMode(null);
+      setSetupDone(null);
     }
   };
 
@@ -579,9 +558,8 @@ export function LocalApp() {
   if (phase.phase === 'aua') {
     return <AuaGate onAccept={handleAccept} />;
   }
-  if (phase.phase === 'mode-select') {
-    // First-run onboarding: the assembled Setup Wizard (porting-plan Unit 22)
-    // replaces the plain mode chooser. Acceptance is already handled by the
+  if (phase.phase === 'setup') {
+    // First-run onboarding: the assembled Setup Wizard (porting-plan Unit 22). Acceptance is already handled by the
     // AuaGate phase above, so the wizard opens at the Target step and its Get
     // Started persists the chosen mode through the same handleSelectMode the
     // plain chooser used. The composed preflight + repositories panels read IO
@@ -629,7 +607,7 @@ export function LocalApp() {
           // 5). 'full' is what the plan says the app always runs as; the entry
           // survives only as the "setup complete" signal until slice 3 deletes
           // appMode outright.
-          onGetStarted={() => handleSelectMode('full')}
+          onGetStarted={handleSetupComplete}
         />
       </PortsProvider>
     );
@@ -646,7 +624,6 @@ export function LocalApp() {
   // scope read false - the journey re-derives the moment it loads.
   const journeyFacts: JourneyFacts = {
     accepted: typeof acceptance === 'object' && acceptance !== null,
-    mode: phase.mode,
     identityPresent:
       activeAzureConfig !== null &&
       activeAzureConfig.tenantId.trim() !== '' &&
@@ -701,7 +678,7 @@ export function LocalApp() {
       <PortsProvider ports={ports} config={activeAzureConfig ?? EMPTY_AZURE_CONFIG}>
         <HomeScreen
           facts={journeyFacts}
-          links={phase.mode === 'azure-only' ? AZURE_ONLY_JOURNEY_LINKS : JOURNEY_LINKS}
+          links={JOURNEY_LINKS}
           onNavigate={nav.navigate}
           setupSections={setupSections}
         />
@@ -749,14 +726,13 @@ export function LocalApp() {
         <PortsProvider ports={ports} config={activeAzureConfig}>
           <IntegrateScreen
             scopeCommitted={journeyFacts.scopeCommitted}
-            offline={!hasAzure(phase.mode)}
+            offline={!capabilityAudit.context.azureIdentityPresent}
             onCommitScope={handleCommitScope}
             criblDefaults={appOptions.cribl}
             operationDefaults={appOptions.operation}
             onOperationChange={persistOperation}
             roleGuidance={ROLE_GUIDANCE}
-            mode={phase.mode}
-          />
+            />
         </PortsProvider>
       )}
     </>
@@ -861,7 +837,7 @@ export function LocalApp() {
         </PortsProvider>
       }
       singleDisabledReason={
-        hasCribl(phase.mode)
+        capabilityAudit.context.criblReachable
           ? undefined
           : 'Single-table onboarding creates a Cribl destination, so it needs a live Cribl connection. Batch supports template-only export without Cribl.'
       }
@@ -890,8 +866,7 @@ export function LocalApp() {
           getRecentLogs={getRecentLogs}
           platformInfo={{
             shell: 'local-node-host',
-            mode: phase.mode,
-            hostLink,
+                    hostLink,
             criblLeader: load.state === 'loaded' ? load.config.criblLeaderUrl : null,
           }}
         />
@@ -1105,7 +1080,6 @@ export function LocalApp() {
         'token never leave the host process. To change this connection, edit ' +
         'config/local-config.json, restart the host, then reload this page.'
       }
-      mode={phase.mode}
       onReconfigure={handleReconfigure}
       themeControl={themeControl}
     />
@@ -1205,7 +1179,6 @@ export function LocalApp() {
     <AppFrame
       title="SOC Optimization Toolkit"
       subtitle="Local shell"
-      mode={phase.mode}
       routes={routes}
       capabilities={capabilityAudit.capabilities}
       capabilityContext={capabilityAudit.context}

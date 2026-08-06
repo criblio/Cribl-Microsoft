@@ -57,7 +57,7 @@ function renderFrame(
   return render(
     <AppFrame
       title="Toolkit"
-      mode="full"
+
       routes={ROUTES}
       capabilities={capabilities}
       capabilityContext={context}
@@ -158,7 +158,7 @@ describe("degradation", () => {
     // A shell that has not wired the audit yet must not have its whole nav
     // read as denied.
     render(
-      <AppFrame title="Toolkit" mode="full" routes={ROUTES} initialRouteId="home" />,
+      <AppFrame title="Toolkit" routes={ROUTES} initialRouteId="home" />,
     );
     expect(screen.getByText("Sentinel Integration")).toBeTruthy();
     expect(screen.queryByText("no access")).toBeNull();

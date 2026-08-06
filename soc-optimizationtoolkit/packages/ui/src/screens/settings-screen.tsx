@@ -9,7 +9,7 @@
  *     SAME ThemeControl wiring the frame's topBar toggle uses - one model,
  *     two controls that cannot disagree. Optional: shells that do not wire
  *     theming yet simply omit it.
- *   - Operating mode: the current mode (shared MODE_LABELS, so it can never
+ *   - Setup: re-run the first-run wizard (the legacy Reconfigure
  *     disagree with the frame's chip) and Reconfigure. The Reconfigure
  *     contract is the legacy one: the shell writes an EMPTY mode record
  *     (EMPTY_MODE_RECORD) and reloads, landing the user back in ModeSelect;
@@ -24,8 +24,7 @@
 
 import { useEffect, useState } from "react";
 import { THEME_CHOICES, parseThemeChoice } from "@soc/core";
-import type { AppMode, AzureConfig } from "@soc/core";
-import { MODE_LABELS } from "../frame/frame-state";
+import type { AzureConfig } from "@soc/core";
 import { THEME_LABELS } from "../frame/theme-state";
 import type { ThemeControl } from "../frame/theme-toggle";
 import { validateConfigJson } from "./config-json";
@@ -56,11 +55,9 @@ export interface SettingsScreenProps {
   platformRows: readonly PlatformInfoRow[];
   /** Free-text note under the platform rows (constraints, file locations). */
   platformNote?: string;
-  /** The active mode; null renders as "not set". */
-  mode: AppMode | null;
   /**
-   * Clear the persisted mode (write EMPTY_MODE_RECORD) and reload back into
-   * mode selection. The shell owns both the write and the reload.
+   * Clear the persisted setup record (write EMPTY_SETUP_RECORD) and reload
+   * back into the first-run wizard. The shell owns both the write and reload.
    */
   onReconfigure: () => void | Promise<void>;
   /** The raw-JSON editor, where a JSON-editable surface exists. */
@@ -77,7 +74,6 @@ export function SettingsScreen(props: SettingsScreenProps) {
     shellName,
     platformRows,
     platformNote,
-    mode,
     onReconfigure,
     configEditor,
     themeControl,
@@ -161,27 +157,17 @@ export function SettingsScreen(props: SettingsScreenProps) {
       )}
 
       <div className="settings-section">
-        <div className="settings-section-title">Operating mode</div>
+        <div className="settings-section-title">Setup</div>
         <div className="settings-card">
           <div className="settings-row">
             <span className="settings-row-label">
-              Current mode
+              Re-run first-run setup
               <InfoTip
                 text={
-                  "The mode is the one source of truth for what this app may touch.\n" +
-                  "Full: live Azure and Cribl.\n" +
-                  "Azure Only / Cribl Only: one live side, artifacts for the other.\n" +
-                  "Air-Gapped: artifacts only, no live connections."
+                  "Reopens the setup wizard: connections, targeting, and the permission check.\n" +
+                  "What this app can actually do is MEASURED by the permission check - it is no longer a mode you choose."
                 }
               />
-            </span>
-            <span className="settings-row-value">
-              {mode === null ? "not set" : MODE_LABELS[mode]}
-            </span>
-          </div>
-          <div className="settings-row">
-            <span className="settings-row-label">
-              Reconfigure connections and mode
             </span>
             <button
               className="run-button"
@@ -193,8 +179,8 @@ export function SettingsScreen(props: SettingsScreenProps) {
           </div>
         </div>
         <p className="panel-desc settings-note">
-          Reconfigure clears the saved mode and reloads into mode selection.
-          Connections and their configurations are kept.
+          Reconfigure reopens the first-run wizard. Connections and their
+          configurations are kept.
         </p>
       </div>
 
