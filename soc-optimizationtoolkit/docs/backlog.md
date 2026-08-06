@@ -202,19 +202,26 @@ four commits behind before anyone noticed. Cheapest fix that does not need write
 access to a protected branch: a CI check that warns when `soc-optimizationtoolkit/**`
 source changed without a version bump since the last packaged release.
 
-**1.3.0 is already behind.** It predates the "Start over" removal (`a8b7ba1`),
-the pack-embedded breaker fix (`7890f6c`), and the capability domain
-(`56e909f`). Next package should be at least 1.3.1.
+**1.4.0 PACKAGED 2026-08-06.** `release/soc-optimizationtoolkit-1.4.0.tgz`,
+with [release-notes.md](release-notes.md) started as an accumulating file. Minor
+rather than patch deliberately: removing operating modes is a visible feature
+removal, and every existing install sees the setup wizard once.
 
-**The drift is worse than the committed artifact suggests (seen 2026-08-06).**
-The app INSTALLED in the Crib.Cloud Lab workspace is **1.2.212** - a whole minor
-version behind the 1.3.0 in `package.json`, which is itself behind main. So there
-are two independent lags: repo source ahead of the packaged release, and the
-packaged release ahead of what is actually installed. Anyone opening the
-installed app is running none of the recent work; it is only reachable through
-Live Preview, which serves the dev server rather than the installed artifact.
-Whatever CI check gets built for the first lag says nothing about the second -
-installed version is only observable from the workspace's Apps list.
+Two things learned while packaging, worth knowing next time:
+
+- `npm run package -- --minor` from the workspace root SILENTLY drops the flag
+  and produces a patch bump. The flag does not survive the
+  `--workspace apps/cribl-app` indirection. Run
+  `node scripts/package.mjs --version X.Y.Z` from `apps/cribl-app` instead, and
+  check the version it prints.
+- The script's own archive verification caught a truncated 8 KB tgz on its first
+  attempt and retried - it exists because this has gone wrong before. Confirm the
+  artifact is ~500 KB and that `static/assets` holds the real JS/CSS before
+  trusting a package.
+
+**Still installed: 1.2.212.** Packaging does not deploy. The lab workspace runs
+the installed app, not `release/`, so this work stays invisible there until
+someone uploads the new tgz through the Apps page.
 
 ## 5. Copy and UX
 
