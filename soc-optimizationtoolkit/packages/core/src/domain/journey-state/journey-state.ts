@@ -442,8 +442,10 @@ export function nextAction(facts: JourneyFacts): NextAction | null {
             "A stored secret may exist, but liveness is only known per session - re-enter or verify it before relying on it.",
         };
       }
-      // Azure side is green, so the miss is the Cribl link (full mode with
-      // criblReachable === false).
+      // The Azure side is green, so the only remaining way connect can be
+      // unsatisfied is a KNOWN-unreachable Cribl leader - unknown never blocks
+      // (see connectSatisfied). The two cribl-only branches that used to follow
+      // were unreachable once modes went, and lint caught them.
       return {
         stageId: "connect",
         label: "Restore the Cribl connection",
@@ -451,21 +453,6 @@ export function nextAction(facts: JourneyFacts): NextAction | null {
           "The Cribl leader is not reachable; restore the connection before deploying destinations.",
       };
     }
-    // cribl-only: the Cribl link is the only thing connect proves.
-    if (facts.criblReachable === false) {
-      return {
-        stageId: "connect",
-        label: "Restore the Cribl connection",
-        description:
-          "The Cribl leader is not reachable; restore the connection to continue.",
-      };
-    }
-    return {
-      stageId: "connect",
-      label: "Verify the Cribl connection",
-      description:
-        "Cribl reachability is unknown; verify the leader connection to continue.",
-    };
   }
   if (!facts.scopeCommitted) {
     return {
