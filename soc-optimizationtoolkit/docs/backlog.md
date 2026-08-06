@@ -127,6 +127,16 @@ source changed without a version bump since the last packaged release.
 the pack-embedded breaker fix (`7890f6c`), and the capability domain
 (`56e909f`). Next package should be at least 1.3.1.
 
+**The drift is worse than the committed artifact suggests (seen 2026-08-06).**
+The app INSTALLED in the Crib.Cloud Lab workspace is **1.2.212** - a whole minor
+version behind the 1.3.0 in `package.json`, which is itself behind main. So there
+are two independent lags: repo source ahead of the packaged release, and the
+packaged release ahead of what is actually installed. Anyone opening the
+installed app is running none of the recent work; it is only reachable through
+Live Preview, which serves the dev server rather than the installed artifact.
+Whatever CI check gets built for the first lag says nothing about the second -
+installed version is only observable from the workspace's Apps list.
+
 ## 5. Copy and UX
 
 **"reset when the solution changes" understates deletion.** The Sample Data

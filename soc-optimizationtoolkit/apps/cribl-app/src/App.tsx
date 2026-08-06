@@ -28,6 +28,7 @@ import {
   formatScopeChip,
   mergeJourneyLinks,
   resolveFramePhase,
+  useCapabilityAudit,
   useConsolidatedPolling,
 } from '@soc/ui';
 import type {
@@ -461,6 +462,12 @@ function KvStorePanel() {
 // RBAC panel opens on. 'existing' defaults to the resource-group WRITE path
 // (what deploy-readiness turns on); the operator can switch to the
 // subscription-scope read path inside the panel.
+// The shell owns the clock; @soc/core never reads one. Module scope so the
+// supplier's identity is stable across renders.
+function nowIso(): string {
+  return new Date().toISOString();
+}
+
 function defaultPreflightPath(path: AzureSetupPath): PreflightSetupPath {
   switch (path) {
     case 'existing':
@@ -1069,6 +1076,35 @@ function App() {
     setRenaming(false);
   };
 
+  // The app-level capability audit (capability-model-plan step 2): what this
+  // connection can actually DO, which will replace app modes as the product's
+  // gate. Mounted above every gate branch - hooks cannot live below an early
+  // return, and the audit should survive the first-run wizard rather than be
+  // paid for twice.
+  //
+  // The launch trigger is the hook's own, and it honours the cache, so a return
+  // visit to an already-audited connection costs nothing. Re-audits on a
+  // connection switch or a scope commit fall out of the audit key changing.
+  // Only the trigger is consumed for now - step 3's nav annotation is the first
+  // consumer of the capabilities themselves.
+  const { audit: auditCapabilities } = useCapabilityAudit({
+    ports: cloudPorts,
+    config: activeConfig,
+    // Withhold until the connection store has loaded. Before that activeConfig
+    // is the empty one, and auditing it would cache a result under the empty
+    // config's key - which is what stopped the cache ever hitting when this was
+    // first wired (three audits per load, none of them cached).
+    ready: hydrated,
+    criblShellMode: 'cloud',
+    setupPath: defaultPreflightPath(activeConfig.setupPath),
+    // This app runs inside the leader, so a healthy platform bridge IS Cribl
+    // reachability - the same mapping hasCribl and journeyFacts already use.
+    // 'checking...' is not yet a failure, so it counts as reachable and the
+    // Cribl verdicts stay 'unknown' rather than briefly claiming 'unreachable'.
+    criblReachable: platformLink !== 'failed',
+    now: nowIso,
+  });
+
   // Save-secret success: record which connection (and identity) the live secret
   // now belongs to, and clear any outstanding "enter the secret" notice.
   const handleSecretSaved = useCallback(
@@ -1076,6 +1112,12 @@ function App() {
       setLiveSecretProfileId(profileId);
       setLiveSecretIdentity({ tenantId: savedTenantId, clientId: savedClientId });
       setSwitchNotice('');
+      // NO capability re-audit here, deliberately. This runs for BOTH the
+      // operator saving a secret AND the one-shot session probe merely
+      // confirming an already-stored one. The probe proves nothing changed, so
+      // re-auditing from here would re-measure on every single page load -
+      // precisely the "re-audit every launch" the plan rejected. The trigger
+      // lives in connectAzure, the path that actually takes a new secret.
     },
     [],
   );
@@ -1151,6 +1193,12 @@ function App() {
     if (store.activeProfileId !== null) {
       handleSecretSaved(store.activeProfileId, input.tenantId, input.clientId);
     }
+    // THE trigger the audit key cannot reveal: a NEW secret just arrived. Tenant
+    // and client id are unchanged, so the key does not move and the hook's own
+    // effect will not re-fire - but what this identity can be MEASURED to do may
+    // have gone from unmeasurable to measurable. Fired here rather than in
+    // handleSecretSaved because only this path takes a secret from the operator.
+    auditCapabilities('secret-entry');
     try {
       const token = await acquireArmToken(input.tenantId);
       await appStateStore.set('azureArmToken', token.access_token, { encrypted: true });

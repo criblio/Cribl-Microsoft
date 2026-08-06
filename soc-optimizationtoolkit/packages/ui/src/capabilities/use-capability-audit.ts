@@ -29,6 +29,7 @@ import {
 } from "@soc/core";
 import type {
   AuditTrigger,
+  AzureConfig,
   AzurePreflightTarget,
   CapabilityAuditView,
   CapabilityContext,
@@ -36,11 +37,36 @@ import type {
   CriblShellMode,
   SetupPath,
 } from "@soc/core";
-import { usePorts } from "../ports-context";
+import type { UiPorts } from "../ports-context";
 import { deriveCapabilityContext } from "./capability-audit-state";
 
 /** What the hosting shell must tell the audit. */
 export interface CapabilityAuditOptions {
+  /**
+   * The port bundle. Passed explicitly rather than read from PortsContext
+   * because the audit is an APP-level concern and neither shell has a single
+   * provider high enough to cover the frame - each screen wraps its own. A
+   * caller already inside a provider passes `usePorts().ports`.
+   */
+  ports: UiPorts;
+  /** The active connection's non-secret config - identity plus target scope. */
+  config: AzureConfig;
+  /**
+   * Whether `config` can be TRUSTED yet. Defaults to true.
+   *
+   * Both shells load their connection store asynchronously, so for the first
+   * moments after mount `config` is the empty one. Auditing then is not merely
+   * wasted - it is actively harmful, because the audit key derived from an empty
+   * config is a DIFFERENT key, and the result gets cached under it. The next
+   * audit, with the real config, finds no match and re-measures; and on the
+   * following launch the unhydrated audit overwrites the cache again before the
+   * hydrated one can use it. The cache never hits, so launch conservation - the
+   * entire point of caching - never engages.
+   *
+   * Observed live 2026-08-06 before this existed: three audits per page load,
+   * every one of them reporting "no cached audit for this connection".
+   */
+  ready?: boolean;
   /**
    * Which shell is hosting. Decides how the Cribl side is measured - the cloud
    * probe is granted-by-platform, the local one is genuinely probed.
@@ -84,8 +110,16 @@ export interface CapabilityAuditState {
 export function useCapabilityAudit(
   options: CapabilityAuditOptions,
 ): CapabilityAuditState {
-  const { ports, config } = usePorts();
-  const { criblShellMode, setupPath, workerGroup = "", criblReachable, now } = options;
+  const {
+    ports,
+    config,
+    ready = true,
+    criblShellMode,
+    setupPath,
+    workerGroup = "",
+    criblReachable,
+    now,
+  } = options;
 
   const [capabilities, setCapabilities] = useState<CapabilitySet>(emptyCapabilitySet());
   const [running, setRunning] = useState(false);
@@ -170,9 +204,15 @@ export function useCapabilityAudit(
   // Re-runs whenever the audited connection changes, which covers connection
   // switch and scope commit. `launch` is the right trigger for all of them: it
   // is the passive moment that may legitimately use a cached answer.
+  //
+  // Gated on `ready` so a not-yet-hydrated config never gets audited, and never
+  // caches a result under the empty config's key.
   useEffect(() => {
+    if (!ready) {
+      return;
+    }
     audit("launch");
-  }, [audit]);
+  }, [audit, ready]);
 
   const context = deriveCapabilityContext(config, criblReachable);
   const view = describeCapabilityAudit(capabilities, key, nowRef.current());

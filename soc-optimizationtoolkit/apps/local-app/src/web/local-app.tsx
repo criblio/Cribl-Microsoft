@@ -40,6 +40,7 @@ import {
   formatScopeChip,
   logLineToEntry,
   mergeJourneyLinks,
+  useCapabilityAudit,
   parseTargetScope,
   resolveFramePhase,
   serializeTargetScope,
@@ -93,6 +94,12 @@ import { HostLogger } from './logger';
 
 /** Build-time app version from package.json (Vite define). */
 declare const __APP_VERSION__: string;
+
+// The shell owns the clock; @soc/core never reads one. Module scope so the
+// supplier's identity is stable across renders.
+function nowIso(): string {
+  return new Date().toISOString();
+}
 
 // Map the coarse setup path (persisted on AzureConfig) to the DEFAULT core
 // preflight SetupPath the RBAC panel opens on. 'existing' defaults to the
@@ -513,6 +520,39 @@ export function LocalApp() {
       setMode(null);
     }
   };
+
+  // The app-level capability audit (capability-model-plan step 2): what this
+  // connection can actually DO, which will replace app modes as the product's
+  // gate. Mounted above every gate branch - hooks cannot live below an early
+  // return.
+  //
+  // NO secret-entry trigger in this shell, and that is correct rather than an
+  // omission: there is no in-app identity surface here. The secret lives in
+  // config/local-config.json, so changing it means editing the file, restarting
+  // the host and reloading the page - which arrives as a fresh `launch`. The
+  // cloud shell needs the explicit trigger precisely because it can save a
+  // secret without the page ever reloading.
+  // The result is deliberately unused for now - step 3's nav annotation is its
+  // first consumer. Running and caching the audit is this step's whole job.
+  useCapabilityAudit({
+    ports,
+    config: activeAzureConfig ?? EMPTY_AZURE_CONFIG,
+    // Withhold until the host config has loaded - until then the config is the
+    // empty one, and auditing it would cache a result under the empty config's
+    // key, which is what stops the cache ever hitting on a later launch.
+    ready: activeAzureConfig !== null,
+    criblShellMode: 'local',
+    setupPath: defaultPreflightPath(activeAzureConfig?.setupPath ?? 'existing'),
+    // This shell reaches a leader THROUGH the host proxy and never polls it, so
+    // reachability is genuinely unproven rather than known-bad. Reporting `true`
+    // resolves unmeasured Cribl capabilities to 'unknown' ("not checked yet");
+    // reporting `false` would render "Connect Cribl to enable", asserting a
+    // connection fact nothing here established. The local preflight really does
+    // probe, so an unreachable leader surfaces as its own error and its probes
+    // degrade to unknown - which records no verdicts at all.
+    criblReachable: true,
+    now: nowIso,
+  });
 
   // Gate order is the contract: acceptance before ANYTHING else, then mode
   // selection, then the frame.

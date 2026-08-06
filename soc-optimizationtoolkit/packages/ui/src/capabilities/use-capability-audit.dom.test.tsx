@@ -21,7 +21,6 @@ import {
   FakeCriblClient,
 } from "@soc/core";
 import type { AzureConfig } from "@soc/core";
-import { PortsProvider } from "../ports-context";
 import type { UiPorts } from "../ports-context";
 import { useCapabilityAudit } from "./use-capability-audit";
 import type { CapabilityAuditState } from "./use-capability-audit";
@@ -64,6 +63,8 @@ function renderAudit(ports: UiPorts, config: AzureConfig) {
   const seen: { current: CapabilityAuditState | null } = { current: null };
   function Probe() {
     seen.current = useCapabilityAudit({
+      ports,
+      config,
       criblShellMode: "cloud",
       setupPath: "existing-rg",
       criblReachable: true,
@@ -71,11 +72,7 @@ function renderAudit(ports: UiPorts, config: AzureConfig) {
     });
     return null;
   }
-  const view = render(
-    <PortsProvider ports={ports} config={config}>
-      <Probe />
-    </PortsProvider>,
-  );
+  const view = render(<Probe />);
   return { seen, view };
 }
 
@@ -155,6 +152,41 @@ describe("useCapabilityAudit", () => {
     act(() => seen.current?.refresh());
     await waitFor(() => expect(seen.current?.running).toBe(false));
     expect(second.azure.calls.length).toBeGreaterThan(0);
+  });
+
+  it("does not audit until the config is trustworthy", async () => {
+    // Live regression 2026-08-06: mounted before the connection store hydrated,
+    // the hook audited the EMPTY config and cached the result under that config's
+    // key. The hydrated audit then missed, and on the next launch the unhydrated
+    // audit overwrote the cache before the hydrated one could use it - so the
+    // cache never hit and launch conservation never engaged at all.
+    const cache = new FakeContentCache();
+    const { ports, azure } = makePorts(cache);
+
+    // The shells' real shape: config arrives with `ready`, in one re-render.
+    function Probe({ isReady, cfg }: { isReady: boolean; cfg: AzureConfig }) {
+      useCapabilityAudit({
+        ports,
+        config: cfg,
+        ready: isReady,
+        criblShellMode: "cloud",
+        setupPath: "existing-rg",
+        criblReachable: true,
+        now: NOW,
+      });
+      return null;
+    }
+
+    const { rerender } = render(<Probe isReady={false} cfg={EMPTY_AZURE_CONFIG} />);
+    expect(azure.calls).toHaveLength(0);
+    expect(await cache.get(CAPABILITY_AUDIT_CACHE_KEY)).toBeNull();
+
+    rerender(<Probe isReady={true} cfg={CONFIG} />);
+    await waitFor(() => expect(azure.calls.length).toBeGreaterThan(0));
+
+    // Exactly one audit, against the real config - not one per hydration step.
+    const stored = await cache.get(CAPABILITY_AUDIT_CACHE_KEY);
+    expect((stored as { connectionId: string }).connectionId).toContain("tenant-a");
   });
 
   it("reports an unconfigured connection as unreachable, not denied", async () => {
