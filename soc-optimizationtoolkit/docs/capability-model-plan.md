@@ -134,17 +134,23 @@ the shared ~100 req/min proxy budget every session for something that changes
 rarely. This is only safe because of rule 3 above: a stale audit cannot block
 work, so the cost of being slightly out of date is an annotation, not a wall.
 
-## Still open
+**3. Cribl symmetry: yes, identical treatment.**
 
-**Cribl symmetry.** Once `cribl-only` and `air-gapped` disappear, does the Cribl
-side get identical annotate-don't-hide treatment? The recommendation is yes - the
-preflight already measures Cribl capabilities (manage packs, destinations,
-sources, routes), and without it those operators lose their honest signal
-entirely. One asymmetry to absorb: in the cloud shell Cribl capability is granted
-by the platform via `policies.yml`, whereas the local shell connects out to a
-leader - so the MEASUREMENT source differs per shell while the PRESENTATION
-should be identical, exactly as `criblDeploymentType` and the platform-link poll
-are already handled. Not yet confirmed.
+The Cribl side gets the same annotate-don't-hide rule, the same four-value
+verdict, and the same fallback obligation. Without it, the operators who used to
+live in `cribl-only` and `air-gapped` lose their honest signal entirely when
+those modes disappear. The preflight already measures Cribl capabilities (manage
+packs, destinations, sources, routes), so no new probing is needed.
+
+One asymmetry to absorb: in the cloud shell Cribl capability is granted by the
+platform via `policies.yml`, whereas the local shell connects out to a leader.
+So the MEASUREMENT source differs per shell while the PRESENTATION is identical -
+exactly how `criblDeploymentType` and the platform-link poll are already handled.
+`CapabilityContext.criblReachable` is the seam: each shell supplies it from what
+it already knows, and nothing downstream needs to care which shell it is.
+
+All plan decisions are now settled. Step 1 (the capability domain) shipped in
+56e909f; steps 2-5 are unblocked.
 
 ## Sequencing
 
