@@ -10,21 +10,31 @@ Design is settled. See [capability-model-plan.md](capability-model-plan.md);
 every open decision in it is now closed. Step 1 (the pure domain) shipped in
 `56e909f` and nothing consumes it yet.
 
-**Step 2 - audit lifecycle. MOSTLY DONE (2026-08-06).** Shipped: the pure policy
+**Step 2 - audit lifecycle. DONE (2026-08-06).** The pure policy
 (`domain/capabilities/audit-lifecycle` - the audit key, the trigger rules, age
 reporting with no time-based expiry), the persistence codec, the
-`usecases/capability-audit` orchestration, and the `useCapabilityAudit` hook. The
-audit key IS a `CapabilitySet`'s `connectionId`, so `isSetForConnection` stays
-the single invalidation rule. The preflight panel now feeds the same cache
-instead of measuring beside it.
+`usecases/capability-audit` orchestration, the `useCapabilityAudit` hook, and
+both shells mounting it. The audit key IS a `CapabilitySet`'s `connectionId`, so
+`isSetForConnection` stays the single invalidation rule. The preflight panel
+feeds the same cache rather than measuring beside it.
 
-Two things remain, both shell work:
+Verified in the live preview against real Azure: 10 capabilities measured (three
+writes from effective actions, three reads from probes, four Cribl), with
+`role.assign` correctly absent because the existing-rg path never checks it. A
+page load costs one cache read and no Azure requests.
 
-- **Neither shell mounts the hook yet**, so no app-level audit runs. Mounting it
-  is what makes launch conservation real rather than latent.
-- **Nothing fires `audit('secret-entry')`.** It is the one trigger the key
-  cannot reveal, so it has to be called explicitly where a secret is entered -
-  the cloud shell's secret-verification path is the site.
+Two defects that only the live run exposed, both fixed - worth knowing because
+the same shapes will recur in steps 3-5:
+
+- **Auditing before the store hydrates poisons the cache.** The key from an
+  empty config is a different key, so the result cached under it, and on the
+  next launch the unhydrated audit overwrote the cache before the hydrated one
+  could use it. The cache never hit. Hence the hook's `ready` gate - any future
+  consumer reading capabilities during hydration needs the same discipline.
+- **`secret-entry` must come from the operator path only.** It was fired from
+  `handleSecretSaved`, which also runs when the one-shot session probe merely
+  confirms an already-stored secret - so it re-measured every launch under a
+  different trigger name. It now fires from `connectAzure`.
 
 Deliberately not done: surfacing the audit's age. It belongs with the first
 surface that DISPLAYS capabilities (step 3's nav annotation); on the preflight
