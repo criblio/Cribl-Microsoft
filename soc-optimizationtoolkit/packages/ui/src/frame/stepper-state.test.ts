@@ -17,7 +17,7 @@ import type { JourneyLinks } from "./stepper-state";
 function facts(overrides: Partial<JourneyFacts> = {}): JourneyFacts {
   return {
     accepted: true,
-    mode: "azure-only",
+
     identityPresent: true,
     secretLive: "live",
     scopeCommitted: true,

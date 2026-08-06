@@ -13,8 +13,6 @@
  *     shell's connect stage), the link's guidance text renders instead of
  *     a button - always-visible affordances, props not shell-sniffing
  *     prose.
- *   - {@link modeNoteFor}: the honest one-liner for the active mode,
- *     REUSING MODE_LABELS/MODE_OPTIONS (one source - the chooser, the
  *     chip, and Home can never disagree).
  *   - {@link NO_ACTION_FALLBACK}: what the next-action card says when the
  *     core reports nothing actionable (cribl-only / air-gapped once their
@@ -24,8 +22,7 @@
  */
 
 import { nextAction } from "@soc/core";
-import type { AppMode, JourneyFacts, JourneyStageId } from "@soc/core";
-import { MODE_LABELS, MODE_OPTIONS } from "../../frame/frame-state";
+import type { JourneyFacts, JourneyStageId } from "@soc/core";
 import type { JourneyLinks } from "../../frame/stepper-state";
 
 /** Everything the next-action card renders. */
@@ -69,17 +66,5 @@ export function deriveNextActionView(
 
 /** The next-action card's copy when the core reports nothing actionable. */
 export const NO_ACTION_FALLBACK =
-  "Nothing on the journey needs action right now. This mode's onboarding surfaces have not shipped yet - the mode note below states what this install can do today.";
+  "Nothing on the journey needs action right now.";
 
-/**
- * The honest one-liner for the active mode: label plus the SAME description
- * the mode chooser shows (MODE_OPTIONS is the one source). Total: a null
- * mode (never expected inside the frame) states itself honestly.
- */
-export function modeNoteFor(mode: AppMode | null): string {
-  const option = MODE_OPTIONS.find((o) => o.mode === mode);
-  if (mode === null || option === undefined) {
-    return "No operating mode is chosen yet.";
-  }
-  return `${MODE_LABELS[mode]}: ${option.description}`;
-}

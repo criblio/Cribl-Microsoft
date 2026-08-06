@@ -2,24 +2,22 @@
  * Tests for Home's pure decisions (Unit 6.5). The journey decisions
  * themselves are pinned in @soc/core's journey-state tests; these pin the
  * BINDING layer: nextAction mirrored exactly, route/hint joined from the
- * shell links, honest fallbacks, and the one-source mode note.
+ * shell links and honest fallbacks.
  */
 import { describe, expect, it } from "vitest";
-import { APP_MODES, nextAction } from "@soc/core";
+import { nextAction } from "@soc/core";
 import type { JourneyFacts } from "@soc/core";
-import { MODE_LABELS, MODE_OPTIONS } from "../../frame/frame-state";
 import { SHARED_JOURNEY_LINKS, mergeJourneyLinks } from "../../frame/stepper-state";
 import {
   NO_ACTION_FALLBACK,
   deriveNextActionView,
-  modeNoteFor,
 } from "./home-state";
 
 /** A green azure-only baseline; tests override the facts under exercise. */
 function facts(overrides: Partial<JourneyFacts> = {}): JourneyFacts {
   return {
     accepted: true,
-    mode: "azure-only",
+
     identityPresent: true,
     secretLive: "live",
     scopeCommitted: true,
@@ -32,12 +30,12 @@ describe("deriveNextActionView", () => {
     const cases: JourneyFacts[] = [
       facts(),
       facts({ accepted: false }),
-      facts({ mode: null }),
+      facts({}),
       facts({ identityPresent: false }),
       facts({ secretLive: "unknown" }),
       facts({ secretLive: "missing" }),
       facts({ scopeCommitted: false }),
-      facts({ mode: "full", criblReachable: false }),
+      facts({ criblReachable: false }),
     ];
     for (const f of cases) {
       const core = nextAction(f);
@@ -90,32 +88,19 @@ describe("deriveNextActionView", () => {
     expect(view?.routeId).toBe("home");
   });
 
-  it("is null exactly when the core reports nothing actionable", () => {
-    // cribl-only with a proven Cribl link: first-run arc green, integrate
-    // surfaces unshipped -> the core returns null and Home falls back.
-    const view = deriveNextActionView(
-      facts({ mode: "cribl-only", criblReachable: true }),
-      SHARED_JOURNEY_LINKS,
-    );
-    expect(
-      nextAction(facts({ mode: "cribl-only", criblReachable: true })),
-    ).toBeNull();
-    expect(view).toBeNull();
+  it("always has an action now that modes cannot strand the journey", () => {
+    // DELIBERATE CHANGE (capability-model-plan step 5). This pinned the opposite:
+    // a green cribl-only journey had no shipped integrate surface, so the core
+    // returned null and Home fell back. Modes no longer suppress the integrate
+    // arc, so a green journey ends at "choose content" instead of nowhere.
+    //
+    // The null branch and NO_ACTION_FALLBACK are KEPT rather than deleted: the
+    // return type still admits null, and a caller that drops the fallback would
+    // render an empty card if a future fact ever reintroduces that state.
+    const green = facts({ criblReachable: true });
+    expect(nextAction(green)?.stageId).toBe("choose-content");
+    expect(deriveNextActionView(green, SHARED_JOURNEY_LINKS)).not.toBeNull();
     expect(NO_ACTION_FALLBACK.trim()).not.toBe("");
   });
 });
 
-describe("modeNoteFor", () => {
-  it("reuses MODE_LABELS and the MODE_OPTIONS descriptions (one source)", () => {
-    for (const mode of APP_MODES) {
-      const option = MODE_OPTIONS.find((o) => o.mode === mode);
-      expect(modeNoteFor(mode)).toBe(
-        `${MODE_LABELS[mode]}: ${option?.description}`,
-      );
-    }
-  });
-
-  it("states a missing mode honestly", () => {
-    expect(modeNoteFor(null)).toBe("No operating mode is chosen yet.");
-  });
-});

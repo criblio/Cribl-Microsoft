@@ -127,7 +127,6 @@ export type { HomeScreenProps } from "./screens/home/home-screen";
 export {
   NO_ACTION_FALLBACK,
   deriveNextActionView,
-  modeNoteFor,
 } from "./screens/home/home-state";
 export type { NextActionView } from "./screens/home/home-state";
 
