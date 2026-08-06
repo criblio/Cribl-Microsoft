@@ -49,6 +49,7 @@ import {
   DEFAULT_THEME_CHOICE,
   hasAzure,
   hasCribl,
+  mustProduceArtifacts,
   EMPTY_AZURE_CONFIG,
   EMPTY_PROFILE_STORE,
   getActiveConfig,
@@ -1105,6 +1106,21 @@ function App() {
   });
   const { audit: auditCapabilities } = capabilityAudit;
 
+  // Artifact-only output, derived from CAPABILITY rather than mode
+  // (capability-model-plan step 4). Replaces `!hasCribl(mode)`, and preserves
+  // what it meant: that check said "no live Cribl connection", which is
+  // destination.manage UNREACHABLE.
+  //
+  // Only unreachable forces. A DENIED verdict deliberately does not: forcing
+  // there would forbid the live attempt, and rule 3 keeps it available because a
+  // stale or wrong audit must not silently downgrade a deploy. The artifact is
+  // offered alongside instead.
+  const forcedTemplateOnly = mustProduceArtifacts(
+    ['destination.manage'],
+    capabilityAudit.capabilities,
+    capabilityAudit.context,
+  );
+
   // Save-secret success: record which connection (and identity) the live secret
   // now belongs to, and clear any outstanding "enter the secret" notice.
   const handleSecretSaved = useCallback(
@@ -1815,7 +1831,7 @@ function App() {
               pacing={BATCH_PACING}
               operationDefaults={appOptions.operation}
               criblDefaults={appOptions.cribl}
-              forcedTemplateOnly={!hasCribl(phase.mode)}
+              forcedTemplateOnly={forcedTemplateOnly}
             />
           </PortsProvider>
         </>

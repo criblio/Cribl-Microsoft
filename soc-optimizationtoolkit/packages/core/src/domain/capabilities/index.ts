@@ -48,6 +48,12 @@ export {
   IDENTITY_FALLBACK,
   fallbackFor,
 } from "./fallbacks";
+export type { ActionRouting, CapabilityRouting } from "./fallback-routing";
+export {
+  artifactsToOffer,
+  mustProduceArtifacts,
+  routeCapability,
+} from "./fallback-routing";
 export type {
   AnnotatedNavItem,
   NavAvailability,

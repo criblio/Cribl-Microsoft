@@ -65,6 +65,7 @@ import {
   criblUiBaseFromLeaderUrl,
   hasAzure,
   hasCribl,
+  mustProduceArtifacts,
   parseAcceptanceRecord,
   parseAppMode,
   parseAppOptions,
@@ -553,6 +554,16 @@ export function LocalApp() {
     now: nowIso,
   });
 
+  // Artifact-only output, derived from CAPABILITY rather than mode
+  // (capability-model-plan step 4). Replaces `!hasCribl(mode)`; only an
+  // UNREACHABLE Cribl forces it, since a denied verdict must leave the live
+  // attempt available (rule 3).
+  const forcedTemplateOnly = mustProduceArtifacts(
+    ['destination.manage'],
+    capabilityAudit.capabilities,
+    capabilityAudit.context,
+  );
+
   // Gate order is the contract: acceptance before ANYTHING else, then mode
   // selection, then the frame.
   if (phase.phase === 'loading') {
@@ -824,7 +835,7 @@ export function LocalApp() {
             pacing={BATCH_PACING}
             operationDefaults={appOptions.operation}
             criblDefaults={appOptions.cribl}
-            forcedTemplateOnly={!hasCribl(phase.mode)}
+            forcedTemplateOnly={forcedTemplateOnly}
           />
         </PortsProvider>
       )}
