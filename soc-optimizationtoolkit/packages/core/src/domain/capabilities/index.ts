@@ -39,6 +39,21 @@ export {
   shouldRunAudit,
   usableCapabilitySet,
 } from "./audit-lifecycle";
+export type {
+  CapabilityFallback,
+  CapabilityFallbackKind,
+} from "./fallbacks";
+export {
+  CAPABILITY_FALLBACKS,
+  IDENTITY_FALLBACK,
+  fallbackFor,
+} from "./fallbacks";
+export type {
+  AnnotatedNavItem,
+  NavAvailability,
+  NavItemCapabilities,
+} from "./nav-annotation";
+export { annotateNavItems, unavailableCount } from "./nav-annotation";
 export type { CachedCapabilitySet } from "./capability-codec";
 export {
   CAPABILITY_AUDIT_CACHE_KEY,
