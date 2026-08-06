@@ -63,12 +63,51 @@ across at least six state modules (`frame-state`, `stepper-state`,
 **those pins are the specification**. Each must be read and deliberately
 re-pinned against the capability model, never deleted to make a suite pass.
 
-## 2. Verification gaps
+## 2. Workspace table inventory for gap analysis
 
-**First-run wizard as a genuine first run.** The reordered cloud wizard
-(GitHub-first, no target/upload steps, change-request generator inline) was only
-ever seen via a temporarily forced branch in `App.tsx`, not by actually
-onboarding. Everything else from the session has been confirmed on screen.
+**Requested 2026-08-06.** Inventory the Log Analytics workspace's tables when the
+identity has the permission to read them, and let the operator filter and select
+ANY table to run the DCR gap analysis against. Today the gap analysis works from
+the solution/sample path (`schemaReport.destSchema`); there is no way to point it
+at an arbitrary existing table.
+
+The ARM call already exists - and is already thrown away. `permission-preflight`
+issues a `tables-list` GET against
+`{workspace}/tables` as its `table.read` PROBE, but reads only the status code
+and discards the body. The work is a real listing usecase that keeps the
+response, paginated through the existing `listAllPages`/`requestUrl` helpers the
+DCR inventory already uses.
+
+This is the first natural consumer of the capability model, and a good test of
+whether the model is right:
+
+- Gate on `table.read` (and `workspace.read` for the workspace itself). Both are
+  already measured by the audit that shipped in step 2.
+- `denied` must NOT hide the picker - per plan rule 3 it stays attemptable, and
+  Azure's 403 is the real gate.
+- These are READ capabilities, and the plan is explicit that reads have NO
+  fallback artifact: without them discovery genuinely cannot run, and the honest
+  UI says so rather than inventing an offline substitute. So this feature has no
+  "download the thing someone else runs" path - the annotation IS the answer.
+
+Worth settling when picking it up: whether the selected table's live schema
+replaces the derived `destSchema` outright or is reconciled against it, since the
+derived-schema path exists precisely for tables that do not materialize until a
+connector is enabled.
+
+## 3. Verification gaps
+
+**First-run wizard as a genuine first run. VERIFIED 2026-08-06.** Walked end to
+end from clean state in the cloud shell on the dev server - AUA, Connect
+(GitHub-first), the optional Connect Azure sub-step with the change-request
+generator inline, the permission check, Mode, then into the app frame. It matches
+what was described from the forced branch; no forced branch was needed.
+
+One copy mismatch seen while walking it: the header promises four phases
+("connect GitHub content, connect Azure, verify access, then pick an operating
+mode") while the stepper shows two, Connect and Mode, with the other three as
+sub-steps inside Connect. Not wrong, but the header sets up a count the stepper
+does not show.
 
 **The bug-triage workflow has never run.** `.github/workflows/bug-triage.yml`
 fires daily at 07:00 UTC or on demand. First execution creates three labels
@@ -76,7 +115,7 @@ fires daily at 07:00 UTC or on demand. First execution creates three labels
 issue. A read-only dry run - fetch and render without writing - is worth doing
 first to see the output before anything is created in the repo.
 
-## 3. Release hygiene
+## 4. Release hygiene
 
 **Release drift will recur.** Nothing ties `release/` to source changes;
 `npm run package` is manual. The committed artifact silently fell five days and
@@ -88,7 +127,7 @@ source changed without a version bump since the last packaged release.
 the pack-embedded breaker fix (`7890f6c`), and the capability domain
 (`56e909f`). Next package should be at least 1.3.1.
 
-## 4. Copy and UX
+## 5. Copy and UX
 
 **"reset when the solution changes" understates deletion.** The Sample Data
 helper text says the sample, mapping and coverage sections "reset" when the
@@ -101,7 +140,7 @@ the behavior.
 scrolling page inside the app iframe. `overscroll-behavior: contain` stops the
 wheel chaining at the list's end, but the three-level nesting remains.
 
-## 5. Diagram fidelity
+## 6. Diagram fidelity
 
 **Inline breaker rulesets are not named.** The spec's
 `EventBreakerExistingOrNewExisting` carries `existingRule` - the ruleset name -
@@ -119,7 +158,7 @@ It is the 19 `Input*` schemas carrying a breaker property, out of 68, extracted
 from `packages/core/assets/cribl-openapi.json`. Derived, not hand-written - do
 not edit it by hand.
 
-## 6. Explicitly not doing
+## 7. Explicitly not doing
 
 **Live capture.** `POST /system/capture` supports `level` 0-3 (before
 pre-processing pipeline / before Routes / before post-processing pipeline /
