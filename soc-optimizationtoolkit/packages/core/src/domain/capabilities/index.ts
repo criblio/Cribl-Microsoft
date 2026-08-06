@@ -22,3 +22,26 @@ export {
   unavailableReason,
   verdictFor,
 } from "./capabilities";
+export type {
+  AuditDecision,
+  AuditStatus,
+  AuditTrigger,
+  CapabilityAuditKeyInput,
+  CapabilityAuditView,
+} from "./audit-lifecycle";
+export {
+  AUDIT_SKIP_CACHED_REASON,
+  CAPABILITY_AUDIT_KEY_VERSION,
+  auditAgeMs,
+  capabilityAuditKey,
+  describeAuditAge,
+  describeCapabilityAudit,
+  shouldRunAudit,
+  usableCapabilitySet,
+} from "./audit-lifecycle";
+export type { CachedCapabilitySet } from "./capability-codec";
+export {
+  CAPABILITY_AUDIT_CACHE_KEY,
+  parseCapabilitySet,
+  serializeCapabilitySet,
+} from "./capability-codec";
