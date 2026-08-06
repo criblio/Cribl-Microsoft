@@ -10,10 +10,25 @@ Design is settled. See [capability-model-plan.md](capability-model-plan.md);
 every open decision in it is now closed. Step 1 (the pure domain) shipped in
 `56e909f` and nothing consumes it yet.
 
-**Step 2 - audit lifecycle.** Where a `CapabilitySet` is cached, and when it
-refreshes. Decided: cache per connection, re-audit on connection switch, scope
-commit, and secret re-entry; surface the audit's age with a manual refresh; do
-NOT re-audit every launch. Blocked on nothing.
+**Step 2 - audit lifecycle. MOSTLY DONE (2026-08-06).** Shipped: the pure policy
+(`domain/capabilities/audit-lifecycle` - the audit key, the trigger rules, age
+reporting with no time-based expiry), the persistence codec, the
+`usecases/capability-audit` orchestration, and the `useCapabilityAudit` hook. The
+audit key IS a `CapabilitySet`'s `connectionId`, so `isSetForConnection` stays
+the single invalidation rule. The preflight panel now feeds the same cache
+instead of measuring beside it.
+
+Two things remain, both shell work:
+
+- **Neither shell mounts the hook yet**, so no app-level audit runs. Mounting it
+  is what makes launch conservation real rather than latent.
+- **Nothing fires `audit('secret-entry')`.** It is the one trigger the key
+  cannot reveal, so it has to be called explicitly where a secret is entered -
+  the cloud shell's secret-verification path is the site.
+
+Deliberately not done: surfacing the audit's age. It belongs with the first
+surface that DISPLAYS capabilities (step 3's nav annotation); on the preflight
+panel, which re-measures on arrival, it would only ever read "just now".
 
 **Prerequisite for step 2 - preflight mapping. DONE (2026-08-06).**
 `usecases/permission-preflight/capability-mapping.ts` projects a
