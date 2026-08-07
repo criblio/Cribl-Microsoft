@@ -177,22 +177,28 @@ phase it used to promise is gone, so the gap narrowed from 4-vs-2 to 3-vs-1, but
 the header still sets up a count the stepper does not show. Either drop the
 enumeration from the header or promote the sub-steps.
 
-**Annotated nav states have never been seen live.** A healthy connection produces
-no flags, so `no access` / `unchecked` / `not connected` are test-verified only
-(DOM tests over the frame). Seeing them needs a connection with missing
-permissions - a second App registration with reduced RBAC would do it, and would
-also exercise step 4's offer path once that UI exists.
+**Annotated nav states - `unchecked` VERIFIED LIVE 2026-08-06, two remain.**
+Seen in the LOCAL shell, which has an Azure identity but an empty
+`cribl.auth.token`, so its Cribl probes fail: Sentinel Integration and Pack
+Maintenance both carry the `unchecked` pill while DCR Automation and Labs (which
+need only granted Azure capabilities) carry none. Tooltip reads "Not checked yet
+- run the permission check to see if this will work.", the button is not
+disabled, and clicking it opens the screen - rule 3 on screen.
 
-**The local shell has never been exercised in a browser.** Every live validation
-so far has been the cloud shell. The local shell compiles and its tests pass, but
-the mode removal touched its gate flow (`resolveFramePhase`, the setup record,
-the wizard's Get Started) and none of that has been run.
+The honesty rule held where it matters: the failed Cribl probes returned HTTP
+500, which is not a 401/403, so the panel reported all four capabilities UNKNOWN
+rather than missing, and the nav flagged `unchecked` rather than `no access`.
 
-**The bug-triage workflow has never run.** `.github/workflows/bug-triage.yml`
-fires daily at 07:00 UTC or on demand. First execution creates three labels
-(`triage/tracker`, `triage/approved`, `triage/rejected`) and opens the tracker
-issue. A read-only dry run - fetch and render without writing - is worth doing
-first to see the output before anything is created in the repo.
+`no access` and `not connected` are still test-only. `no access` needs a
+measured denial (an identity with reduced RBAC); `not connected` needs a
+connection with no identity at all - a new empty connection profile in the cloud
+shell would produce it, at the cost of a throwaway profile in the KV store.
+
+**Local shell in a browser - VERIFIED 2026-08-06.** `npm run local`, host on
+:4600. AUA, the two-phase wizard (Target -> Connect, no Mode step), the
+permission check as the final view, Get Started, and into the frame. This shell
+had never been run in a browser at all, and the mode removal touched its gate
+flow.
 
 ## 4. Release hygiene
 
