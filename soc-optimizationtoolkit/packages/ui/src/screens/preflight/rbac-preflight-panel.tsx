@@ -25,8 +25,11 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
+  AZURE_CAPABILITIES,
+  CRIBL_CAPABILITIES,
   CRIBL_CAPABILITY_PROBES,
   REQUIRED_ACTIONS,
+  artifactsToOffer,
   capabilitiesFromSides,
   capabilityAuditKey,
   runAzurePreflight,
@@ -41,6 +44,7 @@ import type {
   SetupPath,
 } from "@soc/core";
 import { usePorts } from "../../ports-context";
+import { FallbackNotice } from "../../capabilities/fallback-notice";
 import {
   type AzureSideState,
   type CapabilityDot,
@@ -269,6 +273,32 @@ export function RbacPreflightPanel({
     void saveCapabilityAudit(ports.contentCache, set, ports.logger);
   }, [azure, cribl, config.tenantId, config.clientId, target, setupPath, workerGroup, ports]);
 
+  // The artifacts for whatever the identity was MEASURED to lack
+  // (capability-model-plan step 4). Derived from the same projection the cache
+  // write uses, so the offers can never disagree with the dots above.
+  //
+  // Only a resolved report produces offers: an in-flight or failed check has
+  // measured nothing, and offering a workaround for an unmeasured capability
+  // would imply we know it is blocked. Reads have no artifact by design, so a
+  // denied read contributes nothing here and the dot above is the whole answer.
+  const offers = useMemo(() => {
+    if (azure.phase !== "done" || azure.result === null) {
+      return [];
+    }
+    if (cribl.phase !== "done" || cribl.result === null) {
+      return [];
+    }
+    const set = capabilitiesFromSides(azure.result, cribl.result, {
+      auditedAt: null,
+      connectionId: null,
+    });
+    return artifactsToOffer(
+      [...AZURE_CAPABILITIES, ...CRIBL_CAPABILITIES],
+      set,
+      { azureIdentityPresent: true, criblReachable: true },
+    );
+  }, [azure, cribl]);
+
   const view = derivePreflightView({
     setupPath,
     azure,
@@ -312,6 +342,21 @@ export function RbacPreflightPanel({
         <SideSection view={view.azure} />
         <SideSection view={view.cribl} />
       </div>
+
+      {offers.length > 0 && (
+        <section className="preflight-offers">
+          <span className="field-label">Take these to someone who can</span>
+          <p className="field-hint">
+            Everything above stays attemptable - this reports access, it does not
+            gate the deploy. These are the artifacts for the actions the identity
+            was MEASURED to lack, so the work can proceed through someone with
+            the access.
+          </p>
+          {offers.map((offer) => (
+            <FallbackNotice key={offer.kind} fallback={offer} />
+          ))}
+        </section>
+      )}
 
       <div className="panel-controls">
         <button

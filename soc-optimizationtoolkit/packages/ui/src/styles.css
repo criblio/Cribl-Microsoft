@@ -5521,3 +5521,14 @@ details[open] > summary::before {
   margin-top: 10px;
   flex-wrap: wrap;
 }
+
+/* The offers block on the permission-check panel: the artifacts for whatever
+   the identity was measured to lack. Sits BELOW the dots, so the reading order
+   is "here is what you cannot do" then "here is what to do about it". */
+.preflight-offers {
+  display: flex;
+  flex-direction: column;
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
