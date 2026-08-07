@@ -14,3 +14,10 @@ export type {
   CapabilityAuditOptions,
   CapabilityAuditState,
 } from "./use-capability-audit";
+export { FallbackNotice } from "./fallback-notice";
+export type { FallbackNoticeProps } from "./fallback-notice";
+export {
+  fallbackActionLabel,
+  fallbackHint,
+  isInlineArtifact,
+} from "./fallback-notice-state";

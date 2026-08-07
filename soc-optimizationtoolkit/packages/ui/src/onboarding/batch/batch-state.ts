@@ -191,7 +191,7 @@ export function applyRunOverrides(
  * hints) can never drift.
  */
 export const FORCED_TEMPLATE_ONLY_NOTICE =
-  "Template only is forced on: this mode has no live Cribl connection, so " +
+  "Template only is forced on: there is no reachable Cribl connection, so " +
   "nothing can deploy to Cribl and no worker group is needed. The run " +
   "collects every ARM request body as one downloadable artifact instead.";
 

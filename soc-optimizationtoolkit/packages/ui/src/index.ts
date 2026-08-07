@@ -635,6 +635,16 @@ export type {
   CapabilityAuditOptions,
   CapabilityAuditState,
 } from "./capabilities";
+// The "someone else runs this" offer (capability-model-plan step 4, rule 2):
+// names the artifact beside a blocked action. An OFFER, not an error - the live
+// control stays available because the audit never forbids.
+export { FallbackNotice } from "./capabilities";
+export type { FallbackNoticeProps } from "./capabilities";
+export {
+  fallbackActionLabel,
+  fallbackHint,
+  isInlineArtifact,
+} from "./capabilities";
 
 // Setup Wizard (porting-plan Unit 22, GUI-03 delta): the local-app first-run
 // onboarding ASSEMBLED from already-shipped pieces - AuaGate (Unit 1) ->
