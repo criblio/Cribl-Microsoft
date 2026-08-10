@@ -6,6 +6,31 @@ is harder to forget to update than a directory that has to be remembered.
 
 ---
 
+## 1.5.0
+
+Additive. Nothing an operator does changes, and there is no migration.
+
+**DeviceVendor / DeviceProduct override.** These two CEF header fields are what
+Sentinel content keys off - rules filter on them by literal string, so a sample
+whose vendor does not match what the rules expect deploys cleanly, ingests
+cleanly, and never fires a rule. Nothing errors, because nothing is broken.
+
+The toolkit can now derive what a solution's rules expect (from the literals
+coverage analysis already extracts), compare it against the sample, and force
+the corrected value into the generated pipeline. Wrong CASING is reported
+separately from a wrong vendor, because the rule corpus mixes `==` and `=~` and
+only one of them cares.
+
+**Workspace table listing.** The tables in the connected Log Analytics workspace
+can be listed and a table's live schema fetched - the groundwork for pointing
+DCR gap analysis at any existing table.
+
+**Not yet reachable from the UI.** Both arrived as capability this release; the
+screens that expose them come next. The pipeline override is live for anything
+that sets a value, so a pack built with one carries the corrected vendor.
+
+---
+
 ## 1.4.0
 
 **Operating modes are gone. What this app can do is now MEASURED, not chosen.**
