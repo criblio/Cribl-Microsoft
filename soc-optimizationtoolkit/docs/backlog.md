@@ -245,7 +245,41 @@ Worth settling when picking it up:
   analysis would leave deployed data still carrying the wrong vendor, so the
   value has to flow into the generated pipeline, not just the gap report.
 
-## 4. Verification gaps
+## 4. Unverified empty inventories report "none" (BUG)
+
+**Reported 2026-08-10. Standard written, fix NOT applied.** See
+[inventory-standard.md](inventory-standard.md), which is BINDING for every
+inventory scenario.
+
+With insufficient RBAC the app reports "No workspaces found - create one below".
+That is a confident wrong answer, and the harmful kind: it invites the operator
+to create a workspace that may already exist and that they simply cannot see.
+
+**The trap, and why this is not error handling.** Azure ARM list operations
+return `200 OK` with an empty `value` array when RBAC filters the caller out.
+There is no error to catch - a caller with no access and a caller looking at a
+genuinely empty subscription get byte-identical responses. `listAllPages` does
+throw on non-2xx, correctly, and it does not help here. The distinction is not
+in the response at all; it has to come from a permission check.
+
+**The fix is available.** The capability audit already measures `workspace.read`,
+`table.read` and `dcr.read`. An empty result is only a zero when the matching
+capability is GRANTED; denied means "cannot list", and unknown means "cannot
+confirm" - three answers, never collapsed into one.
+
+**Where to apply it:**
+
+- `azure-targeting-screen` line ~632, the "No workspaces found" option - the
+  reported instance.
+- `listWorkspaceTables` - throws on explicit denial, but an RBAC-filtered
+  `200 []` would still read as an empty workspace.
+- Then audit the rest as they are touched: subscriptions, resource groups, DCR
+  inventory, Event Hub discovery, worker groups, pack inventory.
+
+Do NOT hide or gate these surfaces while fixing them - rule 3 still holds, the
+list stays loadable, and reads have no fallback artifact.
+
+## 5. Verification gaps
 
 **First-run wizard as a genuine first run. VERIFIED 2026-08-06, twice.** Walked
 end to end from clean state in the cloud shell (dev server), and again in the
@@ -282,7 +316,7 @@ permission check as the final view, Get Started, and into the frame. This shell
 had never been run in a browser at all, and the mode removal touched its gate
 flow.
 
-## 5. Release hygiene
+## 6. Release hygiene
 
 **Release drift will recur.** Nothing ties `release/` to source changes;
 `npm run package` is manual. The committed artifact silently fell five days and
@@ -311,7 +345,7 @@ Two things learned while packaging, worth knowing next time:
 the installed app, not `release/`, so this work stays invisible there until
 someone uploads the new tgz through the Apps page.
 
-## 6. Copy and UX
+## 7. Copy and UX
 
 **"reset when the solution changes" understates deletion.** The Sample Data
 helper text says the sample, mapping and coverage sections "reset" when the
@@ -324,7 +358,7 @@ the behavior.
 scrolling page inside the app iframe. `overscroll-behavior: contain` stops the
 wheel chaining at the list's end, but the three-level nesting remains.
 
-## 7. Diagram fidelity
+## 8. Diagram fidelity
 
 **Inline breaker rulesets are not named.** The spec's
 `EventBreakerExistingOrNewExisting` carries `existingRule` - the ruleset name -
@@ -342,7 +376,7 @@ It is the 19 `Input*` schemas carrying a breaker property, out of 68, extracted
 from `packages/core/assets/cribl-openapi.json`. Derived, not hand-written - do
 not edit it by hand.
 
-## 8. Explicitly not doing
+## 9. Explicitly not doing
 
 **Live capture.** `POST /system/capture` supports `level` 0-3 (before
 pre-processing pipeline / before Routes / before post-processing pipeline /
