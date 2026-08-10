@@ -755,3 +755,16 @@ export type {
   ConsolidatedPoll,
   ConsolidatedPollingOptions,
 } from "./polling/use-consolidated-polling";
+
+// Workspace table picker (backlog item 2): choosing an existing Log Analytics
+// table to run DCR gap analysis against. First feature to exercise the
+// capability model outside the nav - a denied table.read ANNOTATES the picker
+// and never blocks it, and reads have no fallback artifact, so the annotation is
+// the whole answer. Pure decisions only; the screen comes next.
+export {
+  ANALYSIS_STALE_NOTICE,
+  deriveTablePickerAccess,
+  filterTables,
+  tableCountLabel,
+} from "./screens/table-picker/table-picker-state";
+export type { TablePickerAccess } from "./screens/table-picker/table-picker-state";
