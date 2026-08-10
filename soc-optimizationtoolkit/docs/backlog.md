@@ -84,7 +84,7 @@ turned out to be the wrong place for a global "checked 5 minutes ago" line - it
 belongs in the frame footer or the connection bar, next to the existing
 secret/target/platform-link chips.
 
-**Step 4 - fallback routing. DECISION LAYER DONE (2026-08-06); UI NOT BUILT.**
+**Step 4 - fallback routing. DONE (2026-08-06).**
 `domain/capabilities/fallback-routing` resolves the tension the plan left: it
 says to force the artifact "from a permission verdict", while rule 3 says the
 audit never forbids. UNREACHABLE forces (there is nowhere to send the request -
@@ -96,12 +96,21 @@ The fallback catalog is data, keyed by a typed `kind` so the routing is a switch
 the compiler checks. Read capabilities map to NOTHING deliberately - without live
 read access discovery cannot run and no artifact substitutes for it.
 
-**What remains: nothing RENDERS the offer.** When an action is blocked the
-operator is told so (step 3's annotation) but is not yet handed the artifact. The
-work is presentational over a settled contract: a component that takes a
-`CapabilityFallback` and routes its `kind` to the generator that already exists -
-`templateOnly` for the ARM bodies, `domain/change-request` for the tickets, the
-pack builder for `.crbl`.
+`FallbackNotice` renders the offer, placed on the permission-check panel - the
+one screen that already enumerates what the identity cannot do, so the reading
+order is "what you cannot do" then "what to do about it". Styled and worded as an
+OFFER, not an error, with a test pinning the absence of alert semantics: the live
+control stays available, so a notice that read like a failure would talk people
+out of work that might succeed.
+
+Three cases correctly produce nothing: an unresolved check, an UNKNOWN verdict
+(not a denial - verified live, where broken Cribl auth produced unknowns and no
+offers), and a denied READ (no artifact exists by design).
+
+**Follow-on:** the offer is only on the permission panel. Placing it beside the
+ACTIONS themselves - Integrate's deploy, Batch Deploy, DCR Automation - is a
+product call about surface area, and each needs its own `onProduce`. One prop
+away in any of them.
 
 **Step 5 - mode removal. DONE (2026-08-06).** `AppMode`, `APP_MODES`,
 `hasAzure`/`hasCribl`, `NavRequirement`, `filterNavItems`, `ModeSelect`, the mode
