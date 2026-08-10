@@ -39,6 +39,7 @@ export * from "./domain/sentinel-content";
 export * from "./domain/gap-analysis";
 export * from "./domain/vendor-identity";
 export * from "./domain/coverage-analysis";
+export * from "./domain/cef-identity";
 export * from "./domain/pipeline-generation";
 export * from "./domain/pack-assembly";
 export * from "./domain/architecture-patterns";
