@@ -40,6 +40,8 @@
 
 import { PANOS_CSV_HEADERS } from "../sample-parsing";
 import type { OverflowConfig } from "../field-matcher";
+import { CEF_IDENTITY_FIELDS } from "../cef-identity";
+import type { CefIdentityOverride } from "../cef-identity";
 import type { PipelineFieldMapping, TablePlan } from "./models";
 import type { TableReductionRules } from "./reduction-rules";
 
@@ -115,6 +117,49 @@ export function escapeYamlFilter(expr: string | undefined | null): string {
 }
 
 /**
+ * The Eval function that forces DeviceVendor / DeviceProduct to the operator's
+ * values, or null when the override names nothing.
+ *
+ * Values are emitted as QUOTED JS STRING LITERALS, not interpolated bare: a
+ * vendor name legitimately contains spaces ("Palo Alto Networks") and can
+ * contain an apostrophe, and an unescaped one would produce a Cribl expression
+ * that fails to parse - breaking the whole pipeline over a punctuation mark.
+ *
+ * A blank value emits nothing, matching applyCefIdentityOverride: "leave it" is
+ * expressible, "clear it" deliberately is not, because an empty DeviceVendor
+ * makes CEF reconstruction fail.
+ */
+export function buildCefIdentityOverrideFn(
+  override: CefIdentityOverride | undefined,
+): string | null {
+  if (override === undefined) {
+    return null;
+  }
+  const adds: string[] = [];
+  for (const field of CEF_IDENTITY_FIELDS) {
+    const value = override[field]?.trim() ?? "";
+    if (value === "") {
+      continue;
+    }
+    adds.push(`        - name: ${field}`);
+    adds.push(`          value: "${JSON.stringify(value).slice(1, -1).replace(/"/g, '\\"')}"`);
+  }
+  if (adds.length === 0) {
+    return null;
+  }
+  return [
+    "  - id: eval",
+    '    filter: "true"',
+    "    disabled: false",
+    "    conf:",
+    "      add:",
+    ...adds,
+    "    description: Override CEF identity so Sentinel content matches",
+    "    groupId: extract",
+  ].join("\n");
+}
+
+/**
  * Generate the transformation pipeline conf.yml. Groups: Field Extraction,
  * (Volume Reduction), Enrich & Classify, (Overflow Collection), Sentinel
  * Cleanup. See the file header for the verbatim knowledge and the two fixes.
@@ -129,6 +174,7 @@ export function generatePipelineConf(
   overflowConfig?: OverflowConfig,
   reductionRules?: TableReductionRules | null,
   logType?: string,
+  identityOverride?: CefIdentityOverride,
 ): string {
   const functions: string[] = [];
 
@@ -378,6 +424,22 @@ export function generatePipelineConf(
         "    groupId: extract",
       ].join("\n"),
     );
+  }
+
+  // Step 1.5 (extract group): CEF IDENTITY OVERRIDE.
+  //
+  // Placed HERE, and the position is the whole point. The CEF branch above sets
+  // DeviceVendor/DeviceProduct FROM the raw header, so an override emitted
+  // before it would be overwritten by the extraction it was meant to correct.
+  // Everything after this - reduction filters (which match on raw vendor field
+  // names), renames, overflow - sees the corrected value.
+  //
+  // Without this the override would only ever have changed the ANALYSIS, and
+  // deployed data would still carry the vendor string the rules do not match:
+  // the same invisible failure the feature exists to remove, one layer down.
+  const identityOverrideFn = buildCefIdentityOverrideFn(identityOverride);
+  if (identityOverrideFn !== null) {
+    functions.push(identityOverrideFn);
   }
 
   // Step 2 (extract group): Extract timestamp.

@@ -9,7 +9,7 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { generatePipelineConf } from "./pipeline-conf";
+import { buildCefIdentityOverrideFn, generatePipelineConf } from "./pipeline-conf";
 import { checkCriblYaml } from "./cribl-yaml-validator";
 import type { PipelineFieldMapping } from "./models";
 import type { OverflowConfig } from "../field-matcher";
@@ -293,5 +293,70 @@ describe("reviewer drops vs overflow (2026-07-13 live fix)", () => {
     // And the overflow source is never in the cleanup remove list.
     const cleanup = conf.slice(conf.indexOf("Remove internal fields") - 800);
     expect(cleanup).not.toContain("- extra");
+  });
+});
+
+describe("CEF identity override", () => {
+  const FIELDS: PipelineFieldMapping[] = [
+    { source: "src", target: "SourceIP", action: "keep", type: "string" },
+  ];
+  const conf = (override?: { DeviceVendor?: string; DeviceProduct?: string }) =>
+    generatePipelineConf(
+      "p", "Sol", "CommonSecurityLog", FIELDS, undefined, "cef",
+      undefined, null, undefined, override,
+    );
+
+  it("emits nothing when no override is given", () => {
+    expect(buildCefIdentityOverrideFn(undefined)).toBeNull();
+    expect(buildCefIdentityOverrideFn({})).toBeNull();
+    expect(conf()).not.toContain("Override CEF identity");
+  });
+
+  it("treats a blank value as 'leave it', never as 'clear it'", () => {
+    // An empty DeviceVendor makes reconstructCefLine return null, so a blank
+    // must not reach the pipeline as a field assignment.
+    expect(buildCefIdentityOverrideFn({ DeviceVendor: "   " })).toBeNull();
+  });
+
+  it("sets the fields the override names", () => {
+    const fn = buildCefIdentityOverrideFn({
+      DeviceVendor: "Palo Alto Networks",
+      DeviceProduct: "PAN-OS",
+    })!;
+    expect(fn).toContain("- name: DeviceVendor");
+    expect(fn).toContain('"Palo Alto Networks"');
+    expect(fn).toContain("- name: DeviceProduct");
+  });
+
+  it("escapes a quote rather than emitting a broken expression", () => {
+    // An unescaped quote would produce a Cribl expression that fails to parse,
+    // breaking the whole pipeline over a punctuation mark.
+    const fn = buildCefIdentityOverrideFn({ DeviceVendor: 'A"B' })!;
+    expect(fn).toContain('\\"');
+  });
+
+  it("runs AFTER CEF extraction, so it is not overwritten by it", () => {
+    // The load-bearing pin. The CEF branch sets DeviceVendor FROM the raw
+    // header; an override emitted before it would be silently undone by the
+    // extraction it exists to correct.
+    const yaml = conf({ DeviceVendor: "ZScaler" });
+    const extraction = yaml.indexOf("__cefParts");
+    const override = yaml.indexOf("Override CEF identity");
+    expect(extraction).toBeGreaterThan(-1);
+    expect(override).toBeGreaterThan(extraction);
+  });
+
+  it("runs BEFORE reduction and rename, so downstream sees the corrected value", () => {
+    const yaml = conf({ DeviceVendor: "ZScaler" });
+    const override = yaml.indexOf("Override CEF identity");
+    const rename = yaml.indexOf("groupId: enrich");
+    expect(rename).toBeGreaterThan(-1);
+    expect(override).toBeLessThan(rename);
+  });
+
+  it("still emits valid Cribl YAML", () => {
+    expect(
+      checkCriblYaml(conf({ DeviceVendor: "Palo Alto Networks" }), "conf.yml"),
+    ).toEqual([]);
   });
 });
