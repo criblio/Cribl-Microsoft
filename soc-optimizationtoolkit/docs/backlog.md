@@ -167,10 +167,31 @@ whether the model is right:
   UI says so rather than inventing an offline substitute. So this feature has no
   "download the thing someone else runs" path - the annotation IS the answer.
 
-Worth settling when picking it up: whether the selected table's live schema
-replaces the derived `destSchema` outright or is reconciled against it, since the
-derived-schema path exists precisely for tables that do not materialize until a
-connector is enabled.
+**Core DONE (2026-08-10).** `usecases/workspace-tables`: `listWorkspaceTables`
+keeps the body the preflight probe discards, and `fetchWorkspaceTableSchema`
+returns the selected table's live columns as `DestField[]`.
+
+**Decisions taken, both by the user:**
+
+- **The live schema REPLACES the derived `destSchema`** - not reconciled. Once a
+  real table is named, ARM is the better authority; blending would produce a
+  schema matching neither source. The derived path still exists for tables that
+  do not materialize until a connector is enabled.
+- **Selecting a table RE-RUNS the gap analysis**, and the old results go STALE
+  while the new run loads - they are not cleared. Reuse the Review screen's
+  existing staleness-marker pattern (a visible stale notice over the previous
+  result) rather than inventing a second idiom. The results must not simply
+  persist unmarked: every mapping, coverage and overflow verdict in them was
+  computed against a different destination.
+
+**What remains: the UI.** Two pieces:
+
+1. **The picker**, gated on `table.read` - and this is the first real test of the
+   capability model inside a feature rather than in the nav. A `denied` verdict
+   must ANNOTATE, never hide the picker, and reads have no fallback artifact, so
+   the annotation is the whole answer with nothing to offer beside it.
+2. **The re-run wiring** - where the picker sits relative to the Sample Data and
+   Gap Analysis sections, and the stale-then-replace transition above.
 
 ## 3. Override DeviceVendor and DeviceProduct
 
