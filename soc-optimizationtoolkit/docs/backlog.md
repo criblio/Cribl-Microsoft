@@ -195,8 +195,20 @@ returns the selected table's live columns as `DestField[]`.
 
 ## 3. Override DeviceVendor and DeviceProduct
 
-**Requested 2026-08-10.** Let the operator override the `DeviceVendor` and
-`DeviceProduct` values rather than taking whatever the sample carries.
+**Requested 2026-08-10. CORE DONE.** `domain/cef-identity` derives what a
+solution's rules expect from the discriminators coverage already extracts,
+classifies the sample against them, and applies an override. Three pins worth
+keeping: wrong CASING is its own status (the corpus mixes `==` and `=~`), an
+unconstrained field NEVER gets a suggestion (inventing one manufactures a
+problem), and a blank override means "leave it" not "clear it" (an empty
+DeviceVendor makes reconstructCefLine return null).
+
+**Still owed:** surfacing the finding beside the gap report, and carrying the
+override into the GENERATED PIPELINE. An override that only affects analysis
+leaves deployed data still carrying the wrong vendor - the same invisible failure
+one layer down.
+
+Original request and the reasoning behind it:
 
 Why it matters: these two are the CEF header fields Sentinel content keys off.
 Analytic rules filter on them by literal string - the repo's own test corpus is
