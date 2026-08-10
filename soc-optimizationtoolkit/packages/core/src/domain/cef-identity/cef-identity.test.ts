@@ -15,6 +15,7 @@ import {
   findCefIdentity,
   findCefIdentityAll,
   overrideChangesEvent,
+  overrideValueFor,
 } from "./cef-identity";
 import type { DiscriminatorValue } from "../coverage-analysis";
 
@@ -146,5 +147,33 @@ describe("overrideChangesEvent", () => {
     expect(
       overrideChangesEvent({ DeviceVendor: "Acme" }, { DeviceVendor: "ZScaler" }),
     ).toBe(true);
+  });
+});
+
+describe("overrideValueFor - the ONE blank rule", () => {
+  // Architecture audit 2026-08-10: this guard had been written out three times,
+  // once across a module boundary (the pipeline emitter). If the copies drifted,
+  // the analysis and the DEPLOYED pipeline would disagree about the same
+  // override - the exact invisible split this feature exists to remove.
+  it("returns the trimmed value, or null for anything blank", () => {
+    expect(overrideValueFor({ DeviceVendor: "  ZScaler " }, "DeviceVendor")).toBe(
+      "ZScaler",
+    );
+    expect(overrideValueFor({ DeviceVendor: "   " }, "DeviceVendor")).toBeNull();
+    expect(overrideValueFor({}, "DeviceVendor")).toBeNull();
+  });
+
+  it("is what applyCefIdentityOverride and overrideChangesEvent both obey", () => {
+    // Pinned as agreement rather than as three separate behaviours, so a future
+    // change to the rule cannot land in one caller and not the others.
+    for (const raw of ["ZScaler", "  ZScaler  ", "", "   ", undefined]) {
+      const override = { DeviceVendor: raw } as { DeviceVendor?: string };
+      const supplied = overrideValueFor(override, "DeviceVendor");
+      const applied = applyCefIdentityOverride({ DeviceVendor: "Acme" }, override);
+      expect(applied.DeviceVendor).toBe(supplied ?? "Acme");
+      expect(overrideChangesEvent({ DeviceVendor: "Acme" }, override)).toBe(
+        supplied !== null,
+      );
+    }
   });
 });

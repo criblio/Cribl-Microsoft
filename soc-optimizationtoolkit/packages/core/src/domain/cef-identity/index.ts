@@ -11,6 +11,7 @@ export {
   findCefIdentity,
   findCefIdentityAll,
   overrideChangesEvent,
+  overrideValueFor,
 } from "./cef-identity";
 export type {
   CefIdentityField,

@@ -40,7 +40,7 @@
 
 import { PANOS_CSV_HEADERS } from "../sample-parsing";
 import type { OverflowConfig } from "../field-matcher";
-import { CEF_IDENTITY_FIELDS } from "../cef-identity";
+import { CEF_IDENTITY_FIELDS, overrideValueFor } from "../cef-identity";
 import type { CefIdentityOverride } from "../cef-identity";
 import type { PipelineFieldMapping, TablePlan } from "./models";
 import type { TableReductionRules } from "./reduction-rules";
@@ -137,8 +137,11 @@ export function buildCefIdentityOverrideFn(
   }
   const adds: string[] = [];
   for (const field of CEF_IDENTITY_FIELDS) {
-    const value = override[field]?.trim() ?? "";
-    if (value === "") {
+    // The blank rule is NOT re-derived here: overrideValueFor owns it, so the
+    // emitted pipeline and the event path cannot disagree about the same
+    // override (architecture audit 2026-08-10).
+    const value = overrideValueFor(override, field);
+    if (value === null) {
       continue;
     }
     adds.push(`        - name: ${field}`);

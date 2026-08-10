@@ -152,6 +152,26 @@ export function findCefIdentityAll(
 }
 
 /**
+ * The value an override supplies for one field, or null when it supplies none.
+ *
+ * THE ONE PLACE the "blank means leave it, never clear it" rule lives. It
+ * matters because an empty DeviceVendor makes reconstructCefLine return null, so
+ * a blank that reached the data would be a silent way to break the pack - and it
+ * has to hold identically in the event path and in the emitted pipeline, or the
+ * analysis and the deployed config would disagree about the same override.
+ *
+ * Architecture audit 2026-08-10: this guard had been written out three times,
+ * once across a module boundary. Callers use this; none of them re-derive it.
+ */
+export function overrideValueFor(
+  override: CefIdentityOverride,
+  field: CefIdentityField,
+): string | null {
+  const value = override[field]?.trim() ?? "";
+  return value === "" ? null : value;
+}
+
+/**
  * Apply an override to one event.
  *
  * Returns a NEW object; the input is never mutated. A blank or absent override
@@ -166,8 +186,8 @@ export function applyCefIdentityOverride<T extends Record<string, unknown>>(
 ): T {
   const next = { ...event };
   for (const field of CEF_IDENTITY_FIELDS) {
-    const value = override[field]?.trim() ?? "";
-    if (value !== "") {
+    const value = overrideValueFor(override, field);
+    if (value !== null) {
       (next as Record<string, unknown>)[field] = value;
     }
   }
@@ -180,7 +200,7 @@ export function overrideChangesEvent(
   override: CefIdentityOverride,
 ): boolean {
   return CEF_IDENTITY_FIELDS.some((field) => {
-    const value = override[field]?.trim() ?? "";
-    return value !== "" && value !== event[field];
+    const value = overrideValueFor(override, field);
+    return value !== null && value !== event[field];
   });
 }
