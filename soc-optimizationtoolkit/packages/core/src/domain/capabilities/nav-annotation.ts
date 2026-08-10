@@ -29,7 +29,7 @@
  * Pure: no IO, no clock.
  */
 
-import { isAzureCapability, verdictFor } from "./capabilities";
+import { isAttemptable, isAzureCapability, verdictFor } from "./capabilities";
 import type {
   Capability,
   CapabilityContext,
@@ -209,7 +209,15 @@ export function annotateNavItems<T extends NavItemCapabilities>(
       availability,
       reason: reasonFor(availability, unreachable, fallback),
       missing,
-      attemptable: availability !== "unreachable",
+      // COMPOSED, not restated. This used to derive from the governing
+      // verdict (`availability !== "unreachable"`), which was the same rule as
+      // isAttemptable written a second time - so revisiting rule 3 would have
+      // changed the action layer while the nav silently kept the old behaviour,
+      // leaving routes clickable that the action layer had begun refusing. An
+      // item is attemptable when every capability it needs is.
+      attemptable: item.requires.every((capability) =>
+        isAttemptable(capability, set, context),
+      ),
       fallback,
     };
   });

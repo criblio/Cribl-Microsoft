@@ -15,7 +15,7 @@ import {
   unavailableCount,
   type NavItemCapabilities,
 } from "./nav-annotation";
-import { emptyCapabilitySet } from "./capabilities";
+import { emptyCapabilitySet, isAttemptable } from "./capabilities";
 import type { CapabilityContext, CapabilitySet } from "./capabilities";
 import { AZURE_CAPABILITIES, CRIBL_CAPABILITIES } from "./capabilities";
 import { fallbackFor } from "./fallbacks";
@@ -145,6 +145,29 @@ describe("a denied item still works", () => {
     expect(dcr.fallback?.kind).toBe("dcr-arm-bodies");
     expect(dcr.reason).toContain("still try");
     expect(dcr.reason?.toLowerCase()).toContain("dcr arm request bodies");
+  });
+
+  it("agrees with isAttemptable for every capability and state", () => {
+    // Architecture audit 2026-08-10: this was computed from the governing
+    // verdict rather than from isAttemptable - the same rule written twice, in
+    // the module whose header calls rule 3 binding. Revisiting rule 3 would have
+    // moved the action layer while the nav kept the old behaviour. Now composed,
+    // and pinned so a future divergence fails here instead of shipping.
+    const sets: CapabilitySet[] = [
+      emptyCapabilitySet(),
+      audited({ "dcr.write": "denied", "pack.manage": "granted" }),
+      audited({ "dcr.write": "granted", "pack.manage": "denied" }),
+    ];
+    for (const set of sets) {
+      for (const context of [connected, disconnected]) {
+        for (const entry of annotateNavItems(ROUTES, set, context)) {
+          const expected = entry.item.requires.every((capability) =>
+            isAttemptable(capability, set, context),
+          );
+          expect(entry.attemptable, `${entry.item.id}`).toBe(expected);
+        }
+      }
+    }
   });
 
   it("reports which capabilities are missing", () => {
