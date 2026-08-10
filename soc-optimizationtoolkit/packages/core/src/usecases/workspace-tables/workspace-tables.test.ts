@@ -8,6 +8,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  fetchWorkspaceTableSchema,
   listWorkspaceTables,
   parseWorkspaceTable,
   workspaceTablesPath,
@@ -120,5 +121,69 @@ describe("listWorkspaceTables", () => {
     const azure = new FakeAzureManagement();
     azure.respondWith(page());
     expect(await listWorkspaceTables(azure, TARGET)).toEqual([]);
+  });
+});
+
+describe("fetchWorkspaceTableSchema", () => {
+  const schemaResponse = (schema: unknown): PortHttpResponse => ({
+    status: 200,
+    body: { properties: { schema } },
+  });
+
+  it("projects the live columns as destination fields", () => {
+    // The selected table's schema REPLACES the derived destSchema (user
+    // decision 2026-08-10) - once a real table is named, ARM is the authority.
+    const azure = new FakeAzureManagement();
+    azure.respondWith(
+      schemaResponse({
+        columns: [
+          { name: "TimeGenerated", type: "datetime" },
+          { name: "SrcIp", type: "string" },
+        ],
+      }),
+    );
+    return fetchWorkspaceTableSchema(azure, TARGET, "App_CL").then((fields) => {
+      expect(fields).toEqual([
+        { name: "TimeGenerated", type: "datetime" },
+        { name: "SrcIp", type: "string" },
+      ]);
+    });
+  });
+
+  it("defers the column-source choice to selectSchemaColumns", async () => {
+    // A NATIVE table prefers standardColumns; restating that rule here instead
+    // of importing it is the duplication this module already tripped over once.
+    const azure = new FakeAzureManagement();
+    azure.respondWith(
+      schemaResponse({
+        columns: [{ name: "FromColumns", type: "string" }],
+        standardColumns: [{ name: "FromStandard", type: "string" }],
+      }),
+    );
+    const fields = await fetchWorkspaceTableSchema(azure, TARGET, "SecurityEvent");
+    expect(fields?.map((f) => f.name)).toEqual(["FromStandard"]);
+  });
+
+  it("returns null - not a throw - for a table with no usable columns", async () => {
+    // A real state for a table provisioned but not yet materialized, and
+    // distinct from a failed fetch.
+    const azure = new FakeAzureManagement();
+    azure.respondWith(schemaResponse({}));
+    expect(await fetchWorkspaceTableSchema(azure, TARGET, "App_CL")).toBeNull();
+  });
+
+  it("surfaces a failed fetch by name", async () => {
+    const azure = new FakeAzureManagement();
+    azure.respondWith({ status: 403, body: {} });
+    await expect(
+      fetchWorkspaceTableSchema(azure, TARGET, "App_CL"),
+    ).rejects.toThrow(/App_CL/);
+  });
+
+  it("reads the single table, not the collection", async () => {
+    const azure = new FakeAzureManagement();
+    azure.respondWith(schemaResponse({ columns: [{ name: "A", type: "string" }] }));
+    await fetchWorkspaceTableSchema(azure, TARGET, "App_CL");
+    expect(azure.calls[0]!.path.endsWith("/tables/App_CL")).toBe(true);
   });
 });

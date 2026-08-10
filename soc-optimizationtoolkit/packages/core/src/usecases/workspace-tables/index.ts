@@ -6,6 +6,7 @@
 export {
   listWorkspaceTables,
   parseWorkspaceTable,
+  fetchWorkspaceTableSchema,
   workspaceTablesPath,
 } from "./workspace-tables";
 export type {

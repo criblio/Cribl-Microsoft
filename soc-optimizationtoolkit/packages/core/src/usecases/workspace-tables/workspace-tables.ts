@@ -28,8 +28,11 @@
 import type { AzureManagement } from "../../ports/azure-management";
 import type { Logger } from "../../ports/logger";
 import { isCustomTableName } from "../../domain/custom-table";
+import type { DestField } from "../../domain/field-matcher";
+import { selectSchemaColumns } from "../../domain/schema-mapping";
+import type { LogAnalyticsColumn } from "../../domain/schema-mapping";
 import { listAllPages, WORKSPACE_API_VERSION } from "../azure-discovery";
-import { asString, prop } from "../arm-http";
+import { asString, httpErrorText, is2xx, prop } from "../arm-http";
 
 /** How a table came to exist, as far as the list response reveals. */
 export type WorkspaceTableKind = "custom" | "native";
@@ -135,4 +138,87 @@ export async function listWorkspaceTables(
     custom: tables.filter((table) => table.kind === "custom").length,
   });
   return tables;
+}
+
+// ---------------------------------------------------------------------------
+// Selecting a table: its LIVE schema becomes the destination schema
+// ---------------------------------------------------------------------------
+
+/**
+ * Fetch the live schema of ONE table, as destination fields.
+ *
+ * User decision 2026-08-10: the selected table's live schema REPLACES the
+ * derived `destSchema` outright - it is not reconciled against it. The derived
+ * path exists for tables that do not materialize until a connector is enabled;
+ * once a real table is named, ARM is the better authority and blending the two
+ * would produce a schema matching neither.
+ *
+ * THE CALLER MUST RE-RUN THE GAP ANALYSIS (same decision). Selecting a table is
+ * not a data swap - the previous analysis was computed against a different
+ * destination and every mapping, coverage and overflow verdict in it is now
+ * about the wrong schema. Replacing the schema without re-deriving would leave
+ * results on screen that silently describe the old target, which is worse than
+ * showing none.
+ *
+ * The column-source choice is NOT made here: {@link selectSchemaColumns} owns
+ * the columns-vs-standardColumns rule (custom prefers `columns` and falls back
+ * to the MMA-legacy `standardColumns`; native the reverse), and it is imported
+ * rather than restated.
+ *
+ * Returns null when the table exists but exposes no usable column source - a
+ * real state for a table provisioned but not yet materialized, and distinct
+ * from a throw, which means the fetch itself failed.
+ */
+export async function fetchWorkspaceTableSchema(
+  azure: AzureManagement,
+  target: WorkspaceTablesTarget,
+  tableName: string,
+  logger?: Logger,
+): Promise<DestField[] | null> {
+  const path = `${workspaceTablesPath(target)}/${tableName}`;
+  const response = await azure.request({
+    method: "GET",
+    path,
+    apiVersion: WORKSPACE_API_VERSION,
+  });
+  if (!is2xx(response.status)) {
+    throw new Error(
+      httpErrorText(`read schema of table '${tableName}'`, response.status, response.body),
+    );
+  }
+
+  const schema = prop(prop(response.body, "properties"), "schema");
+  const columns = selectSchemaColumns(
+    {
+      columns: asColumns(prop(schema, "columns")),
+      standardColumns: asColumns(prop(schema, "standardColumns")),
+    },
+    isCustomTableName(tableName) ? "custom" : "native",
+  );
+  if (columns === null) {
+    logger?.info("workspace-tables: table has no usable columns", { table: tableName });
+    return null;
+  }
+
+  const fields = columns.map((column) => ({ name: column.name, type: column.type }));
+  logger?.info("workspace-tables: schema fetched", {
+    table: tableName,
+    fields: fields.length,
+  });
+  return fields;
+}
+
+/** Coerce an ARM column array, dropping entries with no usable name. */
+function asColumns(value: unknown): LogAnalyticsColumn[] | null {
+  if (!Array.isArray(value)) {
+    return null;
+  }
+  const columns: LogAnalyticsColumn[] = [];
+  for (const entry of value) {
+    const name = asString(prop(entry, "name"));
+    if (name !== "") {
+      columns.push({ name, type: asString(prop(entry, "type")) });
+    }
+  }
+  return columns.length > 0 ? columns : null;
 }
