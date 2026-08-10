@@ -172,7 +172,47 @@ replaces the derived `destSchema` outright or is reconciled against it, since th
 derived-schema path exists precisely for tables that do not materialize until a
 connector is enabled.
 
-## 3. Verification gaps
+## 3. Override DeviceVendor and DeviceProduct
+
+**Requested 2026-08-10.** Let the operator override the `DeviceVendor` and
+`DeviceProduct` values rather than taking whatever the sample carries.
+
+Why it matters: these two are the CEF header fields Sentinel content keys off.
+Analytic rules filter on them by literal string - the repo's own test corpus is
+full of `CommonSecurityLog | where DeviceVendor == "Palo Alto Networks"` and
+`=~ "ZScaler"` - so a vendor string that does not match what the rules expect
+means the rules never fire, however complete the rest of the mapping is. The
+operator often knows the value the content expects; the sample cannot.
+
+Where they are handled today (all reads, no override anywhere):
+
+- `domain/pack-assembly/sample-file.ts` `reconstructCefLine` builds the CEF
+  header positionally from `evt.DeviceVendor` / `evt.DeviceProduct`, and
+  RETURNS NULL when DeviceVendor is falsy - so an override may also be what
+  makes reconstruction possible for a sample that currently cannot produce a
+  CEF line at all.
+- `domain/field-matcher/knowledge-bases.ts` lists them as CEF standard header
+  fields with only identity aliases, so the field matcher maps them but never
+  rewrites them.
+- `domain/coverage-analysis` extracts them from rule KQL as discriminators -
+  which is the other half of this: coverage already KNOWS which vendor strings
+  the selected solution's rules require.
+
+Worth settling when picking it up:
+
+- **Where the override lives.** Per-sample (it is a property of the data) or
+  per-solution/run (it is a property of the destination the content expects)?
+  The coverage side argues for the latter - the required value is a fact about
+  the rules, not the sample.
+- **Whether coverage can SUGGEST the value.** It already extracts the literals
+  the rules compare against, so "your sample says X, this solution's rules
+  expect Y" is derivable rather than typed. That is the version worth building;
+  a free-text box is the fallback.
+- **Whether the override reaches the pack.** An override that only affects
+  analysis would leave deployed data still carrying the wrong vendor, so the
+  value has to flow into the generated pipeline, not just the gap report.
+
+## 4. Verification gaps
 
 **First-run wizard as a genuine first run. VERIFIED 2026-08-06, twice.** Walked
 end to end from clean state in the cloud shell (dev server), and again in the
@@ -209,7 +249,7 @@ permission check as the final view, Get Started, and into the frame. This shell
 had never been run in a browser at all, and the mode removal touched its gate
 flow.
 
-## 4. Release hygiene
+## 5. Release hygiene
 
 **Release drift will recur.** Nothing ties `release/` to source changes;
 `npm run package` is manual. The committed artifact silently fell five days and
@@ -238,7 +278,7 @@ Two things learned while packaging, worth knowing next time:
 the installed app, not `release/`, so this work stays invisible there until
 someone uploads the new tgz through the Apps page.
 
-## 5. Copy and UX
+## 6. Copy and UX
 
 **"reset when the solution changes" understates deletion.** The Sample Data
 helper text says the sample, mapping and coverage sections "reset" when the
@@ -251,7 +291,7 @@ the behavior.
 scrolling page inside the app iframe. `overscroll-behavior: contain` stops the
 wheel chaining at the list's end, but the three-level nesting remains.
 
-## 6. Diagram fidelity
+## 7. Diagram fidelity
 
 **Inline breaker rulesets are not named.** The spec's
 `EventBreakerExistingOrNewExisting` carries `existingRule` - the ruleset name -
@@ -269,7 +309,7 @@ It is the 19 `Input*` schemas carrying a breaker property, out of 68, extracted
 from `packages/core/assets/cribl-openapi.json`. Derived, not hand-written - do
 not edit it by hand.
 
-## 7. Explicitly not doing
+## 8. Explicitly not doing
 
 **Live capture.** `POST /system/capture` supports `level` 0-3 (before
 pre-processing pipeline / before Routes / before post-processing pipeline /
