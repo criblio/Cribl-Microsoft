@@ -21,3 +21,5 @@ export {
   fallbackHint,
   isInlineArtifact,
 } from "./fallback-notice-state";
+export { emptyInventoryMessage } from "./empty-inventory";
+export type { EmptyInventoryMessage } from "./empty-inventory";

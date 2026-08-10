@@ -768,3 +768,9 @@ export {
   tableCountLabel,
 } from "./screens/table-picker/table-picker-state";
 export type { TablePickerAccess } from "./screens/table-picker/table-picker-state";
+
+// Empty-inventory messaging (docs/inventory-standard.md, BINDING): an empty list
+// is only a ZERO when the read was verified. Shared by every lister so eight
+// screens cannot phrase the same confident wrong answer eight ways.
+export { emptyInventoryMessage } from "./capabilities";
+export type { EmptyInventoryMessage } from "./capabilities";

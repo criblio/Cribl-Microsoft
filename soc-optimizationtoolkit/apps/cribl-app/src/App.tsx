@@ -1708,6 +1708,8 @@ function App() {
         <IntegrateScreen
           key={`integrate-${store.activeProfileId ?? 'none'}`}
           scopeCommitted={journeyFacts.scopeCommitted}
+          capabilities={capabilityAudit.capabilities}
+          capabilityContext={capabilityAudit.context}
           offline={!capabilityAudit.context.azureIdentityPresent}
           onCommitScope={handleCommitScope}
           criblDefaults={appOptions.cribl}

@@ -47,6 +47,9 @@ import type {
   ResourceGroupChoices,
   TargetScope,
 } from "@soc/core";
+import { emptyCapabilitySet } from "@soc/core";
+import type { CapabilityContext, CapabilitySet } from "@soc/core";
+import { emptyInventoryMessage } from "../../capabilities/empty-inventory";
 import { usePorts } from "../../ports-context";
 import { SearchableSelect } from "../../components/searchable-select";
 import {
@@ -65,6 +68,15 @@ export interface CommitScopeOutcome {
 }
 
 export interface AzureTargetingScreenProps {
+  /**
+   * What the connected identity was measured to be able to do. Used ONLY to
+   * decide whether an empty workspace list may be reported as a real zero
+   * (docs/inventory-standard.md). Absent is safe: the message hedges rather
+   * than claiming "none found".
+   */
+  capabilities?: CapabilitySet;
+  /** Connection facts for resolving unmeasured capabilities. */
+  capabilityContext?: CapabilityContext;
   /**
    * The air-gapped/offline branch: free-text scope entry, nothing fetched.
    * The SHELL derives this from the frame's resolved mode (no live Azure
@@ -90,11 +102,24 @@ type DepLoad =
   | { status: "error"; error: string };
 
 export function AzureTargetingScreen(props: AzureTargetingScreenProps) {
-  const { offline, onCommitScope } = props;
+  const { offline, onCommitScope, capabilities, capabilityContext } = props;
   const { ports, config } = usePorts();
 
   // Browse state - NEVER committed by itself. Seeded from the committed
   // scope so the pickers open on the current target.
+  // docs/inventory-standard.md, BINDING: an empty list is only a ZERO when the
+  // read was verified. ARM returns 200 with an empty value array when RBAC
+  // filters the caller out, so "no workspaces" and "no permission to see
+  // workspaces" are identical responses - the distinction comes from the audit,
+  // never from the response. The old copy said "No workspaces found - create one
+  // below", which invited creating a workspace that already existed unseen.
+  const emptyWorkspaces = emptyInventoryMessage(
+    "workspaces",
+    "workspace.read",
+    capabilities ?? emptyCapabilitySet(),
+    capabilityContext ?? { azureIdentityPresent: true, criblReachable: true },
+  );
+
   const [browseSub, setBrowseSub] = useState(config.subscriptionId);
   const [browseWs, setBrowseWs] = useState(config.workspaceName);
   const [browseRg, setBrowseRg] = useState(config.resourceGroup);
@@ -629,7 +654,7 @@ export function AzureTargetingScreen(props: AzureTargetingScreenProps) {
                     ? "Loading workspaces..."
                     : depLoad.status === "error"
                       ? "Workspace discovery failed - see the error below"
-                      : "No workspaces found - create one below"}
+                      : emptyWorkspaces.text}
               </option>
             </select>
           )}

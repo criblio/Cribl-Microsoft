@@ -726,6 +726,8 @@ export function LocalApp() {
         <PortsProvider ports={ports} config={activeAzureConfig}>
           <IntegrateScreen
             scopeCommitted={journeyFacts.scopeCommitted}
+          capabilities={capabilityAudit.capabilities}
+          capabilityContext={capabilityAudit.context}
             offline={!capabilityAudit.context.azureIdentityPresent}
             onCommitScope={handleCommitScope}
             criblDefaults={appOptions.cribl}
