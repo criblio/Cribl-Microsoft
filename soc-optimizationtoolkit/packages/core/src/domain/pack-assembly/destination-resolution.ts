@@ -226,23 +226,42 @@ export function unresolvedDestinations(
 
 /**
  * The operator-facing warning for a pack that shipped placeholders, or null
- * when every table resolved.
+ * when every table carried real values.
+ *
+ * TAKES THE ARTIFACT'S LIST, NOT THE RESOLUTIONS (architecture audit
+ * 2026-08-11). Both existed: assemblePack reports which tables it actually
+ * emitted placeholders for, and the resolutions say which it could not resolve.
+ * They agreed only because one caller happened to supply a destination exactly
+ * when a table resolved - a convention, not a construction - while BOTH were
+ * rendered, the warning to the build log and the artifact's list to the deploy
+ * summary. A caller that built its table inputs any other way would have made
+ * one surface warn and the other stay silent, which is the original silent-
+ * placeholder bug again in whichever half went quiet.
+ *
+ * So the ARTIFACT decides WHICH (it is what actually shipped) and the
+ * resolutions supply WHY. A table with no matching resolution still gets a
+ * line - unexplained is bad, unmentioned is worse.
  *
  * Lives here so the two shells and the build log cannot describe the same
- * outcome differently - and so this is never left to a caller who might just
- * not bother, which is how the silent fallback survived as long as it did.
+ * outcome differently, and so this is never left to a caller who might just
+ * not bother - which is how the silent fallback survived as long as it did.
  */
 export function placeholderWarning(
-  resolved: readonly ResolvedDestination[],
+  placeholderTables: readonly string[],
+  resolved: readonly ResolvedDestination[] = [],
 ): string | null {
-  const missing = unresolvedDestinations(resolved);
-  if (missing.length === 0) {
+  if (placeholderTables.length === 0) {
     return null;
   }
+  const reasonFor = (table: string): string => {
+    const match = resolved.find((r) => sameTable(r.table, table));
+    return match?.reason ?? "no destination values were supplied for it";
+  };
   const lines = [
-    `${missing.length} table(s) shipped PLACEHOLDER destination values. The pack ` +
-      "installs, but those destinations point nowhere until you edit them in Cribl:",
-    ...missing.map((r) => `  - ${r.table}: ${r.reason ?? "not resolved"}`),
+    `${placeholderTables.length} table(s) shipped PLACEHOLDER destination values. ` +
+      "The pack installs, but those destinations point nowhere until you edit " +
+      "them in Cribl:",
+    ...placeholderTables.map((table) => `  - ${table}: ${reasonFor(table)}`),
   ];
   return lines.join("\n");
 }

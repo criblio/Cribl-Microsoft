@@ -28,6 +28,7 @@ import {
   AZURE_CAPABILITIES,
   CRIBL_CAPABILITIES,
   CRIBL_CAPABILITY_PROBES,
+  checkResult,
   REQUIRED_ACTIONS,
   artifactsToOffer,
   capabilitiesFromSides,
@@ -100,14 +101,12 @@ function azureThrowFallback(setupPath: SetupPath, err: unknown): AzurePreflight 
         : "subscription",
     scope: "",
     permissionsFetched: false,
-    checks: REQUIRED_ACTIONS[setupPath].map((req) => ({
-      action: req.action,
-      label: req.label,
-      granted: false,
-      // Same default the evaluator applies, so an errored panel groups its rows
-      // identically to a successful one.
-      necessity: req.necessity ?? ("core" as const),
-    })),
+    // checkResult, not a hand-built row: an errored panel must group its rows
+    // identically to a measured one, and spelling the necessity default here
+    // is how those two drift apart. (Architecture audit 2026-08-11 - this was
+    // the one site the consolidation missed, with a comment claiming the
+    // default matched instead of using the function that owns it.)
+    checks: REQUIRED_ACTIONS[setupPath].map((req) => checkResult(req, false)),
     probes: [],
     hasRequiredAccess: false,
     error: `azure preflight error: ${message}`,
