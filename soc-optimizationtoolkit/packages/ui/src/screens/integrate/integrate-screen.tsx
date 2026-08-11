@@ -231,7 +231,12 @@ export function IntegrateScreen({
   const [groups, setGroups] = useState<CriblGroupSummary[] | null>(null);
   const [groupsError, setGroupsError] = useState("");
   const [groupId, setGroupId] = useState("");
-  const [packName, setPackName] = useState(() => defaultPackName(criblDefaults, solution?.name ?? ""));
+  // NO solution here: it is declared below, and a useState initializer runs
+  // IMMEDIATELY on first render, so reading it would throw before the component
+  // ever painted. It is also always null at this point - the solution-derived
+  // name is applied by the effect further down, which is what makes switching
+  // solutions work at all.
+  const [packName, setPackName] = useState(() => defaultPackName(criblDefaults));
   // Multi-group deploy: opt-in fan-out beyond the primary worker group.
   const [multiGroup, setMultiGroup] = useState(false);
   const [extraGroups, setExtraGroups] = useState<string[]>([]);

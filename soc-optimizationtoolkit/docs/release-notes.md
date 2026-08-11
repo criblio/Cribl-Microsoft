@@ -6,6 +6,23 @@ is harder to forget to update than a directory that has to be remembered.
 
 ---
 
+## 1.7.1
+
+**Fixes a crash in 1.7.0 that blanked the Sentinel Integration screen.** The
+pack-name change read the selected solution from a `useState` initializer, which
+runs immediately on first render - before the line that declares it. Every visit
+to the screen threw and rendered nothing.
+
+If you installed 1.7.0, upgrade. Nothing else in it was affected, and no data or
+configuration is involved.
+
+Typecheck could not see it (the read sits inside a closure, where TypeScript
+cannot know when it runs) and 3,498 tests passed, because none of them rendered
+that screen - the flagship of the app. There is now a smoke test that mounts it,
+verified to fail on exactly this bug.
+
+---
+
 ## 1.7.0
 
 **The pack name now includes the solution.** It was prefilled from the Cribl
