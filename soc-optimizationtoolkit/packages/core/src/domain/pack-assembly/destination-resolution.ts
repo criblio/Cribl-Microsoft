@@ -94,11 +94,19 @@ function sameTable(a: string, b: string): boolean {
 /**
  * A DCR can serve a Sentinel destination only if it exposes BOTH a logs
  * ingestion endpoint and an immutable id - the two values the destination's URL
- * is composed from. DCE-based rules carry a dataCollectionEndpointId instead of
- * `endpoints.logsIngestion`, so they route the table but cannot back a direct
- * destination; that distinction drives the two different "unresolved" reasons
- * below, because "no DCR routes this" and "the DCR that does cannot be used
- * this way" need different fixes.
+ * is composed from.
+ *
+ * MORE THAN ONE KIND OF RULE FAILS THIS, which is why the message names the
+ * symptom rather than a cause. DCE-based rules carry a
+ * dataCollectionEndpointId instead of `endpoints.logsIngestion`; agent rules
+ * (Kind "Windows"/"Linux") have no ingestion endpoint at all - confirmed live
+ * 2026-08-11 against a lab holding a Kind "Windows" rule for WindowsEvent
+ * beside three Direct ones. Both route their table and neither can back this
+ * destination, and blaming DCE for an agent rule would send the operator
+ * looking for a DCE that does not exist.
+ *
+ * The distinction from "no rule routes this" is kept because the fixes differ:
+ * one needs any DCR, the other needs a DIRECT one.
  */
 function canServeDestination(entry: DcrDestinationSource): boolean {
   return entry.immutableId !== "" && entry.ingestionEndpoint !== "";
@@ -135,7 +143,7 @@ export function resolveDestinationForTable(
       source: "unresolved",
       reason:
         `the rule(s) routing it (${names}) expose no logs-ingestion endpoint - ` +
-        "DCE-based rules cannot back a direct destination, so this table needs a Direct DCR",
+        "only a Direct DCR can back this destination, so deploy one for this table",
     };
   }
   if (usable.length > 1) {
