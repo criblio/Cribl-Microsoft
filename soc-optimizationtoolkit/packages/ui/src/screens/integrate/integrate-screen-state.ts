@@ -14,12 +14,13 @@
  *     {@link SectionInputs}. The read-ahead model needs completion signals,
  *     not the underlying values, so this trims and reduces to booleans in ONE
  *     place the component and the core share.
- *   - {@link defaultPackName}: the pack-name prefill. The legacy flagship
- *     derived the pack name from the chosen solution (noise words stripped);
- *     the solution section has not shipped (Unit 14), so until it does the
- *     prefill comes from the persisted Cribl destination prefix (Unit 4
- *     options) - a stable, editable default so the operable native-table
- *     deploy needs no manual pack-name entry to satisfy canDeploy.
+ *   - {@link defaultPackName}: the pack-name prefill - the persisted Cribl
+ *     destination prefix (Unit 4 options) narrowed by the selected solution,
+ *     so it stays a stable editable default that needs no manual entry to
+ *     satisfy canDeploy. The solution half was missing until 2026-08-11, when
+ *     the shared prefix turned out to make every solution prefill the SAME
+ *     pack name; the legacy flagship had derived it from the solution all
+ *     along, and this restores that.
  *   - {@link deployDisabledReason}: the single unlock condition the readiness
  *     footer's Deploy button shows when it is disabled - the deploy section's
  *     own blocked reason from the core, never per-screen prose.
@@ -31,6 +32,7 @@ import {
   canDeploy,
   deriveSectionStatus,
   integrateSection,
+  packNameForSolution,
 } from "@soc/core";
 import type { CriblOptions, SectionInputs } from "@soc/core";
 
@@ -101,14 +103,26 @@ function trimSeparators(value: string): string {
 /**
  * The pack-name prefill: the persisted Cribl destination prefix with its
  * trailing separator trimmed (e.g. the "MS-Sentinel-" default becomes
- * "MS-Sentinel"), or {@link FALLBACK_PACK_NAME} when no usable prefix is
- * configured. Always non-empty so the pack-name prerequisite is satisfied by
- * default and the operable native-table deploy stays one committed scope
- * away, while the field remains editable on the page.
+ * "MS-Sentinel"), NARROWED BY THE SELECTED SOLUTION, or
+ * {@link FALLBACK_PACK_NAME} when no usable prefix is configured. Always
+ * non-empty so the pack-name prerequisite is satisfied by default and the
+ * operable native-table deploy stays one committed scope away, while the field
+ * remains editable on the page.
+ *
+ * The solution is in the name because without it every solution prefilled the
+ * SAME name, so building a second one landed on the first one's pack and the
+ * only guard was an operator reading the overwrite prompt carefully (user
+ * report 2026-08-11). The rule itself lives in core beside the vendor-prefix
+ * shortener, so a pack name and the pipeline ids inside it shorten a vendor
+ * identically.
  */
-export function defaultPackName(criblDefaults?: CriblOptions): string {
+export function defaultPackName(
+  criblDefaults?: CriblOptions,
+  solutionName?: string,
+): string {
   const fromPrefix = trimSeparators(criblDefaults?.destinationPrefix ?? "");
-  return fromPrefix !== "" ? fromPrefix : FALLBACK_PACK_NAME;
+  const base = fromPrefix !== "" ? fromPrefix : FALLBACK_PACK_NAME;
+  return packNameForSolution(base, solutionName ?? "");
 }
 
 /**

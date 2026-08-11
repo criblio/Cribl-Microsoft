@@ -44,6 +44,47 @@ export function vendorPrefixFromSolution(solutionName: string): string {
 }
 
 /**
+ * The pack NAME for a solution: `{prefix}-{vendor}`, e.g. "MS-Sentinel-Gigamon".
+ *
+ * WHY THE SOLUTION HAS TO BE IN IT (user report 2026-08-11). The name used to be
+ * the destination prefix alone, so EVERY solution built a pack called
+ * "MS-Sentinel". Building a second solution therefore landed on the first one's
+ * name, and the only thing between that and a silent replacement was an operator
+ * noticing the overwrite prompt and renaming by hand. The pack's DISPLAY name
+ * was already solution-derived ("Gigamon Sentinel"), which made the collision
+ * harder to spot: two packs reading as different things, fighting over one id.
+ *
+ * Vendor comes from {@link vendorPrefixFromSolution} rather than a second
+ * sanitizer, so the pack name, the pipeline ids and the sample filenames all
+ * shorten a vendor the same way. Its underscores become hyphens here to match
+ * the prefix's separator - "Palo_Alto" would otherwise make
+ * "MS-Sentinel-Palo_Alto", which reads like two conventions colliding.
+ *
+ * A blank solution name yields the prefix unchanged: before a solution is
+ * chosen there is nothing to distinguish, and inventing a token would be worse
+ * than the shared default it replaces.
+ */
+export function packNameForSolution(
+  prefix: string,
+  solutionName: string,
+): string {
+  const base = prefix.trim().replace(/[-_\s]+$/, "");
+  if (solutionName.trim() === "") {
+    return base;
+  }
+  const vendor = vendorPrefixFromSolution(solutionName).replace(/_/g, "-");
+  if (vendor === "" || vendor === "vendor") {
+    return base;
+  }
+  // A vendor already at the tail (re-deriving from an existing name, or a
+  // prefix an operator built by hand) must not be doubled.
+  if (base.toLowerCase().endsWith(`-${vendor.toLowerCase()}`)) {
+    return base;
+  }
+  return base === "" ? vendor : `${base}-${vendor}`;
+}
+
+/**
  * The ONE per-log-type suffix. Adopts the transformation-pipeline-dir rules
  * (the stricter, correct set) as the single canonical form: prefer the log type
  * over the table name, strip a trailing `_CL`, sanitize to `[A-Za-z0-9_-]`,
