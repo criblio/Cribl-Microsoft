@@ -89,18 +89,33 @@ describe("resolveDestinationForTable", () => {
     expect(found.reason).toContain("no Data Collection Rule");
   });
 
-  it("distinguishes a DCE-based rule from no rule at all", () => {
+  it("distinguishes a rule that CANNOT serve from no rule at all", () => {
     // Different problems, different fixes: one needs a DCR deployed, the other
-    // needs a DIRECT DCR because a DCE-based rule exposes no logs-ingestion
-    // endpoint and cannot back this destination. One shared message would send
-    // the operator to deploy a rule that already exists.
+    // needs a DIRECT one. A shared message would send the operator to deploy a
+    // rule that already exists.
     const found = resolveDestinationForTable("CommonSecurityLog", [
-      dcr("dce-based", ["CommonSecurityLog"], { ingestionEndpoint: "" }),
+      dcr("agent-kind", ["CommonSecurityLog"], { ingestionEndpoint: "" }),
     ]);
     expect(found.source).toBe("unresolved");
     expect(found.reason).toContain("logs-ingestion endpoint");
-    expect(found.reason).toContain("dce-based");
+    expect(found.reason).toContain("agent-kind");
     expect(found.reason).not.toContain("no Data Collection Rule");
+  });
+
+  it("names the SYMPTOM, never a cause it has not established", () => {
+    // Found walking a live lab 2026-08-11: a Kind "Windows" rule routes
+    // WindowsEvent with no ingestion endpoint. The message used to blame
+    // "DCE-based rules" - true for one cause of a blank endpoint, wrong for
+    // this one, and it would send the operator hunting a DCE that never
+    // existed. The inventory does not tell us WHY the endpoint is blank, so
+    // the message must not claim to know.
+    const found = resolveDestinationForTable("WindowsEvent", [
+      dcr("dcr-WindowsEvent-paradigm-replica", ["WindowsEvent"], {
+        ingestionEndpoint: "",
+      }),
+    ]);
+    expect(found.reason).not.toContain("DCE");
+    expect(found.reason).toContain("Direct DCR");
   });
 
   it("treats a rule missing its immutableId as unusable, not as a match", () => {
