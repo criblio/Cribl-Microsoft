@@ -204,19 +204,24 @@ describe("resolveDestinations", () => {
 });
 
 describe("placeholderWarning - the fallback can never be silent", () => {
-  it("is null only when every table resolved", () => {
-    const resolved = resolveDestinations(
-      ["Syslog"],
-      [],
-      [dcr("a", ["Syslog"])],
-    );
-    expect(placeholderWarning(resolved)).toBeNull();
+  // RE-PINNED 2026-08-11 by the architecture audit. This took the resolutions
+  // and derived its own list of unresolved tables, while the deploy summary read
+  // assemblePack's placeholderTables - two independent answers to "which tables
+  // shipped placeholders", BOTH shown to the operator, agreeing only because one
+  // caller happened to supply a destination exactly when a table resolved. It
+  // now takes the artifact's list, so the two surfaces cannot diverge.
+  const tablesOf = (resolved: ReturnType<typeof resolveDestinations>) =>
+    unresolvedDestinations(resolved).map((r) => r.table);
+
+  it("is null when the pack shipped no placeholders", () => {
+    const resolved = resolveDestinations(["Syslog"], [], [dcr("a", ["Syslog"])]);
+    expect(placeholderWarning(tablesOf(resolved), resolved)).toBeNull();
     expect(unresolvedDestinations(resolved)).toHaveLength(0);
   });
 
-  it("names every unresolved table AND why", () => {
+  it("names every placeholder table AND why", () => {
     const resolved = resolveDestinations(["Syslog", "WindowsEvent"], [], []);
-    const warning = placeholderWarning(resolved);
+    const warning = placeholderWarning(tablesOf(resolved), resolved);
     expect(warning).toContain("Syslog");
     expect(warning).toContain("WindowsEvent");
     expect(warning).toContain("2 table(s)");
@@ -225,7 +230,7 @@ describe("placeholderWarning - the fallback can never be silent", () => {
     expect(warning).toContain("point nowhere");
   });
 
-  it("warns whenever ANY table is unresolved, even if others are fine", () => {
+  it("warns whenever ANY table shipped placeholders, even if others are fine", () => {
     // A partial success is the dangerous shape: the summary looks green because
     // most tables worked.
     const resolved = resolveDestinations(
@@ -233,9 +238,28 @@ describe("placeholderWarning - the fallback can never be silent", () => {
       [],
       [dcr("a", ["Syslog"])],
     );
-    const warning = placeholderWarning(resolved);
+    const warning = placeholderWarning(tablesOf(resolved), resolved);
     expect(warning).not.toBeNull();
     expect(warning).toContain("WindowsEvent");
     expect(warning).toContain("1 table(s)");
+  });
+
+  it("WARNS ABOUT A TABLE IT CANNOT EXPLAIN", () => {
+    // The whole reason the artifact decides which. If the pack emitted
+    // placeholders for a table the resolutions say nothing about, staying quiet
+    // would be the original bug - unexplained is bad, unmentioned is worse.
+    const warning = placeholderWarning(["Syslog"], []);
+    expect(warning).toContain("Syslog");
+    expect(warning).toContain("no destination values were supplied");
+  });
+
+  it("is driven by the ARTIFACT, not by the resolutions", () => {
+    // A table that resolved cleanly but shipped placeholders anyway (a caller
+    // that built its inputs some other way) must still be reported.
+    const resolved = resolveDestinations(["Syslog"], [], [dcr("a", ["Syslog"])]);
+    expect(resolved[0]?.source).toBe("inventory");
+    expect(placeholderWarning(["Syslog"], resolved)).toContain("Syslog");
+    // And the converse: nothing shipped, nothing warned about.
+    expect(placeholderWarning([], resolveDestinations(["Syslog"], [], []))).toBeNull();
   });
 });

@@ -886,7 +886,14 @@ export function IntegrateScreen({
       // nowhere, so the one thing that must not happen is shipping it without
       // saying so. The warning comes from core, so the log and the summary
       // cannot word the same outcome differently.
-      const placeholderNotice = placeholderWarning(resolved);
+      // ONE list, the artifact's: what the pack actually emitted, not what we
+      // intended to resolve. The summary below reads the same field, so the
+      // build log and the summary cannot disagree about which tables shipped
+      // placeholders.
+      const placeholderNotice = placeholderWarning(
+        assembled.placeholderTables,
+        resolved,
+      );
       if (placeholderNotice !== null) {
         push(placeholderNotice);
       }

@@ -129,9 +129,14 @@ export type {
   ResolvedDestination,
   SessionDestination,
 } from "./destination-resolution";
+// resolveDestinationForTable and unresolvedDestinations are deliberately NOT
+// re-exported (architecture audit 2026-08-11). Each is an ingredient whose
+// public export invites bypassing the rule it belongs to: the per-table helper
+// skips the session-outcome preference that makes a just-deployed DCR win, and
+// unresolvedDestinations is exactly the second placeholder list this audit just
+// removed. Callers want resolveDestinations and placeholderWarning; the module's
+// own tests import the rest from "./destination-resolution" directly.
 export {
   placeholderWarning,
-  resolveDestinationForTable,
   resolveDestinations,
-  unresolvedDestinations,
 } from "./destination-resolution";
