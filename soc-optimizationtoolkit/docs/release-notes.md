@@ -6,6 +6,18 @@ is harder to forget to update than a directory that has to be remembered.
 
 ---
 
+## 1.5.4
+
+**Change-request permission blocks wrap properly.** Caught reviewing 1.5.3 in a
+live preview: the justification and "if not granted" lines ran to 300-plus
+characters unwrapped, so they reflowed to the left margin and destroyed the
+block alignment, in a document that hard-wraps everything else. They now wrap at
+78 columns with a hanging indent under the value. Resource ids longer than the
+wrap width overhang rather than break, since a split id is worse than a long
+line.
+
+---
+
 ## 1.5.3
 
 **The app-registration change request now asks for every permission the app

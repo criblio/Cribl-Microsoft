@@ -155,7 +155,31 @@ describe("appRegistrationRequest", () => {
     const out = appRegistrationRequest(ctxFor("existing"));
     expect(out).toContain("Entra ID > App registrations");
     expect(out).toContain("Grant admin consent");
-    expect(out).toContain("the condition above cannot be set from the CLI");
+    expect(out).toContain("the condition above cannot be");
+  });
+
+  it("wraps long justifications with a hanging indent, never back to column 0", () => {
+    // Caught in the live preview: unwrapped 300-character justifications reflowed
+    // to column 0 and destroyed the block alignment, beside a document that hard
+    // -wraps everything else. Ticketing systems do not reflow this back.
+    const out = appRegistrationRequest(ctxFor("existing"), { includeDiagram: false });
+    // Only the permission blocks: a field line (4 spaces + label) or one of its
+    // continuations (the 20-column hanging indent).
+    const blockLines = out
+      .split("\n")
+      .filter((line) => /^ {4}[A-Z]/.test(line) || /^ {20}\S/.test(line));
+    expect(blockLines.length).toBeGreaterThan(20);
+    for (const line of blockLines) {
+      // The wrapper never BREAKS a word, so a line may only exceed the limit
+      // when one token is itself too long to fit - a resource id, say, which is
+      // far more useful whole than split across two lines.
+      const longest = Math.max(...line.trim().split(" ").map((w) => w.length));
+      if (longest <= 58) {
+        expect(line.length, line).toBeLessThanOrEqual(78);
+      }
+    }
+    // Continuation lines sit under the value column, not at the margin.
+    expect(out).toMatch(/\n {20}\S/);
   });
 
   it("does not ask a lab path for roles its Contributor grant already covers", () => {
