@@ -10,7 +10,6 @@ import {
   BatchDeployScreen,
   DcrAutomationScreen,
   DcrInventoryPanel,
-  EMPTY_MODE_RECORD,
   EventHubDiscoveryScreen,
   HomeScreen,
   IntegrateScreen,
@@ -24,10 +23,12 @@ import {
   SettingsScreen,
   SetupWizard,
   SiemMigrationScreen,
+  capabilitiesForRoute,
   commitNoticeText,
   formatScopeChip,
   mergeJourneyLinks,
   resolveFramePhase,
+  useCapabilityAudit,
   useConsolidatedPolling,
 } from '@soc/ui';
 import type {
@@ -37,7 +38,7 @@ import type {
   CommitScopeOutcome,
   JourneyLinks,
   LoadableAcceptance,
-  LoadableMode,
+  LoadableSetup,
   ThemeControl,
 } from '@soc/ui';
 import {
@@ -45,14 +46,14 @@ import {
   computeInvalidation,
   DEFAULT_APP_OPTIONS,
   DEFAULT_THEME_CHOICE,
-  hasAzure,
-  hasCribl,
+  mustProduceArtifacts,
   EMPTY_AZURE_CONFIG,
   EMPTY_PROFILE_STORE,
   getActiveConfig,
   getActiveProfile,
+  EMPTY_SETUP_RECORD,
   parseAcceptanceRecord,
-  parseAppMode,
+  parseSetupRecord,
   parseAppOptions,
   serializeAppOptions,
   parseAzureConfig,
@@ -63,7 +64,7 @@ import {
   removeProfile,
   renameProfile,
   serializeAcceptanceRecord,
-  serializeAppMode,
+  serializeSetupRecord,
   serializeProfileStore,
   setActiveProfile,
   updateActiveConfig,
@@ -71,7 +72,6 @@ import {
 } from '@soc/core';
 import type {
   AcceptanceRecord,
-  AppMode,
   AppOptions,
   OperationOptions,
   AzureConfig,
@@ -125,7 +125,7 @@ type Status = 'idle' | 'running' | 'ok' | 'failed';
 // state, not secrets, and must be readable back on every launch. The codecs
 // (parse/serialize) live in @soc/core app-mode; the shell owns the clock.
 const AUA_ACCEPTANCE_KEY = 'auaAcceptance';
-const APP_MODE_KEY = 'appMode';
+const SETUP_KEY = 'setupComplete';
 // Deployment/naming options (porting-plan Unit 4): ONE plain KV entry,
 // persisted through the same SecretsStore adapter as appMode. Saves go
 // through @soc/core applyOptionsPatch so unmanaged keys in the blob survive.
@@ -195,24 +195,6 @@ const JOURNEY_LINKS = mergeJourneyLinks({
 // azure-only: the Onboard route requires a live Cribl side and is hidden, so
 // the integrate stages bind to DCR Automation - the surface the relaxed
 // 'azure' requirement actually exposes in this mode (templateOnly forced on;
-// the honest copy lives on the screen).
-const AZURE_ONLY_JOURNEY_LINKS = mergeJourneyLinks({
-  ...SHELL_LINK_OVERRIDES,
-  'choose-content': {
-    routeId: 'dcr-automation',
-    hint: 'DCR Automation is this mode\'s onboarding surface; runs are template-only (no live Cribl connection).',
-  },
-  configure: {
-    routeId: 'dcr-automation',
-    hint: 'Per-run overrides live on DCR Automation.',
-  },
-  deploy: {
-    routeId: 'dcr-automation',
-    hint:
-      'Run on DCR Automation - template-only in this mode; ARM bodies download as one ' +
-      'artifact.',
-  },
-});
 
 // Where the operator grants the Monitoring Metrics Publisher role today
 // (shell-provided pointer for the shared Onboard footer - the local shell
@@ -461,6 +443,12 @@ function KvStorePanel() {
 // RBAC panel opens on. 'existing' defaults to the resource-group WRITE path
 // (what deploy-readiness turns on); the operator can switch to the
 // subscription-scope read path inside the panel.
+// The shell owns the clock; @soc/core never reads one. Module scope so the
+// supplier's identity is stable across renders.
+function nowIso(): string {
+  return new Date().toISOString();
+}
+
 function defaultPreflightPath(path: AzureSetupPath): PreflightSetupPath {
   switch (path) {
     case 'existing':
@@ -648,7 +636,7 @@ function App() {
   // contract guarantees the agreement gate NEVER flashes for a user whose
   // acceptance is merely still in flight.
   const [acceptance, setAcceptance] = useState<LoadableAcceptance>('loading');
-  const [mode, setMode] = useState<LoadableMode>('loading');
+  const [setupDone, setSetupDone] = useState<LoadableSetup>('loading');
 
   // The parsed deployment/naming options (porting-plan Unit 4). Hydrated
   // from the plain appOptions KV entry alongside acceptance and mode;
@@ -707,7 +695,7 @@ function App() {
     void (async () => {
       const [accRaw, modeRaw, optionsRaw, themeRaw] = await Promise.allSettled([
         appStateStore.get(AUA_ACCEPTANCE_KEY),
-        appStateStore.get(APP_MODE_KEY),
+        appStateStore.get(SETUP_KEY),
         appStateStore.get(APP_OPTIONS_KEY),
         appStateStore.get(APP_THEME_KEY),
       ]);
@@ -717,7 +705,7 @@ function App() {
       setAcceptance(
         parseAcceptanceRecord(accRaw.status === 'fulfilled' ? accRaw.value : null)
       );
-      setMode(parseAppMode(modeRaw.status === 'fulfilled' ? modeRaw.value : null));
+      setSetupDone(parseSetupRecord(modeRaw.status === 'fulfilled' ? modeRaw.value : null) !== null);
       setAppOptions(
         parseAppOptions(optionsRaw.status === 'fulfilled' ? optionsRaw.value : null)
       );
@@ -895,7 +883,7 @@ function App() {
 
   // Which top-level surface to show (loading / AUA gate / mode select /
   // frame). Computed every render from the two loadable states.
-  const phase = resolveFramePhase(acceptance, mode);
+  const phase = resolveFramePhase(acceptance, setupDone);
 
   // Stable accessor for the Logs screen: a fresh snapshot of the module-
   // scoped logger ring on every call (mount and Refresh).
@@ -1069,6 +1057,49 @@ function App() {
     setRenaming(false);
   };
 
+  // The app-level capability audit (capability-model-plan step 2): what this
+  // connection can actually DO, which will replace app modes as the product's
+  // gate. Mounted above every gate branch - hooks cannot live below an early
+  // return, and the audit should survive the first-run wizard rather than be
+  // paid for twice.
+  //
+  // The launch trigger is the hook's own, and it honours the cache, so a return
+  // visit to an already-audited connection costs nothing. Re-audits on a
+  // connection switch or a scope commit fall out of the audit key changing.
+  const capabilityAudit = useCapabilityAudit({
+    ports: cloudPorts,
+    config: activeConfig,
+    // Withhold until the connection store has loaded. Before that activeConfig
+    // is the empty one, and auditing it would cache a result under the empty
+    // config's key - which is what stopped the cache ever hitting when this was
+    // first wired (three audits per load, none of them cached).
+    ready: hydrated,
+    criblShellMode: 'cloud',
+    setupPath: defaultPreflightPath(activeConfig.setupPath),
+    // This app runs inside the leader, so a healthy platform bridge IS Cribl
+    // reachability - the same mapping hasCribl and journeyFacts already use.
+    // 'checking...' is not yet a failure, so it counts as reachable and the
+    // Cribl verdicts stay 'unknown' rather than briefly claiming 'unreachable'.
+    criblReachable: platformLink !== 'failed',
+    now: nowIso,
+  });
+  const { audit: auditCapabilities } = capabilityAudit;
+
+  // Artifact-only output, derived from CAPABILITY rather than mode
+  // (capability-model-plan step 4). Replaces `!hasCribl(mode)`, and preserves
+  // what it meant: that check said "no live Cribl connection", which is
+  // destination.manage UNREACHABLE.
+  //
+  // Only unreachable forces. A DENIED verdict deliberately does not: forcing
+  // there would forbid the live attempt, and rule 3 keeps it available because a
+  // stale or wrong audit must not silently downgrade a deploy. The artifact is
+  // offered alongside instead.
+  const forcedTemplateOnly = mustProduceArtifacts(
+    ['destination.manage'],
+    capabilityAudit.capabilities,
+    capabilityAudit.context,
+  );
+
   // Save-secret success: record which connection (and identity) the live secret
   // now belongs to, and clear any outstanding "enter the secret" notice.
   const handleSecretSaved = useCallback(
@@ -1076,6 +1107,12 @@ function App() {
       setLiveSecretProfileId(profileId);
       setLiveSecretIdentity({ tenantId: savedTenantId, clientId: savedClientId });
       setSwitchNotice('');
+      // NO capability re-audit here, deliberately. This runs for BOTH the
+      // operator saving a secret AND the one-shot session probe merely
+      // confirming an already-stored one. The probe proves nothing changed, so
+      // re-auditing from here would re-measure on every single page load -
+      // precisely the "re-audit every launch" the plan rejected. The trigger
+      // lives in connectAzure, the path that actually takes a new secret.
     },
     [],
   );
@@ -1151,6 +1188,12 @@ function App() {
     if (store.activeProfileId !== null) {
       handleSecretSaved(store.activeProfileId, input.tenantId, input.clientId);
     }
+    // THE trigger the audit key cannot reveal: a NEW secret just arrived. Tenant
+    // and client id are unchanged, so the key does not move and the hook's own
+    // effect will not re-fire - but what this identity can be MEASURED to do may
+    // have gone from unmeasurable to measurable. Fired here rather than in
+    // handleSecretSaved because only this path takes a secret from the operator.
+    auditCapabilities('secret-entry');
     try {
       const token = await acquireArmToken(input.tenantId);
       await appStateStore.set('azureArmToken', token.access_token, { encrypted: true });
@@ -1224,13 +1267,13 @@ function App() {
 
   // First-run mode choice: persist, then adopt. A failed write holds the
   // mode for this session only and re-asks next launch.
-  const handleSelectMode = async (next: AppMode) => {
+  const handleSetupComplete = async () => {
     try {
-      await appStateStore.set(APP_MODE_KEY, serializeAppMode(next));
+      await appStateStore.set(SETUP_KEY, serializeSetupRecord({ completedAt: nowIso() }));
     } catch {
       // Non-fatal; re-asks next launch.
     }
-    setMode(next);
+    setSetupDone(true);
   };
 
   // The Reconfigure contract (mined from the legacy Settings page): write an
@@ -1241,10 +1284,10 @@ function App() {
   // reset so the user still reaches the chooser.
   const handleReconfigure = async () => {
     try {
-      await appStateStore.set(APP_MODE_KEY, EMPTY_MODE_RECORD);
+      await appStateStore.set(SETUP_KEY, EMPTY_SETUP_RECORD);
       window.location.reload();
     } catch {
-      setMode(null);
+      setSetupDone(null);
     }
   };
 
@@ -1303,7 +1346,7 @@ function App() {
   // The target is FIXED to cribl-hosted and locked: this shell only ever runs
   // installed inside a Cribl.Cloud workspace, so the target is a fact to state,
   // never a choice to offer (the lockTarget prop exists for exactly this).
-  if (phase.phase === 'aua' || phase.phase === 'mode-select') {
+  if (phase.phase === 'aua' || phase.phase === 'setup') {
     return (
       <PortsProvider ports={cloudPorts} config={activeConfig}>
         <SetupWizard
@@ -1336,7 +1379,11 @@ function App() {
           }
           accepted={phase.phase !== 'aua'}
           onAccept={handleAccept}
-          onGetStarted={handleSelectMode}
+          // The wizard no longer produces a mode (capability-model-plan step
+          // 5). 'full' is what the plan says the app always runs as; the entry
+          // survives only as the "setup complete" signal until slice 3 deletes
+          // appMode outright.
+          onGetStarted={handleSetupComplete}
         />
       </PortsProvider>
     );
@@ -1354,7 +1401,6 @@ function App() {
   // leader, so a healthy bridge IS Cribl reachability.
   const journeyFacts: JourneyFacts = {
     accepted: typeof acceptance === 'object' && acceptance !== null,
-    mode: phase.mode,
     identityPresent:
       activeConfig.tenantId.trim() !== '' && activeConfig.clientId.trim() !== '',
     // The probe resolves the honest 'unknown': a verified token acquisition
@@ -1591,7 +1637,7 @@ function App() {
       <PortsProvider ports={cloudPorts} config={activeConfig}>
         <HomeScreen
           facts={journeyFacts}
-          links={phase.mode === 'azure-only' ? AZURE_ONLY_JOURNEY_LINKS : JOURNEY_LINKS}
+          links={JOURNEY_LINKS}
           onNavigate={nav.navigate}
           setupSections={setupSections}
         />
@@ -1662,13 +1708,14 @@ function App() {
         <IntegrateScreen
           key={`integrate-${store.activeProfileId ?? 'none'}`}
           scopeCommitted={journeyFacts.scopeCommitted}
-          offline={!hasAzure(phase.mode)}
+          capabilities={capabilityAudit.capabilities}
+          capabilityContext={capabilityAudit.context}
+          offline={!capabilityAudit.context.azureIdentityPresent}
           onCommitScope={handleCommitScope}
           criblDefaults={appOptions.cribl}
           operationDefaults={appOptions.operation}
           onOperationChange={persistOperation}
           roleGuidance={ROLE_GUIDANCE}
-          mode={phase.mode}
         />
       </PortsProvider>
     </>
@@ -1767,7 +1814,7 @@ function App() {
               pacing={BATCH_PACING}
               operationDefaults={appOptions.operation}
               criblDefaults={appOptions.cribl}
-              forcedTemplateOnly={!hasCribl(phase.mode)}
+              forcedTemplateOnly={forcedTemplateOnly}
             />
           </PortsProvider>
         </>
@@ -1790,7 +1837,7 @@ function App() {
         </PortsProvider>
       }
       singleDisabledReason={
-        hasCribl(phase.mode)
+        capabilityAudit.context.criblReachable
           ? undefined
           : 'Single-table onboarding creates a Cribl destination, so it needs a live Cribl connection. Batch supports template-only export without Cribl.'
       }
@@ -1819,8 +1866,7 @@ function App() {
             shell: 'cribl-cloud-app',
             application: APP_NAME,
             appId: window.CRIBL_APP_ID ?? null,
-            mode: phase.mode,
-            activeConnection: activeProfile?.name ?? null,
+                    activeConnection: activeProfile?.name ?? null,
             platformLink,
           }}
         />
@@ -2042,7 +2088,6 @@ function App() {
         'Secrets live in the app-scoped KV store; encrypted entries are write-only and can ' +
         'only be replaced, never read back.'
       }
-      mode={phase.mode}
       onReconfigure={handleReconfigure}
       configEditor={{
         label: `Active connection config - ${activeProfile?.name ?? '(none)'}`,
@@ -2057,9 +2102,12 @@ function App() {
   // in dependency order - Setup (home, now carrying the connect + resource +
   // GitHub sections), then Integrate (the single-page flagship, the PRIMARY
   // journey route), then DCR Automation and Pack Maintenance - then tools
-  // (Repositories, Logs, Settings), then Diagnostics last. Requirements
-  // still drive mode-aware navigation via the ONE @soc/core filterNavItems
-  // pass; grouping is presentation only. Onboard needs BOTH live sides (it
+  // (Repositories, Logs, Settings), then Diagnostics last. Requirements are
+  // now CAPABILITIES and no longer decide visibility: every route renders,
+  // annotated with what is unavailable and why (capability-model-plan step 3).
+  // The per-route capability list is shared with the local shell via
+  // capabilitiesForRoute, so the two cannot disagree about what an operator can
+  // do; grouping is presentation only. Onboard needs BOTH live sides (it
   // deploys to Azure and Cribl in one run); batch-onboard relaxes to 'azure'
   // (recorded Unit 6.5 decision) - in azure-only mode templateOnly is FORCED
   // on because no live Cribl connection exists to deploy destinations to.
@@ -2076,28 +2124,29 @@ function App() {
     // Dataflow is the JOURNEY landing item (user directive
     // 2026-07-20): users arrive here first to learn how the ingestion works
     // before setting anything up. requires:'none' so it is always reachable.
-    { id: 'architecture', label: 'Dataflow', requires: 'none', section: 'journey', render: renderArchitecture },
-    { id: 'home', label: 'Setup', requires: 'none', section: 'journey', render: renderHome },
-    { id: 'integrate', label: 'Sentinel Integration', requires: 'both', section: 'journey', render: renderIntegrate },
-    { id: 'dcr-automation', label: 'DCR Automation', requires: 'azure', section: 'journey', render: renderDcrAutomation },
-    { id: 'packs', label: 'Pack Maintenance', requires: 'cribl', section: 'journey', render: () => packsView },
-    { id: 'repositories', label: 'Repositories', requires: 'none', section: 'tools', render: () => repositoriesView },
-    { id: 'labs', label: 'Labs', requires: 'azure', section: 'tools', render: () => labsView },
-    { id: 'logs', label: 'Logs', requires: 'none', section: 'tools', render: () => logsView },
-    { id: 'settings', label: 'Settings', requires: 'none', section: 'tools', render: () => settingsView },
-    { id: 'siem-migration', label: 'SIEM Migration', requires: 'none', section: 'development', render: renderSiemMigration },
-    { id: 'preflight', label: 'Permission Verification', requires: 'azure', section: 'development', render: renderPreflight },
-    { id: 'eventhub-discovery', label: 'Event Hub Discovery', requires: 'azure', section: 'development', render: () => eventHubDiscoveryView },
-    { id: 'mapping-catalog', label: 'Mapping Catalog', requires: 'none', section: 'development', render: () => mappingCatalogView },
-    { id: 'harness', label: 'Diagnostics', requires: 'none', section: 'diagnostics', render: () => harnessView },
+    { id: 'architecture', label: 'Dataflow', requires: capabilitiesForRoute('architecture'), section: 'journey', render: renderArchitecture },
+    { id: 'home', label: 'Setup', requires: capabilitiesForRoute('home'), section: 'journey', render: renderHome },
+    { id: 'integrate', label: 'Sentinel Integration', requires: capabilitiesForRoute('integrate'), section: 'journey', render: renderIntegrate },
+    { id: 'dcr-automation', label: 'DCR Automation', requires: capabilitiesForRoute('dcr-automation'), section: 'journey', render: renderDcrAutomation },
+    { id: 'packs', label: 'Pack Maintenance', requires: capabilitiesForRoute('packs'), section: 'journey', render: () => packsView },
+    { id: 'repositories', label: 'Repositories', requires: capabilitiesForRoute('repositories'), section: 'tools', render: () => repositoriesView },
+    { id: 'labs', label: 'Labs', requires: capabilitiesForRoute('labs'), section: 'tools', render: () => labsView },
+    { id: 'logs', label: 'Logs', requires: capabilitiesForRoute('logs'), section: 'tools', render: () => logsView },
+    { id: 'settings', label: 'Settings', requires: capabilitiesForRoute('settings'), section: 'tools', render: () => settingsView },
+    { id: 'siem-migration', label: 'SIEM Migration', requires: capabilitiesForRoute('siem-migration'), section: 'development', render: renderSiemMigration },
+    { id: 'preflight', label: 'Permission Verification', requires: capabilitiesForRoute('preflight'), section: 'development', render: renderPreflight },
+    { id: 'eventhub-discovery', label: 'Event Hub Discovery', requires: capabilitiesForRoute('eventhub-discovery'), section: 'development', render: () => eventHubDiscoveryView },
+    { id: 'mapping-catalog', label: 'Mapping Catalog', requires: capabilitiesForRoute('mapping-catalog'), section: 'development', render: () => mappingCatalogView },
+    { id: 'harness', label: 'Diagnostics', requires: capabilitiesForRoute('harness'), section: 'diagnostics', render: () => harnessView },
   ];
 
   return (
     <AppFrame
       title={APP_NAME}
       subtitle="Cribl.Cloud shell"
-      mode={phase.mode}
       routes={routes}
+      capabilities={capabilityAudit.capabilities}
+      capabilityContext={capabilityAudit.context}
       topBar={connectionBar}
       footerNote={`v${window.__APP_VERSION_RUNTIME__ ?? __APP_VERSION__}`}
       initialRouteId="architecture"

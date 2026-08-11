@@ -64,19 +64,14 @@ export type {
   BatchSelection,
 } from "./onboarding/batch/batch-state";
 
-// App frame: chrome, acceptance gate, mode chooser, and their pure state.
+// App frame: chrome, acceptance gate, and their pure state.
 export { AppFrame } from "./frame/app-frame";
 export type { AppFrameNav, AppFrameProps, AppRoute } from "./frame/app-frame";
 export { AuaGate } from "./frame/aua-gate";
 export type { AuaGateProps } from "./frame/aua-gate";
-export { ModeSelect } from "./frame/mode-select";
-export type { ModeSelectProps } from "./frame/mode-select";
 export {
   AUA_SCROLL_SLACK_PX,
   DEFAULT_NAV_SECTION,
-  EMPTY_MODE_RECORD,
-  MODE_LABELS,
-  MODE_OPTIONS,
   NAV_SECTION_LABELS,
   NAV_SECTION_ORDER,
   groupNavSections,
@@ -86,8 +81,7 @@ export {
 export type {
   FramePhase,
   LoadableAcceptance,
-  LoadableMode,
-  ModeOption,
+  LoadableSetup,
   NavSection,
   NavSectionGroup,
 } from "./frame/frame-state";
@@ -127,7 +121,6 @@ export type { HomeScreenProps } from "./screens/home/home-screen";
 export {
   NO_ACTION_FALLBACK,
   deriveNextActionView,
-  modeNoteFor,
 } from "./screens/home/home-state";
 export type { NextActionView } from "./screens/home/home-state";
 
@@ -616,6 +609,43 @@ export type {
   SidePhase,
 } from "./screens/preflight/preflight-state";
 
+// App-level capability audit (capability-model-plan step 2): the permission
+// audit that will replace app modes as what the product gates on. useCapabilityAudit
+// owns the LIFECYCLE - it loads the cached result, re-measures only when the
+// audited connection changed or the shell reports a secret re-entry, and hands
+// back the capabilities plus the connection facts the domain resolves anything
+// unmeasured from. Launch deliberately reuses a matching cached audit: the check
+// costs real requests against a shared budget and permissions change rarely, and
+// it is safe because the audit informs rather than forbids. Step 3's nav
+// annotation is the intended consumer.
+export {
+  auditStatusTone,
+  deriveCapabilityContext,
+  hasAzureIdentity,
+  refreshLabel,
+  useCapabilityAudit,
+} from "./capabilities";
+// Route id -> required capabilities, SHARED by both shells (the render
+// functions are per-shell; what a route needs is one product decision).
+export {
+  ROUTE_CAPABILITIES,
+  capabilitiesForRoute,
+} from "./frame/route-capabilities";
+export type {
+  CapabilityAuditOptions,
+  CapabilityAuditState,
+} from "./capabilities";
+// The "someone else runs this" offer (capability-model-plan step 4, rule 2):
+// names the artifact beside a blocked action. An OFFER, not an error - the live
+// control stays available because the audit never forbids.
+export { FallbackNotice } from "./capabilities";
+export type { FallbackNoticeProps } from "./capabilities";
+export {
+  fallbackActionLabel,
+  fallbackHint,
+  isInlineArtifact,
+} from "./capabilities";
+
 // Setup Wizard (porting-plan Unit 22, GUI-03 delta): the local-app first-run
 // onboarding ASSEMBLED from already-shipped pieces - AuaGate (Unit 1) ->
 // target chooser (core tradeoff data) -> Connect (the .tgz upload walkthrough
@@ -630,8 +660,6 @@ export { SetupWizard } from "./screens/setup-wizard/setup-wizard";
 export type { SetupWizardProps } from "./screens/setup-wizard/setup-wizard";
 export { TargetChooser } from "./screens/setup-wizard/target-chooser";
 export type { TargetChooserProps } from "./screens/setup-wizard/target-chooser";
-export { ModeCardGrid } from "./screens/setup-wizard/mode-card-grid";
-export type { ModeCardGridProps } from "./screens/setup-wizard/mode-card-grid";
 export { LeaderConnectStep } from "./screens/setup-wizard/leader-connect-step";
 export type {
   AppliedReconnect,
@@ -681,8 +709,6 @@ export type {
   WorkspaceOption,
 } from "./screens/setup-wizard/azure-setup-state";
 export {
-  GET_STARTED_MODE_UNAVAILABLE_REASON,
-  GET_STARTED_NO_MODE_REASON,
   GET_STARTED_NOT_FINAL_REASON,
   deriveFooterStatus,
   deriveGetStarted,
@@ -729,3 +755,22 @@ export type {
   ConsolidatedPoll,
   ConsolidatedPollingOptions,
 } from "./polling/use-consolidated-polling";
+
+// Workspace table picker (backlog item 2): choosing an existing Log Analytics
+// table to run DCR gap analysis against. First feature to exercise the
+// capability model outside the nav - a denied table.read ANNOTATES the picker
+// and never blocks it, and reads have no fallback artifact, so the annotation is
+// the whole answer. Pure decisions only; the screen comes next.
+export {
+  ANALYSIS_STALE_NOTICE,
+  deriveTablePickerAccess,
+  filterTables,
+  tableCountLabel,
+} from "./screens/table-picker/table-picker-state";
+export type { TablePickerAccess } from "./screens/table-picker/table-picker-state";
+
+// Empty-inventory messaging (docs/inventory-standard.md, BINDING): an empty list
+// is only a ZERO when the read was verified. Shared by every lister so eight
+// screens cannot phrase the same confident wrong answer eight ways.
+export { emptyInventoryMessage } from "./capabilities";
+export type { EmptyInventoryMessage } from "./capabilities";

@@ -13,7 +13,6 @@
  */
 import { describe, expect, it } from "vitest";
 import {
-  APP_MODES,
   FIRST_RUN_ARC,
   INTEGRATE_ARC,
   JOURNEY_STAGE_LABELS,
@@ -24,7 +23,6 @@ import {
   readinessChips,
 } from "../../index";
 import type {
-  AppMode,
   Journey,
   JourneyFacts,
   JourneyStage,
@@ -37,7 +35,6 @@ import type {
 function facts(overrides: Partial<JourneyFacts> = {}): JourneyFacts {
   return {
     accepted: true,
-    mode: "azure-only",
     identityPresent: true,
     secretLive: "live",
     scopeCommitted: true,
@@ -65,10 +62,10 @@ const SECRET_STATES: readonly SecretLiveness[] = ["live", "unknown", "missing"];
 const CRIBL_STATES: readonly (boolean | undefined)[] = [true, false, undefined];
 const BOOLS: readonly boolean[] = [true, false];
 
-/** Every fact combination: 5 modes x 2 x 2 x 3 x 2 x 3 = 360 records. */
+/** Every fact combination: 2 x 2 x 3 x 2 x 3 = 72 records. */
 function everyFactCombination(): JourneyFacts[] {
   const combos: JourneyFacts[] = [];
-  for (const mode of [null, ...APP_MODES] as (AppMode | null)[]) {
+  {
     for (const accepted of BOOLS) {
       for (const identityPresent of BOOLS) {
         for (const secretLive of SECRET_STATES) {
@@ -76,7 +73,6 @@ function everyFactCombination(): JourneyFacts[] {
             for (const criblReachable of CRIBL_STATES) {
               combos.push({
                 accepted,
-                mode,
                 identityPresent,
                 secretLive,
                 scopeCommitted,
@@ -95,7 +91,6 @@ describe("arc constants", () => {
   it("fixes the first-run arc order", () => {
     expect(FIRST_RUN_ARC).toEqual([
       "accept",
-      "choose-mode",
       "connect",
       "target",
       "ready",
@@ -120,41 +115,28 @@ describe("arc constants", () => {
   });
 });
 
-describe("firstRunStageIds (mode filtering)", () => {
-  it("gives full and azure-only modes the whole arc", () => {
-    expect(firstRunStageIds("full")).toEqual(FIRST_RUN_ARC);
-    expect(firstRunStageIds("azure-only")).toEqual(FIRST_RUN_ARC);
+describe("firstRunStageIds", () => {
+  // DELIBERATE INVERSION (capability-model-plan step 5). These pins previously
+  // asserted the opposite: cribl-only dropped 'target', air-gapped dropped
+  // 'connect' AND 'target', so an operator was shown a shorter journey than the
+  // product has. Modes are gone and the arc is never pruned - a stage that
+  // cannot be completed says so through its own blockedReason instead. This is
+  // the same annotate-don't-hide rule step 3 applied to the nav.
+  it("is always the whole arc", () => {
+    expect(firstRunStageIds()).toEqual(FIRST_RUN_ARC);
   });
 
-  it("skips target for cribl-only (no Azure scope exists)", () => {
-    expect(firstRunStageIds("cribl-only")).toEqual([
-      "accept",
-      "choose-mode",
-      "connect",
-      "ready",
-    ]);
-  });
-
-  it("skips connect AND target for air-gapped (no live connections) rather than showing them locked", () => {
-    expect(firstRunStageIds("air-gapped")).toEqual([
-      "accept",
-      "choose-mode",
-      "ready",
-    ]);
-  });
-
-  it("returns the generic arc while no mode is chosen", () => {
-    expect(firstRunStageIds(null)).toEqual(FIRST_RUN_ARC);
+  it("no longer carries a mode-selection stage", () => {
+    expect(FIRST_RUN_ARC).not.toContain("choose-mode");
+    expect(firstRunStageIds()).toEqual(["accept", "connect", "target", "ready"]);
   });
 });
 
 describe("deriveJourney invariants (full 360-combination fact matrix)", () => {
-  it("derives stage lists from the mode alone - facts change statuses, never which stages exist", () => {
+  it("emits CONSTANT stage lists - facts change statuses, never which stages exist", () => {
     for (const f of everyFactCombination()) {
       const journey = deriveJourney(f);
-      expect(journey.firstRun.map((s) => s.id)).toEqual(
-        firstRunStageIds(f.mode),
-      );
+      expect(journey.firstRun.map((s) => s.id)).toEqual(firstRunStageIds());
       expect(journey.integrate.map((s) => s.id)).toEqual([...INTEGRATE_ARC]);
     }
   });
@@ -190,11 +172,8 @@ describe("deriveJourney invariants (full 360-combination fact matrix)", () => {
     }
   });
 
-  it("never marks connect complete unless the secret is live (unknown is honestly incomplete) in Azure modes", () => {
+  it("never marks connect complete unless the secret is live (unknown is honestly incomplete)", () => {
     for (const f of everyFactCombination()) {
-      if (f.mode !== "full" && f.mode !== "azure-only") {
-        continue;
-      }
       if (f.secretLive === "live" && f.identityPresent) {
         continue;
       }
@@ -217,9 +196,9 @@ describe("deriveJourney invariants (full 360-combination fact matrix)", () => {
     }
   });
 
-  it("keeps choose-content, configure, and review navigable in Azure modes past the walls, whatever later stages need", () => {
+  it("keeps choose-content, configure, and review navigable past the wall, whatever later stages need", () => {
     for (const f of everyFactCombination()) {
-      if (!f.accepted || (f.mode !== "full" && f.mode !== "azure-only")) {
+      if (!f.accepted) {
         continue;
       }
       const journey = deriveJourney(f);
@@ -238,7 +217,6 @@ describe("deriveJourney invariants (full 360-combination fact matrix)", () => {
 function freshFacts(overrides: Partial<JourneyFacts> = {}): JourneyFacts {
   return facts({
     accepted: false,
-    mode: null,
     identityPresent: false,
     secretLive: "missing",
     scopeCommitted: false,
@@ -265,12 +243,11 @@ describe("acceptance wall", () => {
   });
 
   it("keeps persisted completion honest across an acceptance re-prompt (resume never lies that work is undone)", () => {
-    // Acceptance record failed to parse (re-prompt), but mode, identity,
-    // secret, and scope persist: completed stages stay complete; nothing
-    // is available past the wall; accept is the single current stage.
+    // Acceptance record failed to parse (re-prompt), but identity, secret, and
+    // scope persist: completed stages stay complete; nothing is available past
+    // the wall; accept is the single current stage.
     const journey = deriveJourney(facts({ accepted: false }));
     expect(statusOf(journey, "accept")).toBe("current");
-    expect(statusOf(journey, "choose-mode")).toBe("complete");
     expect(statusOf(journey, "connect")).toBe("complete");
     expect(statusOf(journey, "target")).toBe("complete");
     const ready = stageOf(journey, "ready");
@@ -286,25 +263,26 @@ describe("acceptance wall", () => {
   });
 });
 
-describe("mode wall", () => {
-  it("makes choose-mode current after acceptance and blocks later stages on the mode choice", () => {
+describe("acceptance is now the ONLY wall", () => {
+  // DELIBERATE REMOVAL (capability-model-plan step 5). This block used to pin a
+  // second wall: after acceptance, 'choose-mode' became current and every later
+  // stage was blocked on picking a mode. Mode selection is gone, so acceptance
+  // is the single full-app gate and connect follows it directly.
+  it("makes connect current immediately after acceptance", () => {
     const journey = deriveJourney(freshFacts({ accepted: true }));
     expect(statusOf(journey, "accept")).toBe("complete");
-    expect(statusOf(journey, "choose-mode")).toBe("current");
-    for (const id of ["connect", "target", "ready"] as const) {
-      const s = stageOf(journey, id);
-      expect(s.status).toBe("blocked");
-      expect(s.blockedReason).toContain("operating mode");
-    }
-    expect(statusOf(journey, "choose-content")).toBe("blocked");
-    expect(statusOf(journey, "deploy")).toBe("blocked");
+    expect(statusOf(journey, "connect")).toBe("current");
   });
 
-  it("headlines mode choice as the next action", () => {
-    expect(nextAction(freshFacts({ accepted: true }))?.stageId).toBe(
-      "choose-mode",
-    );
-    expect(nextAction(facts({ mode: null }))?.stageId).toBe("choose-mode");
+  it("blocks nothing on a mode choice any more", () => {
+    const journey = deriveJourney(freshFacts({ accepted: true }));
+    for (const stage of [...journey.firstRun, ...journey.integrate]) {
+      expect(stage.blockedReason ?? "").not.toContain("operating mode");
+    }
+  });
+
+  it("headlines the connection, not a mode choice, once accepted", () => {
+    expect(nextAction(freshFacts({ accepted: true }))?.stageId).toBe("connect");
   });
 });
 
@@ -351,7 +329,6 @@ describe("azure-only status matrix (identity x secret x scope)", () => {
       const f = facts({ identityPresent, secretLive, scopeCommitted });
       const journey = deriveJourney(f);
       expect(statusOf(journey, "accept")).toBe("complete");
-      expect(statusOf(journey, "choose-mode")).toBe("complete");
       expect(statusOf(journey, "connect")).toBe(connect);
       expect(statusOf(journey, "target")).toBe(target);
       expect(statusOf(journey, "ready")).toBe(ready);
@@ -375,23 +352,23 @@ describe("azure-only status matrix (identity x secret x scope)", () => {
   });
 });
 
-describe("full mode Cribl participation in connect", () => {
-  it("completes connect when the Azure side is green and Cribl reachability is unknown (optional fact never blocks full mode)", () => {
+describe("Cribl participation in connect", () => {
+  it("completes connect when the Azure side is green and Cribl reachability is unknown (an optional fact never blocks)", () => {
     const journey = deriveJourney(
-      facts({ mode: "full", criblReachable: undefined }),
+      facts({ criblReachable: undefined }),
     );
     expect(statusOf(journey, "connect")).toBe("complete");
   });
 
   it("completes connect when Cribl is known reachable", () => {
     const journey = deriveJourney(
-      facts({ mode: "full", criblReachable: true }),
+      facts({ criblReachable: true }),
     );
     expect(statusOf(journey, "connect")).toBe("complete");
   });
 
   it("holds connect open when Cribl is known unreachable, and names it as the next action", () => {
-    const f = facts({ mode: "full", criblReachable: false });
+    const f = facts({ criblReachable: false });
     const journey = deriveJourney(f);
     expect(statusOf(journey, "connect")).toBe("current");
     const action = nextAction(f);
@@ -401,77 +378,46 @@ describe("full mode Cribl participation in connect", () => {
 
   it("does not gate Deploy on Cribl reachability (no new gates beyond the existing Run gate)", () => {
     const journey = deriveJourney(
-      facts({ mode: "full", criblReachable: false }),
+      facts({ criblReachable: false }),
     );
     expect(statusOf(journey, "deploy")).toBe("available");
   });
 });
 
-describe("cribl-only mode", () => {
-  it("completes connect only on known reachability - unknown honestly stays incomplete", () => {
-    const green = facts({ mode: "cribl-only", criblReachable: true });
-    expect(statusOf(deriveJourney(green), "connect")).toBe("complete");
-    const unknown = facts({ mode: "cribl-only", criblReachable: undefined });
-    expect(statusOf(deriveJourney(unknown), "connect")).toBe("current");
-    expect(nextAction(unknown)?.label).toBe("Verify the Cribl connection");
-    const down = facts({ mode: "cribl-only", criblReachable: false });
+describe("Cribl reachability now has ONE rule", () => {
+  // DELIBERATE INVERSION (capability-model-plan step 5). This block used to pin
+  // the cribl-only mode's STRICTER rule: unknown reachability held connect open,
+  // because in that mode the Cribl link was the only thing the stage proved.
+  // With modes gone there is a single rule and it is the lenient one - only a
+  // KNOWN failure blocks. Requiring proof would wall the arc on a fact the local
+  // shell legitimately never establishes, and 'unknown' must not read as broken.
+  it("treats unknown reachability as non-blocking", () => {
+    const unknown = facts({ criblReachable: undefined });
+    expect(statusOf(deriveJourney(unknown), "connect")).toBe("complete");
+  });
+
+  it("still blocks on a KNOWN failure, and names restoring it", () => {
+    const down = facts({ criblReachable: false });
+    expect(statusOf(deriveJourney(down), "connect")).toBe("current");
     expect(nextAction(down)?.label).toBe("Restore the Cribl connection");
   });
 
-  it("marks every integrate stage not-yet-available with an honest reason", () => {
-    const journey = deriveJourney(
-      facts({ mode: "cribl-only", criblReachable: true }),
+  it("no longer suppresses the integrate arc for a Cribl-less operator", () => {
+    // Previously every integrate stage was forced 'not-yet-available' for
+    // cribl-only and air-gapped. Suppressing a whole arc by mode was the same
+    // hiding step 3 removed; the stages now stand on their own facts.
+    const journey = deriveJourney(facts({ criblReachable: true }));
+    const suppressed = journey.integrate.filter(
+      (stage) => stage.status === "not-yet-available",
     );
-    for (const s of journey.integrate) {
-      expect(s.status).toBe("not-yet-available");
-      expect(s.blockedReason).toBeTruthy();
-    }
-  });
-
-  it("returns a null next action once its first-run arc is green (nothing actionable is never oversold)", () => {
-    const f = facts({ mode: "cribl-only", criblReachable: true });
-    expect(nextAction(f)).toBeNull();
-    const currents = allStages(deriveJourney(f)).filter(
-      (s) => s.status === "current",
-    );
-    expect(currents).toHaveLength(0);
-  });
-});
-
-describe("air-gapped mode", () => {
-  it("completes its whole first-run arc from acceptance plus mode choice alone", () => {
-    const journey = deriveJourney(
-      facts({
-        mode: "air-gapped",
-        identityPresent: false,
-        secretLive: "missing",
-        scopeCommitted: false,
-      }),
-    );
-    for (const s of journey.firstRun) {
-      expect(s.status).toBe("complete");
-    }
-  });
-
-  it("marks every integrate stage not-yet-available (tightened copy until the guided deploy unit)", () => {
-    const journey = deriveJourney(facts({ mode: "air-gapped" }));
-    for (const s of journey.integrate) {
-      expect(s.status).toBe("not-yet-available");
-    }
-    expect(stageOf(journey, "choose-content").blockedReason).toContain(
-      "Air-gapped",
-    );
-  });
-
-  it("returns a null next action rather than inventing one", () => {
-    expect(nextAction(facts({ mode: "air-gapped" }))).toBeNull();
+    expect(suppressed.map((stage) => stage.id)).toEqual(["validate", "monitor"]);
   });
 });
 
 describe("unshipped integrate placeholders", () => {
   it("keeps validate and monitor not-yet-available even on a fully green full-mode journey", () => {
     const journey = deriveJourney(
-      facts({ mode: "full", criblReachable: true }),
+      facts({ criblReachable: true }),
     );
     for (const id of UNSHIPPED_INTEGRATE_STAGES) {
       const s = stageOf(journey, id);
@@ -486,7 +432,7 @@ describe("unshipped integrate placeholders", () => {
 
   it("ships review: available on a green Azure journey, never a placeholder", () => {
     const journey = deriveJourney(
-      facts({ mode: "full", criblReachable: true }),
+      facts({ criblReachable: true }),
     );
     const review = stageOf(journey, "review");
     expect(review.status).toBe("available");
@@ -523,8 +469,8 @@ describe("read-ahead invariants", () => {
     );
     expect(statusOf(scopeMissing, "connect")).toBe("current");
     expect(statusOf(scopeCommitted, "connect")).toBe("current");
-    expect(statusOf(scopeMissing, "choose-mode")).toBe(
-      statusOf(scopeCommitted, "choose-mode"),
+    expect(statusOf(scopeMissing, "accept")).toBe(
+      statusOf(scopeCommitted, "accept"),
     );
   });
 });
@@ -575,10 +521,17 @@ describe("readinessChips", () => {
     expect(chips[2]?.hint).toContain("Azure Targeting");
   });
 
-  it("returns no chips for modes without a live Azure connection, or before a mode is chosen", () => {
-    expect(readinessChips(facts({ mode: "cribl-only" }))).toEqual([]);
-    expect(readinessChips(facts({ mode: "air-gapped" }))).toEqual([]);
-    expect(readinessChips(facts({ mode: null }))).toEqual([]);
+  it("ALWAYS renders the three chips, whatever the connection state", () => {
+    // DELIBERATE INVERSION (capability-model-plan step 5). Chips used to be
+    // suppressed entirely for modes without a live Azure connection, on the
+    // grounds that red chips would be meaningless. With modes gone they always
+    // render and report honestly - an operator without Azure access is told
+    // identity and scope are missing rather than being shown nothing at all.
+    const none = readinessChips(
+      facts({ identityPresent: false, secretLive: "missing", scopeCommitted: false }),
+    );
+    expect(none.map((chip) => chip.id)).toEqual(["identity", "secret", "scope"]);
+    expect(none.every((chip) => chip.state === "missing")).toBe(true);
   });
 });
 

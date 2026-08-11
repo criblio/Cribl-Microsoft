@@ -28,9 +28,8 @@
  */
 
 import { useState } from "react";
-import { appRegistrationRequest, modeCards } from "@soc/core";
+import { appRegistrationRequest } from "@soc/core";
 import type {
-  AppMode,
   ChangeRequestContext,
   ContentPlatform,
   CriblShellMode,
@@ -47,7 +46,6 @@ import { RepositoriesScreen } from "../repositories/repositories-screen";
 import { ChangeRequestBlock } from "./change-request-block";
 import { LeaderConnectStep } from "./leader-connect-step";
 import type { AppliedReconnect } from "./leader-connect-step";
-import { ModeCardGrid } from "./mode-card-grid";
 import { TargetChooser } from "./target-chooser";
 import { UploadWalkthroughStep } from "./upload-walkthrough-step";
 import {
@@ -110,8 +108,8 @@ export interface SetupWizardProps {
   repositoriesReachable?: boolean;
   /** Fully-explicit footer signals; overrides the capability-derived defaults. */
   footerOverride?: WizardFooterInput;
-  /** Persist the chosen mode and enter the app. */
-  onGetStarted: (mode: AppMode) => void | Promise<void>;
+  /** Finish the wizard and enter the app. */
+  onGetStarted: () => void | Promise<void>;
   /**
    * Acceptance handling when the wizard owns the AUA gate. When `accepted` is
    * false the wizard shows AuaGate first and calls `onAccept`; when omitted the
@@ -125,7 +123,6 @@ export interface SetupWizardProps {
 const PHASE_LABELS: Readonly<Record<WizardPhase, string>> = {
   target: "Target",
   connect: "Connect",
-  mode: "Mode",
 };
 
 export function SetupWizard(props: SetupWizardProps) {
@@ -152,31 +149,24 @@ export function SetupWizard(props: SetupWizardProps) {
   } = props;
 
   const [target, setTarget] = useState<WizardTarget>(initialTarget);
-  const [chosenMode, setChosenMode] = useState<AppMode | null>(null);
   const [desiredViewId, setDesiredViewId] = useState<WizardViewId>("target");
   const [starting, setStarting] = useState(false);
 
-  // The step list is derived with mode UNDECIDED: mode is the output of the
+  // The step list no longer depends on a mode (capability-model-plan step 5).
+  // What used to be the output of this flow
   // flow, not an input to step visibility, so first-run always walks the full
   // connect path regardless of what will be picked at the end.
-  const shape: WizardShape = { target, mode: null, installedInLeader };
+  const shape: WizardShape = { target, installedInLeader };
   const views = wizardViews(shape);
   // Clamp the cursor so a target switch that drops the current view never
   // strands it (e.g. leaving leader-connect when the target becomes cribl-hosted).
   const currentViewId = resolveCurrentViewId(shape, desiredViewId);
   const currentView = views.find((v) => v.id === currentViewId) ?? views[0];
 
-  const cards = modeCards(capabilities);
-  const chosenCardAvailable =
-    chosenMode !== null &&
-    (cards.find((c) => c.mode === chosenMode)?.available ?? false);
-
   const final = isFinalView(shape, currentViewId);
   const first = isFirstView(shape, currentViewId);
   const getStarted = deriveGetStarted({
     isFinal: final,
-    chosenMode,
-    modeAvailable: chosenCardAvailable,
   });
 
   const footerInput: WizardFooterInput = footerOverride ?? {
@@ -208,12 +198,12 @@ export function SetupWizard(props: SetupWizardProps) {
     setDesiredViewId("target");
   };
   const start = async () => {
-    if (!getStarted.ready || chosenMode === null) {
+    if (!getStarted.ready) {
       return;
     }
     setStarting(true);
     try {
-      await onGetStarted(chosenMode);
+      await onGetStarted();
     } finally {
       setStarting(false);
     }
@@ -236,8 +226,8 @@ export function SetupWizard(props: SetupWizardProps) {
             * chooses a target or uploads anything. */}
           <p className="wizard-subtitle">
             {installedInLeader
-              ? "A short first-run flow: connect GitHub content, connect Azure, verify access, then pick an operating mode."
-              : "A short first-run flow: choose where the toolkit runs, connect GitHub content, connect Cribl and Azure, verify access, then pick an operating mode."}
+              ? "A short first-run flow: connect GitHub content, connect Azure, verify access."
+              : "A short first-run flow: choose where the toolkit runs, connect GitHub content, connect Cribl and Azure, verify access."}
           </p>
         </header>
 
@@ -309,13 +299,6 @@ export function SetupWizard(props: SetupWizardProps) {
               </p>
               <RepositoriesScreen platform={contentPlatform} />
             </div>
-          )}
-          {currentViewId === "mode" && (
-            <ModeCardGrid
-              capabilities={capabilities}
-              value={chosenMode}
-              onChange={setChosenMode}
-            />
           )}
         </div>
 

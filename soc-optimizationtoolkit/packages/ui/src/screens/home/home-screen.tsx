@@ -14,7 +14,6 @@
  *   - Readiness chips (identity / secret / scope) with the honest
  *     'unknown' hedge - the legacy point-of-commitment chip checklist
  *     promoted to the overview.
- *   - The honest mode note (MODE_LABELS/MODE_OPTIONS, one source) plus the
  *     Settings/Reconfigure pointer.
  *   - RecentRuns embedded read-only, so "what happened last time" frames
  *     "what to do next".
@@ -40,7 +39,6 @@ import { RecentRuns } from "../../onboarding/recent-runs";
 import {
   NO_ACTION_FALLBACK,
   deriveNextActionView,
-  modeNoteFor,
 } from "./home-state";
 
 export interface HomeScreenProps {
@@ -70,7 +68,6 @@ export function HomeScreen({
   facts,
   links = {},
   onNavigate,
-  settingsRouteId = "settings",
   runsRefreshToken = 0,
   setupSections,
 }: HomeScreenProps) {
@@ -158,22 +155,6 @@ export function HomeScreen({
       </section>
 
       {setupSections}
-
-      <section className="panel">
-        <h2 className="panel-title">Mode</h2>
-        <p className="panel-desc">{modeNoteFor(facts.mode)}</p>
-        <div className="panel-controls">
-          <button
-            className="run-button"
-            onClick={() => onNavigate(settingsRouteId)}
-          >
-            Open Settings
-          </button>
-          <span className="field-hint">
-            Change the mode from Settings (Reconfigure).
-          </span>
-        </div>
-      </section>
 
       <section className="panel">
         <h2 className="panel-title">Recent runs</h2>

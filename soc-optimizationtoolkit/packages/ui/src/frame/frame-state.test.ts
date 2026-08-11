@@ -1,12 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { APP_MODES, parseAppMode } from "@soc/core";
 import type { AcceptanceRecord } from "@soc/core";
 import {
   AUA_SCROLL_SLACK_PX,
   DEFAULT_NAV_SECTION,
-  EMPTY_MODE_RECORD,
-  MODE_LABELS,
-  MODE_OPTIONS,
   NAV_SECTION_LABELS,
   NAV_SECTION_ORDER,
   groupNavSections,
@@ -18,78 +14,41 @@ import type { NavSection } from "./frame-state";
 const ACCEPTED: AcceptanceRecord = { acceptedAt: "2026-07-03T00:00:00.000Z" };
 
 describe("resolveFramePhase", () => {
-  it("reports loading while acceptance is still loading, even with a known mode", () => {
-    // The never-flash contract: an already-accepted user must not see the
-    // gate while their persisted acceptance is in flight.
-    expect(resolveFramePhase("loading", "full")).toEqual({ phase: "loading" });
+  // The phase order is UNCHANGED by capability-model-plan step 5; only its
+  // fourth step is renamed. "mode-select" became "setup" (the first-run wizard),
+  // and "ready" no longer carries a mode because the frame no longer has one.
+  it("reports loading while acceptance is still loading, whatever setup says", () => {
+    // The never-flash contract: an already-accepted user must not see the gate
+    // while their persisted acceptance is in flight.
+    expect(resolveFramePhase("loading", true)).toEqual({ phase: "loading" });
     expect(resolveFramePhase("loading", null)).toEqual({ phase: "loading" });
-    expect(resolveFramePhase("loading", "loading")).toEqual({
-      phase: "loading",
-    });
+    expect(resolveFramePhase("loading", "loading")).toEqual({ phase: "loading" });
   });
 
   it("shows the acceptance gate before anything else once acceptance is known-absent", () => {
     expect(resolveFramePhase(null, "loading")).toEqual({ phase: "aua" });
     expect(resolveFramePhase(null, null)).toEqual({ phase: "aua" });
-    expect(resolveFramePhase(null, "air-gapped")).toEqual({ phase: "aua" });
+    expect(resolveFramePhase(null, true)).toEqual({ phase: "aua" });
   });
 
-  it("reports loading while the mode is still loading for an accepted user", () => {
-    expect(resolveFramePhase(ACCEPTED, "loading")).toEqual({
-      phase: "loading",
-    });
+  it("reports loading while setup state is still loading for an accepted user", () => {
+    expect(resolveFramePhase(ACCEPTED, "loading")).toEqual({ phase: "loading" });
   });
 
-  it("routes an accepted user without a mode into mode selection", () => {
-    expect(resolveFramePhase(ACCEPTED, null)).toEqual({
-      phase: "mode-select",
-    });
+  it("routes an accepted user who has not finished setup into the wizard", () => {
+    expect(resolveFramePhase(ACCEPTED, null)).toEqual({ phase: "setup" });
+    expect(resolveFramePhase(ACCEPTED, false)).toEqual({ phase: "setup" });
   });
 
-  it("is ready with the narrowed mode once both are known", () => {
-    for (const mode of APP_MODES) {
-      expect(resolveFramePhase(ACCEPTED, mode)).toEqual({
-        phase: "ready",
-        mode,
-      });
-    }
+  it("is ready once accepted and set up, carrying nothing else", () => {
+    expect(resolveFramePhase(ACCEPTED, true)).toEqual({ phase: "ready" });
   });
 });
 
-describe("EMPTY_MODE_RECORD (the Reconfigure contract)", () => {
-  it("parses back to null, routing the next load into mode selection", () => {
-    expect(parseAppMode(EMPTY_MODE_RECORD)).toBeNull();
-  });
-
-  it("is the legacy empty-object shape", () => {
-    expect(JSON.parse(EMPTY_MODE_RECORD)).toEqual({});
-  });
-});
-
-describe("MODE_OPTIONS", () => {
-  it("covers every core mode exactly once, in APP_MODES order", () => {
-    expect(MODE_OPTIONS.map((o) => o.mode)).toEqual([...APP_MODES]);
-  });
-
-  it("uses the shared MODE_LABELS so the chooser and the chip cannot drift", () => {
-    for (const option of MODE_OPTIONS) {
-      expect(option.label).toBe(MODE_LABELS[option.mode]);
-    }
-  });
-
-  it("gives every option a non-empty single-line description", () => {
-    for (const option of MODE_OPTIONS) {
-      expect(option.description.trim()).not.toBe("");
-      expect(option.description).not.toContain("\n");
-    }
-  });
-
-  it("labels every mode (MODE_LABELS is total over APP_MODES)", () => {
-    for (const mode of APP_MODES) {
-      expect(MODE_LABELS[mode].trim()).not.toBe("");
-    }
-  });
-});
+// The EMPTY_MODE_RECORD and MODE_OPTIONS blocks lived here. The Reconfigure
+// contract they pinned survives as EMPTY_SETUP_RECORD in core (pinned in
+// domain/app-setup); the chooser list has no successor, because what an
+// operator can do is MEASURED by the capability audit rather than chosen.
 
 describe("groupNavSections", () => {
   interface Item {

@@ -10,8 +10,6 @@
 import { describe, expect, it } from "vitest";
 import type { WizardShape } from "@soc/core";
 import {
-  GET_STARTED_MODE_UNAVAILABLE_REASON,
-  GET_STARTED_NO_MODE_REASON,
   GET_STARTED_NOT_FINAL_REASON,
   deriveFooterStatus,
   deriveGetStarted,
@@ -32,26 +30,24 @@ describe("wizardViews", () => {
     // the connection a customer can make without a change request; the
     // preflight must still follow connect-azure, since it verifies the
     // identity that step configures.
-    const shape: WizardShape = { target: "local", mode: null };
+    const shape: WizardShape = { target: "local" };
     expect(wizardViewIds(shape)).toEqual([
       "target",
       "repositories",
       "leader-connect",
       "connect-azure",
       "preflight",
-      "mode",
     ]);
   });
 
   it("uses the upload walkthrough as the cribl-side step for the cribl-hosted target", () => {
-    const shape: WizardShape = { target: "cribl-hosted", mode: null };
+    const shape: WizardShape = { target: "cribl-hosted" };
     expect(wizardViewIds(shape)).toEqual([
       "target",
       "repositories",
       "upload-walkthrough",
       "connect-azure",
       "preflight",
-      "mode",
     ]);
   });
 
@@ -59,8 +55,8 @@ describe("wizardViews", () => {
     // The point of the reorder: a customer blocked on Azure credentials must
     // reach the GitHub step first, in every shape that offers both.
     for (const target of ["local", "cribl-hosted"] as const) {
-      for (const mode of [null, "full", "azure-only", "cribl-only"] as const) {
-        const ids = wizardViewIds({ target, mode });
+      {
+        const ids = wizardViewIds({ target });
         const repos = ids.indexOf("repositories");
         const azure = ids.indexOf("connect-azure");
         if (repos !== -1 && azure !== -1) {
@@ -70,29 +66,25 @@ describe("wizardViews", () => {
     }
   });
 
-  it("drops the connect panels for a decided air-gapped re-run", () => {
-    const shape: WizardShape = { target: "local", mode: "air-gapped" };
-    // No live link -> core drops both connect steps, and the injected panels
-    // are suppressed too: just target -> mode.
-    expect(wizardViewIds(shape)).toEqual(["target", "mode"]);
-  });
-
-  it("keeps the connect panels for a decided azure-only re-run and drops the cribl step", () => {
-    const shape: WizardShape = { target: "local", mode: "azure-only" };
-    expect(wizardViewIds(shape)).toEqual([
+  // DELIBERATE INVERSION (capability-model-plan step 5). Two pins here asserted
+  // that a "decided" re-run PRUNED the wizard: air-gapped dropped both connect
+  // panels leaving just [target, mode], and azure-only dropped the Cribl step.
+  // There is no decided mode to prune with any more, and the panels are
+  // skippable, so the list is the same for every run.
+  it("shows the same concrete list for every run", () => {
+    expect(wizardViewIds({ target: "local" })).toEqual([
       "target",
       "repositories",
+      "leader-connect",
       "connect-azure",
       "preflight",
-      "mode",
     ]);
   });
 
-  it("marks target and mode non-skippable and the middle screens skippable", () => {
-    const views = wizardViews({ target: "local", mode: null });
+  it("marks target non-skippable and the middle screens skippable", () => {
+    const views = wizardViews({ target: "local" });
     const byId = Object.fromEntries(views.map((v) => [v.id, v.skippable]));
     expect(byId["target"]).toBe(false);
-    expect(byId["mode"]).toBe(false);
     expect(byId["leader-connect"]).toBe(true);
     expect(byId["connect-azure"]).toBe(true);
     expect(byId["preflight"]).toBe(true);
@@ -100,7 +92,7 @@ describe("wizardViews", () => {
   });
 
   it("puts the injected panels in the connect phase", () => {
-    const views = wizardViews({ target: "local", mode: null });
+    const views = wizardViews({ target: "local" });
     const preflight = views.find((v) => v.id === "preflight");
     const repositories = views.find((v) => v.id === "repositories");
     expect(preflight?.phase).toBe("connect");
@@ -109,22 +101,21 @@ describe("wizardViews", () => {
 });
 
 describe("navigation", () => {
-  const shape: WizardShape = { target: "local", mode: null };
+  const shape: WizardShape = { target: "local" };
 
   it("advances through the concrete list in order", () => {
     expect(nextViewId(shape, "target")).toBe("repositories");
     expect(nextViewId(shape, "repositories")).toBe("leader-connect");
     expect(nextViewId(shape, "connect-azure")).toBe("preflight");
-    expect(nextViewId(shape, "preflight")).toBe("mode");
   });
 
   it("returns null past the final view and before the first", () => {
-    expect(nextViewId(shape, "mode")).toBeNull();
+    expect(nextViewId(shape, "preflight")).toBeNull();
     expect(previousViewId(shape, "target")).toBeNull();
   });
 
   it("steps backward through the list", () => {
-    expect(previousViewId(shape, "mode")).toBe("preflight");
+    expect(previousViewId(shape, "preflight")).toBe("connect-azure");
     expect(previousViewId(shape, "leader-connect")).toBe("repositories");
     expect(previousViewId(shape, "repositories")).toBe("target");
   });
@@ -138,50 +129,35 @@ describe("navigation", () => {
   it("marks the first and last views", () => {
     expect(isFirstView(shape, "target")).toBe(true);
     expect(isFirstView(shape, "leader-connect")).toBe(false);
-    expect(isFinalView(shape, "mode")).toBe(true);
+    expect(isFinalView(shape, "preflight")).toBe(true);
     expect(isFinalView(shape, "repositories")).toBe(false);
   });
 });
 
 describe("resolveCurrentViewId", () => {
   it("keeps a still-present view id", () => {
-    const shape: WizardShape = { target: "local", mode: null };
+    const shape: WizardShape = { target: "local" };
     expect(resolveCurrentViewId(shape, "preflight")).toBe("preflight");
   });
 
   it("falls back to the first view when a target switch drops the current view", () => {
     // On cribl-hosted there is no leader-connect view; a cursor left there
     // clamps back to target rather than stranding on a missing screen.
-    const shape: WizardShape = { target: "cribl-hosted", mode: null };
+    const shape: WizardShape = { target: "cribl-hosted" };
     expect(resolveCurrentViewId(shape, "leader-connect")).toBe("target");
   });
 });
 
 describe("wizardViewProgress", () => {
   it("lights the segments by phase, mapping the injected panels to Connect", () => {
-    const shape: WizardShape = { target: "local", mode: null };
+    const shape: WizardShape = { target: "local" };
     const at = (id: Parameters<typeof wizardViewProgress>[1]) =>
       wizardViewProgress(shape, id).map((seg) => `${seg.phase}:${seg.status}`);
-    expect(at("target")).toEqual([
-      "target:current",
-      "connect:upcoming",
-      "mode:upcoming",
-    ]);
-    expect(at("preflight")).toEqual([
-      "target:complete",
-      "connect:current",
-      "mode:upcoming",
-    ]);
-    expect(at("repositories")).toEqual([
-      "target:complete",
-      "connect:current",
-      "mode:upcoming",
-    ]);
-    expect(at("mode")).toEqual([
-      "target:complete",
-      "connect:complete",
-      "mode:current",
-    ]);
+    // Two segments now, not three: the Mode phase went with mode selection
+    // (capability-model-plan step 5).
+    expect(at("target")).toEqual(["target:current", "connect:upcoming"]);
+    expect(at("repositories")).toEqual(["target:complete", "connect:current"]);
+    expect(at("preflight")).toEqual(["target:complete", "connect:current"]);
   });
 
   it("drops the Target segment entirely when already installed in the leader", () => {
@@ -189,13 +165,12 @@ describe("wizardViewProgress", () => {
     // Target segment would promise a step that never arrives.
     const shape: WizardShape = {
       target: "cribl-hosted",
-      mode: null,
       installedInLeader: true,
     };
     const at = (id: Parameters<typeof wizardViewProgress>[1]) =>
       wizardViewProgress(shape, id).map((seg) => `${seg.phase}:${seg.status}`);
-    expect(at("repositories")).toEqual(["connect:current", "mode:upcoming"]);
-    expect(at("mode")).toEqual(["connect:complete", "mode:current"]);
+    expect(at("repositories")).toEqual(["connect:current"]);
+    expect(at("preflight")).toEqual(["connect:current"]);
   });
 });
 
@@ -206,25 +181,22 @@ describe("installed-in-leader shape", () => {
     // 2026-08-03).
     const shape: WizardShape = {
       target: "cribl-hosted",
-      mode: null,
       installedInLeader: true,
     };
     expect(wizardViewIds(shape)).toEqual([
       "repositories",
       "connect-azure",
       "preflight",
-      "mode",
     ]);
   });
 
   it("still leads with repositories and ends on mode", () => {
     const shape: WizardShape = {
       target: "cribl-hosted",
-      mode: null,
       installedInLeader: true,
     };
     expect(isFirstView(shape, "repositories")).toBe(true);
-    expect(isFinalView(shape, "mode")).toBe(true);
+    expect(isFinalView(shape, "preflight")).toBe(true);
     // A cursor left on the dropped target view clamps to the first real view
     // instead of stranding the wizard on a blank screen.
     expect(resolveCurrentViewId(shape, "target")).toBe("repositories");
@@ -286,44 +258,21 @@ describe("deriveFooterStatus", () => {
 });
 
 describe("deriveGetStarted", () => {
+  // DELIBERATE SIMPLIFICATION (capability-model-plan step 5). Two of the four
+  // pins here asserted mode conditions: blocked until a mode was chosen, and
+  // blocked when the chosen mode was not "available" for the connections
+  // established. Finishing no longer depends on either - what an operator can
+  // do is MEASURED by the capability audit afterwards rather than declared
+  // here - so reaching the last view is the whole gate.
   it("is blocked with a specific reason before the final view", () => {
-    const gate = deriveGetStarted({
-      isFinal: false,
-      chosenMode: "full",
-      modeAvailable: true,
-    });
-    expect(gate).toEqual({ ready: false, reason: GET_STARTED_NOT_FINAL_REASON });
-  });
-
-  it("is blocked on the final view until a mode is chosen", () => {
-    const gate = deriveGetStarted({
-      isFinal: true,
-      chosenMode: null,
-      modeAvailable: false,
-    });
-    expect(gate).toEqual({ ready: false, reason: GET_STARTED_NO_MODE_REASON });
-  });
-
-  it("is blocked when the chosen mode is not available", () => {
-    const gate = deriveGetStarted({
-      isFinal: true,
-      chosenMode: "full",
-      modeAvailable: false,
-    });
-    expect(gate).toEqual({
+    expect(deriveGetStarted({ isFinal: false })).toEqual({
       ready: false,
-      reason: GET_STARTED_MODE_UNAVAILABLE_REASON,
+      reason: GET_STARTED_NOT_FINAL_REASON,
     });
   });
 
-  it("is ready on the final view with an available chosen mode", () => {
-    expect(
-      deriveGetStarted({
-        isFinal: true,
-        chosenMode: "azure-only",
-        modeAvailable: true,
-      }),
-    ).toEqual({ ready: true });
+  it("is ready on the final view, with no mode to choose", () => {
+    expect(deriveGetStarted({ isFinal: true })).toEqual({ ready: true });
   });
 });
 

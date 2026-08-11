@@ -75,6 +75,7 @@ import {
   readinessPillsForMode,
   mergeContentRequirements,
 } from "@soc/core";
+import type { CapabilityContext, CapabilitySet } from "@soc/core";
 import type {
   ContentItem,
   CriblGroupSummary,
@@ -140,6 +141,14 @@ import { WiringSection } from "./wiring-section";
 const SELECTED_SOLUTION_KEY = "integrate-selected-solution~v1";
 
 export interface IntegrateScreenProps {
+  /**
+   * Measured capabilities, passed through to the Azure Resources section so an
+   * empty workspace list is only reported as a zero when the read was verified
+   * (docs/inventory-standard.md). Absent is safe - the message hedges.
+   */
+  capabilities?: CapabilitySet;
+  /** Connection facts for resolving unmeasured capabilities. */
+  capabilityContext?: CapabilityContext;
   /**
    * Whether the active connection has a committed target scope (subscription
    * + resource group + workspace). The SHELL owns this fact (it derives it
@@ -208,6 +217,8 @@ export function IntegrateScreen({
   onOperationChange,
   roleGuidance,
   mode = "full",
+  capabilities,
+  capabilityContext,
 }: IntegrateScreenProps) {
   const { ports, config } = usePorts();
 
@@ -1186,7 +1197,12 @@ export function IntegrateScreen({
 
   const azureResourcesBody = (
     <>
-      <AzureTargetingScreen offline={offline} onCommitScope={onCommitScope} />
+      <AzureTargetingScreen
+        offline={offline}
+        onCommitScope={onCommitScope}
+        {...(capabilities !== undefined ? { capabilities } : {})}
+        {...(capabilityContext !== undefined ? { capabilityContext } : {})}
+      />
       <div className="discovery-result">
         <span className="field-label">
           Deployment capabilities

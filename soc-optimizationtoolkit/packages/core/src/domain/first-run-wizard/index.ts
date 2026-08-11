@@ -1,7 +1,4 @@
 export {
-  recommendMode,
-  modeCards,
-  WIZARD_MODE_ORDER,
   WIZARD_TARGETS,
   TARGET_TRADEOFFS,
   targetTradeoffs,
@@ -17,7 +14,6 @@ export {
 } from "./first-run-wizard";
 export type {
   WizardCapabilities,
-  ModeCard,
   WizardTarget,
   TargetTradeoff,
   LeaderDeploymentType,

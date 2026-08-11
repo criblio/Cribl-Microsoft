@@ -12,6 +12,8 @@ export * from "./list-service-principals";
 export * from "./discover-event-hubs";
 export * from "./guided-deploy";
 export * from "./permission-preflight";
+export * from "./capability-audit";
+export * from "./workspace-tables";
 export * from "./install-pack";
 export * from "./dcr-inventory";
 export * from "./update-dcr";

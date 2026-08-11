@@ -10,7 +10,7 @@
  *
  * Two arcs are modeled:
  *
- *   FIRST-RUN arc  (accept -> choose-mode -> connect -> target -> ready):
+ *   FIRST-RUN arc  (accept -> connect -> target -> ready):
  *     runs once per install; resume is automatic because every input fact is
  *     re-derived from persisted state on each call - there is no stored
  *     wizard-progress blob to drift (ux-flow-plan 4.2).
@@ -36,28 +36,22 @@
  * that already exist inside the screens (accept, Use this target, Run). A
  * 'blocked' status therefore means "this stage's commit action is gated -
  * here is the single unlock condition", NOT "you cannot look at it". The
- * only stages a shell actually walls off are the two full-app gates it
- * already enforces (AuaGate, ModeSelect); this module adds no new gates.
+ * only stage a shell actually walls off is the full-app gate it already
+ * enforces (AuaGate); this module adds no new gates.
  * In particular, Deploy's blocked reasons mirror the existing Run gate
  * (identity fields + committed scope). Secret liveness is deliberately NOT
  * part of Deploy's gate - the run itself proves a stored secret - it is
  * surfaced honestly through the connect stage, nextAction, and the chips.
  *
- * Mode honesty:
- *   - Artifact modes skip live-connection stages entirely rather than
- *     showing them locked: cribl-only has no 'target' stage, air-gapped has
- *     neither 'connect' nor 'target' (plan 4.1 contract).
- *   - Modes without a live Azure connection (cribl-only, air-gapped) have no
- *     shipped Integrate surface today (onboard requires both; batch-onboard
- *     relaxes to azure per the recorded Unit 6.5 decision), so their
- *     Integrate stages render 'not-yet-available' with an honest reason -
- *     never as a teaser.
+ * MODES ARE GONE (capability-model-plan step 5). They used to prune this arc -
+ * cribl-only dropped 'target', air-gapped dropped 'connect' and 'target' - so an
+ * operator saw a shorter journey than the product has. Both arcs now always
+ * emit in full, and a stage that cannot be completed says so through its own
+ * blockedReason. Same rule step 3 applied to the nav.
  *
  * Pure: no IO, no fetch, no React, no Date, no crypto.
  */
 
-import { hasAzure, hasCribl } from "../app-mode";
-import type { AppMode } from "../app-mode";
 
 /**
  * Client-secret liveness. Liveness is SESSION-ONLY knowledge:
@@ -79,8 +73,6 @@ export type SecretLiveness = "live" | "unknown" | "missing";
 export interface JourneyFacts {
   /** Acceptable-use agreement accepted (persisted AcceptanceRecord parsed). */
   accepted: boolean;
-  /** Operating mode; null means not yet chosen (ModeSelect still walls). */
-  mode: AppMode | null;
   /** Both identity fields (tenantId, clientId) are set on the active config. */
   identityPresent: boolean;
   /** Client-secret liveness for the active connection (session-only). */
@@ -90,10 +82,10 @@ export interface JourneyFacts {
   /**
    * Cribl reachability, when the shell knows it; undefined means unknown.
    * Optional because not every shell probes it (the cloud shell runs inside
-   * the leader). In full mode an unknown value never blocks (only a known
-   * failure does); in cribl-only mode the Cribl link is the ONLY thing the
-   * connect stage proves, so unknown honestly stays incomplete - the same
-   * rule that keeps an unknown secret from rendering as done.
+   * the leader). An unknown value never blocks - only a KNOWN failure does.
+   * Modes used to make this stricter on the Cribl-only path; with modes gone
+   * there is one rule, and it is the lenient one, because the local shell
+   * legitimately never proves reachability.
    */
   criblReachable?: boolean;
 }
@@ -101,7 +93,6 @@ export interface JourneyFacts {
 /** First-run arc stage ids, in dependency order. */
 export type FirstRunStageId =
   | "accept"
-  | "choose-mode"
   | "connect"
   | "target"
   | "ready";
@@ -118,10 +109,12 @@ export type IntegrateStageId =
 /** Any journey stage id. */
 export type JourneyStageId = FirstRunStageId | IntegrateStageId;
 
-/** The full first-run arc, in dependency order (mode filtering may omit stages). */
+/**
+ * The full first-run arc, in dependency order. ALWAYS emitted in full - mode
+ * used to prune it, and capability-model-plan step 5 removed that hiding.
+ */
 export const FIRST_RUN_ARC: readonly FirstRunStageId[] = [
   "accept",
-  "choose-mode",
   "connect",
   "target",
   "ready",
@@ -207,7 +200,6 @@ export interface ReadinessChip {
 /** Display labels, exported so rails and gate panels share one source. */
 export const JOURNEY_STAGE_LABELS: Readonly<Record<JourneyStageId, string>> = {
   accept: "Acceptable use",
-  "choose-mode": "Mode",
   connect: "Connect",
   target: "Target",
   ready: "Readiness",
@@ -219,10 +211,10 @@ export const JOURNEY_STAGE_LABELS: Readonly<Record<JourneyStageId, string>> = {
   monitor: "Monitor",
 };
 
-// The two full-app walls the shells already enforce (AuaGate, ModeSelect).
-// Stages behind a wall are 'blocked' with the wall as their one unlock.
+// The one full-app wall the shells still enforce (AuaGate). Stages behind it
+// are 'blocked' with the wall as their single unlock. The mode wall went with
+// mode selection itself (capability-model-plan step 5).
 const ACCEPT_WALL_REASON = "Accept the acceptable-use agreement to continue.";
-const MODE_WALL_REASON = "Choose an operating mode to continue.";
 
 // Honest not-shipped notes for the placeholder integrate stages.
 const UNSHIPPED_REASONS: Partial<Record<IntegrateStageId, string>> = {
@@ -239,59 +231,39 @@ const DEPLOY_NEEDS_IDENTITY_REASON =
 const DEPLOY_NEEDS_SCOPE_REASON =
   "Commit an Azure target (subscription, resource group, and workspace) first.";
 
-/** Honest reason the shipped integrate stages do not exist for a mode yet. */
-function integrateModeReason(mode: AppMode): string {
-  if (mode === "air-gapped") {
-    return "Air-gapped artifact onboarding has not shipped yet.";
-  }
-  return "Onboarding needs a live Azure connection in this release.";
-}
-
 /**
- * The first-run stage ids for a mode. Artifact modes SKIP live-connection
- * stages entirely rather than showing them locked (plan 4.1 contract):
- * cribl-only has no 'target', air-gapped has neither 'connect' nor 'target'.
- * With mode null (not yet chosen) the generic full arc is returned; it
- * re-derives per mode the moment one is chosen.
+ * The first-run stage ids. ALWAYS the full arc
+ * (capability-model-plan step 5).
+ *
+ * Modes used to prune this list - cribl-only dropped 'target', air-gapped
+ * dropped 'connect' and 'target' - so an operator was shown a shorter journey
+ * than the product actually has. That is the same hiding step 3 removed from the
+ * nav, and it goes for the same reason: the stages stay visible and a stage that
+ * cannot be completed says so through its own blockedReason.
+ *
+ * Kept as a function rather than inlining FIRST_RUN_ARC at the call sites so the
+ * arc has ONE accessor, and so a future per-connection variation has somewhere
+ * to live.
  */
-export function firstRunStageIds(mode: AppMode | null): FirstRunStageId[] {
-  if (mode === null) {
-    return [...FIRST_RUN_ARC];
-  }
-  const ids: FirstRunStageId[] = ["accept", "choose-mode"];
-  if (hasAzure(mode) || hasCribl(mode)) {
-    ids.push("connect");
-  }
-  if (hasAzure(mode)) {
-    ids.push("target");
-  }
-  ids.push("ready");
-  return ids;
+export function firstRunStageIds(): FirstRunStageId[] {
+  return [...FIRST_RUN_ARC];
 }
 
 /**
  * Whether the connect stage's outcome is satisfied.
  *
- * Azure side (modes with live Azure): identity present AND secret verified
- * live this session - 'unknown' honestly never counts as done.
- * Cribl side: in cribl-only mode reachability must be known-true (it is the
- * only thing the stage proves); in full mode the optional fact only vetoes
- * when known-false (unknown never blocks a mode whose primary signal is
- * the Azure identity).
+ * Azure: identity present AND the secret verified live this session -
+ * 'unknown' honestly never counts as done.
+ *
+ * Cribl: an optional fact that only vetoes when KNOWN-false. It used to be
+ * stricter in cribl-only mode, where reachability was the only thing the stage
+ * proved; with modes gone there is one rule, and requiring proof of a connection
+ * the operator may not be using would wall the arc on a fact that is often
+ * legitimately unknown (the local shell never proves it).
  */
 function connectSatisfied(facts: JourneyFacts): boolean {
-  const mode = facts.mode;
-  if (mode === null) {
-    return false;
-  }
-  const azureOk =
-    !hasAzure(mode) ||
-    (facts.identityPresent && facts.secretLive === "live");
-  const criblOk = !hasCribl(mode)
-    ? true
-    : mode === "cribl-only"
-      ? facts.criblReachable === true
-      : facts.criblReachable !== false;
+  const azureOk = facts.identityPresent && facts.secretLive === "live";
+  const criblOk = facts.criblReachable !== false;
   return azureOk && criblOk;
 }
 
@@ -307,9 +279,6 @@ function firstRunCompletion(
     switch (id) {
       case "accept":
         done = facts.accepted;
-        break;
-      case "choose-mode":
-        done = facts.mode !== null;
         break;
       case "connect":
         done = connectSatisfied(facts);
@@ -345,13 +314,9 @@ function firstRunCompletion(
  *     and earlier integrate stages stay navigable while Deploy is blocked.
  */
 export function deriveJourney(facts: JourneyFacts): Journey {
-  const wall = !facts.accepted
-    ? ACCEPT_WALL_REASON
-    : facts.mode === null
-      ? MODE_WALL_REASON
-      : null;
+  const wall = !facts.accepted ? ACCEPT_WALL_REASON : null;
 
-  const ids = firstRunStageIds(facts.mode);
+  const ids = firstRunStageIds();
   const completion = firstRunCompletion(facts, ids);
   const firstRunDone = ids.every((id) => completion.get(id) === true);
 
@@ -362,7 +327,7 @@ export function deriveJourney(facts: JourneyFacts): Journey {
       return { id, label, status: "complete" as const };
     }
     // The FIRST incomplete stage is the current one - even when it is itself
-    // a wall (accept / choose-mode): the wall stage is the thing to act on.
+    // the wall (accept): the wall stage is the thing to act on.
     if (!currentAssigned) {
       currentAssigned = true;
       return { id, label, status: "current" as const };
@@ -384,16 +349,6 @@ export function deriveJourney(facts: JourneyFacts): Journey {
         label,
         status: "not-yet-available" as const,
         blockedReason: unshippedReason,
-      };
-    }
-    // Capability absence outranks fact walls: a mode with no shipped surface
-    // for the stage is honestly 'not-yet-available' regardless of facts.
-    if (facts.mode !== null && !hasAzure(facts.mode)) {
-      return {
-        id,
-        label,
-        status: "not-yet-available" as const,
-        blockedReason: integrateModeReason(facts.mode),
       };
     }
     if (wall !== null) {
@@ -448,9 +403,9 @@ export function deriveJourney(facts: JourneyFacts): Journey {
  * the legacy single-next-action hint cascade: each result names the single
  * missing thing in dependency order.
  *
- * Returns null when nothing in the journey is actionable - today that is
- * cribl-only / air-gapped once their first-run arc is green (their integrate
- * surfaces have not shipped); Home then falls back to the honest mode note.
+ * Returns null only when the whole journey is satisfied - every first-run
+ * stage complete and content selection reached. Home falls back to its own
+ * copy in that case.
  */
 export function nextAction(facts: JourneyFacts): NextAction | null {
   if (!facts.accepted) {
@@ -461,17 +416,8 @@ export function nextAction(facts: JourneyFacts): NextAction | null {
         "Review and accept the agreement; nothing else unlocks until acceptance is recorded.",
     };
   }
-  const mode = facts.mode;
-  if (mode === null) {
-    return {
-      stageId: "choose-mode",
-      label: "Choose your operating mode",
-      description:
-        "Pick which live connections this install may use; navigation and the journey derive from the choice.",
-    };
-  }
   if (!connectSatisfied(facts)) {
-    if (hasAzure(mode)) {
+    {
       if (!facts.identityPresent) {
         return {
           stageId: "connect",
@@ -496,8 +442,10 @@ export function nextAction(facts: JourneyFacts): NextAction | null {
             "A stored secret may exist, but liveness is only known per session - re-enter or verify it before relying on it.",
         };
       }
-      // Azure side is green, so the miss is the Cribl link (full mode with
-      // criblReachable === false).
+      // The Azure side is green, so the only remaining way connect can be
+      // unsatisfied is a KNOWN-unreachable Cribl leader - unknown never blocks
+      // (see connectSatisfied). The two cribl-only branches that used to follow
+      // were unreachable once modes went, and lint caught them.
       return {
         stageId: "connect",
         label: "Restore the Cribl connection",
@@ -505,23 +453,8 @@ export function nextAction(facts: JourneyFacts): NextAction | null {
           "The Cribl leader is not reachable; restore the connection before deploying destinations.",
       };
     }
-    // cribl-only: the Cribl link is the only thing connect proves.
-    if (facts.criblReachable === false) {
-      return {
-        stageId: "connect",
-        label: "Restore the Cribl connection",
-        description:
-          "The Cribl leader is not reachable; restore the connection to continue.",
-      };
-    }
-    return {
-      stageId: "connect",
-      label: "Verify the Cribl connection",
-      description:
-        "Cribl reachability is unknown; verify the leader connection to continue.",
-    };
   }
-  if (hasAzure(mode) && !facts.scopeCommitted) {
+  if (!facts.scopeCommitted) {
     return {
       stageId: "target",
       label: "Commit an Azure target",
@@ -529,15 +462,12 @@ export function nextAction(facts: JourneyFacts): NextAction | null {
         "Browse subscriptions and workspaces in Azure Targeting, then commit the scope with Use this target.",
     };
   }
-  if (hasAzure(mode)) {
-    return {
-      stageId: "choose-content",
-      label: "Choose content to onboard",
-      description:
-        "Pick a table or vendor schemas on the Sentinel Integration page to start an integration run.",
-    };
-  }
-  return null;
+  return {
+    stageId: "choose-content",
+    label: "Choose content to onboard",
+    description:
+      "Pick a table or vendor schemas on the Sentinel Integration page to start an integration run.",
+  };
 }
 
 /**
@@ -545,14 +475,15 @@ export function nextAction(facts: JourneyFacts): NextAction | null {
  * commit-point checklists (legacy chip-checklist pattern, promoted).
  *
  * Only the secret chip can be 'unknown' - the honest hedge for a stored
- * secret whose liveness is session-only knowledge. Chips exist only for
- * modes with a live Azure connection; other modes (and mode-not-chosen)
- * return an empty list rather than rendering meaningless red chips.
+ * secret whose liveness is session-only knowledge.
+ *
+ * Chips used to be suppressed entirely for modes without a live Azure
+ * connection. With modes gone they ALWAYS render: an operator without Azure
+ * access sees the same three chips reporting honestly that identity and scope
+ * are missing, which is the annotate-don't-hide rule from step 3 applied to the
+ * chips (capability-model-plan step 5).
  */
 export function readinessChips(facts: JourneyFacts): ReadinessChip[] {
-  if (!hasAzure(facts.mode)) {
-    return [];
-  }
   const identity: ReadinessChip = facts.identityPresent
     ? {
         id: "identity",
