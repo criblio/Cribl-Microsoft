@@ -247,13 +247,14 @@ Worth settling when picking it up:
 
 ## 4. Unverified empty inventories report "none" (BUG)
 
-**Reported 2026-08-10. Standard written, fix NOT applied.** See
-[inventory-standard.md](inventory-standard.md), which is BINDING for every
-inventory scenario.
+**Reported 2026-08-10. Reported instance and three more FIXED; two open
+questions below.** See [inventory-standard.md](inventory-standard.md), which is
+BINDING for every inventory scenario.
 
-With insufficient RBAC the app reports "No workspaces found - create one below".
-That is a confident wrong answer, and the harmful kind: it invites the operator
-to create a workspace that may already exist and that they simply cannot see.
+With insufficient RBAC the app reported "No workspaces found - create one
+below". That is a confident wrong answer, and the harmful kind: it invites the
+operator to create a workspace that may already exist and that they simply
+cannot see.
 
 **The trap, and why this is not error handling.** Azure ARM list operations
 return `200 OK` with an empty `value` array when RBAC filters the caller out.
@@ -267,17 +268,40 @@ in the response at all; it has to come from a permission check.
 capability is GRANTED; denied means "cannot list", and unknown means "cannot
 confirm" - three answers, never collapsed into one.
 
-**Where to apply it:**
+**Applied so far (2026-08-10):** the reported workspace instance, the
+subscription and resource-group pickers beside it, the DCR inventory, and the
+table listing's pure decision (`emptyTableListMessage` - the picker screen owes
+the wiring). Shared helper:
+`packages/ui/src/capabilities/empty-inventory.ts`.
 
-- `azure-targeting-screen` line ~632, the "No workspaces found" option - the
-  reported instance.
-- `listWorkspaceTables` - throws on explicit denial, but an RBAC-filtered
-  `200 []` would still read as an empty workspace.
-- Then audit the rest as they are touched: subscriptions, resource groups, DCR
-  inventory, Event Hub discovery, worker groups, pack inventory.
+**The rule the first fix missed, worth knowing before touching another lister.**
+A verdict is evidence ONLY about the scope it was measured at. `runAzurePreflight`
+evaluates ONE ARM scope built from the COMMITTED target, and the screens that
+list are the screens that BROWSE - Azure targeting exists to look at other
+subscriptions, the DCR inventory says in its own hint that it browses other
+resource groups. Reusing the committed verdict there reproduces the bug one
+scope over with a permission check as cover, which is worse than no check.
+`emptyInventoryMessage` now REQUIRES a scope argument so the next call site has
+to decide. Off-scope is unmeasured, and that includes off-scope DENIALS.
 
 Do NOT hide or gate these surfaces while fixing them - rule 3 still holds, the
 list stays loadable, and reads have no fallback artifact.
+
+**Open question 1: the unmeasured listers.** Subscriptions, resource groups,
+Resource Graph (Event Hub discovery) and Cribl worker groups have NO capability
+in the settled 11-item taxonomy. They currently take
+`unmeasuredInventoryMessage`, which hedges without pointing at a permission
+check that cannot settle it - honest, but inert. The two real options are the
+same pair already recorded for Resource Graph in item 1: add the capability plus
+a probe, or accept these lists stay unmeasured. Needs a decision; do not resolve
+it by reusing a neighbouring capability.
+
+**Open question 2: prop-drilling.** `capabilities`/`capabilityContext` are
+threaded from both shells into each screen that lists (Integrate ->
+AzureTargeting, DcrInventoryPanel so far). At ~8 listers that is the duplication
+that drifts. The alternative is carrying them in `PortsContext` beside `config`,
+which every screen already reads - one seam change against updating every
+`PortsProvider` call site in both shells. Cheap now, less so later.
 
 ## 5. Verification gaps
 
@@ -324,10 +348,17 @@ four commits behind before anyone noticed. Cheapest fix that does not need write
 access to a protected branch: a CI check that warns when `soc-optimizationtoolkit/**`
 source changed without a version bump since the last packaged release.
 
-**1.4.0 PACKAGED 2026-08-06.** `release/soc-optimizationtoolkit-1.4.0.tgz`,
-with [release-notes.md](release-notes.md) started as an accumulating file. Minor
-rather than patch deliberately: removing operating modes is a visible feature
-removal, and every existing install sees the setup wizard once.
+**1.5.4 IS CURRENT (2026-08-11).** `release/soc-optimizationtoolkit-1.5.4.tgz`.
+1.4.0 through 1.5.4 are described in [release-notes.md](release-notes.md), which
+was started as an accumulating file at 1.4.0.
+
+**`release/` HOLDS EXACTLY THE LATEST TGZ** - a user directive from 2026-07-30,
+enforced by `package.mjs`, which prunes older tarballs on every run. Publishing
+1.5.2 through 1.5.4 the prune was worked around three times (restoring the older
+tarballs on the reasoning that pruning breaks download links already handed out)
+before being corrected. If keeping older versions reachable does matter, GitHub
+Releases is the answer, not tarballs in the tree - do not re-litigate it by
+quietly restoring files after packaging.
 
 Two things learned while packaging, worth knowing next time:
 
