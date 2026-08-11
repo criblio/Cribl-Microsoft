@@ -100,6 +100,33 @@ describe("defaultPackName", () => {
     expect(defaultPackName(undefined)).toBe(FALLBACK_PACK_NAME);
   });
 
+  it("NARROWS the prefix by the selected solution", () => {
+    // The 2026-08-11 report: one prefix meant one pack name for every
+    // solution, so a second solution's build landed on the first one's pack.
+    expect(defaultPackName(DEFAULT_CRIBL_OPTIONS, "Gigamon Connector")).toBe(
+      "MS-Sentinel-Gigamon",
+    );
+    expect(defaultPackName(DEFAULT_CRIBL_OPTIONS, "Cloudflare")).toBe(
+      "MS-Sentinel-Cloudflare",
+    );
+  });
+
+  it("gives two solutions two names, from the same prefix", () => {
+    // Stated as the property rather than as two literals: the point is that
+    // they DIFFER, and a future change to the vendor shortener must not be
+    // able to collapse them while still matching a hard-coded pair.
+    const a = defaultPackName(DEFAULT_CRIBL_OPTIONS, "Gigamon Connector");
+    const b = defaultPackName(DEFAULT_CRIBL_OPTIONS, "Cloudflare");
+    expect(a).not.toBe(b);
+  });
+
+  it("is unchanged when no solution is selected yet", () => {
+    // The prefill must stay non-empty before a solution is chosen - the
+    // pack-name prerequisite is satisfied by default, and that still holds.
+    expect(defaultPackName(DEFAULT_CRIBL_OPTIONS)).toBe("MS-Sentinel");
+    expect(defaultPackName(DEFAULT_CRIBL_OPTIONS, "")).toBe("MS-Sentinel");
+  });
+
   it("never returns an empty string, so the pack-name prerequisite starts satisfied", () => {
     expect(defaultPackName(DEFAULT_CRIBL_OPTIONS).trim()).not.toBe("");
   });

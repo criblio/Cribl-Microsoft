@@ -38,6 +38,7 @@ export {
 
 // Unified naming (fixes the route/pipeline suffix-mismatch defect)
 export {
+  packNameForSolution,
   vendorPrefixFromSolution,
   pipelineSuffix,
   pipelineName,

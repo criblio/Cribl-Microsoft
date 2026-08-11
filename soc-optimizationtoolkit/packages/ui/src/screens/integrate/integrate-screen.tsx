@@ -231,7 +231,7 @@ export function IntegrateScreen({
   const [groups, setGroups] = useState<CriblGroupSummary[] | null>(null);
   const [groupsError, setGroupsError] = useState("");
   const [groupId, setGroupId] = useState("");
-  const [packName, setPackName] = useState(() => defaultPackName(criblDefaults));
+  const [packName, setPackName] = useState(() => defaultPackName(criblDefaults, solution?.name ?? ""));
   // Multi-group deploy: opt-in fan-out beyond the primary worker group.
   const [multiGroup, setMultiGroup] = useState(false);
   const [extraGroups, setExtraGroups] = useState<string[]>([]);
@@ -246,6 +246,7 @@ export function IntegrateScreen({
   // Tracks whether the operator hand-edited the table so the detected-table
   // prefill never clobbers an explicit choice.
   const tableTouchedRef = useRef(false);
+  const packNameTouchedRef = useRef(false);
   const [ingestionClientId, setIngestionClientId] = useState(
     () => config.clientId,
   );
@@ -345,6 +346,16 @@ export function IntegrateScreen({
     }
     return out;
   }, [gapReports]);
+  // Re-derive the pack name when the solution changes, unless the operator has
+  // typed one. Without this the prefill only ran on mount, so picking a second
+  // solution kept the first one's name and its build landed on that pack (user
+  // report 2026-08-11). Same touched-ref discipline as the table prefill below:
+  // a hand-typed name is never overwritten.
+  useEffect(() => {
+    if (!packNameTouchedRef.current) {
+      setPackName(defaultPackName(criblDefaults, solution?.name ?? ""));
+    }
+  }, [solution?.name, criblDefaults]);
   // Prefill the deploy's native table from the first detected destination table
   // unless the operator hand-edited it - the gap analysis is the source of truth
   // for which table a solution's samples map to.
@@ -1372,14 +1383,19 @@ export function IntegrateScreen({
         <input
           type="text"
           value={packName}
-          onChange={(e) => setPackName(e.target.value)}
+          onChange={(e) => {
+            packNameTouchedRef.current = true;
+            setPackName(e.target.value);
+          }}
           autoComplete="off"
           spellCheck={false}
         />
         <span className="field-hint">
           The pack that will be built and installed by Build and install pack
           below (from the approved Gap Analysis mappings). Prefilled from the
-          destination prefix in Options; editable.
+          destination prefix in Options plus the selected solution, so each
+          solution gets its own pack; editable, and an edit is never
+          overwritten.
         </span>
       </label>
       <div className="discovery-result">

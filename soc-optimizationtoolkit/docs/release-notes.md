@@ -6,6 +6,35 @@ is harder to forget to update than a directory that has to be remembered.
 
 ---
 
+## 1.7.0
+
+**The pack name now includes the solution.** It was prefilled from the Cribl
+destination prefix alone, so EVERY solution proposed the same name -
+`MS-Sentinel`. Building a second solution therefore landed on the first one's
+pack, and the only thing between that and a silent replacement was an operator
+reading the overwrite prompt carefully.
+
+The pack's *display* name was already solution-derived ("Gigamon Sentinel",
+"Cloudflare Sentinel"), which made the collision harder to spot: two packs
+reading as different things, sharing one id.
+
+Now `MS-Sentinel-Gigamon`, `MS-Sentinel-Cloudflare`, and so on. The vendor is
+shortened by the same rule the pipeline ids and sample filenames use, so a pack
+and its contents never abbreviate a vendor differently, and underscores become
+hyphens to match the prefix.
+
+The name also **re-derives when you change solution** - previously the prefill
+ran only on first load, so switching solutions silently kept the old name. A
+name you have typed yourself is never overwritten.
+
+`naming.ts` had no test file of its own until now, which is how the pack name
+came to ignore the solution entirely without a suite noticing.
+
+**Existing packs are untouched.** This changes the proposed default only; a pack
+already installed keeps its name until you rebuild with the new one.
+
+---
+
 ## 1.6.0
 
 **Packs stopped shipping placeholder Sentinel destinations.** Reported
