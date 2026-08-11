@@ -316,6 +316,50 @@ describe("assemblePack - deterministic .crbl + build record", () => {
     expect(built.crblFileName).toBe("paloalto-pan-os-sentinel_1.0.0.crbl");
   });
 
+  it("REPORTS every table that shipped placeholder destination values", () => {
+    // The silent half of the 2026-08-11 bug. Falling back to placeholders is a
+    // legitimate outcome - a table with no deployed DCR has nothing else to
+    // ship - but doing it without saying so let operators install a pack whose
+    // destination pointed at dcr-000...0 and looked entirely successful. If
+    // this list is ever empty while placeholders were emitted, the caller has
+    // no way to warn and the failure goes back to being invisible.
+    const plan = buildPipelinePlan(paloPlanInput());
+    const built = assemblePack(scaffoldInput({ plan }));
+    // No tableInputs supplied, so EVERY table falls back - and every one is
+    // named. A report that listed only some would be worse than none, because
+    // the omitted tables would read as fine.
+    expect(built.placeholderTables).toEqual(
+      plan.tables.map((t) => t.sentinelTable),
+    );
+    // And the emitted YAML really does carry the placeholder, so the report is
+    // about the artifact rather than about the input.
+    const outputs = built.tree.get("default/outputs.yml") as string;
+    expect(outputs).toContain("dcr-00000000000000000000000000000000");
+  });
+
+  it("reports NO placeholders when every table supplies real values", () => {
+    const plan = buildPipelinePlan(paloPlanInput());
+    const built = assemblePack(
+      scaffoldInput({
+        plan,
+        tableInputs: plan.tables.map((table) => ({
+          destination: {
+            id: table.destinationId,
+            dcrImmutableId: "dcr-11111111111111111111111111111111",
+            ingestionEndpoint: "https://real.ingest.monitor.azure.com",
+            streamName: table.streamName,
+            tenantId: "tenant",
+            ingestionClientId: "client",
+          },
+        })),
+      }),
+    );
+    expect(built.placeholderTables).toEqual([]);
+    const outputs = built.tree.get("default/outputs.yml") as string;
+    expect(outputs).not.toContain("dcr-00000000000000000000000000000000");
+    expect(outputs).toContain("dcr-11111111111111111111111111111111");
+  });
+
   it("produces byte-identical .crbl for identical inputs", () => {
     const a = assemblePack(scaffoldInput());
     const b = assemblePack(scaffoldInput());

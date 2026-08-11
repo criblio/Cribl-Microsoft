@@ -6,6 +6,39 @@ is harder to forget to update than a directory that has to be remembered.
 
 ---
 
+## 1.6.0
+
+**Packs stopped shipping placeholder Sentinel destinations.** Reported
+2026-08-11. A rebuilt pack could carry
+`dcr-00000000000000000000000000000000` and `UPDATE-DCE-ENDPOINT` as its
+destination - installing cleanly, showing green, and sending nothing anywhere.
+
+The cause: the pack read real DCR values ONLY from the Integrate screen's
+in-session deploy outcomes. Those are React state - cleared on every deploy and
+gone on reload - so deploying, reloading, and rebuilding produced placeholders
+while the real rules sat in Azure the whole time. The "Rebuild pack" button was
+the flow that hit it hardest, and its tooltip promised the opposite.
+
+**The pack now asks Azure.** Anything the session does not know is resolved from
+the deployed DCRs themselves, matched on the tables a rule actually routes - so
+a renamed or hand-created DCR resolves too, which name prediction would have
+missed.
+
+**It refuses to guess.** Two rules routing one table is a real situation, and
+picking either would bake the wrong endpoint into a pack that installs without
+complaint. That resolves to placeholders with both rule names in the reason.
+A DCE-based rule (no logs-ingestion endpoint) is reported differently from no
+rule at all, because the fixes differ.
+
+**And it is never silent again.** Every table shipping placeholders is named in
+the build log with why, and carried into the Deploy summary - a green summary
+over a pack that sends nowhere is the worst thing this screen can produce.
+`assemblePack` now returns `placeholderTables` so no caller has to re-derive it.
+
+Minor rather than patch: `AssembledPack` gained a field.
+
+---
+
 ## 1.5.5
 
 **The permission check now measures everything the change request asks for.**
