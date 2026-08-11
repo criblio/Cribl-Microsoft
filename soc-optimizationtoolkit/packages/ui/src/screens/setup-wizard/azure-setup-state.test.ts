@@ -190,20 +190,46 @@ describe("evaluateScopeLines", () => {
   const required = REQUIRED_ACTIONS["lab-byo-rg"];
 
   it("summarizes an all-granted scope with one line per required action", () => {
+    // RE-PINNED 2026-08-11: the headline is now three-state, so a fully granted
+    // scope says "all actions granted" rather than "all REQUIRED actions
+    // granted" - the latter now means specifically "core granted, optional
+    // gaps", and reusing one phrase for both would hide the gaps.
     const body = { value: [{ actions: ["*"], notActions: [] }] };
     const lines = evaluateScopeLines("RG scope", 200, body, required);
-    expect(lines[0]).toBe("RG scope: all required actions granted");
+    expect(lines[0]).toBe("RG scope: all actions granted");
     expect(lines).toHaveLength(1 + required.length);
     for (const line of lines.slice(1)) {
       expect(line).toMatch(/^ {2}\[ok\] /);
     }
   });
 
-  it("flags missing actions", () => {
+  it("flags missing CORE actions as a blocker", () => {
     const body = { value: [{ actions: [], notActions: [] }] };
     const lines = evaluateScopeLines("RG scope", 200, body, required);
     expect(lines[0]).toBe("RG scope: MISSING required actions");
-    expect(lines.slice(1).every((l) => l.startsWith("  [missing]"))).toBe(true);
+    // Core denials read [missing]; feature denials read [optional] in the same
+    // list, so the operator can see which lines actually block them.
+    expect(lines.slice(1).some((l) => l.startsWith("  [missing]"))).toBe(true);
+    expect(
+      lines.slice(1).every((l) => l.startsWith("  [missing]") || l.startsWith("  [optional]")),
+    ).toBe(true);
+  });
+
+  it("does NOT call a scope blocked when only optional actions are missing", () => {
+    // The whole reason feature actions could be added at all. Contributor-like
+    // breadth minus Microsoft.Authorization: every core action granted, the DCR
+    // ingestion grant denied. Reporting that as MISSING would tell an operator
+    // who can deploy that they cannot.
+    const body = {
+      value: [
+        { actions: ["*"], notActions: ["Microsoft.Authorization/*/Write"] },
+      ],
+    };
+    const lines = evaluateScopeLines("RG scope", 200, body, required);
+    expect(lines[0]).toBe(
+      "RG scope: all required actions granted; 1 optional action(s) missing",
+    );
+    expect(lines.some((l) => l.startsWith("  [optional]"))).toBe(true);
   });
 
   it("renders actionable 401/403 messages and surfaces surprising shapes", () => {

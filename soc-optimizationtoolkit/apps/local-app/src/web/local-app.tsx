@@ -64,6 +64,7 @@ import {
   criblUiBaseFromLeaderUrl,
   mustProduceArtifacts,
   EMPTY_SETUP_RECORD,
+  preflightPathForSetupPath,
   parseAcceptanceRecord,
   parseSetupRecord,
   parseAppOptions,
@@ -83,7 +84,6 @@ import type {
   BatchPacing,
   JourneyFacts,
   LogEntry,
-  SetupPath as PreflightSetupPath,
   TargetScope,
   ThemeChoice,
   WizardCapabilities,
@@ -103,18 +103,8 @@ function nowIso(): string {
 // Map the coarse setup path (persisted on AzureConfig) to the DEFAULT core
 // preflight SetupPath the RBAC panel opens on. 'existing' defaults to the
 // resource-group WRITE path; the operator can switch inside the panel.
-function defaultPreflightPath(
-  path: 'existing' | 'lab-new-rg' | 'lab-byo-rg',
-): PreflightSetupPath {
-  switch (path) {
-    case 'existing':
-      return 'existing-rg';
-    case 'lab-new-rg':
-      return 'lab-new-rg-subscription';
-    case 'lab-byo-rg':
-      return 'lab-byo-rg';
-  }
-}
+// Shared with the cloud shell via @soc/core: both shells had an identical copy.
+const defaultPreflightPath = preflightPathForSetupPath;
 
 // Constructed once: the adapters are stateless over the host API, and a
 // stable identity keeps PortsProvider's memoized context value stable. The
@@ -726,8 +716,8 @@ export function LocalApp() {
         <PortsProvider ports={ports} config={activeAzureConfig}>
           <IntegrateScreen
             scopeCommitted={journeyFacts.scopeCommitted}
-          capabilities={capabilityAudit.capabilities}
-          capabilityContext={capabilityAudit.context}
+            capabilities={capabilityAudit.capabilities}
+            capabilityContext={capabilityAudit.context}
             offline={!capabilityAudit.context.azureIdentityPresent}
             onCommitScope={handleCommitScope}
             criblDefaults={appOptions.cribl}
@@ -835,7 +825,10 @@ export function LocalApp() {
       batch={batchView}
       inventory={
         <PortsProvider ports={ports} config={activeAzureConfig ?? EMPTY_AZURE_CONFIG}>
-          <DcrInventoryPanel />
+          <DcrInventoryPanel
+            capabilities={capabilityAudit.capabilities}
+            capabilityContext={capabilityAudit.context}
+          />
         </PortsProvider>
       }
       singleDisabledReason={

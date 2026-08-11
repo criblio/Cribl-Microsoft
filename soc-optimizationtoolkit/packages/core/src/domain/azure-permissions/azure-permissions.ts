@@ -27,6 +27,8 @@
  * Pure: no IO, no fetch. The caller fetches the response and passes it in.
  */
 
+import type { AzureSetupPath } from "../azure-config";
+
 /**
  * One element of the RBAC permissions API response - the effective permission
  * grant contributed by a single role assignment at the queried scope.
@@ -115,6 +117,24 @@ export function hasEffectiveAction(
 }
 
 /**
+ * How much a checked action carries.
+ *
+ *   core    - the setup path cannot do its primary job without it. These are
+ *             what {@link coreGranted} - and therefore deploy readiness - turns
+ *             on.
+ *   feature - one named capability is unavailable without it; the path still
+ *             works. Measured and REPORTED, never gating.
+ *
+ * The split exists because deploy readiness is a single boolean over the whole
+ * list. Without it, adding a check for anything short of essential would report
+ * "not ready" to an operator who can deploy perfectly well - turning a precise
+ * signal into a blunt one, and making the check itself the thing that had to be
+ * left out. Same vocabulary as the change-request ticket's [core]/[feature]
+ * tags, deliberately: an operator reading both should see one distinction.
+ */
+export type PermissionNecessity = "core" | "feature";
+
+/**
  * A single control-plane action the app performs, paired with a human-readable
  * label for the preflight UI.
  */
@@ -123,6 +143,17 @@ export interface RequiredAction {
   action: string;
   /** Short human-readable description shown in the preflight results. */
   label: string;
+  /**
+   * Whether a denial blocks the path or only costs one capability. OPTIONAL,
+   * defaulting to `core`.
+   *
+   * Optional because core is both the common case and the CONSERVATIVE one: an
+   * action added without thought gates deploy readiness, which over-reports a
+   * blocker rather than hiding one. Only a deliberately-optional action carries
+   * the tag, so the annotation appears exactly where the judgement was made
+   * (see the lab action list, which is core throughout and says so once).
+   */
+  necessity?: PermissionNecessity;
 }
 
 /**
@@ -151,7 +182,12 @@ export type SetupPath =
  *   denies it, so this path additionally requires RBAC Administrator (or Owner)
  *   to provision the lab's TTL identity.
  * - `lab-byo-rg` - bring-your-own pre-created lab resource group (Contributor
- *   on that RG is enough; no role assignment needed).
+ *   on that RG covers the deploy itself).
+ *
+ * Entries with no `necessity` are core and gate deploy readiness; `feature`
+ * entries are measured and reported without gating. Every action listed is one
+ * the app actually calls - the list is not aspirational, and an action nothing
+ * calls does not belong here.
  */
 export const REQUIRED_ACTIONS: Record<SetupPath, RequiredAction[]> = {
   "existing-subscription": [
@@ -177,6 +213,26 @@ export const REQUIRED_ACTIONS: Record<SetupPath, RequiredAction[]> = {
       action: "Microsoft.Resources/deployments/write",
       label: "Deploy ARM templates",
     },
+    // The three below were added 2026-08-11 by the architecture audit. The
+    // app-registration ticket asks for Microsoft Sentinel Contributor and RBAC
+    // Administrator on this path, and NOTHING measured them - so an identity
+    // holding neither passed the preflight clean and then failed at content
+    // install and at the DCR grant. Ask and audit now cover the same ground.
+    {
+      action: "Microsoft.SecurityInsights/alertRules/write",
+      label: "Install Sentinel analytic rules (Microsoft Sentinel Contributor)",
+      necessity: "feature",
+    },
+    {
+      action: "Microsoft.SecurityInsights/onboardingStates/write",
+      label: "Onboard the workspace to Sentinel (Microsoft Sentinel Contributor)",
+      necessity: "feature",
+    },
+    {
+      action: "Microsoft.Authorization/roleAssignments/write",
+      label: "Grant Cribl's identity access to each DCR (RBAC Administrator)",
+      necessity: "feature",
+    },
   ],
   "lab-new-rg-subscription": [
     {
@@ -190,6 +246,8 @@ export const REQUIRED_ACTIONS: Record<SetupPath, RequiredAction[]> = {
     {
       action: "Microsoft.Authorization/roleAssignments/write",
       label: "Assign roles (RBAC Administrator, for the lab TTL identity)",
+      // Stays CORE on this path: without it the lab has no TTL self-destruct
+      // and becomes orphaned cost, which is a reason not to deploy at all.
     },
   ],
   "lab-byo-rg": [
@@ -201,8 +259,62 @@ export const REQUIRED_ACTIONS: Record<SetupPath, RequiredAction[]> = {
       action: "Microsoft.OperationalInsights/workspaces/write",
       label: "Create workspace",
     },
+    // Contributor on the lab RG cannot assign roles at any scope, which is why
+    // this path's own role plan says the app cannot do it. Checked so the
+    // operator learns that before deploying, not after data fails to flow.
+    {
+      action: "Microsoft.Authorization/roleAssignments/write",
+      label: "Grant Cribl's identity access to each DCR (RBAC Administrator)",
+      necessity: "feature",
+    },
   ],
 };
+
+/**
+ * The preflight path a configured setup path defaults to.
+ *
+ * The two taxonomies differ on purpose: {@link AzureSetupPath} is what the
+ * operator chose, while {@link SetupPath} names a scope to evaluate at, and the
+ * `existing` choice can be checked at either subscription (reads) or resource
+ * group (writes). This picks the WRITE path, because deploy readiness is what
+ * the preflight exists to answer; the panel lets the operator switch.
+ *
+ * Lives here rather than in a shell because both shells had their own identical
+ * copy, and a mapping that exists twice is a mapping that can disagree twice.
+ */
+export function preflightPathForSetupPath(path: AzureSetupPath): SetupPath {
+  switch (path) {
+    case "existing":
+      return "existing-rg";
+    case "lab-new-rg":
+      return "lab-new-rg-subscription";
+    case "lab-byo-rg":
+      return "lab-byo-rg";
+  }
+}
+
+/**
+ * Build one result from an action and a verdict - THE ONE PLACE the
+ * `necessity ?? "core"` default is applied.
+ *
+ * Every site that turns a {@link RequiredAction} into a
+ * {@link PermissionCheckResult} goes through here: the evaluator, the
+ * permissions-unread fallback, the lab check, and the panel's error seed. Those
+ * four had started to spell the default out individually, which is how a
+ * "denied" list ends up grouping its rows differently from a measured one over
+ * the same actions.
+ */
+export function checkResult(
+  action: RequiredAction,
+  granted: boolean,
+): PermissionCheckResult {
+  return {
+    action: action.action,
+    label: action.label,
+    granted,
+    necessity: action.necessity ?? "core",
+  };
+}
 
 /** The outcome of evaluating one {@link RequiredAction} against a response. */
 export interface PermissionCheckResult {
@@ -212,6 +324,8 @@ export interface PermissionCheckResult {
   label: string;
   /** Whether the caller has effective permission for the action. */
   granted: boolean;
+  /** Carried over from the {@link RequiredAction}, so renderers can group. */
+  necessity: PermissionNecessity;
 }
 
 /**
@@ -226,20 +340,46 @@ export function evaluatePermissions(
   response: PermissionsResponse,
   required: RequiredAction[],
 ): PermissionCheckResult[] {
-  return required.map((req) => ({
-    action: req.action,
-    label: req.label,
-    granted: hasEffectiveAction(response, req.action),
-  }));
+  return required.map((req) => checkResult(req, hasEffectiveAction(response, req.action)));
 }
 
 /**
- * Whether every result in an evaluation was granted. An empty list is
- * vacuously `true`.
+ * Whether every result in an evaluation was granted, `feature` ones included.
+ * An empty list is vacuously `true`.
+ *
+ * NOT the deploy gate - see {@link coreGranted}. This answers the narrower
+ * question "is anything at all missing?", which is what a summary line needs to
+ * distinguish "fully granted" from "granted, with optional gaps".
  *
  * @param results - The output of {@link evaluatePermissions}.
- * @returns `true` when no required action was denied.
+ * @returns `true` when no checked action was denied.
  */
 export function allGranted(results: PermissionCheckResult[]): boolean {
   return results.every((result) => result.granted);
+}
+
+/**
+ * Whether every CORE result was granted - the deploy-readiness predicate.
+ *
+ * `feature` denials are deliberately ignored here. An operator who can deploy
+ * DCRs but cannot install Sentinel content is ready to deploy DCRs, and
+ * reporting otherwise would be the blunt answer that kept those checks out of
+ * the list in the first place. They are still measured, and still shown.
+ *
+ * @param results - The output of {@link evaluatePermissions}.
+ * @returns `true` when no core action was denied.
+ */
+export function coreGranted(results: PermissionCheckResult[]): boolean {
+  return results.every(
+    (result) => result.necessity !== "core" || result.granted,
+  );
+}
+
+/** The `feature` results that were denied, in list order. */
+export function missingFeatureActions(
+  results: PermissionCheckResult[],
+): PermissionCheckResult[] {
+  return results.filter(
+    (result) => result.necessity === "feature" && !result.granted,
+  );
 }

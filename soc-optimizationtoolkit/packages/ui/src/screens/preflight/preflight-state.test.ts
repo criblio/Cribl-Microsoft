@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CRIBL_CAPABILITY_PROBES, REQUIRED_ACTIONS } from "@soc/core";
+import { checkResult, CRIBL_CAPABILITY_PROBES, REQUIRED_ACTIONS } from "@soc/core";
 import type {
   AzurePreflight,
   CriblPreflight,
@@ -37,6 +37,7 @@ function azureReady(overrides: Partial<AzurePreflight> = {}): AzurePreflight {
       action: req.action,
       label: req.label,
       granted: true,
+      necessity: "core",
     })),
     probes: [
       { name: "dcr-list", label: "List Data Collection Rules", status: "ok", detail: "access confirmed" },
@@ -120,11 +121,9 @@ describe("deriveAzureDots", () => {
   });
 
   it("marks an ungranted required action as missing (write is not implied by read)", () => {
-    const checks = REQUIRED_ACTIONS[SETUP_PATH].map((req, i) => ({
-      action: req.action,
-      label: req.label,
-      granted: i > 0, // first required action denied
-    }));
+    const checks = REQUIRED_ACTIONS[SETUP_PATH].map((req, i) =>
+      checkResult(req, i > 0), // first required action denied
+    );
     const dots = deriveAzureDots(
       azureState("done", azureReady({ checks, hasRequiredAccess: false })),
       SETUP_PATH,
@@ -143,6 +142,7 @@ describe("deriveAzureDots", () => {
           action: req.action,
           label: req.label,
           granted: false,
+          necessity: "core",
         })),
       }),
     );
@@ -264,6 +264,7 @@ describe("derivePreflightView", () => {
         action: req.action,
         label: req.label,
         granted: false,
+        necessity: "core",
       })),
       probes: [
         { name: "dcr-list", label: "List Data Collection Rules", status: "ok", detail: "access confirmed" },

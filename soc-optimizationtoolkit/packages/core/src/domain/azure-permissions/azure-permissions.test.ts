@@ -14,8 +14,10 @@ import { describe, expect, it } from "vitest";
 import {
   actionMatchesGlob,
   allGranted,
+  coreGranted,
   evaluatePermissions,
   hasEffectiveAction,
+  missingFeatureActions,
   REQUIRED_ACTIONS,
 } from "./index";
 import type { PermissionSet, PermissionsResponse } from "./index";
@@ -210,9 +212,15 @@ describe("evaluatePermissions / allGranted per setup path", () => {
     expect(writeResults.every((r) => !r.granted)).toBe(true);
   });
 
-  it("Contributor satisfies existing-rg and lab-byo-rg", () => {
+  it("Contributor satisfies the CORE actions of existing-rg and lab-byo-rg", () => {
+    // RE-PINNED 2026-08-11 from allGranted to coreGranted, deliberately. Both
+    // paths gained a `feature` check for roleAssignments/write, which
+    // Contributor explicitly denies (see the next pin) - so allGranted is now
+    // false for a role that can still deploy everything these paths deploy.
+    // Widening the claim to allGranted would say Contributor is insufficient,
+    // which is exactly the blunt answer the core/feature split exists to avoid.
     expect(
-      allGranted(
+      coreGranted(
         evaluatePermissions(
           response(CONTRIBUTOR),
           REQUIRED_ACTIONS["existing-rg"],
@@ -220,13 +228,47 @@ describe("evaluatePermissions / allGranted per setup path", () => {
       ),
     ).toBe(true);
     expect(
-      allGranted(
+      coreGranted(
         evaluatePermissions(
           response(CONTRIBUTOR),
           REQUIRED_ACTIONS["lab-byo-rg"],
         ),
       ),
     ).toBe(true);
+  });
+
+  it("Contributor is DENIED the DCR ingestion grant on both existing-rg and lab-byo-rg", () => {
+    // The other half of the re-pin above, and the fact that made the checks
+    // worth adding: Contributor cannot assign roles at any scope, so data never
+    // flows through a deployed DCR until someone else grants Cribl's identity
+    // Monitoring Metrics Publisher on it. Reported, never gating.
+    for (const path of ["existing-rg", "lab-byo-rg"] as const) {
+      const results = evaluatePermissions(
+        response(CONTRIBUTOR),
+        REQUIRED_ACTIONS[path],
+      );
+      const missing = missingFeatureActions(results);
+      expect(missing.map((r) => r.action), path).toContain(
+        "Microsoft.Authorization/roleAssignments/write",
+      );
+      // Missing an optional action must never read as "not deployable".
+      expect(coreGranted(results), path).toBe(true);
+    }
+  });
+
+  it("Contributor DOES satisfy the Sentinel content actions on existing-rg", () => {
+    // Contributor is '*' minus Microsoft.Authorization writes, so it covers
+    // Microsoft.SecurityInsights - which is why the change-request plan does not
+    // ask a Contributor-holding path for Sentinel Contributor on top.
+    const results = evaluatePermissions(
+      response(CONTRIBUTOR),
+      REQUIRED_ACTIONS["existing-rg"],
+    );
+    const byAction = new Map(results.map((r) => [r.action, r.granted]));
+    expect(byAction.get("Microsoft.SecurityInsights/alertRules/write")).toBe(true);
+    expect(byAction.get("Microsoft.SecurityInsights/onboardingStates/write")).toBe(
+      true,
+    );
   });
 
   it("Contributor grants RG/deployment writes but DENIES roleAssignments/write for lab-new-rg (case-insensitive)", () => {
@@ -277,8 +319,8 @@ describe("allGranted", () => {
   it("is false when any single result is denied", () => {
     expect(
       allGranted([
-        { action: "a", label: "A", granted: true },
-        { action: "b", label: "B", granted: false },
+        { action: "a", label: "A", granted: true, necessity: "core" },
+        { action: "b", label: "B", granted: false, necessity: "core" },
       ]),
     ).toBe(false);
   });

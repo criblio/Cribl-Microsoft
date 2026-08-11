@@ -114,11 +114,13 @@ describe("permissionCheckLines", () => {
           action: "Microsoft.Logic/workflows/write",
           label: "Deploy the TTL self-destruct watchdog",
           granted: true,
+          necessity: "core",
         },
         {
           action: "Microsoft.Authorization/roleAssignments/write",
           label: "Grant the TTL identity its delete role",
           granted: false,
+          necessity: "core",
         },
       ],
       roleAssignmentGrant: {

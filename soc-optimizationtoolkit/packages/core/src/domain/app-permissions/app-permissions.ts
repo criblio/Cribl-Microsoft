@@ -42,16 +42,17 @@ import type { RoleScopeLevel } from "../role-plan";
 export type PermissionScopeLevel = RoleScopeLevel | "tenant";
 
 /**
- * How much is lost without a permission.
+ * How much is lost without a permission - re-exported from azure-permissions
+ * rather than redefined.
  *
- *   core    - the app cannot do its primary job (connect, discover, deploy).
- *   feature - one named capability is unavailable; everything else still works.
- *
- * The distinction is for the APPROVER, who frequently can grant some of what is
- * asked and not the rest. Presenting an all-or-nothing list invites a blanket
- * refusal; naming the cost of each line lets them grant what they can.
+ * ONE vocabulary on purpose. The same distinction decides what the ticket tags
+ * `[feature]` and what the preflight declines to gate deploy readiness on, and
+ * an operator who reads both should not have to work out whether two words that
+ * look alike mean the same thing. Two identical unions in two modules is how
+ * that stops being true.
  */
-export type PermissionNecessity = "core" | "feature";
+export type { PermissionNecessity } from "../azure-permissions";
+import type { PermissionNecessity } from "../azure-permissions";
 
 /** One permission the app registration needs, with its justification. */
 export interface AppPermission {

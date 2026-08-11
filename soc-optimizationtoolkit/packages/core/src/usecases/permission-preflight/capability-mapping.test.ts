@@ -39,7 +39,7 @@ import {
   verdictFor,
   type CapabilityContext,
 } from "../../domain/capabilities";
-import { REQUIRED_ACTIONS } from "../../domain/azure-permissions";
+import { checkResult, REQUIRED_ACTIONS } from "../../domain/azure-permissions";
 import type { PermissionSet, SetupPath } from "../../domain/azure-permissions";
 import { FakeAzureManagement } from "../../testing/fake-azure-management";
 import { FakeCriblClient } from "../../testing/fake-cribl-client";
@@ -166,15 +166,27 @@ describe("mapping tables", () => {
   });
 
   it("reports which capabilities a setup path actually checks", () => {
+    // RE-PINNED 2026-08-11: role.assign joined both existing-rg and lab-byo-rg
+    // when they gained the roleAssignments/write check. `feature` actions are
+    // still real MEASUREMENTS - they only decline to gate deploy readiness - so
+    // they belong in this list exactly like core ones.
     expect(capabilitiesCheckedForSetupPath("existing-rg").sort()).toEqual(
-      ["arm.deploy", "dcr.write", "table.write"].sort(),
+      ["arm.deploy", "dcr.write", "role.assign", "table.write"].sort(),
     );
     expect(capabilitiesCheckedForSetupPath("existing-subscription").sort()).toEqual(
       ["dcr.read", "workspace.read"].sort(),
     );
     // lab-byo-rg checks workspaces/write, which has no capability - the list is
-    // the mapped subset, never padded to match the action count.
-    expect(capabilitiesCheckedForSetupPath("lab-byo-rg")).toEqual(["arm.deploy"]);
+    // the mapped subset, never padded to match the action count. The Sentinel
+    // content actions on existing-rg are the same case: checked, measured, and
+    // deliberately mapped to no capability, because the settled taxonomy has
+    // none for content install and inventing one here would widen it.
+    expect(capabilitiesCheckedForSetupPath("lab-byo-rg").sort()).toEqual(
+      ["arm.deploy", "role.assign"].sort(),
+    );
+    expect(capabilitiesCheckedForSetupPath("existing-rg")).not.toContain(
+      "content.install",
+    );
   });
 
   it("never claims a capability the setup path does not check", () => {
@@ -209,11 +221,7 @@ describe("only measurements are recorded", () => {
     const set = capabilitiesFromReport(
       report({
         permissionsFetched: false,
-        checks: REQUIRED_ACTIONS["existing-rg"].map((r) => ({
-          action: r.action,
-          label: r.label,
-          granted: false,
-        })),
+        checks: REQUIRED_ACTIONS["existing-rg"].map((r) => checkResult(r, false)),
         error: "fetch RBAC permissions: HTTP 500",
       }),
       META,
@@ -229,11 +237,7 @@ describe("only measurements are recorded", () => {
         configured: false,
         scope: "",
         permissionsFetched: false,
-        checks: REQUIRED_ACTIONS["existing-rg"].map((r) => ({
-          action: r.action,
-          label: r.label,
-          granted: false,
-        })),
+        checks: REQUIRED_ACTIONS["existing-rg"].map((r) => checkResult(r, false)),
         error: "No resource group configured",
       }),
       META,
@@ -302,6 +306,7 @@ describe("probes are truth for reads", () => {
             action: "Microsoft.Insights/dataCollectionRules/read",
             label: "Read DCRs",
             granted: false,
+            necessity: "core",
           },
         ],
         probes: [
@@ -322,6 +327,7 @@ describe("probes are truth for reads", () => {
             action: "Microsoft.Insights/dataCollectionRules/read",
             label: "Read DCRs",
             granted: true,
+            necessity: "core",
           },
         ],
         probes: [
@@ -341,6 +347,7 @@ describe("probes are truth for reads", () => {
             action: "Microsoft.Insights/dataCollectionRules/read",
             label: "Read DCRs",
             granted: true,
+            necessity: "core",
           },
         ],
         probes: [
@@ -384,6 +391,7 @@ describe("writes come from effective actions, never from a probe", () => {
             action: "Microsoft.Insights/dataCollectionRules/write",
             label: "Create/update DCRs",
             granted: false,
+            necessity: "core",
           },
         ],
       }),
@@ -452,8 +460,13 @@ describe("over a real preflight report", () => {
     expect(set.verdicts["dcr.read"]).toBe("granted");
     expect(set.verdicts["workspace.read"]).toBe("granted");
     expect(set.verdicts["table.read"]).toBe("granted");
-    // Not checked at this scope and not probed - absent, not denied.
-    expect(set.verdicts["role.assign"]).toBeUndefined();
+    // RE-PINNED 2026-08-11: this used to be `undefined` with the comment "not
+    // checked at this scope". That was the gap - the app asked operators for
+    // RBAC Administrator on this path and then never measured whether they had
+    // it, so the capability stayed unknown and nothing could annotate it.
+    // existing-rg now checks roleAssignments/write as a `feature` action, and
+    // Owner grants it.
+    expect(set.verdicts["role.assign"]).toBe("granted");
   });
 
   it("Reader on existing-rg reads everything and writes nothing", async () => {

@@ -13,7 +13,13 @@
  * Pure: no IO, no fetch, no React.
  */
 
-import { evaluatePermissions, allGranted, REQUIRED_ACTIONS } from "@soc/core";
+import {
+  evaluatePermissions,
+  allGranted,
+  coreGranted,
+  missingFeatureActions,
+  REQUIRED_ACTIONS,
+} from "@soc/core";
 import type {
   AzureSetupPath,
   PermissionsResponse,
@@ -341,11 +347,24 @@ export function evaluateScopeLines(
   }
   const parsed: PermissionsResponse = { value: value as PermissionsResponse["value"] };
   const results = evaluatePermissions(parsed, required);
-  const lines = [
-    `${label}: ${allGranted(results) ? "all required actions granted" : "MISSING required actions"}`,
-  ];
+  // Three states, not two: "granted with optional gaps" is a real and common
+  // outcome, and collapsing it into MISSING would report a blocker to an
+  // operator who has none. coreGranted is the deploy gate; allGranted only
+  // decides whether to mention the optional ones.
+  const missingOptional = missingFeatureActions(results);
+  const headline = !coreGranted(results)
+    ? "MISSING required actions"
+    : allGranted(results)
+      ? "all actions granted"
+      : `all required actions granted; ${missingOptional.length} optional action(s) missing`;
+  const lines = [`${label}: ${headline}`];
   for (const result of results) {
-    lines.push(`  [${result.granted ? "ok" : "missing"}] ${result.label} (${result.action})`);
+    const state = result.granted
+      ? "ok"
+      : result.necessity === "feature"
+        ? "optional"
+        : "missing";
+    lines.push(`  [${state}] ${result.label} (${result.action})`);
   }
   return lines;
 }
