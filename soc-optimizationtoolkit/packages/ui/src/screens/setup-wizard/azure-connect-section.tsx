@@ -105,10 +105,12 @@ export function AzureConnectSection({
       <ChangeRequestBlock
         title="Cannot create the app registration yourself? Generate a change request"
         description={
-          'Produce a paste-ready ticket for the team that manages Entra ID. It asks them to create a ' +
-          'single-tenant daemon confidential client (no redirect URI), create a client secret, and ' +
-          'securely share the tenant id, client id, and secret. The current tenant/client ids are ' +
-          'included; blank fields appear as clear placeholders.'
+          'Produce a paste-ready ticket covering EVERYTHING this app needs to be fully functional: ' +
+          'a single-tenant daemon confidential client (no redirect URI), a client secret, the ' +
+          'Microsoft Graph permission to admin-consent, and every Azure RBAC role for the setup ' +
+          'path selected below. Each line names the feature that needs it, why, and what stops ' +
+          'working without it, so any single permission can be approved or refused on its own. ' +
+          'The current tenant/client ids are included; blank fields appear as clear placeholders.'
         }
         filename="app-registration-request.txt"
         generate={() => appRegistrationRequest(ctx)}

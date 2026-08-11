@@ -14,6 +14,7 @@ export * from "./domain/app-theme";
 export * from "./domain/dcr-naming";
 export * from "./domain/poll-scheduler";
 export * from "./domain/schema-mapping";
+export * from "./domain/app-permissions";
 export * from "./domain/azure-permissions";
 export * from "./domain/azure-config";
 export * from "./domain/azure-resource-id";

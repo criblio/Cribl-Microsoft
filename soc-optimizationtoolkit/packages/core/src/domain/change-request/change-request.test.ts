@@ -103,6 +103,68 @@ describe("appRegistrationRequest", () => {
     expect(out).toContain("<tenant id>");
     expect(out).toContain("<client id>");
   });
+
+  it("asks for EVERY permission the app needs, not just the registration", () => {
+    // The defect this section exists for: the ticket used to stop at "create the
+    // registration and a secret", so an operator who got exactly what they asked
+    // for had an app that could authenticate and do nothing else - then needed a
+    // fresh ticket per missing permission, discovered one failure at a time.
+    const out = appRegistrationRequest(ctxFor("existing"));
+    expect(out).toContain("Application.Read.All");
+    expect(out).toContain("Reader");
+    expect(out).toContain("Monitoring Contributor");
+    expect(out).toContain("Log Analytics Contributor");
+    expect(out).toContain("Microsoft Sentinel Contributor");
+    expect(out).toContain("RBAC Administrator");
+  });
+
+  it("separates Graph consent from RBAC assignment - different approvers", () => {
+    const out = appRegistrationRequest(ctxFor("existing"));
+    expect(out).toContain("Microsoft Graph API permissions (admin consent required)");
+    expect(out).toContain("Azure RBAC roles (setup path: existing)");
+    // APPLICATION, not delegated: the app runs headless, and a delegated grant
+    // would consent cleanly and then fail at runtime with no user to act as.
+    expect(out).toContain("APPLICATION permissions");
+  });
+
+  it("states which feature needs each permission and what refusing it costs", () => {
+    // Without the cost line an approver cannot tell a blocker from a
+    // nice-to-have, and the safe answer to that is no.
+    const out = appRegistrationRequest(ctxFor("existing"));
+    expect(out).toContain("Needed for:");
+    expect(out).toContain("If not granted:");
+    expect(out).toContain("[core]");
+    expect(out).toContain("[feature]");
+  });
+
+  it("resolves each RBAC scope so the approver need not look anything up", () => {
+    const out = appRegistrationRequest(ctxFor("existing"));
+    expect(out).toContain("Scope:          /subscriptions/33333333-3333-3333-3333-333333333333");
+    expect(out).toContain(
+      "Scope:          /subscriptions/33333333-3333-3333-3333-333333333333/resourceGroups/rg-soc-lab",
+    );
+    // A Graph permission has no subscription scope, and rendering one would
+    // send the approver to the wrong portal blade entirely.
+    expect(out).toContain("tenant-wide (consented on the app registration)");
+  });
+
+  it("points each portal step at ITS OWN portal", () => {
+    // Graph consent and an RBAC condition both need a portal, but not the same
+    // one. A single generic "use the portal" line sends the Graph approver
+    // hunting through RBAC blades for a permission that is not there.
+    const out = appRegistrationRequest(ctxFor("existing"));
+    expect(out).toContain("Entra ID > App registrations");
+    expect(out).toContain("Grant admin consent");
+    expect(out).toContain("the condition above cannot be set from the CLI");
+  });
+
+  it("does not ask a lab path for roles its Contributor grant already covers", () => {
+    // Over-asking gets a whole request refused. Contributor writes
+    // SecurityInsights resources, so naming Sentinel Contributor beside it reads
+    // as someone who does not know what they need.
+    const out = appRegistrationRequest(ctxFor("lab-new-rg"));
+    expect(out).not.toContain("Microsoft Sentinel Contributor");
+  });
 });
 
 describe("roleAssignmentRequest role selection", () => {

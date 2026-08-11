@@ -16,6 +16,14 @@
  * lab-new-rg "Constrain roles and principal types" condition), so a ticket asks
  * for precisely what the wizard would otherwise self-assign.
  *
+ * {@link appRegistrationRequest} asks for MORE than that: the full permission
+ * plan from domain/app-permissions, which is the setup-path roles plus the Graph
+ * application permission and the feature roles no setup path grants. The two
+ * generators therefore differ on purpose - the role ticket asks the subscription
+ * owner for what the wizard would self-assign, while the app-registration ticket
+ * is the one an operator sends before anything works and so must name
+ * everything. Neither restates the role model; both compose it.
+ *
  * Any blank context field renders as a clear placeholder (for example
  * `<tenant id>`), so a partially filled request is visibly incomplete.
  *
@@ -24,6 +32,8 @@
  */
 
 import type { AzureConfig, AzureSetupPath } from "../azure-config";
+import { appPermissionPlan, graphPermissions, rbacPermissions } from "../app-permissions";
+import type { AppPermission } from "../app-permissions";
 import { rolePlanForSetupPath } from "../role-plan";
 import {
   authFlowMermaid,
@@ -138,30 +148,105 @@ function diagramFor(
 }
 
 /**
+ * The scope a permission is granted at, written for a ticket reader rather than
+ * as an ARM resource id. Graph permissions are tenant-wide by nature; RBAC
+ * scopes resolve to the concrete subscription or resource group so the approver
+ * can act without looking anything up.
+ */
+function permissionScope(permission: AppPermission, n: ResolvedNames): string {
+  if (permission.scopeLevel === "tenant") {
+    return "tenant-wide (consented on the app registration)";
+  }
+  return permission.scopeLevel === "subscription"
+    ? subscriptionScope(n)
+    : resourceGroupScope(n);
+}
+
+/**
+ * One permission rendered as a block: what it is, what needs it, why, and what
+ * an approver gives up by refusing it.
+ *
+ * The "If not granted" line is the point of the whole format. An approver who
+ * can grant some of this and not the rest would otherwise have to guess at the
+ * cost of each refusal, and a list that hides the cost invites a blanket no.
+ */
+function permissionBlock(permission: AppPermission, n: ResolvedNames): string {
+  const lines: string[] = [
+    "- " + permission.name + "  [" + permission.necessity + "]",
+    "    Scope:          " + permissionScope(permission, n),
+    "    Needed for:     " + permission.feature,
+    "    Why:            " + permission.justification,
+    "    If not granted: " + permission.withoutIt,
+  ];
+  if (permission.condition !== undefined) {
+    lines.push("    Condition:      " + permission.condition);
+  }
+  if (permission.assignViaPortal === true) {
+    // Both systems have a portal step, but they are entirely different portals
+    // and different blades. One generic "use the portal" line would send a
+    // Graph approver hunting through RBAC, which is precisely the confusion
+    // this ticket's two-section split exists to prevent.
+    lines.push(
+      "    Where:          " +
+        (permission.kind === "graph-api"
+          ? "Entra ID > App registrations > this app > API permissions > Grant admin consent."
+          : permission.condition !== undefined
+            ? "Azure portal, not the CLI - the condition above cannot be set from the CLI."
+            : "Azure portal."),
+    );
+  }
+  return lines.join("\n");
+}
+
+/**
  * Request that another team create an Entra app registration (single-tenant,
  * daemon confidential client - no redirect URI, no interactive sign-in), create
- * a client secret, and securely share the tenant id, client id, and secret.
- * Embeds the authentication flow so the reviewer sees why the app needs an ARM
- * identity.
+ * a client secret, securely share the credentials, AND grant every permission
+ * the app needs to be fully functional. Embeds the authentication flow so the
+ * reviewer sees why the app needs an ARM identity.
+ *
+ * THE PERMISSIONS ARE THE POINT. This ticket used to ask only for the
+ * registration and the secret, which produced an app that could authenticate
+ * and do nothing else - the operator then met each missing permission one
+ * failed request at a time, and needed a fresh ticket for each. The full plan
+ * comes from {@link appPermissionPlan}, so the ticket cannot fall behind what
+ * the app actually calls.
+ *
+ * The two permission systems render as SEPARATE sections because they are
+ * usually granted by different people: Graph application permissions by an
+ * Entra administrator on the registration itself, RBAC roles by whoever owns
+ * the subscription or resource group.
  */
 export function appRegistrationRequest(
   ctx: ChangeRequestContext,
   options?: ChangeRequestOptions,
 ): string {
   const n = resolveNames(ctx);
+  const plan = appPermissionPlan(ctx.config.setupPath);
+  const graph = graphPermissions(plan);
+  const rbac = rbacPermissions(plan);
+
   const parts: string[] = [
     "Change request: create Entra app registration for " + n.appName,
     requestHeader(n),
     section(
       "What is requested",
       [
-        "- Create a single-tenant Entra app registration (daemon / confidential",
-        "  client): sign-in audience this directory only, no redirect URI, no",
-        "  interactive user sign-in.",
-        "- Create a client secret on that app registration.",
-        "- Securely share the tenant id, application (client) id, and the client",
-        "  secret with the requester (use a secrets manager or vault, not email or",
-        "  chat).",
+        "1. Create a single-tenant Entra app registration (daemon / confidential",
+        "   client): sign-in audience this directory only, no redirect URI, no",
+        "   interactive user sign-in.",
+        "2. Create a client secret on that app registration.",
+        "3. Grant the Microsoft Graph API permissions listed below and ADMIN-CONSENT",
+        "   them.",
+        "4. Assign the Azure RBAC roles listed below to this app's service principal.",
+        "5. Securely share the tenant id, application (client) id, and the client",
+        "   secret with the requester (use a secrets manager or vault, not email or",
+        "   chat).",
+        "",
+        "Steps 3 and 4 are usually different approvers. Every permission below says",
+        "what needs it and what stops working without it, so each can be granted or",
+        "refused on its own - a partial grant leaves a working app with fewer",
+        "features, never a broken one.",
       ].join("\n"),
     ),
     section(
@@ -175,6 +260,38 @@ export function appRegistrationRequest(
         "than delegated user permissions.",
       ].join("\n"),
     ),
+  ];
+
+  if (graph.length > 0) {
+    parts.push(
+      section(
+        "Microsoft Graph API permissions (admin consent required)",
+        [
+          "Add these as APPLICATION permissions - not delegated, because the app runs",
+          "with no signed-in user - then grant admin consent. Until consent is",
+          "granted the permission is listed on the registration but has no effect.",
+          "",
+          ...graph.map((permission) => permissionBlock(permission, n)),
+        ].join("\n"),
+      ),
+    );
+  }
+
+  parts.push(
+    section(
+      "Azure RBAC roles (setup path: " + ctx.config.setupPath + ")",
+      [
+        "Assign each role to the service principal for " +
+          n.appName +
+          " (client id:",
+        n.clientId + ") at the scope given.",
+        "",
+        "[core] roles are what this setup path needs to function at all. [feature]",
+        "roles each unlock one named capability and can be refused independently.",
+        "",
+        ...rbac.map((permission) => permissionBlock(permission, n)),
+      ].join("\n"),
+    ),
     section(
       "Specifics",
       [
@@ -184,9 +301,13 @@ export function appRegistrationRequest(
         "Credential:              client secret",
         "Tenant id:               " + n.tenantId,
         "Application (client) id: " + n.clientId + " (if already created)",
+        "Setup path:              " + ctx.config.setupPath,
+        "Subscription:            " + n.subscriptionId,
+        "Resource group:          " + n.resourceGroup,
       ].join("\n"),
     ),
-  ];
+  );
+
   const diagram = diagramFor(ctx, options, authFlowMermaid);
   if (diagram !== null) {
     parts.push(section("Why (authentication flow)", diagram));

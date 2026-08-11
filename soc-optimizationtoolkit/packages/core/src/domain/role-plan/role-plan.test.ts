@@ -33,20 +33,42 @@ describe("rolePlanForSetupPath", () => {
         scopeLevel: "subscription",
         justification:
           "Discover subscriptions, resource groups, workspaces, and existing DCRs before deploying.",
+        feature: "Discovery and gap analysis",
+        withoutIt:
+          "The app cannot find your workspace or read the DCRs already deployed, so every screen that starts from your environment is empty and gap analysis has nothing to compare against.",
       },
       {
         role: "Monitoring Contributor",
         scopeLevel: "resourceGroup",
         justification:
           "Create and update Data Collection Rules in the workspace resource group.",
+        feature: "Deploy Data Collection Rules",
+        withoutIt:
+          "The app can still generate the DCR ARM template for someone else to deploy, but cannot deploy it itself - no data path is created.",
       },
       {
         role: "Log Analytics Contributor",
         scopeLevel: "resourceGroup",
         justification:
           "Create custom Log Analytics tables and configure the workspace for ingestion.",
+        feature: "Create custom tables",
+        withoutIt:
+          "Onboarding a source to a table that does not exist yet fails; existing native tables can still be targeted.",
       },
     ]);
+  });
+
+  it("every role says which feature needs it and what refusing it costs", () => {
+    // Re-pinned 2026-08-11 alongside the two added fields. They live on the
+    // canonical plan rather than in a ticket generator so the CLI, the role
+    // ticket, and the app-registration ticket cannot describe the same role
+    // three different ways - the drift this module was created to end.
+    for (const path of ["existing", "lab-new-rg", "lab-byo-rg"] as const) {
+      for (const req of rolePlanForSetupPath(path)) {
+        expect(req.feature.length, `${path}/${req.role}`).toBeGreaterThan(0);
+        expect(req.withoutIt.length, `${path}/${req.role}`).toBeGreaterThan(20);
+      }
+    }
   });
 
   it("existing has no portal-assigned or conditioned role", () => {
@@ -63,6 +85,9 @@ describe("rolePlanForSetupPath", () => {
         scopeLevel: "subscription",
         justification:
           "Create the lab resource group and deploy the workspace, DCRs, and tables inside it (resource group creation is a subscription-level action, so no workspace-scoped roles are needed on this path).",
+        feature: "Deploy the lab environment",
+        withoutIt:
+          "Nothing on this path runs - the lab cannot create its resource group, so there is nowhere to deploy.",
       },
       {
         role: "RBAC Administrator",
@@ -72,6 +97,9 @@ describe("rolePlanForSetupPath", () => {
         condition:
           "Constrain roles and principal types: only Contributor and Monitoring Metrics Publisher, only to service principals.",
         assignViaPortal: true,
+        feature: "Lab TTL self-destruct",
+        withoutIt:
+          "The lab deploys but never auto-deletes, so it lingers as orphaned cost until someone removes it by hand.",
       },
     ]);
   });
@@ -93,6 +121,9 @@ describe("rolePlanForSetupPath", () => {
         scopeLevel: "resourceGroup",
         justification:
           "Deploy the lab workspace, DCRs, and tables into the pre-created lab resource group; no subscription-scope rights are needed.",
+        feature: "Deploy the lab environment",
+        withoutIt:
+          "Nothing on this path runs - there is no other scope the lab is allowed to deploy into.",
       },
     ]);
   });

@@ -6,6 +6,42 @@ is harder to forget to update than a directory that has to be remembered.
 
 ---
 
+## 1.5.3
+
+**The app-registration change request now asks for every permission the app
+needs.** It used to ask only for the registration and a client secret - so an
+operator who got exactly what they requested had an app that could
+authenticate and do nothing else, then met each missing permission one failed
+request at a time, each needing a fresh ticket.
+
+The ticket now carries the full plan, in two sections because they are usually
+two different approvers:
+
+- **Microsoft Graph** - `Application.Read.All`, admin-consented on the
+  registration. This was documented nowhere an operator would look: the app
+  needs it to list service principals so you can pick Cribl's ingestion
+  identity by name rather than hunting for its object id. Requested instead of
+  the broader `Directory.Read.All`, which also works but reads the whole
+  directory.
+- **Azure RBAC** - the setup path's roles, plus two that no setup path grants:
+  **Microsoft Sentinel Contributor** (content install writes
+  `Microsoft.SecurityInsights` resources; Log Analytics Contributor grants read
+  but no write there) and **RBAC Administrator**, constrained, for granting
+  Cribl's identity Monitoring Metrics Publisher on each deployed DCR.
+
+Every line names the feature that needs it, why, and **what stops working
+without it**, marked `[core]` or `[feature]`. An approver who can grant some of
+it and not the rest can now see the cost of each refusal instead of guessing -
+and a partial grant leaves a working app with fewer features, never a broken
+one.
+
+The plan is composed from the existing role model rather than restated, so a
+lab path whose Contributor grant already covers Sentinel content is not asked
+for both. `1.5.2` shipped the credential form in the wizard's Connect Azure
+step, which previously offered the change request and no way to connect.
+
+---
+
 ## 1.5.0
 
 Additive. Nothing an operator does changes, and there is no migration.
