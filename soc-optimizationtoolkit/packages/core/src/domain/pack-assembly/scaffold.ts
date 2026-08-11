@@ -138,6 +138,19 @@ function lookupRowsFor(input: TableAssemblyInput | undefined): string[][] {
   return [];
 }
 
+/**
+ * Whether a table's destination will ship placeholders - i.e. no caller
+ * supplied real DCR values for it.
+ *
+ * Separate from {@link destinationConfigFor} so the same condition decides both
+ * what is emitted and what is REPORTED. Deriving the report from a second
+ * expression is how the two would eventually disagree, and the failure mode of
+ * that disagreement is a pack that claims to be complete and is not.
+ */
+function shipsPlaceholders(input: TableAssemblyInput | undefined): boolean {
+  return input?.destination === undefined;
+}
+
 /** Build the Sentinel destination config for a table (real or placeholder). */
 function destinationConfigFor(
   table: TablePlan,
@@ -243,6 +256,16 @@ export interface AssembledPack {
   crbl: Uint8Array;
   crblFileName: string;
   record: PackBuildRecord;
+  /**
+   * Tables whose destination shipped PLACEHOLDER values, in plan order.
+   *
+   * Reported rather than left for the caller to re-derive, because for a long
+   * time nobody derived it: the fallback was silent, and an operator could
+   * install a pack whose destination pointed at
+   * `dcr-00000000000000000000000000000000` with nothing anywhere saying so.
+   * Empty means every table carries real values.
+   */
+  placeholderTables: string[];
 }
 
 /**
@@ -264,5 +287,8 @@ export function assemblePack(input: PackScaffoldInput): AssembledPack {
     crbl,
     crblFileName: crblFileName(input.plan.packName, input.plan.version),
     record,
+    placeholderTables: input.plan.tables
+      .filter((_, index) => shipsPlaceholders(input.tableInputs?.[index]))
+      .map((table) => table.sentinelTable),
   };
 }

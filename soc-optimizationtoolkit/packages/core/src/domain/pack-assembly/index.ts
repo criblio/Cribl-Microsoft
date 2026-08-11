@@ -120,3 +120,18 @@ export {
 } from "./install";
 export type { MaintenanceRow, MaintenanceEdit } from "./maintenance";
 export { maintenanceRows, applyMaintenanceEdits } from "./maintenance";
+
+// Destination resolution - real DCR values for the pack's outputs.yml, and the
+// honest report of any table that had to ship placeholders.
+export type {
+  DcrDestinationSource,
+  DestinationSource,
+  ResolvedDestination,
+  SessionDestination,
+} from "./destination-resolution";
+export {
+  placeholderWarning,
+  resolveDestinationForTable,
+  resolveDestinations,
+  unresolvedDestinations,
+} from "./destination-resolution";

@@ -59,6 +59,9 @@ import {
   DEFAULT_OPERATION_OPTIONS,
   SENTINEL_SECRET_PLACEHOLDER,
   assemblePack,
+  listDcrInventory,
+  placeholderWarning,
+  resolveDestinations,
   canWireSource,
   compareLogTypeCoverage,
   deriveExpectedLogTypes,
@@ -91,6 +94,8 @@ import type {
   PackScaffoldInput,
   PackVendorSample,
   SolutionRef,
+  DcrInventoryEntry,
+  SessionDestination,
   TableAssemblyInput,
   TaggedSample,
   TargetScope,
@@ -566,6 +571,12 @@ export function IntegrateScreen({
   const [packOutcome, setPackOutcome] = useState<{
     name: string;
     installs: Array<{ group: string; ok: boolean; detail: string }>;
+    /**
+     * Tables whose destination shipped placeholder DCR values. Carried into the
+     * summary because the build log scrolls and this is the one thing an
+     * operator must not miss - the pack installs either way.
+     */
+    placeholderTables: string[];
   } | null>(null);
 
   // Required vendor identity (DeviceVendor/DeviceProduct and the ASim Event
@@ -731,17 +742,74 @@ export function IntegrateScreen({
       );
 
       // 3. Compose the assembly input: the reviewer's effective mappings feed
-      // the lookup CSVs; deployed tables carry their real DCR destination.
+      // the lookup CSVs; every table carries its REAL DCR destination.
+      //
+      // Session outcomes are only half the answer. They are React state - gone
+      // on reload - and for a long time they were the ONLY source, so an
+      // operator who deployed, reloaded, and rebuilt got a pack full of
+      // placeholder DCR ids while the real rules sat in Azure (user report
+      // 2026-08-11). Anything the session does not know is now looked up from
+      // the deployed DCRs themselves.
       const ingestId =
         ingestionClientId.trim() === "" ? config.clientId : ingestionClientId.trim();
       const reportByLogType = new Map(gapReports.map((r) => [r.logType, r]));
+      const sessionDestinations: SessionDestination[] = outcomes.map((o) => ({
+        table: o.table,
+        dcrImmutableId: o.outcome.dcrImmutableId,
+        ingestionEndpoint: o.outcome.logsIngestionEndpoint,
+        dcrName: o.outcome.dcrName,
+        // The names the deploy ACTUALLY used - it renames a destination that
+        // exists and points elsewhere, and the pack must follow it there.
+        destinationId: o.outcome.destinationId,
+        streamName: o.outcome.streamName,
+      }));
+      const planTables = plan.tables.map((t) => t.sentinelTable);
+      const needsLookup = planTables.some(
+        (t) => !sessionDestinations.some((s) => s.table === t),
+      );
+      let inventory: DcrInventoryEntry[] = [];
+      if (needsLookup) {
+        // A failed listing must never read as "no DCRs" - that would silently
+        // downgrade every table to placeholders and blame the environment.
+        // listDcrInventory throws; the reason is surfaced and the build goes on
+        // with placeholders that are now explicitly reported below.
+        try {
+          inventory = await listDcrInventory(ports.azure, {
+            subscriptionId: config.subscriptionId,
+            resourceGroup: config.resourceGroup,
+          });
+          push(
+            `Read ${inventory.length} deployed DCR(s) from ${config.resourceGroup} ` +
+              "to resolve destination values.",
+          );
+        } catch (err) {
+          push(
+            `Could not read deployed DCRs (${String(err)}) - tables not deployed ` +
+              "in this session will ship placeholder destination values.",
+          );
+        }
+      }
+      const resolved = resolveDestinations(
+        planTables,
+        sessionDestinations,
+        inventory,
+      );
+      for (const entry of resolved) {
+        if (entry.source === "inventory") {
+          push(
+            `${entry.table}: resolved destination from deployed DCR ` +
+              `'${entry.dcrName ?? ""}'.`,
+          );
+        }
+      }
+      const resolvedByTable = new Map(resolved.map((r) => [r.table, r]));
       const tableInputs: TableAssemblyInput[] = plan.tables.map((table) => {
         const report = reportByLogType.get(table.logType);
         const effective =
           report !== undefined
             ? (mappingOverrides[report.logType] ?? report.fieldMappings)
             : [];
-        const outcomeEntry = outcomes.find((o) => o.table === table.sentinelTable);
+        const destination = resolvedByTable.get(table.sentinelTable);
         return {
           ...(effective.length > 0
             ? {
@@ -757,13 +825,13 @@ export function IntegrateScreen({
                 })),
               }
             : {}),
-          ...(outcomeEntry !== undefined
+          ...(destination !== undefined && destination.source !== "unresolved"
             ? {
                 destination: {
-                  id: outcomeEntry.outcome.destinationId,
-                  dcrImmutableId: outcomeEntry.outcome.dcrImmutableId,
-                  ingestionEndpoint: outcomeEntry.outcome.logsIngestionEndpoint,
-                  streamName: outcomeEntry.outcome.streamName,
+                  id: destination.destinationId ?? table.destinationId,
+                  dcrImmutableId: destination.dcrImmutableId ?? "",
+                  ingestionEndpoint: destination.ingestionEndpoint ?? "",
+                  streamName: destination.streamName ?? table.streamName,
                   tenantId: config.tenantId,
                   ingestionClientId: ingestId,
                 },
@@ -797,6 +865,15 @@ export function IntegrateScreen({
       push(
         `Assembled ${assembled.crblFileName} (${assembled.crbl.length.toLocaleString()} bytes).`,
       );
+      // NEVER SILENT. A pack whose destination points at
+      // dcr-00000000000000000000000000000000 installs cleanly and sends
+      // nowhere, so the one thing that must not happen is shipping it without
+      // saying so. The warning comes from core, so the log and the summary
+      // cannot word the same outcome differently.
+      const placeholderNotice = placeholderWarning(resolved);
+      if (placeholderNotice !== null) {
+        push(placeholderNotice);
+      }
       // The record is a CONVENIENCE (the Packs screen lists/downloads it);
       // the install below is the point. A store failure - live 2026-07-13:
       // the leader's kvstore answered HTTP 413 for a 103 KB record - must
@@ -838,7 +915,7 @@ export function IntegrateScreen({
           });
         }
       }
-      setPackOutcome({ name, installs });
+      setPackOutcome({ name, installs, placeholderTables: assembled.placeholderTables });
       push(
         "Done. Wire a source below (or commit and deploy in Cribl) to activate the pack.",
       );
@@ -849,6 +926,8 @@ export function IntegrateScreen({
     }
   }, [
     ports.packs,
+    // The DCR listing that resolves real destination values.
+    ports.azure,
     ports.packInstall,
     ports.logger,
     packBuilding,
@@ -1404,7 +1483,7 @@ export function IntegrateScreen({
       <div className="discovery-result">
         <span className="field-label">
           Pack rebuild
-          <InfoTip text="The pack ships automatically with Deploy in the Deploy section. Use this only to rebuild and reinstall the pack alone after editing mappings - no Azure resources are touched. Builds from the APPROVED Gap Analysis mappings (the exact pipelines, reduction rules, routes, breakers, samples, and lookups previewed in section 3); deployed tables carry their real DCR values, others a fill-in-Cribl placeholder; the pack name and overwrite acknowledgment above are honored." />
+          <InfoTip text="The pack ships automatically with Deploy in the Deploy section. Use this only to rebuild and reinstall the pack alone after editing mappings - no Azure resources are touched. Builds from the APPROVED Gap Analysis mappings (the exact pipelines, reduction rules, routes, breakers, samples, and lookups previewed in section 3); real DCR values are read from the deployed rules in Azure, so a rebuild after a reload is still correct; any table with no deployed DCR - or with more than one, which would make the choice a guess - ships a fill-in-Cribl placeholder and is named in the build log; the pack name and overwrite acknowledgment above are honored." />
         </span>
         <div className="panel-controls">
           <button
@@ -1551,7 +1630,15 @@ export function IntegrateScreen({
                           (i) =>
                             `  ${i.group}:${" ".repeat(Math.max(1, 14 - i.group.length))}${i.ok ? i.detail : `FAILED - ${i.detail}`}`,
                         )
-                        .join("\n"),
+                        .join("\n") +
+                      // A green summary over a pack that sends nowhere is the
+                      // worst outcome this screen can produce, so the caveat
+                      // rides the summary rather than only the build log.
+                      (packOutcome.placeholderTables.length > 0
+                        ? `\n  PLACEHOLDER destinations: ${packOutcome.placeholderTables.join(", ")}` +
+                          "\n  Those destinations point nowhere until you set the DCR id and" +
+                          "\n  ingestion URL in Cribl. See the build log above for why."
+                        : ""),
                   ]
                 : []),
             ].join("\n\n")}
