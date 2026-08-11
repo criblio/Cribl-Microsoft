@@ -162,6 +162,42 @@ function permissionScope(permission: AppPermission, n: ResolvedNames): string {
     : resourceGroupScope(n);
 }
 
+/** Column the permission-block values start at, and the wrap width. */
+const FIELD_INDENT = 20;
+const WRAP_COLUMNS = 78;
+
+/**
+ * A labelled field, hard-wrapped with a hanging indent so continuation lines
+ * stay under the value rather than falling back to column 0.
+ *
+ * Hard-wrapped rather than left to the reader's renderer because this text is
+ * pasted into ticketing systems that do not reflow, and because the rest of the
+ * ticket is already wrapped - a block of 300-character lines beside it reads as
+ * a rendering bug. Words longer than the available width (a resource id, say)
+ * are left to overhang rather than broken, since a split id is worse than a
+ * long line.
+ */
+function field(label: string, value: string): string {
+  const head = ("    " + label).padEnd(FIELD_INDENT, " ");
+  const width = WRAP_COLUMNS - FIELD_INDENT;
+  const lines: string[] = [];
+  let current = "";
+  for (const word of value.split(" ")) {
+    if (current === "") {
+      current = word;
+    } else if (current.length + 1 + word.length <= width) {
+      current += " " + word;
+    } else {
+      lines.push(current);
+      current = word;
+    }
+  }
+  lines.push(current);
+  return lines
+    .map((line, index) => (index === 0 ? head : " ".repeat(FIELD_INDENT)) + line)
+    .join("\n");
+}
+
 /**
  * One permission rendered as a block: what it is, what needs it, why, and what
  * an approver gives up by refusing it.
@@ -173,13 +209,13 @@ function permissionScope(permission: AppPermission, n: ResolvedNames): string {
 function permissionBlock(permission: AppPermission, n: ResolvedNames): string {
   const lines: string[] = [
     "- " + permission.name + "  [" + permission.necessity + "]",
-    "    Scope:          " + permissionScope(permission, n),
-    "    Needed for:     " + permission.feature,
-    "    Why:            " + permission.justification,
-    "    If not granted: " + permission.withoutIt,
+    field("Scope:", permissionScope(permission, n)),
+    field("Needed for:", permission.feature),
+    field("Why:", permission.justification),
+    field("If not granted:", permission.withoutIt),
   ];
   if (permission.condition !== undefined) {
-    lines.push("    Condition:      " + permission.condition);
+    lines.push(field("Condition:", permission.condition));
   }
   if (permission.assignViaPortal === true) {
     // Both systems have a portal step, but they are entirely different portals
@@ -187,12 +223,14 @@ function permissionBlock(permission: AppPermission, n: ResolvedNames): string {
     // Graph approver hunting through RBAC, which is precisely the confusion
     // this ticket's two-section split exists to prevent.
     lines.push(
-      "    Where:          " +
-        (permission.kind === "graph-api"
+      field(
+        "Where:",
+        permission.kind === "graph-api"
           ? "Entra ID > App registrations > this app > API permissions > Grant admin consent."
           : permission.condition !== undefined
             ? "Azure portal, not the CLI - the condition above cannot be set from the CLI."
-            : "Azure portal."),
+            : "Azure portal.",
+      ),
     );
   }
   return lines.join("\n");
