@@ -16,6 +16,7 @@
 import type { AzureManagement } from "../../ports/azure-management";
 import type { Logger } from "../../ports/logger";
 import {
+  checkResult,
   hasEffectiveAction,
   type PermissionCheckResult,
 } from "../../domain/azure-permissions";
@@ -98,11 +99,9 @@ export async function checkLabPermissions(
   const checks: PermissionCheckResult[] = labRequiredActions(
     input.flags,
     input.rgMode,
-  ).map((required) => ({
-    action: required.action,
-    label: required.label,
-    granted: hasEffectiveAction(parsed, required.action),
-  }));
+  ).map((required) =>
+    checkResult(required, hasEffectiveAction(parsed, required.action)),
+  );
 
   const roleAssignmentGrant = analyzeRoleAssignmentGrant(response.body);
   // Keep the plain check row consistent with the deeper analysis: a grant

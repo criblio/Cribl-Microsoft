@@ -104,6 +104,9 @@ function azureThrowFallback(setupPath: SetupPath, err: unknown): AzurePreflight 
       action: req.action,
       label: req.label,
       granted: false,
+      // Same default the evaluator applies, so an errored panel groups its rows
+      // identically to a successful one.
+      necessity: req.necessity ?? ("core" as const),
     })),
     probes: [],
     hasRequiredAccess: false,

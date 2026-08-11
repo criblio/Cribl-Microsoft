@@ -28,6 +28,7 @@ import {
   rbacPermissions,
 } from "./app-permissions";
 import { rolePlanForSetupPath } from "../role-plan";
+import { REQUIRED_ACTIONS, preflightPathForSetupPath } from "../azure-permissions";
 import type { AzureSetupPath } from "../azure-config";
 
 const PATHS: AzureSetupPath[] = ["existing", "lab-new-rg", "lab-byo-rg"];
@@ -80,6 +81,53 @@ describe("appPermissionPlan - completeness", () => {
         expect(permission.justification.length, permission.name).toBeGreaterThan(20);
         expect(permission.withoutIt.length, permission.name).toBeGreaterThan(20);
       }
+    }
+  });
+});
+
+describe("what the ticket ASKS FOR is what the preflight MEASURES", () => {
+  // The invariant that closes architecture-audit finding 1 (2026-08-11). The
+  // ticket had grown to ask for two roles nothing checked, so an identity
+  // holding neither passed the preflight clean and failed later, one request at
+  // a time. The two lists are built independently and always will be - this is
+  // the only thing that notices when they drift apart again.
+  it("checks a feature action on every path whose plan asks for a feature role", () => {
+    for (const path of PATHS) {
+      const asksForFeatureRole = appPermissionPlan(path).some(
+        (p) => p.kind === "azure-rbac" && p.necessity === "feature",
+      );
+      const checksFeatureAction = REQUIRED_ACTIONS[
+        preflightPathForSetupPath(path)
+      ].some((a) => a.necessity === "feature");
+      expect(checksFeatureAction, `${path} asks=${asksForFeatureRole}`).toBe(
+        asksForFeatureRole,
+      );
+    }
+  });
+
+  it("measures the DCR ingestion grant wherever it asks for RBAC Administrator", () => {
+    // Named concretely as well as structurally: the generic pin above would
+    // still pass if the feature action checked were something unrelated.
+    for (const path of PATHS) {
+      const asks = appPermissionPlan(path).some(
+        (p) => p.name === "RBAC Administrator",
+      );
+      const checks = REQUIRED_ACTIONS[preflightPathForSetupPath(path)].some(
+        (a) => a.action === "Microsoft.Authorization/roleAssignments/write",
+      );
+      expect(checks, path).toBe(asks);
+    }
+  });
+
+  it("measures Sentinel content wherever it asks for Sentinel Contributor", () => {
+    for (const path of PATHS) {
+      const asks = appPermissionPlan(path).some(
+        (p) => p.name === "Microsoft Sentinel Contributor",
+      );
+      const checks = REQUIRED_ACTIONS[preflightPathForSetupPath(path)].some(
+        (a) => a.action.startsWith("Microsoft.SecurityInsights/"),
+      );
+      expect(checks, path).toBe(asks);
     }
   });
 });

@@ -6,6 +6,31 @@ is harder to forget to update than a directory that has to be remembered.
 
 ---
 
+## 1.5.5
+
+**The permission check now measures everything the change request asks for.**
+1.5.3 started asking for Microsoft Sentinel Contributor and RBAC Administrator,
+and nothing verified either - so an identity holding neither passed Permission
+Verification clean and then failed at content install and at the DCR ingestion
+grant, one request at a time.
+
+Three checks added to the existing-workspace path (Sentinel analytic rules,
+Sentinel workspace onboarding, and the DCR role grant) and one to the
+bring-your-own-lab-RG path.
+
+**They report without blocking.** Deploy readiness is a single boolean, so
+adding a check for anything short of essential would have told an operator who
+can deploy DCRs perfectly well that they were not ready. Checks are now `core`
+or `feature`: only core gates readiness, feature ones are measured and shown.
+A scope with everything but the optional grants now reads "all required actions
+granted; 1 optional action(s) missing" rather than a flat MISSING, and those
+rows render `[optional]` instead of `[missing]`.
+
+A contract test now pins that the two lists agree - the ticket cannot ask for a
+role the preflight does not measure without failing the build.
+
+---
+
 ## 1.5.4
 
 **Change-request permission blocks wrap properly.** Caught reviewing 1.5.3 in a

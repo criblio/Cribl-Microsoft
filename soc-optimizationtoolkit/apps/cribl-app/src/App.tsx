@@ -52,6 +52,7 @@ import {
   getActiveConfig,
   getActiveProfile,
   EMPTY_SETUP_RECORD,
+  preflightPathForSetupPath,
   parseAcceptanceRecord,
   parseSetupRecord,
   parseAppOptions,
@@ -75,13 +76,11 @@ import type {
   AppOptions,
   OperationOptions,
   AzureConfig,
-  AzureSetupPath,
   BatchPacing,
   ChangeRequestContext,
   ConnectionProfile,
   JourneyFacts,
   ProfileStore,
-  SetupPath as PreflightSetupPath,
   TargetScope,
   ThemeChoice,
 } from '@soc/core';
@@ -449,16 +448,8 @@ function nowIso(): string {
   return new Date().toISOString();
 }
 
-function defaultPreflightPath(path: AzureSetupPath): PreflightSetupPath {
-  switch (path) {
-    case 'existing':
-      return 'existing-rg';
-    case 'lab-new-rg':
-      return 'lab-new-rg-subscription';
-    case 'lab-byo-rg':
-      return 'lab-byo-rg';
-  }
-}
+// Shared with the local shell via @soc/core: both shells had an identical copy.
+const defaultPreflightPath = preflightPathForSetupPath;
 
 // Panel 3: client_credentials token flow. The app never sets Authorization;
 // proxies.yml injects Basic ${kv.azureBasic} server-side (the proxy strips

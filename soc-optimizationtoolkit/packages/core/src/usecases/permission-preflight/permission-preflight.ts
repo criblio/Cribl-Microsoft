@@ -20,7 +20,11 @@
  *   1. EFFECTIVE ACTIONS - a prediction of WRITE capability. Writes cannot be
  *      probed non-destructively, so the RBAC permissions API is the sound source
  *      for "can this caller create a DCR / a custom table / deploy a template".
- *      This is what gates {@link AzurePreflight.hasRequiredAccess}.
+ *      The CORE ones gate {@link AzurePreflight.hasRequiredAccess}; actions
+ *      marked `feature` are measured and reported but never gate, so adding a
+ *      check for something short of essential (Sentinel content install, the
+ *      DCR ingestion grant) cannot report "not ready" to an operator who can
+ *      deploy perfectly well. See domain/azure-permissions PermissionNecessity.
  *   2. LIVE EXISTENCE PROBES - no-op GETs (workspace GET, tables list, DCR
  *      list). PROBES ARE TRUTH about what is actually reachable/readable right
  *      now. They decorate the report but never, on their own, flip
@@ -55,8 +59,9 @@ import type { AzureManagement, AzureManagementRequest } from "../../ports/azure-
 import type { CriblClient } from "../../ports/cribl-client";
 import type { Logger } from "../../ports/logger";
 import {
+  checkResult,
   evaluatePermissions,
-  allGranted,
+  coreGranted,
   REQUIRED_ACTIONS,
 } from "../../domain/azure-permissions";
 import type {
@@ -412,11 +417,8 @@ function extractPermissionSets(body: unknown): PermissionSet[] {
 
 /** Build a denied check result for every required action (permissions unread). */
 function deniedChecks(setupPath: SetupPath): PermissionCheckResult[] {
-  return REQUIRED_ACTIONS[setupPath].map((req) => ({
-    action: req.action,
-    label: req.label,
-    granted: false,
-  }));
+  return REQUIRED_ACTIONS[setupPath].map((req) => checkResult(req, false));
+
 }
 
 // ---------------------------------------------------------------------------
@@ -555,7 +557,7 @@ export async function runAzurePreflight(
     probeRequests.map((p) => probeAzure(azure, p.name, p.label, p.request)),
   );
 
-  const hasRequiredAccess = permissionsFetched && allGranted(checks);
+  const hasRequiredAccess = permissionsFetched && coreGranted(checks);
   logger?.info("permission-preflight: azure evaluated", {
     setupPath,
     scopeKind,
