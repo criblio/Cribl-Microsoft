@@ -48,6 +48,20 @@ export interface RoleRequirement {
   /** One-line justification for this specific role. */
   justification: string;
   /**
+   * The app capability that needs this role - the "which" a reviewer reads
+   * before the "why". Lives here rather than in the ticket generator so the
+   * CLI, the role ticket, and the app-registration ticket all name the same
+   * capability for the same role.
+   */
+  feature: string;
+  /**
+   * What still works if this role is NOT granted. An approver who cannot grant
+   * everything needs to know the cost of each refusal, and stating it is also
+   * the honest form of the request - see docs/inventory-standard.md for the
+   * same principle applied to listings.
+   */
+  withoutIt: string;
+  /**
    * Optional assignment condition (the lab-new-rg RBAC Administrator constrains
    * which roles and principal types it may in turn assign).
    */
@@ -81,6 +95,9 @@ export function rolePlanForSetupPath(path: AzureSetupPath): RoleRequirement[] {
         scopeLevel: "subscription",
         justification:
           "Create the lab resource group and deploy the workspace, DCRs, and tables inside it (resource group creation is a subscription-level action, so no workspace-scoped roles are needed on this path).",
+        feature: "Deploy the lab environment",
+        withoutIt:
+          "Nothing on this path runs - the lab cannot create its resource group, so there is nowhere to deploy.",
       },
       {
         role: "RBAC Administrator",
@@ -90,6 +107,9 @@ export function rolePlanForSetupPath(path: AzureSetupPath): RoleRequirement[] {
         condition:
           "Constrain roles and principal types: only Contributor and Monitoring Metrics Publisher, only to service principals.",
         assignViaPortal: true,
+        feature: "Lab TTL self-destruct",
+        withoutIt:
+          "The lab deploys but never auto-deletes, so it lingers as orphaned cost until someone removes it by hand.",
       },
     ];
   }
@@ -100,6 +120,9 @@ export function rolePlanForSetupPath(path: AzureSetupPath): RoleRequirement[] {
         scopeLevel: "resourceGroup",
         justification:
           "Deploy the lab workspace, DCRs, and tables into the pre-created lab resource group; no subscription-scope rights are needed.",
+        feature: "Deploy the lab environment",
+        withoutIt:
+          "Nothing on this path runs - there is no other scope the lab is allowed to deploy into.",
       },
     ];
   }
@@ -110,18 +133,27 @@ export function rolePlanForSetupPath(path: AzureSetupPath): RoleRequirement[] {
       scopeLevel: "subscription",
       justification:
         "Discover subscriptions, resource groups, workspaces, and existing DCRs before deploying.",
+      feature: "Discovery and gap analysis",
+      withoutIt:
+        "The app cannot find your workspace or read the DCRs already deployed, so every screen that starts from your environment is empty and gap analysis has nothing to compare against.",
     },
     {
       role: "Monitoring Contributor",
       scopeLevel: "resourceGroup",
       justification:
         "Create and update Data Collection Rules in the workspace resource group.",
+      feature: "Deploy Data Collection Rules",
+      withoutIt:
+        "The app can still generate the DCR ARM template for someone else to deploy, but cannot deploy it itself - no data path is created.",
     },
     {
       role: "Log Analytics Contributor",
       scopeLevel: "resourceGroup",
       justification:
         "Create custom Log Analytics tables and configure the workspace for ingestion.",
+      feature: "Create custom tables",
+      withoutIt:
+        "Onboarding a source to a table that does not exist yet fails; existing native tables can still be targeted.",
     },
   ];
 }
