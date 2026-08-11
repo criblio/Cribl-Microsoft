@@ -28,6 +28,7 @@
  */
 
 import { useState } from "react";
+import type { ReactNode } from "react";
 import { appRegistrationRequest } from "@soc/core";
 import type {
   ChangeRequestContext,
@@ -92,6 +93,22 @@ export interface SetupWizardProps {
   /** Guidance for where the Azure service-principal identity is configured. */
   azureConnectGuidance?: string;
   /**
+   * The shell's App-registration-and-connect form, rendered INSIDE the Connect
+   * Azure step.
+   *
+   * Reported 2026-08-11: the step was titled "Connect Azure" and was the one
+   * place you could not connect Azure - it offered the change-request generator
+   * and a line of grey text pointing at the Setup page. The wizard had been
+   * optimised for the operator who must wait on another team for credentials,
+   * and left the one holding credentials at a dead end.
+   *
+   * Passed as a NODE rather than threading the section's ten props through here:
+   * both shells already construct this element for the Setup page, so this reuses
+   * their wiring instead of duplicating it. Absent = the guidance-only step, so
+   * an unwired shell is unchanged.
+   */
+  azureConnectSection?: ReactNode;
+  /**
    * The active connection's change-request context (app name + non-secret
    * config). When present, the Azure step renders the app-registration ticket
    * generator INLINE.
@@ -139,6 +156,7 @@ export function SetupWizard(props: SetupWizardProps) {
     onReconnect,
     connectGuidance,
     azureConnectGuidance,
+    azureConnectSection,
     azureChangeRequestContext,
     uploadArtifactName,
     repositoriesReachable = false,
@@ -266,10 +284,13 @@ export function SetupWizard(props: SetupWizardProps) {
             />
           )}
           {currentViewId === "connect-azure" && (
-            <AzureConnectStep
-              guidance={azureConnectGuidance}
-              changeRequestContext={azureChangeRequestContext}
-            />
+            <>
+              <AzureConnectStep
+                guidance={azureConnectGuidance}
+                changeRequestContext={azureChangeRequestContext}
+              />
+              {azureConnectSection}
+            </>
           )}
           {currentViewId === "preflight" && (
             <div className="wizard-step">

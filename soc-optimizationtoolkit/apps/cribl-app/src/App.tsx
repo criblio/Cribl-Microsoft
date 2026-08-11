@@ -1346,6 +1346,37 @@ function App() {
   // The target is FIXED to cribl-hosted and locked: this shell only ever runs
   // installed inside a Cribl.Cloud workspace, so the target is a fact to state,
   // never a choice to offer (the lockTarget prop exists for exactly this).
+  // The SAME element the wizard's Connect Azure step renders, so the operator can
+  // enter credentials there instead of being pointed at this page (reported
+  // 2026-08-11). Built once; used in both places.
+  const azureConnectElement = (
+    <AzureConnectSection
+      key={`connect-${store.activeProfileId ?? 'none'}`}
+      tenantId={activeConfig.tenantId}
+      onTenantIdChange={(v) => updateField({ tenantId: v })}
+      clientId={activeConfig.clientId}
+      onClientIdChange={(v) => updateField({ clientId: v })}
+      setupPath={activeConfig.setupPath}
+      onSetupPathChange={(v) => updateField({ setupPath: v })}
+      secretLive={secretLive}
+      ctx={changeRequestCtx}
+      onConnect={connectAzure}
+      storageNote={
+        'Save and connect combines the client secret with the client ID as ' +
+        'base64(clientId:clientSecret) and writes it to the encrypted, write-only KV entry ' +
+        'azureBasic, then acquires an Azure AD ARM token (grant_type=client_credentials, ARM ' +
+        'scope) and stores it encrypted under azureArmToken. The app never sets an Authorization ' +
+        'header - the platform proxy injects the secret and token server-side per proxies.yml, ' +
+        'and the secret can never be read back. azureBasic is a single shared slot, so only one ' +
+        "connection's secret is live at a time: switching connections clears it and you re-enter " +
+        'and reconnect here. If a secret is already stored the field stays blank - enter a new ' +
+        'value only to replace it. The client ID, tenant ID, and setup path are non-secret ' +
+        'configuration remembered per connection in the plain azureProfiles KV entry. The ' +
+        "connection bar above shows whether this connection's secret is live this session."
+      }
+    />
+  );
+
   if (phase.phase === 'aua' || phase.phase === 'setup') {
     return (
       <PortsProvider ports={cloudPorts} config={activeConfig}>
@@ -1372,6 +1403,7 @@ function App() {
           contentPlatform="cloud"
           defaultSetupPath={defaultPreflightPath(activeConfig.setupPath)}
           azureChangeRequestContext={changeRequestCtx}
+          azureConnectSection={azureConnectElement}
           azureConnectGuidance={
             'Already have the credentials? Enter the tenant id, client id, and secret in the ' +
             'App registration and connect section on Setup. The secret is stored encrypted in ' +
@@ -1572,31 +1604,7 @@ function App() {
     <>
       {/* The journey's connect action scrolls here (SHELL_LINK_OVERRIDES). */}
       <div id="setup-connect-section" />
-      <AzureConnectSection
-        key={`connect-${store.activeProfileId ?? 'none'}`}
-        tenantId={activeConfig.tenantId}
-        onTenantIdChange={(v) => updateField({ tenantId: v })}
-        clientId={activeConfig.clientId}
-        onClientIdChange={(v) => updateField({ clientId: v })}
-        setupPath={activeConfig.setupPath}
-        onSetupPathChange={(v) => updateField({ setupPath: v })}
-        secretLive={secretLive}
-        ctx={changeRequestCtx}
-        onConnect={connectAzure}
-        storageNote={
-          'Save and connect combines the client secret with the client ID as ' +
-          'base64(clientId:clientSecret) and writes it to the encrypted, write-only KV entry ' +
-          'azureBasic, then acquires an Azure AD ARM token (grant_type=client_credentials, ARM ' +
-          'scope) and stores it encrypted under azureArmToken. The app never sets an Authorization ' +
-          'header - the platform proxy injects the secret and token server-side per proxies.yml, ' +
-          'and the secret can never be read back. azureBasic is a single shared slot, so only one ' +
-          "connection's secret is live at a time: switching connections clears it and you re-enter " +
-          'and reconnect here. If a secret is already stored the field stays blank - enter a new ' +
-          'value only to replace it. The client ID, tenant ID, and setup path are non-secret ' +
-          'configuration remembered per connection in the plain azureProfiles KV entry. The ' +
-          "connection bar above shows whether this connection's secret is live this session."
-        }
-      />
+      {azureConnectElement}
       <AzureResourcesSection
         key={`resources-${store.activeProfileId ?? 'none'}`}
         clientId={activeConfig.clientId}
@@ -1833,7 +1841,10 @@ function App() {
       batch={renderBatch(nav)}
       inventory={
         <PortsProvider ports={cloudPorts} config={activeConfig}>
-          <DcrInventoryPanel />
+          <DcrInventoryPanel
+            capabilities={capabilityAudit.capabilities}
+            capabilityContext={capabilityAudit.context}
+          />
         </PortsProvider>
       }
       singleDisabledReason={
