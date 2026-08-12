@@ -328,3 +328,75 @@ describe("value discrimination revives unreachable routes", () => {
     expect(checkCriblYaml(generateRouteYml(zscalerLike(true)), "route.yml")).toEqual([]);
   });
 });
+
+/**
+ * The warning and the emitted file must name the SAME surviving catch-all.
+ *
+ * unreachableLogTypes and generateRouteYml both have to decide which match-all
+ * lives. They used to compute that separately - one from plan order, one from
+ * a sorted copy - and agreed only because the sort is stable. Architecture
+ * audit 2026-08-12 made them read one sequence; this pins the consequence, so
+ * a future reorder cannot make the app name one log type as dead while the
+ * pack kills a different one.
+ */
+describe("unreachableLogTypes agrees with the emitted order", () => {
+  /** A match-all deliberately FIRST in plan order, discriminated after it. */
+  function matchAllFirst() {
+    return buildPipelinePlan({
+      solutionName: "Vendor",
+      packName: "vendor-sentinel",
+      tables: [
+        {
+          sentinelTable: "CommonSecurityLog",
+          logType: "catchall",
+          sourceFormat: "cef" as const,
+          presetFields: [
+            { source: "shared", target: "SourceIP", type: "string", action: "rename" as const },
+          ],
+        },
+        {
+          sentinelTable: "CommonSecurityLog",
+          logType: "alsoCatchall",
+          sourceFormat: "cef" as const,
+          presetFields: [
+            { source: "shared", target: "SourceIP", type: "string", action: "rename" as const },
+          ],
+        },
+        {
+          sentinelTable: "CommonSecurityLog",
+          logType: "distinct",
+          sourceFormat: "cef" as const,
+          presetFields: [
+            { source: "onlyHere", target: "DestinationIP", type: "string", action: "rename" as const },
+          ],
+        },
+      ],
+    });
+  }
+
+  it("names the log type the emitted file actually starves", () => {
+    const plan = matchAllFirst();
+    const dead = unreachableLogTypes(plan);
+    const yaml = generateRouteYml(plan);
+
+    // Exactly one match-all survives, so exactly one is reported dead.
+    expect(dead).toHaveLength(1);
+
+    // The survivor is whichever match-all route the file emits FIRST, and the
+    // reported one must not be it.
+    const order = ["catchall", "alsoCatchall"].map((s) => ({
+      suffix: s,
+      at: yaml.indexOf(`Reduction + Transform: ${s}`),
+    }));
+    order.sort((a, b) => a.at - b.at);
+    expect(dead).not.toContain(order[0].suffix);
+    expect(dead).toContain(order[1].suffix);
+  });
+
+  it("puts the discriminated route ahead of both match-alls", () => {
+    const yaml = generateRouteYml(matchAllFirst());
+    expect(yaml.indexOf("Transform: distinct")).toBeLessThan(
+      yaml.indexOf("Reduction + Transform: catchall"),
+    );
+  });
+});

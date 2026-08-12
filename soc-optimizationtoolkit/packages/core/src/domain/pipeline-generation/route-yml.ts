@@ -39,6 +39,37 @@ import {
   reductionRouteId,
 } from "./naming";
 
+/**
+ * The match-all sentinel, and the ONE place that recognises it.
+ *
+ * Architecture audit 2026-08-12: this predicate was written out six times
+ * across plan.ts and this file. Two of those sites have to agree or the
+ * product lies - {@link unreachableLogTypes} names the dead log types and
+ * {@link emissionOrder} decides which one survives - and until now they agreed
+ * only because both happened to spell the same literal.
+ */
+function isMatchAll(table: TablePlan): boolean {
+  return table.routeCondition === "true";
+}
+
+/**
+ * Tables in the order their routes are EMITTED: match-alls last.
+ *
+ * A final match-all emitted first makes every later route unreachable (live
+ * flaw 2026-07-13). Sorting is stable, so discriminated pairs keep their
+ * relative order and so do the match-alls among themselves - which is what
+ * makes "the first match-all" a well-defined thing for both callers.
+ *
+ * Shared rather than duplicated: {@link unreachableLogTypes} used to derive
+ * its answer from plan order and agree with the emitter only by the accident
+ * of that stability. Now both read the same sequence, so they cannot drift.
+ */
+function emissionOrder(plan: PipelinePlan): TablePlan[] {
+  return [...plan.tables].sort(
+    (a, b) => Number(isMatchAll(a)) - Number(isMatchAll(b)),
+  );
+}
+
 /** Build the route filter line: unquoted-match-all vs an escaped condition. */
 function filterLine(routeCondition: string): string {
   // YAML `filter: true` (unquoted) means match all; we always quote the value.
@@ -94,9 +125,10 @@ export function buildRouteEntries(
  * The log types whose routes CANNOT receive events, in route order.
  *
  * Every route is `final: true`, so the first match-all route consumes each
- * event and terminates routing - any match-all after it is dead. The plan
- * orders match-alls last, which is what makes the FIRST one a legitimate
- * catch-all; this reports the rest.
+ * event and terminates routing - any match-all after it is dead. Read from
+ * {@link emissionOrder}, the same sequence generateRouteYml emits, so "the
+ * first match-all" means the same thing here and in the file: the surviving
+ * catch-all. This reports the rest.
  *
  * Generic, not per-vendor: a log type ends up match-all whenever
  * deriveRouteDiscriminator cannot separate it from its siblings, which happens
@@ -112,24 +144,15 @@ export function buildRouteEntries(
  * because nobody opens route.yml.
  */
 export function unreachableLogTypes(plan: PipelinePlan): string[] {
-  const matchAll = plan.tables
-    .filter((t) => t.routeCondition === "true")
-    .map((t) => t.suffix);
+  const matchAll = emissionOrder(plan).filter(isMatchAll).map((t) => t.suffix);
   // The first match-all is the catch-all and is reachable; the rest are not.
   return matchAll.slice(1);
 }
 
 /** Emit the full route.yml for a resolved {@link PipelinePlan}. */
 export function generateRouteYml(plan: PipelinePlan): string {
-  // Match-all pairs go LAST (live flaw 2026-07-13: a final match-all route
-  // emitted first made every later route unreachable). Discriminated pairs
-  // keep their relative order; at most one match-all is reachable, so any
-  // beyond the first get an honest warning comment.
-  const ordered = [...plan.tables].sort(
-    (a, b) =>
-      Number(a.routeCondition === "true") - Number(b.routeCondition === "true"),
-  );
-  const catchAlls = ordered.filter((t) => t.routeCondition === "true").length;
+  const ordered = emissionOrder(plan);
+  const catchAlls = ordered.filter(isMatchAll).length;
   const allRouteEntries: string[] = [];
   for (const table of ordered) {
     allRouteEntries.push(...buildRouteEntries(plan, table));
