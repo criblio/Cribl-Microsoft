@@ -497,3 +497,56 @@ describe("selective drop inside the catch-all (user decision 2026-08-12)", () =>
     expect(conf).toContain("SourceUserName");
   });
 });
+
+describe("the CEF identity override reaches the emitted pipeline", () => {
+  // The chain that was broken end to end: generatePipelineConf has accepted an
+  // identityOverride since 1.5.0 and NOTHING ever passed one - not the plan,
+  // not generatePipelineConfForPlan, not any screen. The capability shipped
+  // unreachable. These pin the seam, not the formatting.
+  const planWith = (identityOverride?: { DeviceVendor?: string }) =>
+    buildPipelinePlan({
+      solutionName: "Zscaler Internet Access",
+      packName: "MS-Sentinel-Zscaler",
+      version: "1.0.0",
+      tables: [
+        {
+          sentinelTable: "CommonSecurityLog",
+          logType: "ALLOWED",
+          sourceFormat: "cef",
+          presetFields: [
+            { source: "src", target: "SourceIP", type: "string", action: "keep" },
+          ],
+          ...(identityOverride !== undefined ? { identityOverride } : {}),
+        } as TablePlanInput,
+      ],
+    }).tables[0]!;
+
+  it("carries the override from the plan INPUT onto the plan", () => {
+    expect(planWith({ DeviceVendor: "Zscaler" }).identityOverride).toEqual({
+      DeviceVendor: "Zscaler",
+    });
+  });
+
+  it("EMITS it - the whole chain, through the pack build's entry point", () => {
+    const conf = generatePipelineConfForPlan(
+      planWith({ DeviceVendor: "Zscaler" }),
+      "Zscaler Internet Access",
+    );
+    expect(conf).toContain("Zscaler");
+    expect(conf).toContain("DeviceVendor");
+  });
+
+  it("emits NOTHING when no override is set", () => {
+    // A correction nobody asked for must never appear: silently rewriting a
+    // vendor string is exactly the failure this feature exists to catch.
+    const withNone = generatePipelineConfForPlan(
+      planWith(),
+      "Zscaler Internet Access",
+    );
+    const withOne = generatePipelineConfForPlan(
+      planWith({ DeviceVendor: "Zscaler" }),
+      "Zscaler Internet Access",
+    );
+    expect(withOne.length).toBeGreaterThan(withNone.length);
+  });
+});

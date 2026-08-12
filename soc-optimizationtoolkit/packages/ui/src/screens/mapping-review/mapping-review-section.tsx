@@ -75,6 +75,8 @@ import {
   vendorPacksForSolution,
 } from "@soc/core";
 import type {
+  CefIdentityFinding,
+  CefIdentityOverride,
   ContentCache,
   DestinationTableResolution,
   GapFieldMapping,
@@ -91,6 +93,7 @@ import type {
 import { InfoTip } from "../../components/info-tip";
 import { EnrichmentEditor } from "./enrichment-editor";
 import { IdentityBlock } from "./identity-block";
+import { IdentityMismatchBlock } from "./identity-mismatch-block";
 import { useEnrichmentFields, useLearnedMappings } from "./mapping-review-hooks";
 import { SearchableSelect } from "../../components/searchable-select";
 import {
@@ -220,6 +223,18 @@ export interface MappingReviewSectionProps {
    * from the rules section still protects workbook-consumed fields.
    */
   dropUnneededEvent?: { nonce: number };
+  /**
+   * Per-logType findings comparing the sample's DeviceVendor/DeviceProduct
+   * against what the selected solution's rules filter on. Empty when no rules
+   * were loaded, or when they never constrain those fields - in which case the
+   * card shows nothing, because there is no disagreement to report.
+   */
+  identityFindings?: Readonly<Record<string, readonly CefIdentityFinding[]>>;
+  /** The corrections currently in force, keyed by logType. */
+  identityOverrides?: Readonly<Record<string, CefIdentityOverride>>;
+  onIdentityOverridesChange?: (
+    next: Readonly<Record<string, CefIdentityOverride>>,
+  ) => void;
   /** Diagnostics sink - analysis runs narrate into the Logs page. */
   logger?: Logger;
 }
@@ -273,6 +288,9 @@ export function MappingReviewSection({
   learnedCache,
   contentRequirements,
   dropUnneededEvent,
+  identityFindings,
+  identityOverrides,
+  onIdentityOverridesChange,
   logger,
 }: MappingReviewSectionProps) {
   const activeContent = content ?? EMPTY_SENTINEL_CONTENT;
@@ -1015,6 +1033,20 @@ export function MappingReviewSection({
                 }
               />
             )}
+
+            {/* Rendered right after the identity block: that one answers "is it
+                set", this one "is it the value the content looks for". Both are
+                about the same two fields, so they belong together. */}
+            <IdentityMismatchBlock
+              findings={identityFindings?.[report.logType] ?? []}
+              override={identityOverrides?.[report.logType] ?? {}}
+              onOverrideChange={(next) =>
+                onIdentityOverridesChange?.({
+                  ...(identityOverrides ?? {}),
+                  [report.logType]: next,
+                })
+              }
+            />
 
             {vendorDocPacks.length > 0 && (
               <p className="field-hint vendor-doc-links">

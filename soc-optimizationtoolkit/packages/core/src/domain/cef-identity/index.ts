@@ -6,7 +6,9 @@
  */
 export {
   CEF_IDENTITY_FIELDS,
+  actionableCefIdentity,
   applyCefIdentityOverride,
+  cefIdentityFindings,
   expectedCefIdentity,
   findCefIdentity,
   findCefIdentityAll,

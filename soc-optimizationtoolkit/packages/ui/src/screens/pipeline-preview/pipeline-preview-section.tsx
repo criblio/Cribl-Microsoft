@@ -21,7 +21,7 @@
  */
 
 import { useMemo } from "react";
-import type { GapFieldMapping, GapReport } from "@soc/core";
+import type { CefIdentityOverride, GapFieldMapping, GapReport } from "@soc/core";
 import { InfoTip } from "../../components/info-tip";
 import {
   derivePipelinePreview,
@@ -45,6 +45,8 @@ export interface PipelinePreviewSectionProps {
   sampleFormats?: Readonly<Record<string, string>>;
   /** User-added enrichment constants keyed by logType (merged by the caller). */
   enrichments?: Readonly<Record<string, readonly EnrichmentField[]>>;
+  /** Corrected DeviceVendor/DeviceProduct keyed by logType. */
+  identityOverrides?: Readonly<Record<string, CefIdentityOverride>>;
   /** The mapping-review content-path gate (every table approved, not stale). */
   approved: boolean;
 }
@@ -101,6 +103,7 @@ export function PipelinePreviewSection({
   mappingOverrides,
   sampleFormats,
   enrichments,
+  identityOverrides,
   approved,
 }: PipelinePreviewSectionProps) {
   const view = useMemo(
@@ -113,6 +116,7 @@ export function PipelinePreviewSection({
         ...(mappingOverrides !== undefined ? { mappingOverrides } : {}),
         ...(sampleFormats !== undefined ? { sampleFormats } : {}),
         ...(enrichments !== undefined ? { enrichments } : {}),
+        ...(identityOverrides !== undefined ? { identityOverrides } : {}),
         approved,
       }),
     [
@@ -123,6 +127,7 @@ export function PipelinePreviewSection({
       mappingOverrides,
       sampleFormats,
       enrichments,
+      identityOverrides,
       approved,
     ],
   );

@@ -59,6 +59,8 @@ import {
   DEFAULT_OPERATION_OPTIONS,
   SENTINEL_SECRET_PLACEHOLDER,
   assemblePack,
+  cefIdentityFindings,
+  extractDiscriminatorValues,
   listDcrInventory,
   placeholderWarning,
   resolveDestinations,
@@ -94,6 +96,8 @@ import type {
   PackScaffoldInput,
   PackVendorSample,
   SolutionRef,
+  CefIdentityFinding,
+  CefIdentityOverride,
   DcrInventoryEntry,
   SessionDestination,
   TableAssemblyInput,
@@ -619,6 +623,43 @@ export function IntegrateScreen({
   // and parses them - nothing is fetched twice. Until they do, the view reads
   // 'unknown' and gates nothing.
   const [contentItems, setContentItems] = useState<ContentItem[]>([]);
+  // Corrected DeviceVendor/DeviceProduct per logType. Keyed by logType because
+  // one solution can send several feeds whose headers differ - a single override
+  // would silently rewrite the ones that were already right.
+  const [identityOverrides, setIdentityOverrides] = useState<
+    Readonly<Record<string, CefIdentityOverride>>
+  >({});
+  // What the solution's OWN analytic rules compare these fields against, per
+  // logType. Derived from the rule queries the coverage section already fetched
+  // - never typed in, so the app can only ever suggest a value the content
+  // itself names.
+  const identityFindings = useMemo(() => {
+    const queries = contentItems.flatMap((item) => item.queries);
+    if (queries.length === 0) return {} as Record<string, CefIdentityFinding[]>;
+    const byLogType: Record<string, CefIdentityFinding[]> = {};
+    for (const report of gapReports) {
+      const sample: Partial<Record<"DeviceVendor" | "DeviceProduct", string>> = {};
+      for (const m of report.fieldMappings) {
+        if (m.dest === "DeviceVendor" || m.dest === "DeviceProduct") {
+          if (m.sampleValue !== undefined) sample[m.dest] = m.sampleValue;
+        }
+      }
+      // An enrichment constant overwrites the sample's value at runtime, so it
+      // is what the rules will actually see - compare against that, not the raw
+      // sample, or the app would flag a mismatch the operator already fixed.
+      for (const e of enrichments[report.logType] ?? []) {
+        if (e.field === "DeviceVendor" || e.field === "DeviceProduct") {
+          sample[e.field] = e.value;
+        }
+      }
+      byLogType[report.logType] = cefIdentityFindings(
+        sample,
+        queries,
+        extractDiscriminatorValues,
+      );
+    }
+    return byLogType;
+  }, [contentItems, gapReports, enrichments]);
   const [sampleSetConfirmed, setSampleSetConfirmed] = useState(false);
   const sampleCoverageView = useMemo(() => {
     const expected = deriveExpectedLogTypes(contentItems);
@@ -736,6 +777,7 @@ export function IntegrateScreen({
         reports: gapReports,
         mappingOverrides,
         sampleFormats,
+        identityOverrides,
         enrichments,
         approved: mappingsApproved,
         version: packVersion,
@@ -951,6 +993,7 @@ export function IntegrateScreen({
     ports.packs,
     // The DCR listing that resolves real destination values.
     ports.azure,
+    identityOverrides,
     ports.packInstall,
     ports.logger,
     packBuilding,
@@ -1230,6 +1273,9 @@ export function IntegrateScreen({
         renameEvent={renameEvent}
         contentRequirements={contentRequirements}
         dropUnneededEvent={dropUnneededEvent}
+        identityFindings={identityFindings}
+        identityOverrides={identityOverrides}
+        onIdentityOverridesChange={setIdentityOverrides}
         logger={ports.logger}
       />
       {/* COLLAPSED by default: the full per-pipeline detail is reference
@@ -1250,6 +1296,7 @@ export function IntegrateScreen({
           mappingOverrides={mappingOverrides}
           sampleFormats={sampleFormats}
           enrichments={enrichments}
+          identityOverrides={identityOverrides}
           approved={mappingsApproved}
         />
       </details>
