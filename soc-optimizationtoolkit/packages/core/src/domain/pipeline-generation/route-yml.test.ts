@@ -257,3 +257,74 @@ describe("unreachableLogTypes - overlapping match-all routes", () => {
     expect(matchAllRoutes).toBe((unreachableLogTypes(plan).length + 1) * 2);
   });
 });
+
+/**
+ * End to end: sample VALUES turn the dead routes back on.
+ *
+ * The regression this closes was measured on the real pack - ten Zscaler log
+ * types through one CommonSecurityLog schema, seven of them unreachable
+ * because nothing but a field value told them apart. The unit pins for the
+ * derivation live in route-value-discriminator.test.ts; this one pins the
+ * thing the operator actually gets, which is the number of routes that can
+ * receive events.
+ */
+describe("value discrimination revives unreachable routes", () => {
+  const LOG_TYPES = ["ALLOWED", "BLOCKED", "CAUTIONED", "OUTOFRANGE", "firewall"];
+
+  /** One shared schema; only `action` differs, exactly like the live corpus. */
+  function zscalerLike(withValues: boolean) {
+    return buildPipelinePlan({
+      solutionName: "Zscaler Internet Access",
+      packName: "ms-sentinel-zscaler-internet",
+      tables: LOG_TYPES.map((logType) => ({
+        sentinelTable: "CommonSecurityLog",
+        logType,
+        sourceFormat: "cef" as const,
+        presetFields: [
+          { source: "action", target: "DeviceAction", type: "string", action: "rename" as const },
+          { source: "src", target: "SourceIP", type: "string", action: "rename" as const },
+        ],
+        ...(withValues
+          ? {
+              sampleFieldValues: {
+                eventCount: 3,
+                values: {
+                  action: [logType, logType, logType],
+                  src: ["10.0.0.1", "10.0.0.2", "10.0.0.3"],
+                },
+              },
+            }
+          : {}),
+      })),
+    });
+  }
+
+  it("WITHOUT values, four of five routes are dead - the shipped defect", () => {
+    expect(unreachableLogTypes(zscalerLike(false))).toHaveLength(LOG_TYPES.length - 1);
+  });
+
+  it("WITH values, every log type can receive events", () => {
+    expect(unreachableLogTypes(zscalerLike(true))).toEqual([]);
+  });
+
+  it("routes on the discriminating field, not on per-event data", () => {
+    const yaml = generateRouteYml(zscalerLike(true));
+    expect(yaml).toContain("action");
+    // src separates these samples perfectly too, and must never be chosen.
+    expect(yaml).not.toContain("SourceIP ===");
+    expect(yaml).not.toContain("10.0.0.1");
+  });
+
+  it("gives every log type a DISTINCT filter", () => {
+    const plan = zscalerLike(true);
+    const filters = plan.tables.map((t) => t.routeCondition);
+    expect(new Set(filters).size).toBe(LOG_TYPES.length);
+    expect(filters).not.toContain("true");
+  });
+
+  it("still emits YAML the Cribl loader accepts", () => {
+    // The filters now carry quotes and JS operators - the exact shape most
+    // likely to break the emitter's escaping.
+    expect(checkCriblYaml(generateRouteYml(zscalerLike(true)), "route.yml")).toEqual([]);
+  });
+});
