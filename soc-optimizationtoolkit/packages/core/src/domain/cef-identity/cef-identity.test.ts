@@ -19,6 +19,7 @@ import {
   cefIdentityFindings,
   actionableCefIdentity,
   extractCefIdentityValues,
+  effectiveCefIdentity,
 } from "./cef-identity";
 import type { DiscriminatorValue } from "../coverage-analysis";
 
@@ -286,5 +287,66 @@ describe("cefIdentityFindings + actionableCefIdentity - the analysis surface", (
       expect(f.suggested).not.toBeNull();
       expect(f.expected).toContain(f.suggested);
     }
+  });
+});
+
+describe("effectiveCefIdentity - what the rules will actually see", () => {
+  // Extracted from the Integrate screen by the architecture audit 2026-08-12:
+  // it spelled "DeviceVendor" and "DeviceProduct" out three times, so a field
+  // added to the header set later would have been silently skipped - the same
+  // renders-nothing failure this feature already shipped once.
+  it("takes the sample's value when only the sample has one", () => {
+    expect(
+      effectiveCefIdentity([{ dest: "DeviceVendor", sampleValue: "Acme" }], []),
+    ).toEqual({ DeviceVendor: "Acme" });
+  });
+
+  it("lets an ENRICHMENT override the sample - it wins at runtime", () => {
+    // The load-bearing rule. The enrichment Eval overwrites whatever the rename
+    // produced, so comparing the raw sample would flag a mismatch the operator
+    // has already corrected, and an advisory that will not go away is how the
+    // real one gets ignored.
+    expect(
+      effectiveCefIdentity(
+        [{ dest: "DeviceVendor", sampleValue: "Acme" }],
+        [{ field: "DeviceVendor", value: "ZScaler" }],
+      ),
+    ).toEqual({ DeviceVendor: "ZScaler" });
+  });
+
+  it("takes an enrichment when the sample carries nothing", () => {
+    expect(
+      effectiveCefIdentity([], [{ field: "DeviceProduct", value: "NSSWeblog" }]),
+    ).toEqual({ DeviceProduct: "NSSWeblog" });
+  });
+
+  it("omits a field neither source provides", () => {
+    // Absent must stay absent: findCefIdentity reports `absent` and offers the
+    // expected value, which is different from carrying an empty string.
+    expect(effectiveCefIdentity([], [])).toEqual({});
+  });
+
+  it("ignores mappings and enrichments for OTHER fields", () => {
+    expect(
+      effectiveCefIdentity(
+        [{ dest: "SourceIP", sampleValue: "10.0.0.1" }],
+        [{ field: "Activity", value: "x" }],
+      ),
+    ).toEqual({});
+  });
+
+  it("covers EVERY field in CEF_IDENTITY_FIELDS, by iteration", () => {
+    // Pinned as coverage of the list rather than of two names, so adding a
+    // third header field cannot leave this silently collecting two of three.
+    const mappings = CEF_IDENTITY_FIELDS.map((f) => ({
+      dest: f,
+      sampleValue: `v-${f}`,
+    }));
+    const out = effectiveCefIdentity(mappings, []);
+    expect(Object.keys(out).sort()).toEqual([...CEF_IDENTITY_FIELDS].sort());
+  });
+
+  it("a mapping with no sampleValue does not fabricate one", () => {
+    expect(effectiveCefIdentity([{ dest: "DeviceVendor" }], [])).toEqual({});
   });
 });
