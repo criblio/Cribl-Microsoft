@@ -90,6 +90,35 @@ export function buildRouteEntries(
   return entries;
 }
 
+/**
+ * The log types whose routes CANNOT receive events, in route order.
+ *
+ * Every route is `final: true`, so the first match-all route consumes each
+ * event and terminates routing - any match-all after it is dead. The plan
+ * orders match-alls last, which is what makes the FIRST one a legitimate
+ * catch-all; this reports the rest.
+ *
+ * Generic, not per-vendor: a log type ends up match-all whenever
+ * deriveRouteDiscriminator cannot separate it from its siblings, which happens
+ * to every vendor whose log types share a schema and differ by field VALUE
+ * rather than field presence - Zscaler ALLOWED/CAUTIONED/BLOCKED, Palo Alto
+ * TRAFFIC/THREAT, Fortinet subtypes. Zscaler is just where it was measured.
+ *
+ * The failure it exposes is silent by construction: the pack builds, the YAML
+ * validates, Cribl installs it, and the affected log types are quietly handled
+ * by the first match-all's pipeline - the wrong renames, and for CEF web logs
+ * no base64 decode - so the data lands mis-shaped rather than not at all.
+ * Callers surface this BEFORE the build; route.yml's comment is not enough,
+ * because nobody opens route.yml.
+ */
+export function unreachableLogTypes(plan: PipelinePlan): string[] {
+  const matchAll = plan.tables
+    .filter((t) => t.routeCondition === "true")
+    .map((t) => t.suffix);
+  // The first match-all is the catch-all and is reachable; the rest are not.
+  return matchAll.slice(1);
+}
+
 /** Emit the full route.yml for a resolved {@link PipelinePlan}. */
 export function generateRouteYml(plan: PipelinePlan): string {
   // Match-all pairs go LAST (live flaw 2026-07-13: a final match-all route

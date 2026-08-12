@@ -9,7 +9,7 @@
 
 import { describe, it, expect } from "vitest";
 import { buildPipelinePlan } from "./plan";
-import { generateRouteYml } from "./route-yml";
+import { generateRouteYml, unreachableLogTypes } from "./route-yml";
 import { checkCriblYaml } from "./cribl-yaml-validator";
 import type { TableRoutingInfo } from "../gap-analysis";
 
@@ -165,5 +165,95 @@ describe("route pipeline references match the pipeline names (suffix-mismatch fi
     expect(t.pipelineName.endsWith(t.suffix)).toBe(true);
     expect(t.reductionPipelineId.endsWith(t.suffix)).toBe(true);
     expect(t.suffix.length).toBeLessThanOrEqual(25);
+  });
+});
+
+/**
+ * Unreachable match-all routes. Measured on the Zscaler Internet Access pack
+ * (2026-08-12): ten log types, only two separable by field presence, so eight
+ * became match-all - and because every route is `final: true`, seven of them
+ * could never receive an event. Cribl's own UI flagged exactly those seven.
+ *
+ * The affected log types do not go unprocessed, which is what makes this
+ * silent: they fall into the FIRST match-all's pipeline and get that log
+ * type's renames, so the data lands mis-shaped rather than missing.
+ *
+ * Not a Zscaler bug. Field-presence discrimination fails for ANY vendor whose
+ * log types share a schema and differ by field value, so these pins use a
+ * shape, not a vendor.
+ */
+describe("unreachableLogTypes - overlapping match-all routes", () => {
+  /** n log types that share one schema, so none can be told apart. */
+  function sameSchemaPlan(logTypes: string[]) {
+    return buildPipelinePlan({
+      solutionName: "Vendor Solution",
+      packName: "vendor-sentinel",
+      tables: logTypes.map((logType) => ({
+        sentinelTable: "CommonSecurityLog",
+        logType,
+        sourceFormat: "cef" as const,
+        presetFields: [
+          { source: "src", target: "SourceIP", type: "string", action: "rename" as const },
+          { source: "dst", target: "DestinationIP", type: "string", action: "rename" as const },
+        ],
+      })),
+    });
+  }
+
+  it("reports every match-all AFTER the first", () => {
+    // Five identical schemas: one catch-all is legitimate, four are dead.
+    const plan = sameSchemaPlan(["ALLOWED", "BLOCKED", "CAUTIONED", "OUTOFRANGE", "firewall"]);
+    expect(unreachableLogTypes(plan)).toHaveLength(4);
+  });
+
+  it("says NOTHING when the log types are separable", () => {
+    // Distinct fields per log type - the discriminator separates them, so no
+    // route is match-all and there is nothing to warn about. A warning that
+    // fires on healthy packs is the noise that gets the real one ignored.
+    const plan = buildPipelinePlan({
+      solutionName: "Vendor Solution",
+      packName: "vendor-sentinel",
+      tables: [
+        {
+          sentinelTable: "CommonSecurityLog",
+          logType: "web",
+          sourceFormat: "cef" as const,
+          presetFields: [
+            { source: "requestUrl", target: "RequestURL", type: "string", action: "rename" as const },
+          ],
+        },
+        {
+          sentinelTable: "CommonSecurityLog",
+          logType: "tunnel",
+          sourceFormat: "cef" as const,
+          presetFields: [
+            { source: "tunnelPackets", target: "SentBytes", type: "int", action: "rename" as const },
+          ],
+        },
+      ],
+    });
+    expect(unreachableLogTypes(plan)).toEqual([]);
+  });
+
+  it("says nothing for a single log type", () => {
+    expect(unreachableLogTypes(sameSchemaPlan(["firewall"]))).toEqual([]);
+  });
+
+  it("names the log types, so the operator can act on it", () => {
+    // A count alone ("4 log types overlap") is not actionable - the operator
+    // has to know WHICH filters to separate.
+    const names = unreachableLogTypes(sameSchemaPlan(["a", "b", "c"]));
+    expect(names.every((n) => typeof n === "string" && n.length > 0)).toBe(true);
+    expect(new Set(names).size).toBe(names.length);
+  });
+
+  it("agrees with the route.yml the same plan emits", () => {
+    // The warning and the emitted routing must not drift: if this says 4 are
+    // dead, route.yml must carry 5 match-all filters (1 reachable + 4 dead)
+    // per enabled route pair.
+    const plan = sameSchemaPlan(["ALLOWED", "BLOCKED", "CAUTIONED", "OUTOFRANGE", "firewall"]);
+    const yaml = generateRouteYml(plan);
+    const matchAllRoutes = [...yaml.matchAll(/filter: "true"/g)].length;
+    expect(matchAllRoutes).toBe((unreachableLogTypes(plan).length + 1) * 2);
   });
 });

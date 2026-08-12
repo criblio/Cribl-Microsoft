@@ -74,7 +74,7 @@ export {
 } from "./pipeline-conf";
 
 // (d) route.yml emission
-export { buildRouteEntries, generateRouteYml } from "./route-yml";
+export { buildRouteEntries, generateRouteYml, unreachableLogTypes } from "./route-yml";
 
 // Core Cribl-YAML acceptance validator
 export { checkCriblYaml } from "./cribl-yaml-validator";

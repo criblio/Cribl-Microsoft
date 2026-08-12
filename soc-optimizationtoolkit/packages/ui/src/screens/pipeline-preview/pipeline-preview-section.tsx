@@ -166,6 +166,31 @@ export function PipelinePreviewSection({
         </div>
       )}
 
+      {/*
+        Valid YAML is not a working pack. Every route is final, so only the
+        first match-all receives events - the rest are silently handled by ITS
+        pipeline, with the wrong renames. Without this the green banner above
+        is the last word, and the loss only shows up as detections that never
+        fire. Measured on Zscaler (7 of 10 log types dead) but generic: it hits
+        any vendor whose log types share a schema and differ by field value.
+      */}
+      {view.unreachableLogTypes.length > 0 && (
+        <div className="pipeline-preview-valid pipeline-preview-valid-bad">
+          <strong>
+            {view.unreachableLogTypes.length} log type
+            {view.unreachableLogTypes.length === 1 ? "" : "s"} cannot receive
+            events.
+          </strong>{" "}
+          Nothing in these samples separates {view.unreachableLogTypes.join(", ")}{" "}
+          from the others, so their routes match everything and only the first
+          such route runs. Their events are not dropped - they are processed by
+          that route&apos;s pipeline instead, so they reach Sentinel with the
+          wrong field mapping. Give these log types a distinguishing filter in
+          route.yml after the build, or drop the ones you do not need.
+          <InfoTip text="Route filters are derived from fields unique to each log type. Log types that share a schema and differ only by a field VALUE - an action of ALLOWED vs BLOCKED, a type of TRAFFIC vs THREAT - cannot be separated that way, so they fall back to match-all. Cribl marks the resulting routes with its own unreachable-route warning." />
+        </div>
+      )}
+
       {view.tables.map((table) => (
         <div key={table.logType} className="pipeline-preview-card">
           <div className="pipeline-preview-card-head">

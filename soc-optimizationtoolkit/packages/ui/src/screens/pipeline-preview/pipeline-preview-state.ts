@@ -39,6 +39,7 @@
 
 import {
   buildPipelinePlan,
+  unreachableLogTypes as coreUnreachableLogTypes,
   checkCriblYaml,
   generatePipelineConfForPlan,
   generateReductionConfForPlan,
@@ -186,6 +187,16 @@ export interface PipelinePreviewView {
   totalYamlIssues: number;
   /** Every emitted YAML passed the Cribl validator (the honest green signal). */
   valid: boolean;
+  /**
+   * Log types whose routes cannot receive events, in route order.
+   *
+   * Valid YAML and dead routes are not the same thing, and `valid` alone reads
+   * as "the pack is fine". Every route is final, so only the first match-all
+   * gets events; the rest are silently handled by ITS pipeline - wrong renames,
+   * and for CEF web logs no base64 decode - so the data lands mis-shaped rather
+   * than missing. Empty for packs whose log types are separable.
+   */
+  unreachableLogTypes: string[];
 }
 
 // ---------------------------------------------------------------------------
@@ -426,6 +437,7 @@ export function derivePipelinePreview(
       routeYmlIssues: [],
       totalYamlIssues: 0,
       valid: true,
+      unreachableLogTypes: [],
     };
   }
 
@@ -493,5 +505,6 @@ export function derivePipelinePreview(
     routeYmlIssues,
     totalYamlIssues,
     valid: totalYamlIssues === 0,
+    unreachableLogTypes: coreUnreachableLogTypes(plan),
   };
 }
