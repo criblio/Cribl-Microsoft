@@ -6,6 +6,35 @@ is harder to forget to update than a directory that has to be remembered.
 
 ---
 
+## 1.9.0
+
+**DeviceVendor and DeviceProduct can be changed after they are set.** Reported
+2026-08-12. Picking NSSWeblog left a read-only row whose hint pointed at another
+section, so correcting a one-click choice meant leaving the card you made it on.
+A value the SAMPLE provided could not be corrected at all - a wrong
+DeviceProduct in the data was simply unfixable in the app.
+
+Every identity row is now the same editable control in every state: the current
+value, a text box, a Replace button, and the vendor's known values as one-click
+chips. Only the framing changes - Required while missing. Candidates are still
+offered and never auto-picked, because the wrong constant silently breaks
+Sentinel's content filters.
+
+Replacing a sample-provided value now says what it costs: the constant
+overwrites the per-event value for every event.
+
+**A `startswith` filter is no longer read as a product value.** Zscaler's
+connector filters `DeviceProduct startswith "NSS"`, and the app took `NSS` as
+the product and auto-seeded it - a value Zscaler never emits (the real ones are
+NSSWeblog and NSSFWlog). It satisfied the one connector query it came from and
+failed every analytic rule comparing the product with `==`; being seeded, it
+also looked settled, so nothing prompted a correction.
+
+Stems are now offered as candidates. A single `==` product is still seeded -
+that one names a constant the vendor actually emits.
+
+---
+
 ## 1.8.0
 
 **Pipelines now do what the DCR Gap Analysis says.** Reported 2026-08-12 while
