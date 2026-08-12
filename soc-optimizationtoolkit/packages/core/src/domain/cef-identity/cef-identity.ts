@@ -204,3 +204,41 @@ export function overrideChangesEvent(
     return value !== null && value !== event[field];
   });
 }
+
+/**
+ * The identity findings for one sample against a solution's CONTENT.
+ *
+ * The step that was missing between the primitives above and any screen: the
+ * expected values live in analytic-rule KQL, one query at a time, and nothing
+ * turned a solution's rules into the literal set this module compares against.
+ *
+ * Takes the queries rather than the rule objects so it stays free of the
+ * coverage-analysis content model - the caller already holds both.
+ */
+export function cefIdentityFindings(
+  sample: Partial<Record<CefIdentityField, string>>,
+  queries: readonly string[],
+  extractDiscriminators: (kql: string) => readonly DiscriminatorValue[],
+): CefIdentityFinding[] {
+  const discriminators: DiscriminatorValue[] = [];
+  for (const query of queries) {
+    discriminators.push(...extractDiscriminators(query));
+  }
+  return findCefIdentityAll(sample, discriminators);
+}
+
+/**
+ * The findings worth showing an operator: a real disagreement with the content.
+ *
+ * `match` needs no action. `unknown` means the rules never constrain the field,
+ * so there is nothing to disagree with - surfacing it would manufacture a
+ * problem, which is the pin findCefIdentity already carries. What remains is
+ * mismatch, case-mismatch and absent: the three that silently cost detections.
+ */
+export function actionableCefIdentity(
+  findings: readonly CefIdentityFinding[],
+): CefIdentityFinding[] {
+  return findings.filter(
+    (f) => f.status !== "match" && f.status !== "unknown" && f.suggested !== null,
+  );
+}

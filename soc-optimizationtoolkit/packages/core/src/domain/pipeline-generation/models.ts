@@ -19,6 +19,7 @@
  * Pure data: no IO, no fetch, no React, no Date/crypto/Math.random.
  */
 
+import type { CefIdentityOverride } from "../cef-identity";
 import type { MatchResult, OverflowConfig, VendorMapping } from "../field-matcher";
 import type { DcrGapAnalysis, TableRoutingInfo } from "../gap-analysis";
 import type { TableReductionRules } from "./reduction-rules";
@@ -96,6 +97,18 @@ export interface TablePlanInput {
   /** Vendor mappings (Unit 15, deferred). Empty/undefined for MVP. */
   vendorMappings?: VendorMapping[];
   /**
+   * Corrected DeviceVendor / DeviceProduct for CEF content.
+   *
+   * NOT the same lever as an enrichment constant, and the difference is
+   * PLACEMENT. An enrichment Eval runs late, after the reduction rules have
+   * already filtered on the vendor's own value; this override is emitted right
+   * after CEF extraction, so reduction, renames and the destination all see the
+   * corrected identity. A vendor string that does not match what a solution's
+   * analytic rules compare against deploys and ingests cleanly and never fires a
+   * rule, so getting it right early is the whole point.
+   */
+  identityOverride?: CefIdentityOverride;
+  /**
    * Sample format detected by the caller (Unit 11): cef | leef | csv | kv | json
    * | ndjson | syslog. Drives serde selection + timestamp logic. Defaults json.
    */
@@ -141,6 +154,8 @@ export interface TablePlan {
   routeCondition: string;
   /** Vendor mappings passed through to the emitter (empty for MVP). */
   vendorMappings?: VendorMapping[];
+  /** Corrected DeviceVendor / DeviceProduct, carried to the emitter. */
+  identityOverride?: CefIdentityOverride;
   /** Reduction rules for this table (null when none matched). */
   reductionRules: TableReductionRules | null;
   /** Which branch produced `fields`. */

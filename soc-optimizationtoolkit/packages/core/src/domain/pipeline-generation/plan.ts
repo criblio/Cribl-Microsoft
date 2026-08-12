@@ -294,6 +294,7 @@ export function buildPipelinePlan(
       sourceFormat: t.sourceFormat || "json",
       routeCondition: resolveRouteCondition(t),
       vendorMappings: t.vendorMappings,
+      identityOverride: t.identityOverride,
       reductionRules: resolveReductionRules(t, input.solutionName),
       provenance,
     };

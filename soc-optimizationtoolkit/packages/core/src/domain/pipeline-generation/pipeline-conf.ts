@@ -870,6 +870,11 @@ export function generatePipelineConfForPlan(
     table.overflowConfig,
     null,
     table.logType,
+    // The corrected CEF identity, if the reviewer set one. Threaded here rather
+    // than left to the caller: this is the entry point the pack build and the
+    // pipeline preview both use, and an override the preview showed but the
+    // build dropped would be the worst possible version of this feature.
+    table.identityOverride,
   );
 }
 

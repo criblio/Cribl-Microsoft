@@ -45,6 +45,7 @@ import {
   generateRouteYml,
 } from "@soc/core";
 import type {
+  CefIdentityOverride,
   GapFieldMapping,
   GapReport,
   PipelineFieldMapping,
@@ -153,6 +154,13 @@ export interface PipelinePreviewInputs {
    */
   enrichments?: Readonly<Record<string, readonly EnrichmentField[]>>;
   /**
+   * Corrected DeviceVendor/DeviceProduct keyed by logType. Advisory on the
+   * analysis card, but once applied it must reach the emitted pipeline - a
+   * correction the preview showed and the build dropped would be worse than
+   * never offering it.
+   */
+  identityOverrides?: Readonly<Record<string, CefIdentityOverride>>;
+  /**
    * The mapping-review content-path gate (deriveMappingReviewGate().ready): every
    * table-with-mappings approved and not stale. The preview renders its tables
    * only when this is true (else the always-visible-disabled empty state).
@@ -255,12 +263,17 @@ export function reportToPlanInput(
   overrides?: Readonly<Record<string, GapFieldMapping[]>>,
   sampleFormats?: Readonly<Record<string, string>>,
   enrichments?: readonly EnrichmentField[],
+  identityOverride?: CefIdentityOverride,
 ): TablePlanInput {
   const mappings = effectiveReportMappings(report, overrides);
   return {
     sentinelTable: report.tableName,
     logType: report.logType,
     presetFields: mappings.map(gapMappingToPreset),
+    // The corrected CEF identity, when the reviewer applied one. Threaded on the
+    // PLAN rather than as an enrichment because placement differs: this lands
+    // right after CEF extraction, so the reduction rules see the fixed value.
+    ...(identityOverride !== undefined ? { identityOverride } : {}),
     sourceFormat: normalizeSourceFormat(sampleFormats?.[report.logType]),
     // User-added constants ride the planner's vendorMappings channel: the
     // conf emitter's enrich branch turns each into an Eval add of
@@ -430,6 +443,7 @@ export function derivePipelinePreview(
         inputs.mappingOverrides,
         inputs.sampleFormats,
         inputs.enrichments?.[r.logType],
+        inputs.identityOverrides?.[r.logType],
       ),
     ),
   });

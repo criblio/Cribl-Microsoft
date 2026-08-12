@@ -16,6 +16,8 @@ import {
   findCefIdentityAll,
   overrideChangesEvent,
   overrideValueFor,
+  cefIdentityFindings,
+  actionableCefIdentity,
 } from "./cef-identity";
 import type { DiscriminatorValue } from "../coverage-analysis";
 
@@ -174,6 +176,92 @@ describe("overrideValueFor - the ONE blank rule", () => {
       expect(overrideChangesEvent({ DeviceVendor: "Acme" }, override)).toBe(
         supplied !== null,
       );
+    }
+  });
+});
+
+describe("cefIdentityFindings + actionableCefIdentity - the analysis surface", () => {
+  // The step that was missing between these primitives and any screen: nothing
+  // turned a solution's rule queries into the literal set to compare against,
+  // so the whole feature shipped in 1.5.0 unreachable.
+  const extract = (kql: string): DiscriminatorValue[] => {
+    const out: DiscriminatorValue[] = [];
+    const re = /(\w+)\s*(?:==|=~)\s*"([^"]+)"/g;
+    for (const m of kql.matchAll(re)) out.push({ field: m[1], value: m[2] });
+    return out;
+  };
+
+  it("unions the literals across EVERY rule query", () => {
+    // One rule filtering on the vendor is enough to establish the expectation,
+    // and a solution has many rules - looking at only the first would miss it.
+    const findings = cefIdentityFindings(
+      { DeviceVendor: "Acme" },
+      [
+        'CommonSecurityLog | where Foo == "bar"',
+        'CommonSecurityLog | where DeviceVendor == "Zscaler"',
+      ],
+      extract,
+    );
+    const vendor = findings.find((f) => f.field === "DeviceVendor");
+    expect(vendor?.status).toBe("mismatch");
+    expect(vendor?.suggested).toBe("Zscaler");
+  });
+
+  it("reports NOTHING actionable when the sample already agrees", () => {
+    const findings = cefIdentityFindings(
+      { DeviceVendor: "Zscaler" },
+      ['where DeviceVendor == "Zscaler"'],
+      extract,
+    );
+    expect(actionableCefIdentity(findings)).toEqual([]);
+  });
+
+  it("reports NOTHING actionable when the rules never mention the field", () => {
+    // The load-bearing one. With no rule constraining the vendor there is no
+    // disagreement, and surfacing a suggestion would manufacture a problem -
+    // the same pin findCefIdentity carries, restated at the screen's boundary.
+    const findings = cefIdentityFindings(
+      { DeviceVendor: "Acme" },
+      ["CommonSecurityLog | count"],
+      extract,
+    );
+    expect(actionableCefIdentity(findings)).toEqual([]);
+  });
+
+  it("SURFACES a case-mismatch - it costs the == rules only", () => {
+    const findings = cefIdentityFindings(
+      { DeviceVendor: "zscaler" },
+      ['where DeviceVendor == "Zscaler"'],
+      extract,
+    );
+    const [first] = actionableCefIdentity(findings);
+    expect(first?.status).toBe("case-mismatch");
+    expect(first?.suggested).toBe("Zscaler");
+  });
+
+  it("surfaces an ABSENT field the rules do constrain", () => {
+    const findings = cefIdentityFindings(
+      {},
+      ['where DeviceProduct =~ "NSSWeblog"'],
+      extract,
+    );
+    const [first] = actionableCefIdentity(findings);
+    expect(first?.field).toBe("DeviceProduct");
+    expect(first?.status).toBe("absent");
+  });
+
+  it("never offers a suggestion it did not read from the content", () => {
+    // Every actionable finding must carry a value the RULES named. The app is
+    // not allowed to invent an identity constant - that is how you get a
+    // confident wrong answer that also breaks detections.
+    const findings = cefIdentityFindings(
+      { DeviceVendor: "Acme", DeviceProduct: "Thing" },
+      ['where DeviceVendor == "Zscaler" and DeviceProduct == "NSSWeblog"'],
+      extract,
+    );
+    for (const f of actionableCefIdentity(findings)) {
+      expect(f.suggested).not.toBeNull();
+      expect(f.expected).toContain(f.suggested);
     }
   });
 });
