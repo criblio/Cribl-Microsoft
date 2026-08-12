@@ -774,6 +774,19 @@ export function generatePipelineConf(
     ? vendorMappings.filter((m) => m.action === "drop").map((m) => m.sourceName)
     : [];
   // Reviewer/policy drops arrive as preset fields (2026-07-13 live fix).
+  //
+  // ONLY EXPLICIT DROPS ARE REMOVED - never the overflow set as a block (user
+  // decision, confirmed 2026-08-12). Dropping every field bound for the
+  // catch-all would make the choice all-or-nothing, and the reviewer's actual
+  // need is selective: keep the catch-all, remove the handful of fields inside
+  // it that are noise. Marking a row `drop` is that lever - it excludes the
+  // field from the serialize above AND removes it here, so a dropped field is
+  // gone from both places, while everything else still reaches
+  // AdditionalExtensions.
+  //
+  // The cost of not bulk-removing is that a serialized field also rides along
+  // top-level (Cribl's Serialize copies rather than moves) where the DCR has no
+  // column for it and ignores it. That is accepted, deliberately.
   const presetDropFields = fields
     .filter((f) => f.action === "drop")
     .map((f) => f.source)

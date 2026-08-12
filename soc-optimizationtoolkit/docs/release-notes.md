@@ -6,6 +6,35 @@ is harder to forget to update than a directory that has to be remembered.
 
 ---
 
+## 1.8.0
+
+**Pipelines now do what the DCR Gap Analysis says.** Reported 2026-08-12 while
+testing Zscaler: the analysis promised 133 of 170 fields would land in
+`AdditionalExtensions`, and the generated pipeline had no function that put them
+there. It happened for every solution, not just Zscaler.
+
+The planner resolves a table's fields through a priority ladder. Only the rung
+fed by the field matcher ever supplied a real overflow config; the rung the gap
+analysis actually uses hardcoded a DISABLED one. So a field marked `overflow`
+fell through the emitter completely - excluded from the renames (correct), then
+skipped by the serialize step (gated on enabled) and missed by the cleanup drops
+(which only remove `drop`). It reached the DCR under its raw vendor name and was
+discarded there.
+
+Silent by construction: nothing errored, the YAML validated, the pack installed,
+and the only symptom was fields missing from the table.
+
+Overflow is now enabled by the FIELDS - if any field asks for it, the table's own
+catch-all column collects them. That fixes the reviewer-edit path too, which had
+the same hole. The field matcher's own config still wins when it is present.
+
+**Dropping stays per-field.** Fields bound for the catch-all are never removed as
+a block, so you can send most of them to `AdditionalExtensions` and drop just the
+noisy handful. Marking a row `drop` keeps it out of the catch-all AND removes it
+from the event; everything else still lands there.
+
+---
+
 ## 1.7.1
 
 **Fixes a crash in 1.7.0 that blanked the Sentinel Integration screen.** The
