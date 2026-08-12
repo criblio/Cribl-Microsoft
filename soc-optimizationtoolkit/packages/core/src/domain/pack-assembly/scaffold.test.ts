@@ -397,3 +397,79 @@ describe("scaffold - multi-logType single table (overflow collision fix)", () =>
     expect(destCount).toBe(1);
   });
 });
+
+/**
+ * Sample-id uniqueness. Zscaler Internet Access shipped a pack with TEN log
+ * types and ZERO samples: two ids collided, so one sample file overwrote
+ * another AND samples.yml carried a duplicate mapping key, which Cribl rejects
+ * wholesale. Nothing errored - the build reported success, the YAML validator
+ * passed, and the pack installed clean. Only opening the pack in Cribl showed
+ * the loss, which is why these pins assert COUNTS and KEYS, not "some sample
+ * exists" (the pre-existing layout pin used `.some()` and stayed green
+ * throughout).
+ */
+describe("scaffold - sample ids are unique per pack", () => {
+  const ZSCALER_LOG_TYPES = [
+    "firewall",
+    "ALLOWED",
+    "CAUTIONED",
+    "web-BLOCKED",
+    "firewall-BLOCKED",
+    "OUTOFRANGE",
+    "dns-http-endpoint",
+    "dns",
+    "tunnel-http-endpoint",
+    "tunnel",
+  ];
+
+  /** The exact shape that lost a sample in the field. */
+  function zscalerTree() {
+    return scaffoldPack({
+      plan: buildPipelinePlan({
+        solutionName: "Zscaler Internet Access",
+        packName: "MS-Sentinel-Zscaler-Internet",
+        tables: ZSCALER_LOG_TYPES.map((logType) => ({
+          sentinelTable: "CommonSecurityLog",
+          logType,
+          sourceFormat: "cef" as const,
+        })),
+      }),
+      builtAtMs: 1_700_000_000_000,
+    });
+  }
+
+  function sampleIds(tree: ReturnType<typeof scaffoldPack>): string[] {
+    return tree
+      .paths()
+      .filter((p) => p.startsWith("data/samples/"))
+      .map((p) => p.slice("data/samples/".length, -".json".length));
+  }
+
+  /** samples.yml top-level keys, in file order (duplicates preserved). */
+  function registryKeys(tree: ReturnType<typeof scaffoldPack>): string[] {
+    return ((tree.get("default/samples.yml") as string).match(/^\S+(?=:$)/gm) ?? []).slice();
+  }
+
+  it("emits ONE sample file per table - never fewer", () => {
+    // The collision silently dropped a file: 10 tables produced 9 samples.
+    expect(sampleIds(zscalerTree())).toHaveLength(ZSCALER_LOG_TYPES.length);
+  });
+
+  it("never repeats a key in samples.yml", () => {
+    // A duplicate mapping key makes the document invalid, and Cribl responds by
+    // discarding EVERY sample in the pack - not just the duplicated one.
+    const keys = registryKeys(zscalerTree());
+    expect(keys).toHaveLength(ZSCALER_LOG_TYPES.length);
+    expect(new Set(keys).size).toBe(keys.length);
+  });
+
+  it("registers exactly the sample files it wrote", () => {
+    const tree = zscalerTree();
+    expect(registryKeys(tree).sort()).toEqual(sampleIds(tree).sort());
+  });
+
+  it("stays deterministic across builds", () => {
+    // Uniqueness must not be bought with a counter that depends on run order.
+    expect(sampleIds(zscalerTree())).toEqual(sampleIds(zscalerTree()));
+  });
+});

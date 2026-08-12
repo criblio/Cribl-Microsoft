@@ -113,13 +113,50 @@ function hash32(str: string): number {
   return h >>> 0;
 }
 
-/** A deterministic 6-char base62 sample id (replaces legacy random ids). */
+/**
+ * A deterministic 6-char base62 sample id (replaces legacy random ids).
+ *
+ * All six characters come from ONE hash, expanded by successive base-62
+ * division. The earlier form hashed `seed#0`..`seed#5` and took each result
+ * mod 62 - six hashes of strings differing only in the final byte, which
+ * FNV-1a barely avalanches, so the characters were correlated across seeds:
+ * distinct tables collided outright about a third of the time at ten tables
+ * (the real Zscaler pack collided `firewall-BLOCKED` with `OUTOFRANGE`).
+ *
+ * Why that mattered so much: the id is both the file name AND the samples.yml
+ * mapping key, so one collision silently overwrote a sample file and emitted a
+ * DUPLICATE YAML key. Cribl rejects the whole samples.yml, and the pack then
+ * installs cleanly with ZERO samples and no error anywhere - see
+ * {@link uniqueSampleId}, which is why uniqueness is now guaranteed rather
+ * than merely likely.
+ *
+ * 62^6 (~5.7e10) exceeds the 32-bit hash range, so this is injective on the
+ * hash value: two ids differ whenever their hashes do.
+ */
 function deterministicSampleId(seed: string): string {
+  let v = hash32(seed);
   let out = "";
   for (let i = 0; i < 6; i++) {
-    out += B62[hash32(`${seed}#${i}`) % 62];
+    out = B62[v % 62] + out;
+    v = Math.floor(v / 62);
   }
   return out;
+}
+
+/**
+ * The sample id for `seed`, guaranteed distinct from every id already issued
+ * for this pack. A good hash makes collisions vanishingly rare; this makes
+ * them impossible, because the failure they cause is invisible (see above) and
+ * a probabilistic argument is not worth that risk. Deterministic: the same
+ * table order always yields the same ids.
+ */
+function uniqueSampleId(seed: string, used: Set<string>): string {
+  let id = deterministicSampleId(seed);
+  for (let n = 1; used.has(id); n++) {
+    id = deterministicSampleId(`${seed}!${n}`);
+  }
+  used.add(id);
+  return id;
 }
 
 /** The sample display name for a table (single naming source, <=50 chars). */
@@ -185,6 +222,7 @@ export function scaffoldPack(input: PackScaffoldInput): PackTree {
 
   // Sample files + samples.yml registry.
   const sampleRegistry: SampleRegistryEntry[] = [];
+  const usedSampleIds = new Set<string>();
   plan.tables.forEach((table, i) => {
     const sourceFields: SampleSourceField[] = table.fields.map((f) => ({
       source: f.source,
@@ -199,7 +237,7 @@ export function scaffoldPack(input: PackScaffoldInput): PackTree {
       EVENTS_PER_SAMPLE,
       table.logType,
     );
-    const sampleId = deterministicSampleId(`${plan.packName}:${table.suffix}:${i}`);
+    const sampleId = uniqueSampleId(`${plan.packName}:${table.suffix}:${i}`, usedSampleIds);
     const content = JSON.stringify(events, null, 2);
     tree.set(`data/samples/${sampleId}.json`, content);
     sampleRegistry.push({
