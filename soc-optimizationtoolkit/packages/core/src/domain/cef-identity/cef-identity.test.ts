@@ -18,6 +18,7 @@ import {
   overrideValueFor,
   cefIdentityFindings,
   actionableCefIdentity,
+  extractCefIdentityValues,
 } from "./cef-identity";
 import type { DiscriminatorValue } from "../coverage-analysis";
 
@@ -184,80 +185,102 @@ describe("cefIdentityFindings + actionableCefIdentity - the analysis surface", (
   // The step that was missing between these primitives and any screen: nothing
   // turned a solution's rule queries into the literal set to compare against,
   // so the whole feature shipped in 1.5.0 unreachable.
-  const extract = (kql: string): DiscriminatorValue[] => {
-    const out: DiscriminatorValue[] = [];
-    const re = /(\w+)\s*(?:==|=~)\s*"([^"]+)"/g;
-    for (const m of kql.matchAll(re)) out.push({ field: m[1], value: m[2] });
-    return out;
-  };
+  //
+  // NO INJECTED EXTRACTOR. The first version took one as an argument, and the
+  // first test passed it a plausible fake - which is precisely how it shipped
+  // wired to coverage-analysis's extractDiscriminatorValues, a function that
+  // scans LOG-TYPE discriminators and has never looked at DeviceVendor. The
+  // real screen showed nothing about a real mismatch and every test was green.
+  // These now exercise the extractor the app actually runs.
 
-  it("unions the literals across EVERY rule query", () => {
-    // One rule filtering on the vendor is enough to establish the expectation,
-    // and a solution has many rules - looking at only the first would miss it.
-    const findings = cefIdentityFindings(
-      { DeviceVendor: "Acme" },
-      [
-        'CommonSecurityLog | where Foo == "bar"',
-        'CommonSecurityLog | where DeviceVendor == "Zscaler"',
-      ],
-      extract,
-    );
+  // The genuine Zscaler ZIA rule text from a live workspace, trimmed. Note the
+  // casing: the rule says "ZScaler" while the curated vendor list says
+  // "Zscaler" - a real case-mismatch found only by reading the query.
+  const ZSCALER_RULE = [
+    "let connectionThreshold = 1;",
+    'let riskyExtensions = dynamic([".bin",".exe",".dll"]);',
+    "CommonSecurityLog",
+    '| where DeviceVendor =~ "ZScaler"',
+    '| where RequestURL has_any("media.discordapp.net", "cdn.discordapp.com")',
+    '| where DeviceAction !~ "blocked"',
+    "| summarize dcount(RequestURL) by DiscordServerId, DeviceProduct",
+  ].join("\n");
+
+  it("reads the vendor literal out of a REAL rule query", () => {
+    const findings = cefIdentityFindings({ DeviceVendor: "Acme" }, [ZSCALER_RULE]);
     const vendor = findings.find((f) => f.field === "DeviceVendor");
     expect(vendor?.status).toBe("mismatch");
-    expect(vendor?.suggested).toBe("Zscaler");
+    expect(vendor?.suggested).toBe("ZScaler");
+  });
+
+  it("catches the CASE difference the curated vendor list introduces", () => {
+    // The lab's actual situation: the app seeds "Zscaler", the rule wants
+    // "ZScaler". =~ rules still match; == rules do not.
+    const findings = cefIdentityFindings({ DeviceVendor: "Zscaler" }, [ZSCALER_RULE]);
+    const [first] = actionableCefIdentity(findings);
+    expect(first?.status).toBe("case-mismatch");
+    expect(first?.suggested).toBe("ZScaler");
+  });
+
+  it("does NOT treat a grouping/projection field as an expectation", () => {
+    // DeviceProduct appears in that rule's summarize and project clauses but is
+    // never compared to a literal. There is no value to expect, so claiming one
+    // would manufacture a problem.
+    const findings = cefIdentityFindings({}, [ZSCALER_RULE]);
+    const product = findings.find((f) => f.field === "DeviceProduct");
+    expect(product?.status).toBe("unknown");
+    expect(product?.suggested).toBeNull();
+  });
+
+  it("unions the literals across EVERY rule query", () => {
+    const findings = cefIdentityFindings({ DeviceProduct: "Acme" }, [
+      'CommonSecurityLog | where Foo == "bar"',
+      'CommonSecurityLog | where DeviceProduct == "NSSWeblog"',
+    ]);
+    const product = findings.find((f) => f.field === "DeviceProduct");
+    expect(product?.suggested).toBe("NSSWeblog");
+  });
+
+  it("reads an in~ SET as several candidates, first-seen order", () => {
+    const findings = cefIdentityFindings({ DeviceProduct: "Acme" }, [
+      `CommonSecurityLog | where DeviceProduct in~ ("NSSWeblog", "NSSFWlog")`,
+    ]);
+    const product = findings.find((f) => f.field === "DeviceProduct");
+    expect(product?.expected).toEqual(["NSSWeblog", "NSSFWlog"]);
+    expect(product?.suggested).toBe("NSSWeblog");
+  });
+
+  it("IGNORES has/contains - a substring test names no value", () => {
+    // `DeviceProduct has "NSS"` says the value contains NSS, not that it IS
+    // NSS. Offering the fragment as a replacement would invent a constant, the
+    // same mistake the connector-KQL stem fix corrected.
+    expect(
+      extractCefIdentityValues('| where DeviceProduct has "NSS"'),
+    ).toEqual([]);
+  });
+
+  it("ignores a literal inside a COMMENT", () => {
+    expect(
+      extractCefIdentityValues('// | where DeviceVendor == "Example"'),
+    ).toEqual([]);
   });
 
   it("reports NOTHING actionable when the sample already agrees", () => {
-    const findings = cefIdentityFindings(
-      { DeviceVendor: "Zscaler" },
-      ['where DeviceVendor == "Zscaler"'],
-      extract,
-    );
+    const findings = cefIdentityFindings({ DeviceVendor: "ZScaler" }, [ZSCALER_RULE]);
     expect(actionableCefIdentity(findings)).toEqual([]);
   });
 
-  it("reports NOTHING actionable when the rules never mention the field", () => {
-    // The load-bearing one. With no rule constraining the vendor there is no
-    // disagreement, and surfacing a suggestion would manufacture a problem -
-    // the same pin findCefIdentity carries, restated at the screen's boundary.
-    const findings = cefIdentityFindings(
-      { DeviceVendor: "Acme" },
-      ["CommonSecurityLog | count"],
-      extract,
-    );
+  it("reports NOTHING actionable when no rule mentions the fields", () => {
+    const findings = cefIdentityFindings({ DeviceVendor: "Acme" }, [
+      "CommonSecurityLog | count",
+    ]);
     expect(actionableCefIdentity(findings)).toEqual([]);
-  });
-
-  it("SURFACES a case-mismatch - it costs the == rules only", () => {
-    const findings = cefIdentityFindings(
-      { DeviceVendor: "zscaler" },
-      ['where DeviceVendor == "Zscaler"'],
-      extract,
-    );
-    const [first] = actionableCefIdentity(findings);
-    expect(first?.status).toBe("case-mismatch");
-    expect(first?.suggested).toBe("Zscaler");
-  });
-
-  it("surfaces an ABSENT field the rules do constrain", () => {
-    const findings = cefIdentityFindings(
-      {},
-      ['where DeviceProduct =~ "NSSWeblog"'],
-      extract,
-    );
-    const [first] = actionableCefIdentity(findings);
-    expect(first?.field).toBe("DeviceProduct");
-    expect(first?.status).toBe("absent");
   });
 
   it("never offers a suggestion it did not read from the content", () => {
-    // Every actionable finding must carry a value the RULES named. The app is
-    // not allowed to invent an identity constant - that is how you get a
-    // confident wrong answer that also breaks detections.
     const findings = cefIdentityFindings(
       { DeviceVendor: "Acme", DeviceProduct: "Thing" },
-      ['where DeviceVendor == "Zscaler" and DeviceProduct == "NSSWeblog"'],
-      extract,
+      ['where DeviceVendor == "ZScaler" and DeviceProduct == "NSSWeblog"'],
     );
     for (const f of actionableCefIdentity(findings)) {
       expect(f.suggested).not.toBeNull();
