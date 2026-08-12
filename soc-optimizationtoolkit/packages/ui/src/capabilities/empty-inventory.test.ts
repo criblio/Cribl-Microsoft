@@ -7,7 +7,11 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { emptyInventoryMessage } from "./empty-inventory";
+import {
+  AUDITED_SCOPE,
+  emptyInventoryMessage,
+  unmeasuredInventoryMessage,
+} from "./empty-inventory";
 import { emptyCapabilitySet } from "@soc/core";
 import type { CapabilityContext, CapabilitySet } from "@soc/core";
 
@@ -16,7 +20,13 @@ const audited = (v: CapabilitySet["verdicts"]): CapabilitySet => ({
   verdicts: v, auditedAt: "2026-08-10T00:00:00Z", connectionId: "c1",
 });
 const msg = (set: CapabilitySet, ctx = connected) =>
-  emptyInventoryMessage("workspaces", "workspace.read", set, ctx);
+  emptyInventoryMessage({
+    noun: "workspaces",
+    capability: "workspace.read",
+    capabilities: set,
+    context: ctx,
+    scope: AUDITED_SCOPE,
+  });
 
 describe("only a MEASURED grant may claim a zero", () => {
   it("says 'none found' when the read was verified", () => {
@@ -48,17 +58,90 @@ describe("only a MEASURED grant may claim a zero", () => {
     expect(m.verified).toBe(false);
     expect(m.text).toContain("no Azure connection");
   });
+
+  it("names the CRIBL connection for a Cribl capability", () => {
+    // Regression: the unreachable wording was hardcoded to Azure, so every
+    // Cribl lister the standard also binds - packs, worker groups - would have
+    // blamed a missing Azure connection for an unreachable leader.
+    const m = emptyInventoryMessage({
+      noun: "packs",
+      capability: "pack.manage",
+      capabilities: emptyCapabilitySet(),
+      context: { azureIdentityPresent: true, criblReachable: false },
+      scope: AUDITED_SCOPE,
+    });
+    expect(m.text).toContain("no Cribl connection");
+    expect(m.text).not.toContain("Azure");
+  });
+});
+
+describe("a verdict is evidence only about the scope it was measured at", () => {
+  // runAzurePreflight evaluates ONE ARM scope built from the COMMITTED target,
+  // and the targeting screen exists to browse OTHER subscriptions. Carrying the
+  // committed scope's verdict across would reproduce the original bug one scope
+  // over - with a permission check as cover, which is worse.
+  const offScope = (set: CapabilitySet) =>
+    emptyInventoryMessage({
+      noun: "workspaces",
+      capability: "workspace.read",
+      capabilities: set,
+      context: connected,
+      scope: { matchesAudit: false, label: "subscription" },
+    });
+
+  it("refuses to claim a zero off-scope even when the capability is GRANTED", () => {
+    const m = offScope(audited({ "workspace.read": "granted" }));
+    expect(m.verified).toBe(false);
+    expect(m.text).not.toContain("No workspaces found");
+    expect(m.text).toContain("measured a different subscription");
+  });
+
+  it("refuses to claim a denial off-scope either", () => {
+    // Symmetry: being refused in the committed subscription is no evidence
+    // about this one, so an accusation would be as unfounded as a zero.
+    const m = offScope(audited({ "workspace.read": "denied" }));
+    expect(m.verified).toBe(false);
+    expect(m.text).not.toContain("does not have permission");
+    expect(m.text).toContain("Cannot confirm");
+  });
+
+  it("still reports a missing connection ahead of the scope mismatch", () => {
+    const m = emptyInventoryMessage({
+      noun: "workspaces",
+      capability: "workspace.read",
+      capabilities: emptyCapabilitySet(),
+      context: { azureIdentityPresent: false, criblReachable: true },
+      scope: { matchesAudit: false, label: "subscription" },
+    });
+    expect(m.text).toContain("no Azure connection");
+  });
+});
+
+describe("lists no capability covers", () => {
+  it("hedges WITHOUT sending the operator to a check that cannot settle it", () => {
+    const m = unmeasuredInventoryMessage("resource groups");
+    expect(m.verified).toBe(false);
+    expect(m.text).toContain("Cannot confirm there are no resource groups");
+    expect(m.text).not.toContain("run the permission check");
+  });
 });
 
 describe("wording", () => {
   it("interpolates the noun into every case", () => {
     for (const set of [
-      audited({ "workspace.read": "granted" }),
-      audited({ "workspace.read": "denied" }),
+      audited({ "dcr.read": "granted" }),
+      audited({ "dcr.read": "denied" }),
       emptyCapabilitySet(),
     ]) {
-      expect(emptyInventoryMessage("data collection rules", "dcr.read", set, connected).text)
-        .toContain("data collection rules");
+      expect(
+        emptyInventoryMessage({
+          noun: "data collection rules",
+          capability: "dcr.read",
+          capabilities: set,
+          context: connected,
+          scope: AUDITED_SCOPE,
+        }).text,
+      ).toContain("data collection rules");
     }
   });
 });

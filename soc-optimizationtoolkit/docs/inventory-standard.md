@@ -48,6 +48,53 @@ either of the others - the same discipline `CapabilityVerdict` already enforces
 (see docs/capability-model-plan.md). An unaudited connection has not earned the
 right to say "none".
 
+The shared helper is `packages/ui/src/capabilities/empty-inventory.ts`. Use it
+rather than phrasing this per screen: the failure is a confident wrong answer,
+and those are exactly what drifts when eight screens each word it themselves.
+
+## A verdict is evidence ONLY about the scope it was measured at
+
+Learned applying this to the second and third listers, and it is the rule most
+likely to be missed, because the fix LOOKS right without it.
+
+`runAzurePreflight` builds ONE ARM scope from the COMMITTED target and evaluates
+everything there. So `workspace.read: granted` means "this identity can read
+workspaces in the committed subscription". It says nothing about a subscription
+the operator is merely browsing - and browsing is not an edge case here: Azure
+targeting exists to look at other subscriptions, and the DCR inventory says in
+its own hint that it browses other resource groups.
+
+Carrying the committed scope's verdict across reproduces the original bug one
+scope over, now with a permission check as cover, which is worse than having no
+check at all. Hence `emptyInventoryMessage` REQUIRES a scope argument. Off-scope
+is unmeasured - and that applies to a DENIAL too: being refused in the committed
+subscription is no evidence about this one, so an accusation there would be as
+unfounded as a zero.
+
+## When NO capability covers the list
+
+The settled taxonomy has nothing for listing subscriptions, resource groups,
+Resource Graph results, or Cribl worker groups. The standing rule from the
+capability model holds: **do not quietly reuse a neighbouring capability** -
+mapping a subscription list onto `workspace.read` would misreport what was
+actually checked.
+
+The answer is `unmeasuredInventoryMessage`, which hedges WITHOUT pointing at the
+permission check. Sending an operator to run a check that does not measure this
+list sends them to do work that cannot settle the question, and they will read
+its result as confirmation.
+
+That is a holding position, not a resolution. Two honest ways out, both bigger
+decisions than a message:
+
+- **Add the capability and a probe for it** (`subscription.read`,
+  `resourcegroup.read`, `resourcegraph.read`). Widens a taxonomy the capability
+  plan deliberately closed at 11.
+- **Accept that these lists stay unmeasured** and keep saying so.
+
+Unresolved as of 2026-08-10; the same open question the backlog already records
+for Resource Graph.
+
 ## What this does NOT license
 
 - **Do not hide the surface.** The capability model's rule 3 still holds: a
@@ -61,17 +108,31 @@ right to say "none".
 
 ## Known instances
 
-- **Workspaces (the reported bug, 2026-08-10).** `azure-targeting-screen`
-  renders "No workspaces found - create one below" for an empty
+- **Workspaces (the reported bug, 2026-08-10). DONE.** `azure-targeting-screen`
+  rendered "No workspaces found - create one below" for an empty
   `listWorkspaces`. With insufficient RBAC that message is wrong AND actively
   harmful: it invites the operator to create a workspace that may already exist
-  and that they simply cannot see.
-- **Workspace tables.** `listWorkspaceTables` throws on non-2xx, which covers
-  the explicit-denial case, but an RBAC-filtered `200 []` would still read as an
-  empty workspace. Same fix needed.
-- Audit the remaining listers against this rule when touching them:
-  subscriptions, resource groups, DCR inventory, Event Hub discovery, worker
-  groups, pack inventory.
+  and that they simply cannot see. Now routed through `workspace.read`, and
+  scoped: browsing a subscription other than the committed one drops to the
+  hedge.
+- **Subscriptions and resource groups (same screen). DONE 2026-08-10.** Both
+  said the harmful thing: the resource-group line invited creating one, and the
+  subscription line ("grant Reader, then Refresh") asserted a permission problem
+  that an identity with genuinely zero subscriptions does not have. No
+  capability covers either, so both take the unmeasured hedge above.
+- **DCR inventory. DONE 2026-08-10.** "No Data Collection Rules in this resource
+  group." stated an unverified emptiness as fact. Now `dcr.read`, and scoped -
+  the panel browses resource groups other than the audited one by design.
+- **Workspace tables. PINNED, screen pending.** `listWorkspaceTables` throws on
+  non-2xx, which covers the explicit-denial case, but an RBAC-filtered `200 []`
+  would still read as an empty workspace. `emptyTableListMessage` in
+  `table-picker-state` decides it; the picker screen (backlog item 2) must use
+  it rather than `tableCountLabel`, which only reports a PRE-LOAD state.
+- Audit the remaining listers against this rule when touching them: Event Hub
+  discovery (the Resource Graph taxonomy gap), worker groups, pack inventory.
+  The `unreachable` wording already names the right connection for a Cribl
+  capability, so the Cribl-side listers can adopt the helper as they are
+  touched.
 
 ## Promote this
 

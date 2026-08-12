@@ -10,6 +10,7 @@ import { describe, expect, it } from "vitest";
 import {
   ANALYSIS_STALE_NOTICE,
   deriveTablePickerAccess,
+  emptyTableListMessage,
   filterTables,
   tableCountLabel,
 } from "./table-picker-state";
@@ -100,6 +101,29 @@ describe("tableCountLabel", () => {
   it("states the filter rather than hiding it", () => {
     expect(tableCountLabel(12, 12)).toBe("12 tables");
     expect(tableCountLabel(12, 3)).toBe("3 of 12 tables");
+  });
+});
+
+describe("an empty listing (docs/inventory-standard.md)", () => {
+  it("claims a zero ONLY on a measured table.read", () => {
+    const m = emptyTableListMessage(audited({ "table.read": "granted" }), connected);
+    expect(m.verified).toBe(true);
+    expect(m.text).toBe("No tables found");
+  });
+
+  it("never reads as an empty workspace when the read was refused", () => {
+    // listWorkspaceTables throws on a non-2xx, which covers explicit denial -
+    // but an RBAC-filtered 200 [] arrives as a successful empty listing and
+    // would otherwise look like a workspace with no tables in it.
+    const m = emptyTableListMessage(audited({ "table.read": "denied" }), connected);
+    expect(m.verified).toBe(false);
+    expect(m.text).not.toContain("No tables found");
+  });
+
+  it("hedges when no audit has run", () => {
+    const m = emptyTableListMessage(emptyCapabilitySet(), connected);
+    expect(m.verified).toBe(false);
+    expect(m.text).toContain("Cannot confirm");
   });
 });
 
