@@ -60,7 +60,6 @@ import {
   SENTINEL_SECRET_PLACEHOLDER,
   assemblePack,
   cefIdentityFindings,
-  extractDiscriminatorValues,
   listDcrInventory,
   placeholderWarning,
   resolveDestinations,
@@ -652,11 +651,7 @@ export function IntegrateScreen({
           sample[e.field] = e.value;
         }
       }
-      byLogType[report.logType] = cefIdentityFindings(
-        sample,
-        queries,
-        extractDiscriminatorValues,
-      );
+      byLogType[report.logType] = cefIdentityFindings(sample, queries);
     }
     return byLogType;
   }, [contentItems, gapReports, enrichments]);

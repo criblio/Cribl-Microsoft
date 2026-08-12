@@ -206,23 +206,81 @@ export function overrideChangesEvent(
 }
 
 /**
+ * The DeviceVendor / DeviceProduct literals a KQL query compares against.
+ *
+ * THIS MODULE READS ITS OWN FIELDS. The first version borrowed
+ * extractDiscriminatorValues from coverage-analysis, which was wrong in a way
+ * that produced silence rather than an error: that function scans
+ * DISCRIMINATOR_FIELDS - event_simpleName, DeviceEventClassID, Activity and
+ * friends - because it answers "which LOG TYPES does this content reference".
+ * DeviceVendor and DeviceProduct are not in that list and never should be, so
+ * it returned nothing, every field resolved to `unknown`, and the advisory
+ * correctly rendered nothing about a real mismatch. Found only by reading a
+ * live rule (Zscaler's `where DeviceVendor =~ "ZScaler"`) after the screen
+ * stayed blank.
+ *
+ * Matches the comparison forms a rule actually uses on these fields: `==`,
+ * `=~`, and `in`/`in~` sets. Deliberately NOT `has`/`contains` - a substring
+ * test does not name the value the field should hold, and offering one as a
+ * replacement would be inventing an identity constant.
+ */
+export function extractCefIdentityValues(kql: string): DiscriminatorValue[] {
+  // Comments can carry example queries; stripping them avoids expectations no
+  // rule actually enforces.
+  const cleaned = kql.replace(/\/\/.*$/gm, "");
+  const out: DiscriminatorValue[] = [];
+  const fields = CEF_IDENTITY_FIELDS.join("|");
+  // Quote styles are matched separately rather than with a backreference: it
+  // keeps every pattern here free of escapes that tooling mangles, and a rule
+  // never mixes the two within one comparison anyway.
+  const quoted = `(?:"([^"]*)"|'([^']*)')`;
+
+  const scalar = new RegExp(
+    String.raw`(?:^|[^A-Za-z])(${fields})\s*(?:==|=~)\s*${quoted}`,
+    "gim",
+  );
+  for (const m of cleaned.matchAll(scalar)) {
+    const value = m[2] ?? m[3];
+    if (m[1] !== undefined && value !== undefined) {
+      out.push({ field: m[1], value });
+    }
+  }
+
+  const set = new RegExp(
+    String.raw`(?:^|[^A-Za-z])(${fields})\s+in~?\s*\(([^)]*)\)`,
+    "gim",
+  );
+  for (const m of cleaned.matchAll(set)) {
+    const field = m[1];
+    const body = m[2];
+    if (field === undefined || body === undefined) continue;
+    for (const lit of body.matchAll(new RegExp(quoted, "g"))) {
+      const value = lit[1] ?? lit[2];
+      if (value !== undefined) out.push({ field, value });
+    }
+  }
+  return out;
+}
+
+/**
  * The identity findings for one sample against a solution's CONTENT.
  *
  * The step that was missing between the primitives above and any screen: the
  * expected values live in analytic-rule KQL, one query at a time, and nothing
  * turned a solution's rules into the literal set this module compares against.
  *
- * Takes the queries rather than the rule objects so it stays free of the
- * coverage-analysis content model - the caller already holds both.
+ * Takes the QUERIES, and extracts the literals itself. An earlier version
+ * accepted an extractor so the caller could supply one - which is how it came
+ * to be handed a function that reads different fields entirely, and how a test
+ * that injected a plausible fake passed while the real screen showed nothing.
  */
 export function cefIdentityFindings(
   sample: Partial<Record<CefIdentityField, string>>,
   queries: readonly string[],
-  extractDiscriminators: (kql: string) => readonly DiscriminatorValue[],
 ): CefIdentityFinding[] {
   const discriminators: DiscriminatorValue[] = [];
   for (const query of queries) {
-    discriminators.push(...extractDiscriminators(query));
+    discriminators.push(...extractCefIdentityValues(query));
   }
   return findCefIdentityAll(sample, discriminators);
 }

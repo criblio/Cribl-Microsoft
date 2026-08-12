@@ -9,6 +9,7 @@ export {
   actionableCefIdentity,
   applyCefIdentityOverride,
   cefIdentityFindings,
+  extractCefIdentityValues,
   expectedCefIdentity,
   findCefIdentity,
   findCefIdentityAll,
