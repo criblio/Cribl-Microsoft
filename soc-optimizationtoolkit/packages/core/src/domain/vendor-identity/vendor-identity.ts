@@ -304,10 +304,21 @@ export function identityGateMessage(
  * inside baseQuery/connectivityCriterias strings across all four connector
  * formats, so structural decoding is unnecessary.
  *
- * A single distinct product value becomes `product`; several become
- * `productOptions` (never auto-seeded - operator picks). A `startswith`
- * value is accepted as the product stem: it is the constant the connector
- * itself filters on, so a pipeline emitting it satisfies the content.
+ * A single distinct EQUALITY product value becomes `product`; several become
+ * `productOptions` (never auto-seeded - operator picks).
+ *
+ * A `startswith` value is a STEM, NOT A PRODUCT (user report 2026-08-12).
+ * Zscaler's connector filters `DeviceProduct startswith "NSS"`, and treating
+ * that as the product auto-seeded a DeviceProduct of "NSS" - a value Zscaler
+ * never emits. The real ones are NSSWeblog and NSSFWlog. It satisfied the ONE
+ * connector query it was read from, because "NSS" startswith "NSS", and failed
+ * every analytic rule that compares the product with `==`. Worse, being seeded
+ * it looked settled, so nothing prompted the operator to correct it.
+ *
+ * Stems are therefore offered as `productOptions` - visible, one-click, never
+ * auto-picked - which is exactly how the curated list already handles a vendor
+ * with several products.
+ *
  * Returns null when no DeviceVendor/EventVendor filter is found - curated
  * knowledge (detectVendorIdentity) stays the first tier.
  */
@@ -315,20 +326,24 @@ export function identityFromConnectorKql(
   connectorTexts: readonly string[],
 ): VendorIdentity | null {
   const vendors = new Set<string>();
-  const products = new Set<string>();
+  const exactProducts = new Set<string>();
+  const productStems = new Set<string>();
   // JSON-embedded KQL carries escaped quotes: DeviceVendor == \"Fortinet\".
   const value = String.raw`\\?['"]([^'"\\]+)\\?['"]`;
   const vendorRe = new RegExp(
     String.raw`(?:DeviceVendor|EventVendor)\s*(?:==|=~)\s*` + value,
     "g",
   );
+  // The operator is captured so a stem is never mistaken for a value.
   const productRe = new RegExp(
-    String.raw`(?:DeviceProduct|EventProduct)\s*(?:==|=~|startswith)\s*` + value,
+    String.raw`(?:DeviceProduct|EventProduct)\s*(==|=~|startswith)\s*` + value,
     "g",
   );
   for (const text of connectorTexts) {
     for (const m of text.matchAll(vendorRe)) vendors.add(m[1].trim());
-    for (const m of text.matchAll(productRe)) products.add(m[1].trim());
+    for (const m of text.matchAll(productRe)) {
+      (m[1] === "startswith" ? productStems : exactProducts).add(m[2].trim());
+    }
   }
   if (vendors.size !== 1) {
     // Zero: nothing to derive. Several: conflicting definitions - do not
@@ -336,10 +351,16 @@ export function identityFromConnectorKql(
     return null;
   }
   const identity: VendorIdentity = { vendor: [...vendors][0] };
-  if (products.size === 1) {
-    identity.product = [...products][0];
-  } else if (products.size > 1) {
-    identity.productOptions = [...products].sort();
+  if (exactProducts.size === 1 && productStems.size === 0) {
+    identity.product = [...exactProducts][0];
+  } else {
+    // Everything else - several exact values, or any stem - is offered rather
+    // than assumed. A stem still belongs in the list: it is a real clue about
+    // the product family, and the operator recognises their own feed.
+    const options = [...new Set([...exactProducts, ...productStems])].sort();
+    if (options.length > 0) {
+      identity.productOptions = options;
+    }
   }
   return identity;
 }

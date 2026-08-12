@@ -221,11 +221,43 @@ describe("missingIdentityFields / identityGateMessage", () => {
 });
 
 describe("identityFromConnectorKql (Wave C: identity from connector KQL)", () => {
-  it("derives vendor + startswith product stem from raw connector JSON", () => {
+  it("OFFERS a startswith stem, never seeds it as the product", () => {
+    // RE-PINNED 2026-08-12. This used to yield `product: "Fortigate"` - a stem
+    // accepted as a value because it satisfies the connector query it came
+    // from. Zscaler is where that breaks: its connector filters
+    // `DeviceProduct startswith "NSS"`, so the app auto-seeded a DeviceProduct
+    // of "NSS" - a value Zscaler never emits (NSSWeblog / NSSFWlog are the real
+    // ones) and one that fails every analytic rule comparing with `==`. Being
+    // seeded it also looked settled, so nothing prompted a correction.
+    //
+    // The stem is still shown - it is a real clue, and the operator recognises
+    // their own feed - but as a CANDIDATE, which is how this module already
+    // treats a vendor with more than one product.
     const fortinet = String.raw`{"graphQueries":[{"baseQuery":"CommonSecurityLog\n| where DeviceVendor == \"Fortinet\"\n| where DeviceProduct startswith \"Fortigate\""}]}`;
     expect(identityFromConnectorKql([fortinet])).toEqual({
       vendor: "Fortinet",
-      product: "Fortigate",
+      productOptions: ["Fortigate"],
+    });
+  });
+
+  it("still seeds a single EQUALITY product - that one is a real value", () => {
+    // The distinction the re-pin turns on: `==` names the constant the vendor
+    // actually emits, so seeding it saves a click without guessing anything.
+    const exact = String.raw`{"baseQuery":"CommonSecurityLog | where DeviceVendor == 'Acme' | where DeviceProduct == 'AcmeFirewall'"}`;
+    expect(identityFromConnectorKql([exact])).toEqual({
+      vendor: "Acme",
+      product: "AcmeFirewall",
+    });
+  });
+
+  it("a stem ALONGSIDE an exact value keeps both as candidates", () => {
+    // Mixed evidence is not a decision. Seeding the exact one would hide the
+    // stem, which may be the family the operator's own feed belongs to.
+    const exact = String.raw`{"baseQuery":"CommonSecurityLog | where DeviceVendor =~ 'Zscaler' | where DeviceProduct == 'NSSWeblog'"}`;
+    const stem = String.raw`{"baseQuery":"CommonSecurityLog | where DeviceVendor =~ 'Zscaler' | where DeviceProduct startswith 'NSS'"}`;
+    expect(identityFromConnectorKql([exact, stem])).toEqual({
+      vendor: "Zscaler",
+      productOptions: ["NSS", "NSSWeblog"],
     });
   });
 
