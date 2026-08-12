@@ -300,3 +300,49 @@ export function actionableCefIdentity(
     (f) => f.status !== "match" && f.status !== "unknown" && f.suggested !== null,
   );
 }
+
+/** The slice of a gap-analysis mapping row this module reads. */
+export interface CefIdentityMappingRow {
+  /** Destination column the source field maps onto. */
+  dest: string;
+  /** The sample's example value for it, when the sample carried one. */
+  sampleValue?: string;
+}
+
+/** The slice of an enrichment constant this module reads. */
+export interface CefIdentityEnrichmentRow {
+  field: string;
+  value: string;
+}
+
+/**
+ * What the rules will ACTUALLY see for each identity field on one log type.
+ *
+ * ENRICHMENT WINS, and that is the whole reason this is a function rather than
+ * a field read. An enrichment constant is emitted as an Eval that overwrites
+ * whatever the rename produced, so comparing the raw sample value against the
+ * content would flag a mismatch the operator has already fixed - an advisory
+ * that will not go away is how the real one gets ignored.
+ *
+ * Iterates CEF_IDENTITY_FIELDS rather than naming the pair. The screen used to
+ * spell "DeviceVendor" and "DeviceProduct" out three times, which would have
+ * silently skipped any field added to the header set later - the same
+ * renders-nothing failure this feature already shipped once.
+ */
+export function effectiveCefIdentity(
+  mappings: readonly CefIdentityMappingRow[],
+  enrichments: readonly CefIdentityEnrichmentRow[],
+): Partial<Record<CefIdentityField, string>> {
+  const out: Partial<Record<CefIdentityField, string>> = {};
+  for (const field of CEF_IDENTITY_FIELDS) {
+    const mapped = mappings.find((m) => m.dest === field);
+    if (mapped?.sampleValue !== undefined) {
+      out[field] = mapped.sampleValue;
+    }
+    const enriched = enrichments.find((e) => e.field === field);
+    if (enriched !== undefined) {
+      out[field] = enriched.value;
+    }
+  }
+  return out;
+}

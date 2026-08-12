@@ -60,6 +60,7 @@ import {
   SENTINEL_SECRET_PLACEHOLDER,
   assemblePack,
   cefIdentityFindings,
+  effectiveCefIdentity,
   listDcrInventory,
   placeholderWarning,
   resolveDestinations,
@@ -637,20 +638,12 @@ export function IntegrateScreen({
     if (queries.length === 0) return {} as Record<string, CefIdentityFinding[]>;
     const byLogType: Record<string, CefIdentityFinding[]> = {};
     for (const report of gapReports) {
-      const sample: Partial<Record<"DeviceVendor" | "DeviceProduct", string>> = {};
-      for (const m of report.fieldMappings) {
-        if (m.dest === "DeviceVendor" || m.dest === "DeviceProduct") {
-          if (m.sampleValue !== undefined) sample[m.dest] = m.sampleValue;
-        }
-      }
-      // An enrichment constant overwrites the sample's value at runtime, so it
-      // is what the rules will actually see - compare against that, not the raw
-      // sample, or the app would flag a mismatch the operator already fixed.
-      for (const e of enrichments[report.logType] ?? []) {
-        if (e.field === "DeviceVendor" || e.field === "DeviceProduct") {
-          sample[e.field] = e.value;
-        }
-      }
+      // The enrichment-wins rule and the field list both live in core - this
+      // screen used to spell the pair out three times.
+      const sample = effectiveCefIdentity(
+        report.fieldMappings,
+        enrichments[report.logType] ?? [],
+      );
       byLogType[report.logType] = cefIdentityFindings(sample, queries);
     }
     return byLogType;
