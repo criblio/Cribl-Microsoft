@@ -21,5 +21,13 @@ export {
   fallbackHint,
   isInlineArtifact,
 } from "./fallback-notice-state";
-export { emptyInventoryMessage } from "./empty-inventory";
-export type { EmptyInventoryMessage } from "./empty-inventory";
+export {
+  AUDITED_SCOPE,
+  emptyInventoryMessage,
+  unmeasuredInventoryMessage,
+} from "./empty-inventory";
+export type {
+  AuditedScope,
+  EmptyInventoryInput,
+  EmptyInventoryMessage,
+} from "./empty-inventory";

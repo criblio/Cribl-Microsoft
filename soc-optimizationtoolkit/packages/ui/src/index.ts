@@ -134,6 +134,7 @@ export type { ReviewScreenProps } from "./screens/review/review-screen";
 export { DcrAutomationScreen } from "./screens/dcr-automation/dcr-automation-screen";
 export type { DcrAutomationScreenProps } from "./screens/dcr-automation/dcr-automation-screen";
 export { DcrInventoryPanel } from "./screens/dcr-automation/dcr-inventory-panel";
+export type { DcrInventoryPanelProps } from "./screens/dcr-automation/dcr-inventory-panel";
 export {
   HANDOFF_CHECKING_REASON,
   HANDOFF_NEEDS_ACKNOWLEDGE_REASON,
@@ -764,13 +765,24 @@ export type {
 export {
   ANALYSIS_STALE_NOTICE,
   deriveTablePickerAccess,
+  emptyTableListMessage,
   filterTables,
   tableCountLabel,
 } from "./screens/table-picker/table-picker-state";
 export type { TablePickerAccess } from "./screens/table-picker/table-picker-state";
 
 // Empty-inventory messaging (docs/inventory-standard.md, BINDING): an empty list
-// is only a ZERO when the read was verified. Shared by every lister so eight
-// screens cannot phrase the same confident wrong answer eight ways.
-export { emptyInventoryMessage } from "./capabilities";
-export type { EmptyInventoryMessage } from "./capabilities";
+// is only a ZERO when the read was verified, AT THE SCOPE BEING LISTED - the
+// audit measures one committed scope, so a browsing screen must say so. Shared
+// by every lister so eight screens cannot phrase the same confident wrong answer
+// eight ways.
+export {
+  AUDITED_SCOPE,
+  emptyInventoryMessage,
+  unmeasuredInventoryMessage,
+} from "./capabilities";
+export type {
+  AuditedScope,
+  EmptyInventoryInput,
+  EmptyInventoryMessage,
+} from "./capabilities";

@@ -49,7 +49,10 @@ import type {
 } from "@soc/core";
 import { emptyCapabilitySet } from "@soc/core";
 import type { CapabilityContext, CapabilitySet } from "@soc/core";
-import { emptyInventoryMessage } from "../../capabilities/empty-inventory";
+import {
+  emptyInventoryMessage,
+  unmeasuredInventoryMessage,
+} from "../../capabilities/empty-inventory";
 import { usePorts } from "../../ports-context";
 import { SearchableSelect } from "../../components/searchable-select";
 import {
@@ -107,23 +110,49 @@ export function AzureTargetingScreen(props: AzureTargetingScreenProps) {
 
   // Browse state - NEVER committed by itself. Seeded from the committed
   // scope so the pickers open on the current target.
+  const [browseSub, setBrowseSub] = useState(config.subscriptionId);
+  const [browseWs, setBrowseWs] = useState(config.workspaceName);
+  const [browseRg, setBrowseRg] = useState(config.resourceGroup);
+  const [location, setLocation] = useState("");
+
   // docs/inventory-standard.md, BINDING: an empty list is only a ZERO when the
   // read was verified. ARM returns 200 with an empty value array when RBAC
   // filters the caller out, so "no workspaces" and "no permission to see
   // workspaces" are identical responses - the distinction comes from the audit,
   // never from the response. The old copy said "No workspaces found - create one
   // below", which invited creating a workspace that already existed unseen.
-  const emptyWorkspaces = emptyInventoryMessage(
-    "workspaces",
-    "workspace.read",
-    capabilities ?? emptyCapabilitySet(),
-    capabilityContext ?? { azureIdentityPresent: true, criblReachable: true },
-  );
+  //
+  // SCOPE MATTERS HERE MORE THAN ANYWHERE: this screen exists to browse
+  // subscriptions OTHER than the committed one, and the audit only ever
+  // measured the committed scope. A `workspace.read` grant is evidence about
+  // that subscription alone, so browsing elsewhere drops back to the hedge -
+  // otherwise the fix would reproduce the very bug it removes, one subscription
+  // over, with a permission check as cover.
+  const auditedCapabilities = capabilities ?? emptyCapabilitySet();
+  const auditedContext = capabilityContext ?? {
+    azureIdentityPresent: true,
+    criblReachable: true,
+  };
+  const emptyWorkspaces = emptyInventoryMessage({
+    noun: "workspaces",
+    capability: "workspace.read",
+    capabilities: auditedCapabilities,
+    context: auditedContext,
+    scope: {
+      matchesAudit: browseSub.trim() === config.subscriptionId.trim(),
+      label: "subscription",
+    },
+  });
 
-  const [browseSub, setBrowseSub] = useState(config.subscriptionId);
-  const [browseWs, setBrowseWs] = useState(config.workspaceName);
-  const [browseRg, setBrowseRg] = useState(config.resourceGroup);
-  const [location, setLocation] = useState("");
+  // Subscriptions and resource groups have NO capability in the settled
+  // taxonomy, and the standing rule is not to quietly reuse a neighbouring one
+  // (mapping either onto workspace.read would misreport what was checked). So
+  // they get the honest hedge that does not send the operator to a check which
+  // cannot settle it. Both said the harmful thing before: the resource-group
+  // line invited creating one, and the subscription line asserted a permission
+  // problem that an identity with genuinely zero subscriptions does not have.
+  const emptySubscriptions = unmeasuredInventoryMessage("enabled subscriptions");
+  const emptyResourceGroups = unmeasuredInventoryMessage("resource groups");
 
   // Create-action inputs.
   const [newRgName, setNewRgName] = useState("");
@@ -617,7 +646,7 @@ export function AzureTargetingScreen(props: AzureTargetingScreenProps) {
                   : subsLoad.status === "error"
                     ? "Subscription discovery failed - fix the connection, then Refresh"
                     : subsLoad.status === "loaded"
-                      ? "No enabled subscriptions visible - grant Reader, then Refresh"
+                      ? emptySubscriptions.text
                       : "Connect first, then Refresh from Azure"}
               </option>
             </select>
@@ -683,7 +712,7 @@ export function AzureTargetingScreen(props: AzureTargetingScreenProps) {
                   ? "Select a subscription first..."
                   : depLoad.status === "loading"
                     ? "Loading resource groups..."
-                    : "No resource groups visible - create one below"}
+                    : emptyResourceGroups.text}
               </option>
             </select>
           )}

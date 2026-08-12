@@ -21,12 +21,32 @@ import {
   removeTableColumn,
   updateDcrInPlace,
 } from "@soc/core";
-import type { DcrInventoryEntry, DcrUpdatePreview } from "@soc/core";
+import { emptyCapabilitySet } from "@soc/core";
+import type {
+  CapabilityContext,
+  CapabilitySet,
+  DcrInventoryEntry,
+  DcrUpdatePreview,
+} from "@soc/core";
+import { emptyInventoryMessage } from "../../capabilities/empty-inventory";
 import { usePorts } from "../../ports-context";
 import { SearchableSelect } from "../../components/searchable-select";
 import { mergePreviewColumns, summarizePreview } from "./dcr-inventory-state";
 
-export function DcrInventoryPanel() {
+export interface DcrInventoryPanelProps {
+  /**
+   * What the connected identity was measured to be able to do. Used ONLY to
+   * decide whether an empty DCR list may be reported as a real zero
+   * (docs/inventory-standard.md). Absent is safe: the message hedges rather
+   * than claiming "none".
+   */
+  capabilities?: CapabilitySet;
+  /** Connection facts for resolving unmeasured capabilities. */
+  capabilityContext?: CapabilityContext;
+}
+
+export function DcrInventoryPanel(props: DcrInventoryPanelProps = {}) {
+  const { capabilities, capabilityContext } = props;
   const { ports, config } = usePorts();
   // Every button narrates to the Logs page (user request 2026-07-13).
   const logger = ports.logger;
@@ -87,6 +107,25 @@ export function DcrInventoryPanel() {
   const [rgOptions, setRgOptions] = useState<string[]>(
     config.resourceGroup !== "" ? [config.resourceGroup] : [],
   );
+
+  // docs/inventory-standard.md, BINDING: an ARM list returns 200 with an empty
+  // value array when RBAC filters the caller out, so an empty inventory is only
+  // a ZERO once the read is verified. The old copy - "No Data Collection Rules
+  // in this resource group." - stated it as fact.
+  //
+  // The audit measured `dcr.read` at the COMMITTED resource group, and this
+  // panel deliberately browses others (that is the point of the selector right
+  // above), so the verdict only licenses a zero while the two agree.
+  const emptyDcrs = emptyInventoryMessage({
+    noun: "data collection rules",
+    capability: "dcr.read",
+    capabilities: capabilities ?? emptyCapabilitySet(),
+    context: capabilityContext ?? { azureIdentityPresent: true, criblReachable: true },
+    scope: {
+      matchesAudit: inventoryRg === config.resourceGroup,
+      label: "resource group",
+    },
+  });
   useEffect(() => {
     if (!scopeReady) return;
     let cancelled = false;
@@ -529,7 +568,7 @@ export function DcrInventoryPanel() {
       {preview === null && error !== "" && <pre className="result">{error}</pre>}
       {preview === null && notice !== "" && <p className="panel-desc">{notice}</p>}
       {entries !== null && entries.length === 0 && (
-        <p className="panel-desc">No Data Collection Rules in this resource group.</p>
+        <p className="panel-desc">{emptyDcrs.text}</p>
       )}
       {entries !== null && entries.length > 0 && (
         <>

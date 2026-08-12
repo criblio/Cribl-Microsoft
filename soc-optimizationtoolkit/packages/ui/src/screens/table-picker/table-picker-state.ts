@@ -12,6 +12,12 @@
  *      else runs" for a listing, so the annotation IS the whole answer. A
  *      surface that implied otherwise would be inventing a workaround.
  *
+ * A THIRD RULE APPLIES AFTER THE LOAD (docs/inventory-standard.md, BINDING): an
+ * empty result is only a zero once the read was verified. The two are easy to
+ * confuse but are different moments - {@link deriveTablePickerAccess} says what
+ * to expect BEFORE loading, {@link emptyTableListMessage} says what an empty
+ * answer MEANT afterwards.
+ *
  * Pure: no IO, no React, no clock.
  */
 
@@ -21,6 +27,8 @@ import type {
   CapabilitySet,
   WorkspaceTable,
 } from "@soc/core";
+import { AUDITED_SCOPE, emptyInventoryMessage } from "../../capabilities/empty-inventory";
+import type { EmptyInventoryMessage } from "../../capabilities/empty-inventory";
 
 /** What the picker should say about its own availability. */
 export interface TablePickerAccess {
@@ -58,6 +66,34 @@ export function deriveTablePickerAccess(
   };
 }
 
+/**
+ * What to say when the listing COMPLETED and returned nothing.
+ *
+ * docs/inventory-standard.md names this lister explicitly: `listWorkspaceTables`
+ * throws on a non-2xx, which covers an explicit denial, but an RBAC-filtered
+ * `200 []` is byte-identical to a genuinely empty workspace and would read as
+ * one. Only a measured `table.read` may call it a zero.
+ *
+ * SCOPE IS {@link AUDITED_SCOPE} BY CONSTRUCTION, and the caller must keep it
+ * that way: the audit's `tables-list` probe runs against the COMMITTED
+ * workspace, so this answer is only sound while the picker lists that same
+ * workspace. A picker that grows a workspace selector must pass a real scope
+ * comparison instead - siblings that browse (Azure targeting, DCR inventory)
+ * already do.
+ */
+export function emptyTableListMessage(
+  capabilities: CapabilitySet,
+  context: CapabilityContext,
+): EmptyInventoryMessage {
+  return emptyInventoryMessage({
+    noun: "tables",
+    capability: "table.read",
+    capabilities,
+    context,
+    scope: AUDITED_SCOPE,
+  });
+}
+
 /** Case-insensitive substring filter over table names, order preserved. */
 export function filterTables(
   tables: readonly WorkspaceTable[],
@@ -70,7 +106,14 @@ export function filterTables(
   return tables.filter((table) => table.name.toLowerCase().includes(needle));
 }
 
-/** The count line under the list; states the filter rather than hiding it. */
+/**
+ * The count line under the list; states the filter rather than hiding it.
+ *
+ * `total === 0` means NOTHING HAS BEEN LOADED - a pre-load state, not a
+ * finding. Once a listing has completed and returned nothing, the caller owes
+ * {@link emptyTableListMessage} instead: this line would report an unverified
+ * emptiness as a settled fact about the workspace.
+ */
 export function tableCountLabel(total: number, shown: number): string {
   if (total === 0) {
     return "No tables loaded yet.";
