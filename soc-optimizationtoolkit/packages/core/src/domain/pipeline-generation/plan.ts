@@ -85,6 +85,47 @@ function disabledOverflow(sentinelTable: string): OverflowConfig {
   };
 }
 
+/**
+ * The overflow config for a resolved field set.
+ *
+ * THE FIELDS THEMSELVES CAN TURN OVERFLOW ON (user report 2026-08-12, Zscaler).
+ * Every rung below that did not come from the field matcher used to hardcode a
+ * DISABLED config, so a field the gap analysis marked `overflow` fell through
+ * the emitter entirely: excluded from the renames (correct - it is not renamed),
+ * skipped by the serialize step (which only runs when overflow is enabled), and
+ * missed by the cleanup drops (which only remove `drop`). It reached the DCR
+ * under its raw vendor name and was discarded there, silently.
+ *
+ * For Zscaler that was 133 of 170 fields on one log type: the analysis promised
+ * them in AdditionalExtensions and the pipeline did nothing with them at all.
+ *
+ * The matcher's own config still wins when present - it carries decisions this
+ * cannot reconstruct. Otherwise overflow is enabled exactly when some field asks
+ * for it, and the table's own catch-all column supplies the name and type.
+ */
+function overflowFor(
+  sentinelTable: string,
+  fields: readonly PipelineFieldMapping[],
+  matchResult: TablePlanInput["matchResult"],
+): OverflowConfig {
+  if (matchResult?.overflowConfig !== undefined) {
+    return matchResult.overflowConfig;
+  }
+  const sourceFields = fields
+    .filter((f) => f.action === "overflow")
+    .map((f) => f.source);
+  if (sourceFields.length === 0) {
+    return disabledOverflow(sentinelTable);
+  }
+  const def = getOverflowConfig(sentinelTable);
+  return {
+    enabled: true,
+    fieldName: def.fieldName,
+    fieldType: def.fieldType,
+    sourceFields,
+  };
+}
+
 /** Resolve one table's fields + overflow via the priority ladder. */
 function resolveFields(input: TablePlanInput): {
   fields: PipelineFieldMapping[];
@@ -103,8 +144,7 @@ function resolveFields(input: TablePlanInput): {
     }));
     return {
       fields,
-      overflowConfig:
-        input.matchResult?.overflowConfig ?? disabledOverflow(sentinelTable),
+      overflowConfig: overflowFor(sentinelTable, fields, input.matchResult),
       provenance: "user-override",
     };
   }
@@ -138,8 +178,7 @@ function resolveFields(input: TablePlanInput): {
     ];
     return {
       fields,
-      overflowConfig:
-        input.matchResult?.overflowConfig ?? disabledOverflow(sentinelTable),
+      overflowConfig: overflowFor(sentinelTable, fields, input.matchResult),
       provenance: "dcr-gap",
     };
   }
@@ -181,7 +220,11 @@ function resolveFields(input: TablePlanInput): {
   if (input.presetFields && input.presetFields.length > 0) {
     return {
       fields: input.presetFields,
-      overflowConfig: disabledOverflow(sentinelTable),
+      overflowConfig: overflowFor(
+        sentinelTable,
+        input.presetFields,
+        input.matchResult,
+      ),
       provenance: "preset-fields",
     };
   }
