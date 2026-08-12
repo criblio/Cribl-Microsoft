@@ -194,7 +194,27 @@ export function applyCefIdentityOverride<T extends Record<string, unknown>>(
   return next;
 }
 
-/** True when the override would actually change something on this event. */
+/**
+ * True when the override would actually change something on THIS event.
+ *
+ * SPECIFICATION-ONLY, ON PURPOSE. Nothing in the product calls this; it exists
+ * so the blank-value rule is pinned identically for the predicate and for
+ * {@link applyCefIdentityOverride}, which is the contract the emitted pipeline
+ * also obeys through {@link overrideValueFor}.
+ *
+ * DO NOT use it to decide whether to emit the override step. That looks
+ * obvious - "the sample already says ZScaler, so the eval is a no-op" - and it
+ * is wrong: the emitted eval sets a CONSTANT on every event, while this answers
+ * a question about ONE event. Live events whose value differs from the sample
+ * (different casing, a second appliance, a firmware change) are exactly the
+ * ones the constant has to normalize, so gating emission on a sample match
+ * would silently leave them un-normalized and the rules would stop matching
+ * them - the failure this whole module exists to prevent.
+ *
+ * Architecture audit 2026-08-12 proposed that wiring and it was rejected here
+ * for this reason; the note is the deliverable, so the next audit does not
+ * re-propose it.
+ */
 export function overrideChangesEvent(
   event: Record<string, unknown>,
   override: CefIdentityOverride,
