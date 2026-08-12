@@ -17,6 +17,7 @@
 import { describe, expect, it } from "vitest";
 import {
   deriveValueDiscriminator,
+  fieldValuesFromRecords,
   type LogTypeFieldValues,
 } from "./route-value-discriminator";
 
@@ -152,5 +153,54 @@ describe("deriveValueDiscriminator - format rules", () => {
     const a = deriveValueDiscriminator(allowed, [blocked, cautioned], "cef");
     const b = deriveValueDiscriminator(allowed, [blocked, cautioned], "cef");
     expect(a).toBe(b);
+  });
+});
+
+describe("fieldValuesFromRecords - evidence, not summary", () => {
+  it("keeps one value per event, so counts survive", () => {
+    // The guards run on repetition and presence; a distinct-value summary
+    // (DiscoveredField.examples) would erase both.
+    const v = fieldValuesFromRecords([
+      { action: "Allowed", src: "10.0.0.1" },
+      { action: "Allowed", src: "10.0.0.2" },
+    ]);
+    expect(v.eventCount).toBe(2);
+    expect(v.values.action).toEqual(["Allowed", "Allowed"]);
+    expect(v.values.src).toEqual(["10.0.0.1", "10.0.0.2"]);
+  });
+
+  it("records a short array for a field missing from some events", () => {
+    // Fewer values than events is exactly how the present-in-every-event
+    // guard detects a sometimes-absent field.
+    const v = fieldValuesFromRecords([{ a: "1" }, {}, { a: "2" }]);
+    expect(v.eventCount).toBe(3);
+    expect(v.values.a).toHaveLength(2);
+  });
+
+  it("drops nested values rather than inventing a string for them", () => {
+    const v = fieldValuesFromRecords([{ nested: { x: 1 }, list: [1, 2], ok: "y" }]);
+    expect(v.values.nested).toBeUndefined();
+    expect(v.values.list).toBeUndefined();
+    expect(v.values.ok).toEqual(["y"]);
+  });
+
+  it("keeps numbers and booleans, which vendors use as discriminators", () => {
+    const v = fieldValuesFromRecords([{ code: 200, ok: true }]);
+    expect(v.values.code).toEqual(["200"]);
+    expect(v.values.ok).toEqual(["true"]);
+  });
+
+  it("feeds a working discriminator straight from records", () => {
+    const allow = fieldValuesFromRecords([
+      { action: "Allowed", ip: "1.1.1.1" },
+      { action: "Allowed", ip: "2.2.2.2" },
+    ]);
+    const block = fieldValuesFromRecords([
+      { action: "Blocked", ip: "3.3.3.3" },
+      { action: "Blocked", ip: "4.4.4.4" },
+    ]);
+    const filter = deriveValueDiscriminator(allow, [block], "cef") ?? "";
+    expect(filter).toContain("action === 'Allowed'");
+    expect(filter).not.toContain("ip");
   });
 });

@@ -61,6 +61,7 @@ import {
   assemblePack,
   cefIdentityFindings,
   effectiveCefIdentity,
+  fieldValuesFromRecords,
   listDcrInventory,
   placeholderWarning,
   resolveDestinations,
@@ -99,6 +100,7 @@ import type {
   CefIdentityFinding,
   CefIdentityOverride,
   DcrInventoryEntry,
+  LogTypeFieldValues,
   SessionDestination,
   TableAssemblyInput,
   TaggedSample,
@@ -485,6 +487,26 @@ export function IntegrateScreen({
     return map;
   }, [samples]);
 
+  // The observed field VALUES per log type, for route discrimination.
+  //
+  // Vendors that send every log type through one schema - Zscaler action
+  // ALLOWED/BLOCKED, Palo Alto type TRAFFIC/THREAT - cannot be separated by
+  // which fields exist, so without this every route is match-all and, routes
+  // being final, only the first receives events.
+  //
+  // Built from the PARSED RECORDS, deliberately: the planner's guards run on
+  // how often each value occurred, and every summary at hand
+  // (DiscoveredField.examples, GapFieldMapping.sampleValue) has already thrown
+  // that away - which would let an id pass as a category and produce a filter
+  // that matches the sample and drops live traffic.
+  const sampleFieldValues = useMemo<Record<string, LogTypeFieldValues>>(() => {
+    const map: Record<string, LogTypeFieldValues> = {};
+    for (const sample of samples) {
+      map[sample.logType] = fieldValuesFromRecords(sample.parsed.records);
+    }
+    return map;
+  }, [samples]);
+
   // Rename contract (Unit 11 -> Unit 18): the Sample Data section re-keys the
   // tagged-sample STORE entry itself; this handler forwards the rename to the
   // DCR Gap Analysis section so its log-type-keyed approvals and mapping edits
@@ -765,6 +787,7 @@ export function IntegrateScreen({
         reports: gapReports,
         mappingOverrides,
         sampleFormats,
+        sampleFieldValues,
         identityOverrides,
         enrichments,
         approved: mappingsApproved,
@@ -993,6 +1016,7 @@ export function IntegrateScreen({
     gapReports,
     mappingOverrides,
     sampleFormats,
+    sampleFieldValues,
     enrichments,
     identityGateReason,
     outcomes,
@@ -1283,6 +1307,7 @@ export function IntegrateScreen({
           reports={gapReports}
           mappingOverrides={mappingOverrides}
           sampleFormats={sampleFormats}
+          sampleFieldValues={sampleFieldValues}
           enrichments={enrichments}
           identityOverrides={identityOverrides}
           approved={mappingsApproved}

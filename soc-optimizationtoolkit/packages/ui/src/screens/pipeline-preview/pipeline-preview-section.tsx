@@ -21,7 +21,12 @@
  */
 
 import { useMemo } from "react";
-import type { CefIdentityOverride, GapFieldMapping, GapReport } from "@soc/core";
+import type {
+  CefIdentityOverride,
+  GapFieldMapping,
+  GapReport,
+  LogTypeFieldValues,
+} from "@soc/core";
 import { InfoTip } from "../../components/info-tip";
 import {
   derivePipelinePreview,
@@ -43,6 +48,8 @@ export interface PipelinePreviewSectionProps {
   mappingOverrides?: Readonly<Record<string, GapFieldMapping[]>>;
   /** Detected sample format keyed by logType (drives serde/timestamp). */
   sampleFormats?: Readonly<Record<string, string>>;
+  /** Observed field values keyed by logType (drives route discrimination). */
+  sampleFieldValues?: Readonly<Record<string, LogTypeFieldValues>>;
   /** User-added enrichment constants keyed by logType (merged by the caller). */
   enrichments?: Readonly<Record<string, readonly EnrichmentField[]>>;
   /** Corrected DeviceVendor/DeviceProduct keyed by logType. */
@@ -102,6 +109,7 @@ export function PipelinePreviewSection({
   reports,
   mappingOverrides,
   sampleFormats,
+  sampleFieldValues,
   enrichments,
   identityOverrides,
   approved,
@@ -115,6 +123,7 @@ export function PipelinePreviewSection({
         reports,
         ...(mappingOverrides !== undefined ? { mappingOverrides } : {}),
         ...(sampleFormats !== undefined ? { sampleFormats } : {}),
+        ...(sampleFieldValues !== undefined ? { sampleFieldValues } : {}),
         ...(enrichments !== undefined ? { enrichments } : {}),
         ...(identityOverrides !== undefined ? { identityOverrides } : {}),
         approved,
@@ -126,6 +135,7 @@ export function PipelinePreviewSection({
       reports,
       mappingOverrides,
       sampleFormats,
+      sampleFieldValues,
       enrichments,
       identityOverrides,
       approved,

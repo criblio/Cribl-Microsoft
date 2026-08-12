@@ -431,3 +431,73 @@ describe("enrichment fields (user-added constants)", () => {
     expect(view.valid).toBe(true);
   });
 });
+
+/**
+ * Sample VALUES must reach the planner THROUGH the preview.
+ *
+ * The derivation has its own pins in @soc/core. What those cannot catch is the
+ * wiring being inert: a prop that type-checks, threads through three files and
+ * never arrives still leaves every route match-all, and the only symptom is
+ * detections that never fire. This is how the 1.11.0 identity advisory shipped
+ * doing nothing, so it is pinned on the REAL derivePipelinePreview rather than
+ * on a stub of it.
+ */
+describe("derivePipelinePreview - route discrimination by field value", () => {
+  /** Two log types, one schema - separable only by the `action` VALUE. */
+  const reports = [
+    report({ logType: "ALLOWED", routeCondition: "true" }),
+    report({ logType: "BLOCKED", routeCondition: "true" }),
+  ];
+
+  const values = {
+    ALLOWED: {
+      eventCount: 3,
+      values: { action: ["Allowed", "Allowed", "Allowed"], src: ["a", "b", "c"] },
+    },
+    BLOCKED: {
+      eventCount: 3,
+      values: { action: ["Blocked", "Blocked", "Blocked"], src: ["d", "e", "f"] },
+    },
+  };
+
+  function conditions(withValues: boolean): string[] {
+    const view = derivePipelinePreview({
+      solutionName: "Vendor",
+      packName: "vendor-sentinel",
+      reports,
+      sampleFormats: { ALLOWED: "cef", BLOCKED: "cef" },
+      ...(withValues ? { sampleFieldValues: values } : {}),
+      approved: true,
+    });
+    return (view.plan?.tables ?? []).map((t) => t.routeCondition);
+  }
+
+  it("leaves both routes match-all when no values are supplied", () => {
+    // The baseline: this is the shipped behaviour, and one of these is dead.
+    expect(conditions(false)).toEqual(["true", "true"]);
+  });
+
+  it("gives each log type its own filter once values arrive", () => {
+    const got = conditions(true);
+    expect(got).not.toContain("true");
+    expect(new Set(got).size).toBe(2);
+  });
+
+  it("filters on the discriminating field, never on per-event data", () => {
+    const got = conditions(true).join(" ");
+    expect(got).toContain("action");
+    expect(got).not.toContain("src ===");
+  });
+
+  it("reports nothing unreachable once the routes are separated", () => {
+    const view = derivePipelinePreview({
+      solutionName: "Vendor",
+      packName: "vendor-sentinel",
+      reports,
+      sampleFormats: { ALLOWED: "cef", BLOCKED: "cef" },
+      sampleFieldValues: values,
+      approved: true,
+    });
+    expect(view.unreachableLogTypes).toEqual([]);
+  });
+});

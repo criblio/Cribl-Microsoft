@@ -67,6 +67,35 @@ export interface LogTypeFieldValues {
  */
 const CATEGORICAL_SLACK = 2;
 
+/**
+ * Build the value evidence for one log type from its PARSED sample records.
+ *
+ * Records, not DiscoveredField.examples: `examples` keeps only a few DISTINCT
+ * values and drops how often each occurred, which is precisely the evidence
+ * the guards above run on. A field seen once and a field seen identically in
+ * fifty events look the same through `examples`, so an id would pass the
+ * repetition guard. GapFieldMapping.sampleValue is worse still - one value,
+ * no counts at all.
+ *
+ * Only SCALAR values are kept. A nested object or array cannot be compared in
+ * a route filter, and stringifying one would invent a value the event never
+ * carried.
+ */
+export function fieldValuesFromRecords(
+  records: ReadonlyArray<Record<string, unknown>>,
+): LogTypeFieldValues {
+  const values: Record<string, string[]> = {};
+  for (const record of records) {
+    for (const [field, raw] of Object.entries(record)) {
+      if (raw === null || raw === undefined) continue;
+      const t = typeof raw;
+      if (t !== "string" && t !== "number" && t !== "boolean") continue;
+      (values[field] ??= []).push(String(raw));
+    }
+  }
+  return { eventCount: records.length, values };
+}
+
 /** Escape a value for a single-quoted JS string literal. */
 function jsString(value: string): string {
   return `'${value.replace(/\\/g, "\\\\").replace(/'/g, "\\'")}'`;

@@ -49,6 +49,7 @@ import type {
   CefIdentityOverride,
   GapFieldMapping,
   GapReport,
+  LogTypeFieldValues,
   PipelineFieldMapping,
   PipelinePlan,
   PlanProvenance,
@@ -167,6 +168,21 @@ export interface PipelinePreviewInputs {
    * only when this is true (else the always-visible-disabled empty state).
    */
   approved: boolean;
+  /**
+   * Observed sample field VALUES keyed by logType, for route discrimination.
+   *
+   * Built from the tagged samples' PARSED RECORDS, never from
+   * GapFieldMapping.sampleValue or DiscoveredField.examples: both summarise
+   * away how often a value occurred, and occurrence is the evidence the
+   * planner's over-fit guards run on. Feeding a summary would let a session id
+   * pass as a category and produce a route filter that matches the sample and
+   * drops live traffic.
+   *
+   * Optional. Without it the planner falls back to field-presence
+   * discrimination, which is what shipped the Zscaler pack with 7 of 10 routes
+   * unreachable - reported by unreachableLogTypes, not silent.
+   */
+  sampleFieldValues?: Readonly<Record<string, LogTypeFieldValues>>;
 }
 
 /** The whole preview view the panel renders. */
@@ -275,6 +291,7 @@ export function reportToPlanInput(
   sampleFormats?: Readonly<Record<string, string>>,
   enrichments?: readonly EnrichmentField[],
   identityOverride?: CefIdentityOverride,
+  sampleFieldValues?: LogTypeFieldValues,
 ): TablePlanInput {
   const mappings = effectiveReportMappings(report, overrides);
   return {
@@ -285,6 +302,9 @@ export function reportToPlanInput(
     // PLAN rather than as an enrichment because placement differs: this lands
     // right after CEF extraction, so the reduction rules see the fixed value.
     ...(identityOverride !== undefined ? { identityOverride } : {}),
+    // Route discrimination by field VALUE, for the log types that share one
+    // schema and cannot be told apart by which fields exist.
+    ...(sampleFieldValues !== undefined ? { sampleFieldValues } : {}),
     sourceFormat: normalizeSourceFormat(sampleFormats?.[report.logType]),
     // User-added constants ride the planner's vendorMappings channel: the
     // conf emitter's enrich branch turns each into an Eval add of
@@ -456,6 +476,7 @@ export function derivePipelinePreview(
         inputs.sampleFormats,
         inputs.enrichments?.[r.logType],
         inputs.identityOverrides?.[r.logType],
+        inputs.sampleFieldValues?.[r.logType],
       ),
     ),
   });
