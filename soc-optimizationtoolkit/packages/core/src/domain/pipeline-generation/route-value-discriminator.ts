@@ -57,7 +57,7 @@ const IDENTIFIER = /^[A-Za-z_$][A-Za-z0-9_$]*$/;
  * corpus has 1-3 events per log type, so it produces none, and that is the
  * correct reading of evidence that thin.
  */
-export const MIN_EVENTS_FOR_VALUE_FILTER = 3;
+const MIN_EVENTS_FOR_VALUE_FILTER = 3;
 
 /**
  * The observed values of one log type's fields: field name -> the value of

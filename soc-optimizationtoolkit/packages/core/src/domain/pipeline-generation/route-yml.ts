@@ -48,9 +48,17 @@ import { isPlaceholderFilter } from "./route-placeholder";
  * product lies - {@link unreachableLogTypes} names the dead log types and
  * {@link emissionOrder} decides which one survives - and until now they agreed
  * only because both happened to spell the same literal.
+ *
+ * Audit 2026-08-14: the literal is now a shared constant, because the coupling
+ * crosses a module boundary. plan.ts decides WHEN to replace a match-all (with
+ * a discriminator or a placeholder); this file decides WHAT IS one. If those
+ * ever spelled the sentinel differently, the planner would leave a route this
+ * file does not recognise - reported as reachable while receiving nothing.
  */
+export const MATCH_ALL_FILTER = "true";
+
 function isMatchAll(table: TablePlan): boolean {
-  return table.routeCondition === "true";
+  return table.routeCondition === MATCH_ALL_FILTER;
 }
 
 /**

@@ -59,6 +59,7 @@ import {
   type LogTypeFieldValues,
 } from "./route-value-discriminator";
 import { placeholderRouteFilter } from "./route-placeholder";
+import { MATCH_ALL_FILTER } from "./route-yml";
 import {
   destinationId,
   pipelineName,
@@ -266,10 +267,10 @@ function resolveReductionRules(
   return findReductionRules(input.sentinelTable, solutionName);
 }
 
-/** Compute the route filter for a table (routing.routeCondition, else "true"). */
+/** Compute the route filter for a table (routing.routeCondition, else match-all). */
 function resolveRouteCondition(input: TablePlanInput): string {
   const cond = input.routing?.routeCondition;
-  return cond && cond !== "true" ? cond : "true";
+  return cond && cond !== MATCH_ALL_FILTER ? cond : MATCH_ALL_FILTER;
 }
 
 /**
@@ -326,7 +327,7 @@ export function buildPipelinePlan(
     // supply none, and for log types whose shapes genuinely differ.
     const sampleValues = input.tables.map((t) => t.sampleFieldValues);
     tables.forEach((table, i) => {
-      if (table.routeCondition !== "true") return;
+      if (table.routeCondition !== MATCH_ALL_FILTER) return;
 
       const ownValues = sampleValues[i];
       if (ownValues !== undefined) {
