@@ -474,16 +474,38 @@ describe("selective drop inside the catch-all (user decision 2026-08-12)", () =>
     expect(cleanup).toContain("- noisy");
   });
 
-  it("does NOT remove the fields that overflow - dropping is per-field", () => {
-    // The regression this guards: bulk-removing the overflow set would make the
-    // reviewer choose between the whole catch-all and none of it.
+  it("removes the overflow originals AFTER serializing them", () => {
+    // RE-PINNED 2026-08-13 (user decision), reversing "does NOT remove the
+    // fields that overflow".
+    //
+    // The old rationale was that removing them would make the reviewer choose
+    // between the whole catch-all and none of it. That is not so, and the
+    // reason is ORDER: the serialize runs in the `overflow` group and the
+    // cleanup eval immediately after, so the values are already inside the
+    // AdditionalExtensions JSON before the originals are removed. Cribl's
+    // Serialize copies rather than moves, so leaving them meant shipping every
+    // catch-all field twice - the second copy landing where the DCR has no
+    // column and silently discards it.
     const conf = confFor(MIXED);
     const cleanup = conf.slice(conf.indexOf("Remove internal fields") - 900);
-    expect(cleanup).not.toContain("- cloudname");
-    expect(cleanup).not.toContain("- bamd5");
-    // And they are not excluded from the serialize either, so they land in it.
+    expect(cleanup).toContain("- cloudname");
+    expect(cleanup).toContain("- bamd5");
+    // Still NOT excluded from the serialize - they must land in the catch-all
+    // first, which is the whole point of removing them only afterwards.
     expect(conf).not.toContain('- "!cloudname"');
     expect(conf).not.toContain('- "!bamd5"');
+    // And the per-field lever is untouched: an explicit drop is excluded from
+    // the serialize as well, so it appears in neither place.
+    expect(conf).toContain('- "!noisy"');
+  });
+
+  it("leaves the RENAMED column alone - it is what the DCR ingests", () => {
+    // The dangerous over-reach of this change: sweeping a mapped column into
+    // the remove list would delete the data the pipeline exists to deliver.
+    const conf = confFor(MIXED);
+    const cleanup = conf.slice(conf.indexOf("Remove internal fields") - 900);
+    expect(cleanup).not.toContain("- SourceUserName");
+    expect(cleanup).not.toContain("- login");
   });
 
   it("still collects the catch-all when EVERY unmapped field is dropped", () => {

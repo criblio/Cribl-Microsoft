@@ -775,22 +775,45 @@ export function generatePipelineConf(
     : [];
   // Reviewer/policy drops arrive as preset fields (2026-07-13 live fix).
   //
-  // ONLY EXPLICIT DROPS ARE REMOVED - never the overflow set as a block (user
-  // decision, confirmed 2026-08-12). Dropping every field bound for the
-  // catch-all would make the choice all-or-nothing, and the reviewer's actual
-  // need is selective: keep the catch-all, remove the handful of fields inside
-  // it that are noise. Marking a row `drop` is that lever - it excludes the
-  // field from the serialize above AND removes it here, so a dropped field is
-  // gone from both places, while everything else still reaches
-  // AdditionalExtensions.
-  //
-  // The cost of not bulk-removing is that a serialized field also rides along
-  // top-level (Cribl's Serialize copies rather than moves) where the DCR has no
-  // column for it and ignores it. That is accepted, deliberately.
+  // Marking a row `drop` excludes the field from the serialize above AND
+  // removes it here, so a dropped field is gone from both places while
+  // everything else still reaches AdditionalExtensions. That lever is
+  // unchanged.
   const presetDropFields = fields
     .filter((f) => f.action === "drop")
     .map((f) => f.source)
     .filter((source) => !vendorDropFields.includes(source));
+
+  // The serialized originals are removed too (user decision 2026-08-13,
+  // REVERSING the 2026-08-12 call to keep them).
+  //
+  // Cribl's Serialize COPIES rather than moves, so every overflow field was
+  // being sent twice: once inside the AdditionalExtensions JSON and again at
+  // top level, where the DCR has no column for it and silently ignores it. For
+  // Zscaler that is 59 duplicated fields on a firewall event and 133 on a web
+  // event - bytes paid for and discarded, in a toolkit whose purpose is
+  // reducing exactly that.
+  //
+  // The earlier decision assumed removing them would empty the catch-all,
+  // making the choice all-or-nothing. It does not: ORDER IS WHAT MAKES THIS
+  // SAFE - the serialize runs in the `overflow` group, this eval in `cleanup`
+  // immediately after, so the values are already inside the JSON string before
+  // anything is removed. Selectivity is unaffected, because an explicit `drop`
+  // still excludes a field from the serialize itself.
+  //
+  // Only fields that were actually serialized: a field the serialize excluded
+  // is either already in presetDropFields or is a real DCR column, and
+  // removing a mapped column would delete data the DCR wants.
+  const serializedOverflowFields = hasOverflow
+    ? fields
+        .filter((f) => f.action === "overflow")
+        .map((f) => f.source)
+        .filter(
+          (source) =>
+            !vendorDropFields.includes(source) &&
+            !presetDropFields.includes(source),
+        )
+    : [];
   const dropEntries = [
     "_raw",
     "_time",
@@ -810,6 +833,7 @@ export function generatePipelineConf(
     "sourcetype",
     ...vendorDropFields,
     ...presetDropFields,
+    ...serializedOverflowFields,
   ];
 
   functions.push(
