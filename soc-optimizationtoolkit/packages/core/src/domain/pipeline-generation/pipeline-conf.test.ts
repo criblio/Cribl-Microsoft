@@ -290,9 +290,65 @@ describe("reviewer drops vs overflow (2026-07-13 live fix)", () => {
     expect(conf).toContain('- "!noise"');
     // ...while the overflow field stays serializable (no exclusion).
     expect(conf).not.toContain('- "!extra"');
-    // And the overflow source is never in the cleanup remove list.
+    // RE-PINNED 2026-08-13, reversing the 2026-07-13 assertion that an
+    // overflow source is never removed. Cribl's Serialize COPIES, so keeping
+    // the original meant every catch-all field went over the wire twice - once
+    // in the JSON and once top-level, where the DCR has no column and drops it.
+    // The serialize runs in the `overflow` group and this eval in `cleanup`
+    // immediately after, so the value is already inside AdditionalExtensions
+    // before the original is removed.
     const cleanup = conf.slice(conf.indexOf("Remove internal fields") - 800);
-    expect(cleanup).not.toContain("- extra");
+    expect(cleanup).toContain("- extra");
+  });
+
+  it("keeps the serialized VALUE while dropping the duplicate top-level copy", () => {
+    // The pin that makes the reversal safe: removing the original must not
+    // empty the catch-all. Order is the only thing guaranteeing that, so it is
+    // asserted as order - serialize before cleanup, in the emitted file.
+    const conf = generatePipelineConf(
+      "p",
+      "V",
+      "CommonSecurityLog",
+      [{ source: "extra", target: "extra", type: "string", action: "overflow" }],
+      undefined,
+      "json",
+      {
+        enabled: true,
+        fieldName: "AdditionalExtensions",
+        fieldType: "string",
+        sourceFields: ["extra"],
+      },
+    );
+    const serializeAt = conf.indexOf("groupId: overflow");
+    const cleanupAt = conf.indexOf("groupId: cleanup");
+    expect(serializeAt).toBeGreaterThan(-1);
+    expect(cleanupAt).toBeGreaterThan(serializeAt);
+    // The field is serialized (not excluded) and then removed.
+    expect(conf).not.toContain('- "!extra"');
+    expect(conf.slice(cleanupAt - 900)).toContain("- extra");
+  });
+
+  it("never removes a MAPPED column - that would delete what the DCR wants", () => {
+    const conf = generatePipelineConf(
+      "p",
+      "V",
+      "CommonSecurityLog",
+      [
+        { source: "src", target: "SourceIP", type: "string", action: "rename" },
+        { source: "extra", target: "extra", type: "string", action: "overflow" },
+      ],
+      undefined,
+      "json",
+      {
+        enabled: true,
+        fieldName: "AdditionalExtensions",
+        fieldType: "string",
+        sourceFields: ["extra"],
+      },
+    );
+    const cleanup = conf.slice(conf.indexOf("Remove internal fields") - 900);
+    expect(cleanup).not.toContain("- SourceIP");
+    expect(cleanup).not.toContain("- src");
   });
 });
 

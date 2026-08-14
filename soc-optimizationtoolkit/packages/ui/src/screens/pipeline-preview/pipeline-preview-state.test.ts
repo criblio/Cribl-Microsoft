@@ -431,3 +431,130 @@ describe("enrichment fields (user-added constants)", () => {
     expect(view.valid).toBe(true);
   });
 });
+
+/**
+ * Sample VALUES must reach the planner THROUGH the preview.
+ *
+ * The derivation has its own pins in @soc/core. What those cannot catch is the
+ * wiring being inert: a prop that type-checks, threads through three files and
+ * never arrives still leaves every route match-all, and the only symptom is
+ * detections that never fire. This is how the 1.11.0 identity advisory shipped
+ * doing nothing, so it is pinned on the REAL derivePipelinePreview rather than
+ * on a stub of it.
+ */
+describe("derivePipelinePreview - route discrimination by field value", () => {
+  /** Two log types, one schema - separable only by the `action` VALUE. */
+  const reports = [
+    report({ logType: "ALLOWED", routeCondition: "true" }),
+    report({ logType: "BLOCKED", routeCondition: "true" }),
+  ];
+
+  const values = {
+    ALLOWED: {
+      eventCount: 3,
+      values: { action: ["Allowed", "Allowed", "Allowed"], src: ["a", "b", "c"] },
+    },
+    BLOCKED: {
+      eventCount: 3,
+      values: { action: ["Blocked", "Blocked", "Blocked"], src: ["d", "e", "f"] },
+    },
+  };
+
+  function conditions(withValues: boolean): string[] {
+    const view = derivePipelinePreview({
+      solutionName: "Vendor",
+      packName: "vendor-sentinel",
+      reports,
+      sampleFormats: { ALLOWED: "cef", BLOCKED: "cef" },
+      ...(withValues ? { sampleFieldValues: values } : {}),
+      approved: true,
+    });
+    return (view.plan?.tables ?? []).map((t) => t.routeCondition);
+  }
+
+  it("leaves both routes on a PLACEHOLDER when no values are supplied", () => {
+    // RE-PINNED 2026-08-13. The baseline used to be two match-alls, one of
+    // which was dead. Undiscriminable log types now get an inert placeholder
+    // instead, so neither route steals the other's events and both are
+    // reported as outstanding work.
+    for (const cond of conditions(false)) {
+      expect(cond).toContain("__UNSET__");
+    }
+  });
+
+  it("gives each log type its own filter once values arrive", () => {
+    const got = conditions(true);
+    expect(got).not.toContain("true");
+    expect(new Set(got).size).toBe(2);
+  });
+
+  it("filters on the discriminating field, never on per-event data", () => {
+    const got = conditions(true).join(" ");
+    expect(got).toContain("action");
+    expect(got).not.toContain("src ===");
+  });
+
+  it("reports nothing unreachable once the routes are separated", () => {
+    const view = derivePipelinePreview({
+      solutionName: "Vendor",
+      packName: "vendor-sentinel",
+      reports,
+      sampleFormats: { ALLOWED: "cef", BLOCKED: "cef" },
+      sampleFieldValues: values,
+      approved: true,
+    });
+    expect(view.unreachableLogTypes).toEqual([]);
+  });
+});
+
+/**
+ * Placeholder filters must reach the preview, or the operator never learns
+ * there is work outstanding and ships a pack with silent inert routes.
+ */
+describe("derivePipelinePreview - placeholder route filters", () => {
+  const reports = [
+    report({ logType: "firewall", routeCondition: "true" }),
+    report({ logType: "dns", routeCondition: "true" }),
+  ];
+
+  function view(withValues: boolean) {
+    return derivePipelinePreview({
+      solutionName: "Vendor",
+      packName: "vendor-sentinel",
+      reports,
+      sampleFormats: { firewall: "cef", dns: "cef" },
+      ...(withValues
+        ? {
+            sampleFieldValues: {
+              firewall: { eventCount: 2, values: { act: ["Allow", "Allow"] } },
+              dns: { eventCount: 2, values: { act: ["Query", "Query"] } },
+            },
+          }
+        : {}),
+      approved: true,
+    });
+  }
+
+  it("names the log types awaiting a filter", () => {
+    expect(view(false).placeholderLogTypes.sort()).toEqual(["dns", "firewall"]);
+  });
+
+  it("reports NOTHING unreachable - a placeholder is inert, not shadowed", () => {
+    // The distinction the operator acts on: unfinished, not broken.
+    expect(view(false).unreachableLogTypes).toEqual([]);
+  });
+
+  it("still emits both routes and pipelines, so a filter edit is all that remains", () => {
+    const v = view(false);
+    expect(v.tables).toHaveLength(2);
+    expect(v.routeYml).toContain("Reduction + Transform: firewall");
+    expect(v.routeYml).toContain("Reduction + Transform: dns");
+  });
+
+  it("says nothing once the samples DO separate the log types", () => {
+    // A warning that fires on a healthy pack is the noise that hides the real one.
+    const v = view(true);
+    expect(v.placeholderLogTypes).toEqual([]);
+    expect(v.unreachableLogTypes).toEqual([]);
+  });
+})

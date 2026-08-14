@@ -21,7 +21,12 @@
  */
 
 import { useMemo } from "react";
-import type { CefIdentityOverride, GapFieldMapping, GapReport } from "@soc/core";
+import type {
+  CefIdentityOverride,
+  GapFieldMapping,
+  GapReport,
+  LogTypeFieldValues,
+} from "@soc/core";
 import { InfoTip } from "../../components/info-tip";
 import {
   derivePipelinePreview,
@@ -43,6 +48,8 @@ export interface PipelinePreviewSectionProps {
   mappingOverrides?: Readonly<Record<string, GapFieldMapping[]>>;
   /** Detected sample format keyed by logType (drives serde/timestamp). */
   sampleFormats?: Readonly<Record<string, string>>;
+  /** Observed field values keyed by logType (drives route discrimination). */
+  sampleFieldValues?: Readonly<Record<string, LogTypeFieldValues>>;
   /** User-added enrichment constants keyed by logType (merged by the caller). */
   enrichments?: Readonly<Record<string, readonly EnrichmentField[]>>;
   /** Corrected DeviceVendor/DeviceProduct keyed by logType. */
@@ -102,6 +109,7 @@ export function PipelinePreviewSection({
   reports,
   mappingOverrides,
   sampleFormats,
+  sampleFieldValues,
   enrichments,
   identityOverrides,
   approved,
@@ -115,6 +123,7 @@ export function PipelinePreviewSection({
         reports,
         ...(mappingOverrides !== undefined ? { mappingOverrides } : {}),
         ...(sampleFormats !== undefined ? { sampleFormats } : {}),
+        ...(sampleFieldValues !== undefined ? { sampleFieldValues } : {}),
         ...(enrichments !== undefined ? { enrichments } : {}),
         ...(identityOverrides !== undefined ? { identityOverrides } : {}),
         approved,
@@ -126,6 +135,7 @@ export function PipelinePreviewSection({
       reports,
       mappingOverrides,
       sampleFormats,
+      sampleFieldValues,
       enrichments,
       identityOverrides,
       approved,
@@ -163,6 +173,59 @@ export function PipelinePreviewSection({
           </strong>{" "}
           This should not happen for well-formed input; the exact messages are
           shown with each file below.
+        </div>
+      )}
+
+      {/*
+        Valid YAML is not a working pack. Every route is final, so only the
+        first match-all receives events - the rest are silently handled by ITS
+        pipeline, with the wrong renames. Without this the green banner above
+        is the last word, and the loss only shows up as detections that never
+        fire. Measured on Zscaler (7 of 10 log types dead) but generic: it hits
+        any vendor whose log types share a schema and differ by field value.
+      */}
+      {/*
+        A placeholder is a TASK, not a defect: the route, pipeline, lookup and
+        sample all exist and start working the moment a filter is written. It
+        is phrased as work outstanding rather than as a failure, because the
+        alternatives the generator rejected were worse - a match-all would have
+        run these events through another log type's pipeline, and dropping the
+        log type would have removed a path a SOC needs.
+      */}
+      {view.placeholderLogTypes.length > 0 && (
+        <div className="pipeline-preview-valid pipeline-preview-valid-bad">
+          <strong>
+            {view.placeholderLogTypes.length} log type
+            {view.placeholderLogTypes.length === 1 ? "" : "s"} need a route
+            filter before {view.placeholderLogTypes.length === 1 ? "it" : "they"}{" "}
+            can receive events.
+          </strong>{" "}
+          Nothing in these samples separates{" "}
+          {view.placeholderLogTypes.join(", ")} from the others, so the pack
+          ships them with a placeholder filter that matches nothing. Everything
+          else for them is built - pipelines, reduction rules, lookups and
+          samples - so replacing each filter in route.yml with an expression
+          that identifies that log type is all that is left. Until then those
+          events are not routed by this pack; they are NOT being processed by
+          another log type&apos;s pipeline, which is what a catch-all would do.
+          <InfoTip text="Route filters are derived from fields unique to each log type, then from field values that are constant within one log type and absent from the others. When neither separates them, the generator emits a filter comparing against __UNSET__ - a field no vendor sends - so the route is inert rather than stealing its siblings' events. Edit the filter in the pack's route.yml (Routes tab) and the route starts working; no rebuild is needed." />
+        </div>
+      )}
+
+      {view.unreachableLogTypes.length > 0 && (
+        <div className="pipeline-preview-valid pipeline-preview-valid-bad">
+          <strong>
+            {view.unreachableLogTypes.length} log type
+            {view.unreachableLogTypes.length === 1 ? "" : "s"} cannot receive
+            events.
+          </strong>{" "}
+          Nothing in these samples separates {view.unreachableLogTypes.join(", ")}{" "}
+          from the others, so their routes match everything and only the first
+          such route runs. Their events are not dropped - they are processed by
+          that route&apos;s pipeline instead, so they reach Sentinel with the
+          wrong field mapping. Give these log types a distinguishing filter in
+          route.yml after the build, or drop the ones you do not need.
+          <InfoTip text="Route filters are derived from fields unique to each log type. Log types that share a schema and differ only by a field VALUE - an action of ALLOWED vs BLOCKED, a type of TRAFFIC vs THREAT - cannot be separated that way, so they fall back to match-all. Cribl marks the resulting routes with its own unreachable-route warning." />
         </div>
       )}
 

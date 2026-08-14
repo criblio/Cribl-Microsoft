@@ -10,16 +10,21 @@
 // the case-mismatch distinction that keeps "wrong casing" from reading as
 // "wrong vendor". Callers want cefIdentityFindings. The module's own tests
 // import it from "./cef-identity" directly.
+//
+// expectedCefIdentity, findCefIdentityAll and overrideChangesEvent are NOT
+// re-exported either (architecture audit 2026-08-12). The first two are
+// ingredients of cefIdentityFindings and re-exporting them invites the same
+// skip-the-comparison mistake as above; overrideChangesEvent is
+// specification-only and answers a PER-EVENT question that must never gate the
+// emitted constant (see its docstring). All three stay exported from the module
+// so their tests, which import "./cef-identity" directly, keep pinning them.
 export {
   CEF_IDENTITY_FIELDS,
   actionableCefIdentity,
   applyCefIdentityOverride,
   cefIdentityFindings,
   effectiveCefIdentity,
-  expectedCefIdentity,
   findCefIdentity,
-  findCefIdentityAll,
-  overrideChangesEvent,
   overrideValueFor,
 } from "./cef-identity";
 export type {

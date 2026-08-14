@@ -123,3 +123,47 @@ describe("samples.yml registry", () => {
     expect(generateSamplesYml([])).toBe("# No sample data generated\n");
   });
 });
+
+/**
+ * Log-type narrowing. A CEF vendor sends every log type to ONE table, so the
+ * table match alone hands each per-logType sample file every other log type's
+ * events - the firewall pipeline's in-pack preview then runs against web-proxy
+ * events and produces nonsense. The narrowing must not fire when the corpus
+ * does not distinguish log types, or single-table packs lose their sample.
+ */
+describe("generateSampleFile - many log types, one table", () => {
+  function zs(logType: string, marker: string): PackVendorSample {
+    return {
+      tableName: "CommonSecurityLog",
+      source: `Zscaler:${logType}`,
+      logType,
+      rawEvents: [`raw-${marker}`],
+    };
+  }
+
+  const corpus = [zs("firewall", "fw"), zs("web-BLOCKED", "web"), zs("tunnel", "tun")];
+
+  it("takes ONLY this log type's events", () => {
+    const { events } = generateSampleFile("Zscaler", "CommonSecurityLog", [], corpus, 5, "firewall");
+    expect(events.map((e) => e._raw)).toEqual(["raw-fw"]);
+  });
+
+  it("gives each log type a different sample", () => {
+    const raws = ["firewall", "web-BLOCKED", "tunnel"].map(
+      (lt) => generateSampleFile("Zscaler", "CommonSecurityLog", [], corpus, 5, lt).events[0]._raw,
+    );
+    expect(new Set(raws).size).toBe(3);
+  });
+
+  it("keeps the broad match when the corpus does not label log types", () => {
+    // Unlabelled samples are the one-table case (Cloudflare); narrowing here
+    // would leave the pack with an empty sample instead of a useful one.
+    const unlabelled: PackVendorSample = {
+      tableName: "Cloudflare_CL",
+      source: "cloudflare",
+      rawEvents: ["a", "b"],
+    };
+    const { events } = generateSampleFile("CF", "Cloudflare_CL", [], [unlabelled], 5, "HTTP");
+    expect(events.map((e) => e._raw)).toEqual(["a", "b"]);
+  });
+});

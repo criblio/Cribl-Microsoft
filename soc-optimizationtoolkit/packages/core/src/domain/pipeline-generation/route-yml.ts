@@ -38,6 +38,38 @@ import {
   passthroughRouteId,
   reductionRouteId,
 } from "./naming";
+import { isPlaceholderFilter } from "./route-placeholder";
+
+/**
+ * The match-all sentinel, and the ONE place that recognises it.
+ *
+ * Architecture audit 2026-08-12: this predicate was written out six times
+ * across plan.ts and this file. Two of those sites have to agree or the
+ * product lies - {@link unreachableLogTypes} names the dead log types and
+ * {@link emissionOrder} decides which one survives - and until now they agreed
+ * only because both happened to spell the same literal.
+ */
+function isMatchAll(table: TablePlan): boolean {
+  return table.routeCondition === "true";
+}
+
+/**
+ * Tables in the order their routes are EMITTED: match-alls last.
+ *
+ * A final match-all emitted first makes every later route unreachable (live
+ * flaw 2026-07-13). Sorting is stable, so discriminated pairs keep their
+ * relative order and so do the match-alls among themselves - which is what
+ * makes "the first match-all" a well-defined thing for both callers.
+ *
+ * Shared rather than duplicated: {@link unreachableLogTypes} used to derive
+ * its answer from plan order and agree with the emitter only by the accident
+ * of that stability. Now both read the same sequence, so they cannot drift.
+ */
+function emissionOrder(plan: PipelinePlan): TablePlan[] {
+  return [...plan.tables].sort(
+    (a, b) => Number(isMatchAll(a)) - Number(isMatchAll(b)),
+  );
+}
 
 /** Build the route filter line: unquoted-match-all vs an escaped condition. */
 function filterLine(routeCondition: string): string {
@@ -90,17 +122,59 @@ export function buildRouteEntries(
   return entries;
 }
 
+/**
+ * The log types whose routes CANNOT receive events, in route order.
+ *
+ * Every route is `final: true`, so the first match-all route consumes each
+ * event and terminates routing - any match-all after it is dead. Read from
+ * {@link emissionOrder}, the same sequence generateRouteYml emits, so "the
+ * first match-all" means the same thing here and in the file: the surviving
+ * catch-all. This reports the rest.
+ *
+ * Generic, not per-vendor: a log type ends up match-all whenever
+ * deriveRouteDiscriminator cannot separate it from its siblings, which happens
+ * to every vendor whose log types share a schema and differ by field VALUE
+ * rather than field presence - Zscaler ALLOWED/CAUTIONED/BLOCKED, Palo Alto
+ * TRAFFIC/THREAT, Fortinet subtypes. Zscaler is just where it was measured.
+ *
+ * The failure it exposes is silent by construction: the pack builds, the YAML
+ * validates, Cribl installs it, and the affected log types are quietly handled
+ * by the first match-all's pipeline - the wrong renames, and for CEF web logs
+ * no base64 decode - so the data lands mis-shaped rather than not at all.
+ * Callers surface this BEFORE the build; route.yml's comment is not enough,
+ * because nobody opens route.yml.
+ */
+export function unreachableLogTypes(plan: PipelinePlan): string[] {
+  const matchAll = emissionOrder(plan).filter(isMatchAll).map((t) => t.suffix);
+  // The first match-all is the catch-all and is reachable; the rest are not.
+  return matchAll.slice(1);
+}
+
+/**
+ * The log types whose route filter is a placeholder awaiting a human.
+ *
+ * These are NOT unreachable and NOT lost - they have a full route, pipeline,
+ * lookup and sample, and start receiving events the moment someone writes a
+ * filter that identifies them. That is the whole point of emitting a
+ * placeholder instead of a match-all (which would have hijacked its siblings'
+ * events) or nothing at all (which would have dropped the log type silently).
+ *
+ * Reported separately from {@link unreachableLogTypes} because the two ask for
+ * different things: unreachable is a defect to fix in the generator,
+ * placeholder is a task for the operator. Collapsing them would either nag
+ * about a healthy pack or bury a real routing bug.
+ */
+export function placeholderLogTypes(plan: PipelinePlan): string[] {
+  return emissionOrder(plan)
+    .filter((t) => isPlaceholderFilter(t.routeCondition))
+    .map((t) => t.suffix);
+}
+
 /** Emit the full route.yml for a resolved {@link PipelinePlan}. */
 export function generateRouteYml(plan: PipelinePlan): string {
-  // Match-all pairs go LAST (live flaw 2026-07-13: a final match-all route
-  // emitted first made every later route unreachable). Discriminated pairs
-  // keep their relative order; at most one match-all is reachable, so any
-  // beyond the first get an honest warning comment.
-  const ordered = [...plan.tables].sort(
-    (a, b) =>
-      Number(a.routeCondition === "true") - Number(b.routeCondition === "true"),
-  );
-  const catchAlls = ordered.filter((t) => t.routeCondition === "true").length;
+  const ordered = emissionOrder(plan);
+  const catchAlls = ordered.filter(isMatchAll).length;
+  const placeholders = placeholderLogTypes(plan);
   const allRouteEntries: string[] = [];
   for (const table of ordered) {
     allRouteEntries.push(...buildRouteEntries(plan, table));
@@ -120,6 +194,19 @@ export function generateRouteYml(plan: PipelinePlan): string {
           `# WARNING: ${catchAlls} log types have no distinguishing fields - their`,
           "# match-all routes overlap and only the first receives events. Edit the",
           "# filters below to separate them.",
+        ]
+      : []),
+    ...(placeholders.length > 0
+      ? [
+          "#",
+          `# ACTION REQUIRED: ${placeholders.length} log type(s) have a PLACEHOLDER`,
+          `# filter: ${placeholders.join(", ")}.`,
+          "# Nothing in the samples told them apart from the other log types, so",
+          "# their filters compare against __UNSET__ and match no event. Their",
+          "# pipelines, lookups and samples are all present - replace each filter",
+          "# with an expression that identifies that log type and the route starts",
+          "# working. Left as-is they receive nothing; they are not dropping data",
+          "# into another log type's pipeline, which is what a match-all would do.",
         ]
       : []),
     "",

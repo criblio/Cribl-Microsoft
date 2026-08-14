@@ -153,13 +153,32 @@ export function generateSampleFile(
   const events: PackSampleEvent[] = [];
 
   const tblTarget = tableName.toLowerCase().replace(/_cl$/i, "");
-  const tableSamples = vendorSamples.filter((s) => {
+  const candidates = vendorSamples.filter((s) => {
     const tbl = s.tableName.toLowerCase();
     if (tbl === tableName.toLowerCase()) return true;
     if (tbl.includes(tblTarget)) return true;
     if (logType && s.source && s.source.toLowerCase().includes(logType.toLowerCase())) return true;
     return false;
   });
+
+  // Narrow to THIS log type when the corpus distinguishes them. The table match
+  // above is deliberately broad, but a CEF vendor sends every log type to the
+  // same table - Zscaler puts all ten into CommonSecurityLog - so on its own it
+  // hands each per-logType sample file every OTHER log type's events too, and
+  // the firewall pipeline's in-pack preview then runs against web-proxy events.
+  // Only narrow when this log type actually has samples: a single-logType pack
+  // (or a corpus that never labels logType) must keep the broad match, which is
+  // what makes one-table packs like Cloudflare work.
+  let tableSamples = candidates;
+  if (logType) {
+    const lt = logType.toLowerCase();
+    const own = candidates.filter((s) =>
+      s.logType !== undefined
+        ? s.logType.toLowerCase() === lt
+        : (s.source ?? "").toLowerCase().includes(lt),
+    );
+    if (own.length > 0) tableSamples = own;
+  }
 
   const allRawEvents: string[] = [];
   for (const sample of tableSamples) {

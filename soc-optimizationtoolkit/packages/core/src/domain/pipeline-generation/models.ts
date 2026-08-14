@@ -23,6 +23,7 @@ import type { CefIdentityOverride } from "../cef-identity";
 import type { MatchResult, OverflowConfig, VendorMapping } from "../field-matcher";
 import type { DcrGapAnalysis, TableRoutingInfo } from "../gap-analysis";
 import type { TableReductionRules } from "./reduction-rules";
+import type { LogTypeFieldValues } from "./route-value-discriminator";
 
 /**
  * One resolved source-to-destination field decision the pipeline emits. Verbatim
@@ -94,6 +95,18 @@ export interface TablePlanInput {
   gap?: DcrGapAnalysis;
   /** Routing info (Unit 18); its routeCondition becomes the route filter. */
   routing?: TableRoutingInfo;
+  /**
+   * Observed field VALUES from this log type's samples, for route filters.
+   *
+   * Field PRESENCE cannot separate log types that share one schema and differ
+   * by a value - Zscaler action ALLOWED/BLOCKED, Palo Alto type TRAFFIC/THREAT
+   * - so those all fall back to match-all, and since routes are final only the
+   * first one receives events. Supplying this lets the planner find the
+   * discriminator column instead. Optional: without it the planner behaves
+   * exactly as before, and the unreachable log types are reported rather than
+   * silently mis-routed.
+   */
+  sampleFieldValues?: LogTypeFieldValues;
   /** Vendor mappings (Unit 15, deferred). Empty/undefined for MVP. */
   vendorMappings?: VendorMapping[];
   /**

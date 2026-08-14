@@ -55,6 +55,11 @@ import type {
 import { findReductionRules, type TableReductionRules } from "./reduction-rules";
 import { deriveRouteDiscriminator } from "./route-discriminator";
 import {
+  deriveValueDiscriminator,
+  type LogTypeFieldValues,
+} from "./route-value-discriminator";
+import { placeholderRouteFilter } from "./route-placeholder";
+import {
   destinationId,
   pipelineName,
   pipelineSuffix,
@@ -314,8 +319,31 @@ export function buildPipelinePlan(
             .filter((s) => s !== ""),
         ),
     );
+    // VALUES are tried FIRST, because presence cannot separate log types that
+    // share one schema - the common case for CEF vendors, and the reason the
+    // Zscaler pack shipped with 7 of 10 routes unreachable. Presence stays the
+    // fallback: it needs no sample values, so it still works for callers that
+    // supply none, and for log types whose shapes genuinely differ.
+    const sampleValues = input.tables.map((t) => t.sampleFieldValues);
     tables.forEach((table, i) => {
       if (table.routeCondition !== "true") return;
+
+      const ownValues = sampleValues[i];
+      if (ownValues !== undefined) {
+        const siblingValues = sampleValues.filter(
+          (v, j) => j !== i && v !== undefined,
+        ) as LogTypeFieldValues[];
+        const byValue = deriveValueDiscriminator(
+          ownValues,
+          siblingValues,
+          table.sourceFormat,
+        );
+        if (byValue !== null) {
+          table.routeCondition = byValue;
+          return;
+        }
+      }
+
       const discriminator = deriveRouteDiscriminator(
         table.fields.map((f) => f.source),
         sourceSets.filter((_, j) => j !== i),
@@ -323,7 +351,24 @@ export function buildPipelinePlan(
       );
       if (discriminator !== null) {
         table.routeCondition = discriminator;
+        return;
       }
+
+      // Nothing separates this log type. Emit its route and pipeline anyway,
+      // behind a filter that cannot match until a human writes one.
+      //
+      // Keeping `true` here is what made routes unreachable: every route is
+      // final, so the first match-all consumed everything and ran it through
+      // the wrong pipeline. Dropping the log type instead would be honest but
+      // costly - firewall and DNS are exactly what a SOC needs a path for.
+      // The placeholder keeps the path and makes the missing filter visible
+      // (see route-placeholder), which is work the operator can finish; the
+      // other two options are losses they cannot see.
+      //
+      // Only when there are siblings to be confused with. A single-log-type
+      // pack has nothing to shadow, so match-all is correct there and stays -
+      // placeholdering it would leave that pack routing nothing at all.
+      table.routeCondition = placeholderRouteFilter(table.logType);
     });
   }
 

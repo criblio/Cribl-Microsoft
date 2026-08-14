@@ -39,6 +39,8 @@
 
 import {
   buildPipelinePlan,
+  unreachableLogTypes as coreUnreachableLogTypes,
+  placeholderLogTypes as corePlaceholderLogTypes,
   checkCriblYaml,
   generatePipelineConfForPlan,
   generateReductionConfForPlan,
@@ -48,6 +50,7 @@ import type {
   CefIdentityOverride,
   GapFieldMapping,
   GapReport,
+  LogTypeFieldValues,
   PipelineFieldMapping,
   PipelinePlan,
   PlanProvenance,
@@ -166,6 +169,21 @@ export interface PipelinePreviewInputs {
    * only when this is true (else the always-visible-disabled empty state).
    */
   approved: boolean;
+  /**
+   * Observed sample field VALUES keyed by logType, for route discrimination.
+   *
+   * Built from the tagged samples' PARSED RECORDS, never from
+   * GapFieldMapping.sampleValue or DiscoveredField.examples: both summarise
+   * away how often a value occurred, and occurrence is the evidence the
+   * planner's over-fit guards run on. Feeding a summary would let a session id
+   * pass as a category and produce a route filter that matches the sample and
+   * drops live traffic.
+   *
+   * Optional. Without it the planner falls back to field-presence
+   * discrimination, which is what shipped the Zscaler pack with 7 of 10 routes
+   * unreachable - reported by unreachableLogTypes, not silent.
+   */
+  sampleFieldValues?: Readonly<Record<string, LogTypeFieldValues>>;
 }
 
 /** The whole preview view the panel renders. */
@@ -186,6 +204,25 @@ export interface PipelinePreviewView {
   totalYamlIssues: number;
   /** Every emitted YAML passed the Cribl validator (the honest green signal). */
   valid: boolean;
+  /**
+   * Log types whose routes cannot receive events, in route order.
+   *
+   * Valid YAML and dead routes are not the same thing, and `valid` alone reads
+   * as "the pack is fine". Every route is final, so only the first match-all
+   * gets events; the rest are silently handled by ITS pipeline - wrong renames,
+   * and for CEF web logs no base64 decode - so the data lands mis-shaped rather
+   * than missing. Empty for packs whose log types are separable.
+   */
+  unreachableLogTypes: string[];
+  /**
+   * Log types whose route filter is a PLACEHOLDER awaiting the operator.
+   *
+   * Distinct from unreachableLogTypes on purpose: unreachable means the pack
+   * is wrong and events land in the wrong pipeline; placeholder means the pack
+   * is right but unfinished, and the log type receives nothing until a filter
+   * is written. One is a defect report, the other is a task.
+   */
+  placeholderLogTypes: string[];
 }
 
 // ---------------------------------------------------------------------------
@@ -264,6 +301,7 @@ export function reportToPlanInput(
   sampleFormats?: Readonly<Record<string, string>>,
   enrichments?: readonly EnrichmentField[],
   identityOverride?: CefIdentityOverride,
+  sampleFieldValues?: LogTypeFieldValues,
 ): TablePlanInput {
   const mappings = effectiveReportMappings(report, overrides);
   return {
@@ -274,6 +312,9 @@ export function reportToPlanInput(
     // PLAN rather than as an enrichment because placement differs: this lands
     // right after CEF extraction, so the reduction rules see the fixed value.
     ...(identityOverride !== undefined ? { identityOverride } : {}),
+    // Route discrimination by field VALUE, for the log types that share one
+    // schema and cannot be told apart by which fields exist.
+    ...(sampleFieldValues !== undefined ? { sampleFieldValues } : {}),
     sourceFormat: normalizeSourceFormat(sampleFormats?.[report.logType]),
     // User-added constants ride the planner's vendorMappings channel: the
     // conf emitter's enrich branch turns each into an Eval add of
@@ -426,6 +467,8 @@ export function derivePipelinePreview(
       routeYmlIssues: [],
       totalYamlIssues: 0,
       valid: true,
+      unreachableLogTypes: [],
+      placeholderLogTypes: [],
     };
   }
 
@@ -444,6 +487,7 @@ export function derivePipelinePreview(
         inputs.sampleFormats,
         inputs.enrichments?.[r.logType],
         inputs.identityOverrides?.[r.logType],
+        inputs.sampleFieldValues?.[r.logType],
       ),
     ),
   });
@@ -493,5 +537,7 @@ export function derivePipelinePreview(
     routeYmlIssues,
     totalYamlIssues,
     valid: totalYamlIssues === 0,
+    unreachableLogTypes: coreUnreachableLogTypes(plan),
+    placeholderLogTypes: corePlaceholderLogTypes(plan),
   };
 }

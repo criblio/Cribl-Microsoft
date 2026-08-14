@@ -74,7 +74,19 @@ export {
 } from "./pipeline-conf";
 
 // (d) route.yml emission
-export { buildRouteEntries, generateRouteYml } from "./route-yml";
+export {
+  buildRouteEntries,
+  generateRouteYml,
+  unreachableLogTypes,
+  placeholderLogTypes,
+} from "./route-yml";
+
+// Route discrimination by field VALUE - the strategy that separates log types
+// sharing one schema. deriveValueDiscriminator itself stays module-private:
+// callers supply evidence and the planner decides, so nobody can build a
+// filter that skips the over-fit guards.
+export { fieldValuesFromRecords } from "./route-value-discriminator";
+export type { LogTypeFieldValues } from "./route-value-discriminator";
 
 // Core Cribl-YAML acceptance validator
 export { checkCriblYaml } from "./cribl-yaml-validator";
