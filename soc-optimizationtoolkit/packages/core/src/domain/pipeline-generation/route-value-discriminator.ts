@@ -58,16 +58,6 @@ export interface LogTypeFieldValues {
 }
 
 /**
- * How far a field's corpus-wide distinct-value count may exceed the number of
- * log types before it stops looking like a category.
- *
- * A true discriminator has roughly one value per log type. The slack absorbs
- * legitimate variance - a vendor spelling an action two ways, a log type that
- * carries two subtypes - without admitting fields whose values are per-event.
- */
-const CATEGORICAL_SLACK = 2;
-
-/**
  * Build the value evidence for one log type from its PARSED sample records.
  *
  * Records, not DiscoveredField.examples: `examples` keeps only a few DISTINCT
@@ -137,33 +127,60 @@ export function deriveValueDiscriminator(
     // the field name never appears in _raw, so neither test below can run.
     return null;
   }
-  const logTypeCount = siblings.length + 1;
-  const budget = logTypeCount + CATEGORICAL_SLACK;
-
   const candidates: Array<{ field: string; value: string; spread: number }> = [];
   for (const field of Object.keys(own.values)) {
     const value = constantValue(own, field);
     if (value === null) {
       continue;
     }
-    // Disjoint: no sibling ever carries this value for this field. Compared
-    // case-insensitively because a filter that matches "ALLOWED" but not
-    // "Allowed" would split one log type across two routes.
+    // Guard 3: it must behave like a COLUMN across the whole corpus - every log
+    // type that carries the field is single-valued on it, and those values are
+    // pairwise distinct.
+    //
+    // Tightened 2026-08-13 (user decision) from "no sibling sends this value".
+    // The looser test let incidental fields through: on the real Zscaler
+    // corpus it picked `client_tls_sig_pqc_offers === '1'` and
+    // `cltsslsessreuse === 'No'` - TLS/session details that happened to
+    // partition three sample events and would not survive live traffic. A
+    // filter that is precise on the samples and wrong in production is the
+    // failure mode this module exists to avoid, and it is invisible.
+    //
+    // Requiring the column shape rejects them: a real discriminator (an action,
+    // a type, a subtype) takes one value per log type BY CONSTRUCTION, while an
+    // incidental field varies inside at least one sibling or repeats a value
+    // across two. A log type that does not carry the field at all is no
+    // obstacle - it simply will not match, which is correct.
+    //
+    // Rejecting is now cheap: the log type gets a placeholder filter and is
+    // reported as needing one, rather than a dead route. That is what made this
+    // tightening worth doing.
     const lowered = value.toLowerCase();
-    const clashes = siblings.some((sib) =>
-      (sib.values[field] ?? []).some((v) => v.toLowerCase() === lowered),
-    );
-    if (clashes) {
+    let isColumn = true;
+    for (const sib of siblings) {
+      const seen = sib.values[field] ?? [];
+      if (seen.length === 0) {
+        continue; // Sibling does not carry it; nothing to clash with.
+      }
+      const distinct = new Set(seen.map((v) => v.toLowerCase()));
+      // Single-valued, and a DIFFERENT value from ours. Case-insensitive
+      // because "ALLOWED" and "Allowed" are one log type to a vendor.
+      if (distinct.size !== 1 || distinct.has(lowered)) {
+        isColumn = false;
+        break;
+      }
+    }
+    if (!isColumn) {
       continue;
     }
-    // Guard 3: categorical across the corpus, not id-like.
+    // The corpus-cardinality budget that used to live here is GONE (2026-08-13).
+    // The column test above makes it unreachable: every log type contributes at
+    // most one distinct value, so the spread can never exceed the number of log
+    // types, and the budget allowed more than that. Keeping a guard no input
+    // can trip reads as protection that is not there.
     const corpus = [own, ...siblings];
     const spread = new Set(
       corpus.flatMap((lt) => (lt.values[field] ?? []).map((v) => v.toLowerCase())),
     ).size;
-    if (spread > budget) {
-      continue;
-    }
     // Guard 3b: SOME log type must show the value repeating across events.
     // Without this, a corpus of one-event log types makes every field
     // trivially "constant" and a session id looks exactly like a category -

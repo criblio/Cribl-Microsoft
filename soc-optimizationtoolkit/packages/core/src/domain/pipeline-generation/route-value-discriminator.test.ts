@@ -116,9 +116,11 @@ describe("deriveValueDiscriminator - refuses to over-fit", () => {
 
   it("rejects a repeated-but-high-cardinality field, e.g. a busy source IP", () => {
     // srcIP is constant across THIS log type's 3 events (one talkative host,
-    // so repetition alone is satisfied) and never appears in a sibling. Only
-    // the corpus-cardinality guard separates it from a real category: the
-    // field takes far more values overall than there are log types.
+    // so repetition alone is satisfied) and never appears in a sibling. What
+    // rejects it since 2026-08-13 is the COLUMN test: the siblings each carry
+    // several distinct IPs, so the field is not single-valued for them and
+    // therefore is not a discriminator column. (A corpus-cardinality budget
+    // used to do this job; the column test made it unreachable and it is gone.)
     const oneHost = lt({ srcIP: ["10.0.0.9", "10.0.0.9", "10.0.0.9"] });
     const chatty = Array.from({ length: 3 }, (_, i) =>
       lt({ srcIP: [`10.1.${i}.1`, `10.1.${i}.2`, `10.1.${i}.3`, `10.1.${i}.4`] }),
@@ -202,5 +204,81 @@ describe("fieldValuesFromRecords - evidence, not summary", () => {
     const filter = deriveValueDiscriminator(allow, [block], "cef") ?? "";
     expect(filter).toContain("action === 'Allowed'");
     expect(filter).not.toContain("ip");
+  });
+});
+
+/**
+ * The COLUMN test (tightened 2026-08-13).
+ *
+ * A discriminator is a column: every log type carrying the field is
+ * single-valued on it and the values are pairwise distinct. The looser
+ * "no sibling sends my value" test admitted incidental fields, and on the real
+ * Zscaler corpus it chose TLS/session details that partitioned three sample
+ * events by luck. Those filters are precise on the samples and wrong on live
+ * traffic - invisible, which is the failure this module exists to avoid.
+ *
+ * Rejecting is cheap now: the log type gets a placeholder and is reported as
+ * needing a filter, instead of a dead route. That is what made the tightening
+ * worth its cost, which is real - fewer log types get an automatic filter.
+ */
+describe("deriveValueDiscriminator - must look like a column", () => {
+  it("REJECTS the field the real Zscaler corpus over-fitted on", () => {
+    // ALLOWED carries client_tls_sig_pqc_offers='1' constantly; the sibling
+    // carries it too but VARIES. Under the old disjointness test '1' was
+    // unseen in the sibling, so it won. A column cannot vary inside a sibling.
+    // NO competing field: if a real discriminator were present the tie-break
+    // would pick it and this would pass without ever exercising the guard.
+    const allowedTls = lt({ client_tls_sig_pqc_offers: ["1", "1", "1"] });
+    const blockedTls = lt({ client_tls_sig_pqc_offers: ["0", "2", "3"] });
+    expect(deriveValueDiscriminator(allowedTls, [blockedTls], "cef")).toBeNull();
+  });
+
+  it("picks the real discriminator when both are present", () => {
+    const allowedTls = lt({
+      client_tls_sig_pqc_offers: ["1", "1", "1"],
+      act: ["Allowed", "Allowed", "Allowed"],
+    });
+    const blockedTls = lt({
+      client_tls_sig_pqc_offers: ["0", "2", "3"],
+      act: ["Blocked", "Blocked", "Blocked"],
+    });
+    const filter = deriveValueDiscriminator(allowedTls, [blockedTls], "cef") ?? "";
+    expect(filter).toContain("act === 'Allowed'");
+    expect(filter).not.toContain("client_tls_sig_pqc_offers");
+  });
+
+  it("REJECTS a field two log types happen to share a value on", () => {
+    // Same value in a sibling is not a column, even though each is constant.
+    const a = lt({ tier: ["gold", "gold"], act: ["A", "A"] });
+    const b = lt({ tier: ["gold", "gold"], act: ["B", "B"] });
+    const filter = deriveValueDiscriminator(a, [b], "cef") ?? "";
+    expect(filter).not.toContain("tier");
+    expect(filter).toContain("act === 'A'");
+  });
+
+  it("ACCEPTS a field a sibling does not carry at all", () => {
+    // Absence is not a clash: the sibling simply never matches the filter.
+    const web = lt({ urlCategory: ["news", "news"], shared: ["x", "x"] });
+    const fw = lt({ shared: ["x", "x"] });
+    const filter = deriveValueDiscriminator(web, [fw], "cef") ?? "";
+    expect(filter).toContain("urlCategory === 'news'");
+  });
+
+  it("still separates a genuine action column across three log types", () => {
+    // The case the whole feature exists for must survive the tightening.
+    const A = lt({ act: ["Allowed", "Allowed"], ip: ["1", "2"] });
+    const B = lt({ act: ["Blocked", "Blocked"], ip: ["3", "4"] });
+    const C = lt({ act: ["Cautioned", "Cautioned"], ip: ["5", "6"] });
+    expect(deriveValueDiscriminator(A, [B, C], "cef")).toContain("act === 'Allowed'");
+    expect(deriveValueDiscriminator(B, [A, C], "cef")).toContain("act === 'Blocked'");
+    expect(deriveValueDiscriminator(C, [A, B], "cef")).toContain("act === 'Cautioned'");
+  });
+
+  it("returns null when the only candidates are incidental", () => {
+    // Nothing column-shaped: the caller placeholders the log type, which is
+    // the honest outcome rather than a filter built on coincidence.
+    const own = lt({ noise: ["7", "7"], shared: ["s", "s"] });
+    const sib = lt({ noise: ["8", "9"], shared: ["s", "s"] });
+    expect(deriveValueDiscriminator(own, [sib], "cef")).toBeNull();
   });
 });
