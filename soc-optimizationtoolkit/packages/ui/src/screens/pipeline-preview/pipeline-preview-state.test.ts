@@ -526,8 +526,11 @@ describe("derivePipelinePreview - placeholder route filters", () => {
       ...(withValues
         ? {
             sampleFieldValues: {
-              firewall: { eventCount: 2, values: { act: ["Allow", "Allow"] } },
-              dns: { eventCount: 2, values: { act: ["Query", "Query"] } },
+              // Three events each: below MIN_EVENTS_FOR_VALUE_FILTER the core
+              // refuses to infer a filter at all, so a thinner fixture would
+              // pin the evidence threshold instead of the wiring.
+              firewall: { eventCount: 3, values: { act: ["Allow", "Allow", "Allow"] } },
+              dns: { eventCount: 3, values: { act: ["Query", "Query", "Query"] } },
             },
           }
         : {}),

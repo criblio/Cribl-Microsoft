@@ -45,6 +45,21 @@
 const IDENTIFIER = /^[A-Za-z_$][A-Za-z0-9_$]*$/;
 
 /**
+ * Events a log type must contribute before its "constant" fields are believed.
+ *
+ * Three, because that is where a constant stops being an accident worth
+ * betting a route on. At one event every field is constant; at two, any field
+ * with a low-cardinality value space repeats by chance. Three is not a
+ * guarantee - it is the point where the inference is worth making at all,
+ * given the alternative (a placeholder the operator fills in) is safe.
+ *
+ * Deliberately NOT tuned to make the Zscaler corpus produce filters. That
+ * corpus has 1-3 events per log type, so it produces none, and that is the
+ * correct reading of evidence that thin.
+ */
+export const MIN_EVENTS_FOR_VALUE_FILTER = 3;
+
+/**
  * The observed values of one log type's fields: field name -> the value of
  * that field in each event, in event order. Absent fields are simply missing
  * from the array, so length is how the "present in every event" guard is
@@ -127,6 +142,31 @@ export function deriveValueDiscriminator(
     // the field name never appears in _raw, so neither test below can run.
     return null;
   }
+  // EVIDENCE THRESHOLD (2026-08-14). No structural test can separate a real
+  // discriminator from an incidental field on a handful of events, because on
+  // a handful of events they look identical.
+  //
+  // Measured: the column test was added expecting it to reject
+  // `client_tls_sig_pqc_offers === '1'` on the Zscaler corpus. It did not, and
+  // it was right not to - across 43 events in 10 log types that field IS
+  // single-valued per log type with distinct values. It satisfies every
+  // structural property of a discriminator column. The problem was never the
+  // rule; it was that 1-3 events per log type cannot tell the two apart.
+  //
+  // So the corpus has to earn the inference. A log type with fewer than
+  // MIN_EVENTS_FOR_VALUE_FILTER events has not demonstrated that ANY of its
+  // fields is constant - one event makes every field trivially "constant" -
+  // and a sibling below the threshold has not demonstrated that it is
+  // single-valued either, so the column shape cannot be verified against it.
+  //
+  // The cost is real and deliberate: thin curated corpora now yield no value
+  // filters at all. That is the honest answer, and it is not a dead end - the
+  // log type gets a placeholder saying a filter is needed, and more sample
+  // events make the inference available. Guessing well on thin evidence is the
+  // failure this module exists to prevent.
+  if (own.eventCount < MIN_EVENTS_FOR_VALUE_FILTER) {
+    return null;
+  }
   const candidates: Array<{ field: string; value: string; spread: number }> = [];
   for (const field of Object.keys(own.values)) {
     const value = constantValue(own, field);
@@ -161,6 +201,13 @@ export function deriveValueDiscriminator(
       if (seen.length === 0) {
         continue; // Sibling does not carry it; nothing to clash with.
       }
+      // A sibling too thin to have demonstrated single-valued-ness cannot
+      // confirm the column shape, so the field is not usable - its events
+      // might carry our value in the traffic we never sampled.
+      if (sib.eventCount < MIN_EVENTS_FOR_VALUE_FILTER) {
+        isColumn = false;
+        break;
+      }
       const distinct = new Set(seen.map((v) => v.toLowerCase()));
       // Single-valued, and a DIFFERENT value from ours. Case-insensitive
       // because "ALLOWED" and "Allowed" are one log type to a vendor.
@@ -181,20 +228,13 @@ export function deriveValueDiscriminator(
     const spread = new Set(
       corpus.flatMap((lt) => (lt.values[field] ?? []).map((v) => v.toLowerCase())),
     ).size;
-    // Guard 3b: SOME log type must show the value repeating across events.
-    // Without this, a corpus of one-event log types makes every field
-    // trivially "constant" and a session id looks exactly like a category -
-    // the filter would then route on an identifier that never recurs, which
-    // matches the sample and drops all live traffic. Repetition is the only
-    // evidence that a field's values are drawn from a small set; a corpus too
-    // thin to show it is a corpus we decline to guess from.
-    const repeats = corpus.some((lt) => {
-      const seen = lt.values[field] ?? [];
-      return seen.length >= 2 && new Set(seen.map((v) => v.toLowerCase())).size === 1;
-    });
-    if (!repeats) {
-      continue;
-    }
+    // The repetition guard that used to sit here is GONE (2026-08-14). It
+    // required some log type to show the value repeating across events - which
+    // the evidence threshold now guarantees outright, since `own` must clear
+    // MIN_EVENTS_FOR_VALUE_FILTER and be single-valued over all of them. That
+    // IS repetition, so the check could never fail. Second dead guard removed
+    // from this function; both were found by mutating them and watching every
+    // test still pass, not by reading the code.
     candidates.push({ field, value, spread });
   }
   if (candidates.length === 0) {
