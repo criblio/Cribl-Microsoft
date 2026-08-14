@@ -472,9 +472,14 @@ describe("derivePipelinePreview - route discrimination by field value", () => {
     return (view.plan?.tables ?? []).map((t) => t.routeCondition);
   }
 
-  it("leaves both routes match-all when no values are supplied", () => {
-    // The baseline: this is the shipped behaviour, and one of these is dead.
-    expect(conditions(false)).toEqual(["true", "true"]);
+  it("leaves both routes on a PLACEHOLDER when no values are supplied", () => {
+    // RE-PINNED 2026-08-13. The baseline used to be two match-alls, one of
+    // which was dead. Undiscriminable log types now get an inert placeholder
+    // instead, so neither route steals the other's events and both are
+    // reported as outstanding work.
+    for (const cond of conditions(false)) {
+      expect(cond).toContain("__UNSET__");
+    }
   });
 
   it("gives each log type its own filter once values arrive", () => {
@@ -501,3 +506,55 @@ describe("derivePipelinePreview - route discrimination by field value", () => {
     expect(view.unreachableLogTypes).toEqual([]);
   });
 });
+
+/**
+ * Placeholder filters must reach the preview, or the operator never learns
+ * there is work outstanding and ships a pack with silent inert routes.
+ */
+describe("derivePipelinePreview - placeholder route filters", () => {
+  const reports = [
+    report({ logType: "firewall", routeCondition: "true" }),
+    report({ logType: "dns", routeCondition: "true" }),
+  ];
+
+  function view(withValues: boolean) {
+    return derivePipelinePreview({
+      solutionName: "Vendor",
+      packName: "vendor-sentinel",
+      reports,
+      sampleFormats: { firewall: "cef", dns: "cef" },
+      ...(withValues
+        ? {
+            sampleFieldValues: {
+              firewall: { eventCount: 2, values: { act: ["Allow", "Allow"] } },
+              dns: { eventCount: 2, values: { act: ["Query", "Query"] } },
+            },
+          }
+        : {}),
+      approved: true,
+    });
+  }
+
+  it("names the log types awaiting a filter", () => {
+    expect(view(false).placeholderLogTypes.sort()).toEqual(["dns", "firewall"]);
+  });
+
+  it("reports NOTHING unreachable - a placeholder is inert, not shadowed", () => {
+    // The distinction the operator acts on: unfinished, not broken.
+    expect(view(false).unreachableLogTypes).toEqual([]);
+  });
+
+  it("still emits both routes and pipelines, so a filter edit is all that remains", () => {
+    const v = view(false);
+    expect(v.tables).toHaveLength(2);
+    expect(v.routeYml).toContain("Reduction + Transform: firewall");
+    expect(v.routeYml).toContain("Reduction + Transform: dns");
+  });
+
+  it("says nothing once the samples DO separate the log types", () => {
+    // A warning that fires on a healthy pack is the noise that hides the real one.
+    const v = view(true);
+    expect(v.placeholderLogTypes).toEqual([]);
+    expect(v.unreachableLogTypes).toEqual([]);
+  });
+})

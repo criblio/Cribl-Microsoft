@@ -74,7 +74,12 @@ export {
 } from "./pipeline-conf";
 
 // (d) route.yml emission
-export { buildRouteEntries, generateRouteYml, unreachableLogTypes } from "./route-yml";
+export {
+  buildRouteEntries,
+  generateRouteYml,
+  unreachableLogTypes,
+  placeholderLogTypes,
+} from "./route-yml";
 
 // Route discrimination by field VALUE - the strategy that separates log types
 // sharing one schema. deriveValueDiscriminator itself stays module-private:

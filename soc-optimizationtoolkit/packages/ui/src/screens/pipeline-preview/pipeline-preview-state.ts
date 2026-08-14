@@ -40,6 +40,7 @@
 import {
   buildPipelinePlan,
   unreachableLogTypes as coreUnreachableLogTypes,
+  placeholderLogTypes as corePlaceholderLogTypes,
   checkCriblYaml,
   generatePipelineConfForPlan,
   generateReductionConfForPlan,
@@ -213,6 +214,15 @@ export interface PipelinePreviewView {
    * than missing. Empty for packs whose log types are separable.
    */
   unreachableLogTypes: string[];
+  /**
+   * Log types whose route filter is a PLACEHOLDER awaiting the operator.
+   *
+   * Distinct from unreachableLogTypes on purpose: unreachable means the pack
+   * is wrong and events land in the wrong pipeline; placeholder means the pack
+   * is right but unfinished, and the log type receives nothing until a filter
+   * is written. One is a defect report, the other is a task.
+   */
+  placeholderLogTypes: string[];
 }
 
 // ---------------------------------------------------------------------------
@@ -458,6 +468,7 @@ export function derivePipelinePreview(
       totalYamlIssues: 0,
       valid: true,
       unreachableLogTypes: [],
+      placeholderLogTypes: [],
     };
   }
 
@@ -527,5 +538,6 @@ export function derivePipelinePreview(
     totalYamlIssues,
     valid: totalYamlIssues === 0,
     unreachableLogTypes: coreUnreachableLogTypes(plan),
+    placeholderLogTypes: corePlaceholderLogTypes(plan),
   };
 }

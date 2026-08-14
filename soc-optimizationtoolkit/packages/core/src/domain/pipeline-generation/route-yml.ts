@@ -38,6 +38,7 @@ import {
   passthroughRouteId,
   reductionRouteId,
 } from "./naming";
+import { isPlaceholderFilter } from "./route-placeholder";
 
 /**
  * The match-all sentinel, and the ONE place that recognises it.
@@ -149,10 +150,31 @@ export function unreachableLogTypes(plan: PipelinePlan): string[] {
   return matchAll.slice(1);
 }
 
+/**
+ * The log types whose route filter is a placeholder awaiting a human.
+ *
+ * These are NOT unreachable and NOT lost - they have a full route, pipeline,
+ * lookup and sample, and start receiving events the moment someone writes a
+ * filter that identifies them. That is the whole point of emitting a
+ * placeholder instead of a match-all (which would have hijacked its siblings'
+ * events) or nothing at all (which would have dropped the log type silently).
+ *
+ * Reported separately from {@link unreachableLogTypes} because the two ask for
+ * different things: unreachable is a defect to fix in the generator,
+ * placeholder is a task for the operator. Collapsing them would either nag
+ * about a healthy pack or bury a real routing bug.
+ */
+export function placeholderLogTypes(plan: PipelinePlan): string[] {
+  return emissionOrder(plan)
+    .filter((t) => isPlaceholderFilter(t.routeCondition))
+    .map((t) => t.suffix);
+}
+
 /** Emit the full route.yml for a resolved {@link PipelinePlan}. */
 export function generateRouteYml(plan: PipelinePlan): string {
   const ordered = emissionOrder(plan);
   const catchAlls = ordered.filter(isMatchAll).length;
+  const placeholders = placeholderLogTypes(plan);
   const allRouteEntries: string[] = [];
   for (const table of ordered) {
     allRouteEntries.push(...buildRouteEntries(plan, table));
@@ -172,6 +194,19 @@ export function generateRouteYml(plan: PipelinePlan): string {
           `# WARNING: ${catchAlls} log types have no distinguishing fields - their`,
           "# match-all routes overlap and only the first receives events. Edit the",
           "# filters below to separate them.",
+        ]
+      : []),
+    ...(placeholders.length > 0
+      ? [
+          "#",
+          `# ACTION REQUIRED: ${placeholders.length} log type(s) have a PLACEHOLDER`,
+          `# filter: ${placeholders.join(", ")}.`,
+          "# Nothing in the samples told them apart from the other log types, so",
+          "# their filters compare against __UNSET__ and match no event. Their",
+          "# pipelines, lookups and samples are all present - replace each filter",
+          "# with an expression that identifies that log type and the route starts",
+          "# working. Left as-is they receive nothing; they are not dropping data",
+          "# into another log type's pipeline, which is what a match-all would do.",
         ]
       : []),
     "",
