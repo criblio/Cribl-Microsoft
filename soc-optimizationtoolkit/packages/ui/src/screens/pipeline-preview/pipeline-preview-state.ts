@@ -41,6 +41,7 @@ import {
   buildPipelinePlan,
   unreachableLogTypes as coreUnreachableLogTypes,
   placeholderLogTypes as corePlaceholderLogTypes,
+  routeFilterSuggestions as coreRouteFilterSuggestions,
   checkCriblYaml,
   generatePipelineConfForPlan,
   generateReductionConfForPlan,
@@ -52,6 +53,7 @@ import type {
   GapReport,
   LogTypeFieldValues,
   PipelineFieldMapping,
+  RouteFilterSuggestion,
   PipelinePlan,
   PlanProvenance,
   TablePlan,
@@ -223,6 +225,14 @@ export interface PipelinePreviewView {
    * is written. One is a defect report, the other is a task.
    */
   placeholderLogTypes: string[];
+  /**
+   * Placeholdered log types whose filter the derivation DID work out, and
+   * withheld only because the corpus was too thin to trust it.
+   *
+   * Shown so the operator can accept in one step what the generator already
+   * derived - they know the vendor the sample does not describe.
+   */
+  routeFilterSuggestions: RouteFilterSuggestion[];
 }
 
 // ---------------------------------------------------------------------------
@@ -469,6 +479,7 @@ export function derivePipelinePreview(
       valid: true,
       unreachableLogTypes: [],
       placeholderLogTypes: [],
+      routeFilterSuggestions: [],
     };
   }
 
@@ -539,5 +550,6 @@ export function derivePipelinePreview(
     valid: totalYamlIssues === 0,
     unreachableLogTypes: coreUnreachableLogTypes(plan),
     placeholderLogTypes: corePlaceholderLogTypes(plan),
+    routeFilterSuggestions: coreRouteFilterSuggestions(plan),
   };
 }

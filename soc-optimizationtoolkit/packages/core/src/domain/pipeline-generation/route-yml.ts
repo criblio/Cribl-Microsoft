@@ -178,6 +178,30 @@ export function placeholderLogTypes(plan: PipelinePlan): string[] {
     .map((t) => t.suffix);
 }
 
+/** One placeholdered log type and the filter the derivation would have used. */
+export interface RouteFilterSuggestion {
+  logType: string;
+  filter: string;
+}
+
+/**
+ * Placeholdered log types for which a candidate filter WAS derived, and
+ * withheld only because the corpus was too thin to trust it.
+ *
+ * Separate from {@link placeholderLogTypes} because the two ask different
+ * things of the operator: that one says "write a filter", this one says "here
+ * is the one I worked out - is it right?". A log type with no suggestion has
+ * nothing column-shaped in its samples at all, and no amount of accepting will
+ * conjure one; conflating them would offer nothing for half the list.
+ */
+export function routeFilterSuggestions(plan: PipelinePlan): RouteFilterSuggestion[] {
+  return emissionOrder(plan)
+    .filter(
+      (t) => isPlaceholderFilter(t.routeCondition) && t.routeFilterSuggestion,
+    )
+    .map((t) => ({ logType: t.suffix, filter: t.routeFilterSuggestion as string }));
+}
+
 /** Emit the full route.yml for a resolved {@link PipelinePlan}. */
 export function generateRouteYml(plan: PipelinePlan): string {
   const ordered = emissionOrder(plan);

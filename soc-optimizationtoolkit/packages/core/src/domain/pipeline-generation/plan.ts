@@ -55,7 +55,7 @@ import type {
 import { findReductionRules, type TableReductionRules } from "./reduction-rules";
 import { deriveRouteDiscriminator } from "./route-discriminator";
 import {
-  deriveValueDiscriminator,
+  valueDiscriminatorFor,
   type LogTypeFieldValues,
 } from "./route-value-discriminator";
 import { placeholderRouteFilter } from "./route-placeholder";
@@ -334,14 +334,20 @@ export function buildPipelinePlan(
         const siblingValues = sampleValues.filter(
           (v, j) => j !== i && v !== undefined,
         ) as LogTypeFieldValues[];
-        const byValue = deriveValueDiscriminator(
+        const byValue = valueDiscriminatorFor(
           ownValues,
           siblingValues,
           table.sourceFormat,
         );
-        if (byValue !== null) {
-          table.routeCondition = byValue;
+        if (byValue.filter !== null) {
+          table.routeCondition = byValue.filter;
           return;
+        }
+        // Carried to the placeholder below rather than applied. Presence-based
+        // discrimination is still tried first - a filter it can PROVE beats a
+        // value filter the evidence only suggests.
+        if (byValue.suggestion !== null) {
+          table.routeFilterSuggestion = byValue.suggestion;
         }
       }
 
@@ -351,6 +357,9 @@ export function buildPipelinePlan(
         table.sourceFormat,
       );
       if (discriminator !== null) {
+        // A proven filter supersedes a suggested one - leaving the suggestion
+        // would offer the operator an alternative to a route that already works.
+        delete table.routeFilterSuggestion;
         table.routeCondition = discriminator;
         return;
       }

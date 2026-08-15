@@ -126,21 +126,73 @@ function constantValue(own: LogTypeFieldValues, field: string): string | null {
 }
 
 /**
+ * What the derivation found for one log type.
+ *
+ * The two fields are deliberately separate. `filter` is safe to APPLY;
+ * `suggestion` is safe to SHOW and not to apply, because the only thing wrong
+ * with it is that the corpus is too thin to trust it. Collapsing them would
+ * force the choice this design exists to avoid - ship a guess, or throw the
+ * derivation's work away and tell the operator nothing.
+ */
+export interface ValueDiscriminatorResult {
+  /** Filter whose evidence cleared the threshold. Null when none did. */
+  filter: string | null;
+  /**
+   * A structurally valid candidate rejected ONLY for thin evidence.
+   *
+   * Present exactly when `filter` is null and a field was column-shaped
+   * anyway. The operator knows the vendor; the sample does not. Showing this
+   * lets them accept in one step what the derivation already worked out,
+   * without the generator betting a route on three events.
+   */
+  suggestion: string | null;
+  /** Events this log type contributed - what the threshold is measured against. */
+  eventCount: number;
+  /** Events a log type needs before its constants are believed. */
+  minEvents: number;
+}
+
+/**
  * Derive a route filter that matches THIS log type by a field value.
  *
- * Returns null when no field clears the three guards - the caller then keeps
- * the match-all filter and reports the log type as unreachable rather than
- * guessing.
+ * Returns null when no field clears the guards - the caller then keeps the
+ * match-all filter (or a placeholder) rather than guessing. Use
+ * {@link valueDiscriminatorFor} when the caller also wants the candidate that
+ * was rejected only for thin evidence.
  */
 export function deriveValueDiscriminator(
   own: LogTypeFieldValues,
   siblings: readonly LogTypeFieldValues[],
   format: string,
 ): string | null {
+  return valueDiscriminatorFor(own, siblings, format).filter;
+}
+
+/**
+ * The full derivation: the filter if the evidence earns it, otherwise the
+ * candidate it would have chosen.
+ *
+ * ONE selection pass feeds both answers. Computing the suggestion separately
+ * would mean a second copy of the structural guards, and two copies of a rule
+ * is how they drift - the failure this module has already been audited for
+ * twice.
+ */
+export function valueDiscriminatorFor(
+  own: LogTypeFieldValues,
+  siblings: readonly LogTypeFieldValues[],
+  format: string,
+): ValueDiscriminatorResult {
+  const none: ValueDiscriminatorResult = {
+    filter: null,
+    suggestion: null,
+    eventCount: own.eventCount,
+    minEvents: MIN_EVENTS_FOR_VALUE_FILTER,
+  };
   if (format === "csv") {
     // CSV data rows are positional: at route time the event is unparsed and
     // the field name never appears in _raw, so neither test below can run.
-    return null;
+    // Nothing to suggest either - the filter could not be written at all.
+    return none;
   }
   // EVIDENCE THRESHOLD (2026-08-14). No structural test can separate a real
   // discriminator from an incidental field on a handful of events, because on
@@ -159,15 +211,27 @@ export function deriveValueDiscriminator(
   // and a sibling below the threshold has not demonstrated that it is
   // single-valued either, so the column shape cannot be verified against it.
   //
-  // The cost is real and deliberate: thin curated corpora now yield no value
+  // The cost is real and deliberate: thin curated corpora yield no APPLIED
   // filters at all. That is the honest answer, and it is not a dead end - the
-  // log type gets a placeholder saying a filter is needed, and more sample
-  // events make the inference available. Guessing well on thin evidence is the
-  // failure this module exists to prevent.
-  if (own.eventCount < MIN_EVENTS_FOR_VALUE_FILTER) {
-    return null;
-  }
-  const candidates: Array<{ field: string; value: string; spread: number }> = [];
+  // log type gets a placeholder, and the candidate is returned as a suggestion
+  // the operator can accept, because they know the vendor and the sample does
+  // not. Guessing well on thin evidence is the failure this module prevents;
+  // hiding what it found is a different failure, and this avoids both.
+  //
+  // Evidence is judged SEPARATELY from structure below, so one selection pass
+  // can answer both "may I apply this" and "what would I have chosen".
+  //
+  // PER CANDIDATE, not once for the whole call: a thin sibling only undermines
+  // the fields THAT SIBLING CARRIES. Tracking it globally let a sibling that
+  // was rejected on some unrelated field drag down a perfectly well-evidenced
+  // one - caught by the pin for a sibling that does not carry the field.
+  const ownEvidenceOk = own.eventCount >= MIN_EVENTS_FOR_VALUE_FILTER;
+  const candidates: Array<{
+    field: string;
+    value: string;
+    spread: number;
+    evidenceOk: boolean;
+  }> = [];
   for (const field of Object.keys(own.values)) {
     const value = constantValue(own, field);
     if (value === null) {
@@ -196,17 +260,19 @@ export function deriveValueDiscriminator(
     // tightening worth doing.
     const lowered = value.toLowerCase();
     let isColumn = true;
+    let evidenceOk = ownEvidenceOk;
     for (const sib of siblings) {
       const seen = sib.values[field] ?? [];
       if (seen.length === 0) {
         continue; // Sibling does not carry it; nothing to clash with.
       }
       // A sibling too thin to have demonstrated single-valued-ness cannot
-      // confirm the column shape, so the field is not usable - its events
-      // might carry our value in the traffic we never sampled.
+      // confirm the column shape - its events might carry our value in the
+      // traffic we never sampled. That is an EVIDENCE failure, not a
+      // structural one: the field still looks like a column as far as anyone
+      // can tell, so it stays a candidate and is downgraded to a suggestion.
       if (sib.eventCount < MIN_EVENTS_FOR_VALUE_FILTER) {
-        isColumn = false;
-        break;
+        evidenceOk = false;
       }
       const distinct = new Set(seen.map((v) => v.toLowerCase()));
       // Single-valued, and a DIFFERENT value from ours. Case-insensitive
@@ -235,17 +301,17 @@ export function deriveValueDiscriminator(
     // IS repetition, so the check could never fail. Second dead guard removed
     // from this function; both were found by mutating them and watching every
     // test still pass, not by reading the code.
-    candidates.push({ field, value, spread });
+    candidates.push({ field, value, spread, evidenceOk });
   }
   if (candidates.length === 0) {
-    return null;
+    return none;
   }
 
   // Fewest distinct values wins: that is the most category-like field, and the
   // least likely to be a coincidence of small samples. Field name breaks ties
   // so the same corpus always produces the same filter.
   candidates.sort((a, b) => a.spread - b.spread || (a.field < b.field ? -1 : 1));
-  const { field, value } = candidates[0];
+  const { field, value, evidenceOk } = candidates[0];
 
   const terms: string[] = [];
   if (IDENTIFIER.test(field)) {
@@ -261,5 +327,13 @@ export function deriveValueDiscriminator(
       `(typeof _raw === 'string' && _raw.indexOf(${jsString(`${field}=${value}`)}) !== -1)`,
     );
   }
-  return terms.length === 0 ? null : terms.join(" || ");
+  if (terms.length === 0) {
+    return none;
+  }
+  const expression = terms.join(" || ");
+  // The ONLY place the two answers diverge. Same field, same value, same
+  // expression - evidence decides whether it is applied or offered.
+  return evidenceOk
+    ? { ...none, filter: expression }
+    : { ...none, suggestion: expression };
 }

@@ -17,6 +17,7 @@
 import { describe, expect, it } from "vitest";
 import {
   deriveValueDiscriminator,
+  valueDiscriminatorFor,
   fieldValuesFromRecords,
   type LogTypeFieldValues,
 } from "./route-value-discriminator";
@@ -348,5 +349,79 @@ describe("deriveValueDiscriminator - the corpus must earn the inference", () => 
     const cautioned1 = lt({ tls: ["0"], act: ["Cautioned"] });
     const webBlocked2 = lt({ tls: ["2", "2"], act: ["Blocked", "Blocked"] });
     expect(deriveValueDiscriminator(allowed3, [cautioned1, webBlocked2], "cef")).toBeNull();
+  });
+});
+
+/**
+ * SUGGEST INSTEAD OF APPLY (user decision 2026-08-15).
+ *
+ * The evidence threshold is right to refuse thin corpora, but throwing the
+ * derivation's work away is its own failure - the operator is left writing a
+ * filter by hand that the generator had already worked out. So a candidate
+ * rejected ONLY for thin evidence comes back as a suggestion: shown, never
+ * applied, accepted by a human who knows the vendor the sample does not
+ * describe.
+ */
+describe("valueDiscriminatorFor - offers what it will not apply", () => {
+  it("returns a SUGGESTION, not a filter, when the corpus is thin", () => {
+    const own = lt({ act: ["Allowed", "Allowed"] });
+    const sib = lt({ act: ["Blocked", "Blocked"] });
+    const r = valueDiscriminatorFor(own, [sib], "cef");
+    expect(r.filter).toBeNull();
+    expect(r.suggestion).toContain("act === 'Allowed'");
+  });
+
+  it("returns a FILTER and no suggestion once the evidence is there", () => {
+    // Never both: they are the same expression, and offering it after
+    // applying it would read as two different findings.
+    const own = lt({ act: ["Allowed", "Allowed", "Allowed"] });
+    const sib = lt({ act: ["Blocked", "Blocked", "Blocked"] });
+    const r = valueDiscriminatorFor(own, [sib], "cef");
+    expect(r.filter).toContain("act === 'Allowed'");
+    expect(r.suggestion).toBeNull();
+  });
+
+  it("suggests nothing when the field is STRUCTURALLY wrong, not merely thin", () => {
+    // A per-event field is not a discriminator at any sample size, so there is
+    // nothing to offer. Suggesting it would train operators to accept garbage.
+    const own = lt({ sessionId: ["a", "b"] });
+    const sib = lt({ sessionId: ["c", "d"] });
+    const r = valueDiscriminatorFor(own, [sib], "cef");
+    expect(r.filter).toBeNull();
+    expect(r.suggestion).toBeNull();
+  });
+
+  it("does not let a thin sibling poison a field it does not carry", () => {
+    // The bug this pin was written for: evidence was tracked once per call, so
+    // a sibling rejected on some unrelated field downgraded a well-evidenced
+    // one to a suggestion. Evidence is per candidate field.
+    const own = lt({ urlCat: ["news", "news", "news"], shared: ["x", "x", "x"] });
+    const thinOnShared = lt({ shared: ["x"] });
+    const r = valueDiscriminatorFor(own, [thinOnShared], "cef");
+    expect(r.filter).toContain("urlCat === 'news'");
+    expect(r.suggestion).toBeNull();
+  });
+
+  it("reports the evidence so the operator knows what would fix it", () => {
+    // "Add more samples" is only actionable with the numbers attached.
+    const r = valueDiscriminatorFor(lt({ act: ["A"] }), [lt({ act: ["B"] })], "cef");
+    expect(r.eventCount).toBe(1);
+    expect(r.minEvents).toBeGreaterThan(1);
+  });
+
+  it("suggests the SAME expression it would have applied", () => {
+    // One selection pass feeds both answers; a second copy of the guards would
+    // drift, which this module has already been audited for twice.
+    const thin = valueDiscriminatorFor(
+      lt({ act: ["A", "A"] }),
+      [lt({ act: ["B", "B"] })],
+      "cef",
+    );
+    const fat = valueDiscriminatorFor(
+      lt({ act: ["A", "A", "A"] }),
+      [lt({ act: ["B", "B", "B"] })],
+      "cef",
+    );
+    expect(thin.suggestion).toBe(fat.filter);
   });
 });

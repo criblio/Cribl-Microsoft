@@ -561,3 +561,53 @@ describe("derivePipelinePreview - placeholder route filters", () => {
     expect(v.unreachableLogTypes).toEqual([]);
   });
 })
+
+/**
+ * Suggested filters must reach the operator, or the derivation's work is done
+ * and then thrown away - which is the failure "suggest instead of apply" was
+ * chosen to avoid.
+ */
+describe("derivePipelinePreview - suggested route filters", () => {
+  function view(eventsPerType: number) {
+    const vals = (v: string) => ({
+      eventCount: eventsPerType,
+      values: { act: Array.from({ length: eventsPerType }, () => v) },
+    });
+    return derivePipelinePreview({
+      solutionName: "Vendor",
+      packName: "vendor-sentinel",
+      reports: [
+        report({ logType: "firewall", routeCondition: "true" }),
+        report({ logType: "dns", routeCondition: "true" }),
+      ],
+      sampleFormats: { firewall: "cef", dns: "cef" },
+      sampleFieldValues: { firewall: vals("Allow"), dns: vals("Query") },
+      approved: true,
+    });
+  }
+
+  it("offers the filter it declined to apply on a thin corpus", () => {
+    const v = view(2);
+    expect(v.placeholderLogTypes.sort()).toEqual(["dns", "firewall"]);
+    const firewall = v.routeFilterSuggestions.find((s) => s.logType === "firewall");
+    expect(firewall?.filter).toContain("act === 'Allow'");
+  });
+
+  it("offers NOTHING once the filters are actually applied", () => {
+    // Suggesting a filter that is already in force would read as outstanding
+    // work that does not exist.
+    const v = view(3);
+    expect(v.placeholderLogTypes).toEqual([]);
+    expect(v.routeFilterSuggestions).toEqual([]);
+  });
+
+  it("suggests per log type, each with its OWN value", () => {
+    const v = view(2);
+    const byType = Object.fromEntries(
+      v.routeFilterSuggestions.map((s) => [s.logType, s.filter]),
+    );
+    expect(byType.firewall).toContain("Allow");
+    expect(byType.firewall).not.toContain("Query");
+    expect(byType.dns).toContain("Query");
+  });
+})
