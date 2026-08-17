@@ -163,3 +163,25 @@ export function isRuleYamlFileName(name: string): boolean {
   const lower = name.toLowerCase();
   return lower.endsWith(".yaml") || lower.endsWith(".yml");
 }
+
+/**
+ * Analytic-rule YAMLs read per solution, shared by every consumer.
+ *
+ * Decided 2026-08-17 after the audit found the two consumers disagreeing:
+ * rule coverage read 150 and SIEM migration read 40, so a solution with more
+ * than 40 rules was covered in full by one screen and truncated by the other,
+ * silently. Raised to the larger value and made SHARED rather than raised in
+ * place, because two constants holding the same number is how the divergence
+ * started - core's 40 carried a comment claiming it matched rule-coverage,
+ * and it matched rule-coverage's unrelated PARSER cap instead.
+ *
+ * The cost is real and was the likely reason for the 40: this is up to 150
+ * reads through the content port for one solution, against a 100 req/min
+ * budget. It is bounded, cached per solution, and only paid when a screen
+ * actually analyses rules - and a migration analysis that silently ignores
+ * three quarters of a solution's rules is worse than a slow one.
+ *
+ * NOT the parser cap. Parser files are capped separately in rule-coverage; the
+ * two quantities are unrelated and share a value only by coincidence.
+ */
+export const RULE_FILE_CAP = 150;

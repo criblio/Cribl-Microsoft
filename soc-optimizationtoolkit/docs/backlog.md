@@ -926,23 +926,27 @@ anything is written to the KV store.
 
 ## 12. Open questions from the 2026-08-17 architecture audit
 
-**Rule-file caps disagree between the two screens that read rules - UNDECIDED.**
-Rule coverage reads up to 150 analytic-rule YAMLs per solution
-(`RULE_DECODE_CAP`); SIEM migration analyses up to 40 (`RULE_FILE_CAP`). The
-core constant carried the comment "matches rule-coverage's cap", which was never
-true - the 40 matches rule-coverage's UNRELATED parser cap, also 40.
+**Rule-file caps disagreed between the two screens that read rules - RESOLVED
+2026-08-17, raised and shared.** Rule coverage read up to 150 analytic-rule
+YAMLs per solution; SIEM migration read 40. The core constant carried the
+comment "matches rule-coverage's cap", which was never true - the 40 matched
+rule-coverage's UNRELATED parser cap, also 40. The consequence was user-visible
+and unexplained: a solution with more than 40 rules was covered in full by one
+screen and truncated by the other, so the same solution reported different
+coverage depending on where you looked.
 
-The consequence is user-visible and unexplained: a solution with more than 40
-analytic rules is covered in full by one screen and truncated by the other, so
-the same solution reports different coverage depending on where you look, with
-no notice in either place.
+Decision (user): raise SIEM migration to 150. Implemented as ONE shared
+`RULE_FILE_CAP` in the sentinel-content domain rather than a second 150,
+because two constants holding the same number is exactly how the divergence
+started. Pinned in core, so changing it breaks a test and has to be re-pinned
+deliberately.
 
-Deliberately NOT unified while fixing the duplicated rule-directory constants
-around it. Picking the larger number is the obvious move and is probably right,
-but it is a product decision about how much a migration analysis should read -
-and 150 rule reads per solution against the GitHub content port has a cost the
-40 was possibly chosen to avoid. Whoever decides should either raise the cap or
-say why the two differ, and the losing screen should tell the user it truncated.
+Accepted cost: up to 150 content-port reads for one solution on the migration
+path, against the 100 req/min proxy budget - which is plausibly why the 40 was
+there. Bounded and cached per solution, and a migration analysis that silently
+ignores three quarters of a large solution's rules is the worse failure. If the
+budget bites in practice, the fix is a progress-reporting read loop, not a
+quieter cap.
 
 **`unreachableLogTypes` can no longer report anything - RESOLVED 2026-08-17.**
 See the route-yml module header: the placeholder ladder superseded it, and it is
