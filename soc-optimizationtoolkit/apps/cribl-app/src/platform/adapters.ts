@@ -672,19 +672,63 @@ export class PlatformJobStore implements JobStore {
 }
 
 // ---------------------------------------------------------------------------
+// KV key safety
+// ---------------------------------------------------------------------------
+
+/**
+ * A KV key the leader will actually round-trip: `<prefix><16 hex chars>`.
+ *
+ * THE RULE, learned live twice: any PERCENT-ESCAPE in a KV key gets a
+ * route-not-matched 404 - not an error about the key, just a 404 that reads
+ * like a missing entry. (A `/` is fine on its own; `jobs/<uuid>` has always
+ * round-tripped. It is the escapes that kill, so any key built from text a
+ * human or a vendor chose is a hazard.)
+ *
+ * Both failures were found in production and both were predicted before they
+ * fired. content-cache hit it first (a `~` separator, 2026-07-07). Tagged
+ * samples were flagged as latent in the same lesson because their keys were
+ * "UUIDs/simple names" - true until a vendor whose LOG TYPES CONTAIN SPACES
+ * came along. PaloAlto-PAN-OS ships "Palo Alto_Cortex XDR_AlertEvent", which
+ * encodeURIComponent turned into `Palo%20Alto_Cortex%20XDR_AlertEvent`, and
+ * loading any browsed Palo Alto sample failed with HTTP 404 (2026-08-17).
+ * Zscaler's log types - ALLOWED, dns, firewall - have no spaces, which is the
+ * only reason this survived that long.
+ *
+ * Hashing rather than sanitising, deliberately: a sanitiser has to be right
+ * about every character the leader rejects, and this codebase has now guessed
+ * wrong twice. A hash is right by construction, and nothing reads the key back
+ * - callers hold their own index of logical names.
+ *
+ * Two rolling 32-bit FNV-style accumulators. No crypto, no Date - the shells
+ * may own the clock but these keys must be reproducible across sessions.
+ */
+function kvSafeKey(prefix: string, logical: string): string {
+  let h1 = 0x811c9dc5;
+  let h2 = 0xdeadbeef;
+  for (let i = 0; i < logical.length; i++) {
+    const c = logical.charCodeAt(i);
+    h1 = Math.imul(h1 ^ c, 0x01000193) >>> 0;
+    h2 = Math.imul(h2 ^ c, 0x85ebca6b) >>> 0;
+  }
+  return (
+    prefix + h1.toString(16).padStart(8, '0') + h2.toString(16).padStart(8, '0')
+  );
+}
+
+// ---------------------------------------------------------------------------
 // TaggedSampleStore
 // ---------------------------------------------------------------------------
 
-// Each tagged sample is one plain KV entry under tagged-samples/{encodedLogType}
+// Each tagged sample is one plain KV entry under tagged-samples-{hash}
 // (the 200-event rawEvents cap the core applies keeps each entry small); the
 // flat tagged-samples-index entry holds the JSON array of log types in insert
-// order. Kept outside the tagged-samples/ prefix so a prefix listing of records
+// order. Kept outside the tagged-samples- prefix so a prefix listing of records
 // never returns the index itself (same shape as PlatformJobStore).
-const TAGGED_SAMPLE_KEY_PREFIX = 'tagged-samples/';
+const TAGGED_SAMPLE_KEY_PREFIX = 'tagged-samples-';
 const TAGGED_SAMPLE_INDEX_KEY = 'tagged-samples-index';
 
 function taggedSampleKey(logType: string): string {
-  return `${TAGGED_SAMPLE_KEY_PREFIX}${encodeURIComponent(logType)}`;
+  return kvSafeKey(TAGGED_SAMPLE_KEY_PREFIX, logType);
 }
 
 // Sanity-check a KV-read value before trusting it as a TaggedSample. Entries
@@ -757,7 +801,18 @@ export class PlatformTaggedSampleStore implements TaggedSampleStore {
 
   async get(logType: string): Promise<TaggedSample | null> {
     const key = taggedSampleKey(logType);
-    const res = await fetchWithTimeout(kvUrl(key));
+    let res = await fetchWithTimeout(kvUrl(key));
+    if (res.status === 404) {
+      // Samples stored before the 2026-08-17 key change live under the old
+      // `tagged-samples/<encoded>` name. Read through to them rather than
+      // reporting a sample the index still lists as missing; the next upsert
+      // rewrites it under the hashed key. Only reachable for log types whose
+      // old key was legal in the first place - the ones with spaces never
+      // stored successfully, which is the bug being fixed.
+      res = await fetchWithTimeout(
+        kvUrl(`tagged-samples/${encodeURIComponent(logType)}`),
+      );
+    }
     if (res.status === 404) {
       return null;
     }
@@ -1316,24 +1371,8 @@ export class PlatformRemoteSampleSource implements RemoteSampleSource {
 // one segment, [a-z0-9-], and still prefix-listable under `content-cache-`.
 const CONTENT_CACHE_KV_PREFIX = 'content-cache-';
 
-/**
- * Deterministic 64-bit hex key (two rolling 32-bit FNV-style accumulators) for a
- * content cache entry. No crypto/Date; the collision space is ample for a
- * per-commit content cache and the physical key is always KV-path-safe.
- */
 function contentCacheKvKey(cacheKey: string): string {
-  let h1 = 0x811c9dc5;
-  let h2 = 0xdeadbeef;
-  for (let i = 0; i < cacheKey.length; i++) {
-    const c = cacheKey.charCodeAt(i);
-    h1 = Math.imul(h1 ^ c, 0x01000193) >>> 0;
-    h2 = Math.imul(h2 ^ c, 0x85ebca6b) >>> 0;
-  }
-  return (
-    CONTENT_CACHE_KV_PREFIX +
-    h1.toString(16).padStart(8, '0') +
-    h2.toString(16).padStart(8, '0')
-  );
+  return kvSafeKey(CONTENT_CACHE_KV_PREFIX, cacheKey);
 }
 
 /**
