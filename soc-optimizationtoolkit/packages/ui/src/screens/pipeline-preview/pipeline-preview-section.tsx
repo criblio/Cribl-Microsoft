@@ -132,16 +132,17 @@ export function PipelinePreviewSection({
     return entries.filter(([logType]) => present.has(logType));
   }, [routeFilterOverrides, view.tables]);
 
-  // Placeholdered log types the derivation found NOTHING for - no candidate
-  // field is constant within them and distinct across their siblings, so there
-  // is nothing to suggest and no amount of accepting will conjure one. Measured
-  // on Zscaler: 5 of 10. Their only remedy used to be editing route.yml in the
-  // Cribl UI after install, which means leaving the app mid-flow to finish the
-  // pack it just built.
-  const unsuggested = useMemo(() => {
-    const suggested = new Set(view.routeFilterSuggestions.map((s) => s.logType));
-    return view.placeholderLogTypes.filter((lt) => !suggested.has(lt));
-  }, [view.placeholderLogTypes, view.routeFilterSuggestions]);
+  // Every placeholdered log type needs a hand-written filter now.
+  //
+  // This used to subtract the ones with a suggestion, because those had an
+  // Accept button instead. The suggestion tier is gone (2026-08-17): a value
+  // that names its log type is APPLIED, and one that does not is not offered
+  // at all, so a placeholdered log type is by definition one nothing could be
+  // derived for. Measured on Zscaler: 5 of 8 placeholders became real filters
+  // and the remaining 3 are genuinely ambiguous - web-BLOCKED and
+  // firewall-BLOCKED both send action="Blocked", so no single field separates
+  // them and only a human can say what does.
+  const unsuggested = view.placeholderLogTypes;
 
   // Draft text per log type. Deliberately NOT lifted to the caller: a filter
   // being typed is not a decision yet, and the plan must not re-derive on every
@@ -216,42 +217,6 @@ export function PipelinePreviewSection({
           events are not routed by this pack; they are NOT being processed by
           another log type&apos;s pipeline, which is what a catch-all would do.
           <InfoTip text="Route filters are derived from fields unique to each log type, then from field values that are constant within one log type and absent from the others. When neither separates them, the generator emits a filter comparing against __UNSET__ - a field no vendor sends - so the route is inert rather than stealing its siblings' events. Edit the filter in the pack's route.yml (Routes tab) and the route starts working; no rebuild is needed." />
-        </div>
-      )}
-
-      {/*
-        The derivation often DID work out a filter and withheld it because the
-        samples were too thin to bet a route on. Showing it costs nothing and
-        saves the operator rediscovering what the generator already found -
-        they know the vendor that three sample events do not describe.
-
-        Never applied AUTOMATICALLY, which is not the same as never applied.
-        The generator will not bet a route on three events; the operator can,
-        because they know the vendor. Accept is that act, and it writes the
-        filter into the same derivation the build reads - so a filter shown
-        here and accepted cannot be dropped on the way to route.yml.
-      */}
-      {view.routeFilterSuggestions.length > 0 && (
-        <div className="pipeline-preview-suggestions">
-          <span className="field-label">
-            Suggested filters, from too few events to apply automatically
-            <InfoTip text="These are structurally valid discriminators - a field constant within the log type and different in every sibling that carries it - found in samples too small to trust. A filter that fits three events can be precise on the sample and wrong on live traffic, so the generator will not apply one on its own; it shows you what it found. Accept the ones you recognise as how this vendor labels its log types and they go into the pack's route.yml; leave the rest and edit route.yml by hand. Adding more sample events and re-analyzing applies them without asking." />
-          </span>
-          {view.routeFilterSuggestions.map((s) => (
-            <div className="pipeline-preview-suggestion-row" key={s.logType}>
-              <code className="code-chip">{s.logType}</code>
-              <code className="pipeline-preview-suggestion-filter">{s.filter}</code>
-              {onAcceptRouteFilter !== undefined && (
-                <button
-                  type="button"
-                  className="pipeline-preview-suggestion-accept"
-                  onClick={() => onAcceptRouteFilter(s.logType, s.filter)}
-                >
-                  Accept
-                </button>
-              )}
-            </div>
-          ))}
         </div>
       )}
 

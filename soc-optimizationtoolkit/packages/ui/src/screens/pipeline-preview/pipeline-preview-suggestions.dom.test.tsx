@@ -65,8 +65,8 @@ function report(logType: string): GapReport {
 /** Two CEF log types telling themselves apart by ONE value, on 2 events each -
  *  under the 3-event threshold, so the filters are suggested and not applied. */
 const THIN_VALUES = {
-  firewall: { eventCount: 2, values: { act: ["Allow", "Allow"] } },
-  dns: { eventCount: 2, values: { act: ["Query", "Query"] } },
+  firewall: { logType: "firewall", eventCount: 2, values: { act: ["Allow", "Allow"] } },
+  dns: { logType: "dns", eventCount: 2, values: { act: ["Query", "Query"] } },
 };
 
 function renderPreview(props: {
@@ -94,48 +94,28 @@ function renderPreview(props: {
     />,
   );
 }
-
-describe("PipelinePreviewSection - accepting a suggested route filter", () => {
-  it("offers an Accept per suggestion, reporting THAT log type's filter", () => {
-    // The pin that matters most: two suggestions render two buttons, and the
-    // second one must not report the first one's filter. A single shared
-    // handler closing over the wrong row would route DNS events as firewall.
-    const onAccept = vi.fn();
-    renderPreview({ onAccept });
-
-    const buttons = screen.getAllByRole("button", { name: "Accept" });
-    expect(buttons).toHaveLength(2);
-
-    for (const button of buttons) {
-      fireEvent.click(button);
-    }
-    const calls = onAccept.mock.calls as Array<[string, string]>;
-    const byLogType = Object.fromEntries(calls);
-    expect(byLogType.firewall).toContain("'Allow'");
-    expect(byLogType.dns).toContain("'Query'");
-  });
-
-  it("renders NO Accept when the caller cannot persist the choice", () => {
-    // A button whose result the build would never see is worse than no button:
-    // it reports work as done that was silently discarded.
-    renderPreview({});
-    expect(screen.queryByRole("button", { name: "Accept" })).toBeNull();
-  });
-
-  it("moves an accepted filter out of the suggestions and into its own list", () => {
-    // Accepted filters leave routeFilterSuggestions, so without the accepted
-    // list they would vanish with no trace of what was applied - the operator
-    // could not tell an accepted filter from one derived automatically.
-    const onAccept = vi.fn();
+/**
+ * The accepted-filters list and Undo. These SURVIVED the removal of the
+ * suggestion tier because they serve the hand-written path too: whatever the
+ * operator applies, from wherever, has to be visible and reversible.
+ *
+ * What went with the tier: "offers an Accept per suggestion", "moves an
+ * accepted filter out of the suggestions", and the pin that a suggested log
+ * type gets no write-a-filter field. All three described a block that no
+ * longer renders, because a value naming its log type is now APPLIED and one
+ * that does not is not offered at all. Deleted deliberately rather than left
+ * asserting against markup that cannot appear.
+ */
+describe("PipelinePreviewSection - what the operator applied", () => {
+  it("lists an applied filter with an Undo", () => {
+    // Without this the filter would vanish into the plan with no trace of what
+    // was applied or any way back to the placeholder.
     renderPreview({
       routeFilterOverrides: { firewall: "act === 'Allow'" },
-      onAccept,
+      onAccept: vi.fn(),
       onUndo: vi.fn(),
     });
-
     expect(screen.getByText("Route filters you accepted")).toBeTruthy();
-    // One suggestion left (dns), so one Accept - firewall is no longer offered.
-    expect(screen.getAllByRole("button", { name: "Accept" })).toHaveLength(1);
     expect(screen.getAllByRole("button", { name: "Undo" })).toHaveLength(1);
   });
 
@@ -150,14 +130,13 @@ describe("PipelinePreviewSection - accepting a suggested route filter", () => {
     expect(onUndo).toHaveBeenCalledWith("firewall");
   });
 
-  it("stops naming an accepted log type as needing a filter", () => {
+  it("stops naming an applied log type as needing a filter", () => {
     // The placeholder banner is a call to action. Leaving firewall in it after
     // its filter is in force reads as outstanding work that is already done.
     renderPreview({
       routeFilterOverrides: { firewall: "act === 'Allow'" },
       onAccept: vi.fn(),
     });
-    // The count sits in a <strong>; the log-type NAMES are in its parent.
     const banner =
       screen.getByText(/needs a route filter/).parentElement?.textContent ?? "";
     expect(banner).toContain("dns");
@@ -167,23 +146,13 @@ describe("PipelinePreviewSection - accepting a suggested route filter", () => {
   it("agrees with itself about how many log types are left", () => {
     // The count, the verb and the pronoun are three separate ternaries over
     // the same length. "1 log type need a route filter before it can" shipped
-    // because only the count and pronoun were pluralized - a state that was
-    // rare until Accept started producing it one log type at a time.
+    // because only the count and pronoun were pluralized.
     renderPreview({
       routeFilterOverrides: { firewall: "act === 'Allow'" },
       onAccept: vi.fn(),
     });
-    const banner =
-      screen.getByText(/needs a route filter/).textContent ?? "";
+    const banner = screen.getByText(/needs a route filter/).textContent ?? "";
     expect(banner).toContain("1 log type needs a route filter before it can");
-  });
-
-  it("does not offer a write-a-filter field to a log type that HAS a suggestion", () => {
-    // Both log types here have a candidate, so Accept covers them. Rendering a
-    // blank input beside a one-click Accept would ask the operator to choose
-    // between two controls that do the same thing.
-    renderPreview({ onAccept: vi.fn() });
-    expect(screen.queryByLabelText(/^Route filter for/)).toBeNull();
   });
 
   it("does not offer Undo for an override whose log type left the plan", () => {
@@ -197,7 +166,16 @@ describe("PipelinePreviewSection - accepting a suggested route filter", () => {
     expect(screen.queryByText("Route filters you accepted")).toBeNull();
     expect(screen.queryByRole("button", { name: "Undo" })).toBeNull();
   });
+
+  it("offers a write-a-filter field to EVERY placeholdered log type", () => {
+    // Was "does not offer one to a log type that HAS a suggestion". With the
+    // tier gone, a placeholdered log type is by definition one nothing could
+    // be derived for, so every one of them gets a field.
+    renderPreview({ onAccept: vi.fn() });
+    expect(screen.getAllByLabelText(/^Route filter for/)).toHaveLength(2);
+  });
 });
+
 
 /**
  * The log types with NO candidate. Accept cannot reach them - there is nothing
@@ -209,8 +187,8 @@ describe("PipelinePreviewSection - writing a filter by hand", () => {
   /** One field per log type, so nothing is column-shaped and nothing is
    *  suggested - the no-candidate case, not the thin-evidence one. */
   const NO_CANDIDATE = {
-    firewall: { eventCount: 9, values: { onlyFirewall: ["a"] } },
-    dns: { eventCount: 9, values: { onlyDns: ["b"] } },
+    firewall: { logType: "firewall", eventCount: 9, values: { onlyFirewall: ["a"] } },
+    dns: { logType: "dns", eventCount: 9, values: { onlyDns: ["b"] } },
   };
 
   function renderNoCandidate(onAccept?: (l: string, f: string) => void) {

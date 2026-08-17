@@ -44,20 +44,6 @@
 /** A bare name usable as a JS identifier in a Cribl filter expression. */
 const IDENTIFIER = /^[A-Za-z_$][A-Za-z0-9_$]*$/;
 
-/**
- * Events a log type must contribute before its "constant" fields are believed.
- *
- * Three, because that is where a constant stops being an accident worth
- * betting a route on. At one event every field is constant; at two, any field
- * with a low-cardinality value space repeats by chance. Three is not a
- * guarantee - it is the point where the inference is worth making at all,
- * given the alternative (a placeholder the operator fills in) is safe.
- *
- * Deliberately NOT tuned to make the Zscaler corpus produce filters. That
- * corpus has 1-3 events per log type, so it produces none, and that is the
- * correct reading of evidence that thin.
- */
-const MIN_EVENTS_FOR_VALUE_FILTER = 3;
 
 /**
  * The observed values of one log type's fields: field name -> the value of
@@ -66,10 +52,57 @@ const MIN_EVENTS_FOR_VALUE_FILTER = 3;
  * checked against the event count.
  */
 export interface LogTypeFieldValues {
+  /**
+   * The log type this evidence belongs to, as tagged on the samples.
+   *
+   * Carried here because it is an INPUT to the decision, not a label
+   * (2026-08-17 user decision): a field only counts as this log type's
+   * discriminator when its value names the log type. See {@link namesLogType}.
+   */
+  logType: string;
   /** How many sample events this log type contributed. */
   eventCount: number;
   /** field name (as sent) -> values observed, one per event that carried it. */
   values: Readonly<Record<string, readonly string[]>>;
+}
+
+/**
+ * Whether a field VALUE names the log type it was found in.
+ *
+ * The governing rule, from the user 2026-08-17: "each vendor log type can be
+ * defined with the contents of the log itself". If that is true, the field
+ * that defines a log type carries a value that NAMES it - `action` is
+ * "Cautioned" in CAUTIONED, `event_type` is "dns" in dns. A field whose value
+ * says nothing about the log type is not the defining field, however cleanly
+ * it happens to partition three sample events.
+ *
+ * This replaced a purely statistical choice that ranked candidates by how few
+ * distinct values they had. Measured live on the Zscaler pack, that heuristic
+ * offered `client_tls_sig_pqc_offers === '1'` for ALLOWED and
+ * `client_tls_keyex_hybrid_offers === '0'` for web-BLOCKED - TLS capability
+ * flags, structurally perfect and semantically meaningless - while correctly
+ * finding `action === 'Cautioned'` for CAUTIONED. Three of four offers were
+ * wrong, and one click from being applied. Fewest-distinct-values actively
+ * FAVOURS binary incidental flags: a two-valued flag scores better than the
+ * real column, which takes a distinct value in every log type.
+ *
+ * CONTAINMENT EITHER WAY, case-insensitive, because log types are tagged from
+ * the sample and the vendor's value is only part of that name: "Blocked"
+ * defines both web-BLOCKED and firewall-BLOCKED, and "dns" defines both dns
+ * and dns-http-endpoint. Exact match would placeholder all four.
+ *
+ * Deliberately NOT fuzzy. Token overlap or edit distance would re-admit the
+ * plausible-but-wrong filters this exists to reject, and the fallback for a
+ * near-miss is a placeholder the operator finishes - not a wrong route that
+ * silently mis-maps their data.
+ */
+export function namesLogType(value: string, logType: string): boolean {
+  const v = value.trim().toLowerCase();
+  const t = logType.trim().toLowerCase();
+  if (v === "" || t === "") {
+    return false;
+  }
+  return v.includes(t) || t.includes(v);
 }
 
 /**
@@ -87,6 +120,7 @@ export interface LogTypeFieldValues {
  * carried.
  */
 export function fieldValuesFromRecords(
+  logType: string,
   records: ReadonlyArray<Record<string, unknown>>,
 ): LogTypeFieldValues {
   const values: Record<string, string[]> = {};
@@ -98,7 +132,7 @@ export function fieldValuesFromRecords(
       (values[field] ??= []).push(String(raw));
     }
   }
-  return { eventCount: records.length, values };
+  return { logType, eventCount: records.length, values };
 }
 
 /** Escape a value for a single-quoted JS string literal. */
@@ -126,115 +160,70 @@ function constantValue(own: LogTypeFieldValues, field: string): string | null {
 }
 
 /**
- * What the derivation found for one log type.
- *
- * The two fields are deliberately separate. `filter` is safe to APPLY;
- * `suggestion` is safe to SHOW and not to apply, because the only thing wrong
- * with it is that the corpus is too thin to trust it. Collapsing them would
- * force the choice this design exists to avoid - ship a guess, or throw the
- * derivation's work away and tell the operator nothing.
- */
-export interface ValueDiscriminatorResult {
-  /** Filter whose evidence cleared the threshold. Null when none did. */
-  filter: string | null;
-  /**
-   * A structurally valid candidate rejected ONLY for thin evidence.
-   *
-   * Present exactly when `filter` is null and a field was column-shaped
-   * anyway. The operator knows the vendor; the sample does not. Showing this
-   * lets them accept in one step what the derivation already worked out,
-   * without the generator betting a route on three events.
-   */
-  suggestion: string | null;
-  /** Events this log type contributed - what the threshold is measured against. */
-  eventCount: number;
-  /** Events a log type needs before its constants are believed. */
-  minEvents: number;
-}
-
-/**
  * Derive a route filter that matches THIS log type by a field value.
  *
- * Returns null when no field clears the guards - the caller then keeps the
- * match-all filter (or a placeholder) rather than guessing. Use
- * {@link valueDiscriminatorFor} when the caller also wants the candidate that
- * was rejected only for thin evidence.
+ * Returns null when nothing qualifies - the caller then emits a placeholder
+ * filter for the operator to complete, which is the designed fallback and not
+ * a failure.
+ *
+ * There used to be a second entry point, valueDiscriminatorFor, returning a
+ * richer result: the filter when the corpus was thick enough, otherwise the
+ * candidate it WOULD have chosen, as a suggestion for the operator to accept.
+ * Both are gone with the evidence threshold (2026-08-17). A candidate either
+ * names its log type - in which case it is applied, however few events back it
+ * - or it does not, in which case there is nothing worth showing. The middle
+ * answer existed only because corpus size was the deciding evidence.
  */
 export function deriveValueDiscriminator(
+
   own: LogTypeFieldValues,
   siblings: readonly LogTypeFieldValues[],
   format: string,
 ): string | null {
-  return valueDiscriminatorFor(own, siblings, format).filter;
-}
-
-/**
- * The full derivation: the filter if the evidence earns it, otherwise the
- * candidate it would have chosen.
- *
- * ONE selection pass feeds both answers. Computing the suggestion separately
- * would mean a second copy of the structural guards, and two copies of a rule
- * is how they drift - the failure this module has already been audited for
- * twice.
- */
-export function valueDiscriminatorFor(
-  own: LogTypeFieldValues,
-  siblings: readonly LogTypeFieldValues[],
-  format: string,
-): ValueDiscriminatorResult {
-  const none: ValueDiscriminatorResult = {
-    filter: null,
-    suggestion: null,
-    eventCount: own.eventCount,
-    minEvents: MIN_EVENTS_FOR_VALUE_FILTER,
-  };
+  const none = null;
   if (format === "csv") {
     // CSV data rows are positional: at route time the event is unparsed and
     // the field name never appears in _raw, so neither test below can run.
     // Nothing to suggest either - the filter could not be written at all.
     return none;
   }
-  // EVIDENCE THRESHOLD (2026-08-14). No structural test can separate a real
-  // discriminator from an incidental field on a handful of events, because on
-  // a handful of events they look identical.
+  // THE EVIDENCE THRESHOLD IS GONE (2026-08-17, user decision), and with it the
+  // suggestion tier it produced.
   //
-  // Measured: the column test was added expecting it to reject
-  // `client_tls_sig_pqc_offers === '1'` on the Zscaler corpus. It did not, and
-  // it was right not to - across 43 events in 10 log types that field IS
-  // single-valued per log type with distinct values. It satisfies every
-  // structural property of a discriminator column. The problem was never the
-  // rule; it was that 1-3 events per log type cannot tell the two apart.
+  // It existed for a good reason: no STRUCTURAL test can separate a real
+  // discriminator from an incidental field on three events, because on three
+  // events they look identical. That was measured, not assumed - the column
+  // test was added expecting it to reject `client_tls_sig_pqc_offers === '1'`
+  // on the Zscaler corpus, and it did not, because across 43 events that field
+  // genuinely IS single-valued per log type with distinct values.
   //
-  // So the corpus has to earn the inference. A log type with fewer than
-  // MIN_EVENTS_FOR_VALUE_FILTER events has not demonstrated that ANY of its
-  // fields is constant - one event makes every field trivially "constant" -
-  // and a sibling below the threshold has not demonstrated that it is
-  // single-valued either, so the column shape cannot be verified against it.
+  // The name-match guard answers the same question from a different direction,
+  // and answers it better. Corpus size was only ever a proxy for "is this the
+  // field that defines the log type"; the value naming the log type IS that
+  // fact. One event of action="Cautioned" in CAUTIONED settles it, and no
+  // number of events of client_tls_sig_pqc_offers="1" ever would.
   //
-  // The cost is real and deliberate: thin curated corpora yield no APPLIED
-  // filters at all. That is the honest answer, and it is not a dead end - the
-  // log type gets a placeholder, and the candidate is returned as a suggestion
-  // the operator can accept, because they know the vendor and the sample does
-  // not. Guessing well on thin evidence is the failure this module prevents;
-  // hiding what it found is a different failure, and this avoids both.
-  //
-  // Evidence is judged SEPARATELY from structure below, so one selection pass
-  // can answer both "may I apply this" and "what would I have chosen".
-  //
-  // PER CANDIDATE, not once for the whole call: a thin sibling only undermines
-  // the fields THAT SIBLING CARRIES. Tracking it globally let a sibling that
-  // was rejected on some unrelated field drag down a perfectly well-evidenced
-  // one - caught by the pin for a sibling that does not carry the field.
-  const ownEvidenceOk = own.eventCount >= MIN_EVENTS_FOR_VALUE_FILTER;
+  // So thin corpora no longer yield nothing: the Zscaler set now gets applied
+  // filters wherever the vendor labels its own logs, and placeholders
+  // everywhere else. Both outcomes are honest, and neither is a guess.
   const candidates: Array<{
     field: string;
     value: string;
     spread: number;
-    evidenceOk: boolean;
   }> = [];
   for (const field of Object.keys(own.values)) {
     const value = constantValue(own, field);
     if (value === null) {
+      continue;
+    }
+    // Guard 0, and the one that decides most cases: the value must NAME this
+    // log type. Applied before the column test because it is the cheaper and
+    // stronger signal - a field that does not name the log type is not its
+    // defining field no matter how it partitions the corpus, and the samples
+    // simply may not carry the field that does. Everything rejected here gets
+    // a placeholder for the operator to finish, which is the designed fallback
+    // rather than a loss.
+    if (!namesLogType(value, own.logType)) {
       continue;
     }
     // Guard 3: it must behave like a COLUMN across the whole corpus - every log
@@ -260,19 +249,10 @@ export function valueDiscriminatorFor(
     // tightening worth doing.
     const lowered = value.toLowerCase();
     let isColumn = true;
-    let evidenceOk = ownEvidenceOk;
     for (const sib of siblings) {
       const seen = sib.values[field] ?? [];
       if (seen.length === 0) {
         continue; // Sibling does not carry it; nothing to clash with.
-      }
-      // A sibling too thin to have demonstrated single-valued-ness cannot
-      // confirm the column shape - its events might carry our value in the
-      // traffic we never sampled. That is an EVIDENCE failure, not a
-      // structural one: the field still looks like a column as far as anyone
-      // can tell, so it stays a candidate and is downgraded to a suggestion.
-      if (sib.eventCount < MIN_EVENTS_FOR_VALUE_FILTER) {
-        evidenceOk = false;
       }
       const distinct = new Set(seen.map((v) => v.toLowerCase()));
       // Single-valued, and a DIFFERENT value from ours. Case-insensitive
@@ -295,23 +275,27 @@ export function valueDiscriminatorFor(
       corpus.flatMap((lt) => (lt.values[field] ?? []).map((v) => v.toLowerCase())),
     ).size;
     // The repetition guard that used to sit here is GONE (2026-08-14). It
-    // required some log type to show the value repeating across events - which
-    // the evidence threshold now guarantees outright, since `own` must clear
-    // MIN_EVENTS_FOR_VALUE_FILTER and be single-valued over all of them. That
-    // IS repetition, so the check could never fail. Second dead guard removed
-    // from this function; both were found by mutating them and watching every
-    // test still pass, not by reading the code.
-    candidates.push({ field, value, spread, evidenceOk });
+    // required some log type to show the value repeating across events, which
+    // the then-current evidence threshold guaranteed outright, so the check
+    // could never fail. Second dead guard removed from this function; both
+    // were found by mutating them and watching every test still pass, not by
+    // reading the code. (The threshold itself is gone too, as of 2026-08-17.)
+    candidates.push({ field, value, spread });
   }
   if (candidates.length === 0) {
     return none;
   }
 
-  // Fewest distinct values wins: that is the most category-like field, and the
-  // least likely to be a coincidence of small samples. Field name breaks ties
-  // so the same corpus always produces the same filter.
-  candidates.sort((a, b) => a.spread - b.spread || (a.field < b.field ? -1 : 1));
-  const { field, value, evidenceOk } = candidates[0];
+  // Every survivor now names the log type, so the old "fewest distinct values
+  // wins" ranking is gone - it is what chose the TLS flags, because a binary
+  // flag has fewer distinct values than a real column by construction. Among
+  // fields that all name the log type there is no quality ordering left worth
+  // making, so this sorts on the widest evidence and then the field name,
+  // purely so one corpus always yields one filter.
+  candidates.sort(
+    (a, b) => b.spread - a.spread || (a.field < b.field ? -1 : 1),
+  );
+  const { field, value } = candidates[0];
 
   const terms: string[] = [];
   if (IDENTIFIER.test(field)) {
@@ -330,10 +314,21 @@ export function valueDiscriminatorFor(
   if (terms.length === 0) {
     return none;
   }
-  const expression = terms.join(" || ");
-  // The ONLY place the two answers diverge. Same field, same value, same
-  // expression - evidence decides whether it is applied or offered.
-  return evidenceOk
-    ? { ...none, filter: expression }
-    : { ...none, suggestion: expression };
+  // APPLIED, not offered (2026-08-17 user decision). The event-count threshold
+  // no longer gates this, and the suggestion tier is gone with it.
+  //
+  // The threshold existed because no structural test could tell a real
+  // discriminator from an incidental field on three events - true, and the
+  // reason it was right to withhold. The name-match rule answers that question
+  // from the value itself rather than from corpus size: one event showing
+  // action="Cautioned" for log type CAUTIONED is not a small-sample
+  // coincidence, it is the vendor labelling its own log. Conversely a thousand
+  // events of client_tls_sig_pqc_offers="1" would still not make that field
+  // the definition of ALLOWED.
+  //
+  // So the outcome is binary now - the value names the log type and the filter
+  // applies, or it does not and the log type gets a placeholder. The middle
+  // tier ("structurally valid, too thin to trust") was an artefact of judging
+  // on evidence volume and has nothing left to hold.
+  return terms.join(" || ");
 }

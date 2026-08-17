@@ -376,6 +376,7 @@ describe("value discrimination revives unreachable routes", () => {
         ...(withValues
           ? {
               sampleFieldValues: {
+                logType,
                 eventCount: 3,
                 values: {
                   action: [logType, logType, logType],

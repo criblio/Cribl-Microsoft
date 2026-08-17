@@ -451,10 +451,12 @@ describe("derivePipelinePreview - route discrimination by field value", () => {
 
   const values = {
     ALLOWED: {
+      logType: "ALLOWED",
       eventCount: 3,
       values: { action: ["Allowed", "Allowed", "Allowed"], src: ["a", "b", "c"] },
     },
     BLOCKED: {
+      logType: "BLOCKED",
       eventCount: 3,
       values: { action: ["Blocked", "Blocked", "Blocked"], src: ["d", "e", "f"] },
     },
@@ -526,11 +528,18 @@ describe("derivePipelinePreview - placeholder route filters", () => {
       ...(withValues
         ? {
             sampleFieldValues: {
-              // Three events each: below MIN_EVENTS_FOR_VALUE_FILTER the core
-              // refuses to infer a filter at all, so a thinner fixture would
-              // pin the evidence threshold instead of the wiring.
-              firewall: { eventCount: 3, values: { act: ["Allow", "Allow", "Allow"] } },
-              dns: { eventCount: 3, values: { act: ["Query", "Query", "Query"] } },
+              // Values that NAME their log type, so the core applies a filter
+              // and this pins the WIRING rather than the derivation's rules.
+              firewall: {
+                logType: "firewall",
+                eventCount: 3,
+                values: { act: ["firewall", "firewall", "firewall"] },
+              },
+              dns: {
+                logType: "dns",
+                eventCount: 3,
+                values: { act: ["dns", "dns", "dns"] },
+              },
             },
           }
         : {}),
@@ -563,56 +572,6 @@ describe("derivePipelinePreview - placeholder route filters", () => {
 })
 
 /**
- * Suggested filters must reach the operator, or the derivation's work is done
- * and then thrown away - which is the failure "suggest instead of apply" was
- * chosen to avoid.
- */
-describe("derivePipelinePreview - suggested route filters", () => {
-  function view(eventsPerType: number) {
-    const vals = (v: string) => ({
-      eventCount: eventsPerType,
-      values: { act: Array.from({ length: eventsPerType }, () => v) },
-    });
-    return derivePipelinePreview({
-      solutionName: "Vendor",
-      packName: "vendor-sentinel",
-      reports: [
-        report({ logType: "firewall", routeCondition: "true" }),
-        report({ logType: "dns", routeCondition: "true" }),
-      ],
-      sampleFormats: { firewall: "cef", dns: "cef" },
-      sampleFieldValues: { firewall: vals("Allow"), dns: vals("Query") },
-      approved: true,
-    });
-  }
-
-  it("offers the filter it declined to apply on a thin corpus", () => {
-    const v = view(2);
-    expect(v.placeholderLogTypes.sort()).toEqual(["dns", "firewall"]);
-    const firewall = v.routeFilterSuggestions.find((s) => s.logType === "firewall");
-    expect(firewall?.filter).toContain("act === 'Allow'");
-  });
-
-  it("offers NOTHING once the filters are actually applied", () => {
-    // Suggesting a filter that is already in force would read as outstanding
-    // work that does not exist.
-    const v = view(3);
-    expect(v.placeholderLogTypes).toEqual([]);
-    expect(v.routeFilterSuggestions).toEqual([]);
-  });
-
-  it("suggests per log type, each with its OWN value", () => {
-    const v = view(2);
-    const byType = Object.fromEntries(
-      v.routeFilterSuggestions.map((s) => [s.logType, s.filter]),
-    );
-    expect(byType.firewall).toContain("Allow");
-    expect(byType.firewall).not.toContain("Query");
-    expect(byType.dns).toContain("Query");
-  });
-})
-
-/**
  * Accepting a suggestion is the operator supplying the judgement the sample
  * corpus could not. The threshold stays where it is - the app still never
  * applies thin evidence on its own - so acceptance is the ONLY path from a
@@ -622,7 +581,11 @@ describe("derivePipelinePreview - suggested route filters", () => {
  * a filter that was never accepted.
  */
 describe("derivePipelinePreview - accepted route filters", () => {
-  const vals = (v: string) => ({
+  // Deliberately values that do NOT name their log type, so the derivation
+  // placeholders both and the accepted override is the only thing that can put
+  // a real filter in the plan - which is what these pins are about.
+  const vals = (logType: string, v: string) => ({
+    logType,
     eventCount: 2,
     values: { act: Array.from({ length: 2 }, () => v) },
   });
@@ -635,7 +598,10 @@ describe("derivePipelinePreview - accepted route filters", () => {
         report({ logType: "dns", routeCondition: "true" }),
       ],
       sampleFormats: { firewall: "cef", dns: "cef" },
-      sampleFieldValues: { firewall: vals("Allow"), dns: vals("Query") },
+      sampleFieldValues: {
+        firewall: vals("firewall", "Allow"),
+        dns: vals("dns", "Query"),
+      },
       ...(routeFilterOverrides !== undefined ? { routeFilterOverrides } : {}),
       approved: true,
     });
@@ -650,12 +616,11 @@ describe("derivePipelinePreview - accepted route filters", () => {
     expect(v.routeYml).not.toContain("__UNSET__ === \"firewall\"");
   });
 
-  it("takes the accepted log type out of the placeholder and suggestion lists", () => {
-    // Both lists are calls to ACTION. Leaving a log type in either after its
-    // filter is in force reads as work still outstanding.
+  it("takes the accepted log type out of the placeholder list", () => {
+    // The list is a call to ACTION. Leaving a log type in it after its filter
+    // is in force reads as work still outstanding.
     const v = view({ firewall: "act === 'Allow'" });
     expect(v.placeholderLogTypes).toEqual(["dns"]);
-    expect(v.routeFilterSuggestions.map((s) => s.logType)).toEqual(["dns"]);
   });
 
   it("leaves every OTHER log type exactly as it was", () => {
