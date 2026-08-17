@@ -212,6 +212,28 @@ export function PipelinePreviewSection({
         </div>
       )}
 
+      {/*
+        The derivation often DID work out a filter and withheld it because the
+        samples were too thin to bet a route on. Showing it costs nothing and
+        saves the operator rediscovering what the generator already found -
+        they know the vendor that three sample events do not describe. Shown,
+        never applied: accepting is a human act, which is the whole point.
+      */}
+      {view.routeFilterSuggestions.length > 0 && (
+        <div className="pipeline-preview-suggestions">
+          <span className="field-label">
+            Suggested filters, from too few events to apply automatically
+            <InfoTip text="These are structurally valid discriminators - a field constant within the log type and different in every sibling that carries it - found in samples too small to trust. A filter that fits three events can be precise on the sample and wrong on live traffic, so the generator will not apply one; it shows you what it found instead. Check each against what you know the vendor sends, then paste it over the __UNSET__ filter in route.yml. Adding more sample events and re-analyzing will apply them automatically." />
+          </span>
+          {view.routeFilterSuggestions.map((s) => (
+            <div className="pipeline-preview-suggestion-row" key={s.logType}>
+              <code className="code-chip">{s.logType}</code>
+              <code className="pipeline-preview-suggestion-filter">{s.filter}</code>
+            </div>
+          ))}
+        </div>
+      )}
+
       {view.unreachableLogTypes.length > 0 && (
         <div className="pipeline-preview-valid pipeline-preview-valid-bad">
           <strong>

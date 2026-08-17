@@ -79,6 +79,7 @@ export {
   generateRouteYml,
   unreachableLogTypes,
   placeholderLogTypes,
+  routeFilterSuggestions,
 } from "./route-yml";
 
 // Route discrimination by field VALUE - the strategy that separates log types
@@ -87,6 +88,7 @@ export {
 // filter that skips the over-fit guards.
 export { fieldValuesFromRecords } from "./route-value-discriminator";
 export type { LogTypeFieldValues } from "./route-value-discriminator";
+export type { RouteFilterSuggestion } from "./route-yml";
 
 // Core Cribl-YAML acceptance validator
 export { checkCriblYaml } from "./cribl-yaml-validator";

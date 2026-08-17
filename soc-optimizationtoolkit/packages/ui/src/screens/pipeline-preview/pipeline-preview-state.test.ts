@@ -526,8 +526,11 @@ describe("derivePipelinePreview - placeholder route filters", () => {
       ...(withValues
         ? {
             sampleFieldValues: {
-              firewall: { eventCount: 2, values: { act: ["Allow", "Allow"] } },
-              dns: { eventCount: 2, values: { act: ["Query", "Query"] } },
+              // Three events each: below MIN_EVENTS_FOR_VALUE_FILTER the core
+              // refuses to infer a filter at all, so a thinner fixture would
+              // pin the evidence threshold instead of the wiring.
+              firewall: { eventCount: 3, values: { act: ["Allow", "Allow", "Allow"] } },
+              dns: { eventCount: 3, values: { act: ["Query", "Query", "Query"] } },
             },
           }
         : {}),
@@ -556,5 +559,55 @@ describe("derivePipelinePreview - placeholder route filters", () => {
     const v = view(true);
     expect(v.placeholderLogTypes).toEqual([]);
     expect(v.unreachableLogTypes).toEqual([]);
+  });
+})
+
+/**
+ * Suggested filters must reach the operator, or the derivation's work is done
+ * and then thrown away - which is the failure "suggest instead of apply" was
+ * chosen to avoid.
+ */
+describe("derivePipelinePreview - suggested route filters", () => {
+  function view(eventsPerType: number) {
+    const vals = (v: string) => ({
+      eventCount: eventsPerType,
+      values: { act: Array.from({ length: eventsPerType }, () => v) },
+    });
+    return derivePipelinePreview({
+      solutionName: "Vendor",
+      packName: "vendor-sentinel",
+      reports: [
+        report({ logType: "firewall", routeCondition: "true" }),
+        report({ logType: "dns", routeCondition: "true" }),
+      ],
+      sampleFormats: { firewall: "cef", dns: "cef" },
+      sampleFieldValues: { firewall: vals("Allow"), dns: vals("Query") },
+      approved: true,
+    });
+  }
+
+  it("offers the filter it declined to apply on a thin corpus", () => {
+    const v = view(2);
+    expect(v.placeholderLogTypes.sort()).toEqual(["dns", "firewall"]);
+    const firewall = v.routeFilterSuggestions.find((s) => s.logType === "firewall");
+    expect(firewall?.filter).toContain("act === 'Allow'");
+  });
+
+  it("offers NOTHING once the filters are actually applied", () => {
+    // Suggesting a filter that is already in force would read as outstanding
+    // work that does not exist.
+    const v = view(3);
+    expect(v.placeholderLogTypes).toEqual([]);
+    expect(v.routeFilterSuggestions).toEqual([]);
+  });
+
+  it("suggests per log type, each with its OWN value", () => {
+    const v = view(2);
+    const byType = Object.fromEntries(
+      v.routeFilterSuggestions.map((s) => [s.logType, s.filter]),
+    );
+    expect(byType.firewall).toContain("Allow");
+    expect(byType.firewall).not.toContain("Query");
+    expect(byType.dns).toContain("Query");
   });
 })

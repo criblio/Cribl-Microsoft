@@ -55,10 +55,11 @@ import type {
 import { findReductionRules, type TableReductionRules } from "./reduction-rules";
 import { deriveRouteDiscriminator } from "./route-discriminator";
 import {
-  deriveValueDiscriminator,
+  valueDiscriminatorFor,
   type LogTypeFieldValues,
 } from "./route-value-discriminator";
 import { placeholderRouteFilter } from "./route-placeholder";
+import { MATCH_ALL_FILTER } from "./route-yml";
 import {
   destinationId,
   pipelineName,
@@ -266,10 +267,10 @@ function resolveReductionRules(
   return findReductionRules(input.sentinelTable, solutionName);
 }
 
-/** Compute the route filter for a table (routing.routeCondition, else "true"). */
+/** Compute the route filter for a table (routing.routeCondition, else match-all). */
 function resolveRouteCondition(input: TablePlanInput): string {
   const cond = input.routing?.routeCondition;
-  return cond && cond !== "true" ? cond : "true";
+  return cond && cond !== MATCH_ALL_FILTER ? cond : MATCH_ALL_FILTER;
 }
 
 /**
@@ -326,21 +327,27 @@ export function buildPipelinePlan(
     // supply none, and for log types whose shapes genuinely differ.
     const sampleValues = input.tables.map((t) => t.sampleFieldValues);
     tables.forEach((table, i) => {
-      if (table.routeCondition !== "true") return;
+      if (table.routeCondition !== MATCH_ALL_FILTER) return;
 
       const ownValues = sampleValues[i];
       if (ownValues !== undefined) {
         const siblingValues = sampleValues.filter(
           (v, j) => j !== i && v !== undefined,
         ) as LogTypeFieldValues[];
-        const byValue = deriveValueDiscriminator(
+        const byValue = valueDiscriminatorFor(
           ownValues,
           siblingValues,
           table.sourceFormat,
         );
-        if (byValue !== null) {
-          table.routeCondition = byValue;
+        if (byValue.filter !== null) {
+          table.routeCondition = byValue.filter;
           return;
+        }
+        // Carried to the placeholder below rather than applied. Presence-based
+        // discrimination is still tried first - a filter it can PROVE beats a
+        // value filter the evidence only suggests.
+        if (byValue.suggestion !== null) {
+          table.routeFilterSuggestion = byValue.suggestion;
         }
       }
 
@@ -350,6 +357,9 @@ export function buildPipelinePlan(
         table.sourceFormat,
       );
       if (discriminator !== null) {
+        // A proven filter supersedes a suggested one - leaving the suggestion
+        // would offer the operator an alternative to a route that already works.
+        delete table.routeFilterSuggestion;
         table.routeCondition = discriminator;
         return;
       }

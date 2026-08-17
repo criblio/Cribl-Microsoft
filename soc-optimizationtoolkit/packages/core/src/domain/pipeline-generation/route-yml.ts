@@ -48,9 +48,17 @@ import { isPlaceholderFilter } from "./route-placeholder";
  * product lies - {@link unreachableLogTypes} names the dead log types and
  * {@link emissionOrder} decides which one survives - and until now they agreed
  * only because both happened to spell the same literal.
+ *
+ * Audit 2026-08-14: the literal is now a shared constant, because the coupling
+ * crosses a module boundary. plan.ts decides WHEN to replace a match-all (with
+ * a discriminator or a placeholder); this file decides WHAT IS one. If those
+ * ever spelled the sentinel differently, the planner would leave a route this
+ * file does not recognise - reported as reachable while receiving nothing.
  */
+export const MATCH_ALL_FILTER = "true";
+
 function isMatchAll(table: TablePlan): boolean {
-  return table.routeCondition === "true";
+  return table.routeCondition === MATCH_ALL_FILTER;
 }
 
 /**
@@ -168,6 +176,30 @@ export function placeholderLogTypes(plan: PipelinePlan): string[] {
   return emissionOrder(plan)
     .filter((t) => isPlaceholderFilter(t.routeCondition))
     .map((t) => t.suffix);
+}
+
+/** One placeholdered log type and the filter the derivation would have used. */
+export interface RouteFilterSuggestion {
+  logType: string;
+  filter: string;
+}
+
+/**
+ * Placeholdered log types for which a candidate filter WAS derived, and
+ * withheld only because the corpus was too thin to trust it.
+ *
+ * Separate from {@link placeholderLogTypes} because the two ask different
+ * things of the operator: that one says "write a filter", this one says "here
+ * is the one I worked out - is it right?". A log type with no suggestion has
+ * nothing column-shaped in its samples at all, and no amount of accepting will
+ * conjure one; conflating them would offer nothing for half the list.
+ */
+export function routeFilterSuggestions(plan: PipelinePlan): RouteFilterSuggestion[] {
+  return emissionOrder(plan)
+    .filter(
+      (t) => isPlaceholderFilter(t.routeCondition) && t.routeFilterSuggestion,
+    )
+    .map((t) => ({ logType: t.suffix, filter: t.routeFilterSuggestion as string }));
 }
 
 /** Emit the full route.yml for a resolved {@link PipelinePlan}. */
