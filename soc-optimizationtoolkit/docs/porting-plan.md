@@ -277,13 +277,14 @@ Phase 2 exit check (roadmap): DirectNative/DirectCustom/DCE/PrivateLink parity w
 - External surface: policies.yml capture/preview/search/lake paths; 60s captures chunked on cloud.
 - Depends on: Units 10, 20.
 
-#### Unit 22: Local-app first-run onboarding completion (M)
+#### Unit 22: First-run onboarding completion (M) - SHIPPED; scope reduced by ADR-0002
 
 - Covers: GUI-03 (delta - consent flow, permission matrix, and preflight shipped in Phases 1-2; Cribl auth manager already exists).
 - Legacy sources: `IS-R/pages/SetupWizard.tsx` (676) as prior art for step/skip semantics.
 - New core/UI: target chooser (Cribl-hosted vs local, tradeoff table), .tgz packaging/upload walkthrough for the cloud target, leader-connect step for local (base-URL derivation rules and dual-profile swap semantics from legacy, minus the reconnect-with-divergent-overrides bug class - overrides and stored secrets validated together, tested), mode auto-selection rules (hasCribl/hasAzure matrix) with availability-gated mode cards.
+- ADR-0002 (2026-08-17): the local target is gone, so the target chooser and leader-connect step are DORMANT - cribl-app renders this wizard with initialTarget "cribl-hosted" and lockTarget, and it already skips the .tgz walkthrough via installedInLeader. They are kept, not deleted, as the only asset that would onboard a customer-managed leader. What remains live is the Cloud first run: Connect GitHub -> Connect Azure -> Check permissions -> Mode.
 - External surface: none new.
-- Depends on: Units 1, 2, 9; roadmap places this at Phase 3 exit ("Onboarding GUI completion in local-app first-run").
+- Depends on: Units 1, 2, 9.
 
 Phase 3 exit check (roadmap): solution browsed -> samples -> pipeline -> pack -> installed destination end-to-end; Cloudflare pack reproducible through the app. Units 11-22 deliver it.
 
@@ -489,9 +490,9 @@ Each unit lands through the established loop:
 
 1. Mine and decide first: re-read the digest's edge cases for the unit; every flagged legacy defect gets an explicit fix-vs-preserve decision recorded in the unit's PR description (defaults chosen in this plan: fix + pin for suppress maxEvents, route/pipeline suffix mismatch, streamtags read, enable-Sentinel location, templateOnly forwarding, first-workspace query, CSV batch drop, rename re-keying, normalization mismatch, take-then-order; preserve + pin for anything a deployed artifact depends on).
 2. Core first: pure domain module(s) in packages/core with contract tests; characterization tests where section 3 names a contract; fixtures vendored into the repo (never %APPDATA%/Downloads/machine state; skipIf-gated tests are not characterization).
-3. Both shells in the same increment: adapters bound in apps/cribl-app AND apps/local-app; parity is the gate (roadmap standing gates). Long operations are polled JobStore jobs; each cloud request fits 30s; batches respect the 100 req/min budget through the shared scheduler.
-4. External surface in the same PR: proxies.yml/policies.yml (cloud) and the local-host allowlist change with the feature (invariant 4). New Azure-facing proxy entries always carry the Origin-suppressing header allowlist.
-5. Adversarial verify before merge: drive the affected flow end-to-end in at least one shell (live where feasible, as the Phase 1 slice was verified live); code review at high effort for units touching contracts (17, 19, 20); CI gates (lint, typecheck, test, build, boundary lint) green.
+3. Bind adapters in apps/cribl-app (ADR-0002: the local shell and its parity gate are retired). Long operations are polled JobStore jobs; each cloud request fits 30s; batches respect the 100 req/min budget through the shared scheduler.
+4. External surface in the same PR: proxies.yml/policies.yml change with the feature (invariant 4). New Azure-facing proxy entries always carry the Origin-suppressing header allowlist.
+5. Adversarial verify before merge: drive the affected flow end-to-end (live where feasible, as the Phase 1 slice was verified live); code review at high effort for units touching contracts (17, 19, 20); CI gates (lint, typecheck, test, build, boundary lint) green.
 6. One reviewable increment = one unit = one PR/commit train; no unit starts before its dependency units merge.
 7. Legacy stays untouched and runnable as the fallback throughout. When a unit family completes a catalog domain in BOTH shells, mark that domain superseded in feature-catalog.md (strangler-fig plan); archival only at roadmap Phase 7 parity audit.
 8. Documentation: CONTEXT.md per package and ADRs updated when a unit changes boundaries or records a cross-cutting decision (secret placeholder convention, JobStatus 'skipped', hash domain, report format are ADR-worthy). Catalog corrections found during mining (ENG-25 scans remote not mirror; GUI-22 emits HTML not Markdown) are applied to the catalog when the owning unit lands.

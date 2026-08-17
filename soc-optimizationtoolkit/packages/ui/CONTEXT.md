@@ -1,6 +1,6 @@
 # CONTEXT: @soc/ui
 
-Purpose: the shared React feature screens and components rendered by both shells (cribl-app iframe and local-app browser UI).
+Purpose: the shared React feature screens and components rendered by the hosting shell (cribl-app, the Cribl.Cloud iframe). Written for two shells; the local one was removed 2026-08-17 (ADR-0002), and nothing here changed - status entries below that say "both shells" are historical records.
 
 Boundaries: imports only @soc/core. No direct fetch or storage access; all IO flows through core ports provided via React context by the hosting shell.
 

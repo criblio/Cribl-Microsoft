@@ -647,7 +647,7 @@ export {
   isInlineArtifact,
 } from "./capabilities";
 
-// Setup Wizard (porting-plan Unit 22, GUI-03 delta): the local-app first-run
+// Setup Wizard (porting-plan Unit 22, GUI-03 delta): the first-run
 // onboarding ASSEMBLED from already-shipped pieces - AuaGate (Unit 1) ->
 // target chooser (core tradeoff data) -> Connect (the .tgz upload walkthrough
 // for cribl-hosted, the leader-connect form for local over the core base-URL +

@@ -1,11 +1,13 @@
 # Implementation Roadmap
 
-Derived from [feature-catalog.md](feature-catalog.md) with all review questions resolved (2026-07-01). Phases are vertical slices: each delivers user-visible capability end-to-end in BOTH targets, per ADR-0001. Feature IDs reference the catalog. The redesign-first principle and its compatibility contracts apply throughout.
+Derived from [feature-catalog.md](feature-catalog.md) with all review questions resolved (2026-07-01). Phases are vertical slices: each delivers user-visible capability end-to-end. Feature IDs reference the catalog. The redesign-first principle and its compatibility contracts apply throughout.
+
+TARGET CHANGE (2026-08-17, ADR-0002): the local target is dropped; apps/cribl-app is the only shell. Phase entries below that say "both shells" are historical status records of what shipped when - left as written. The standing gates are not history, so they are corrected here.
 
 Standing gates for every phase:
-- Capability works in apps/cribl-app AND apps/local-app (parity gates legacy archival).
+- Capability works in apps/cribl-app. (Was: parity across both shells, which gated legacy archival; retired with the local target, so archival now depends on Cloud-shell coverage alone.)
 - Domain logic lands in packages/core with contract tests; characterization tests where the catalog names a compatibility contract.
-- proxies.yml/policies.yml (cloud) and the local host allowlist change in the same PR as the feature.
+- proxies.yml/policies.yml change in the same PR as the feature.
 - CONTEXT.md files and ADRs updated when boundaries or decisions change.
 - No emojis anywhere.
 
@@ -56,7 +58,7 @@ Goal: the Integration Solution's crown jewels, redesigned into packages/core.
 - Sample acquisition: tiered resolver (ENG-19) with Sentinel repo on-demand GitHub queries + KV cache (redesign of ENG-21/23), synthetic samples (ENG-41).
 - Pack lifecycle: scaffolding (ENG-06), lookup generation (ENG-07), .crbl assembly in-browser (ENG-08), inventory (GUI-19/20), direct install via Cribl API; DCR gap analysis with mapping review (ENG-12, GUI-08).
 - Air-gap bundle export (ENG-10/GUI-15 capability via ArtifactSink).
-- Onboarding GUI completion in local-app first-run: target chooser, .tgz packaging/upload walkthrough, leader connect (per dual-target architecture).
+- Onboarding GUI completion (SetupWizard). Shipped for the Cloud shell; the target chooser and leader-connect step it also contains are dormant since ADR-0002 (cribl-app locks the target), kept only as the asset that would onboard a customer-managed leader.
 
 Exit: solution browsed -> samples -> pipeline -> pack -> installed destination end-to-end; Cloudflare pack (DOC-01) reproducible through the app.
 

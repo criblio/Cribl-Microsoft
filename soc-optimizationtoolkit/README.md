@@ -1,9 +1,8 @@
 # SOC Optimization Toolkit
 
-Cribl + Microsoft Sentinel SOC optimization, delivered as two targets from one shared codebase:
+Cribl + Microsoft Sentinel SOC optimization, delivered as a Cribl App Platform app:
 
 - `apps/cribl-app` - Cribl App Platform app (Cribl.Cloud), installed as a .tgz into the leader UI.
-- `apps/local-app` - the same UI served by a local Node host, for customer-managed (on-prem) Cribl deployments. Its first run is the onboarding GUI that guides setup of either target.
 - `packages/core` - pure domain logic and port interfaces (no IO, no React).
 - `packages/ui` - shared React feature screens and components.
 

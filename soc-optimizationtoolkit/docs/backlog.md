@@ -826,6 +826,15 @@ permission check as the final view, Get Started, and into the frame. This shell
 had never been run in a browser at all, and the mode removal touched its gate
 flow.
 
+> RETIRED 2026-08-17 (ADR-0002): the local shell is gone and `npm run local` no
+> longer exists, so neither this walk nor the `unchecked` nav-state observation
+> above can be reproduced as written. The nav-state evidence still stands - the
+> annotated states live in shared @soc/ui code, not in the removed shell - but
+> the CHEAPEST way to produce an Azure-identity-without-Cribl-token state went
+> with it. Reproducing `unchecked` in the cloud shell now costs a throwaway
+> connection profile in KV, the same cost already noted above for
+> `not connected`.
+
 **`labSubscriptionHash` is 16 bits - DECIDED 2026-08-12, no change.** It takes 4
 hex chars of a 32-bit FNV-1a to disambiguate Azure resource names per
 subscription, so the space is 65,536 and a birthday collision arrives around 300
