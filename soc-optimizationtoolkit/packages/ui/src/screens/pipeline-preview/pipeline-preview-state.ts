@@ -41,7 +41,6 @@ import {
   buildPipelinePlan,
   unreachableLogTypes as coreUnreachableLogTypes,
   placeholderLogTypes as corePlaceholderLogTypes,
-  routeFilterSuggestions as coreRouteFilterSuggestions,
   checkCriblYaml,
   generatePipelineConfForPlan,
   generateReductionConfForPlan,
@@ -53,7 +52,6 @@ import type {
   GapReport,
   LogTypeFieldValues,
   PipelineFieldMapping,
-  RouteFilterSuggestion,
   PipelinePlan,
   PlanProvenance,
   TablePlan,
@@ -207,7 +205,7 @@ export interface PipelinePreviewInputs {
    */
   identityOverrides?: Readonly<Record<string, CefIdentityOverride>>;
   /**
-   * Route filters the operator ACCEPTED from routeFilterSuggestions, keyed by
+   * Route filters the operator supplied for placeholdered log types, keyed by
    * logType. Each replaces that log type's route condition, which takes it out
    * of the planner's discrimination ladder entirely (a table whose condition is
    * not match-all is skipped), so the accepted filter reaches route.yml verbatim.
@@ -289,14 +287,6 @@ export interface PipelinePreviewView {
    * is written. One is a defect report, the other is a task.
    */
   placeholderLogTypes: string[];
-  /**
-   * Placeholdered log types whose filter the derivation DID work out, and
-   * withheld only because the corpus was too thin to trust it.
-   *
-   * Shown so the operator can accept in one step what the generator already
-   * derived - they know the vendor the sample does not describe.
-   */
-  routeFilterSuggestions: RouteFilterSuggestion[];
 }
 
 // ---------------------------------------------------------------------------
@@ -546,7 +536,6 @@ export function derivePipelinePreview(
       valid: true,
       unreachableLogTypes: [],
       placeholderLogTypes: [],
-      routeFilterSuggestions: [],
     };
   }
 
@@ -618,6 +607,5 @@ export function derivePipelinePreview(
     valid: totalYamlIssues === 0,
     unreachableLogTypes: coreUnreachableLogTypes(plan),
     placeholderLogTypes: corePlaceholderLogTypes(plan),
-    routeFilterSuggestions: coreRouteFilterSuggestions(plan),
   };
 }

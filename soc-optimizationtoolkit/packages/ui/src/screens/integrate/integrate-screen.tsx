@@ -505,7 +505,10 @@ export function IntegrateScreen({
   const sampleFieldValues = useMemo<Record<string, LogTypeFieldValues>>(() => {
     const map: Record<string, LogTypeFieldValues> = {};
     for (const sample of samples) {
-      map[sample.logType] = fieldValuesFromRecords(sample.parsed.records);
+      map[sample.logType] = fieldValuesFromRecords(
+        sample.logType,
+        sample.parsed.records,
+      );
     }
     return map;
   }, [samples]);
@@ -1057,11 +1060,21 @@ export function IntegrateScreen({
     ports.packs,
     // The DCR listing that resolves real destination values.
     ports.azure,
-    // The whole content plan, as ONE dependency. Listing its fields here
-    // individually is what let the build's own derivation drift from the
-    // preview's (audit finding 2) - the deps and the call must name the same
-    // thing, and now they both name contentPlanInputs.
+    // The whole content plan, as ONE dependency for the DERIVATION. Listing
+    // its fields here individually is what let the build's derivation drift
+    // from the preview's (audit finding 2) - the deps and the call must name
+    // the same thing, and both now name contentPlanInputs.
     contentPlanInputs,
+    // Still listed individually because the callback ALSO reads these
+    // directly, outside the derivation - the approval gate, the per-log-type
+    // report lookup, and the effective mappings for the DCR bodies. Dropping
+    // them when contentPlanInputs arrived would have left a stale closure
+    // building a pack from a superseded gap analysis. Caught by lint, not by
+    // any test, because a stale closure needs a re-render to show itself.
+    mappingsApproved,
+    gapReports,
+    mappingOverrides,
+    solution,
     ports.packInstall,
     ports.logger,
     packBuilding,

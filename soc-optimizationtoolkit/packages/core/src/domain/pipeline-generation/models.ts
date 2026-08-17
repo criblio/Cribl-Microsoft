@@ -165,16 +165,6 @@ export interface TablePlan {
   sourceFormat: string;
   /** Route filter expression (routing.routeCondition or "true"). */
   routeCondition: string;
-  /**
-   * A route filter the derivation worked out but would not apply, because the
-   * corpus is too thin to trust it (see route-value-discriminator).
-   *
-   * Set only alongside a placeholder routeCondition. Offering it is the middle
-   * ground between shipping a guess and telling the operator nothing: they
-   * know the vendor the sample does not describe, so they can accept in one
-   * step what the generator already derived.
-   */
-  routeFilterSuggestion?: string;
   /** Vendor mappings passed through to the emitter (empty for MVP). */
   vendorMappings?: VendorMapping[];
   /** Corrected DeviceVendor / DeviceProduct, carried to the emitter. */
