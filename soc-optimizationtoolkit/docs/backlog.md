@@ -1,6 +1,6 @@
 # Backlog
 
-Updated 2026-08-06 (branch `feature/capability-preflight-mapping`). Each item
+Updated 2026-08-12 (branch `feature/capability-preflight-mapping`). Each item
 states enough context to be picked up cold. Ordered by priority within each
 group.
 
@@ -73,10 +73,13 @@ both are worth remembering:
 **Taxonomy gap: Resource Graph reads.** Event Hub discovery reads through Azure
 Resource Graph, and the settled 11-capability taxonomy has nothing covering it.
 Mapping it onto `workspace.read` or `dcr.read` would MISREPORT what was checked,
-so the route is unconstrained and the screen keeps reporting its own errors. Two
-honest options when someone picks this up: add a `resourcegraph.read` capability
-(and a preflight probe for it), or accept that discovery-only surfaces stay
-unannotated. Do not quietly reuse a neighbouring capability.
+so the route is unconstrained and the screen keeps reporting its own errors.
+
+**SETTLED 2026-08-12 (user decision, recorded in 6h): add `resourcegraph.read`
+plus a preflight probe for it.** The same question came up three times - here,
+in item 4's unmeasured listers, and across item 6 - and it is answered once:
+extend the taxonomy rather than reusing a neighbouring capability or leaving
+surfaces unmeasured. Do the extension as ONE piece of work serving all three.
 
 **Not yet done in step 3:** the audit's AGE and a manual re-check still have no
 home. The nav was the intended surface for it, and annotating individual items
@@ -287,14 +290,15 @@ to decide. Off-scope is unmeasured, and that includes off-scope DENIALS.
 Do NOT hide or gate these surfaces while fixing them - rule 3 still holds, the
 list stays loadable, and reads have no fallback artifact.
 
-**Open question 1: the unmeasured listers.** Subscriptions, resource groups,
-Resource Graph (Event Hub discovery) and Cribl worker groups have NO capability
-in the settled 11-item taxonomy. They currently take
-`unmeasuredInventoryMessage`, which hedges without pointing at a permission
-check that cannot settle it - honest, but inert. The two real options are the
-same pair already recorded for Resource Graph in item 1: add the capability plus
-a probe, or accept these lists stay unmeasured. Needs a decision; do not resolve
-it by reusing a neighbouring capability.
+**Open question 1: the unmeasured listers. SETTLED 2026-08-12 (user decision,
+recorded in 6h): add the capabilities plus their probes.** Subscriptions,
+resource groups, Resource Graph (Event Hub discovery) and Cribl worker groups
+have NO capability in the 11-item taxonomy, so they currently take
+`unmeasuredInventoryMessage` - honest, but inert, hedging without pointing at a
+permission check that could settle it. The taxonomy gets extended rather than
+leaving them unmeasured or reusing a neighbouring capability. Note this is the
+same extension item 1 needs and item 6 needs: ONE piece of work, not three, and
+each new capability needs a real probe or it contributes nothing.
 
 **Open question 2: prop-drilling.** `capabilities`/`capabilityContext` are
 threaded from both shells into each screen that lists (Integrate ->
@@ -303,7 +307,489 @@ that drifts. The alternative is carrying them in `PortsContext` beside `config`,
 which every screen already reads - one seam change against updating every
 `PortsProvider` call site in both shells. Cheap now, less so later.
 
-## 5. Verification gaps
+## 5. Windows Event analysis screen
+
+**Requested 2026-08-12.** A new menu item covering Windows event data
+specifically. Two goals, related only by subject - keep them separable when
+picking this up, because the first is Sentinel-side and the second is Lake-side,
+and either could ship without the other.
+
+### 5a. Catalog the Microsoft proprietary enrichments
+
+Catalog what Microsoft ADDS to a Windows event on its way into `SecurityEvent`
+and `WindowsEvent`, and which of those additions Sentinel content actually
+depends on.
+
+Why it matters: this is the native-onboarding content-preservation problem
+([features/content-preserving-native-reroute.md](features/content-preserving-native-reroute.md)) on
+the busiest table pair in Sentinel. When Microsoft's own agent ships a Windows
+event, the row that lands in `SecurityEvent` carries fields the raw EventLog
+record never had - the agent parses `EventData` into named columns, splits
+account and domain strings out, and stamps its own provenance. Send the same
+event through Cribl into a Kind:Direct DCR and those fields are absent unless the
+pipeline reconstructs them. Rules, workbooks, hunting queries and UEBA reference
+them BY NAME, so a missing enrichment fails exactly the way a wrong
+`DeviceVendor` does in item 3: the mapping looks complete and the content
+silently never fires.
+
+**Derive the catalog; do not write it from memory.** The field list IS the
+deliverable, and a hand-typed one would be both stale and unciteable. Four
+sources are already in the tree:
+
+- **What the table holds** - `usecases/workspace-tables`
+  `fetchWorkspaceTableSchema` (item 2, core DONE) returns a live table's columns
+  as `DestField[]`. ARM is the authority once a workspace is connected.
+- **What a DCR will ACCEPT** - the stream declarations in
+  `deprecated/Azure/CustomDeploymentTemplates/DCR-Templates/SentinelNativeTables/DataCollectionRules(NoDCE)/SecurityEvent.json`
+  and `WindowsEvent.json`. This is the offline fallback when no workspace is
+  connected, and it is the sharper of the two for this question: a column the DCR
+  stream does not declare cannot be populated from Cribl at all, whatever the
+  table holds.
+- **What the raw event carries** - the sample path, through the existing tagged
+  sample acquisition. This is the left-hand side of the diff.
+- **What the content REFERENCES** - `coverage-analysis/extract-kql-fields`
+  `extractKqlFields` already pulls field references out of rule KQL, and
+  `content-requirements` already reasons over them.
+
+The catalog is then (schema columns) minus (what the raw event carries), RANKED
+by how much content references each one. The ranking is the point, and it is what
+makes this a screen rather than a documentation page: an enrichment nothing
+queries needs no reconstruction, while one that forty rules key off is a
+deployment blocker. Show the unreferenced fields as unreferenced rather than
+omitting them - "nothing uses this" is a finding, and dropping them silently
+turns a measured zero into an unmeasured absence, which is item 4 in a new place.
+
+**Worth settling when picking it up:**
+
+- **Does the screen only report, or does it produce?** The end state matching
+  item 3's "still owed" note is an enrichment that reaches the GENERATED
+  PIPELINE - a function that reconstructs `Account` from the raw fields, say.
+  Reporting first is a legitimate slice; just do not let it become the finished
+  state, because a catalog that only affects analysis leaves deployed data still
+  missing the fields.
+- **`SecurityEvent` and `WindowsEvent` are not one problem.** One is the curated
+  security-audit set, the other the general-channel table, and their enrichment
+  sets will differ with them. Produce both catalogs and let them differ rather
+  than assuming one covers the pair.
+
+**Capability gating.** A new route id is available-by-default -
+`packages/ui/src/frame/route-capabilities.ts` fails toward reachable - so this
+one must opt IN to `table.read`, which the audit already measures. Per rule 3 a
+denial ANNOTATES and never hides. Note the unusual shape for a read capability:
+the DCR-template path means the screen still does real work under a denial, which
+is worth saying ON the screen, since item 2 established that reads normally have
+no fallback. If it lists anything, [inventory-standard.md](inventory-standard.md)
+is binding.
+
+### 5b. JSON vs Parquet for the Cribl Lake copy
+
+Analyze which format serves data destined for Cribl Lake and queried through
+Cribl Federated Search, and put the answer where the operator makes the choice.
+
+The choice is already live in the product and made silently. Source wiring
+(GUI-16 in [feature-catalog.md](feature-catalog.md)) optionally creates a Cribl
+Lake dataset and a full-fidelity passthru route to `cribl_lake:{dataset}`, and
+the lab configs in `domain/labs/lab-cribl.ts` already carry `parquetChunkSizeMB`
+and `parquetChunkDownloadTimeout`. Nothing presents the tradeoff or lets it be
+reasoned about.
+
+**Verify against Cribl's own docs and API before encoding any of it.** The
+dimensions are known - search-time column pruning and predicate pushdown,
+compression and storage cost, write-side cost and latency in Stream, and schema
+stability, which is the sharp one here because the Windows tables are wide and
+sparse while Parquet is columnar and typed. What is NOT known well enough to
+encode is how Federated Search actually EXECUTES against each format. Pin that
+down the way item 10 says to pin down `InputRest`; do not ship a recommendation
+derived from general Parquet knowledge, because the entire value of this is that
+it is specific to Cribl's engine. The `cribl-api` skill and the vendored spec at
+`packages/core/assets/cribl-openapi.json` are the starting points for what the
+dataset and destination expose as format options.
+
+**Why this sits on a WINDOWS screen** rather than being a general Lake setting:
+Windows events are the volume case that makes the question worth asking, and the
+schema-stability dimension is answerable only against a specific, known-wide
+event shape - a general answer would have to hedge on the variable that decides
+it. If the analysis turns out to be format-general, promoting it later is cheap;
+starting general risks advice too vague to act on.
+
+## 6. Azure Native Source Onboarding menu item
+
+**Requested 2026-08-12; renamed and restructured the same day (user direction).**
+Was "Azure Policy". The item holds ONE SECTION PER COLLECTION MECHANISM, and each
+section carries per-source CHECKBOXES so the operator picks exactly what to
+onboard. Sections 6a-6f below are those categories, researched from the legacy
+implementation rather than assembled from memory.
+
+**Name collision - RESOLVED 2026-08-12 (user decision), already applied.** The
+plan doc that held this name since 2026-07-02 was renamed to
+[features/content-preserving-native-reroute.md](features/content-preserving-native-reroute.md),
+which describes its actual subject; the menu item takes the name. References in
+`roadmap.md` and `porting-plan.md` were updated, and the doc carries a rename
+banner pointing here.
+
+The two remain halves of one flow and must keep cross-referencing: that plan is
+the DESTINATION half - keeping Sentinel content working once a native source is
+rerouted (`_CL` divergence, UEBA, function aliases) - while this menu item is the
+SOURCE half, turning on the Azure-side export so data reaches Cribl at all. They
+meet at the Event Hub, and the coupling is concrete rather than thematic:
+**ticking the Entra ID box in 6b is exactly what triggers the
+content-preservation problem that plan exists to solve.** A build of 6b that
+ignores it will silently break Entra content.
+
+**The port has never happened.** Confirmed - this surface exists in
+`soc-optimizationtoolkit/` only as catalog entries, with no screen, route or
+usecase. The legacy source is `deprecated/Azure/Azure-LogCollection/` (~13,200
+lines, production, v5.1.0), catalogued as LOG-01 through LOG-15 plus V1-20 in
+[feature-catalog.md](feature-catalog.md). Read those entries before designing -
+they are a detailed census of a working implementation, and they already record
+the traps.
+
+**The checkbox model exists as a file - port it, do not invent one.**
+`deprecated/Azure/Azure-LogCollection/core/resource-coverage.json` is the legacy
+single toggle file and its shape is nearly what was asked for: sources grouped by
+`method`, each with an `enabled` flag, plus tiers and profiles wherever a source
+has sub-selections. Its `method` values ARE the section keys -
+`built-in-policy`, `custom-initiative`, `script`, `guided-portal`, `none`. LOG-02
+already specifies it porting to the app KV store. Keep two things verbatim: the
+tier/profile sub-selections, and the `notSupported` block (see 6e).
+
+### 6a. Azure Policy - diagnostic settings to Event Hub
+
+The bulk of the platform. Policy assigns diagnostic settings across a management
+group, resources emit to Event Hub, Cribl reads the hub.
+
+- **Built-in initiative** (LOG-04). Microsoft's Audit initiative
+  (`1020d527-...`, 69 resource types) or AllLogs (`85175a36-...`, 140 types).
+  One checkbox plus a choice between the two rather than two checkboxes - they
+  overlap, and ticking both is not a coherent request.
+- **Community initiative** (LOG-05). 44 resource types fetched from
+  Azure/Community-Policy and bundled into one custom initiative. Eight tiers,
+  which is the natural checkbox grain: **Storage** (Blob/File/Queue/Table
+  services, Storage Accounts), **Security** (Firewall, NSG, Application Gateway,
+  ExpressRoute, Virtual Network), **Data** (CosmosDB, Data Factory, MySQL,
+  PostgreSQL, MariaDB, Synapse Analytics/Spark/SQL, Data Explorer, Databricks,
+  Analysis Services, Time Series Insights), **Compute** (App Service, Function
+  App, Batch, Machine Learning, Application Insights, Autoscale, DevCenter),
+  **Integration** (Logic Apps, Logic Apps ISE, Event Grid topic and system topic,
+  Relay), **Networking** (Load Balancer, Traffic Manager, CDN Endpoint), **AVD**
+  (Host Pool, Application Group, Workspace, Scaling Plan), **Other** (Recovery
+  Services Vault, Azure API for FHIR, Power BI Embedded). Per-service checkboxes
+  are available too - `CommunityPolicyMetadata` maps each service to its resource
+  type - so the right shape is tier checkboxes with a per-service expander.
+- **Supplemental** (LOG-06). The Activity Log, which is subscription-level and
+  CANNOT live in a resource-type initiative, plus AKS and PostgreSQLFlexible,
+  which the bundled initiative deliberately EXCLUDES (incompatible
+  `resourceLocation` Array type). Those two exclusions are the classic silent
+  gap - an operator ticking "Security" reasonably assumes AKS came with it - so
+  they need to be visible checkboxes, not a footnote.
+
+Mechanics shared by all three, all already recorded in the census: every
+assignment needs a user-assigned managed identity plus Monitoring Contributor at
+MG scope and Event Hubs Data Owner on the namespace; **DeployIfNotExists fires
+automatically only for NEW resources**, which makes bulk remediation (LOG-14)
+mandatory rather than a nicety; and compliance data lags 15-30 minutes, so a
+freshly deployed selection reads as non-compliant and the UI has to say why
+rather than look broken.
+
+**Cleanup (LOG-15) - DECIDED 2026-08-12 (user): PREVIEW-ONLY FIRST.** The legacy
+path removes matching diagnostic settings across every subscription under a
+management group, behind a typed `DELETE`. The port ships the useful half and
+none of the blast radius: enumerate and display exactly what WOULD be removed,
+grouped by resource type and target namespace, and stop there. **No delete
+capability in the GUI in this pass.** Extend later only if the preview proves the
+need - and if it is ever extended, the typed confirmation comes with it rather
+than being redesigned into an ordinary button.
+
+Note this makes the preview a genuinely useful standalone tool: policy
+assignments recreate settings after removal, so knowing what exists and what
+would be affected is most of the value an operator needs before dropping to the
+legacy script to act.
+
+### 6b. Direct ARM configuration - script, no policy
+
+Sources configured by a direct ARM PUT rather than through policy. Both carry
+`needs-proxy` (the easiest verdicts in the census) and both already exist as raw
+REST calls, so they port close to one-to-one.
+
+- **Entra ID tenant diagnostics** (LOG-07). One tenant-level setting on
+  `microsoft.aadiam`. Checkbox grain is the CATEGORY, with the legacy profiles as
+  presets: **Standard** (9 - AuditLogs, SignInLogs, ServicePrincipal and
+  ManagedIdentity sign-ins, ProvisioningLogs, RiskyUsers, UserRiskEvents,
+  RiskyServicePrincipals, ServicePrincipalRiskEvents) and **HighVolume** (15 -
+  adds NonInteractiveUserSignInLogs, ADFSSignInLogs, NetworkAccessTrafficLogs,
+  EnrichedOffice365AuditLogs, MicrosoftGraphActivityLogs). **Non-interactive
+  sign-ins are 5-10x the volume of the rest** and that warning belongs at the
+  checkbox, not in a footnote. Requires Entra Security or Global Admin - surface
+  it as a precondition check. Drift to resolve while porting: LOG-07 documents a
+  third profile, SecurityOnly (6 categories), that `resource-coverage.json`
+  `_profileOptions` omits.
+- **Defender for Cloud continuous export** (LOG-08). Per subscription, a
+  `Microsoft.Security/automations` resource streaming Security Alerts, with
+  Recommendations, Secure Score and Regulatory Compliance as three more
+  checkboxes. It detects which of 12 paid plans are enabled and **never enables
+  one** - keep that property and show the plan report, because the alternative is
+  a tool that silently starts billing.
+
+### 6c. Defender XDR export - guided portal
+
+Checkbox grain is the TABLE, grouped by product, with the export tiers as
+presets. Both catalogs are pure data in `resource-coverage.json` and port as-is:
+
+- **Products**: Defender for Endpoint (DeviceEvents, DeviceInfo,
+  DeviceLogonEvents, DeviceNetworkEvents, DeviceProcessEvents, DeviceFileEvents,
+  DeviceRegistryEvents, DeviceImageLoadEvents, DeviceFileCertificateInfo,
+  DeviceNetworkInfo), Defender for Identity (IdentityLogonEvents,
+  IdentityQueryEvents, IdentityDirectoryEvents), Defender for Office 365
+  (EmailEvents, EmailAttachmentInfo, EmailUrlInfo, EmailPostDeliveryEvents),
+  Defender for Cloud Apps (CloudAppEvents), and XDR unified alerts (AlertInfo,
+  AlertEvidence, UrlClickEvents).
+- **Tier presets**: T1 essential (AlertInfo, AlertEvidence, DeviceProcessEvents,
+  DeviceNetworkEvents, DeviceLogonEvents, IdentityLogonEvents, EmailEvents), T2
+  recommended, T3 situational.
+- **Volume warnings ride specific checkboxes**, not the tier: DeviceImageLoadEvents
+  is ~100+ GB/day per 1K endpoints, IdentityQueryEvents is high-volume noise from
+  normal AD operations. These are the two the legacy tool calls out by name.
+- **Not available in the Streaming API at all**: BehaviorEntities, BehaviorInfo,
+  and the TVM (vulnerability/software inventory) tables. Show them as
+  unavailable with the reason rather than omitting them - see 6e.
+
+**Path A (RECOMMENDED) for alert data.** Defender XDR streams to an Event Hub and
+Cribl reads it with an Event Hub source - PUSH, not poll, which is the whole
+reason it ranks ahead of 6d for alerts: no 5-minute schedule, no latency floor to
+explain, and no repeat-delivery dedupe rule for an operator to get wrong.
+
+This is LOG-09, from
+`deprecated/Azure/Azure-LogCollection/core/Deploy-DefenderXDRStreaming.ps1` - the
+same legacy subsystem as the policy scripts, which is what makes this section a
+peer of 6a rather than a bolt-on. Read LOG-09 before designing. What carries
+over:
+
+- **Validate licences first** via Graph `subscribedSkus` against embedded SKU
+  lists, per product (MDE/MDI/MDO/MDCA). Then PROBE actual usage - onboarded MDE
+  machines, MDI sensors, recent incidents via `security/incidents` - because a
+  licence held is not a product in use, and streaming a product nobody runs
+  produces an empty hub and a support ticket. This probe is what should DISABLE
+  or annotate the product's checkboxes, which is the capability model's
+  annotate-never-hide rule applied to licensing.
+- **Create a dedicated XDR Event Hub namespace** (`cribl-xdr-{subId8}` in the
+  multi-region shape).
+- **Create the Cribl Event Hub source directly** through the Cribl API rather
+  than exporting `xdr-streaming-config.json` for someone to import by hand. This
+  is LOG-09's own portability note and it is the right call.
+
+**The irreducible constraint: Microsoft exposes NO configuration API for XDR
+streaming.** The final step happens in the Defender portal, by hand. Any port
+keeps it. So "recommended" does NOT mean "more automatable" - the app can
+validate, provision the namespace, and create the Cribl source, but it must then
+hand over a guided checklist with the exact Resource ID and copy buttons. This
+also means the CHECKBOXES IN THIS SECTION ARE A WORKLIST, not a deployment: what
+they produce is the operator's portal to-do list. Design that seam deliberately
+instead of discovering it late; a wizard implying it finished the job when a
+portal visit is still owed is the same category of confident wrong answer as
+item 4.
+
+Graph access needs a `graph.microsoft.com` proxy domain with
+`Organization.Read.All` and `SecurityEvents.Read.All`.
+
+### 6d. Pull collectors - no push path exists
+
+Sources with no Azure-side export to turn on at all: Cribl has to go and fetch
+them. Nothing in this section deploys anything into Azure, which makes it the odd
+section out - the checkboxes here create CRIBL config, not Azure config.
+
+- **Sentinel incidents** - path B below.
+- **Resource Graph change tracking** - `resource-coverage.json` records it under
+  `notSupported` as query-only with no streaming path, alternative "scheduled
+  Azure Resource Graph queries". If it is offered at all it is a second scheduled
+  collector, and it lands on the same unmeasured-Resource-Graph capability gap
+  already recorded in items 1 and 4.
+
+**Path B (SECONDARY) for incident data - the incidents API via a Cribl REST
+Collector**
+
+Pull Sentinel incidents with a Cribl REST/API Endpoint Collector. The request as
+given, and it is a specification rather than a sketch - each point below is a
+default that is wrong:
+
+```
+GET https://management.azure.com/subscriptions/{sub}/resourceGroups/{rg}/providers/
+    Microsoft.OperationalInsights/workspaces/{ws}/providers/Microsoft.SecurityInsights/
+    incidents?api-version=2025-09-01
+    &$filter=properties/lastModifiedTimeUtc ge {earliest}
+    &$orderby=properties/lastModifiedTimeUtc asc&$top=1000
+```
+
+- **Auth**: app registration + client credentials against
+  `https://management.azure.com/.default`, role **Microsoft Sentinel Reader**
+  scoped to the workspace. The collector's OAuth login handles token refresh -
+  do not build token handling beside it.
+- **Paginate on `nextLink`** (`$skipToken`).
+- **Filter on `lastModifiedTimeUtc`, NOT `createdTimeUtc`.** This is the one that
+  silently produces a plausible wrong answer: filtering on creation misses every
+  UPDATE to an already-open incident, so the collector reports steady state while
+  all triage activity stays invisible.
+- **Corollary - repeat deliveries are expected and correct.** The same incident
+  arrives again on every modification, so dedupe DOWNSTREAM on `name` (the
+  incident GUID) + `lastModifiedTimeUtc`. A pipeline that treats repeats as
+  duplicates-to-drop would discard exactly the updates that filtering on
+  lastModified exists to catch.
+- **Schedule every 5 minutes.** That is the latency floor, and it should be
+  stated as such wherever the schedule is presented rather than left as a number
+  someone tunes without knowing what it costs.
+
+**What already exists to build on.** `domain/labs/lab-cribl.ts`
+`buildLabFlowLogCollector` is a working precedent for GENERATING a scheduled
+collector: a `type: "collection"` job carrying `schedule.cronSchedule`,
+`run.timeRangeType: "relative"` with `earliest`/`latest`, and a `collector.conf`
+with `authType: "clientSecret"`. The incident collector is that shape with a REST
+conf instead of a blob one, and the relative window is how `{earliest}` gets
+filled. Heed item 10's warning that `InputRest` has no schema under that name in
+the vendored spec - collectors are modelled as collection jobs, which is what
+this precedent already builds, so pin the conf against
+`packages/core/assets/cribl-openapi.json` instead of hand-writing it.
+
+#### 6c and 6d are probably COMPLEMENTARY, not alternatives - verify this first
+
+This is the question that decides how the two are presented, and it should be
+settled before either is built. Our own catalog describes XDR streaming as
+carrying **alerts** (LOG-09: "MDE/MDI/MDO/MDCA/XDR alerts"), while path B returns
+the Sentinel **incident** object - severity, classification, owner, incident
+number, the triage state a SOC actually works. Those are different things at
+different grains, and if the streaming export carries no incident-level object
+then path A cannot replace path B for incident data no matter how it is ranked.
+
+Verify against the APIs rather than reasoning it out: does the XDR streaming
+export carry an incident-grain table, or only alert-grain ones? If only alerts,
+then the honest presentation is "alerts via A, incidents via B", both offered,
+and the recommendation applies to the ALERT half only. Getting this wrong in
+either direction is costly - presenting A as a replacement loses incident triage
+state silently, presenting them as unrelated makes an operator build two
+overlapping feeds without being told they overlap.
+
+Also worth checking while in there: the incidents API returns an incident that
+REFERENCES its alerts rather than embedding their detail, with alerts and
+entities as separate sub-resources. A SOC consuming incidents downstream usually
+wants the entities, and discovering that after path B ships means a second
+collector and a join. Microsoft Graph `security/incidents` - which LOG-09 already
+calls for its usage probe - is a third shape worth pricing while answering this,
+though it is not one of the two paths requested.
+
+### 6e. Blob-only sources - cannot reach Event Hub
+
+**vNet Flow Logs** and **NSG Flow Logs** write to a Storage Account and have no
+Event Hub path at all. The mechanism is a Cribl Azure Blob source, and the repo
+already has the working shape: `vnet-flow-collection` in the architecture
+patterns, the legacy `Azure/dev/vNetFlowLogDiscovery`, and `blob-collector` /
+`buildLabBlobCollectorSource` in `domain/labs/lab-cribl.ts`.
+
+**The `notSupported` block is a FEATURE of the legacy config, not an omission -
+port it as such.** `resource-coverage.json` lists four things that cannot stream
+to Event Hub and names the alternative for each: vNet Flow Logs and NSG Flow Logs
+(blob source), Resource Graph change tracking (scheduled query), and VM guest OS
+logs (AMA + DCR, see 6f). An operator who ticks through every section and cannot
+find flow logs concludes the tool missed them; a greyed row reading "Storage
+Account only - use the Blob source, here" answers the question instead. This is
+the same honesty rule as item 4: the absence of a source must be stated with its
+reason, never left as silence.
+
+### 6f. Agent-based - AMA plus DCR
+
+**VM guest OS logs** (SecurityEvent, WindowsEvent, Syslog) reach Sentinel through
+the Azure Monitor Agent and a Data Collection Rule, not through diagnostic
+settings or policy. `resource-coverage.json` files this under `notSupported` with
+the alternative "use the DCR-Automation solution" - and in this codebase that is
+not a foreign tool, it is the app's OWN `dcr-automation` and `integrate` routes,
+plus the `windows-ama-direct` and `direct-dcr` architecture patterns.
+
+So this section should LINK rather than duplicate, and it is the natural place to
+surface item 5: the Windows Event analysis screen catalogs exactly what the agent
+adds on this path, which is the question an operator ticking this box is about to
+hit.
+
+### 6g. Dataflow diagrams, one per category
+
+**Requested 2026-08-12.** The Dataflow page gains a diagram per category above,
+so each section can show what its mechanism actually looks like end to end.
+
+**Do not build a new diagram implementation.** The house standard is this repo's
+own `packages/ui/src/screens/architecture/`, and both the renderer and the
+layout already exist. The work is DATA: new entries in
+`domain/architecture-patterns/architecture-patterns.ts` (27 patterns today),
+following the existing node/tier vocabulary, plus presets in
+`ARCHITECTURE_PRESETS` where a category deserves a one-click story. The pure
+snapshot-to-graph rule holds - no fetch, no React, no `Date`/`Math.random` in the
+builder, so routing stays unit-testable.
+
+Partial coverage already exists and should be extended rather than duplicated:
+`event-hub-fanin`, `entra-reroute` (Entra, content-preserving), the
+`azure-platform-fanin` preset ("platform diagnostics and Entra ID exports stream
+into Event Hubs"), `vnet-flow-collection`, `blob-collector`, `windows-ama-direct`
+and `direct-dcr`. What has no diagram today: the POLICY mechanism itself (6a -
+assignment at MG scope, DeployIfNotExists, the managed identity, remediation for
+pre-existing resources), Defender for Cloud continuous export (6b), Defender XDR
+streaming with its manual portal step (6c), and the pull collectors (6d).
+
+Two things worth drawing honestly, because they are where a generic
+"everything flows to the hub" picture would mislead:
+
+- **The manual portal step in 6c.** The diagram should show it as a step, not
+  imply an automated edge that does not exist.
+- **6d flows the other way.** Every other category is Azure pushing to a hub;
+  the pull collectors are Cribl reaching into Azure on a schedule. A diagram set
+  that draws them all left-to-right identically teaches the wrong model.
+
+### 6h. Shared concerns
+
+**Unchecking - DECIDED 2026-08-12 (user): ADDITIVE-ONLY, with a separate Remove
+action.** Checkboxes only ever DEPLOY. Unticking a box removes it from the
+desired selection and does nothing to Azure; teardown lives in an explicit,
+separately-confirmed Remove action. **No checkbox in this item may ever destroy
+anything**, which is the property to pin with a test.
+
+This matches how the legacy tool already split the work - deployment flags and
+`-RemoveAssignments` / `-RemoveSetting` / `-RemoveExport` / `-RemoveNamespaces` /
+`-RemoveInitiative` were always distinct invocations, never a toggle. Two
+consequences to design for: the UI must distinguish "not selected" from "not
+deployed" (they are different states now, and conflating them is item 4's
+confident-wrong-answer shape again), and there is no undo path via the
+checkboxes, so the Remove action needs to be discoverable enough that people do
+not go looking for one.
+
+**Capability gating - DECIDED 2026-08-12 (user): ADD THE CAPABILITIES AND THEIR
+PROBES.** This settles the open question carried in items 1 and 4 as well - it
+was the same question three times, and the answer is the same one. Extend the
+taxonomy past 11 rather than reusing neighbouring capabilities or leaving
+surfaces unmeasured.
+
+What this item needs added: policy assignment and remediation
+(`Microsoft.Authorization`, `Microsoft.PolicyInsights`), managed-identity
+creation, Sentinel incident read (Microsoft Sentinel Reader is modelled nowhere -
+`domain/azure-permissions` knows only the CONTRIBUTOR actions `alertRules/write`
+and `onboardingStates/write` used by content install), Graph scopes for licence
+validation (`Organization.Read.All`, `SecurityEvents.Read.All`), and Resource
+Graph - which is the capability items 1 and 4 already wanted for Event Hub
+discovery and the unmeasured listers. Already measured and reusable: Event Hub
+namespace creation is `arm.deploy`; every Cribl-side write here, Event Hub source
+or REST collector, is `source.manage`.
+
+Each new capability needs a preflight PROBE, not just a name - an unprobed
+capability contributes nothing per the step-2 mapping rule (only measurements are
+recorded). The existing rules carry over unchanged: writes come only from
+effective actions, reads prefer probe results, and rule 3 holds throughout -
+annotate, never hide, never disable. Do this work ONCE, as a taxonomy extension
+serving all three items, rather than three times per surface.
+
+**Prerequisite ordering is real and mostly implicit.** Nearly every section needs
+an Event Hub namespace (LOG-03) to exist first, and the policy sections need
+Policy Contributor plus User Access Administrator at MG scope. LOG-02's
+"Deploy All" ran the components in a fixed order for this reason. Checkboxes
+scattered across six sections lose that ordering unless it is made explicit.
+
+**`eventhub-discovery` already exists** as a screen and knows how to find Event
+Hubs; several sections here create one and wire a source to it. Check for overlap
+before building a second Event Hub surface beside it.
+
+## 7. Verification gaps
 
 **First-run wizard as a genuine first run. VERIFIED 2026-08-06, twice.** Walked
 end to end from clean state in the cloud shell (dev server), and again in the
@@ -340,7 +826,18 @@ permission check as the final view, Get Started, and into the frame. This shell
 had never been run in a browser at all, and the mode removal touched its gate
 flow.
 
-## 6. Release hygiene
+**`labSubscriptionHash` is 16 bits - DECIDED 2026-08-12, no change.** It takes 4
+hex chars of a 32-bit FNV-1a to disambiguate Azure resource names per
+subscription, so the space is 65,536 and a birthday collision arrives around 300
+subscriptions. Reviewed while fixing the pack sample-id collision, which came
+from the same family of defect, and deliberately left alone for two reasons: it
+slices the HIGH nibbles, which FNV avalanches well (the sample-id bug came from
+consuming the LOW bits mod 62 across six correlated hashes), and a collision
+surfaces as an Azure name conflict at deploy - loud, not silent. Revisit only if
+lab provisioning ever needs to be idempotent across many subscriptions, where a
+name clash would stop being a visible failure and start being a silent reuse.
+
+## 8. Release hygiene
 
 **Release drift will recur.** Nothing ties `release/` to source changes;
 `npm run package` is manual. The committed artifact silently fell five days and
@@ -376,7 +873,7 @@ Two things learned while packaging, worth knowing next time:
 the installed app, not `release/`, so this work stays invisible there until
 someone uploads the new tgz through the Apps page.
 
-## 7. Copy and UX
+## 9. Copy and UX
 
 **"reset when the solution changes" understates deletion.** The Sample Data
 helper text says the sample, mapping and coverage sections "reset" when the
@@ -389,7 +886,7 @@ the behavior.
 scrolling page inside the app iframe. `overscroll-behavior: contain` stops the
 wheel chaining at the list's end, but the three-level nesting remains.
 
-## 8. Diagram fidelity
+## 10. Diagram fidelity
 
 **Inline breaker rulesets are not named.** The spec's
 `EventBreakerExistingOrNewExisting` carries `existingRule` - the ruleset name -
@@ -407,7 +904,7 @@ It is the 19 `Input*` schemas carrying a breaker property, out of 68, extracted
 from `packages/core/assets/cribl-openapi.json`. Derived, not hand-written - do
 not edit it by hand.
 
-## 9. Explicitly not doing
+## 11. Explicitly not doing
 
 **Live capture.** `POST /system/capture` supports `level` 0-3 (before
 pre-processing pipeline / before Routes / before post-processing pipeline /

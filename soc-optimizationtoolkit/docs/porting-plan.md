@@ -300,7 +300,7 @@ Phase 3 exit check (roadmap): solution browsed -> samples -> pipeline -> pack ->
 > known analyzer risk - parse defensively, count what could not be parsed), reuse extractKqlFields
 > for table/field references, and render the same three-way coverage summary per workbook (covered /
 > missing-from-reduced-schema / unknown) beside the rule panel. This doubles as the FIRST SLICE of
-> the native-onboarding flagship's content-reference analyzer (azure-native-onboarding.md section 3)
+> the native-onboarding flagship's content-reference analyzer (content-preserving-native-reroute.md section 3)
 > - build it as a shared analyzer over {type, id, queries[]} content items so alertRules and
 > workbooks are two sources into one engine, hunting queries/parsers/playbooks join later.
 
