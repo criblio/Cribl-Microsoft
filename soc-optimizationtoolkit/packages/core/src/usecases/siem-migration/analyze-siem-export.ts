@@ -36,6 +36,7 @@ import { parseAnalyticRuleYaml } from "../../domain/coverage-analysis/index";
 import {
   ANALYTIC_RULE_DIR_VARIANTS,
   isRuleYamlFileName,
+  RULE_FILE_CAP,
 } from "../../domain/sentinel-content/index";
 import type { SentinelContent } from "../../ports/sentinel-content";
 import type { Logger } from "../../ports/logger";
@@ -58,22 +59,6 @@ export interface AnalyzeSiemExportInput {
   platform: SiemPlatform;
   fileName: string;
 }
-
-/**
- * Rule YAMLs analysed per solution here.
- *
- * This used to carry the comment "matches rule-coverage's cap". It does not,
- * and never did (audit 2026-08-17): rule-coverage reads up to its
- * RULE_DECODE_CAP of 150 rule files, and the 40 below happens to match its
- * UNRELATED parser cap. So a solution with more than 40 rules is analysed in
- * full by the coverage screen and truncated here, and the two report different
- * coverage for the same solution with nothing saying why.
- *
- * Left at 40 rather than quietly raised to 150: which bound is right is a
- * product question about how much a migration analysis should read, not a
- * defect to paper over by picking the larger number. Recorded in the backlog.
- */
-const RULE_FILE_CAP = 40;
 
 function errText(err: unknown): string {
   return err instanceof Error ? err.message : String(err);

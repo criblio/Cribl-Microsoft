@@ -4,10 +4,13 @@
  */
 import { describe, expect, it } from "vitest";
 import {
+  ANALYTIC_RULE_DIR_VARIANTS,
   BLOCKED_EXTENSIONS,
   INCLUDED_EXTENSIONS,
+  RULE_FILE_CAP,
   extname,
   isContentPathIncluded,
+  isRuleYamlFileName,
 } from "./file-selection";
 
 describe("extname", () => {
@@ -75,5 +78,42 @@ describe("isContentPathIncluded", () => {
     expect(BLOCKED_EXTENSIONS.has(".zip")).toBe(true);
     // .json is content, never blocked.
     expect(BLOCKED_EXTENSIONS.has(".json")).toBe(false);
+  });
+});
+
+/**
+ * The analytic-rule location rules, shared by rule-coverage and SIEM migration.
+ *
+ * These were duplicated until the 2026-08-17 audit - each consumer had its own
+ * copy of the dir variants and the predicate, and its own rule cap (150 vs 40).
+ * Only one copy was pinned, so a change to the other was invisible: adding a
+ * fourth dir variant here would have kept that pin green while the other
+ * consumer probed three, and the cap split meant a solution over 40 rules was
+ * analysed in full by one screen and truncated by the other.
+ *
+ * Pinned in CORE now, which is what makes it one decision instead of two.
+ */
+describe("analytic-rule location - one definition for both consumers", () => {
+  it("probes the three dir-name variants in the legacy order", () => {
+    expect(ANALYTIC_RULE_DIR_VARIANTS).toEqual([
+      "Analytic Rules",
+      "Analytics Rules",
+      "AnalyticRules",
+    ]);
+  });
+
+  it("accepts both YAML extensions, case-insensitively, and nothing else", () => {
+    expect(isRuleYamlFileName("Rule.yaml")).toBe(true);
+    expect(isRuleYamlFileName("rule.YML")).toBe(true);
+    expect(isRuleYamlFileName("rule.json")).toBe(false);
+    expect(isRuleYamlFileName("yaml")).toBe(false);
+  });
+
+  it("caps rule reads at 150 - the value BOTH consumers now use", () => {
+    // The number itself is the decision (2026-08-17): the larger of the two
+    // that were in force, so the migration analysis stops silently ignoring
+    // three quarters of a large solution's rules. Changing it is a product
+    // decision about read budget, so it should break this pin and be re-pinned.
+    expect(RULE_FILE_CAP).toBe(150);
   });
 });

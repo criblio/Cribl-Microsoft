@@ -69,6 +69,7 @@ export {
   isContentPathIncluded,
   ANALYTIC_RULE_DIR_VARIANTS,
   isRuleYamlFileName,
+  RULE_FILE_CAP,
 } from "./file-selection";
 
 // Solution deprecation heuristics

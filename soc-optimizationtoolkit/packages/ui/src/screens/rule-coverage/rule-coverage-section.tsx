@@ -64,6 +64,10 @@ import type {
   SchemaCatalog,
   SentinelContent,
 } from "@soc/core";
+// The per-solution rule-file bound, shared with SIEM migration. Local until
+// 2026-08-17, when it read 150 here and 40 there and the two screens reported
+// different coverage for the same solution with nothing saying why.
+import { RULE_FILE_CAP } from "@soc/core";
 import { usePorts } from "../../ports-context";
 import { InfoTip } from "../../components/info-tip";
 import {
@@ -152,9 +156,6 @@ export interface RuleCoverageSectionProps {
  * port, probing the three dir-name variants and taking the first that yields
  * files (the legacy "first existing dir" rule over the lazy port).
  */
-/** Bound on rule files read per analysis (mirrors the other loader caps). */
-const RULE_DECODE_CAP = 150;
-
 /**
  * The file list of the FIRST dir-name variant that exists and is non-empty -
  * the shared probe both the rule and parser loaders use.
@@ -186,7 +187,7 @@ async function fetchRuleContentItems(
     ANALYTIC_RULE_DIR_VARIANTS,
   );
   const items: ContentItem[] = [];
-  for (const file of files.slice(0, RULE_DECODE_CAP)) {
+  for (const file of files.slice(0, RULE_FILE_CAP)) {
     if (!isRuleYamlFileName(file.name)) {
       continue;
     }
