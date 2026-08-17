@@ -4697,6 +4697,52 @@ details[open] > summary::before {
   border-color: var(--accent, var(--text));
 }
 
+/* Route-filter suggestions (2026-08-17). The block shipped in 1.11.5 naming
+   these three classes, none of which existed - it has been rendering as bare
+   divs since. Modelled on .identity-suggestions above, which solves the same
+   problem one section up: a derived value the app shows and the operator
+   applies. Same chip vocabulary, one row per log type so a filter expression
+   has room to be read before it is accepted. */
+.pipeline-preview-suggestions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 10px 0;
+}
+.pipeline-preview-suggestion-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.pipeline-preview-suggestion-filter {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-dim);
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 2px 8px;
+  /* A long expression wraps rather than pushing Accept off the row. */
+  overflow-wrap: anywhere;
+}
+.pipeline-preview-suggestion-accept {
+  font-family: inherit;
+  font-size: 12px;
+  padding: 3px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-raised);
+  color: var(--text);
+  cursor: pointer;
+  /* Pinned to the row's end so Accept sits in one column down the list,
+     rather than wherever the filter above it happened to stop. */
+  margin-left: auto;
+}
+.pipeline-preview-suggestion-accept:hover {
+  border-color: var(--accent, var(--text));
+}
+
 /* Collapsible numbered sections (2026-07-12): Expand sits at the right edge
    of a collapsed section's header; Collapse sits at the bottom of the
    expanded body (user direction 2026-07-13 - a section is finished at its

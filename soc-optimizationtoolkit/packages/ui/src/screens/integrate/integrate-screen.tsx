@@ -651,6 +651,25 @@ export function IntegrateScreen({
   const [identityOverrides, setIdentityOverrides] = useState<
     Readonly<Record<string, CefIdentityOverride>>
   >({});
+  // Route filters the operator accepted from the preview's suggestions, per
+  // logType. Held HERE rather than in the preview section because the pack
+  // build reads its plan from this level - a filter accepted in a component
+  // that owns it alone would be shown, then dropped at build time, which is
+  // exactly the trap identityOverrides above is documented against.
+  const [routeFilterOverrides, setRouteFilterOverrides] = useState<
+    Readonly<Record<string, string>>
+  >({});
+  const acceptRouteFilter = useCallback((logType: string, filter: string) => {
+    setRouteFilterOverrides((prev) => ({ ...prev, [logType]: filter }));
+  }, []);
+  const undoRouteFilter = useCallback((logType: string) => {
+    setRouteFilterOverrides((prev) => {
+      if (!(logType in prev)) return prev;
+      const next = { ...prev };
+      delete next[logType];
+      return next;
+    });
+  }, []);
   // What the solution's OWN analytic rules compare these fields against, per
   // logType. Derived from the rule queries the coverage section already fetched
   // - never typed in, so the app can only ever suggest a value the content
@@ -789,6 +808,7 @@ export function IntegrateScreen({
         sampleFormats,
         sampleFieldValues,
         identityOverrides,
+        routeFilterOverrides,
         enrichments,
         approved: mappingsApproved,
         version: packVersion,
@@ -1005,6 +1025,7 @@ export function IntegrateScreen({
     // The DCR listing that resolves real destination values.
     ports.azure,
     identityOverrides,
+    routeFilterOverrides,
     ports.packInstall,
     ports.logger,
     packBuilding,
@@ -1310,6 +1331,9 @@ export function IntegrateScreen({
           sampleFieldValues={sampleFieldValues}
           enrichments={enrichments}
           identityOverrides={identityOverrides}
+          routeFilterOverrides={routeFilterOverrides}
+          onAcceptRouteFilter={acceptRouteFilter}
+          onUndoRouteFilter={undoRouteFilter}
           approved={mappingsApproved}
         />
       </details>
