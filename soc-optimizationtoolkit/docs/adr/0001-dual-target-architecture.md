@@ -1,7 +1,12 @@
 # ADR 0001: Dual-target architecture (Cribl.Cloud app + local Node-host app)
 
 Date: 2026-07-01
-Status: Accepted
+Status: Accepted; SUPERSEDED IN PART by ADR 0002 (2026-08-17), which drops the
+local target and ships apps/cribl-app only. The workspace layout, the port
+seam, and the lint-enforced boundaries below all still hold - they are what
+made removing the second target a 31-file deletion rather than a refactor.
+Everything below is the reasoning as it stood on 2026-07-01; read ADR 0002 for
+what changed and what it cost.
 
 ## Context
 

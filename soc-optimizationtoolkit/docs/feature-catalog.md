@@ -236,6 +236,15 @@ The preflight should test these with real read/no-op calls rather than trusting 
 
 ## Proposed architecture: dual-target (for review)
 
+> SUPERSEDED IN PART 2026-08-17 by ADR-0002: the local target was built, shipped,
+> and then dropped - apps/cribl-app is the only shell. This section is kept as
+> written because it records WHY two targets were planned and what the tradeoffs
+> were; on-prem Cribl customers are consequently NOT served by this toolkit,
+> which is the real cost and should not be rediscovered by re-reading this
+> section as current intent. The air-gap answer reverts to the Cloud-target
+> story (open question 5 below): generate and download artifacts on the
+> connected side and carry them across.
+
 Requirement (2026-07-01): one shared codebase, two deployment targets, so on-prem Cribl customers are first-class. The differences between targets are confined to a thin adapter layer; domain logic and feature UI are written once.
 
 ### The two targets

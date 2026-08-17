@@ -1,4 +1,12 @@
-# Feature Plan: Azure Native Source Onboarding (content-preserving)
+# Feature Plan: Content-preserving native reroute
+
+> **Renamed 2026-08-12** from "Azure Native Source Onboarding" (user decision).
+> That name now belongs to the Azure Native Source Onboarding MENU ITEM
+> (backlog item 6), which is the SOURCE half - turning on the Azure-side export
+> so data reaches Cribl at all. This document is the DESTINATION half: keeping
+> Sentinel content working once a native source has been rerouted. The two meet
+> at the Event Hub, and ticking the Entra ID box in backlog item 6b is what
+> triggers the problem this plan solves.
 
 Status: Proposed (plan only, no code)
 Author-context: derived from a verified research digest, 2026-07-02

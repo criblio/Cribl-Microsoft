@@ -52,9 +52,9 @@ import {
 } from "./arch-layout";
 import { emptyEdits, loadEdits, saveEdits } from "./arch-edits";
 import type { DiagramEditState } from "./arch-edits";
-// React Flow's stylesheet is imported by the SHELL entry points (cribl-app
-// main.tsx / local-app), matching how @soc/ui/styles.css is loaded - a library
-// component must not side-effect-import CSS (no *.css module in the lib tsc).
+// React Flow's stylesheet is imported by the SHELL entry point (cribl-app
+// main.tsx), matching how @soc/ui/styles.css is loaded - a library component
+// must not side-effect-import CSS (no *.css module in the lib tsc).
 
 type ArchNodeData = {
   label: string;

@@ -1,6 +1,14 @@
 /**
- * SetupWizard - the local-app first-run onboarding, ASSEMBLED from the pieces
- * already shipped in Units 1, 9, and 14 (porting-plan Unit 22, GUI-03 delta).
+ * SetupWizard - the first-run onboarding, ASSEMBLED from the pieces already
+ * shipped in Units 1, 9, and 14 (porting-plan Unit 22, GUI-03 delta).
+ *
+ * It was written as the LOCAL app's first run, which is why the target step
+ * below exists at all. The local target was dropped 2026-08-17 (ADR 0002) and
+ * cribl-app is the only shell that renders this - it passes initialTarget
+ * "cribl-hosted" with lockTarget, so the target chooser and leader-connect
+ * step are dormant, not reachable. They are KEPT deliberately: they are the
+ * only asset that would let this onboard a customer-managed leader if Cribl
+ * Apps ever run off Cloud. Do not read their presence as a live choice.
  * It does NOT rebuild any of them; it composes them in order behind one wizard
  * chrome (the legacy-flow-analysis.md wizard bar): a 3-segment progress bar
  * (Target -> Connect -> Mode), the current step's screen, a persistent

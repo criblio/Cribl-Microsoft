@@ -1,8 +1,10 @@
 /**
  * PortsContext: the React context every @soc/ui screen consumes for IO.
- * The hosting shell (cribl-app iframe or local-app browser UI) constructs
- * its port adapters and the ACTIVE non-secret AzureConfig, then wraps the
- * screens in PortsProvider. Screens never fetch or touch storage directly -
+ * The hosting shell (cribl-app, the iframe served by the Cribl.Cloud leader)
+ * constructs its port adapters and the ACTIVE non-secret AzureConfig, then
+ * wraps the screens in PortsProvider. The context stays shell-agnostic even
+ * though one shell ships today - that is the seam that let the second target
+ * be removed (2026-08-17) without touching a single screen. Screens never fetch or touch storage directly -
  * all IO flows through the six @soc/core ports carried here.
  *
  * No JSX in this module (plain createElement) so it stays a .ts file and the
