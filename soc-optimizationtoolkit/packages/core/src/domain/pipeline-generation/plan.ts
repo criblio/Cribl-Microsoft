@@ -345,10 +345,15 @@ export function buildPipelinePlan(
         }
       }
 
+      // The same sample evidence the value discriminator used, so the presence
+      // path can tell a characteristic field from one event's identifier. Undefined
+      // when the caller supplied no values, which leaves the older, weaker
+      // presence-only behaviour rather than dropping routing entirely.
       const discriminator = deriveRouteDiscriminator(
         table.fields.map((f) => f.source),
         sourceSets.filter((_, j) => j !== i),
         table.sourceFormat,
+        sampleValues[i],
       );
       if (discriminator !== null) {
         table.routeCondition = discriminator;
