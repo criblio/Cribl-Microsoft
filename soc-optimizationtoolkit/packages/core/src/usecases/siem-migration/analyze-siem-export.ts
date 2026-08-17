@@ -29,6 +29,14 @@ import type {
   SiemPlatform,
 } from "../../domain/siem-migration/index";
 import { parseAnalyticRuleYaml } from "../../domain/coverage-analysis/index";
+// The rule-directory variants and the YAML predicate live in the
+// sentinel-content domain now. They used to be restated here with a comment
+// saying ui's copies "cannot be imported" - true, but the knowledge was never
+// ui's to own (audit finding 1, 2026-08-17).
+import {
+  ANALYTIC_RULE_DIR_VARIANTS,
+  isRuleYamlFileName,
+} from "../../domain/sentinel-content/index";
 import type { SentinelContent } from "../../ports/sentinel-content";
 import type { Logger } from "../../ports/logger";
 
@@ -52,17 +60,19 @@ export interface AnalyzeSiemExportInput {
 }
 
 /**
- * The rule-directory variants tried in order under a solution (first that
- * yields files wins) - mirrors @soc/ui's ANALYTIC_RULE_DIR_VARIANTS, which
- * cannot be imported here (core never depends on ui).
+ * Rule YAMLs analysed per solution here.
+ *
+ * This used to carry the comment "matches rule-coverage's cap". It does not,
+ * and never did (audit 2026-08-17): rule-coverage reads up to its
+ * RULE_DECODE_CAP of 150 rule files, and the 40 below happens to match its
+ * UNRELATED parser cap. So a solution with more than 40 rules is analysed in
+ * full by the coverage screen and truncated here, and the two report different
+ * coverage for the same solution with nothing saying why.
+ *
+ * Left at 40 rather than quietly raised to 150: which bound is right is a
+ * product question about how much a migration analysis should read, not a
+ * defect to paper over by picking the larger number. Recorded in the backlog.
  */
-const RULE_DIR_VARIANTS: readonly string[] = [
-  "Analytic Rules",
-  "Analytics Rules",
-  "AnalyticRules",
-];
-
-/** Bound on rule YAMLs read per solution (matches rule-coverage's cap). */
 const RULE_FILE_CAP = 40;
 
 function errText(err: unknown): string {
@@ -71,11 +81,6 @@ function errText(err: unknown): string {
 
 function normName(s: string): string {
   return s.toLowerCase().replace(/[^a-z0-9]/g, "");
-}
-
-function isRuleYaml(name: string): boolean {
-  const lower = name.toLowerCase();
-  return lower.endsWith(".yaml") || lower.endsWith(".yml");
 }
 
 /**
@@ -142,9 +147,9 @@ export async function fetchSolutionAnalyticRules(
     return [];
   }
   const matches: SentinelAnalyticRuleMatch[] = [];
-  for (const variant of RULE_DIR_VARIANTS) {
+  for (const variant of ANALYTIC_RULE_DIR_VARIANTS) {
     const files = await content.listSolutionFiles(dirName, variant);
-    const yamls = files.filter((f) => isRuleYaml(f.name)).slice(0, RULE_FILE_CAP);
+    const yamls = files.filter((f) => isRuleYamlFileName(f.name)).slice(0, RULE_FILE_CAP);
     if (yamls.length === 0) continue;
     let read = 0;
     for (const file of yamls) {

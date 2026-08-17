@@ -46,23 +46,22 @@ import type {
 // ---------------------------------------------------------------------------
 
 /**
- * The three Analytic-Rules directory-name variants a solution may use, in the
- * legacy probe order (sentinel-repo.ts listAnalyticRules): the component lists
- * each under the selected solution through the Unit 14 SentinelContent port and
- * takes the first that yields files - exactly the legacy "first existing dir"
- * rule, expressed over the lazy port instead of a filesystem walk.
+ * The Analytic-Rules directory variants and the rule-YAML predicate now come
+ * from @soc/core's sentinel-content domain, and are re-exported here so this
+ * module's public surface is unchanged for the component and its pins.
+ *
+ * They were DEFINED here until the 2026-08-17 audit, with byte-identical copies
+ * in core's siem-migration use-case. Two definitions of where a Sentinel
+ * solution keeps its analytic rules can disagree, and only this one was pinned:
+ * a fourth variant added here would have left the other probing three, so
+ * SIEM migration would find no rules for a solution this screen handles fine.
+ * The knowledge is about the content repo, not about this screen, so it lives
+ * in the domain and both consumers import it.
  */
-export const ANALYTIC_RULE_DIR_VARIANTS: readonly string[] = [
-  "Analytic Rules",
-  "Analytics Rules",
-  "AnalyticRules",
-];
-
-/** Whether a solution file is an analytic-rule YAML (legacy: .yaml or .yml). */
-export function isRuleYamlFileName(name: string): boolean {
-  const lower = name.toLowerCase();
-  return lower.endsWith(".yaml") || lower.endsWith(".yml");
-}
+export {
+  ANALYTIC_RULE_DIR_VARIANTS,
+  isRuleYamlFileName,
+} from "@soc/core";
 
 // ---------------------------------------------------------------------------
 // Coverage-input derivation from the Gap Analysis reports

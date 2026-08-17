@@ -11,6 +11,7 @@ import { matchFields } from "../field-matcher";
 import type { DcrGapAnalysis } from "../gap-analysis";
 import { buildPipelinePlan } from "./plan";
 import { generatePipelineConfForPlan } from "./pipeline-conf";
+import { unreachableLogTypes } from "./route-yml";
 import type {
   FieldMappingOverride,
   PipelineFieldMapping,
@@ -570,5 +571,61 @@ describe("the CEF identity override reaches the emitted pipeline", () => {
       "Zscaler Internet Access",
     );
     expect(withOne.length).toBeGreaterThan(withNone.length);
+  });
+});
+
+/**
+ * The invariant that made unreachableLogTypes an assertion rather than a report
+ * (architecture audit 2026-08-17).
+ *
+ * The planner must never leave two overlapping match-all routes: every route is
+ * final, so the second would silently receive nothing while its events were
+ * processed by the first one's pipeline and reached Sentinel with another log
+ * type's field mapping. The placeholder ladder is what guarantees it - an
+ * unseparable log type gets a filter matching NOTHING rather than EVERYTHING.
+ *
+ * Pinned here because the guarantee lives in the PLANNER while the detector
+ * lives in route-yml, and nothing else asserts they still agree. If a future
+ * change makes the ladder skip a table, this fails; without it, the only symptom
+ * is a shipped pack whose log types are quietly mis-mapped.
+ */
+describe("planner invariant - no overlapping catch-alls survive", () => {
+  function table(logType: string) {
+    return {
+      sentinelTable: "CommonSecurityLog",
+      logType,
+      presetFields: [],
+      sourceFormat: "json",
+    };
+  }
+
+  it("leaves nothing unreachable when NOTHING distinguishes the log types", () => {
+    // The worst case: three tables, identical shape, no sample values at all.
+    // Before the placeholder ladder this produced three match-alls, two of them
+    // dead. It must now produce zero dead routes.
+    const plan = buildPipelinePlan({
+      solutionName: "Vendor",
+      packName: "vendor-sentinel",
+      tables: [table("a"), table("b"), table("c")],
+    });
+    expect(unreachableLogTypes(plan)).toEqual([]);
+    // ...because each got a placeholder, not because routing was dropped.
+    expect(plan.tables.map((t) => t.routeCondition)).toEqual([
+      "__UNSET__ === 'a'",
+      "__UNSET__ === 'b'",
+      "__UNSET__ === 'c'",
+    ]);
+  });
+
+  it("keeps the lone match-all when there is only ONE log type", () => {
+    // A single-table pack has nothing to shadow, so match-all is correct and
+    // placeholdering it would leave the pack routing nothing at all.
+    const plan = buildPipelinePlan({
+      solutionName: "Vendor",
+      packName: "vendor-sentinel",
+      tables: [table("only")],
+    });
+    expect(plan.tables[0]?.routeCondition).toBe("true");
+    expect(unreachableLogTypes(plan)).toEqual([]);
   });
 });

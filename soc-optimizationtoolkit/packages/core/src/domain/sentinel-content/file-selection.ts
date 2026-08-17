@@ -134,3 +134,32 @@ export function isContentPathIncluded(filePath: string): boolean {
   // Only known text content types.
   return INCLUDED_EXTENSIONS.has(ext);
 }
+
+/**
+ * The directory names that hold analytic rules under a Sentinel solution, in
+ * the legacy probe order (sentinel-repo.ts listAnalyticRules): the caller lists
+ * each in turn and takes the first that yields files - the legacy "first
+ * existing dir" rule, expressed over a lazy port instead of a filesystem walk.
+ *
+ * Architecture audit 2026-08-17 (finding 1): this list, the YAML predicate
+ * below, and the per-solution file cap each existed TWICE - once in
+ * @soc/ui rule-coverage and once in @soc/core siem-migration, which carried
+ * the comment "mirrors @soc/ui's ANALYTIC_RULE_DIR_VARIANTS, which cannot be
+ * imported here (core never depends on ui)". The rule was right and the
+ * conclusion backwards: this is knowledge about the Sentinel content repo, so
+ * it belongs in the domain and ui imports it like everything else. Only the ui
+ * copy was pinned, so adding a fourth variant would have kept that pin green
+ * while SIEM migration silently probed fewer directories - finding no rules for
+ * a solution rule-coverage handles fine.
+ */
+export const ANALYTIC_RULE_DIR_VARIANTS: readonly string[] = [
+  "Analytic Rules",
+  "Analytics Rules",
+  "AnalyticRules",
+];
+
+/** Whether a solution file is an analytic-rule YAML (legacy: .yaml or .yml). */
+export function isRuleYamlFileName(name: string): boolean {
+  const lower = name.toLowerCase();
+  return lower.endsWith(".yaml") || lower.endsWith(".yml");
+}

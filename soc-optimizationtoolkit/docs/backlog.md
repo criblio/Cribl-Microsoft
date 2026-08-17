@@ -923,3 +923,27 @@ everything else this app does is config-level. Note there is no capture level
 before event breaking, so it could never show the before/after of that stage.
 Revisit only with a deliberate decision about display, retention, and whether
 anything is written to the KV store.
+
+## 12. Open questions from the 2026-08-17 architecture audit
+
+**Rule-file caps disagree between the two screens that read rules - UNDECIDED.**
+Rule coverage reads up to 150 analytic-rule YAMLs per solution
+(`RULE_DECODE_CAP`); SIEM migration analyses up to 40 (`RULE_FILE_CAP`). The
+core constant carried the comment "matches rule-coverage's cap", which was never
+true - the 40 matches rule-coverage's UNRELATED parser cap, also 40.
+
+The consequence is user-visible and unexplained: a solution with more than 40
+analytic rules is covered in full by one screen and truncated by the other, so
+the same solution reports different coverage depending on where you look, with
+no notice in either place.
+
+Deliberately NOT unified while fixing the duplicated rule-directory constants
+around it. Picking the larger number is the obvious move and is probably right,
+but it is a product decision about how much a migration analysis should read -
+and 150 rule reads per solution against the GitHub content port has a cost the
+40 was possibly chosen to avoid. Whoever decides should either raise the cap or
+say why the two differ, and the losing screen should tell the user it truncated.
+
+**`unreachableLogTypes` can no longer report anything - RESOLVED 2026-08-17.**
+See the route-yml module header: the placeholder ladder superseded it, and it is
+now retained as an invariant assertion rather than a user-facing warning.

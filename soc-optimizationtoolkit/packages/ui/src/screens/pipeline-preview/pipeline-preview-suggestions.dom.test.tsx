@@ -76,19 +76,21 @@ function renderPreview(props: {
 }) {
   render(
     <PipelinePreviewSection
-      solutionName="Vendor"
+      inputs={{
+        solutionName: "Vendor",
+        reports: [report("firewall"), report("dns")],
+        sampleFormats: { firewall: "cef", dns: "cef" },
+        sampleFieldValues: THIN_VALUES,
+        ...(props.routeFilterOverrides !== undefined
+          ? { routeFilterOverrides: props.routeFilterOverrides }
+          : {}),
+        approved: true,
+      }}
       packName="vendor-sentinel"
-      reports={[report("firewall"), report("dns")]}
-      sampleFormats={{ firewall: "cef", dns: "cef" }}
-      sampleFieldValues={THIN_VALUES}
-      {...(props.routeFilterOverrides !== undefined
-        ? { routeFilterOverrides: props.routeFilterOverrides }
-        : {})}
       {...(props.onAccept !== undefined
         ? { onAcceptRouteFilter: props.onAccept }
         : {})}
       {...(props.onUndo !== undefined ? { onUndoRouteFilter: props.onUndo } : {})}
-      approved
     />,
   );
 }
@@ -214,13 +216,15 @@ describe("PipelinePreviewSection - writing a filter by hand", () => {
   function renderNoCandidate(onAccept?: (l: string, f: string) => void) {
     render(
       <PipelinePreviewSection
-        solutionName="Vendor"
+        inputs={{
+          solutionName: "Vendor",
+          reports: [report("firewall"), report("dns")],
+          sampleFormats: { firewall: "json", dns: "json" },
+          sampleFieldValues: NO_CANDIDATE,
+          approved: true,
+        }}
         packName="vendor-sentinel"
-        reports={[report("firewall"), report("dns")]}
-        sampleFormats={{ firewall: "json", dns: "json" }}
-        sampleFieldValues={NO_CANDIDATE}
         {...(onAccept !== undefined ? { onAcceptRouteFilter: onAccept } : {})}
-        approved
       />,
     );
   }

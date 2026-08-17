@@ -139,18 +139,27 @@ export function buildRouteEntries(
  * first match-all" means the same thing here and in the file: the surviving
  * catch-all. This reports the rest.
  *
- * Generic, not per-vendor: a log type ends up match-all whenever
- * deriveRouteDiscriminator cannot separate it from its siblings, which happens
- * to every vendor whose log types share a schema and differ by field VALUE
- * rather than field presence - Zscaler ALLOWED/CAUTIONED/BLOCKED, Palo Alto
- * TRAFFIC/THREAT, Fortinet subtypes. Zscaler is just where it was measured.
+ * NOW AN INVARIANT ASSERTION, NOT A REPORT (architecture audit 2026-08-17).
+ * For any plan from buildPipelinePlan this is ALWAYS empty, and that is by
+ * construction rather than by luck: the planner placeholders EVERY match-all
+ * once a plan has more than one table, and a lone table's match-all is correct
+ * and is the only one, so "all match-alls except the first" has nothing left to
+ * name. Verified against the planner, not reasoned about: 1 table -> [], 3
+ * indistinguishable tables -> [] with all three placeholdered.
  *
- * The failure it exposes is silent by construction: the pack builds, the YAML
- * validates, Cribl installs it, and the affected log types are quietly handled
- * by the first match-all's pipeline - the wrong renames, and for CEF web logs
- * no base64 decode - so the data lands mis-shaped rather than not at all.
- * Callers surface this BEFORE the build; route.yml's comment is not enough,
- * because nobody opens route.yml.
+ * So the failure this was written for - a silent one, where the pack builds,
+ * the YAML validates, and the affected log types are quietly run through the
+ * first match-all's pipeline with the wrong renames - can no longer happen.
+ * The placeholder ladder superseded it: an unseparable log type now gets a
+ * filter that matches NOTHING instead of a filter that matches EVERYTHING,
+ * which turns silent mis-shaped data into a visible unfinished task
+ * ({@link placeholderLogTypes}).
+ *
+ * Kept, because a non-empty result now means the PLANNER has regressed - the
+ * ladder let a match-all through where it should have placeholdered it - and
+ * that is worth catching. Callers should treat it as an assertion that fires
+ * only on a generator bug, not as a routine warning to render; the tests that
+ * exercise it build plans by hand, which is the only way to reach it.
  */
 export function unreachableLogTypes(plan: PipelinePlan): string[] {
   const matchAll = emissionOrder(plan).filter(isMatchAll).map((t) => t.suffix);
@@ -220,12 +229,19 @@ export function generateRouteYml(plan: PipelinePlan): string {
     "#   1. Reduction + Transform (enabled): full pipeline with volume reduction",
     "#   2. Transform only (disabled): same pipeline without reduction",
     "# To skip reduction: disable the reduction route and enable the passthrough route.",
+    // Unreachable in any planner-built pack - see unreachableLogTypes: the
+    // ladder placeholders every match-all once there is more than one table,
+    // so catchAlls can only be 0 or 1 here. Emitted anyway because a plan that
+    // DOES arrive with overlapping catch-alls is a generator regression, and
+    // the person holding that pack should be told in the file itself.
     ...(catchAlls > 1
       ? [
           "#",
-          `# WARNING: ${catchAlls} log types have no distinguishing fields - their`,
-          "# match-all routes overlap and only the first receives events. Edit the",
-          "# filters below to separate them.",
+          `# GENERATOR BUG: ${catchAlls} log types kept overlapping match-all`,
+          "# routes. Every route is final, so only the first receives events and",
+          "# the rest are handled by ITS pipeline, with the wrong field mapping.",
+          "# This should be impossible - the generator gives an unseparable log",
+          "# type a placeholder filter instead. Please report this pack.",
         ]
       : []),
     ...(placeholders.length > 0

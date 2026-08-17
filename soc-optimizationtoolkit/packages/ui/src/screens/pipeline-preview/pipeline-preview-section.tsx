@@ -21,41 +21,31 @@
  */
 
 import { useMemo, useState } from "react";
-import type {
-  CefIdentityOverride,
-  GapFieldMapping,
-  GapReport,
-  LogTypeFieldValues,
-} from "@soc/core";
 import { InfoTip } from "../../components/info-tip";
 import {
   derivePipelinePreview,
-  type EnrichmentField,
+  type ContentPlanInputs,
   type PipelineFunctionLine,
   type ReductionRuleView,
 } from "./pipeline-preview-state";
 
 export interface PipelinePreviewSectionProps {
-  /** The selected Sentinel solution name (scopes naming + reduction lookup). */
-  solutionName: string;
+  /**
+   * Every content decision the plan is derived from, composed ONCE by the
+   * caller and shared with the pack build.
+   *
+   * Taken as one object rather than as individual props on purpose (audit
+   * finding 2, 2026-08-17): when the caller listed these out here and again at
+   * its build site, the two lists could silently disagree, and the build
+   * dropping a field showed up nowhere - not in typecheck, not in 721 ui tests,
+   * only in a shipped pack whose routes matched nothing. A single object cannot
+   * be present in one derivation and absent from the other.
+   */
+  inputs: ContentPlanInputs;
   /** The pack name from the Cribl Configuration section. */
   packName: string;
   /** Optional pack version (defaults to 1.0.0 in the planner). */
   version?: string;
-  /** The Unit 18 gap reports (the typed input the preview projects). */
-  reports: GapReport[];
-  /** The reviewer's effective (edited) mappings keyed by logType. */
-  mappingOverrides?: Readonly<Record<string, GapFieldMapping[]>>;
-  /** Detected sample format keyed by logType (drives serde/timestamp). */
-  sampleFormats?: Readonly<Record<string, string>>;
-  /** Observed field values keyed by logType (drives route discrimination). */
-  sampleFieldValues?: Readonly<Record<string, LogTypeFieldValues>>;
-  /** User-added enrichment constants keyed by logType (merged by the caller). */
-  enrichments?: Readonly<Record<string, readonly EnrichmentField[]>>;
-  /** Corrected DeviceVendor/DeviceProduct keyed by logType. */
-  identityOverrides?: Readonly<Record<string, CefIdentityOverride>>;
-  /** Accepted route filters keyed by logType (replace that log type's filter). */
-  routeFilterOverrides?: Readonly<Record<string, string>>;
   /**
    * Accept a suggested route filter. Absent = the suggestions render read-only,
    * which is what a caller that cannot persist the choice should do: an Accept
@@ -67,8 +57,6 @@ export interface PipelinePreviewSectionProps {
    * = accepted filters render without an Undo control.
    */
   onUndoRouteFilter?: (logType: string) => void;
-  /** The mapping-review content-path gate (every table approved, not stale). */
-  approved: boolean;
 }
 
 /** The count summary line under a reduction rule group. */
@@ -116,48 +104,21 @@ function ReductionRuleRow({ rule }: { rule: ReductionRuleView }) {
 }
 
 export function PipelinePreviewSection({
-  solutionName,
+  inputs,
   packName,
   version,
-  reports,
-  mappingOverrides,
-  sampleFormats,
-  sampleFieldValues,
-  enrichments,
-  identityOverrides,
-  routeFilterOverrides,
   onAcceptRouteFilter,
   onUndoRouteFilter,
-  approved,
 }: PipelinePreviewSectionProps) {
+  const routeFilterOverrides = inputs.routeFilterOverrides;
   const view = useMemo(
     () =>
       derivePipelinePreview({
-        solutionName,
+        ...inputs,
         packName,
         ...(version !== undefined ? { version } : {}),
-        reports,
-        ...(mappingOverrides !== undefined ? { mappingOverrides } : {}),
-        ...(sampleFormats !== undefined ? { sampleFormats } : {}),
-        ...(sampleFieldValues !== undefined ? { sampleFieldValues } : {}),
-        ...(enrichments !== undefined ? { enrichments } : {}),
-        ...(identityOverrides !== undefined ? { identityOverrides } : {}),
-        ...(routeFilterOverrides !== undefined ? { routeFilterOverrides } : {}),
-        approved,
       }),
-    [
-      solutionName,
-      packName,
-      version,
-      reports,
-      mappingOverrides,
-      sampleFormats,
-      sampleFieldValues,
-      enrichments,
-      identityOverrides,
-      routeFilterOverrides,
-      approved,
-    ],
+    [inputs, packName, version],
   );
 
   // Only overrides for log types the CURRENT plan still has. An override left
@@ -387,20 +348,30 @@ export function PipelinePreviewSection({
         </div>
       )}
 
+      {/*
+        An ALARM, not a task (architecture audit 2026-08-17). This used to be
+        the normal outcome for log types the derivation could not separate, and
+        it told the operator to go fix the filters. The placeholder ladder took
+        that job: an unseparable log type now gets a filter matching NOTHING
+        instead of one matching EVERYTHING, and the block above asks for the
+        filter. So this is now unreachable for any pack the generator builds -
+        which makes a non-empty list a GENERATOR REGRESSION, and the copy says
+        so rather than sending the operator to fix something they did not cause.
+      */}
       {view.unreachableLogTypes.length > 0 && (
         <div className="pipeline-preview-valid pipeline-preview-valid-bad">
           <strong>
-            {view.unreachableLogTypes.length} log type
+            Generator bug: {view.unreachableLogTypes.length} log type
             {view.unreachableLogTypes.length === 1 ? "" : "s"} cannot receive
             events.
           </strong>{" "}
-          Nothing in these samples separates {view.unreachableLogTypes.join(", ")}{" "}
-          from the others, so their routes match everything and only the first
-          such route runs. Their events are not dropped - they are processed by
-          that route&apos;s pipeline instead, so they reach Sentinel with the
-          wrong field mapping. Give these log types a distinguishing filter in
-          route.yml after the build, or drop the ones you do not need.
-          <InfoTip text="Route filters are derived from fields unique to each log type. Log types that share a schema and differ only by a field VALUE - an action of ALLOWED vs BLOCKED, a type of TRAFFIC vs THREAT - cannot be separated that way, so they fall back to match-all. Cribl marks the resulting routes with its own unreachable-route warning." />
+          {view.unreachableLogTypes.join(", ")} kept a match-all route behind
+          another one. Every route is final, so only the first runs and these
+          events reach Sentinel through the wrong pipeline - mapped with another
+          log type&apos;s renames. This should not be possible; the generator
+          gives an unseparable log type a placeholder filter instead. Do not
+          ship this pack - please report it.
+          <InfoTip text="Route filters are derived from fields unique to each log type, then from field values constant within one and absent from the others. When neither separates them the generator emits a placeholder filter that matches nothing, so the route is inert rather than stealing its siblings' events. Seeing this message means that fallback did not happen, which is a defect in the generator rather than anything about your samples." />
         </div>
       )}
 

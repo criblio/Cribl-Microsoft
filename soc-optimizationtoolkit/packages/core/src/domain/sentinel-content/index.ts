@@ -57,7 +57,9 @@ export {
   ingestionTierReason,
 } from "./ingestion-classification";
 
-// File-selection persistence filter (verbatim extension/dir sets)
+// File-selection persistence filter (verbatim extension/dir sets), plus the
+// analytic-rule location rules shared by rule-coverage and siem-migration
+// (audit finding 1, 2026-08-17: they were duplicated, and only one was pinned).
 export {
   BLOCKED_EXTENSIONS,
   SKIP_EXTENSIONS,
@@ -65,6 +67,8 @@ export {
   INCLUDED_EXTENSIONS,
   extname,
   isContentPathIncluded,
+  ANALYTIC_RULE_DIR_VARIANTS,
+  isRuleYamlFileName,
 } from "./file-selection";
 
 // Solution deprecation heuristics
