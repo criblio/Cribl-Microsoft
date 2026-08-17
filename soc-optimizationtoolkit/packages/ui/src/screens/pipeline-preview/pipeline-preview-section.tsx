@@ -20,7 +20,7 @@
  * Cribl loader would reject.
  */
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import type {
   CefIdentityOverride,
   GapFieldMapping,
@@ -171,6 +171,22 @@ export function PipelinePreviewSection({
     return entries.filter(([logType]) => present.has(logType));
   }, [routeFilterOverrides, view.tables]);
 
+  // Placeholdered log types the derivation found NOTHING for - no candidate
+  // field is constant within them and distinct across their siblings, so there
+  // is nothing to suggest and no amount of accepting will conjure one. Measured
+  // on Zscaler: 5 of 10. Their only remedy used to be editing route.yml in the
+  // Cribl UI after install, which means leaving the app mid-flow to finish the
+  // pack it just built.
+  const unsuggested = useMemo(() => {
+    const suggested = new Set(view.routeFilterSuggestions.map((s) => s.logType));
+    return view.placeholderLogTypes.filter((lt) => !suggested.has(lt));
+  }, [view.placeholderLogTypes, view.routeFilterSuggestions]);
+
+  // Draft text per log type. Deliberately NOT lifted to the caller: a filter
+  // being typed is not a decision yet, and the plan must not re-derive on every
+  // keystroke. Only Apply crosses into routeFilterOverrides.
+  const [drafts, setDrafts] = useState<Readonly<Record<string, string>>>({});
+
   if (!view.available) {
     return (
       <div className="pipeline-preview pipeline-preview-empty">
@@ -275,6 +291,67 @@ export function PipelinePreviewSection({
               )}
             </div>
           ))}
+        </div>
+      )}
+
+      {/*
+        The log types with no candidate at all. Accept cannot help them - there
+        is nothing to accept - so the only thing that finishes the pack is a
+        filter the operator writes. It goes through the SAME override channel
+        as an accepted suggestion, so it reaches route.yml by the path that is
+        already pinned, and the pack ships complete instead of needing an edit
+        in the Cribl UI after install.
+      */}
+      {unsuggested.length > 0 && onAcceptRouteFilter !== undefined && (
+        <div className="pipeline-preview-suggestions">
+          <span className="field-label">
+            Write a filter for the rest
+            <InfoTip text="Nothing in these samples is shaped like a discriminator for these log types - no field is constant within one and different across the others - so there is nothing to suggest. Write an expression that identifies the log type, the same JavaScript Cribl route filters use (for example: event_type === 'dns'). It goes into the pack's route.yml exactly as typed. Leave any of them blank and that log type ships with a placeholder filter you can still edit in Cribl's Routes tab later." />
+          </span>
+          {unsuggested.map((logType) => {
+            const draft = drafts[logType] ?? "";
+            const apply = () => {
+              const filter = draft.trim();
+              if (filter === "") return;
+              onAcceptRouteFilter(logType, filter);
+            };
+            return (
+              <div className="pipeline-preview-suggestion-row" key={logType}>
+                <code className="code-chip">{logType}</code>
+                <input
+                  className="pipeline-preview-filter-input"
+                  type="text"
+                  value={draft}
+                  aria-label={`Route filter for ${logType}`}
+                  placeholder="event_type === 'dns'"
+                  onChange={(e) => {
+                    const { value } = e.target;
+                    setDrafts((prev) => ({ ...prev, [logType]: value }));
+                  }}
+                  // Enter applies, because this is a one-field form and
+                  // reaching for the mouse to commit one expression is friction
+                  // the operator pays once per log type.
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      apply();
+                    }
+                  }}
+                />
+                <button
+                  type="button"
+                  className="pipeline-preview-suggestion-accept"
+                  // A blank filter would be applied verbatim and match nothing -
+                  // the same inert route the placeholder already is, but without
+                  // the banner saying so.
+                  disabled={draft.trim() === ""}
+                  onClick={apply}
+                >
+                  Apply
+                </button>
+              </div>
+            );
+          })}
         </div>
       )}
 

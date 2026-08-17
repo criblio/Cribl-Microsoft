@@ -1,7 +1,7 @@
 {
   "name": "soc-optimizationtoolkit",
   "private": true,
-  "version": "1.11.5",
+  "version": "1.11.6",
   "license": "Apache-2.0",
   "type": "module",
   "scripts": {

@@ -176,6 +176,14 @@ describe("PipelinePreviewSection - accepting a suggested route filter", () => {
     expect(banner).toContain("1 log type needs a route filter before it can");
   });
 
+  it("does not offer a write-a-filter field to a log type that HAS a suggestion", () => {
+    // Both log types here have a candidate, so Accept covers them. Rendering a
+    // blank input beside a one-click Accept would ask the operator to choose
+    // between two controls that do the same thing.
+    renderPreview({ onAccept: vi.fn() });
+    expect(screen.queryByLabelText(/^Route filter for/)).toBeNull();
+  });
+
   it("does not offer Undo for an override whose log type left the plan", () => {
     // Overrides outlive solution changes. An Undo control for a log type that
     // is not on screen is a control with no visible effect.
@@ -186,5 +194,89 @@ describe("PipelinePreviewSection - accepting a suggested route filter", () => {
     });
     expect(screen.queryByText("Route filters you accepted")).toBeNull();
     expect(screen.queryByRole("button", { name: "Undo" })).toBeNull();
+  });
+});
+
+/**
+ * The log types with NO candidate. Accept cannot reach them - there is nothing
+ * to accept - and on the Zscaler corpus that was 5 of 10. Before this they
+ * shipped placeholdered and the operator had to finish the pack by editing
+ * route.yml in Cribl after install.
+ */
+describe("PipelinePreviewSection - writing a filter by hand", () => {
+  /** One field per log type, so nothing is column-shaped and nothing is
+   *  suggested - the no-candidate case, not the thin-evidence one. */
+  const NO_CANDIDATE = {
+    firewall: { eventCount: 9, values: { onlyFirewall: ["a"] } },
+    dns: { eventCount: 9, values: { onlyDns: ["b"] } },
+  };
+
+  function renderNoCandidate(onAccept?: (l: string, f: string) => void) {
+    render(
+      <PipelinePreviewSection
+        solutionName="Vendor"
+        packName="vendor-sentinel"
+        reports={[report("firewall"), report("dns")]}
+        sampleFormats={{ firewall: "json", dns: "json" }}
+        sampleFieldValues={NO_CANDIDATE}
+        {...(onAccept !== undefined ? { onAcceptRouteFilter: onAccept } : {})}
+        approved
+      />,
+    );
+  }
+
+  it("offers a field for a log type nothing could be suggested for", () => {
+    renderNoCandidate(vi.fn());
+    expect(screen.getByLabelText("Route filter for firewall")).toBeTruthy();
+    expect(screen.getByLabelText("Route filter for dns")).toBeTruthy();
+    // Nothing was suggestable, so there is nothing to Accept.
+    expect(screen.queryByRole("button", { name: "Accept" })).toBeNull();
+  });
+
+  it("applies what was typed, to the log type it was typed for", () => {
+    const onAccept = vi.fn();
+    renderNoCandidate(onAccept);
+    fireEvent.change(screen.getByLabelText("Route filter for dns"), {
+      target: { value: "event_type === 'dns'" },
+    });
+    fireEvent.click(screen.getAllByRole("button", { name: "Apply" })[1]!);
+    expect(onAccept).toHaveBeenCalledWith("dns", "event_type === 'dns'");
+  });
+
+  it("applies on Enter, so one expression does not need the mouse", () => {
+    const onAccept = vi.fn();
+    renderNoCandidate(onAccept);
+    const input = screen.getByLabelText("Route filter for firewall");
+    fireEvent.change(input, { target: { value: "event_type === 'fw'" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(onAccept).toHaveBeenCalledWith("firewall", "event_type === 'fw'");
+  });
+
+  it("refuses a blank or whitespace filter", () => {
+    // A blank filter applies verbatim and matches nothing - the same inert
+    // route as the placeholder, minus the banner explaining it.
+    const onAccept = vi.fn();
+    renderNoCandidate(onAccept);
+    const input = screen.getByLabelText("Route filter for dns");
+    const apply = screen.getAllByRole("button", { name: "Apply" })[1]!;
+    expect(apply).toHaveProperty("disabled", true);
+
+    fireEvent.change(input, { target: { value: "   " } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(onAccept).not.toHaveBeenCalled();
+  });
+
+  it("trims what it applies", () => {
+    const onAccept = vi.fn();
+    renderNoCandidate(onAccept);
+    const input = screen.getByLabelText("Route filter for dns");
+    fireEvent.change(input, { target: { value: "  event_type === 'dns'  " } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(onAccept).toHaveBeenCalledWith("dns", "event_type === 'dns'");
+  });
+
+  it("renders nothing when the caller cannot persist the choice", () => {
+    renderNoCandidate();
+    expect(screen.queryByLabelText(/^Route filter for/)).toBeNull();
   });
 });

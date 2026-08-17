@@ -4607,6 +4607,52 @@ details[open] > summary::before {
   color: var(--warn);
 }
 
+/* Vendor-identity MISMATCH block (2026-08-17). Found by the class sweep that
+   followed the route-filter suggestions defect: .identity-block and
+   .identity-row above are styled, their -mismatch counterparts never were, so
+   this block has been rendering with no container and no row layout - chip,
+   hint and button stacking instead of sitting on a line. Same vocabulary as
+   the block it sits beside, warn-bordered because it is a discrepancy. */
+.identity-mismatch-block {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 1px solid var(--warn);
+  border-radius: var(--radius-control);
+  background: var(--surface-raised);
+}
+.identity-mismatch-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  flex-wrap: wrap;
+}
+.identity-mismatch-applied {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* A button that is an ACTION on the sentence it sits in, not a control: used
+   for "Clear learned mappings" beside its explanation. Undefined until now, so
+   it rendered as a full chrome button and read as the primary action of the
+   bar it lives in. */
+.link-button {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  font-size: 12px;
+  color: var(--accent);
+  text-decoration: underline;
+  cursor: pointer;
+}
+.link-button:hover {
+  color: var(--text);
+}
+
 /* Field-mapping search (per Gap Analysis card). */
 .mapping-search {
   display: flex;
@@ -4739,8 +4785,26 @@ details[open] > summary::before {
      rather than wherever the filter above it happened to stop. */
   margin-left: auto;
 }
-.pipeline-preview-suggestion-accept:hover {
+.pipeline-preview-suggestion-accept:hover:not(:disabled) {
   border-color: var(--accent, var(--text));
+}
+.pipeline-preview-suggestion-accept:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+/* The hand-written filter field, for log types with no candidate to suggest.
+   Monospace because what goes in it is a JS expression that lands verbatim in
+   route.yml - it should read the way it will read there. */
+.pipeline-preview-filter-input {
+  flex: 1 1 260px;
+  min-width: 0;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  padding: 3px 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--text);
 }
 
 /* Collapsible numbered sections (2026-07-12): Expand sits at the right edge
