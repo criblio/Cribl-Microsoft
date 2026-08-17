@@ -138,6 +138,47 @@ export interface PipelinePreviewTable {
   yamlIssues: string[];
 }
 
+/**
+ * Everything about WHAT is being generated, with nothing about which artifact
+ * it is being generated for.
+ *
+ * This split exists because the Integrate flow derives the plan TWICE - once to
+ * render the preview, once to build the pack - and those two must agree on
+ * every content decision while differing on packName and version (a build
+ * ships an incremented version; the preview shows the current one).
+ *
+ * Architecture audit 2026-08-17 (finding 2): they used to agree by TRANSCRIPTION.
+ * The build site's comment claimed "the SAME derivation the pipeline preview
+ * renders" and eleven fields were listed out by hand at each site to make it
+ * true. Deleting one field from the build list left every one of 721 ui tests
+ * passing - the preview would show a route filter applied and the built pack
+ * would ship __UNSET__, silently. The caller now composes this ONCE and both
+ * sites spread it, so a field can no longer be present in one and absent from
+ * the other.
+ */
+export type ContentPlanInputs = Omit<
+  PipelinePreviewInputs,
+  "packName" | "version"
+>;
+
+/**
+ * The same thing, with every optional content field made REQUIRED.
+ *
+ * Sharing one object stops the preview and the build DISAGREEING, but on its
+ * own it does not stop them agreeing on something incomplete: every override
+ * field is optional, so dropping one from the composition still typechecks and
+ * still passes the suite - it just fails symmetrically now (the operator sees
+ * Accept do nothing) instead of silently shipping a broken pack.
+ *
+ * A screen that HOLDS state for a content field must put it in the plan, so
+ * the composition site types itself as this and a missing field becomes a
+ * compile error at the one place that can make the mistake. The section and
+ * its tests keep the permissive {@link ContentPlanInputs} - a caller with
+ * nothing to say about enrichments should not have to write `enrichments:
+ * undefined` to say it.
+ */
+export type FullContentPlan = Required<ContentPlanInputs>;
+
 /** The inputs the Integrate flow hands the preview projection. */
 export interface PipelinePreviewInputs {
   solutionName: string;

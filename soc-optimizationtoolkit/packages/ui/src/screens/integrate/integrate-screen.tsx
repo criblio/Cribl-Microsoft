@@ -127,7 +127,10 @@ import { MappingReviewSection } from "../mapping-review/mapping-review-section";
 import type { MappingReviewRenameEvent } from "../mapping-review/mapping-review-section";
 import { PipelinePreviewSection } from "../pipeline-preview/pipeline-preview-section";
 import { derivePipelinePreview } from "../pipeline-preview/pipeline-preview-state";
-import type { EnrichmentField } from "../pipeline-preview/pipeline-preview-state";
+import type {
+  EnrichmentField,
+  FullContentPlan,
+} from "../pipeline-preview/pipeline-preview-state";
 import { SolutionBrowser } from "../solution-browser/solution-browser";
 import { RuleCoverageSection } from "../rule-coverage/rule-coverage-section";
 import { ContentInstallSection } from "../content-install/content-install-section";
@@ -670,6 +673,40 @@ export function IntegrateScreen({
       return next;
     });
   }, []);
+
+  // THE content plan, composed once. Both the preview panel and the pack build
+  // derive from this exact object, so they cannot disagree about what is being
+  // generated - only about which pack name and version it is generated under.
+  //
+  // Audit finding 2 (2026-08-17): these eleven fields used to be typed out at
+  // both sites. Removing one from the build list passed typecheck and all 721
+  // ui tests, and would have shipped a pack whose accepted route filters were
+  // silently back to __UNSET__. Add new content inputs HERE and both paths get
+  // them; there is no second list to remember.
+  const contentPlanInputs = useMemo<FullContentPlan>(
+    () => ({
+      solutionName: solution?.name ?? "",
+      reports: gapReports,
+      mappingOverrides,
+      sampleFormats,
+      sampleFieldValues,
+      identityOverrides,
+      routeFilterOverrides,
+      enrichments,
+      approved: mappingsApproved,
+    }),
+    [
+      solution?.name,
+      gapReports,
+      mappingOverrides,
+      sampleFormats,
+      sampleFieldValues,
+      identityOverrides,
+      routeFilterOverrides,
+      enrichments,
+      mappingsApproved,
+    ],
+  );
   // What the solution's OWN analytic rules compare these fields against, per
   // logType. Derived from the rule queries the coverage section already fetched
   // - never typed in, so the app can only ever suggest a value the content
@@ -798,19 +835,15 @@ export function IntegrateScreen({
       // overwrite check fetched.
       const packVersion = nextPackVersion(installedPackVersions(deployed, name));
 
-      // 2. Resolve the plan - the SAME derivation the pipeline preview renders,
+      // 2. Resolve the plan from the SAME object the pipeline preview renders,
       // including the Cribl YAML validation (an invalid plan never ships).
+      // Only packName and version differ - a build ships an incremented
+      // version. Every content decision is spread from contentPlanInputs
+      // rather than re-listed here, because when it WAS re-listed the two
+      // lists could disagree and nothing caught it (audit finding 2).
       const preview = derivePipelinePreview({
-        solutionName: solution?.name ?? "",
+        ...contentPlanInputs,
         packName: name,
-        reports: gapReports,
-        mappingOverrides,
-        sampleFormats,
-        sampleFieldValues,
-        identityOverrides,
-        routeFilterOverrides,
-        enrichments,
-        approved: mappingsApproved,
         version: packVersion,
       });
       if (!preview.available || preview.plan === null) {
@@ -1024,21 +1057,17 @@ export function IntegrateScreen({
     ports.packs,
     // The DCR listing that resolves real destination values.
     ports.azure,
-    identityOverrides,
-    routeFilterOverrides,
+    // The whole content plan, as ONE dependency. Listing its fields here
+    // individually is what let the build's own derivation drift from the
+    // preview's (audit finding 2) - the deps and the call must name the same
+    // thing, and now they both name contentPlanInputs.
+    contentPlanInputs,
     ports.packInstall,
     ports.logger,
     packBuilding,
     packName,
     packTargetGroups,
-    mappingsApproved,
     overwriteAcked,
-    solution,
-    gapReports,
-    mappingOverrides,
-    sampleFormats,
-    sampleFieldValues,
-    enrichments,
     identityGateReason,
     outcomes,
     samples,
@@ -1323,18 +1352,10 @@ export function IntegrateScreen({
         </summary>
         <PipelinePreviewSection
           key={contentResetKey}
-          solutionName={solution?.name ?? ""}
+          inputs={contentPlanInputs}
           packName={packName}
-          reports={gapReports}
-          mappingOverrides={mappingOverrides}
-          sampleFormats={sampleFormats}
-          sampleFieldValues={sampleFieldValues}
-          enrichments={enrichments}
-          identityOverrides={identityOverrides}
-          routeFilterOverrides={routeFilterOverrides}
           onAcceptRouteFilter={acceptRouteFilter}
           onUndoRouteFilter={undoRouteFilter}
-          approved={mappingsApproved}
         />
       </details>
     </>

@@ -134,7 +134,21 @@ describe("multi-log-type route order (live flaw 2026-07-13)", () => {
     expect(yaml).not.toContain("WARNING");
   });
 
-  it("warns in the header when several match-all pairs overlap", () => {
+  it("calls overlapping match-alls a GENERATOR BUG in the header", () => {
+    // RE-PINNED 2026-08-17 (architecture audit finding 3), from
+    // "WARNING: 2 log types". Not a wording tidy - the meaning changed.
+    //
+    // When this pin was written, overlapping match-alls were the NORMAL
+    // outcome for log types the derivation could not separate, so the header
+    // asked the operator to edit the filters. The placeholder ladder has since
+    // taken that job: an unseparable log type gets a filter matching NOTHING
+    // instead of one matching EVERYTHING. This state is therefore no longer
+    // reachable from buildPipelinePlan at all - note the forceMatchAll helper
+    // below, which exists to construct a plan the planner will not produce.
+    //
+    // So reaching it means the ladder regressed, and telling the operator to
+    // go edit filters would send them to fix something they did not cause.
+    // The header now says the pack should not ship and should be reported.
     const plan = forceMatchAll(
       buildPipelinePlan({
         solutionName: "Acme",
@@ -146,7 +160,10 @@ describe("multi-log-type route order (live flaw 2026-07-13)", () => {
       }),
       ["a", "b"],
     );
-    expect(generateRouteYml(plan)).toContain("WARNING: 2 log types");
+    const yaml = generateRouteYml(plan);
+    expect(yaml).toContain("GENERATOR BUG: 2 log types");
+    // It must not read as routine operator work any more.
+    expect(yaml).not.toContain("Edit the");
   });
 });
 
