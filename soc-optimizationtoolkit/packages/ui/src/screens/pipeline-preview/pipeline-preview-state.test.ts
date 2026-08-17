@@ -611,3 +611,87 @@ describe("derivePipelinePreview - suggested route filters", () => {
     expect(byType.dns).toContain("Query");
   });
 })
+
+/**
+ * Accepting a suggestion is the operator supplying the judgement the sample
+ * corpus could not. The threshold stays where it is - the app still never
+ * applies thin evidence on its own - so acceptance is the ONLY path from a
+ * suggested filter to a shipped one, and every step of that path is pinned
+ * here. The failure this guards is silent: a filter shown, accepted, and then
+ * dropped somewhere between the preview and route.yml would look exactly like
+ * a filter that was never accepted.
+ */
+describe("derivePipelinePreview - accepted route filters", () => {
+  const vals = (v: string) => ({
+    eventCount: 2,
+    values: { act: Array.from({ length: 2 }, () => v) },
+  });
+  function view(routeFilterOverrides?: Readonly<Record<string, string>>) {
+    return derivePipelinePreview({
+      solutionName: "Vendor",
+      packName: "vendor-sentinel",
+      reports: [
+        report({ logType: "firewall", routeCondition: "true" }),
+        report({ logType: "dns", routeCondition: "true" }),
+      ],
+      sampleFormats: { firewall: "cef", dns: "cef" },
+      sampleFieldValues: { firewall: vals("Allow"), dns: vals("Query") },
+      ...(routeFilterOverrides !== undefined ? { routeFilterOverrides } : {}),
+      approved: true,
+    });
+  }
+
+  it("writes the accepted filter into the emitted route.yml", () => {
+    // The whole point. Without this the Accept button is decoration - the
+    // operator would see it applied on screen and get __UNSET__ in the pack.
+    const accepted = "act === 'Allow'";
+    const v = view({ firewall: accepted });
+    expect(v.routeYml).toContain(`filter: "${accepted}"`);
+    expect(v.routeYml).not.toContain("__UNSET__ === \"firewall\"");
+  });
+
+  it("takes the accepted log type out of the placeholder and suggestion lists", () => {
+    // Both lists are calls to ACTION. Leaving a log type in either after its
+    // filter is in force reads as work still outstanding.
+    const v = view({ firewall: "act === 'Allow'" });
+    expect(v.placeholderLogTypes).toEqual(["dns"]);
+    expect(v.routeFilterSuggestions.map((s) => s.logType)).toEqual(["dns"]);
+  });
+
+  it("leaves every OTHER log type exactly as it was", () => {
+    // Accepting one filter silently rerouting a sibling is the failure that
+    // would be hardest to see - the pack builds, the YAML validates, and the
+    // wrong events land in the wrong table.
+    const before = view();
+    const after = view({ firewall: "act === 'Allow'" });
+    const dnsBefore = before.tables.find((t) => t.logType === "dns");
+    const dnsAfter = after.tables.find((t) => t.logType === "dns");
+    expect(dnsAfter?.routeCondition).toBe(dnsBefore?.routeCondition);
+    expect(dnsAfter?.routeCondition).toContain("__UNSET__");
+  });
+
+  it("applies the operator's filter verbatim, not a re-derived one", () => {
+    // The operator may accept a suggestion and then hand-correct it. Whatever
+    // reaches this input is what ships; the planner must not "improve" it.
+    const handWritten = "act.startsWith('Allo') && src != null";
+    const v = view({ firewall: handWritten });
+    const firewall = v.tables.find((t) => t.logType === "firewall");
+    expect(firewall?.routeCondition).toBe(handWritten);
+  });
+
+  it("keeps the pack valid, so an accepted filter can actually be built", () => {
+    // A filter that breaks route.yml validation would block the build entirely,
+    // which is a worse outcome than the placeholder it replaced.
+    const v = view({ firewall: "act === 'Allow'" });
+    expect(v.valid).toBe(true);
+    expect(v.routeYmlIssues).toEqual([]);
+  });
+
+  it("ignores an override for a log type that is not in the plan", () => {
+    // Overrides outlive solution changes. One naming a log type this plan does
+    // not have must not invent a route or throw.
+    const v = view({ nonexistent: "act === 'Nope'" });
+    expect(v.routeYml).not.toContain("Nope");
+    expect(v.placeholderLogTypes.sort()).toEqual(["dns", "firewall"]);
+  });
+})

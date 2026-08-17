@@ -54,6 +54,19 @@ export interface PipelinePreviewSectionProps {
   enrichments?: Readonly<Record<string, readonly EnrichmentField[]>>;
   /** Corrected DeviceVendor/DeviceProduct keyed by logType. */
   identityOverrides?: Readonly<Record<string, CefIdentityOverride>>;
+  /** Accepted route filters keyed by logType (replace that log type's filter). */
+  routeFilterOverrides?: Readonly<Record<string, string>>;
+  /**
+   * Accept a suggested route filter. Absent = the suggestions render read-only,
+   * which is what a caller that cannot persist the choice should do: an Accept
+   * button whose result the build would not see is worse than no button.
+   */
+  onAcceptRouteFilter?: (logType: string, filter: string) => void;
+  /**
+   * Undo an accepted filter, returning that log type to its placeholder. Absent
+   * = accepted filters render without an Undo control.
+   */
+  onUndoRouteFilter?: (logType: string) => void;
   /** The mapping-review content-path gate (every table approved, not stale). */
   approved: boolean;
 }
@@ -112,6 +125,9 @@ export function PipelinePreviewSection({
   sampleFieldValues,
   enrichments,
   identityOverrides,
+  routeFilterOverrides,
+  onAcceptRouteFilter,
+  onUndoRouteFilter,
   approved,
 }: PipelinePreviewSectionProps) {
   const view = useMemo(
@@ -126,6 +142,7 @@ export function PipelinePreviewSection({
         ...(sampleFieldValues !== undefined ? { sampleFieldValues } : {}),
         ...(enrichments !== undefined ? { enrichments } : {}),
         ...(identityOverrides !== undefined ? { identityOverrides } : {}),
+        ...(routeFilterOverrides !== undefined ? { routeFilterOverrides } : {}),
         approved,
       }),
     [
@@ -138,9 +155,21 @@ export function PipelinePreviewSection({
       sampleFieldValues,
       enrichments,
       identityOverrides,
+      routeFilterOverrides,
       approved,
     ],
   );
+
+  // Only overrides for log types the CURRENT plan still has. An override left
+  // behind by a solution the operator has since changed is not something they
+  // accepted here, and offering Undo for a log type that is not on screen
+  // would be a control with no visible effect.
+  const acceptedFilters = useMemo(() => {
+    const entries = Object.entries(routeFilterOverrides ?? {});
+    if (entries.length === 0) return entries;
+    const present = new Set(view.tables.map((t) => t.logType));
+    return entries.filter(([logType]) => present.has(logType));
+  }, [routeFilterOverrides, view.tables]);
 
   if (!view.available) {
     return (
@@ -196,7 +225,8 @@ export function PipelinePreviewSection({
         <div className="pipeline-preview-valid pipeline-preview-valid-bad">
           <strong>
             {view.placeholderLogTypes.length} log type
-            {view.placeholderLogTypes.length === 1 ? "" : "s"} need a route
+            {view.placeholderLogTypes.length === 1 ? "" : "s"}{" "}
+            {view.placeholderLogTypes.length === 1 ? "needs" : "need"} a route
             filter before {view.placeholderLogTypes.length === 1 ? "it" : "they"}{" "}
             can receive events.
           </strong>{" "}
@@ -216,19 +246,65 @@ export function PipelinePreviewSection({
         The derivation often DID work out a filter and withheld it because the
         samples were too thin to bet a route on. Showing it costs nothing and
         saves the operator rediscovering what the generator already found -
-        they know the vendor that three sample events do not describe. Shown,
-        never applied: accepting is a human act, which is the whole point.
+        they know the vendor that three sample events do not describe.
+
+        Never applied AUTOMATICALLY, which is not the same as never applied.
+        The generator will not bet a route on three events; the operator can,
+        because they know the vendor. Accept is that act, and it writes the
+        filter into the same derivation the build reads - so a filter shown
+        here and accepted cannot be dropped on the way to route.yml.
       */}
       {view.routeFilterSuggestions.length > 0 && (
         <div className="pipeline-preview-suggestions">
           <span className="field-label">
             Suggested filters, from too few events to apply automatically
-            <InfoTip text="These are structurally valid discriminators - a field constant within the log type and different in every sibling that carries it - found in samples too small to trust. A filter that fits three events can be precise on the sample and wrong on live traffic, so the generator will not apply one; it shows you what it found instead. Check each against what you know the vendor sends, then paste it over the __UNSET__ filter in route.yml. Adding more sample events and re-analyzing will apply them automatically." />
+            <InfoTip text="These are structurally valid discriminators - a field constant within the log type and different in every sibling that carries it - found in samples too small to trust. A filter that fits three events can be precise on the sample and wrong on live traffic, so the generator will not apply one on its own; it shows you what it found. Accept the ones you recognise as how this vendor labels its log types and they go into the pack's route.yml; leave the rest and edit route.yml by hand. Adding more sample events and re-analyzing applies them without asking." />
           </span>
           {view.routeFilterSuggestions.map((s) => (
             <div className="pipeline-preview-suggestion-row" key={s.logType}>
               <code className="code-chip">{s.logType}</code>
               <code className="pipeline-preview-suggestion-filter">{s.filter}</code>
+              {onAcceptRouteFilter !== undefined && (
+                <button
+                  type="button"
+                  className="pipeline-preview-suggestion-accept"
+                  onClick={() => onAcceptRouteFilter(s.logType, s.filter)}
+                >
+                  Accept
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/*
+        Accepted filters leave routeFilterSuggestions (the log type is no longer
+        placeholdered), so without this they would vanish with no trace of what
+        was applied - the operator could not tell an accepted filter from one
+        the generator derived on its own, nor undo it. Listed separately rather
+        than left in the suggestions block, because these two ask nothing and
+        everything of the reader respectively.
+      */}
+      {acceptedFilters.length > 0 && (
+        <div className="pipeline-preview-suggestions">
+          <span className="field-label">
+            Route filters you accepted
+            <InfoTip text="These filters came from sample evidence the generator judged too thin to apply on its own, and you accepted them. They are in the plan and will be written to the pack's route.yml exactly as shown. Undo returns the log type to a placeholder filter that matches nothing, which is where it started." />
+          </span>
+          {acceptedFilters.map(([logType, filter]) => (
+            <div className="pipeline-preview-suggestion-row" key={logType}>
+              <code className="code-chip">{logType}</code>
+              <code className="pipeline-preview-suggestion-filter">{filter}</code>
+              {onUndoRouteFilter !== undefined && (
+                <button
+                  type="button"
+                  className="pipeline-preview-suggestion-accept"
+                  onClick={() => onUndoRouteFilter(logType)}
+                >
+                  Undo
+                </button>
+              )}
             </div>
           ))}
         </div>

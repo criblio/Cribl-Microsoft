@@ -166,6 +166,29 @@ export interface PipelinePreviewInputs {
    */
   identityOverrides?: Readonly<Record<string, CefIdentityOverride>>;
   /**
+   * Route filters the operator ACCEPTED from routeFilterSuggestions, keyed by
+   * logType. Each replaces that log type's route condition, which takes it out
+   * of the planner's discrimination ladder entirely (a table whose condition is
+   * not match-all is skipped), so the accepted filter reaches route.yml verbatim.
+   *
+   * Why acceptance exists at all: the value discriminator withholds a filter it
+   * cannot back with enough events, and curated sample corpora are exactly the
+   * thin case - 8 of 10 Zscaler log types placeholdered, several with a correct
+   * filter derived and then withheld. Showing that filter and making the
+   * operator retype it into route.yml is the worst of both. The threshold stays
+   * honest (the app still never applies thin evidence on its own); this is the
+   * operator supplying the judgement the events could not.
+   *
+   * Accepting one log type's filter does NOT change any sibling's: each table's
+   * discrimination is derived from the sample values independently, and the
+   * planner placeholders every table it cannot separate rather than leaving a
+   * catch-all to be promoted. So accepting is local by construction - it takes
+   * one log type out of placeholderLogTypes and leaves the rest exactly as they
+   * were. Pinned, because "accepting one quietly rerouted another" is the
+   * failure that would be hardest to see.
+   */
+  routeFilterOverrides?: Readonly<Record<string, string>>;
+  /**
    * The mapping-review content-path gate (deriveMappingReviewGate().ready): every
    * table-with-mappings approved and not stale. The preview renders its tables
    * only when this is true (else the always-visible-disabled empty state).
@@ -312,6 +335,7 @@ export function reportToPlanInput(
   enrichments?: readonly EnrichmentField[],
   identityOverride?: CefIdentityOverride,
   sampleFieldValues?: LogTypeFieldValues,
+  routeFilterOverride?: string,
 ): TablePlanInput {
   const mappings = effectiveReportMappings(report, overrides);
   return {
@@ -342,11 +366,13 @@ export function reportToPlanInput(
         }
       : {}),
     // The report mirrors the Cribl route condition; feed it as routing so the
-    // emitted route.yml filter matches what the gap analysis showed.
+    // emitted route.yml filter matches what the gap analysis showed. An
+    // ACCEPTED suggestion wins over the report: the operator chose it after
+    // being shown it, which is stronger evidence than the report's default.
     routing: {
       tableName: report.tableName,
       outputStream: "",
-      routeCondition: report.routeCondition,
+      routeCondition: routeFilterOverride ?? report.routeCondition,
       eventSimpleNames: [],
       columns: [],
       typeConversions: [],
@@ -499,6 +525,7 @@ export function derivePipelinePreview(
         inputs.enrichments?.[r.logType],
         inputs.identityOverrides?.[r.logType],
         inputs.sampleFieldValues?.[r.logType],
+        inputs.routeFilterOverrides?.[r.logType],
       ),
     ),
   });
