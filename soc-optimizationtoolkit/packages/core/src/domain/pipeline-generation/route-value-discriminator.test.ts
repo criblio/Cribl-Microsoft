@@ -17,6 +17,7 @@
 import { describe, expect, it } from "vitest";
 import {
   deriveValueDiscriminator,
+  fieldPresence,
   fieldValuesFromRecords,
   type LogTypeFieldValues,
 } from "./route-value-discriminator";
@@ -416,5 +417,50 @@ describe("deriveValueDiscriminator - the value must name the log type", () => {
     const dns = lt("dns", { event_type: ["dns", "dns-tcp"] });
     const other = lt("tunnel", { event_type: ["tunnel", "tunnel"] });
     expect(deriveValueDiscriminator(dns, [other], "json")).toBeNull();
+  });
+});
+
+/**
+ * The shared presence predicate (architecture audit 2026-08-17, finding 1).
+ *
+ * Both discriminators ask "is this field characteristic of the log type, or of
+ * one event?". They had separate inline arithmetic and already disagreed on the
+ * absent case - the value path rejected, the presence path accepted - which is
+ * the one-rule-two-implementations shape this repo keeps finding in audits.
+ *
+ * Three states, not a boolean, because the callers genuinely differ on the
+ * third and now have to say so at the call site rather than by accident.
+ */
+describe("fieldPresence - one definition, three answers", () => {
+  const own = lt("TRAFFIC", {
+    always: ["a", "b", "c"],
+    sometimes: ["x"],
+  });
+
+  it("separates every-event from some-events", () => {
+    expect(fieldPresence(own, "always")).toBe("every-event");
+    // A per-event id lands here: one occurrence across a large sample.
+    expect(fieldPresence(own, "sometimes")).toBe("some-events");
+  });
+
+  it("reports a field the evidence never saw as not-in-evidence", () => {
+    // NOT "some-events". The two callers treat this case differently and the
+    // distinction has to survive, or the divergence goes back to being silent.
+    expect(fieldPresence(own, "absent")).toBe("not-in-evidence");
+  });
+
+  it("treats missing or empty evidence as not-in-evidence", () => {
+    expect(fieldPresence(undefined, "any")).toBe("not-in-evidence");
+    expect(fieldPresence(lt("EMPTY", {}, 0), "any")).toBe("not-in-evidence");
+  });
+
+  it("is what the value discriminator rejects a partial field with", () => {
+    // Ties the shared predicate to the behaviour it governs: `act` names the
+    // log type and is single-valued, and is STILL refused because one event
+    // lacks it.
+    const partial = lt("Allowed", { act: ["Allowed", "Allowed"] }, 3);
+    const sib = lt("Blocked", { act: ["Blocked", "Blocked", "Blocked"] });
+    expect(fieldPresence(partial, "act")).toBe("some-events");
+    expect(deriveValueDiscriminator(partial, [sib], "cef")).toBeNull();
   });
 });

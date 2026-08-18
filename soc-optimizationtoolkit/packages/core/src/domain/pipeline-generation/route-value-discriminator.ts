@@ -19,24 +19,40 @@
  * satisfy "constant" and can never be picked, no matter how neatly a handful of
  * sample events happen to partition.
  *
+ * WHAT QUALIFIES A FIELD, in the order the guards run. The header used to
+ * describe three evidence guards and a corpus-cardinality budget; the budget
+ * was removed 2026-08-13 (the column test made it unreachable) and the rule
+ * that decides most cases arrived 2026-08-17, so this list is the current one:
+ *
+ *   1. ITS VALUE NAMES THE LOG TYPE. The governing rule (user, 2026-08-17):
+ *      each vendor log type can be defined with the contents of the log
+ *      itself, so the field that DEFINES a log type carries a value that names
+ *      it - `action` is "Cautioned" in CAUTIONED, `DeviceEventClassID` is
+ *      "AUTH" in AUTH. Containment either way, case-insensitive. See
+ *      {@link namesLogType}.
+ *   2. PRESENT IN EVERY OWN EVENT, via the shared {@link fieldPresence}. A
+ *      field only sometimes there yields a filter that misses the rest.
+ *   3. EXACTLY ONE OWN VALUE - constant, therefore categorical. This is what
+ *      excludes per-event data.
+ *   4. COLUMN-SHAPED ACROSS THE CORPUS - every sibling carrying the field is
+ *      single-valued on it, and those values are pairwise distinct.
+ *
  * THE FAILURE THIS MUST NOT INTRODUCE. Sample sets here are tiny (one Zscaler
  * log type had a single event). A filter over-fitted to them would match the
  * samples, pass every test, deploy clean, and then silently drop live events
  * that differ - trading a visible dead route for an invisible one, which is
- * strictly worse. Hence three guards, all of them about evidence rather than
- * cleverness:
+ * strictly worse. That is not hypothetical: with only the structural guards,
+ * this module offered `client_tls_sig_pqc_offers === '1'` for Zscaler ALLOWED,
+ * a TLS capability flag that is a structurally perfect discriminator column
+ * and means nothing. Guard 1 is what rejects it.
  *
- *   1. PRESENT IN EVERY OWN EVENT. A field that is only sometimes there yields
- *      a filter that misses the events lacking it.
- *   2. EXACTLY ONE OWN VALUE. Constant, i.e. categorical. This is what excludes
- *      per-event data.
- *   3. CATEGORICAL ACROSS THE CORPUS. The field's total distinct values must
- *      stay near the number of log types. An id-like field can be constant
- *      within each tiny sample by accident; a real category cannot explode.
- *
- * When no field clears all three the answer is null, and the caller keeps the
- * match-all and reports it as unreachable. An honest dead route the operator
- * is told about beats a confident filter built on one event.
+ * WHEN NOTHING QUALIFIES the answer is null and the caller emits a PLACEHOLDER
+ * filter - one that matches no event - so the log type keeps its route,
+ * pipeline, lookup and sample and starts working the moment an operator writes
+ * a filter. It is NOT left as a match-all: that is what made routes unreachable
+ * (every route is final, so the first match-all swallowed everything). An
+ * unfinished route the operator is told about beats a confident filter built on
+ * one event.
  *
  * Pure: no IO, no fetch, no React, no Date/crypto/Math.random.
  */
@@ -135,6 +151,47 @@ export function fieldValuesFromRecords(
   return { logType, eventCount: records.length, values };
 }
 
+
+/**
+ * How much of a log type carries a field: the ONE definition of "is this field
+ * characteristic of the log type, or of one event?".
+ *
+ * Both discriminators ask this. They gave different answers to the same input
+ * until 2026-08-17, and not on purpose - the value path rejected a field it
+ * could not find in the evidence, the presence path accepted one, and each had
+ * its own inline arithmetic. That is the shape of defect this codebase keeps
+ * finding in audits: one rule, two implementations, free to drift.
+ *
+ * Three states rather than a boolean, because the callers genuinely differ on
+ * the third and should have to say so:
+ *
+ *   - `every-event`   the field is in all of them. Characteristic. Both accept.
+ *   - `some-events`   present, but not always. Both REJECT: a filter built on
+ *                     it misses the events lacking it, and a per-event id
+ *                     lands here (one event each across a large sample).
+ *   - `not-in-evidence` the field is not in the parsed records at all. The
+ *                     value path rejects (it needs a value to compare), the
+ *                     presence path accepts (its field names come from the
+ *                     MAPPINGS, which can legitimately name something the
+ *                     parser normalised away). Neither is wrong; making it a
+ *                     named state is what stops the difference being accidental.
+ */
+export type FieldPresence = "every-event" | "some-events" | "not-in-evidence";
+
+export function fieldPresence(
+  own: LogTypeFieldValues | undefined,
+  field: string,
+): FieldPresence {
+  if (own === undefined || own.eventCount === 0) {
+    return "not-in-evidence";
+  }
+  const seen = own.values[field];
+  if (seen === undefined) {
+    return "not-in-evidence";
+  }
+  return seen.length === own.eventCount ? "every-event" : "some-events";
+}
+
 /** Escape a value for a single-quoted JS string literal. */
 function jsString(value: string): string {
   return `'${value.replace(/\\/g, "\\\\").replace(/'/g, "\\'")}'`;
@@ -142,14 +199,13 @@ function jsString(value: string): string {
 
 /** The single value this log type always carries for `field`, else null. */
 function constantValue(own: LogTypeFieldValues, field: string): string | null {
-  const observed = own.values[field];
-  if (observed === undefined || observed.length === 0) {
+  // Guard 1: present in EVERY event, not merely in some. This path also
+  // rejects `not-in-evidence` - it needs an actual value to compare against,
+  // so a field it cannot see is no use to it whatever the mappings say.
+  if (fieldPresence(own, field) !== "every-event") {
     return null;
   }
-  // Guard 1: present in EVERY event, not merely in some.
-  if (observed.length !== own.eventCount) {
-    return null;
-  }
+  const observed = own.values[field] ?? [];
   // Guard 2: exactly one distinct value - constant, therefore categorical.
   const distinct = new Set(observed);
   if (distinct.size !== 1) {
