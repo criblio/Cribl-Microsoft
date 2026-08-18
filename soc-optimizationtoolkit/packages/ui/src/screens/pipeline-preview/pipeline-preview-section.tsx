@@ -59,6 +59,27 @@ export interface PipelinePreviewSectionProps {
   onUndoRouteFilter?: (logType: string) => void;
 }
 
+
+/**
+ * The example filter to show for a log type, by the format its events arrive in.
+ *
+ * CSV needs a different one, and the difference is not cosmetic. Cribl routes
+ * run BEFORE the pipeline, so a CSV event is still a positional line in `_raw`
+ * with no parsed fields - which is exactly why both discriminators refuse to
+ * derive a filter for CSV at all. Offering `event_type === 'dns'` there invites
+ * the operator to write the one thing that cannot work: a field test that is
+ * undefined at route time, on a route that then silently receives nothing.
+ *
+ * Found by validating CSV route derivation 2026-08-17. Every CSV log type in a
+ * multi-log-type pack placeholders by construction, so this hint is the ONLY
+ * guidance a CSV vendor's operator ever gets.
+ */
+function filterExample(format: string | undefined): string {
+  return format === "csv"
+    ? "_raw.startsWith('login,')"
+    : "event_type === 'dns'";
+}
+
 /** The count summary line under a reduction rule group. */
 function ruleKindLabel(kind: ReductionRuleView["kind"]): string {
   if (kind === "keep") return "KEEP";
@@ -143,6 +164,9 @@ export function PipelinePreviewSection({
   // firewall-BLOCKED both send action="Blocked", so no single field separates
   // them and only a human can say what does.
   const unsuggested = view.placeholderLogTypes;
+  const formatByLogType = new Map(
+    view.tables.map((t) => [t.logType, t.sourceFormat]),
+  );
 
   // Draft text per log type. Deliberately NOT lifted to the caller: a filter
   // being typed is not a decision yet, and the plan must not re-derive on every
@@ -232,8 +256,16 @@ export function PipelinePreviewSection({
         <div className="pipeline-preview-suggestions">
           <span className="field-label">
             Write a filter for the rest
-            <InfoTip text="Nothing in these samples is shaped like a discriminator for these log types - no field is constant within one and different across the others - so there is nothing to suggest. Write an expression that identifies the log type, the same JavaScript Cribl route filters use (for example: event_type === 'dns'). It goes into the pack's route.yml exactly as typed. Leave any of them blank and that log type ships with a placeholder filter you can still edit in Cribl's Routes tab later." />
+            <InfoTip text="Nothing in these samples is shaped like a discriminator for these log types - no field is constant within one and different across the others - so there is nothing to suggest. Write an expression that identifies the log type, the same JavaScript Cribl route filters use. It goes into the pack's route.yml exactly as typed. Leave any of them blank and that log type ships with a placeholder filter you can still edit in Cribl's Routes tab later." />
           </span>
+          {[...formatByLogType.values()].some((f) => f === "csv") && (
+            <span className="field-hint">
+              CSV events reach the route unparsed, so a field test like
+              {" "}<code>action === &apos;Allowed&apos;</code>{" "}
+              is undefined there however the pipeline maps it later. Match on{" "}
+              <code>_raw</code> instead.
+            </span>
+          )}
           {unsuggested.map((logType) => {
             const draft = drafts[logType] ?? "";
             const apply = () => {
@@ -249,7 +281,7 @@ export function PipelinePreviewSection({
                   type="text"
                   value={draft}
                   aria-label={`Route filter for ${logType}`}
-                  placeholder="event_type === 'dns'"
+                  placeholder={filterExample(formatByLogType.get(logType))}
                   onChange={(e) => {
                     const { value } = e.target;
                     setDrafts((prev) => ({ ...prev, [logType]: value }));

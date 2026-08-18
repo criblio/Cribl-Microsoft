@@ -951,3 +951,47 @@ quieter cap.
 **`unreachableLogTypes` can no longer report anything - RESOLVED 2026-08-17.**
 See the route-yml module header: the placeholder ladder superseded it, and it is
 now retained as an invariant assertion rather than a user-facing warning.
+
+**Bare CSS classes - SWEPT AND CLOSED 2026-08-17, no code change.** A class-name
+sweep after the route-filter suggestions block shipped unstyled found 54
+candidates: class names used in TSX with no rule in any stylesheet. Triaged to
+21 "bare" (every class on the element undefined) and 34 "modifier" (base styled,
+variant does nothing).
+
+Two were real and were fixed in 1.11.6 - `.link-button` rendered as a full chrome
+button, and `.identity-mismatch-block/-row/-applied` had no container or row
+layout while their `.identity-block` siblings did.
+
+Of the rest: five were SCANNER ARTIFACTS (`ok`, `failed`, `running`, `idle`,
+`error` are literals inside a `status status-${...}` interpolation, and
+`status-ok` etc. are defined). The remaining twelve were checked ON SCREEN and
+all render correctly - they are grouping wrappers whose children carry the
+styling, or semantic elements (`<a>`, table rows) the browser styles anyway.
+Two of them, `content-install` and `numbered-section-body`, are used as TEST
+SELECTORS, so they are structural hooks rather than dead names.
+
+Deliberately NOT "fixed": adding rules to wrappers that never needed them is
+churn that looks like progress, and deleting the names would break two test
+files. Recorded here so the sweep is not re-run and re-triaged from scratch.
+The script shape that found it: extract every className literal, diff against
+the selectors the stylesheets define, then classify by whether the element has
+ANY styled class - the count alone is meaningless.
+
+**CSV route derivation - VALIDATED 2026-08-17, one defect found and fixed.**
+Both discriminators return early for CSV (data rows are positional; at route
+time the event is unparsed and the field name never appears in `_raw`), so
+EVERY CSV log type in a multi-log-type pack placeholders by construction, even
+when its values name their log types perfectly. Verified against the planner:
+three CSV log types named Allowed/Blocked/Audit with matching values all
+produced `__UNSET__` filters and zero unreachable routes.
+
+That is correct, and it means the write-a-filter hint is the ONLY routing
+guidance a CSV vendor's operator ever gets - which is where the defect was. It
+offered `event_type === 'dns'`, a parsed-field test that cannot work at route
+time for exactly the reason the discriminators bail. Now format-aware: CSV gets
+a `_raw`-based example plus a line explaining why a field test is undefined
+there.
+
+Open follow-up: the placeholder filter itself (`__UNSET__ === 'x'`) is equally
+unmatched for CSV, which is fine, but nothing yet tells the operator that a CSV
+pack can never route automatically BEFORE they reach the preview.
