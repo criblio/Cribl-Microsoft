@@ -56,7 +56,7 @@ function tablesResponse(names: string[]) {
 function renderPicker(opts: {
   capabilities?: CapabilitySet;
   request?: ReturnType<typeof vi.fn>;
-  onSelected?: ReturnType<typeof vi.fn>;
+  onLoaded?: ReturnType<typeof vi.fn>;
 }) {
   const request = opts.request ?? vi.fn().mockResolvedValue(tablesResponse([]));
   const ports = {
@@ -69,8 +69,7 @@ function renderPicker(opts: {
         target={TARGET}
         capabilities={opts.capabilities ?? emptyCapabilitySet()}
         capabilityContext={{ azureIdentityPresent: true, criblReachable: true }}
-        selectedTable={null}
-        onTableSelected={opts.onSelected ?? vi.fn()}
+        onTablesLoaded={opts.onLoaded ?? vi.fn()}
       />
     </PortsProvider>,
   );
@@ -135,9 +134,9 @@ describe("TablePickerSection - listing and selection", () => {
     renderPicker({ request });
     fireEvent.click(screen.getByRole("button", { name: /Load tables/ }));
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: "SecurityEvent" })).toBeTruthy();
+      expect(screen.getByText("SecurityEvent")).toBeTruthy();
     });
-    expect(screen.getByRole("button", { name: "App_CL" })).toBeTruthy();
+    expect(screen.getByText("App_CL")).toBeTruthy();
     expect(screen.getByText("2 tables")).toBeTruthy();
   });
 
@@ -150,42 +149,41 @@ describe("TablePickerSection - listing and selection", () => {
     renderPicker({ request });
     fireEvent.click(screen.getByRole("button", { name: /Load tables/ }));
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: "App_CL" })).toBeTruthy();
+      expect(screen.getByText("App_CL")).toBeTruthy();
     });
     fireEvent.change(screen.getByLabelText("Filter tables"), {
       target: { value: "_cl" },
     });
     expect(screen.getByText("1 of 2 tables")).toBeTruthy();
-    expect(screen.queryByRole("button", { name: "SecurityEvent" })).toBeNull();
+    expect(screen.queryByText("SecurityEvent")).toBeNull();
   });
 
-  it("hands the caller the table AND its live schema on selection", async () => {
-    // The selection is only useful if the schema travels with it - that is
-    // what replaces the derived destSchema and re-runs the analysis.
-    const request = vi.fn().mockImplementation((req: { path: string }) =>
-      req.path.endsWith("/SecurityEvent")
-        ? Promise.resolve({
-            status: 200,
-            body: {
-              properties: {
-                schema: { columns: [{ name: "TimeGenerated", type: "datetime" }] },
-              },
-            },
-          })
-        : Promise.resolve(tablesResponse(["SecurityEvent"])),
-    );
-    const onSelected = vi.fn();
-    renderPicker({ request, onSelected });
+  it("hands the loaded tables UP, so each log type can offer them", async () => {
+    // The panel loads; it does not select. Selection is per log type on the
+    // mapping-review cards, because a solution's log types can land in
+    // different tables - each its own DCR and Sentinel destination.
+    const request = vi
+      .fn()
+      .mockResolvedValue(tablesResponse(["CrowdStrikeAlerts_CL", "SecurityEvent"]));
+    const onLoaded = vi.fn();
+    renderPicker({ request, onLoaded });
     fireEvent.click(screen.getByRole("button", { name: /Load tables/ }));
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: "SecurityEvent" })).toBeTruthy();
+      expect(onLoaded).toHaveBeenCalled();
     });
-    fireEvent.click(screen.getByRole("button", { name: "SecurityEvent" }));
+    const handed = onLoaded.mock.calls[0]![0] as Array<{ name: string }>;
+    expect(handed.map((t) => t.name)).toEqual([
+      "CrowdStrikeAlerts_CL",
+      "SecurityEvent",
+    ]);
+  });
+
+  it("reports an empty listing upward too, so stale options are dropped", async () => {
+    const onLoaded = vi.fn();
+    renderPicker({ onLoaded });
+    fireEvent.click(screen.getByRole("button", { name: /Load tables/ }));
     await waitFor(() => {
-      expect(onSelected).toHaveBeenCalled();
+      expect(onLoaded).toHaveBeenCalledWith([]);
     });
-    const [table, schema] = onSelected.mock.calls[0] as [string, unknown];
-    expect(table).toBe("SecurityEvent");
-    expect(schema).toEqual([{ name: "TimeGenerated", type: "datetime" }]);
   });
 });

@@ -63,6 +63,7 @@ import {
   effectiveCefIdentity,
   createBundledSchemaCatalog,
   createLiveTableSchemaCatalog,
+  fetchWorkspaceTableSchema,
   fieldValuesFromRecords,
   listDcrInventory,
   placeholderWarning,
@@ -98,6 +99,7 @@ import type {
   OnboardTableOutcome,
   OperationOptions,
   PackScaffoldInput,
+  WorkspaceTable,
   PackVendorSample,
   SolutionRef,
   CefIdentityFinding,
@@ -682,43 +684,78 @@ export function IntegrateScreen({
     });
   }, []);
 
-  // The workspace table the operator pointed the gap analysis at, and its LIVE
-  // columns (backlog item 2). Null means the derived solution/sample schema is
-  // still in charge, which is the default and remains correct for tables that
-  // do not exist until a connector is enabled.
-  const [pickedTable, setPickedTable] = useState<{
-    name: string;
-    schema: DestField[];
-  } | null>(null);
+  // The tables that actually exist in the workspace, offered to EVERY log
+  // type's Destination table selector. Loaded once; the choice is per log type
+  // because a solution's log types can land in different tables - and each
+  // table becomes its own DCR and its own Sentinel destination in the pack.
+  const [workspaceTables, setWorkspaceTables] = useState<readonly string[]>([]);
+  // Live columns keyed by TABLE, not by log type: two log types pointed at the
+  // same table share one schema and one destination, which is exactly what the
+  // pack emits. Fetched once per table and reused.
+  const [liveSchemas, setLiveSchemas] = useState<
+    Readonly<Record<string, DestField[]>>
+  >({});
   // Marked STALE, not cleared (user decision 2026-08-10): every mapping,
   // coverage and overflow verdict on screen was computed against a different
   // destination schema, and clearing them would hide that they ever existed.
   const [analysisStale, setAnalysisStale] = useState(false);
 
-  const handleTableSelected = useCallback(
-    (name: string, schema: DestField[] | null) => {
-      // A null schema means the table exists but exposes no columns yet. That
-      // is still a selection - the empty override is the honest answer, and
-      // falling back would analyse against the derived schema while the UI
-      // says the live table is in use.
-      setPickedTable({ name, schema: schema ?? [] });
+  const handleTablesLoaded = useCallback((tables: readonly WorkspaceTable[]) => {
+    setWorkspaceTables(tables.map((t) => t.name));
+  }, []);
+
+  // A log type was pointed at a table. Fetch that table's live columns unless
+  // they are already known - the re-analysis reads them through the catalog.
+  const handleTableChosen = useCallback(
+    // The logType is part of the contract but not needed here: schemas are
+    // keyed by TABLE, because two log types pointed at the same table share
+    // one schema and one destination - which is exactly what the pack emits.
+    (_logType: string, table: string) => {
       setAnalysisStale(gapReports.length > 0);
+      if (!workspaceTables.includes(table)) {
+        // Not a table that exists yet (a solution candidate, or one the pack
+        // will create). The derived schema is the right authority there.
+        return;
+      }
+      setLiveSchemas((prev) => {
+        if (prev[table] !== undefined) return prev;
+        void (async () => {
+          try {
+            const schema = await fetchWorkspaceTableSchema(
+              ports.azure,
+              {
+                subscriptionId: config.subscriptionId,
+                resourceGroup: config.resourceGroup,
+                workspaceName: config.workspaceName,
+              },
+              table,
+              ports.logger,
+            );
+            // An empty array is still an override: a provisioned but
+            // unmaterialized table really has no columns, and falling back
+            // would analyse against the derived schema while the card says
+            // this table is in use.
+            setLiveSchemas((cur) => ({ ...cur, [table]: schema ?? [] }));
+          } catch {
+            // Leave it unset: the derived schema remains in charge and the
+            // analysis still runs. A failed schema read must not cost the
+            // operator the re-analysis they asked for.
+          }
+        })();
+        return prev;
+      });
     },
-    [gapReports.length],
+    [gapReports.length, workspaceTables, ports.azure, ports.logger, config],
   );
 
-  // The live columns REPLACE the derived schema for that one table; every
-  // other table still resolves through the bundled/solution tiers.
+  // The live columns REPLACE the derived schema for the tables that have them;
+  // every other table still resolves through the bundled/solution tiers.
   const schemaCatalog = useMemo(
     () =>
-      pickedTable === null
+      Object.keys(liveSchemas).length === 0
         ? undefined
-        : createLiveTableSchemaCatalog(
-            pickedTable.name,
-            pickedTable.schema,
-            createBundledSchemaCatalog(),
-          ),
-    [pickedTable],
+        : createLiveTableSchemaCatalog(liveSchemas, createBundledSchemaCatalog()),
+    [liveSchemas],
   );
 
   // THE content plan, composed once. Both the preview panel and the pack build
@@ -1390,8 +1427,7 @@ export function IntegrateScreen({
           }}
           capabilities={capabilities}
           capabilityContext={capabilityContext}
-          selectedTable={pickedTable?.name ?? null}
-          onTableSelected={handleTableSelected}
+          onTablesLoaded={handleTablesLoaded}
         />
       )}
       {/* STALE, not cleared: the results below were computed against a
@@ -1408,6 +1444,8 @@ export function IntegrateScreen({
         learnedCache={ports.contentCache}
         ruleFields={ruleFields}
         {...(schemaCatalog !== undefined ? { catalog: schemaCatalog } : {})}
+        workspaceTables={workspaceTables}
+        onTableChosen={handleTableChosen}
         onGateChange={setMappingsApproved}
         onReportsChange={(reports) => {
           // A completed run is about the CURRENT table, so the staleness the

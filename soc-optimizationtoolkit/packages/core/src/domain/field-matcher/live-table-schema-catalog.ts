@@ -1,18 +1,25 @@
 /**
- * A schema catalog tier for a table the operator PICKED from the live
+ * A schema catalog tier for tables the operator PICKED from the live
  * workspace (backlog item 2).
  *
- * THE DECISION THIS ENCODES (user, 2026-08-10): once a real table is named,
- * ARM is the better authority, so its live columns REPLACE the derived schema
- * for that table rather than being reconciled with it. Blending the two would
+ * PER LOG TYPE, NOT PER ANALYSIS (user, 2026-08-18). A solution rarely lands in
+ * one table: CrowdStrike alone can map its log types across several, and each
+ * destination is its own DCR with its own schema. So this tier holds a MAP -
+ * every table any log type was pointed at - rather than a single override. An
+ * earlier single-table version could only express "the whole analysis targets
+ * one table", which is the wrong shape for the problem.
+ *
+ * THE DECISION THIS ENCODES (user, 2026-08-10): once a real table is named, ARM
+ * is the better authority, so its live columns REPLACE the derived schema for
+ * that table rather than being reconciled with it. Blending the two would
  * produce a schema matching neither source - some columns as the solution
  * declares them, some as the workspace actually has them - and every mapping
  * verdict computed against it would be about a table that does not exist.
  *
- * REPLACEMENT IS SCOPED TO THE ONE TABLE. Everything else still resolves
- * through the fallback, because picking a table says nothing about the others;
- * the derived path remains correct for tables that do not materialize until a
- * connector is enabled.
+ * REPLACEMENT IS SCOPED TO THE TABLES IN THE MAP. Everything else still
+ * resolves through the fallback, because pointing one log type at a real table
+ * says nothing about the others; the derived path remains correct for tables
+ * that do not materialize until a connector is enabled.
  *
  * Layered like {@link createSolutionSchemaCatalog}: wrap a fallback, override
  * what this tier knows, delegate the rest. Same shape, so the tiers compose in
@@ -26,29 +33,35 @@
 import type { DcrSchemaColumn, SchemaCatalog } from "../../ports/schema-catalog";
 
 /**
- * Wrap `fallback` so `tableName` resolves to `columns`.
+ * Wrap `fallback` so every table in `byTable` resolves to its live columns.
  *
  * Name matching is case-insensitive to match the rest of the catalog stack -
  * ARM reports `SecurityEvent` while a solution may say `securityevent`, and the
  * operator picked one table either way.
  *
- * An EMPTY `columns` array is still an override, deliberately. A table that
- * exists but exposes no columns yet is a real state (provisioned, never
- * materialized), and falling back there would silently analyse against the
- * derived schema while the UI says the live table is in use - the kind of quiet
- * substitution this tier exists to prevent.
+ * An EMPTY column array is still an override, deliberately. A table that exists
+ * but exposes no columns yet is a real state (provisioned, never materialized),
+ * and falling back there would silently analyse against the derived schema
+ * while the UI says the live table is in use - the kind of quiet substitution
+ * this tier exists to prevent.
  */
 export function createLiveTableSchemaCatalog(
-  tableName: string,
-  columns: readonly DcrSchemaColumn[],
+  byTable: Readonly<Record<string, readonly DcrSchemaColumn[]>>,
   fallback: SchemaCatalog,
 ): SchemaCatalog {
-  const key = tableName.trim().toLowerCase();
-  const frozen = [...columns];
+  const frozen = new Map<string, DcrSchemaColumn[]>();
+  for (const [name, columns] of Object.entries(byTable)) {
+    const key = name.trim().toLowerCase();
+    // A blank name would match a trimmed lookup and override the world.
+    if (key !== "") {
+      frozen.set(key, [...columns]);
+    }
+  }
   return {
     async resolveSchema(name: string): Promise<DcrSchemaColumn[] | null> {
-      if (key !== "" && name.trim().toLowerCase() === key) {
-        return [...frozen];
+      const hit = frozen.get(name.trim().toLowerCase());
+      if (hit !== undefined) {
+        return [...hit];
       }
       return fallback.resolveSchema(name);
     },

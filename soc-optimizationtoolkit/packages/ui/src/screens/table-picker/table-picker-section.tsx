@@ -21,20 +21,24 @@
  *      nothing has been loaded; after one, emptyTableListMessage decides
  *      whether "no tables" is a fact about the workspace or about our sight.
  *
- * Selecting a table REPLACES the derived destination schema and re-runs the
- * analysis (user decision 2026-08-10). The previous results are marked stale
- * rather than cleared, which the caller renders - see ANALYSIS_STALE_NOTICE.
+ * IT LOADS; IT DOES NOT SELECT (user, 2026-08-18). Selection is PER LOG TYPE,
+ * on each mapping-review card, because a solution's log types can land in
+ * different tables - CrowdStrike spreads across several, and each table is its
+ * own DCR and its own Sentinel destination in the built pack. A single
+ * whole-analysis picker could not express that, so this panel's job is to make
+ * the real tables available and say honestly whether it could see them; the
+ * choice belongs beside the log type it applies to.
+ *
+ * Selecting a table REPLACES the derived destination schema for that table and
+ * re-runs the analysis (user decision 2026-08-10). The previous results are
+ * marked stale rather than cleared - see ANALYSIS_STALE_NOTICE.
  */
 
 import { useCallback, useMemo, useState } from "react";
-import {
-  fetchWorkspaceTableSchema,
-  listWorkspaceTables,
-} from "@soc/core";
+import { listWorkspaceTables } from "@soc/core";
 import type {
   CapabilityContext,
   CapabilitySet,
-  DestField,
   WorkspaceTable,
   WorkspaceTablesTarget,
 } from "@soc/core";
@@ -53,23 +57,18 @@ export interface TablePickerSectionProps {
   /** Measured capabilities; the audit already covers `table.read`. */
   capabilities: CapabilitySet;
   capabilityContext: CapabilityContext;
-  /** The table currently driving the gap analysis, if any. */
-  selectedTable: string | null;
   /**
-   * A table was chosen and its LIVE schema fetched. The caller replaces the
-   * derived destination schema with these fields and re-runs the analysis;
-   * null means the table exists but exposes no usable columns yet, which is a
-   * real state for a provisioned-but-unmaterialized table.
+   * The loaded tables, handed up so the per-log-type selectors can offer them.
+   * Called with [] when a listing completed and found none.
    */
-  onTableSelected: (table: string, schema: DestField[] | null) => void;
+  onTablesLoaded: (tables: readonly WorkspaceTable[]) => void;
 }
 
 export function TablePickerSection({
   target,
   capabilities,
   capabilityContext,
-  selectedTable,
-  onTableSelected,
+  onTablesLoaded,
 }: TablePickerSectionProps) {
   const { ports } = usePorts();
   const [tables, setTables] = useState<WorkspaceTable[]>([]);
@@ -80,7 +79,6 @@ export function TablePickerSection({
   // which cannot tell "not loaded" from "loaded and empty" - and those two
   // owe the operator different sentences (rule 3).
   const [loaded, setLoaded] = useState(false);
-  const [selecting, setSelecting] = useState<string | null>(null);
 
   const access = useMemo(
     () => deriveTablePickerAccess(capabilities, capabilityContext),
@@ -95,6 +93,7 @@ export function TablePickerSection({
       const found = await listWorkspaceTables(ports.azure, target, ports.logger);
       setTables(found);
       setLoaded(true);
+      onTablesLoaded(found);
     } catch (err) {
       // Surfaced verbatim rather than folded into the empty state: a 403 here
       // is the meaningful answer, and showing it as "no tables" would be the
@@ -102,41 +101,21 @@ export function TablePickerSection({
       setError(err instanceof Error ? err.message : String(err));
       setTables([]);
       setLoaded(false);
+      onTablesLoaded([]);
     } finally {
       setLoading(false);
     }
-  }, [ports.azure, ports.logger, target]);
-
-  const select = useCallback(
-    async (table: string) => {
-      setSelecting(table);
-      setError(null);
-      try {
-        const schema = await fetchWorkspaceTableSchema(
-          ports.azure,
-          target,
-          table,
-          ports.logger,
-        );
-        onTableSelected(table, schema);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : String(err));
-      } finally {
-        setSelecting(null);
-      }
-    },
-    [ports.azure, ports.logger, target, onTableSelected],
-  );
+  }, [ports.azure, ports.logger, target, onTablesLoaded]);
 
   const empty = loaded && tables.length === 0 ? emptyTableListMessage(capabilities, capabilityContext) : null;
 
   return (
     <div className="table-picker">
       <p className="panel-desc">
-        Run the gap analysis against a table that already exists in{" "}
-        <code>{target.workspaceName}</code>, using its live schema from Azure
-        instead of one derived from the solution.
-        <InfoTip text="Selecting a table replaces the destination schema the analysis was using and re-runs it. Azure is the better authority once a real table is named, so the live columns REPLACE the derived ones rather than being merged - blending the two would produce a schema matching neither. The derived path still covers tables that do not exist until a connector is enabled." />
+        Load the tables that already exist in <code>{target.workspaceName}</code>,
+        then point each log type at one from its own Destination table selector
+        below.
+        <InfoTip text="Each log type chooses its own destination table, because a solution's log types can land in different tables - and each table becomes its own DCR and its own Sentinel destination in the built pack, with the route sending that log type to the matching pipeline and destination. Choosing a table that exists replaces the derived schema with the live columns from Azure and re-runs the analysis for that log type; blending the two would produce a schema matching neither." />
       </p>
 
       {/* Rule 1: annotate, never hide or disable. Rule 2: nothing is offered
@@ -173,24 +152,10 @@ export function TablePickerSection({
           <ul className="table-picker-list">
             {shown.map((table) => (
               <li key={table.name} className="table-picker-row">
-                <button
-                  type="button"
-                  className={
-                    table.name === selectedTable
-                      ? "table-picker-pick table-picker-pick-selected"
-                      : "table-picker-pick"
-                  }
-                  onClick={() => void select(table.name)}
-                  disabled={selecting !== null}
-                >
-                  {table.name}
-                </button>
+                <code className="table-picker-pick">{table.name}</code>
                 <span className="table-picker-kind">{table.kind}</span>
                 {table.plan !== "" && (
                   <span className="table-picker-plan">{table.plan}</span>
-                )}
-                {selecting === table.name && (
-                  <span className="field-hint">reading schema...</span>
                 )}
               </li>
             ))}
