@@ -22,6 +22,7 @@
  * Pure: no IO, no fetch, no React, no Date/crypto/Math.random.
  */
 
+import { fieldPresence } from "./route-value-discriminator";
 import type { LogTypeFieldValues } from "./route-value-discriminator";
 
 /** A bare name usable as a JS identifier in a Cribl filter expression. */
@@ -76,16 +77,13 @@ function isCharacteristic(
   field: string,
   ownValues: LogTypeFieldValues | undefined,
 ): boolean {
-  if (ownValues === undefined || ownValues.eventCount === 0) {
-    return true;
-  }
-  const seen = ownValues.values[field];
-  if (seen === undefined) {
-    // Not in the parsed evidence at all (a mapping-only field, or a name the
-    // parser normalised). Nothing to judge it on, so it is not disqualified.
-    return true;
-  }
-  return seen.length === ownValues.eventCount;
+  // `not-in-evidence` PASSES here, and that is the one place this path differs
+  // from the value discriminator. The names it judges come from the MAPPINGS,
+  // not from the parsed records, so a field missing from the evidence may just
+  // be one the parser normalised - and a caller that supplies no sample values
+  // at all would otherwise lose routing entirely. `some-events` is the
+  // rejection that matters: a per-event id lands there.
+  return fieldPresence(ownValues, field) !== "some-events";
 }
 
 /**

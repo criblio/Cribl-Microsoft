@@ -657,7 +657,7 @@ export function IntegrateScreen({
   const [identityOverrides, setIdentityOverrides] = useState<
     Readonly<Record<string, CefIdentityOverride>>
   >({});
-  // Route filters the operator accepted from the preview's suggestions, per
+  // Route filters the operator supplied for placeholdered log types, per
   // logType. Held HERE rather than in the preview section because the pack
   // build reads its plan from this level - a filter accepted in a component
   // that owns it alone would be shown, then dropped at build time, which is
