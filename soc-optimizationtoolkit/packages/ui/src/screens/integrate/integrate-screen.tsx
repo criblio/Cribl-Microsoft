@@ -61,8 +61,6 @@ import {
   assemblePack,
   cefIdentityFindings,
   effectiveCefIdentity,
-  createBundledSchemaCatalog,
-  createLiveTableSchemaCatalog,
   fetchWorkspaceTableSchema,
   fieldValuesFromRecords,
   listDcrInventory,
@@ -689,12 +687,6 @@ export function IntegrateScreen({
   // because a solution's log types can land in different tables - and each
   // table becomes its own DCR and its own Sentinel destination in the pack.
   const [workspaceTables, setWorkspaceTables] = useState<readonly string[]>([]);
-  // Live columns keyed by TABLE, not by log type: two log types pointed at the
-  // same table share one schema and one destination, which is exactly what the
-  // pack emits. Fetched once per table and reused.
-  const [liveSchemas, setLiveSchemas] = useState<
-    Readonly<Record<string, DestField[]>>
-  >({});
   // Marked STALE, not cleared (user decision 2026-08-10): every mapping,
   // coverage and overflow verdict on screen was computed against a different
   // destination schema, and clearing them would hide that they ever existed.
@@ -704,58 +696,29 @@ export function IntegrateScreen({
     setWorkspaceTables(tables.map((t) => t.name));
   }, []);
 
-  // A log type was pointed at a table. Fetch that table's live columns unless
-  // they are already known - the re-analysis reads them through the catalog.
-  const handleTableChosen = useCallback(
-    // The logType is part of the contract but not needed here: schemas are
-    // keyed by TABLE, because two log types pointed at the same table share
-    // one schema and one destination - which is exactly what the pack emits.
-    (_logType: string, table: string) => {
+  // Resolve a workspace table's live columns for the mapping review, which
+  // AWAITS this before re-analysing. The section owns the timing because it
+  // owns the analysis; this just answers the question.
+  const fetchTableSchema = useCallback(
+    async (table: string): Promise<DestField[] | null> => {
       setAnalysisStale(gapReports.length > 0);
       if (!workspaceTables.includes(table)) {
         // Not a table that exists yet (a solution candidate, or one the pack
         // will create). The derived schema is the right authority there.
-        return;
+        return null;
       }
-      setLiveSchemas((prev) => {
-        if (prev[table] !== undefined) return prev;
-        void (async () => {
-          try {
-            const schema = await fetchWorkspaceTableSchema(
-              ports.azure,
-              {
-                subscriptionId: config.subscriptionId,
-                resourceGroup: config.resourceGroup,
-                workspaceName: config.workspaceName,
-              },
-              table,
-              ports.logger,
-            );
-            // An empty array is still an override: a provisioned but
-            // unmaterialized table really has no columns, and falling back
-            // would analyse against the derived schema while the card says
-            // this table is in use.
-            setLiveSchemas((cur) => ({ ...cur, [table]: schema ?? [] }));
-          } catch {
-            // Leave it unset: the derived schema remains in charge and the
-            // analysis still runs. A failed schema read must not cost the
-            // operator the re-analysis they asked for.
-          }
-        })();
-        return prev;
-      });
+      return fetchWorkspaceTableSchema(
+        ports.azure,
+        {
+          subscriptionId: config.subscriptionId,
+          resourceGroup: config.resourceGroup,
+          workspaceName: config.workspaceName,
+        },
+        table,
+        ports.logger,
+      );
     },
     [gapReports.length, workspaceTables, ports.azure, ports.logger, config],
-  );
-
-  // The live columns REPLACE the derived schema for the tables that have them;
-  // every other table still resolves through the bundled/solution tiers.
-  const schemaCatalog = useMemo(
-    () =>
-      Object.keys(liveSchemas).length === 0
-        ? undefined
-        : createLiveTableSchemaCatalog(liveSchemas, createBundledSchemaCatalog()),
-    [liveSchemas],
   );
 
   // THE content plan, composed once. Both the preview panel and the pack build
@@ -1443,9 +1406,8 @@ export function IntegrateScreen({
         content={ports.content}
         learnedCache={ports.contentCache}
         ruleFields={ruleFields}
-        {...(schemaCatalog !== undefined ? { catalog: schemaCatalog } : {})}
         workspaceTables={workspaceTables}
-        onTableChosen={handleTableChosen}
+        fetchTableSchema={fetchTableSchema}
         onGateChange={setMappingsApproved}
         onReportsChange={(reports) => {
           // A completed run is about the CURRENT table, so the staleness the
