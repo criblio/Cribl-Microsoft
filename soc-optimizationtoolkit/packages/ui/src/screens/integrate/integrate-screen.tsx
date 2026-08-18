@@ -61,6 +61,8 @@ import {
   assemblePack,
   cefIdentityFindings,
   effectiveCefIdentity,
+  createBundledSchemaCatalog,
+  createLiveTableSchemaCatalog,
   fieldValuesFromRecords,
   listDcrInventory,
   placeholderWarning,
@@ -88,6 +90,7 @@ import type {
   CriblOptions,
   DcrRoleTarget,
   DeployMode,
+  DestField,
   GapFieldMapping,
   GapReport,
   IntegrateSectionId,
@@ -126,6 +129,8 @@ import { SampleIntakeSection } from "../samples/sample-intake-section";
 import { MappingReviewSection } from "../mapping-review/mapping-review-section";
 import type { MappingReviewRenameEvent } from "../mapping-review/mapping-review-section";
 import { PipelinePreviewSection } from "../pipeline-preview/pipeline-preview-section";
+import { TablePickerSection } from "../table-picker/table-picker-section";
+import { ANALYSIS_STALE_NOTICE } from "../table-picker/table-picker-state";
 import { derivePipelinePreview } from "../pipeline-preview/pipeline-preview-state";
 import type {
   EnrichmentField,
@@ -676,6 +681,45 @@ export function IntegrateScreen({
       return next;
     });
   }, []);
+
+  // The workspace table the operator pointed the gap analysis at, and its LIVE
+  // columns (backlog item 2). Null means the derived solution/sample schema is
+  // still in charge, which is the default and remains correct for tables that
+  // do not exist until a connector is enabled.
+  const [pickedTable, setPickedTable] = useState<{
+    name: string;
+    schema: DestField[];
+  } | null>(null);
+  // Marked STALE, not cleared (user decision 2026-08-10): every mapping,
+  // coverage and overflow verdict on screen was computed against a different
+  // destination schema, and clearing them would hide that they ever existed.
+  const [analysisStale, setAnalysisStale] = useState(false);
+
+  const handleTableSelected = useCallback(
+    (name: string, schema: DestField[] | null) => {
+      // A null schema means the table exists but exposes no columns yet. That
+      // is still a selection - the empty override is the honest answer, and
+      // falling back would analyse against the derived schema while the UI
+      // says the live table is in use.
+      setPickedTable({ name, schema: schema ?? [] });
+      setAnalysisStale(gapReports.length > 0);
+    },
+    [gapReports.length],
+  );
+
+  // The live columns REPLACE the derived schema for that one table; every
+  // other table still resolves through the bundled/solution tiers.
+  const schemaCatalog = useMemo(
+    () =>
+      pickedTable === null
+        ? undefined
+        : createLiveTableSchemaCatalog(
+            pickedTable.name,
+            pickedTable.schema,
+            createBundledSchemaCatalog(),
+          ),
+    [pickedTable],
+  );
 
   // THE content plan, composed once. Both the preview panel and the pack build
   // derive from this exact object, so they cannot disagree about what is being
@@ -1334,6 +1378,28 @@ export function IntegrateScreen({
 
   const gapAnalysisBody = (
     <>
+      {/* Point the analysis at a table that already EXISTS, using its live
+          columns instead of the derived schema (backlog item 2). Above the
+          review because it decides what the review is about. */}
+      {scopeCommitted && capabilities !== undefined && capabilityContext !== undefined && (
+        <TablePickerSection
+          target={{
+            subscriptionId: config.subscriptionId,
+            resourceGroup: config.resourceGroup,
+            workspaceName: config.workspaceName,
+          }}
+          capabilities={capabilities}
+          capabilityContext={capabilityContext}
+          selectedTable={pickedTable?.name ?? null}
+          onTableSelected={handleTableSelected}
+        />
+      )}
+      {/* STALE, not cleared: the results below were computed against a
+          different destination schema, and saying so beats removing the
+          evidence that they existed. */}
+      {analysisStale && (
+        <div className="table-picker-note">{ANALYSIS_STALE_NOTICE}</div>
+      )}
       <MappingReviewSection
         key={contentResetKey}
         solutionName={solution?.name ?? ""}
@@ -1341,8 +1407,14 @@ export function IntegrateScreen({
         content={ports.content}
         learnedCache={ports.contentCache}
         ruleFields={ruleFields}
+        {...(schemaCatalog !== undefined ? { catalog: schemaCatalog } : {})}
         onGateChange={setMappingsApproved}
-        onReportsChange={setGapReports}
+        onReportsChange={(reports) => {
+          // A completed run is about the CURRENT table, so the staleness the
+          // selection introduced is over.
+          setAnalysisStale(false);
+          setGapReports(reports);
+        }}
         onEffectiveMappingsChange={setMappingOverrides}
         onEnrichmentsChange={setEnrichments}
         renameEvent={renameEvent}

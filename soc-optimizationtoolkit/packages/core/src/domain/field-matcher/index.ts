@@ -116,3 +116,7 @@ export { EMPTY_OVERFLOW_TRIAGE, triageOverflow } from "./overflow-triage";
 // derive the schema from the sample + the content's referenced columns.
 export type { DerivedTableSchema } from "./derive-schema-from-sample";
 export { deriveCustomTableSchema } from "./derive-schema-from-sample";
+
+// Live workspace table tier (backlog item 2): a picked table's ARM columns
+// REPLACE the derived schema for that one table.
+export { createLiveTableSchemaCatalog } from "./live-table-schema-catalog";

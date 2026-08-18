@@ -187,7 +187,27 @@ returns the selected table's live columns as `DestField[]`.
   persist unmarked: every mapping, coverage and overflow verdict in them was
   computed against a different destination.
 
-**What remains: the UI.** Two pieces:
+**COMPLETE 2026-08-17.** Both UI pieces shipped:
+
+1. `TablePickerSection` - loads the workspace tables, filters by name, and hands
+   the caller the picked table WITH its live schema. The three capability rules
+   are pinned by DOM tests rather than left to comments, because rule 1 can only
+   fail visually: a `disabled` added in good faith would satisfy every state
+   test while removing the attempt the model deliberately preserves. Mutation
+   check - gating Load on the verdict fails 7 pins, including one asserting the
+   listing was attempted at all.
+2. The re-run wiring, via a new `createLiveTableSchemaCatalog` core tier that
+   REPLACES the derived schema for the picked table and delegates every other
+   table to the fallback. Layered exactly like `createSolutionSchemaCatalog`, so
+   the tiers compose. An EMPTY live schema is still an override - a provisioned
+   but unmaterialized table really has no columns, and falling back there would
+   analyse against the derived schema while the UI claims the live table is in
+   use. The stale notice renders over the previous results and clears when a run
+   completes.
+
+Superseded planning notes follow.
+
+**What remained: the UI.** Two pieces:
 
 1. **The picker**, gated on `table.read` - and this is the first real test of the
    capability model inside a feature rather than in the nav. A `denied` verdict
@@ -206,10 +226,18 @@ unconstrained field NEVER gets a suggestion (inventing one manufactures a
 problem), and a blank override means "leave it" not "clear it" (an empty
 DeviceVendor makes reconstructCefLine return null).
 
-**Still owed:** surfacing the finding beside the gap report, and carrying the
-override into the GENERATED PIPELINE. An override that only affects analysis
-leaves deployed data still carrying the wrong vendor - the same invisible failure
-one layer down.
+**COMPLETE - the "still owed" work shipped and this entry was stale until
+2026-08-17.** Both halves are in:
+
+- Surfaced beside the gap report: `IdentityBlock` and `IdentityMismatchBlock`
+  render inside each mapping-review card (mapping-review-section.tsx), including
+  the "Vendor identity does not match this solution's rules" case with its
+  one-click correction. Confirmed on screen against a live Zscaler analysis.
+- Carried into the GENERATED PIPELINE: `buildCefIdentityOverrideFn` in
+  pipeline-conf.ts pushes an override function into the emitted pipeline, placed
+  right after CEF extraction so the reduction rules see the corrected value. Its
+  comment records why, in this entry's own words - an override that only changed
+  the analysis would leave deployed data carrying the wrong vendor.
 
 Original request and the reasoning behind it:
 
@@ -854,9 +882,17 @@ four commits behind before anyone noticed. Cheapest fix that does not need write
 access to a protected branch: a CI check that warns when `soc-optimizationtoolkit/**`
 source changed without a version bump since the last packaged release.
 
-**1.5.4 IS CURRENT (2026-08-11).** `release/soc-optimizationtoolkit-1.5.4.tgz`.
-1.4.0 through 1.5.4 are described in [release-notes.md](release-notes.md), which
-was started as an accumulating file at 1.4.0.
+**1.11.11 IS CURRENT (2026-08-17).**
+`release/soc-optimizationtoolkit-1.11.11.tgz`. Release notes in
+[release-notes.md](release-notes.md), started as an accumulating file at 1.4.0.
+
+This line said "1.5.4 IS CURRENT" until 2026-08-17, by which point the app was
+at 1.11.11 - six minor versions and about a week of work later. The release
+notes stop at 1.9.0. Both are the same drift this section is ABOUT, so the
+entry had quietly become its own best evidence: a hand-maintained version claim
+decays exactly as fast as the automated one it warns about, and nothing tells
+anyone. Whoever adds the CI check below should have it cover this file and
+release-notes.md too, not just the tgz.
 
 **`release/` HOLDS EXACTLY THE LATEST TGZ** - a user directive from 2026-07-30,
 enforced by `package.mjs`, which prunes older tarballs on every run. Publishing
