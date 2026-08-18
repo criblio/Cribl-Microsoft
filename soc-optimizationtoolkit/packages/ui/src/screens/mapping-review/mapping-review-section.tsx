@@ -61,6 +61,7 @@ import {
   collectGapReports,
   createBundledSchemaCatalog,
   createKqlValidationSchemaCatalog,
+  createLiveTableSchemaCatalog,
   createSolutionSchemaCatalog,
   detectVendorIdentity,
   dropSavingsLine,
@@ -79,6 +80,7 @@ import type {
   CefIdentityOverride,
   ContentCache,
   DestinationTableResolution,
+  DestField,
   GapFieldMapping,
   GapReport,
   IdentityFieldStatus,
@@ -183,11 +185,18 @@ export interface MappingReviewSectionProps {
    */
   workspaceTables?: readonly string[];
   /**
-   * A log type was pointed at a table. The caller uses this to fetch that
-   * table's LIVE schema and feed it back through `catalog`, so the re-analysis
-   * runs against the real columns rather than the derived ones.
+   * Resolve a workspace table's LIVE columns, or null when it exposes none.
+   *
+   * AWAITED BEFORE THE RE-ANALYSIS, deliberately. The first version of this
+   * notified the caller and let it feed a schema back through `catalog`, which
+   * raced: changeTable re-analysed immediately, the fetch landed afterwards,
+   * and nothing re-runs when the catalog prop changes - so the analysis used
+   * the OLD catalog and reported "No destination schema resolved ... all 28
+   * field(s) are unmatched" with 0 destination columns. Caught live on
+   * CrowdStrike 2026-08-18; no unit or DOM pin could see it, because both
+   * halves worked in isolation.
    */
-  onTableChosen?: (logType: string, table: string) => void;
+  fetchTableSchema?: (table: string) => Promise<DestField[] | null>;
   /** Vendor quirks for the gap analysis (defaults to the generic profile). */
   vendorProfile?: VendorGapProfile;
   /**
@@ -296,7 +305,7 @@ export function MappingReviewSection({
   content,
   catalog,
   workspaceTables,
-  onTableChosen,
+  fetchTableSchema,
   vendorProfile,
   ruleFields,
   onGateChange,
@@ -319,17 +328,33 @@ export function MappingReviewSection({
   // Wave E solution connector-ARM tables -> the bundled snapshot (or the
   // injected catalog). Sample-DERIVED schemas remain the analyzeSamples
   // fallback for tables none of these define. Degrades tier by tier.
-  const activeCatalog = useMemo(
-    () =>
+  // Live columns for tables the operator pointed a log type at, keyed by
+  // TABLE: two log types on the same table share one schema, exactly as the
+  // pack shares one destination for them.
+  const [liveSchemas, setLiveSchemas] = useState<
+    Readonly<Record<string, DestField[]>>
+  >({});
+
+  const catalogWith = useCallback(
+    (live: Readonly<Record<string, DestField[]>>) =>
       createKqlValidationSchemaCatalog(
         activeContent,
         createSolutionSchemaCatalog(
           activeContent,
           solutionName,
-          catalog ?? createBundledSchemaCatalog(),
+          Object.keys(live).length === 0
+            ? (catalog ?? createBundledSchemaCatalog())
+            : createLiveTableSchemaCatalog(
+                live,
+                catalog ?? createBundledSchemaCatalog(),
+              ),
         ),
       ),
     [activeContent, solutionName, catalog],
+  );
+  const activeCatalog = useMemo(
+    () => catalogWith(liveSchemas),
+    [catalogWith, liveSchemas],
   );
   const profile: VendorGapProfile = vendorProfile ?? DEFAULT_GAP_PROFILE;
 
@@ -548,7 +573,10 @@ export function MappingReviewSection({
   const currentSig = inputSignature(solutionName, samples);
 
   // ---- Analyze / Re-Analyze ---------------------------------------------
-  const runAnalysis = useCallback(async (overrides?: Record<string, string>) => {
+  const runAnalysis = useCallback(async (
+    overrides?: Record<string, string>,
+    catalogForRun?: SchemaCatalog,
+  ) => {
     if (analyzing || samples.length === 0) {
       return;
     }
@@ -597,7 +625,7 @@ export function MappingReviewSection({
       // entry only when its source field exists in the sample AND its column
       // exists in the resolved schema.
       const produced = await collectGapReports(
-        { content: activeContent, catalog: activeCatalog, logger },
+        { content: activeContent, catalog: catalogForRun ?? activeCatalog, logger },
         {
           solutionName,
           samples: specs,
@@ -665,13 +693,29 @@ export function MappingReviewSection({
       if (newTable === "" || analyzing) return;
       const next = { ...tableOverrides, [logType]: newTable };
       setTableOverrides(next);
-      // Let the caller fetch the live schema BEFORE the re-analysis reads the
-      // catalog. Fire-and-forget by design: a table with no live schema simply
-      // falls back to the derived one rather than blocking the re-run.
-      onTableChosen?.(logType, newTable);
-      void runAnalysis(next);
+      // Fetch the live columns FIRST, then analyse once with them applied.
+      // Awaiting is the whole fix: the schema has to be in the catalog this
+      // run reads, and a catalog handed back through props arrives too late.
+      void (async () => {
+        let live = liveSchemas;
+        if (fetchTableSchema !== undefined && liveSchemas[newTable] === undefined) {
+          try {
+            const schema = await fetchTableSchema(newTable);
+            if (schema !== null) {
+              // An empty array is still an override - a provisioned but
+              // unmaterialized table really has no columns.
+              live = { ...liveSchemas, [newTable]: schema };
+              setLiveSchemas(live);
+            }
+          } catch {
+            // Leave it derived. A failed schema read must not cost the
+            // operator the re-analysis they asked for.
+          }
+        }
+        await runAnalysis(next, catalogWith(live));
+      })();
     },
-    [tableOverrides, runAnalysis, analyzing, onTableChosen],
+    [tableOverrides, runAnalysis, analyzing, fetchTableSchema, liveSchemas, catalogWith],
   );
 
   // ---- Staleness: inputs changed after the last analysis ----------------
