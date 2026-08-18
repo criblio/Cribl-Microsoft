@@ -262,3 +262,53 @@ describe("PipelinePreviewSection - writing a filter by hand", () => {
     expect(screen.queryByLabelText(/^Route filter for/)).toBeNull();
   });
 });
+
+/**
+ * CSV needs different guidance, and the difference is not cosmetic.
+ *
+ * Cribl routes run BEFORE the pipeline, so a CSV event is still a positional
+ * line in `_raw` with no parsed fields - which is exactly why both
+ * discriminators refuse to derive a filter for CSV at all. Every CSV log type
+ * in a multi-log-type pack therefore placeholders by construction, making this
+ * hint the ONLY routing guidance a CSV vendor's operator ever gets. Offering
+ * `event_type === 'dns'` there invites the one filter that cannot work.
+ *
+ * Found by validating CSV route derivation 2026-08-17.
+ */
+describe("PipelinePreviewSection - CSV cannot be filtered on parsed fields", () => {
+  function renderCsv(format: string) {
+    render(
+      <PipelinePreviewSection
+        inputs={{
+          solutionName: "Vendor",
+          reports: [report("Allowed"), report("Blocked")],
+          sampleFormats: { Allowed: format, Blocked: format },
+          approved: true,
+        }}
+        packName="vendor-sentinel"
+        onAcceptRouteFilter={vi.fn()}
+      />,
+    );
+  }
+
+  it("offers a _raw example for CSV, not a field test", () => {
+    renderCsv("csv");
+    const input = screen.getByLabelText("Route filter for Allowed");
+    expect(input.getAttribute("placeholder")).toContain("_raw");
+    expect(input.getAttribute("placeholder")).not.toContain("event_type ===");
+  });
+
+  it("explains WHY a field test fails on CSV", () => {
+    // Without the reason, the _raw example reads as an arbitrary style choice
+    // and the operator "fixes" it back to a field test.
+    renderCsv("csv");
+    expect(screen.getByText(/reach the route unparsed/)).toBeTruthy();
+  });
+
+  it("keeps the field-test example for parsed formats", () => {
+    renderCsv("json");
+    const input = screen.getByLabelText("Route filter for Allowed");
+    expect(input.getAttribute("placeholder")).toContain("event_type ===");
+    expect(screen.queryByText(/reach the route unparsed/)).toBeNull();
+  });
+});
