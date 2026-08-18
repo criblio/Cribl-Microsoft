@@ -171,6 +171,23 @@ export interface MappingReviewSectionProps {
   content?: SentinelContent;
   /** Schema catalog; defaults to the fetch-free bundled adapter. */
   catalog?: SchemaCatalog;
+  /**
+   * Tables that actually exist in the workspace, offered per log type alongside
+   * the solution's own candidates.
+   *
+   * A solution's log types can land in DIFFERENT tables - CrowdStrike spreads
+   * across several, each its own DCR - so this is a per-card choice, not a
+   * per-analysis one (user 2026-08-18). Absent, the card offers only the
+   * solution-derived candidates, which is the behaviour before the workspace
+   * listing existed.
+   */
+  workspaceTables?: readonly string[];
+  /**
+   * A log type was pointed at a table. The caller uses this to fetch that
+   * table's LIVE schema and feed it back through `catalog`, so the re-analysis
+   * runs against the real columns rather than the derived ones.
+   */
+  onTableChosen?: (logType: string, table: string) => void;
   /** Vendor quirks for the gap analysis (defaults to the generic profile). */
   vendorProfile?: VendorGapProfile;
   /**
@@ -278,6 +295,8 @@ export function MappingReviewSection({
   samples,
   content,
   catalog,
+  workspaceTables,
+  onTableChosen,
   vendorProfile,
   ruleFields,
   onGateChange,
@@ -632,8 +651,12 @@ export function MappingReviewSection({
     for (const t of resolution?.tables ?? []) set.add(t);
     for (const r of reports) set.add(r.tableName);
     for (const t of COMMON_NATIVE_TABLES) set.add(t);
+    // Tables that genuinely exist in the workspace. Added LAST but deduped by
+    // the set, so a table that is both a solution candidate and real appears
+    // once - the operator should not have to tell two identical entries apart.
+    for (const t of workspaceTables ?? []) set.add(t);
     return [...set].filter((t) => t !== "").sort();
-  }, [resolution, reports]);
+  }, [resolution, reports, workspaceTables]);
 
   // Reassign a logType to a different destination table, then re-analyze so its
   // gap report reflects the new table's schema.
@@ -642,9 +665,13 @@ export function MappingReviewSection({
       if (newTable === "" || analyzing) return;
       const next = { ...tableOverrides, [logType]: newTable };
       setTableOverrides(next);
+      // Let the caller fetch the live schema BEFORE the re-analysis reads the
+      // catalog. Fire-and-forget by design: a table with no live schema simply
+      // falls back to the derived one rather than blocking the re-run.
+      onTableChosen?.(logType, newTable);
       void runAnalysis(next);
     },
-    [tableOverrides, runAnalysis, analyzing],
+    [tableOverrides, runAnalysis, analyzing, onTableChosen],
   );
 
   // ---- Staleness: inputs changed after the last analysis ----------------
