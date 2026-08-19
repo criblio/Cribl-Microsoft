@@ -12,7 +12,9 @@ import { describe, expect, it } from "vitest";
 import { compareLogTypeCoverage, deriveExpectedLogTypes } from "@soc/core";
 import type { ContentItem } from "@soc/core";
 import {
+  deriveLogTypeRecommendation,
   deriveSampleCoverageView,
+  joinNames,
   packShapeSummary,
   sampleCoverageGateReason,
 } from "./sample-coverage-state";
@@ -104,6 +106,134 @@ describe("deriveSampleCoverageView", () => {
   it("does not ask for an acknowledgement with no samples and no signal", () => {
     const view = deriveSampleCoverageView(coverageFor(["T | count"], []), true, 0);
     expect(view.requiresAck).toBe(false);
+  });
+});
+
+describe("joinNames", () => {
+  it("reads as prose at one, two and three names", () => {
+    expect(joinNames([])).toBe("");
+    expect(joinNames(["TRAFFIC"])).toBe("TRAFFIC");
+    expect(joinNames(["TRAFFIC", "THREAT"])).toBe("TRAFFIC and THREAT");
+    expect(joinNames(["TRAFFIC", "THREAT", "CONFIG"])).toBe(
+      "TRAFFIC, THREAT and CONFIG",
+    );
+  });
+});
+
+describe("deriveLogTypeRecommendation", () => {
+  const threeTypes = 'T | where type in ("TRAFFIC","THREAT","CONFIG")';
+
+  it("states what is needed and what is provided", () => {
+    const rec = deriveLogTypeRecommendation(
+      coverageFor([threeTypes], ["TRAFFIC", "THREAT"]),
+      true,
+    );
+
+    expect(rec.status).toBe("partial");
+    expect(rec.headline).toContain(
+      "This solution's detections need CONFIG, THREAT and TRAFFIC.",
+    );
+    expect(rec.headline).toContain("You have provided THREAT and TRAFFIC.");
+  });
+
+  it("marks each expected type provided or not, keeping the core's ranking", () => {
+    const rec = deriveLogTypeRecommendation(
+      coverageFor(
+        // TRAFFIC is referenced by two rules, so it outranks the others.
+        ['T | where type == "TRAFFIC"', threeTypes],
+        ["TRAFFIC"],
+      ),
+      true,
+    );
+
+    expect(rec.entries.map((e) => e.value)).toEqual([
+      "TRAFFIC",
+      "CONFIG",
+      "THREAT",
+    ]);
+    expect(rec.entries.map((e) => e.provided)).toEqual([true, false, false]);
+    expect(rec.entries[0].referenceCount).toBe(2);
+    expect(rec.entries[0].field).toBe("type");
+  });
+
+  it("says NOTHING IS PROVIDED rather than showing an empty list", () => {
+    const rec = deriveLogTypeRecommendation(coverageFor([threeTypes], []), true);
+
+    expect(rec.status).toBe("none-provided");
+    expect(rec.headline).toContain("You have provided none of them yet.");
+    // The list is the recommendation - it must be present precisely when
+    // nothing has been provided, which is when the operator needs it most.
+    expect(rec.entries).toHaveLength(3);
+    expect(rec.entries.every((e) => !e.provided)).toBe(true);
+  });
+
+  it("reports covered without implying the list is exhaustive", () => {
+    const rec = deriveLogTypeRecommendation(
+      coverageFor([threeTypes], ["TRAFFIC", "THREAT", "CONFIG"]),
+      true,
+    );
+
+    expect(rec.status).toBe("covered");
+    expect(rec.headline).toContain("You have provided all of them.");
+  });
+
+  it("distinguishes NOT-READ from READ-AND-DISCRIMINATES-ON-NOTHING", () => {
+    // The false-ok this codebase refuses: an unread solution must not read as
+    // "nothing needed", and neither state may produce an entry list.
+    const unread = deriveLogTypeRecommendation(coverageFor([], ["traffic"]), false);
+    expect(unread.status).toBe("unknown");
+    expect(unread.headline).toContain("has not completed yet");
+    expect(unread.entries).toEqual([]);
+
+    const noSignal = deriveLogTypeRecommendation(
+      coverageFor(["T | count"], ["traffic"]),
+      true,
+    );
+    expect(noSignal.status).toBe("no-signal");
+    expect(noSignal.headline).toContain("cannot say which log types it needs");
+    expect(noSignal.entries).toEqual([]);
+    expect(noSignal.headline).not.toContain("need TRAFFIC");
+  });
+
+  it("carries unreferenced provided types in EVERY state, never as a gap", () => {
+    const covered = deriveLogTypeRecommendation(
+      coverageFor(['T | where type == "traffic"'], ["traffic", "hipmatch"]),
+      true,
+    );
+    expect(covered.status).toBe("covered");
+    expect(covered.unreferenced).toEqual(["hipmatch"]);
+
+    // Also surfaced before the content is read - the operator has provided it
+    // either way, and hiding it would look like it had been dropped.
+    const unread = deriveLogTypeRecommendation(
+      coverageFor([], ["traffic", "hipmatch"]),
+      false,
+    );
+    expect(unread.unreferenced).toEqual(["traffic", "hipmatch"]);
+  });
+
+  it("AGREES with the confirmation view - both read one coverage result", () => {
+    // The two halves are shown on the same screen; a disagreement between them
+    // is the failure this pins against.
+    const coverage = coverageFor([threeTypes], ["TRAFFIC"]);
+    const rec = deriveLogTypeRecommendation(coverage, true);
+    const view = deriveSampleCoverageView(coverage, true, 1);
+
+    const notProvided = rec.entries.filter((e) => !e.provided).map((e) => e.value);
+    expect(notProvided).toEqual(view.missing);
+    expect(rec.unreferenced).toEqual(view.unreferenced);
+  });
+
+  it("gates nothing: the confirmation owns the only acknowledgement", () => {
+    const rec = deriveLogTypeRecommendation(coverageFor([threeTypes], []), true);
+    // A structural claim, so it is asserted rather than assumed: the
+    // recommendation model carries no gate, reason, or acknowledgement field.
+    expect(Object.keys(rec).sort()).toEqual([
+      "entries",
+      "headline",
+      "status",
+      "unreferenced",
+    ]);
   });
 });
 

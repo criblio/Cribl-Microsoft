@@ -1,6 +1,18 @@
 /**
  * Sample-coverage state - the PURE decisions behind the Sample Data section's
- * completeness confirmation (user request 2026-08-04).
+ * two coverage questions, both fed by the SAME core join (deriveExpectedLogTypes
+ * over the solution's content, compareLogTypeCoverage against the tagged
+ * samples):
+ *
+ *   1. the RECOMMENDATION, at the top of the section - "this solution's
+ *      detections need TRAFFIC, THREAT and CONFIG; you have provided TRAFFIC".
+ *      Forward-looking, advisory, gates nothing (ADR 0003).
+ *   2. the completeness CONFIRMATION, at the bottom - the 2026-08-04 request
+ *      below, which does gate the pack build on an acknowledgement.
+ *
+ * They are the same fact asked at different moments: before the operator goes
+ * and gets samples, and before the pack is built from them. Only the second
+ * blocks, and it blocks on the OPERATOR's answer rather than on the derivation.
  *
  * THE THING THE APP WAS NOT SAYING: every unique log type the operator tags
  * becomes its own route pair, pipeline pair, and sample file in the generated
@@ -93,8 +105,8 @@ export function deriveSampleCoverageView(
     return {
       verdict: "unknown",
       headline:
-        "Run the DCR Gap Analysis to compare your samples against the log types " +
-        "this solution's detections reference.",
+        "This solution's detections have not been read yet, so there is nothing " +
+        "to compare your samples against.",
       missing: [],
       unreferenced,
       requiresAck: false,
@@ -123,16 +135,156 @@ export function deriveSampleCoverageView(
     };
   }
 
+  // The missing names are NOT repeated here: the recommendation panel at the top
+  // of the section lists every expected log type with its provided state, and
+  // printing the same list twice on one screen reads as two different findings.
   const label = missing.length === 1 ? "log type" : "log types";
   return {
     verdict: "gaps",
     headline:
-      `${missing.length} ${label} referenced by this solution's detections have no sample: ` +
-      `${missing.join(", ")}. Each one you add becomes another route and pipeline pair; ` +
+      `${missing.length} ${label} referenced by this solution's detections still have ` +
+      "no sample. Each one you add becomes another route and pipeline pair; " +
       "continuing without them means those events are never shaped.",
     missing,
     unreferenced,
     requiresAck: true,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// The log-type RECOMMENDATION (ADR 0003, plan Phase 2)
+// ---------------------------------------------------------------------------
+//
+// Same core join as the confirmation above - deriveExpectedLogTypes, the tagged
+// samples, compareLogTypeCoverage - asked at the other end of the task.
+//
+// The confirmation is BACKWARD-looking and gates the build: you have provided
+// these, some are missing, tick to proceed. The recommendation is FORWARD-
+// looking and gates nothing: here is what this solution's detections
+// discriminate on, so here is what to go and fetch. It sits where the Browse
+// Samples button used to, because that is the moment the operator is deciding
+// what to provide - which is precisely what the browser was pretending to
+// answer for them by scoring filenames.
+//
+// ADVISORY, NEVER BLOCKING, and that is not a style preference: expected-log-
+// types is explicitly a LOWER BOUND (table-wide rules contribute nothing,
+// ASIM-normalized rules hide the discriminator behind a parser, a solution with
+// no shipped detections yields nothing at all). Blocking on a lower bound blocks
+// on a guess. The one gate in this section stays the 2026-08-04 acknowledgement,
+// which asks the OPERATOR to confirm rather than asserting the app knows.
+
+/** How the recommendation panel should read, given what is known. */
+export type RecommendationStatus =
+  /** The solution's detections have not been read yet. */
+  | "unknown"
+  /** Read, but they discriminate on nothing - we cannot recommend. */
+  | "no-signal"
+  /** We know what is needed and none of it has been provided. */
+  | "none-provided"
+  /** Some provided, some not. */
+  | "partial"
+  /** Every expected log type has a sample. */
+  | "covered";
+
+/** One expected log type, with whether the operator has provided it. */
+export interface RecommendedLogType {
+  /** The literal as the content writes it (e.g. "TRAFFIC"). */
+  value: string;
+  /** The discriminator field it was compared against. */
+  field: string;
+  /** True when a tagged sample covers it. */
+  provided: boolean;
+  /** How many content items reference it - the ranking the core applied. */
+  referenceCount: number;
+}
+
+export interface LogTypeRecommendation {
+  status: RecommendationStatus;
+  /** The lead sentence: what is needed, and what has been provided. */
+  headline: string;
+  /** Every expected log type, most-referenced first. */
+  entries: RecommendedLogType[];
+  /** Provided log types no detection references - neutral, never an error. */
+  unreferenced: string[];
+}
+
+/** Join names as prose: "A", "A and B", "A, B and C". */
+export function joinNames(names: readonly string[]): string {
+  if (names.length === 0) return "";
+  if (names.length === 1) return names[0];
+  return `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
+}
+
+/**
+ * Derive the forward-looking recommendation from the same coverage result the
+ * confirmation uses.
+ *
+ * `contentLoaded` separates "not read yet" from "read, and it discriminates on
+ * nothing" for the same reason {@link deriveSampleCoverageView} does: collapsing
+ * them would let an unread solution read as "nothing needed", which is the
+ * false-ok this codebase refuses everywhere else.
+ */
+export function deriveLogTypeRecommendation(
+  coverage: LogTypeCoverage,
+  contentLoaded: boolean,
+): LogTypeRecommendation {
+  const unreferenced = [...coverage.unreferenced];
+
+  if (!contentLoaded) {
+    return {
+      status: "unknown",
+      headline:
+        "The log types this solution needs are read from its own detections - " +
+        "that read has not completed yet.",
+      entries: [],
+      unreferenced,
+    };
+  }
+
+  const missingValues = new Set(coverage.missing.map((m) => m.value));
+  const entries: RecommendedLogType[] = coverage.expected.map((e) => ({
+    value: e.value,
+    field: e.field,
+    provided: !missingValues.has(e.value),
+    referenceCount: e.referencedBy.length,
+  }));
+
+  if (entries.length === 0) {
+    return {
+      status: "no-signal",
+      headline:
+        "This solution's detections do not filter on a log-type field, so the app " +
+        "cannot say which log types it needs. Provide the ones your environment sends.",
+      entries: [],
+      unreferenced,
+    };
+  }
+
+  const needed = entries.map((e) => e.value);
+  const have = entries.filter((e) => e.provided).map((e) => e.value);
+  const lead = `This solution's detections need ${joinNames(needed)}.`;
+
+  if (have.length === 0) {
+    return {
+      status: "none-provided",
+      headline: `${lead} You have provided none of them yet.`,
+      entries,
+      unreferenced,
+    };
+  }
+  if (have.length < entries.length) {
+    return {
+      status: "partial",
+      headline: `${lead} You have provided ${joinNames(have)}.`,
+      entries,
+      unreferenced,
+    };
+  }
+  return {
+    status: "covered",
+    headline: `${lead} You have provided all of them.`,
+    entries,
+    unreferenced,
   };
 }
 

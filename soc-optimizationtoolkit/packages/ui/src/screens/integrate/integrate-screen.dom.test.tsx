@@ -92,6 +92,18 @@ describe("IntegrateScreen - renders", () => {
     ).not.toThrow();
   });
 
+  it("renders the log-type recommendation in the Sample Data section", () => {
+    // Wiring pin, in the spirit of this file: the panel's own behaviour is
+    // covered by log-type-recommendation.dom.test.tsx, but a component that is
+    // built, tested and never actually mounted is exactly the gap this smoke
+    // test exists for. With no solution chosen there is nothing read yet, so
+    // "unknown" is the honest state and the one that must reach the DOM.
+    const { container } = renderScreen();
+    const panel = container.querySelector(".log-type-recommendation");
+    expect(panel).toBeTruthy();
+    expect(panel?.getAttribute("data-status")).toBe("unknown");
+  });
+
   it("prefills the pack name before any solution is chosen", () => {
     // Proves the initializer ran and produced the documented default, which is
     // the exact line that crashed. The solution-derived form is pinned without
