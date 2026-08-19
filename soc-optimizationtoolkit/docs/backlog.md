@@ -882,10 +882,10 @@ four commits behind before anyone noticed. Cheapest fix that does not need write
 access to a protected branch: a CI check that warns when `soc-optimizationtoolkit/**`
 source changed without a version bump since the last packaged release.
 
-**1.11.14 IS CURRENT (2026-08-18).**
-`release/soc-optimizationtoolkit-1.11.14.tgz`. Release notes in
+**1.11.15 IS CURRENT (2026-08-18).**
+`release/soc-optimizationtoolkit-1.11.15.tgz`. Release notes in
 [release-notes.md](release-notes.md), started as an accumulating file at 1.4.0
-and now current through 1.11.14.
+and now current through 1.11.15.
 
 TWICE NOW. This line said "1.5.4 IS CURRENT" until 2026-08-17, by which point
 the app was at 1.11.11 - six minor versions and about a week of work later. It
@@ -900,6 +900,14 @@ warns about, and nothing tells anyone. The correct fix is not another manual
 correction - it is the CI check below, extended to cover this file and
 release-notes.md, not just the tgz. Treat a third manual correction here as
 proof the check should have been built instead.
+
+**DO NOT HAND-BUMP THE VERSION BEFORE PACKAGING.** `npm run package` IS the
+bump: `scripts/package.mjs:73` increments the patch itself (`--minor`, `--major`
+and `--version X.Y.Z` override it). Editing `package.json` first and then
+running package double-bumps - done 2026-08-18 while shipping 1.11.15, which
+landed on 1.11.16 and had to be rolled back. Nothing warns; the tgz name is the
+only place the doubled number shows up, and `release/` gets pruned to it, so the
+wrong version becomes the shipped one quietly. Bump by running the script.
 
 **`release/` HOLDS EXACTLY THE LATEST TGZ** - a user directive from 2026-07-30,
 enforced by `package.mjs`, which prunes older tarballs on every run. Publishing
@@ -1055,6 +1063,59 @@ No pin was lost: nothing asserted either label. The internal name
 `runDeployEverything` is left alone deliberately - it describes the handler's
 scope accurately, and renaming it would touch the disabled-reason chain for no
 user-visible gain.
+
+## The workspace table listing lost its panel - DONE 2026-08-18
+
+**User question, and it was the right one:** "why are we reloading any tables if
+there needs to be a per log analysis because each log type needs a different
+table? what is the use for this top section to list out tables at all?"
+
+None. `TablePickerSection` was built as a PICKER - list the workspace's tables,
+choose ONE for the whole analysis. When the choice became per log type (1.11.13)
+the picking moved onto the mapping-review cards and the panel kept its entire UI
+while losing its job: a filter box, an ~842-row list and a count line that
+nobody selected from. Its own header said so out loud - "IT LOADS; IT DOES NOT
+SELECT" - which is a section documenting its own obsolescence.
+
+**What stayed, and why it is not per log type.** The workspace's table inventory
+is ONE FACT: 842 tables exist regardless of how many log types are being
+analysed. What is per log type is the CHOICE over that fact. So the fetch remains
+one shared call above the cards rather than N identical ones, but it is now
+`useWorkspaceTables` - a hook with no surface. On success it renders nothing; the
+tables appearing in the dropdowns are the only evidence worth showing.
+
+**A degraded listing is one line in the mapping review's existing routing-notes
+block**, which already carries this exact class of fact (unreadable connectors,
+broken EventsToTableMapping - something reduced where log types can go, said out
+loud rather than swallowed). It names the consequence, not just the error: the
+selectors fall back to the solution's tables plus the common natives. The retry
+lives there and nowhere else, because the listing is deliberately NOT
+re-attempted automatically - one 403 would otherwise become a request storm.
+
+**The three capability rules all survive, two of them now structurally:**
+
+1. A denied verdict never removes the attempt. There is no button to disable and
+   no panel to hide - the listing is unconditional - so the rule holds by
+   construction. Still pinned, because "structural" is a claim about code that
+   can be edited. The `enabled` gate is on the WORKSPACE, not the verdict, and
+   there is a pin asserting that distinction so the two do not get confused.
+2. Reads have no fallback artifact: the note offers a retry and nothing else.
+3. An empty listing is only a zero once the read was verified -
+   `emptyTableListMessage` still decides it, and is the last of the three still
+   expressed as a pure decision.
+
+**Deleted, not deprecated:** `TablePickerSection` and its DOM test,
+`filterTables`, `tableCountLabel`, `deriveTablePickerAccess` and
+`TablePickerAccess`, plus nine now-orphaned CSS rules. The access predicate went
+because it predicted what the load would do; auto-load means the real answer
+arrives in the same second, and a prediction that disagreed with the outcome
+would have been two answers to one question. `.table-picker-note` was renamed
+`.analysis-stale-note` - it dresses the stale-results notice and never dressed
+the panel, and a class named after a deleted component is the next audit's stale
+reference.
+
+All fourteen behavioural pins moved to `use-workspace-tables.dom.test.tsx`
+intact; what was lost is the rendering they used to reach through, not the rules.
 
 ## Pack maintenance: bring in the new sample analysis
 

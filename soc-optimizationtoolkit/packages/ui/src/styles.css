@@ -5653,86 +5653,20 @@ details[open] > summary::before {
   border-top: 1px solid var(--border);
 }
 
-/* Workspace table picker (backlog item 2). Written WITH the component rather
-   than after it: the 2026-08-17 sweep found a block that shipped naming three
-   classes no stylesheet defined, and rendered as bare divs until someone
-   looked. */
-.table-picker {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-/* The capability annotation. Deliberately informational, not an error: a
-   denied verdict does not stop the operator loading, so styling it as a
-   failure would contradict the rule it exists to express. */
-.table-picker-note {
+/* The workspace-table PANEL's rules were deleted 2026-08-18 with the panel: the
+   container, the ~842-row scrolling list, its rows, the filter input, the
+   pickable name, the kind/plan captions and the error box. The listing is a
+   hook now and renders nothing of its own; a failure is one line in the mapping
+   review's routing-notes block.
+
+   What survives is the one rule that never dressed the panel: the notice saying
+   the results on screen belong to the PREVIOUSLY selected table. Renamed from
+   .table-picker-note with the panel, because a class named after a component
+   that no longer exists is the next audit's stale reference. Informational
+   rather than an error - the results are outdated, not wrong. */
+.analysis-stale-note {
   font-size: 12px;
   color: var(--text-dim);
   border-left: 2px solid var(--warn);
   padding: 4px 10px;
-}
-.table-picker-error {
-  font-size: 12px;
-  font-family: var(--font-mono);
-  color: var(--error);
-  border: 1px solid var(--error);
-  border-radius: 4px;
-  padding: 6px 10px;
-  overflow-wrap: anywhere;
-}
-.table-picker-controls {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-.table-picker-filter {
-  flex: 1 1 220px;
-  min-width: 0;
-  font-size: 12px;
-  padding: 4px 8px;
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  background: var(--surface);
-  color: var(--text);
-}
-.table-picker-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  /* A workspace can hold hundreds of tables; scroll the list, not the page. */
-  max-height: 320px;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-}
-.table-picker-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.table-picker-pick {
-  font-family: var(--font-mono);
-  font-size: 12px;
-  padding: 3px 8px;
-  border: 1px solid transparent;
-  border-radius: 4px;
-  background: none;
-  color: var(--text);
-  cursor: pointer;
-  text-align: left;
-}
-.table-picker-pick:hover:not(:disabled) {
-  border-color: var(--accent, var(--text));
-}
-.table-picker-pick-selected {
-  border-color: var(--accent);
-  background: var(--surface-raised);
-}
-.table-picker-kind,
-.table-picker-plan {
-  font-size: 11px;
-  color: var(--text-faint);
 }
