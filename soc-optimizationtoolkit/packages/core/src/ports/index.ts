@@ -19,6 +19,10 @@ export type { CriblClient, CriblRequest, CriblGroupSummary } from './cribl-clien
 export { deriveGroupProduct, isStreamWorkerGroup } from './cribl-client';
 export type { GraphDirectory, ServicePrincipalRef } from './graph-directory';
 export type { TaggedSampleStore } from './tagged-sample-store';
+export type {
+  RemoteSampleSource,
+  FetchedSampleFile,
+} from './remote-sample-source';
 export type { SchemaCatalog, DcrSchemaColumn } from './schema-catalog';
 export type {
   SentinelContent,

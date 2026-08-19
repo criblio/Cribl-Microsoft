@@ -135,3 +135,7 @@ export {
   patPolicyFor,
   evaluatePatGate,
 } from "./pat-policy";
+
+// Fuzzy solution-NAME matching (rehomed 2026-08-18 with the sample-browser
+// removal; analyze-samples reconciles a typed name against the repo's list).
+export { matchSolutionName, normalizeSolutionKey } from "./solution-matching";

@@ -140,9 +140,14 @@ export function fieldRows(
 
 /**
  * The raw-preview lines for a tagged sample: the first `maxLines` stored raw
- * events (already capped to {@link RAW_EVENTS_CAP} on tag). These are the
- * ORIGINAL vendor bytes when the sample was a non-JSON format, which is why the
- * preview shows them rather than a re-serialization.
+ * events (already capped to {@link RAW_EVENTS_CAP} on tag).
+ *
+ * These are NOT the original vendor bytes. This comment used to claim they were
+ * "the ORIGINAL vendor bytes when the sample was a non-JSON format"; that has
+ * never been true on the intake path - parseSampleContent builds `rawEvents` by
+ * re-serializing each parsed record (`JSON.stringify`), whatever the input
+ * format was. Only the deleted browse path kept original lines, by indexing back
+ * into the file text. See docs/sample-acquisition-phase0.md (0.3).
  */
 export function rawPreviewLines(
   sample: TaggedSample,
