@@ -256,23 +256,23 @@ describe("sectionNote", () => {
       lakeDatasets: { status: 403, body: "" },
       criblSources: [{ groupId: "g", section: okBody([{ id: "in_a" }]) }],
     });
-    expect(sectionNote(both.sections, "lake-query")).toContain("403");
+    expect(sectionNote(both, "lake-query")).toContain("403");
     // The chosen surface worked, so nothing is said about the failed other one.
-    expect(sectionNote(both.sections, "live-capture")).toBeNull();
+    expect(sectionNote(both, "live-capture")).toBeNull();
   });
 
   it("says nothing for a PENDING surface - that is not news", () => {
     const lakeOnly = buildSampleSourceInventory({ lakeDatasets: okBody([{ id: "a" }]) });
-    expect(sectionNote(lakeOnly.sections, "live-capture")).toBeNull();
+    expect(sectionNote(lakeOnly, "live-capture")).toBeNull();
   });
 
   it("says nothing at all before a mode is chosen", () => {
-    expect(sectionNote(lakeInv.sections, null)).toBeNull();
+    expect(sectionNote(lakeInv, null)).toBeNull();
   });
 
   it("names an empty-but-successful surface", () => {
     const none = buildSampleSourceInventory({ lakeDatasets: okBody([]) });
-    expect(sectionNote(none.sections, "lake-query")).toContain("none in this workspace");
+    expect(sectionNote(none, "lake-query")).toContain("none in this workspace");
   });
 });
 

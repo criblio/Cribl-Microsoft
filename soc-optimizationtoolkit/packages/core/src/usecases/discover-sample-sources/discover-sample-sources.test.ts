@@ -21,6 +21,7 @@ import { describe, expect, it } from "vitest";
 
 import { FakeCriblClient } from "../../testing/fake-cribl-client";
 import {
+  SYSTEM_INPUTS_PATH,
   lakeDatasetsPath,
   listSampleSourceGroups,
   loadSampleSources,
@@ -118,7 +119,7 @@ describe("stage two: lake-query mode", () => {
 
     expect(cribl.calls).toHaveLength(1);
     expect(cribl.calls[0].groupId).toBeUndefined();
-    expect(cribl.calls.some((c) => c.path === "/system/inputs")).toBe(false);
+    expect(cribl.calls.some((c) => c.path === SYSTEM_INPUTS_PATH)).toBe(false);
   });
 
   it("leaves the SOURCE surface pending - it was never asked about", async () => {
@@ -145,7 +146,7 @@ describe("stage two: live-capture mode", () => {
     await loadSampleSources(cribl, { mode: "live-capture", groupId: "chosen" });
 
     expect(cribl.calls).toHaveLength(1);
-    expect(cribl.calls[0].path).toBe("/system/inputs");
+    expect(cribl.calls[0].path).toBe(SYSTEM_INPUTS_PATH);
     expect(cribl.calls[0].groupId).toBe("chosen");
     // Lake is a different mode's surface and must not be read.
     expect(cribl.calls.some((c) => c.path.startsWith("/products/lake/"))).toBe(false);

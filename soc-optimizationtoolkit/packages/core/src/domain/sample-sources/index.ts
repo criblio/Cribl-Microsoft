@@ -14,9 +14,7 @@ export type {
 export { MODE_KIND } from "./models";
 export type { InventoryInput, RawSection } from "./inventory";
 export {
-  allEntries,
   buildSampleSourceInventory,
-  hasAnySource,
   parseCriblSources,
   parseLakeDatasets,
   sectionFor,

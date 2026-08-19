@@ -11,9 +11,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  allEntries,
   buildSampleSourceInventory,
-  hasAnySource,
   parseCriblSources,
   parseLakeDatasets,
   sectionFor,
@@ -177,24 +175,17 @@ describe("buildSampleSourceInventory", () => {
   });
 });
 
-describe("allEntries + hasAnySource", () => {
-  it("flattens every section and reports whether anything is reachable", () => {
-    const inv = buildSampleSourceInventory({
-      lakeDatasets: okBody([{ id: "lake1" }]),
-      criblSources: [{ groupId: "g", section: okBody([{ id: "in_a" }]) }],
-    });
-    expect(allEntries(inv).map((e) => e.id)).toEqual(["lake1", "in_a"]);
-    expect(hasAnySource(inv)).toBe(true);
-  });
-
-  it("hasAnySource is FALSE when every surface failed - upload is the only path", () => {
+describe("every surface failed", () => {
+  it("says what broke on EACH surface - upload is then the only path", () => {
+    // No aggregate helper decides this: the panel reads the chosen mode's
+    // section, so what matters is that each one carries its own reason rather
+    // than the pair collapsing into a single "nothing found".
     const inv = buildSampleSourceInventory({
       lakeDatasets: { status: 403, body: "" },
       criblSources: [{ groupId: "g", section: { status: 403, body: "" } }],
     });
-    expect(hasAnySource(inv)).toBe(false);
-    // ...and for the RIGHT reason - every section says what broke.
     expect(inv.sections.every((s) => s.status === "failed")).toBe(true);
     expect(inv.sections.every((s) => (s.note ?? "").length > 0)).toBe(true);
+    expect(inv.sections.every((s) => s.entries.length === 0)).toBe(true);
   });
 });

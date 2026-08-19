@@ -234,11 +234,38 @@ select via dropdown which dataset applies and/or ask if they would prefer to
 upload the samples manually or capture them with a user provided filter and
 source selection."*
 
+> **[SUPERSEDED - shipped, but as TWO modes, not three surfaces]**
+> (user direction 2026-08-19)
+>
+> "Search dataset" is NOT a listed surface. Cribl Search exposes Lake datasets in
+> its own dataset list - verified live: `cribl_metrics`, `Corelight` and
+> `LogSources` appear in both `/search/datasets` and
+> `/products/lake/lakes/default/datasets` - so listing both double-listed the
+> same dataset and asked the operator to choose between a place and the
+> mechanism for reading it. **Search is HOW a Lake dataset is queried.**
+>
+> The panel now asks one question first: **query a Cribl Lake dataset**, or
+> **capture from a live source**. The mode decides what is read:
+> Lake is ONE leader request needing no worker group; capture needs a group
+> first. Routing a source INTO Lake was considered and deferred.
+>
+> Discovery is also LAZY: page load costs one request (`listGroups`) and nothing
+> else. The first cut fanned out across every Stream worker group, which was up
+> to nine, and needed a cap that silently hid groups.
+
 ---
 
-## Phase 4 - three acquisition paths
+## Phase 4 - the acquisition paths
 
 Operator-chosen, each labelled for the evidence it gives.
+
+> **[SUPERSEDED - TWO modes, not three paths]** (user direction 2026-08-19)
+> Phase 3 shipped the choice as **query a Lake dataset** or **capture from a
+> live source**; manual upload is not a mode, it is the permanently-available
+> intake below. "Search" is the MECHANISM for querying a Lake dataset, not a
+> separate path - see the note under Phase 3. The Search section below still
+> describes the right QUERY (`summarize count() by <discriminator>`); read it as
+> the lake-query mode's implementation.
 
 ### Search (best evidence)
 
