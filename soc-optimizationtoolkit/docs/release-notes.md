@@ -6,6 +6,43 @@ is harder to forget to update than a directory that has to be remembered.
 
 ---
 
+## 1.11.15
+
+**The workspace table list is gone from DCR Gap Analysis; the listing is not.**
+Reported 2026-08-18: the section was making the screen busy for no return. It
+was built as a picker - list the workspace's tables, choose ONE for the whole
+analysis - and when the choice became per log type in 1.11.13 the picking moved
+onto the mapping-review cards while the panel kept its filter box, its ~842-row
+list and its count line. Nobody selected from any of it.
+
+The fetch stays, because the workspace's table inventory is one fact shared by
+every log type - what is per log type is the choice over it - so it remains one
+call rather than one per card. It is now a hook with no surface: on success it
+renders nothing, and the tables appearing in each Destination selector are the
+evidence that it worked.
+
+A failed listing is one line in the mapping review's existing routing-notes
+block, naming what the failure cost ("the destination selectors below offer only
+this solution's tables and the common natives") with an inline Retry. It is not
+re-attempted automatically, so one 403 cannot become a request storm.
+
+**Two overflow fixes ride along.** The triage now NAMES the fields with no
+destination equivalent instead of only counting them, and says when the pairing
+itself is the suspect - an ASim authentication sample pointed at
+CrowdStrikeAlerts left 161 of 161 overflow fields unmappable against 108
+columns, where the useful next step is checking the sample, not adding a column.
+And the remedy now depends on who owns the table: "add a column" is sound for a
+custom `_CL` table and impossible for a Microsoft-managed one, which is exactly
+what shipped for those 161 fields.
+
+**Also:** the run button reads "Deploy" in every state rather than renaming
+itself to "Deploy everything", and choosing a destination table now asks ARM
+whether it exists rather than consulting a listing that may not have loaded -
+which had been analysing against the derived schema while the UI promised live
+columns from Azure.
+
+---
+
 ## 1.11.14
 
 **The live schema is now awaited before the analysis re-runs.** Choosing a

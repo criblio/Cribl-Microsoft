@@ -186,6 +186,17 @@ export interface MappingReviewSectionProps {
    */
   workspaceTables?: readonly string[];
   /**
+   * Why the workspace listing is not backing those candidates, when it is not.
+   *
+   * Null on success and while in flight - the tables appearing in the selectors
+   * are the only evidence worth rendering. This exists so a 403 does not become
+   * a silently shorter dropdown: the fallback list looks perfectly normal, and
+   * without a note nothing distinguishes "your workspace has these tables" from
+   * "we could not read your workspace". Shown in the routing-notes block, which
+   * already carries exactly this class of soft degradation.
+   */
+  workspaceTablesNote?: { text: string; onRetry: () => void } | null;
+  /**
    * Resolve a workspace table's LIVE columns, or null when it exposes none.
    *
    * AWAITED BEFORE THE RE-ANALYSIS, deliberately. The first version of this
@@ -306,6 +317,7 @@ export function MappingReviewSection({
   content,
   catalog,
   workspaceTables,
+  workspaceTablesNote,
   fetchTableSchema,
   vendorProfile,
   ruleFields,
@@ -854,6 +866,24 @@ export function MappingReviewSection({
           {note}
         </p>
       ))}
+
+      {/* The workspace listing degraded. Same block as the other soft routing
+          notes, because it is the same kind of fact - something reduced where
+          these log types can be sent, said out loud rather than swallowed. The
+          retry is here and nowhere else: the listing is NOT re-attempted
+          automatically, or one 403 becomes a request storm. */}
+      {workspaceTablesNote != null && (
+        <p className="field-hint gap-routing-note">
+          {workspaceTablesNote.text}{" "}
+          <button
+            type="button"
+            className="link-button"
+            onClick={workspaceTablesNote.onRetry}
+          >
+            Retry
+          </button>
+        </p>
+      )}
 
       {learned.length > 0 && (
         <div className="status-bar learned-mappings-bar">

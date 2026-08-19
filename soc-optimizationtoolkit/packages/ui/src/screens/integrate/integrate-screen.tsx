@@ -61,6 +61,7 @@ import {
   assemblePack,
   cefIdentityFindings,
   effectiveCefIdentity,
+  emptyCapabilitySet,
   fieldValuesFromRecords,
   listDcrInventory,
   placeholderWarning,
@@ -96,7 +97,6 @@ import type {
   OnboardTableOutcome,
   OperationOptions,
   PackScaffoldInput,
-  WorkspaceTable,
   PackVendorSample,
   SolutionRef,
   CefIdentityFinding,
@@ -128,9 +128,9 @@ import { SampleIntakeSection } from "../samples/sample-intake-section";
 import { MappingReviewSection } from "../mapping-review/mapping-review-section";
 import type { MappingReviewRenameEvent } from "../mapping-review/mapping-review-section";
 import { PipelinePreviewSection } from "../pipeline-preview/pipeline-preview-section";
-import { TablePickerSection } from "../table-picker/table-picker-section";
 import { ANALYSIS_STALE_NOTICE } from "../table-picker/table-picker-state";
 import { createTableSchemaResolver } from "../table-picker/table-schema-resolver";
+import { useWorkspaceTables } from "../table-picker/use-workspace-tables";
 import { derivePipelinePreview } from "../pipeline-preview/pipeline-preview-state";
 import type {
   EnrichmentField,
@@ -683,18 +683,33 @@ export function IntegrateScreen({
   }, []);
 
   // The tables that actually exist in the workspace, offered to EVERY log
-  // type's Destination table selector. Loaded once; the choice is per log type
-  // because a solution's log types can land in different tables - and each
-  // table becomes its own DCR and its own Sentinel destination in the pack.
-  const [workspaceTables, setWorkspaceTables] = useState<readonly string[]>([]);
+  // type's Destination table selector.
+  //
+  // ONE FETCH, NO PANEL (user, 2026-08-18). This used to be TablePickerSection:
+  // a filter box and an ~842-row list above the review, which nobody selected
+  // from once the choice moved onto the cards. The listing stays above them
+  // because the workspace's inventory is ONE FACT shared by every log type -
+  // what is per log type is the CHOICE over it - but it has no surface of its
+  // own now. Only a degraded listing says anything, and it says it in the
+  // mapping review's existing routing-notes block.
+  const workspaceTableListing = useWorkspaceTables({
+    target: {
+      subscriptionId: config.subscriptionId,
+      resourceGroup: config.resourceGroup,
+      workspaceName: config.workspaceName,
+    },
+    capabilities: capabilities ?? emptyCapabilitySet(),
+    capabilityContext: capabilityContext ?? {
+      azureIdentityPresent: false,
+      criblReachable: false,
+    },
+    enabled: scopeCommitted,
+  });
+  const workspaceTables = workspaceTableListing.names;
   // Marked STALE, not cleared (user decision 2026-08-10): every mapping,
   // coverage and overflow verdict on screen was computed against a different
   // destination schema, and clearing them would hide that they ever existed.
   const [analysisStale, setAnalysisStale] = useState(false);
-
-  const handleTablesLoaded = useCallback((tables: readonly WorkspaceTable[]) => {
-    setWorkspaceTables(tables.map((t) => t.name));
-  }, []);
 
   // Resolve a workspace table's live columns for the mapping review, which
   // AWAITS this before re-analysing. The section owns the timing because it
@@ -1384,26 +1399,11 @@ export function IntegrateScreen({
 
   const gapAnalysisBody = (
     <>
-      {/* Point the analysis at a table that already EXISTS, using its live
-          columns instead of the derived schema (backlog item 2). Above the
-          review because it decides what the review is about. */}
-      {scopeCommitted && capabilities !== undefined && capabilityContext !== undefined && (
-        <TablePickerSection
-          target={{
-            subscriptionId: config.subscriptionId,
-            resourceGroup: config.resourceGroup,
-            workspaceName: config.workspaceName,
-          }}
-          capabilities={capabilities}
-          capabilityContext={capabilityContext}
-          onTablesLoaded={handleTablesLoaded}
-        />
-      )}
       {/* STALE, not cleared: the results below were computed against a
           different destination schema, and saying so beats removing the
           evidence that they existed. */}
       {analysisStale && (
-        <div className="table-picker-note">{ANALYSIS_STALE_NOTICE}</div>
+        <div className="analysis-stale-note">{ANALYSIS_STALE_NOTICE}</div>
       )}
       <MappingReviewSection
         key={contentResetKey}
@@ -1413,6 +1413,7 @@ export function IntegrateScreen({
         learnedCache={ports.contentCache}
         ruleFields={ruleFields}
         workspaceTables={workspaceTables}
+        workspaceTablesNote={workspaceTableListing.note}
         fetchTableSchema={fetchTableSchema}
         onGateChange={setMappingsApproved}
         onReportsChange={(reports) => {
