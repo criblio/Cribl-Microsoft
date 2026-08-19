@@ -1,36 +1,34 @@
 /**
- * discover-sample-sources - the IO half of Phase 3 (ADR 0003): find the surfaces
- * the operator can reach to get their OWN samples from.
+ * discover-sample-sources - the IO half of Phase 3 (ADR 0003): find what the
+ * operator can reach to get their OWN samples from.
  *
- * TWO STAGES, DELIBERATELY LAZY (user direction 2026-08-19). Stage one lists
- * worker groups and nothing else - ONE request - so the page can render a group
- * dropdown immediately. Stage two runs only once the operator has picked a
- * group, and reads that ONE group's sources plus the two workspace-wide dataset
- * listings.
+ * TWO MODES, and the operator picks (user direction 2026-08-19):
+ *   LAKE QUERY   - an existing Cribl Lake dataset, queried through Cribl Search.
+ *   LIVE CAPTURE - a configured Cribl source, captured with a filter.
  *
- * The first cut fanned out across every Stream worker group on load. This
- * workspace has 15+, so that was up to nine requests before the operator had
- * done anything, against a proxy budget shared with the rest of the page - and
- * it forced a MAX_SOURCE_GROUPS cap whose only job was to bound damage that a
- * dropdown removes entirely. Lazy is both cheaper AND more complete: every group
- * is now selectable, where the cap silently hid some.
+ * LAZY, AND THE MODE DECIDES THE COST. Stage one lists worker groups and nothing
+ * else - one request - so the page renders immediately. Stage two reads only the
+ * surface the chosen mode needs:
  *
- *   stage 1   listGroups()                             1 request
- *   stage 2   GET /m/{groupId}/system/inputs           1 request
- *             GET /m/{searchGroupId}/search/datasets   1, when a Search group exists
- *             GET /products/lake/lakes/{lakeId}/datasets  1
+ *   stage 1        listGroups()                                1 request
+ *   lake-query     GET /products/lake/lakes/{lakeId}/datasets  1, LEADER route
+ *   live-capture   GET /m/{groupId}/system/inputs              1, per chosen group
+ *
+ * Lake mode needs NO worker group at all, which is why the group dropdown only
+ * appears for capture. The first cut fanned out across every Stream worker group
+ * on load - up to nine requests before the operator had done anything.
  *
  * ADDRESSING, verified live 2026-08-19 against a Cribl.Cloud workspace by
  * reading Cribl's own UI traffic - the OpenAPI spec declares these paths bare
  * and cannot settle it:
- *   - `/search/*` is GROUP-scoped, under the SEARCH group (`isSearchGroup`).
- *     The group id is not a constant; it comes from listGroups().
- *   - Lake datasets are a LEADER route with a `lakeId` path segment, NOT the
+ *   - Lake datasets LIST from a LEADER route with a `lakeId` segment, NOT the
  *     `/system/lake/datasets` route Unit 20 POSTs to when creating one. Two
  *     route families for one resource; this is the listing one.
+ *   - `/search/*` is GROUP-scoped under the SEARCH group. Nothing here calls it
+ *     yet - Phase 4's query does - but the group is resolved in stage one so the
+ *     UI can say up front whether a Lake dataset is queryable at all.
  *
- * Neither stage rejects for a per-surface failure: a refused Search read must
- * not cost the operator their source list.
+ * Neither stage rejects for a per-surface failure.
  */
 
 import type { CriblClient, CriblGroupSummary } from "../../ports/cribl-client";
@@ -41,10 +39,12 @@ import type {
   InventoryInput,
   RawSection,
 } from "../../domain/sample-sources/inventory";
-import type { SampleSourceInventory } from "../../domain/sample-sources/models";
+import type {
+  AcquisitionMode,
+  SampleSourceInventory,
+} from "../../domain/sample-sources/models";
 
 /** API paths, pinned here so a change is one edit and one test. */
-export const SEARCH_DATASETS_PATH = "/search/datasets";
 export const SYSTEM_INPUTS_PATH = "/system/inputs";
 /**
  * The Cribl.Cloud managed lake's id. There is no "list lakes" route in the
@@ -59,15 +59,21 @@ export const lakeDatasetsPath = (lakeId: string): string =>
 // Stage 1: the group listing
 // ---------------------------------------------------------------------------
 
-/** What the operator can choose between, before anything else is fetched. */
+/** What stage one establishes, before any surface is read. */
 export interface SampleSourceGroups {
   /**
    * Every Stream worker group, in leader order - NOT capped. The whole point of
-   * asking the operator which group they want is that we no longer have to
-   * guess at a subset.
+   * asking which group is that we no longer have to guess at a subset.
    */
   streamGroupIds: string[];
-  /** The Search group, when this workspace has one. */
+  /**
+   * The Search group, when this workspace has one.
+   *
+   * Load-bearing for the LAKE-QUERY mode even though nothing here calls Search:
+   * a Lake dataset is queried THROUGH Search, so a workspace with no Search
+   * group can list its datasets and not query them. The UI says that up front
+   * rather than letting the operator pick a dataset and hit a wall in Phase 4.
+   */
   searchGroupId?: string;
   /** Why the listing is unusable, when it is. Empty on success. */
   notes: string[];
@@ -77,10 +83,8 @@ export interface SampleSourceGroups {
 
 /**
  * Stage one: list the worker groups. ONE request, and the only thing that runs
- * on load.
- *
- * A failure here is reported, never thrown: the page still renders, and manual
- * upload does not need any of this.
+ * on load. A failure is reported, never thrown - the page still renders, and
+ * manual upload needs none of this.
  */
 export async function listSampleSourceGroups(
   cribl: CriblClient,
@@ -123,23 +127,20 @@ export async function listSampleSourceGroups(
 }
 
 // ---------------------------------------------------------------------------
-// Stage 2: the selected group's sources, plus the workspace-wide datasets
+// Stage 2: the chosen mode's surface
 // ---------------------------------------------------------------------------
 
 /** Options for {@link loadSampleSources}. */
 export interface LoadSampleSourcesOptions {
-  /** The worker group whose sources to list. Omit to list datasets only. */
+  /** Which surface to read. */
+  mode: AcquisitionMode;
+  /**
+   * The worker group whose sources to list. Required for `live-capture`;
+   * IGNORED for `lake-query`, which is a leader route.
+   */
   groupId?: string;
-  /** The Search group from stage one; omit when the workspace has none. */
-  searchGroupId?: string;
   /** Lake id to list datasets from; defaults to {@link DEFAULT_LAKE_ID}. */
   lakeId?: string;
-  /**
-   * Whether to list the workspace-wide Search and Lake datasets. They do not
-   * depend on the selected group, so a caller that already has them can skip
-   * the two requests on a subsequent group change.
-   */
-  includeDatasets?: boolean;
 }
 
 /** Execute one GET, folding any transport rejection into a synthetic 599. */
@@ -170,43 +171,29 @@ async function get(
 }
 
 /**
- * Stage two: read the selected group's sources and, when asked, the two
- * workspace-wide dataset listings. Everything not requested stays `pending` in
- * the returned inventory rather than rendering as empty.
+ * Stage two: read the chosen mode's surface, and ONLY that one. The other stays
+ * `pending` in the returned inventory rather than rendering as empty - the
+ * operator has not asked about it, so nothing may be claimed.
  */
 export async function loadSampleSources(
   cribl: CriblClient,
   options: LoadSampleSourcesOptions,
   logger?: Logger,
 ): Promise<SampleSourceInventory> {
-  const { groupId, searchGroupId, includeDatasets = true } = options;
-  const lakeId = options.lakeId ?? DEFAULT_LAKE_ID;
+  const input: InventoryInput = {};
 
-  const [sources, searchDatasets, lakeDatasets] = await Promise.all([
-    groupId === undefined
-      ? Promise.resolve(undefined)
-      : get(cribl, SYSTEM_INPUTS_PATH, groupId, logger),
-    includeDatasets && searchGroupId !== undefined
-      ? get(cribl, SEARCH_DATASETS_PATH, searchGroupId, logger)
-      : Promise.resolve(undefined),
-    includeDatasets
-      ? get(cribl, lakeDatasetsPath(lakeId), undefined, logger)
-      : Promise.resolve(undefined),
-  ]);
-
-  const input: InventoryInput = { groupsListed: true };
-  if (groupId !== undefined && sources !== undefined) {
-    input.criblSources = [{ groupId, section: sources }];
+  if (options.mode === "lake-query") {
+    const lakeId = options.lakeId ?? DEFAULT_LAKE_ID;
+    input.lakeDatasets = await get(cribl, lakeDatasetsPath(lakeId), undefined, logger);
+  } else if (options.groupId !== undefined && options.groupId !== "") {
+    const section = await get(cribl, SYSTEM_INPUTS_PATH, options.groupId, logger);
+    input.criblSources = [{ groupId: options.groupId, section }];
   }
-  if (searchGroupId !== undefined) {
-    input.searchGroupId = searchGroupId;
-    if (searchDatasets !== undefined) input.searchDatasets = searchDatasets;
-  }
-  if (lakeDatasets !== undefined) input.lakeDatasets = lakeDatasets;
 
   const inventory = buildSampleSourceInventory(input);
   logger?.info("discover-sample-sources: inventory built", {
-    group: groupId ?? "(none)",
+    mode: options.mode,
+    group: options.groupId ?? "(none)",
     entries: inventory.sections.reduce((n, s) => n + s.entries.length, 0),
   });
   return inventory;

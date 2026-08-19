@@ -1,46 +1,68 @@
 /**
  * Pure decisions behind the sample-source picker (plan Phase 3, ADR 0003).
  *
- * The picker's whole job is to answer "where can I get my own samples from?"
- * honestly, which mostly means being careful about the difference between these
- * four states, because three of them look identical if you only count entries:
+ * TWO MODES the operator chooses between (user direction 2026-08-19):
+ *   lake-query    an existing Cribl Lake dataset, queried through Cribl Search
+ *   live-capture  a configured Cribl source, captured with a filter
  *
- *   - not looked yet          -> say so, offer nothing
- *   - looked, found nothing   -> a real fact about the workspace
- *   - looked, the read failed -> a fact about our SIGHT, not the workspace
- *   - looked, found things    -> the dropdown
+ * The panel's job is to answer "where do my samples come from?" honestly, which
+ * mostly means being careful about states that look identical if you only count
+ * entries:
+ *
+ *   no connection     -> we have not looked; blame nothing
+ *   no mode chosen    -> the operator has not asked a question yet
+ *   mode chosen, empty-> a real fact about the workspace
+ *   mode chosen, failed-> a fact about our SIGHT, not the workspace
  *
  * Pure: no IO, no fetch, no React, no Date/crypto.
  */
 
 import type {
+  AcquisitionMode,
   SampleSourceInventory,
   SampleSourceKind,
   SampleSourceRef,
   SampleSourceSection,
 } from "@soc/core";
+import { MODE_KIND } from "@soc/core";
 import type { SelectOption } from "../../components/searchable-select";
+
+/** The two modes, with the copy the chooser renders. */
+export interface ModeChoice {
+  mode: AcquisitionMode;
+  label: string;
+  /** What this mode gives you, and what it costs - one line each. */
+  detail: string;
+}
+
+export const MODE_CHOICES: readonly ModeChoice[] = Object.freeze([
+  {
+    mode: "lake-query",
+    label: "Query a Cribl Lake dataset",
+    detail:
+      "Data you already retain, so it can show every log type present rather than whatever arrives during a short window. Needs a Cribl Search group to run the query.",
+  },
+  {
+    mode: "live-capture",
+    label: "Capture from a live source",
+    detail:
+      "A bounded capture off a configured source, filtered to the log types you want. Immediate, but it only sees what flows while it runs.",
+  },
+]);
 
 /** The stable option id for a discovered entry: kind, group, and id. */
 export function sourceOptionValue(ref: SampleSourceRef): string {
   return `${ref.kind}:${ref.groupId ?? ""}:${ref.id}`;
 }
 
-/** Human name for a surface, used in option labels and section headings. */
+/** Human name for a surface, used in option hints and section headings. */
 export function kindLabel(kind: SampleSourceKind): string {
-  switch (kind) {
-    case "search-dataset":
-      return "Search dataset";
-    case "lake-dataset":
-      return "Lake dataset";
-    case "cribl-source":
-      return "Cribl source";
-  }
+  return kind === "lake-dataset" ? "Lake dataset" : "Cribl source";
 }
 
 /**
- * Byte size in the shortest honest unit. Deliberately coarse - this is a hint
- * about which dataset is worth searching, never an accounting figure.
+ * Byte size in the shortest honest unit. Deliberately coarse - a hint about
+ * which dataset is worth querying, never an accounting figure.
  */
 export function formatBytes(bytes: number): string {
   if (!Number.isFinite(bytes) || bytes < 0) return "";
@@ -55,35 +77,28 @@ export function formatBytes(bytes: number): string {
   return `${rounded} ${units[unit]}`;
 }
 
-/**
- * Build the dropdown options for the whole inventory, one flat list with the
- * surface named in each label.
- *
- * Flat rather than grouped on purpose: the operator is choosing WHERE their data
- * is, and a Lake dataset and a live source are equally valid answers to that -
- * making them navigate a hierarchy first implies a decision they have not made.
- * The surface is in the hint so it is still filterable by typing "lake".
- */
+/** Options for the CHOSEN mode's surface only - never both at once. */
 export function sourceOptions(
   inventory: SampleSourceInventory | null,
+  mode: AcquisitionMode | null,
 ): SelectOption[] {
-  if (inventory === null) return [];
-  const options: SelectOption[] = [];
-  for (const section of inventory.sections) {
-    for (const entry of section.entries) {
-      const bits: string[] = [kindLabel(entry.kind)];
-      if (entry.detail !== undefined) bits.push(entry.detail);
-      if (entry.groupId !== undefined) bits.push(`group ${entry.groupId}`);
-      if (entry.sizeBytes !== undefined) bits.push(formatBytes(entry.sizeBytes));
-      if (entry.disabled === true) bits.push("DISABLED");
-      options.push({
-        value: sourceOptionValue(entry),
-        label: entry.label,
-        hint: bits.join(" - "),
-      });
-    }
-  }
-  return options;
+  if (inventory === null || mode === null) return [];
+  const kind = MODE_KIND[mode];
+  const section = inventory.sections.find((s) => s.kind === kind);
+  if (section === undefined) return [];
+  return section.entries.map((entry) => {
+    const bits: string[] = [];
+    if (entry.detail !== undefined) bits.push(entry.detail);
+    if (entry.groupId !== undefined) bits.push(`group ${entry.groupId}`);
+    if (entry.sizeBytes !== undefined) bits.push(formatBytes(entry.sizeBytes));
+    if (entry.retentionDays !== undefined) bits.push(`${entry.retentionDays}d retention`);
+    if (entry.disabled === true) bits.push("DISABLED");
+    return {
+      value: sourceOptionValue(entry),
+      label: entry.label,
+      ...(bits.length > 0 ? { hint: bits.join(" - ") } : {}),
+    };
+  });
 }
 
 /** Find the entry an option value refers to, or null. */
@@ -100,16 +115,19 @@ export function findEntry(
   return null;
 }
 
-/**
- * How the picker as a whole should read.
- *
- * `awaiting-group` is the state the lazy two-stage load added: the group listing
- * is in and the dropdown is up, but nothing has been chosen so there is nothing
- * to list. It is emphatically NOT `empty` - the workspace has not been asked yet.
- */
+/** Worker-group options for the capture mode's group dropdown. */
+export function groupOptions(
+  groups: { streamGroupIds: readonly string[] } | null,
+): SelectOption[] {
+  if (groups === null) return [];
+  return groups.streamGroupIds.map((id) => ({ value: id, label: id }));
+}
+
+/** How the picker as a whole should read. */
 export type PickerStatus =
   | "idle"
   | "loading"
+  | "awaiting-mode"
   | "awaiting-group"
   | "empty"
   | "degraded"
@@ -120,164 +138,161 @@ export interface PickerView {
   /** The lead sentence. */
   headline: string;
   options: SelectOption[];
-  /** Per-surface lines for anything that is not plain `ok` with entries. */
-  sectionNotes: Array<{ kind: SampleSourceKind; text: string }>;
+  /** Whether the worker-group dropdown belongs on screen. Capture mode only. */
+  showGroupPicker: boolean;
+  /**
+   * A blocking-shaped fact stated up front rather than discovered later: Lake
+   * mode needs a Search group to run the query. Null when there is nothing to
+   * warn about. NOT a gate - the datasets still list, and the operator may want
+   * to see what exists even if they cannot query it from here.
+   */
+  modeWarning: string | null;
 }
 
 /**
- * One line per surface that has something to explain; `ok` with entries is
- * silent, because the dropdown is the evidence it worked.
- *
- * `pending` is skipped entirely. A surface nobody has asked for yet has nothing
- * to say, and printing "not listed yet" for each one turns the empty state into
- * a wall of non-news.
+ * One line per surface that has something to explain. Only ever describes the
+ * CHOSEN mode's surface - the other is none of the operator's business right
+ * now, and `pending` says nothing either way.
  */
-export function sectionNotes(
+export function sectionNote(
   sections: readonly SampleSourceSection[],
-): Array<{ kind: SampleSourceKind; text: string }> {
-  const out: Array<{ kind: SampleSourceKind; text: string }> = [];
-  for (const section of sections) {
-    if (section.status === "pending") {
-      continue;
-    }
-    if (section.status === "ok" && section.entries.length > 0) {
-      continue;
-    }
-    if (section.status === "ok") {
-      out.push({
-        kind: section.kind,
-        text: `${kindLabel(section.kind)}s: none in this workspace.`,
-      });
-      continue;
-    }
-    out.push({
-      kind: section.kind,
-      text: `${kindLabel(section.kind)}s: ${section.note ?? "unavailable."}`,
-    });
+  mode: AcquisitionMode | null,
+): string | null {
+  if (mode === null) return null;
+  const section = sections.find((s) => s.kind === MODE_KIND[mode]);
+  if (section === undefined || section.status === "pending") return null;
+  if (section.status === "ok") {
+    return section.entries.length > 0
+      ? null
+      : `${kindLabel(section.kind)}s: none in this workspace.`;
   }
-  return out;
+  return `${kindLabel(section.kind)}s: ${section.note ?? "unavailable."}`;
 }
 
-/** Worker-group options for the FIRST dropdown (stage one). */
-export function groupOptions(
-  groups: { streamGroupIds: readonly string[] } | null,
-): SelectOption[] {
-  if (groups === null) return [];
-  return groups.streamGroupIds.map((id) => ({ value: id, label: id }));
-}
-
-/** Everything {@link derivePickerView} needs to decide how the picker reads. */
+/** Everything {@link derivePickerView} needs. */
 export interface PickerViewInput {
-  /** Stage one: the worker group listing, or null before it lands. */
-  groups: { streamGroupIds: readonly string[]; ok: boolean } | null;
-  /** Stage two: the selected group's inventory, or null before a selection. */
+  groups: {
+    streamGroupIds: readonly string[];
+    searchGroupId?: string;
+    ok: boolean;
+  } | null;
   inventory: SampleSourceInventory | null;
-  /** The chosen worker group, or "". */
+  mode: AcquisitionMode | null;
   selectedGroupId: string;
   loadingGroups: boolean;
   loadingSources: boolean;
-  /** False when there is no Cribl connection to discover against. */
   enabled: boolean;
 }
 
-/**
- * Project the two stages into what the picker renders.
- *
- * The states this exists to keep apart, in order of how easily they collapse:
- *
- *   idle           - no Cribl address. We have not looked; blame nothing.
- *   loading        - stage one in flight.
- *   awaiting-group - groups are listed, none chosen. NOTHING is known about
- *                    sources yet, and saying "none found" here would be a claim
- *                    about the workspace made before asking it a question.
- *   empty          - a group WAS chosen and it really has nothing (or the reads
- *                    failed, which reads differently).
- *   degraded/ready - there is something to pick.
- */
+/** Project the two stages and the chosen mode into what the picker renders. */
 export function derivePickerView(input: PickerViewInput): PickerView {
   const {
     groups,
     inventory,
+    mode,
     selectedGroupId,
     loadingGroups,
     loadingSources,
     enabled,
   } = input;
 
+  const base = { options: [] as SelectOption[], showGroupPicker: false, modeWarning: null };
+
   if (!enabled) {
     return {
+      ...base,
       status: "idle",
       headline:
-        "Connect Cribl to list the datasets and sources you could take samples from. Uploading a file works either way.",
-      options: [],
-      sectionNotes: [],
+        "Connect Cribl to pull samples from a Lake dataset or a live source. Uploading a file works either way.",
     };
   }
   if (loadingGroups && groups === null) {
-    return {
-      status: "loading",
-      headline: "Listing this workspace's worker groups...",
-      options: [],
-      sectionNotes: [],
-    };
+    return { ...base, status: "loading", headline: "Checking what this workspace offers..." };
   }
   if (groups === null || !groups.ok) {
     return {
+      ...base,
       status: "empty",
       headline:
         "Nothing could be listed from Cribl. Upload a sample file instead - it needs no Cribl access.",
-      options: [],
-      sectionNotes: [],
     };
   }
-  // ORDER MATTERS: a group IS selected and its first listing is in flight, so
-  // `inventory` is still null - which the awaiting-group branch below would
-  // otherwise read as "nothing chosen" and answer with "pick a group", right
-  // after the operator picked one.
-  if (selectedGroupId !== "" && loadingSources) {
+  if (mode === null) {
     return {
-      status: "loading",
-      headline: `Listing what is available in "${selectedGroupId}"...`,
-      options: [],
-      sectionNotes: [],
-    };
-  }
-  if (selectedGroupId === "" || inventory === null) {
-    const count = groups.streamGroupIds.length;
-    return {
-      status: "awaiting-group",
+      ...base,
+      status: "awaiting-mode",
       headline:
-        count === 0
-          ? "No Stream worker group is visible, so there is no live source to capture from. Upload a sample file instead."
-          : `Pick one of this workspace's ${count} worker groups to see what you could take samples from. Nothing is loaded until you do.`,
-      options: [],
-      sectionNotes: [],
+        "Choose where your samples come from. Nothing is loaded until you pick one.",
     };
   }
 
-  const notes = sectionNotes(inventory.sections);
-  const options = sourceOptions(inventory);
-  const anyFailed = inventory.sections.some((s) => s.status === "failed");
+  // Lake mode is queried THROUGH Search, so no Search group means the datasets
+  // can be listed and not read. Said here, not discovered in Phase 4.
+  const modeWarning =
+    mode === "lake-query" && groups.searchGroupId === undefined
+      ? "This workspace has no Cribl Search group, so a Lake dataset cannot be queried from here. The datasets below are listed for reference; capture from a live source, or upload a file."
+      : null;
+
+  const showGroupPicker = mode === "live-capture";
+
+  if (mode === "live-capture" && selectedGroupId === "") {
+    const count = groups.streamGroupIds.length;
+    return {
+      ...base,
+      status: "awaiting-group",
+      showGroupPicker: count > 0,
+      headline:
+        count === 0
+          ? "No Stream worker group is visible, so there is no live source to capture from. Query a Lake dataset instead, or upload a file."
+          : `Pick one of this workspace's ${count} worker groups to see what you could capture from.`,
+    };
+  }
+  if (loadingSources) {
+    return {
+      ...base,
+      status: "loading",
+      showGroupPicker,
+      modeWarning,
+      headline:
+        mode === "lake-query"
+          ? "Listing this workspace's Lake datasets..."
+          : `Listing the sources in "${selectedGroupId}"...`,
+    };
+  }
+  if (inventory === null) {
+    return {
+      ...base,
+      status: "awaiting-mode",
+      showGroupPicker,
+      headline: "Choose where your samples come from.",
+    };
+  }
+
+  const options = sourceOptions(inventory, mode);
+  const section = inventory.sections.find((s) => s.kind === MODE_KIND[mode]);
+  const failed = section?.status === "failed";
 
   if (options.length === 0) {
     return {
-      status: "empty",
-      headline: anyFailed
-        ? "No sample source could be listed, and at least one listing failed - so this may be a permission problem rather than an empty workspace. Uploading a file always works."
-        : `Worker group "${selectedGroupId}" has no sources, and this workspace has no Search or Lake datasets to take samples from. Try another group, or upload a sample file.`,
       options,
-      sectionNotes: notes,
+      showGroupPicker,
+      modeWarning,
+      status: "empty",
+      headline: failed
+        ? "That listing failed, so this may be a permission problem rather than an empty workspace. Uploading a file always works."
+        : mode === "lake-query"
+          ? "This workspace has no Cribl Lake datasets. Capture from a live source instead, or upload a file."
+          : `Worker group "${selectedGroupId}" has no sources configured. Try another group, or upload a sample file.`,
     };
   }
 
   const count = options.length;
-  const noun = count === 1 ? "place" : "places";
+  const noun = mode === "lake-query" ? "Lake dataset" : "source";
   return {
-    status: anyFailed ? "degraded" : "ready",
-    headline: anyFailed
-      ? `${count} ${noun} to take samples from - though one listing failed, so there may be more.`
-      : `${count} ${noun} to take samples from.`,
     options,
-    sectionNotes: notes,
+    showGroupPicker,
+    modeWarning,
+    status: failed ? "degraded" : "ready",
+    headline: `${count} ${noun}${count === 1 ? "" : "s"} to choose from.`,
   };
 }

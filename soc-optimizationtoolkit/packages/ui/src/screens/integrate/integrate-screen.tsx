@@ -1379,16 +1379,21 @@ export function IntegrateScreen({
       <SampleSourcePicker
         groups={sampleSources.groups}
         inventory={sampleSources.inventory}
+        mode={sampleSources.mode}
         selectedGroupId={sampleSources.selectedGroupId}
         notes={sampleSources.notes}
         loadingGroups={sampleSources.loadingGroups}
         loadingSources={sampleSources.loadingSources}
         enabled={scopeCommitted}
         value={sampleSourceChoice}
+        onSelectMode={(next) => {
+          // A different mode reads a different surface, so the previous pick is
+          // not in the new list - leaving it would show a selection the
+          // dropdown no longer offers.
+          setSampleSourceChoice("");
+          sampleSources.selectMode(next);
+        }}
         onSelectGroup={(groupId) => {
-          // A different group means a different source list, so the previous
-          // pick cannot survive - leaving it would show a selection that is no
-          // longer in the dropdown.
           setSampleSourceChoice("");
           sampleSources.selectGroup(groupId);
         }}

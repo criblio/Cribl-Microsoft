@@ -1,30 +1,35 @@
 /**
- * SampleSourcePicker - "where can I get my own samples from?" (plan Phase 3).
+ * SampleSourcePicker - "where do my samples come from?" (plan Phase 3).
  *
- * TWO DROPDOWNS, and the order is the point (user direction 2026-08-19). The
- * first lists worker groups, which costs one request and lands immediately. The
- * second appears only once a group is chosen, and lists what is actually in it.
- * Nothing about sources is fetched - or claimed - until the operator has said
- * which group they mean.
+ * TWO CHOICES, made explicitly before anything is fetched (user direction
+ * 2026-08-19): query an existing Cribl Lake dataset, or capture from a live
+ * source. The mode decides what is read and what is shown:
  *
- * It DISCOVERS; it does not acquire. Phase 4 owns the three acquisition paths;
- * selecting here only says where to go next.
+ *   lake-query    one leader request, NO worker group involved
+ *   live-capture  a worker group first, then that group's sources
  *
- * ADVISORY, like the recommendation panel above it: no gate, no blocking. Every
- * dead end still ends with "uploading a file works", because manual upload is
- * the one path needing no Cribl access - an operator whose Search read 403s must
- * not be left thinking they are stuck.
+ * Search is not a third choice. Lake datasets already appear in Cribl Search's
+ * own dataset list, so offering both listed the same dataset twice and asked the
+ * operator to choose between a place and the mechanism for reading it.
+ *
+ * It DISCOVERS; it does not acquire. Phase 4 runs the query or the capture.
+ *
+ * ADVISORY: no gate, no blocking. Every dead end ends with "uploading a file
+ * works", because manual upload needs no Cribl access - which is also why it is
+ * not a mode here, but a permanent option in the intake section below.
  *
  * All decisions are the pure sample-source-picker-state; this renders and wires.
  */
 
 import { SearchableSelect } from "../../components/searchable-select";
 import type {
+  AcquisitionMode,
   SampleSourceGroups,
   SampleSourceInventory,
   SampleSourceRef,
 } from "@soc/core";
 import {
+  MODE_CHOICES,
   derivePickerView,
   findEntry,
   groupOptions,
@@ -33,9 +38,11 @@ import {
 export interface SampleSourcePickerProps {
   /** Stage one: the worker group listing, or null before it lands. */
   groups: SampleSourceGroups | null;
-  /** Stage two: the selected group's inventory, or null before a selection. */
+  /** Stage two: the chosen mode's inventory, or null before it is read. */
   inventory: SampleSourceInventory | null;
-  /** The chosen worker group, or "". */
+  /** The chosen mode, or null before the operator picks. */
+  mode: AcquisitionMode | null;
+  /** The chosen worker group (capture mode), or "". */
   selectedGroupId: string;
   /** Notes about discovery itself. */
   notes: readonly string[];
@@ -45,23 +52,23 @@ export interface SampleSourcePickerProps {
   enabled: boolean;
   /** The selected source option value, or "" for none. */
   value: string;
-  /** A worker group was chosen; triggers the second-stage load. */
+  onSelectMode: (mode: AcquisitionMode) => void;
   onSelectGroup: (groupId: string) => void;
-  /** A source was chosen; the resolved entry is passed for convenience. */
   onChange: (value: string, entry: SampleSourceRef | null) => void;
-  /** Re-run discovery. Offered whenever something degraded. */
   onReload: () => void;
 }
 
 export function SampleSourcePicker({
   groups,
   inventory,
+  mode,
   selectedGroupId,
   notes,
   loadingGroups,
   loadingSources,
   enabled,
   value,
+  onSelectMode,
   onSelectGroup,
   onChange,
   onReload,
@@ -69,6 +76,7 @@ export function SampleSourcePicker({
   const view = derivePickerView({
     groups,
     inventory,
+    mode,
     selectedGroupId,
     loadingGroups,
     loadingSources,
@@ -76,20 +84,50 @@ export function SampleSourcePicker({
   });
   const selected = findEntry(inventory, value);
   const groupChoices = groupOptions(groups);
+  const busy = loadingGroups || loadingSources;
   const showRetry =
-    enabled &&
-    !loadingGroups &&
-    !loadingSources &&
-    (view.status === "degraded" || view.status === "empty");
+    enabled && !busy && (view.status === "degraded" || view.status === "empty");
 
   return (
     <div className="sample-source-picker" data-status={view.status}>
-      <span className="field-label">Where your samples can come from</span>
+      <span className="field-label">Where your samples come from</span>
       <p className="panel-desc">{view.headline}</p>
 
-      {/* STAGE ONE. Rendered as soon as the group listing lands, and it is the
-          only thing fetched on load. */}
-      {groupChoices.length > 0 && (
+      {/* THE CHOICE. Rendered as soon as the workspace is reachable, and before
+          anything about either surface is fetched - the modes are two different
+          questions, and asking which one they mean is cheaper and clearer than
+          answering both. */}
+      {enabled && groups !== null && groups.ok && (
+        <div className="acquisition-modes" role="radiogroup" aria-label="Sample source mode">
+          {MODE_CHOICES.map((choice) => (
+            <button
+              key={choice.mode}
+              type="button"
+              role="radio"
+              aria-checked={mode === choice.mode}
+              className={
+                mode === choice.mode
+                  ? "acquisition-mode acquisition-mode-active"
+                  : "acquisition-mode"
+              }
+              onClick={() => onSelectMode(choice.mode)}
+              disabled={busy}
+            >
+              <span className="acquisition-mode-label">{choice.label}</span>
+              <span className="field-hint">{choice.detail}</span>
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Stated up front rather than discovered in Phase 4. */}
+      {view.modeWarning !== null && (
+        <p className="field-hint sample-source-warning">{view.modeWarning}</p>
+      )}
+
+      {/* Capture only: which worker group. Lake datasets are a leader route and
+          need no group at all, which is why this is conditional. */}
+      {view.showGroupPicker && groupChoices.length > 0 && (
         <label className="field">
           <span className="field-label">Worker group</span>
           <SearchableSelect
@@ -103,15 +141,18 @@ export function SampleSourcePicker({
         </label>
       )}
 
-      {/* STAGE TWO. Only once a group is chosen and its listing is in. */}
       {view.options.length > 0 && (
         <label className="field">
-          <span className="field-label">Dataset or source</span>
+          <span className="field-label">
+            {mode === "lake-query" ? "Lake dataset" : "Source"}
+          </span>
           <SearchableSelect
             options={view.options}
             value={value}
             onChange={(next) => onChange(next, findEntry(inventory, next))}
-            placeholder="Select a dataset or source..."
+            placeholder={
+              mode === "lake-query" ? "Select a dataset..." : "Select a source..."
+            }
             ariaLabel="Sample source"
           />
         </label>
@@ -124,20 +165,6 @@ export function SampleSourcePicker({
         </p>
       )}
 
-      {/* Per-surface lines: only for surfaces that have something to explain. A
-          surface that worked and has entries says nothing - the dropdown is the
-          evidence it worked - and one nobody has asked for yet says nothing
-          either. */}
-      {view.sectionNotes.length > 0 && (
-        <ul className="sample-source-picker-notes">
-          {view.sectionNotes.map((note) => (
-            <li key={note.kind} className="field-hint">
-              {note.text}
-            </li>
-          ))}
-        </ul>
-      )}
-
       {notes.map((note) => (
         <p className="field-hint" key={note}>
           {note}
@@ -146,12 +173,8 @@ export function SampleSourcePicker({
 
       {showRetry && (
         <div className="panel-controls">
-          <button
-            className="run-button"
-            onClick={onReload}
-            disabled={loadingGroups || loadingSources}
-          >
-            Retry discovery
+          <button className="run-button" onClick={onReload} disabled={busy}>
+            Retry
           </button>
         </div>
       )}

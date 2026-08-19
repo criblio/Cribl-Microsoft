@@ -2,7 +2,7 @@
  * discover-sample-sources usecase barrel (sample-acquisition plan Phase 3).
  *
  * Two stages: listSampleSourceGroups on load (one request), loadSampleSources
- * once the operator has picked a group.
+ * once the operator has chosen a mode.
  */
 
 export type {
@@ -11,7 +11,6 @@ export type {
 } from "./discover-sample-sources";
 export {
   DEFAULT_LAKE_ID,
-  SEARCH_DATASETS_PATH,
   SYSTEM_INPUTS_PATH,
   lakeDatasetsPath,
   listSampleSourceGroups,

@@ -1,27 +1,44 @@
 /**
- * Sample-source inventory models - what the operator can actually REACH to get
- * samples from (sample-acquisition plan Phase 3, ADR 0003).
+ * Sample-source models - where the operator gets their OWN samples from
+ * (sample-acquisition plan Phase 3, ADR 0003).
  *
- * The browser this replaces answered "which file should I use?" from a repo the
- * operator had no relationship with. This answers "where can I get my OWN data
- * from?", which has three possible answers in a Cribl.Cloud workspace:
+ * TWO WAYS, and the operator picks between them explicitly (user direction
+ * 2026-08-19):
  *
- *   - a Cribl SEARCH dataset (including federated ones) - searchable at scale,
- *     so it can report complete log types AND volumes;
- *   - a Cribl LAKE dataset - the workspace's own retained data;
- *   - a Cribl SOURCE - live, capturable with a filter, bounded.
+ *   LAKE QUERY   - an existing Cribl Lake dataset, queried through Cribl Search.
+ *                  Data that already exists, so it can report complete log types
+ *                  and volumes rather than whatever a short window happened to
+ *                  contain.
+ *   LIVE CAPTURE - a configured Cribl source, captured with a filter. Bounded,
+ *                  immediate, and limited to what flows during the capture.
  *
- * Manual upload is the fourth path and deliberately has no entry here: it needs
- * no discovery and no Cribl integration at all, which is exactly why it is the
- * fallback that always works.
+ * "Search dataset" is deliberately NOT a third choice. Lake datasets are already
+ * exposed in Cribl Search's own dataset list (verified 2026-08-19: cribl_metrics,
+ * Corelight and LogSources appear in both), so offering them separately listed
+ * the same dataset twice and asked the operator to choose between a place and
+ * the mechanism for reading it. Search is HOW a Lake dataset is queried, not a
+ * different thing to query.
+ *
+ * Manual upload is not a mode here either: it needs no Cribl access at all,
+ * which is exactly why it stays permanently available in the intake section
+ * below rather than hiding behind a choice.
  *
  * Pure data: no IO, no fetch, no React, no Date/crypto.
  */
 
-/** Which acquisition surface an entry belongs to. */
-export type SampleSourceKind = "search-dataset" | "lake-dataset" | "cribl-source";
+/** How the operator wants to get samples out of Cribl. */
+export type AcquisitionMode = "lake-query" | "live-capture";
 
-/** One thing the operator can pick from, normalized across the three surfaces. */
+/** Which surface an entry belongs to. One per {@link AcquisitionMode}. */
+export type SampleSourceKind = "lake-dataset" | "cribl-source";
+
+/** The surface each mode draws from. */
+export const MODE_KIND: Record<AcquisitionMode, SampleSourceKind> = {
+  "lake-query": "lake-dataset",
+  "live-capture": "cribl-source",
+};
+
+/** One thing the operator can pick, normalized across both surfaces. */
 export interface SampleSourceRef {
   /** Which surface this came from. */
   kind: SampleSourceKind;
@@ -31,8 +48,8 @@ export interface SampleSourceRef {
   label: string;
   /**
    * The worker group this must be addressed through, when it is group-scoped.
-   * Search datasets carry the Search group; Cribl sources carry their Stream
-   * group; Lake datasets are a LEADER route and carry none.
+   * Cribl sources carry their Stream group. Lake datasets carry NONE - listing
+   * them is a leader route, which is why picking Lake mode needs no group.
    */
   groupId?: string;
   /** One-line provenance for the operator (dataset description, source type). */
@@ -42,31 +59,30 @@ export interface SampleSourceRef {
    * Advisory only - it says nothing about which LOG TYPES are inside.
    */
   sizeBytes?: number;
+  /** Retention window in days, when reported. */
+  retentionDays?: number;
   /** True when the entry is configured but switched off (disabled sources). */
   disabled?: boolean;
 }
 
 /**
- * The outcome of ONE surface's discovery. Kept per-surface rather than folded
- * into a single list+error because the surfaces fail independently and the
- * operator's next move differs: no Search entitlement is a different sentence
- * from a Search group that answered 403.
+ * The outcome of ONE surface's discovery, kept separate because the surfaces
+ * fail independently and the operator's next move differs: no Lake dataset is a
+ * different sentence from a Lake listing that returned 403.
  */
 export interface SampleSourceSection {
   kind: SampleSourceKind;
   /**
    * What happened, in four states that must never be collapsed:
    *
-   *   `pending`     - not looked at yet. Nothing has been requested, so this
-   *                   says nothing at all about the workspace.
+   *   `pending`     - not looked at yet. Says nothing about the workspace.
    *   `ok`          - the API answered; the entries are complete.
-   *   `unavailable` - the surface does not exist here (no Search group).
+   *   `unavailable` - the surface does not exist here.
    *   `failed`      - it should have worked and did not.
    *
-   * `pending` exists because discovery is LAZY (2026-08-19): only the worker
-   * group listing runs on load, and a surface nobody has asked for yet must not
-   * render as "you have none" - which is what `unavailable` or an empty `ok`
-   * would say.
+   * `pending` exists because discovery is LAZY: only the worker group listing
+   * runs on load, and a surface nobody has asked for yet must not render as
+   * "you have none".
    */
   status: "pending" | "ok" | "unavailable" | "failed";
   entries: SampleSourceRef[];
@@ -77,7 +93,7 @@ export interface SampleSourceSection {
   note?: string;
 }
 
-/** Everything discovered, one section per surface, always all three present. */
+/** Everything discovered, one section per surface, both always present. */
 export interface SampleSourceInventory {
   sections: SampleSourceSection[];
 }
