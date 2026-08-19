@@ -219,19 +219,3 @@ export function sectionFor(
 ): SampleSourceSection | undefined {
   return inventory.sections.find((s) => s.kind === kind);
 }
-
-/** Every entry across every section. */
-export function allEntries(
-  inventory: SampleSourceInventory,
-): SampleSourceRef[] {
-  return inventory.sections.flatMap((s) => s.entries);
-}
-
-/**
- * Whether discovery found ANY reachable entry. False means the operator's only
- * route is manual upload - a legitimate outcome that must be said out loud, not
- * left as an empty dropdown.
- */
-export function hasAnySource(inventory: SampleSourceInventory): boolean {
-  return inventory.sections.some((s) => s.entries.length > 0);
-}

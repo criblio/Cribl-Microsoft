@@ -22,9 +22,8 @@ import type {
   SampleSourceInventory,
   SampleSourceKind,
   SampleSourceRef,
-  SampleSourceSection,
 } from "@soc/core";
-import { MODE_KIND } from "@soc/core";
+import { MODE_KIND, sectionFor } from "@soc/core";
 import type { SelectOption } from "../../components/searchable-select";
 
 /** The two modes, with the copy the chooser renders. */
@@ -77,14 +76,18 @@ export function formatBytes(bytes: number): string {
   return `${rounded} ${units[unit]}`;
 }
 
-/** Options for the CHOSEN mode's surface only - never both at once. */
-export function sourceOptions(
+/**
+ * Options for the CHOSEN mode's surface only - never both at once.
+ *
+ * Module-local: derivePickerView is this module's public surface, and an
+ * exported helper nothing imports is the shape the audit looks for.
+ */
+function sourceOptions(
   inventory: SampleSourceInventory | null,
   mode: AcquisitionMode | null,
 ): SelectOption[] {
   if (inventory === null || mode === null) return [];
-  const kind = MODE_KIND[mode];
-  const section = inventory.sections.find((s) => s.kind === kind);
+  const section = sectionFor(inventory, MODE_KIND[mode]);
   if (section === undefined) return [];
   return section.entries.map((entry) => {
     const bits: string[] = [];
@@ -155,11 +158,11 @@ export interface PickerView {
  * now, and `pending` says nothing either way.
  */
 export function sectionNote(
-  sections: readonly SampleSourceSection[],
+  inventory: SampleSourceInventory | null,
   mode: AcquisitionMode | null,
 ): string | null {
-  if (mode === null) return null;
-  const section = sections.find((s) => s.kind === MODE_KIND[mode]);
+  if (inventory === null || mode === null) return null;
+  const section = sectionFor(inventory, MODE_KIND[mode]);
   if (section === undefined || section.status === "pending") return null;
   if (section.status === "ok") {
     return section.entries.length > 0
@@ -269,7 +272,7 @@ export function derivePickerView(input: PickerViewInput): PickerView {
   }
 
   const options = sourceOptions(inventory, mode);
-  const section = inventory.sections.find((s) => s.kind === MODE_KIND[mode]);
+  const section = sectionFor(inventory, MODE_KIND[mode]);
   const failed = section?.status === "failed";
 
   if (options.length === 0) {

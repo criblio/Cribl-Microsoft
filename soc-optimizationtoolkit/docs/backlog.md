@@ -1198,7 +1198,7 @@ it. To continue, open ONE document:
 findings. [ADR 0003](adr/0003-remove-sample-browser.md) is the durable decision
 record and is background, not a prerequisite.
 
-**What remains:** Phases 4-5 (the three acquisition paths, volume findings).
+**What remains:** Phases 4-5 (running the two acquisition modes, volume findings).
 **Nothing gates them.** Phase 3 landed source discovery, so Phase 4 starts from
 a selected `SampleSourceRef` that already carries its `kind` and its `groupId`.
 The addressing for all three surfaces is verified (phase 0 doc, 0.1b).
