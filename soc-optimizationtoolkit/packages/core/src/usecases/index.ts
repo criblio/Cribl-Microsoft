@@ -19,5 +19,6 @@ export * from "./update-dcr";
 export * from "./siem-migration";
 export * from "./content-install";
 export * from "./discover-sample-sources";
+export * from "./capture-samples";
 export * from "./provision-lab";
 export * from "./live-architecture";
