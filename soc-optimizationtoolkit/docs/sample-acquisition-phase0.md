@@ -8,9 +8,10 @@ Sources: the vendored `packages/core/assets/cribl-openapi.json` (Cribl's
 official spec, 517 paths), `apps/cribl-app/config/policies.yml`, and a live
 read of the parsing/intake code.
 
-**Verdict: Phases 1, 2 and 4-capture are buildable. Phase 4-Search and Phase 3's
-dataset half carry one live-verification gate (0.1b).** Nothing found here
-contradicts the plan's direction; two details change, both recorded below.
+**Verdict: all of Phases 1-5 are buildable.** The one live gate (0.1b) was
+answered on 2026-08-19 against a real Cribl.Cloud workspace - `/search/*` is
+group-scoped. Nothing found here contradicts the plan's direction; two details
+change, both recorded below.
 
 ---
 
@@ -56,29 +57,57 @@ dataset create. Its GET is the obvious candidate for listing Lake datasets from
 the app, and is a cheaper first probe than the specced
 `/products/lake/lakes/{lakeId}/datasets` (which needs a `lakeId` we do not have).
 
-### 0.1b - the one live gate
+### 0.1b - RESOLVED 2026-08-19: `/search/*` is GROUP-scoped
 
-**Unresolved: does `/search/*` need a Worker Group context?** The spec declares
-paths without prefixes and its `servers` is bare `/`, so it is silent. The
-`cribl-api` skill's lab evidence uses the classic proxy form
-`/m/default_search/search/jobs`. So the call is either
+**Answer: `/m/{searchGroupId}/search/...`, and the group is `default_search`.**
 
-- `GET /search/query` (leader-level, like `/system/lake/datasets`), or
-- `GET /m/{searchGroupId}/search/query` (group-level, like `/system/inputs`).
+Verified live, not inferred: Cribl's own Search UI was opened in a browser
+against a real Cribl.Cloud workspace and its network calls read off. Every
+Search call carries the `/m/` prefix, while the app shell's own calls do not:
 
-This cannot be settled from the spec, and this session has no Cribl.Cloud
-credentials. **It is one GET against a live workspace to settle.**
+```
+GET  /api/v1/version                                          <- leader, no prefix
+GET  /api/v1/system/settings/git-settings                     <- leader, no prefix
 
-Good news: finding the Search group id needs no new code.
-`deriveGroupProduct` (`ports/cribl-client.ts:88`) already returns `"search"` for
-a Search group - from the `type` discriminator or the deprecated `isSearch`
-boolean. `listGroups()` returns every group; only the *UI pickers* filter to
-Stream via `isStreamWorkerGroup`. So a Search-group lookup is a filter change,
-not a new fetch.
+GET  /api/v1/m/default_search/search/datasets?vtables=1       200
+GET  /api/v1/m/default_search/search/macros                   200
+GET  /api/v1/m/default_search/search/dataset-providers        200
+POST /api/v1/m/default_search/search/jobs                     200
+GET  /api/v1/m/default_search/search/jobs/{id}/status?advanced=true   200
+GET  /api/v1/m/default_search/search/jobs/{id}/results-poll?offset=0&limit=200
+GET  /api/v1/m/default_search/search/jobs/{id}/results?offset=0&limit=200
+```
 
-**Risk if it goes the wrong way: none to the schedule.** Both forms go through
-the same `CriblClient.request({path, groupId?})` seam. The difference is one
-`groupId` argument and one line in `policies.yml`.
+So the call is `cribl.request({ method, path: "/search/...", groupId })`, which
+the adapter renders as `/m/{groupId}/search/...`. `policies.yml` needs
+`/m/:gid/search/*` entries, not leader-level ones.
+
+Finding the group id needs no new code: `deriveGroupProduct`
+(`ports/cribl-client.ts:88`) already returns `"search"` from the `type`
+discriminator or the deprecated `isSearch` boolean, and `listGroups()` returns
+every group - only the *UI pickers* filter to Stream via `isStreamWorkerGroup`.
+Do not hard-code `default_search`; it is this workspace's id, not a constant.
+
+**Two caveats on what this does and does not prove.**
+
+1. The UI uses the ASYNC job path. `GET /search/query` - the synchronous one
+   Phase 4 wants - was never called, so its behaviour is still spec-only. The
+   addressing question is settled for the whole `/search/*` family, which was
+   the actual gate; if `/search/query` disappoints, the job lifecycle above is
+   a proven fallback and its full shape is now known.
+2. The UI authenticates by session cookie; the app authenticates through the
+   platform's injected credential. Path shape is what transfers here, not auth.
+
+**Bonus, and it corroborates 0.2 independently of the spec:** the UI's own
+job-list call passes `filterExp` as a JavaScript expression with method calls -
+
+```
+filterExp=user !== '__system_search__' && type !== 'scheduled' &&
+          String(user).toLowerCase().includes('auth0|...')
+```
+
+Cribl really does evaluate these as JavaScript on a live system, which is the
+assumption the whole regex-filter design in Phase 4 rests on.
 
 ---
 
@@ -230,6 +259,7 @@ scoped as such, not smuggled in as a salvage.
    capture-wrapped input - not just CEF, which already half-works.
 3. **Phase 1 salvage**: `consolidateByTableRouting` needs no salvage. It is
    unreachable. Delete it with the module and record it as a deleted capability.
-4. **Phase 3/4 Search**: one live GET decides leader-vs-group addressing. Until
-   then, build behind `CriblClient.request({path, groupId?})`, which absorbs
-   either answer.
+4. **Phase 3/4 Search**: ANSWERED (0.1b). Pass a `groupId` resolved from
+   `listGroups()` by product `"search"`; declare `/m/:gid/search/*` in
+   `policies.yml`. Prefer `GET /search/query` for the count-by-discriminator
+   query, with the proven `POST /search/jobs` lifecycle as the fallback.

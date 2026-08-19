@@ -1199,10 +1199,9 @@ findings. [ADR 0003](adr/0003-remove-sample-browser.md) is the durable decision
 record and is background, not a prerequisite.
 
 **What remains:** Phases 3-5 (source discovery, the three acquisition paths,
-volume findings). One thing gates them - whether Cribl's `/search/*` is
-addressed at the leader or under `/m/{searchGroupId}`. The spec is silent and it
-needs one authenticated GET against a live workspace. The capture path does not
-depend on it.
+volume findings). **Nothing gates them** - the `/search/*` addressing question
+was answered live on 2026-08-19 (group-scoped, `/m/{searchGroupId}/search/...`;
+see phase 0 doc section 0.1b), so Search, capture and Lake can all be built.
 
 The Browse Samples modal is being removed and replaced by a log-type
 recommendation derived from the operator's own environment.

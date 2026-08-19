@@ -14,10 +14,11 @@ Written 2026-08-18 by a planning session, from a live read of the code.
 > and they change four things written below. Read that document before Phase 3;
 > the corrections are marked inline here as **[SUPERSEDED]**.
 >
-> One thing is still unverified and it gates Phase 3's dataset half and Phase
-> 4's Search path: whether `/search/*` is addressed at the leader or under
-> `/m/{searchGroupId}`. It is one GET against a live Cribl.Cloud workspace. The
-> capture path does not depend on it.
+> **Nothing is blocked any more.** The one open question - whether `/search/*`
+> is addressed at the leader or under `/m/{searchGroupId}` - was answered on
+> 2026-08-19 by reading Cribl's own Search UI network calls against a live
+> workspace: it is **group-scoped**, `/m/{searchGroupId}/search/...`. Details and
+> caveats in the phase 0 doc, section 0.1b.
 
 **Where to branch from.** This document was committed on `fix/live-schema-race`
 (PR #118) and may not be on `main` yet. Check before you branch:
