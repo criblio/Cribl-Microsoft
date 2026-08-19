@@ -104,6 +104,16 @@ describe("IntegrateScreen - renders", () => {
     expect(panel?.getAttribute("data-status")).toBe("unknown");
   });
 
+  it("renders the sample-source picker, idle before the scope is committed", () => {
+    // Wiring pin, same reason as the one above. `idle` is the honest state with
+    // no Cribl address yet - it must not read as "nothing found", which would
+    // blame the workspace for our own missing connection.
+    const { container } = renderScreen({ scopeCommitted: false });
+    const picker = container.querySelector(".sample-source-picker");
+    expect(picker).toBeTruthy();
+    expect(picker?.getAttribute("data-status")).toBe("idle");
+  });
+
   it("prefills the pack name before any solution is chosen", () => {
     // Proves the initializer ran and produced the documented default, which is
     // the exact line that crashed. The solution-derived form is pinned without
