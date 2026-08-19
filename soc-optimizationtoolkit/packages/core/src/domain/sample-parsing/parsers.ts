@@ -168,7 +168,17 @@ export function parseCsv(
   return out;
 }
 
-/** Parse key=value lines (Palo Alto, FortiGate, ...). Verbatim from legacy. */
+/**
+ * Parse key=value lines (Palo Alto, FortiGate, ...). Verbatim from legacy.
+ *
+ * NOT the same function as `parseKvLine` in ./splitting, which became a sibling
+ * when the splitter was rehomed here (ADR 0003). That one is a cheap probe used
+ * only to find a DISCRIMINATOR field; this one is full field extraction and is
+ * what feeds the schema. They are deliberately separate: merging them would put
+ * the splitter's log-type naming - which is the tagged-sample store's KEY - on
+ * this function's change budget, and re-keying an operator's stored samples is
+ * silent. If you touch one, do not assume the other should follow.
+ */
 export function parseKv(
   content: string,
   sourceLines?: string[],
