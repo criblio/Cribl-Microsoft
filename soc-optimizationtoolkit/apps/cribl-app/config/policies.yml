@@ -156,6 +156,16 @@ policies:
   # a DIFFERENT route family from the /system/lake/datasets create above.
   - object: '/products/lake/lakes/:lakeId/datasets'
     actions: ['GET']
+  # Sample capture (ADR 0003 Phase 4). THE ONLY NON-GET THIS FEATURE ADDS, and
+  # worth reading carefully because the verb overstates it: POST /system/capture
+  # CREATES NOTHING. It opens a short diagnostic read of events already flowing
+  # through a source and returns them; the API models it as a POST because the
+  # filter expression travels in the body, not because anything is written. It
+  # is bounded by construction - maxEvents (default 100, hard max 10000) and
+  # duration (default 10s) both terminate it - and runs at level 0, before any
+  # pipeline, so the samples are what the source actually delivers.
+  - object: '/m/:gid/system/capture'
+    actions: ['POST']
   # Live sources to capture from. The GET is already declared above for Live
   # Architecture; repeated here only in this comment so the reason is findable
   # from either feature. No second entry is added.
