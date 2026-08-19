@@ -1377,11 +1377,21 @@ export function IntegrateScreen({
         * failure state still ends with "upload works", because manual upload is
         * the one path needing no Cribl access. */}
       <SampleSourcePicker
+        groups={sampleSources.groups}
         inventory={sampleSources.inventory}
+        selectedGroupId={sampleSources.selectedGroupId}
         notes={sampleSources.notes}
-        loading={sampleSources.loading}
+        loadingGroups={sampleSources.loadingGroups}
+        loadingSources={sampleSources.loadingSources}
         enabled={scopeCommitted}
         value={sampleSourceChoice}
+        onSelectGroup={(groupId) => {
+          // A different group means a different source list, so the previous
+          // pick cannot survive - leaving it would show a selection that is no
+          // longer in the dropdown.
+          setSampleSourceChoice("");
+          sampleSources.selectGroup(groupId);
+        }}
         onChange={(next) => setSampleSourceChoice(next)}
         onReload={sampleSources.reload}
       />

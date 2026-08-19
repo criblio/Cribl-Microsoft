@@ -1,27 +1,36 @@
 /**
- * discover-sample-sources - the IO half of Phase 3 (ADR 0003): find every
- * surface the operator can actually reach to get their OWN samples from, and
- * hand the raw responses to the pure domain builder.
+ * discover-sample-sources - the IO half of Phase 3 (ADR 0003): find the surfaces
+ * the operator can reach to get their OWN samples from.
  *
- * Three reads, all GET, all independently degradable:
+ * TWO STAGES, DELIBERATELY LAZY (user direction 2026-08-19). Stage one lists
+ * worker groups and nothing else - ONE request - so the page can render a group
+ * dropdown immediately. Stage two runs only once the operator has picked a
+ * group, and reads that ONE group's sources plus the two workspace-wide dataset
+ * listings.
  *
- *   GET /m/{searchGroupId}/search/datasets      Search datasets (incl. federated)
- *   GET /products/lake/lakes/{lakeId}/datasets  Cribl Lake datasets  (LEADER route)
- *   GET /m/{groupId}/system/inputs              live sources, per Stream group
+ * The first cut fanned out across every Stream worker group on load. This
+ * workspace has 15+, so that was up to nine requests before the operator had
+ * done anything, against a proxy budget shared with the rest of the page - and
+ * it forced a MAX_SOURCE_GROUPS cap whose only job was to bound damage that a
+ * dropdown removes entirely. Lazy is both cheaper AND more complete: every group
+ * is now selectable, where the cap silently hid some.
+ *
+ *   stage 1   listGroups()                             1 request
+ *   stage 2   GET /m/{groupId}/system/inputs           1 request
+ *             GET /m/{searchGroupId}/search/datasets   1, when a Search group exists
+ *             GET /products/lake/lakes/{lakeId}/datasets  1
  *
  * ADDRESSING, verified live 2026-08-19 against a Cribl.Cloud workspace by
  * reading Cribl's own UI traffic - the OpenAPI spec declares these paths bare
  * and cannot settle it:
  *   - `/search/*` is GROUP-scoped, under the SEARCH group (`isSearchGroup`).
- *     The group id is not a constant; it is resolved from listGroups().
+ *     The group id is not a constant; it comes from listGroups().
  *   - Lake datasets are a LEADER route with a `lakeId` path segment, NOT the
  *     `/system/lake/datasets` route Unit 20 POSTs to when creating one. Two
  *     route families for one resource; this is the listing one.
  *
- * Never rejects for a per-surface failure: a refused Search read must not cost
- * the operator their source list. Only listGroups() failing is fatal, because
- * without it there is nothing to address at all - and even that is reported as
- * an inventory with every section marked, not thrown.
+ * Neither stage rejects for a per-surface failure: a refused Search read must
+ * not cost the operator their source list.
  */
 
 import type { CriblClient, CriblGroupSummary } from "../../ports/cribl-client";
@@ -46,32 +55,91 @@ export const DEFAULT_LAKE_ID = "default";
 export const lakeDatasetsPath = (lakeId: string): string =>
   `/products/lake/lakes/${encodeURIComponent(lakeId)}/datasets`;
 
-/**
- * How many Stream worker groups get their sources read. A workspace can carry
- * dozens (this one has 15+); reading every one turns a page load into a request
- * storm against a shared 100/min proxy budget. The domain reports the shortfall.
- */
-export const MAX_SOURCE_GROUPS = 6;
+// ---------------------------------------------------------------------------
+// Stage 1: the group listing
+// ---------------------------------------------------------------------------
 
-/** Options for {@link discoverSampleSources}. */
-export interface DiscoverSampleSourcesOptions {
+/** What the operator can choose between, before anything else is fetched. */
+export interface SampleSourceGroups {
   /**
-   * Restrict the source read to these Stream groups. Absent = the first
-   * {@link MAX_SOURCE_GROUPS} Stream groups the leader reports.
+   * Every Stream worker group, in leader order - NOT capped. The whole point of
+   * asking the operator which group they want is that we no longer have to
+   * guess at a subset.
    */
-  groupIds?: readonly string[];
-  /** Lake id to list datasets from; defaults to {@link DEFAULT_LAKE_ID}. */
-  lakeId?: string;
+  streamGroupIds: string[];
+  /** The Search group, when this workspace has one. */
+  searchGroupId?: string;
+  /** Why the listing is unusable, when it is. Empty on success. */
+  notes: string[];
+  /** False when listGroups itself failed - nothing below can be addressed. */
+  ok: boolean;
 }
 
-/** The result: the inventory plus what discovery itself could not do. */
-export interface DiscoverSampleSourcesResult {
-  inventory: SampleSourceInventory;
+/**
+ * Stage one: list the worker groups. ONE request, and the only thing that runs
+ * on load.
+ *
+ * A failure here is reported, never thrown: the page still renders, and manual
+ * upload does not need any of this.
+ */
+export async function listSampleSourceGroups(
+  cribl: CriblClient,
+  logger?: Logger,
+): Promise<SampleSourceGroups> {
+  let groups: CriblGroupSummary[] = [];
+  try {
+    groups = await cribl.listGroups();
+  } catch (err) {
+    logger?.warn("discover-sample-sources: listGroups failed", {
+      error: String(err),
+    });
+    return {
+      streamGroupIds: [],
+      notes: [
+        `The worker-group listing failed (${String(err)}), so no Cribl surface could be reached. Uploading samples still works.`,
+      ],
+      ok: false,
+    };
+  }
+
+  const streamGroupIds = groups.filter(isStreamWorkerGroup).map((g) => g.id);
+  const searchGroupId = groups.find(isSearchGroup)?.id;
+  const notes: string[] = [];
+  if (streamGroupIds.length === 0) {
+    notes.push(
+      "No Stream worker group is visible, so there is no live source to capture from.",
+    );
+  }
+  logger?.info("discover-sample-sources: groups listed", {
+    streamGroups: streamGroupIds.length,
+    searchGroup: searchGroupId ?? "(none)",
+  });
+  return {
+    streamGroupIds,
+    ...(searchGroupId !== undefined ? { searchGroupId } : {}),
+    notes,
+    ok: true,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Stage 2: the selected group's sources, plus the workspace-wide datasets
+// ---------------------------------------------------------------------------
+
+/** Options for {@link loadSampleSources}. */
+export interface LoadSampleSourcesOptions {
+  /** The worker group whose sources to list. Omit to list datasets only. */
+  groupId?: string;
+  /** The Search group from stage one; omit when the workspace has none. */
+  searchGroupId?: string;
+  /** Lake id to list datasets from; defaults to {@link DEFAULT_LAKE_ID}. */
+  lakeId?: string;
   /**
-   * Notes about the DISCOVERY, distinct from the per-section notes about each
-   * surface - e.g. "only the first 6 of 15 worker groups were read".
+   * Whether to list the workspace-wide Search and Lake datasets. They do not
+   * depend on the selected group, so a caller that already has them can skip
+   * the two requests on a subsequent group change.
    */
-  notes: string[];
+  includeDatasets?: boolean;
 }
 
 /** Execute one GET, folding any transport rejection into a synthetic 599. */
@@ -102,62 +170,34 @@ async function get(
 }
 
 /**
- * Discover every reachable sample source. See the module header for the three
- * reads and why each degrades independently.
+ * Stage two: read the selected group's sources and, when asked, the two
+ * workspace-wide dataset listings. Everything not requested stays `pending` in
+ * the returned inventory rather than rendering as empty.
  */
-export async function discoverSampleSources(
+export async function loadSampleSources(
   cribl: CriblClient,
-  options: DiscoverSampleSourcesOptions = {},
+  options: LoadSampleSourcesOptions,
   logger?: Logger,
-): Promise<DiscoverSampleSourcesResult> {
-  const notes: string[] = [];
-
-  let groups: CriblGroupSummary[] = [];
-  try {
-    groups = await cribl.listGroups();
-  } catch (err) {
-    // Nothing can be addressed without the group list. Report it as an empty
-    // inventory with the reason rather than throwing - the page still renders,
-    // and manual upload is still a valid path.
-    logger?.warn("discover-sample-sources: listGroups failed", {
-      error: String(err),
-    });
-    notes.push(
-      `The worker-group listing failed (${String(err)}), so no Cribl surface could be reached. Uploading samples still works.`,
-    );
-    return { inventory: buildSampleSourceInventory({}), notes };
-  }
-
-  const searchGroupId = groups.find(isSearchGroup)?.id;
-  const streamGroupIds =
-    options.groupIds !== undefined
-      ? [...options.groupIds]
-      : groups.filter(isStreamWorkerGroup).map((g) => g.id);
-  const readGroupIds = streamGroupIds.slice(0, MAX_SOURCE_GROUPS);
-  if (streamGroupIds.length > readGroupIds.length) {
-    notes.push(
-      `Sources were read from the first ${readGroupIds.length} of ${streamGroupIds.length} worker groups. Pick a group explicitly to see the rest.`,
-    );
-  }
-
+): Promise<SampleSourceInventory> {
+  const { groupId, searchGroupId, includeDatasets = true } = options;
   const lakeId = options.lakeId ?? DEFAULT_LAKE_ID;
 
-  // All reads concurrently: they are independent, and the slowest one should
-  // set the wall clock rather than their sum.
-  const [searchDatasets, lakeDatasets, sourceSections] = await Promise.all([
-    searchGroupId === undefined
+  const [sources, searchDatasets, lakeDatasets] = await Promise.all([
+    groupId === undefined
       ? Promise.resolve(undefined)
-      : get(cribl, SEARCH_DATASETS_PATH, searchGroupId, logger),
-    get(cribl, lakeDatasetsPath(lakeId), undefined, logger),
-    Promise.all(
-      readGroupIds.map(async (groupId) => ({
-        groupId,
-        section: await get(cribl, SYSTEM_INPUTS_PATH, groupId, logger),
-      })),
-    ),
+      : get(cribl, SYSTEM_INPUTS_PATH, groupId, logger),
+    includeDatasets && searchGroupId !== undefined
+      ? get(cribl, SEARCH_DATASETS_PATH, searchGroupId, logger)
+      : Promise.resolve(undefined),
+    includeDatasets
+      ? get(cribl, lakeDatasetsPath(lakeId), undefined, logger)
+      : Promise.resolve(undefined),
   ]);
 
-  const input: InventoryInput = { criblSources: sourceSections };
+  const input: InventoryInput = { groupsListed: true };
+  if (groupId !== undefined && sources !== undefined) {
+    input.criblSources = [{ groupId, section: sources }];
+  }
   if (searchGroupId !== undefined) {
     input.searchGroupId = searchGroupId;
     if (searchDatasets !== undefined) input.searchDatasets = searchDatasets;
@@ -166,9 +206,8 @@ export async function discoverSampleSources(
 
   const inventory = buildSampleSourceInventory(input);
   logger?.info("discover-sample-sources: inventory built", {
-    searchGroup: searchGroupId ?? "(none)",
-    groupsRead: readGroupIds.length,
+    group: groupId ?? "(none)",
     entries: inventory.sections.reduce((n, s) => n + s.entries.length, 0),
   });
-  return { inventory, notes };
+  return inventory;
 }

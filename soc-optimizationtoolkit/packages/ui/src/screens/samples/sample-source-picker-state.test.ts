@@ -13,9 +13,23 @@ import {
   derivePickerView,
   findEntry,
   formatBytes,
+  groupOptions,
   kindLabel,
   sourceOptionValue,
 } from "./sample-source-picker-state";
+
+const GROUPS = { streamGroupIds: ["default"], ok: true };
+
+/** The common "groups listed, a group chosen, load finished" situation. */
+const loaded = (inventory: Parameters<typeof derivePickerView>[0]["inventory"]) =>
+  derivePickerView({
+    groups: GROUPS,
+    inventory,
+    selectedGroupId: "default",
+    loadingGroups: false,
+    loadingSources: false,
+    enabled: true,
+  });
 
 const okBody = (items: unknown[]) => ({ status: 200, body: { items } });
 
@@ -24,6 +38,21 @@ const full = buildSampleSourceInventory({
   searchDatasets: okBody([{ id: "pfsense", description: "Firewall" }]),
   lakeDatasets: okBody([{ id: "lake_ds", metrics: { currentSizeBytes: 5_368_709_120 } }]),
   criblSources: [{ groupId: "default", section: okBody([{ id: "in_syslog", type: "syslog" }]) }],
+});
+
+describe("groupOptions", () => {
+  it("offers every stream group, in leader order", () => {
+    const many = { streamGroupIds: ["default", "grp2", "AzureManaged"], ok: true };
+    expect(groupOptions(many).map((o) => o.value)).toEqual([
+      "default",
+      "grp2",
+      "AzureManaged",
+    ]);
+  });
+
+  it("is empty before the listing lands, so no dropdown is offered", () => {
+    expect(groupOptions(null)).toEqual([]);
+  });
 });
 
 describe("formatBytes", () => {
@@ -42,7 +71,7 @@ describe("formatBytes", () => {
 
 describe("sourceOptionValue + findEntry", () => {
   it("round-trips an entry through its option value", () => {
-    const view = derivePickerView(full, false, true);
+    const view = loaded(full);
     for (const option of view.options) {
       const entry = findEntry(full, option.value);
       expect(entry).not.toBeNull();
@@ -58,7 +87,7 @@ describe("sourceOptionValue + findEntry", () => {
       searchDatasets: okBody([{ id: "shared" }]),
       lakeDatasets: okBody([{ id: "shared" }]),
     });
-    const view = derivePickerView(clash, false, true);
+    const view = loaded(clash);
     expect(view.options).toHaveLength(2);
     expect(new Set(view.options.map((o) => o.value)).size).toBe(2);
     expect(findEntry(clash, view.options[0].value)?.kind).toBe("search-dataset");
@@ -73,22 +102,74 @@ describe("sourceOptionValue + findEntry", () => {
 });
 
 describe("derivePickerView", () => {
+  const at = (over: Partial<Parameters<typeof derivePickerView>[0]>) =>
+    derivePickerView({
+      groups: GROUPS,
+      inventory: null,
+      selectedGroupId: "",
+      loadingGroups: false,
+      loadingSources: false,
+      enabled: true,
+      ...over,
+    });
+
   it("IDLE when not enabled - we have not looked, so we blame nothing", () => {
-    const view = derivePickerView(null, false, false);
+    const view = at({ groups: null, enabled: false });
     expect(view.status).toBe("idle");
     expect(view.headline).toContain("Connect Cribl");
     expect(view.headline).toContain("Uploading a file works either way");
     expect(view.options).toEqual([]);
   });
 
-  it("LOADING only before the first result, never after", () => {
-    expect(derivePickerView(null, true, true).status).toBe("loading");
-    // A reload with an inventory already in hand keeps showing it.
-    expect(derivePickerView(full, true, true).status).toBe("ready");
+  it("LOADING while the GROUP listing is in flight", () => {
+    expect(at({ groups: null, loadingGroups: true }).status).toBe("loading");
+  });
+
+  it("AWAITING-GROUP once groups are listed but none is chosen", () => {
+    // The state the lazy load added, and the one most likely to be collapsed
+    // into "empty". Nothing has been asked yet, so nothing may be claimed.
+    const view = at({});
+    expect(view.status).toBe("awaiting-group");
+    expect(view.headline).toContain("Pick one of this workspace's 1 worker groups");
+    expect(view.headline).toContain("Nothing is loaded until you do");
+    expect(view.options).toEqual([]);
+    // Crucially it does NOT say the workspace has nothing.
+    expect(view.headline).not.toContain("no Search datasets");
+  });
+
+  it("AWAITING-GROUP with zero groups says so without blaming the operator", () => {
+    const view = at({ groups: { streamGroupIds: [], ok: true } });
+    expect(view.status).toBe("awaiting-group");
+    expect(view.headline).toContain("No Stream worker group is visible");
+    expect(view.headline).toContain("Upload a sample file instead");
+  });
+
+  it("LOADING again while the SELECTED group's sources are in flight", () => {
+    const view = at({ selectedGroupId: "default", loadingSources: true });
+    expect(view.status).toBe("loading");
+    expect(view.headline).toContain('"default"');
+  });
+
+  it("EMPTY when the group listing itself failed", () => {
+    const view = at({ groups: { streamGroupIds: [], ok: false } });
+    expect(view.status).toBe("empty");
+    expect(view.headline).toContain("Nothing could be listed from Cribl");
+  });
+
+  it("keeps showing results during a reload rather than flashing empty", () => {
+    const view = derivePickerView({
+      groups: GROUPS,
+      inventory: full,
+      selectedGroupId: "default",
+      loadingGroups: true,
+      loadingSources: false,
+      enabled: true,
+    });
+    expect(view.status).toBe("ready");
   });
 
   it("READY names how many places, and labels every surface", () => {
-    const view = derivePickerView(full, false, true);
+    const view = loaded(full);
     expect(view.status).toBe("ready");
     expect(view.headline).toBe("3 places to take samples from.");
     expect(view.options.map((o) => o.label)).toEqual(["pfsense", "lake_ds", "in_syslog"]);
@@ -101,7 +182,7 @@ describe("derivePickerView", () => {
     const one = buildSampleSourceInventory({
       criblSources: [{ groupId: "g", section: okBody([{ id: "only" }]) }],
     });
-    expect(derivePickerView(one, false, true).headline).toBe("1 place to take samples from.");
+    expect(loaded(one).headline).toBe("1 place to take samples from.");
   });
 
   it("DEGRADED when a listing failed but others produced entries", () => {
@@ -110,7 +191,7 @@ describe("derivePickerView", () => {
       searchDatasets: { status: 403, body: "" },
       criblSources: [{ groupId: "g", section: okBody([{ id: "in_a" }]) }],
     });
-    const view = derivePickerView(partial, false, true);
+    const view = loaded(partial);
     expect(view.status).toBe("degraded");
     // The honest bit: it does not claim the list is complete.
     expect(view.headline).toContain("there may be more");
@@ -124,7 +205,7 @@ describe("derivePickerView", () => {
       lakeDatasets: { status: 403, body: "" },
       criblSources: [{ groupId: "g", section: { status: 403, body: "" } }],
     });
-    const view = derivePickerView(allFailed, false, true);
+    const view = loaded(allFailed);
     expect(view.status).toBe("empty");
     expect(view.headline).toContain("permission problem rather than an empty workspace");
   });
@@ -136,14 +217,29 @@ describe("derivePickerView", () => {
       lakeDatasets: okBody([]),
       criblSources: [{ groupId: "g", section: okBody([]) }],
     });
-    const view = derivePickerView(genuinelyEmpty, false, true);
+    const view = loaded(genuinelyEmpty);
     expect(view.status).toBe("empty");
-    expect(view.headline).toContain("has no Search datasets, Lake datasets or sources");
+    // Names the GROUP that was checked, so "try another group" is actionable.
+    expect(view.headline).toContain('Worker group "default" has no sources');
+    expect(view.headline).toContain("Try another group, or upload");
     expect(view.headline).not.toContain("permission");
   });
 
+  it("says nothing about surfaces still PENDING - that is not news", () => {
+    // Before the datasets have been requested, listing "not listed yet" for
+    // each one turns the panel into a wall of non-answers.
+    const sourcesOnly = buildSampleSourceInventory({
+      groupsListed: true,
+      searchGroupId: "s",
+      criblSources: [{ groupId: "default", section: okBody([{ id: "in_a" }]) }],
+    });
+    const view = loaded(sourcesOnly);
+    expect(view.status).toBe("ready");
+    expect(view.sectionNotes).toEqual([]);
+  });
+
   it("stays SILENT about surfaces that worked and have entries", () => {
-    const view = derivePickerView(full, false, true);
+    const view = loaded(full);
     expect(view.sectionNotes).toEqual([]);
   });
 
@@ -154,7 +250,7 @@ describe("derivePickerView", () => {
       lakeDatasets: { status: 404, body: "" },
       criblSources: [{ groupId: "g", section: okBody([{ id: "in_a" }]) }],
     });
-    const view = derivePickerView(mixed, false, true);
+    const view = loaded(mixed);
     const byKind = Object.fromEntries(view.sectionNotes.map((n) => [n.kind, n.text]));
     expect(byKind["search-dataset"]).toContain("none in this workspace");
     expect(byKind["lake-dataset"]).toContain("not enabled in this workspace");

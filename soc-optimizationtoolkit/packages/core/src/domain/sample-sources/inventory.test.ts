@@ -146,6 +146,7 @@ describe("buildSampleSourceInventory", () => {
 
   it("says WHY when there is no Search group, and offers the alternatives", () => {
     const inv = buildSampleSourceInventory({
+      groupsListed: true,
       criblSources: [{ groupId: "default", section: okBody([{ id: "in_syslog" }]) }],
     });
     const search = sectionOf(inv, "search-dataset");
@@ -154,6 +155,31 @@ describe("buildSampleSourceInventory", () => {
     expect(search.note).toContain("Capture from a source, or upload");
     // The other surfaces are unaffected by Search being absent.
     expect(sectionOf(inv, "cribl-source").entries).toHaveLength(1);
+  });
+
+  it("separates NOT-LOOKED-YET from DOES-NOT-EXIST for the Search group", () => {
+    // The whole reason `groupsListed` exists. Both have no searchGroupId, and
+    // they owe the operator opposite sentences: one is "we have not asked", the
+    // other is "this workspace does not have Search".
+    const notLooked = buildSampleSourceInventory({});
+    expect(sectionOf(notLooked, "search-dataset").status).toBe("pending");
+    expect(sectionOf(notLooked, "search-dataset").note).not.toContain("no Cribl Search group");
+
+    const looked = buildSampleSourceInventory({ groupsListed: true });
+    expect(sectionOf(looked, "search-dataset").status).toBe("unavailable");
+    expect(sectionOf(looked, "search-dataset").note).toContain("no Cribl Search group");
+  });
+
+  it("is PENDING, not empty, for every surface nobody has asked about", () => {
+    // The lazy load's core claim: before a worker group is picked, NOTHING is
+    // known. Reporting that as empty would be a statement about the workspace
+    // made before asking it a question.
+    const inv = buildSampleSourceInventory({ groupsListed: true, searchGroupId: "s" });
+    expect(sectionOf(inv, "search-dataset").status).toBe("pending");
+    expect(sectionOf(inv, "lake-dataset").status).toBe("pending");
+    expect(sectionOf(inv, "cribl-source").status).toBe("pending");
+    expect(sectionOf(inv, "cribl-source").note).toContain("Pick a worker group");
+    expect(hasAnySource(inv)).toBe(false);
   });
 
   it("one failing worker group degrades to a note; the rest still populate", () => {

@@ -55,11 +55,20 @@ export interface SampleSourceRef {
 export interface SampleSourceSection {
   kind: SampleSourceKind;
   /**
-   * What happened. `ok` means the API answered and the entries are complete;
-   * `unavailable` means the surface is not present in this workspace (no Search
-   * group, no Lake); `failed` means it should have worked and did not.
+   * What happened, in four states that must never be collapsed:
+   *
+   *   `pending`     - not looked at yet. Nothing has been requested, so this
+   *                   says nothing at all about the workspace.
+   *   `ok`          - the API answered; the entries are complete.
+   *   `unavailable` - the surface does not exist here (no Search group).
+   *   `failed`      - it should have worked and did not.
+   *
+   * `pending` exists because discovery is LAZY (2026-08-19): only the worker
+   * group listing runs on load, and a surface nobody has asked for yet must not
+   * render as "you have none" - which is what `unavailable` or an empty `ok`
+   * would say.
    */
-  status: "ok" | "unavailable" | "failed";
+  status: "pending" | "ok" | "unavailable" | "failed";
   entries: SampleSourceRef[];
   /**
    * Why, when the status is not `ok`. Written for an operator, naming what they
