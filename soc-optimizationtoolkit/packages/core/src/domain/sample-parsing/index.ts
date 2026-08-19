@@ -12,6 +12,7 @@ export type {
   DiscoveredField,
   ParsedSample,
   TaggedSample,
+  SplitSample,
 } from "./models";
 export { RAW_EVENTS_CAP, MAX_FIELD_EXAMPLES } from "./models";
 
@@ -91,3 +92,14 @@ export {
   estimateDropSavings,
   mergeDropSavings,
 } from "./drop-savings";
+
+// Log-type SPLITTING of a mixed stream (rehomed 2026-08-18 from the deleted
+// sample-acquisition domain; load-bearing for capture and mixed uploads).
+export {
+  parseKvLine,
+  splitSamplesByLogType,
+  splitFoundNoDiscriminator,
+  splitSampleId,
+  hasNamedFields,
+  convertPanosSplitAtLoad,
+} from "./splitting";

@@ -29,7 +29,7 @@
  */
 
 import { parseSampleContent } from "../../domain/sample-parsing/index";
-import { matchSolutionName } from "../../domain/sample-acquisition/index";
+import { matchSolutionName } from "../../domain/sentinel-content/index";
 import {
   deriveCustomTableSchema,
   matchParsedSampleToColumns,
@@ -138,7 +138,7 @@ export async function resolveSolutionDcrFlows(
   const flowsByTable = new Map<string, DcrFlow>();
   try {
     const solutions = await content.listSolutions();
-    // The ONE fuzzy solution-name matcher (sample-acquisition consolidated
+    // The ONE fuzzy solution-name matcher (sentinel-content consolidated
     // the legacy's three copies; this was a fourth inline fork).
     const match = solutions.find((s) => matchSolutionName(s.name, solutionName));
     if (!match) {

@@ -14,9 +14,10 @@
  *      preserved `#/?solution=` deep link (consumed once so Clear works), and
  *      the dedicated selected-solution card. Additive and non-gating.
  *   2. Add Sample Data      - the SampleIntakeSection: multi-file upload,
- *      paste-and-tag, Browse Samples (Sentinel repo + Elastic tiers,
- *      stream-scoped split names), per-sample chips, and the log-type rename
- *      that re-keys the tagged-sample store (Unit 11).
+ *      paste-and-tag, per-sample chips, and the log-type rename that re-keys
+ *      the tagged-sample store (Unit 11), fronted by the LogTypeRecommendation
+ *      panel that says which log types this solution's detections need
+ *      (ADR 0003 replaced the filename-scoring Browse Samples modal).
  *   3. Select Azure Resources - the AzureTargetingScreen cascade, capability
  *      checkboxes, Sentinel-enabled auto-check, and the operable
  *      RoleAssignmentSection (Unit 8). Additive + non-gating.
@@ -1350,12 +1351,6 @@ export function IntegrateScreen({
         store={ports.samples}
         onSamplesChange={handleSamplesChange}
         onRenameLogType={handleRenameLogType}
-        solutionName={solution?.name ?? ""}
-        {...(ports.content !== undefined ? { content: ports.content } : {})}
-        {...(ports.sampleSource !== undefined
-          ? { sampleSource: ports.sampleSource }
-          : {})}
-        {...(ports.logger !== undefined ? { logger: ports.logger } : {})}
       />
       {/* Completeness confirmation (user request 2026-08-04). The app never
         * said that each unique log type becomes its own routes and pipelines,
