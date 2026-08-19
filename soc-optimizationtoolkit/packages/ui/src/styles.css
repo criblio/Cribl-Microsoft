@@ -1528,6 +1528,29 @@ button.journey-step-main:hover .journey-step-label {
   color: var(--text-muted);
 }
 
+/* Sample-source picker (screens/samples/sample-source-picker): where the
+ * operator can take their own samples from. Same quiet card as the
+ * recommendation above it - both are advisory and neither gates anything. */
+.sample-source-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  background: var(--surface-raised);
+}
+
+.sample-source-picker-notes {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 2px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
 /* Sample-set completeness confirmation (screens/samples/sample-coverage-state):
  * the consequence line, the derived comparison, and the acknowledgement that
  * arms the pack build. */

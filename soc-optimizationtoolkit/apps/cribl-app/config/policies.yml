@@ -141,3 +141,20 @@ policies:
   # 409/exists is treated as success. A LEADER route (no /m/ prefix).
   - object: '/system/lake/datasets'
     actions: ['POST']
+  # Sample-source discovery (ADR 0003 Phase 3): READ-ONLY listing of every
+  # surface the operator can get their own samples from. Three GETs, each
+  # degrading independently. Addressing was verified against a live workspace
+  # (2026-08-19) by reading Cribl's own UI traffic - the OpenAPI spec declares
+  # these paths bare and does not say which are group-scoped.
+  #
+  # /search/* is GROUP-scoped, under the SEARCH group (isSearchGroup resolves
+  # the id from /master/groups; it is NOT the constant "default_search").
+  - object: '/m/:gid/search/datasets'
+    actions: ['GET']
+  # Cribl Lake dataset LISTING is a LEADER route carrying a lakeId segment -
+  # a DIFFERENT route family from the /system/lake/datasets create above.
+  - object: '/products/lake/lakes/:lakeId/datasets'
+    actions: ['GET']
+  # Live sources to capture from. The GET is already declared above for Live
+  # Architecture; repeated here only in this comment so the reason is findable
+  # from either feature. No second entry is added.

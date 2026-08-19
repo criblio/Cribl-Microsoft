@@ -120,6 +120,8 @@ import {
   sampleCoverageGateReason,
 } from "../samples/sample-coverage-state";
 import { LogTypeRecommendation } from "../samples/log-type-recommendation";
+import { SampleSourcePicker } from "../samples/sample-source-picker";
+import { useSampleSources } from "../samples/use-sample-sources";
 import { InfoTip } from "../../components/info-tip";
 import { ReadinessFooter } from "../../components/readiness-footer";
 import { AzureTargetingScreen } from "../azure-targeting/azure-targeting-screen";
@@ -797,6 +799,12 @@ export function IntegrateScreen({
     }
     return byLogType;
   }, [contentItems, gapReports, enrichments]);
+  // Where the operator could take samples FROM (Phase 3). Discovery is one fact
+  // about the workspace, so it is read once behind a hook with no surface, and
+  // gated on scopeCommitted only because there is no Cribl address before that
+  // - not because the answer is expected to be uninteresting.
+  const sampleSources = useSampleSources({ enabled: scopeCommitted });
+  const [sampleSourceChoice, setSampleSourceChoice] = useState("");
   const [sampleSetConfirmed, setSampleSetConfirmed] = useState(false);
   // ONE join, TWO readings. The recommendation is the forward-looking half (what
   // to go and fetch, advisory); the coverage view is the backward-looking half
@@ -1363,6 +1371,20 @@ export function IntegrateScreen({
         * solution's own detections discriminate on and leaves the fetching to
         * the operator, who is the only one who can get their own data. */}
       <LogTypeRecommendation recommendation={logTypeRecommendation} />
+      {/* WHERE to get it from, once they know WHAT to get (ADR 0003 Phase 3).
+        * Discovery only - picking a dataset or source records the choice; the
+        * three acquisition paths that act on it are Phase 4. Advisory: every
+        * failure state still ends with "upload works", because manual upload is
+        * the one path needing no Cribl access. */}
+      <SampleSourcePicker
+        inventory={sampleSources.inventory}
+        notes={sampleSources.notes}
+        loading={sampleSources.loading}
+        enabled={scopeCommitted}
+        value={sampleSourceChoice}
+        onChange={(next) => setSampleSourceChoice(next)}
+        onReload={sampleSources.reload}
+      />
       <SampleIntakeSection
         key={contentResetKey}
         store={ports.samples}
