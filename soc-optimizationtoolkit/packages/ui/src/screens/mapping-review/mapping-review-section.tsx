@@ -96,6 +96,7 @@ import { InfoTip } from "../../components/info-tip";
 import { EnrichmentEditor } from "./enrichment-editor";
 import { IdentityBlock } from "./identity-block";
 import { IdentityMismatchBlock } from "./identity-mismatch-block";
+import { OverflowTriageBlock } from "./overflow-triage-block";
 import { useEnrichmentFields, useLearnedMappings } from "./mapping-review-hooks";
 import { SearchableSelect } from "../../components/searchable-select";
 import {
@@ -613,10 +614,16 @@ export function MappingReviewSection({
           : routing.notes,
       );
 
+      // NO LOCAL DEFAULT HERE (2026-08-18 audit). resolveSampleRouting fills
+      // tableByLogType for every logType it was given, and it was given exactly
+      // these samples' log types - so a `?? "CommonSecurityLog"` was unreachable
+      // AND a second answer to "where does this log type go". Core's own default
+      // is the solution's first resolved table, falling back to
+      // CommonSecurityLog; the two would have disagreed the moment the fallback
+      // became reachable, which is how a restated constant bites.
       const specs = samples.map((sample) => ({
         logType: sample.logType,
-        tableName:
-          routing.tableByLogType[sample.logType] ?? "CommonSecurityLog",
+        tableName: routing.tableByLogType[sample.logType],
         content: sample.rawEvents.join("\n"),
       }));
 
@@ -1146,41 +1153,12 @@ export function MappingReviewSection({
               </p>
             )}
 
-            {report.overflowCount > 0 && (
-              <p className="field-hint gap-overflow-note">
-                Overflow: {report.overflowCount} field(s) preserved in the
-                catch-all
-                {report.overflowTriage.summary !== ""
-                  ? ` - ${report.overflowTriage.noEquivalentCount} unmappable, ${report.overflowTriage.outranked.length} outranked`
-                  : ""}
-                .
-                <InfoTip
-                  text={
-                    OVERFLOW_COVERAGE_NOTE +
-                    (report.overflowTriage.summary !== ""
-                      ? ` ${report.overflowTriage.summary}`
-                      : "")
-                  }
-                />
-              </p>
-            )}
-
-            {report.overflowTriage.outranked.length > 0 && (
-              <details className="gap-overflow-triage">
-                <summary className="field-hint">
-                  Overflow fields with a close-named column (
-                  {report.overflowTriage.outranked.length})
-                </summary>
-                <ul className="field-hint">
-                  {report.overflowTriage.outranked.map((e) => (
-                    <li key={`out-${e.sourceName}`}>
-                      {e.sourceName}: closest column {e.column} is already
-                      claimed by the better-matching field {e.claimedBy}
-                    </li>
-                  ))}
-                </ul>
-              </details>
-            )}
+            <OverflowTriageBlock
+              overflowCount={report.overflowCount}
+              tableName={report.tableName}
+              triage={report.overflowTriage}
+              coverageNote={OVERFLOW_COVERAGE_NOTE}
+            />
 
             {(dropSavingsByLogType.get(report.logType)?.droppedBytes ?? 0) >
               0 && (

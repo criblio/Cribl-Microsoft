@@ -42,8 +42,30 @@ export interface OverflowTriageEntry {
 export interface OverflowTriage {
   /** Overflow fields with no name-similar destination column at all. */
   noEquivalentCount: number;
+  /**
+   * The NAMES of those fields, not just how many (user request 2026-08-18).
+   *
+   * A count cannot be acted on. The names can: they are what tells an operator
+   * whether the sample simply carries vendor detail this table has no room for,
+   * or whether the sample does not belong to this table at all. Measured live -
+   * an ASim authentication sample pointed at CrowdStrikeAlerts left 161 fields
+   * with no equivalent among 108 columns, and the field names are what make
+   * that diagnosable rather than merely large.
+   */
+  noEquivalent: string[];
   /** Closest column exists but a better source field already claimed it. */
   outranked: OverflowTriageEntry[];
+  /**
+   * The "check the sample" recommendation, or "" when the pairing looks fine.
+   *
+   * SEPARATE FROM {@link summary} ON PURPOSE. The card renders its own terse
+   * overflow line and keeps the full summary in a hover tip - which is a fine
+   * home for the counts, and the wrong home for a recommendation nobody would
+   * hover to find. Exposing it as its own field lets the UI show it as a
+   * visible warning WITHOUT re-deriving the heuristic; the threshold stays
+   * decided in exactly one place.
+   */
+  pairingWarning: string;
   /** The rendered honesty line ("" when there is no overflow). */
   summary: string;
 }
@@ -51,7 +73,9 @@ export interface OverflowTriage {
 /** Triage with empty inputs (no overflow, or no schema to check against). */
 export const EMPTY_OVERFLOW_TRIAGE: OverflowTriage = {
   noEquivalentCount: 0,
+  noEquivalent: [],
   outranked: [],
+  pairingWarning: "",
   summary: "",
 };
 
@@ -77,7 +101,7 @@ export function triageOverflow(
   }
   const catchAll = matchResult.overflowConfig.fieldName.toLowerCase();
 
-  let noEquivalentCount = 0;
+  const noEquivalent: string[] = [];
   const outranked: OverflowTriageEntry[] = [];
 
   for (const of of overflow) {
@@ -90,7 +114,7 @@ export function triageOverflow(
       }
     }
     if (best === undefined) {
-      noEquivalentCount++;
+      noEquivalent.push(of.sourceName);
     } else {
       // An unclaimed best column cannot happen under the current ladder (see
       // header); the fallback keeps a future gap VISIBLE instead of silently
@@ -105,6 +129,27 @@ export function triageOverflow(
     }
   }
 
+  const noEquivalentCount = noEquivalent.length;
+  // WHEN ALMOST NOTHING FITS, THE PAIRING IS THE SUSPECT (user, 2026-08-18).
+  //
+  // A few unmappable fields is normal - vendors carry detail a curated table
+  // has no column for. Most of them unmappable is a different claim: it says
+  // this sample probably does not belong to this table. Measured live, an ASim
+  // authentication sample pointed at CrowdStrikeAlerts left 161 of 161 with no
+  // equivalent among 108 columns, and the useful next step there is not "add a
+  // column" or "accept the loss" - it is to check the sample is the right one
+  // for this destination.
+  //
+  // Two thirds, and at least a handful, so a small sample with two odd fields
+  // does not accuse the operator of picking the wrong table.
+  const mostlyUnmappable =
+    noEquivalent.length >= 5 && noEquivalent.length >= overflow.length * (2 / 3);
+  const pairingWarning = mostlyUnmappable
+    ? `Most of this sample has no ${tableName} equivalent (` +
+      `${noEquivalentCount} of ${overflow.length} overflow fields). Check the ` +
+      `sample is the right one for this table before continuing.`
+    : "";
+
   const parts = [
     `${noEquivalentCount} of ${overflow.length} overflow fields have no ` +
       `${tableName} equivalent (checked against all ${destSchema.length} ` +
@@ -116,10 +161,13 @@ export function triageOverflow(
         `by a better source field`,
     );
   }
-
   return {
     noEquivalentCount,
+    noEquivalent,
     outranked,
-    summary: parts.join(". ") + ".",
+    pairingWarning,
+    // The warning is appended VERBATIM rather than restated, so the hover tip
+    // and the visible line can never drift into two different sentences.
+    summary: parts.join(". ") + "." + (pairingWarning === "" ? "" : ` ${pairingWarning}`),
   };
 }

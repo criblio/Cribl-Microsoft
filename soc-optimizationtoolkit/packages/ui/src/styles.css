@@ -2846,6 +2846,16 @@ button.journey-step-main:hover .journey-step-label {
   margin-top: 6px;
 }
 
+/* "Most of this sample has no <table> equivalent." A warning rail, not an
+   error: the pairing is suspect, not proven wrong, and the operator may have
+   good reason to keep it. Matches .table-picker-note for the same reason. */
+.gap-overflow-warning {
+  margin-top: 6px;
+  color: var(--warn);
+  border-left: 2px solid var(--warn);
+  padding: 4px 10px;
+}
+
 .mapping-review-fields {
   margin-top: 10px;
 }

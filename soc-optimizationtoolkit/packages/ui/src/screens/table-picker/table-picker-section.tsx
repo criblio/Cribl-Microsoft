@@ -21,6 +21,12 @@
  *      nothing has been loaded; after one, emptyTableListMessage decides
  *      whether "no tables" is a fact about the workspace or about our sight.
  *
+ * IT LOADS AUTOMATICALLY (user, 2026-08-18). The listing exists to fill the
+ * per-log-type selectors, so requiring a click first meant those selectors
+ * offered four hardcoded natives with no hint that a prerequisite existed. See
+ * the autoLoadedFor effect for the once-per-workspace and no-retry-on-failure
+ * guards.
+ *
  * IT LOADS; IT DOES NOT SELECT (user, 2026-08-18). Selection is PER LOG TYPE,
  * on each mapping-review card, because a solution's log types can land in
  * different tables - CrowdStrike spreads across several, and each table is its
@@ -34,7 +40,7 @@
  * marked stale rather than cleared - see ANALYSIS_STALE_NOTICE.
  */
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { listWorkspaceTables } from "@soc/core";
 import type {
   CapabilityContext,
@@ -107,14 +113,39 @@ export function TablePickerSection({
     }
   }, [ports.azure, ports.logger, target, onTablesLoaded]);
 
+  // AUTO-LOAD ONCE PER WORKSPACE (user, 2026-08-18).
+  //
+  // The listing is not really this panel's product - it is what fills EVERY log
+  // type's Destination table selector below. Before it ran, those selectors
+  // silently fell back to four hardcoded natives, and nothing on them said a
+  // button further up the page was the prerequisite. Reported live: "there is a
+  // destination table dropdown for each log [in] the DCR gap analysis section
+  // but it only populates 4 tables."
+  //
+  // Once per TARGET, never once per mount: the ref key is the workspace, so
+  // switching workspaces re-lists while re-renders do not.
+  //
+  // A FAILURE IS NOT RETRIED. `load` clears `loaded` on error, so keying the
+  // guard off that would re-fire every render and turn one 403 into a storm.
+  // The button stays for a deliberate retry - which is also rule 1 holding: the
+  // attempt is never taken away, it just is not repeated behind the operator's
+  // back.
+  const autoLoadedFor = useRef<string | null>(null);
+  useEffect(() => {
+    const key = `${target.subscriptionId}/${target.resourceGroup}/${target.workspaceName}`;
+    if (autoLoadedFor.current === key) return;
+    autoLoadedFor.current = key;
+    void load();
+  }, [target, load]);
+
   const empty = loaded && tables.length === 0 ? emptyTableListMessage(capabilities, capabilityContext) : null;
 
   return (
     <div className="table-picker">
       <p className="panel-desc">
-        Load the tables that already exist in <code>{target.workspaceName}</code>,
-        then point each log type at one from its own Destination table selector
-        below.
+        The tables that already exist in <code>{target.workspaceName}</code>,
+        loaded automatically and offered to every log type's Destination table
+        selector below - point each log type at the one it should land in.
         <InfoTip text="Each log type chooses its own destination table, because a solution's log types can land in different tables - and each table becomes its own DCR and its own Sentinel destination in the built pack, with the route sending that log type to the matching pipeline and destination. Choosing a table that exists replaces the derived schema with the live columns from Azure and re-runs the analysis for that log type; blending the two would produce a schema matching neither." />
       </p>
 

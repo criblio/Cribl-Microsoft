@@ -882,17 +882,24 @@ four commits behind before anyone noticed. Cheapest fix that does not need write
 access to a protected branch: a CI check that warns when `soc-optimizationtoolkit/**`
 source changed without a version bump since the last packaged release.
 
-**1.11.11 IS CURRENT (2026-08-17).**
-`release/soc-optimizationtoolkit-1.11.11.tgz`. Release notes in
-[release-notes.md](release-notes.md), started as an accumulating file at 1.4.0.
+**1.11.14 IS CURRENT (2026-08-18).**
+`release/soc-optimizationtoolkit-1.11.14.tgz`. Release notes in
+[release-notes.md](release-notes.md), started as an accumulating file at 1.4.0
+and now current through 1.11.14.
 
-This line said "1.5.4 IS CURRENT" until 2026-08-17, by which point the app was
-at 1.11.11 - six minor versions and about a week of work later. The release
-notes stop at 1.9.0. Both are the same drift this section is ABOUT, so the
-entry had quietly become its own best evidence: a hand-maintained version claim
-decays exactly as fast as the automated one it warns about, and nothing tells
-anyone. Whoever adds the CI check below should have it cover this file and
-release-notes.md too, not just the tgz.
+TWICE NOW. This line said "1.5.4 IS CURRENT" until 2026-08-17, by which point
+the app was at 1.11.11 - six minor versions and about a week of work later. It
+was corrected to 1.11.11 that day, and the 2026-08-18 architecture audit found
+it stale AGAIN at three patch versions behind, inside a single audit window.
+The release notes had likewise stopped at 1.9.0 and were written forward to
+1.11.14 in the same pass.
+
+That is the entry becoming its own best evidence for the second time: a
+hand-maintained version claim decays exactly as fast as the automated one it
+warns about, and nothing tells anyone. The correct fix is not another manual
+correction - it is the CI check below, extended to cover this file and
+release-notes.md, not just the tgz. Treat a third manual correction here as
+proof the check should have been built instead.
 
 **`release/` HOLDS EXACTLY THE LATEST TGZ** - a user directive from 2026-07-30,
 enforced by `package.mjs`, which prunes older tarballs on every run. Publishing
@@ -1031,3 +1038,90 @@ there.
 Open follow-up: the placeholder filter itself (`__UNSET__ === 'x'`) is equally
 unmatched for CSV, which is fine, but nothing yet tells the operator that a CSV
 pack can never route automatically BEFORE they reach the preview.
+
+**"Deploy" vs "Deploy everything" - DONE 2026-08-18.** The run button relabelled
+itself: `contentEngaged ? "Deploy everything" : "Deploy"`. One button that
+renames itself with the state of the page reads as two different actions, and an
+operator cannot tell whether they are looking at a second control or the same
+one armed differently. User direction: **just say "Deploy"**.
+
+`contentEngaged` still decides what the run DOES (it gates the pack build inside
+`runDeployEverything`, and the disabled-reason ladder) - it simply no longer
+decides what the button is CALLED. The InfoTip beside it already spells out the
+whole ordered sequence, which is the honest place for "everything" to be
+described rather than compressed into a label that changes underneath you.
+
+No pin was lost: nothing asserted either label. The internal name
+`runDeployEverything` is left alone deliberately - it describes the handler's
+scope accurately, and renaming it would touch the disabled-reason chain for no
+user-visible gain.
+
+## Pack maintenance: bring in the new sample analysis
+
+**OPEN - user request 2026-08-18.** Pack maintenance
+(`pack-inventory-screen.tsx`, the `maintainId` panel) reconstructs a pack's
+mapping table from its STORED definition, lets the operator edit dispositions and
+targets, and rebuilds the next version in place. It predates everything the
+analysis side has learned since: per-log-type destination tables, live workspace
+schemas replacing derived ones, overflow triage naming the fields that do not
+fit, the pairing warning, route-filter derivation and placeholders, and the CEF
+identity override.
+
+So an operator maintaining a pack today edits it through a strictly weaker view
+than the one they built it with. The obvious symptom: maintenance cannot tell
+them a mapping is now dropping 161 fields, because the triage that knows it only
+runs in the gap-analysis path.
+
+What this needs deciding before it is built:
+
+- **Does maintenance re-analyse, or read a stored analysis?** Re-analysing needs
+  the original samples, which the pack carries (`PackVendorSample`) but which may
+  no longer represent live traffic. Reading a stored verdict is cheap and goes
+  stale silently. A third option - re-analyse against the LIVE table schema and
+  show what changed since the pack was built - is probably the honest one, and is
+  the same fetch the picker already makes.
+- **The schema may have moved under the pack.** A destination table gains columns;
+  fields that overflowed at build time may now have a home. That is a genuine
+  reason to rebuild, and nothing surfaces it.
+- Reuse, do not restate: `triageOverflow`, `matchFields`, `resolveSampleRouting`
+  and `createLiveTableSchemaCatalog` are all already pure and callable from here.
+  A second mapping verdict computed a second way is the duplicated-decision
+  failure this codebase keeps finding.
+
+## Pack maintenance: detect packs modified in the Cribl UI before overwriting them
+
+**OPEN - user request 2026-08-18. The data-loss one.** Maintenance rebuilds the
+next version from OUR stored definition and installs it over the deployed pack.
+Anything an operator changed in the Cribl UI since the app deployed it - a route
+filter, a pipeline function, a lookup row, an added destination - is silently
+overwritten. They will not be asked, and they will not be told.
+
+The comparison has to be three-way, not two:
+
+1. **What the app originally deployed** - the stored `definition` for that pack
+   version in the pack store. This is the baseline, and it is the piece that makes
+   the diff meaningful: without it, "deployed differs from what we would build
+   next" cannot distinguish a change the operator made from a change WE are about
+   to make.
+2. **What is deployed now**, fetched per worker group.
+3. **What the rebuild would produce.**
+
+A field that differs between 1 and 2 is the operator's edit and must be preserved
+or at minimum surfaced. A field that differs between 1 and 3 is our intended
+update. A field that differs in both is a genuine conflict and is the only case
+that should stop and ask.
+
+**PER WORKER GROUP, because the answer differs per group.** The pack can be
+deployed to many, and they diverge independently - one group hand-tuned, another
+untouched, a third still on an older version. `deployedGroups` and
+`installedPackVersions` (domain/pack-assembly/install.ts) already model exactly
+this shape, `Array<{group, packs}>`, and already take truth from the live API
+response rather than a persisted flag. Build on those rather than a new listing.
+The maintenance panel should name which groups diverge and how, not report a
+single verdict for a pack that is in three different states.
+
+Open question worth answering early: how much of a deployed pack can the Cribl
+API actually return for comparison? If the readback is lossy, the honest surface
+is "these groups differ from what we deployed, in these files we can see" rather
+than a confident clean bill - the same rule as the inventory standard. An unknown
+must not render as a zero.

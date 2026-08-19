@@ -13,6 +13,13 @@
  * Rule 1 in particular can only fail visually: a `disabled` attribute added in
  * good faith would satisfy every state test while taking away the attempt the
  * model deliberately preserves.
+ *
+ * RE-PINNED 2026-08-18 for auto-load. The listing now runs on mount, so the
+ * pins that used to click "Load tables" wait for the automatic attempt instead.
+ * Every rule above still has a pin; only the trigger moved. The in-flight
+ * states (button reads "Loading...", nothing loaded yet) are pinned against a
+ * request that never settles, so they stay deterministic rather than racing the
+ * resolution.
  */
 
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -53,6 +60,23 @@ function tablesResponse(names: string[]) {
   };
 }
 
+/** A request that never settles - pins the in-flight render deterministically. */
+function pendingRequest() {
+  return vi.fn().mockReturnValue(new Promise(() => {}));
+}
+
+/**
+ * Render the picker the way integrate-screen really does.
+ *
+ * THE TARGET IS A FRESH OBJECT LITERAL EVERY RENDER, deliberately. The screen
+ * builds it inline from three config fields, so its identity changes on every
+ * parent render and any effect keyed on the object itself re-fires constantly.
+ * An earlier version of these pins held `target` constant, which made a broken
+ * guard look correct - the mutation test passed. Matching production is what
+ * gives the no-retry pin teeth.
+ *
+ * Returns `rerender` so a test can drive those parent re-renders.
+ */
 function renderPicker(opts: {
   capabilities?: CapabilitySet;
   request?: ReturnType<typeof vi.fn>;
@@ -63,41 +87,117 @@ function renderPicker(opts: {
     azure: { request },
     jobs: { list: vi.fn().mockResolvedValue([]) },
   } as unknown as UiPorts;
-  render(
+  const onLoaded = opts.onLoaded ?? vi.fn();
+  const tree = () => (
     <PortsProvider ports={ports} config={CONFIG}>
       <TablePickerSection
-        target={TARGET}
+        target={{ ...TARGET }}
         capabilities={opts.capabilities ?? emptyCapabilitySet()}
         capabilityContext={{ azureIdentityPresent: true, criblReachable: true }}
-        onTablesLoaded={opts.onLoaded ?? vi.fn()}
+        onTablesLoaded={onLoaded}
       />
-    </PortsProvider>,
+    </PortsProvider>
   );
-  return request;
+  const { rerender } = render(tree());
+  return { request, rerender: () => rerender(tree()) };
 }
 
+describe("TablePickerSection - auto-load", () => {
+  // The listing exists to fill the per-log-type Destination selectors. Behind a
+  // click, those selectors offered four hardcoded natives and nothing said a
+  // prerequisite existed - reported live 2026-08-18.
+  it("lists the workspace tables without being asked", async () => {
+    const request = vi
+      .fn()
+      .mockResolvedValue(tablesResponse(["SecurityEvent", "App_CL"]));
+    renderPicker({ request });
+    await waitFor(() => {
+      expect(screen.getByText("SecurityEvent")).toBeTruthy();
+    });
+    expect(request).toHaveBeenCalledTimes(1);
+  });
+
+  it("lists ONCE across parent re-renders", async () => {
+    // The screen rebuilds `target` inline every render, so an effect keyed on
+    // the object re-fires constantly. Listing 842 tables on every keystroke
+    // elsewhere on the page is the failure mode; the ref key is the workspace
+    // string, not the object.
+    const request = vi.fn().mockResolvedValue(tablesResponse(["SecurityEvent"]));
+    const picker = renderPicker({ request });
+    await waitFor(() => {
+      expect(screen.getByText("SecurityEvent")).toBeTruthy();
+    });
+    picker.rerender();
+    picker.rerender();
+    expect(request).toHaveBeenCalledTimes(1);
+  });
+
+  it("hands them straight up to the selectors", async () => {
+    const onLoaded = vi.fn();
+    const request = vi.fn().mockResolvedValue(tablesResponse(["App_CL"]));
+    renderPicker({ request, onLoaded });
+    await waitFor(() => {
+      expect(onLoaded).toHaveBeenCalled();
+    });
+    const handed = onLoaded.mock.calls[0]![0] as Array<{ name: string }>;
+    expect(handed.map((t) => t.name)).toEqual(["App_CL"]);
+  });
+
+  it("does not re-attempt a FAILED listing", async () => {
+    // `load` clears `loaded` on error, so a guard keyed on that state re-fires
+    // as soon as anything re-renders the parent - turning one 403 into a
+    // request storm. Driving real re-renders is what distinguishes the two
+    // guards; without them the broken version passes.
+    const request = vi.fn().mockRejectedValue(new Error("403 Forbidden: denied"));
+    const picker = renderPicker({ request });
+    await waitFor(() => {
+      expect(screen.getByText(/403 Forbidden/)).toBeTruthy();
+    });
+    picker.rerender();
+    picker.rerender();
+    expect(request).toHaveBeenCalledTimes(1);
+  });
+
+  it("still allows a MANUAL retry after a failure", async () => {
+    const request = vi.fn().mockRejectedValue(new Error("403 Forbidden: denied"));
+    renderPicker({ request });
+    await waitFor(() => {
+      expect(screen.getByText(/403 Forbidden/)).toBeTruthy();
+    });
+    fireEvent.click(screen.getByRole("button", { name: /tables/ }));
+    await waitFor(() => {
+      expect(request).toHaveBeenCalledTimes(2);
+    });
+  });
+});
+
 describe("TablePickerSection - the capability rules are visible, not implied", () => {
-  it("keeps Load pressable when the audit says table.read is denied", () => {
+  it("keeps the load pressable when the audit says table.read is denied", async () => {
     // RULE 1, and the one that can only fail here. An empty capability set is
-    // the worst verdict available, and the button must still be usable -
-    // Azure's 403 is the real gate, not our audit.
+    // the worst verdict available, and the control must still be usable -
+    // Azure's 403 is the real gate, not our audit. Asserted once the automatic
+    // attempt has settled, so what is being measured is the VERDICT's effect
+    // and not the in-flight disable.
     renderPicker({});
-    const load = screen.getByRole("button", { name: /Load tables/ });
-    expect(load).toHaveProperty("disabled", false);
+    await waitFor(() => {
+      const load = screen.getByRole("button", { name: /tables/ });
+      expect(load).toHaveProperty("disabled", false);
+    });
   });
 
-  it("actually attempts the listing on a denied verdict", () => {
-    // Stronger than the enabled check: proves the click reaches ARM rather
-    // than being swallowed by a guard somewhere between button and port.
-    const request = renderPicker({});
-    fireEvent.click(screen.getByRole("button", { name: /Load tables/ }));
-    expect(request).toHaveBeenCalled();
+  it("actually attempts the listing on a denied verdict", async () => {
+    // Stronger than the enabled check: proves the attempt reaches ARM rather
+    // than being swallowed by a guard somewhere between mount and port.
+    const { request } = renderPicker({});
+    await waitFor(() => {
+      expect(request).toHaveBeenCalled();
+    });
   });
 
-  it("says nothing has been loaded BEFORE any load", () => {
-    // Rule 3's near-miss: pre-load emptiness is not a finding about the
-    // workspace, and must not be reported as one.
-    renderPicker({});
+  it("says nothing has been loaded WHILE the listing is in flight", () => {
+    // Rule 3's near-miss: emptiness before a listing completes is not a finding
+    // about the workspace, and must not be reported as one.
+    renderPicker({ request: pendingRequest() });
     expect(screen.getByText("No tables loaded yet.")).toBeTruthy();
   });
 
@@ -107,7 +207,6 @@ describe("TablePickerSection - the capability rules are visible, not implied", (
     // settle it. Anything asserting a bare "no tables" here would be the
     // confident wrong answer inventory-standard.md was written against.
     renderPicker({});
-    fireEvent.click(screen.getByRole("button", { name: /Load tables/ }));
     await waitFor(() => {
       expect(screen.queryByText("No tables loaded yet.")).toBeNull();
     });
@@ -119,7 +218,6 @@ describe("TablePickerSection - the capability rules are visible, not implied", (
     // hide the one thing the operator can act on.
     const request = vi.fn().mockRejectedValue(new Error("403 Forbidden: denied"));
     renderPicker({ request });
-    fireEvent.click(screen.getByRole("button", { name: /Load tables/ }));
     await waitFor(() => {
       expect(screen.getByText(/403 Forbidden/)).toBeTruthy();
     });
@@ -132,7 +230,6 @@ describe("TablePickerSection - listing and selection", () => {
       .fn()
       .mockResolvedValue(tablesResponse(["SecurityEvent", "App_CL"]));
     renderPicker({ request });
-    fireEvent.click(screen.getByRole("button", { name: /Load tables/ }));
     await waitFor(() => {
       expect(screen.getByText("SecurityEvent")).toBeTruthy();
     });
@@ -147,7 +244,6 @@ describe("TablePickerSection - listing and selection", () => {
       .fn()
       .mockResolvedValue(tablesResponse(["SecurityEvent", "App_CL"]));
     renderPicker({ request });
-    fireEvent.click(screen.getByRole("button", { name: /Load tables/ }));
     await waitFor(() => {
       expect(screen.getByText("App_CL")).toBeTruthy();
     });
@@ -167,7 +263,6 @@ describe("TablePickerSection - listing and selection", () => {
       .mockResolvedValue(tablesResponse(["CrowdStrikeAlerts_CL", "SecurityEvent"]));
     const onLoaded = vi.fn();
     renderPicker({ request, onLoaded });
-    fireEvent.click(screen.getByRole("button", { name: /Load tables/ }));
     await waitFor(() => {
       expect(onLoaded).toHaveBeenCalled();
     });
@@ -181,7 +276,6 @@ describe("TablePickerSection - listing and selection", () => {
   it("reports an empty listing upward too, so stale options are dropped", async () => {
     const onLoaded = vi.fn();
     renderPicker({ onLoaded });
-    fireEvent.click(screen.getByRole("button", { name: /Load tables/ }));
     await waitFor(() => {
       expect(onLoaded).toHaveBeenCalledWith([]);
     });
