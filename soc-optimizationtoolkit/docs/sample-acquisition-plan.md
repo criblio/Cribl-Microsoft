@@ -7,8 +7,13 @@ the work is below, including the reasoning you need to avoid undoing it.
 
 Written 2026-08-18 by a planning session, from a live read of the code.
 
-> **EXECUTION STATUS (2026-08-19), branch `feature/log-type-recommendation`:**
-> **Phases 0, 1 and 2 are done.** Phases 3-5 are not started.
+> **EXECUTION STATUS (2026-08-19), branch `feature/log-type-recommendation`,
+> PR #119:** **Phases 0, 1, 2 and 3 are done.** Phases 4-5 are not started.
+>
+> Phase 3 shipped as `discoverSampleSources` (usecase), `domain/sample-sources`
+> (pure inventory) and `SampleSourcePicker` (UI). It DISCOVERS and lets the
+> operator choose; it acquires nothing - that is Phase 4, which now has a
+> selected `SampleSourceRef` to act on.
 >
 > Phase 0's answers are in **[sample-acquisition-phase0.md](sample-acquisition-phase0.md)**
 > and they change four things written below. Read that document before Phase 3;

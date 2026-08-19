@@ -1187,7 +1187,7 @@ is "these groups differ from what we deployed, in these files we can see" rather
 than a confident clean bill - the same rule as the inventory standard. An unknown
 must not render as a zero.
 
-## Sample browser: REMOVED (ADR-0003) - Phases 0-2 done, 3-5 open
+## Sample browser: REMOVED (ADR-0003) - Phases 0-3 done, 4-5 open
 
 **Executed 2026-08-19 on `feature/log-type-recommendation`.** The browser and its
 whole acquisition domain are deleted; the `LogTypeRecommendation` panel replaces
@@ -1198,10 +1198,14 @@ it. To continue, open ONE document:
 findings. [ADR 0003](adr/0003-remove-sample-browser.md) is the durable decision
 record and is background, not a prerequisite.
 
-**What remains:** Phases 3-5 (source discovery, the three acquisition paths,
-volume findings). **Nothing gates them** - the `/search/*` addressing question
-was answered live on 2026-08-19 (group-scoped, `/m/{searchGroupId}/search/...`;
-see phase 0 doc section 0.1b), so Search, capture and Lake can all be built.
+**What remains:** Phases 4-5 (the three acquisition paths, volume findings).
+**Nothing gates them.** Phase 3 landed source discovery, so Phase 4 starts from
+a selected `SampleSourceRef` that already carries its `kind` and its `groupId`.
+The addressing for all three surfaces is verified (phase 0 doc, 0.1b).
+
+Phase 4's first correctness trap is recorded in the plan: a capture request has
+NO source field, so the source is an `__inputId` clause inside the filter, and
+an operator editing that filter can silently widen the capture to everything.
 
 The Browse Samples modal is being removed and replaced by a log-type
 recommendation derived from the operator's own environment.
