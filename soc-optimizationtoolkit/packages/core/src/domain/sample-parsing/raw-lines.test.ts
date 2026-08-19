@@ -86,27 +86,22 @@ describe("line-oriented formats keep the ORIGINAL vendor bytes", () => {
   });
 });
 
-describe("KNOWN GAP - a syslog-prefixed PAN-OS file uploaded directly", () => {
-  it("parses to ZERO events (characterization, not an endorsement)", () => {
-    // detectSampleFormat calls this "syslog", and parseSyslog's RFC 3164/5424
-    // regexes do not match a PAN-OS CSV body, so every record is dropped by the
-    // >1-field filter. The >=5-comma PAN-OS branch that rescues this shape lives
-    // in detectCaptureInnerFormat, so it only fires for capture-WRAPPED input
-    // (pinned in the capture suite below).
-    //
-    // PRE-EXISTING, and unrelated to raw-line preservation - it is pinned here
-    // because it was found while writing these pins and would otherwise stay
-    // invisible. The operator is at least told: `errors` carries the reason.
-    // Fixing it means touching format detection, which decides CEF/CSV/syslog
-    // for every vendor, so it is deliberately NOT bundled into this change.
+describe("FIXED - a syslog-prefixed PAN-OS file uploaded directly", () => {
+  it("parses, instead of yielding zero events", () => {
+    // Was a KNOWN GAP pinned here on 2026-08-19 and fixed the same day.
+    // detectSampleFormat called this "syslog"; parseSyslog's RFC 3164/5424
+    // regexes cannot match a PAN-OS body, so every record was dropped and a
+    // good export reported "could not parse any events". Detection now
+    // recognises the PAN-OS positional fingerprint ahead of the syslog check.
     const parsed = parseSampleContent([PANOS_LINE_1, PANOS_LINE_2].join("\n"));
 
-    expect(parsed.format).toBe("syslog");
-    expect(parsed.records).toHaveLength(0);
-    expect(parsed.rawEvents).toEqual([]);
-    expect(parsed.errors).toContain(
-      "Could not parse any events from the provided content",
-    );
+    expect(parsed.format).toBe("csv");
+    expect(parsed.records).toHaveLength(2);
+    expect(parsed.errors).toEqual([]);
+    // GLOBALPROTECT has no column dictionary, so the record is positional -
+    // and the raw line is therefore the only place the vendor shape survives.
+    expect(parsed.records[0]._3).toBe("GLOBALPROTECT");
+    expect(parsed.rawEvents).toEqual([PANOS_LINE_1, PANOS_LINE_2]);
   });
 });
 
