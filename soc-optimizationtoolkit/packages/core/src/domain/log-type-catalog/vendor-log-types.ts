@@ -58,6 +58,17 @@ export interface DocumentedLogTypePack {
   vendor: string;
   /** Lowercased substrings matched against the solution name. */
   solutionKeywords: readonly string[];
+  /**
+   * Lowercased substrings that DISQUALIFY this pack even when a keyword hits.
+   *
+   * Needed because vendors ship several products under one brand and substring
+   * matching cannot express "most specific wins": "Zscaler Private Access"
+   * contains "zscaler", so the ZIA pack would otherwise tell a ZPA operator to
+   * collect ZIA Web. Recommending the WRONG product's feeds is worse than
+   * recommending nothing - it sends someone to collect data that does not exist
+   * in the product they are onboarding.
+   */
+  excludeKeywords?: readonly string[];
   /** Where the knowledge comes from (doc pointer / generator tag). */
   provenance: string;
   /** Link to the vendor documentation backing the pack, when one exists. */
@@ -79,6 +90,8 @@ const HAND_PACKS: readonly DocumentedLogTypePack[] = [
     id: "zscaler-zia",
     vendor: "Zscaler",
     solutionKeywords: ["zscaler"],
+    // ZPA is a different product with entirely different feeds.
+    excludeKeywords: ["private access", "zpa"],
     provenance:
       "Zscaler NSS feed types documented in the Zscaler and Microsoft Sentinel Deployment Guide (canonical feed definitions: github.com/zscaler/microsoft-resources)",
     docUrl:
@@ -115,6 +128,8 @@ const HAND_PACKS: readonly DocumentedLogTypePack[] = [
     id: "paloalto-panos",
     vendor: "Palo Alto Networks",
     solutionKeywords: ["palo alto", "paloalto", "pan-os", "panos"],
+    // Cortex XDR is Palo Alto's EDR and shares none of the firewall's log types.
+    excludeKeywords: ["cortex"],
     provenance:
       "PAN-OS syslog field reference - the log types the firewall emits, matching the column dictionaries in domain/sample-parsing/panos-dictionary.ts",
     docUrl: "https://docs.paloaltonetworks.com/pan-os/11-1/pan-os-admin/monitoring/use-syslog-for-monitoring/syslog-field-descriptions",
@@ -157,6 +172,135 @@ const HAND_PACKS: readonly DocumentedLogTypePack[] = [
       { value: "utm", doc: "Security profile events - antivirus, IPS, web filter, application control" },
       { value: "event", doc: "System, VPN, user and admin events" },
       { value: "anomaly", doc: "DoS policy anomaly detections" },
+    ],
+  },
+  {
+    id: "zscaler-zpa",
+    vendor: "Zscaler",
+    solutionKeywords: ["zscaler private access", "zpa"],
+    provenance:
+      "Zscaler Private Access Log Streaming Service (LSS) log types - ZPA streams each of these as a separate LSS receiver feed",
+    docUrl: "https://help.zscaler.com/zpa/about-log-streaming-service",
+    logTypes: [
+      { value: "User Activity", doc: "Per-application access transactions through the ZPA connector" },
+      { value: "User Status", doc: "User authentication and posture state changes" },
+      { value: "App Connector Status", doc: "Connector health and enrolment events" },
+      { value: "Private Service Edge Status", doc: "Service Edge health events" },
+      { value: "Audit Logs", doc: "Administrative configuration changes" },
+      { value: "Browser Access", doc: "Clientless browser-access transactions" },
+    ],
+  },
+  {
+    id: "checkpoint",
+    vendor: "Check Point",
+    solutionKeywords: ["check point", "checkpoint"],
+    provenance:
+      "Check Point Log Exporter blade types - the `product` field partitions the exported log stream by the blade that produced the record",
+    docUrl: "https://sc1.checkpoint.com/documents/latest/APIs/#log-exporter",
+    logTypes: [
+      { value: "Firewall", doc: "Connection accept, drop and reject records" },
+      { value: "VPN-1", doc: "IPsec and Remote Access VPN events" },
+      { value: "Application Control", doc: "Application and site access decisions" },
+      { value: "URL Filtering", doc: "Web categorisation and blocking decisions" },
+      { value: "Threat Emulation", doc: "Sandbox verdicts on files and attachments" },
+      { value: "Anti-Bot", doc: "Command-and-control communication detections" },
+      { value: "IPS", doc: "Intrusion protection signature matches" },
+      { value: "Audit", doc: "Administrator configuration changes" },
+    ],
+  },
+  {
+    id: "okta",
+    vendor: "Okta",
+    solutionKeywords: ["okta"],
+    provenance:
+      "Okta System Log event-type families - Okta emits ONE stream and partitions it by the dotted `eventType`, so these are prefixes rather than separate feeds",
+    docUrl: "https://developer.okta.com/docs/reference/api/event-types/",
+    logTypes: [
+      { value: "user.session", doc: "Sign-in, sign-out and session lifecycle events", aliases: ["user.session.start"] },
+      { value: "user.authentication", doc: "Authentication attempts including MFA challenges" },
+      { value: "user.lifecycle", doc: "Account create, activate, suspend and deactivate" },
+      { value: "application.lifecycle", doc: "App assignment and configuration changes" },
+      { value: "policy.lifecycle", doc: "Sign-on and password policy changes" },
+      { value: "system.org", doc: "Org-level administrative and security events" },
+    ],
+  },
+  {
+    id: "netskope",
+    vendor: "Netskope",
+    solutionKeywords: ["netskope"],
+    provenance:
+      "Netskope Cloud Exchange / REST API event types - each is a separate iterator on the events endpoint",
+    docUrl: "https://docs.netskope.com/en/netskope-help/data-security/rest-api/",
+    logTypes: [
+      { value: "page", doc: "Page-level web transactions" },
+      { value: "application", doc: "Cloud-app activity events (upload, download, share)" },
+      { value: "alert", doc: "Policy, DLP, malware and anomaly alerts" },
+      { value: "audit", doc: "Administrative configuration changes" },
+      { value: "infrastructure", doc: "Tenant and appliance health events" },
+      { value: "network", doc: "NPA/Borderless SD-WAN session records" },
+    ],
+  },
+  {
+    id: "sentinelone",
+    vendor: "SentinelOne",
+    solutionKeywords: ["sentinelone", "sentinel one"],
+    provenance:
+      "SentinelOne Singularity Data Lake event categories - the agent's telemetry is partitioned by `event.category`",
+    docUrl: "https://www.sentinelone.com/platform/singularity-data-lake/",
+    logTypes: [
+      { value: "Process", doc: "Process creation and termination telemetry" },
+      { value: "File", doc: "File create, modify and delete events" },
+      { value: "Network", doc: "Network connection telemetry from the agent" },
+      { value: "DNS", doc: "DNS queries observed on the endpoint" },
+      { value: "Registry", doc: "Windows registry modifications" },
+      { value: "Threat", doc: "Detections and mitigation actions" },
+    ],
+  },
+  {
+    id: "cortex-xdr",
+    vendor: "Palo Alto Networks",
+    solutionKeywords: ["cortex xdr", "cortex"],
+    provenance:
+      "Palo Alto Cortex XDR alert and incident feeds exposed through the XDR API, which the Sentinel solution polls separately",
+    docUrl: "https://docs-cortex.paloaltonetworks.com/p/XDR",
+    logTypes: [
+      { value: "Alerts", doc: "Detection alerts raised by analytics and BIOCs" },
+      { value: "Incidents", doc: "Correlated incidents grouping related alerts" },
+      { value: "Audit Management", doc: "Console administrative actions" },
+      { value: "Audit Agent", doc: "Agent-side configuration and policy events" },
+    ],
+  },
+  {
+    id: "corelight-zeek",
+    vendor: "Corelight",
+    solutionKeywords: ["corelight", "zeek", "bro"],
+    provenance:
+      "Zeek/Corelight log streams - Zeek writes one log per protocol analyser, and Corelight exports them under the same names",
+    docUrl: "https://docs.zeek.org/en/master/script-reference/log-files.html",
+    logTypes: [
+      { value: "conn", doc: "Connection summaries - the highest-volume Zeek log" },
+      { value: "dns", doc: "DNS queries and responses" },
+      { value: "http", doc: "HTTP requests and responses" },
+      { value: "ssl", doc: "TLS handshakes and certificate details" },
+      { value: "files", doc: "File transfers observed across protocols" },
+      { value: "notice", doc: "Zeek notices - the detection stream" },
+      { value: "x509", doc: "Certificate details seen on the wire" },
+      { value: "smb", doc: "SMB session and file operations" },
+    ],
+  },
+  {
+    id: "pfsense",
+    vendor: "Netgate",
+    solutionKeywords: ["pfsense", "opnsense"],
+    provenance:
+      "pfSense/OPNsense syslog sub-systems - the firewall tags each record with the daemon that produced it",
+    docUrl: "https://docs.netgate.com/pfsense/en/latest/monitoring/logs/index.html",
+    logTypes: [
+      { value: "filterlog", doc: "Packet filter accept and block decisions" },
+      { value: "dhcpd", doc: "DHCP lease assignment and renewal" },
+      { value: "unbound", doc: "DNS resolver queries" },
+      { value: "openvpn", doc: "OpenVPN session establishment and teardown" },
+      { value: "ipsec", doc: "IPsec tunnel negotiation events" },
     ],
   },
   {
@@ -212,8 +356,10 @@ export function documentedLogTypePacksForSolution(
 ): DocumentedLogTypePack[] {
   const haystack = solutionName.trim().toLowerCase();
   if (haystack === "") return [];
-  return DOCUMENTED_LOG_TYPE_PACKS.filter((pack) =>
-    pack.solutionKeywords.some((k) => haystack.includes(k)),
+  return DOCUMENTED_LOG_TYPE_PACKS.filter(
+    (pack) =>
+      pack.solutionKeywords.some((k) => haystack.includes(k)) &&
+      !(pack.excludeKeywords ?? []).some((k) => haystack.includes(k)),
   );
 }
 
