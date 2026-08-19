@@ -3,11 +3,11 @@
  * DOM pins for the sample-source picker (plan Phase 3, ADR 0003).
  *
  * The state module beside this covers what the picker DECIDES. These cover what
- * it SHOWS - the class of defect a state test structurally cannot see: a retry
- * that never renders, a dropdown offered when there is nothing to pick, a
+ * it SHOWS - the class of defect a state test structurally cannot see: a second
+ * dropdown offered before a group is chosen, a retry that never renders, a
  * disabled source selected with no warning. The table-picker removal is the
  * cautionary tale: fourteen thoroughly-tested pure decisions behind a panel that
- * had lost its job.
+ * had quietly lost its job.
  */
 
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -19,7 +19,10 @@ afterEach(cleanup);
 
 const okBody = (items: unknown[]) => ({ status: 200, body: { items } });
 
+const GROUPS = { streamGroupIds: ["default", "grp2"], notes: [], ok: true };
+
 const full = buildSampleSourceInventory({
+  groupsListed: true,
   searchGroupId: "default_search",
   searchDatasets: okBody([{ id: "pfsense", description: "Firewall" }]),
   criblSources: [
@@ -29,11 +32,15 @@ const full = buildSampleSourceInventory({
 
 function renderPicker(over: Partial<Parameters<typeof SampleSourcePicker>[0]> = {}) {
   const props = {
+    groups: GROUPS,
     inventory: full,
+    selectedGroupId: "default",
     notes: [] as readonly string[],
-    loading: false,
+    loadingGroups: false,
+    loadingSources: false,
     enabled: true,
     value: "",
+    onSelectGroup: vi.fn(),
     onChange: vi.fn(),
     onReload: vi.fn(),
     ...over,
@@ -41,55 +48,105 @@ function renderPicker(over: Partial<Parameters<typeof SampleSourcePicker>[0]> = 
   return { ...render(<SampleSourcePicker {...props} />), props };
 }
 
-describe("SampleSourcePicker", () => {
-  it("offers a dropdown when there is something to pick", () => {
+/** Every combobox on the panel, in DOM order. */
+const combos = (container: HTMLElement) => container.querySelectorAll("input");
+
+describe("SampleSourcePicker - the two stages", () => {
+  it("offers ONLY the worker-group dropdown before a group is chosen", () => {
+    // The whole point of the lazy load: nothing about sources is shown, or
+    // fetched, until the operator says which group they mean.
+    const { container } = renderPicker({ selectedGroupId: "", inventory: null });
+    expect(container.querySelector(".sample-source-picker")?.getAttribute("data-status")).toBe(
+      "awaiting-group",
+    );
+    expect(combos(container)).toHaveLength(1);
+    expect(screen.getByText("Worker group")).toBeTruthy();
+    expect(screen.queryByText("Dataset or source")).toBeNull();
+  });
+
+  it("offers BOTH dropdowns once a group's listing is in", () => {
     const { container } = renderPicker();
-    expect(container.querySelector(".sample-source-picker")?.getAttribute("data-status")).toBe(
-      "ready",
-    );
-    expect(container.querySelector("input")).toBeTruthy();
-    expect(screen.getByText("2 places to take samples from.")).toBeTruthy();
+    expect(combos(container)).toHaveLength(2);
+    expect(screen.getByText("Worker group")).toBeTruthy();
+    expect(screen.getByText("Dataset or source")).toBeTruthy();
   });
 
-  it("offers NO dropdown when there is nothing to pick", () => {
-    // An empty combobox is worse than none: it looks like a control that is
-    // simply not working.
-    const empty = buildSampleSourceInventory({
-      criblSources: [{ groupId: "g", section: okBody([]) }],
+  it("reports the chosen group upward", () => {
+    const { container, props } = renderPicker({ selectedGroupId: "", inventory: null });
+    // The combobox renders its options only while the popover is open, which
+    // the control button toggles (see searchable-select.dom.test).
+    const control = container.querySelector(".searchable-select-control");
+    expect(control).toBeTruthy();
+    fireEvent.click(control!);
+    const option = [...container.querySelectorAll(".searchable-select-option")].find((o) =>
+      o.textContent?.includes("grp2"),
+    );
+    expect(option).toBeTruthy();
+    fireEvent.click(option!);
+    expect(props.onSelectGroup).toHaveBeenCalledWith("grp2");
+  });
+
+  it("shows no dropdown at all before the group listing lands", () => {
+    const { container } = renderPicker({
+      groups: null,
+      inventory: null,
+      selectedGroupId: "",
+      loadingGroups: true,
     });
-    const { container } = renderPicker({ inventory: empty });
-    expect(container.querySelector("input")).toBeNull();
+    expect(combos(container)).toHaveLength(0);
     expect(container.querySelector(".sample-source-picker")?.getAttribute("data-status")).toBe(
-      "empty",
+      "loading",
     );
   });
 
+  it("keeps the group dropdown while its sources load, but disables it", () => {
+    // Leaving it enabled invites a second selection that races the first.
+    const { container } = renderPicker({
+      selectedGroupId: "default",
+      inventory: null,
+      loadingSources: true,
+    });
+    const all = combos(container);
+    expect(all).toHaveLength(1);
+    expect(all[0].disabled).toBe(true);
+    expect(container.textContent).toContain('Listing what is available in "default"');
+  });
+});
+
+describe("SampleSourcePicker - honesty and escape hatches", () => {
   it("always ends with upload as a way out, in EVERY dead end", () => {
-    // The whole reason discovery is advisory: a failed Search read must not
-    // leave the operator thinking they are stuck.
     const failed = buildSampleSourceInventory({
+      groupsListed: true,
       searchGroupId: "s",
       searchDatasets: { status: 403, body: "" },
       lakeDatasets: { status: 403, body: "" },
-      criblSources: [{ groupId: "g", section: { status: 403, body: "" } }],
+      criblSources: [{ groupId: "default", section: { status: 403, body: "" } }],
     });
     const { container: a } = renderPicker({ inventory: failed });
     expect(a.textContent).toContain("Uploading a file always works");
 
     cleanup();
-    const { container: b } = renderPicker({ enabled: false, inventory: null });
+    const { container: b } = renderPicker({ enabled: false, groups: null, inventory: null });
     expect(b.textContent).toContain("Uploading a file works either way");
+
+    cleanup();
+    const { container: c } = renderPicker({
+      groups: { streamGroupIds: [], notes: [], ok: true },
+      inventory: null,
+      selectedGroupId: "",
+    });
+    expect(c.textContent).toContain("Upload a sample file instead");
   });
 
   it("offers RETRY when degraded, and not when everything worked", () => {
     const degraded = buildSampleSourceInventory({
+      groupsListed: true,
       searchGroupId: "s",
       searchDatasets: { status: 500, body: "" },
-      criblSources: [{ groupId: "g", section: okBody([{ id: "in_a" }]) }],
+      criblSources: [{ groupId: "default", section: okBody([{ id: "in_a" }]) }],
     });
     const { props } = renderPicker({ inventory: degraded });
-    const retry = screen.getByText("Retry discovery");
-    fireEvent.click(retry);
+    fireEvent.click(screen.getByText("Retry discovery"));
     expect(props.onReload).toHaveBeenCalledTimes(1);
 
     cleanup();
@@ -97,8 +154,11 @@ describe("SampleSourcePicker", () => {
     expect(screen.queryByText("Retry discovery")).toBeNull();
   });
 
-  it("does not offer retry while a load is in flight", () => {
-    renderPicker({ inventory: null, loading: true });
+  it("does not offer retry while either stage is in flight", () => {
+    renderPicker({ groups: null, inventory: null, loadingGroups: true });
+    expect(screen.queryByText("Retry discovery")).toBeNull();
+    cleanup();
+    renderPicker({ inventory: null, loadingSources: true });
     expect(screen.queryByText("Retry discovery")).toBeNull();
   });
 
@@ -106,12 +166,15 @@ describe("SampleSourcePicker", () => {
     // The likeliest reason a Phase 4 capture returns nothing, said at the
     // moment of choosing rather than after the capture comes back empty.
     const withDisabled = buildSampleSourceInventory({
+      groupsListed: true,
       criblSources: [
-        { groupId: "g", section: okBody([{ id: "in_off", type: "http", disabled: true }]) },
+        { groupId: "default", section: okBody([{ id: "in_off", type: "http", disabled: true }]) },
       ],
     });
-    const value = "cribl-source:g:in_off";
-    const { container } = renderPicker({ inventory: withDisabled, value });
+    const { container } = renderPicker({
+      inventory: withDisabled,
+      value: "cribl-source:default:in_off",
+    });
     expect(container.textContent).toContain("capture from it will return no events");
   });
 
@@ -120,24 +183,22 @@ describe("SampleSourcePicker", () => {
     expect(container.textContent).not.toContain("will return no events");
   });
 
-  it("renders discovery notes verbatim - a silent cap reads as completeness", () => {
+  it("renders discovery notes verbatim", () => {
     const { container } = renderPicker({
-      notes: ["Sources were read from the first 6 of 15 worker groups."],
+      notes: ["The worker-group listing failed (boom)."],
     });
-    expect(container.textContent).toContain("first 6 of 15 worker groups");
+    expect(container.textContent).toContain("The worker-group listing failed (boom).");
   });
 
-  it("explains each surface that has nothing to show", () => {
-    const mixed = buildSampleSourceInventory({
+  it("stays quiet about surfaces nobody has asked for yet", () => {
+    // Sources loaded, datasets not requested: the panel must not list two
+    // "not listed yet" lines as if they were findings.
+    const sourcesOnly = buildSampleSourceInventory({
+      groupsListed: true,
       searchGroupId: "s",
-      searchDatasets: okBody([]),
-      criblSources: [{ groupId: "g", section: okBody([{ id: "in_a" }]) }],
+      criblSources: [{ groupId: "default", section: okBody([{ id: "in_a" }]) }],
     });
-    const { container } = renderPicker({ inventory: mixed });
-    const notes = container.querySelectorAll(".sample-source-picker-notes li");
-    // Search (empty) and Lake (never attempted) explain themselves; the source
-    // listing worked and stays silent.
-    expect(notes.length).toBe(2);
-    expect(container.textContent).toContain("none in this workspace");
+    const { container } = renderPicker({ inventory: sourcesOnly });
+    expect(container.querySelectorAll(".sample-source-picker-notes li")).toHaveLength(0);
   });
 });

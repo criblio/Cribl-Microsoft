@@ -100,8 +100,20 @@ export function findEntry(
   return null;
 }
 
-/** How the picker as a whole should read. */
-export type PickerStatus = "idle" | "loading" | "empty" | "degraded" | "ready";
+/**
+ * How the picker as a whole should read.
+ *
+ * `awaiting-group` is the state the lazy two-stage load added: the group listing
+ * is in and the dropdown is up, but nothing has been chosen so there is nothing
+ * to list. It is emphatically NOT `empty` - the workspace has not been asked yet.
+ */
+export type PickerStatus =
+  | "idle"
+  | "loading"
+  | "awaiting-group"
+  | "empty"
+  | "degraded"
+  | "ready";
 
 export interface PickerView {
   status: PickerStatus;
@@ -112,12 +124,22 @@ export interface PickerView {
   sectionNotes: Array<{ kind: SampleSourceKind; text: string }>;
 }
 
-/** One line per surface that has something to explain; `ok` with entries is silent. */
+/**
+ * One line per surface that has something to explain; `ok` with entries is
+ * silent, because the dropdown is the evidence it worked.
+ *
+ * `pending` is skipped entirely. A surface nobody has asked for yet has nothing
+ * to say, and printing "not listed yet" for each one turns the empty state into
+ * a wall of non-news.
+ */
 export function sectionNotes(
   sections: readonly SampleSourceSection[],
 ): Array<{ kind: SampleSourceKind; text: string }> {
   const out: Array<{ kind: SampleSourceKind; text: string }> = [];
   for (const section of sections) {
+    if (section.status === "pending") {
+      continue;
+    }
     if (section.status === "ok" && section.entries.length > 0) {
       continue;
     }
@@ -136,18 +158,52 @@ export function sectionNotes(
   return out;
 }
 
+/** Worker-group options for the FIRST dropdown (stage one). */
+export function groupOptions(
+  groups: { streamGroupIds: readonly string[] } | null,
+): SelectOption[] {
+  if (groups === null) return [];
+  return groups.streamGroupIds.map((id) => ({ value: id, label: id }));
+}
+
+/** Everything {@link derivePickerView} needs to decide how the picker reads. */
+export interface PickerViewInput {
+  /** Stage one: the worker group listing, or null before it lands. */
+  groups: { streamGroupIds: readonly string[]; ok: boolean } | null;
+  /** Stage two: the selected group's inventory, or null before a selection. */
+  inventory: SampleSourceInventory | null;
+  /** The chosen worker group, or "". */
+  selectedGroupId: string;
+  loadingGroups: boolean;
+  loadingSources: boolean;
+  /** False when there is no Cribl connection to discover against. */
+  enabled: boolean;
+}
+
 /**
- * Project the inventory into what the picker renders.
+ * Project the two stages into what the picker renders.
  *
- * `enabled` false is `idle`, NOT `empty` - no Cribl connection means we have not
- * looked, and reporting that as "nothing found" would blame the workspace for
- * our own missing address.
+ * The states this exists to keep apart, in order of how easily they collapse:
+ *
+ *   idle           - no Cribl address. We have not looked; blame nothing.
+ *   loading        - stage one in flight.
+ *   awaiting-group - groups are listed, none chosen. NOTHING is known about
+ *                    sources yet, and saying "none found" here would be a claim
+ *                    about the workspace made before asking it a question.
+ *   empty          - a group WAS chosen and it really has nothing (or the reads
+ *                    failed, which reads differently).
+ *   degraded/ready - there is something to pick.
  */
-export function derivePickerView(
-  inventory: SampleSourceInventory | null,
-  loading: boolean,
-  enabled: boolean,
-): PickerView {
+export function derivePickerView(input: PickerViewInput): PickerView {
+  const {
+    groups,
+    inventory,
+    selectedGroupId,
+    loadingGroups,
+    loadingSources,
+    enabled,
+  } = input;
+
   if (!enabled) {
     return {
       status: "idle",
@@ -157,19 +213,43 @@ export function derivePickerView(
       sectionNotes: [],
     };
   }
-  if (loading && inventory === null) {
+  if (loadingGroups && groups === null) {
     return {
       status: "loading",
-      headline: "Looking for datasets and sources you can take samples from...",
+      headline: "Listing this workspace's worker groups...",
       options: [],
       sectionNotes: [],
     };
   }
-  if (inventory === null) {
+  if (groups === null || !groups.ok) {
     return {
       status: "empty",
       headline:
         "Nothing could be listed from Cribl. Upload a sample file instead - it needs no Cribl access.",
+      options: [],
+      sectionNotes: [],
+    };
+  }
+  // ORDER MATTERS: a group IS selected and its first listing is in flight, so
+  // `inventory` is still null - which the awaiting-group branch below would
+  // otherwise read as "nothing chosen" and answer with "pick a group", right
+  // after the operator picked one.
+  if (selectedGroupId !== "" && loadingSources) {
+    return {
+      status: "loading",
+      headline: `Listing what is available in "${selectedGroupId}"...`,
+      options: [],
+      sectionNotes: [],
+    };
+  }
+  if (selectedGroupId === "" || inventory === null) {
+    const count = groups.streamGroupIds.length;
+    return {
+      status: "awaiting-group",
+      headline:
+        count === 0
+          ? "No Stream worker group is visible, so there is no live source to capture from. Upload a sample file instead."
+          : `Pick one of this workspace's ${count} worker groups to see what you could take samples from. Nothing is loaded until you do.`,
       options: [],
       sectionNotes: [],
     };
@@ -184,7 +264,7 @@ export function derivePickerView(
       status: "empty",
       headline: anyFailed
         ? "No sample source could be listed, and at least one listing failed - so this may be a permission problem rather than an empty workspace. Uploading a file always works."
-        : "This workspace has no Search datasets, Lake datasets or sources to take samples from. Upload a sample file instead.",
+        : `Worker group "${selectedGroupId}" has no sources, and this workspace has no Search or Lake datasets to take samples from. Try another group, or upload a sample file.`,
       options,
       sectionNotes: notes,
     };

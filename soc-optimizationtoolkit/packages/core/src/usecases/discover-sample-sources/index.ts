@@ -1,16 +1,19 @@
 /**
  * discover-sample-sources usecase barrel (sample-acquisition plan Phase 3).
+ *
+ * Two stages: listSampleSourceGroups on load (one request), loadSampleSources
+ * once the operator has picked a group.
  */
 
 export type {
-  DiscoverSampleSourcesOptions,
-  DiscoverSampleSourcesResult,
+  LoadSampleSourcesOptions,
+  SampleSourceGroups,
 } from "./discover-sample-sources";
 export {
   DEFAULT_LAKE_ID,
-  MAX_SOURCE_GROUPS,
   SEARCH_DATASETS_PATH,
   SYSTEM_INPUTS_PATH,
-  discoverSampleSources,
   lakeDatasetsPath,
+  listSampleSourceGroups,
+  loadSampleSources,
 } from "./discover-sample-sources";

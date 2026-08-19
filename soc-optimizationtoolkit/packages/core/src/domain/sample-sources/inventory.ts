@@ -36,7 +36,19 @@ export interface RawSection {
   body: unknown;
 }
 
-/** The inputs to {@link buildSampleSourceInventory}. */
+/**
+ * The inputs to {@link buildSampleSourceInventory}.
+ *
+ * An ABSENT field means "not requested", which becomes a `pending` section -
+ * not an empty one. Discovery is lazy: the load path reads only the worker group
+ * listing, and everything else arrives when the operator asks for it. A surface
+ * nobody has looked at yet must never render as a fact about the workspace.
+ *
+ * `searchGroupId` is the exception that carries two meanings, and they are
+ * distinguished by {@link InventoryInput.groupsListed}: absent WITH the groups
+ * listed means this workspace genuinely has no Search group (`unavailable`);
+ * absent WITHOUT is simply "we have not listed groups yet" (`pending`).
+ */
 export interface InventoryInput {
   /** GET /m/{searchGroupId}/search/datasets, when a Search group exists. */
   searchDatasets?: RawSection;
@@ -44,8 +56,13 @@ export interface InventoryInput {
   searchGroupId?: string;
   /** GET /products/lake/lakes/{lakeId}/datasets. */
   lakeDatasets?: RawSection;
-  /** GET /m/{groupId}/system/inputs, per Stream worker group that was read. */
+  /** GET /m/{groupId}/system/inputs, per worker group that was read. */
   criblSources?: ReadonlyArray<{ groupId: string; section: RawSection }>;
+  /**
+   * True once the worker group listing has completed. Turns "no Search group
+   * seen" from `pending` into `unavailable`.
+   */
+  groupsListed?: boolean;
 }
 
 /** True for a 2xx status. */
@@ -174,11 +191,11 @@ function section(
   kind: SampleSourceKind,
   raw: RawSection | undefined,
   what: string,
-  unavailableNote: string,
+  pendingNote: string,
   parse: (items: readonly unknown[]) => SampleSourceRef[],
 ): SampleSourceSection {
   if (raw === undefined) {
-    return { kind, status: "unavailable", entries: [], note: unavailableNote };
+    return { kind, status: "pending", entries: [], note: pendingNote };
   }
   const outcome = itemsOrNote(raw, what);
   if ("note" in outcome) {
@@ -198,17 +215,24 @@ export function buildSampleSourceInventory(
   const searchGroupId = input.searchGroupId;
   const searchSection: SampleSourceSection =
     searchGroupId === undefined
-      ? {
-          kind: "search-dataset",
-          status: "unavailable",
-          entries: [],
-          note: "This workspace has no Cribl Search group, so datasets cannot be listed or queried. Capture from a source, or upload samples.",
-        }
+      ? input.groupsListed === true
+        ? {
+            kind: "search-dataset",
+            status: "unavailable",
+            entries: [],
+            note: "This workspace has no Cribl Search group, so datasets cannot be listed or queried. Capture from a source, or upload samples.",
+          }
+        : {
+            kind: "search-dataset",
+            status: "pending",
+            entries: [],
+            note: "Search datasets have not been listed yet.",
+          }
       : section(
           "search-dataset",
           input.searchDatasets,
           "The Search dataset listing",
-          "The Search dataset listing was not attempted.",
+          "Search datasets have not been listed yet.",
           (items) => parseSearchDatasets(items, searchGroupId),
         );
 
@@ -216,12 +240,13 @@ export function buildSampleSourceInventory(
     "lake-dataset",
     input.lakeDatasets,
     "The Cribl Lake dataset listing",
-    "The Cribl Lake dataset listing was not attempted.",
+    "Cribl Lake datasets have not been listed yet.",
     parseLakeDatasets,
   );
 
-  // Sources are read per Stream group and merged, so one failing group degrades
-  // to a note while the rest still populate the dropdown.
+  // Sources are read per worker group and merged, so one failing group degrades
+  // to a note while the rest still populate the dropdown. Normally exactly one
+  // group is read - the one the operator selected.
   const sourceEntries: SampleSourceRef[] = [];
   const sourceNotes: string[] = [];
   const groups = input.criblSources ?? [];
@@ -236,13 +261,12 @@ export function buildSampleSourceInventory(
   const everyGroupFailed = groups.length > 0 && sourceNotes.length === groups.length;
   const sourcesSection: SampleSourceSection = {
     kind: "cribl-source",
-    status:
-      groups.length === 0 ? "unavailable" : everyGroupFailed ? "failed" : "ok",
+    status: groups.length === 0 ? "pending" : everyGroupFailed ? "failed" : "ok",
     entries: sourceEntries.sort(byLabel),
   };
   if (groups.length === 0) {
     sourcesSection.note =
-      "No Stream worker group was read, so no live source can be captured from.";
+      "Pick a worker group to list the sources you could capture from.";
   } else if (sourceNotes.length > 0) {
     sourcesSection.note = sourceNotes.join(" ");
   }
