@@ -70,6 +70,8 @@ import {
   canWireSource,
   compareLogTypeCoverage,
   deriveExpectedLogTypes,
+  documentedLogTypesForSolution,
+  mergeLogTypeSources,
   deployedGroups,
   deriveSectionStatuses,
   destinationIdFromOptions,
@@ -812,21 +814,32 @@ export function IntegrateScreen({
   // must never disagree, which is why they share this single coverage result
   // rather than each computing their own.
   const { sampleCoverageView, logTypeRecommendation } = useMemo(() => {
+    const provided = samples.map((s) => s.logType);
     const expected = deriveExpectedLogTypes(contentItems);
-    const coverage = compareLogTypeCoverage(
-      expected,
-      samples.map((s) => s.logType),
-    );
+    const coverage = compareLogTypeCoverage(expected, provided);
     const contentLoaded = contentItems.length > 0;
+    // THREE TIERS of evidence, merged once (ADR 0003): shipped detections,
+    // shipped workbooks, and the vendor's own documented feeds. The vendor tier
+    // is what answers a solution that ships no detections - the case where the
+    // content-derived recommendation is structurally empty.
+    const merged = mergeLogTypeSources({
+      expected,
+      vendorLogTypes: documentedLogTypesForSolution(solution?.name ?? ""),
+      provided,
+    });
     return {
       sampleCoverageView: deriveSampleCoverageView(
         coverage,
         contentLoaded,
         samples.length,
       ),
-      logTypeRecommendation: deriveLogTypeRecommendation(coverage, contentLoaded),
+      logTypeRecommendation: deriveLogTypeRecommendation(
+        merged,
+        coverage.unreferenced,
+        contentLoaded,
+      ),
     };
-  }, [contentItems, samples]);
+  }, [contentItems, samples, solution?.name]);
   // Re-ask whenever the sample set changes: a confirmation given for a
   // different set of log types is not a confirmation for this one.
   useEffect(() => {
