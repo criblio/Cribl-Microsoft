@@ -1186,3 +1186,37 @@ API actually return for comparison? If the readback is lossy, the honest surface
 is "these groups differ from what we deployed, in these files we can see" rather
 than a confident clean bill - the same rule as the inventory standard. An unknown
 must not render as a zero.
+
+## Sample browser: REMOVED IN PLAN (ADR-0003, 2026-08-18) - not yet executed
+
+**Decision made, work not started. To execute this, open ONE document:
+[sample-acquisition-plan.md](sample-acquisition-plan.md)** - it is self-contained
+(verified file:line facts, the phases, and the traps). [ADR
+0003](adr/0003-remove-sample-browser.md) is the durable decision record and is
+background, not a prerequisite.
+
+The Browse Samples modal is being removed and replaced by a log-type
+recommendation derived from the operator's own environment.
+
+Short version of why: `scoreFileName` (repo-samples.ts:278) is the whole
+selection mechanism, and it scores the FILENAME against vendor-name keywords -
+it never opens the file. "This sample belongs to this solution" means "its
+filename contains part of the vendor name". The one content check,
+`detectPreIngested`, only ever rejects; nothing confirms a sample fits. The
+operator gets many files per vendor, most wrong for their solution, with no way
+to tell which.
+
+A smarter fit check was designed and rejected - it is real work to make a
+browser trustworthy that should not exist. Samples now come from the operator,
+deliberately named, via three paths: Cribl Search over a Lake/federated dataset
+(complete log types + volumes), filtered capture from a Cribl source (bounded,
+with vendor-derived filter suggestions), or manual upload (needs no Cribl
+integration).
+
+**The trap for whoever executes this:** `splitSamplesByLogType`
+(sample-acquisition/splitting.ts:64) must SURVIVE the deletion. It separates a
+mixed stream by discriminator, it is load-bearing for capture and for mixed
+uploads, and its only current caller is `precedence.ts` on the browse path - so
+deleting the sample-acquisition domain as a unit silently removes it. Two more
+capabilities need salvaging first: CEF/LEEF raw-line preservation
+(repo-samples.ts:400,428,486) and `consolidateByTableRouting` (:505).
