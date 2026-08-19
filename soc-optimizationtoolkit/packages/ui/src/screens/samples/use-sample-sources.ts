@@ -1,18 +1,16 @@
 /**
- * Sample-source discovery, in two lazy stages (plan Phase 3, ADR 0003).
+ * Sample-source discovery, lazy and mode-driven (plan Phase 3, ADR 0003).
  *
- * ON LOAD: the worker group listing, and nothing else. ONE request, so the
- * picker can render a group dropdown immediately.
+ * ON LOAD: the worker group listing, and nothing else. ONE request.
  *
- * ON SELECTION: that one group's sources, plus the two workspace-wide dataset
- * listings (fetched once and kept - they do not depend on the group, so
- * switching groups costs one request, not three).
+ * ON MODE CHOICE: only the surface that mode needs.
+ *   lake-query    one leader request; NO worker group involved.
+ *   live-capture  one request, once a worker group is picked.
  *
  * WHY LAZY (user direction 2026-08-19): the first cut fanned out across every
  * Stream worker group on load. This workspace has 15+, so that was up to nine
  * requests before the operator had done anything, against a proxy budget shared
- * with the rest of the page. Asking which group they want is cheaper AND more
- * complete - the fan-out needed a cap, and the cap silently hid groups.
+ * with the rest of the page.
  *
  * NOT AUTO-RETRIED. A failure stays failed until the operator asks again; one
  * 403 must not become a request storm.
@@ -23,23 +21,29 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { listSampleSourceGroups, loadSampleSources } from "@soc/core";
-import type { SampleSourceGroups, SampleSourceInventory } from "@soc/core";
+import type {
+  AcquisitionMode,
+  SampleSourceGroups,
+  SampleSourceInventory,
+} from "@soc/core";
 import { usePorts } from "../../ports-context";
 
 export interface SampleSourcesState {
   /** Stage one. Null until the group listing completes. */
   groups: SampleSourceGroups | null;
-  /** Stage two. Null until a group has been selected. */
+  /** Stage two. Null until a mode has been chosen and its surface read. */
   inventory: SampleSourceInventory | null;
-  /** The group whose sources are loaded, or "". */
+  /** The chosen mode, or null before the operator picks one. */
+  mode: AcquisitionMode | null;
+  /** The worker group whose sources are loaded (capture mode only), or "". */
   selectedGroupId: string;
-  /** Notes about discovery itself (an unreachable leader, no Stream groups). */
+  /** Notes about discovery itself. */
   notes: readonly string[];
-  /** Stage one in flight. */
   loadingGroups: boolean;
-  /** Stage two in flight. */
   loadingSources: boolean;
-  /** Pick a worker group; triggers stage two. */
+  /** Choose a mode. Lake mode loads immediately; capture waits for a group. */
+  selectMode: (mode: AcquisitionMode) => void;
+  /** Pick a worker group (capture mode); triggers its source listing. */
   selectGroup: (groupId: string) => void;
   /** Re-run whichever stage is relevant. */
   reload: () => void;
@@ -60,13 +64,11 @@ export function useSampleSources({
   const { ports } = usePorts();
   const [groups, setGroups] = useState<SampleSourceGroups | null>(null);
   const [inventory, setInventory] = useState<SampleSourceInventory | null>(null);
+  const [mode, setMode] = useState<AcquisitionMode | null>(null);
   const [selectedGroupId, setSelectedGroupId] = useState("");
   const [notes, setNotes] = useState<readonly string[]>([]);
   const [loadingGroups, setLoadingGroups] = useState(false);
   const [loadingSources, setLoadingSources] = useState(false);
-  // Whether the workspace-wide dataset listings have already been fetched, so a
-  // second group selection costs one request rather than three.
-  const datasetsLoaded = useRef(false);
 
   const loadGroups = useCallback(async () => {
     setLoadingGroups(true);
@@ -86,26 +88,19 @@ export function useSampleSources({
     }
   }, [ports.cribl, ports.logger]);
 
-  const loadSources = useCallback(
-    async (groupId: string, current: SampleSourceGroups | null) => {
+  const loadSurface = useCallback(
+    async (next: AcquisitionMode, groupId: string) => {
       setLoadingSources(true);
       try {
-        const next = await loadSampleSources(
+        const found = await loadSampleSources(
           ports.cribl,
-          {
-            groupId,
-            ...(current?.searchGroupId !== undefined
-              ? { searchGroupId: current.searchGroupId }
-              : {}),
-            includeDatasets: !datasetsLoaded.current,
-          },
+          { mode: next, ...(groupId !== "" ? { groupId } : {}) },
           ports.logger,
         );
-        datasetsLoaded.current = true;
-        setInventory(next);
+        setInventory(found);
       } catch (err) {
         setNotes([
-          `Listing that worker group's sources failed: ${String(err)}. Uploading samples still works.`,
+          `Listing what is available failed: ${String(err)}. Uploading samples still works.`,
         ]);
       } finally {
         setLoadingSources(false);
@@ -122,34 +117,55 @@ export function useSampleSources({
     void loadGroups();
   }, [enabled, loadGroups]);
 
+  const selectMode = useCallback(
+    (next: AcquisitionMode) => {
+      setMode(next);
+      // Switching mode invalidates the other surface's listing, so drop it
+      // rather than showing a stale one under a new heading.
+      setInventory(null);
+      setSelectedGroupId("");
+      // Lake datasets are a leader route, so they load the moment the mode is
+      // chosen. Capture has nothing to read until a worker group is picked.
+      if (next === "lake-query") {
+        void loadSurface(next, "");
+      }
+    },
+    [loadSurface],
+  );
+
   const selectGroup = useCallback(
     (groupId: string) => {
       setSelectedGroupId(groupId);
-      if (groupId === "") {
+      if (groupId === "" || mode !== "live-capture") {
         return;
       }
-      void loadSources(groupId, groups);
+      void loadSurface("live-capture", groupId);
     },
-    [groups, loadSources],
+    [mode, loadSurface],
   );
 
   const reload = useCallback(() => {
     started.current = true;
-    datasetsLoaded.current = false;
-    if (selectedGroupId === "") {
+    if (mode === null) {
       void loadGroups();
       return;
     }
-    void loadSources(selectedGroupId, groups);
-  }, [groups, loadGroups, loadSources, selectedGroupId]);
+    if (mode === "live-capture" && selectedGroupId === "") {
+      void loadGroups();
+      return;
+    }
+    void loadSurface(mode, selectedGroupId);
+  }, [mode, selectedGroupId, loadGroups, loadSurface]);
 
   return {
     groups,
     inventory,
+    mode,
     selectedGroupId,
     notes,
     loadingGroups,
     loadingSources,
+    selectMode,
     selectGroup,
     reload,
   };

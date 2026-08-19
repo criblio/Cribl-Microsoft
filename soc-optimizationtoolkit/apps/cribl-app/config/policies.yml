@@ -147,10 +147,11 @@ policies:
   # (2026-08-19) by reading Cribl's own UI traffic - the OpenAPI spec declares
   # these paths bare and does not say which are group-scoped.
   #
-  # /search/* is GROUP-scoped, under the SEARCH group (isSearchGroup resolves
-  # the id from /master/groups; it is NOT the constant "default_search").
-  - object: '/m/:gid/search/datasets'
-    actions: ['GET']
+  # NOTE on /search/*: it IS group-scoped, under the SEARCH group (isSearchGroup
+  # resolves the id from /master/groups; it is NOT the constant
+  # "default_search"). Nothing declares it yet because nothing calls it - the
+  # Lake dataset LISTING is a leader route, and the QUERY that needs
+  # /m/:gid/search/query arrives with Phase 4. Declared then, not now.
   # Cribl Lake dataset LISTING is a LEADER route carrying a lakeId segment -
   # a DIFFERENT route family from the /system/lake/datasets create above.
   - object: '/products/lake/lakes/:lakeId/datasets'

@@ -1542,6 +1542,50 @@ button.journey-step-main:hover .journey-step-label {
   background: var(--surface-raised);
 }
 
+/* The two acquisition modes, as cards rather than a select: each carries a line
+ * about what it gives you and what it costs, and that does not fit an option. */
+.acquisition-modes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 4px 0 2px;
+}
+
+.acquisition-mode {
+  flex: 1 1 240px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  text-align: left;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.acquisition-mode:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.acquisition-mode-active {
+  border-color: var(--accent);
+  background: var(--surface-raised);
+}
+
+.acquisition-mode-label {
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 20px;
+}
+
+/* A stated-up-front limit, not an error - warn-toned but not alarming. */
+.sample-source-warning {
+  color: var(--warn);
+}
+
 .sample-source-picker-notes {
   display: flex;
   flex-direction: column;

@@ -39,30 +39,17 @@ export interface RawSection {
 /**
  * The inputs to {@link buildSampleSourceInventory}.
  *
- * An ABSENT field means "not requested", which becomes a `pending` section -
- * not an empty one. Discovery is lazy: the load path reads only the worker group
- * listing, and everything else arrives when the operator asks for it. A surface
- * nobody has looked at yet must never render as a fact about the workspace.
- *
- * `searchGroupId` is the exception that carries two meanings, and they are
- * distinguished by {@link InventoryInput.groupsListed}: absent WITH the groups
- * listed means this workspace genuinely has no Search group (`unavailable`);
- * absent WITHOUT is simply "we have not listed groups yet" (`pending`).
+ * An ABSENT field means "not requested", which becomes a `pending` section - not
+ * an empty one. Discovery is lazy and mode-driven: the load path reads only the
+ * worker group listing, and each surface arrives when the operator picks the
+ * mode that needs it. A surface nobody has looked at yet must never render as a
+ * fact about the workspace.
  */
 export interface InventoryInput {
-  /** GET /m/{searchGroupId}/search/datasets, when a Search group exists. */
-  searchDatasets?: RawSection;
-  /** The Search group id the datasets were read through. */
-  searchGroupId?: string;
   /** GET /products/lake/lakes/{lakeId}/datasets. */
   lakeDatasets?: RawSection;
   /** GET /m/{groupId}/system/inputs, per worker group that was read. */
   criblSources?: ReadonlyArray<{ groupId: string; section: RawSection }>;
-  /**
-   * True once the worker group listing has completed. Turns "no Search group
-   * seen" from `pending` into `unavailable`.
-   */
-  groupsListed?: boolean;
 }
 
 /** True for a 2xx status. */
@@ -72,8 +59,7 @@ function ok(status: number): boolean {
 
 /**
  * Turn one raw response into items, or a note explaining why not. Returns null
- * items ONLY when the read genuinely failed - the caller decides whether that is
- * `failed` or `unavailable`.
+ * items ONLY when the read genuinely failed.
  */
 function itemsOrNote(
   section: RawSection,
@@ -87,7 +73,7 @@ function itemsOrNote(
           ? " - it is not enabled in this workspace"
           : "";
     return {
-      note: `${what} returned HTTP ${section.status}${hint}. That surface is not offered below; the others are unaffected.`,
+      note: `${what} returned HTTP ${section.status}${hint}. That surface is not offered below; the other is unaffected.`,
     };
   }
   const items = criblEnvelopeItems(section.body);
@@ -100,41 +86,13 @@ function itemsOrNote(
 }
 
 /**
- * Parse Search datasets. Every variant of the spec's huge `DatasetEnriched`
- * union requires `type`, `id` and `provider`, so `id` is the only field read as
- * load-bearing; `description` and `provider` are decoration when present.
- */
-export function parseSearchDatasets(
-  items: readonly unknown[],
-  groupId: string,
-): SampleSourceRef[] {
-  const out: SampleSourceRef[] = [];
-  for (const item of items) {
-    const id = readString(item, "id");
-    if (id === undefined) continue;
-    const description = readString(item, "description");
-    const provider = readString(item, "provider");
-    const type = readString(item, "type");
-    const ref: SampleSourceRef = {
-      kind: "search-dataset",
-      id,
-      label: id,
-      groupId,
-    };
-    const detail = description ?? provider ?? type;
-    if (detail !== undefined) ref.detail = detail;
-    out.push(ref);
-  }
-  return out;
-}
-
-/**
  * Parse Cribl Lake datasets. `CriblLakeDataset` requires only `id`; the size
  * comes from `metrics.currentSizeBytes` when a snapshot exists.
  *
- * NO groupId: Lake datasets are a LEADER route
- * (`/products/lake/lakes/{lakeId}/datasets`, verified live 2026-08-19), unlike
- * Search datasets and sources.
+ * NO groupId: listing Lake datasets is a LEADER route
+ * (`/products/lake/lakes/{lakeId}/datasets`, verified live 2026-08-19). Querying
+ * one later goes through the SEARCH group, but that is the query's business,
+ * not the listing's.
  */
 export function parseLakeDatasets(items: readonly unknown[]): SampleSourceRef[] {
   const out: SampleSourceRef[] = [];
@@ -146,6 +104,8 @@ export function parseLakeDatasets(items: readonly unknown[]): SampleSourceRef[] 
     if (description !== undefined) ref.detail = description;
     const sizeBytes = readNumber(readProp(item, "metrics"), "currentSizeBytes");
     if (sizeBytes !== undefined) ref.sizeBytes = sizeBytes;
+    const retentionDays = readNumber(item, "retentionPeriodInDays");
+    if (retentionDays !== undefined) ref.retentionDays = retentionDays;
     out.push(ref);
   }
   return out;
@@ -186,63 +146,41 @@ function byLabel(a: SampleSourceRef, b: SampleSourceRef): number {
   return a.label.toLowerCase().localeCompare(b.label.toLowerCase());
 }
 
-/** Build one section, folding the fetch outcome and the parse into a status. */
-function section(
-  kind: SampleSourceKind,
-  raw: RawSection | undefined,
-  what: string,
-  pendingNote: string,
-  parse: (items: readonly unknown[]) => SampleSourceRef[],
-): SampleSourceSection {
-  if (raw === undefined) {
-    return { kind, status: "pending", entries: [], note: pendingNote };
-  }
-  const outcome = itemsOrNote(raw, what);
-  if ("note" in outcome) {
-    return { kind, status: "failed", entries: [], note: outcome.note };
-  }
-  return { kind, status: "ok", entries: parse(outcome.items).sort(byLabel) };
-}
-
 /**
- * Build the inventory. ALWAYS returns all three sections, in a fixed order
- * (search, lake, sources) so the UI never reflows between refreshes and an
- * absent surface is visibly absent rather than missing.
+ * Build the inventory. ALWAYS returns both sections, in a fixed order (lake,
+ * sources) so the UI never reflows between refreshes and an absent surface is
+ * visibly absent rather than missing.
  */
 export function buildSampleSourceInventory(
   input: InventoryInput,
 ): SampleSourceInventory {
-  const searchGroupId = input.searchGroupId;
-  const searchSection: SampleSourceSection =
-    searchGroupId === undefined
-      ? input.groupsListed === true
-        ? {
-            kind: "search-dataset",
-            status: "unavailable",
-            entries: [],
-            note: "This workspace has no Cribl Search group, so datasets cannot be listed or queried. Capture from a source, or upload samples.",
+  const lakeSection: SampleSourceSection =
+    input.lakeDatasets === undefined
+      ? {
+          kind: "lake-dataset",
+          status: "pending",
+          entries: [],
+          note: "Cribl Lake datasets have not been listed yet.",
+        }
+      : (() => {
+          const outcome = itemsOrNote(
+            input.lakeDatasets,
+            "The Cribl Lake dataset listing",
+          );
+          if ("note" in outcome) {
+            return {
+              kind: "lake-dataset" as const,
+              status: "failed" as const,
+              entries: [],
+              note: outcome.note,
+            };
           }
-        : {
-            kind: "search-dataset",
-            status: "pending",
-            entries: [],
-            note: "Search datasets have not been listed yet.",
-          }
-      : section(
-          "search-dataset",
-          input.searchDatasets,
-          "The Search dataset listing",
-          "Search datasets have not been listed yet.",
-          (items) => parseSearchDatasets(items, searchGroupId),
-        );
-
-  const lakeSection = section(
-    "lake-dataset",
-    input.lakeDatasets,
-    "The Cribl Lake dataset listing",
-    "Cribl Lake datasets have not been listed yet.",
-    parseLakeDatasets,
-  );
+          return {
+            kind: "lake-dataset" as const,
+            status: "ok" as const,
+            entries: parseLakeDatasets(outcome.items).sort(byLabel),
+          };
+        })();
 
   // Sources are read per worker group and merged, so one failing group degrades
   // to a note while the rest still populate the dropdown. Normally exactly one
@@ -271,10 +209,18 @@ export function buildSampleSourceInventory(
     sourcesSection.note = sourceNotes.join(" ");
   }
 
-  return { sections: [searchSection, lakeSection, sourcesSection] };
+  return { sections: [lakeSection, sourcesSection] };
 }
 
-/** Every entry across every section, for a single flat dropdown. */
+/** The section for one surface, or undefined when the kind is unknown. */
+export function sectionFor(
+  inventory: SampleSourceInventory,
+  kind: SampleSourceKind,
+): SampleSourceSection | undefined {
+  return inventory.sections.find((s) => s.kind === kind);
+}
+
+/** Every entry across every section. */
 export function allEntries(
   inventory: SampleSourceInventory,
 ): SampleSourceRef[] {
@@ -283,8 +229,8 @@ export function allEntries(
 
 /**
  * Whether discovery found ANY reachable entry. False means the operator's only
- * route is manual upload - which is a legitimate outcome and must be said out
- * loud, not left as an empty dropdown.
+ * route is manual upload - a legitimate outcome that must be said out loud, not
+ * left as an empty dropdown.
  */
 export function hasAnySource(inventory: SampleSourceInventory): boolean {
   return inventory.sections.some((s) => s.entries.length > 0);

@@ -1,19 +1,20 @@
 /**
  * Pins for sample-source discovery (plan Phase 3, ADR 0003).
  *
- * TWO GROUPS OF PINS, and they guard different failures.
+ * THREE GROUPS OF PINS, guarding different failures.
  *
  * ADDRESSING cannot be read off the OpenAPI spec, which declares these paths
- * bare; it was settled live on 2026-08-19 by watching Cribl's own UI. Each is
- * asserted on the REQUEST rather than the result, because a wrong path fails as
- * an empty list - which reads as "your environment has nothing", the most
- * damaging wrong answer this feature can give.
+ * bare; it was settled live on 2026-08-19 by watching Cribl's own UI. Asserted
+ * on the REQUEST rather than the result, because a wrong path fails as an empty
+ * list - which reads as "your environment has nothing", the most damaging wrong
+ * answer this feature can give.
  *
- * LAZINESS is a cost contract (user direction 2026-08-19): loading the page must
- * cost ONE request. The first cut fanned out across every Stream worker group,
- * which was up to nine. A regression here is invisible in behaviour and only
- * shows up as a slow page and a burnt proxy budget, so it is pinned by counting
- * calls.
+ * LAZINESS is a cost contract: loading the page must cost ONE request, and
+ * choosing a mode must read ONLY that mode's surface. A regression is invisible
+ * in behaviour and shows up only as a slow page, so it is pinned by counting.
+ *
+ * MODE SEPARATION: Lake needs no worker group, capture needs one. Getting that
+ * backwards would send a leader route through /m/{group} and 404.
  */
 
 import { describe, expect, it } from "vitest";
@@ -59,6 +60,20 @@ describe("stage one: listing groups is ONE request and nothing else", () => {
     expect(groups.notes).toEqual([]);
   });
 
+  it("reports the SEARCH group even though nothing here calls Search", async () => {
+    // Load-bearing for lake-query mode: a Lake dataset is queried THROUGH
+    // Search, so the UI needs to know up front whether that is possible.
+    const withSearch = await listSampleSourceGroups(
+      clientWith([{ id: "s", product: "search" }]),
+    );
+    expect(withSearch.searchGroupId).toBe("s");
+
+    const without = await listSampleSourceGroups(
+      clientWith([{ id: "default", product: "stream" }]),
+    );
+    expect(without.searchGroupId).toBeUndefined();
+  });
+
   it("reports a failed listing rather than throwing, and says upload still works", async () => {
     const cribl = new FakeCriblClient();
     cribl.listGroups = async () => {
@@ -80,53 +95,40 @@ describe("stage one: listing groups is ONE request and nothing else", () => {
   });
 });
 
-describe("stage two: addressing (the part the spec could not settle)", () => {
-  it("reads the SELECTED group's sources, and only that group's", async () => {
-    const cribl = clientWith([]);
-    cribl.respondWith(okBody([{ id: "in_syslog", type: "syslog" }]), okBody([]), okBody([]));
-
-    await loadSampleSources(cribl, { groupId: "chosen", searchGroupId: "s" });
-
-    const inputCalls = cribl.calls.filter((c) => c.path === "/system/inputs");
-    expect(inputCalls).toHaveLength(1);
-    expect(inputCalls[0].groupId).toBe("chosen");
-  });
-
-  it("reads Search datasets through the SEARCH group, not the selected one", async () => {
-    const cribl = clientWith([]);
-    cribl.respondWith(okBody([]), okBody([{ id: "ds1" }]), okBody([]));
-
-    await loadSampleSources(cribl, { groupId: "default", searchGroupId: "default_search" });
-
-    const searchCall = cribl.calls.find((c) => c.path === "/search/datasets");
-    expect(searchCall?.groupId).toBe("default_search");
-    expect(searchCall?.method).toBe("GET");
-  });
-
+describe("stage two: lake-query mode", () => {
   it("reads Lake datasets as a LEADER route with NO groupId", async () => {
     const cribl = clientWith([]);
-    cribl.respondWith(okBody([]), okBody([{ id: "lake1" }]));
+    cribl.respondWith(okBody([{ id: "lake1" }]));
 
-    await loadSampleSources(cribl, { groupId: "default" });
+    await loadSampleSources(cribl, { mode: "lake-query" });
 
-    const lakeCall = cribl.calls.find((c) => c.path.startsWith("/products/lake/"));
-    expect(lakeCall?.path).toBe("/products/lake/lakes/default/datasets");
+    expect(cribl.calls).toHaveLength(1);
+    expect(cribl.calls[0].path).toBe("/products/lake/lakes/default/datasets");
     // The distinction that makes it work: no /m/{group} prefix.
-    expect(lakeCall?.groupId).toBeUndefined();
+    expect(cribl.calls[0].groupId).toBeUndefined();
     // And NOT the create route Unit 20 uses.
     expect(cribl.calls.some((c) => c.path === "/system/lake/datasets")).toBe(false);
   });
 
-  it("skips the Search read entirely when the workspace has no Search group", async () => {
+  it("IGNORES a groupId - Lake mode needs no worker group at all", async () => {
     const cribl = clientWith([]);
-    cribl.respondWith(okBody([]), okBody([]));
+    cribl.respondWith(okBody([]));
 
-    const inventory = await loadSampleSources(cribl, { groupId: "default" });
+    await loadSampleSources(cribl, { mode: "lake-query", groupId: "default" });
 
-    expect(cribl.calls.some((c) => c.path === "/search/datasets")).toBe(false);
-    expect(inventory.sections.find((s) => s.kind === "search-dataset")?.status).toBe(
-      "unavailable",
-    );
+    expect(cribl.calls).toHaveLength(1);
+    expect(cribl.calls[0].groupId).toBeUndefined();
+    expect(cribl.calls.some((c) => c.path === "/system/inputs")).toBe(false);
+  });
+
+  it("leaves the SOURCE surface pending - it was never asked about", async () => {
+    const cribl = clientWith([]);
+    cribl.respondWith(okBody([{ id: "lake1" }]));
+
+    const inventory = await loadSampleSources(cribl, { mode: "lake-query" });
+
+    expect(inventory.sections.find((s) => s.kind === "lake-dataset")?.status).toBe("ok");
+    expect(inventory.sections.find((s) => s.kind === "cribl-source")?.status).toBe("pending");
   });
 
   it("lakeDatasetsPath encodes the lake id", () => {
@@ -135,75 +137,60 @@ describe("stage two: addressing (the part the spec could not settle)", () => {
   });
 });
 
-describe("stage two: cost", () => {
-  it("costs THREE requests the first time and ONE on a group change", async () => {
+describe("stage two: live-capture mode", () => {
+  it("reads the SELECTED group's sources, and only that group's", async () => {
     const cribl = clientWith([]);
-    cribl.respondWith(okBody([]), okBody([]), okBody([]));
-    await loadSampleSources(cribl, { groupId: "a", searchGroupId: "s" });
-    expect(cribl.calls).toHaveLength(3);
+    cribl.respondWith(okBody([{ id: "in_syslog", type: "syslog" }]));
 
-    // The datasets do not depend on the group, so a caller that already has
-    // them says so and pays for the source listing alone.
-    cribl.calls.length = 0;
-    cribl.respondWith(okBody([]));
-    await loadSampleSources(cribl, {
-      groupId: "b",
-      searchGroupId: "s",
-      includeDatasets: false,
-    });
+    await loadSampleSources(cribl, { mode: "live-capture", groupId: "chosen" });
+
     expect(cribl.calls).toHaveLength(1);
     expect(cribl.calls[0].path).toBe("/system/inputs");
+    expect(cribl.calls[0].groupId).toBe("chosen");
+    // Lake is a different mode's surface and must not be read.
+    expect(cribl.calls.some((c) => c.path.startsWith("/products/lake/"))).toBe(false);
   });
 
-  it("leaves un-requested surfaces PENDING, never empty", async () => {
+  it("reads NOTHING when no group has been picked yet", async () => {
+    const cribl = clientWith([]);
+
+    const inventory = await loadSampleSources(cribl, { mode: "live-capture" });
+
+    expect(cribl.calls).toHaveLength(0);
+    expect(inventory.sections.every((s) => s.status === "pending")).toBe(true);
+  });
+
+  it("leaves the LAKE surface pending - it was never asked about", async () => {
     const cribl = clientWith([]);
     cribl.respondWith(okBody([{ id: "in_a" }]));
 
     const inventory = await loadSampleSources(cribl, {
-      groupId: "a",
-      searchGroupId: "s",
-      includeDatasets: false,
+      mode: "live-capture",
+      groupId: "g",
     });
 
-    // "Not asked" and "asked, and there are none" are different claims.
-    expect(inventory.sections.find((s) => s.kind === "search-dataset")?.status).toBe("pending");
     expect(inventory.sections.find((s) => s.kind === "lake-dataset")?.status).toBe("pending");
     expect(inventory.sections.find((s) => s.kind === "cribl-source")?.status).toBe("ok");
   });
 });
 
 describe("stage two: degradation", () => {
-  it("a refused Search read does NOT cost the operator their source list", async () => {
+  it("a failed read becomes a failed section, never an exception", async () => {
     const cribl = clientWith([]);
-    cribl.respondWith(
-      okBody([{ id: "in_syslog", type: "syslog" }]),
-      { status: 403, body: "nope" },
-      okBody([]),
-    );
+    cribl.respondWith({ status: 403, body: "nope" });
 
-    const inventory = await loadSampleSources(cribl, {
-      groupId: "default",
-      searchGroupId: "s",
-    });
+    const inventory = await loadSampleSources(cribl, { mode: "lake-query" });
 
-    expect(inventory.sections.find((s) => s.kind === "search-dataset")?.status).toBe("failed");
-    const sources = inventory.sections.find((s) => s.kind === "cribl-source");
-    expect(sources?.status).toBe("ok");
-    expect(sources?.entries.map((e) => e.id)).toEqual(["in_syslog"]);
+    expect(inventory.sections.find((s) => s.kind === "lake-dataset")?.status).toBe("failed");
   });
 
   it("a TRANSPORT rejection is folded into a failed section, never thrown", async () => {
     const cribl = clientWith([]);
-    // One scripted response; the rest throw inside the fake, standing in for a
-    // network failure.
-    cribl.respondWith(okBody([]));
+    // No scripted response: the fake throws, standing in for a network failure.
 
-    const inventory = await loadSampleSources(cribl, {
-      groupId: "default",
-      searchGroupId: "s",
-    });
+    const inventory = await loadSampleSources(cribl, { mode: "lake-query" });
 
-    expect(inventory.sections).toHaveLength(3);
-    expect(inventory.sections.some((s) => s.status === "failed")).toBe(true);
+    expect(inventory.sections).toHaveLength(2);
+    expect(inventory.sections.find((s) => s.kind === "lake-dataset")?.status).toBe("failed");
   });
 });
