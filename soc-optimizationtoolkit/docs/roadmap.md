@@ -4,6 +4,8 @@ Derived from [feature-catalog.md](feature-catalog.md) with all review questions 
 
 TARGET CHANGE (2026-08-17, ADR-0002): the local target is dropped; apps/cribl-app is the only shell. Phase entries below that say "both shells" are historical status records of what shipped when - left as written. The standing gates are not history, so they are corrected here.
 
+SAMPLE ACQUISITION CHANGE (2026-08-18, ADR-0003): the Browse Samples modal is being removed; samples come from the operator via Cribl Search over a Lake/federated dataset, a filtered capture, or manual upload, with the log types to provide recommended from the operator's own environment. TO EXECUTE, read docs/sample-acquisition-plan.md - one self-contained doc (verified file:line facts, phases, deletion list, and the splitting.ts trap). Decision record: docs/adr/0003-remove-sample-browser.md. Not yet executed.
+
 Standing gates for every phase:
 - Capability works in apps/cribl-app. (Was: parity across both shells, which gated legacy archival; retired with the local target, so archival now depends on Cloud-shell coverage alone.)
 - Domain logic lands in packages/core with contract tests; characterization tests where the catalog names a compatibility contract.
