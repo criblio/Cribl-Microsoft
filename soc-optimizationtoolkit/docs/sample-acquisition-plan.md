@@ -5,10 +5,22 @@
 is worth reading if you want the full argument - but everything required to do
 the work is below, including the reasoning you need to avoid undoing it.
 
-Written 2026-08-18 by planning session, from a live read of the code. Nothing
-here has been executed. Branch from `main`; the toolkit is npm workspaces
-(`packages/core`, `packages/ui`, `apps/cribl-app`) and `main` is protected, so
-this lands through a PR like everything else.
+Written 2026-08-18 by a planning session, from a live read of the code. Nothing
+here has been executed.
+
+**Where to branch from.** This document was committed on `fix/live-schema-race`
+(PR #118) and may not be on `main` yet. Check before you branch:
+
+```sh
+git cat-file -e origin/main:soc-optimizationtoolkit/docs/sample-acquisition-plan.md \
+  && echo "on main - branch from main" \
+  || echo "not on main yet - branch from fix/live-schema-race, or merge #118 first"
+```
+
+Branching from `main` while this file is only on the feature branch removes the
+document you are reading. The toolkit is npm workspaces (`packages/core`,
+`packages/ui`, `apps/cribl-app`) and `main` is protected, so the work lands
+through a PR either way.
 
 ## The decision, in one page
 
