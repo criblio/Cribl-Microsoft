@@ -61,7 +61,6 @@ import {
   assemblePack,
   cefIdentityFindings,
   effectiveCefIdentity,
-  fetchWorkspaceTableSchema,
   fieldValuesFromRecords,
   listDcrInventory,
   placeholderWarning,
@@ -131,6 +130,7 @@ import type { MappingReviewRenameEvent } from "../mapping-review/mapping-review-
 import { PipelinePreviewSection } from "../pipeline-preview/pipeline-preview-section";
 import { TablePickerSection } from "../table-picker/table-picker-section";
 import { ANALYSIS_STALE_NOTICE } from "../table-picker/table-picker-state";
+import { createTableSchemaResolver } from "../table-picker/table-schema-resolver";
 import { derivePipelinePreview } from "../pipeline-preview/pipeline-preview-state";
 import type {
   EnrichmentField,
@@ -699,26 +699,32 @@ export function IntegrateScreen({
   // Resolve a workspace table's live columns for the mapping review, which
   // AWAITS this before re-analysing. The section owns the timing because it
   // owns the analysis; this just answers the question.
-  const fetchTableSchema = useCallback(
-    async (table: string): Promise<DestField[] | null> => {
-      setAnalysisStale(gapReports.length > 0);
-      if (!workspaceTables.includes(table)) {
-        // Not a table that exists yet (a solution candidate, or one the pack
-        // will create). The derived schema is the right authority there.
-        return null;
-      }
-      return fetchWorkspaceTableSchema(
+  //
+  // ARM DECIDES WHETHER THE TABLE EXISTS, NOT OUR CACHED LISTING (2026-08-18
+  // audit). The resolver is extracted to table-schema-resolver.ts, which
+  // records why the cache guard that used to sit here was wrong and is pinned
+  // against its return. All this adds is the staleness flag, which is React
+  // state and has to stay at this level.
+  const resolveTableSchema = useMemo(
+    () =>
+      createTableSchemaResolver(
         ports.azure,
         {
           subscriptionId: config.subscriptionId,
           resourceGroup: config.resourceGroup,
           workspaceName: config.workspaceName,
         },
-        table,
         ports.logger,
-      );
+      ),
+    [ports.azure, ports.logger, config],
+  );
+
+  const fetchTableSchema = useCallback(
+    async (table: string): Promise<DestField[] | null> => {
+      setAnalysisStale(gapReports.length > 0);
+      return resolveTableSchema(table);
     },
-    [gapReports.length, workspaceTables, ports.azure, ports.logger, config],
+    [gapReports.length, resolveTableSchema],
   );
 
   // THE content plan, composed once. Both the preview panel and the pack build
@@ -1802,13 +1808,18 @@ export function IntegrateScreen({
           disabled={deployEverythingDisabledReason !== null || deploying || packBuilding}
           title={deployEverythingDisabledReason ?? undefined}
         >
+          {/* ONE LABEL, ALWAYS "Deploy" (user, 2026-08-18). It used to read
+              "Deploy everything" whenever content was engaged, so the same
+              button renamed itself depending on how much of the run was armed -
+              the operator could not tell whether two buttons existed or one had
+              changed. `contentEngaged` still decides what the run DOES; it just
+              no longer decides what the button is called. The InfoTip below
+              already enumerates the whole sequence. */}
           {deploying
             ? "Deploying..."
             : packBuilding
               ? "Installing pack..."
-              : contentEngaged
-                ? "Deploy everything"
-                : "Deploy"}
+              : "Deploy"}
         </button>
         <span className={`status status-${deployStatus}`}>{deployStatus}</span>
         <InfoTip
