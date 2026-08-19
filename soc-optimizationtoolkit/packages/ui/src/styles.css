@@ -1471,6 +1471,63 @@ button.journey-step-main:hover .journey-step-label {
   color: var(--text-muted);
 }
 
+/* Log-type recommendation (screens/samples/log-type-recommendation): what this
+ * solution's detections need, in the slot the Browse Samples button used to
+ * occupy. Advisory - deliberately quieter than the warn-toned gap line below,
+ * because a lower bound must not read like a failed check. */
+.log-type-recommendation {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  background: var(--surface-raised);
+}
+
+.log-type-recommendation-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 2px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.log-type-recommendation-list li {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.log-type-recommendation-name {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  color: var(--text);
+}
+
+/* The state word carries the whole signal, so it is the only coloured thing
+ * here - the row itself stays neutral. */
+.log-type-recommendation-state {
+  font-size: 12px;
+  line-height: 18px;
+  padding: 0 8px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+}
+
+.log-type-recommendation-have .log-type-recommendation-state {
+  color: var(--ok);
+}
+
+.log-type-recommendation-need .log-type-recommendation-state {
+  color: var(--text-muted);
+}
+
 /* Sample-set completeness confirmation (screens/samples/sample-coverage-state):
  * the consequence line, the derived comparison, and the acknowledgement that
  * arms the pack build. */

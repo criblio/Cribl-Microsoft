@@ -114,10 +114,12 @@ import type { ReactNode } from "react";
 import { usePorts } from "../../ports-context";
 import { NumberedSection } from "../../components/numbered-section";
 import {
+  deriveLogTypeRecommendation,
   deriveSampleCoverageView,
   packShapeSummary,
   sampleCoverageGateReason,
 } from "../samples/sample-coverage-state";
+import { LogTypeRecommendation } from "../samples/log-type-recommendation";
 import { InfoTip } from "../../components/info-tip";
 import { ReadinessFooter } from "../../components/readiness-footer";
 import { AzureTargetingScreen } from "../azure-targeting/azure-targeting-screen";
@@ -796,17 +798,26 @@ export function IntegrateScreen({
     return byLogType;
   }, [contentItems, gapReports, enrichments]);
   const [sampleSetConfirmed, setSampleSetConfirmed] = useState(false);
-  const sampleCoverageView = useMemo(() => {
+  // ONE join, TWO readings. The recommendation is the forward-looking half (what
+  // to go and fetch, advisory); the coverage view is the backward-looking half
+  // (what is still missing, and the acknowledgement that arms the build). They
+  // must never disagree, which is why they share this single coverage result
+  // rather than each computing their own.
+  const { sampleCoverageView, logTypeRecommendation } = useMemo(() => {
     const expected = deriveExpectedLogTypes(contentItems);
     const coverage = compareLogTypeCoverage(
       expected,
       samples.map((s) => s.logType),
     );
-    return deriveSampleCoverageView(
-      coverage,
-      contentItems.length > 0,
-      samples.length,
-    );
+    const contentLoaded = contentItems.length > 0;
+    return {
+      sampleCoverageView: deriveSampleCoverageView(
+        coverage,
+        contentLoaded,
+        samples.length,
+      ),
+      logTypeRecommendation: deriveLogTypeRecommendation(coverage, contentLoaded),
+    };
   }, [contentItems, samples]);
   // Re-ask whenever the sample set changes: a confirmation given for a
   // different set of log types is not a confirmation for this one.
@@ -1346,6 +1357,12 @@ export function IntegrateScreen({
 
   const sampleDataBody = (
     <>
+      {/* WHAT TO PROVIDE, before the operator goes and gets it (ADR 0003). This
+        * is the slot the Browse Samples button occupied - the browser guessed
+        * which FILE fitted by scoring its name; this says which LOG TYPES the
+        * solution's own detections discriminate on and leaves the fetching to
+        * the operator, who is the only one who can get their own data. */}
+      <LogTypeRecommendation recommendation={logTypeRecommendation} />
       <SampleIntakeSection
         key={contentResetKey}
         store={ports.samples}
@@ -1355,8 +1372,14 @@ export function IntegrateScreen({
       {/* Completeness confirmation (user request 2026-08-04). The app never
         * said that each unique log type becomes its own routes and pipelines,
         * so an operator had no way to know a missing sample means missing
-        * routing. State the consequence, compare against what the solution's
-        * detections reference, and ask before the pack build is armed. */}
+        * routing. State the consequence and ask before the pack build is armed.
+        *
+        * WHICH log types are missing is no longer restated here - the
+        * recommendation panel above lists every expected one with its provided
+        * state, and the same list printed twice on one screen reads as two
+        * findings. Same for the unreferenced note. This block keeps the part
+        * that is only true down here: the pack-shape consequence and the
+        * acknowledgement that arms the build. */}
       <div className="sample-coverage">
         <p className="field-hint">{packShapeSummary(samples.length)}</p>
         <p
@@ -1368,12 +1391,6 @@ export function IntegrateScreen({
         >
           {sampleCoverageView.headline}
         </p>
-        {sampleCoverageView.unreferenced.length > 0 && (
-          <p className="field-hint">
-            Not referenced by any detection (fine - a vendor emits more than one
-            solution detects on): {sampleCoverageView.unreferenced.join(", ")}.
-          </p>
-        )}
         {sampleCoverageView.requiresAck && (
           <label className="sample-coverage-ack">
             <input
