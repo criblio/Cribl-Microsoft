@@ -63,15 +63,61 @@ describe("the documented catalog", () => {
 
   it("matches a solution by keyword, not by exact name", () => {
     expect(documentedLogTypePacksForSolution("PaloAlto-PAN-OS")).toHaveLength(1);
-    expect(documentedLogTypePacksForSolution("Zscaler Private Access")).toHaveLength(1);
     expect(documentedLogTypePacksForSolution("Totally Unknown Vendor")).toEqual([]);
     expect(documentedLogTypePacksForSolution("")).toEqual([]);
+  });
+
+  it("does NOT recommend a SIBLING PRODUCT's feeds", () => {
+    // Substring matching cannot express "most specific wins": every ZPA
+    // solution name contains "zscaler". Sending a ZPA operator to collect
+    // "ZIA Web" is worse than saying nothing - that feed does not exist in the
+    // product they are onboarding.
+    const zpa = documentedLogTypePacksForSolution("Zscaler Private Access");
+    expect(zpa.map((p) => p.id)).toEqual(["zscaler-zpa"]);
+    expect(documentedLogTypesForSolution("Zscaler Private Access").map((t) => t.value))
+      .toContain("User Activity");
+    expect(documentedLogTypesForSolution("Zscaler Private Access").map((t) => t.value))
+      .not.toContain("ZIA Web");
+
+    // ZIA still resolves for its own solution.
+    expect(documentedLogTypePacksForSolution("Zscaler Internet Access").map((p) => p.id))
+      .toEqual(["zscaler-zia"]);
+
+    // Same trap on the Palo Alto side: Cortex XDR is not the firewall.
+    const cortex = documentedLogTypePacksForSolution("Palo Alto Networks Cortex XDR");
+    expect(cortex.map((p) => p.id)).toEqual(["cortex-xdr"]);
+    expect(documentedLogTypesForSolution("Palo Alto Networks Cortex XDR").map((t) => t.value))
+      .not.toContain("TRAFFIC");
+  });
+
+  it("covers the vendors this toolkit actually onboards", () => {
+    // Breadth pin: the generated tier is empty until the bulk miner runs, so
+    // these hand packs are the whole vendor tier today. A shrink here is a
+    // silent loss of the only fallback thin solutions have.
+    const ids = DOCUMENTED_LOG_TYPE_PACKS.map((p) => p.id);
+    for (const id of [
+      "zscaler-zia",
+      "zscaler-zpa",
+      "paloalto-panos",
+      "cortex-xdr",
+      "crowdstrike-fdr",
+      "fortinet-fortigate",
+      "cisco-asa",
+      "checkpoint",
+      "okta",
+      "netskope",
+      "sentinelone",
+      "corelight-zeek",
+      "pfsense",
+    ]) {
+      expect(ids).toContain(id);
+    }
   });
 
   it("dedupes by value AND alias, so one feed never appears twice", () => {
     // A generated pack could name the same Zscaler feed "web"; the hand entry
     // lists it as an alias, so it must swallow it rather than sit beside it.
-    const types = documentedLogTypesForSolution("Zscaler");
+    const types = documentedLogTypesForSolution("Zscaler Internet Access");
     const normalized = types.map((t) => t.value.toLowerCase().replace(/[^a-z0-9]/g, ""));
     expect(new Set(normalized).size).toBe(normalized.length);
   });
