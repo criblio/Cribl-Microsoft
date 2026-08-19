@@ -5,8 +5,19 @@
 is worth reading if you want the full argument - but everything required to do
 the work is below, including the reasoning you need to avoid undoing it.
 
-Written 2026-08-18 by a planning session, from a live read of the code. Nothing
-here has been executed.
+Written 2026-08-18 by a planning session, from a live read of the code.
+
+> **EXECUTION STATUS (2026-08-19), branch `feature/log-type-recommendation`:**
+> **Phases 0, 1 and 2 are done.** Phases 3-5 are not started.
+>
+> Phase 0's answers are in **[sample-acquisition-phase0.md](sample-acquisition-phase0.md)**
+> and they change four things written below. Read that document before Phase 3;
+> the corrections are marked inline here as **[SUPERSEDED]**.
+>
+> One thing is still unverified and it gates Phase 3's dataset half and Phase
+> 4's Search path: whether `/search/*` is addressed at the leader or under
+> `/m/{searchGroupId}`. It is one GET against a live Cribl.Cloud workspace. The
+> capture path does not depend on it.
 
 **Where to branch from.** This document was committed on `fix/live-schema-race`
 (PR #118) and may not be on `main` yet. Check before you branch:
@@ -147,6 +158,23 @@ across, with pins. Losing the first means CEF packs ship parsed JSON in `_raw`
 instead of the raw line; losing the second means a CrowdStrike upload fragments
 across destination tables instead of consolidating.
 
+> **[SUPERSEDED - done, but not as written]**
+> - `consolidateByTableRouting` needed NO salvage. It runs only when
+>   `eventToTable` is non-empty and both callers pass two arguments, so it has
+>   never executed. Deleted as a dead capability.
+> - Raw-line preservation was a LIVE defect on the intake path, not a browse-path
+>   risk, and CEF was the one format that already half-worked (pack-assembly
+>   reconstructs a CEF line). It was fixed in `parseSampleContent` so every intake
+>   path benefits - LEEF, syslog, headerless CSV and Cribl captures included -
+>   rather than by porting `splitRepoFile`'s line-index trick.
+> - Two more modules had live consumers off the browse path and were rehomed, not
+>   deleted: `RemoteSampleSource` (used by the Repositories screen) to `ports/`,
+>   and `matchSolutionName` (used by `analyze-samples`) to `domain/sentinel-content`.
+> - `plannedTagged` was NOT kept. Its three references are all inside
+>   `loadBrowsed`, which was the modal's Load handler.
+> - `browseSampleId` is now `splitSampleId`; `splitting.ts` lives in
+>   `domain/sample-parsing`.
+
 **Test accounting:** state the before/after test count and where every removed
 test went, the same way the 2026-08-18 table-picker removal did. A removed pin
 must be traceable to either a replacement pin or a deleted capability.
@@ -172,6 +200,15 @@ detections yields an empty result that must read as "nothing to compare
 against". Blocking the build on a lower bound blocks on a guess.
 
 This phase alone is worth shipping even if every later phase is abandoned.
+
+> **[SUPERSEDED - done, but the join already existed]** The 2026-08-04
+> completeness confirmation below the intake section already computed this exact
+> join. What was missing is the FORWARD-looking reading: the confirmation is
+> backward-looking and gates the build, which is useful when the pack is built
+> and useless when the operator is deciding what to fetch. Both halves now read
+> ONE coverage result computed once in `integrate-screen`, and a pin asserts they
+> agree. The panel is `LogTypeRecommendation`; the confirmation stopped
+> re-listing the same names.
 
 ---
 
@@ -208,6 +245,13 @@ values".**
 ### Filtered capture (bounded evidence)
 
 Chosen source + operator filter, then `splitSamplesByLogType`.
+
+> **[SUPERSEDED - there is no source parameter]** `CaptureParamsReq` has no
+> source field. Source selection is a `__inputId` clause INSIDE the filter
+> string, so the generated filter must conjoin it:
+> `__inputId === "<input>" && /,TRAFFIC,/i.test(_raw)`. The editable filter shown
+> to the operator has to include that clause, or editing it silently widens the
+> capture to every source. See phase0 doc section 0.2.
 
 **Vendor-derived filter suggestions, as checkboxes** (user direction
 2026-08-18). Pre-tick the log types `deriveExpectedLogTypes` says the solution
