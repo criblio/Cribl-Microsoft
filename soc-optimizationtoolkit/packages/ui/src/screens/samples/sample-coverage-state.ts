@@ -29,7 +29,7 @@
  * Pure: no IO, no fetch, no React, no Date/crypto/Math.random.
  */
 
-import type { LogTypeCoverage } from "@soc/core";
+import type { LogTypeCoverage, LogTypeEvidence, MergedLogType } from "@soc/core";
 
 /** What the pack gains per unique log type - stated once, here. */
 export const ROUTES_PER_LOG_TYPE = 2;
@@ -186,16 +186,43 @@ export type RecommendationStatus =
   /** Every expected log type has a sample. */
   | "covered";
 
-/** One expected log type, with whether the operator has provided it. */
+/**
+ * One recommended log type, with whether the operator has provided it and WHICH
+ * EVIDENCE named it.
+ *
+ * The evidence tier is not decoration. "A shipped detection filters on this"
+ * and "your vendor documents this feed" are different claims, and an operator
+ * deciding what to spend effort collecting needs to know which one they are
+ * looking at - especially for a solution whose recommendation is entirely
+ * vendor-derived because it ships no detections at all.
+ */
 export interface RecommendedLogType {
-  /** The literal as the content writes it (e.g. "TRAFFIC"). */
+  /** The literal as its strongest source writes it (e.g. "TRAFFIC"). */
   value: string;
-  /** The discriminator field it was compared against. */
-  field: string;
+  /** Which tier named it. */
+  evidence: LogTypeEvidence;
   /** True when a tagged sample covers it. */
   provided: boolean;
-  /** How many content items reference it - the ranking the core applied. */
-  referenceCount: number;
+  /** Content tiers: the discriminator field the content compares against. */
+  field?: string;
+  /** Content tiers: how many items reference it - the core's ranking. */
+  referenceCount?: number;
+  /** Vendor tier: who documents it, and where. */
+  vendor?: string;
+  docUrl?: string;
+  doc?: string;
+}
+
+/** Operator-facing name for an evidence tier. */
+export function evidenceLabel(evidence: LogTypeEvidence): string {
+  switch (evidence) {
+    case "detection":
+      return "a shipped detection filters on it";
+    case "workbook":
+      return "a shipped workbook queries it";
+    case "vendor":
+      return "the vendor documents this feed";
+  }
 }
 
 export interface LogTypeRecommendation {
@@ -225,44 +252,60 @@ export function joinNames(names: readonly string[]): string {
  * false-ok this codebase refuses everywhere else.
  */
 export function deriveLogTypeRecommendation(
-  coverage: LogTypeCoverage,
+  merged: readonly MergedLogType[],
+  unreferencedProvided: readonly string[],
   contentLoaded: boolean,
 ): LogTypeRecommendation {
-  const unreferenced = [...coverage.unreferenced];
+  const unreferenced = [...unreferencedProvided];
 
-  if (!contentLoaded) {
+  if (!contentLoaded && merged.length === 0) {
     return {
       status: "unknown",
       headline:
-        "The log types this solution needs are read from its own detections - " +
+        "The log types this solution needs are read from its own content - " +
         "that read has not completed yet.",
       entries: [],
       unreferenced,
     };
   }
 
-  const missingValues = new Set(coverage.missing.map((m) => m.value));
-  const entries: RecommendedLogType[] = coverage.expected.map((e) => ({
-    value: e.value,
-    field: e.field,
-    provided: !missingValues.has(e.value),
-    referenceCount: e.referencedBy.length,
-  }));
+  const entries: RecommendedLogType[] = merged.map((m) => {
+    const entry: RecommendedLogType = {
+      value: m.value,
+      evidence: m.evidence,
+      provided: m.provided,
+    };
+    if (m.field !== undefined) entry.field = m.field;
+    if (m.referencedBy !== undefined) entry.referenceCount = m.referencedBy.length;
+    if (m.vendor !== undefined) entry.vendor = m.vendor;
+    if (m.docUrl !== undefined) entry.docUrl = m.docUrl;
+    if (m.doc !== undefined) entry.doc = m.doc;
+    return entry;
+  });
 
   if (entries.length === 0) {
     return {
       status: "no-signal",
       headline:
-        "This solution's detections do not filter on a log-type field, so the app " +
-        "cannot say which log types it needs. Provide the ones your environment sends.",
+        "This solution's detections do not filter on a log-type field, and no " +
+        "vendor log-type documentation is bundled for it - so the app cannot say " +
+        "which log types it needs. Provide the ones your environment sends.",
       entries: [],
       unreferenced,
     };
   }
 
-  const needed = entries.map((e) => e.value);
+  // WHOSE claim this is, said in the lead sentence. A list built entirely from
+  // vendor documentation must not read as "your solution needs these" - it is
+  // the fallback for a solution that told us nothing, and saying otherwise
+  // would dress a catalog up as a requirement.
+  const fromContent = entries.filter((e) => e.evidence !== "vendor");
+  const lead =
+    fromContent.length === 0
+      ? `This solution ships no detections that name a log type. ${entries[0].vendor ?? "The vendor"} documents ${joinNames(entries.map((e) => e.value))}.`
+      : `This solution's content needs ${joinNames(fromContent.map((e) => e.value))}.`;
+
   const have = entries.filter((e) => e.provided).map((e) => e.value);
-  const lead = `This solution's detections need ${joinNames(needed)}.`;
 
   if (have.length === 0) {
     return {

@@ -16,6 +16,7 @@
  */
 
 import type { LogTypeRecommendation as Recommendation } from "./sample-coverage-state";
+import { evidenceLabel } from "./sample-coverage-state";
 
 export interface LogTypeRecommendationProps {
   /** The derived recommendation (pure; see sample-coverage-state). */
@@ -38,9 +39,10 @@ export function LogTypeRecommendation({
             <li
               key={entry.value}
               className={
-                entry.provided
+                (entry.provided
                   ? "log-type-recommendation-have"
-                  : "log-type-recommendation-need"
+                  : "log-type-recommendation-need") +
+                ` log-type-evidence-${entry.evidence}`
               }
             >
               <span className="log-type-recommendation-name">{entry.value}</span>
@@ -48,11 +50,36 @@ export function LogTypeRecommendation({
                 {entry.provided ? "provided" : "not provided"}
               </span>
               {/* The provenance, so the operator can judge the suggestion
-                  rather than take it on faith: which field the content compares
-                  against, and how many detections depend on it. */}
+                  rather than take it on faith. WHICH TIER matters most: a
+                  shipped detection filtering on a value and a vendor merely
+                  documenting a feed are different claims, and the second must
+                  never wear the first's authority. */}
               <span className="field-hint">
-                {entry.field}, referenced by {entry.referenceCount} detection
-                {entry.referenceCount === 1 ? "" : "s"}
+                {entry.evidence === "vendor" ? (
+                  <>
+                    {evidenceLabel(entry.evidence)}
+                    {entry.vendor !== undefined ? ` (${entry.vendor})` : ""}
+                    {entry.doc !== undefined ? ` - ${entry.doc}` : ""}
+                    {entry.docUrl !== undefined && (
+                      <>
+                        {" "}
+                        <a
+                          href={entry.docUrl}
+                          target="_blank"
+                          rel="noreferrer noopener"
+                        >
+                          docs
+                        </a>
+                      </>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    {entry.field}, {evidenceLabel(entry.evidence)} -{" "}
+                    {entry.referenceCount} item
+                    {entry.referenceCount === 1 ? "" : "s"}
+                  </>
+                )}
               </span>
             </li>
           ))}
@@ -70,9 +97,10 @@ export function LogTypeRecommendation({
           opens. Only shown once there is a claim to qualify. */}
       {entries.length > 0 && (
         <p className="field-hint">
-          Derived from this solution's detections, so it is a minimum, not a
-          catalog - rules that filter a whole table, and ASIM-normalized rules,
-          name no log type. Provide anything else your environment sends.
+          A minimum, not a catalog. Content-derived entries miss rules that
+          filter a whole table and ASIM-normalized rules, which name no log
+          type; vendor-derived entries say what the vendor emits, not what this
+          solution needs. Provide anything else your environment sends.
         </p>
       )}
     </div>

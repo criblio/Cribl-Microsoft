@@ -11,7 +11,12 @@
 
 import { afterEach, describe, expect, it } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
-import { compareLogTypeCoverage, deriveExpectedLogTypes } from "@soc/core";
+import {
+  compareLogTypeCoverage,
+  deriveExpectedLogTypes,
+  documentedLogTypesForSolution,
+  mergeLogTypeSources,
+} from "@soc/core";
 import type { ContentItem } from "@soc/core";
 import { LogTypeRecommendation } from "./log-type-recommendation";
 import { deriveLogTypeRecommendation } from "./sample-coverage-state";
@@ -25,14 +30,27 @@ const rule = (name: string, query: string): ContentItem => ({
   queries: [query],
 });
 
-function renderFor(queries: string[], provided: string[], loaded = true) {
-  const coverage = compareLogTypeCoverage(
-    deriveExpectedLogTypes(queries.map((q, i) => rule(`R${i}`, q))),
+function renderFor(
+  queries: string[],
+  provided: string[],
+  loaded = true,
+  solution = "",
+) {
+  const items = queries.map((q, i) => rule(`R${i}`, q));
+  const expected = deriveExpectedLogTypes(items);
+  const coverage = compareLogTypeCoverage(expected, provided);
+  const merged = mergeLogTypeSources({
+    expected,
+    vendorLogTypes: documentedLogTypesForSolution(solution),
     provided,
-  );
+  });
   return render(
     <LogTypeRecommendation
-      recommendation={deriveLogTypeRecommendation(coverage, loaded)}
+      recommendation={deriveLogTypeRecommendation(
+        merged,
+        coverage.unreferenced,
+        loaded,
+      )}
     />,
   );
 }
@@ -62,14 +80,15 @@ describe("LogTypeRecommendation", () => {
     );
     const first = container.querySelector(".log-type-recommendation-list li");
     expect(first?.textContent).toContain("type");
-    expect(first?.textContent).toContain("referenced by 2 detections");
+    expect(first?.textContent).toContain("a shipped detection filters on it");
+    expect(first?.textContent).toContain("2 items");
   });
 
-  it("uses the singular for a single referencing detection", () => {
+  it("uses the singular for a single referencing item", () => {
     const { container } = renderFor(['T | where type == "TRAFFIC"'], []);
     const row = container.querySelector(".log-type-recommendation-list li");
-    expect(row?.textContent).toContain("referenced by 1 detection");
-    expect(row?.textContent).not.toContain("1 detections");
+    expect(row?.textContent).toContain("1 item");
+    expect(row?.textContent).not.toContain("1 items");
   });
 
   it("is ADVISORY: renders no button, no input and no gate", () => {
@@ -77,14 +96,30 @@ describe("LogTypeRecommendation", () => {
 
     expect(container.querySelectorAll("button")).toHaveLength(0);
     expect(container.querySelectorAll("input")).toHaveLength(0);
-    expect(container.querySelectorAll("a")).toHaveLength(0);
+  });
+
+  it("the only links it renders are OUT to vendor documentation", () => {
+    // A doc link is not a control - it is the citation that lets the operator
+    // check a vendor-tier suggestion rather than take it on faith. Content
+    // entries cite nothing external and so render no link at all.
+    const { container: content } = renderFor([THREE], []);
+    expect(content.querySelectorAll("a")).toHaveLength(0);
+
+    const { container: vendor } = renderFor([], [], true, "Zscaler");
+    const links = vendor.querySelectorAll("a");
+    expect(links.length).toBeGreaterThan(0);
+    for (const link of links) {
+      expect(link.getAttribute("href")).toContain("zscaler");
+      // Opens away from the app, and cannot reach back into it.
+      expect(link.getAttribute("rel")).toContain("noopener");
+    }
   });
 
   it("states the lower-bound limit wherever it makes a claim", () => {
     const { container } = renderFor([THREE], ["TRAFFIC", "THREAT", "CONFIG"]);
     // Even when everything is covered - that is exactly when "you have all of
     // them" could be misread as "there is nothing else".
-    expect(container.textContent).toContain("a minimum, not a catalog");
+    expect(container.textContent).toContain("A minimum, not a catalog");
   });
 
   it("makes no claim, and no list, before the detections are read", () => {
@@ -94,7 +129,7 @@ describe("LogTypeRecommendation", () => {
       .toBe("unknown");
     expect(container.querySelectorAll(".log-type-recommendation-list li")).toHaveLength(0);
     // No qualifier either: there is no claim to qualify.
-    expect(container.textContent).not.toContain("a minimum, not a catalog");
+    expect(container.textContent).not.toContain("A minimum, not a catalog");
   });
 
   it("says so plainly when the detections discriminate on nothing", () => {
@@ -104,6 +139,43 @@ describe("LogTypeRecommendation", () => {
       .toBe("no-signal");
     expect(container.textContent).toContain("cannot say which log types it needs");
     expect(container.querySelectorAll(".log-type-recommendation-list li")).toHaveLength(0);
+  });
+
+  it("falls back to the VENDOR tier when the solution names nothing", () => {
+    // The case this whole tier exists for: a solution shipping no detections
+    // used to produce an empty panel saying "cannot advise".
+    const { container } = renderFor([], [], true, "Zscaler Internet Access");
+
+    const rows = container.querySelectorAll(".log-type-recommendation-list li");
+    expect(rows).toHaveLength(5);
+    expect(container.textContent).toContain("ZIA Web");
+    expect(container.textContent).toContain("ZIA Firewall");
+    expect(container.querySelectorAll(".log-type-evidence-vendor")).toHaveLength(5);
+  });
+
+  it("does NOT claim a vendor-derived list is what the solution needs", () => {
+    // The distinction the tiers exist to protect: a catalog is not a
+    // requirement, and saying otherwise would send an operator collecting data
+    // their content never mentions.
+    const { container } = renderFor([], [], true, "Zscaler");
+    expect(container.textContent).toContain("ships no detections that name a log type");
+    expect(container.textContent).toContain("Zscaler documents");
+    expect(container.textContent).not.toContain("This solution's content needs");
+  });
+
+  it("labels each row with WHICH tier vouched for it", () => {
+    // A detection and a vendor doc must never look alike on the row.
+    const { container } = renderFor(
+      ['T | where type == "TRAFFIC"'],
+      [],
+      true,
+      "Palo Alto Networks",
+    );
+    expect(container.querySelectorAll(".log-type-evidence-detection")).toHaveLength(1);
+    expect(
+      container.querySelectorAll(".log-type-evidence-vendor").length,
+    ).toBeGreaterThan(0);
+    expect(container.textContent).toContain("the vendor documents this feed");
   });
 
   it("reports unreferenced samples neutrally, never as something to fix", () => {

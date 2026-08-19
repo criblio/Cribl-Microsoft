@@ -46,6 +46,7 @@ export * from "./domain/architecture-patterns";
 export * from "./domain/live-architecture";
 export * from "./domain/cribl-api";
 export * from "./domain/sample-sources";
+export * from "./domain/log-type-catalog";
 export * from "./domain/eventhub-discovery";
 export * from "./domain/siem-migration";
 export * from "./domain/content-install";
