@@ -35,6 +35,10 @@ import {
  * Quick KV parser for discriminator detection (NOT full field parsing). Ported
  * verbatim from legacy `parseKvLine`: strips a syslog priority prefix, then
  * pulls `key=value` and `key="quoted value"` pairs.
+ *
+ * Sibling to `parseKv` in ./parsers since the rehome (ADR 0003), and kept
+ * separate on purpose - see that function's note. The two agree on ordinary
+ * input today; the reason not to merge them is blast radius, not behaviour.
  */
 export function parseKvLine(line: string): Record<string, string> {
   const fields: Record<string, string> = {};

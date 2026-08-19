@@ -1187,13 +1187,22 @@ is "these groups differ from what we deployed, in these files we can see" rather
 than a confident clean bill - the same rule as the inventory standard. An unknown
 must not render as a zero.
 
-## Sample browser: REMOVED IN PLAN (ADR-0003, 2026-08-18) - not yet executed
+## Sample browser: REMOVED (ADR-0003) - Phases 0-2 done, 3-5 open
 
-**Decision made, work not started. To execute this, open ONE document:
-[sample-acquisition-plan.md](sample-acquisition-plan.md)** - it is self-contained
-(verified file:line facts, the phases, and the traps). [ADR
-0003](adr/0003-remove-sample-browser.md) is the durable decision record and is
-background, not a prerequisite.
+**Executed 2026-08-19 on `feature/log-type-recommendation`.** The browser and its
+whole acquisition domain are deleted; the `LogTypeRecommendation` panel replaces
+it. To continue, open ONE document:
+[sample-acquisition-plan.md](sample-acquisition-plan.md) - it carries inline
+`[SUPERSEDED]` markers where Phase 0 disproved it, and
+[sample-acquisition-phase0.md](sample-acquisition-phase0.md) has the API
+findings. [ADR 0003](adr/0003-remove-sample-browser.md) is the durable decision
+record and is background, not a prerequisite.
+
+**What remains:** Phases 3-5 (source discovery, the three acquisition paths,
+volume findings). One thing gates them - whether Cribl's `/search/*` is
+addressed at the leader or under `/m/{searchGroupId}`. The spec is silent and it
+needs one authenticated GET against a live workspace. The capture path does not
+depend on it.
 
 The Browse Samples modal is being removed and replaced by a log-type
 recommendation derived from the operator's own environment.
