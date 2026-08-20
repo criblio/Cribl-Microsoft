@@ -57,7 +57,17 @@ const DELIMITERS = ",|\\t\"':= \\r\\n";
  * explaining the filter, rather than making them read the whole conjunction.
  */
 export function logTypePredicate(value: string): string {
-  const escaped = escapeRegExp(value.trim());
+  // The extra `/` escape is NOT redundant with escapeRegExp (2026-08-20 audit).
+  // That helper was written for `new RegExp(escapeRegExp(x))`, where a slash is
+  // an ordinary character. Here the escaped value is embedded in a regex
+  // LITERAL, so an unescaped `/` closes the literal early and the rest becomes
+  // stray tokens - a log type like "app/web" emitted syntactically invalid
+  // JavaScript, which Cribl rejects with a 400.
+  //
+  // Escaping it here rather than widening the shared helper: its other callers
+  // build RegExp objects, where escaping `/` is harmless but would read as
+  // though it mattered.
+  const escaped = escapeRegExp(value.trim()).replace(/\//g, "\\/");
   return `/(^|[${DELIMITERS}])${escaped}([${DELIMITERS}]|$)/i.test(_raw)`;
 }
 

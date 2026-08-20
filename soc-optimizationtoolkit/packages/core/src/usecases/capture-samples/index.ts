@@ -6,11 +6,7 @@ export type {
   CaptureSamplesOptions,
   CaptureSamplesResult,
 } from "./capture-samples";
-export {
-  DEFAULT_DURATION_SECONDS,
-  DEFAULT_MAX_EVENTS,
-  MAX_EVENTS_LIMIT,
-  SYSTEM_CAPTURE_PATH,
-  captureSamples,
-  extractCapturedEvents,
-} from "./capture-samples";
+// MAX_EVENTS_LIMIT, SYSTEM_CAPTURE_PATH and extractCapturedEvents stay
+// module-local (2026-08-20 audit): internal and test-only. The two DEFAULT_*
+// bounds ARE exported - the capture panel seeds its inputs from them.
+export { DEFAULT_DURATION_SECONDS, DEFAULT_MAX_EVENTS, captureSamples } from "./capture-samples";

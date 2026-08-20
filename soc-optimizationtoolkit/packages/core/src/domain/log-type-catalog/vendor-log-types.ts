@@ -345,10 +345,8 @@ export const DOCUMENTED_LOG_TYPE_PACKS: readonly DocumentedLogTypePack[] = [
     : []),
 ];
 
-/** Collapse a name for comparison: lowercase, alphanumerics only. */
-function normalize(value: string): string {
-  return value.toLowerCase().replace(/[^a-z0-9]+/g, "");
-}
+// The THIRD copy of this normalization, now imported (2026-08-20 audit).
+import { normalizeLogTypeName as normalize } from "../coverage-analysis/expected-log-types";
 
 /** The packs whose keywords match a solution name, in declaration order. */
 export function documentedLogTypePacksForSolution(

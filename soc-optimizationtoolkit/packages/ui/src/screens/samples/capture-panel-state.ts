@@ -130,7 +130,7 @@ export interface CaptureView {
 }
 
 /** How many raw lines the preview shows per log type. */
-export const PREVIEW_LINES = 3;
+const PREVIEW_LINES = 3;
 
 /**
  * Project a capture result into what the panel renders.
