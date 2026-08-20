@@ -28,6 +28,7 @@ import {
   plannedCaptureSamples,
   toggleChoice,
 } from "./capture-panel-state";
+import { useNumericField } from "./use-numeric-field";
 import type { CaptureLogTypeChoice } from "./capture-panel-state";
 
 export interface CapturePanelProps {
@@ -59,8 +60,10 @@ export function CapturePanel({
   // checkboxes stop rewriting it, because silently discarding someone's edit is
   // worse than letting the two disagree.
   const [filterEdited, setFilterEdited] = useState(false);
-  const [maxEvents, setMaxEvents] = useState(DEFAULT_MAX_EVENTS);
-  const [duration, setDuration] = useState(DEFAULT_DURATION_SECONDS);
+  const maxEvents = useNumericField(DEFAULT_MAX_EVENTS);
+  // The one that bites hardest cleared: 0 clamps to a ONE-SECOND capture, which
+  // on a quiet source returns nothing and is then reported as an idle source.
+  const duration = useNumericField(DEFAULT_DURATION_SECONDS);
   const [result, setResult] = useState<CaptureSamplesResult | null>(null);
   const [running, setRunning] = useState(false);
 
@@ -87,7 +90,7 @@ export function CapturePanel({
     setRunning(true);
     setResult(null);
     try {
-      setResult(await onCapture(filter, maxEvents, duration));
+      setResult(await onCapture(filter, maxEvents.value, duration.value));
     } finally {
       setRunning(false);
     }
@@ -159,10 +162,10 @@ export function CapturePanel({
           <span className="field-label">Max events</span>
           <input
             type="number"
-            value={maxEvents}
+            value={maxEvents.text}
             min={1}
             max={10000}
-            onChange={(e) => setMaxEvents(Number(e.target.value))}
+            onChange={(e) => maxEvents.setText(e.target.value)}
             disabled={busy || running}
           />
         </label>
@@ -170,9 +173,9 @@ export function CapturePanel({
           <span className="field-label">Seconds</span>
           <input
             type="number"
-            value={duration}
+            value={duration.text}
             min={1}
-            onChange={(e) => setDuration(Number(e.target.value))}
+            onChange={(e) => duration.setText(e.target.value)}
             disabled={busy || running}
           />
         </label>

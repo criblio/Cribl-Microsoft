@@ -266,6 +266,32 @@ describe("CapturePanel - running a capture", () => {
     expect(bounds(container)[1].value).toBe(String(DEFAULT_DURATION_SECONDS));
   });
 
+  it("reads CLEARED bounds as the defaults, not as one event for one second", async () => {
+    // Number("") is 0, and both bounds clamp up to a floor of 1. So clearing
+    // these to retype captured ONE event, over ONE SECOND - and a one-second
+    // capture of a quiet source returns nothing, which the panel then reports
+    // as an idle source. The operator is told a fact about their data that we
+    // invented out of an empty text box.
+    const { container, onCapture } = renderPanel();
+
+    fireEvent.change(bounds(container)[0], { target: { value: "" } });
+    fireEvent.change(bounds(container)[1], { target: { value: "" } });
+    // Both stay empty while being typed into, rather than snapping back to the
+    // default and landing the next keystroke on the end of it.
+    expect(bounds(container)[0].value).toBe("");
+    expect(bounds(container)[1].value).toBe("");
+
+    await act(async () => {
+      fireEvent.click(runButton(container));
+    });
+
+    expect(onCapture).toHaveBeenCalledWith(
+      expect.anything(),
+      DEFAULT_MAX_EVENTS,
+      DEFAULT_DURATION_SECONDS,
+    );
+  });
+
   it("locks every control while the capture is in flight, and offers NO commit", async () => {
     // A second click would run a second capture against a panel already
     // waiting, and an edit mid-flight would describe a request already sent.
