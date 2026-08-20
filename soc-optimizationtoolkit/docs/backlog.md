@@ -1187,7 +1187,7 @@ is "these groups differ from what we deployed, in these files we can see" rather
 than a confident clean bill - the same rule as the inventory standard. An unknown
 must not render as a zero.
 
-## Sample browser: REMOVED (ADR-0003) - Phase 4 capture done, lake query in progress
+## Sample browser: REMOVED (ADR-0003) - Phases 0-4 done, Phase 5 unblocked
 
 **Executed 2026-08-19/20 on `feature/log-type-recommendation`.** The browser and
 its whole acquisition domain are deleted; the `LogTypeRecommendation` panel
