@@ -85,7 +85,14 @@ export function LakePanel({
 }: LakePanelProps) {
   const [result, setResult] = useState<QueryLakeSamplesResult | null>(null);
   const [choices, setChoices] = useState<LakeLogTypeChoice[]>([]);
-  const [eventsPerLogType, setEventsPerLogType] = useState(DEFAULT_SAMPLE_LIMIT);
+  // Held as TEXT, coerced once at fetch time. A number here meant an empty box
+  // read as Number("") === 0, which clampLimit floors to 1 - so an operator who
+  // cleared the field to retype got ONE event per log type and a note blaming a
+  // bound they never typed. Coercing on every keystroke instead would snap the
+  // box back to the default mid-edit, which is the same bug wearing a nicer hat.
+  const [eventsPerLogType, setEventsPerLogType] = useState(
+    String(DEFAULT_SAMPLE_LIMIT),
+  );
   const [querying, setQuerying] = useState(false);
   const [fetching, setFetching] = useState(false);
   const [outcome, setOutcome] = useState<CommitOutcome | null>(null);
@@ -132,7 +139,11 @@ export function LakePanel({
     setFetching(true);
     setOutcome(null);
     try {
-      const fetched = await onFetchEvents(field, selected, eventsPerLogType);
+      // An empty or nonsense box means "the default", not zero.
+      const typed = Number(eventsPerLogType);
+      const limit =
+        Number.isFinite(typed) && typed > 0 ? typed : DEFAULT_SAMPLE_LIMIT;
+      const fetched = await onFetchEvents(field, selected, limit);
       const samples = plannedLakeSamples(
         fetched.events,
         `lake:${datasetId}`,
@@ -255,7 +266,7 @@ export function LakePanel({
               value={eventsPerLogType}
               min={1}
               max={MAX_SAMPLE_LIMIT}
-              onChange={(e) => setEventsPerLogType(Number(e.target.value))}
+              onChange={(e) => setEventsPerLogType(e.target.value)}
               disabled={locked}
             />
           </label>
