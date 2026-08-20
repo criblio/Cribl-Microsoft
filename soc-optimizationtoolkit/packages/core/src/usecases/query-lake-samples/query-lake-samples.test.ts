@@ -29,6 +29,8 @@ import {
   MAX_SAMPLE_LIMIT,
   buildDiscriminatorSampleQuery,
   buildLogTypeCountQuery,
+  buildLogTypeEventQuery,
+  fetchLakeLogTypeEvents,
   queryLakeSamples,
   searchResultRows,
 } from "./query-lake-samples";
@@ -523,5 +525,130 @@ describe("searchResultRows - the shapes an NDJSON body arrives in", () => {
   it("keeps the rows it could decode when one line is junk", () => {
     const body = `${JSON.stringify(META)}\nnot json\n${JSON.stringify(COUNT_ROWS[0])}`;
     expect(searchResultRows(body)).toEqual([COUNT_ROWS[0]]);
+  });
+});
+
+describe("fetchLakeLogTypeEvents - counts choose, events sample", () => {
+  const fetchRun = (cribl: FakeCriblClient, extra = {}) =>
+    fetchLakeLogTypeEvents(cribl, {
+      searchGroupId: GROUP,
+      datasetId: DATASET,
+      discriminatorField: "type",
+      logTypes: ["TRAFFIC"],
+      ...extra,
+    });
+
+  it("filters to ONE log type and asks for events, not a summarize", () => {
+    // The whole reason this is a third query: `summarize count()` returns one
+    // row per log type with no event bodies, so it can never become a sample.
+    const query = buildLogTypeEventQuery(DATASET, "type", "TRAFFIC", 50);
+    expect(query).toBe('dataset="LogSources" | where type=="TRAFFIC" | limit 50');
+    expect(query).not.toContain("summarize");
+  });
+
+  it("escapes a quote in the log-type value", () => {
+    // The dataset id comes from configuration; this value came from DATA, so a
+    // quote in it would otherwise break out of the comparison literal.
+    expect(buildLogTypeEventQuery(DATASET, "type", 'a"b', 5)).toContain(
+      'type=="a\\"b"',
+    );
+  });
+
+  it("keeps the vendor _raw, which is the point of a Lake sample", async () => {
+    const cribl = client(
+      ok(ndjson([{ type: "TRAFFIC", _raw: "1,2026/08/13,fw01,TRAFFIC,end" }])),
+    );
+
+    const result = await fetchRun(cribl);
+
+    expect(result.ok).toBe(true);
+    expect(result.events).toHaveLength(1);
+    expect(result.events[0].logType).toBe("TRAFFIC");
+    expect(result.events[0].rawEvents).toEqual(["1,2026/08/13,fw01,TRAFFIC,end"]);
+  });
+
+  it("serializes a row with NO _raw rather than dropping the event", async () => {
+    const cribl = client(ok(ndjson([{ type: "TRAFFIC", a: 1 }])));
+
+    const result = await fetchRun(cribl);
+
+    expect(result.events[0].rawEvents).toEqual(['{"type":"TRAFFIC","a":1}']);
+  });
+
+  it("runs ONE query per chosen log type - each becomes its own sample", async () => {
+    const cribl = client(
+      ok(ndjson([{ type: "TRAFFIC", _raw: "a" }])),
+      ok(ndjson([{ type: "THREAT", _raw: "b" }])),
+    );
+
+    const result = await fetchRun(cribl, { logTypes: ["TRAFFIC", "THREAT"] });
+
+    expect(cribl.calls).toHaveLength(2);
+    expect(result.events.map((e) => e.logType)).toEqual(["TRAFFIC", "THREAT"]);
+  });
+
+  it("PARTIAL SUCCESS is success - one failure does not cost the others", async () => {
+    // The operator picked several. Returning nothing because the second 400'd
+    // would throw away a good sample they can use.
+    const cribl = client(
+      ok(ndjson([{ type: "TRAFFIC", _raw: "a" }])),
+      { status: 400, body: "bad query" },
+      { status: 400, body: "bad query" },
+    );
+
+    const result = await fetchRun(cribl, { logTypes: ["TRAFFIC", "THREAT"] });
+
+    // ok is FALSE because one log type genuinely FAILED - but the good sample
+    // is still returned, which is the point of partial success.
+    expect(result.ok).toBe(false);
+    expect(result.events.map((e) => e.logType)).toEqual(["TRAFFIC"]);
+    expect(result.notes.join(" ")).toContain("THREAT");
+  });
+
+  it("reports a log type that returned nothing, rather than an empty sample", async () => {
+    // An empty SYNC answer is inconclusive by design, so the job path has to
+    // confirm the emptiness before it is reported as such - four responses, not
+    // one. Scripting it fully is what makes this pin about the EMPTY outcome
+    // rather than about a half-scripted fake.
+    const cribl = client(
+      ok(""),
+      ok({ count: 1, items: [{ id: "j-1" }] }),
+      ok({ status: "completed" }),
+      ok(""),
+    );
+
+    const result = await fetchRun(cribl);
+
+    expect(result.events).toEqual([]);
+    // ok is TRUE: every request succeeded and the window is simply empty.
+    // This pin asserted false until the 2026-08-20 bug-hunt - it had codified
+    // the empty-vs-failed collapse rather than guarding against it, which is
+    // the one thing a pin must never do.
+    expect(result.ok).toBe(true);
+    expect(result.notes.join(" ")).toContain("no events in this window");
+  });
+
+  it("requests NOTHING when the selection or addressing is incomplete", async () => {
+    // A blank search group would 404 at the leader and read as a Cribl fault.
+    for (const bad of [
+      { searchGroupId: "" },
+      { datasetId: "" },
+      { discriminatorField: "" },
+      { logTypes: [] },
+    ]) {
+      const cribl = new FakeCriblClient();
+      const result = await fetchRun(cribl, bad);
+      expect(cribl.calls).toHaveLength(0);
+      expect(result.ok).toBe(false);
+    }
+  });
+
+  it("addresses the SEARCH group, like every other /search/* call", async () => {
+    const cribl = client(ok(ndjson([{ type: "TRAFFIC", _raw: "a" }])));
+
+    await fetchRun(cribl);
+
+    expect(cribl.calls[0].groupId).toBe(GROUP);
+    expect(cribl.calls[0].path).toContain("/search/");
   });
 });

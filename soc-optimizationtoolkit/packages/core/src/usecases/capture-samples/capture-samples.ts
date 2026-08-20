@@ -40,6 +40,16 @@ export const SYSTEM_CAPTURE_PATH = "/system/capture";
 /** Capture bounds. Small on purpose - this is a sample, not an export. */
 export const DEFAULT_MAX_EVENTS = 100;
 export const DEFAULT_DURATION_SECONDS = 10;
+/**
+ * The longest capture the TRANSPORT survives (2026-08-20 bug-hunt).
+ *
+ * A capture holds the response open for its whole duration, and the cloud
+ * adapter's fetch gives up at 15s. `durationSeconds` had no ceiling and the
+ * panel's input had no max, so asking for 30s ALWAYS failed - with a message
+ * blaming the platform bridge for a capture that had run perfectly server-side.
+ * 12 leaves headroom for dispatch and the response.
+ */
+export const MAX_DURATION_SECONDS = 12;
 /** The API's own ceiling (CaptureParamsReq.maxEvents maximum). */
 export const MAX_EVENTS_LIMIT = 10000;
 
@@ -79,6 +89,17 @@ export interface CaptureSamplesResult {
   ok: boolean;
 }
 
+/** What a capture body yielded: the usable lines, and what was set aside. */
+export interface CapturedEvents {
+  /** The event lines to split and tag. */
+  lines: string[];
+  /**
+   * Records with NO `_raw` that were left out because raw-bearing ones existed.
+   * Reported so the count the operator sees matches what they get.
+   */
+  droppedHusks: number;
+}
+
 /**
  * Pull the raw event lines out of a capture response.
  *
@@ -89,21 +110,22 @@ export interface CaptureSamplesResult {
  * the raw vendor bytes where the event carries `_raw`, and as the serialized
  * event otherwise.
  */
-export function extractCapturedEvents(body: unknown): string[] {
-  const lines: string[] = [];
+export function extractCapturedEvents(body: unknown): CapturedEvents {
+  const withRaw: string[] = [];
+  const husks: string[] = [];
 
   const pushRecord = (record: unknown): void => {
     const raw = readString(record, "_raw");
     if (raw !== undefined) {
-      lines.push(raw);
+      withRaw.push(raw);
       return;
     }
     if (typeof record === "string") {
-      if (record.trim() !== "") lines.push(record);
+      if (record.trim() !== "") withRaw.push(record);
       return;
     }
     if (record !== null && typeof record === "object") {
-      lines.push(JSON.stringify(record));
+      husks.push(JSON.stringify(record));
     }
   };
 
@@ -115,17 +137,55 @@ export function extractCapturedEvents(body: unknown): string[] {
         pushRecord(JSON.parse(trimmed));
       } catch {
         // Not JSON - a capture of a plain text stream. Keep the line as-is.
-        lines.push(trimmed);
+        withRaw.push(trimmed);
       }
     }
-    return lines;
+    return settle(withRaw, husks);
   }
 
   const items = criblEnvelopeItems(body);
   if (items !== null) {
     for (const item of items) pushRecord(item);
+    return settle(withRaw, husks);
   }
-  return lines;
+
+  // ONE EVENT arrives as a BARE OBJECT, not a list (2026-08-20 bug-hunt).
+  // The cloud adapter's readPortBody JSON.parses the WHOLE body, so a
+  // single-line NDJSON response parses cleanly into an object and never reaches
+  // the string branch above. criblEnvelopeItems then answers null for it, and a
+  // perfectly good one-event capture was reported as "returned no events" -
+  // sending the operator to widen a filter that was already correct.
+  //
+  // Two events behave differently: two lines are not valid JSON, so the body
+  // stays a string. That asymmetry is exactly why the fixtures missed this -
+  // they build a string a real single-event response can never be.
+  // searchResultRows already had this branch; this is the same treatment.
+  if (body !== null && typeof body === "object") {
+    pushRecord(body);
+  }
+  return settle(withRaw, husks);
+}
+
+/**
+ * Decide what the captured LINES are, given the two kinds of record seen.
+ *
+ * RAW-BEARING RECORDS WIN OUTRIGHT when there are any. Mixing a serialized
+ * husk into a list of vendor text breaks the split downstream:
+ * splitSamplesByLogType only reaches its CSV/PAN-OS fallback when NOTHING
+ * parses as JSON, so one husk - a keepalive, a metric, an internal event with
+ * no `_raw` - suppresses the fallback and collapses a clean TRAFFIC/THREAT
+ * split into one undifferentiated group. The operator is then invited to name
+ * it, and names it after whichever type they recognise, mislabelling the rest
+ * in the store that drives route and pipeline generation.
+ *
+ * Husks are used only when NO record carried a payload, which is the
+ * structured-source case where serializing really is the best available answer.
+ */
+function settle(withRaw: string[], husks: string[]): CapturedEvents {
+  if (withRaw.length > 0) {
+    return { lines: withRaw, droppedHusks: husks.length };
+  }
+  return { lines: husks, droppedHusks: 0 };
 }
 
 /** Clamp a requested bound into the API's accepted range. */
@@ -133,7 +193,11 @@ function clampMaxEvents(requested: number | undefined): {
   value: number;
   note?: string;
 } {
-  if (requested === undefined) return { value: DEFAULT_MAX_EVENTS };
+  if (requested === undefined || !Number.isFinite(requested)) {
+    // NaN reached the wire as {"maxEvents":null} and a note reading "adjusted
+    // to NaN". The sibling clamp in query-lake-samples already guarded this.
+    return { value: DEFAULT_MAX_EVENTS };
+  }
   const value = Math.min(Math.max(Math.floor(requested), 1), MAX_EVENTS_LIMIT);
   if (value !== requested) {
     return {
@@ -160,10 +224,18 @@ export async function captureSamples(
   const notes: string[] = [];
   const bounded = clampMaxEvents(options.maxEvents);
   if (bounded.note !== undefined) notes.push(bounded.note);
-  const duration = Math.max(
-    1,
-    Math.floor(options.durationSeconds ?? DEFAULT_DURATION_SECONDS),
-  );
+  const requestedDuration = options.durationSeconds ?? DEFAULT_DURATION_SECONDS;
+  const duration = Number.isFinite(requestedDuration)
+    ? Math.min(Math.max(Math.floor(requestedDuration), 1), MAX_DURATION_SECONDS)
+    : DEFAULT_DURATION_SECONDS;
+  if (Number.isFinite(requestedDuration) && duration !== requestedDuration) {
+    // SAID, not silent. A clamped duration changes how much the operator gets,
+    // and the empty-capture note below tells them to "try a longer capture" -
+    // advice that would be actively wrong if we had quietly shortened it.
+    notes.push(
+      `Capture window adjusted to ${duration}s. The platform bridge gives up on a request after ${MAX_DURATION_SECONDS}s, so a longer capture would fail as a transport timeout even though it ran.`,
+    );
+  }
 
   const empty = (ok: boolean): CaptureSamplesResult => ({
     splits: [],
@@ -205,13 +277,19 @@ export async function captureSamples(
       status === 403 || status === 401
         ? " - the app's credentials may not carry capture permission on this group"
         : status === 400
-          ? " - Cribl rejected the filter expression; its message is above"
+          ? " - either the filter expression was rejected, or no worker nodes are connected to this group (the documented 400); Cribl's own message is above"
           : "";
     notes.push(`The capture returned HTTP ${status}${hint}. ${detail ?? ""}`.trim());
     return empty(false);
   }
 
-  const rawEvents = extractCapturedEvents(body);
+  const captured = extractCapturedEvents(body);
+  const rawEvents = captured.lines;
+  if (captured.droppedHusks > 0) {
+    notes.push(
+      `${captured.droppedHusks} captured event(s) carried no raw payload and were left out, so they could not confuse the log-type split.`,
+    );
+  }
   if (rawEvents.length === 0) {
     // A RESULT, not an error, and the likeliest causes are worth naming: the
     // filter matched nothing, or nothing flowed during the window.

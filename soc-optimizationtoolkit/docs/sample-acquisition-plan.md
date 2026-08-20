@@ -505,6 +505,60 @@ closer to the toolkit's stated purpose than sample selection is.
 cover part of it. It was raised late in planning and was not checked. Out of
 scope unless explicitly wanted.
 
+> **[CHECKED 2026-08-20 - it was right to ask. Roughly 70% already exists.]**
+>
+> **The cross-product IS `compareLogTypeCoverage`'s `unreferenced` field**
+> (`domain/coverage-analysis/expected-log-types.ts`): "provided log types that
+> matched nothing expected". The other half - what any detection reads - is
+> `deriveExpectedLogTypes`. Both are already merged, ranked and ON SCREEN via
+> `mergeLogTypeSources` and `LogTypeRecommendation`. The cost premise is stated
+> too: `packShapeSummary` already says N log types means 2N routes and 2N
+> pipelines. What is missing is a NUMBER attached to it.
+>
+> **Genuinely missing** (small, in this order):
+> 1. `MergedLogType` / `RecommendedLogType` / `LogTypeCoverage.unreferenced`
+>    carry no count - `unreferenced` is a bare `string[]`, so there is nowhere
+>    to hang 890K.
+> 2. `provided` is tagged samples only. Phase 5 needs a SECOND "present" source:
+>    what the dataset actually holds, tagged or not.
+> 3. A THRESHOLD, and this is a real decision rather than a copy edit.
+>    `expected-log-types.ts` deliberately documents `unreferenced` as *"NOT a
+>    problem - a vendor emits more than any one solution detects on"*, and the UI
+>    says "fine". Phase 5 wants the same set to read as cost. Volume is what
+>    reconciles them - 12 events/day unreferenced is fine, 890K is a finding -
+>    but somebody has to pick the line.
+> 4. No events-to-bytes conversion anywhere. `estimateDropSavings` measures
+>    FIELD bytes inside a sample already collected; it has no notion of a daily
+>    rate. Its mean-bytes-per-event could be multiplied by a Search count,
+>    though, so the pieces exist.
+>
+> **On "no ENABLED detection consumes it" - the wording is reachable, but not
+> for free, and BOTH the obvious readings of the code are wrong.**
+>
+> An investigation reported the claim unprovable, on the grounds that rules come
+> from the GitHub repo and carry no enablement state, so it would need a new ARM
+> read and new permission surface. Checking that directly: `installedContentState`
+> (`usecases/content-install/content-install.ts`) ALREADY issues a paginated
+> `GET {scope}/alertRules`. So the read is written and the ARM surface is not new.
+>
+> But it does not simply work either: that function extracts ONLY
+> `properties.displayName`, and it currently has NO production consumer - it is
+> exported and tested and called from nowhere. So the honest position is that
+> Phase 5's original wording needs the existing read wired up and two more
+> fields taken off it (`properties.enabled`, `properties.query`), not a new
+> capability.
+>
+> Two scoping facts that survive regardless:
+> - expected log types are derived from ONE SELECTED SOLUTION's repo content,
+>   while deployed rules are workspace-wide. Those are different universes and
+>   a finding must not silently mix them.
+> - until that wiring exists, the strongest honest wording is *"no rule or
+>   workbook shipped by THIS SOLUTION filters on it"* - which is a weaker claim
+>   than the plan's, and should be written that way rather than overstated.
+>
+> **The actual blocker is upstream:** Phase 5 has no input until the Lake query
+> has a UI consumer. That is Phase 4's remaining half, not Phase 5's gap.
+
 ---
 
 ## Open assumptions
