@@ -212,13 +212,33 @@ export function deriveCaptureView(
 export function plannedCaptureSamples(
   splits: readonly SplitSample[],
   sourceLabel: string,
+  existingLogTypes: readonly string[] = [],
 ): TaggedSample[] {
+  // ADOPT THE EXISTING LABEL when one matches case-insensitively (2026-08-20
+  // audit). splitSamplesByLogType FORCE-UPPERCASES every captured log type,
+  // while an upload keeps whatever the operator typed - and the store keys
+  // case-SENSITIVELY. So capturing TRAFFIC after uploading "traffic" appended a
+  // second sample rather than replacing the first, while the panel had just
+  // promised "replaces your existing TRAFFIC sample".
+  //
+  // Two samples for one log type is not a cosmetic duplicate: the pack builds a
+  // route pair per unique log type, so it silently gains an overlapping pair
+  // where only the first receives events. Reusing the operator's own casing
+  // makes the replacement real and the warning honest, and it respects the
+  // label they chose rather than shouting it back at them.
+  const byLower = new Map<string, string>();
+  for (const existing of existingLogTypes) {
+    byLower.set(existing.trim().toLowerCase(), existing);
+  }
+
   const order: string[] = [];
   const byType = new Map<string, TaggedSample>();
   for (const split of splits) {
     if (split.rawEvents.length === 0) continue;
+    const label =
+      byLower.get(split.logType.trim().toLowerCase()) ?? split.logType;
     const tagged = tagSampleFromContent(
-      split.logType,
+      label,
       split.rawEvents.join("\n"),
       sourceLabel,
     );

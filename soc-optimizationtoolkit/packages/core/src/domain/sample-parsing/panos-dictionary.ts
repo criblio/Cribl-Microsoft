@@ -85,6 +85,16 @@ export const PANOS_CANONICAL_INDEX20 = "logset";
  * verbatim). Eight log types: TRAFFIC, THREAT, SYSTEM, CONFIG, GLOBALPROTECT,
  * AUTHENTICATION, DECRYPTION, HIP-MATCH. `future_use*` placeholders are retained
  * in the order (so positions stay correct) but skipped when a line is named.
+ *
+ * NOTE for anyone counting these with a grep: `"HIP-MATCH"` is QUOTED, because
+ * the hyphen is not a bare identifier. A pattern matching unquoted keys finds
+ * seven and concludes the eighth is missing - which happened twice on
+ * 2026-08-20, once in an audit and once in the check meant to verify it.
+ *
+ * `isPanosFormat` recognises MORE types than are dictionaried here
+ * (CORRELATION, GTP, USERID, WILDFIRE...). Those are correctly detected as
+ * PAN-OS and then parsed positionally, which is the honest outcome for a type
+ * whose column order is not recorded.
  */
 export const PANOS_CSV_HEADERS: Readonly<Record<string, readonly string[]>> =
   Object.freeze({

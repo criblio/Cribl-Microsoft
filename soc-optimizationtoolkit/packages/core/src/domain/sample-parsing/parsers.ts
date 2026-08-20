@@ -141,13 +141,22 @@ export function parseCsv(
       .map((v) => v.trim().replace(/^"|"$/g, ""));
     const record: Record<string, unknown> = {};
 
+    // EVERY dictionary, not the two that were hardcoded (2026-08-20 audit).
+    // PANOS_CSV_HEADERS carries seven - TRAFFIC, THREAT, SYSTEM, CONFIG,
+    // GLOBALPROTECT, AUTHENTICATION, DECRYPTION - and five of them sat unused
+    // behind an if/else that named only the first two.
+    //
+    // It went unnoticed because it was unreachable: an uploaded PAN-OS file was
+    // classified "syslog" and parsed to zero events, so this branch never ran on
+    // real input. The format-detection fix that routes PAN-OS here for the first
+    // time is what exposed it - a fix uncovering the next defect down.
+    //
+    // The cost of leaving it: a GLOBALPROTECT or CONFIG export parses to
+    // positional _0.._N, so field mapping sees `_3` instead of `type` and `_7`
+    // instead of `src`, and the generated pack maps numbers.
     const logType = values[3];
-    let colNames: readonly string[] | null = null;
-    if (logType === "TRAFFIC") {
-      colNames = PANOS_CSV_HEADERS.TRAFFIC;
-    } else if (logType === "THREAT") {
-      colNames = PANOS_CSV_HEADERS.THREAT;
-    }
+    const colNames: readonly string[] | null =
+      logType !== undefined ? (PANOS_CSV_HEADERS[logType] ?? null) : null;
 
     if (colNames) {
       colNames.forEach((name, i) => {

@@ -95,7 +95,13 @@ export function CapturePanel({
 
   const commit = async () => {
     if (result === null) return;
-    await onCommit(plannedCaptureSamples(result.splits, `capture:${source.id}`));
+    await onCommit(
+      plannedCaptureSamples(
+        result.splits,
+        `capture:${source.id}`,
+        existingLogTypes,
+      ),
+    );
     setResult(null);
   };
 

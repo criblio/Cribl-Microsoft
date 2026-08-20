@@ -78,10 +78,11 @@ describe("line-oriented formats keep the ORIGINAL vendor bytes", () => {
 
     expect(parsed.records).toHaveLength(2);
     expect(parsed.rawEvents).toEqual([PANOS_CSV_1, PANOS_CSV_2]);
-    // GLOBALPROTECT has no column dictionary (only TRAFFIC/THREAT do), so the
-    // record is POSITIONAL - the raw line is the only place the vendor shape
-    // survives, which is exactly why storing it matters.
-    expect(parsed.records[0]._3).toBe("GLOBALPROTECT");
+    // NAMED, not positional. This asserted `_3` until the 2026-08-20 audit,
+    // with a comment claiming GLOBALPROTECT had no column dictionary - it has
+    // had one all along; parseCsv just wired two of the seven.
+    expect(parsed.records[0].type).toBe("GLOBALPROTECT");
+    expect(parsed.records[0].eventid).toBe("gateway-hip-check");
     expect(parsed.rawEvents[0].startsWith("{")).toBe(false);
   });
 });
@@ -98,9 +99,8 @@ describe("FIXED - a syslog-prefixed PAN-OS file uploaded directly", () => {
     expect(parsed.format).toBe("csv");
     expect(parsed.records).toHaveLength(2);
     expect(parsed.errors).toEqual([]);
-    // GLOBALPROTECT has no column dictionary, so the record is positional -
-    // and the raw line is therefore the only place the vendor shape survives.
-    expect(parsed.records[0]._3).toBe("GLOBALPROTECT");
+    expect(parsed.records[0].type).toBe("GLOBALPROTECT");
+    expect(parsed.records[0].eventid).toBe("gateway-hip-check");
     expect(parsed.rawEvents).toEqual([PANOS_LINE_1, PANOS_LINE_2]);
   });
 });
@@ -120,7 +120,7 @@ describe("Cribl capture: the wrapper's _raw IS the vendor line", () => {
     expect(parsed.records).toHaveLength(2);
     expect(parsed.records[0]._time).toBeUndefined();
     expect(parsed.records[0].source).toBeUndefined();
-    expect(parsed.records[0]._3).toBe("GLOBALPROTECT");
+    expect(parsed.records[0].type).toBe("GLOBALPROTECT");
     // ...and the raw events are the vendor bytes the capture carried, syslog
     // header and all - NOT the wrapper JSON and NOT the exploded columns.
     expect(parsed.rawEvents).toEqual([PANOS_LINE_1, PANOS_LINE_2]);
@@ -211,9 +211,9 @@ describe("the line/record pairing cannot drift", () => {
     expect(parsed.records).toHaveLength(2);
     expect(parsed.rawEvents).toEqual([PANOS_CSV_1, PANOS_CSV_2]);
     // Pair each event to its own record by a field only that record carries.
-    expect(parsed.records[0]._8).toBe("gateway-hip-check");
+    expect(parsed.records[0].eventid).toBe("gateway-hip-check");
     expect(parsed.rawEvents[0]).toContain("gateway-hip-check");
-    expect(parsed.records[1]._8).toBe("portal-auth");
+    expect(parsed.records[1].eventid).toBe("portal-auth");
     expect(parsed.rawEvents[1]).toContain("portal-auth");
     expect(parsed.rawEvents.some((e) => e.includes("GARBAGE"))).toBe(false);
   });

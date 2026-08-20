@@ -16,6 +16,8 @@
 import { describe, expect, it } from "vitest";
 
 import { detectSampleFormat } from "./format-detection";
+import { parseCsv } from "./parsers";
+import { PANOS_CSV_HEADERS } from "./panos-dictionary";
 
 const lenient = (s: string) => detectSampleFormat(s);
 const strict = (s: string) => detectSampleFormat(s, { mode: "strict" });
@@ -139,6 +141,62 @@ describe("PAN-OS positional CSV", () => {
   it("does not hijack a CEF or kv line carrying commas", () => {
     expect(lenient(`${CEF} extra=a,b,c,d,e,f`)).toBe("cef");
     expect(lenient("date=2019-05-10 msg=a,b,c,d,e,f action=accept")).toBe("kv");
+  });
+
+  it("names the columns for EVERY log type with a dictionary, not just two", () => {
+    // The 2026-08-20 audit finding. parseCsv's headerless branch was a
+    // hardcoded TRAFFIC/THREAT if-else while PANOS_CSV_HEADERS carries EIGHT,
+    // so six dictionaries sat unused and those log types parsed to positional
+    // _0.._N - field mapping then sees `_3` instead of `type`.
+    //
+    // It was invisible until the format-detection fix above routed uploaded
+    // PAN-OS files into parseCsv for the first time. Pinned per type, because
+    // "some of them work" is exactly the shape the bug had - and the count is
+    // asserted against the dictionary itself so neither can drift alone.
+    const bodies: Record<string, string> = {
+      TRAFFIC:
+        "1,2026/08/13 10:49:02,013201031064,TRAFFIC,end,2817,2026/08/13 10:48:54,10.0.0.5,8.8.8.8",
+      THREAT:
+        "1,2026/08/13 10:49:02,013201031064,THREAT,vuln,2817,2026/08/13 10:48:54,10.0.0.6,9.9.9.9",
+      SYSTEM:
+        "1,2026/08/13 10:49:02,013201031064,SYSTEM,general,2817,2026/08/13 10:48:54,vsys1,eventid",
+      CONFIG:
+        "1,2026/08/13 10:49:02,013201031064,CONFIG,0,2817,2026/08/13 10:48:54,10.0.0.1,vsys1",
+      GLOBALPROTECT:
+        "1,2026/08/13 10:49:02,013201031064,GLOBALPROTECT,0,2817,2026/08/13 10:48:54,vsys1,gateway-hip-check",
+      AUTHENTICATION:
+        "1,2026/08/13 10:49:02,013201031064,AUTHENTICATION,0,2817,2026/08/13 10:48:54,vsys1,authuser",
+      DECRYPTION:
+        "1,2026/08/13 10:49:02,013201031064,DECRYPTION,0,2817,2026/08/13 10:48:54,10.0.0.7,8.8.4.4",
+      "HIP-MATCH":
+        "1,2026/08/13 10:49:02,013201031064,HIP-MATCH,0,2817,2026/08/13 10:48:54,user1,vsys1",
+    };
+    // Every dictionary is covered - not a sample of them. "HIP-MATCH" is
+    // QUOTED in the dictionary because of its hyphen, which is how two separate
+    // greps on 2026-08-20 counted seven and missed it.
+    expect(Object.keys(bodies).sort()).toEqual(Object.keys(PANOS_CSV_HEADERS).sort());
+    for (const [logType, body] of Object.entries(bodies)) {
+      const records = parseCsv(body);
+      expect(records).toHaveLength(1);
+      // Named via the dictionary - `type` exists only when one was applied.
+      expect(records[0].type).toBe(logType);
+      expect(records[0]._3).toBeUndefined();
+    }
+  });
+
+  it("still parses a type with NO dictionary positionally, rather than dropping it", () => {
+    // isPanosFormat recognises more types than there are dictionaries for
+    // (HIP-MATCH, CORRELATION, GTP...). Those must still parse - positionally
+    // is the honest outcome when the column order is not recorded - and must
+    // not silently vanish.
+    const records = parseCsv(
+      "1,2026/08/13 10:49:02,013201031064,USERID,0,2817,2026/08/13 10:48:54,vsys1,user1",
+    );
+    expect(records).toHaveLength(1);
+    expect(records[0]._3).toBe("USERID");
+    expect(records[0].type).toBeUndefined();
+    // USERID is genuinely undictionaried - assert that rather than trusting it.
+    expect(PANOS_CSV_HEADERS.USERID).toBeUndefined();
   });
 
   it("leaves STRICT mode alone - it classifies one split event", () => {

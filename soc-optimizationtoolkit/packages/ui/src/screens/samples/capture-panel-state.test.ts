@@ -163,7 +163,11 @@ describe("deriveCaptureView", () => {
       false,
       ["traffic"],
     );
-    // Case-insensitive: the store keys on the label the operator typed.
+    // Matched case-insensitively BECAUSE the store keys on the label the
+    // operator typed: the capture shouts "TRAFFIC", the upload said "traffic",
+    // and without folding the case the panel would not know they collide.
+    // plannedCaptureSamples then adopts the operator's casing so the
+    // replacement this warning promises actually happens - pinned below.
     expect(view.collisions).toEqual(["TRAFFIC"]);
     expect(view.logTypes[0].replacesExisting).toBe(true);
     expect(view.logTypes[1].replacesExisting).toBe(false);
@@ -235,6 +239,33 @@ describe("plannedCaptureSamples", () => {
     );
     expect(samples.map((s) => s.logType)).toEqual(["A", "B"]);
     expect(samples[0].parsed.records[0].n).toBe("second");
+  });
+
+  it("ADOPTS the operator's casing so the promised replacement really happens", () => {
+    // The 2026-08-20 audit's data bug. splitSamplesByLogType force-uppercases
+    // every captured log type; the store keys case-SENSITIVELY. So capturing
+    // TRAFFIC after uploading "traffic" used to APPEND a second sample while
+    // the panel had just promised it would replace the first.
+    //
+    // Two samples for one log type is not cosmetic: the pack builds a route
+    // pair per unique log type, so it silently gains an overlapping pair where
+    // only the first receives events.
+    const samples = plannedCaptureSamples(
+      [{ logType: "TRAFFIC", rawEvents: ['{"a":1}'], format: "ndjson", eventCount: 1 }],
+      "capture:in_syslog",
+      ["traffic"],
+    );
+    // The operator's own label, not the capture's shout - so upsert replaces.
+    expect(samples[0].logType).toBe("traffic");
+  });
+
+  it("keeps the captured label when nothing existing matches", () => {
+    const samples = plannedCaptureSamples(
+      [{ logType: "TRAFFIC", rawEvents: ['{"a":1}'], format: "ndjson", eventCount: 1 }],
+      "capture:in_syslog",
+      ["threat"],
+    );
+    expect(samples[0].logType).toBe("TRAFFIC");
   });
 
   it("drops a split whose lines parse to nothing, rather than storing a husk", () => {
