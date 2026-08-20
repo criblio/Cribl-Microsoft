@@ -101,6 +101,36 @@ describe("vendorPacksForSolution", () => {
     expect(ziaLogTypeIds).not.toContain("zscaler-zpa");
     expect(ziaLogTypeIds).not.toContain("generated-zscaler_zpa");
   });
+
+  it("does not cite Prisma Cloud's docs to a Cortex XDR operator", () => {
+    // Measured 2026-08-20. generated-prisma_cloud claims the parent brand
+    // "palo alto", so it attached to Cortex XDR. Its two mappings do not steal
+    // a column - Cortex XDR carries neither `user` nor `resourceName` - but
+    // mapping-review renders a documentation line for EVERY matching pack
+    // whether its entries fire or not, so the operator was shown Prisma
+    // Cloud's documentation for their EDR's data.
+    //
+    // Pinned as the packs, not the mapping count, deliberately: the count is
+    // what the >100 floor below already guards, and re-encoding today's 158
+    // there would just break on the next regeneration.
+    const cortex = vendorPacksForSolution("Palo Alto Networks Cortex XDR").map(
+      (p) => p.id,
+    );
+    expect(cortex).not.toContain("generated-prisma_cloud");
+    // Both halves of the screen agree about the product, which is the rule the
+    // Zscaler case established - the log-type side already excluded "cortex".
+    expect(
+      documentedLogTypePacksForSolution("Palo Alto Networks Cortex XDR").map(
+        (p) => p.id,
+      ),
+    ).not.toContain("paloalto-panos");
+
+    // Prisma Cloud still resolves for its OWN solution - the exclusion must not
+    // cost the pack the thing it is actually for.
+    expect(
+      vendorPacksForSolution("Palo Alto Prisma Cloud CWPP").map((p) => p.id),
+    ).toContain("generated-prisma_cloud");
+  });
 });
 
 describe("vendorMappingsForSolution", () => {
