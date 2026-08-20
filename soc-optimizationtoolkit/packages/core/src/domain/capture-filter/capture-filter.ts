@@ -103,8 +103,14 @@ export function logTypePredicate(values: readonly string[]): string {
   );
   const fieldPattern = JSON.stringify(`^(${alt})$`);
 
+  // `_raw` IS GUARDED TOO (2026-08-20 audit). It was the one bare reference
+  // left, which made this function contradict its own rule 4 in the worst
+  // possible place: rule 4 exists BECAUSE `_raw` is absent on Event Hub, HEC and
+  // Kafka JSON sources, and on exactly those sources the bare reference is the
+  // ReferenceError that drops every event. The structured arms added to rescue
+  // them could never run, because the expression threw before reaching them.
   const tests = [
-    `new RegExp(${rawPattern}, "i").test(_raw)`,
+    `(typeof _raw !== "undefined" && new RegExp(${rawPattern}, "i").test(String(_raw)))`,
     ...STRUCTURED_FIELDS.map(
       (field) =>
         `(typeof ${field} !== "undefined" && new RegExp(${fieldPattern}, "i").test(String(${field})))`,

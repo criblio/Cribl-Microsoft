@@ -38,6 +38,31 @@ function matchesStructured(
   ) as boolean;
 }
 
+/**
+ * Evaluate with ONLY the named fields in scope, so `_raw` is genuinely an
+ * UNDECLARED name rather than a parameter that happens to be undefined.
+ *
+ * The distinction is the whole point, and it is why the pins below this one
+ * missed a real defect for a day: `matches` takes `_raw` as a parameter and
+ * `matchesStructured` was only ever called with `_raw` as an explicit key, so
+ * in every existing test `_raw` was a declared binding. A bare reference to it
+ * therefore could not throw, and the one arm of the predicate that was NOT
+ * typeof-guarded looked fine.
+ */
+function matchesUndeclaredRaw(
+  predicate: string,
+  event: Record<string, unknown>,
+): boolean {
+  const names = Object.keys(event);
+  if (names.includes("_raw")) {
+    throw new Error("this helper exists to leave _raw undeclared");
+  }
+  // eslint-disable-next-line no-new-func
+  return new Function(...names, `return ${predicate};`)(
+    ...names.map((n) => event[n]),
+  ) as boolean;
+}
+
 describe("logTypePredicate - case", () => {
   it("is CASE-INSENSITIVE, because PAN-OS shouts", () => {
     // The failure this prevents: PAN-OS emits GLOBALPROTECT, not
@@ -52,7 +77,8 @@ describe("logTypePredicate - case", () => {
     // toLowerCase().includes() would allocate a lowercased copy of every event
     // that passes the filter, on the worker, for the whole capture.
     const p = logTypePredicate(["TRAFFIC"]);
-    expect(p).toContain(".test(_raw)");
+    expect(p).toContain("_raw");
+    expect(p).toContain("RegExp");
     expect(p).not.toContain("toLowerCase");
   });
 });
@@ -140,6 +166,25 @@ describe("logTypePredicate - sources with no _raw (2026-08-20 bug-hunt)", () => 
     expect(() => matchesStructured(p, { _raw: "nothing relevant here" })).not.toThrow();
     expect(matchesStructured(p, { _raw: "nothing relevant here" })).toBe(false);
     expect(p).toContain("typeof");
+  });
+
+  it("does not THROW when `_raw` is not a field on the event AT ALL", () => {
+    // 2026-08-20 audit, and this one is sharp: `_raw` was the single bare
+    // reference left in the predicate while all eight structured fields were
+    // typeof-guarded. That contradicted rule 4 in the worst possible place,
+    // because rule 4 exists BECAUSE `_raw` is absent on Event Hub, HEC and
+    // Kafka JSON sources - so on exactly the sources the structured arms were
+    // added to rescue, the expression threw a ReferenceError before it ever
+    // reached them. Every event dropped, and a capture that returns nothing
+    // reads to the operator as an idle source.
+    //
+    // The existing pins could not see it: both other helpers declare `_raw`,
+    // so a bare reference to it could not throw in any of them.
+    const p = logTypePredicate(["TRAFFIC"]);
+    expect(() => matchesUndeclaredRaw(p, { type: "TRAFFIC" })).not.toThrow();
+    expect(matchesUndeclaredRaw(p, { type: "TRAFFIC" })).toBe(true);
+    // And it still answers NO rather than throwing when nothing matches.
+    expect(matchesUndeclaredRaw(p, { type: "SYSTEM" })).toBe(false);
   });
 
   it("matches a field whose value is a NUMBER, not a string", () => {

@@ -8,9 +8,13 @@ the work is below, including the reasoning you need to avoid undoing it.
 Written 2026-08-18 by a planning session, from a live read of the code.
 
 > **EXECUTION STATUS (2026-08-20), branch `feature/log-type-recommendation`,
-> PR #119:** **Phases 0, 1, 2 and 3 are done. Phase 4's CAPTURE path is done
-> (core + UI). Phase 4's LAKE QUERY path is IN PROGRESS.** Phase 5 is not
-> started.
+> PR #119:** **Phases 0, 1, 2, 3 and 4 are done** - both of Phase 4's paths,
+> capture and lake query, in core and UI. **Phase 5 is unblocked but not
+> started**, and needs no further Phase 4 work: its one open decision is the
+> threshold, and that decision is now made (see Phase 5).
+>
+> NOT verified against a real workspace. See "Needs live verification" - the
+> suite that settles it is `packages/core/src/testing/live-verify.test.ts`.
 >
 > Phase 3 shipped as `discoverSampleSources` (usecase), `domain/sample-sources`
 > (pure inventory) and `SampleSourcePicker` (UI). It DISCOVERS and lets the
@@ -351,9 +355,10 @@ Operator-chosen, each labelled for the evidence it gives.
 
 ### Search (best evidence)
 
-> **STATUS: IN PROGRESS (2026-08-20).** The lake-query mode is being built now on
-> this branch. Nothing in this section has shipped yet; the capture path below it
-> has.
+> **STATUS: DONE (2026-08-20).** Shipped as `queryLakeSamples` +
+> `fetchLakeLogTypeEvents` (usecase), `lake-panel-state` (pure) and `LakePanel`,
+> wired from `integrate-screen`. The counts and the events are two separate
+> reads on purpose - see the usecase header for why.
 
 `summarize count() by <discriminator>` over the selected dataset. Returns the
 complete log-type list AND per-type volumes. The discriminator field comes from
@@ -566,15 +571,32 @@ scope unless explicitly wanted.
 > source: what the dataset holds, tagged or not") is answered: the dataset's own
 > counts are on screen.
 >
-> Remaining, and only item 3 needs a decision rather than typing:
+> Remaining:
 > 1. Counts have nowhere to live once merged - `unreferenced` is still a bare
 >    `string[]` and `MergedLogType` has no volume field.
-> 3. THE THRESHOLD. Still the open question, and still a real one: this module
->    documents `unreferenced` as "NOT a problem - a vendor emits more than any
->    one solution detects on", and the UI says "fine". Phase 5 wants the same set
->    to read as cost.
 > 4. Events-to-bytes remains absent; `estimateDropSavings`'s mean bytes/event
 >    could be multiplied by a Search count, so the pieces exist.
+>
+> **THE THRESHOLD - DECIDED 2026-08-20 (user): there is no threshold.**
+>
+> Attach the volume and RANK by it. Do not render a verdict, do not flag, do not
+> call anything a finding. The 890K entry rises to the top of the list on its own
+> and the operator draws their own conclusion.
+>
+> Why this and not a cutoff. This module already documents `unreferenced` as
+> "NOT a problem - a vendor emits more than any one solution detects on", and any
+> threshold makes the app contradict its own comment on a set it was right about.
+> A cutoff is also a claim we cannot support: the line that is obviously correct
+> in one tenant is obviously wrong in the next, so it would need defending and
+> tuning forever, and every environment where it was wrong would produce a
+> confident false finding. Ranking asserts nothing that is not measured. It is
+> the same rule the vendor tier already follows - OFFERED, never assumed - and
+> the same one behind `eventCount` being optional rather than defaulting to 0.
+>
+> So Phase 5 is now entirely typing: give the merged types somewhere to carry a
+> volume, sort by it, and render the number beside the existing evidence label.
+> The wording next to an unreferenced entry stays "no rule or workbook shipped by
+> THIS SOLUTION filters on it" - see below.
 >
 > One thing NOT to lose when this is built: the honest wording is still "no rule
 > or workbook shipped by THIS SOLUTION filters on it", because expected log types
