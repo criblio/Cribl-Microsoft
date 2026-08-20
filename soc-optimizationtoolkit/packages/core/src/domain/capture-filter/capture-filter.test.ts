@@ -21,12 +21,29 @@ function matches(predicate: string, raw: string): boolean {
   return new Function("_raw", `return ${predicate};`)(raw) as boolean;
 }
 
+/**
+ * Evaluate against a STRUCTURED event - fields as variables, no `_raw`.
+ *
+ * This is what a Cribl filter sees for an Event Hub or Kafka JSON source, and
+ * the shape the predicate used to return false for unconditionally.
+ */
+function matchesStructured(
+  predicate: string,
+  event: Record<string, unknown>,
+): boolean {
+  const names = Object.keys(event);
+  // eslint-disable-next-line no-new-func
+  return new Function(...names, `return ${predicate};`)(
+    ...names.map((n) => event[n]),
+  ) as boolean;
+}
+
 describe("logTypePredicate - case", () => {
   it("is CASE-INSENSITIVE, because PAN-OS shouts", () => {
     // The failure this prevents: PAN-OS emits GLOBALPROTECT, not
     // GlobalProtect. A case-sensitive test returns zero events, which reads as
     // "this source does not carry that log type" - an answer, not an error.
-    const p = logTypePredicate("GlobalProtect");
+    const p = logTypePredicate(["GlobalProtect"]);
     expect(matches(p, "1,2026/08/13,013201031064,GLOBALPROTECT,0,2817")).toBe(true);
     expect(matches(p, "1,2026/08/13,013201031064,globalprotect,0,2817")).toBe(true);
   });
@@ -34,14 +51,14 @@ describe("logTypePredicate - case", () => {
   it("generates a REGEX test, not a lowercased copy of every event", () => {
     // toLowerCase().includes() would allocate a lowercased copy of every event
     // that passes the filter, on the worker, for the whole capture.
-    const p = logTypePredicate("TRAFFIC");
+    const p = logTypePredicate(["TRAFFIC"]);
     expect(p).toContain(".test(_raw)");
     expect(p).not.toContain("toLowerCase");
   });
 });
 
 describe("logTypePredicate - anchoring", () => {
-  const traffic = logTypePredicate("TRAFFIC");
+  const traffic = logTypePredicate(["TRAFFIC"]);
 
   it("matches a COMMA-delimited PAN-OS field", () => {
     expect(
@@ -87,7 +104,7 @@ describe("logTypePredicate - anchoring", () => {
     // is ordinary; embedded in a literal it closes the pattern early and the
     // whole expression stops being valid JavaScript. Cribl answers 400, so the
     // operator sees a rejected filter with no obvious cause.
-    const p = logTypePredicate("app/web");
+    const p = logTypePredicate(["app/web"]);
     // The pin is that it EVALUATES at all - a string assertion would have
     // passed happily while the generated JS was unparseable.
     expect(matches(p, "1,x,app/web,y")).toBe(true);
@@ -96,11 +113,63 @@ describe("logTypePredicate - anchoring", () => {
 
   it("escapes regex metacharacters in the value", () => {
     // PAN-OS ships HIP-MATCH; a vendor could ship one with a dot or plus.
-    const p = logTypePredicate("HIP-MATCH");
+    const p = logTypePredicate(["HIP-MATCH"]);
     expect(matches(p, "1,2026/08/13,001,HIP-MATCH,end")).toBe(true);
-    const dotted = logTypePredicate("a.b");
+    const dotted = logTypePredicate(["a.b"]);
     expect(matches(dotted, "x,a.b,y")).toBe(true);
     expect(matches(dotted, "x,aXb,y")).toBe(false);
+  });
+});
+
+describe("logTypePredicate - sources with no _raw (2026-08-20 bug-hunt)", () => {
+  it("matches a STRUCTURED event whose discriminator field carries the value", () => {
+    // The defect: the test looked at `_raw` alone. Against an Event Hub, HEC or
+    // Kafka JSON source - all of which the source picker offers - `_raw` is
+    // undefined, so the capture returned nothing and the operator was told
+    // their filter matched no events. A fact about their data, invented.
+    const p = logTypePredicate(["TRAFFIC"]);
+    expect(matchesStructured(p, { _raw: undefined, type: "TRAFFIC" })).toBe(true);
+  });
+
+  it("does NOT throw against a source carrying none of the fields it names", () => {
+    // The reason every access is typeof-guarded. A Cribl filter is JavaScript,
+    // and a bare reference to a name the event does not carry is a
+    // ReferenceError - which drops the event. So the predicate names eight
+    // fields, and an event with none of them must still evaluate, to false.
+    const p = logTypePredicate(["TRAFFIC"]);
+    expect(() => matchesStructured(p, { _raw: "nothing relevant here" })).not.toThrow();
+    expect(matchesStructured(p, { _raw: "nothing relevant here" })).toBe(false);
+    expect(p).toContain("typeof");
+  });
+
+  it("matches a field whose value is a NUMBER, not a string", () => {
+    // Log types arrive as numbers from some sources - Windows EventID, Zscaler
+    // reason codes - and the operator picked the value off a list where it was
+    // rendered as text. (The String() call in the generated predicate is not
+    // what makes this hold: RegExp.test coerces its argument identically. It is
+    // there so the coercion is visible to whoever edits the filter.)
+    const p = logTypePredicate(["4625"]);
+    expect(matchesStructured(p, { _raw: undefined, eventType: 4625 })).toBe(true);
+  });
+
+  it("anchors the FIELD test to the whole value, not a substring", () => {
+    // A field IS the value - unlike _raw, where the token sits among others.
+    // Substring matching here would put "TRAFFIC" onto "TRAFFIC_DENIED".
+    const p = logTypePredicate(["TRAFFIC"]);
+    expect(matchesStructured(p, { _raw: undefined, type: "TRAFFIC" })).toBe(true);
+    expect(matchesStructured(p, { _raw: undefined, type: "TRAFFIC_DENIED" })).toBe(
+      false,
+    );
+  });
+
+  it("ORs the values into ONE alternation, not a clause per value", () => {
+    // Six ticked log types across eight fields would otherwise be 48 clauses in
+    // a box the operator is invited to read and edit.
+    const one = logTypePredicate(["TRAFFIC"]);
+    const six = logTypePredicate(["TRAFFIC", "THREAT", "SYSTEM", "CONFIG", "HIP-MATCH", "GLOBALPROTECT"]);
+    expect(six.split("||").length).toBe(one.split("||").length);
+    expect(matchesStructured(six, { _raw: undefined, type: "CONFIG" })).toBe(true);
+    expect(matchesStructured(six, { _raw: undefined, type: "URL" })).toBe(false);
   });
 });
 
