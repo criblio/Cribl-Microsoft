@@ -519,8 +519,43 @@ describe("LakePanel - nothing enters the store without a click", () => {
 
     const replaces = container.querySelectorAll(".lake-replaces");
     expect(replaces).toHaveLength(2);
+    // The OPERATOR'S label, not the dataset's: the row is the dataset's
+    // "TRAFFIC", but the sample about to be overwritten is the one their screen
+    // calls "traffic", and that is the one the warning is about.
     expect(replaces[1].textContent).toBe(
-      "Adding these replaces your existing TRAFFIC sample.",
+      "Adding these replaces your existing traffic sample.",
+    );
+  });
+
+  it("names ONE sample when two ticked rows fold onto the operator's one", async () => {
+    // A dataset holding both casings as discriminator values, against a sample
+    // the operator called "Traffic". Both rows really do replace it, so both
+    // carry their own note - but there is ONE sample between them, and naming
+    // two would have them brace for a loss twice the size of the real one.
+    const { container } = renderPanel({
+      query: queryResult({
+        discriminatorField: "sourcetype",
+        logTypes: [
+          { logType: "TRAFFIC", eventCount: 412908 },
+          { logType: "traffic", eventCount: 1201 },
+        ],
+      }),
+      props: { existingLogTypes: ["Traffic"] },
+    });
+    await runQuery(container);
+
+    // Both are collisions, so neither is pre-ticked; the operator asks for them.
+    expect(rows(container)).toHaveLength(2);
+    expect([...boxes(container)].map((b) => b.checked)).toEqual([false, false]);
+    fireEvent.click(boxes(container)[0]);
+    fireEvent.click(boxes(container)[1]);
+    expect(ticked(container)).toBe(2);
+
+    // Two row notes plus the one warning beside the button.
+    const replaces = container.querySelectorAll(".lake-replaces");
+    expect(replaces).toHaveLength(3);
+    expect(replaces[2].textContent).toBe(
+      "Adding these replaces your existing Traffic sample.",
     );
   });
 });
