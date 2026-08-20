@@ -1445,11 +1445,9 @@ export function IntegrateScreen({
           setSampleSourceChoice("");
           sampleSources.selectGroup(groupId);
         }}
-        onChange={(next) => {
-          // ONE setter, because there is one piece of state. The entry the
-          // picker hands back is the same one findEntry derives above.
-          setSampleSourceChoice(next);
-        }}
+        // ONE setter, because there is one piece of state. The entry is
+        // derived from it above rather than carried alongside it.
+        onChange={setSampleSourceChoice}
         onReload={sampleSources.reload}
       />
       {captureTarget !== null && (
