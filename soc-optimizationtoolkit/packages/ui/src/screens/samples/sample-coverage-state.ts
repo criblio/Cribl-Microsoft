@@ -258,13 +258,40 @@ export function deriveLogTypeRecommendation(
 ): LogTypeRecommendation {
   const unreferenced = [...unreferencedProvided];
 
-  if (!contentLoaded && merged.length === 0) {
+  // NOT LOADED means NOT LOADED, whatever the vendor catalog happens to know
+  // (2026-08-20 audit). The vendor tier resolves from the solution NAME, which
+  // is available the instant a solution is picked - while the content fetch is
+  // still in flight. The guard briefly read `!contentLoaded && merged.length
+  // === 0`, so during that window a Palo Alto solution announced "This solution
+  // ships no detections that name a log type" before a single rule had been
+  // read. That is the false-ok this module exists to refuse, and the same race
+  // class as the 1.11.14 "await the live schema before re-analysing" fix.
+  //
+  // The vendor list is still worth showing while waiting - it is real, and it
+  // is what the operator would act on - but it is shown under a headline that
+  // says the content read is unfinished, never one that reports its verdict.
+  if (!contentLoaded) {
+    const vendorOnly = merged.filter((m) => m.evidence === "vendor");
     return {
       status: "unknown",
       headline:
-        "The log types this solution needs are read from its own content - " +
-        "that read has not completed yet.",
-      entries: [],
+        vendorOnly.length === 0
+          ? "The log types this solution needs are read from its own content - " +
+            "that read has not completed yet."
+          : "Still reading this solution's content. Meanwhile, its vendor " +
+            `documents ${joinNames(vendorOnly.map((m) => m.value))} - whether ` +
+            "this solution needs them is not known yet.",
+      entries: vendorOnly.map((m) => {
+        const entry: RecommendedLogType = {
+          value: m.value,
+          evidence: m.evidence,
+          provided: m.provided,
+        };
+        if (m.vendor !== undefined) entry.vendor = m.vendor;
+        if (m.docUrl !== undefined) entry.docUrl = m.docUrl;
+        if (m.doc !== undefined) entry.doc = m.doc;
+        return entry;
+      }),
       unreferenced,
     };
   }

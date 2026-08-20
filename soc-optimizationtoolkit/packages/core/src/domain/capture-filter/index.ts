@@ -5,9 +5,8 @@
  */
 
 export type { CaptureFilterInput } from "./capture-filter";
-export {
-  buildCaptureFilter,
-  captureFilterWarning,
-  inputPredicate,
-  logTypePredicate,
-} from "./capture-filter";
+// inputPredicate and logTypePredicate are deliberately NOT exported: they are
+// building blocks of buildCaptureFilter, and the 2026-08-20 audit found both
+// were reachable only from their own tests. A test importing the module
+// directly loses nothing.
+export { buildCaptureFilter, captureFilterWarning } from "./capture-filter";

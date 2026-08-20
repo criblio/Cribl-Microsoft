@@ -23,6 +23,10 @@
  */
 
 import type { ExpectedLogType } from "../coverage-analysis/expected-log-types";
+import {
+  logTypeNameMatches,
+  normalizeLogTypeName,
+} from "../coverage-analysis/expected-log-types";
 import type { DocumentedLogTypeEntry } from "./vendor-log-types";
 
 /** Which kind of evidence named a log type. Strongest first. */
@@ -53,24 +57,12 @@ export interface MergedLogType {
   provided: boolean;
 }
 
-/** Collapse a name for comparison: lowercase, alphanumerics only. */
-function normalize(value: string): string {
-  return value.toLowerCase().replace(/[^a-z0-9]+/g, "");
-}
-
-/**
- * Whether a provided log-type name covers an expected one. Separator- and
- * case-insensitive, and a provided name COUNTS when it contains the expected
- * token - an operator who tags "panos-traffic" has covered "TRAFFIC". Same rule
- * compareLogTypeCoverage applies, kept identical on purpose.
- */
-function isCovered(value: string, providedNorm: readonly string[]): boolean {
-  const key = normalize(value);
-  if (key === "") return false;
-  return providedNorm.some(
-    (p) => p === key || p.includes(key) || key.includes(p),
-  );
-}
+// Both IMPORTED, not re-derived (2026-08-20 audit). This module used to carry
+// its own copies with a comment saying they were "kept identical on purpose" -
+// but intent is not a mechanism, and they answer the same question as
+// compareLogTypeCoverage on the same screen.
+const normalize = normalizeLogTypeName;
+const isCovered = logTypeNameMatches;
 
 /** The evidence tier for a content item's type. */
 function evidenceFor(types: readonly string[]): LogTypeEvidence {

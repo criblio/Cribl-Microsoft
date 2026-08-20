@@ -82,6 +82,18 @@ describe("logTypePredicate - anchoring", () => {
     expect(matches(traffic, "app=traffic-analyzer action=allow")).toBe(false);
   });
 
+  it("survives a value containing a SLASH - it is inside a regex literal", () => {
+    // 2026-08-20 audit. escapeRegExp was written for new RegExp(), where `/`
+    // is ordinary; embedded in a literal it closes the pattern early and the
+    // whole expression stops being valid JavaScript. Cribl answers 400, so the
+    // operator sees a rejected filter with no obvious cause.
+    const p = logTypePredicate("app/web");
+    // The pin is that it EVALUATES at all - a string assertion would have
+    // passed happily while the generated JS was unparseable.
+    expect(matches(p, "1,x,app/web,y")).toBe(true);
+    expect(matches(p, "1,x,appXweb,y")).toBe(false);
+  });
+
   it("escapes regex metacharacters in the value", () => {
     // PAN-OS ships HIP-MATCH; a vendor could ship one with a dot or plus.
     const p = logTypePredicate("HIP-MATCH");

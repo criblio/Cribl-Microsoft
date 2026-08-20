@@ -251,6 +251,29 @@ describe("deriveLogTypeRecommendation", () => {
     expect(rec.entries.some((e) => e.evidence === "vendor")).toBe(true);
   });
 
+  it("never reports a VERDICT while the content read is still in flight", () => {
+    // 2026-08-20 audit. The vendor tier resolves from the solution NAME, which
+    // is known the instant a solution is picked - before the content fetch
+    // returns. The guard briefly allowed a vendor-only merge through, so a Palo
+    // Alto solution announced "ships no detections that name a log type" before
+    // a single rule had been read. Same race class as 1.11.14.
+    const rec = recFor([], [], {
+      solution: "Palo Alto Networks",
+      contentLoaded: false,
+    });
+
+    expect(rec.status).toBe("unknown");
+    // The vendor list is real and still shown - it is what the operator would
+    // act on - but under a headline that says the read is unfinished.
+    expect(rec.entries.length).toBeGreaterThan(0);
+    expect(rec.entries.every((e) => e.evidence === "vendor")).toBe(true);
+    expect(rec.headline).toContain("Still reading this solution's content");
+    expect(rec.headline).toContain("not known yet");
+    // The verdict sentences must NOT appear.
+    expect(rec.headline).not.toContain("ships no detections");
+    expect(rec.headline).not.toContain("content needs");
+  });
+
   it("gates nothing: the confirmation owns the only acknowledgement", () => {
     const rec = recFor([threeTypes], [], { contentLoaded: true });
     // A structural claim, so it is asserted rather than assumed: the
