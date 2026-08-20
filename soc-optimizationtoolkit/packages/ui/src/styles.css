@@ -1595,6 +1595,74 @@ button.journey-step-main:hover .journey-step-label {
   list-style: none;
 }
 
+/* Capture panel (screens/samples/capture-panel): the bounded live capture and
+ * its confirm-before-tagging preview. */
+.capture-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  background: var(--surface-raised);
+}
+
+.capture-log-types,
+.capture-results {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 2px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.capture-log-type {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 13px;
+  line-height: 20px;
+  cursor: pointer;
+}
+
+.capture-log-type-name {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  color: var(--text);
+}
+
+.capture-filter {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 18px;
+  resize: vertical;
+}
+
+/* Both of these are "you are about to lose something" - warn, not error. */
+.capture-filter-warning,
+.capture-replaces {
+  color: var(--warn);
+}
+
+.capture-result-head {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.capture-preview {
+  max-height: 160px;
+  overflow: auto;
+}
+
+.capture-bound {
+  max-width: 120px;
+}
+
 /* Sample-set completeness confirmation (screens/samples/sample-coverage-state):
  * the consequence line, the derived comparison, and the acknowledgement that
  * arms the pack build. */
