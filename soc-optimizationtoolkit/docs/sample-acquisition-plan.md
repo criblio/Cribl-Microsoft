@@ -626,6 +626,7 @@ It was caught by reading the vendored spec's examples, not by a test.
 | 5 | 12s is under the real capture ceiling | `http.ts:47` `timeoutMs = 15000`, minus dispatch headroom | Captures fail blaming the bridge, or we clamp shorter than needed |
 | 6 | The Lake dataset listing is a LEADER route and `lakeId` is discoverable | Phase 0 spike | The Lake mode has no dataset list to offer |
 | 7 | Capture needs a permission the app's own credentials hold | Not established | 403 on the primary path |
+| 8 | A Cribl filter referencing a field the event lacks is a ReferenceError that DROPS the event | `capture-filter.ts`'s stated model - never tested against the real evaluator | If Cribl tolerates undeclared names, the typeof guards are insurance rather than load-bearing. Either answer is fine; the guess is not |
 
 **Cheapest order:** one real capture against a syslog source settles 1, 4 and 5
 and 7 at once. One capture of a JSON source settles 2. One Lake query with a
