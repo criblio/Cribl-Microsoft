@@ -113,9 +113,35 @@ export function logTypePredicate(values: readonly string[]): string {
   return tests.join(" || ");
 }
 
-/** The source-selection clause. */
+/**
+ * The source-selection clause, matching BOTH forms of `__inputId`.
+ *
+ * `__inputId` IS NOT THE BARE INPUT ID (2026-08-20, from the vendored spec). It
+ * is `<type>:<id>` - the spec's own capture example filters
+ * `__inputId.startsWith("http:")`, and every route example in the same document
+ * reads that way too: `open_telemetry:open_telemetry`,
+ * `prometheus_rw:prom_rw_in`, `cribl_http:pan_traffic_syslog`. `/system/inputs`
+ * hands us only the bare `id`, so `__inputId === "in_syslog"` matched NOTHING
+ * and every capture came back empty - reported to the operator as an idle
+ * source. The worst version of the failure this module exists to prevent,
+ * sitting in its own source clause.
+ *
+ * MATCHED BY SUFFIX RATHER THAN REBUILT AS `type:id`, even though
+ * `/system/inputs` also carries `type`. The prefix is the TRANSPORT, not the
+ * configured type: a syslog source listening on both protocols emits `tcp:` on
+ * one event and `udp:` on the next, so a rebuilt string would silently drop
+ * half the traffic - the same empty-looking failure, harder to spot. The `:`
+ * in the suffix is what keeps it honest: `syslog:other_in_syslog` does not end
+ * with `:in_syslog`.
+ *
+ * The equality arm is kept first so the clause still works if a deployment does
+ * hand back a bare id, and `.endsWith` is typeof-guarded because calling a
+ * method on an absent field is a TypeError that would drop every event.
+ */
 export function inputPredicate(inputId: string): string {
-  return `__inputId === ${JSON.stringify(inputId)}`;
+  const quoted = JSON.stringify(inputId);
+  const suffix = JSON.stringify(`:${inputId}`);
+  return `(__inputId === ${quoted} || (typeof __inputId === "string" && __inputId.endsWith(${suffix})))`;
 }
 
 /** Inputs to {@link buildCaptureFilter}. */
@@ -170,7 +196,10 @@ export function captureFilterWarning(
   if (!filter.includes("__inputId")) {
     return `This filter does not mention __inputId, so it captures from EVERY source in the worker group - not just "${inputId}". Add ${inputPredicate(inputId)} unless that is what you want.`;
   }
-  const quoted = new RegExp(`["'\`]${escapeRegExp(inputId)}["'\`]`);
+  // The `:?` admits the SUFFIX form inputPredicate emits (`":in_syslog"`) as
+  // well as the bare one, so an operator who trims the clause down to just the
+  // endsWith arm is not warned about a filter that is still correct.
+  const quoted = new RegExp(`["'\`]:?${escapeRegExp(inputId)}["'\`]`);
   if (!quoted.test(filter)) {
     return `This filter references __inputId but not "${inputId}", so it may capture from a different source than the one selected.`;
   }
