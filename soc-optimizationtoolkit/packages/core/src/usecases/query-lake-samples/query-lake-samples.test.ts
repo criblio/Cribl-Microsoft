@@ -10,7 +10,9 @@
  *                2026-08-19 off Cribl's own UI traffic. The spec declares these
  *                paths bare and cannot settle it.
  *   THE QUERIES  KQL, not SPL, and TWO of them: a sample that answers WHICH
- *                FIELD, then a summarize that answers WHAT VALUES.
+ *                FIELD, then a summarize that answers WHAT VALUES. A third
+ *                fetches events for one chosen value, and must be able to fetch
+ *                every value the second one LISTED - see the round-trip block.
  *   THE ROUTES   sync first (spec-only), the proven job lifecycle second.
  *   EMPTY vs FAILED  never collapsed, in either direction.
  */
@@ -542,7 +544,9 @@ describe("fetchLakeLogTypeEvents - counts choose, events sample", () => {
     // The whole reason this is a third query: `summarize count()` returns one
     // row per log type with no event bodies, so it can never become a sample.
     const query = buildLogTypeEventQuery(DATASET, "type", "TRAFFIC", 50);
-    expect(query).toBe('dataset="LogSources" | where type=="TRAFFIC" | limit 50');
+    expect(query).toBe(
+      'dataset="LogSources" | where tostring(type)=="TRAFFIC" | limit 50',
+    );
     expect(query).not.toContain("summarize");
   });
 
@@ -550,7 +554,7 @@ describe("fetchLakeLogTypeEvents - counts choose, events sample", () => {
     // The dataset id comes from configuration; this value came from DATA, so a
     // quote in it would otherwise break out of the comparison literal.
     expect(buildLogTypeEventQuery(DATASET, "type", 'a"b', 5)).toContain(
-      'type=="a\\"b"',
+      'tostring(type)=="a\\"b"',
     );
   });
 
@@ -650,5 +654,122 @@ describe("fetchLakeLogTypeEvents - counts choose, events sample", () => {
 
     expect(cribl.calls[0].groupId).toBe(GROUP);
     expect(cribl.calls[0].path).toContain("/search/");
+  });
+});
+
+/**
+ * Anything step two can LIST, step three must be able to FETCH.
+ *
+ * The defect these pin (2026-08-20): a discriminator value is legitimately
+ * numeric, readGroupValue keeps it as text, and the fetch then compared a long
+ * column to a quoted string. Kusto answered 400 or matched nothing, and nothing
+ * surfaced as "\"4624\" returned no events in this window" - an empty-vs-failed
+ * collapse about a log type the app itself had just reported holding seven.
+ *
+ * Which is why every case here asserts the QUERY TEXT as well as the outcome: a
+ * fake that answers whatever it is asked would let the broken query pass.
+ */
+describe("a NUMERIC log type round-trips - listed by step two, FETCHED by step three", () => {
+  it("carries 4624 out of the count query and into a query the engine answers", async () => {
+    const counting = client(
+      ok(ndjson([{ eventType: 4624 }, { eventType: 4625 }])),
+      ok(ndjson([{ eventType: 4624, [COUNT_COLUMN]: 7 }])),
+    );
+
+    const listed = await run(counting);
+
+    expect(listed.discriminatorField).toBe("eventType");
+    expect(listed.logTypes).toEqual([{ logType: "4624", eventCount: 7 }]);
+
+    // Step three is handed exactly what step two produced, with no re-typing in
+    // between - that hand-off IS the round trip, and it is where the value's
+    // number-ness was lost.
+    const fetching = client(
+      ok(ndjson([{ eventType: 4624, _raw: "An account was successfully logged on." }])),
+    );
+
+    const fetched = await fetchLakeLogTypeEvents(fetching, {
+      searchGroupId: GROUP,
+      datasetId: DATASET,
+      discriminatorField: listed.discriminatorField ?? "",
+      logTypes: listed.logTypes.map((entry) => entry.logType),
+    });
+
+    expect(fetching.calls).toHaveLength(1);
+    expect(fetching.calls[0].query?.query).toBe(
+      `dataset="${DATASET}" | where tostring(eventType)=="4624"` +
+        ` | limit ${DEFAULT_SAMPLE_LIMIT}`,
+    );
+    expect(fetched.ok).toBe(true);
+    expect(fetched.events).toEqual([
+      { logType: "4624", rawEvents: ["An account was successfully logged on."] },
+    ]);
+  });
+
+  it("fetches a value that merely LOOKS numeric but arrived as a string", async () => {
+    // `type` is a string column whose values happen to be digits. The cast is a
+    // no-op on it, which is what lets one code path serve both columns.
+    const cribl = client(ok(ndjson([{ type: "4624", _raw: "x" }])));
+
+    const result = await fetchLakeLogTypeEvents(cribl, {
+      searchGroupId: GROUP,
+      datasetId: DATASET,
+      discriminatorField: "type",
+      logTypes: ["4624"],
+    });
+
+    expect(cribl.calls[0].query?.query).toBe(
+      `dataset="${DATASET}" | where tostring(type)=="4624" | limit ${DEFAULT_SAMPLE_LIMIT}`,
+    );
+    expect(result.ok).toBe(true);
+    expect(result.events).toEqual([{ logType: "4624", rawEvents: ["x"] }]);
+  });
+
+  it("keeps a BOOLEAN group value too, and the same cast covers it", async () => {
+    // readGroupValue accepts booleans - some vendors emit allow/deny that way -
+    // and a bool column refuses a string comparison exactly as a long does.
+    const cribl = client(
+      ok(ndjson([{ action: true }, { action: false }])),
+      ok(
+        ndjson([
+          { action: true, [COUNT_COLUMN]: 31 },
+          { action: false, [COUNT_COLUMN]: 4 },
+        ]),
+      ),
+    );
+
+    const result = await run(cribl);
+
+    expect(result.discriminatorField).toBe("action");
+    expect(result.logTypes).toEqual([
+      { logType: "true", eventCount: 31 },
+      { logType: "false", eventCount: 4 },
+    ]);
+    expect(
+      buildLogTypeEventQuery(DATASET, "action", result.logTypes[0].logType, 50),
+    ).toBe(`dataset="${DATASET}" | where tostring(action)=="true" | limit 50`);
+  });
+
+  it("names the numeric log type in the note when its fetch DOES fail", async () => {
+    // A per-log-type failure is only actionable if the operator can tell which
+    // one was lost, and a bare code like 4624 is the easiest kind to lose.
+    const cribl = client(
+      { status: 400, body: "bad query" },
+      { status: 400, body: "bad query" },
+    );
+
+    const result = await fetchLakeLogTypeEvents(cribl, {
+      searchGroupId: GROUP,
+      datasetId: DATASET,
+      discriminatorField: "eventType",
+      logTypes: ["4624"],
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.events).toEqual([]);
+    expect(result.notes).toHaveLength(1);
+    expect(result.notes[0]).toContain('"4624" could not be fetched');
+    // FAILED, not empty. The two must not render as the same sentence.
+    expect(result.notes[0]).not.toContain("no events in this window");
   });
 });
