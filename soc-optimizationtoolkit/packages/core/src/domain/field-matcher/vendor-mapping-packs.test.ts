@@ -13,6 +13,7 @@ import {
   vendorPacksForSolution,
 } from "./vendor-mapping-packs";
 import { matchFields } from "./match-fields";
+import { documentedLogTypePacksForSolution } from "../log-type-catalog/vendor-log-types";
 
 describe("vendorPacksForSolution", () => {
   it("matches the Zscaler solution to both the hand and generated packs", () => {
@@ -31,6 +32,58 @@ describe("vendorPacksForSolution", () => {
     // remains alias-ladder-only.
     expect(vendorPacksForSolution("Barracuda CloudGen Firewall")).toEqual([]);
     expect(vendorPacksForSolution("")).toEqual([]);
+  });
+
+  it("does NOT claim a SIBLING PRODUCT's solution (Zscaler ZPA)", () => {
+    // The 2026-08-20 audit case. Every "Zscaler Private Access" solution name
+    // contains "zscaler", so all three ZIA packs - hand, mined Sentinel DCR,
+    // Elastic-mined - claimed a ZPA solution and the review table cited
+    // Zscaler's NSS web feed as the documentation for fields ZPA has never
+    // emitted. Meanwhile the log-type recommendation, ON THE SAME SCREEN,
+    // correctly offered ZPA's LSS feeds: two vendor claims about one solution.
+    // ZPA has no mapping pack; the alias ladder covers it.
+    expect(vendorPacksForSolution("Zscaler Private Access")).toEqual([]);
+    expect(vendorMappingsForSolution("Zscaler Private Access")).toEqual([]);
+    expect(vendorPacksForSolution("Zscaler ZPA")).toEqual([]);
+
+    // ZIA is untouched: the exclusion must not cost the product it curates.
+    const zia = vendorPacksForSolution("Zscaler Internet Access").map(
+      (p) => p.id,
+    );
+    expect(zia).toContain("zscaler-zia");
+    expect(zia).toContain("sentinel-dcr-zscaler");
+    expect(zia).toContain("generated-zscaler_zia");
+  });
+
+  it("agrees with the log-type catalog about WHICH PRODUCT a solution is", () => {
+    // The two matchers are one predicate now (packAppliesToSolution). Pinned
+    // across the modules because that is exactly where they disagreed, and the
+    // two answers render on one screen: whichever side learns an exclusion,
+    // the other can no longer miss it.
+    //
+    // Pack ids are compared, not vendor labels - both Zscaler products carry
+    // the vendor name "Zscaler", so a vendor-level check would not see this.
+    const zpaMappingIds = vendorPacksForSolution("Zscaler Private Access").map(
+      (p) => p.id,
+    );
+    const zpaLogTypeIds = documentedLogTypePacksForSolution(
+      "Zscaler Private Access",
+    ).map((p) => p.id);
+
+    // Neither module offers ZIA to a ZPA operator...
+    expect(zpaMappingIds).not.toContain("zscaler-zia");
+    expect(zpaLogTypeIds).not.toContain("zscaler-zia");
+    // ...and the catalog still identifies the product correctly.
+    expect(zpaLogTypeIds).toEqual(["zscaler-zpa"]);
+
+    // The mirror case: ZIA resolves to ZIA on both sides.
+    expect(vendorPacksForSolution("Zscaler Internet Access").map((p) => p.id))
+      .toContain("zscaler-zia");
+    expect(
+      documentedLogTypePacksForSolution("Zscaler Internet Access").map(
+        (p) => p.id,
+      ),
+    ).toEqual(["zscaler-zia"]);
   });
 });
 

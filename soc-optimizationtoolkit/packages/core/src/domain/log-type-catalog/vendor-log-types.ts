@@ -31,6 +31,12 @@
  */
 
 import generatedLogTypes from "../../assets/generated-vendor-log-types.json";
+// Keyword-vs-solution matching is shared with the field matcher's mapping
+// packs (2026-08-20 audit): the exclusion rule below was learned here first and
+// the other copy never got it, so a ZPA solution drew ZPA feeds from this
+// module and ZIA field mappings from that one, on the same screen.
+import type { SolutionKeywordedPack } from "../sentinel-content/solution-matching";
+import { packAppliesToSolution } from "../sentinel-content/solution-matching";
 
 /** One log type a vendor documents. */
 export interface DocumentedLogType {
@@ -50,25 +56,21 @@ export interface DocumentedLogType {
   aliases?: readonly string[];
 }
 
-/** A per-vendor documented log-type pack. */
-export interface DocumentedLogTypePack {
+/**
+ * A per-vendor documented log-type pack.
+ *
+ * `solutionKeywords`/`excludeKeywords` come from SolutionKeywordedPack so this
+ * pack and the field matcher's mapping pack are matched by ONE predicate
+ * (packAppliesToSolution) against one declared contract. The concrete reason
+ * exclusions exist: recommending the WRONG product's feeds is worse than
+ * recommending nothing - it sends someone to collect data that does not exist
+ * in the product they are onboarding.
+ */
+export interface DocumentedLogTypePack extends SolutionKeywordedPack {
   /** Stable id (e.g. "zscaler-zia"). */
   id: string;
   /** Display vendor name. */
   vendor: string;
-  /** Lowercased substrings matched against the solution name. */
-  solutionKeywords: readonly string[];
-  /**
-   * Lowercased substrings that DISQUALIFY this pack even when a keyword hits.
-   *
-   * Needed because vendors ship several products under one brand and substring
-   * matching cannot express "most specific wins": "Zscaler Private Access"
-   * contains "zscaler", so the ZIA pack would otherwise tell a ZPA operator to
-   * collect ZIA Web. Recommending the WRONG product's feeds is worse than
-   * recommending nothing - it sends someone to collect data that does not exist
-   * in the product they are onboarding.
-   */
-  excludeKeywords?: readonly string[];
   /** Where the knowledge comes from (doc pointer / generator tag). */
   provenance: string;
   /** Link to the vendor documentation backing the pack, when one exists. */
@@ -352,12 +354,8 @@ import { normalizeLogTypeName as normalize } from "../coverage-analysis/expected
 export function documentedLogTypePacksForSolution(
   solutionName: string,
 ): DocumentedLogTypePack[] {
-  const haystack = solutionName.trim().toLowerCase();
-  if (haystack === "") return [];
-  return DOCUMENTED_LOG_TYPE_PACKS.filter(
-    (pack) =>
-      pack.solutionKeywords.some((k) => haystack.includes(k)) &&
-      !(pack.excludeKeywords ?? []).some((k) => haystack.includes(k)),
+  return DOCUMENTED_LOG_TYPE_PACKS.filter((pack) =>
+    packAppliesToSolution(solutionName, pack),
   );
 }
 

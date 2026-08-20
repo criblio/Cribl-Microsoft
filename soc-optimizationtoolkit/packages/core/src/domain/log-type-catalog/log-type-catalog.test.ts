@@ -17,6 +17,7 @@ import {
 } from "./vendor-log-types";
 import { evidenceCounts, mergeLogTypeSources } from "./merge";
 import type { ExpectedLogType } from "../coverage-analysis/expected-log-types";
+import { compareLogTypeCoverage } from "../coverage-analysis/expected-log-types";
 
 const expected = (
   value: string,
@@ -230,6 +231,58 @@ describe("mergeLogTypeSources - provided matching", () => {
       provided: ["hipmatch"],
     });
     expect(merged[0].provided).toBe(false);
+  });
+});
+
+describe("ONE answer to 'is this log type provided'", () => {
+  // compareLogTypeCoverage (the Sample Data confirmation, which gates and arms
+  // the pack build) and mergeLogTypeSources (the recommendation panel above it)
+  // answer the SAME question about the SAME inputs and render on the SAME
+  // screen. At the 2026-08-20 audit they were two implementations, and they had
+  // already drifted. These pins state the invariant directly: for every log
+  // type, "provided" and "not missing" are the same fact.
+  const types = [
+    expected("TRAFFIC", ["alert-rule"]),
+    expected("THREAT", ["alert-rule"]),
+    expected("CONFIG", ["alert-rule"]),
+  ];
+
+  const agreementOf = (provided: readonly string[]): boolean[] => {
+    const coverage = compareLogTypeCoverage(types, provided);
+    const merged = mergeLogTypeSources({
+      expected: types,
+      vendorLogTypes: [],
+      provided,
+    });
+    expect(merged).toHaveLength(types.length);
+    return merged.map((m) => {
+      const isMissing = coverage.missing.some((x) => x.value === m.value);
+      expect(m.provided, `${m.value}: provided vs !missing`).toBe(!isMissing);
+      return m.provided;
+    });
+  };
+
+  it("agrees that an empty-normalizing tag covers NOTHING", () => {
+    // THE reproduction. "-" normalizes to "" and `"traffic".includes("")` is
+    // true, so the drifted copy inside compareLogTypeCoverage matched every
+    // expected log type while the merge - which filtered empties - matched
+    // none. Two contradicting sentences, one screen, and the coverage side is
+    // the one that arms the pack build.
+    expect(agreementOf(["-"])).toEqual([false, false, false]);
+  });
+
+  it("agrees that a real tag covers exactly what it names", () => {
+    // The other direction, so the pin cannot be satisfied by making both sides
+    // answer "no" to everything.
+    expect(agreementOf(["panos-traffic"])).toEqual([false, false, true]);
+  });
+
+  it("agrees when every log type has a sample", () => {
+    expect(agreementOf(["TRAFFIC", "threat", "Config"])).toEqual([
+      true,
+      true,
+      true,
+    ]);
   });
 });
 
