@@ -51,7 +51,12 @@ import type {
   QueryLakeSamplesResult,
   TaggedSample,
 } from "@soc/core";
-import { tagSampleFromContent } from "./sample-intake-state";
+import {
+  existingLabelsByCase,
+  plannedSamplesFrom,
+  sampleStoreKey,
+  storeLabelFor,
+} from "./planned-samples";
 
 /**
  * How many log types start ticked.
@@ -105,11 +110,13 @@ export function lakeLogTypeChoices(
   logTypes: readonly LakeLogTypeVolume[],
   existingLogTypes: readonly string[] = [],
 ): LakeLogTypeChoice[] {
-  const existing = new Set(existingLogTypes.map((t) => t.trim().toLowerCase()));
+  // Folded through the store's own key rule, so a row that warns about
+  // replacing a sample is a row plannedLakeSamples will really replace.
+  const existing = new Set(existingLogTypes.map(sampleStoreKey));
   let preselected = 0;
 
   return logTypes.map((entry) => {
-    const replacesExisting = existing.has(entry.logType.trim().toLowerCase());
+    const replacesExisting = existing.has(sampleStoreKey(entry.logType));
     const selected = !replacesExisting && preselected < DEFAULT_PRESELECTED;
     if (selected) preselected += 1;
 
@@ -392,74 +399,23 @@ function shortfallReason(
 }
 
 /**
- * Index the operator's existing labels by their folded case.
- *
- * ADOPT THE EXISTING LABEL when one matches case-insensitively, the same fix
- * plannedCaptureSamples carries (2026-08-20 audit). The store keys
- * case-SENSITIVELY, so taking Search's "TRAFFIC" after the operator uploaded
- * "traffic" would APPEND a second sample while the panel had just promised to
- * replace the first. Two samples for one log type is not a cosmetic duplicate:
- * the pack builds a route pair per unique log type, so it silently gains an
- * overlapping pair where only the first receives events.
- */
-function existingLabelsByCase(
-  existingLogTypes: readonly string[],
-): Map<string, string> {
-  const byLower = new Map<string, string>();
-  for (const existing of existingLogTypes) {
-    byLower.set(existing.trim().toLowerCase(), existing);
-  }
-  return byLower;
-}
-
-/**
- * The label a Lake log type will actually be stored under.
- *
- * ONE PLACE decides this, because two callers now depend on the answer: the
- * commit itself ({@link plannedLakeSamples}) and the report of what the commit
- * folded together ({@link mergedLakeLogTypeCount}). A second copy of the rule
- * would drift, and the drift would show up as an accounting sentence that
- * contradicts the samples sitting beside it. Trimmed because tagSampleFromContent
- * normalizes the label that way, and the key has to be the STORED one.
- */
-function lakeStoreLabel(logType: string, byLower: Map<string, string>): string {
-  return (byLower.get(logType.trim().toLowerCase()) ?? logType).trim();
-}
-
-/**
  * Convert fetched Lake events into storage tagged samples - one per log type.
  *
- * Re-tags through {@link tagSampleFromContent}, the SAME content-first parse an
- * upload goes through, so a Lake sample and an uploaded one are
- * indistinguishable downstream. The format is detected from the raw lines here
- * rather than carried over from anything Search said about them.
+ * The conversion is {@link plannedSamplesFrom}, shared with the capture panel:
+ * the operator's existing label is adopted, the events are re-tagged through the
+ * SAME content-first parse an upload goes through, and a log type whose rows
+ * parse to no records is dropped rather than stored as a husk.
+ *
+ * What stays here is the Lake BOUNDARY: LakeLogTypeEvents is accepted at the
+ * edge and reduced to {logType, rawEvents}, because the format is detected from
+ * the raw lines rather than carried over from anything Search said about them.
  */
 export function plannedLakeSamples(
   events: readonly LakeLogTypeEvents[],
   sourceLabel: string,
   existingLogTypes: readonly string[] = [],
 ): TaggedSample[] {
-  const byLower = existingLabelsByCase(existingLogTypes);
-
-  const order: string[] = [];
-  const byType = new Map<string, TaggedSample>();
-  for (const entry of events) {
-    if (entry.rawEvents.length === 0) continue;
-    const label = lakeStoreLabel(entry.logType, byLower);
-    const tagged = tagSampleFromContent(
-      label,
-      entry.rawEvents.join("\n"),
-      sourceLabel,
-    );
-    // Having LINES is not the same as having RECORDS. A log type whose rows
-    // were all whitespace, or all shapes the parser could not read, becomes a
-    // sample with a name and zero fields - worse than none, because it counts
-    // as coverage while carrying nothing to map.
-    if (tagged.parsed.records.length === 0) continue;
-    if (!byType.has(tagged.logType)) order.push(tagged.logType);
-    byType.set(tagged.logType, tagged);
-  }
-  return order.map((t) => byType.get(t) as TaggedSample);
+  return plannedSamplesFrom(events, sourceLabel, existingLogTypes);
 }
 
 /**
@@ -467,7 +423,7 @@ export function plannedLakeSamples(
  *
  * The case-variant collision this exists for: a dataset holding both "TRAFFIC"
  * and "traffic" while the operator already has a sample called "traffic". Both
- * picks adopt the operator's label ({@link lakeStoreLabel}), so
+ * picks adopt the operator's label ({@link storeLabelFor}), so
  * {@link plannedLakeSamples} folds them into ONE sample - and without this
  * count the commit summary calls the second one "returned nothing usable",
  * which is the opposite of what happened to it.
@@ -486,12 +442,12 @@ export function mergedLakeLogTypeCount(
   samples: readonly TaggedSample[],
   existingLogTypes: readonly string[] = [],
 ): number {
-  const byLower = existingLabelsByCase(existingLogTypes);
+  const byKey = existingLabelsByCase(existingLogTypes);
   const added = new Set(samples.map((s) => s.logType));
 
   const picksPerLabel = new Map<string, number>();
   for (const pick of selected) {
-    const label = lakeStoreLabel(pick, byLower);
+    const label = storeLabelFor(pick, byKey);
     picksPerLabel.set(label, (picksPerLabel.get(label) ?? 0) + 1);
   }
 
