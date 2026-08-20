@@ -69,6 +69,18 @@ describe("captureLogTypeChoices", () => {
   });
 });
 
+/**
+ * Evaluate a composed filter the way Cribl does - as JavaScript, against one
+ * event. `__inputId` is the type-qualified form the platform really sends.
+ */
+function select(filter: string, inputId: string, raw: string): boolean {
+  // eslint-disable-next-line no-new-func
+  return new Function("__inputId", "_raw", `return ${filter};`)(
+    inputId,
+    raw,
+  ) as boolean;
+}
+
 describe("toggle + compose", () => {
   const choices = captureLogTypeChoices([
     rec("TRAFFIC", "detection"),
@@ -77,9 +89,15 @@ describe("toggle + compose", () => {
 
   it("composes a filter from the ticked boxes and the source", () => {
     const filter = composeFilter("in_syslog", choices);
-    expect(filter).toContain('__inputId === "in_syslog"');
-    expect(filter).toContain("TRAFFIC");
-    expect(filter).not.toContain("HIPMATCH");
+    // EVALUATED, not string-matched. How core addresses __inputId is core's
+    // decision and it has already changed once - it is `<type>:<id>`, not the
+    // bare id - so a literal copy of the clause here would have to be edited
+    // every time and can silently disagree in between. What this panel is
+    // responsible for is that the ticked boxes reach the filter and the
+    // unticked ones do not.
+    expect(select(filter, "syslog:in_syslog", "1,x,TRAFFIC,y")).toBe(true);
+    expect(select(filter, "syslog:in_other", "1,x,TRAFFIC,y")).toBe(false);
+    expect(select(filter, "syslog:in_syslog", "1,x,HIPMATCH,y")).toBe(false);
   });
 
   it("ticking an offered type adds it to the filter", () => {
@@ -90,10 +108,15 @@ describe("toggle + compose", () => {
 
   it("unticking everything captures the whole source, not nothing", () => {
     // A legitimate choice: an operator who does not know what the source sends
-    // should be able to look first.
+    // should be able to look first. The pin is that the filter stops
+    // discriminating on CONTENT - any event from the source qualifies - while
+    // still selecting only that source.
     const none = toggleChoice(choices, "TRAFFIC");
     expect(selectedValues(none)).toEqual([]);
-    expect(composeFilter("in_syslog", none)).toBe('__inputId === "in_syslog"');
+    const filter = composeFilter("in_syslog", none);
+    expect(select(filter, "syslog:in_syslog", "1,x,TRAFFIC,y")).toBe(true);
+    expect(select(filter, "syslog:in_syslog", "anything at all")).toBe(true);
+    expect(select(filter, "syslog:in_other", "anything at all")).toBe(false);
   });
 
   it("surfaces the __inputId warning for an edited filter", () => {

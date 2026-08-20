@@ -173,13 +173,61 @@ describe("logTypePredicate - sources with no _raw (2026-08-20 bug-hunt)", () => 
   });
 });
 
+describe("inputPredicate - __inputId is type-qualified (2026-08-20 bug-hunt)", () => {
+  /** Evaluate a source clause against a given __inputId value. */
+  const selects = (predicate: string, inputId: unknown): boolean =>
+    // eslint-disable-next-line no-new-func
+    new Function("__inputId", `return ${predicate};`)(inputId) as boolean;
+
+  it("matches the TYPE-QUALIFIED form the platform actually sends", () => {
+    // The defect: /system/inputs hands us the bare `id`, but __inputId is
+    // `<type>:<id>` - the spec's own capture example is
+    // __inputId.startsWith("http:"), and its route examples read
+    // `cribl_http:pan_traffic_syslog`. So the clause matched NOTHING and every
+    // capture came back empty, reported to the operator as an idle source.
+    const p = inputPredicate("in_syslog");
+    expect(selects(p, "syslog:in_syslog")).toBe(true);
+    expect(selects(p, "cribl_http:in_syslog")).toBe(true);
+  });
+
+  it("still matches a BARE id, in case a deployment sends one", () => {
+    expect(selects(inputPredicate("in_syslog"), "in_syslog")).toBe(true);
+  });
+
+  it("matches whichever TRANSPORT prefix a dual-protocol source sends", () => {
+    // Why this is a suffix match rather than a rebuilt `type:id` from the
+    // /system/inputs `type` field: a syslog source listening on both protocols
+    // emits tcp: on one event and udp: on the next. A rebuilt string would
+    // match one and silently drop the other.
+    const p = inputPredicate("in_syslog");
+    expect(selects(p, "tcp:in_syslog")).toBe(true);
+    expect(selects(p, "udp:in_syslog")).toBe(true);
+  });
+
+  it("does NOT select a DIFFERENT source that merely ends the same way", () => {
+    // The `:` is what makes the suffix match safe rather than sloppy.
+    const p = inputPredicate("in_syslog");
+    expect(selects(p, "syslog:other_in_syslog")).toBe(false);
+    expect(selects(p, "syslog:in_syslog_prod")).toBe(false);
+  });
+
+  it("does not THROW when __inputId is absent", () => {
+    // Calling .endsWith on an absent field is a TypeError, which drops every
+    // event - a capture that returns nothing for a reason nobody can see.
+    const p = inputPredicate("in_syslog");
+    expect(() => selects(p, undefined)).not.toThrow();
+    expect(selects(p, undefined)).toBe(false);
+  });
+});
+
 describe("buildCaptureFilter", () => {
   it("ALWAYS conjoins the source clause - there is no source parameter", () => {
     // CaptureParamsReq carries no input field, so if __inputId is not in the
     // filter the capture runs against every source in the worker group.
     const filter = buildCaptureFilter({ inputId: "in_syslog", logTypes: ["TRAFFIC"] });
-    expect(filter).toContain('__inputId === "in_syslog"');
-    expect(filter.startsWith('__inputId === "in_syslog" && ')).toBe(true);
+    expect(filter).toContain("__inputId");
+    expect(filter).toContain('"in_syslog"');
+    expect(filter.startsWith(`${inputPredicate("in_syslog")} && `)).toBe(true);
   });
 
   it("ORs several log types inside parentheses so the && binds correctly", () => {
@@ -202,19 +250,25 @@ describe("buildCaptureFilter", () => {
   it("captures EVERYTHING from the source when no log type is chosen", () => {
     // A legitimate choice: not every vendor partitions its output, and an
     // operator who does not know yet should be able to look first.
-    expect(buildCaptureFilter({ inputId: "in_syslog" })).toBe(
-      '__inputId === "in_syslog"',
-    );
-    expect(buildCaptureFilter({ inputId: "in_syslog", logTypes: [] })).toBe(
-      '__inputId === "in_syslog"',
-    );
+    const sourceOnly = inputPredicate("in_syslog");
+    expect(buildCaptureFilter({ inputId: "in_syslog" })).toBe(sourceOnly);
+    expect(buildCaptureFilter({ inputId: "in_syslog", logTypes: [] })).toBe(sourceOnly);
     expect(buildCaptureFilter({ inputId: "in_syslog", logTypes: ["", "  "] })).toBe(
-      '__inputId === "in_syslog"',
+      sourceOnly,
     );
   });
 
   it("quotes the input id safely", () => {
-    expect(inputPredicate('weird "id"')).toBe('__inputId === "weird \\"id\\""');
+    // An id carrying a quote must not break out of the string literal and turn
+    // the filter into JavaScript Cribl rejects.
+    const p = inputPredicate('weird "id"');
+    expect(p).toContain('"weird \\"id\\""');
+    expect(() =>
+      // eslint-disable-next-line no-new-func
+      new Function("__inputId", `return ${p};`)('weird "id"'),
+    ).not.toThrow();
+    // eslint-disable-next-line no-new-func
+    expect(new Function("__inputId", `return ${p};`)('weird "id"')).toBe(true);
   });
 });
 
