@@ -70,20 +70,36 @@ describe("vendorPacksForSolution", () => {
       "Zscaler Private Access",
     ).map((p) => p.id);
 
-    // Neither module offers ZIA to a ZPA operator...
+    // Neither module offers ZIA to a ZPA operator, in EITHER tier - the hand
+    // packs or the generated ones. The generated half matters as much: the
+    // miner derives keywords from a package title, so both Zscaler packs
+    // claimed the bare word "zscaler", and populating that tier on 2026-08-20
+    // reintroduced this exact bleed until each side got an exclusions overlay.
     expect(zpaMappingIds).not.toContain("zscaler-zia");
+    expect(zpaMappingIds).not.toContain("generated-zscaler_zia");
     expect(zpaLogTypeIds).not.toContain("zscaler-zia");
-    // ...and the catalog still identifies the product correctly.
-    expect(zpaLogTypeIds).toEqual(["zscaler-zpa"]);
+    expect(zpaLogTypeIds).not.toContain("generated-zscaler_zia");
+    // ...and the catalog still identifies the product correctly. Membership,
+    // not equality: the generated tier legitimately adds ZPA's own pack, so an
+    // exact list would have to be retyped after every regeneration.
+    expect(zpaLogTypeIds).toContain("zscaler-zpa");
 
-    // The mirror case: ZIA resolves to ZIA on both sides.
-    expect(vendorPacksForSolution("Zscaler Internet Access").map((p) => p.id))
-      .toContain("zscaler-zia");
-    expect(
-      documentedLogTypePacksForSolution("Zscaler Internet Access").map(
-        (p) => p.id,
-      ),
-    ).toEqual(["zscaler-zia"]);
+    // The mirror case: ZIA resolves to ZIA on both sides, and draws no ZPA.
+    // Not symmetric for free - the GENERATED ZPA pack claims bare "zscaler" as
+    // well as "zscaler private access", so it caught ZIA until the ZPA pack got
+    // an exclusion of its own.
+    const ziaMappingIds = vendorPacksForSolution("Zscaler Internet Access").map(
+      (p) => p.id,
+    );
+    const ziaLogTypeIds = documentedLogTypePacksForSolution(
+      "Zscaler Internet Access",
+    ).map((p) => p.id);
+
+    expect(ziaMappingIds).toContain("zscaler-zia");
+    expect(ziaMappingIds).not.toContain("zscaler-zpa");
+    expect(ziaLogTypeIds).toContain("zscaler-zia");
+    expect(ziaLogTypeIds).not.toContain("zscaler-zpa");
+    expect(ziaLogTypeIds).not.toContain("generated-zscaler_zpa");
   });
 });
 

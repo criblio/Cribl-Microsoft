@@ -40,9 +40,18 @@ describe("the documented catalog", () => {
     }
   });
 
-  it("knows the Zscaler ZIA feeds by their documented names", () => {
+  it("knows the Zscaler ZIA feeds by their documented names, HAND FIRST", () => {
+    // Was an exact list of five (2026-08-20): that only held while the
+    // generated tier was empty, and it is populated now - 157 packs / 647 log
+    // types from the bulk miner. Exact equality here would have to be retyped
+    // after every regeneration, which is how a pin stops meaning anything.
+    //
+    // What is actually being pinned survives: the five HAND-VERIFIED, cited
+    // feed names are present and lead the list, because hand packs are declared
+    // first and win the per-value dedupe. A generated feed displacing a curated
+    // one is the regression this guards.
     const types = documentedLogTypesForSolution("Zscaler Internet Access");
-    expect(types.map((t) => t.value)).toEqual([
+    expect(types.slice(0, 5).map((t) => t.value)).toEqual([
       "ZIA Web",
       "ZIA Firewall",
       "ZIA DNS",
@@ -73,28 +82,46 @@ describe("the documented catalog", () => {
     // solution name contains "zscaler". Sending a ZPA operator to collect
     // "ZIA Web" is worse than saying nothing - that feed does not exist in the
     // product they are onboarding.
+    // Asserted as "no SIBLING pack", not as an exact list (2026-08-20). The
+    // list was exact while the generated tier was empty; now that it is
+    // populated, ZPA legitimately draws its own generated pack alongside its
+    // hand one, and pinning the exact set would have to be retyped on every
+    // regeneration. The claim that matters is which product's feeds appear.
     const zpa = documentedLogTypePacksForSolution("Zscaler Private Access");
-    expect(zpa.map((p) => p.id)).toEqual(["zscaler-zpa"]);
+    expect(zpa.map((p) => p.id)).toContain("zscaler-zpa");
+    expect(zpa.map((p) => p.id)).not.toContain("zscaler-zia");
+    expect(zpa.map((p) => p.id)).not.toContain("generated-zscaler_zia");
     expect(documentedLogTypesForSolution("Zscaler Private Access").map((t) => t.value))
       .toContain("User Activity");
     expect(documentedLogTypesForSolution("Zscaler Private Access").map((t) => t.value))
       .not.toContain("ZIA Web");
 
-    // ZIA still resolves for its own solution.
-    expect(documentedLogTypePacksForSolution("Zscaler Internet Access").map((p) => p.id))
-      .toEqual(["zscaler-zia"]);
+    // ZIA still resolves for its own solution - and does NOT draw ZPA's, which
+    // is the same bleed in the other direction. The generated ZPA pack claims
+    // bare "zscaler" too, so this arm is not symmetric for free.
+    const zia = documentedLogTypePacksForSolution("Zscaler Internet Access");
+    expect(zia.map((p) => p.id)).toContain("zscaler-zia");
+    expect(zia.map((p) => p.id)).not.toContain("zscaler-zpa");
+    expect(zia.map((p) => p.id)).not.toContain("generated-zscaler_zpa");
+    expect(documentedLogTypesForSolution("Zscaler Internet Access").map((t) => t.value))
+      .not.toContain("User Activity");
 
     // Same trap on the Palo Alto side: Cortex XDR is not the firewall.
     const cortex = documentedLogTypePacksForSolution("Palo Alto Networks Cortex XDR");
-    expect(cortex.map((p) => p.id)).toEqual(["cortex-xdr"]);
+    expect(cortex.map((p) => p.id)).toContain("cortex-xdr");
+    expect(cortex.map((p) => p.id)).not.toContain("paloalto-panos");
     expect(documentedLogTypesForSolution("Palo Alto Networks Cortex XDR").map((t) => t.value))
       .not.toContain("TRAFFIC");
   });
 
   it("covers the vendors this toolkit actually onboards", () => {
-    // Breadth pin: the generated tier is empty until the bulk miner runs, so
-    // these hand packs are the whole vendor tier today. A shrink here is a
-    // silent loss of the only fallback thin solutions have.
+    // Breadth pin. The generated tier has been populated since 2026-08-20 (157
+    // packs from the bulk miner), so these hand packs are no longer the WHOLE
+    // vendor tier - but they are still the CITED, human-checked part of it, and
+    // a regeneration must never drop one. A shrink here is a silent loss of the
+    // only fallback thin solutions have, and the generated tier cannot replace
+    // it: mined feed names are package stream ids like "user_activity", not the
+    // documented names an operator would recognize.
     const ids = DOCUMENTED_LOG_TYPE_PACKS.map((p) => p.id);
     for (const id of [
       "zscaler-zia",
@@ -195,7 +222,12 @@ describe("mergeLogTypeSources - tiers", () => {
       vendorLogTypes: documentedLogTypesForSolution("Zscaler"),
       provided: [],
     });
-    expect(merged).toHaveLength(5);
+    // Not a fixed count (2026-08-20): the bare vendor name draws BOTH Zscaler
+    // products, and the generated tier is populated now, so the number moves
+    // with the asset. The claim is the one in the title - content named
+    // nothing, and the operator is still given something to provide, all of it
+    // labelled vendor so nothing masquerades as detection evidence.
+    expect(merged.length).toBeGreaterThan(0);
     expect(merged.every((m) => m.evidence === "vendor")).toBe(true);
     expect(merged[0].docUrl).toContain("zscaler");
   });
@@ -288,15 +320,23 @@ describe("ONE answer to 'is this log type provided'", () => {
 
 describe("evidenceCounts", () => {
   it("counts each tier", () => {
+    const vendorLogTypes = documentedLogTypesForSolution("Zscaler");
     const merged = mergeLogTypeSources({
       expected: [expected("A", ["alert-rule"]), expected("B", ["workbook"])],
-      vendorLogTypes: documentedLogTypesForSolution("Zscaler"),
+      vendorLogTypes,
       provided: [],
     });
     const counts = evidenceCounts(merged);
+    // detection and workbook come from this test's own fixture, so they stay
+    // exact. The vendor count was 5 while the generated tier was empty; it is
+    // asserted against the input now (2026-08-20), which is a STRONGER claim
+    // than the number was - every vendor log type in, every one counted, none
+    // silently dropped or double-counted - and it does not have to be retyped
+    // when the miner runs again.
     expect(counts.detection).toBe(1);
     expect(counts.workbook).toBe(1);
-    expect(counts.vendor).toBe(5);
+    expect(counts.vendor).toBe(vendorLogTypes.length);
+    expect(counts.vendor).toBeGreaterThan(0);
   });
 
   it("is all zeroes for an empty merge", () => {
