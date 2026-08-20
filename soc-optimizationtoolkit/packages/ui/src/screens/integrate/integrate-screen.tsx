@@ -111,7 +111,6 @@ import type {
   LogTypeFieldValues,
   SessionDestination,
   TableAssemblyInput,
-  SampleSourceRef,
   TaggedSample,
   TargetScope,
   ContentRequirements,
@@ -127,6 +126,7 @@ import {
 } from "../samples/sample-coverage-state";
 import { LogTypeRecommendation } from "../samples/log-type-recommendation";
 import { SampleSourcePicker } from "../samples/sample-source-picker";
+import { findEntry } from "../samples/sample-source-picker-state";
 import { CapturePanel } from "../samples/capture-panel";
 import { LakePanel } from "../samples/lake-panel";
 import { useSampleSources } from "../samples/use-sample-sources";
@@ -813,8 +813,20 @@ export function IntegrateScreen({
   // - not because the answer is expected to be uninteresting.
   const sampleSources = useSampleSources({ enabled: scopeCommitted });
   const [sampleSourceChoice, setSampleSourceChoice] = useState("");
-  const [sampleSourceEntry, setSampleSourceEntry] =
-    useState<SampleSourceRef | null>(null);
+  // DERIVED FROM THE CHOICE, never stored beside it (2026-08-20 audit). Holding
+  // the entry in its own state gave one question two answers, and only one of
+  // them was ever cleared: switching worker group and switching mode both reset
+  // the choice and left the entry behind. The panel below then stayed mounted on
+  // the PREVIOUS group while the dropdown showed nothing selected, so a capture
+  // POSTed to /m/{oldGroup}/system/capture filtered on an __inputId that group
+  // need not contain - an empty result, reported to the operator as an idle
+  // source, which is the exact confusion capture-filter.ts exists to prevent.
+  // findEntry answers null for an empty value, so clearing the choice is now the
+  // whole of clearing the selection and the two cannot disagree.
+  const sampleSourceEntry = findEntry(
+    sampleSources.inventory,
+    sampleSourceChoice,
+  );
   // Capture is offered only for a chosen LIVE SOURCE - a Lake dataset is
   // queried, not captured, and that is Phase 4's other half.
   const captureTarget =
@@ -1422,17 +1434,21 @@ export function IntegrateScreen({
         onSelectMode={(next) => {
           // A different mode reads a different surface, so the previous pick is
           // not in the new list - leaving it would show a selection the
-          // dropdown no longer offers.
+          // dropdown no longer offers, and (because the panels below are
+          // derived from it) a capture panel sitting over a Lake inventory.
           setSampleSourceChoice("");
           sampleSources.selectMode(next);
         }}
         onSelectGroup={(groupId) => {
+          // Same reason, one level down: a source id is only addressable through
+          // the group it was listed from, so the pick does not survive the move.
           setSampleSourceChoice("");
           sampleSources.selectGroup(groupId);
         }}
-        onChange={(next, entry) => {
+        onChange={(next) => {
+          // ONE setter, because there is one piece of state. The entry the
+          // picker hands back is the same one findEntry derives above.
           setSampleSourceChoice(next);
-          setSampleSourceEntry(entry);
         }}
         onReload={sampleSources.reload}
       />

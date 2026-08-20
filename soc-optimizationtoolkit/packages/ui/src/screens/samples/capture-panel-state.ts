@@ -30,8 +30,8 @@ import type {
   TaggedSample,
 } from "@soc/core";
 import { buildCaptureFilter, captureFilterWarning } from "@soc/core";
+import { plannedSamplesFrom, sampleStoreKey } from "./planned-samples";
 import type { RecommendedLogType } from "./sample-coverage-state";
-import { tagSampleFromContent } from "./sample-intake-state";
 
 /** One log-type checkbox on the capture panel. */
 export interface CaptureLogTypeChoice {
@@ -179,12 +179,14 @@ export function deriveCaptureView(
     };
   }
 
-  const existing = new Set(existingLogTypes.map((t) => t.trim().toLowerCase()));
+  // Folded through the store's own key rule, so this warning cannot promise a
+  // replacement that plannedCaptureSamples then declines to make.
+  const existing = new Set(existingLogTypes.map(sampleStoreKey));
   const logTypes = result.splits.map((split) => ({
     logType: split.logType,
     eventCount: split.eventCount,
     preview: split.rawEvents.slice(0, PREVIEW_LINES),
-    replacesExisting: existing.has(split.logType.trim().toLowerCase()),
+    replacesExisting: existing.has(sampleStoreKey(split.logType)),
   }));
   const collisions = logTypes.filter((l) => l.replacesExisting).map((l) => l.logType);
 
@@ -203,53 +205,20 @@ export function deriveCaptureView(
 /**
  * Convert captured splits into storage tagged samples - one per log type.
  *
- * Re-tags through {@link tagSampleFromContent}, the SAME content-first parse an
- * upload goes through, rather than trusting the capture's own idea of the
- * format. That is what makes a captured sample and an uploaded one identical
- * downstream, and it is why the format is detected again here from the raw
- * lines rather than carried over.
+ * The conversion is {@link plannedSamplesFrom}, shared with the Lake panel: the
+ * operator's existing label is adopted, the events are re-tagged through the
+ * SAME content-first parse an upload goes through, and a log type whose lines
+ * parse to no records is dropped rather than stored as a husk.
+ *
+ * What stays here is the capture's BOUNDARY. A SplitSample carries a `format`
+ * this conversion deliberately ignores - detecting it again from the raw lines
+ * is what makes a captured sample and an uploaded one identical downstream - so
+ * the split type is accepted at the edge and reduced to {logType, rawEvents}.
  */
 export function plannedCaptureSamples(
   splits: readonly SplitSample[],
   sourceLabel: string,
   existingLogTypes: readonly string[] = [],
 ): TaggedSample[] {
-  // ADOPT THE EXISTING LABEL when one matches case-insensitively (2026-08-20
-  // audit). splitSamplesByLogType FORCE-UPPERCASES every captured log type,
-  // while an upload keeps whatever the operator typed - and the store keys
-  // case-SENSITIVELY. So capturing TRAFFIC after uploading "traffic" appended a
-  // second sample rather than replacing the first, while the panel had just
-  // promised "replaces your existing TRAFFIC sample".
-  //
-  // Two samples for one log type is not a cosmetic duplicate: the pack builds a
-  // route pair per unique log type, so it silently gains an overlapping pair
-  // where only the first receives events. Reusing the operator's own casing
-  // makes the replacement real and the warning honest, and it respects the
-  // label they chose rather than shouting it back at them.
-  const byLower = new Map<string, string>();
-  for (const existing of existingLogTypes) {
-    byLower.set(existing.trim().toLowerCase(), existing);
-  }
-
-  const order: string[] = [];
-  const byType = new Map<string, TaggedSample>();
-  for (const split of splits) {
-    if (split.rawEvents.length === 0) continue;
-    const label =
-      byLower.get(split.logType.trim().toLowerCase()) ?? split.logType;
-    const tagged = tagSampleFromContent(
-      label,
-      split.rawEvents.join("\n"),
-      sourceLabel,
-    );
-    // A split can hold LINES that parse to no RECORDS - whitespace, a partial
-    // event caught at the edge of the capture window. Storing that produces a
-    // husk: a sample with a name and zero fields, which satisfies the
-    // "samples provided" check while giving the mapping nothing to work with.
-    // Having lines is not the same as having events.
-    if (tagged.parsed.records.length === 0) continue;
-    if (!byType.has(tagged.logType)) order.push(tagged.logType);
-    byType.set(tagged.logType, tagged);
-  }
-  return order.map((t) => byType.get(t) as TaggedSample);
+  return plannedSamplesFrom(splits, sourceLabel, existingLogTypes);
 }

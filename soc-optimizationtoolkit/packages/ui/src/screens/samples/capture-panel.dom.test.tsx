@@ -24,7 +24,12 @@
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { DEFAULT_DURATION_SECONDS, DEFAULT_MAX_EVENTS } from "@soc/core";
+import {
+  DEFAULT_DURATION_SECONDS,
+  DEFAULT_MAX_EVENTS,
+  MAX_DURATION_SECONDS,
+  MAX_EVENTS_LIMIT,
+} from "@soc/core";
 import type {
   CaptureSamplesResult,
   SampleSourceRef,
@@ -33,9 +38,33 @@ import type {
 } from "@soc/core";
 import { CapturePanel } from "./capture-panel";
 import type { CapturePanelProps } from "./capture-panel";
+import { composeFilter } from "./capture-panel-state";
 import type { RecommendedLogType } from "./sample-coverage-state";
 
 afterEach(cleanup);
+
+/**
+ * Evaluate a rendered filter the way Cribl does - as JavaScript, against one
+ * event. `__inputId` is the type-qualified form the platform really sends.
+ *
+ * WHY EVALUATED RATHER THAN STRING-MATCHED, the same reason capture-panel-
+ * state.test.ts gives: how core addresses `__inputId` is core's decision and it
+ * has already changed once. The clause now carries an equality arm kept only in
+ * case a deployment hands back a bare id, so it is the arm most likely to be
+ * dropped - and a literal copy of it here would break a pin about this PANEL for
+ * a change that costs the product nothing. What the panel owes the operator is
+ * that the box on screen selects the source they picked and no other.
+ *
+ * Kept local rather than shared with the sibling suite: `new Function` must not
+ * appear in shipped UI source, which is where a shared helper would have to live.
+ */
+function select(filter: string, inputId: string, raw: string): boolean {
+  // eslint-disable-next-line no-new-func
+  return new Function("__inputId", "_raw", `return ${filter};`)(
+    inputId,
+    raw,
+  ) as boolean;
+}
 
 const SOURCE: SampleSourceRef = {
   kind: "cribl-source",
@@ -198,12 +227,18 @@ describe("CapturePanel - what it offers before a run", () => {
     const { container, onCapture } = renderPanel();
 
     const shown = filterBox(container).value;
-    expect(shown).toContain('__inputId === "in_syslog"');
+    // The SOURCE clause is evaluated rather than matched: what the operator is
+    // owed is a box that selects the source they picked, whatever shape core
+    // gives that clause.
+    expect(select(shown, "syslog:in_syslog", "1,x,TRAFFIC,y")).toBe(true);
+    expect(select(shown, "syslog:in_other", "1,x,TRAFFIC,y")).toBe(false);
     expect(shown).toContain("TRAFFIC");
     expect(shown).toContain("CONFIG");
-    // Unticked types must not be in the filter, or the checkboxes mean nothing.
+    // Unticked types must not be in the filter, or the checkboxes mean nothing -
+    // and an event of one must not survive it.
     expect(shown).not.toContain("HIPMATCH");
     expect(shown).not.toContain("THREAT");
+    expect(select(shown, "syslog:in_syslog", "1,x,HIPMATCH,y")).toBe(false);
 
     // Rendering and editing are not running: only the button runs a capture.
     fireEvent.change(filterBox(container), { target: { value: "anything" } });
@@ -249,7 +284,15 @@ describe("CapturePanel - the filter belongs to the operator", () => {
     const warnings = container.querySelectorAll(".capture-filter-warning");
     expect(warnings).toHaveLength(1);
     expect(warnings[0].textContent).toContain("EVERY source");
-    expect(warnings[0].textContent).toContain('__inputId === "in_syslog"');
+    // The clause it offers is the one this panel would have composed for this
+    // source, taken from the composer rather than restated here - so an arm
+    // added to or dropped from core's predicate cannot break a pin about the
+    // WARNING. What matters is that the fix names the selected source, and that
+    // pasting it back gets the operator what the panel promised.
+    const sourceClause = composeFilter("in_syslog", []);
+    expect(warnings[0].textContent).toContain(sourceClause);
+    expect(select(sourceClause, "syslog:in_syslog", "anything")).toBe(true);
+    expect(select(sourceClause, "syslog:in_other", "anything")).toBe(false);
 
     fireEvent.change(filterBox(container), { target: { value: "" } });
     expect(
@@ -281,6 +324,23 @@ describe("CapturePanel - running a capture", () => {
     const { container } = renderPanel();
     expect(bounds(container)[0].value).toBe(String(DEFAULT_MAX_EVENTS));
     expect(bounds(container)[1].value).toBe(String(DEFAULT_DURATION_SECONDS));
+  });
+
+  it("advertises CORE's ceilings, not numbers of its own", () => {
+    // Compared against the constants rather than against 10000 and 12 on
+    // purpose: the defect being pinned is DRIFT. The panel carried a literal
+    // max={10000} until 2026-08-20, so the day the capture API's ceiling moves,
+    // the box would go on offering the old one - and the seconds box, which had
+    // no max at all, would go on inviting a 30s capture that the platform
+    // bridge kills at 15s after the operator has waited for it.
+    const { container } = renderPanel();
+    expect(bounds(container)[0].getAttribute("max")).toBe(String(MAX_EVENTS_LIMIT));
+    expect(bounds(container)[1].getAttribute("max")).toBe(
+      String(MAX_DURATION_SECONDS),
+    );
+    // Floors stay where they were; this pin is about the upper end only.
+    expect(bounds(container)[0].getAttribute("min")).toBe("1");
+    expect(bounds(container)[1].getAttribute("min")).toBe("1");
   });
 
   it("reads CLEARED bounds as the defaults, not as one event for one second", async () => {
@@ -487,9 +547,14 @@ describe("CapturePanel - changing source", () => {
 
     expect(resultRows(container)).toHaveLength(0);
     expect(status(container)).toBe("idle");
-    expect(filterBox(container).value).toContain('__inputId === "in_http"');
-    expect(filterBox(container).value).not.toContain("in_syslog");
-    expect(filterBox(container).value).not.toContain("hand_edited");
+    // Evaluated for the same reason as above: the pin is that the recomposed
+    // filter now selects the NEW source and no longer the old one, which is what
+    // "the filter edit was dropped" has to mean to be worth anything.
+    const recomposed = filterBox(container).value;
+    expect(select(recomposed, "syslog:in_http", "1,x,TRAFFIC,y")).toBe(true);
+    expect(select(recomposed, "syslog:in_syslog", "1,x,TRAFFIC,y")).toBe(false);
+    expect(recomposed).not.toContain("in_syslog");
+    expect(recomposed).not.toContain("hand_edited");
     expect(ticked(container)).toBe(2);
     expect(screen.getByText("Capture from in_http")).toBeTruthy();
   });

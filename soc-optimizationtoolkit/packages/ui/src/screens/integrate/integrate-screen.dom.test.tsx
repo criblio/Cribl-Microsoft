@@ -14,14 +14,25 @@
  * beside it is thoroughly unit-tested, which is exactly what made the gap
  * invisible: the file with tests was not the file that crashed.
  *
- * So this asserts almost nothing about behaviour on purpose. Its whole job is
- * to mount the component, which is the one thing the rest of the suite never
- * did. Behavioural pins belong in integrate-screen-state.test.ts, where they
- * run without a DOM.
+ * So the first group asserts almost nothing about behaviour on purpose. Its
+ * whole job is to mount the component, which is the one thing the rest of the
+ * suite never did. Behavioural pins belong in integrate-screen-state.test.ts,
+ * where they run without a DOM.
+ *
+ * THE EXCEPTION, added 2026-08-20: WIRING between the sample-source picker and
+ * the acquisition panels below it. That wiring lives only in this file's
+ * component - no pure module can see it - and it had gone wrong in the way a
+ * smoke test cannot notice, because the screen still mounted perfectly. The
+ * selected source was held twice (a string choice and a resolved entry) and the
+ * group/mode handlers cleared only the string, so CapturePanel stayed mounted
+ * against the PREVIOUS worker group while the dropdown showed nothing selected.
+ * A capture from there POSTs to /m/{oldGroup}/system/capture filtered on an
+ * __inputId that group need not contain: empty, and reported as an idle source.
+ * Those pins mount the whole screen because a stale MOUNT is the defect.
  */
 
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { DEFAULT_CRIBL_OPTIONS } from "@soc/core";
 import type { AzureConfig } from "@soc/core";
 import { PortsProvider } from "../../ports-context";
@@ -121,5 +132,151 @@ describe("IntegrateScreen - renders", () => {
     renderScreen();
     const field = screen.getByDisplayValue("MS-Sentinel");
     expect(field).toBeTruthy();
+  });
+});
+
+/**
+ * A Cribl workspace with two Stream worker groups holding DIFFERENT sources.
+ * Different is the whole point: a source id that exists in both groups would
+ * make a stale target indistinguishable from a correct one.
+ */
+const SOURCES: Record<string, unknown[]> = {
+  default: [{ id: "in_syslog", type: "syslog" }],
+  grp2: [{ id: "in_other", type: "http" }],
+};
+
+/** Ports whose Cribl answers the two discovery stages and nothing else. */
+function discoveryPorts() {
+  const request = vi.fn(
+    async (opts: { method: string; path: string; groupId?: string }) => {
+      if (opts.path === "/system/inputs") {
+        return { status: 200, body: { items: SOURCES[opts.groupId ?? ""] ?? [] } };
+      }
+      if (opts.path.startsWith("/products/lake/")) {
+        return { status: 200, body: { items: [{ id: "Corelight" }] } };
+      }
+      // Everything else this screen reaches for is beside the point here, and a
+      // mount that survives its own failed fetches is already pinned above.
+      throw new Error("offline");
+    },
+  );
+  return {
+    azure: { request: vi.fn().mockRejectedValue(new Error("offline")) },
+    cribl: {
+      request,
+      listGroups: vi.fn().mockResolvedValue([
+        { id: "default", product: "stream" },
+        { id: "grp2", product: "stream" },
+      ]),
+    },
+    packs: { list: vi.fn().mockRejectedValue(new Error("offline")) },
+    packInstall: { list: vi.fn().mockRejectedValue(new Error("offline")) },
+    jobs: { list: vi.fn().mockResolvedValue([]) },
+  } as unknown as UiPorts;
+}
+
+function renderWithDiscovery() {
+  const ports = discoveryPorts();
+  const { container } = render(
+    <PortsProvider ports={ports} config={CONFIG}>
+      <IntegrateScreen
+        scopeCommitted
+        offline={false}
+        onCommitScope={vi.fn().mockResolvedValue({ ok: true } as never)}
+        criblDefaults={DEFAULT_CRIBL_OPTIONS}
+      />
+    </PortsProvider>,
+  );
+  const picker = () =>
+    container.querySelector(".sample-source-picker") as HTMLElement;
+  /** The picker's own comboboxes, in render order: worker group, then source. */
+  const combos = () =>
+    [...picker().querySelectorAll(".searchable-select-control")] as HTMLElement[];
+  return { container, ports, picker, combos };
+}
+
+/** Open one combobox and click the option whose text contains `label`. */
+function pickOption(combo: HTMLElement, label: string): void {
+  const root = combo.closest(".searchable-select");
+  if (root === null) throw new Error("combobox is not inside a searchable-select");
+  fireEvent.click(combo);
+  const option = [...root.querySelectorAll(".searchable-select-option")].find((o) =>
+    o.textContent?.includes(label),
+  );
+  if (option === undefined) throw new Error(`no option matching "${label}"`);
+  fireEvent.click(option);
+}
+
+/** Get as far as a mounted CapturePanel aimed at "in_syslog" in "default". */
+async function selectSourceInDefaultGroup() {
+  const view = renderWithDiscovery();
+  await waitFor(() => {
+    expect(screen.getByText("Capture from a live source")).toBeTruthy();
+  });
+  fireEvent.click(screen.getByText("Capture from a live source"));
+  pickOption(view.combos()[0], "default");
+  await waitFor(() => {
+    expect(view.combos()).toHaveLength(2);
+  });
+  pickOption(view.combos()[1], "in_syslog");
+  const panel = view.container.querySelector(".capture-panel");
+  expect(panel).toBeTruthy();
+  expect(panel?.querySelector(".capture-filter")?.textContent).toContain("in_syslog");
+  return view;
+}
+
+describe("IntegrateScreen - the acquisition panel follows the picker", () => {
+  it("takes the capture panel down when the WORKER GROUP changes", async () => {
+    // The defect this pins is invisible to a label check: CapturePanel is keyed
+    // on the source id, so a target change does not even remount it - the panel
+    // would sit there unchanged, still carrying the old group. Asserting it is
+    // GONE is what distinguishes a cleared selection from a stale one.
+    const view = await selectSourceInDefaultGroup();
+
+    pickOption(view.combos()[0], "grp2");
+    expect(view.container.querySelector(".capture-panel")).toBeNull();
+
+    // And still gone once the new group's listing lands - the moment a stale
+    // entry would otherwise be re-derived against a fresh inventory.
+    await waitFor(() => {
+      expect(view.combos()).toHaveLength(2);
+    });
+    expect(view.container.querySelector(".capture-panel")).toBeNull();
+  });
+
+  it("retargets to the NEW group's source, never the old one", async () => {
+    // The other half: the panel must come back aimed at what was actually
+    // picked. The filter names the source, and a capture that keeps the old
+    // __inputId returns nothing from a group that never had it.
+    const view = await selectSourceInDefaultGroup();
+
+    pickOption(view.combos()[0], "grp2");
+    await waitFor(() => {
+      expect(view.combos()).toHaveLength(2);
+    });
+    pickOption(view.combos()[1], "in_other");
+
+    const filter = view.container
+      .querySelector(".capture-panel")
+      ?.querySelector(".capture-filter")?.textContent;
+    expect(filter).toContain("in_other");
+    expect(filter).not.toContain("in_syslog");
+  });
+
+  it("takes the capture panel down when the MODE changes to lake-query", async () => {
+    // Otherwise the operator reads a capture panel sitting over a Lake
+    // inventory - two mutually exclusive acquisition paths on screen at once,
+    // one of them addressing a worker group this mode does not even use.
+    const view = await selectSourceInDefaultGroup();
+
+    fireEvent.click(screen.getByText("Query a Cribl Lake dataset"));
+    expect(view.container.querySelector(".capture-panel")).toBeNull();
+
+    await waitFor(() => {
+      expect(screen.getByText("Lake dataset")).toBeTruthy();
+    });
+    expect(view.container.querySelector(".capture-panel")).toBeNull();
+    // Nothing is picked in the new mode yet, so no panel replaces it either.
+    expect(view.container.querySelector(".lake-panel")).toBeNull();
   });
 });
