@@ -415,6 +415,28 @@ describe("LakePanel - nothing enters the store without a click", () => {
     );
   });
 
+  it("reads a CLEARED bound as the default, not as one event", async () => {
+    // Number("") is 0, which clampLimit floors to 1 - so clearing the box to
+    // retype fetched ONE event per log type and returned a note blaming a bound
+    // the operator never typed. A sample of one is not obviously wrong on
+    // screen, which is what made it worth pinning.
+    const { container, onFetchEvents } = renderPanel();
+    await runQuery(container);
+
+    fireEvent.change(perLogType(container), { target: { value: "" } });
+    // And the box stays empty while they type, rather than snapping back to the
+    // default and landing the next keystroke on the end of it.
+    expect(perLogType(container).value).toBe("");
+
+    await addSamples(container);
+
+    expect(onFetchEvents).toHaveBeenCalledWith(
+      "sourcetype",
+      expect.anything(),
+      DEFAULT_SAMPLE_LIMIT,
+    );
+  });
+
   it("offers no fetch at all once every row is unticked", async () => {
     // An enabled button over an empty selection fetches nothing and reports a
     // failure, which reads as a broken dataset rather than an empty choice.
