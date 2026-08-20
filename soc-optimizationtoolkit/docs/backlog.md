@@ -1187,25 +1187,58 @@ is "these groups differ from what we deployed, in these files we can see" rather
 than a confident clean bill - the same rule as the inventory standard. An unknown
 must not render as a zero.
 
-## Sample browser: REMOVED (ADR-0003) - Phases 0-3 done, 4-5 open
+## Sample browser: REMOVED (ADR-0003) - Phase 4 capture done, lake query in progress
 
-**Executed 2026-08-19 on `feature/log-type-recommendation`.** The browser and its
-whole acquisition domain are deleted; the `LogTypeRecommendation` panel replaces
-it. To continue, open ONE document:
+**Executed 2026-08-19/20 on `feature/log-type-recommendation`.** The browser and
+its whole acquisition domain are deleted; the `LogTypeRecommendation` panel
+replaces it. To continue, open ONE document:
 [sample-acquisition-plan.md](sample-acquisition-plan.md) - it carries inline
-`[SUPERSEDED]` markers where Phase 0 disproved it, and
+`[SUPERSEDED]` markers where reality diverged from it, and
 [sample-acquisition-phase0.md](sample-acquisition-phase0.md) has the API
 findings. [ADR 0003](adr/0003-remove-sample-browser.md) is the durable decision
 record and is background, not a prerequisite.
 
-**What remains:** Phases 4-5 (running the two acquisition modes, volume findings).
-**Nothing gates them.** Phase 3 landed source discovery, so Phase 4 starts from
-a selected `SampleSourceRef` that already carries its `kind` and its `groupId`.
-The addressing for all three surfaces is verified (phase 0 doc, 0.1b).
+**Where it stands:** Phases 0-3 done. **Phase 4's CAPTURE path is done** (core
+and UI): `domain/capture-filter`, `captureSamples`, `CapturePanel` - compose the
+filter, run one bounded `POST /system/capture`, split by log type, PREVIEW, and
+tag nothing without a click. **Phase 4's LAKE QUERY path is in progress.** Phase
+5 (volume findings) is not started and nothing gates it.
 
-Phase 4's first correctness trap is recorded in the plan: a capture request has
-NO source field, so the source is an `__inputId` clause inside the filter, and
-an operator editing that filter can silently widen the capture to everything.
+Phase 4's first correctness trap is recorded in the plan and shipped as a
+warning: a capture request has NO source field, so the source is an `__inputId`
+clause inside the filter, and an operator deleting that clause silently widens
+the capture to every source in the group.
+
+**The plan's capture filter was not built as written, deliberately.** It
+specifies a comma anchor (`/,TRAFFIC,/i`), but the operator picks a SOURCE, not
+a format, so a comma anchor against a pipe-delimited CEF vendor matches nothing -
+the same zero-events failure the anchor exists to prevent. The shipped predicate
+anchors on the SET of delimiters this app's parsers use, excluding `/` so a URL
+path cannot match. Marked `[SUPERSEDED]` inline in the plan's Phase 4.
+
+**The log-type recommendation now has THREE tiers of evidence,** not just
+analytic rules: `detection` (a shipped rule filters on it), `workbook` (a shipped
+workbook queries it - real, weaker), and `vendor` (the vendor documents the
+feed). The third answers a solution shipping few or no detections, which the
+content-derived tiers structurally cannot. The tier is on every row because
+collapsing them would tell an operator their solution requires data it has never
+mentioned.
+
+**One thing needs running, and nothing prompts for it.** The vendor tier has a
+hand-curated half (13 vendors, each cited to vendor documentation) and a
+generated half mined from elastic/integrations. **The generated half ships
+EMPTY** - populating it needs
+`node scripts/generate-vendor-packs.mjs --bulk <elastic-integrations-checkout>`,
+which needs a local checkout and network. Until someone runs it, the 13 hand
+packs are the entire vendor tier, and a breadth pin guards them.
+
+**A parsing defect found and fixed along the way:** a syslog-prefixed PAN-OS
+upload used to parse to ZERO events - detection called it syslog and
+`parseSyslog` cannot match a PAN-OS body. It was pinned as a KNOWN GAP first
+(fixing it means touching the detector every vendor depends on) and then fixed
+the same day: detection recognises the PAN-OS positional fingerprint via
+`isPanosFormat` ahead of the syslog check, characterized first across both modes
+and every format. Full record in the phase 0 doc, 0.3.
 
 The Browse Samples modal is being removed and replaced by a log-type
 recommendation derived from the operator's own environment.
@@ -1225,6 +1258,13 @@ deliberately named, via three paths: Cribl Search over a Lake/federated dataset
 with vendor-derived filter suggestions), or manual upload (needs no Cribl
 integration).
 
+> **[SUPERSEDED - TWO modes, not three paths]** (user direction 2026-08-19)
+> Search is not a separate surface, it is HOW a Lake dataset is queried - the
+> same datasets appear in both listings, verified live. The operator is asked one
+> question first: query a Lake dataset, or capture from a live source. Manual
+> upload is not a mode; it is the permanently-available intake below. Reasoning
+> in the plan's Phase 3.
+
 **The trap for whoever executes this:** `splitSamplesByLogType`
 (sample-acquisition/splitting.ts:64) must SURVIVE the deletion. It separates a
 mixed stream by discriminator, it is load-bearing for capture and for mixed
@@ -1232,3 +1272,12 @@ uploads, and its only current caller is `precedence.ts` on the browse path - so
 deleting the sample-acquisition domain as a unit silently removes it. Two more
 capabilities need salvaging first: CEF/LEEF raw-line preservation
 (repo-samples.ts:400,428,486) and `consolidateByTableRouting` (:505).
+
+> **[SUPERSEDED - one salvage was real, the other was dead code]** The splitter
+> survived, rehomed to `domain/sample-parsing` as `splitSamplesByLogType` with
+> `browseSampleId` renamed `splitSampleId`. Raw-line preservation turned out to
+> be a LIVE defect on the intake path rather than a browse-path risk, so it was
+> fixed in `parseSampleContent` and every intake path benefits.
+> `consolidateByTableRouting` had never executed - both callers pass two
+> arguments, so its `eventToTable` branch is unreachable - and was deleted as a
+> capability the app did not have. Phase 0 doc, 0.3.

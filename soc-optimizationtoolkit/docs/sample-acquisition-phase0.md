@@ -13,6 +13,13 @@ answered on 2026-08-19 against a real Cribl.Cloud workspace - `/search/*` is
 group-scoped. Nothing found here contradicts the plan's direction; two details
 change, both recorded below.
 
+> **STATUS (2026-08-20).** Findings 0.2 and 0.3 have since been acted on and
+> both have `[SUPERSEDED]` blocks in place: the capture path shipped (0.2, with
+> a deliberate departure on the filter anchor) and the raw-line defect was fixed
+> (0.3, which also turned up a second parsing defect recorded there). 0.1's
+> synchronous `/search/query` is still spec-only - the lake-query path is being
+> built now.
+
 ---
 
 ## 0.1 - Cribl Search / Lake API
@@ -164,10 +171,29 @@ Residual risk: low, but it is the same one live call as 0.1b to be certain, and
 it should be made with the *anchored* form the plan mandates (`/,TRAFFIC,/i`),
 not the bare one.
 
+> **[SUPERSEDED - the anchored form is a DELIMITER SET, not `/,TRAFFIC,/i`]**
+> (2026-08-19, shipped as `logTypePredicate` in `domain/capture-filter`)
+>
+> The comma anchor assumes the vendor's format, and the operator selects a
+> SOURCE. Against a pipe-delimited CEF vendor a comma anchor matches nothing,
+> which produces the same zero-event answer the anchor was introduced to prevent.
+> The shipped predicate anchors on the set of delimiters the app's own parsers
+> use - comma, pipe, tab, quote, colon, equals, whitespace, line ends - and
+> excludes `/` deliberately, which is what keeps a URL path from matching. The
+> full reasoning is in the plan's Phase 4 `[SUPERSEDED]` block.
+>
+> **The live call is still unmade.** The predicates are pinned by evaluating
+> them as JavaScript locally, which proves the regexes, not Cribl's evaluator.
+> The residual risk above is unchanged and now applies to the delimiter-set form.
+
 **Permission:** `/m/:gid/system/capture` needs a `POST` entry in
 `policies.yml`. It is the first *write-shaped* product-API path this app would
 add for a read-only purpose - worth a sentence in the install-time policy
 comment, since admins read that list.
+
+> **[DONE 2026-08-19.]** Declared, with the comment: the verb overstates it,
+> because `POST /system/capture` creates nothing - it opens a bounded diagnostic
+> read and returns events already flowing.
 
 ---
 
@@ -228,6 +254,66 @@ regression risk. It is the reason the salvage in Phase 1 is worth doing - but th
 right fix is at `parseSampleContent`/`buildTaggedSample`, so every intake path
 gets it, rather than porting `splitRepoFile`'s line-index trick.
 
+> **[SUPERSEDED - fixed in Phase 1, and every row above marked "broken" now
+> carries the original line]** (2026-08-19)
+>
+> Fixed at the parse, as recommended. Every line-oriented parser takes an
+> optional accumulator and pushes its SOURCE LINE at the point it emits a record,
+> so a parser that filters (`parseCef` skips non-CEF lines, `parseCsv` drops
+> one-field rows) cannot drift the pairing; `parseSampleContent` stores originals
+> only when the counts match, so a MIS-alignment is impossible rather than
+> unlikely - it is all-or-nothing per sample (`rawEventsFor`). The capture unwrap
+> keeps the WRAPPER's `_raw`, which is the vendor's own bytes, instead of
+> discarding it.
+>
+> Nothing in 3,704 tests failed when that behaviour changed, which is why the new
+> pins assert BYTES and pairing rather than presence.
+
+### PAN-OS format detection: recorded as a KNOWN GAP, then FIXED
+
+Found on 2026-08-19 while writing the raw-line pins above, and pinned in
+`raw-lines.test.ts` as a characterization rather than a fix: **a syslog-prefixed
+PAN-OS export uploaded directly parsed to ZERO events.** A PAN-OS source ships
+CSV behind a syslog header, so the file matched the `<14>` priority prefix and
+was classified "syslog"; `parseSyslog`'s RFC 3164/5424 regexes cannot match a
+PAN-OS body, so every record failed its >1-field filter and a perfectly good
+export reported *"could not parse any events"* with no way to tell why. The
+`>=5-comma` rescue for this shape lived only in `detectCaptureInnerFormat`, so it
+fired for capture-WRAPPED input and not for an upload.
+
+The judgement at the time was to leave it: fixing it means touching format
+detection, which decides CEF vs CSV vs syslog vs kv for EVERY vendor the toolkit
+touches, and that did not belong inside the browser-deletion change. So it was
+made visible and deliberately not fixed.
+
+> **[SUPERSEDED - fixed the same day, 2026-08-19]**
+>
+> The gap is closed and the pin now asserts the opposite: the file parses as
+> `csv`, both records survive, and `errors` is empty.
+>
+> **How.** `detectSampleFormat`'s lenient path now recognises the PAN-OS
+> POSITIONAL FINGERPRINT via `isPanosFormat` - the `1,<date> <time>,<serial>,
+> <KNOWN-TYPE>` shape checked against a whitelist of log types - and it runs
+> AHEAD of the syslog check. It is emphatically NOT a comma count, and that
+> distinction is the whole safety argument: a chatty syslog line carrying six
+> commas stays syslog, and a CEF or kv line full of commas keeps its own format.
+> Both directions are pinned.
+>
+> **Characterized first**, because a regression in this detector does not throw -
+> it silently reroutes a sample to the wrong parser and surfaces much later as an
+> empty field list or a broken pack. A new suite pins BOTH modes across every
+> format, including the divergences that look like bugs and are not (strict is
+> prefix-only, so a syslog header hides CEF; strict calls any brace `json`
+> without validating). Run before the change it was 16 passing and 1 failing -
+> the PAN-OS case, and only that. After, 17. Nothing else in 3,761 tests moved.
+>
+> **The asymmetry with `detectCaptureInnerFormat` is deliberate and now
+> documented in both places.** That one keeps its looser `>=5-comma` rule because
+> it inspects ONE already-split `_raw` value where the content is known to be a
+> single vendor line, so a loose rule is cheap and catches comma-delimited
+> vendors beyond PAN-OS. The lenient detector classifies a WHOLE UPLOADED FILE,
+> which could be anything, so it takes the precise shape.
+
 ### `consolidateByTableRouting` is dead code
 
 `resolveRepoSamples` consolidates only when `options.eventToTable` is non-empty
@@ -254,12 +340,21 @@ scoped as such, not smuggled in as a salvage.
 
 1. **Phase 4 capture**: source selection is a `__inputId` clause inside the
    filter string, not a separate field. The suggested filter must conjoin it.
+   *DONE 2026-08-19 - and the log-type half of the conjunction departs from the
+   plan's comma anchor; see the `[SUPERSEDED]` block in 0.2.*
 2. **Phase 1 salvage**: raw-line preservation is a real fix and should land in
    `parseSampleContent`, covering LEEF, syslog, headerless CSV and
    capture-wrapped input - not just CEF, which already half-works.
+   *DONE 2026-08-19.*
 3. **Phase 1 salvage**: `consolidateByTableRouting` needs no salvage. It is
    unreachable. Delete it with the module and record it as a deleted capability.
+   *DONE 2026-08-19.*
 4. **Phase 3/4 Search**: ANSWERED (0.1b). Pass a `groupId` resolved from
    `listGroups()` by product `"search"`; declare `/m/:gid/search/*` in
    `policies.yml`. Prefer `GET /search/query` for the count-by-discriminator
    query, with the proven `POST /search/jobs` lifecycle as the fallback.
+   *IN PROGRESS 2026-08-20. `policies.yml` carries a note where the entries go
+   and says why they are not declared yet - nothing calls them.*
+5. **New, from doing (2)**: PAN-OS format detection dropped every event of a
+   syslog-prefixed upload. Recorded as a KNOWN GAP, then fixed the same day -
+   see the section above 0.3's dead-code note.

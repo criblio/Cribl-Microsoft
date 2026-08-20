@@ -7,17 +7,35 @@ the work is below, including the reasoning you need to avoid undoing it.
 
 Written 2026-08-18 by a planning session, from a live read of the code.
 
-> **EXECUTION STATUS (2026-08-19), branch `feature/log-type-recommendation`,
-> PR #119:** **Phases 0, 1, 2 and 3 are done.** Phases 4-5 are not started.
+> **EXECUTION STATUS (2026-08-20), branch `feature/log-type-recommendation`,
+> PR #119:** **Phases 0, 1, 2 and 3 are done. Phase 4's CAPTURE path is done
+> (core + UI). Phase 4's LAKE QUERY path is IN PROGRESS.** Phase 5 is not
+> started.
 >
 > Phase 3 shipped as `discoverSampleSources` (usecase), `domain/sample-sources`
 > (pure inventory) and `SampleSourcePicker` (UI). It DISCOVERS and lets the
 > operator choose; it acquires nothing - that is Phase 4, which now has a
 > selected `SampleSourceRef` to act on.
 >
+> Phase 4 capture shipped as `domain/capture-filter` (filter composition),
+> `captureSamples` (usecase) and `CapturePanel` (UI). It conjoins the
+> `__inputId` clause with the log-type predicates, runs ONE bounded
+> `POST /system/capture`, splits the result with `splitSamplesByLogType`, and
+> PREVIEWS it - nothing is tagged without a click (user direction 2026-08-19),
+> because the sample store is replace-by-logType and a capture is the one intake
+> path where the APP chose the content rather than the operator. The filter
+> anchor departs from what is written below, on purpose: see the
+> **[SUPERSEDED]** block under "Filtered capture".
+>
+> Phase 2's recommendation grew from one source of evidence to THREE - shipped
+> detections, shipped workbooks, and the vendor's own documentation, each
+> labelled. See the second **[SUPERSEDED]** block under Phase 2; it also records
+> the one command that has to be run to populate the generated half of the
+> vendor tier, which ships empty.
+>
 > Phase 0's answers are in **[sample-acquisition-phase0.md](sample-acquisition-phase0.md)**
-> and they change four things written below. Read that document before Phase 3;
-> the corrections are marked inline here as **[SUPERSEDED]**.
+> and they change four things written below. Read that document before finishing
+> Phase 4; the corrections are marked inline here as **[SUPERSEDED]**.
 >
 > **Nothing is blocked any more.** The one open question - whether `/search/*`
 > is addressed at the leader or under `/m/{searchGroupId}` - was answered on
@@ -216,6 +234,70 @@ This phase alone is worth shipping even if every later phase is abandoned.
 > agree. The panel is `LogTypeRecommendation`; the confirmation stopped
 > re-listing the same names.
 
+> **[SUPERSEDED - one source of evidence became three]** (2026-08-19)
+>
+> `deriveExpectedLogTypes` reads analytic rules and nothing else, so a Sentinel
+> solution shipping few or no detections got "the app cannot say which log types
+> it needs". Honest, and useless - precisely when the operator most needs
+> telling. The recommendation now merges THREE tiers, each making a DIFFERENT
+> claim, and the tier is on every row and in the lead sentence:
+>
+> - `detection` - a shipped analytic rule filters on this value. The strongest
+>   evidence there is: the solution demonstrably breaks without it.
+> - `workbook` - a shipped workbook queries it. Real, weaker; a dashboard panel
+>   is not a detection. Workbooks were already being fetched, but only inside the
+>   workbooks section's `analyze()`, which is a button pressed long after the
+>   operator chooses samples. They now come from the same content-first mount
+>   effect that already fetched the rules, which also fixed a real inconsistency:
+>   the early `contentRequirements` saw rules alone and under-counted the columns
+>   content needs, while `analyze()` had always merged both.
+> - `vendor` - the VENDOR documents this feed. Says nothing about what this
+>   solution needs, everything about what exists to be collected - which is
+>   exactly the decision facing an operator whose solution ships no detections.
+>
+> Collapsing them would tell an operator their solution requires data it has
+> never mentioned, so the tier is pinned. A list built entirely from vendor docs
+> reads *"this solution ships no detections that name a log type; Zscaler
+> documents ..."* and never *"your solution needs"*. The merge is
+> `mergeLogTypeSources` in `domain/log-type-catalog`; the type is
+> `DocumentedLogType`, NOT `VendorLogType`, because `sentinel-content` already
+> exports that name for the connector-decoder's per-table projection.
+>
+> **The vendor tier has two sub-tiers and the generated one ships EMPTY.** The
+> precedence mirrors `vendor-mapping-packs` deliberately - same problem, same
+> answer, already settled here: HAND packs, each cited to the vendor's own
+> documentation, are declared first and win the per-value dedupe over GENERATED
+> packs mined from the elastic/integrations `data_stream` directory names.
+> Thirteen hand packs (Zscaler ZIA and ZPA, PAN-OS, CrowdStrike FDR, FortiGate,
+> Cisco ASA, Check Point, Okta, Netskope, SentinelOne, Cortex XDR,
+> Corelight/Zeek, pfSense) therefore ARE the vendor tier today, and a breadth pin
+> asserts all thirteen ids are present - with the generated tier empty, a silent
+> shrink here removes the only fallback a solution with no detections has.
+>
+> **To populate the generated tier, someone has to run:**
+>
+> ```sh
+> node scripts/generate-vendor-packs.mjs --bulk <elastic-integrations-checkout>
+> ```
+>
+> It needs a local checkout and network, which the environment this shipped in
+> did not have. Curated mode deliberately does NOT write the catalog: it fetches
+> streams by name from `TARGETS` and never enumerates a package, so it would
+> replace the catalog with a partial one that looks complete.
+>
+> Two matching traps surfaced while widening to thirteen, both worth knowing
+> before adding a fourteenth. Substring keywords cannot express "most specific
+> wins", and EVERY Zscaler Private Access solution name contains "zscaler", so
+> the ZIA pack would have told a ZPA operator to collect ZIA Web - a feed that
+> does not exist in the product they are onboarding. Same trap on "Palo Alto
+> Networks Cortex XDR", which contains "palo alto" and would have been handed the
+> firewall's TRAFFIC and THREAT. Recommending the WRONG product's feeds is worse
+> than recommending nothing, so packs carry `excludeKeywords` and both cases are
+> pinned from both directions. Okta is the one vendor that does not fit the model
+> cleanly and says so in its own provenance: it emits ONE stream partitioned by a
+> dotted `eventType`, so its entries are prefixes (`user.session`,
+> `user.authentication`) rather than separate feeds.
+
 ---
 
 ## Phase 3 - source discovery
@@ -269,6 +351,10 @@ Operator-chosen, each labelled for the evidence it gives.
 
 ### Search (best evidence)
 
+> **STATUS: IN PROGRESS (2026-08-20).** The lake-query mode is being built now on
+> this branch. Nothing in this section has shipped yet; the capture path below it
+> has.
+
 `summarize count() by <discriminator>` over the selected dataset. Returns the
 complete log-type list AND per-type volumes. The discriminator field comes from
 `selectDiscriminatorField` run over a small sample; Search then enumerates that
@@ -276,6 +362,10 @@ field's values at scale. **Capture answers "which field"; Search answers "what
 values".**
 
 ### Filtered capture (bounded evidence)
+
+> **STATUS: DONE (2026-08-19), core and UI.** `domain/capture-filter`,
+> `captureSamples`, `CapturePanel`. Read the two `[SUPERSEDED]` blocks in this
+> section before changing any of it.
 
 Chosen source + operator filter, then `splitSamplesByLogType`.
 
@@ -310,11 +400,64 @@ Two correctness rules, both learned the hard way and both easy to get wrong:
    before the CSV (`<14>Aug 13 10:49:03 host 1,2026/...`). Comma-bounded is the
    sweet spot.
 
+> **[SUPERSEDED - the anchor is a DELIMITER SET, not a comma]** (2026-08-19,
+> shipped as `logTypePredicate` in `domain/capture-filter`)
+>
+> Rule 2 is right about the danger and wrong about the anchor. The operator picks
+> a SOURCE, not a format - so a comma anchor against a pipe-delimited CEF vendor
+> matches nothing, which is rule 1's zero-events failure again wearing a
+> different hat: an empty capture reads as "this source does not carry that log
+> type", an answer rather than an error. The shipped anchor is the SET of
+> delimiters the formats this app actually parses use - comma (CSV/PAN-OS), pipe
+> (CEF/LEEF), tab (LEEF extension), quote and colon (JSON), equals (KV),
+> whitespace, and the line ends:
+>
+> ```js
+> __inputId === "in_syslog" && /(^|[,|\t"':= \r\n])TRAFFIC([,|\t"':= \r\n]|$)/i.test(_raw)
+> ```
+>
+> `/` is excluded ON PURPOSE, and that exclusion is what still kills the false
+> positive rule 2 exists for: a URL path like `/api/traffic/list` does not match.
+> Pinned in both directions by EVALUATING the generated predicates as JavaScript
+> rather than asserting on their text - CSV, CEF, JSON and KV all match; the URL
+> and TRAFFICKING do not.
+>
+> Rule 1 shipped exactly as written, and it is not cosmetic: PAN-OS emits
+> `GLOBALPROTECT`, and a case-sensitive test returns zero events.
+>
+> One warning is emitted, and it checks ONE thing - the edit that costs you:
+> deleting the `__inputId` clause, after which the capture runs against every
+> source in the group and returns a mixture the operator believes came from one
+> place. `captureFilterWarning` deliberately does NOT validate the JavaScript;
+> Cribl evaluates the expression, and a filter that fails to compile comes back
+> carrying Cribl's own message, which beats a guess from here.
+
 Filter expressions are **generated into the same vendor-knowledge asset as the
 packs** (`generate-vendor-packs.mjs`, extended to keep the `data_stream`
 dimension it already walks), with hand-verified overrides winning - the same
 precedence rule `vendor-mapping-packs.ts` already pins. Not a hand-maintained
 second list.
+
+> **[SUPERSEDED - the checkboxes come from the log-type CATALOG, and the
+> generated half of it is empty]** (2026-08-19)
+>
+> The suggestions are not computed here as a second opinion. They are the Phase 2
+> recommendation's three tiers, rendered as checkboxes: content-derived types
+> (detection and workbook) are PRE-TICKED, vendor-documented ones are offered
+> unticked, and an already-provided type is unticked with the reason
+> ("capturing again replaces that sample"). Unticking everything captures the
+> whole source, which is a legitimate choice - an operator who does not yet know
+> what a source sends should be able to look first.
+>
+> The generator was extended to keep the `data_stream` dimension as planned, but
+> **its output ships EMPTY** until someone runs
+> `node scripts/generate-vendor-packs.mjs --bulk <elastic-integrations-checkout>`
+> (see the Phase 2 block). So the hand-verified packs are not merely winning the
+> precedence - they are currently the whole vendor tier.
+>
+> Editing the filter by hand STOPS the checkboxes rewriting it. Silently
+> discarding someone's edit is worse than letting the two disagree, and the
+> `__inputId` warning still fires either way.
 
 ### Manual upload (fallback)
 
@@ -326,6 +469,28 @@ Name it rather than silently producing one undifferentiated log type. The
 failure is already modelled one step later - `route-value-discriminator.ts`
 emits a placeholder filter and tells the operator instead of a match-all that
 swallows every route. Same failure, earlier.
+
+> **[DONE 2026-08-19, for the capture path.]** A capture whose events share no
+> discriminator is FLAGGED rather than presented as one invented log type, and an
+> empty capture is returned as a RESULT with both likely causes named - the
+> filter matched nothing, or the source is idle - because "no events" is what the
+> operator will otherwise read as a fact about their source. Two more things this
+> path had to get right and did: the response is read for the THREE shapes the
+> platform returns (documented NDJSON, an already-parsed array when the bridge
+> decoded it, and a `{count, items}` envelope), and a committed sample goes
+> through `tagSampleFromContent`, the SAME content-first parse an upload uses, so
+> the format is re-detected from the captured bytes rather than carried over -
+> pinned by capturing CEF that the split labelled "unknown" and asserting it
+> lands as "cef". A capture and an upload of the same events are
+> indistinguishable afterwards, which is the equivalence that made keeping the
+> splitter through the browser's removal worthwhile.
+>
+> A pin written for this caught a real gap in the implementation rather than
+> confirming it: `plannedCaptureSamples` skipped splits with zero LINES, but a
+> split holding a whitespace-only line - or a partial event caught at the edge of
+> the capture window - produced a tagged sample with zero RECORDS. That husk
+> satisfies the "samples provided" check while giving the mapping nothing to work
+> with. Having lines is not the same as having events; both are checked now.
 
 ---
 
