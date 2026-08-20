@@ -142,12 +142,22 @@ export function fieldRows(
  * The raw-preview lines for a tagged sample: the first `maxLines` stored raw
  * events (already capped to {@link RAW_EVENTS_CAP} on tag).
  *
- * These are NOT the original vendor bytes. This comment used to claim they were
- * "the ORIGINAL vendor bytes when the sample was a non-JSON format"; that has
- * never been true on the intake path - parseSampleContent builds `rawEvents` by
- * re-serializing each parsed record (`JSON.stringify`), whatever the input
- * format was. Only the deleted browse path kept original lines, by indexing back
- * into the file text. See docs/sample-acquisition-phase0.md (0.3).
+ * WHAT THESE ACTUALLY ARE, since this comment has been wrong in both directions
+ * and the preview is where an operator checks whether their sample survived:
+ *
+ *   line-oriented input (CEF, LEEF, syslog, KV, headerless CSV) -> the ORIGINAL
+ *     vendor bytes, because parseSampleContent pairs each record with the input
+ *     line that produced it;
+ *   a Cribl capture -> the vendor line the capture carried in `_raw`;
+ *   JSON / NDJSON -> a re-serialization of the parsed record, deliberately -
+ *     nothing a downstream pipeline can observe is lost by it.
+ *
+ * The history is worth one line as a warning: this doc block previously claimed
+ * the opposite ("NOT the original vendor bytes"), written to debunk an older
+ * stale comment - in the very commit that made the originals available. A
+ * comment that debunks another comment is exactly the kind that outlives its
+ * own truth. See domain/sample-parsing/parse-sample.ts `rawEventsFor` for the
+ * all-or-nothing pairing rule, pinned in raw-lines.test.ts.
  */
 export function rawPreviewLines(
   sample: TaggedSample,
