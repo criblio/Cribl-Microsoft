@@ -558,6 +558,28 @@ scope unless explicitly wanted.
 >
 > **The actual blocker is upstream:** Phase 5 has no input until the Lake query
 > has a UI consumer. That is Phase 4's remaining half, not Phase 5's gap.
+>
+> **[UNBLOCKED 2026-08-20.]** That half shipped. `queryLakeSamples` is wired
+> through `LakePanel` from `integrate-screen.tsx:1476`, and `LakeLogTypeVolume`
+> carries `eventCount` - with `undefined` kept distinct from `0`, because a
+> volume of zero is a claim about the data. So gap 2 above ("a SECOND present
+> source: what the dataset holds, tagged or not") is answered: the dataset's own
+> counts are on screen.
+>
+> Remaining, and only item 3 needs a decision rather than typing:
+> 1. Counts have nowhere to live once merged - `unreferenced` is still a bare
+>    `string[]` and `MergedLogType` has no volume field.
+> 3. THE THRESHOLD. Still the open question, and still a real one: this module
+>    documents `unreferenced` as "NOT a problem - a vendor emits more than any
+>    one solution detects on", and the UI says "fine". Phase 5 wants the same set
+>    to read as cost.
+> 4. Events-to-bytes remains absent; `estimateDropSavings`'s mean bytes/event
+>    could be multiplied by a Search count, so the pieces exist.
+>
+> One thing NOT to lose when this is built: the honest wording is still "no rule
+> or workbook shipped by THIS SOLUTION filters on it", because expected log types
+> come from one selected solution's repo content while deployed rules are
+> workspace-wide. Volume does not make the stronger claim true.
 
 ---
 
