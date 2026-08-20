@@ -294,6 +294,28 @@ function isGeneratedPack(value: unknown): value is VendorMappingPack {
 const GENERATED_PACK_EXCLUSIONS: Readonly<Record<string, readonly string[]>> = {
   "generated-zscaler_zia": ["private access", "zpa"],
   "sentinel-dcr-zscaler": ["private access", "zpa"],
+  // Palo Alto, added 2026-08-20 after measuring it. `generated-prisma_cloud`
+  // claims the parent brand "palo alto", so it attached to FOUR solutions that
+  // are not Prisma Cloud - Cortex XDR, Cortex XDR CCP, Cortex Xpanse CCF and
+  // Azure Cloud NGFW.
+  //
+  // The two mappings it contributes are not WRONG at the column level, and that
+  // is worth stating plainly: they are `user` and `resourceName` -> SourceUserName,
+  // Cortex XDR carries neither field, nothing else targets SourceUserName, and
+  // `user` is already in the alias ladder. Excluding them changes 160 mappings
+  // to 158 and steals no column from anything.
+  //
+  // The harm is the CITATION, which is the bar solution-matching.ts already set:
+  // mapping-review renders a "Vendor mapping documentation" line for every
+  // matching pack whether or not its entries fire, so a Cortex XDR operator was
+  // shown Prisma Cloud's docs. And the log-type catalog ALREADY excludes
+  // "cortex" from the PAN-OS pack, so the two halves of one screen disagreed
+  // about which product this solution is - the exact divergence the
+  // cross-module pin exists to catch.
+  "generated-prisma_cloud": ["cortex", "xpanse", "pan-os", "panos", "ngfw"],
+  // Xpanse is attack-surface management, not EDR - a second bleed in the same
+  // family, from the XDR pack's bare "cortex".
+  "generated-panw_cortex_xdr": ["xpanse"],
 };
 
 /** Apply the hand-declared sibling-product exclusion, if this pack has one. */

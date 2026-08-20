@@ -147,10 +147,20 @@ describe("LogTypeRecommendation", () => {
     const { container } = renderFor([], [], true, "Zscaler Internet Access");
 
     const rows = container.querySelectorAll(".log-type-recommendation-list li");
-    expect(rows).toHaveLength(5);
+    // Not a fixed 5 (2026-08-20): that held only while the generated vendor
+    // tier was empty, and it is populated now. What this test is actually
+    // about survives - the panel is NOT empty, the cited hand feeds are the
+    // ones shown, and every row is labelled vendor so none of it can be read
+    // as something the solution's content asked for.
+    expect(rows.length).toBeGreaterThan(0);
     expect(container.textContent).toContain("ZIA Web");
     expect(container.textContent).toContain("ZIA Firewall");
-    expect(container.querySelectorAll(".log-type-evidence-vendor")).toHaveLength(5);
+    expect(container.querySelectorAll(".log-type-evidence-vendor")).toHaveLength(
+      rows.length,
+    );
+    // And it is still ZIA's list, not its sibling's - the generated tier
+    // reintroduced that bleed before the exclusions overlay closed it.
+    expect(container.textContent).not.toContain("browser_access");
   });
 
   it("does NOT claim a vendor-derived list is what the solution needs", () => {
