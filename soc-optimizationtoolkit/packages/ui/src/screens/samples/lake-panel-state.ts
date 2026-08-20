@@ -32,9 +32,10 @@
  *    existing "TRAFFIC" sample. Named per row and again at the commit, and only
  *    for the rows actually TICKED - unlike a capture, where everything returned
  *    is committed, here the operator's selection decides what collides. Two
- *    ticks that resolve to ONE label are then ACCOUNTED FOR as one sample
- *    afterwards ({@link mergedLakeLogTypeCount}), not reported as data that
- *    never arrived.
+ *    ticks that resolve to ONE label are ONE sample on BOTH sides of the
+ *    commit: named once in the warning beforehand ({@link lakeCollisions}), and
+ *    accounted for as a merge afterwards ({@link mergedLakeLogTypeCount})
+ *    rather than reported as data that never arrived.
  *
  * 4. TRUNCATION IS NOT COMPLETENESS. A list that hit the row cap reads as the
  *    whole dataset unless it says otherwise.
@@ -76,7 +77,20 @@ export interface LakeWindow {
 
 /** One log-type checkbox on the Lake panel. */
 export interface LakeLogTypeChoice {
+  /** The log type as the DATASET names it - what the row shows. */
   value: string;
+  /**
+   * The label this row's events would actually be STORED under: the operator's
+   * own casing when one of their samples collides with it ({@link
+   * storeLabelFor}), the dataset's otherwise.
+   *
+   * Carried on the row rather than re-derived when the warning is built, so
+   * that the warning and the row's own note cannot describe two different
+   * stores. The list is seeded ONCE from the store's log types and deliberately
+   * not re-seeded when they change - re-deriving the label later would read
+   * that newer store while `replacesExisting` still spoke for the older one.
+   */
+  storeLabel: string;
   /**
    * Events over the queried window, or UNDEFINED when Search reported the
    * volume in a column this app does not recognize. Never defaulted to 0 - a
@@ -104,24 +118,29 @@ export interface LakeLogTypeChoice {
  * label the operator typed: Search reports whatever casing the data carries,
  * while an upload keeps "traffic". Without folding the case the panel would not
  * know the two collide. {@link plannedLakeSamples} then adopts the operator's
- * own casing so the replacement this warning promises actually happens.
+ * own casing so the replacement this warning promises actually happens, and
+ * each row carries that same adopted label ({@link LakeLogTypeChoice.storeLabel})
+ * so the warning can name the sample the operator will actually lose.
  */
 export function lakeLogTypeChoices(
   logTypes: readonly LakeLogTypeVolume[],
   existingLogTypes: readonly string[] = [],
 ): LakeLogTypeChoice[] {
-  // Folded through the store's own key rule, so a row that warns about
-  // replacing a sample is a row plannedLakeSamples will really replace.
-  const existing = new Set(existingLogTypes.map(sampleStoreKey));
+  // The store's OWN index, answering both questions from one fold: whether a
+  // row collides, and under which label. A row that warns about replacing a
+  // sample is therefore a row plannedLakeSamples will really replace, named the
+  // way plannedLakeSamples will really name it.
+  const byKey = existingLabelsByCase(existingLogTypes);
   let preselected = 0;
 
   return logTypes.map((entry) => {
-    const replacesExisting = existing.has(sampleStoreKey(entry.logType));
+    const replacesExisting = byKey.has(sampleStoreKey(entry.logType));
     const selected = !replacesExisting && preselected < DEFAULT_PRESELECTED;
     if (selected) preselected += 1;
 
     const choice: LakeLogTypeChoice = {
       value: entry.logType,
+      storeLabel: storeLabelFor(entry.logType, byKey),
       selected,
       replacesExisting,
     };
@@ -154,18 +173,40 @@ export function toggleLakeChoice(
 }
 
 /**
- * The log types a commit would replace RIGHT NOW.
+ * The SAMPLES a commit would replace RIGHT NOW - one entry per sample, never
+ * one per tick.
  *
  * Read off the ticks rather than off the query result, which is where this
  * differs from the capture panel: a capture commits everything it returned, so
  * its collisions are fixed the moment the result lands. Here the operator's
  * selection decides, and warning about a row they already unticked would train
  * them to ignore the warning.
+ *
+ * FOLDED THE WAY THE STORE FOLDS (2026-08-20). A dataset can hold both
+ * "TRAFFIC" and "traffic" as discriminator values; against an operator sample
+ * called "Traffic" BOTH rows adopt that one label, so ticking both replaces ONE
+ * sample. Listing the two ticks named two samples the operator does not have
+ * and overstated what they were about to lose - the pre-commit mirror of the
+ * shortfall that blamed "returned nothing usable" for picks that had in fact
+ * been merged ({@link mergedLakeLogTypeCount}).
+ *
+ * The name shown is the operator's own, because it is THEIR sample being
+ * replaced and that is what it is called on their screen; the store key is only
+ * the fold that decides which rows are the same sample.
  */
 export function lakeCollisions(
   choices: readonly LakeLogTypeChoice[],
 ): string[] {
-  return choices.filter((c) => c.selected && c.replacesExisting).map((c) => c.value);
+  // One entry per store key, holding the label to show for it.
+  const named = new Map<string, string>();
+  for (const choice of choices) {
+    if (!choice.selected || !choice.replacesExisting) continue;
+    // First tick wins the position; both ticks carry the same adopted label, so
+    // there is no casing to choose between here.
+    const key = sampleStoreKey(choice.storeLabel);
+    if (!named.has(key)) named.set(key, choice.storeLabel);
+  }
+  return [...named.values()];
 }
 
 // ---------------------------------------------------------------------------

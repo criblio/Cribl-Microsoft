@@ -11,6 +11,8 @@
  *   - showing a truncated log-type list as if it were the whole dataset;
  *   - letting a commit silently overwrite a sample they curated, or promising a
  *     replacement that appends a duplicate instead;
+ *   - naming more samples in the replace warning than the operator actually
+ *     has, which puts them off a commit that would cost them one sample;
  *   - rounding a partial haul up to a success;
  *   - blaming a shortfall on empty data when the picks were folded into one
  *     sample, which sends them to widen a window over data they already have.
@@ -143,6 +145,27 @@ describe("lakeLogTypeChoices", () => {
     ]);
   });
 
+  it("carries the label each row would be STORED under", () => {
+    // The row shows the dataset's casing, but the store keys the operator's -
+    // so the label a commit writes, and the one a warning must name, is theirs.
+    // Both case variants resolve to it; a log type they do not have keeps the
+    // dataset's own name, because nothing of theirs is at stake there.
+    const choices = lakeLogTypeChoices(
+      [{ logType: "TRAFFIC" }, { logType: "traffic" }, { logType: "THREAT" }],
+      ["Traffic"],
+    );
+    expect(choices.map((c) => c.value)).toEqual([
+      "TRAFFIC",
+      "traffic",
+      "THREAT",
+    ]);
+    expect(choices.map((c) => c.storeLabel)).toEqual([
+      "Traffic",
+      "Traffic",
+      "THREAT",
+    ]);
+  });
+
   it("carries a volume through, and leaves an unreadable one UNDEFINED", () => {
     // Not defaulted to 0: a volume of zero is a claim about the data, and the
     // usecase deliberately declined to make it.
@@ -183,6 +206,52 @@ describe("toggle + collisions", () => {
     const ticked = toggleLakeChoice(choices, "TRAFFIC");
     expect(lakeCollisions(ticked)).toEqual(["TRAFFIC"]);
     expect(lakeCollisions(toggleLakeChoice(ticked, "TRAFFIC"))).toEqual([]);
+  });
+
+  it("names the sample by the OPERATOR'S label, not by Search's casing", () => {
+    // The warning is about a sample of theirs, and "your existing TRAFFIC
+    // sample" names one they do not have - their chip reads "traffic". The
+    // commit adopts their label too, so anything else makes the warning and the
+    // sample it replaced disagree about what was called what.
+    const one = lakeLogTypeChoices([{ logType: "TRAFFIC" }], ["traffic"]);
+    expect(lakeCollisions(toggleLakeChoice(one, "TRAFFIC"))).toEqual([
+      "traffic",
+    ]);
+  });
+
+  it("names ONE sample when two ticks fold onto one of the operator's", () => {
+    // The dataset holds both casings as discriminator values and the operator
+    // has a sample under a third. All three are the same store key, so both
+    // ticks replace that ONE sample - and naming two would tell them they are
+    // about to lose a sample that does not exist, over a commit that costs them
+    // one. The pre-commit mirror of the shortfall mergedLakeLogTypeCount fixed.
+    const variants = lakeLogTypeChoices(
+      [
+        { logType: "TRAFFIC", eventCount: 412908 },
+        { logType: "traffic", eventCount: 1201 },
+      ],
+      ["Traffic"],
+    );
+    const both = toggleLakeChoice(
+      toggleLakeChoice(variants, "TRAFFIC"),
+      "traffic",
+    );
+    // Two rows really are ticked - the fold is in what they are CALLED, not in
+    // what gets fetched, and both are still fetched and committed.
+    expect(selectedLakeLogTypes(both)).toEqual(["TRAFFIC", "traffic"]);
+    expect(lakeCollisions(both)).toEqual(["Traffic"]);
+  });
+
+  it("still names every DISTINCT sample a commit would replace", () => {
+    // The other side of the fold: collapsing to one entry per sample must not
+    // become one entry per commit, which would hide a second sample the
+    // operator is about to lose.
+    const two = lakeLogTypeChoices(
+      [{ logType: "TRAFFIC" }, { logType: "THREAT" }],
+      ["traffic", "threat"],
+    );
+    const both = toggleLakeChoice(toggleLakeChoice(two, "TRAFFIC"), "THREAT");
+    expect(lakeCollisions(both)).toEqual(["traffic", "threat"]);
   });
 });
 
