@@ -68,6 +68,7 @@ import {
   placeholderWarning,
   resolveDestinations,
   canWireSource,
+  captureSamples,
   compareLogTypeCoverage,
   deriveExpectedLogTypes,
   documentedLogTypesForSolution,
@@ -108,6 +109,7 @@ import type {
   LogTypeFieldValues,
   SessionDestination,
   TableAssemblyInput,
+  SampleSourceRef,
   TaggedSample,
   TargetScope,
   ContentRequirements,
@@ -123,6 +125,7 @@ import {
 } from "../samples/sample-coverage-state";
 import { LogTypeRecommendation } from "../samples/log-type-recommendation";
 import { SampleSourcePicker } from "../samples/sample-source-picker";
+import { CapturePanel } from "../samples/capture-panel";
 import { useSampleSources } from "../samples/use-sample-sources";
 import { InfoTip } from "../../components/info-tip";
 import { ReadinessFooter } from "../../components/readiness-footer";
@@ -807,6 +810,15 @@ export function IntegrateScreen({
   // - not because the answer is expected to be uninteresting.
   const sampleSources = useSampleSources({ enabled: scopeCommitted });
   const [sampleSourceChoice, setSampleSourceChoice] = useState("");
+  const [sampleSourceEntry, setSampleSourceEntry] =
+    useState<SampleSourceRef | null>(null);
+  // Capture is offered only for a chosen LIVE SOURCE - a Lake dataset is
+  // queried, not captured, and that is Phase 4's other half.
+  const captureTarget =
+    sampleSourceEntry?.kind === "cribl-source" &&
+    sampleSourceEntry.groupId !== undefined
+      ? sampleSourceEntry
+      : null;
   const [sampleSetConfirmed, setSampleSetConfirmed] = useState(false);
   // ONE join, TWO readings. The recommendation is the forward-looking half (what
   // to go and fetch, advisory); the coverage view is the backward-looking half
@@ -1410,9 +1422,42 @@ export function IntegrateScreen({
           setSampleSourceChoice("");
           sampleSources.selectGroup(groupId);
         }}
-        onChange={(next) => setSampleSourceChoice(next)}
+        onChange={(next, entry) => {
+          setSampleSourceChoice(next);
+          setSampleSourceEntry(entry);
+        }}
         onReload={sampleSources.reload}
       />
+      {captureTarget !== null && (
+        <CapturePanel
+          key={captureTarget.id}
+          source={captureTarget}
+          recommended={logTypeRecommendation.entries}
+          existingLogTypes={samples.map((s) => s.logType)}
+          onCapture={(filter, maxEvents, durationSeconds) =>
+            captureSamples(
+              ports.cribl,
+              {
+                groupId: captureTarget.groupId ?? "",
+                filter,
+                maxEvents,
+                durationSeconds,
+              },
+              ports.logger,
+            )
+          }
+          onCommit={async (captured) => {
+            // Straight through the SAME store the intake section writes, so a
+            // captured sample and an uploaded one are indistinguishable
+            // afterwards - including the replace-by-logType semantics the
+            // preview warned about.
+            for (const sample of captured) {
+              await ports.samples.upsert(sample);
+            }
+            handleSamplesChange(await ports.samples.list());
+          }}
+        />
+      )}
       <SampleIntakeSection
         key={contentResetKey}
         store={ports.samples}
