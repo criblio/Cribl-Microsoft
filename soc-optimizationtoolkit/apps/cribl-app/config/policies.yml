@@ -149,9 +149,8 @@ policies:
   #
   # NOTE on /search/*: it IS group-scoped, under the SEARCH group (isSearchGroup
   # resolves the id from /master/groups; it is NOT the constant
-  # "default_search"). Nothing declares it yet because nothing calls it - the
-  # Lake dataset LISTING is a leader route, and the QUERY that needs
-  # /m/:gid/search/query arrives with Phase 4. Declared then, not now.
+  # "default_search"), which is why its entries below carry the /m/:gid prefix
+  # while the Lake dataset LISTING beside them does not.
   # Cribl Lake dataset LISTING is a LEADER route carrying a lakeId segment -
   # a DIFFERENT route family from the /system/lake/datasets create above.
   - object: '/products/lake/lakes/:lakeId/datasets'
@@ -169,3 +168,28 @@ policies:
   # Live sources to capture from. The GET is already declared above for Live
   # Architecture; repeated here only in this comment so the reason is findable
   # from either feature. No second entry is added.
+  #
+  # Cribl Search, the OTHER half of ADR 0003 Phase 4: read which log types a
+  # Lake dataset holds and how much of each, so the operator is told which
+  # samples to provide instead of guessing. All three are group-scoped under the
+  # SEARCH group, not the Stream worker group (see the NOTE above), and all
+  # three READ - no dataset, job schedule, or saved search is ever written.
+  #   /m/:gid/search/query (get)      - the single-round-trip query. Preferred,
+  #                                     and spec-only: Cribl's own UI was never
+  #                                     seen to call it, so the job routes below
+  #                                     are the fallback rather than an extra.
+  #   /m/:gid/search/jobs (post)      - the second NON-GET this feature adds, and
+  #                                     like the capture POST it CREATES NOTHING
+  #                                     durable: a search job is the query
+  #                                     itself, submitted in a body because it
+  #                                     does not fit a URL. It expires on its own.
+  #   /m/:gid/search/jobs/* (get)     - the job's own status and results pages
+  #                                     ({id}/status?advanced=true then
+  #                                     {id}/results?offset&limit), which is the
+  #                                     lifecycle verified live 2026-08-19.
+  - object: '/m/:gid/search/query'
+    actions: ['GET']
+  - object: '/m/:gid/search/jobs'
+    actions: ['POST']
+  - object: '/m/:gid/search/jobs/*'
+    actions: ['GET']

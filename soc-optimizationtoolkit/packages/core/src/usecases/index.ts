@@ -20,5 +20,6 @@ export * from "./siem-migration";
 export * from "./content-install";
 export * from "./discover-sample-sources";
 export * from "./capture-samples";
+export * from "./query-lake-samples";
 export * from "./provision-lab";
 export * from "./live-architecture";

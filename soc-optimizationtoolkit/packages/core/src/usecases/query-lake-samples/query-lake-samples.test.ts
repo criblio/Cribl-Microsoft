@@ -1,0 +1,527 @@
+/**
+ * Pins for query-lake-samples (plan Phase 4, ADR 0003).
+ *
+ * FOUR CLASSES OF FAILURE guarded here, and the first two are asserted on the
+ * REQUEST rather than the result, because a wrong path or a wrong group answers
+ * 404 and 404 degrades into an EMPTY LOG-TYPE LIST - which the operator reads as
+ * a fact about their data rather than a bug in us.
+ *
+ *   ADDRESSING   /search/* is group-scoped under the SEARCH group, verified live
+ *                2026-08-19 off Cribl's own UI traffic. The spec declares these
+ *                paths bare and cannot settle it.
+ *   THE QUERIES  KQL, not SPL, and TWO of them: a sample that answers WHICH
+ *                FIELD, then a summarize that answers WHAT VALUES.
+ *   THE ROUTES   sync first (spec-only), the proven job lifecycle second.
+ *   EMPTY vs FAILED  never collapsed, in either direction.
+ */
+
+import { describe, expect, it } from "vitest";
+
+import { FakeCriblClient } from "../../testing/fake-cribl-client";
+import type { PortHttpResponse } from "../../ports/http";
+import {
+  COUNT_COLUMN,
+  DEFAULT_EARLIEST,
+  DEFAULT_LATEST,
+  DEFAULT_MAX_LOG_TYPES,
+  DEFAULT_SAMPLE_LIMIT,
+  JOB_POLL_ATTEMPTS,
+  MAX_SAMPLE_LIMIT,
+  buildDiscriminatorSampleQuery,
+  buildLogTypeCountQuery,
+  queryLakeSamples,
+  searchResultRows,
+} from "./query-lake-samples";
+
+const GROUP = "default_search";
+const DATASET = "LogSources";
+
+/** The SearchJobResults envelope line both result routes emit first. */
+const META = {
+  isFinished: true,
+  job: { id: "j-1" },
+  offset: 0,
+  persistedEventCount: 2,
+  totalEventCount: 2,
+};
+
+/** The documented shape: NDJSON, metadata line then one row per line. */
+const ndjson = (rows: unknown[]): string =>
+  [META, ...rows].map((row) => JSON.stringify(row)).join("\n");
+
+const ok = (body: unknown): PortHttpResponse => ({ status: 200, body });
+
+/** Two log types, discriminated by a plain `type` field Search can group by. */
+const SAMPLE_ROWS = [
+  { type: "TRAFFIC", _raw: "1,2026/08/13,fw01,TRAFFIC,end" },
+  { type: "THREAT", _raw: "1,2026/08/13,fw01,THREAT,vuln" },
+];
+const COUNT_ROWS = [
+  { type: "THREAT", [COUNT_COLUMN]: 12 },
+  { type: "TRAFFIC", [COUNT_COLUMN]: 890000 },
+];
+
+function client(...responses: PortHttpResponse[]): FakeCriblClient {
+  const cribl = new FakeCriblClient();
+  cribl.respondWith(...responses);
+  return cribl;
+}
+
+/** The happy path: both queries answered by the sync route. */
+function syncClient(): FakeCriblClient {
+  return client(ok(ndjson(SAMPLE_ROWS)), ok(ndjson(COUNT_ROWS)));
+}
+
+const run = (cribl: FakeCriblClient, extra = {}) =>
+  queryLakeSamples(cribl, { searchGroupId: GROUP, datasetId: DATASET, ...extra });
+
+describe("addressing - /search/* is GROUP-scoped under the SEARCH group", () => {
+  it("GETs /search/query in the search group's context", async () => {
+    const cribl = syncClient();
+
+    await run(cribl);
+
+    const call = cribl.calls[0];
+    expect(call.method).toBe("GET");
+    expect(call.path).toBe("/search/query");
+    // The adapter renders this as /m/default_search/search/query. A leader-level
+    // call (groupId undefined) is the failure this pin exists for.
+    expect(call.groupId).toBe(GROUP);
+  });
+
+  it("passes the query, the window and the page bounds as query params", async () => {
+    const cribl = syncClient();
+
+    await run(cribl);
+
+    expect(cribl.calls[0].query).toEqual({
+      query: `dataset="${DATASET}" | limit ${DEFAULT_SAMPLE_LIMIT}`,
+      earliest: DEFAULT_EARLIEST,
+      latest: DEFAULT_LATEST,
+      offset: "0",
+      limit: String(DEFAULT_SAMPLE_LIMIT),
+    });
+  });
+
+  it("refuses to query at all with no SEARCH group, rather than 404ing", async () => {
+    // A blank group id would address the leader, 404, and read as an empty
+    // dataset. Nothing is sent.
+    const cribl = new FakeCriblClient();
+
+    const result = await queryLakeSamples(cribl, {
+      searchGroupId: "",
+      datasetId: DATASET,
+    });
+
+    expect(cribl.calls).toHaveLength(0);
+    expect(result.ok).toBe(false);
+    expect(result.logTypes).toEqual([]);
+    expect(result.notes.join(" ")).toContain("No Cribl Search group");
+  });
+
+  it("refuses to query with no dataset selected", async () => {
+    const cribl = new FakeCriblClient();
+    const result = await queryLakeSamples(cribl, {
+      searchGroupId: GROUP,
+      datasetId: "  ",
+    });
+    expect(cribl.calls).toHaveLength(0);
+    expect(result.ok).toBe(false);
+  });
+});
+
+describe("the two queries - KQL, and the split the plan mandates", () => {
+  it("asks for a small sample first, then summarizes the field it found", async () => {
+    // "Capture answers which field; Search answers what values." The second
+    // query must group by the field the FIRST one's rows established.
+    const cribl = syncClient();
+
+    const result = await queryLakeSamples(cribl, {
+      searchGroupId: GROUP,
+      datasetId: DATASET,
+    });
+
+    expect(cribl.calls).toHaveLength(2);
+    expect(cribl.calls[0].query?.query).toBe(
+      `dataset="${DATASET}" | limit ${DEFAULT_SAMPLE_LIMIT}`,
+    );
+    expect(cribl.calls[1].query?.query).toBe(
+      `dataset="${DATASET}" | summarize ${COUNT_COLUMN}=count() by type` +
+        ` | sort by ${COUNT_COLUMN} desc | limit ${DEFAULT_MAX_LOG_TYPES}`,
+    );
+    expect(result.discriminatorField).toBe("type");
+  });
+
+  it("sorts BEFORE limiting, so truncation drops the rarest, not the biggest", () => {
+    const query = buildLogTypeCountQuery("ds", "subtype", 25);
+    expect(query.indexOf("sort by")).toBeLessThan(query.indexOf("limit"));
+    expect(query).toContain(`sort by ${COUNT_COLUMN} desc`);
+  });
+
+  it("escapes a quote in the dataset id instead of silently re-targeting", () => {
+    // An unescaped quote changes WHICH dataset is read rather than failing.
+    expect(buildDiscriminatorSampleQuery('od"d', 10)).toBe(
+      'dataset="od\\"d" | limit 10',
+    );
+  });
+
+  it("clamps the bounds and SAYS it did", async () => {
+    const cribl = syncClient();
+
+    const result = await run(cribl, { sampleLimit: 999999 });
+
+    expect(cribl.calls[0].query?.limit).toBe(String(MAX_SAMPLE_LIMIT));
+    expect(cribl.calls[0].query?.query).toContain(`limit ${MAX_SAMPLE_LIMIT}`);
+    expect(result.notes.join(" ")).toContain(String(MAX_SAMPLE_LIMIT));
+  });
+});
+
+describe("the discriminator must be a field SEARCH can group by", () => {
+  it("stops after the sample when the log type is buried in _raw", async () => {
+    // Selecting over a LOCALLY parsed _raw would hand step two a field the
+    // engine cannot see; the summarize would return nothing, which reads as
+    // "this dataset holds no log types".
+    const cribl = client(ok(ndjson([{ _raw: "1,2026,fw,TRAFFIC,end" }])));
+
+    const result = await run(cribl);
+
+    expect(cribl.calls).toHaveLength(1);
+    expect(result.ok).toBe(true);
+    expect(result.noDiscriminator).toBe(true);
+    expect(result.discriminatorField).toBeUndefined();
+    expect(result.logTypes).toEqual([]);
+    expect(result.notes.join(" ")).toContain("capture a sample");
+  });
+});
+
+describe("the result", () => {
+  it("returns per-log-type names AND volumes, biggest first", async () => {
+    const result = await run(syncClient());
+
+    expect(result.ok).toBe(true);
+    expect(result.logTypes).toEqual([
+      { logType: "TRAFFIC", eventCount: 890000 },
+      { logType: "THREAT", eventCount: 12 },
+    ]);
+    // A volume means nothing without the window it covers.
+    expect(result.window).toEqual({
+      earliest: DEFAULT_EARLIEST,
+      latest: DEFAULT_LATEST,
+    });
+    expect(result.path).toBe("sync");
+    expect(result.truncated).toBe(false);
+  });
+
+  it("keeps a NUMERIC discriminator value instead of dropping the log type", async () => {
+    const cribl = client(
+      ok(ndjson([{ eventType: 4624 }, { eventType: 4625 }])),
+      ok(ndjson([{ eventType: 4624, [COUNT_COLUMN]: 7 }])),
+    );
+
+    const result = await run(cribl);
+
+    expect(result.discriminatorField).toBe("eventType");
+    expect(result.logTypes).toEqual([{ logType: "4624", eventCount: 7 }]);
+  });
+
+  it("reports an unreadable volume as UNKNOWN, never as zero", async () => {
+    // Zero is a claim about the data. We would be making it up.
+    const cribl = client(
+      ok(ndjson(SAMPLE_ROWS)),
+      ok(ndjson([{ type: "TRAFFIC", total: 5 }])),
+    );
+
+    const result = await run(cribl);
+
+    expect(result.logTypes).toEqual([{ logType: "TRAFFIC" }]);
+    expect(result.logTypes[0].eventCount).toBeUndefined();
+    expect(result.notes.join(" ")).toContain("unknown rather than zero");
+  });
+
+  it("reads the engine's own count_ column when the alias is ignored", async () => {
+    const cribl = client(
+      ok(ndjson(SAMPLE_ROWS)),
+      ok(ndjson([{ type: "TRAFFIC", count_: 42 }])),
+    );
+
+    const result = await run(cribl);
+
+    expect(result.logTypes).toEqual([{ logType: "TRAFFIC", eventCount: 42 }]);
+  });
+
+  it("leaves out groups with no discriminator value and counts them in a note", async () => {
+    const cribl = client(
+      ok(ndjson(SAMPLE_ROWS)),
+      ok(
+        ndjson([
+          { type: "TRAFFIC", [COUNT_COLUMN]: 3 },
+          { type: "", [COUNT_COLUMN]: 9 },
+        ]),
+      ),
+    );
+
+    const result = await run(cribl);
+
+    expect(result.logTypes).toHaveLength(1);
+    expect(result.notes.join(" ")).toContain("1 group carried no");
+  });
+
+  it("says the list may be truncated when it fills the cap", async () => {
+    const cribl = client(
+      ok(ndjson(SAMPLE_ROWS)),
+      ok(
+        ndjson([
+          { type: "A", [COUNT_COLUMN]: 2 },
+          { type: "B", [COUNT_COLUMN]: 1 },
+        ]),
+      ),
+    );
+
+    const result = await run(cribl, { maxLogTypes: 2 });
+
+    expect(result.truncated).toBe(true);
+    expect(result.logTypes.map((t) => t.logType)).toEqual(["A", "B"]);
+    expect(result.notes.join(" ")).toContain("may hold more");
+  });
+});
+
+describe("empty is a RESULT; failed is not", () => {
+  it("names the empty WINDOW when the dataset answers with no events", async () => {
+    // The sync route is spec-only, so an empty sync answer is confirmed by the
+    // proven job path before it is reported as emptiness (see below).
+    const cribl = client(
+      ok(""),
+      ok({ count: 1, items: [{ id: "j-1" }] }),
+      ok({ status: "completed" }),
+      ok(""),
+    );
+
+    const result = await run(cribl);
+
+    expect(result.ok).toBe(true);
+    expect(result.logTypes).toEqual([]);
+    expect(result.noDiscriminator).toBe(false);
+    expect(result.notes.join(" ")).toContain("holds no events between -24h and now");
+  });
+
+  it("reports a FAILED read when neither route could establish anything", async () => {
+    // The only evidence for "empty" came from the route we do not trust yet, so
+    // this must not render like the case above.
+    const cribl = client(ok(""), { status: 403, body: "forbidden" });
+
+    const result = await run(cribl);
+
+    expect(result.ok).toBe(false);
+    expect(result.logTypes).toEqual([]);
+    expect(result.notes.join(" ")).toContain("search permission");
+    expect(result.notes.join(" ")).toContain("did not run");
+    expect(result.notes.join(" ")).not.toContain("holds no events");
+  });
+
+  it("distinguishes 'the field exists but counts nothing' from a failure", async () => {
+    const cribl = client(
+      ok(ndjson(SAMPLE_ROWS)),
+      ok(ndjson([])),
+      ok({ count: 1, items: [{ id: "j-2" }] }),
+      ok({ status: "completed" }),
+      ok(ndjson([])),
+    );
+
+    const result = await run(cribl);
+
+    expect(result.ok).toBe(true);
+    expect(result.discriminatorField).toBe("type");
+    expect(result.logTypes).toEqual([]);
+    expect(result.notes.join(" ")).toContain("returned no groups");
+  });
+
+  it("folds a TRANSPORT failure into notes and never throws", async () => {
+    const cribl = new FakeCriblClient(); // no scripted response: the fake throws
+
+    const result = await run(cribl);
+
+    expect(result.ok).toBe(false);
+    expect(result.logTypes).toEqual([]);
+    expect(result.notes.join(" ")).toContain("Capturing from a live source");
+  });
+
+  it("keeps the discriminator it learned when only the COUNT query fails", async () => {
+    const cribl = client(
+      ok(ndjson(SAMPLE_ROWS)),
+      { status: 500, body: "boom" },
+      { status: 500, body: "boom" },
+    );
+
+    const result = await run(cribl);
+
+    expect(result.ok).toBe(false);
+    expect(result.discriminatorField).toBe("type");
+    expect(result.notes.join(" ")).toContain("could not be counted");
+  });
+});
+
+describe("the async job lifecycle - the route that was PROVEN live", () => {
+  it("runs create, status?advanced=true, results?offset&limit, all group-scoped", async () => {
+    const cribl = client(
+      { status: 404, body: "no such route" }, // the spec-only sync route
+      ok({ count: 1, items: [{ id: "j-1", status: "new" }] }),
+      ok({ status: "running" }),
+      ok({ status: "completed" }),
+      ok(ndjson(SAMPLE_ROWS)),
+      // Step two: the sync verdict is remembered, so it goes straight to a job.
+      ok({ count: 1, items: [{ id: "j-2" }] }),
+      ok({ status: "completed" }),
+      ok(ndjson(COUNT_ROWS)),
+    );
+    const sleeps: number[] = [];
+
+    const result = await run(cribl, {
+      sleep: async (ms: number) => {
+        sleeps.push(ms);
+      },
+    });
+
+    expect(cribl.calls.map((c) => `${c.method} ${c.path}`)).toEqual([
+      "GET /search/query",
+      "POST /search/jobs",
+      "GET /search/jobs/j-1/status",
+      "GET /search/jobs/j-1/status",
+      "GET /search/jobs/j-1/results",
+      "POST /search/jobs",
+      "GET /search/jobs/j-2/status",
+      "GET /search/jobs/j-2/results",
+    ]);
+    expect(cribl.calls.every((c) => c.groupId === GROUP)).toBe(true);
+    expect(cribl.calls[1].body).toEqual({
+      query: `dataset="${DATASET}" | limit ${DEFAULT_SAMPLE_LIMIT}`,
+      earliest: DEFAULT_EARLIEST,
+      latest: DEFAULT_LATEST,
+    });
+    expect(cribl.calls[2].query).toEqual({ advanced: "true" });
+    expect(cribl.calls[4].query).toEqual({
+      offset: "0",
+      limit: String(DEFAULT_SAMPLE_LIMIT),
+    });
+    // Core reads no clock and starts no timer: the delay is the shell's, and it
+    // is asked for only between polls that are still pending.
+    expect(sleeps).toEqual([500]);
+    expect(result.ok).toBe(true);
+    expect(result.path).toBe("async");
+    expect(result.logTypes).toHaveLength(2);
+  });
+
+  it("percent-encodes a job id rather than growing a path segment", async () => {
+    const cribl = client(
+      { status: 404, body: "" },
+      ok({ count: 1, items: [{ id: "job/1" }] }),
+      ok({ status: "completed" }),
+      ok(ndjson([{ _raw: "no discriminator here" }])),
+    );
+
+    await run(cribl);
+
+    expect(cribl.calls[2].path).toBe("/search/jobs/job%2F1/status");
+  });
+
+  it("uses the job's rows when the sync route wrongly reported nothing", async () => {
+    const cribl = client(
+      ok(""), // 200, no rows - spec-only route, so not believed on its own
+      ok({ count: 1, items: [{ id: "j-1" }] }),
+      ok({ status: "completed" }),
+      ok(ndjson(SAMPLE_ROWS)),
+      // Sync is now known-bad for this workspace: step two skips it entirely.
+      ok({ count: 1, items: [{ id: "j-2" }] }),
+      ok({ status: "completed" }),
+      ok(ndjson(COUNT_ROWS)),
+    );
+
+    const result = await run(cribl);
+
+    expect(cribl.calls).toHaveLength(7);
+    expect(cribl.calls.filter((c) => c.path === "/search/query")).toHaveLength(1);
+    expect(result.ok).toBe(true);
+    expect(result.logTypes).toHaveLength(2);
+    expect(result.notes.join(" ")).toContain("reported no events where a search job found 2");
+  });
+
+  it("treats a job that never finishes as FAILED, not as an empty dataset", async () => {
+    const cribl = client(
+      { status: 404, body: "" },
+      ok({ count: 1, items: [{ id: "j-1" }] }),
+      ...Array.from({ length: JOB_POLL_ATTEMPTS }, () => ok({ status: "running" })),
+    );
+    const sleeps: number[] = [];
+
+    const result = await run(cribl, {
+      sleep: async (ms: number) => {
+        sleeps.push(ms);
+      },
+    });
+
+    // Bounded: create + exactly JOB_POLL_ATTEMPTS status reads, then it stops.
+    expect(cribl.calls).toHaveLength(2 + JOB_POLL_ATTEMPTS);
+    expect(sleeps).toHaveLength(JOB_POLL_ATTEMPTS - 1);
+    expect(result.ok).toBe(false);
+    expect(result.notes.join(" ")).toContain(`${JOB_POLL_ATTEMPTS} status checks`);
+  });
+
+  it("reports a job Cribl itself failed", async () => {
+    const cribl = client(
+      { status: 404, body: "" },
+      ok({ count: 1, items: [{ id: "j-1" }] }),
+      ok({ status: "failed" }),
+    );
+
+    const result = await run(cribl);
+
+    expect(result.ok).toBe(false);
+    expect(result.notes.join(" ")).toContain("as failed");
+  });
+
+  it("reports a created job that carried no id", async () => {
+    const cribl = client({ status: 404, body: "" }, ok({ count: 0, items: [] }));
+
+    const result = await run(cribl);
+
+    expect(result.ok).toBe(false);
+    expect(result.notes.join(" ")).toContain("no job id");
+  });
+});
+
+describe("searchResultRows - the shapes an NDJSON body arrives in", () => {
+  it("splits the documented NDJSON string and DROPS the metadata line", () => {
+    // The metadata line describes the result set, not an event; counting it
+    // would invent a log type out of totalEventCount.
+    expect(searchResultRows(ndjson(COUNT_ROWS))).toEqual(COUNT_ROWS);
+  });
+
+  it("reads an already-parsed array and a {count, items} envelope", () => {
+    expect(searchResultRows(COUNT_ROWS)).toEqual(COUNT_ROWS);
+    expect(searchResultRows({ count: 2, items: COUNT_ROWS })).toEqual(COUNT_ROWS);
+  });
+
+  it("reads a single decoded row", () => {
+    expect(searchResultRows({ type: "A", [COUNT_COLUMN]: 1 })).toEqual([
+      { type: "A", [COUNT_COLUMN]: 1 },
+    ]);
+  });
+
+  it("returns [] for an EMPTY body - the API answered, there is nothing", () => {
+    expect(searchResultRows("")).toEqual([]);
+    expect(searchResultRows("\n\n")).toEqual([]);
+    expect(searchResultRows(null)).toEqual([]);
+    expect(searchResultRows(JSON.stringify(META))).toEqual([]);
+  });
+
+  it("returns null for a body it does not understand - NOT an empty list", () => {
+    // envelope.ts doctrine: a list silently read as empty is the worst failure
+    // shape in this codebase.
+    expect(searchResultRows("<html>gateway timeout</html>")).toBeNull();
+    expect(searchResultRows(42)).toBeNull();
+  });
+
+  it("keeps the rows it could decode when one line is junk", () => {
+    const body = `${JSON.stringify(META)}\nnot json\n${JSON.stringify(COUNT_ROWS[0])}`;
+    expect(searchResultRows(body)).toEqual([COUNT_ROWS[0]]);
+  });
+});
