@@ -142,9 +142,14 @@ export function parseCsv(
     const record: Record<string, unknown> = {};
 
     // EVERY dictionary, not the two that were hardcoded (2026-08-20 audit).
-    // PANOS_CSV_HEADERS carries seven - TRAFFIC, THREAT, SYSTEM, CONFIG,
-    // GLOBALPROTECT, AUTHENTICATION, DECRYPTION - and five of them sat unused
-    // behind an if/else that named only the first two.
+    // PANOS_CSV_HEADERS carries eight - TRAFFIC, THREAT, SYSTEM, CONFIG,
+    // GLOBALPROTECT, AUTHENTICATION, DECRYPTION, HIP-MATCH - and six of them
+    // sat unused behind an if/else that named only the first two.
+    //
+    // This read "seven ... five" until the count was checked by hand:
+    // "HIP-MATCH" is a QUOTED key, so a pattern matching bare identifiers finds
+    // seven and calls the eighth missing. See the warning on PANOS_CSV_HEADERS,
+    // which records the same miscount happening twice on 2026-08-20.
     //
     // It went unnoticed because it was unreachable: an uploaded PAN-OS file was
     // classified "syslog" and parsed to zero events, so this branch never ran on
