@@ -587,6 +587,40 @@ It was caught by reading the vendored spec's examples, not by a test.
 and 7 at once. One capture of a JSON source settles 2. One Lake query with a
 numeric discriminator settles 3 and 6.
 
+`packages/core/src/testing/live-verify.test.ts` runs all seven. It SKIPS unless
+`CRIBL_LIVE_BASE` and `CRIBL_LIVE_TOKEN` are set, so the normal gate stays
+hermetic.
+
+### Attempt 2026-08-20 - blocked, with two things settled anyway
+
+Tried against the lab workspace through the browser rather than a token. What
+came out of it:
+
+- **CONFIRMED live:** `GET /api/v1/m/{groupId}/system/inputs` answers 200. The
+  group-scoped addressing this app uses for inputs is right.
+- **NOTED:** the Cribl UI reaches groups via `/api/v1/products/stream/groups/{id}`
+  (the spec's normalized form) where `listGroups` uses the classic
+  `/master/groups`. Both are documented as coexisting; not a defect, but if
+  `/master/groups` ever 404s, this is the first thing to try.
+- **Corroborating only:** the UI labels a source `cribl_tcp:in_cribl_tcp` -
+  the `<type>:<id>` shape row 1 asserts. That is a UI label, NOT an observation
+  of `__inputId` on an event, so row 1 stays unverified.
+
+What blocked it, so the next attempt does not repeat it:
+
+1. The stored Cribl token had expired, and Vault is on an internal address that
+   is unreachable without the lab network.
+2. The Sources page does not render in either worker group that has workers -
+   it spins indefinitely while its own inputs API returns 200. That page is the
+   way into the UI's Live Data capture, which was the no-token route.
+3. Stream Home reported no events in or out over 15 minutes. If that is real
+   rather than the same rendering fault, a capture returns nothing whatever
+   else is fixed, and rows 1, 2 and 4 stay inconclusive. **Generate traffic
+   before the next attempt.**
+
+The token route avoids 2 entirely: the suite talks to the API and never touches
+the UI.
+
 ---
 
 ## Open assumptions
