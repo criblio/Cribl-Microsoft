@@ -34,6 +34,13 @@
 import type { VendorMapping } from "./match-fields";
 import generatedPacks from "../../assets/generated-vendor-packs.json";
 import sentinelDcrPacks from "../../assets/generated-sentinel-dcr-packs.json";
+// Keyword-vs-solution matching is shared with the log-type catalog's
+// documented packs (2026-08-20 audit). This module used to carry its own copy
+// of the rule, which never learned about excludeKeywords - so a "Zscaler
+// Private Access" solution was offered ZPA feeds by the recommendation and
+// Zscaler ZIA field mappings by the review table, on one screen.
+import type { SolutionKeywordedPack } from "../sentinel-content/solution-matching";
+import { packAppliesToSolution } from "../sentinel-content/solution-matching";
 
 /** One documented source -> destination mapping. */
 export interface VendorPackEntry {
@@ -60,14 +67,21 @@ export interface VendorPackEntry {
   ecs?: string;
 }
 
-/** A per-vendor documented mapping pack. */
-export interface VendorMappingPack {
+/**
+ * A per-vendor documented mapping pack.
+ *
+ * `solutionKeywords`/`excludeKeywords` come from SolutionKeywordedPack so this
+ * pack and the log-type catalog's documented pack are matched by ONE predicate
+ * (packAppliesToSolution) against one declared contract. The concrete reason
+ * exclusions exist here: these mappings are cited to the operator as "Vendor
+ * mapping documentation", so a pack claiming a sibling product's solution puts
+ * one product's documentation against another product's fields.
+ */
+export interface VendorMappingPack extends SolutionKeywordedPack {
   /** Stable id (e.g. "zscaler-zia"). */
   id: string;
   /** Display vendor name. */
   vendor: string;
-  /** Lowercased substrings matched against the solution name. */
-  solutionKeywords: readonly string[];
   /** Where the mapping knowledge comes from (doc pointer / generator tag). */
   provenance: string;
   /** Link to the vendor documentation backing the pack, when one exists. */
@@ -84,6 +98,10 @@ const HAND_PACKS: readonly VendorMappingPack[] = [
     id: "zscaler-zia",
     vendor: "Zscaler",
     solutionKeywords: ["zscaler"],
+    // ZPA is a different product: none of the NSS web/firewall/dns fields
+    // below exist in it. Same exclusion the log-type catalog's zscaler-zia
+    // pack carries - one rule, now stated as data on both.
+    excludeKeywords: ["private access", "zpa"],
     provenance:
       "Zscaler NSS feed output format (web/firewall/dns) + Zscaler and Microsoft Sentinel Deployment Guide (canonical feed: github.com/zscaler/microsoft-resources)",
     docUrl:
@@ -256,6 +274,35 @@ function isGeneratedPack(value: unknown): value is VendorMappingPack {
 }
 
 /**
+ * Sibling-product exclusions for GENERATED packs, keyed by pack id.
+ *
+ * The hand packs above state their own excludeKeywords inline, exactly as the
+ * log-type catalog's packs do. Generated packs cannot: their solutionKeywords
+ * are written by the miners (scripts/generate-vendor-packs.mjs,
+ * generate-sentinel-dcr-packs.mjs) and the assets must never be hand-edited.
+ * "Which products share a brand" is hand knowledge, so it is declared here and
+ * applied when the asset is folded in - the alternative is a regeneration
+ * silently reinstating the claim this removes.
+ *
+ * Zscaler is the case that forced it, and it takes all three packs to fix:
+ * "Zscaler Private Access" contains "zscaler", so the hand ZIA pack, the mined
+ * Sentinel DCR transform for ZIA, and the Elastic-mined ZIA pack ALL claimed a
+ * ZPA solution, while the log-type recommendation on the same screen correctly
+ * offered ZPA's LSS feeds. ZPA has no mapping pack of its own; the alias ladder
+ * covers it, which is what "no packs for uncurated solutions" already means.
+ */
+const GENERATED_PACK_EXCLUSIONS: Readonly<Record<string, readonly string[]>> = {
+  "generated-zscaler_zia": ["private access", "zpa"],
+  "sentinel-dcr-zscaler": ["private access", "zpa"],
+};
+
+/** Apply the hand-declared sibling-product exclusion, if this pack has one. */
+function withExclusions(pack: VendorMappingPack): VendorMappingPack {
+  const exclude = GENERATED_PACK_EXCLUSIONS[pack.id];
+  return exclude === undefined ? pack : { ...pack, excludeKeywords: exclude };
+}
+
+/**
  * Every pack, in AUTHORITY order (first-declared wins the per-source dedupe):
  *  1. HAND-VERIFIED packs (vendor docs, human-checked).
  *  2. SENTINEL-DCR packs - mined from the Azure-Sentinel repo's CCP DCR
@@ -270,10 +317,10 @@ export const VENDOR_MAPPING_PACKS: readonly VendorMappingPack[] = [
   ...HAND_PACKS,
   CEF_CATALOG_PACK,
   ...(Array.isArray(sentinelDcrPacks)
-    ? (sentinelDcrPacks as unknown[]).filter(isGeneratedPack)
+    ? (sentinelDcrPacks as unknown[]).filter(isGeneratedPack).map(withExclusions)
     : []),
   ...(Array.isArray(generatedPacks)
-    ? (generatedPacks as unknown[]).filter(isGeneratedPack)
+    ? (generatedPacks as unknown[]).filter(isGeneratedPack).map(withExclusions)
     : []),
 ];
 
@@ -301,10 +348,8 @@ export function foldEntriesBySource<T extends { sourceName: string }>(
 export function vendorPacksForSolution(
   solutionName: string,
 ): VendorMappingPack[] {
-  const haystack = solutionName.trim().toLowerCase();
-  if (haystack === "") return [];
   return VENDOR_MAPPING_PACKS.filter((pack) =>
-    pack.solutionKeywords.some((k) => haystack.includes(k)),
+    packAppliesToSolution(solutionName, pack),
   );
 }
 
