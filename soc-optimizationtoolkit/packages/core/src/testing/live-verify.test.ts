@@ -235,6 +235,67 @@ describe.skipIf(!LIVE)("live verification against a real workspace", () => {
     );
   });
 
+  it("row 8 - does Cribl THROW on an undeclared field, or tolerate it?", async () => {
+    // The premise the whole predicate design rests on, and it has never been
+    // tested against the real evaluator. capture-filter.ts asserts that a Cribl
+    // filter is JavaScript, so referencing a name the event does not carry is a
+    // ReferenceError that drops the event - which is why every field access is
+    // typeof-guarded and why an unguarded `_raw` was a real defect.
+    //
+    // But Cribl's own documented examples reference bare fields (`status >= 400`)
+    // that plainly do not exist on every event. If the evaluator tolerates
+    // undeclared names, the guards are harmless insurance rather than load
+    // bearing. Either answer is worth having written down; what is NOT worth
+    // having is the guess.
+    //
+    // Asked two ways, because they fail differently: a bare reference to a name
+    // no event carries, and the guarded form of the same thing. If the bare one
+    // errors or returns nothing while the guarded one behaves, the ReferenceError
+    // model is right.
+    const bare = await cribl.request({
+      method: "POST",
+      path: "/system/capture",
+      groupId,
+      body: {
+        filter: "__soc_no_such_field__ === undefined",
+        maxEvents: 5,
+        duration: 8,
+        level: 0,
+      },
+    });
+    const guarded = await cribl.request({
+      method: "POST",
+      path: "/system/capture",
+      groupId,
+      body: {
+        filter: 'typeof __soc_no_such_field__ === "undefined"',
+        maxEvents: 5,
+        duration: 8,
+        level: 0,
+      },
+    });
+
+    const bareCount = extractCapturedEvents(bare.body).lines.length;
+    const guardedCount = extractCapturedEvents(guarded.body).lines.length;
+    report(
+      "row 8 (undeclared field)",
+      bare.status >= 400
+        ? "REJECTED outright - guards are load-bearing"
+        : bareCount === 0 && guardedCount > 0
+          ? "DROPS events - guards are load-bearing"
+          : bareCount > 0
+            ? "TOLERATED - guards are insurance, not load-bearing"
+            : "INCONCLUSIVE - both returned nothing, source may be idle",
+      `bare HTTP ${bare.status} / ${bareCount} events; guarded HTTP ${guarded.status} / ${guardedCount} events`,
+    );
+
+    // Deliberately NOT asserted either way. This test exists to record which
+    // world we are in, and both worlds are acceptable - the guards are correct
+    // in one and merely redundant in the other. Failing the run over a fact we
+    // went looking for would be asserting the conclusion.
+    expect(guarded.status).toBeLessThan(500);
+  });
+
   it("row 4 - a capture of exactly ONE event is not read as empty", async () => {
     expect(groupId).not.toBe("");
     const res = await cribl.request({
