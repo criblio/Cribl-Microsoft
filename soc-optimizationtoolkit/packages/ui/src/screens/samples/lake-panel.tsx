@@ -18,6 +18,15 @@
  * log type and keep the rest, so clearing the panel on success would round a
  * partial haul up to a clean one.
  *
+ * THE COMMIT BUTTON AGREES WITH THE COMMIT HANDLER (2026-08-20 audit). The
+ * handler cannot address step two without the field step one grouped by, so it
+ * returns early when there is none - and the button now disables on that same
+ * condition instead of being left enabled over it. queryLakeSamples sets the
+ * field on every path that returns log types, so the state is unreachable
+ * today; the port's TYPE allows it, and the cost of the two disagreeing is a
+ * button that does nothing whatever when pressed, which an operator reads as a
+ * broken app rather than as a missing field.
+ *
  * All decisions are the pure lake-panel-state; this renders and wires. The ports
  * stay with the screen (onQuery/onFetchEvents), as they do for CapturePanel.
  */
@@ -34,6 +43,7 @@ import {
   deriveLakeQueryView,
   lakeCollisions,
   lakeLogTypeChoices,
+  mergedLakeLogTypeCount,
   plannedLakeSamples,
   selectedLakeLogTypes,
   toggleLakeChoice,
@@ -49,6 +59,12 @@ interface CommitOutcome {
   planned: number;
   /** Log types the operator ticked, which is what `planned` is measured against. */
   requested: number;
+  /**
+   * Ticked log types that were added AS PART OF another rather than lost, which
+   * is the difference between a shortfall the operator should act on and one
+   * they should not.
+   */
+  merged: number;
 }
 
 export interface LakePanelProps {
@@ -72,7 +88,6 @@ export interface LakePanelProps {
   ) => Promise<FetchLakeEventsResult>;
   /** Commit the fetched samples to the store. */
   onCommit: (samples: TaggedSample[]) => Promise<void>;
-  busy?: boolean;
 }
 
 export function LakePanel({
@@ -82,7 +97,6 @@ export function LakePanel({
   onQuery,
   onFetchEvents,
   onCommit,
-  busy = false,
 }: LakePanelProps) {
   const [result, setResult] = useState<QueryLakeSamplesResult | null>(null);
   const [choices, setChoices] = useState<LakeLogTypeChoice[]>([]);
@@ -105,10 +119,13 @@ export function LakePanel({
     fetching,
     outcome?.planned ?? 0,
     outcome?.requested ?? 0,
+    outcome?.merged ?? 0,
   );
   const selected = selectedLakeLogTypes(choices);
   const collisions = lakeCollisions(choices);
-  const locked = busy || querying || fetching;
+  // `fetching` spans the fetch AND the store write, so it is what keeps the
+  // operator off the panel mid-commit.
+  const locked = querying || fetching;
   const unavailable = searchGroupId.trim() === "";
 
   const run = async () => {
@@ -128,6 +145,11 @@ export function LakePanel({
   };
 
   const commit = async () => {
+    // Step two cannot be ADDRESSED without the field step one grouped by, so
+    // this narrows what onFetchEvents is given. The button is disabled on the
+    // same condition (see below) rather than left enabled over a handler that
+    // silently returns - a control that does nothing when pressed is the worse
+    // half of this pair.
     const field = view.discriminatorField;
     if (field === undefined || selected.length === 0) return;
     setFetching(true);
@@ -143,6 +165,7 @@ export function LakePanel({
         result: fetched,
         planned: samples.length,
         requested: selected.length,
+        merged: mergedLakeLogTypeCount(selected, samples, existingLogTypes),
       });
       if (samples.length > 0) {
         await onCommit(samples);
@@ -269,7 +292,11 @@ export function LakePanel({
           <button
             className="next-action-button"
             onClick={() => void commit()}
-            disabled={locked || selected.length === 0}
+            disabled={
+              locked ||
+              selected.length === 0 ||
+              view.discriminatorField === undefined
+            }
           >
             {fetching ? "Fetching events..." : "Add as samples"}
           </button>
