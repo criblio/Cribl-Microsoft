@@ -26,7 +26,6 @@ import type {
   AcquisitionMode,
   SampleSourceGroups,
   SampleSourceInventory,
-  SampleSourceRef,
 } from "@soc/core";
 import {
   MODE_CHOICES,
@@ -54,7 +53,12 @@ export interface SampleSourcePickerProps {
   value: string;
   onSelectMode: (mode: AcquisitionMode) => void;
   onSelectGroup: (groupId: string) => void;
-  onChange: (value: string, entry: SampleSourceRef | null) => void;
+  /**
+   * The chosen option value. Only the VALUE - the screen derives the entry from
+   * it with the same findEntry, so handing one over here would be a second copy
+   * of an answer that must not disagree with the first (2026-08-20 audit).
+   */
+  onChange: (value: string) => void;
   onReload: () => void;
 }
 
@@ -149,7 +153,7 @@ export function SampleSourcePicker({
           <SearchableSelect
             options={view.options}
             value={value}
-            onChange={(next) => onChange(next, findEntry(inventory, next))}
+            onChange={onChange}
             placeholder={
               mode === "lake-query" ? "Select a dataset..." : "Select a source..."
             }

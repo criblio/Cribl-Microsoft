@@ -109,7 +109,22 @@ export function useSampleSources({
     [ports.cribl, ports.logger],
   );
 
-  // Stage one, once per enablement - never once per render.
+  // Stage one, ONCE EVER - not once per enablement, whatever this comment used
+  // to say (2026-08-20 audit). `started` is set below and at reload, and is
+  // never cleared, so the guard outlives any change to `enabled` or to the
+  // ports bundle.
+  //
+  // That is load-bearing for the request-storm rule, and it has ONE consequence
+  // worth naming: `cloudPorts` is memoized on `activeConfig.tenantId`, so
+  // changing AZURE tenant rebuilds ports, changes `loadGroups`, re-fires this
+  // effect - and the guard swallows it. The operator would keep seeing the
+  // previous tenant's worker groups until they press Retry.
+  //
+  // Left as is deliberately: this deployment stays in a single Azure tenant, so
+  // the path is unreachable. If multi-tenant switching is ever added, THIS is
+  // the line that has to change - key the guard on the ports identity rather
+  // than a boolean - because the failure is one tenant's infrastructure shown
+  // under another tenant's name, which no operator would spot.
   const started = useRef(false);
   useEffect(() => {
     if (!enabled || started.current) return;
