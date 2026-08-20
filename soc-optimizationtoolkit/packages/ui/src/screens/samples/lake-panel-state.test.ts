@@ -11,7 +11,9 @@
  *   - showing a truncated log-type list as if it were the whole dataset;
  *   - letting a commit silently overwrite a sample they curated, or promising a
  *     replacement that appends a duplicate instead;
- *   - rounding a partial haul up to a success.
+ *   - rounding a partial haul up to a success;
+ *   - blaming a shortfall on empty data when the picks were folded into one
+ *     sample, which sends them to widen a window over data they already have.
  */
 
 import { describe, expect, it } from "vitest";
@@ -25,6 +27,7 @@ import {
   deriveLakeQueryView,
   lakeCollisions,
   lakeLogTypeChoices,
+  mergedLakeLogTypeCount,
   plannedLakeSamples,
   selectedLakeLogTypes,
   toggleLakeChoice,
@@ -332,6 +335,34 @@ describe("deriveLakeCommitView", () => {
     expect(view.notes).toEqual(['"THREAT" returned no events in this window']);
   });
 
+  it("calls a COLLAPSE a collapse rather than data that never arrived", () => {
+    // Two picks that resolve to ONE sample name cost one sample, and the
+    // shortfall that leaves is not a hole in the data - the second was
+    // OVERWRITTEN, not empty. Reporting it as "returned nothing usable" sends
+    // the operator to widen a window over events sitting in the sample they
+    // just added.
+    const one = deriveLakeCommitView(fetchResult(), false, 1, 2, 1);
+    expect(one.status).toBe("done");
+    expect(one.headline).toBe(
+      "Added 1 of the 2 log types you picked; 1 shares a sample name with another and was added as part of it.",
+    );
+    expect(one.headline).not.toContain("nothing usable");
+
+    const two = deriveLakeCommitView(fetchResult(), false, 1, 3, 2);
+    expect(two.headline).toBe(
+      "Added 1 of the 3 log types you picked; 2 share a sample name with another and were added as part of it.",
+    );
+  });
+
+  it("names BOTH causes when a haul lost picks to each", () => {
+    // A merge and an empty log type in the same commit. Neither may be absorbed
+    // into the other: one is nothing to act on, the other is.
+    const view = deriveLakeCommitView(fetchResult(), false, 1, 3, 1);
+    expect(view.headline).toBe(
+      "Added 1 of the 3 log types you picked; 1 shares a sample name with another and was added as part of it, and 1 returned nothing usable.",
+    );
+  });
+
   it("reports a full haul plainly", () => {
     expect(deriveLakeCommitView(fetchResult(), false, 2, 2).headline).toBe(
       "Added 2 samples from this dataset.",
@@ -407,6 +438,22 @@ describe("plannedLakeSamples", () => {
     expect(samples[0].logType).toBe("TRAFFIC");
   });
 
+  it("folds a CASE VARIANT onto the operator's label, which is a collapse", () => {
+    // The shape mergedLakeLogTypeCount exists to account for: a dataset holding
+    // both casings while the operator already has one of them. Two picks, one
+    // sample - and the second one is overwritten rather than missing.
+    const samples = plannedLakeSamples(
+      [
+        { logType: "TRAFFIC", rawEvents: ['{"n":"upper"}'] },
+        { logType: "traffic", rawEvents: ['{"n":"lower"}'] },
+      ],
+      "lake:cribl_logs",
+      ["traffic"],
+    );
+    expect(samples.map((s) => s.logType)).toEqual(["traffic"]);
+    expect(samples[0].parsed.records[0].n).toBe("lower");
+  });
+
   it("collapses duplicate log types, last wins, first position kept", () => {
     // Mirrors the store's own replace-by-logType semantics, so one commit
     // cannot produce two chips with the same name.
@@ -420,5 +467,60 @@ describe("plannedLakeSamples", () => {
     );
     expect(samples.map((s) => s.logType)).toEqual(["A", "B"]);
     expect(samples[0].parsed.records[0].n).toBe("second");
+  });
+});
+
+describe("mergedLakeLogTypeCount", () => {
+  const both = (existing: string[]) =>
+    plannedLakeSamples(
+      [
+        { logType: "TRAFFIC", rawEvents: ['{"n":"upper"}'] },
+        { logType: "traffic", rawEvents: ['{"n":"lower"}'] },
+      ],
+      "lake:cribl_logs",
+      existing,
+    );
+
+  it("counts the EXTRA pick, not the group - two picks cost one sample", () => {
+    const samples = both(["traffic"]);
+    expect(samples).toHaveLength(1);
+    expect(mergedLakeLogTypeCount(["TRAFFIC", "traffic"], samples, ["traffic"])).toBe(1);
+  });
+
+  it("counts nothing when the case variants stay two separate samples", () => {
+    // With no existing label to adopt, neither pick is folded anywhere: the
+    // store keeps both casings, and calling that a merge would explain away a
+    // shortfall that never happened.
+    const samples = both([]);
+    expect(samples.map((s) => s.logType)).toEqual(["TRAFFIC", "traffic"]);
+    expect(mergedLakeLogTypeCount(["TRAFFIC", "traffic"], samples)).toBe(0);
+  });
+
+  it("counts nothing when the shared label produced NO sample at all", () => {
+    // Both picks returned blank lines, so both genuinely returned nothing
+    // usable. Calling one of them "added as part of" a sample that does not
+    // exist is the same lie as the one this count exists to stop, pointed the
+    // other way.
+    const samples = plannedLakeSamples(
+      [
+        { logType: "TRAFFIC", rawEvents: ["   "] },
+        { logType: "traffic", rawEvents: ["   "] },
+      ],
+      "lake:cribl_logs",
+      ["traffic"],
+    );
+    expect(samples).toEqual([]);
+    expect(mergedLakeLogTypeCount(["TRAFFIC", "traffic"], samples, ["traffic"])).toBe(0);
+  });
+
+  it("counts nothing for picks that each became their own sample", () => {
+    const samples = plannedLakeSamples(
+      [
+        { logType: "TRAFFIC", rawEvents: ['{"a":1}'] },
+        { logType: "THREAT", rawEvents: ['{"a":2}'] },
+      ],
+      "lake:cribl_logs",
+    );
+    expect(mergedLakeLogTypeCount(["TRAFFIC", "THREAT"], samples)).toBe(0);
   });
 });

@@ -12,10 +12,12 @@
  * checkboxes at all. The table picker is the cautionary tale: fourteen
  * thoroughly-tested pure decisions behind a panel that had quietly lost its job.
  *
- * Three things here exist ONLY in the component and are pinned nowhere else:
+ * Four things here exist ONLY in the component and are pinned nowhere else:
  *   - the filterEdited latch, which stops a checkbox silently discarding the
  *     operator's hand-edited filter;
  *   - the promise the run button awaits, and the controls it locks meanwhile;
+ *   - the promise the COMMIT awaits, which locks the same controls for a
+ *     different reason: the preview on screen is already on its way to the store;
  *   - the source-change reset, which is the difference between a stale result
  *     and one the operator believes came from the source now on screen.
  */
@@ -127,6 +129,9 @@ const bounds = (c: HTMLElement) =>
 /** Run capture is first in document order; Discard shares its class. */
 const runButton = (c: HTMLElement) =>
   c.querySelectorAll<HTMLButtonElement>(".run-button")[0];
+/** Discard, which only exists once there is a preview to throw away. */
+const discardButton = (c: HTMLElement) =>
+  c.querySelectorAll<HTMLButtonElement>(".run-button")[1];
 const commitButton = (c: HTMLElement) =>
   c.querySelector<HTMLButtonElement>(".next-action-button");
 const resultRows = (c: HTMLElement) => c.querySelectorAll(".capture-results li");
@@ -148,6 +153,18 @@ function deferredCapture() {
     onCapture,
     finish: (value: CaptureSamplesResult) => act(async () => resolveWith(value)),
   };
+}
+
+/** A commit the test controls the timing of, to catch the panel mid-write. */
+function deferredCommit() {
+  let resolveWith: () => void = () => {};
+  const onCommit = vi.fn(
+    (_samples: TaggedSample[]) =>
+      new Promise<void>((resolve) => {
+        resolveWith = () => resolve();
+      }),
+  );
+  return { onCommit, finish: () => act(async () => resolveWith()) };
 }
 
 describe("CapturePanel - what it offers before a run", () => {
@@ -348,6 +365,45 @@ describe("CapturePanel - nothing enters the store without a click", () => {
     // And the preview clears, so a second click cannot commit the same capture.
     expect(resultRows(container)).toHaveLength(0);
     expect(status(container)).toBe("idle");
+  });
+
+  it("locks the panel while the COMMIT is in flight, and clears only after it lands", async () => {
+    // The commit is awaited, and until it resolves this preview describes
+    // samples already on their way into the store. Every control here was
+    // enabled throughout that window - the `busy` prop that was meant to close
+    // it was never passed by the one caller, so it defaulted to false forever.
+    // The store is replace-by-logType, so a second commit is idempotent and
+    // nothing is corrupted; what this stops is the operator ACTING on a panel
+    // mid-write - discarding the preview, or re-running the capture over it.
+    const { onCommit, finish } = deferredCommit();
+    const { container } = renderPanel({ onCommit });
+
+    await act(async () => {
+      fireEvent.click(runButton(container));
+    });
+    expect(resultRows(container)).toHaveLength(2);
+    expect(commitButton(container)?.disabled).toBe(false);
+
+    fireEvent.click(commitButton(container) as HTMLButtonElement);
+
+    expect(onCommit).toHaveBeenCalledTimes(1);
+    expect(commitButton(container)?.disabled).toBe(true);
+    expect(commitButton(container)?.textContent).toBe("Adding samples...");
+    expect(discardButton(container).disabled).toBe(true);
+    expect(runButton(container).disabled).toBe(true);
+    expect(filterBox(container).disabled).toBe(true);
+    expect([...boxes(container)].filter((b) => b.disabled)).toHaveLength(4);
+    expect([...bounds(container)].filter((b) => b.disabled)).toHaveLength(2);
+    // The preview stays up meanwhile: clearing it before the store answered
+    // would leave a failed commit with nothing on screen to retry from.
+    expect(resultRows(container)).toHaveLength(2);
+
+    await finish();
+
+    expect(onCommit).toHaveBeenCalledTimes(1);
+    expect(resultRows(container)).toHaveLength(0);
+    expect(status(container)).toBe("idle");
+    expect(runButton(container).disabled).toBe(false);
   });
 
   it("discards a capture without committing it", async () => {

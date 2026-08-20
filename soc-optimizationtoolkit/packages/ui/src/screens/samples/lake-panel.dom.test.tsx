@@ -12,7 +12,7 @@
  * the cautionary tale: fourteen thoroughly-tested pure decisions behind a panel
  * that had quietly lost its job.
  *
- * Four things here exist ONLY in the component and are pinned nowhere else:
+ * Five things here exist ONLY in the component and are pinned nowhere else:
  *   - the two-step flow itself, and the invariant underneath it - NOTHING ENTERS
  *     THE SAMPLE STORE WITHOUT A DELIBERATE CLICK, which is a statement about a
  *     rendered button and a handler;
@@ -20,7 +20,10 @@
  *     the query established and the operator can see, not recomposed at submit;
  *   - the promises the two buttons await, and the controls they lock meanwhile;
  *   - the commit summary outliving the log-type list, which is the difference
- *     between a partial haul reported as partial and one rounded up to clean.
+ *     between a partial haul reported as partial and one rounded up to clean;
+ *   - the commit BUTTON agreeing with the commit HANDLER's own guard, so a
+ *     query with no field to fetch by disables the control instead of leaving
+ *     it enabled over a handler that silently returns.
  */
 
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -451,6 +454,31 @@ describe("LakePanel - nothing enters the store without a click", () => {
     expect(onFetchEvents).toHaveBeenCalledTimes(0);
   });
 
+  it("offers NO fetch when the counts came back with no field to fetch BY", async () => {
+    // The commit handler cannot address step two without the discriminator, so
+    // it returns early - but the button used to stay enabled over it, and a
+    // button that does nothing whatever when pressed reads as a broken app
+    // rather than as a missing field. queryLakeSamples sets the field on every
+    // path that returns log types, so this shape only arrives from a port that
+    // is TYPED to allow it; the control and the guard now agree either way.
+    const { container, onFetchEvents } = renderPanel({
+      query: queryResult({ logTypes: [{ logType: "TRAFFIC", eventCount: 5 }] }),
+    });
+    await runQuery(container);
+
+    // A ready list, ticked, and still nothing to address a fetch with.
+    expect(status(container)).toBe("ready");
+    expect(rows(container)).toHaveLength(1);
+    expect(ticked(container)).toBe(1);
+    expect(container.querySelector(".lake-window")?.textContent).toBe(
+      "Volumes cover -24h to now.",
+    );
+
+    expect(commitButton(container)?.disabled).toBe(true);
+    fireEvent.click(commitButton(container) as HTMLButtonElement);
+    expect(onFetchEvents).toHaveBeenCalledTimes(0);
+  });
+
   it("discards the counts without fetching or committing anything", async () => {
     const { container, onFetchEvents, onCommit } = renderPanel();
     await runQuery(container);
@@ -590,6 +618,46 @@ describe("LakePanel - what the commit reports afterwards", () => {
     expect(container.textContent).toContain(
       '"THREAT" returned nothing but blank lines.',
     );
+  });
+
+  it("calls a case-variant COLLAPSE a collapse, not data that never arrived", async () => {
+    // The dataset holds "TRAFFIC" and "traffic", and the operator already has a
+    // sample called "traffic". Both picks adopt their label, so the commit folds
+    // them into ONE sample - and the summary used to report the second as
+    // "returned nothing usable", which is the opposite of what happened to it:
+    // it was overwritten, not empty. That sentence would send the operator off
+    // to widen a window over data sitting in the sample they just added.
+    const { container, onCommit } = renderPanel({
+      props: { existingLogTypes: ["traffic"] },
+      query: queryResult({
+        discriminatorField: "sourcetype",
+        logTypes: [
+          { logType: "TRAFFIC", eventCount: 9 },
+          { logType: "traffic", eventCount: 4 },
+        ],
+      }),
+      fetched: fetchResult({
+        events: [events("TRAFFIC", 2), events("traffic", 1)],
+      }),
+    });
+    await runQuery(container);
+
+    // Both collide with the operator's own sample, so both arrive unticked.
+    expect(ticked(container)).toBe(0);
+    fireEvent.click(boxes(container)[0]);
+    fireEvent.click(boxes(container)[1]);
+    expect(ticked(container)).toBe(2);
+
+    await addSamples(container);
+
+    // One sample, under the operator's own casing: that IS the collapse.
+    expect(onCommit).toHaveBeenCalledTimes(1);
+    expect(onCommit.mock.calls[0][0].map((s) => s.logType)).toEqual(["traffic"]);
+    expect(outcomeStatus(container)).toBe("done");
+    expect(outcomeHeadline(container)).toBe(
+      "Added 1 of the 2 log types you picked; 1 shares a sample name with another and was added as part of it.",
+    );
+    expect(outcomeHeadline(container)).not.toContain("returned nothing usable");
   });
 
   it("adds nothing and KEEPS the counts when the fetch fails or parses to nothing", async () => {

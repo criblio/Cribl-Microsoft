@@ -13,6 +13,12 @@
  * deleting the __inputId clause, which widens the capture to every source in
  * the worker group.
  *
+ * TWO IN-FLIGHT STATES, not one (2026-08-20 audit). The capture is awaited and
+ * so is the COMMIT, and until the store write resolves the panel is showing a
+ * preview of samples already on their way in. Both lock the panel. The commit
+ * lock replaced a `busy` prop that the only caller never passed, so the commit
+ * and discard buttons had been permanently enabled - including mid-write.
+ *
  * All decisions are the pure capture-panel-state; this renders and wires.
  */
 
@@ -42,7 +48,6 @@ export interface CapturePanelProps {
   onCapture: (filter: string, maxEvents: number, durationSeconds: number) => Promise<CaptureSamplesResult>;
   /** Commit the previewed samples to the store. */
   onCommit: (samples: TaggedSample[]) => Promise<void>;
-  busy?: boolean;
 }
 
 export function CapturePanel({
@@ -51,7 +56,6 @@ export function CapturePanel({
   existingLogTypes,
   onCapture,
   onCommit,
-  busy = false,
 }: CapturePanelProps) {
   const seeded = useMemo(() => captureLogTypeChoices(recommended), [recommended]);
   const [choices, setChoices] = useState<CaptureLogTypeChoice[]>(seeded);
@@ -66,6 +70,15 @@ export function CapturePanel({
   const duration = useNumericField(DEFAULT_DURATION_SECONDS);
   const [result, setResult] = useState<CaptureSamplesResult | null>(null);
   const [running, setRunning] = useState(false);
+  // The store write is awaited too, and until it resolves this panel is showing
+  // a preview of something already on its way in. The store is
+  // replace-by-logType, so a second commit is idempotent and nothing is
+  // corrupted by a double click - what this prevents is the operator ACTING on
+  // a panel mid-write: discarding the preview, or re-running the capture,
+  // against a commit whose result they cannot yet see. Named apart from
+  // `running` because a capture and a commit fail differently and lock the same
+  // controls for different reasons.
+  const [committing, setCommitting] = useState(false);
 
   // A different source means different suggestions and a different filter.
   useEffect(() => {
@@ -77,6 +90,9 @@ export function CapturePanel({
 
   const view = deriveCaptureView(result, running, existingLogTypes);
   const warning = filterWarning(filter, source.id);
+  // One lock for the whole panel, as the Lake panel does with querying/fetching:
+  // every control here describes a request that is already in flight.
+  const locked = running || committing;
 
   const toggle = (value: string) => {
     const next = toggleChoice(choices, value);
@@ -98,14 +114,21 @@ export function CapturePanel({
 
   const commit = async () => {
     if (result === null) return;
-    await onCommit(
-      plannedCaptureSamples(
-        result.splits,
-        `capture:${source.id}`,
-        existingLogTypes,
-      ),
-    );
-    setResult(null);
+    setCommitting(true);
+    try {
+      await onCommit(
+        plannedCaptureSamples(
+          result.splits,
+          `capture:${source.id}`,
+          existingLogTypes,
+        ),
+      );
+      // Cleared only once the store has it: dropping the preview first would
+      // leave a failed commit with nothing on screen to retry from.
+      setResult(null);
+    } finally {
+      setCommitting(false);
+    }
   };
 
   return (
@@ -126,7 +149,7 @@ export function CapturePanel({
                     type="checkbox"
                     checked={choice.selected}
                     onChange={() => toggle(choice.value)}
-                    disabled={busy || running}
+                    disabled={locked}
                   />
                   <span className="capture-log-type-name">{choice.value}</span>
                   {choice.note !== undefined && (
@@ -150,7 +173,7 @@ export function CapturePanel({
           }}
           spellCheck={false}
           rows={3}
-          disabled={busy || running}
+          disabled={locked}
         />
       </label>
       {warning !== null && (
@@ -166,7 +189,7 @@ export function CapturePanel({
             min={1}
             max={10000}
             onChange={(e) => maxEvents.setText(e.target.value)}
-            disabled={busy || running}
+            disabled={locked}
           />
         </label>
         <label className="field capture-bound">
@@ -176,13 +199,13 @@ export function CapturePanel({
             value={duration.text}
             min={1}
             onChange={(e) => duration.setText(e.target.value)}
-            disabled={busy || running}
+            disabled={locked}
           />
         </label>
         <button
           className="run-button"
           onClick={() => void run()}
-          disabled={busy || running}
+          disabled={locked}
         >
           {running ? "Capturing..." : "Run capture"}
         </button>
@@ -240,14 +263,14 @@ export function CapturePanel({
           <button
             className="next-action-button"
             onClick={() => void commit()}
-            disabled={busy}
+            disabled={locked}
           >
-            Add these as samples
+            {committing ? "Adding samples..." : "Add these as samples"}
           </button>
           <button
             className="run-button"
             onClick={() => setResult(null)}
-            disabled={busy}
+            disabled={locked}
           >
             Discard
           </button>
