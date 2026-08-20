@@ -561,6 +561,34 @@ scope unless explicitly wanted.
 
 ---
 
+## Needs live verification (added 2026-08-20)
+
+Phases 3 and 4 are pinned entirely against `FakeCriblClient`. That catches our
+own logic and cannot catch a wrong belief about the platform - every row below
+is a belief the code now depends on, ordered by what it costs if wrong.
+
+The case for doing this before shipping is already on the record: `__inputId`
+turned out to be `<type>:<id>`, not the bare id `/system/inputs` returns, so the
+source clause matched nothing and **every capture would have come back empty** -
+reported to the operator as an idle source. Sixty-odd tests were green over it.
+It was caught by reading the vendored spec's examples, not by a test.
+
+| # | Belief | Rests on | If wrong |
+|---|---|---|---|
+| 1 | `__inputId` is `<type>:<id>`, and `.endsWith(":id")` selects the source | Spec examples (`__inputId.startsWith("http:")`, `cribl_http:pan_traffic_syslog`) | Every capture empty, or captures the wrong source |
+| 2 | A level-0 capture of a JSON source (Event Hub, HEC, Kafka) carries broken-out fields, not just `_raw` | Spec's own level-0 example filters `sourcetype==="pan:traffic"` | The structured-field OR never fires; those sources still capture nothing |
+| 3 | Cribl Search accepts `tostring(field)` in a `where` clause | Standard Kusto; Cribl Search speaks Kusto | Numeric log types 400 instead of returning events |
+| 4 | A one-line NDJSON capture response reaches us as a decoded OBJECT | `readPortBody` JSON.parses the whole body | Single-event captures read as empty (the bug we fixed - confirm the fix, not just the diagnosis) |
+| 5 | 12s is under the real capture ceiling | `http.ts:47` `timeoutMs = 15000`, minus dispatch headroom | Captures fail blaming the bridge, or we clamp shorter than needed |
+| 6 | The Lake dataset listing is a LEADER route and `lakeId` is discoverable | Phase 0 spike | The Lake mode has no dataset list to offer |
+| 7 | Capture needs a permission the app's own credentials hold | Not established | 403 on the primary path |
+
+**Cheapest order:** one real capture against a syslog source settles 1, 4 and 5
+and 7 at once. One capture of a JSON source settles 2. One Lake query with a
+numeric discriminator settles 3 and 6.
+
+---
+
 ## Open assumptions
 
 Flagged during planning, not contradicted, but never explicitly confirmed:
