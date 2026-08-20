@@ -24,7 +24,12 @@
 
 import { useEffect, useMemo, useState } from "react";
 import type { CaptureSamplesResult, SampleSourceRef, TaggedSample } from "@soc/core";
-import { DEFAULT_DURATION_SECONDS, DEFAULT_MAX_EVENTS } from "@soc/core";
+import {
+  DEFAULT_DURATION_SECONDS,
+  DEFAULT_MAX_EVENTS,
+  MAX_DURATION_SECONDS,
+  MAX_EVENTS_LIMIT,
+} from "@soc/core";
 import type { RecommendedLogType } from "./sample-coverage-state";
 import {
   captureLogTypeChoices,
@@ -180,6 +185,19 @@ export function CapturePanel({
         <p className="field-hint capture-filter-warning">{warning}</p>
       )}
 
+      {/* BOTH ceilings come from core, which owns them: the capture API's own
+          maxEvents maximum, and the longest window the platform bridge
+          survives. Neither is restated here - a literal 10000 is what this
+          panel carried until 2026-08-20, and a literal goes on advertising the
+          old number after core changes the real one.
+
+          The seconds box gets a max as well, though core clamps it and says so
+          in a note. The note arrives AFTER the capture has already run to the
+          clamped window, so an operator who asks for 30s finds out it was 12
+          only once they have waited for it; `max` states the same ceiling
+          before they press Run. It withholds nothing either - a number input
+          still accepts a larger typed value, useNumericField deliberately
+          leaves upper bounds to the usecase, and the clamp note still fires. */}
       <div className="panel-controls">
         <label className="field capture-bound">
           <span className="field-label">Max events</span>
@@ -187,7 +205,7 @@ export function CapturePanel({
             type="number"
             value={maxEvents.text}
             min={1}
-            max={10000}
+            max={MAX_EVENTS_LIMIT}
             onChange={(e) => maxEvents.setText(e.target.value)}
             disabled={locked}
           />
@@ -198,6 +216,7 @@ export function CapturePanel({
             type="number"
             value={duration.text}
             min={1}
+            max={MAX_DURATION_SECONDS}
             onChange={(e) => duration.setText(e.target.value)}
             disabled={locked}
           />
