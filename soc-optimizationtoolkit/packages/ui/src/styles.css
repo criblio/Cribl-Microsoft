@@ -1595,6 +1595,80 @@ button.journey-step-main:hover .journey-step-label {
   list-style: none;
 }
 
+/* Lake panel (screens/samples/lake-panel): query a Cribl Lake dataset for its
+ * log types and volumes, then take the chosen ones as samples. Same quiet card
+ * as the capture panel it sits opposite - they are two modes of one choice. */
+.lake-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  background: var(--surface-raised);
+}
+
+.lake-log-types {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 2px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.lake-log-type {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 13px;
+  line-height: 20px;
+  cursor: pointer;
+}
+
+.lake-log-type-name {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  color: var(--text);
+}
+
+/* The volume is the reason to pick one dataset over another, so it reads as a
+ * figure rather than as prose - monospace keeps the column scannable. */
+.lake-volume {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--text-muted);
+}
+
+/* A count with no window is not a fact; the window rides with it. */
+.lake-window,
+.lake-truncated,
+.lake-unavailable {
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+/* Truncation and replacement are both "you are about to be misled" - warn. */
+.lake-truncated,
+.lake-replaces {
+  color: var(--warn);
+}
+
+.lake-bound {
+  max-width: 140px;
+}
+
+.lake-outcome {
+  font-size: 13px;
+  line-height: 20px;
+  margin: 2px 0 0;
+}
+
 /* Capture panel (screens/samples/capture-panel): the bounded live capture and
  * its confirm-before-tagging preview. */
 .capture-panel {

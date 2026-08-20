@@ -83,7 +83,7 @@ describe("extractCapturedEvents - the three shapes the platform returns", () => 
   it("reads the documented NDJSON string, keeping the vendor _raw", () => {
     // The cribl-api note this guards: "Search results are NDJSON - first line
     // is metadata, rest are rows. json.loads(body) fails."
-    expect(extractCapturedEvents(ndjson([PANOS_A, PANOS_B]))).toEqual([
+    expect(extractCapturedEvents(ndjson([PANOS_A, PANOS_B])).lines).toEqual([
       PANOS_A,
       PANOS_B,
     ]);
@@ -94,33 +94,117 @@ describe("extractCapturedEvents - the three shapes the platform returns", () => 
       extractCapturedEvents([
         { _raw: PANOS_A, _time: 1 },
         { _raw: PANOS_B, _time: 2 },
-      ]),
+      ]).lines,
     ).toEqual([PANOS_A, PANOS_B]);
   });
 
   it("reads a {count, items} envelope", () => {
     expect(
-      extractCapturedEvents({ count: 1, items: [{ _raw: PANOS_A }] }),
+      extractCapturedEvents({ count: 1, items: [{ _raw: PANOS_A }] }).lines,
     ).toEqual([PANOS_A]);
   });
 
   it("serializes an event that carries NO _raw rather than dropping it", () => {
     // A capture of an already-structured source has no _raw; losing those
     // events silently would look like an empty capture.
-    expect(extractCapturedEvents([{ a: 1, b: "x" }])).toEqual(['{"a":1,"b":"x"}']);
+    expect(extractCapturedEvents([{ a: 1, b: "x" }]).lines).toEqual(['{"a":1,"b":"x"}']);
   });
 
   it("keeps a plain-text line that is not JSON at all", () => {
-    expect(extractCapturedEvents("just a line\nand another")).toEqual([
+    expect(extractCapturedEvents("just a line\nand another").lines).toEqual([
       "just a line",
       "and another",
     ]);
   });
 
   it("ignores blank lines and unrecognized bodies without throwing", () => {
-    expect(extractCapturedEvents(`${ndjson([PANOS_A])}\n\n`)).toEqual([PANOS_A]);
-    expect(extractCapturedEvents(null)).toEqual([]);
-    expect(extractCapturedEvents(42)).toEqual([]);
+    expect(extractCapturedEvents(`${ndjson([PANOS_A])}\n\n`).lines).toEqual([
+      PANOS_A,
+    ]);
+    expect(extractCapturedEvents(null).lines).toEqual([]);
+    expect(extractCapturedEvents(42).lines).toEqual([]);
+  });
+});
+
+describe("the defects the fixtures could not see (2026-08-20 bug-hunt)", () => {
+  it("reads a capture that returned exactly ONE event", async () => {
+    // The cloud adapter JSON.parses the WHOLE body, so a one-line NDJSON
+    // response arrives as an OBJECT - a shape ndjson() above can never build,
+    // which is exactly why every existing fixture missed this. It returned no
+    // events, and the operator was told to widen a filter already correct.
+    const cribl = client({ status: 200, body: { _raw: PANOS_A, _time: 1 } });
+
+    const result = await captureSamples(cribl, { groupId: "g", filter: "true" });
+
+    expect(result.rawEvents).toEqual([PANOS_A]);
+    expect(result.notes.join(" ")).not.toContain("matched no events");
+  });
+
+  it("does not let ONE _raw-less event collapse the whole split", async () => {
+    // A keepalive or internal event with no _raw was serialized into the same
+    // list as vendor text. splitSamplesByLogType only reaches its PAN-OS
+    // fallback when NOTHING parses as JSON, so a single husk suppressed it and
+    // TRAFFIC + THREAT collapsed into one group the operator was invited to
+    // name - mislabelling half their events in the store that drives routing.
+    const cribl = client({
+      status: 200,
+      body: [
+        { _time: 1, source: "keepalive", host: "fw01" },
+        { _raw: PANOS_A },
+        { _raw: PANOS_B },
+      ],
+    });
+
+    const result = await captureSamples(cribl, { groupId: "g", filter: "true" });
+
+    expect(result.splits.map((s) => s.logType).sort()).toEqual([
+      "THREAT",
+      "TRAFFIC",
+    ]);
+    expect(result.noDiscriminator).toBe(false);
+    expect(result.format).toBe("csv");
+    // And the operator is told, so the count they see matches what they get.
+    expect(result.notes.join(" ")).toContain("no raw payload");
+  });
+
+  it("still serializes husks when NO record carried a payload", async () => {
+    // The structured-source case: serializing really is the best available
+    // answer there, so the fix must not throw those events away.
+    const cribl = client({ status: 200, body: [{ type: "A", a: 1 }] });
+
+    const result = await captureSamples(cribl, { groupId: "g", filter: "true" });
+
+    expect(result.rawEvents).toEqual(['{"type":"A","a":1}']);
+  });
+
+  it("clamps a capture longer than the TRANSPORT survives, and says so", async () => {
+    // A 30s capture always failed with a message blaming the platform bridge,
+    // for a capture that had run perfectly server-side.
+    const cribl = client({ status: 200, body: ndjson([PANOS_A]) });
+
+    const result = await captureSamples(cribl, {
+      groupId: "g",
+      filter: "true",
+      durationSeconds: 30,
+    });
+
+    expect((cribl.calls[0].body as Record<string, unknown>).duration).toBe(12);
+    expect(result.notes.join(" ")).toContain("gives up on a request");
+  });
+
+  it("ignores a non-finite bound instead of putting null on the wire", async () => {
+    const cribl = client({ status: 200, body: ndjson([PANOS_A]) });
+
+    await captureSamples(cribl, {
+      groupId: "g",
+      filter: "true",
+      maxEvents: Number.NaN,
+      durationSeconds: Number.NaN,
+    });
+
+    const body = cribl.calls[0].body as Record<string, unknown>;
+    expect(body.maxEvents).toBe(DEFAULT_MAX_EVENTS);
+    expect(body.duration).toBe(DEFAULT_DURATION_SECONDS);
   });
 });
 

@@ -800,3 +800,151 @@ export async function queryLakeSamples(
     ok: true,
   };
 }
+
+// ---------------------------------------------------------------------------
+// Step three: the actual EVENTS for a chosen log type
+// ---------------------------------------------------------------------------
+
+/**
+ * Fetch real events for ONE log type, so a Lake dataset can become a sample.
+ *
+ * WHY THIS IS A SEPARATE STEP. `queryLakeSamples` answers "which log types, and
+ * how much of each" with a `summarize count()`, which returns COUNTS - one row
+ * per log type, no event bodies. Counts are what the operator needs to CHOOSE;
+ * they are useless as a sample, because there is nothing to discover fields
+ * from. So committing a Lake selection needs this third query, run per chosen
+ * log type rather than once, because each becomes its own tagged sample.
+ *
+ * Deliberately NOT folded into queryLakeSamples: the operator picks which log
+ * types are worth taking after seeing the volumes, and fetching events for
+ * every log type up front would pull bodies for the ones they discard - on the
+ * biggest datasets, which is exactly where it hurts most.
+ */
+export function buildLogTypeEventQuery(
+  datasetId: string,
+  field: string,
+  logType: string,
+  limit: number,
+): string {
+  // The value is compared with `==` against a quoted literal, so a value
+  // carrying a quote would break the query. Cribl's own dataset ids and
+  // discriminator values are tame, but the value here came from data rather
+  // than from configuration, so it is escaped the same way the dataset id is.
+  const value = logType.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+  return `dataset="${quoteDataset(datasetId)}" | where ${field}=="${value}" | limit ${limit}`;
+}
+
+/** Options for {@link fetchLakeLogTypeEvents}. */
+export interface FetchLakeEventsOptions extends QueryLakeSamplesOptions {
+  /** The field the log types were grouped by (from the query result). */
+  discriminatorField: string;
+  /** The log-type values the operator chose to take. */
+  logTypes: readonly string[];
+  /** Events per log type; clamped to 1..{@link MAX_SAMPLE_LIMIT}. */
+  eventsPerLogType?: number;
+}
+
+/** Raw events for one log type, ready to tag. */
+export interface LakeLogTypeEvents {
+  logType: string;
+  /** Event lines as the search returned them, `_raw` preferred. */
+  rawEvents: string[];
+}
+
+/** What {@link fetchLakeLogTypeEvents} produced. */
+export interface FetchLakeEventsResult {
+  events: LakeLogTypeEvents[];
+  notes: string[];
+  /** False when EVERY requested log type failed; a partial haul is ok. */
+  ok: boolean;
+}
+
+/**
+ * Fetch events for each chosen log type.
+ *
+ * PARTIAL SUCCESS IS SUCCESS. One log type failing must not cost the operator
+ * the others - they picked several, and returning nothing because the third of
+ * five 400'd would throw away four good samples. Each failure becomes a note
+ * naming which log type was lost.
+ */
+export async function fetchLakeLogTypeEvents(
+  cribl: CriblClient,
+  options: FetchLakeEventsOptions,
+  logger?: Logger,
+): Promise<FetchLakeEventsResult> {
+  const notes: string[] = [];
+  const datasetId = options.datasetId.trim();
+  const searchGroupId = options.searchGroupId.trim();
+  const field = options.discriminatorField.trim();
+  const wanted = options.logTypes.map((t) => t.trim()).filter((t) => t !== "");
+
+  if (searchGroupId === "" || datasetId === "" || field === "" || wanted.length === 0) {
+    // Nothing addressable. Reported rather than requested - a blank group id
+    // would otherwise 404 at the leader and read as a Cribl fault.
+    notes.push(
+      "No dataset, search group, discriminator field or log-type selection was given, so no events were requested.",
+    );
+    return { events: [], notes, ok: false };
+  }
+
+  const limit = clampLimit(
+    options.eventsPerLogType,
+    DEFAULT_SAMPLE_LIMIT,
+    MAX_SAMPLE_LIMIT,
+    "Events per log type",
+  );
+  if (limit.note !== undefined) notes.push(limit.note);
+
+  const runSearch = createSearchRunner(
+    cribl,
+    {
+      searchGroupId,
+      earliest: options.earliest ?? DEFAULT_EARLIEST,
+      latest: options.latest ?? DEFAULT_LATEST,
+      ...(options.sleep !== undefined ? { sleep: options.sleep } : {}),
+    },
+    logger,
+  );
+
+  const events: LakeLogTypeEvents[] = [];
+  // Tracked apart from emptiness (2026-08-20 bug-hunt). `ok` was
+  // `events.length > 0`, which reported a completely SUCCESSFUL fetch over an
+  // empty window as a failure - the empty-vs-failed collapse this codebase
+  // treats as its worst shape, in the direction that cries wolf.
+  let failed = 0;
+  for (const logType of wanted) {
+    const run = await runSearch(
+      buildLogTypeEventQuery(datasetId, field, logType, limit.value),
+      limit.value,
+    );
+    if (!run.ok) {
+      failed += 1;
+      notes.push(`"${logType}" could not be fetched: ${run.notes.join(" ")}`);
+      continue;
+    }
+    // `_raw` is the vendor's own bytes and the whole reason a Lake sample is
+    // worth having; a row without one is serialized, the same fallback the
+    // capture path uses.
+    const rawEvents = run.rows.map((row) => {
+      const raw = readString(row, "_raw");
+      return raw !== undefined ? raw : JSON.stringify(row);
+    });
+    if (rawEvents.length === 0) {
+      notes.push(
+        `"${logType}" returned no events in this window, so it was not added.`,
+      );
+      continue;
+    }
+    events.push({ logType, rawEvents });
+  }
+
+  logger?.info("query-lake-samples: events fetched", {
+    dataset: datasetId,
+    requested: wanted.length,
+    got: events.length,
+  });
+  // ok = "nothing FAILED", not "something came back". A window that genuinely
+  // holds none of the chosen log types is a true answer, and the per-log-type
+  // notes already say which returned nothing.
+  return { events, notes, ok: failed === 0 };
+}

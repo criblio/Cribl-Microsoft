@@ -6,6 +6,9 @@
  */
 
 export type {
+  FetchLakeEventsOptions,
+  FetchLakeEventsResult,
+  LakeLogTypeEvents,
   LakeLogTypeVolume,
   QueryLakeSamplesOptions,
   QueryLakeSamplesResult,
@@ -25,6 +28,8 @@ export {
   SEARCH_QUERY_PATH,
   buildDiscriminatorSampleQuery,
   buildLogTypeCountQuery,
+  buildLogTypeEventQuery,
+  fetchLakeLogTypeEvents,
   queryLakeSamples,
   searchJobResultsPath,
   searchJobStatusPath,

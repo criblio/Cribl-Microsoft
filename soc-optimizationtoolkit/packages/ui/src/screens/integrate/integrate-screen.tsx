@@ -70,6 +70,8 @@ import {
   canWireSource,
   captureSamples,
   compareLogTypeCoverage,
+  fetchLakeLogTypeEvents,
+  queryLakeSamples,
   deriveExpectedLogTypes,
   documentedLogTypesForSolution,
   mergeLogTypeSources,
@@ -126,6 +128,7 @@ import {
 import { LogTypeRecommendation } from "../samples/log-type-recommendation";
 import { SampleSourcePicker } from "../samples/sample-source-picker";
 import { CapturePanel } from "../samples/capture-panel";
+import { LakePanel } from "../samples/lake-panel";
 import { useSampleSources } from "../samples/use-sample-sources";
 import { InfoTip } from "../../components/info-tip";
 import { ReadinessFooter } from "../../components/readiness-footer";
@@ -819,6 +822,11 @@ export function IntegrateScreen({
     sampleSourceEntry.groupId !== undefined
       ? sampleSourceEntry
       : null;
+  // A Lake dataset is QUERIED, not captured, and the query runs through the
+  // SEARCH group - which the dataset entry deliberately does not carry, because
+  // LISTING Lake datasets is a leader route. It comes from stage one instead.
+  const lakeTarget =
+    sampleSourceEntry?.kind === "lake-dataset" ? sampleSourceEntry : null;
   const [sampleSetConfirmed, setSampleSetConfirmed] = useState(false);
   // ONE join, TWO readings. The recommendation is the forward-looking half (what
   // to go and fetch, advisory); the coverage view is the backward-looking half
@@ -1452,6 +1460,43 @@ export function IntegrateScreen({
             // afterwards - including the replace-by-logType semantics the
             // preview warned about.
             for (const sample of captured) {
+              await ports.samples.upsert(sample);
+            }
+            handleSamplesChange(await ports.samples.list());
+          }}
+        />
+      )}
+      {lakeTarget !== null && (
+        <LakePanel
+          key={lakeTarget.id}
+          datasetId={lakeTarget.id}
+          searchGroupId={sampleSources.groups?.searchGroupId ?? ""}
+          existingLogTypes={samples.map((s) => s.logType)}
+          onQuery={() =>
+            queryLakeSamples(
+              ports.cribl,
+              {
+                searchGroupId: sampleSources.groups?.searchGroupId ?? "",
+                datasetId: lakeTarget.id,
+              },
+              ports.logger,
+            )
+          }
+          onFetchEvents={(discriminatorField, logTypes, eventsPerLogType) =>
+            fetchLakeLogTypeEvents(
+              ports.cribl,
+              {
+                searchGroupId: sampleSources.groups?.searchGroupId ?? "",
+                datasetId: lakeTarget.id,
+                discriminatorField,
+                logTypes,
+                eventsPerLogType,
+              },
+              ports.logger,
+            )
+          }
+          onCommit={async (fetched) => {
+            for (const sample of fetched) {
               await ports.samples.upsert(sample);
             }
             handleSamplesChange(await ports.samples.list());
