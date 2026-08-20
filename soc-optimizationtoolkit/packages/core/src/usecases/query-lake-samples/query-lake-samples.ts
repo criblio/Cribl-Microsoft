@@ -542,6 +542,10 @@ function createSearchRunner(
  * A group key as text. Not readString: a discriminator value is legitimately
  * numeric (a Windows EventID, say), and dropping those would hide whole log
  * types.
+ *
+ * The NUMBER-NESS IS LOST HERE, deliberately - a log type is a name by the time
+ * an operator picks it. {@link buildLogTypeEventQuery} is what makes that safe
+ * on the way back in; read its note before changing either.
  */
 function readGroupValue(
   row: Record<string, unknown>,
@@ -819,6 +823,27 @@ export async function queryLakeSamples(
  * types are worth taking after seeing the volumes, and fetching events for
  * every log type up front would pull bodies for the ones they discard - on the
  * biggest datasets, which is exactly where it hurts most.
+ *
+ * `tostring(field)` IS THE LOAD-BEARING PART (2026-08-20 bug-hunt). A
+ * discriminator value is legitimately numeric - a Windows EventID is a log type,
+ * which is why readGroupValue keeps numbers rather than dropping them - but it
+ * reaches this query as TEXT, and a bare `eventType=="4624"` asks Kusto to
+ * compare a long against a string. That answers HTTP 400, or worse, nothing at
+ * all: the app then tells the operator that "4624" returned no events in this
+ * window, about a log type IT had just listed with seven. Empty collapsed into
+ * failed, in the one shape where the app contradicts itself to their face.
+ * Converting engine-side is a single code path that is right whether the column
+ * is a string or a long, or a bool.
+ *
+ * The alternative was to carry each value's original type on LakeLogTypeVolume
+ * and emit an unquoted literal for the numeric ones. Truer to what the column
+ * is, and rejected: the type would have to survive the operator's SELECTION -
+ * volumes, to checkboxes, to the list they ticked - so the flag has to be kept
+ * in step through the panel state and FetchLakeEventsOptions.logTypes, which is
+ * a `string[]` precisely because a chosen log type is a NAME. Three layers of
+ * state kept in step to spare one cast. The cast costs index usage on that
+ * column, which a `| limit 50` behind a single-value filter was never going to
+ * feel.
  */
 export function buildLogTypeEventQuery(
   datasetId: string,
@@ -831,7 +856,7 @@ export function buildLogTypeEventQuery(
   // discriminator values are tame, but the value here came from data rather
   // than from configuration, so it is escaped the same way the dataset id is.
   const value = logType.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
-  return `dataset="${quoteDataset(datasetId)}" | where ${field}=="${value}" | limit ${limit}`;
+  return `dataset="${quoteDataset(datasetId)}" | where tostring(${field})=="${value}" | limit ${limit}`;
 }
 
 /** Options for {@link fetchLakeLogTypeEvents}. */
