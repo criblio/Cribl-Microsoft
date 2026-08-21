@@ -92,3 +92,56 @@ export function packAppliesToSolution(
     !(pack.excludeKeywords ?? []).some((k) => haystack.includes(k))
   );
 }
+
+/**
+ * Sibling-product exclusions for GENERATED packs, by pack id. THE ONE TABLE.
+ *
+ * Generated packs derive their keywords from a package title, so they routinely
+ * claim a parent brand - "zscaler", "palo alto" - and catch every sibling that
+ * shares it. Which products share a brand is hand knowledge, and the generated
+ * assets are rewritten wholesale by their miners, so the exclusion cannot live
+ * in the asset: it is re-applied at read time from here.
+ *
+ * IT IS ONE TABLE BECAUSE TWO DISAGREED (2026-08-21 audit). The log-type catalog
+ * and the field-matcher each grew their own copy, and within a day they had
+ * drifted: the mapping side excluded Prisma Cloud from Cortex XDR while the
+ * log-type side still offered a Cortex XDR operator BOTH Prisma Cloud feeds and
+ * PAN-OS FIREWALL feeds. Those two answers render on one screen. The
+ * cross-module pin that exists to catch exactly this covered only Zscaler, so
+ * the Palo Alto family walked straight past it.
+ *
+ * Ids are shared across both pack kinds (`generated-prisma_cloud` is both a
+ * log-type pack and a mapping pack), which is what makes one table by id the
+ * right shape rather than a coincidence.
+ */
+export const GENERATED_PACK_EXCLUSIONS: Readonly<
+  Record<string, readonly string[]>
+> = Object.freeze({
+  // Zscaler: "Zscaler Private Access" contains "zscaler", so ZIA's bare keyword
+  // caught ZPA - and the generated ZPA pack claims bare "zscaler" too, so it
+  // caught ZIA right back. Both directions are load-bearing.
+  "generated-zscaler_zia": ["private access", "zpa"],
+  "generated-zscaler_zpa": ["internet access", "zia"],
+  "sentinel-dcr-zscaler": ["private access", "zpa"],
+
+  // Palo Alto. The firewall is not the EDR is not the cloud-security product,
+  // and all three answer to "palo alto".
+  //
+  // NOT excluding "ngfw" from the firewall packs on purpose: Cloud NGFW IS a
+  // Palo Alto firewall, so PAN-OS log types and mappings are genuinely relevant
+  // there. Only the EDR / ASM / cloud-posture siblings are wrong.
+  "generated-panw": ["cortex", "xpanse", "prisma"],
+  "generated-panw_cortex_xdr": ["xpanse", "prisma"],
+  // "ngfw" IS excluded here, unlike on the firewall packs above: Cloud NGFW is
+  // a Palo Alto FIREWALL, so PAN-OS content belongs there and Prisma Cloud
+  // (cloud posture) does not.
+  "generated-prisma_cloud": ["cortex", "xpanse", "pan-os", "panos", "ngfw"],
+});
+
+/** Apply the hand-declared sibling exclusion to a generated pack, if it has one. */
+export function withGeneratedExclusions<T extends SolutionKeywordedPack & { id: string }>(
+  pack: T,
+): T {
+  const exclude = GENERATED_PACK_EXCLUSIONS[pack.id];
+  return exclude === undefined ? pack : { ...pack, excludeKeywords: exclude };
+}
