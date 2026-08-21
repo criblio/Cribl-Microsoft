@@ -75,6 +75,7 @@ export {
   PANOS_TRAFFIC_LOGSET_INDEX,
   PANOS_LEGACY_PARSER_INDEX20,
   PANOS_CANONICAL_INDEX20,
+  panosHeadersFor,
   parsePanosLine,
   isPanosFormat,
   convertPanosToJson,

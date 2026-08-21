@@ -214,6 +214,45 @@ export const PANOS_CSV_HEADERS: Readonly<Record<string, readonly string[]>> =
   });
 
 /**
+ * Look a log type up in {@link PANOS_CSV_HEADERS}, tolerating the vendor's
+ * INCONSISTENT HYPHENATION.
+ *
+ * WHY THIS IS NOT A PLAIN INDEX (2026-08-21, checked against Palo Alto's own
+ * fixtures in elastic/integrations). Real PAN-OS emits `HIPMATCH` in the type
+ * field - `...,12345678999,HIPMATCH,0,2305,...` - while this dictionary keys the
+ * column list as `HIP-MATCH`. The spelling `HIP-MATCH` appears NOWHERE in the
+ * vendor's sample corpus. So the one HIP-Match column set that was carefully
+ * transcribed here was reachable only by a string PAN-OS does not send, and
+ * every real HIP-Match event fell through to positional `field_N` names.
+ *
+ * Both spellings are already acknowledged a few lines up - PANOS_LOG_TYPES maps
+ * subtype 15 to "HIP-MATCH" and 100 to "HIPMATCH" - so the vendor genuinely
+ * ships both and the dictionary picked the wrong one to key on.
+ *
+ * NORMALIZING RATHER THAN ADDING A KEY is deliberate. The eight-entry key set is
+ * pinned in two places and one pin asserts `PANOS_CSV_HEADERS.USERID` is
+ * undefined ON PURPOSE - there is no USER-ID column list, and inventing a ninth
+ * key to paper over a lookup bug would make that pin lie. Folding the separator
+ * at lookup time fixes the spelling without claiming a dictionary we do not have:
+ * `USERID` still resolves to nothing, because there is nothing to resolve to.
+ */
+export function panosHeadersFor(
+  logType: string,
+): readonly string[] | undefined {
+  const direct = PANOS_CSV_HEADERS[logType];
+  if (direct !== undefined) {
+    return direct;
+  }
+  const folded = logType.toUpperCase().replace(/[^A-Z0-9]/g, "");
+  for (const [key, headers] of Object.entries(PANOS_CSV_HEADERS)) {
+    if (key.replace(/[^A-Z0-9]/g, "") === folded) {
+      return headers;
+    }
+  }
+  return undefined;
+}
+
+/**
  * Parse ONE PAN-OS syslog+CSV line into a named-field object. Ported verbatim
  * from the legacy sample-resolver.ts `parsePanosLine`.
  *
@@ -241,7 +280,7 @@ export function parsePanosLine(
 
   // Field[3] is the log type (TRAFFIC, THREAT, SYSTEM, CONFIG, ...).
   const logType = (values[3] || "").toUpperCase().trim();
-  const headers = PANOS_CSV_HEADERS[logType];
+  const headers = panosHeadersFor(logType);
 
   const fields: Record<string, string> = {};
   if (headers) {

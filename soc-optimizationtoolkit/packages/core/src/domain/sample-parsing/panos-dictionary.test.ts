@@ -8,6 +8,7 @@ import {
   PANOS_TRAFFIC_LOGSET_INDEX,
   convertPanosToJson,
   isPanosFormat,
+  panosHeadersFor,
   parseCsv,
   parsePanosLine,
 } from "./index";
@@ -130,5 +131,33 @@ describe("isPanosFormat / convertPanosToJson", () => {
     const passthrough = convertPanosToJson(["not a panos line"]);
     expect(passthrough.events).toEqual(["not a panos line"]);
     expect(passthrough.logType).toBe("");
+  });
+});
+
+describe("panosHeadersFor - the vendor's own hyphenation", () => {
+  it("resolves HIPMATCH, which is what PAN-OS actually sends", () => {
+    // Verified 2026-08-21 against Palo Alto's own fixtures in
+    // elastic/integrations: every HIP-Match sample line reads
+    // `...,12345678999,HIPMATCH,0,2305,...` and the spelling "HIP-MATCH"
+    // appears NOWHERE in the vendor corpus. A plain index therefore missed the
+    // one HIP-Match column list this dictionary carries, and every real
+    // HIP-Match event parsed to positional field_N names instead.
+    expect(panosHeadersFor("HIPMATCH")).toBe(PANOS_CSV_HEADERS["HIP-MATCH"]);
+    expect(panosHeadersFor("HIP-MATCH")).toBe(PANOS_CSV_HEADERS["HIP-MATCH"]);
+  });
+
+  it("still resolves the plain keys unchanged", () => {
+    expect(panosHeadersFor("TRAFFIC")).toBe(PANOS_CSV_HEADERS.TRAFFIC);
+    expect(panosHeadersFor("THREAT")).toBe(PANOS_CSV_HEADERS.THREAT);
+  });
+
+  it("does NOT invent a dictionary the toolkit does not have", () => {
+    // The separator fold rescues a SPELLING; it must not manufacture a column
+    // list. USERID has no entry on purpose - a sibling pin asserts exactly
+    // that - so folding it must still answer undefined.
+    expect(panosHeadersFor("USERID")).toBeUndefined();
+    expect(panosHeadersFor("USER-ID")).toBeUndefined();
+    expect(panosHeadersFor("IPTAG")).toBeUndefined();
+    expect(panosHeadersFor("")).toBeUndefined();
   });
 });
