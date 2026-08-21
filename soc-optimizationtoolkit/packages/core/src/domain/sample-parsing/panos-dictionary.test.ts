@@ -161,3 +161,33 @@ describe("panosHeadersFor - the vendor's own hyphenation", () => {
     expect(panosHeadersFor("")).toBeUndefined();
   });
 });
+
+describe("parsePanosLine - the AUDIT sub-format", () => {
+  // Both lines are verbatim from Palo Alto's own fixtures (via
+  // elastic/integrations), not hand-written: audit logs omit the leading
+  // FUTURE_USE field, so every column shifts left by one.
+  const AUDIT =
+    "Apr 11 20:06:15 192.168.0.1 01111111111,2024/04/11 20:06:15,audit,2561,gui-op,suser,\"<show><config-locks/></show>\",success";
+  const TRAFFIC =
+    "<14>Aug 13 10:49:03 fw01 1,2026/08/13 10:49:02,013201031064,TRAFFIC,end,2817,2026/08/13 10:48:54,10.0.0.5,8.8.8.8";
+
+  it("reads AUDIT, not the content-version number beside it", () => {
+    // Read blindly at index 3 this reports "2561", which is not a parse
+    // failure anyone notices - it flows on as a plausible discriminator and
+    // the operator is invited to name a sample after it.
+    expect(parsePanosLine(AUDIT)?.logType).toBe("AUDIT");
+    expect(parsePanosLine(AUDIT)?.logType).not.toBe("2561");
+  });
+
+  it("still reads an ordinary line from index 3", () => {
+    expect(parsePanosLine(TRAFFIC)?.logType).toBe("TRAFFIC");
+  });
+
+  it("does not mistake an ordinary line for the shifted shape", () => {
+    // The detection is a numeric where a type name belongs. TRAFFIC and THREAT
+    // are not numeric, so no normal line can trip it.
+    const threat =
+      "<14>Aug 13 10:49:04 fw01 1,2026/08/13 10:49:03,013201031064,THREAT,vuln,2818,2026/08/13 10:48:55";
+    expect(parsePanosLine(threat)?.logType).toBe("THREAT");
+  });
+});
