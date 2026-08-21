@@ -28,6 +28,41 @@ describe("DISCRIMINATOR_FIELDS reconciliation", () => {
     expect(new Set(DISCRIMINATOR_FIELDS).size).toBe(DISCRIMINATOR_FIELDS.length);
   });
 
+  it("carries RFC 5424's msgid, LAST so the payload still wins", () => {
+    // Added 2026-08-21. RFC 5424 defines MSGID to "identify the type of
+    // message", so a compliant syslog sender has already answered what this
+    // list asks, and Cribl surfaces it without anyone parsing a payload.
+    // Without it an RFC 5424 feed reads as undiscriminated while the log type
+    // sits in a named field.
+    expect(DISCRIMINATOR_FIELDS).toContain("msgid");
+    // Last, and that ordering is the contract: selection takes the first
+    // qualifying field, so a `type` recovered from the payload beats the
+    // envelope. The envelope is what the sender CLAIMS; the payload is what
+    // the device wrote.
+    expect(DISCRIMINATOR_FIELDS[DISCRIMINATOR_FIELDS.length - 1]).toBe("msgid");
+    expect(DISCRIMINATOR_FIELDS.indexOf("msgid")).toBeGreaterThan(
+      DISCRIMINATOR_FIELDS.indexOf("type"),
+    );
+  });
+
+  it("prefers a payload `type` over the syslog envelope's msgid", () => {
+    // Both present and both usable: the one the device wrote wins.
+    const records = [
+      { msgid: "TRAFFIC", type: "TRAFFIC" },
+      { msgid: "THREAT", type: "THREAT" },
+    ];
+    expect(selectDiscriminatorField(records)).toBe("type");
+  });
+
+  it("falls back to msgid when nothing parsed the payload", () => {
+    // The RFC 5424 case this entry exists for: the envelope is all there is.
+    const records = [
+      { msgid: "TRAFFIC", _raw: "<134>1 ... 1,2026/08/13,serial,TRAFFIC,end" },
+      { msgid: "AUDIT", _raw: "<134>1 ... 011,2024/04/11,audit,2561,gui-op" },
+    ];
+    expect(selectDiscriminatorField(records)).toBe("msgid");
+  });
+
   it("keeps the resolver's high-confidence six at the front", () => {
     expect(HIGH_CONFIDENCE_DISCRIMINATOR_COUNT).toBe(6);
     expect(DISCRIMINATOR_FIELDS.slice(0, 6)).toEqual([
