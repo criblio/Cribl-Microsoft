@@ -16,6 +16,7 @@
  */
 
 import type { VendorMapping } from "./match-fields";
+import { normalizeSolutionKey } from "../sentinel-content/solution-matching";
 
 /** One remembered reviewer decision for a source field. */
 export interface LearnedMapping {
@@ -31,15 +32,21 @@ export interface LearnedMapping {
 export const LEARNED_MAPPING_DESCRIPTION =
   "Learned from your mapping review";
 
-/** lowercase, non-alphanumerics removed (mirrors normalizeSolutionKey; kept
- * local to avoid a field-matcher -> sample-acquisition import cycle). */
-function solutionKey(name: string): string {
-  return name.toLowerCase().replace(/[^a-z0-9]/g, "");
-}
-
-/** The ContentCache key holding a solution's learned mappings. */
+/**
+ * The ContentCache key holding a solution's learned mappings.
+ *
+ * The normalization is SHARED, not copied. It used to be a local mirror of
+ * `normalizeSolutionKey`, justified by "avoid a field-matcher ->
+ * sample-acquisition import cycle" - but that domain was deleted with the sample
+ * browser (ADR 0003) and the normalizer now lives in sentinel-content, which
+ * imports nothing at all, so there is no cycle to avoid. Sharing it matters
+ * because this key is PERSISTED: two normalizers that drift apart do not throw,
+ * they silently stop resolving an existing solution's learned decisions, which
+ * reads as "the app forgot my mapping review". The literal key format is pinned
+ * in learned-mappings.test.ts.
+ */
 export function learnedMappingsCacheKey(solutionName: string): string {
-  return `learned-mappings~v1~${solutionKey(solutionName)}`;
+  return `learned-mappings~v1~${normalizeSolutionKey(solutionName)}`;
 }
 
 /** The mapping-row subset the differ needs (a GapFieldMapping projection). */

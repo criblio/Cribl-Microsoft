@@ -116,6 +116,25 @@ export interface TaggedSample {
 }
 
 /**
+ * One per-log-type split of a multi-type sample stream (see ./splitting).
+ *
+ * REHOMED 2026-08-18 with the splitter itself (ADR 0003): this lived in the
+ * sample-acquisition domain that the sample-browser removal deleted, but a
+ * mixed stream still has to be separated by log type - now for a Cribl capture
+ * or a mixed upload rather than a browsed repo file.
+ */
+export interface SplitSample {
+  /** The uppercased, sanitized log-type name (the split key). */
+  logType: string;
+  /** The raw event lines that fell into this log type. */
+  rawEvents: string[];
+  /** The format carried through from the parent sample. */
+  format: SampleFormat;
+  /** Convenience count === rawEvents.length. */
+  eventCount: number;
+}
+
+/**
  * How many records are retained in {@link ParsedSample.rawEvents} and
  * {@link TaggedSample.rawEvents}. 200 keeps a KV-stored tagged sample small
  * while preserving enough events to discover every field (legacy cap).

@@ -13,6 +13,7 @@ import {
   vendorPacksForSolution,
 } from "./vendor-mapping-packs";
 import { matchFields } from "./match-fields";
+import { documentedLogTypePacksForSolution } from "../log-type-catalog/vendor-log-types";
 
 describe("vendorPacksForSolution", () => {
   it("matches the Zscaler solution to both the hand and generated packs", () => {
@@ -31,6 +32,143 @@ describe("vendorPacksForSolution", () => {
     // remains alias-ladder-only.
     expect(vendorPacksForSolution("Barracuda CloudGen Firewall")).toEqual([]);
     expect(vendorPacksForSolution("")).toEqual([]);
+  });
+
+  it("does NOT claim a SIBLING PRODUCT's solution (Zscaler ZPA)", () => {
+    // The 2026-08-20 audit case. Every "Zscaler Private Access" solution name
+    // contains "zscaler", so all three ZIA packs - hand, mined Sentinel DCR,
+    // Elastic-mined - claimed a ZPA solution and the review table cited
+    // Zscaler's NSS web feed as the documentation for fields ZPA has never
+    // emitted. Meanwhile the log-type recommendation, ON THE SAME SCREEN,
+    // correctly offered ZPA's LSS feeds: two vendor claims about one solution.
+    // ZPA has no mapping pack; the alias ladder covers it.
+    expect(vendorPacksForSolution("Zscaler Private Access")).toEqual([]);
+    expect(vendorMappingsForSolution("Zscaler Private Access")).toEqual([]);
+    expect(vendorPacksForSolution("Zscaler ZPA")).toEqual([]);
+
+    // ZIA is untouched: the exclusion must not cost the product it curates.
+    const zia = vendorPacksForSolution("Zscaler Internet Access").map(
+      (p) => p.id,
+    );
+    expect(zia).toContain("zscaler-zia");
+    expect(zia).toContain("sentinel-dcr-zscaler");
+    expect(zia).toContain("generated-zscaler_zia");
+  });
+
+  it("agrees with the log-type catalog about WHICH PRODUCT a solution is", () => {
+    // The two matchers are one predicate now (packAppliesToSolution). Pinned
+    // across the modules because that is exactly where they disagreed, and the
+    // two answers render on one screen: whichever side learns an exclusion,
+    // the other can no longer miss it.
+    //
+    // Pack ids are compared, not vendor labels - both Zscaler products carry
+    // the vendor name "Zscaler", so a vendor-level check would not see this.
+    const zpaMappingIds = vendorPacksForSolution("Zscaler Private Access").map(
+      (p) => p.id,
+    );
+    const zpaLogTypeIds = documentedLogTypePacksForSolution(
+      "Zscaler Private Access",
+    ).map((p) => p.id);
+
+    // Neither module offers ZIA to a ZPA operator, in EITHER tier - the hand
+    // packs or the generated ones. The generated half matters as much: the
+    // miner derives keywords from a package title, so both Zscaler packs
+    // claimed the bare word "zscaler", and populating that tier on 2026-08-20
+    // reintroduced this exact bleed until each side got an exclusions overlay.
+    expect(zpaMappingIds).not.toContain("zscaler-zia");
+    expect(zpaMappingIds).not.toContain("generated-zscaler_zia");
+    expect(zpaLogTypeIds).not.toContain("zscaler-zia");
+    expect(zpaLogTypeIds).not.toContain("generated-zscaler_zia");
+    // ...and the catalog still identifies the product correctly. Membership,
+    // not equality: the generated tier legitimately adds ZPA's own pack, so an
+    // exact list would have to be retyped after every regeneration.
+    expect(zpaLogTypeIds).toContain("zscaler-zpa");
+
+    // The mirror case: ZIA resolves to ZIA on both sides, and draws no ZPA.
+    // Not symmetric for free - the GENERATED ZPA pack claims bare "zscaler" as
+    // well as "zscaler private access", so it caught ZIA until the ZPA pack got
+    // an exclusion of its own.
+    const ziaMappingIds = vendorPacksForSolution("Zscaler Internet Access").map(
+      (p) => p.id,
+    );
+    const ziaLogTypeIds = documentedLogTypePacksForSolution(
+      "Zscaler Internet Access",
+    ).map((p) => p.id);
+
+    expect(ziaMappingIds).toContain("zscaler-zia");
+    expect(ziaMappingIds).not.toContain("zscaler-zpa");
+    expect(ziaLogTypeIds).toContain("zscaler-zia");
+    expect(ziaLogTypeIds).not.toContain("zscaler-zpa");
+    expect(ziaLogTypeIds).not.toContain("generated-zscaler_zpa");
+  });
+
+  it("agrees about the PALO ALTO family too, not just Zscaler", () => {
+    // 2026-08-21 audit. The cross-module pin above covered only Zscaler, so
+    // when the generated log-type tier was populated the Palo Alto family
+    // walked straight past it: the mapping side correctly dropped Prisma Cloud
+    // from Cortex XDR while the log-type side offered that same operator BOTH
+    // Prisma Cloud feeds AND PAN-OS FIREWALL feeds. Two answers, one screen.
+    //
+    // Asserted per-family rather than as exact lists, because the two sides
+    // legitimately hold different packs - what must never differ is WHICH
+    // PRODUCT each thinks the solution is.
+    const both = (solution: string) => [
+      ...vendorPacksForSolution(solution).map((p) => p.id),
+      ...documentedLogTypePacksForSolution(solution).map((p) => p.id),
+    ];
+
+    // The EDR draws no firewall and no cloud-posture content.
+    const xdr = both("Palo Alto Networks Cortex XDR");
+    expect(xdr.some((id) => id.includes("cortex"))).toBe(true);
+    expect(xdr.filter((id) => /panos|paloalto-panos|generated-panw$/.test(id))).toEqual([]);
+    expect(xdr.filter((id) => id.includes("prisma"))).toEqual([]);
+
+    // Cloud posture draws no firewall and no EDR.
+    const prisma = both("Palo Alto Prisma Cloud CWPP");
+    expect(prisma.some((id) => id.includes("prisma"))).toBe(true);
+    expect(prisma.filter((id) => id.includes("panos"))).toEqual([]);
+    expect(prisma.filter((id) => id.includes("cortex"))).toEqual([]);
+
+    // Attack-surface management has no pack at all; claiming a sibling's is
+    // worse than saying nothing, which is what "no packs for uncurated
+    // solutions" already means.
+    expect(both("Palo Alto Cortex Xpanse CCF")).toEqual([]);
+
+    // ...but Cloud NGFW IS a Palo Alto firewall, so PAN-OS content belongs
+    // there. The exclusions must not over-reach into a true sibling.
+    const ngfw = both("Azure Cloud NGFW by Palo Alto Networks");
+    expect(ngfw.some((id) => id.includes("panos") || id === "generated-panw")).toBe(true);
+    expect(ngfw.filter((id) => id.includes("prisma"))).toEqual([]);
+  });
+
+  it("does not cite Prisma Cloud's docs to a Cortex XDR operator", () => {
+    // Measured 2026-08-20. generated-prisma_cloud claims the parent brand
+    // "palo alto", so it attached to Cortex XDR. Its two mappings do not steal
+    // a column - Cortex XDR carries neither `user` nor `resourceName` - but
+    // mapping-review renders a documentation line for EVERY matching pack
+    // whether its entries fire or not, so the operator was shown Prisma
+    // Cloud's documentation for their EDR's data.
+    //
+    // Pinned as the packs, not the mapping count, deliberately: the count is
+    // what the >100 floor below already guards, and re-encoding today's 158
+    // there would just break on the next regeneration.
+    const cortex = vendorPacksForSolution("Palo Alto Networks Cortex XDR").map(
+      (p) => p.id,
+    );
+    expect(cortex).not.toContain("generated-prisma_cloud");
+    // Both halves of the screen agree about the product, which is the rule the
+    // Zscaler case established - the log-type side already excluded "cortex".
+    expect(
+      documentedLogTypePacksForSolution("Palo Alto Networks Cortex XDR").map(
+        (p) => p.id,
+      ),
+    ).not.toContain("paloalto-panos");
+
+    // Prisma Cloud still resolves for its OWN solution - the exclusion must not
+    // cost the pack the thing it is actually for.
+    expect(
+      vendorPacksForSolution("Palo Alto Prisma Cloud CWPP").map((p) => p.id),
+    ).toContain("generated-prisma_cloud");
   });
 });
 

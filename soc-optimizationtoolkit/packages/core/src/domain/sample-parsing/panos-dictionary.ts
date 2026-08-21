@@ -85,6 +85,16 @@ export const PANOS_CANONICAL_INDEX20 = "logset";
  * verbatim). Eight log types: TRAFFIC, THREAT, SYSTEM, CONFIG, GLOBALPROTECT,
  * AUTHENTICATION, DECRYPTION, HIP-MATCH. `future_use*` placeholders are retained
  * in the order (so positions stay correct) but skipped when a line is named.
+ *
+ * NOTE for anyone counting these with a grep: `"HIP-MATCH"` is QUOTED, because
+ * the hyphen is not a bare identifier. A pattern matching unquoted keys finds
+ * seven and concludes the eighth is missing - which happened twice on
+ * 2026-08-20, once in an audit and once in the check meant to verify it.
+ *
+ * `isPanosFormat` recognises MORE types than are dictionaried here
+ * (CORRELATION, GTP, USERID, WILDFIRE...). Those are correctly detected as
+ * PAN-OS and then parsed positionally, which is the honest outcome for a type
+ * whose column order is not recorded.
  */
 export const PANOS_CSV_HEADERS: Readonly<Record<string, readonly string[]>> =
   Object.freeze({
@@ -204,6 +214,45 @@ export const PANOS_CSV_HEADERS: Readonly<Record<string, readonly string[]>> =
   });
 
 /**
+ * Look a log type up in {@link PANOS_CSV_HEADERS}, tolerating the vendor's
+ * INCONSISTENT HYPHENATION.
+ *
+ * WHY THIS IS NOT A PLAIN INDEX (2026-08-21, checked against Palo Alto's own
+ * fixtures in elastic/integrations). Real PAN-OS emits `HIPMATCH` in the type
+ * field - `...,12345678999,HIPMATCH,0,2305,...` - while this dictionary keys the
+ * column list as `HIP-MATCH`. The spelling `HIP-MATCH` appears NOWHERE in the
+ * vendor's sample corpus. So the one HIP-Match column set that was carefully
+ * transcribed here was reachable only by a string PAN-OS does not send, and
+ * every real HIP-Match event fell through to positional `field_N` names.
+ *
+ * Both spellings are already acknowledged a few lines up - PANOS_LOG_TYPES maps
+ * subtype 15 to "HIP-MATCH" and 100 to "HIPMATCH" - so the vendor genuinely
+ * ships both and the dictionary picked the wrong one to key on.
+ *
+ * NORMALIZING RATHER THAN ADDING A KEY is deliberate. The eight-entry key set is
+ * pinned in two places and one pin asserts `PANOS_CSV_HEADERS.USERID` is
+ * undefined ON PURPOSE - there is no USER-ID column list, and inventing a ninth
+ * key to paper over a lookup bug would make that pin lie. Folding the separator
+ * at lookup time fixes the spelling without claiming a dictionary we do not have:
+ * `USERID` still resolves to nothing, because there is nothing to resolve to.
+ */
+export function panosHeadersFor(
+  logType: string,
+): readonly string[] | undefined {
+  const direct = PANOS_CSV_HEADERS[logType];
+  if (direct !== undefined) {
+    return direct;
+  }
+  const folded = logType.toUpperCase().replace(/[^A-Z0-9]/g, "");
+  for (const [key, headers] of Object.entries(PANOS_CSV_HEADERS)) {
+    if (key.replace(/[^A-Z0-9]/g, "") === folded) {
+      return headers;
+    }
+  }
+  return undefined;
+}
+
+/**
  * Parse ONE PAN-OS syslog+CSV line into a named-field object. Ported verbatim
  * from the legacy sample-resolver.ts `parsePanosLine`.
  *
@@ -216,6 +265,38 @@ export const PANOS_CSV_HEADERS: Readonly<Record<string, readonly string[]>> =
  *
  * Returns null when no '1,' is found or fewer than 7 fields survive.
  */
+/**
+ * The log type from a split PAN-OS CSV line, tolerating the AUDIT sub-format.
+ *
+ * Nearly every PAN-OS log puts the type at index 3, after FUTURE_USE,
+ * receive_time and serial. AUDIT LOGS OMIT THE LEADING FUTURE_USE FIELD, so
+ * everything shifts left by one and the type lands at index 2 (2026-08-21,
+ * confirmed against Palo Alto's own fixtures):
+ *
+ *   1,2026/08/13 10:49:02,013201031064,TRAFFIC,end,2817,...   type at 3
+ *   01111111111,2024/04/11 20:06:15,audit,2561,gui-op,...     type at 2
+ *
+ * Read blindly at index 3, an audit line reports its log type as `2561` - the
+ * content-version number. That is not a parse failure anyone would notice: it
+ * flows through as a perfectly plausible-looking discriminator value, and the
+ * operator is offered "2561" as a log type to name a sample after.
+ *
+ * DETECTED BY SHAPE, not by looking for the word "audit": a numeric field where
+ * a type name belongs, with a name-shaped field immediately before it. That is
+ * exactly the left-shift signature, and it does not need a list of every
+ * sub-format Palo Alto might add. A normal line cannot trip it - TRAFFIC and
+ * THREAT are not numeric.
+ */
+function readPanosLogType(values: readonly string[]): string {
+  const atThree = (values[3] ?? "").trim();
+  const atTwo = (values[2] ?? "").trim();
+  const shifted =
+    atThree !== "" &&
+    /^\d+$/.test(atThree) &&
+    /^[A-Za-z][A-Za-z_-]*$/.test(atTwo);
+  return (shifted ? atTwo : atThree).toUpperCase();
+}
+
 export function parsePanosLine(
   line: string,
 ): { logType: string; fields: Record<string, string> } | null {
@@ -229,9 +310,10 @@ export function parsePanosLine(
     return null;
   }
 
-  // Field[3] is the log type (TRAFFIC, THREAT, SYSTEM, CONFIG, ...).
-  const logType = (values[3] || "").toUpperCase().trim();
-  const headers = PANOS_CSV_HEADERS[logType];
+  // Field[3] is the log type (TRAFFIC, THREAT, SYSTEM, CONFIG, ...) - EXCEPT
+  // for audit logs, see readPanosLogType.
+  const logType = readPanosLogType(values);
+  const headers = panosHeadersFor(logType);
 
   const fields: Record<string, string> = {};
   if (headers) {
