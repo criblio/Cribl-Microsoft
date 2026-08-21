@@ -224,15 +224,29 @@ describe("inputPredicate - __inputId is type-qualified (2026-08-20 bug-hunt)", (
     // eslint-disable-next-line no-new-func
     new Function("__inputId", `return ${predicate};`)(inputId) as boolean;
 
-  it("matches the TYPE-QUALIFIED form the platform actually sends", () => {
-    // The defect: /system/inputs hands us the bare `id`, but __inputId is
-    // `<type>:<id>` - the spec's own capture example is
-    // __inputId.startsWith("http:"), and its route examples read
-    // `cribl_http:pan_traffic_syslog`. So the clause matched NOTHING and every
-    // capture came back empty, reported to the operator as an idle source.
-    const p = inputPredicate("in_syslog");
-    expect(selects(p, "syslog:in_syslog")).toBe(true);
-    expect(selects(p, "cribl_http:in_syslog")).toBe(true);
+  it("matches every __inputId shape Cribl's OWN capture dialog offers", () => {
+    // Verified against the product 2026-08-21. Cribl generates an "Input
+    // Filters" list from the configured inputs; these are its exact strings.
+    // Two segments for most source types, THREE for syslog and http - and for
+    // those Cribl itself writes startsWith('syslog:pfsense:'), which is the
+    // tell that a trailing segment exists.
+    expect(selects(inputPredicate("in_cribl_tcp"), "cribl_tcp:in_cribl_tcp")).toBe(true);
+    expect(selects(inputPredicate("Cisco350_SNMP"), "snmp:Cisco350_SNMP")).toBe(true);
+    expect(selects(inputPredicate("replay_pfsense"), "collection:replay_pfsense")).toBe(true);
+    expect(
+      selects(inputPredicate("LogSourceJob_AzureMangedWorkers"), "cribl_http:LogSourceJob_AzureMangedWorkers"),
+    ).toBe(true);
+  });
+
+  it("matches a THREE-segment id, which a suffix match could not", () => {
+    // The defect this replaced: "syslog:pfsense:10.0.0.1".endsWith(":pfsense")
+    // is FALSE, so a capture from any syslog source matched nothing - and
+    // syslog is the transport for most vendors this toolkit onboards. It
+    // survived a spec read and a full round of pins because every example in
+    // the spec happens to be two-segment.
+    expect(selects(inputPredicate("pfsense"), "syslog:pfsense:10.0.0.1")).toBe(true);
+    expect(selects(inputPredicate("Corelight"), "syslog:Corelight:zeek01")).toBe(true);
+    expect(selects(inputPredicate("http"), "http:http:8088")).toBe(true);
   });
 
   it("still matches a BARE id, in case a deployment sends one", () => {
@@ -240,20 +254,22 @@ describe("inputPredicate - __inputId is type-qualified (2026-08-20 bug-hunt)", (
   });
 
   it("matches whichever TRANSPORT prefix a dual-protocol source sends", () => {
-    // Why this is a suffix match rather than a rebuilt `type:id` from the
-    // /system/inputs `type` field: a syslog source listening on both protocols
-    // emits tcp: on one event and udp: on the next. A rebuilt string would
-    // match one and silently drop the other.
+    // Why the id is taken as a SEGMENT rather than rebuilt as `type:id` from
+    // the /system/inputs `type` field: the prefix is the transport, and a
+    // source listening on both protocols emits tcp: on one event and udp: on
+    // the next. A rebuilt string would match one and silently drop the other.
     const p = inputPredicate("in_syslog");
     expect(selects(p, "tcp:in_syslog")).toBe(true);
     expect(selects(p, "udp:in_syslog")).toBe(true);
   });
 
-  it("does NOT select a DIFFERENT source that merely ends the same way", () => {
-    // The `:` is what makes the suffix match safe rather than sloppy.
+  it("does NOT select a DIFFERENT source with a similar name", () => {
+    // Comparing a whole segment is what makes this safe rather than sloppy: a
+    // substring or suffix test would accept both of these.
     const p = inputPredicate("in_syslog");
     expect(selects(p, "syslog:other_in_syslog")).toBe(false);
     expect(selects(p, "syslog:in_syslog_prod")).toBe(false);
+    expect(selects(p, "syslog:other_in_syslog:host1")).toBe(false);
   });
 
   it("does not THROW when __inputId is absent", () => {
