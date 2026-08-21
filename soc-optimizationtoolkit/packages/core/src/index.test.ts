@@ -184,7 +184,16 @@ describe("@soc/core root barrel", () => {
     expect(typeof autoDetectLogTypes).toBe("function");
     expect(RAW_EVENTS_CAP).toBe(200);
     expect(HIGH_CONFIDENCE_DISCRIMINATOR_COUNT).toBe(6);
-    expect(DISCRIMINATOR_FIELDS.length).toBe(16);
+    // Membership, not a count (2026-08-21). This test proves the BARREL
+    // re-exports the module; the exact list is pinned in
+    // discriminators.test.ts, which asserts the union, the absence of
+    // duplicates, and the high-confidence six by name. A length here was a
+    // second copy of that claim in a weaker form - it said nothing about
+    // WHICH fields survived, and it broke when the list legitimately grew to
+    // take RFC 5424's msgid.
+    expect(Array.isArray(DISCRIMINATOR_FIELDS)).toBe(true);
+    expect(DISCRIMINATOR_FIELDS).toContain("type");
+    expect(DISCRIMINATOR_FIELDS).toContain("msgid");
     const store: TaggedSampleStore = new FakeTaggedSampleStore();
     expect(store).toBeDefined();
   });
