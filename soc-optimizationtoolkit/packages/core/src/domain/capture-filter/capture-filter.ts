@@ -120,34 +120,44 @@ export function logTypePredicate(values: readonly string[]): string {
 }
 
 /**
- * The source-selection clause, matching BOTH forms of `__inputId`.
+ * The source-selection clause: the input id as the SECOND colon segment.
  *
- * `__inputId` IS NOT THE BARE INPUT ID (2026-08-20, from the vendored spec). It
- * is `<type>:<id>` - the spec's own capture example filters
- * `__inputId.startsWith("http:")`, and every route example in the same document
- * reads that way too: `open_telemetry:open_telemetry`,
- * `prometheus_rw:prom_rw_in`, `cribl_http:pan_traffic_syslog`. `/system/inputs`
- * hands us only the bare `id`, so `__inputId === "in_syslog"` matched NOTHING
- * and every capture came back empty - reported to the operator as an idle
- * source. The worst version of the failure this module exists to prevent,
- * sitting in its own source clause.
+ * `__inputId` IS NOT THE BARE INPUT ID. It is `<type>:<id>`, optionally with
+ * further segments after it. `/system/inputs` hands us only the bare `id`, so
+ * `__inputId === "in_syslog"` matched NOTHING and every capture came back empty
+ * - reported to the operator as an idle source.
  *
- * MATCHED BY SUFFIX RATHER THAN REBUILT AS `type:id`, even though
- * `/system/inputs` also carries `type`. The prefix is the TRANSPORT, not the
- * configured type: a syslog source listening on both protocols emits `tcp:` on
- * one event and `udp:` on the next, so a rebuilt string would silently drop
- * half the traffic - the same empty-looking failure, harder to spot. The `:`
- * in the suffix is what keeps it honest: `syslog:other_in_syslog` does not end
- * with `:in_syslog`.
+ * VERIFIED AGAINST THE PRODUCT (2026-08-21). Cribl's own capture dialog offers
+ * an "Input Filters" list that it generates from the configured inputs, and it
+ * shows both shapes plainly:
  *
- * The equality arm is kept first so the clause still works if a deployment does
- * hand back a bare id, and `.endsWith` is typeof-guarded because calling a
- * method on an absent field is a TypeError that would drop every event.
+ *   __inputId=='cribl_tcp:in_cribl_tcp'      two segments
+ *   __inputId=='snmp:Cisco350_SNMP'          two segments
+ *   __inputId=='collection:replay_pfsense'   two segments (a collection job)
+ *   __inputId.startsWith('syslog:pfsense:')  THREE - note Cribl uses startsWith
+ *   __inputId.startsWith('syslog:Corelight:')
+ *   __inputId.startsWith('http:http:')
+ *
+ * THE SUFFIX MATCH THIS REPLACES WAS WRONG for the second shape, and wrong in
+ * the worst place: `"syslog:pfsense:10.0.0.1".endsWith(":pfsense")` is false, so
+ * a capture from any SYSLOG source still matched nothing - and syslog is the
+ * transport for most of the vendors this toolkit onboards. The bug survived a
+ * spec read and a full round of pins because the spec's examples happen to be
+ * two-segment.
+ *
+ * Cribl solves it with `startsWith('<type>:<id>:')`, which needs the type. We
+ * only have the id, so we take the SEGMENT instead: split on `:` and compare
+ * position 1. That is exactly the id in every shape above, and it cannot
+ * half-match the way a substring can - `syslog:other_pfsense:x` has
+ * `other_pfsense` at position 1, not `pfsense`.
+ *
+ * The equality arm stays first so a deployment that hands back a bare id still
+ * works, and the split is typeof-guarded because calling a method on an absent
+ * field is a TypeError that drops every event.
  */
 export function inputPredicate(inputId: string): string {
   const quoted = JSON.stringify(inputId);
-  const suffix = JSON.stringify(`:${inputId}`);
-  return `(__inputId === ${quoted} || (typeof __inputId === "string" && __inputId.endsWith(${suffix})))`;
+  return `(__inputId === ${quoted} || (typeof __inputId === "string" && __inputId.split(":")[1] === ${quoted}))`;
 }
 
 /** Inputs to {@link buildCaptureFilter}. */
