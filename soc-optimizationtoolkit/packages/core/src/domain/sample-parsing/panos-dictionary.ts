@@ -265,6 +265,38 @@ export function panosHeadersFor(
  *
  * Returns null when no '1,' is found or fewer than 7 fields survive.
  */
+/**
+ * The log type from a split PAN-OS CSV line, tolerating the AUDIT sub-format.
+ *
+ * Nearly every PAN-OS log puts the type at index 3, after FUTURE_USE,
+ * receive_time and serial. AUDIT LOGS OMIT THE LEADING FUTURE_USE FIELD, so
+ * everything shifts left by one and the type lands at index 2 (2026-08-21,
+ * confirmed against Palo Alto's own fixtures):
+ *
+ *   1,2026/08/13 10:49:02,013201031064,TRAFFIC,end,2817,...   type at 3
+ *   01111111111,2024/04/11 20:06:15,audit,2561,gui-op,...     type at 2
+ *
+ * Read blindly at index 3, an audit line reports its log type as `2561` - the
+ * content-version number. That is not a parse failure anyone would notice: it
+ * flows through as a perfectly plausible-looking discriminator value, and the
+ * operator is offered "2561" as a log type to name a sample after.
+ *
+ * DETECTED BY SHAPE, not by looking for the word "audit": a numeric field where
+ * a type name belongs, with a name-shaped field immediately before it. That is
+ * exactly the left-shift signature, and it does not need a list of every
+ * sub-format Palo Alto might add. A normal line cannot trip it - TRAFFIC and
+ * THREAT are not numeric.
+ */
+function readPanosLogType(values: readonly string[]): string {
+  const atThree = (values[3] ?? "").trim();
+  const atTwo = (values[2] ?? "").trim();
+  const shifted =
+    atThree !== "" &&
+    /^\d+$/.test(atThree) &&
+    /^[A-Za-z][A-Za-z_-]*$/.test(atTwo);
+  return (shifted ? atTwo : atThree).toUpperCase();
+}
+
 export function parsePanosLine(
   line: string,
 ): { logType: string; fields: Record<string, string> } | null {
@@ -278,8 +310,9 @@ export function parsePanosLine(
     return null;
   }
 
-  // Field[3] is the log type (TRAFFIC, THREAT, SYSTEM, CONFIG, ...).
-  const logType = (values[3] || "").toUpperCase().trim();
+  // Field[3] is the log type (TRAFFIC, THREAT, SYSTEM, CONFIG, ...) - EXCEPT
+  // for audit logs, see readPanosLogType.
+  const logType = readPanosLogType(values);
   const headers = panosHeadersFor(logType);
 
   const fields: Record<string, string> = {};
