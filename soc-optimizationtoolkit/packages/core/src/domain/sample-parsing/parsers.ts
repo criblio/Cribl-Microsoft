@@ -21,7 +21,7 @@
  */
 
 import type { SampleFormat } from "./models";
-import { PANOS_CSV_HEADERS } from "./panos-dictionary";
+import { panosHeadersFor } from "./panos-dictionary";
 
 // ---------------------------------------------------------------------------
 // Syslog prefix stripping (shared by parseCsv and capture inner detection)
@@ -160,8 +160,10 @@ export function parseCsv(
     // positional _0.._N, so field mapping sees `_3` instead of `type` and `_7`
     // instead of `src`, and the generated pack maps numbers.
     const logType = values[3];
+    // panosHeadersFor, not a plain index: real PAN-OS emits HIPMATCH while the
+    // dictionary keys HIP-MATCH, so an index missed every HIP-Match event.
     const colNames: readonly string[] | null =
-      logType !== undefined ? (PANOS_CSV_HEADERS[logType] ?? null) : null;
+      logType !== undefined ? (panosHeadersFor(logType) ?? null) : null;
 
     if (colNames) {
       colNames.forEach((name, i) => {
