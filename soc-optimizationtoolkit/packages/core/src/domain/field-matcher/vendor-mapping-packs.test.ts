@@ -102,6 +102,45 @@ describe("vendorPacksForSolution", () => {
     expect(ziaLogTypeIds).not.toContain("generated-zscaler_zpa");
   });
 
+  it("agrees about the PALO ALTO family too, not just Zscaler", () => {
+    // 2026-08-21 audit. The cross-module pin above covered only Zscaler, so
+    // when the generated log-type tier was populated the Palo Alto family
+    // walked straight past it: the mapping side correctly dropped Prisma Cloud
+    // from Cortex XDR while the log-type side offered that same operator BOTH
+    // Prisma Cloud feeds AND PAN-OS FIREWALL feeds. Two answers, one screen.
+    //
+    // Asserted per-family rather than as exact lists, because the two sides
+    // legitimately hold different packs - what must never differ is WHICH
+    // PRODUCT each thinks the solution is.
+    const both = (solution: string) => [
+      ...vendorPacksForSolution(solution).map((p) => p.id),
+      ...documentedLogTypePacksForSolution(solution).map((p) => p.id),
+    ];
+
+    // The EDR draws no firewall and no cloud-posture content.
+    const xdr = both("Palo Alto Networks Cortex XDR");
+    expect(xdr.some((id) => id.includes("cortex"))).toBe(true);
+    expect(xdr.filter((id) => /panos|paloalto-panos|generated-panw$/.test(id))).toEqual([]);
+    expect(xdr.filter((id) => id.includes("prisma"))).toEqual([]);
+
+    // Cloud posture draws no firewall and no EDR.
+    const prisma = both("Palo Alto Prisma Cloud CWPP");
+    expect(prisma.some((id) => id.includes("prisma"))).toBe(true);
+    expect(prisma.filter((id) => id.includes("panos"))).toEqual([]);
+    expect(prisma.filter((id) => id.includes("cortex"))).toEqual([]);
+
+    // Attack-surface management has no pack at all; claiming a sibling's is
+    // worse than saying nothing, which is what "no packs for uncurated
+    // solutions" already means.
+    expect(both("Palo Alto Cortex Xpanse CCF")).toEqual([]);
+
+    // ...but Cloud NGFW IS a Palo Alto firewall, so PAN-OS content belongs
+    // there. The exclusions must not over-reach into a true sibling.
+    const ngfw = both("Azure Cloud NGFW by Palo Alto Networks");
+    expect(ngfw.some((id) => id.includes("panos") || id === "generated-panw")).toBe(true);
+    expect(ngfw.filter((id) => id.includes("prisma"))).toEqual([]);
+  });
+
   it("does not cite Prisma Cloud's docs to a Cortex XDR operator", () => {
     // Measured 2026-08-20. generated-prisma_cloud claims the parent brand
     // "palo alto", so it attached to Cortex XDR. Its two mappings do not steal

@@ -40,7 +40,10 @@ import sentinelDcrPacks from "../../assets/generated-sentinel-dcr-packs.json";
 // Private Access" solution was offered ZPA feeds by the recommendation and
 // Zscaler ZIA field mappings by the review table, on one screen.
 import type { SolutionKeywordedPack } from "../sentinel-content/solution-matching";
-import { packAppliesToSolution } from "../sentinel-content/solution-matching";
+import {
+  packAppliesToSolution,
+  withGeneratedExclusions,
+} from "../sentinel-content/solution-matching";
 
 /** One documented source -> destination mapping. */
 export interface VendorPackEntry {
@@ -273,56 +276,6 @@ function isGeneratedPack(value: unknown): value is VendorMappingPack {
   );
 }
 
-/**
- * Sibling-product exclusions for GENERATED packs, keyed by pack id.
- *
- * The hand packs above state their own excludeKeywords inline, exactly as the
- * log-type catalog's packs do. Generated packs cannot: their solutionKeywords
- * are written by the miners (scripts/generate-vendor-packs.mjs,
- * generate-sentinel-dcr-packs.mjs) and the assets must never be hand-edited.
- * "Which products share a brand" is hand knowledge, so it is declared here and
- * applied when the asset is folded in - the alternative is a regeneration
- * silently reinstating the claim this removes.
- *
- * Zscaler is the case that forced it, and it takes all three packs to fix:
- * "Zscaler Private Access" contains "zscaler", so the hand ZIA pack, the mined
- * Sentinel DCR transform for ZIA, and the Elastic-mined ZIA pack ALL claimed a
- * ZPA solution, while the log-type recommendation on the same screen correctly
- * offered ZPA's LSS feeds. ZPA has no mapping pack of its own; the alias ladder
- * covers it, which is what "no packs for uncurated solutions" already means.
- */
-const GENERATED_PACK_EXCLUSIONS: Readonly<Record<string, readonly string[]>> = {
-  "generated-zscaler_zia": ["private access", "zpa"],
-  "sentinel-dcr-zscaler": ["private access", "zpa"],
-  // Palo Alto, added 2026-08-20 after measuring it. `generated-prisma_cloud`
-  // claims the parent brand "palo alto", so it attached to FOUR solutions that
-  // are not Prisma Cloud - Cortex XDR, Cortex XDR CCP, Cortex Xpanse CCF and
-  // Azure Cloud NGFW.
-  //
-  // The two mappings it contributes are not WRONG at the column level, and that
-  // is worth stating plainly: they are `user` and `resourceName` -> SourceUserName,
-  // Cortex XDR carries neither field, nothing else targets SourceUserName, and
-  // `user` is already in the alias ladder. Excluding them changes 160 mappings
-  // to 158 and steals no column from anything.
-  //
-  // The harm is the CITATION, which is the bar solution-matching.ts already set:
-  // mapping-review renders a "Vendor mapping documentation" line for every
-  // matching pack whether or not its entries fire, so a Cortex XDR operator was
-  // shown Prisma Cloud's docs. And the log-type catalog ALREADY excludes
-  // "cortex" from the PAN-OS pack, so the two halves of one screen disagreed
-  // about which product this solution is - the exact divergence the
-  // cross-module pin exists to catch.
-  "generated-prisma_cloud": ["cortex", "xpanse", "pan-os", "panos", "ngfw"],
-  // Xpanse is attack-surface management, not EDR - a second bleed in the same
-  // family, from the XDR pack's bare "cortex".
-  "generated-panw_cortex_xdr": ["xpanse"],
-};
-
-/** Apply the hand-declared sibling-product exclusion, if this pack has one. */
-function withExclusions(pack: VendorMappingPack): VendorMappingPack {
-  const exclude = GENERATED_PACK_EXCLUSIONS[pack.id];
-  return exclude === undefined ? pack : { ...pack, excludeKeywords: exclude };
-}
 
 /**
  * Every pack, in AUTHORITY order (first-declared wins the per-source dedupe):
@@ -339,10 +292,10 @@ export const VENDOR_MAPPING_PACKS: readonly VendorMappingPack[] = [
   ...HAND_PACKS,
   CEF_CATALOG_PACK,
   ...(Array.isArray(sentinelDcrPacks)
-    ? (sentinelDcrPacks as unknown[]).filter(isGeneratedPack).map(withExclusions)
+    ? (sentinelDcrPacks as unknown[]).filter(isGeneratedPack).map(withGeneratedExclusions)
     : []),
   ...(Array.isArray(generatedPacks)
-    ? (generatedPacks as unknown[]).filter(isGeneratedPack).map(withExclusions)
+    ? (generatedPacks as unknown[]).filter(isGeneratedPack).map(withGeneratedExclusions)
     : []),
 ];
 

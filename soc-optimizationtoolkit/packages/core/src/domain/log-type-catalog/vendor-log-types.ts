@@ -36,7 +36,10 @@ import generatedLogTypes from "../../assets/generated-vendor-log-types.json";
 // the other copy never got it, so a ZPA solution drew ZPA feeds from this
 // module and ZIA field mappings from that one, on the same screen.
 import type { SolutionKeywordedPack } from "../sentinel-content/solution-matching";
-import { packAppliesToSolution } from "../sentinel-content/solution-matching";
+import {
+  packAppliesToSolution,
+  withGeneratedExclusions,
+} from "../sentinel-content/solution-matching";
 
 /** One log type a vendor documents. */
 export interface DocumentedLogType {
@@ -131,7 +134,10 @@ const HAND_PACKS: readonly DocumentedLogTypePack[] = [
     vendor: "Palo Alto Networks",
     solutionKeywords: ["palo alto", "paloalto", "pan-os", "panos"],
     // Cortex XDR is Palo Alto's EDR and shares none of the firewall's log types.
-    excludeKeywords: ["cortex"],
+    // The firewall is not the EDR, not the cloud-posture product, and not
+    // attack-surface management - all four answer to "palo alto"
+    // (2026-08-21 audit, measured against the real solution list).
+    excludeKeywords: ["cortex", "prisma", "xpanse"],
     provenance:
       "PAN-OS syslog field reference - the log types the firewall emits, matching the column dictionaries in domain/sample-parsing/panos-dictionary.ts",
     docUrl: "https://docs.paloaltonetworks.com/pan-os/11-1/pan-os-admin/monitoring/use-syslog-for-monitoring/syslog-field-descriptions",
@@ -262,6 +268,9 @@ const HAND_PACKS: readonly DocumentedLogTypePack[] = [
     id: "cortex-xdr",
     vendor: "Palo Alto Networks",
     solutionKeywords: ["cortex xdr", "cortex"],
+    // Cortex XPANSE is attack-surface management, not EDR, and the bare
+    // "cortex" keyword above catches it (2026-08-21 audit).
+    excludeKeywords: ["xpanse"],
     provenance:
       "Palo Alto Cortex XDR alert and incident feeds exposed through the XDR API, which the Sentinel solution polls separately",
     docUrl: "https://docs-cortex.paloaltonetworks.com/p/XDR",
@@ -337,43 +346,13 @@ function isGeneratedPack(value: unknown): value is DocumentedLogTypePack {
 }
 
 /**
- * Sibling-product exclusions for GENERATED log-type packs, by pack id.
- *
- * The same overlay VENDOR_MAPPING_PACKS carries, and it exists for the same
- * reason: the generator derives keywords from a package title, so both Zscaler
- * packs ended up claiming the bare word "zscaler". That bleeds BOTH WAYS - a
- * ZPA solution drew ZIA's feeds and a ZIA solution drew ZPA's - which is worse
- * than a missing recommendation, because the operator is told to go and capture
- * `dns` and `firewall` from a product that does not emit them.
- *
- * Kept as a hand overlay rather than fixed in the asset because the generated
- * files must not be hand-edited - they are rewritten wholesale by
- * `scripts/generate-vendor-packs.mjs --bulk`. Which products share a brand is
- * hand knowledge, so it lives in hand-maintained code and is re-applied on
- * every regeneration.
- */
-const GENERATED_PACK_EXCLUSIONS: Readonly<Record<string, readonly string[]>> = {
-  // "Zscaler Private Access" contains "zscaler", so ZIA's bare keyword caught it.
-  "generated-zscaler_zia": ["private access", "zpa"],
-  // ...and the reverse: the ZPA pack ALSO claims bare "zscaler", so it was
-  // recommended for "Zscaler Internet Access" too.
-  "generated-zscaler_zpa": ["internet access", "zia"],
-};
-
-/** Apply the hand-declared sibling-product exclusion, if this pack has one. */
-function withExclusions(pack: DocumentedLogTypePack): DocumentedLogTypePack {
-  const exclude = GENERATED_PACK_EXCLUSIONS[pack.id];
-  return exclude === undefined ? pack : { ...pack, excludeKeywords: exclude };
-}
-
-/**
  * Every pack, HAND FIRST so hand entries win the per-value dedupe - the same
  * declaration-order precedence VENDOR_MAPPING_PACKS uses.
  */
 export const DOCUMENTED_LOG_TYPE_PACKS: readonly DocumentedLogTypePack[] = [
   ...HAND_PACKS,
   ...(Array.isArray(generatedLogTypes)
-    ? (generatedLogTypes as unknown[]).filter(isGeneratedPack).map(withExclusions)
+    ? (generatedLogTypes as unknown[]).filter(isGeneratedPack).map(withGeneratedExclusions)
     : []),
 ];
 
