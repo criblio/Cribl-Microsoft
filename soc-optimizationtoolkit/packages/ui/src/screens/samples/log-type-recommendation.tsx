@@ -23,10 +23,29 @@ export interface LogTypeRecommendationProps {
   recommendation: Recommendation;
 }
 
+/**
+ * The measured volume, or nothing at all.
+ *
+ * UNMEASURED RENDERS NOTHING - not "0", not "unknown", not a dash. Before a
+ * Lake query runs, every entry is unmeasured, and a zero there would be the app
+ * inventing a fact about the operator's data. Same refusal the core makes by
+ * leaving `eventCount` undefined rather than defaulting it.
+ */
+function volumeText(eventCount: number | undefined): string | null {
+  if (eventCount === undefined) return null;
+  return `${eventCount.toLocaleString()} event${eventCount === 1 ? "" : "s"}`;
+}
+
 export function LogTypeRecommendation({
   recommendation,
 }: LogTypeRecommendationProps) {
-  const { status, headline, entries, unreferenced } = recommendation;
+  const { status, headline, entries, unreferenced, volumeWindow } =
+    recommendation;
+  // Whether anything on this panel actually carries a number, which decides
+  // whether the window note has something to qualify.
+  const hasVolume =
+    entries.some((e) => e.eventCount !== undefined) ||
+    unreferenced.some((u) => u.eventCount !== undefined);
 
   return (
     <div className="log-type-recommendation" data-status={status}>
@@ -80,6 +99,16 @@ export function LogTypeRecommendation({
                     {entry.referenceCount === 1 ? "" : "s"}
                   </>
                 )}
+                {/* The measured volume, stated beside the evidence rather than
+                    in a column of its own: "a rule needs it" and "there is this
+                    much of it" are two halves of one decision. It is a NUMBER
+                    and nothing else - no threshold, no flag, no verdict. */}
+                {volumeText(entry.eventCount) !== null && (
+                  <span className="log-type-recommendation-volume">
+                    {" - "}
+                    {volumeText(entry.eventCount)}
+                  </span>
+                )}
               </span>
             </li>
           ))}
@@ -87,9 +116,39 @@ export function LogTypeRecommendation({
       )}
 
       {unreferenced.length > 0 && (
+        <div className="log-type-unreferenced">
+          <p className="field-hint">
+            Also provided, referenced by no detection (fine - a vendor emits
+            more than any one solution detects on):
+          </p>
+          {/* A LIST, not prose, because these now carry volumes and rank by
+              them - the busiest log type nothing consumes sits at the top on
+              its own. Still a note and never a gap: no warning styling, no
+              count in any headline, nothing to fix. */}
+          <ul className="log-type-unreferenced-list">
+            {unreferenced.map((entry) => (
+              <li key={entry.value}>
+                <span className="log-type-recommendation-name">
+                  {entry.value}
+                </span>
+                {volumeText(entry.eventCount) !== null && (
+                  <span className="log-type-recommendation-volume">
+                    {volumeText(entry.eventCount)}
+                  </span>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {/* A count without its window is not a fact. Rendered only when a number
+          is actually on screen, so nothing is qualified into existence. */}
+      {hasVolume && volumeWindow !== undefined && (
         <p className="field-hint">
-          Also provided, referenced by no detection (fine - a vendor emits more
-          than any one solution detects on): {unreferenced.join(", ")}.
+          Volumes counted in the Lake dataset over {volumeWindow.earliest} to{" "}
+          {volumeWindow.latest}, and describe what your environment sends - not
+          what this solution needs.
         </p>
       )}
 

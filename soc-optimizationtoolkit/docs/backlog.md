@@ -1187,7 +1187,7 @@ is "these groups differ from what we deployed, in these files we can see" rather
 than a confident clean bill - the same rule as the inventory standard. An unknown
 must not render as a zero.
 
-## Sample browser: REMOVED (ADR-0003) - Phases 0-4 done, Phase 5 unblocked
+## Sample browser: REMOVED (ADR-0003) - ALL PHASES 0-5 DONE
 
 **Executed 2026-08-19/20 on `feature/log-type-recommendation`.** The browser and
 its whole acquisition domain are deleted; the `LogTypeRecommendation` panel
@@ -1198,11 +1198,21 @@ replaces it. To continue, open ONE document:
 findings. [ADR 0003](adr/0003-remove-sample-browser.md) is the durable decision
 record and is background, not a prerequisite.
 
-**Where it stands:** Phases 0-3 done. **Phase 4's CAPTURE path is done** (core
-and UI): `domain/capture-filter`, `captureSamples`, `CapturePanel` - compose the
-filter, run one bounded `POST /system/capture`, split by log type, PREVIEW, and
-tag nothing without a click. **Phase 4's LAKE QUERY path is in progress.** Phase
-5 (volume findings) is not started and nothing gates it.
+**Where it stands:** Phases 0-3 done. **Phase 4 is done, BOTH paths** (core and
+UI). Capture: `domain/capture-filter`, `captureSamples`, `CapturePanel` - compose
+the filter, run one bounded `POST /system/capture`, split by log type, PREVIEW,
+and tag nothing without a click. Lake query: `queryLakeSamples`, `LakePanel`.
+**Phase 5 (volume findings) is done (2026-08-23)** - the Lake counts reach the
+recommendation, entries and the unreferenced set carry a volume and rank by it,
+with no threshold and no flagged finding by decision.
+
+**What has NOT happened: none of this has run against a real workspace.** Every
+platform belief behind Phases 3-5 is pinned against `FakeCriblClient` only; the
+suite that settles them is `packages/core/src/testing/live-verify.test.ts` and it
+skips without `CRIBL_LIVE_BASE`/`CRIBL_LIVE_TOKEN`. The 2026-08-20 attempt was
+blocked on an expired token and an idle lab - generate traffic first, or rows 1,
+2 and 4 stay inconclusive. Nor is any of it packaged: the app is still 1.11.15
+and every ADR-0003 commit is unreleased.
 
 Phase 4's first correctness trap is recorded in the plan and shipped as a
 warning: a capture request has NO source field, so the source is an `__inputId`

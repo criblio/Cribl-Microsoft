@@ -75,6 +75,7 @@ import {
   deriveExpectedLogTypes,
   documentedLogTypesForSolution,
   mergeLogTypeSources,
+  rankUnreferencedByVolume,
   deployedGroups,
   deriveSectionStatuses,
   destinationIdFromOptions,
@@ -116,6 +117,7 @@ import type {
   ContentRequirements,
 } from "@soc/core";
 import type { ReactNode } from "react";
+import type { LogTypeVolume } from "@soc/core";
 import { usePorts } from "../../ports-context";
 import { NumberedSection } from "../../components/numbered-section";
 import {
@@ -840,6 +842,26 @@ export function IntegrateScreen({
   const lakeTarget =
     sampleSourceEntry?.kind === "lake-dataset" ? sampleSourceEntry : null;
   const [sampleSetConfirmed, setSampleSetConfirmed] = useState(false);
+  // MEASURED VOLUMES, lifted out of the Lake panel (plan Phase 5).
+  //
+  // The panel owns the query because it owns the picking; the RECOMMENDATION is
+  // the only place the counts mean anything, and it sits above the panel. So
+  // the result is captured on its way through the onQuery handler below - the
+  // panel is unchanged and still receives exactly what it returned.
+  //
+  // Window travels WITH the counts, in one piece of state, because a count
+  // whose window has been replaced by a later query is worse than no count.
+  const [lakeVolumes, setLakeVolumes] = useState<{
+    logTypes: readonly LogTypeVolume[];
+    window: { earliest: string; latest: string };
+  } | null>(null);
+  // A volume belongs to the dataset it was counted in. Switch datasets and the
+  // old counts describe nothing on screen - so they go, rather than sit under
+  // the new dataset's name until someone happens to press Query. Same reason
+  // the panel itself remounts on `key={lakeTarget.id}`.
+  useEffect(() => {
+    setLakeVolumes(null);
+  }, [lakeTarget?.id]);
   // ONE join, TWO readings. The recommendation is the forward-looking half (what
   // to go and fetch, advisory); the coverage view is the backward-looking half
   // (what is still missing, and the acknowledgement that arms the build). They
@@ -858,6 +880,7 @@ export function IntegrateScreen({
       expected,
       vendorLogTypes: documentedLogTypesForSolution(solution?.name ?? ""),
       provided,
+      volumes: lakeVolumes?.logTypes ?? [],
     });
     return {
       sampleCoverageView: deriveSampleCoverageView(
@@ -865,13 +888,21 @@ export function IntegrateScreen({
         contentLoaded,
         samples.length,
       ),
+      // Only the FORWARD-looking half takes volumes. The confirmation below is
+      // a question about the operator's own sample set - "have you given me
+      // everything?" - and a Lake count cannot answer it, so feeding one in
+      // would decorate a gate with a number that has no bearing on it.
       logTypeRecommendation: deriveLogTypeRecommendation(
         merged,
-        coverage.unreferenced,
+        rankUnreferencedByVolume(
+          coverage.unreferenced,
+          lakeVolumes?.logTypes ?? [],
+        ),
         contentLoaded,
+        lakeVolumes?.window,
       ),
     };
-  }, [contentItems, samples, solution?.name]);
+  }, [contentItems, samples, solution?.name, lakeVolumes]);
   // Re-ask whenever the sample set changes: a confirmation given for a
   // different set of log types is not a confirmation for this one.
   useEffect(() => {
@@ -1486,16 +1517,31 @@ export function IntegrateScreen({
           datasetId={lakeTarget.id}
           searchGroupId={sampleSources.groups?.searchGroupId ?? ""}
           existingLogTypes={samples.map((s) => s.logType)}
-          onQuery={() =>
-            queryLakeSamples(
+          onQuery={async () => {
+            const result = await queryLakeSamples(
               ports.cribl,
               {
                 searchGroupId: sampleSources.groups?.searchGroupId ?? "",
                 datasetId: lakeTarget.id,
               },
               ports.logger,
-            )
-          }
+            );
+            // The counts feed the recommendation above (Phase 5). Captured on
+            // the way past rather than by a second query: this IS the query
+            // that produced them, and asking twice could disagree with itself.
+            //
+            // ONLY ON `ok`. A failed query returns notes and an empty list -
+            // adopting that would silently retract volumes the operator is
+            // already reading, turning a transient 500 into "nothing here".
+            // The previous window's counts stay until a query replaces them.
+            if (result.ok) {
+              setLakeVolumes({
+                logTypes: result.logTypes,
+                window: result.window,
+              });
+            }
+            return result;
+          }}
           onFetchEvents={(discriminatorField, logTypes, eventsPerLogType) =>
             fetchLakeLogTypeEvents(
               ports.cribl,

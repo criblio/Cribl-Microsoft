@@ -14,8 +14,9 @@ import {
   deriveExpectedLogTypes,
   documentedLogTypesForSolution,
   mergeLogTypeSources,
+  rankUnreferencedByVolume,
 } from "@soc/core";
-import type { ContentItem } from "@soc/core";
+import type { ContentItem, LogTypeVolume } from "@soc/core";
 import {
   deriveLogTypeRecommendation,
   deriveSampleCoverageView,
@@ -134,20 +135,29 @@ describe("joinNames", () => {
 function recFor(
   queries: string[],
   provided: string[],
-  opts: { solution?: string; contentLoaded?: boolean } = {},
+  opts: {
+    solution?: string;
+    contentLoaded?: boolean;
+    /** Measured volumes, as a Lake query would supply them (plan Phase 5). */
+    volumes?: LogTypeVolume[];
+    window?: { earliest: string; latest: string };
+  } = {},
 ) {
   const items = queries.map((q, i) => rule(`R${i}`, q));
   const expected = deriveExpectedLogTypes(items);
   const coverage = compareLogTypeCoverage(expected, provided);
+  const volumes = opts.volumes ?? [];
   const merged = mergeLogTypeSources({
     expected,
     vendorLogTypes: documentedLogTypesForSolution(opts.solution ?? ""),
     provided,
+    volumes,
   });
   return deriveLogTypeRecommendation(
     merged,
-    coverage.unreferenced,
+    rankUnreferencedByVolume(coverage.unreferenced, volumes),
     opts.contentLoaded ?? items.length > 0,
+    opts.window,
   );
 }
 
@@ -217,12 +227,20 @@ describe("deriveLogTypeRecommendation", () => {
   it("carries unreferenced provided types in EVERY state, never as a gap", () => {
     const covered = recFor(['T | where type == "traffic"'], ["traffic", "hipmatch"], { contentLoaded: true });
     expect(covered.status).toBe("covered");
-    expect(covered.unreferenced).toEqual(["hipmatch"]);
+    expect(covered.unreferenced).toEqual([{ value: "hipmatch" }]);
 
     // Also surfaced before the content is read - the operator has provided it
     // either way, and hiding it would look like it had been dropped.
     const unread = recFor([], ["traffic", "hipmatch"], { contentLoaded: false });
-    expect(unread.unreferenced).toEqual(["traffic", "hipmatch"]);
+    expect(unread.unreferenced).toEqual([
+      { value: "traffic" },
+      { value: "hipmatch" },
+    ]);
+    // UNMEASURED CARRIES NO COUNT. Not 0, not null - the key is absent, so
+    // nothing downstream can render a volume nobody measured.
+    expect(
+      unread.unreferenced.every((u) => !("eventCount" in u)),
+    ).toBe(true);
   });
 
   it("AGREES with the confirmation view on the CONTENT tier", () => {
@@ -245,7 +263,10 @@ describe("deriveLogTypeRecommendation", () => {
       .filter((e) => e.evidence !== "vendor" && !e.provided)
       .map((e) => e.value);
     expect(contentNotProvided).toEqual(view.missing);
-    expect(rec.unreferenced).toEqual(view.unreferenced);
+    // Compared by VALUE: the recommendation half now carries volumes and the
+    // confirmation half deliberately does not, so the agreement being pinned
+    // is about WHICH log types are unreferenced, not about the shape.
+    expect(rec.unreferenced.map((u) => u.value)).toEqual(view.unreferenced);
     // And the vendor tier really is present, so this is a narrowing rather
     // than a test that passes because nothing was merged.
     expect(rec.entries.some((e) => e.evidence === "vendor")).toBe(true);
@@ -284,8 +305,114 @@ describe("deriveLogTypeRecommendation", () => {
       "status",
       "unreferenced",
     ]);
+
+    // And it stays gateless once volumes arrive - the ONLY key Phase 5 adds is
+    // the window those volumes were measured over. Asserted against a fixed
+    // allow-list so a future gate field cannot slip in behind a volume.
+    const withVolumes = recFor([threeTypes], [], {
+      contentLoaded: true,
+      volumes: [{ logType: "TRAFFIC", eventCount: 5 }],
+      window: { earliest: "-24h", latest: "now" },
+    });
+    expect(Object.keys(withVolumes).sort()).toEqual([
+      "entries",
+      "headline",
+      "status",
+      "unreferenced",
+      "volumeWindow",
+    ]);
   });
 });
+
+describe("measured volume on the recommendation (plan Phase 5)", () => {
+  const threeTypes = 'T | where type in ("TRAFFIC","THREAT","CONFIG")';
+
+  it("carries the count through to the entry the operator reads", () => {
+    const rec = recFor([threeTypes], [], {
+      contentLoaded: true,
+      volumes: [
+        { logType: "THREAT", eventCount: 890000 },
+        { logType: "TRAFFIC", eventCount: 12 },
+      ],
+      window: { earliest: "-24h", latest: "now" },
+    });
+
+    const byValue = new Map(rec.entries.map((e) => [e.value, e]));
+    expect(byValue.get("THREAT")?.eventCount).toBe(890000);
+    expect(byValue.get("TRAFFIC")?.eventCount).toBe(12);
+    // CONFIG was in the content but not in the dataset - unmeasured, and it
+    // must not acquire a zero on the way through the projection.
+    expect("eventCount" in (byValue.get("CONFIG") ?? {})).toBe(false);
+  });
+
+  it("ranks the busiest first, and says over what window", () => {
+    const rec = recFor([threeTypes], [], {
+      contentLoaded: true,
+      volumes: [
+        { logType: "CONFIG", eventCount: 1 },
+        { logType: "THREAT", eventCount: 890000 },
+      ],
+      window: { earliest: "-24h", latest: "now" },
+    });
+
+    expect(rec.entries[0].value).toBe("THREAT");
+    expect(rec.volumeWindow).toEqual({ earliest: "-24h", latest: "now" });
+  });
+
+  it("carries NO window when nothing was measured", () => {
+    // A window with no counts under it would qualify a claim nobody made.
+    const rec = recFor([threeTypes], [], { contentLoaded: true });
+
+    expect(rec.volumeWindow).toBeUndefined();
+    expect(rec.entries.every((e) => !("eventCount" in e))).toBe(true);
+  });
+
+  it("ranks the UNREFERENCED set by volume - the Phase 5 finding", () => {
+    // "GLOBALPROTECT - 890K events, nothing consumes it" is the shape the plan
+    // named. It arrives as ORDER plus a NUMBER, never as a flagged finding.
+    const rec = recFor(['T | where type == "TRAFFIC"'], ["traffic", "hipmatch", "globalprotect"], {
+      contentLoaded: true,
+      volumes: [
+        { logType: "hipmatch", eventCount: 12 },
+        { logType: "globalprotect", eventCount: 890000 },
+      ],
+      window: { earliest: "-24h", latest: "now" },
+    });
+
+    expect(rec.unreferenced.map((u) => u.value)).toEqual([
+      "globalprotect",
+      "hipmatch",
+    ]);
+    expect(rec.unreferenced[0].eventCount).toBe(890000);
+    // NEUTRAL STILL. A volume must not promote an unreferenced log type into a
+    // gap, a warning, or the headline - it is a note that now has a number.
+    expect(rec.status).toBe("covered");
+    expect(rec.headline).not.toContain("globalprotect");
+    expect(rec.headline).not.toContain("890");
+  });
+
+  it("shows volumes even while the content read is unfinished", () => {
+    // The vendor tier renders during the read; a volume measured against the
+    // operator's own dataset is no less true for the content being in flight.
+    const rec = recFor([], [], {
+      solution: "Palo Alto Networks",
+      contentLoaded: false,
+      volumes: [{ logType: rec0VendorValue(), eventCount: 77 }],
+      window: { earliest: "-24h", latest: "now" },
+    });
+
+    expect(rec.status).toBe("unknown");
+    expect(rec.entries.some((e) => e.eventCount === 77)).toBe(true);
+    expect(rec.volumeWindow).toBeDefined();
+  });
+});
+
+/** The first vendor-documented log type for the fixture solution. */
+function rec0VendorValue(): string {
+  const vendor = documentedLogTypesForSolution("Palo Alto Networks");
+  expect(vendor.length).toBeGreaterThan(0);
+  return vendor[0].value;
+}
 
 describe("sampleCoverageGateReason", () => {
   const gaps = deriveSampleCoverageView(

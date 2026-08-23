@@ -21,7 +21,9 @@ export type {
   LogTypeEvidence,
   MergedLogType,
   MergeLogTypeInput,
+  LogTypeVolume,
+  UnreferencedLogType,
 } from "./merge";
 // evidenceCounts is module-local: test-only at the 2026-08-20 audit, and the
 // UI counts tiers off the entries it already has.
-export { mergeLogTypeSources } from "./merge";
+export { mergeLogTypeSources, rankUnreferencedByVolume } from "./merge";

@@ -1528,6 +1528,44 @@ button.journey-step-main:hover .journey-step-label {
   color: var(--text-muted);
 }
 
+/* Measured volume (plan Phase 5). Monospace because it is a technical value,
+ * and DELIBERATELY UNCOLOURED: a colour would be a verdict, and the decision
+ * was to attach the number and rank by it without flagging anything. The list
+ * order carries the signal instead. */
+.log-type-recommendation-volume {
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+/* Provided-but-unreferenced, now a ranked list rather than a prose run-on so
+ * each entry can carry its volume. Kept visually quieter than the
+ * recommendation rows above: this is a note, never a gap. */
+.log-type-unreferenced {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.log-type-unreferenced-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.log-type-unreferenced-list li {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--text-muted);
+}
+
 /* Sample-source picker (screens/samples/sample-source-picker): where the
  * operator can take their own samples from. Same quiet card as the
  * recommendation above it - both are advisory and neither gates anything. */

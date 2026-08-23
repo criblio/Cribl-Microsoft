@@ -29,7 +29,14 @@
  * Pure: no IO, no fetch, no React, no Date/crypto/Math.random.
  */
 
-import type { LogTypeCoverage, LogTypeEvidence, MergedLogType } from "@soc/core";
+import type {
+  LogTypeCoverage,
+  LogTypeEvidence,
+  MergedLogType,
+  UnreferencedLogType,
+} from "@soc/core";
+
+export type { UnreferencedLogType };
 
 /** What the pack gains per unique log type - stated once, here. */
 export const ROUTES_PER_LOG_TYPE = 2;
@@ -211,6 +218,12 @@ export interface RecommendedLogType {
   vendor?: string;
   docUrl?: string;
   doc?: string;
+  /**
+   * Events MEASURED for this log type over {@link LogTypeRecommendation.volumeWindow},
+   * when a Lake query has run. Undefined means unmeasured - which is the state
+   * before any query, and must never render as zero.
+   */
+  eventCount?: number;
 }
 
 /** Operator-facing name for an evidence tier. */
@@ -229,10 +242,22 @@ export interface LogTypeRecommendation {
   status: RecommendationStatus;
   /** The lead sentence: what is needed, and what has been provided. */
   headline: string;
-  /** Every expected log type, most-referenced first. */
+  /** Every expected log type, strongest evidence then measured volume first. */
   entries: RecommendedLogType[];
-  /** Provided log types no detection references - neutral, never an error. */
-  unreferenced: string[];
+  /**
+   * Provided log types no detection references - neutral, never an error, now
+   * ranked by measured volume where one exists (plan Phase 5).
+   */
+  unreferenced: UnreferencedLogType[];
+  /**
+   * The window every `eventCount` on this recommendation was measured over.
+   * Undefined when nothing has been measured.
+   *
+   * CARRIED BECAUSE A COUNT WITHOUT ITS WINDOW IS NOT A FACT: "890K events" is
+   * a different claim over an hour than over a month, and the Lake result keeps
+   * these together for exactly that reason. If the number renders, so does this.
+   */
+  volumeWindow?: { earliest: string; latest: string };
 }
 
 /** Join names as prose: "A", "A and B", "A, B and C". */
@@ -253,10 +278,22 @@ export function joinNames(names: readonly string[]): string {
  */
 export function deriveLogTypeRecommendation(
   merged: readonly MergedLogType[],
-  unreferencedProvided: readonly string[],
+  unreferencedProvided: readonly UnreferencedLogType[],
   contentLoaded: boolean,
+  volumeWindow?: { earliest: string; latest: string },
 ): LogTypeRecommendation {
   const unreferenced = [...unreferencedProvided];
+  // Attached at every exit rather than at one: each status below returns its
+  // own shape, and a window that appeared in only some of them would make the
+  // counts render bare in the others.
+  const withWindow = (
+    recommendation: LogTypeRecommendation,
+  ): LogTypeRecommendation => {
+    if (volumeWindow !== undefined) {
+      recommendation.volumeWindow = volumeWindow;
+    }
+    return recommendation;
+  };
 
   // NOT LOADED means NOT LOADED, whatever the vendor catalog happens to know
   // (2026-08-20 audit). The vendor tier resolves from the solution NAME, which
@@ -272,7 +309,7 @@ export function deriveLogTypeRecommendation(
   // says the content read is unfinished, never one that reports its verdict.
   if (!contentLoaded) {
     const vendorOnly = merged.filter((m) => m.evidence === "vendor");
-    return {
+    return withWindow({
       status: "unknown",
       headline:
         vendorOnly.length === 0
@@ -290,10 +327,11 @@ export function deriveLogTypeRecommendation(
         if (m.vendor !== undefined) entry.vendor = m.vendor;
         if (m.docUrl !== undefined) entry.docUrl = m.docUrl;
         if (m.doc !== undefined) entry.doc = m.doc;
+        if (m.eventCount !== undefined) entry.eventCount = m.eventCount;
         return entry;
       }),
       unreferenced,
-    };
+    });
   }
 
   const entries: RecommendedLogType[] = merged.map((m) => {
@@ -307,11 +345,12 @@ export function deriveLogTypeRecommendation(
     if (m.vendor !== undefined) entry.vendor = m.vendor;
     if (m.docUrl !== undefined) entry.docUrl = m.docUrl;
     if (m.doc !== undefined) entry.doc = m.doc;
+    if (m.eventCount !== undefined) entry.eventCount = m.eventCount;
     return entry;
   });
 
   if (entries.length === 0) {
-    return {
+    return withWindow({
       status: "no-signal",
       headline:
         "This solution's detections do not filter on a log-type field, and no " +
@@ -319,7 +358,7 @@ export function deriveLogTypeRecommendation(
         "which log types it needs. Provide the ones your environment sends.",
       entries: [],
       unreferenced,
-    };
+    });
   }
 
   // WHOSE claim this is, said in the lead sentence. A list built entirely from
@@ -335,27 +374,27 @@ export function deriveLogTypeRecommendation(
   const have = entries.filter((e) => e.provided).map((e) => e.value);
 
   if (have.length === 0) {
-    return {
+    return withWindow({
       status: "none-provided",
       headline: `${lead} You have provided none of them yet.`,
       entries,
       unreferenced,
-    };
+    });
   }
   if (have.length < entries.length) {
-    return {
+    return withWindow({
       status: "partial",
       headline: `${lead} You have provided ${joinNames(have)}.`,
       entries,
       unreferenced,
-    };
+    });
   }
-  return {
+  return withWindow({
     status: "covered",
     headline: `${lead} You have provided all of them.`,
     entries,
     unreferenced,
-  };
+  });
 }
 
 /** The build-gate reason, or null once the operator has confirmed. */

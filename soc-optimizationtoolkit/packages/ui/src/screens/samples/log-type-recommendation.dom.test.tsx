@@ -16,8 +16,9 @@ import {
   deriveExpectedLogTypes,
   documentedLogTypesForSolution,
   mergeLogTypeSources,
+  rankUnreferencedByVolume,
 } from "@soc/core";
-import type { ContentItem } from "@soc/core";
+import type { ContentItem, LogTypeVolume } from "@soc/core";
 import { LogTypeRecommendation } from "./log-type-recommendation";
 import { deriveLogTypeRecommendation } from "./sample-coverage-state";
 
@@ -35,21 +36,28 @@ function renderFor(
   provided: string[],
   loaded = true,
   solution = "",
+  opts: {
+    volumes?: LogTypeVolume[];
+    window?: { earliest: string; latest: string };
+  } = {},
 ) {
   const items = queries.map((q, i) => rule(`R${i}`, q));
   const expected = deriveExpectedLogTypes(items);
   const coverage = compareLogTypeCoverage(expected, provided);
+  const volumes = opts.volumes ?? [];
   const merged = mergeLogTypeSources({
     expected,
     vendorLogTypes: documentedLogTypesForSolution(solution),
     provided,
+    volumes,
   });
   return render(
     <LogTypeRecommendation
       recommendation={deriveLogTypeRecommendation(
         merged,
-        coverage.unreferenced,
+        rankUnreferencedByVolume(coverage.unreferenced, volumes),
         loaded,
+        opts.window,
       )}
     />,
   );
@@ -198,5 +206,106 @@ describe("LogTypeRecommendation", () => {
     expect(container.textContent).toContain("referenced by no detection");
     // hipmatch is not one of the expected rows - it is a note, not a gap.
     expect(container.querySelectorAll(".log-type-recommendation-need")).toHaveLength(0);
+  });
+});
+
+describe("LogTypeRecommendation - measured volume (plan Phase 5)", () => {
+  const THREE_TYPES = 'T | where type in ("TRAFFIC","THREAT","CONFIG")';
+  const WINDOW = { earliest: "-24h", latest: "now" };
+
+  it("shows the count beside the evidence, formatted for a human", () => {
+    const { container } = renderFor([THREE_TYPES], [], true, "", {
+      volumes: [{ logType: "TRAFFIC", eventCount: 890123 }],
+      window: WINDOW,
+    });
+
+    const volumes = container.querySelectorAll(
+      ".log-type-recommendation-volume",
+    );
+    expect(volumes).toHaveLength(1);
+    // Grouped, not a raw 890123 - the number exists to be read at a glance.
+    expect(volumes[0].textContent).toContain("890,123");
+    expect(volumes[0].textContent).toContain("events");
+  });
+
+  it("RENDERS NOTHING for an unmeasured log type - never a zero", () => {
+    // The state before any Lake query, which is the common one. A "0 events"
+    // here would be the app inventing a fact about the operator's data.
+    const { container } = renderFor([THREE_TYPES], []);
+
+    expect(
+      container.querySelectorAll(".log-type-recommendation-volume"),
+    ).toHaveLength(0);
+    expect(container.textContent).not.toContain("0 events");
+    expect(container.textContent).not.toContain("events");
+  });
+
+  it("says over what window, but only once a number is on screen", () => {
+    const bare = renderFor([THREE_TYPES], []);
+    expect(bare.container.textContent).not.toContain("Volumes counted");
+    cleanup();
+
+    const { container } = renderFor([THREE_TYPES], [], true, "", {
+      volumes: [{ logType: "TRAFFIC", eventCount: 4 }],
+      window: WINDOW,
+    });
+    expect(container.textContent).toContain("Volumes counted");
+    expect(container.textContent).toContain("-24h");
+    expect(container.textContent).toContain("now");
+  });
+
+  it("does not qualify a window when the query measured nothing we show", () => {
+    // A window supplied with counts that match no rendered entry must not
+    // print a note qualifying numbers that are not there.
+    const { container } = renderFor([THREE_TYPES], [], true, "", {
+      volumes: [{ logType: "SOMETHING_ELSE", eventCount: 9 }],
+      window: WINDOW,
+    });
+
+    expect(container.textContent).not.toContain("Volumes counted");
+  });
+
+  it("ranks the unreferenced note by volume, still as a note", () => {
+    const { container } = renderFor(
+      ['T | where type == "TRAFFIC"'],
+      ["TRAFFIC", "hipmatch", "globalprotect"],
+      true,
+      "",
+      {
+        volumes: [
+          { logType: "hipmatch", eventCount: 12 },
+          { logType: "globalprotect", eventCount: 890000 },
+        ],
+        window: WINDOW,
+      },
+    );
+
+    const rows = container.querySelectorAll(".log-type-unreferenced-list li");
+    expect(rows).toHaveLength(2);
+    // The busiest thing nothing consumes is first - the Phase 5 finding, made
+    // of ordering rather than a verdict.
+    expect(rows[0].textContent).toContain("globalprotect");
+    expect(rows[0].textContent).toContain("890,000");
+    expect(rows[1].textContent).toContain("hipmatch");
+
+    // STILL NEUTRAL: no gap styling, and the framing sentence is unchanged.
+    expect(container.textContent).toContain("referenced by no detection");
+    expect(
+      container.querySelectorAll(".log-type-recommendation-need"),
+    ).toHaveLength(0);
+    // And it did not leak into the expected-log-type list above it.
+    expect(
+      container.querySelectorAll(".log-type-recommendation-list li"),
+    ).toHaveLength(1);
+  });
+
+  it("still renders no button - a volume is not a call to action", () => {
+    const { container } = renderFor([THREE_TYPES], [], true, "", {
+      volumes: [{ logType: "TRAFFIC", eventCount: 890123 }],
+      window: WINDOW,
+    });
+
+    expect(container.querySelectorAll("button")).toHaveLength(0);
+    expect(container.querySelectorAll("input")).toHaveLength(0);
   });
 });

@@ -7,11 +7,11 @@ the work is below, including the reasoning you need to avoid undoing it.
 
 Written 2026-08-18 by a planning session, from a live read of the code.
 
-> **EXECUTION STATUS (2026-08-20), branch `feature/log-type-recommendation`,
-> PR #119:** **Phases 0, 1, 2, 3 and 4 are done** - both of Phase 4's paths,
-> capture and lake query, in core and UI. **Phase 5 is unblocked but not
-> started**, and needs no further Phase 4 work: its one open decision is the
-> threshold, and that decision is now made (see Phase 5).
+> **EXECUTION STATUS (2026-08-23), branch `feature/log-type-recommendation`,
+> PR #119: ALL PHASES 0-5 ARE DONE.** Phase 4 shipped both its paths, capture
+> and lake query, in core and UI. Phase 5 shipped 2026-08-23 - the Lake counts
+> now reach the recommendation, entries and the unreferenced set both carry a
+> volume, and both rank by it. No threshold was added, by decision.
 >
 > NOT verified against a real workspace. See "Needs live verification" - the
 > suite that settles it is `packages/core/src/testing/live-verify.test.ts`.
@@ -499,7 +499,38 @@ swallows every route. Same failure, earlier.
 
 ---
 
-## Phase 5 - volume findings (flagged, not scoped)
+## Phase 5 - volume findings
+
+> **STATUS: DONE (2026-08-23).** Shipped as `LogTypeVolume` +
+> `rankUnreferencedByVolume` in `domain/log-type-catalog/merge.ts`, an optional
+> `volumes` input to `mergeLogTypeSources`, `eventCount` on `MergedLogType` and
+> `RecommendedLogType`, and `volumeWindow` on the recommendation. The counts are
+> lifted out of the Lake panel in `integrate-screen`'s `onQuery` handler - the
+> panel is unchanged and still receives exactly what it returned - so the query
+> that produced them is the one that reports them.
+>
+> WHAT WAS BUILT TO THE DECISION BELOW, not around it: the number is attached
+> and the list is ordered; nothing is flagged, no threshold exists, and no
+> headline mentions a volume. Two rules the pins hold and a future change must
+> not quietly drop:
+>
+> - **Unmeasured renders nothing** - not 0, not "unknown". The `eventCount` key
+>   is absent rather than undefined, so nothing downstream can print a number
+>   nobody measured. A measured zero, which IS an answer, is carried.
+> - **Volume ranks WITHIN a tier, never across one.** A vendor-documented feed
+>   with 890K events stays below a detection-tier log type with three. The tier
+>   says whether you need it; the volume says how much there is. Letting volume
+>   cross tiers would dress a catalog entry in a requirement's authority, which
+>   is what the tier split exists to prevent.
+>
+> Matching rows are SUMMED rather than picked between, because they come from
+> one `summarize ... by` and therefore partition the window - disjoint sets add
+> safely. If they ever come from separate queries, that stops being true.
+>
+> Events-to-bytes is still absent, deliberately: `estimateDropSavings`'s mean
+> bytes/event could multiply a Search count, but that is a second claim (what it
+> costs) on top of the measured one (how much there is), and it was not asked
+> for. Counts only.
 
 If Search runs, per-log-type counts come back free. Crossing "log types present"
 against "log types any enabled detection reads" yields findings of the form

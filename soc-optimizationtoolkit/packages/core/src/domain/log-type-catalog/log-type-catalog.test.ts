@@ -15,7 +15,12 @@ import {
   documentedLogTypePacksForSolution,
   documentedLogTypesForSolution,
 } from "./vendor-log-types";
-import { evidenceCounts, mergeLogTypeSources } from "./merge";
+import {
+  evidenceCounts,
+  mergeLogTypeSources,
+  rankUnreferencedByVolume,
+} from "./merge";
+import type { LogTypeVolume } from "./merge";
 import type { ExpectedLogType } from "../coverage-analysis/expected-log-types";
 import { compareLogTypeCoverage } from "../coverage-analysis/expected-log-types";
 
@@ -341,5 +346,222 @@ describe("evidenceCounts", () => {
 
   it("is all zeroes for an empty merge", () => {
     expect(evidenceCounts([])).toEqual({ detection: 0, workbook: 0, vendor: 0 });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Measured volume (plan Phase 5)
+// ---------------------------------------------------------------------------
+//
+// The rule these guard: a volume is ATTACHED and RANKED, never judged. No
+// threshold, no flag, and above all no invented number - unmeasured must stay
+// unmeasured all the way to the screen, because a zero here is a claim about
+// the operator's data that nobody made.
+
+describe("volume attachment", () => {
+  const vol = (logType: string, eventCount?: number): LogTypeVolume =>
+    eventCount === undefined ? { logType } : { logType, eventCount };
+
+  it("attaches a measured count to the log type it belongs to", () => {
+    const merged = mergeLogTypeSources({
+      expected: [expected("TRAFFIC", ["alert-rule"])],
+      vendorLogTypes: [],
+      provided: [],
+      volumes: [vol("TRAFFIC", 890123)],
+    });
+
+    expect(merged).toHaveLength(1);
+    expect(merged[0].eventCount).toBe(890123);
+  });
+
+  it("matches a volume through separators and case, as every other join does", () => {
+    const merged = mergeLogTypeSources({
+      expected: [expected("TRAFFIC", ["alert-rule"])],
+      vendorLogTypes: [],
+      provided: [],
+      volumes: [vol("pan-traffic", 12)],
+    });
+
+    expect(merged[0].eventCount).toBe(12);
+  });
+
+  it("SUMS disjoint rows rather than picking one", () => {
+    // The rows come from one summarize-by, so they partition the window and
+    // adding them double-counts nothing. Picking the larger would under-report
+    // a log type the dataset splits across two discriminator values.
+    const merged = mergeLogTypeSources({
+      expected: [expected("TRAFFIC", ["alert-rule"])],
+      vendorLogTypes: [],
+      provided: [],
+      volumes: [vol("pan-traffic", 100), vol("gp-traffic", 25)],
+    });
+
+    expect(merged[0].eventCount).toBe(125);
+  });
+
+  it("leaves an entry UNMEASURED when no row matched - never zero", () => {
+    const merged = mergeLogTypeSources({
+      expected: [expected("TRAFFIC", ["alert-rule"])],
+      vendorLogTypes: [],
+      provided: [],
+      volumes: [vol("THREAT", 5)],
+    });
+
+    expect(merged[0].eventCount).toBeUndefined();
+    // The KEY is absent, not present-and-undefined: a renderer testing
+    // for the property must see nothing to show.
+    expect("eventCount" in merged[0]).toBe(false);
+  });
+
+  it("treats an unreadable count as unmeasured, not as zero", () => {
+    // readCount returns undefined when the column is not recognised. Adopting
+    // that as 0 would report a busy log type as silent.
+    const merged = mergeLogTypeSources({
+      expected: [expected("TRAFFIC", ["alert-rule"])],
+      vendorLogTypes: [],
+      provided: [],
+      volumes: [vol("TRAFFIC")],
+    });
+
+    expect("eventCount" in merged[0]).toBe(false);
+  });
+
+  it("carries a measured ZERO, which is a real answer", () => {
+    const merged = mergeLogTypeSources({
+      expected: [expected("TRAFFIC", ["alert-rule"])],
+      vendorLogTypes: [],
+      provided: [],
+      volumes: [vol("TRAFFIC", 0)],
+    });
+
+    expect(merged[0].eventCount).toBe(0);
+  });
+
+  it("RANKS BY VOLUME WITHIN A TIER", () => {
+    const merged = mergeLogTypeSources({
+      expected: [
+        expected("QUIET", ["alert-rule"]),
+        expected("BUSY", ["alert-rule"]),
+      ],
+      vendorLogTypes: [],
+      provided: [],
+      volumes: [vol("BUSY", 900000), vol("QUIET", 3)],
+    });
+
+    expect(merged.map((m) => m.value)).toEqual(["BUSY", "QUIET"]);
+  });
+
+  it("NEVER lets volume cross a tier boundary", () => {
+    // THE pin of this group. A vendor-documented feed with 900K events must
+    // stay below a detection-tier log type with three, because the tiers answer
+    // "do you need this?" and the volume answers "how much is there?". Floating
+    // the busy one would hand a catalog entry a requirement's authority - the
+    // exact failure the tier split exists to prevent.
+    const vendorLogTypes = documentedLogTypesForSolution("Palo Alto Networks");
+    expect(vendorLogTypes.length).toBeGreaterThan(0);
+    const busyVendor = vendorLogTypes[0].value;
+
+    const merged = mergeLogTypeSources({
+      expected: [expected("QUIET_BUT_NEEDED", ["alert-rule"])],
+      vendorLogTypes,
+      provided: [],
+      volumes: [vol(busyVendor, 900000), vol("QUIET_BUT_NEEDED", 3)],
+    });
+
+    expect(merged[0].value).toBe("QUIET_BUT_NEEDED");
+    expect(merged[0].evidence).toBe("detection");
+    // And the busy vendor row really did get its volume, so this passes
+    // because of the tier rule rather than because nothing was measured.
+    const vendorIndex = merged.findIndex((m) => m.value === busyVendor);
+    expect(vendorIndex).toBeGreaterThan(0);
+    expect(merged[vendorIndex].eventCount).toBe(900000);
+  });
+
+  it("sorts unmeasured BELOW a measured zero, within its tier", () => {
+    const merged = mergeLogTypeSources({
+      expected: [
+        expected("UNMEASURED", ["alert-rule"]),
+        expected("ZERO", ["alert-rule"]),
+      ],
+      vendorLogTypes: [],
+      provided: [],
+      volumes: [vol("ZERO", 0)],
+    });
+
+    expect(merged.map((m) => m.value)).toEqual(["ZERO", "UNMEASURED"]);
+  });
+
+  it("changes nothing when no volumes are supplied", () => {
+    // The state before any Lake query runs, which is most of the time.
+    const input = {
+      expected: [
+        expected("B", ["alert-rule"], ["R1", "R2"]),
+        expected("A", ["alert-rule"], ["R1"]),
+      ],
+      vendorLogTypes: [],
+      provided: [],
+    };
+    const without = mergeLogTypeSources(input);
+    const withEmpty = mergeLogTypeSources({ ...input, volumes: [] });
+
+    expect(withEmpty).toEqual(without);
+    // Reference count still decides, exactly as before Phase 5.
+    expect(without.map((m) => m.value)).toEqual(["B", "A"]);
+  });
+});
+
+describe("rankUnreferencedByVolume", () => {
+  it("puts the busiest unreferenced log type first", () => {
+    const ranked = rankUnreferencedByVolume(
+      ["hipmatch", "globalprotect", "userid"],
+      [
+        { logType: "globalprotect", eventCount: 890000 },
+        { logType: "hipmatch", eventCount: 12 },
+      ],
+    );
+
+    expect(ranked.map((u) => u.value)).toEqual([
+      "globalprotect",
+      "hipmatch",
+      "userid",
+    ]);
+    expect(ranked[0].eventCount).toBe(890000);
+    // The unmeasured one carries no count rather than a zero.
+    expect("eventCount" in ranked[2]).toBe(false);
+  });
+
+  it("PRESERVES INPUT ORDER when nothing has been measured", () => {
+    // Re-alphabetizing an unmeasured list would be reordering on no evidence,
+    // and would silently change what the operator sees before any query runs.
+    const ranked = rankUnreferencedByVolume(["traffic", "hipmatch", "auth"]);
+
+    expect(ranked.map((u) => u.value)).toEqual(["traffic", "hipmatch", "auth"]);
+  });
+
+  it("keeps input order among entries that tie on volume", () => {
+    const ranked = rankUnreferencedByVolume(
+      ["zebra", "alpha"],
+      [
+        { logType: "zebra", eventCount: 7 },
+        { logType: "alpha", eventCount: 7 },
+      ],
+    );
+
+    expect(ranked.map((u) => u.value)).toEqual(["zebra", "alpha"]);
+  });
+
+  it("never invents a count for a name that normalizes to nothing", () => {
+    // An operator may tag a sample "-"; the shared empty-name guards must keep
+    // it from matching every volume row.
+    const ranked = rankUnreferencedByVolume(
+      ["-"],
+      [{ logType: "traffic", eventCount: 500 }],
+    );
+
+    expect(ranked).toEqual([{ value: "-" }]);
+  });
+
+  it("is empty for an empty set, and does not fail without volumes", () => {
+    expect(rankUnreferencedByVolume([])).toEqual([]);
   });
 });
