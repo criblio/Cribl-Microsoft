@@ -63,3 +63,35 @@ describe("runtime boundary: parseTransformKql does NOT mine project maps", () =>
     expect(flow.renames).toEqual([{ dest: "DeviceAction", source: "act" }]);
   });
 });
+
+describe("our OWN emitted transform (ADR 0004) reads back cleanly", () => {
+  // schema-mapping became an EMITTER of transformKql when guid columns stopped
+  // being dropped. Both miners in this domain therefore now parse a string we
+  // wrote, and a self-referential cast is the one shape neither had seen.
+  const EMITTED =
+    "source | extend AwsEventId = toguid(AwsEventId), " +
+    "SharedEventId = toguid(SharedEventId)";
+
+  it("mines NO field pairs from a self-referential cast", () => {
+    // Load-bearing and easy to break: `to\w+(...)` already matches toguid, so
+    // the ONLY thing stopping `AwsEventId <- AwsEventId` becoming a rename is
+    // the source-equals-dest guard. A cast is not a rename - the DCR consumes
+    // and emits the same field - and mining one would tell the mapping review
+    // the DCR already handles a rename that does not exist.
+    expect(mineTransformFieldPairs(EMITTED)).toEqual([]);
+  });
+
+  it("reads the cast as a type coercion, not a phantom source field", () => {
+    const flow = parseTransformKql(EMITTED);
+
+    expect(flow.typeConversions).toEqual([
+      { field: "AwsEventId", toType: "guid" },
+      { field: "SharedEventId", toType: "guid" },
+    ]);
+    // The failure this guards: without toguid in the parser's skip list and
+    // regex, this produced a rename FROM a field literally named "toguid" and
+    // gap analysis reported a source field no sample could ever contain.
+    expect(flow.renames).toEqual([]);
+    expect(flow.columns.map((c) => c.name)).not.toContain("toguid");
+  });
+});

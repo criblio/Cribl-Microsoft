@@ -6,9 +6,26 @@
  * against script-generated templates in DCR-Automation/core/
  * generated-templates. This is the golden compatibility contract: if one of
  * these fails, the implementation is wrong - never the fixture.
+ *
+ * ONE EXCEPTION, and it is the only one (ADR 0004, 2026-08-23). For GUID-TYPED
+ * columns the sentence above no longer holds: legacy dropped them, we declare
+ * them string and promote them with toguid(), and the fixtures were amended to
+ * match US rather than the script. The amendment was mechanical and minimal -
+ * guid columns moved from `dropped` into `columns` at their source-order
+ * position with dcrType "string", and into the new `casts` list; every other
+ * legacy-derived dcrType and drop in every fixture is untouched. Six columns
+ * across two fixtures (AWSCloudTrail 3, SyntheticTypeMatrix 3).
+ *
+ * The reason the fixture lost this argument: legacy's behaviour silently
+ * discarded those fields at the DCR boundary, so bug-compatibility here meant
+ * shipping data loss. Everywhere else, the fixture still wins.
  */
 import { describe, expect, it } from "vitest";
-import { buildDcrColumnSet, buildStreamDeclaration } from "./index";
+import {
+  buildDcrColumnSet,
+  buildStreamDeclaration,
+  buildTransformKql,
+} from "./index";
 import legacyFixtures from "./legacy-fixtures.json";
 
 interface FixtureColumn {
@@ -19,6 +36,8 @@ interface FixtureColumn {
 interface FixtureExpectation {
   columns: Array<{ name: string; dcrType: string }>;
   dropped: string[];
+  /** ADR 0004: columns declared string and promoted in the transform. */
+  casts: Array<{ name: string; laType: string; cast: string }>;
 }
 
 interface LegacyFixture {
@@ -63,6 +82,7 @@ describe("legacy characterization fixtures", () => {
           expect(result.dropped.map((dropped) => dropped.name)).toEqual(
             fixture.expected.dropped,
           );
+          expect(result.casts).toEqual(fixture.expected.casts);
         },
       );
 
@@ -78,6 +98,7 @@ describe("legacy characterization fixtures", () => {
           fixture.table,
           result.columns,
           "native",
+          result.casts,
         );
 
         expect(declaration.streamName).toBe(`Custom-${fixture.table}`);
@@ -92,10 +113,21 @@ describe("legacy characterization fixtures", () => {
           {
             streams: [`Custom-${fixture.table}`],
             destinations: ["logAnalyticsWorkspace"],
-            transformKql: "source",
+            transformKql: buildTransformKql(result.casts),
             outputStream: `Microsoft-${fixture.table}`,
           },
         ]);
+        // THE REGRESSION GUARD for ADR 0004's blast radius: a table with no
+        // guid columns must still emit the bare literal, byte for byte. Seven
+        // of the nine fixtures take this branch, so the assertion above cannot
+        // pass merely because both sides call the same builder.
+        if (result.casts.length === 0) {
+          expect(declaration.dataFlows[0]?.transformKql).toBe("source");
+        } else {
+          expect(declaration.dataFlows[0]?.transformKql).toContain(
+            "| extend ",
+          );
+        }
       });
     });
   }

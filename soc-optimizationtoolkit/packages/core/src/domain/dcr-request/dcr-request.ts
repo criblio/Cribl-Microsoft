@@ -37,6 +37,7 @@ import {
   LOG_ANALYTICS_DESTINATION_NAME,
 } from "../schema-mapping";
 import type {
+  CastColumn,
   DcrColumn,
   DcrDataFlow,
   DroppedColumn,
@@ -60,7 +61,8 @@ export interface DirectDcrRequestInput {
   /**
    * Log Analytics schema columns for the table (the column array selected via
    * schema-mapping selectSchemaColumns from the workspace tables GET). System
-   * and guid-typed columns are filtered here via buildDcrColumnSet.
+   * columns are filtered here via buildDcrColumnSet; guid-typed columns are
+   * declared "string" and promoted by the transform (ADR 0004).
    */
   columns: readonly LogAnalyticsColumn[];
   /**
@@ -116,6 +118,12 @@ export interface DirectDcrRequest {
   droppedColumns: DroppedColumn[];
   /** Columns whose LA type fell back to string (diagnostics; legacy warns). */
   unknownTypeColumns: UnknownTypeColumn[];
+  /**
+   * Columns declared "string" and promoted back by transformKql (ADR 0004).
+   * NOT a loss - unlike droppedColumns, these arrive intact by a two-step
+   * route, and a caller surfacing diagnostics must not report them as missing.
+   */
+  castColumns: CastColumn[];
 }
 
 /** Error thrown when a valid ARM request cannot be composed from the input. */
@@ -139,6 +147,7 @@ function composeDcrRequestCore(input: DirectDcrRequestInput): {
   outputStream: string;
   droppedColumns: DroppedColumn[];
   unknownTypeColumns: UnknownTypeColumn[];
+  castColumns: CastColumn[];
 } {
   const { table, columns, location, workspaceResourceId, dcrName } = input;
   const tableMode: TableMode = input.tableMode ?? "native";
@@ -170,6 +179,9 @@ function composeDcrRequestCore(input: DirectDcrRequestInput): {
     table,
     columnSet.columns,
     tableMode,
+    // The casts travel WITH the columns they belong to (ADR 0004). Passing one
+    // without the other would emit a transform describing a different table.
+    columnSet.casts,
   );
 
   const path =
@@ -192,6 +204,7 @@ function composeDcrRequestCore(input: DirectDcrRequestInput): {
     outputStream: declaration.outputStreamName,
     droppedColumns: columnSet.dropped,
     unknownTypeColumns: columnSet.unknownTypes,
+    castColumns: columnSet.casts,
   };
 }
 
@@ -225,6 +238,7 @@ export function buildDirectDcrRequest(
     outputStream: core.outputStream,
     droppedColumns: core.droppedColumns,
     unknownTypeColumns: core.unknownTypeColumns,
+    castColumns: core.castColumns,
   };
 }
 
@@ -286,6 +300,12 @@ export interface DceDcrRequest {
   droppedColumns: DroppedColumn[];
   /** Columns whose LA type fell back to string (diagnostics; legacy warns). */
   unknownTypeColumns: UnknownTypeColumn[];
+  /**
+   * Columns declared "string" and promoted back by transformKql (ADR 0004).
+   * NOT a loss - unlike droppedColumns, these arrive intact by a two-step
+   * route, and a caller surfacing diagnostics must not report them as missing.
+   */
+  castColumns: CastColumn[];
 }
 
 /**
@@ -323,6 +343,7 @@ export function buildDceDcrRequest(input: DceDcrRequestInput): DceDcrRequest {
     outputStream: core.outputStream,
     droppedColumns: core.droppedColumns,
     unknownTypeColumns: core.unknownTypeColumns,
+    castColumns: core.castColumns,
   };
 }
 

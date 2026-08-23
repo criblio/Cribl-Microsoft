@@ -41,6 +41,11 @@ const RENAME_SKIP_NAMES: readonly string[] = [
   "toint",
   "tobool",
   "todynamic",
+  // ADR 0004: we now EMIT toguid() in our own transforms, so the parser has to
+  // know it. Without this entry `Col = toguid(Col)` parses as a rename FROM a
+  // field literally named "toguid", and gap analysis reports a phantom source
+  // field that no sample will ever contain.
+  "toguid",
   "datetime_add",
   "source",
   "extend",
@@ -54,6 +59,10 @@ const TYPE_MAP: Record<string, string> = {
   tobool: "boolean",
   todynamic: "dynamic",
   tostring: "string",
+  // ADR 0004. The DESTINATION type really is guid - that is the whole point of
+  // the cast - even though "guid" is not a legal DCR stream-declaration type.
+  // The declaration says string; the column it lands in is guid.
+  toguid: "guid",
 };
 
 /**
@@ -114,7 +123,7 @@ export function parseTransformKql(
     clean.match(/extend\s+([\s\S]*?)(?=\n\s*\||\n*$)/g) || [];
   for (const block of extendBlocks) {
     const convRegex =
-      /(\w+)\s*=\s*(tolong|todouble|toint|tobool|todynamic|tostring)\((?:\[?'?)?(\w+)/g;
+      /(\w+)\s*=\s*(tolong|todouble|toint|tobool|todynamic|tostring|toguid)\((?:\[?'?)?(\w+)/g;
     let m: RegExpExecArray | null;
     while ((m = convRegex.exec(block)) !== null) {
       typeConversions.push({ field: m[1], toType: TYPE_MAP[m[2]] || "string" });
