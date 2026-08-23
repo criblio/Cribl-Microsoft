@@ -1234,13 +1234,14 @@ content-derived tiers structurally cannot. The tier is on every row because
 collapsing them would tell an operator their solution requires data it has never
 mentioned.
 
-**One thing needs running, and nothing prompts for it.** The vendor tier has a
+**The vendor tier is now BOTH halves (corrected 2026-08-23).** It has a
 hand-curated half (13 vendors, each cited to vendor documentation) and a
-generated half mined from elastic/integrations. **The generated half ships
-EMPTY** - populating it needs
-`node scripts/generate-vendor-packs.mjs --bulk <elastic-integrations-checkout>`,
-which needs a local checkout and network. Until someone runs it, the 13 hand
-packs are the entire vendor tier, and a breadth pin guards them.
+generated half mined from elastic/integrations. The generated half shipped empty
+at first, and this entry said so; commit df3ad5e ran
+`node scripts/generate-vendor-packs.mjs --bulk <elastic-integrations-checkout>`
+and the catalog now carries 157 generated packs (197 KB). The hand packs still
+WIN the per-value dedupe, and the breadth pin still guards all thirteen. Re-run
+the miner only to refresh against a newer elastic/integrations checkout.
 
 **A parsing defect found and fixed along the way:** a syslog-prefixed PAN-OS
 upload used to parse to ZERO events - detection called it syslog and

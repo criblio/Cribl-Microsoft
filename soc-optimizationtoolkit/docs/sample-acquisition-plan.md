@@ -267,6 +267,12 @@ This phase alone is worth shipping even if every later phase is abandoned.
 > `DocumentedLogType`, NOT `VendorLogType`, because `sentinel-content` already
 > exports that name for the connector-decoder's per-table projection.
 >
+> **[SUPERSEDED 2026-08-23 - the generated tier is POPULATED.** Commit df3ad5e
+> ran the miner: `generated-vendor-log-types.json` carries 157 packs (197 KB).
+> The "someone has to run it" instruction below is a FALSE TO-DO - it was true
+> when written and has been satisfied. The precedence and trap notes are still
+> accurate; only the emptiness claim is not.]**
+>
 > **The vendor tier has two sub-tiers and the generated one ships EMPTY.** The
 > precedence mirrors `vendor-mapping-packs` deliberately - same problem, same
 > answer, already settled here: HAND packs, each cited to the vendor's own
@@ -454,11 +460,11 @@ second list.
 > whole source, which is a legitimate choice - an operator who does not yet know
 > what a source sends should be able to look first.
 >
-> The generator was extended to keep the `data_stream` dimension as planned, but
-> **its output ships EMPTY** until someone runs
-> `node scripts/generate-vendor-packs.mjs --bulk <elastic-integrations-checkout>`
-> (see the Phase 2 block). So the hand-verified packs are not merely winning the
-> precedence - they are currently the whole vendor tier.
+> The generator was extended to keep the `data_stream` dimension as planned.
+> **[CORRECTED 2026-08-23: its output is no longer empty** - the miner was run
+> in df3ad5e and the catalog carries 157 generated packs. The hand-verified
+> packs still WIN the per-value dedupe, which is the point; they are no longer
+> the whole tier.]
 >
 > Editing the filter by hand STOPS the checkboxes rewriting it. Silently
 > discarding someone's edit is worse than letting the two disagree, and the

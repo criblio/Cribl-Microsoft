@@ -346,22 +346,27 @@ describe.skipIf(!LIVE)("live verification against a real workspace", () => {
     // route that lists lakes, so `default` is a constant we assert rather than
     // resolve. What this run settles is whether that constant is RIGHT.
     const inventory = await loadSampleSources(cribl, { mode: "lake-query" });
-    const lakeSection = inventory.sections.find((s) => s.entries.length > 0);
+    const lakeSection = inventory.sections.find((s) => s.kind === "lake-dataset");
     const entries = lakeSection?.entries ?? [];
     report(
       "row 6 (dataset listing, leader route)",
-      entries.length > 0 ? "CONFIRMED" : "EMPTY",
+      lakeSection?.status === "ok"
+        ? entries.length > 0
+          ? "CONFIRMED"
+          : "ANSWERED, but the lake is empty"
+        : `NOT ANSWERED (${lakeSection?.status ?? "no section"})`,
       `GET ${lakeDatasetsPath(DEFAULT_LAKE_ID)} -> ${entries.length} datasets` +
-        (lakeSection === undefined
-          ? ` | sections: ${inventory.sections.map((s) => s.note ?? s.kind).join("; ")}`
-          : ""),
+        (lakeSection?.note === undefined ? "" : ` | ${lakeSection.note}`),
     );
 
-    if (entries.length === 0) {
-      // Diagnostic, NOT a second attempt at passing: if the group-scoped route
-      // answers where the leader route did not, the app is calling the wrong
-      // one and this line says so. Undeclared in policies.yml on purpose - we
-      // do not grant a route until we mean to use it.
+    // The diagnostic runs BEFORE the assertion, deliberately: it is most
+    // valuable exactly when the leader route did not answer, and asserting
+    // first would abort the run before printing the thing that explains why.
+    // Not a second attempt at passing - if the group-scoped route answers
+    // where ours did not, the app is calling the wrong one and this says so.
+    // `/search/datasets` stays undeclared in policies.yml on purpose: we do
+    // not grant a route until we mean to use it.
+    if (lakeSection?.status !== "ok" || entries.length === 0) {
       const alt = await cribl.request({
         method: "GET",
         path: "/search/datasets",
@@ -376,6 +381,20 @@ describe.skipIf(!LIVE)("live verification against a real workspace", () => {
             ? "Repoint discoverSampleSources at the group-scoped route and declare it."
             : "Neither route lists datasets; the lake may be empty."),
       );
+    }
+
+    // THE ROUTE MUST ANSWER. An empty lake is a real answer and must not fail
+    // the run; a 403/404 is not, and must. `status` is what separates them -
+    // loadSampleSources catches its own errors and reports `failed` rather
+    // than throwing, so without this assertion the row degraded to a console
+    // line and the suite went green on an unconfirmed belief. That is the
+    // exact false-green this file exists to prevent, and it was introduced
+    // HERE on 2026-08-23 while fixing the wrong-route bug above. Found by the
+    // architecture audit's test-pin check the same day.
+    expect(lakeSection).toBeDefined();
+    expect(lakeSection?.status).toBe("ok");
+
+    if (entries.length === 0) {
       report("row 3 (tostring)", "SKIPPED", "no datasets to query");
       return;
     }
