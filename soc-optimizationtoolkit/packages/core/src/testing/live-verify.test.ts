@@ -35,6 +35,11 @@ import { describe, expect, it } from "vitest";
 import { buildCaptureFilter } from "../domain/capture-filter/capture-filter";
 import { extractCapturedEvents } from "../usecases/capture-samples/capture-samples";
 import {
+  DEFAULT_LAKE_ID,
+  lakeDatasetsPath,
+  loadSampleSources,
+} from "../usecases/discover-sample-sources/discover-sample-sources";
+import {
   fetchLakeLogTypeEvents,
   queryLakeSamples,
 } from "../usecases/query-lake-samples/query-lake-samples";
@@ -327,27 +332,55 @@ describe.skipIf(!LIVE)("live verification against a real workspace", () => {
       return;
     }
 
-    // Row 6: the dataset listing the Lake mode offers.
-    const list = await cribl.request({
-      method: "GET",
-      path: "/search/datasets",
-      groupId: search.id,
-    });
+    // Row 6: the dataset listing THE APP ACTUALLY CALLS.
+    //
+    // This probed `/m/{gid}/search/datasets` until 2026-08-23, which is a
+    // different route from the one loadSampleSources uses - so a green run
+    // confirmed a listing the app never asks for while the app's own leader
+    // route went untested. That is precisely the failure this file exists to
+    // prevent, committed inside the file itself. It now drives the shipped
+    // function, for the same reason the query below drives queryLakeSamples.
+    //
+    // Row 6 ALSO carried a wrong belief: "lakeId is discoverable". It is not.
+    // Every lake path in the vendored spec requires a {lakeId} and there is no
+    // route that lists lakes, so `default` is a constant we assert rather than
+    // resolve. What this run settles is whether that constant is RIGHT.
+    const inventory = await loadSampleSources(cribl, { mode: "lake-query" });
+    const lakeSection = inventory.sections.find((s) => s.entries.length > 0);
+    const entries = lakeSection?.entries ?? [];
     report(
-      "row 6 (dataset listing)",
-      list.status === 200 ? "CONFIRMED" : `HTTP ${list.status}`,
-      `/m/${search.id}/search/datasets`,
+      "row 6 (dataset listing, leader route)",
+      entries.length > 0 ? "CONFIRMED" : "EMPTY",
+      `GET ${lakeDatasetsPath(DEFAULT_LAKE_ID)} -> ${entries.length} datasets` +
+        (lakeSection === undefined
+          ? ` | sections: ${inventory.sections.map((s) => s.note ?? s.kind).join("; ")}`
+          : ""),
     );
-    expect(list.status).toBe(200);
 
-    const datasets = ((list.body as { items?: unknown[] })?.items ?? []) as Record<
-      string,
-      unknown
-    >[];
-    if (datasets.length === 0) {
+    if (entries.length === 0) {
+      // Diagnostic, NOT a second attempt at passing: if the group-scoped route
+      // answers where the leader route did not, the app is calling the wrong
+      // one and this line says so. Undeclared in policies.yml on purpose - we
+      // do not grant a route until we mean to use it.
+      const alt = await cribl.request({
+        method: "GET",
+        path: "/search/datasets",
+        groupId: search.id,
+      });
+      const altCount = ((alt.body as { items?: unknown[] })?.items ?? []).length;
+      report(
+        "row 6 (fallback probe)",
+        altCount > 0 ? "APP CALLS THE WRONG ROUTE" : `HTTP ${alt.status}`,
+        `/m/${search.id}/search/datasets -> ${altCount} datasets. ` +
+          (altCount > 0
+            ? "Repoint discoverSampleSources at the group-scoped route and declare it."
+            : "Neither route lists datasets; the lake may be empty."),
+      );
       report("row 3 (tostring)", "SKIPPED", "no datasets to query");
       return;
     }
+
+    const datasets = entries.map((e) => ({ id: e.id }));
 
     // THE SHIPPED FUNCTIONS, not a hand-rolled approximation of them. The app
     // tries the sync route before the job lifecycle and owns its own query

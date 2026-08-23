@@ -655,7 +655,7 @@ It was caught by reading the vendored spec's examples, not by a test.
 | 3 | Cribl Search accepts `tostring(field)` in a `where` clause | Standard Kusto; Cribl Search speaks Kusto | Numeric log types 400 instead of returning events |
 | 4 | A one-line NDJSON capture response reaches us as a decoded OBJECT | `readPortBody` JSON.parses the whole body | Single-event captures read as empty (the bug we fixed - confirm the fix, not just the diagnosis) |
 | 5 | 12s is under the real capture ceiling | `http.ts:47` `timeoutMs = 15000`, minus dispatch headroom | Captures fail blaming the bridge, or we clamp shorter than needed |
-| 6 | The Lake dataset listing is a LEADER route and `lakeId` is discoverable | Phase 0 spike | The Lake mode has no dataset list to offer |
+| 6 | The Lake dataset listing is a LEADER route, and the managed lake's id is `default` | Phase 0 spike | The Lake mode has no dataset list to offer |
 | 7 | Capture needs a permission the app's own credentials hold | Not established | 403 on the primary path |
 | 8 | A Cribl filter referencing a field the event lacks is a ReferenceError that DROPS the event | `capture-filter.ts`'s stated model - never tested against the real evaluator | If Cribl tolerates undeclared names, the typeof guards are insurance rather than load-bearing. Either answer is fine; the guess is not |
 
@@ -666,6 +666,43 @@ numeric discriminator settles 3 and 6.
 `packages/core/src/testing/live-verify.test.ts` runs all seven. It SKIPS unless
 `CRIBL_LIVE_BASE` and `CRIBL_LIVE_TOKEN` are set, so the normal gate stays
 hermetic.
+
+### How to run it (2026-08-23)
+
+**Do the traffic step first.** It is the one that sank the last attempt, and no
+amount of fixing the other two rescues a run without events: rows 1, 2 and 4 are
+all observations of a captured event, so an idle source produces an empty
+capture that is indistinguishable from a broken filter.
+
+1. **Generate traffic through a SYSLOG source**, and leave it running. Check
+   Stream Home shows events in AND out before going further - the last attempt
+   read zero over 15 minutes. One capture against a live syslog source settles
+   rows 1, 4, 5 and 7 together, which is why it is worth the setup.
+2. **Get a token.** Vault is on an internal address, so this needs the lab
+   network. The token is a bearer for the workspace API, not a browser session -
+   the suite calls the API directly and does not go through the app's proxy.
+3. **Run it:**
+
+```sh
+cd soc-optimizationtoolkit
+CRIBL_LIVE_BASE=https://<workspace>.cribl.cloud/api/v1 \
+CRIBL_LIVE_TOKEN=<bearer> \
+npx vitest run --root packages/core src/testing/live-verify.test.ts
+```
+
+Read the `[live-verify]` lines, not just the pass/fail. Each row prints its
+verdict AND what it observed, because "row 6: CONFIRMED" is worth nothing
+without the count beside it.
+
+4. **Then a JSON source** (Event Hub, HEC, Kafka) for row 2, and **one Lake
+   query over a dataset with a numeric discriminator** for rows 3 and 6.
+
+**What a green run does NOT settle.** Row 8 asserts nothing either way by
+design; the suite reports what the evaluator did and leaves the conclusion to a
+human. And `GET /search/query` - the sync route the app prefers - is spec-only:
+Cribl's own UI drives the async job path, so if the sync route is unimplemented
+the suite will show the fallback working and the preferred path never running.
+Check which `path` the query row reports.
 
 ### Attempt 2026-08-20 - blocked, with two things settled anyway
 
