@@ -25,7 +25,7 @@ const SECURITY_EVENT_COLUMNS: LogAnalyticsColumn[] = [
   { name: "TimeGenerated", type: "dateTime" },
   { name: "Account", type: "string" },
   { name: "EventID", type: "int" },
-  { name: "InterfaceUuid", type: "guid" }, // RULE 2b: guid-typed, dropped
+  { name: "InterfaceUuid", type: "guid" }, // RULE 2b: declared string + cast
   { name: "EventData", type: "mystery" }, // RULE 3: unknown -> string
 ];
 
@@ -55,6 +55,10 @@ describe("buildDirectDcrRequest", () => {
                 { name: "TimeGenerated", type: "datetime" },
                 { name: "Account", type: "string" },
                 { name: "EventID", type: "int" },
+                // ADR 0004: declared string, in source order, rather than
+                // absent. Before the ADR this field was silently discarded at
+                // the DCR boundary and its column stayed null forever.
+                { name: "InterfaceUuid", type: "string" },
                 { name: "EventData", type: "string" },
               ],
             },
@@ -68,7 +72,9 @@ describe("buildDirectDcrRequest", () => {
             {
               streams: ["Custom-SecurityEvent"],
               destinations: ["logAnalyticsWorkspace"],
-              transformKql: "source",
+              // ...and promoted back on the way into the table.
+              transformKql:
+                "source | extend InterfaceUuid = toguid(InterfaceUuid)",
               outputStream: "Microsoft-SecurityEvent",
             },
           ],
@@ -76,11 +82,11 @@ describe("buildDirectDcrRequest", () => {
       },
       streamName: "Custom-SecurityEvent",
       outputStream: "Microsoft-SecurityEvent",
-      droppedColumns: [
-        { name: "TenantId", reason: "system-column" },
-        { name: "InterfaceUuid", reason: "guid-type" },
-      ],
+      droppedColumns: [{ name: "TenantId", reason: "system-column" }],
       unknownTypeColumns: [{ name: "EventData", laType: "mystery" }],
+      castColumns: [
+        { name: "InterfaceUuid", laType: "guid", cast: "toguid" },
+      ],
     });
     expect(request.apiVersion).toBe(DIRECT_DCR_API_VERSION);
   });
@@ -117,18 +123,46 @@ describe("buildDirectDcrRequest", () => {
   });
 
   it("throws SchemaMappingError when every column is filtered away (RULE 2d)", () => {
+    // ALL SYSTEM COLUMNS NOW. This case used to lean on a guid column being
+    // dropped too; since ADR 0004 a guid column survives, so leaving it here
+    // would have made the test pass for the wrong reason - or, as it did,
+    // stop passing at all.
     expect(() =>
       buildDirectDcrRequest({
         table: "SecurityEvent",
         columns: [
           { name: "TenantId", type: "string" },
-          { name: "SomeGuid", type: "guid" },
+          { name: "SourceSystem", type: "string" },
         ],
         location: "eastus",
         workspaceResourceId: WORKSPACE_ID,
         dcrName: "dcr-SecurityEvent-eastus",
       }),
     ).toThrow(SchemaMappingError);
+  });
+
+  it("does NOT fail a table whose only non-system column is a guid", () => {
+    // The other half of the same change: a table like that used to produce
+    // zero columns and no DCR at all. Now it produces a one-column DCR that
+    // actually carries the field.
+    const request = buildDirectDcrRequest({
+      table: "SecurityEvent",
+      columns: [
+        { name: "TenantId", type: "string" },
+        { name: "SomeGuid", type: "guid" },
+      ],
+      location: "eastus",
+      workspaceResourceId: WORKSPACE_ID,
+      dcrName: "dcr-SecurityEvent-eastus",
+    });
+
+    expect(
+      request.body.properties.streamDeclarations["Custom-SecurityEvent"]
+        ?.columns,
+    ).toEqual([{ name: "SomeGuid", type: "string" }]);
+    expect(request.body.properties.dataFlows[0]?.transformKql).toBe(
+      "source | extend SomeGuid = toguid(SomeGuid)",
+    );
   });
 });
 
@@ -168,6 +202,7 @@ describe("buildDceDcrRequest", () => {
                 { name: "TimeGenerated", type: "datetime" },
                 { name: "Account", type: "string" },
                 { name: "EventID", type: "int" },
+                { name: "InterfaceUuid", type: "string" },
                 { name: "EventData", type: "string" },
               ],
             },
@@ -181,7 +216,10 @@ describe("buildDceDcrRequest", () => {
             {
               streams: ["Custom-SecurityEvent"],
               destinations: ["logAnalyticsWorkspace"],
-              transformKql: "source",
+              // ADR 0004 applies identically in DCE mode - the stream fragment
+              // is the SAME shared builder, which is the point of this pin.
+              transformKql:
+                "source | extend InterfaceUuid = toguid(InterfaceUuid)",
               outputStream: "Microsoft-SecurityEvent",
             },
           ],
@@ -189,11 +227,11 @@ describe("buildDceDcrRequest", () => {
       },
       streamName: "Custom-SecurityEvent",
       outputStream: "Microsoft-SecurityEvent",
-      droppedColumns: [
-        { name: "TenantId", reason: "system-column" },
-        { name: "InterfaceUuid", reason: "guid-type" },
-      ],
+      droppedColumns: [{ name: "TenantId", reason: "system-column" }],
       unknownTypeColumns: [{ name: "EventData", laType: "mystery" }],
+      castColumns: [
+        { name: "InterfaceUuid", laType: "guid", cast: "toguid" },
+      ],
     });
     expect(request.apiVersion).toBe(DCE_DCR_API_VERSION);
     // The load-bearing kind rule: DCE-based DCRs are NOT Kind:Direct.

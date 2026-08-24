@@ -12,17 +12,27 @@
  * the stream declaration and dataFlow shape.
  *
  * The generated column sets and stream names are deployed DCR content; the
- * output must match what the legacy script deploys, including its quirks
- * (e.g. guid-typed columns are DROPPED from DCR declarations, not converted,
- * while the custom-schema-file path CONVERTS them to string). Every rule is
- * pinned by schema-mapping.test.ts (unit, per rule) and
+ * output must match what the legacy script deploys, including its quirks.
+ * Every rule is pinned by schema-mapping.test.ts (unit, per rule) and
  * schema-mapping.characterization.test.ts (legacy-fixtures.json replay).
+ *
+ * ONE DELIBERATE DIVERGENCE FROM LEGACY - guid columns (ADR 0004, 2026-08-23).
+ * The legacy script DROPPED guid-typed columns from the DCR declaration. We
+ * declare them `string` and promote them with toguid() in transformKql instead,
+ * because the drop silently lost data: the stream declaration is the input
+ * contract of a Kind:Direct DCR, so an undeclared field is discarded at the DCR
+ * boundary and the destination column stays null forever, with the deployment
+ * reporting success. v1 had a different bug - it emitted the illegal type `guid`
+ * and Azure rejected the DCR with a 400 - so the port removed the loud failure
+ * and kept the quiet one. Everything else here is still bug-compatible with the
+ * script; this rule alone is not, on purpose.
  *
  * Rules (numbering matches the extracted specification):
  *   RULE 1  input schema selection: which column array of the workspace
  *           tables API response feeds the mapping (selectSchemaColumns)
  *   RULE 2a system-name drop lists, case-insensitive (18 native / 6 custom)
- *   RULE 2b guid/uniqueidentifier/uuid columns dropped entirely
+ *   RULE 2b guid/uniqueidentifier/uuid columns declared string + cast in the
+ *           transform (ADR 0004; legacy dropped them)
  *   RULE 2c TimeGenerated always passes through; only the schema-FILE path
  *           injects it (normalizeCustomSchemaColumns), never the Azure path
  *   RULE 2d zero surviving columns -> no DCR (buildStreamDeclaration throws)
@@ -41,7 +51,10 @@
  *   RULE 4  order preserved; no sort, no dedup, no rename; {name, type} only
  *   RULE 5  stream declaration: input stream "Custom-{table}", output stream
  *           "Microsoft-{table}" (native) / "Custom-{table}" (custom),
- *           transformKql always "source", destination "logAnalyticsWorkspace"
+ *           destination "logAnalyticsWorkspace", and transformKql "source"
+ *           UNLESS the table has guid columns to promote, in which case
+ *           "source | extend Col = toguid(Col), ..." (ADR 0004). A table with
+ *           no guid columns still emits exactly "source", byte for byte.
  *
  * DCR/DCE resource-name generation lives in ../dcr-naming; column names are
  * never abbreviated or altered here.
@@ -72,8 +85,9 @@ export const DCR_COLUMN_TYPES = Object.freeze([
 
 /**
  * A DCR stream-declaration column type. "guid" never appears in generated
- * declarations: guid-typed columns are dropped before mapping (RULE 2b) and
- * the mapper converts the guid family to string everywhere else.
+ * declarations - it is not a legal DCR column type. Guid-typed columns are
+ * declared "string" and promoted back with toguid() in the transform
+ * (RULE 2b, ADR 0004).
  */
 export type DcrColumnType = (typeof DCR_COLUMN_TYPES)[number];
 
@@ -90,12 +104,36 @@ export interface DcrColumn {
  */
 export type TableMode = "native" | "custom";
 
-/** Why a column was removed from the DCR stream declaration. */
-export type DropReason = "system-column" | "guid-type";
+/**
+ * Why a column was removed from the DCR stream declaration.
+ *
+ * ONE VARIANT, not a union of one for its own sake: "guid-type" was removed by
+ * ADR 0004 when guid columns stopped being dropped. Leaving it would have left
+ * the type describing behaviour the code no longer has.
+ */
+export type DropReason = "system-column";
 
 export interface DroppedColumn {
   name: string;
   reason: DropReason;
+}
+
+/**
+ * A column declared as one type and promoted to another in transformKql
+ * (RULE 2b, ADR 0004).
+ *
+ * WHY THIS IS A SEPARATE CHANNEL from `dropped` and `unknownTypes`: those two
+ * report LOSS - a column that will not arrive, or a type we failed to
+ * recognise. This reports a column that arrives intact via a two-step route.
+ * Folding it into either would make a successful promotion read as a problem.
+ */
+export interface CastColumn {
+  /** The column name, unchanged - casts never rename (RULE 4). */
+  name: string;
+  /** The Log Analytics type that required the promotion, verbatim. */
+  laType: string;
+  /** The KQL function that performs it. */
+  cast: "toguid";
 }
 
 /** A column whose LA type was not recognized (legacy logs a warning). */
@@ -116,6 +154,12 @@ export interface DcrColumnSetResult {
    * script does Write-Warning); pure domain code never logs.
    */
   unknownTypes: UnknownTypeColumn[];
+  /**
+   * Columns declared "string" that transformKql must promote back (RULE 2b,
+   * ADR 0004), in original order. Empty for the overwhelming majority of
+   * tables, and an empty list means transformKql stays exactly "source".
+   */
+  casts: CastColumn[];
 }
 
 /**
@@ -158,8 +202,9 @@ export const CUSTOM_SYSTEM_COLUMNS: readonly string[] = Object.freeze([
 ]);
 
 /**
- * RULE 2b: LA types (lowercased) whose columns are removed ENTIRELY from the
- * DCR stream declaration - not converted to string - in both table modes.
+ * RULE 2b: LA types (lowercased) that cannot be declared in a DCR stream and
+ * are therefore declared "string" and promoted with toguid() in the transform,
+ * in both table modes (ADR 0004 - legacy dropped these columns instead).
  */
 export const GUID_LIKE_TYPES: readonly string[] = Object.freeze([
   "guid",
@@ -217,9 +262,13 @@ const reservedCreationColumnSet: ReadonlySet<string> = new Set(
 /**
  * RULE 3: the complete legacy type-mapping table (ConvertTo-DCRColumnType).
  * Keys are lowercased input types; the API casing "dateTime" therefore maps
- * to "datetime". The guid family maps to string here but is UNREACHABLE in
- * the DCR column-set path because RULE 2b drops those columns first; it is
- * reachable only via normalizeCustomSchemaColumns (schema-file path).
+ * to "datetime".
+ *
+ * The guid family maps to string. That entry used to be UNREACHABLE from the
+ * DCR column-set path, because RULE 2b dropped those columns before they
+ * reached the mapper - it was live only for normalizeCustomSchemaColumns
+ * (schema-file path). ADR 0004 stopped the drop, so both paths now use it and
+ * the two agree about a guid column for the first time.
  */
 const typeMap: ReadonlyMap<string, DcrColumnType> = new Map<
   string,
@@ -337,10 +386,11 @@ export function selectSchemaColumns(
  * to DCR stream-declaration columns. Single pass, order-preserving; no
  * sorting, no deduplication, no renaming.
  *
- * Drop reasons: system-column (name in the mode's drop list,
- * case-insensitive) takes precedence over guid-type (LA type is
- * guid/uniqueidentifier/uuid, case-insensitive); a column matching both is
- * reported as system-column, mirroring the legacy diagnostics.
+ * The system-column drop (RULE 2a) still takes precedence over the guid cast
+ * (RULE 2b): a guid-typed system column is DROPPED and reported as
+ * system-column, never cast. That ordering is load-bearing and unchanged by
+ * ADR 0004 - TenantId is guid on essentially every Sentinel table, Azure
+ * populates it, and casting it would declare a column we must not send.
  *
  * TimeGenerated is never dropped and is never injected here (RULE 2c: only
  * the schema-file path injects it - see normalizeCustomSchemaColumns).
@@ -358,6 +408,7 @@ export function buildDcrColumnSet(
   const surviving: DcrColumn[] = [];
   const dropped: DroppedColumn[] = [];
   const unknownTypes: UnknownTypeColumn[] = [];
+  const casts: CastColumn[] = [];
 
   for (const column of columns) {
     if (systemColumnSet.has(column.name.toLowerCase())) {
@@ -365,7 +416,11 @@ export function buildDcrColumnSet(
       continue;
     }
     if (guidLikeTypeSet.has(column.type.toLowerCase())) {
-      dropped.push({ name: column.name, reason: "guid-type" });
+      // RULE 2b (ADR 0004): declared string, promoted in the transform. NOT
+      // recorded in unknownTypes - the type is recognised, and typeMap already
+      // maps the guid family to string, which is what mapColumnType returns.
+      casts.push({ name: column.name, laType: column.type, cast: "toguid" });
+      surviving.push({ name: column.name, type: mapColumnType(column.type) });
       continue;
     }
     if (!isKnownColumnType(column.type)) {
@@ -374,7 +429,32 @@ export function buildDcrColumnSet(
     surviving.push({ name: column.name, type: mapColumnType(column.type) });
   }
 
-  return { columns: surviving, dropped, unknownTypes };
+  return { columns: surviving, dropped, unknownTypes, casts };
+}
+
+/**
+ * RULE 5 (ADR 0004): the transform for a table, given the columns that need
+ * promoting back from their declared string.
+ *
+ * NO CASTS MEANS THE LITERAL "source", byte for byte. The overwhelming majority
+ * of tables have no guid columns, and their DCRs must be unchanged by ADR 0004
+ * - a transform that merely LOOKED equivalent would still rewrite every
+ * deployed DCR's payload.
+ *
+ * The emitted form is `source | extend Col = toguid(Col), ...`. Self-referential
+ * extend replaces the column rather than adding one, which is the form
+ * Microsoft's own DCR samples use.
+ */
+export function buildTransformKql(
+  casts: readonly CastColumn[] = [],
+): string {
+  if (casts.length === 0) {
+    return DEFAULT_TRANSFORM_KQL;
+  }
+  const extensions = casts
+    .map((c) => `${c.name} = ${c.cast}(${c.name})`)
+    .join(", ");
+  return `${DEFAULT_TRANSFORM_KQL} | extend ${extensions}`;
 }
 
 /**
@@ -418,6 +498,11 @@ export interface DcrStreamDeclaration {
  * table. For custom mode the table name is forced to carry the _CL suffix
  * (case-sensitively, matching the legacy EndsWith check).
  *
+ * `casts` is the `casts` field of the same buildDcrColumnSet result that
+ * produced `columns` - pass them together or the declaration and the transform
+ * describe different tables. Omitting it yields transformKql "source", which is
+ * correct for any table with no guid columns.
+ *
  * @throws SchemaMappingError when columns is empty (RULE 2d: a table with
  *   no surviving columns fails processing; no DCR is generated).
  */
@@ -425,6 +510,7 @@ export function buildStreamDeclaration(
   table: string,
   columns: readonly DcrColumn[],
   mode: TableMode = "native",
+  casts: readonly CastColumn[] = [],
 ): DcrStreamDeclaration {
   if (columns.length === 0) {
     throw new SchemaMappingError(
@@ -448,7 +534,7 @@ export function buildStreamDeclaration(
       {
         streams: [streamName],
         destinations: [LOG_ANALYTICS_DESTINATION_NAME],
-        transformKql: DEFAULT_TRANSFORM_KQL,
+        transformKql: buildTransformKql(casts),
         outputStream: outputStreamName,
       },
     ],

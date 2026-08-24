@@ -1,6 +1,7 @@
 export {
   buildDcrColumnSet,
   buildStreamDeclaration,
+  buildTransformKql,
   ensureCustomTableSuffix,
   isKnownColumnType,
   mapColumnType,
@@ -17,6 +18,7 @@ export {
   RESERVED_TABLE_CREATION_COLUMNS,
 } from "./schema-mapping";
 export type {
+  CastColumn,
   CustomSchemaFileColumn,
   CustomTableColumn,
   DcrColumn,

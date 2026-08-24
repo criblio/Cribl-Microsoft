@@ -11,6 +11,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildDcrColumnSet,
   buildStreamDeclaration,
+  buildTransformKql,
   ensureCustomTableSuffix,
   isKnownColumnType,
   mapColumnType,
@@ -26,6 +27,9 @@ import {
   RESERVED_TABLE_CREATION_COLUMNS,
 } from "./index";
 import type { LogAnalyticsColumn } from "./index";
+// Cross-domain on purpose: ADR 0004 made this module an EMITTER of KQL, and the
+// pin that matters is that gap-analysis can read back what we emit.
+import { parseTransformKql } from "../gap-analysis/kql-parser";
 
 function col(name: string, type: string): LogAnalyticsColumn {
   return { name, type };
@@ -188,8 +192,14 @@ describe("RULE 2a: system-name drop lists (case-insensitive)", () => {
   });
 });
 
-describe("RULE 2b: guid-typed columns are dropped entirely", () => {
-  it("drops guid, uniqueidentifier, and uuid columns in native mode", () => {
+// RULE 2b INVERTED BY ADR 0004. These tests used to assert the drop, under the
+// heading "guid-typed columns are dropped entirely". The drop silently lost
+// data - an undeclared field is discarded at the DCR boundary and the
+// destination column stays null forever, with the deploy reporting success - so
+// the pins now assert the cast. The deliberate divergence from the legacy
+// script is recorded in docs/adr/0004-cast-guid-columns.md.
+describe("RULE 2b: guid-typed columns are declared string and cast (ADR 0004)", () => {
+  it("declares guid, uniqueidentifier, and uuid as string in native mode", () => {
     expect(GUID_LIKE_TYPES).toEqual(["guid", "uniqueidentifier", "uuid"]);
     const result = buildDcrColumnSet(
       [
@@ -200,41 +210,124 @@ describe("RULE 2b: guid-typed columns are dropped entirely", () => {
       ],
       "native",
     );
-    expect(result.columns).toEqual([{ name: "D", type: "string" }]);
-    expect(result.dropped).toEqual([
-      { name: "A", reason: "guid-type" },
-      { name: "B", reason: "guid-type" },
-      { name: "C", reason: "guid-type" },
+    // All four SURVIVE now, in source order.
+    expect(result.columns).toEqual([
+      { name: "A", type: "string" },
+      { name: "B", type: "string" },
+      { name: "C", type: "string" },
+      { name: "D", type: "string" },
+    ]);
+    expect(result.dropped).toEqual([]);
+    // And each carries its promotion, with the LA type that required it.
+    expect(result.casts).toEqual([
+      { name: "A", laType: "guid", cast: "toguid" },
+      { name: "B", laType: "uniqueidentifier", cast: "toguid" },
+      { name: "C", laType: "uuid", cast: "toguid" },
     ]);
   });
 
-  it("drops guid-typed columns in custom mode too", () => {
+  it("casts guid-typed columns in custom mode too", () => {
     const result = buildDcrColumnSet([col("CorrelationId", "guid")], "custom");
-    expect(result.columns).toEqual([]);
-    expect(result.dropped).toEqual([
-      { name: "CorrelationId", reason: "guid-type" },
+    expect(result.columns).toEqual([
+      { name: "CorrelationId", type: "string" },
+    ]);
+    expect(result.dropped).toEqual([]);
+    expect(result.casts).toEqual([
+      { name: "CorrelationId", laType: "guid", cast: "toguid" },
     ]);
   });
 
   it("matches the guid type case-insensitively", () => {
     const result = buildDcrColumnSet([col("A", "GUID"), col("B", "Uuid")], "native");
-    expect(result.columns).toEqual([]);
-    expect(result.dropped.map((d) => d.reason)).toEqual([
-      "guid-type",
-      "guid-type",
+    expect(result.columns).toEqual([
+      { name: "A", type: "string" },
+      { name: "B", type: "string" },
+    ]);
+    // laType is echoed VERBATIM, original casing intact - it is what the
+    // workspace said, not what we normalized it to.
+    expect(result.casts).toEqual([
+      { name: "A", laType: "GUID", cast: "toguid" },
+      { name: "B", laType: "Uuid", cast: "toguid" },
     ]);
   });
 
-  it("does NOT convert guid columns to string in the DCR path", () => {
+  it("does not report a cast column as an unknown type", () => {
+    // guid IS a recognised type - typeMap has mapped it to string all along.
+    // Reporting it as unknown would raise a warning about a column we handled.
     const result = buildDcrColumnSet([col("Id", "guid")], "native");
-    expect(result.columns).toEqual([]);
+    expect(result.unknownTypes).toEqual([]);
   });
 
-  it("reports a guid-typed system column as system-column (precedence)", () => {
+  it("DROPS a guid-typed system column rather than casting it (precedence)", () => {
+    // Load-bearing, and unchanged by ADR 0004. TenantId is guid on essentially
+    // every Sentinel table and Azure populates it; casting it would declare a
+    // column we must not send. RULE 2a still wins.
     const result = buildDcrColumnSet([col("TenantId", "guid")], "native");
     expect(result.dropped).toEqual([
       { name: "TenantId", reason: "system-column" },
     ]);
+    expect(result.columns).toEqual([]);
+    expect(result.casts).toEqual([]);
+  });
+
+  it("leaves casts EMPTY for a table with no guid columns", () => {
+    // The common case, and the one that must stay byte-identical to legacy.
+    const result = buildDcrColumnSet(
+      [col("A", "string"), col("B", "int")],
+      "native",
+    );
+    expect(result.casts).toEqual([]);
+  });
+});
+
+describe("buildTransformKql (RULE 5, ADR 0004)", () => {
+  it("is EXACTLY 'source' when nothing needs promoting", () => {
+    // Byte-for-byte. A transform that merely looked equivalent would still
+    // rewrite the payload of every deployed DCR that has no guid columns.
+    expect(buildTransformKql([])).toBe("source");
+    expect(buildTransformKql()).toBe("source");
+  });
+
+  it("emits a self-referential extend for one cast", () => {
+    expect(
+      buildTransformKql([{ name: "AwsEventId", laType: "guid", cast: "toguid" }]),
+    ).toBe("source | extend AwsEventId = toguid(AwsEventId)");
+  });
+
+  it("comma-joins several casts in column order", () => {
+    expect(
+      buildTransformKql([
+        { name: "AwsEventId", laType: "guid", cast: "toguid" },
+        { name: "SharedEventId", laType: "guid", cast: "toguid" },
+      ]),
+    ).toBe(
+      "source | extend AwsEventId = toguid(AwsEventId), " +
+        "SharedEventId = toguid(SharedEventId)",
+    );
+  });
+
+  it("round-trips through the gap-analysis KQL parser", () => {
+    // THE pin that stops us emitting something we cannot read back. Without
+    // toguid in the parser this produced a phantom source field named
+    // "toguid", and gap analysis reported a field no sample could ever carry.
+    const kql = buildTransformKql([
+      { name: "AwsEventId", laType: "guid", cast: "toguid" },
+    ]);
+    const parsed = parseTransformKql(kql);
+
+    expect(parsed.typeConversions).toContainEqual({
+      field: "AwsEventId",
+      toType: "guid",
+    });
+    // The phantom-field check, both directions.
+    expect(parsed.renames.map((r) => r.source)).not.toContain("toguid");
+    expect(parsed.renames.map((r) => r.dest)).not.toContain("toguid");
+    expect(parsed.columns.map((c) => c.name)).not.toContain("toguid");
+    // The real column is there, typed guid.
+    expect(parsed.columns).toContainEqual({
+      name: "AwsEventId",
+      type: "guid",
+    });
   });
 });
 
@@ -434,8 +527,17 @@ describe("RULE 4: ordering and identity", () => {
       ],
       "native",
     );
-    expect(result.columns.map((c) => c.name)).toEqual(["Zulu", "Alpha", "Echo"]);
-    expect(result.dropped.map((d) => d.name)).toEqual(["TenantId", "Mike"]);
+    // Mike is guid, so since ADR 0004 it SURVIVES - in its original position,
+    // which is the claim this test exists to make. Only TenantId drops.
+    expect(result.columns.map((c) => c.name)).toEqual([
+      "Zulu",
+      "Alpha",
+      "Mike",
+      "Echo",
+    ]);
+    expect(result.dropped.map((d) => d.name)).toEqual(["TenantId"]);
+    // The cast list is in column order too, not append order.
+    expect(result.casts.map((c) => c.name)).toEqual(["Mike"]);
   });
 
   it("does not deduplicate repeated column names", () => {

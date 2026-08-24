@@ -120,7 +120,8 @@
         "MG",
         "Type",
         "_ResourceId"
-      ]
+      ],
+      "casts": []
     }
   },
   {
@@ -1900,7 +1901,8 @@
         "SourceComputerId",
         "TimeCollected",
         "_ResourceId"
-      ]
+      ],
+      "casts": []
     }
   },
   {
@@ -3179,7 +3181,8 @@
         "SourceSystem",
         "Type",
         "_ResourceId"
-      ]
+      ],
+      "casts": []
     }
   },
   {
@@ -4250,7 +4253,8 @@
         "SourceSystem",
         "Type",
         "_ResourceId"
-      ]
+      ],
+      "casts": []
     }
   },
   {
@@ -4496,6 +4500,10 @@
           "dcrType": "string"
         },
         {
+          "name": "AwsEventId",
+          "dcrType": "string"
+        },
+        {
           "name": "UserIdentityType",
           "dcrType": "string"
         },
@@ -4588,6 +4596,14 @@
           "dcrType": "string"
         },
         {
+          "name": "SharedEventId",
+          "dcrType": "string"
+        },
+        {
+          "name": "AwsRequestId",
+          "dcrType": "string"
+        },
+        {
           "name": "AwsRequestId_",
           "dcrType": "string"
         },
@@ -4666,12 +4682,26 @@
       ],
       "dropped": [
         "TenantId",
-        "AwsEventId",
-        "SharedEventId",
-        "AwsRequestId",
         "SourceSystem",
         "Type",
         "_ResourceId"
+      ],
+      "casts": [
+        {
+          "name": "AwsEventId",
+          "laType": "guid",
+          "cast": "toguid"
+        },
+        {
+          "name": "SharedEventId",
+          "laType": "guid",
+          "cast": "toguid"
+        },
+        {
+          "name": "AwsRequestId",
+          "laType": "guid",
+          "cast": "toguid"
+        }
       ]
     }
   },
@@ -4727,7 +4757,8 @@
         "SourceSystem",
         "Type",
         "_ResourceId"
-      ]
+      ],
+      "casts": []
     }
   },
   {
@@ -4907,7 +4938,8 @@
         "ManagementGroupName",
         "Type",
         "_ResourceId"
-      ]
+      ],
+      "casts": []
     }
   },
   {
@@ -5183,7 +5215,8 @@
         "Type",
         "_SubscriptionId",
         "_ResourceId"
-      ]
+      ],
+      "casts": []
     }
   },
   {
@@ -5463,12 +5496,21 @@
         {
           "name": "ColUnknownType",
           "dcrType": "string"
+        },
+        {
+          "name": "ColGuid",
+          "dcrType": "string"
+        },
+        {
+          "name": "ColUniqueIdentifier",
+          "dcrType": "string"
+        },
+        {
+          "name": "ColUuid",
+          "dcrType": "string"
         }
       ],
       "dropped": [
-        "ColGuid",
-        "ColUniqueIdentifier",
-        "ColUuid",
         "TenantId",
         "SourceSystem",
         "MG",
@@ -5488,6 +5530,23 @@
         "SourceComputerId",
         "EventOriginId",
         "sourcesystem"
+      ],
+      "casts": [
+        {
+          "name": "ColGuid",
+          "laType": "guid",
+          "cast": "toguid"
+        },
+        {
+          "name": "ColUniqueIdentifier",
+          "laType": "uniqueidentifier",
+          "cast": "toguid"
+        },
+        {
+          "name": "ColUuid",
+          "laType": "uuid",
+          "cast": "toguid"
+        }
       ]
     }
   }
