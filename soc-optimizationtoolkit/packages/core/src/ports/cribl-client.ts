@@ -67,6 +67,23 @@ export function isEdgeFleet(group: CriblGroupSummary): boolean {
 }
 
 /**
+ * Whether a group is a Cribl SEARCH group - the one that serves `/search/*`.
+ *
+ * Strict, like {@link isEdgeFleet}: a leader reporting no product signal has no
+ * Search group to find, and guessing one would send every Search call to a
+ * Stream group that answers 404.
+ *
+ * WHY THIS EXISTS (verified live 2026-08-19): `/search/*` is GROUP-scoped -
+ * `/m/{searchGroupId}/search/datasets`, not a leader route - even though the
+ * OpenAPI spec declares those paths bare. Cribl's own Search UI addresses them
+ * that way. The id is NOT a constant: this workspace's is `default_search`, so
+ * it must be resolved from the groups listing rather than hard-coded.
+ */
+export function isSearchGroup(group: CriblGroupSummary): boolean {
+  return group.product?.toLowerCase() === "search";
+}
+
+/**
  * Derive a group's product from the fields /master/groups items actually
  * carry, oldest-leader-compatible and in signal order:
  *

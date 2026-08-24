@@ -141,3 +141,55 @@ policies:
   # 409/exists is treated as success. A LEADER route (no /m/ prefix).
   - object: '/system/lake/datasets'
     actions: ['POST']
+  # Sample-source discovery (ADR 0003 Phase 3): READ-ONLY listing of every
+  # surface the operator can get their own samples from. Three GETs, each
+  # degrading independently. Addressing was verified against a live workspace
+  # (2026-08-19) by reading Cribl's own UI traffic - the OpenAPI spec declares
+  # these paths bare and does not say which are group-scoped.
+  #
+  # NOTE on /search/*: it IS group-scoped, under the SEARCH group (isSearchGroup
+  # resolves the id from /master/groups; it is NOT the constant
+  # "default_search"), which is why its entries below carry the /m/:gid prefix
+  # while the Lake dataset LISTING beside them does not.
+  # Cribl Lake dataset LISTING is a LEADER route carrying a lakeId segment -
+  # a DIFFERENT route family from the /system/lake/datasets create above.
+  - object: '/products/lake/lakes/:lakeId/datasets'
+    actions: ['GET']
+  # Sample capture (ADR 0003 Phase 4). THE ONLY NON-GET THIS FEATURE ADDS, and
+  # worth reading carefully because the verb overstates it: POST /system/capture
+  # CREATES NOTHING. It opens a short diagnostic read of events already flowing
+  # through a source and returns them; the API models it as a POST because the
+  # filter expression travels in the body, not because anything is written. It
+  # is bounded by construction - maxEvents (default 100, hard max 10000) and
+  # duration (default 10s) both terminate it - and runs at level 0, before any
+  # pipeline, so the samples are what the source actually delivers.
+  - object: '/m/:gid/system/capture'
+    actions: ['POST']
+  # Live sources to capture from. The GET is already declared above for Live
+  # Architecture; repeated here only in this comment so the reason is findable
+  # from either feature. No second entry is added.
+  #
+  # Cribl Search, the OTHER half of ADR 0003 Phase 4: read which log types a
+  # Lake dataset holds and how much of each, so the operator is told which
+  # samples to provide instead of guessing. All three are group-scoped under the
+  # SEARCH group, not the Stream worker group (see the NOTE above), and all
+  # three READ - no dataset, job schedule, or saved search is ever written.
+  #   /m/:gid/search/query (get)      - the single-round-trip query. Preferred,
+  #                                     and spec-only: Cribl's own UI was never
+  #                                     seen to call it, so the job routes below
+  #                                     are the fallback rather than an extra.
+  #   /m/:gid/search/jobs (post)      - the second NON-GET this feature adds, and
+  #                                     like the capture POST it CREATES NOTHING
+  #                                     durable: a search job is the query
+  #                                     itself, submitted in a body because it
+  #                                     does not fit a URL. It expires on its own.
+  #   /m/:gid/search/jobs/* (get)     - the job's own status and results pages
+  #                                     ({id}/status?advanced=true then
+  #                                     {id}/results?offset&limit), which is the
+  #                                     lifecycle verified live 2026-08-19.
+  - object: '/m/:gid/search/query'
+    actions: ['GET']
+  - object: '/m/:gid/search/jobs'
+    actions: ['POST']
+  - object: '/m/:gid/search/jobs/*'
+    actions: ['GET']

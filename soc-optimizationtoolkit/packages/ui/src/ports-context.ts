@@ -132,12 +132,15 @@ export interface UiPorts {
    */
   contentCache?: ContentCache;
   /**
-   * OPTIONAL elastic/cribl sample fetch seam (porting-plan Unit 16). The Browse
-   * Samples modal's sentinel-repo tier runs through {@link content}; this seam
-   * powers the ELASTIC and CRIBL browse tiers (the two sibling GitHub repos the
-   * SentinelContent port cannot address), bound by each shell over the same
-   * api.github.com + raw.githubusercontent.com hosts. Absent = those two tiers
-   * stay empty; the sentinel-repo tier still works.
+   * OPTIONAL seam over the two sibling GitHub repos the SentinelContent port
+   * cannot address (elastic/integrations, criblpacks/*), bound by each shell
+   * over the same api.github.com + raw.githubusercontent.com hosts.
+   *
+   * Its original consumer - the Browse Samples modal's elastic and cribl tiers -
+   * was deleted with the sample browser (ADR 0003). What kept the port alive is
+   * the REPOSITORIES screen, which lists an Elastic package's test files as a
+   * connectivity check that the proxied GitHub path works. Absent = that check
+   * is not offered; nothing else depends on it.
    */
   sampleSource?: RemoteSampleSource;
   /**

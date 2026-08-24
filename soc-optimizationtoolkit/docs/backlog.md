@@ -876,23 +876,50 @@ name clash would stop being a visible failure and start being a silent reuse.
 
 ## 8. Release hygiene
 
-**Release drift will recur.** Nothing ties `release/` to source changes;
-`npm run package` is manual. The committed artifact silently fell five days and
-four commits behind before anyone noticed. Cheapest fix that does not need write
-access to a protected branch: a CI check that warns when `soc-optimizationtoolkit/**`
-source changed without a version bump since the last packaged release.
+**Release drift is CHECKED as of 2026-08-24.**
+`apps/cribl-app/scripts/check-release-drift.mjs`, run by CI on every PR touching
+`soc-optimizationtoolkit/**` and by `npm run check-release` locally. It reads the
+packaged tarball's version and holds four claims to it - `package.json`, the
+single tarball in `release/`, a `## X.Y.Z` section in
+[release-notes.md](release-notes.md), and the "IS CURRENT" line directly below -
+failing when any of them names a different version.
 
-**1.11.11 IS CURRENT (2026-08-17).**
-`release/soc-optimizationtoolkit-1.11.11.tgz`. Release notes in
-[release-notes.md](release-notes.md), started as an accumulating file at 1.4.0.
+**Unreleased source WARNS and never fails**, which is the one rule to keep if
+this is ever rewritten: a feature branch normally carries source the last package
+does not, so failing there would mean packaging on every branch to stay green,
+which is how a check gets disabled rather than obeyed. When git cannot count -
+a shallow clone has no history - the run says so rather than printing the clean
+line a measured zero would print, because this repo's own inventory standard
+applies to its tooling too. The pins live beside it in
+`check-release-drift.test.mjs`, and the pure half takes facts so the cases can be
+stated without a repo, a git history or a tarball.
 
-This line said "1.5.4 IS CURRENT" until 2026-08-17, by which point the app was
-at 1.11.11 - six minor versions and about a week of work later. The release
-notes stop at 1.9.0. Both are the same drift this section is ABOUT, so the
-entry had quietly become its own best evidence: a hand-maintained version claim
-decays exactly as fast as the automated one it warns about, and nothing tells
-anyone. Whoever adds the CI check below should have it cover this file and
-release-notes.md too, not just the tgz.
+**1.12.0 IS CURRENT (2026-08-24).**
+`release/soc-optimizationtoolkit-1.12.0.tgz` - ADR-0003 in full, phases 0-5.
+Release notes in [release-notes.md](release-notes.md), started as an accumulating
+file at 1.4.0 and now current through 1.12.0.
+
+THREE TIMES, and that is why the check above exists. This line said "1.5.4 IS
+CURRENT" until 2026-08-17, by which point the app was at 1.11.11 - six minor
+versions and about a week of work later. It was corrected to 1.11.11 that day,
+the 2026-08-18 architecture audit found it stale AGAIN at three patch versions
+behind inside a single audit window, and it was stale a third time by 1.12.0.
+The release notes had likewise stopped at 1.9.0 and were written forward to
+1.11.14 in one pass.
+
+That is the entry becoming its own best evidence three times over: a
+hand-maintained version claim decays exactly as fast as the automated one it
+warns about, and nothing tells anyone. This entry's own instruction was to treat
+a third correction as proof the check should have been built instead - so the
+third correction built it.
+
+**DO NOT HAND-BUMP THE VERSION BEFORE PACKAGING.** `npm run package` IS the
+bump: `scripts/package.mjs:73` increments the patch itself (`--minor`, `--major`
+and `--version X.Y.Z` override it). Editing `package.json` first and then
+running package double-bumps - done 2026-08-18 while shipping 1.11.15, which
+landed on 1.11.16 and had to be rolled back. Nothing warns; the tgz name is the
+only place the doubled number shows up, and `release/` gets pruned to it, so the
+wrong version becomes the shipped one quietly. Bump by running the script.
 
 **`release/` HOLDS EXACTLY THE LATEST TGZ** - a user directive from 2026-07-30,
 enforced by `package.mjs`, which prunes older tarballs on every run. Publishing
@@ -1031,3 +1058,249 @@ there.
 Open follow-up: the placeholder filter itself (`__UNSET__ === 'x'`) is equally
 unmatched for CSV, which is fine, but nothing yet tells the operator that a CSV
 pack can never route automatically BEFORE they reach the preview.
+
+**"Deploy" vs "Deploy everything" - DONE 2026-08-18.** The run button relabelled
+itself: `contentEngaged ? "Deploy everything" : "Deploy"`. One button that
+renames itself with the state of the page reads as two different actions, and an
+operator cannot tell whether they are looking at a second control or the same
+one armed differently. User direction: **just say "Deploy"**.
+
+`contentEngaged` still decides what the run DOES (it gates the pack build inside
+`runDeployEverything`, and the disabled-reason ladder) - it simply no longer
+decides what the button is CALLED. The InfoTip beside it already spells out the
+whole ordered sequence, which is the honest place for "everything" to be
+described rather than compressed into a label that changes underneath you.
+
+No pin was lost: nothing asserted either label. The internal name
+`runDeployEverything` is left alone deliberately - it describes the handler's
+scope accurately, and renaming it would touch the disabled-reason chain for no
+user-visible gain.
+
+## The workspace table listing lost its panel - DONE 2026-08-18
+
+**User question, and it was the right one:** "why are we reloading any tables if
+there needs to be a per log analysis because each log type needs a different
+table? what is the use for this top section to list out tables at all?"
+
+None. `TablePickerSection` was built as a PICKER - list the workspace's tables,
+choose ONE for the whole analysis. When the choice became per log type (1.11.13)
+the picking moved onto the mapping-review cards and the panel kept its entire UI
+while losing its job: a filter box, an ~842-row list and a count line that
+nobody selected from. Its own header said so out loud - "IT LOADS; IT DOES NOT
+SELECT" - which is a section documenting its own obsolescence.
+
+**What stayed, and why it is not per log type.** The workspace's table inventory
+is ONE FACT: 842 tables exist regardless of how many log types are being
+analysed. What is per log type is the CHOICE over that fact. So the fetch remains
+one shared call above the cards rather than N identical ones, but it is now
+`useWorkspaceTables` - a hook with no surface. On success it renders nothing; the
+tables appearing in the dropdowns are the only evidence worth showing.
+
+**A degraded listing is one line in the mapping review's existing routing-notes
+block**, which already carries this exact class of fact (unreadable connectors,
+broken EventsToTableMapping - something reduced where log types can go, said out
+loud rather than swallowed). It names the consequence, not just the error: the
+selectors fall back to the solution's tables plus the common natives. The retry
+lives there and nowhere else, because the listing is deliberately NOT
+re-attempted automatically - one 403 would otherwise become a request storm.
+
+**The three capability rules all survive, two of them now structurally:**
+
+1. A denied verdict never removes the attempt. There is no button to disable and
+   no panel to hide - the listing is unconditional - so the rule holds by
+   construction. Still pinned, because "structural" is a claim about code that
+   can be edited. The `enabled` gate is on the WORKSPACE, not the verdict, and
+   there is a pin asserting that distinction so the two do not get confused.
+2. Reads have no fallback artifact: the note offers a retry and nothing else.
+3. An empty listing is only a zero once the read was verified -
+   `emptyTableListMessage` still decides it, and is the last of the three still
+   expressed as a pure decision.
+
+**Deleted, not deprecated:** `TablePickerSection` and its DOM test,
+`filterTables`, `tableCountLabel`, `deriveTablePickerAccess` and
+`TablePickerAccess`, plus nine now-orphaned CSS rules. The access predicate went
+because it predicted what the load would do; auto-load means the real answer
+arrives in the same second, and a prediction that disagreed with the outcome
+would have been two answers to one question. `.table-picker-note` was renamed
+`.analysis-stale-note` - it dresses the stale-results notice and never dressed
+the panel, and a class named after a deleted component is the next audit's stale
+reference.
+
+All fourteen behavioural pins moved to `use-workspace-tables.dom.test.tsx`
+intact; what was lost is the rendering they used to reach through, not the rules.
+
+## Pack maintenance: bring in the new sample analysis
+
+**OPEN - user request 2026-08-18.** Pack maintenance
+(`pack-inventory-screen.tsx`, the `maintainId` panel) reconstructs a pack's
+mapping table from its STORED definition, lets the operator edit dispositions and
+targets, and rebuilds the next version in place. It predates everything the
+analysis side has learned since: per-log-type destination tables, live workspace
+schemas replacing derived ones, overflow triage naming the fields that do not
+fit, the pairing warning, route-filter derivation and placeholders, and the CEF
+identity override.
+
+So an operator maintaining a pack today edits it through a strictly weaker view
+than the one they built it with. The obvious symptom: maintenance cannot tell
+them a mapping is now dropping 161 fields, because the triage that knows it only
+runs in the gap-analysis path.
+
+What this needs deciding before it is built:
+
+- **Does maintenance re-analyse, or read a stored analysis?** Re-analysing needs
+  the original samples, which the pack carries (`PackVendorSample`) but which may
+  no longer represent live traffic. Reading a stored verdict is cheap and goes
+  stale silently. A third option - re-analyse against the LIVE table schema and
+  show what changed since the pack was built - is probably the honest one, and is
+  the same fetch the picker already makes.
+- **The schema may have moved under the pack.** A destination table gains columns;
+  fields that overflowed at build time may now have a home. That is a genuine
+  reason to rebuild, and nothing surfaces it.
+- Reuse, do not restate: `triageOverflow`, `matchFields`, `resolveSampleRouting`
+  and `createLiveTableSchemaCatalog` are all already pure and callable from here.
+  A second mapping verdict computed a second way is the duplicated-decision
+  failure this codebase keeps finding.
+
+## Pack maintenance: detect packs modified in the Cribl UI before overwriting them
+
+**OPEN - user request 2026-08-18. The data-loss one.** Maintenance rebuilds the
+next version from OUR stored definition and installs it over the deployed pack.
+Anything an operator changed in the Cribl UI since the app deployed it - a route
+filter, a pipeline function, a lookup row, an added destination - is silently
+overwritten. They will not be asked, and they will not be told.
+
+The comparison has to be three-way, not two:
+
+1. **What the app originally deployed** - the stored `definition` for that pack
+   version in the pack store. This is the baseline, and it is the piece that makes
+   the diff meaningful: without it, "deployed differs from what we would build
+   next" cannot distinguish a change the operator made from a change WE are about
+   to make.
+2. **What is deployed now**, fetched per worker group.
+3. **What the rebuild would produce.**
+
+A field that differs between 1 and 2 is the operator's edit and must be preserved
+or at minimum surfaced. A field that differs between 1 and 3 is our intended
+update. A field that differs in both is a genuine conflict and is the only case
+that should stop and ask.
+
+**PER WORKER GROUP, because the answer differs per group.** The pack can be
+deployed to many, and they diverge independently - one group hand-tuned, another
+untouched, a third still on an older version. `deployedGroups` and
+`installedPackVersions` (domain/pack-assembly/install.ts) already model exactly
+this shape, `Array<{group, packs}>`, and already take truth from the live API
+response rather than a persisted flag. Build on those rather than a new listing.
+The maintenance panel should name which groups diverge and how, not report a
+single verdict for a pack that is in three different states.
+
+Open question worth answering early: how much of a deployed pack can the Cribl
+API actually return for comparison? If the readback is lossy, the honest surface
+is "these groups differ from what we deployed, in these files we can see" rather
+than a confident clean bill - the same rule as the inventory standard. An unknown
+must not render as a zero.
+
+## Sample browser: REMOVED (ADR-0003) - ALL PHASES 0-5 DONE
+
+**Executed 2026-08-19/20 on `feature/log-type-recommendation`.** The browser and
+its whole acquisition domain are deleted; the `LogTypeRecommendation` panel
+replaces it. To continue, open ONE document:
+[sample-acquisition-plan.md](sample-acquisition-plan.md) - it carries inline
+`[SUPERSEDED]` markers where reality diverged from it, and
+[sample-acquisition-phase0.md](sample-acquisition-phase0.md) has the API
+findings. [ADR 0003](adr/0003-remove-sample-browser.md) is the durable decision
+record and is background, not a prerequisite.
+
+**Where it stands:** Phases 0-3 done. **Phase 4 is done, BOTH paths** (core and
+UI). Capture: `domain/capture-filter`, `captureSamples`, `CapturePanel` - compose
+the filter, run one bounded `POST /system/capture`, split by log type, PREVIEW,
+and tag nothing without a click. Lake query: `queryLakeSamples`, `LakePanel`.
+**Phase 5 (volume findings) is done (2026-08-23)** - the Lake counts reach the
+recommendation, entries and the unreferenced set carry a volume and rank by it,
+with no threshold and no flagged finding by decision.
+
+**What has NOT happened: none of this has run against a real workspace.** Every
+platform belief behind Phases 3-5 is pinned against `FakeCriblClient` only; the
+suite that settles them is `packages/core/src/testing/live-verify.test.ts` and it
+skips without `CRIBL_LIVE_BASE`/`CRIBL_LIVE_TOKEN`. The 2026-08-20 attempt was
+blocked on an expired token and an idle lab - generate traffic first, or rows 1,
+2 and 4 stay inconclusive. Nor is any of it packaged: the app is still 1.11.15
+and every ADR-0003 commit is unreleased.
+
+Phase 4's first correctness trap is recorded in the plan and shipped as a
+warning: a capture request has NO source field, so the source is an `__inputId`
+clause inside the filter, and an operator deleting that clause silently widens
+the capture to every source in the group.
+
+**The plan's capture filter was not built as written, deliberately.** It
+specifies a comma anchor (`/,TRAFFIC,/i`), but the operator picks a SOURCE, not
+a format, so a comma anchor against a pipe-delimited CEF vendor matches nothing -
+the same zero-events failure the anchor exists to prevent. The shipped predicate
+anchors on the SET of delimiters this app's parsers use, excluding `/` so a URL
+path cannot match. Marked `[SUPERSEDED]` inline in the plan's Phase 4.
+
+**The log-type recommendation now has THREE tiers of evidence,** not just
+analytic rules: `detection` (a shipped rule filters on it), `workbook` (a shipped
+workbook queries it - real, weaker), and `vendor` (the vendor documents the
+feed). The third answers a solution shipping few or no detections, which the
+content-derived tiers structurally cannot. The tier is on every row because
+collapsing them would tell an operator their solution requires data it has never
+mentioned.
+
+**The vendor tier is now BOTH halves (corrected 2026-08-23).** It has a
+hand-curated half (13 vendors, each cited to vendor documentation) and a
+generated half mined from elastic/integrations. The generated half shipped empty
+at first, and this entry said so; commit df3ad5e ran
+`node scripts/generate-vendor-packs.mjs --bulk <elastic-integrations-checkout>`
+and the catalog now carries 157 generated packs (197 KB). The hand packs still
+WIN the per-value dedupe, and the breadth pin still guards all thirteen. Re-run
+the miner only to refresh against a newer elastic/integrations checkout.
+
+**A parsing defect found and fixed along the way:** a syslog-prefixed PAN-OS
+upload used to parse to ZERO events - detection called it syslog and
+`parseSyslog` cannot match a PAN-OS body. It was pinned as a KNOWN GAP first
+(fixing it means touching the detector every vendor depends on) and then fixed
+the same day: detection recognises the PAN-OS positional fingerprint via
+`isPanosFormat` ahead of the syslog check, characterized first across both modes
+and every format. Full record in the phase 0 doc, 0.3.
+
+The Browse Samples modal is being removed and replaced by a log-type
+recommendation derived from the operator's own environment.
+
+Short version of why: `scoreFileName` (repo-samples.ts:278) is the whole
+selection mechanism, and it scores the FILENAME against vendor-name keywords -
+it never opens the file. "This sample belongs to this solution" means "its
+filename contains part of the vendor name". The one content check,
+`detectPreIngested`, only ever rejects; nothing confirms a sample fits. The
+operator gets many files per vendor, most wrong for their solution, with no way
+to tell which.
+
+A smarter fit check was designed and rejected - it is real work to make a
+browser trustworthy that should not exist. Samples now come from the operator,
+deliberately named, via three paths: Cribl Search over a Lake/federated dataset
+(complete log types + volumes), filtered capture from a Cribl source (bounded,
+with vendor-derived filter suggestions), or manual upload (needs no Cribl
+integration).
+
+> **[SUPERSEDED - TWO modes, not three paths]** (user direction 2026-08-19)
+> Search is not a separate surface, it is HOW a Lake dataset is queried - the
+> same datasets appear in both listings, verified live. The operator is asked one
+> question first: query a Lake dataset, or capture from a live source. Manual
+> upload is not a mode; it is the permanently-available intake below. Reasoning
+> in the plan's Phase 3.
+
+**The trap for whoever executes this:** `splitSamplesByLogType`
+(sample-acquisition/splitting.ts:64) must SURVIVE the deletion. It separates a
+mixed stream by discriminator, it is load-bearing for capture and for mixed
+uploads, and its only current caller is `precedence.ts` on the browse path - so
+deleting the sample-acquisition domain as a unit silently removes it. Two more
+capabilities need salvaging first: CEF/LEEF raw-line preservation
+(repo-samples.ts:400,428,486) and `consolidateByTableRouting` (:505).
+
+> **[SUPERSEDED - one salvage was real, the other was dead code]** The splitter
+> survived, rehomed to `domain/sample-parsing` as `splitSamplesByLogType` with
+> `browseSampleId` renamed `splitSampleId`. Raw-line preservation turned out to
+> be a LIVE defect on the intake path rather than a browse-path risk, so it was
+> fixed in `parseSampleContent` and every intake path benefits.
+> `consolidateByTableRouting` had never executed - both callers pass two
+> arguments, so its `eventToTable` branch is unreachable - and was deleted as a
+> capability the app did not have. Phase 0 doc, 0.3.

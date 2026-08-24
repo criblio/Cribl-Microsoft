@@ -8,11 +8,13 @@
  *   - the comparison is separator/case-insensitive in BOTH directions;
  *   - an empty derivation reads as "nothing to compare", never "all covered".
  */
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
   compareLogTypeCoverage,
   deriveExpectedLogTypes,
   extractDiscriminatorValues,
+  logTypeNameMatches,
 } from "./expected-log-types";
 import type { ContentItem } from "./models";
 
@@ -81,6 +83,31 @@ describe("extractDiscriminatorValues", () => {
       'T | where type == "TRAFFIC" | where type =~ "traffic"',
     );
     expect(out).toHaveLength(1);
+  });
+
+  it("separates field from value in the dedupe key without a raw NUL BYTE", () => {
+    // The dedupe key joins field and value on U+0000. Written as a LITERAL nul
+    // byte (as it was until 2026-08-20) the separator works fine at runtime and
+    // breaks every tool around it: git classifies the file as binary, so its
+    // diffs are unreviewable, and grep answers "Binary file ... matches" with
+    // no lines, so the module silently drops out of every content search.
+    // The escape-sequence form in the template literal is the same
+    // character at runtime and keeps the file text. Same fix already
+    // applied to the architecture-patterns unify edge key (2026-07-29).
+    const source = readFileSync(
+      new URL("./expected-log-types.ts", import.meta.url),
+    );
+    expect(source.indexOf(0)).toBe(-1);
+
+    // ...and the separator still does its job: field and value stay distinct
+    // halves of the key, so the same literal under two fields counts twice.
+    const out = extractDiscriminatorValues(
+      'T | where type == "start" | where subtype == "start"',
+    );
+    expect(out).toEqual([
+      { field: "type", value: "start" },
+      { field: "subtype", value: "start" },
+    ]);
   });
 
   it("returns nothing for a table-wide rule (an honest lower bound)", () => {
@@ -175,5 +202,41 @@ describe("compareLogTypeCoverage", () => {
     const out = compareLogTypeCoverage(expected, []);
     expect(out.missing).toHaveLength(3);
     expect(out.matched).toEqual([]);
+  });
+
+  it("does not let ONE unlabeled tag cover every expected log type", () => {
+    // Reachable, not theoretical: sample intake's validateLogType rejects only
+    // emptiness, so "-", "_" and "--" are all valid tags - plausible after a
+    // no-discriminator capture or from a Lake group value. Each normalizes to
+    // "", and `"traffic".includes("")` is true, so a matcher without the
+    // empty-name guard reports TOTAL coverage from a single junk sample. This
+    // is the side that arms the pack build, which is why it is pinned here and
+    // against mergeLogTypeSources in log-type-catalog.test.ts.
+    const out = compareLogTypeCoverage(expected, ["-"]);
+    expect(out.missing.map((m) => m.value)).toEqual([
+      "SYSTEM",
+      "THREAT",
+      "TRAFFIC",
+    ]);
+    expect(out.matched).toEqual([]);
+    // Not silently dropped either: an unmatched tag is reported neutrally.
+    expect(out.unreferenced).toEqual(["-"]);
+  });
+});
+
+describe("logTypeNameMatches - THE one predicate", () => {
+  it("matches case- and separator-insensitively in both directions", () => {
+    expect(logTypeNameMatches("TRAFFIC", ["panostraffic"])).toBe(true);
+    expect(logTypeNameMatches("PAN-OS Traffic", ["traffic"])).toBe(true);
+    expect(logTypeNameMatches("TRAFFIC", ["hipmatch"])).toBe(false);
+  });
+
+  it("treats an empty name on EITHER side as no match, never as a wildcard", () => {
+    // Both guards live in this function so no caller can forget one - the
+    // failure that let compareLogTypeCoverage and mergeLogTypeSources print
+    // contradicting sentences on one screen.
+    expect(logTypeNameMatches("TRAFFIC", [""])).toBe(false);
+    expect(logTypeNameMatches("TRAFFIC", ["", "traffic"])).toBe(true);
+    expect(logTypeNameMatches("-", ["traffic"])).toBe(false);
   });
 });

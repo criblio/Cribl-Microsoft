@@ -205,6 +205,16 @@ export interface ParseSampleOptions {
  * records, applies the Cribl-capture inner-_raw unwrap, then discovers fields
  * and guesses the timestamp field.
  *
+ * RAW EVENTS ARE THE ORIGINAL BYTES where the format is line-oriented (CEF,
+ * LEEF, syslog, KV, headerless CSV) or the input was a Cribl capture. This used
+ * to be `records.map(JSON.stringify)` unconditionally, which meant a LEEF, a
+ * syslog or a PAN-OS CSV sample reached pack generation as JSON and shipped a
+ * JSON object in the pack's `_raw` - so the pack's own pipeline previewed
+ * against data shaped nothing like what the source actually sends. (CEF alone
+ * escaped, because pack-assembly reconstructs a CEF line from the parsed object.)
+ * See docs/sample-acquisition-phase0.md (0.3) and {@link rawEventsFor} for why
+ * the pairing cannot silently mis-align.
+ *
  * Capture unwrap (ENG-15): when the outer parse is JSON/NDJSON and the first
  * record carries a `_raw` field, the inner vendor format is detected from the
  * `_raw` CONTENT and the sample is re-parsed from it - the wrapper fields are
@@ -220,9 +230,12 @@ export function parseSampleContent(
   const errors: string[] = [];
   let format = detectSampleFormat(content, { mode: options.mode });
   let records: Array<Record<string, unknown>> = [];
+  // The ORIGINAL input line behind each record, for line-oriented formats.
+  // Empty for JSON/NDJSON (and whenever a parser could not pair them).
+  let sourceLines: string[] = [];
 
   try {
-    records = parseByFormat(content, format);
+    records = parseByFormat(content, format, sourceLines);
   } catch (err) {
     errors.push(`Parse error: ${err instanceof Error ? err.message : String(err)}`);
   }
@@ -234,12 +247,13 @@ export function parseSampleContent(
   const unwrapped = unwrapCapture(records, format);
   records = unwrapped.records;
   format = unwrapped.format;
+  if (unwrapped.sourceLines !== undefined) {
+    sourceLines = unwrapped.sourceLines;
+  }
 
   const fields = collectFields(records);
   const timestampField = guessTimestampField(fields);
-  const rawEvents = records
-    .slice(0, RAW_EVENTS_CAP)
-    .map((record) => JSON.stringify(record));
+  const rawEvents = rawEventsFor(records, sourceLines);
 
   return {
     format,
@@ -254,15 +268,49 @@ export function parseSampleContent(
 }
 
 /**
+ * The raw event strings stored for a parse: the ORIGINAL vendor lines when the
+ * parser could pair one to every record, otherwise a re-serialization.
+ *
+ * The length equality is the whole safety argument. Every line-oriented parser
+ * pushes its source line at the point it emits a record, so a full-length
+ * accumulator is index-aligned BY CONSTRUCTION; anything else (a JSON input, a
+ * parser that filtered, a capture unwrap that could not pair) fails the check
+ * and falls back to the shape this function always produced. There is no case
+ * where a MIS-aligned pairing can be stored - it is all-or-nothing per sample.
+ */
+function rawEventsFor(
+  records: ReadonlyArray<Record<string, unknown>>,
+  sourceLines: readonly string[],
+): string[] {
+  if (sourceLines.length === records.length && records.length > 0) {
+    return [...sourceLines].slice(0, RAW_EVENTS_CAP);
+  }
+  return records.slice(0, RAW_EVENTS_CAP).map((record) => JSON.stringify(record));
+}
+
+/**
  * Apply the Cribl-capture inner-_raw unwrap. Only JSON/NDJSON wrappers whose
  * first record has a non-empty-eligible `_raw` are candidates; on a usable
  * inner parse the records and format are replaced, otherwise the input is
  * returned unchanged (silent fallback).
+ *
+ * ORIGINAL LINES (2026-08-18): the wrapper's `_raw` values ARE the vendor's own
+ * bytes - the exact thing the operator's Cribl source delivered - so on a
+ * successful unwrap they become the sample's raw events. Before this, unwrapping
+ * REPLACED the wrapper records with the inner parse and the `_raw` was dropped
+ * outright, which meant a Cribl capture (the most likely input this app sees)
+ * was the format that lost the most. Returned only when they pair 1:1 with the
+ * inner records; `sourceLines` is undefined whenever the caller should keep
+ * whatever it already had.
  */
 export function unwrapCapture(
   records: Array<Record<string, unknown>>,
   format: SampleFormat,
-): { records: Array<Record<string, unknown>>; format: SampleFormat } {
+): {
+  records: Array<Record<string, unknown>>;
+  format: SampleFormat;
+  sourceLines?: string[];
+} {
   const isWrapper =
     (format === "ndjson" || format === "json") &&
     records.length > 0 &&
@@ -284,15 +332,24 @@ export function unwrapCapture(
   }
 
   let innerRecords: Array<Record<string, unknown>> = [];
+  const innerLines: string[] = [];
   try {
-    innerRecords = parseByFormat(rawValues.join("\n"), innerFormat);
+    innerRecords = parseByFormat(rawValues.join("\n"), innerFormat, innerLines);
   } catch {
     // Inner parse threw; fall back to the outer parse (silent).
     return { records, format };
   }
 
   if (innerRecords.length > 0 && Object.keys(innerRecords[0]).length > 1) {
-    return { records: innerRecords, format: innerFormat };
+    // Prefer the line-oriented parser's own pairing; fall back to the wrapper
+    // `_raw` values, which pair when the inner parse dropped nothing.
+    const lines =
+      innerLines.length === innerRecords.length
+        ? innerLines
+        : rawValues.length === innerRecords.length
+          ? rawValues
+          : [];
+    return { records: innerRecords, format: innerFormat, sourceLines: lines };
   }
   return { records, format };
 }

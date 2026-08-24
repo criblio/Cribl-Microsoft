@@ -14,9 +14,10 @@
  *      preserved `#/?solution=` deep link (consumed once so Clear works), and
  *      the dedicated selected-solution card. Additive and non-gating.
  *   2. Add Sample Data      - the SampleIntakeSection: multi-file upload,
- *      paste-and-tag, Browse Samples (Sentinel repo + Elastic tiers,
- *      stream-scoped split names), per-sample chips, and the log-type rename
- *      that re-keys the tagged-sample store (Unit 11).
+ *      paste-and-tag, per-sample chips, and the log-type rename that re-keys
+ *      the tagged-sample store (Unit 11), fronted by the LogTypeRecommendation
+ *      panel that says which log types this solution's detections need
+ *      (ADR 0003 replaced the filename-scoring Browse Samples modal).
  *   3. Select Azure Resources - the AzureTargetingScreen cascade, capability
  *      checkboxes, Sentinel-enabled auto-check, and the operable
  *      RoleAssignmentSection (Unit 8). Additive + non-gating.
@@ -61,14 +62,20 @@ import {
   assemblePack,
   cefIdentityFindings,
   effectiveCefIdentity,
-  fetchWorkspaceTableSchema,
+  emptyCapabilitySet,
   fieldValuesFromRecords,
   listDcrInventory,
   placeholderWarning,
   resolveDestinations,
   canWireSource,
+  captureSamples,
   compareLogTypeCoverage,
+  fetchLakeLogTypeEvents,
+  queryLakeSamples,
   deriveExpectedLogTypes,
+  documentedLogTypesForSolution,
+  mergeLogTypeSources,
+  rankUnreferencedByVolume,
   deployedGroups,
   deriveSectionStatuses,
   destinationIdFromOptions,
@@ -97,7 +104,6 @@ import type {
   OnboardTableOutcome,
   OperationOptions,
   PackScaffoldInput,
-  WorkspaceTable,
   PackVendorSample,
   SolutionRef,
   CefIdentityFinding,
@@ -111,13 +117,21 @@ import type {
   ContentRequirements,
 } from "@soc/core";
 import type { ReactNode } from "react";
+import type { LogTypeVolume } from "@soc/core";
 import { usePorts } from "../../ports-context";
 import { NumberedSection } from "../../components/numbered-section";
 import {
+  deriveLogTypeRecommendation,
   deriveSampleCoverageView,
   packShapeSummary,
   sampleCoverageGateReason,
 } from "../samples/sample-coverage-state";
+import { LogTypeRecommendation } from "../samples/log-type-recommendation";
+import { SampleSourcePicker } from "../samples/sample-source-picker";
+import { findEntry } from "../samples/sample-source-picker-state";
+import { CapturePanel } from "../samples/capture-panel";
+import { LakePanel } from "../samples/lake-panel";
+import { useSampleSources } from "../samples/use-sample-sources";
 import { InfoTip } from "../../components/info-tip";
 import { ReadinessFooter } from "../../components/readiness-footer";
 import { AzureTargetingScreen } from "../azure-targeting/azure-targeting-screen";
@@ -129,8 +143,9 @@ import { SampleIntakeSection } from "../samples/sample-intake-section";
 import { MappingReviewSection } from "../mapping-review/mapping-review-section";
 import type { MappingReviewRenameEvent } from "../mapping-review/mapping-review-section";
 import { PipelinePreviewSection } from "../pipeline-preview/pipeline-preview-section";
-import { TablePickerSection } from "../table-picker/table-picker-section";
 import { ANALYSIS_STALE_NOTICE } from "../table-picker/table-picker-state";
+import { createTableSchemaResolver } from "../table-picker/table-schema-resolver";
+import { useWorkspaceTables } from "../table-picker/use-workspace-tables";
 import { derivePipelinePreview } from "../pipeline-preview/pipeline-preview-state";
 import type {
   EnrichmentField,
@@ -683,42 +698,63 @@ export function IntegrateScreen({
   }, []);
 
   // The tables that actually exist in the workspace, offered to EVERY log
-  // type's Destination table selector. Loaded once; the choice is per log type
-  // because a solution's log types can land in different tables - and each
-  // table becomes its own DCR and its own Sentinel destination in the pack.
-  const [workspaceTables, setWorkspaceTables] = useState<readonly string[]>([]);
+  // type's Destination table selector.
+  //
+  // ONE FETCH, NO PANEL (user, 2026-08-18). This used to be TablePickerSection:
+  // a filter box and an ~842-row list above the review, which nobody selected
+  // from once the choice moved onto the cards. The listing stays above them
+  // because the workspace's inventory is ONE FACT shared by every log type -
+  // what is per log type is the CHOICE over it - but it has no surface of its
+  // own now. Only a degraded listing says anything, and it says it in the
+  // mapping review's existing routing-notes block.
+  const workspaceTableListing = useWorkspaceTables({
+    target: {
+      subscriptionId: config.subscriptionId,
+      resourceGroup: config.resourceGroup,
+      workspaceName: config.workspaceName,
+    },
+    capabilities: capabilities ?? emptyCapabilitySet(),
+    capabilityContext: capabilityContext ?? {
+      azureIdentityPresent: false,
+      criblReachable: false,
+    },
+    enabled: scopeCommitted,
+  });
+  const workspaceTables = workspaceTableListing.names;
   // Marked STALE, not cleared (user decision 2026-08-10): every mapping,
   // coverage and overflow verdict on screen was computed against a different
   // destination schema, and clearing them would hide that they ever existed.
   const [analysisStale, setAnalysisStale] = useState(false);
 
-  const handleTablesLoaded = useCallback((tables: readonly WorkspaceTable[]) => {
-    setWorkspaceTables(tables.map((t) => t.name));
-  }, []);
-
   // Resolve a workspace table's live columns for the mapping review, which
   // AWAITS this before re-analysing. The section owns the timing because it
   // owns the analysis; this just answers the question.
-  const fetchTableSchema = useCallback(
-    async (table: string): Promise<DestField[] | null> => {
-      setAnalysisStale(gapReports.length > 0);
-      if (!workspaceTables.includes(table)) {
-        // Not a table that exists yet (a solution candidate, or one the pack
-        // will create). The derived schema is the right authority there.
-        return null;
-      }
-      return fetchWorkspaceTableSchema(
+  //
+  // ARM DECIDES WHETHER THE TABLE EXISTS, NOT OUR CACHED LISTING (2026-08-18
+  // audit). The resolver is extracted to table-schema-resolver.ts, which
+  // records why the cache guard that used to sit here was wrong and is pinned
+  // against its return. All this adds is the staleness flag, which is React
+  // state and has to stay at this level.
+  const resolveTableSchema = useMemo(
+    () =>
+      createTableSchemaResolver(
         ports.azure,
         {
           subscriptionId: config.subscriptionId,
           resourceGroup: config.resourceGroup,
           workspaceName: config.workspaceName,
         },
-        table,
         ports.logger,
-      );
+      ),
+    [ports.azure, ports.logger, config],
+  );
+
+  const fetchTableSchema = useCallback(
+    async (table: string): Promise<DestField[] | null> => {
+      setAnalysisStale(gapReports.length > 0);
+      return resolveTableSchema(table);
     },
-    [gapReports.length, workspaceTables, ports.azure, ports.logger, config],
+    [gapReports.length, resolveTableSchema],
   );
 
   // THE content plan, composed once. Both the preview panel and the pack build
@@ -773,19 +809,100 @@ export function IntegrateScreen({
     }
     return byLogType;
   }, [contentItems, gapReports, enrichments]);
+  // Where the operator could take samples FROM (Phase 3). Discovery is one fact
+  // about the workspace, so it is read once behind a hook with no surface, and
+  // gated on scopeCommitted only because there is no Cribl address before that
+  // - not because the answer is expected to be uninteresting.
+  const sampleSources = useSampleSources({ enabled: scopeCommitted });
+  const [sampleSourceChoice, setSampleSourceChoice] = useState("");
+  // DERIVED FROM THE CHOICE, never stored beside it (2026-08-20 audit). Holding
+  // the entry in its own state gave one question two answers, and only one of
+  // them was ever cleared: switching worker group and switching mode both reset
+  // the choice and left the entry behind. The panel below then stayed mounted on
+  // the PREVIOUS group while the dropdown showed nothing selected, so a capture
+  // POSTed to /m/{oldGroup}/system/capture filtered on an __inputId that group
+  // need not contain - an empty result, reported to the operator as an idle
+  // source, which is the exact confusion capture-filter.ts exists to prevent.
+  // findEntry answers null for an empty value, so clearing the choice is now the
+  // whole of clearing the selection and the two cannot disagree.
+  const sampleSourceEntry = findEntry(
+    sampleSources.inventory,
+    sampleSourceChoice,
+  );
+  // Capture is offered only for a chosen LIVE SOURCE - a Lake dataset is
+  // queried, not captured, and that is Phase 4's other half.
+  const captureTarget =
+    sampleSourceEntry?.kind === "cribl-source" &&
+    sampleSourceEntry.groupId !== undefined
+      ? sampleSourceEntry
+      : null;
+  // A Lake dataset is QUERIED, not captured, and the query runs through the
+  // SEARCH group - which the dataset entry deliberately does not carry, because
+  // LISTING Lake datasets is a leader route. It comes from stage one instead.
+  const lakeTarget =
+    sampleSourceEntry?.kind === "lake-dataset" ? sampleSourceEntry : null;
   const [sampleSetConfirmed, setSampleSetConfirmed] = useState(false);
-  const sampleCoverageView = useMemo(() => {
+  // MEASURED VOLUMES, lifted out of the Lake panel (plan Phase 5).
+  //
+  // The panel owns the query because it owns the picking; the RECOMMENDATION is
+  // the only place the counts mean anything, and it sits above the panel. So
+  // the result is captured on its way through the onQuery handler below - the
+  // panel is unchanged and still receives exactly what it returned.
+  //
+  // Window travels WITH the counts, in one piece of state, because a count
+  // whose window has been replaced by a later query is worse than no count.
+  const [lakeVolumes, setLakeVolumes] = useState<{
+    logTypes: readonly LogTypeVolume[];
+    window: { earliest: string; latest: string };
+  } | null>(null);
+  // A volume belongs to the dataset it was counted in. Switch datasets and the
+  // old counts describe nothing on screen - so they go, rather than sit under
+  // the new dataset's name until someone happens to press Query. Same reason
+  // the panel itself remounts on `key={lakeTarget.id}`.
+  useEffect(() => {
+    setLakeVolumes(null);
+  }, [lakeTarget?.id]);
+  // ONE join, TWO readings. The recommendation is the forward-looking half (what
+  // to go and fetch, advisory); the coverage view is the backward-looking half
+  // (what is still missing, and the acknowledgement that arms the build). They
+  // must never disagree, which is why they share this single coverage result
+  // rather than each computing their own.
+  const { sampleCoverageView, logTypeRecommendation } = useMemo(() => {
+    const provided = samples.map((s) => s.logType);
     const expected = deriveExpectedLogTypes(contentItems);
-    const coverage = compareLogTypeCoverage(
+    const coverage = compareLogTypeCoverage(expected, provided);
+    const contentLoaded = contentItems.length > 0;
+    // THREE TIERS of evidence, merged once (ADR 0003): shipped detections,
+    // shipped workbooks, and the vendor's own documented feeds. The vendor tier
+    // is what answers a solution that ships no detections - the case where the
+    // content-derived recommendation is structurally empty.
+    const merged = mergeLogTypeSources({
       expected,
-      samples.map((s) => s.logType),
-    );
-    return deriveSampleCoverageView(
-      coverage,
-      contentItems.length > 0,
-      samples.length,
-    );
-  }, [contentItems, samples]);
+      vendorLogTypes: documentedLogTypesForSolution(solution?.name ?? ""),
+      provided,
+      volumes: lakeVolumes?.logTypes ?? [],
+    });
+    return {
+      sampleCoverageView: deriveSampleCoverageView(
+        coverage,
+        contentLoaded,
+        samples.length,
+      ),
+      // Only the FORWARD-looking half takes volumes. The confirmation below is
+      // a question about the operator's own sample set - "have you given me
+      // everything?" - and a Lake count cannot answer it, so feeding one in
+      // would decorate a gate with a number that has no bearing on it.
+      logTypeRecommendation: deriveLogTypeRecommendation(
+        merged,
+        rankUnreferencedByVolume(
+          coverage.unreferenced,
+          lakeVolumes?.logTypes ?? [],
+        ),
+        contentLoaded,
+        lakeVolumes?.window,
+      ),
+    };
+  }, [contentItems, samples, solution?.name, lakeVolumes]);
   // Re-ask whenever the sample set changes: a confirmation given for a
   // different set of log types is not a confirmation for this one.
   useEffect(() => {
@@ -1324,23 +1441,145 @@ export function IntegrateScreen({
 
   const sampleDataBody = (
     <>
+      {/* WHAT TO PROVIDE, before the operator goes and gets it (ADR 0003). This
+        * is the slot the Browse Samples button occupied - the browser guessed
+        * which FILE fitted by scoring its name; this says which LOG TYPES the
+        * solution's own detections discriminate on and leaves the fetching to
+        * the operator, who is the only one who can get their own data. */}
+      <LogTypeRecommendation recommendation={logTypeRecommendation} />
+      {/* WHERE to get it from, once they know WHAT to get (ADR 0003 Phase 3).
+        * Discovery only - picking a dataset or source records the choice; the
+        * three acquisition paths that act on it are Phase 4. Advisory: every
+        * failure state still ends with "upload works", because manual upload is
+        * the one path needing no Cribl access. */}
+      <SampleSourcePicker
+        groups={sampleSources.groups}
+        inventory={sampleSources.inventory}
+        mode={sampleSources.mode}
+        selectedGroupId={sampleSources.selectedGroupId}
+        notes={sampleSources.notes}
+        loadingGroups={sampleSources.loadingGroups}
+        loadingSources={sampleSources.loadingSources}
+        enabled={scopeCommitted}
+        value={sampleSourceChoice}
+        onSelectMode={(next) => {
+          // A different mode reads a different surface, so the previous pick is
+          // not in the new list - leaving it would show a selection the
+          // dropdown no longer offers, and (because the panels below are
+          // derived from it) a capture panel sitting over a Lake inventory.
+          setSampleSourceChoice("");
+          sampleSources.selectMode(next);
+        }}
+        onSelectGroup={(groupId) => {
+          // Same reason, one level down: a source id is only addressable through
+          // the group it was listed from, so the pick does not survive the move.
+          setSampleSourceChoice("");
+          sampleSources.selectGroup(groupId);
+        }}
+        // ONE setter, because there is one piece of state. The entry is
+        // derived from it above rather than carried alongside it.
+        onChange={setSampleSourceChoice}
+        onReload={sampleSources.reload}
+      />
+      {captureTarget !== null && (
+        <CapturePanel
+          key={captureTarget.id}
+          source={captureTarget}
+          recommended={logTypeRecommendation.entries}
+          existingLogTypes={samples.map((s) => s.logType)}
+          onCapture={(filter, maxEvents, durationSeconds) =>
+            captureSamples(
+              ports.cribl,
+              {
+                groupId: captureTarget.groupId ?? "",
+                filter,
+                maxEvents,
+                durationSeconds,
+              },
+              ports.logger,
+            )
+          }
+          onCommit={async (captured) => {
+            // Straight through the SAME store the intake section writes, so a
+            // captured sample and an uploaded one are indistinguishable
+            // afterwards - including the replace-by-logType semantics the
+            // preview warned about.
+            for (const sample of captured) {
+              await ports.samples.upsert(sample);
+            }
+            handleSamplesChange(await ports.samples.list());
+          }}
+        />
+      )}
+      {lakeTarget !== null && (
+        <LakePanel
+          key={lakeTarget.id}
+          datasetId={lakeTarget.id}
+          searchGroupId={sampleSources.groups?.searchGroupId ?? ""}
+          existingLogTypes={samples.map((s) => s.logType)}
+          onQuery={async () => {
+            const result = await queryLakeSamples(
+              ports.cribl,
+              {
+                searchGroupId: sampleSources.groups?.searchGroupId ?? "",
+                datasetId: lakeTarget.id,
+              },
+              ports.logger,
+            );
+            // The counts feed the recommendation above (Phase 5). Captured on
+            // the way past rather than by a second query: this IS the query
+            // that produced them, and asking twice could disagree with itself.
+            //
+            // ONLY ON `ok`. A failed query returns notes and an empty list -
+            // adopting that would silently retract volumes the operator is
+            // already reading, turning a transient 500 into "nothing here".
+            // The previous window's counts stay until a query replaces them.
+            if (result.ok) {
+              setLakeVolumes({
+                logTypes: result.logTypes,
+                window: result.window,
+              });
+            }
+            return result;
+          }}
+          onFetchEvents={(discriminatorField, logTypes, eventsPerLogType) =>
+            fetchLakeLogTypeEvents(
+              ports.cribl,
+              {
+                searchGroupId: sampleSources.groups?.searchGroupId ?? "",
+                datasetId: lakeTarget.id,
+                discriminatorField,
+                logTypes,
+                eventsPerLogType,
+              },
+              ports.logger,
+            )
+          }
+          onCommit={async (fetched) => {
+            for (const sample of fetched) {
+              await ports.samples.upsert(sample);
+            }
+            handleSamplesChange(await ports.samples.list());
+          }}
+        />
+      )}
       <SampleIntakeSection
         key={contentResetKey}
         store={ports.samples}
         onSamplesChange={handleSamplesChange}
         onRenameLogType={handleRenameLogType}
-        solutionName={solution?.name ?? ""}
-        {...(ports.content !== undefined ? { content: ports.content } : {})}
-        {...(ports.sampleSource !== undefined
-          ? { sampleSource: ports.sampleSource }
-          : {})}
-        {...(ports.logger !== undefined ? { logger: ports.logger } : {})}
       />
       {/* Completeness confirmation (user request 2026-08-04). The app never
         * said that each unique log type becomes its own routes and pipelines,
         * so an operator had no way to know a missing sample means missing
-        * routing. State the consequence, compare against what the solution's
-        * detections reference, and ask before the pack build is armed. */}
+        * routing. State the consequence and ask before the pack build is armed.
+        *
+        * WHICH log types are missing is no longer restated here - the
+        * recommendation panel above lists every expected one with its provided
+        * state, and the same list printed twice on one screen reads as two
+        * findings. Same for the unreferenced note. This block keeps the part
+        * that is only true down here: the pack-shape consequence and the
+        * acknowledgement that arms the build. */}
       <div className="sample-coverage">
         <p className="field-hint">{packShapeSummary(samples.length)}</p>
         <p
@@ -1352,12 +1591,6 @@ export function IntegrateScreen({
         >
           {sampleCoverageView.headline}
         </p>
-        {sampleCoverageView.unreferenced.length > 0 && (
-          <p className="field-hint">
-            Not referenced by any detection (fine - a vendor emits more than one
-            solution detects on): {sampleCoverageView.unreferenced.join(", ")}.
-          </p>
-        )}
         {sampleCoverageView.requiresAck && (
           <label className="sample-coverage-ack">
             <input
@@ -1378,26 +1611,11 @@ export function IntegrateScreen({
 
   const gapAnalysisBody = (
     <>
-      {/* Point the analysis at a table that already EXISTS, using its live
-          columns instead of the derived schema (backlog item 2). Above the
-          review because it decides what the review is about. */}
-      {scopeCommitted && capabilities !== undefined && capabilityContext !== undefined && (
-        <TablePickerSection
-          target={{
-            subscriptionId: config.subscriptionId,
-            resourceGroup: config.resourceGroup,
-            workspaceName: config.workspaceName,
-          }}
-          capabilities={capabilities}
-          capabilityContext={capabilityContext}
-          onTablesLoaded={handleTablesLoaded}
-        />
-      )}
       {/* STALE, not cleared: the results below were computed against a
           different destination schema, and saying so beats removing the
           evidence that they existed. */}
       {analysisStale && (
-        <div className="table-picker-note">{ANALYSIS_STALE_NOTICE}</div>
+        <div className="analysis-stale-note">{ANALYSIS_STALE_NOTICE}</div>
       )}
       <MappingReviewSection
         key={contentResetKey}
@@ -1407,6 +1625,7 @@ export function IntegrateScreen({
         learnedCache={ports.contentCache}
         ruleFields={ruleFields}
         workspaceTables={workspaceTables}
+        workspaceTablesNote={workspaceTableListing.note}
         fetchTableSchema={fetchTableSchema}
         onGateChange={setMappingsApproved}
         onReportsChange={(reports) => {
@@ -1802,13 +2021,18 @@ export function IntegrateScreen({
           disabled={deployEverythingDisabledReason !== null || deploying || packBuilding}
           title={deployEverythingDisabledReason ?? undefined}
         >
+          {/* ONE LABEL, ALWAYS "Deploy" (user, 2026-08-18). It used to read
+              "Deploy everything" whenever content was engaged, so the same
+              button renamed itself depending on how much of the run was armed -
+              the operator could not tell whether two buttons existed or one had
+              changed. `contentEngaged` still decides what the run DOES; it just
+              no longer decides what the button is called. The InfoTip below
+              already enumerates the whole sequence. */}
           {deploying
             ? "Deploying..."
             : packBuilding
               ? "Installing pack..."
-              : contentEngaged
-                ? "Deploy everything"
-                : "Deploy"}
+              : "Deploy"}
         </button>
         <span className={`status status-${deployStatus}`}>{deployStatus}</span>
         <InfoTip

@@ -96,6 +96,7 @@ import { InfoTip } from "../../components/info-tip";
 import { EnrichmentEditor } from "./enrichment-editor";
 import { IdentityBlock } from "./identity-block";
 import { IdentityMismatchBlock } from "./identity-mismatch-block";
+import { OverflowTriageBlock } from "./overflow-triage-block";
 import { useEnrichmentFields, useLearnedMappings } from "./mapping-review-hooks";
 import { SearchableSelect } from "../../components/searchable-select";
 import {
@@ -184,6 +185,17 @@ export interface MappingReviewSectionProps {
    * listing existed.
    */
   workspaceTables?: readonly string[];
+  /**
+   * Why the workspace listing is not backing those candidates, when it is not.
+   *
+   * Null on success and while in flight - the tables appearing in the selectors
+   * are the only evidence worth rendering. This exists so a 403 does not become
+   * a silently shorter dropdown: the fallback list looks perfectly normal, and
+   * without a note nothing distinguishes "your workspace has these tables" from
+   * "we could not read your workspace". Shown in the routing-notes block, which
+   * already carries exactly this class of soft degradation.
+   */
+  workspaceTablesNote?: { text: string; onRetry: () => void } | null;
   /**
    * Resolve a workspace table's LIVE columns, or null when it exposes none.
    *
@@ -305,6 +317,7 @@ export function MappingReviewSection({
   content,
   catalog,
   workspaceTables,
+  workspaceTablesNote,
   fetchTableSchema,
   vendorProfile,
   ruleFields,
@@ -613,10 +626,16 @@ export function MappingReviewSection({
           : routing.notes,
       );
 
+      // NO LOCAL DEFAULT HERE (2026-08-18 audit). resolveSampleRouting fills
+      // tableByLogType for every logType it was given, and it was given exactly
+      // these samples' log types - so a `?? "CommonSecurityLog"` was unreachable
+      // AND a second answer to "where does this log type go". Core's own default
+      // is the solution's first resolved table, falling back to
+      // CommonSecurityLog; the two would have disagreed the moment the fallback
+      // became reachable, which is how a restated constant bites.
       const specs = samples.map((sample) => ({
         logType: sample.logType,
-        tableName:
-          routing.tableByLogType[sample.logType] ?? "CommonSecurityLog",
+        tableName: routing.tableByLogType[sample.logType],
         content: sample.rawEvents.join("\n"),
       }));
 
@@ -847,6 +866,24 @@ export function MappingReviewSection({
           {note}
         </p>
       ))}
+
+      {/* The workspace listing degraded. Same block as the other soft routing
+          notes, because it is the same kind of fact - something reduced where
+          these log types can be sent, said out loud rather than swallowed. The
+          retry is here and nowhere else: the listing is NOT re-attempted
+          automatically, or one 403 becomes a request storm. */}
+      {workspaceTablesNote != null && (
+        <p className="field-hint gap-routing-note">
+          {workspaceTablesNote.text}{" "}
+          <button
+            type="button"
+            className="link-button"
+            onClick={workspaceTablesNote.onRetry}
+          >
+            Retry
+          </button>
+        </p>
+      )}
 
       {learned.length > 0 && (
         <div className="status-bar learned-mappings-bar">
@@ -1146,41 +1183,12 @@ export function MappingReviewSection({
               </p>
             )}
 
-            {report.overflowCount > 0 && (
-              <p className="field-hint gap-overflow-note">
-                Overflow: {report.overflowCount} field(s) preserved in the
-                catch-all
-                {report.overflowTriage.summary !== ""
-                  ? ` - ${report.overflowTriage.noEquivalentCount} unmappable, ${report.overflowTriage.outranked.length} outranked`
-                  : ""}
-                .
-                <InfoTip
-                  text={
-                    OVERFLOW_COVERAGE_NOTE +
-                    (report.overflowTriage.summary !== ""
-                      ? ` ${report.overflowTriage.summary}`
-                      : "")
-                  }
-                />
-              </p>
-            )}
-
-            {report.overflowTriage.outranked.length > 0 && (
-              <details className="gap-overflow-triage">
-                <summary className="field-hint">
-                  Overflow fields with a close-named column (
-                  {report.overflowTriage.outranked.length})
-                </summary>
-                <ul className="field-hint">
-                  {report.overflowTriage.outranked.map((e) => (
-                    <li key={`out-${e.sourceName}`}>
-                      {e.sourceName}: closest column {e.column} is already
-                      claimed by the better-matching field {e.claimedBy}
-                    </li>
-                  ))}
-                </ul>
-              </details>
-            )}
+            <OverflowTriageBlock
+              overflowCount={report.overflowCount}
+              tableName={report.tableName}
+              triage={report.overflowTriage}
+              coverageNote={OVERFLOW_COVERAGE_NOTE}
+            />
 
             {(dropSavingsByLogType.get(report.logType)?.droppedBytes ?? 0) >
               0 && (

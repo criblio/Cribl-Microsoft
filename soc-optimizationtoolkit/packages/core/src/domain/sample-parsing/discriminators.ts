@@ -50,6 +50,17 @@ export const DISCRIMINATOR_FIELDS: readonly string[] = Object.freeze([
   "sourcetype", // A,B,C - Splunk-style
   "action", // A,B,C - firewall
   "module", // C only - Okta / generic module
+  // NOT from any of the three legacy copies (added 2026-08-21). RFC 5424 gives
+  // syslog a MSGID field whose stated purpose is to "identify the type of
+  // message", so a compliant sender has already answered the question this list
+  // asks - and Cribl's syslog source surfaces it without anyone parsing a
+  // payload. Without this entry an RFC 5424 feed looks undiscriminated even
+  // though the log type is sitting in a named field.
+  //
+  // LAST on purpose. Selection takes the first qualifying field in list order,
+  // so a `type` recovered from the payload still wins: the envelope is what the
+  // sender claims, the payload is what the device wrote.
+  "msgid",
 ]);
 
 /**
