@@ -764,12 +764,14 @@ export type {
 // the whole answer. Pure decisions only; the screen comes next.
 export {
   ANALYSIS_STALE_NOTICE,
-  deriveTablePickerAccess,
   emptyTableListMessage,
-  filterTables,
-  tableCountLabel,
 } from "./screens/table-picker/table-picker-state";
-export type { TablePickerAccess } from "./screens/table-picker/table-picker-state";
+export { useWorkspaceTables } from "./screens/table-picker/use-workspace-tables";
+export type {
+  UseWorkspaceTablesInput,
+  WorkspaceTablesNote,
+  WorkspaceTablesState,
+} from "./screens/table-picker/use-workspace-tables";
 
 // Empty-inventory messaging (docs/inventory-standard.md, BINDING): an empty list
 // is only a ZERO when the read was verified, AT THE SCOPE BEING LISTED - the

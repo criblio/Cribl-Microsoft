@@ -1,70 +1,32 @@
 /**
- * Table picker state - the PURE decisions behind choosing a workspace table to
- * run DCR gap analysis against.
+ * The PURE decisions behind pointing gap analysis at a real workspace table.
  *
- * TWO RULES FROM THE CAPABILITY MODEL apply here, and this is the first feature
- * to exercise them rather than the nav:
+ * THE THREE CAPABILITY RULES, and where each one lives after 2026-08-18:
  *
- *   1. A DENIED `table.read` ANNOTATES the picker; it never hides or disables
- *      it. The audit informs and offers, and Azure's own 403 is the real gate -
- *      so the operator can still press Load and find out.
+ *   1. A denied `table.read` never removes the attempt. Once this was an
+ *      annotation beside a Load button; there is no button now - the listing is
+ *      unconditional - so the rule holds STRUCTURALLY, and is pinned as such in
+ *      use-workspace-tables.dom.test.tsx.
  *   2. Reads have NO fallback artifact. There is no "download the thing someone
- *      else runs" for a listing, so the annotation IS the whole answer. A
- *      surface that implied otherwise would be inventing a workaround.
+ *      else runs" for a listing, so the honest note IS the whole answer. The
+ *      note offers a retry and nothing besides.
+ *   3. An empty result is only a zero once the read was verified
+ *      (docs/inventory-standard.md, BINDING). {@link emptyTableListMessage}
+ *      decides that, and it is the last of the three still expressed here.
  *
- * A THIRD RULE APPLIES AFTER THE LOAD (docs/inventory-standard.md, BINDING): an
- * empty result is only a zero once the read was verified. The two are easy to
- * confuse but are different moments - {@link deriveTablePickerAccess} says what
- * to expect BEFORE loading, {@link emptyTableListMessage} says what an empty
- * answer MEANT afterwards.
+ * `deriveTablePickerAccess` and `TablePickerAccess` were DELETED with the panel.
+ * They said what to EXPECT before loading, which mattered while the operator had
+ * to press Load and wanted to know whether it was worth it. The listing now runs
+ * on mount, so the real answer arrives in the same second and a prediction of it
+ * was noise - and worse, a prediction that disagreed with the outcome would have
+ * been two answers to one question.
  *
  * Pure: no IO, no React, no clock.
  */
 
-import { unavailableReason, verdictFor } from "@soc/core";
-import type {
-  CapabilityContext,
-  CapabilitySet,
-  WorkspaceTable,
-} from "@soc/core";
+import type { CapabilityContext, CapabilitySet } from "@soc/core";
 import { AUDITED_SCOPE, emptyInventoryMessage } from "../../capabilities/empty-inventory";
 import type { EmptyInventoryMessage } from "../../capabilities/empty-inventory";
-
-/** What the picker should say about its own availability. */
-export interface TablePickerAccess {
-  /** Whether loading is worth presenting as expected to work. */
-  expectedToWork: boolean;
-  /**
-   * The honest note, or null when nothing needs saying. Never null merely
-   * because the verdict is bad - a denial has the most to say.
-   */
-  note: string | null;
-  /**
-   * ALWAYS true. Kept explicit rather than implied so the rule is visible at
-   * the call site: the operator may always attempt the load, whatever the audit
-   * says, because a stale or wrong audit must not cost them the attempt.
-   */
-  loadable: true;
-}
-
-/**
- * What to tell the operator about their access before they load.
- *
- * `table.read` is the capability, and it is already measured by the audit - no
- * new probing. `unavailableReason` supplies the wording so the picker and the
- * nav cannot describe the same verdict differently.
- */
-export function deriveTablePickerAccess(
-  capabilities: CapabilitySet,
-  context: CapabilityContext,
-): TablePickerAccess {
-  const verdict = verdictFor("table.read", capabilities, context);
-  return {
-    expectedToWork: verdict === "granted",
-    note: unavailableReason("table.read", capabilities, context),
-    loadable: true,
-  };
-}
 
 /**
  * What to say when the listing COMPLETED and returned nothing.
@@ -94,34 +56,13 @@ export function emptyTableListMessage(
   });
 }
 
-/** Case-insensitive substring filter over table names, order preserved. */
-export function filterTables(
-  tables: readonly WorkspaceTable[],
-  query: string,
-): WorkspaceTable[] {
-  const needle = query.trim().toLowerCase();
-  if (needle === "") {
-    return [...tables];
-  }
-  return tables.filter((table) => table.name.toLowerCase().includes(needle));
-}
-
-/**
- * The count line under the list; states the filter rather than hiding it.
- *
- * `total === 0` means NOTHING HAS BEEN LOADED - a pre-load state, not a
- * finding. Once a listing has completed and returned nothing, the caller owes
- * {@link emptyTableListMessage} instead: this line would report an unverified
- * emptiness as a settled fact about the workspace.
- */
-export function tableCountLabel(total: number, shown: number): string {
-  if (total === 0) {
-    return "No tables loaded yet.";
-  }
-  return shown === total
-    ? `${total} table${total === 1 ? "" : "s"}`
-    : `${shown} of ${total} tables`;
-}
+// `filterTables` and `tableCountLabel` were DELETED 2026-08-18 with the panel
+// they served. Both existed only for the ~842-row browse list above the mapping
+// review, which nobody selected from once the destination choice moved onto the
+// cards - the listing is now a hook with no surface of its own. The count
+// line's "No tables loaded yet." distinction survives as behaviour rather than
+// text: a listing in flight renders nothing at all, which is the same claim
+// (nothing has been verified yet) made by saying less.
 
 /**
  * The warning shown once a table is selected while an analysis already exists.

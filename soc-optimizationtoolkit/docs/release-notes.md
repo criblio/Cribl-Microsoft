@@ -6,6 +6,165 @@ is harder to forget to update than a directory that has to be remembered.
 
 ---
 
+## 1.11.15
+
+**The workspace table list is gone from DCR Gap Analysis; the listing is not.**
+Reported 2026-08-18: the section was making the screen busy for no return. It
+was built as a picker - list the workspace's tables, choose ONE for the whole
+analysis - and when the choice became per log type in 1.11.13 the picking moved
+onto the mapping-review cards while the panel kept its filter box, its ~842-row
+list and its count line. Nobody selected from any of it.
+
+The fetch stays, because the workspace's table inventory is one fact shared by
+every log type - what is per log type is the choice over it - so it remains one
+call rather than one per card. It is now a hook with no surface: on success it
+renders nothing, and the tables appearing in each Destination selector are the
+evidence that it worked.
+
+A failed listing is one line in the mapping review's existing routing-notes
+block, naming what the failure cost ("the destination selectors below offer only
+this solution's tables and the common natives") with an inline Retry. It is not
+re-attempted automatically, so one 403 cannot become a request storm.
+
+**Two overflow fixes ride along.** The triage now NAMES the fields with no
+destination equivalent instead of only counting them, and says when the pairing
+itself is the suspect - an ASim authentication sample pointed at
+CrowdStrikeAlerts left 161 of 161 overflow fields unmappable against 108
+columns, where the useful next step is checking the sample, not adding a column.
+And the remedy now depends on who owns the table: "add a column" is sound for a
+custom `_CL` table and impossible for a Microsoft-managed one, which is exactly
+what shipped for those 161 fields.
+
+**Also:** the run button reads "Deploy" in every state rather than renaming
+itself to "Deploy everything", and choosing a destination table now asks ARM
+whether it exists rather than consulting a listing that may not have loaded -
+which had been analysing against the derived schema while the UI promised live
+columns from Azure.
+
+---
+
+## 1.11.14
+
+**The live schema is now awaited before the analysis re-runs.** Choosing a
+destination table fetched its live columns and re-analysed in the same breath,
+so the run could read a catalog the new columns had not reached yet - the
+results looked like the new table and were computed against the old schema.
+`changeTable` now fetches first and passes the schema into the run it starts.
+
+## 1.11.13
+
+**A destination table is chosen PER LOG TYPE, not per analysis.** A solution
+rarely lands in one table - CrowdStrike alone spreads its log types across
+several, and each destination is its own DCR with its own schema. The live
+schema tier holds a map of every table any log type was pointed at, and
+replacement is scoped to the tables in that map; everything else still resolves
+through the derived fallback, because pointing one log type at a real table says
+nothing about the others.
+
+## 1.11.12
+
+**The gap analysis can be pointed at a table that already exists.** The workspace
+table listing feeds every log type's Destination selector, and picking a real
+table replaces the derived schema with the live columns from Azure rather than
+blending the two - a blend would match neither source, and every verdict computed
+against it would describe a table that does not exist. A `table.read` denial
+annotates the picker; it never hides or disables it, because Azure's own 403 is
+the real gate.
+
+## 1.11.11
+
+**CSV operators are told the truth about route filters.** Both route
+discriminators return early for CSV - data rows are positional, so at route time
+the event is unparsed and the field name never appears in `_raw` - which means
+every CSV log type placeholders by construction. That is correct, and it made
+the write-a-filter hint the only routing guidance a CSV vendor's operator ever
+got. It was offering `event_type === 'dns'`, a parsed-field test that cannot
+work at route time for exactly the reason the discriminators bail. The hint is
+now format-aware: CSV gets a `_raw`-based example and a line explaining why a
+field test is undefined there.
+
+## 1.11.10
+
+**One definition of "characteristic field", and an honest header.** The two
+route discriminators asked the same question - is this field characteristic of
+the log type, or of one event? - and gave different answers to the same input,
+each with its own inline arithmetic. They now share `fieldPresence`, which
+returns three states rather than a boolean so the one place the callers
+genuinely differ (`not-in-evidence`) has to be stated rather than drifted into.
+The value-discriminator header was also rewritten to describe the guards that
+actually run, after two dead ones were removed.
+
+## 1.11.9
+
+**The presence discriminator stops over-fitting on per-event ids.** A field
+present in only some of a log type's events yielded a filter that missed the
+rest; a per-event id lands there by construction across a large sample.
+
+## 1.11.8
+
+**A route filter's value must NAME its log type.** The governing rule: each
+vendor log type can be defined with the contents of the log itself, so the field
+that defines a log type carries a value that names it - `action` is "Cautioned"
+in CAUTIONED. Measured live on the Zscaler pack, the previous fewest-distinct-
+values ranking offered `client_tls_sig_pqc_offers === '1'` for ALLOWED and
+`client_tls_keyex_hybrid_offers === '0'` for web-BLOCKED: TLS capability flags,
+structurally perfect and semantically meaningless, three of four offers wrong and
+one click from being applied. Fewest-distinct-values actively favours binary
+incidental flags, because a two-valued flag scores better than a real column.
+
+## 1.11.7
+
+**Both rule-reading paths report the same count.** They disagreed, which meant
+one of the two numbers an operator saw was always wrong.
+
+## 1.11.6
+
+**A route filter is written for the rest, and three blocks got their styling.**
+Log types with no qualifying discriminator now get a placeholder filter that
+matches no event, so the route, pipeline, lookup and sample all survive and start
+working the moment an operator writes a filter - rather than a match-all, which
+made every later route unreachable because routes are final. A class-name sweep
+also found `.link-button` rendering as full chrome and the identity-mismatch
+block with no container or row layout.
+
+## 1.11.5
+
+**Route derivation gained the column test.** A discriminator must behave like a
+column across the whole corpus: every log type carrying the field is single-valued
+on it, and those values are pairwise distinct. The looser "no sibling sends this
+value" test let incidental fields through that partitioned three sample events and
+would not have survived live traffic.
+
+## 1.11.3
+
+**A pack sample id collision no longer drops every sample.** Two samples that
+hashed to the same id left the pack with one.
+
+## 1.11.1
+
+**The identity module reads the fields it owns.** It was reading fields resolved
+elsewhere, so a correction applied in one place did not reach the other.
+
+## 1.11.0
+
+**The CEF identity override is surfaced on the analysis card.** The finding used
+to exist only in the model. `IdentityBlock` and `IdentityMismatchBlock` now render
+inside each mapping-review card, including "Vendor identity does not match this
+solution's rules" with its one-click correction - and the override is carried into
+the GENERATED PIPELINE by `buildCefIdentityOverrideFn`, placed right after CEF
+extraction so the reduction rules see the corrected value. An override that only
+changed the analysis would leave deployed data still carrying the wrong vendor.
+
+## 1.10.0
+
+**The inventory standard applies across every lister.** An empty result is only a
+zero once the read was verified: an RBAC-filtered `200 []` is byte-identical to a
+genuinely empty workspace and would read as one. Every lister now distinguishes
+"nothing has been loaded" from "the read completed and found nothing", and only a
+measured capability may call the second a fact about the environment.
+
+---
+
 ## 1.9.0
 
 **DeviceVendor and DeviceProduct can be changed after they are set.** Reported
