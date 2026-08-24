@@ -2118,10 +2118,14 @@ function App() {
   // RETIRED (the Integrate page composes the same cascade and Setup selects
   // resources), the standalone Review item RETIRED (its preview folds into
   // the Integrate flow), and Preflight is relabeled Permission Verification.
-  // SECTION SPLIT (user directive 2026-07-09): only Setup (home) and
-  // Sentinel Integration are ACTIVE. Every feature not yet validated live
-  // parks in the DEVELOPMENT section - still reachable, moved back into
-  // journey/tools one item at a time as it passes live testing.
+  // SECTION SPLIT (user directive 2026-07-09): features not yet validated
+  // live park in the DEVELOPMENT section - still reachable, moved back into
+  // journey/tools one item at a time as each passes live testing.
+  // That migration has largely HAPPENED. It began as Setup and Sentinel
+  // Integration alone; Dataflow, DCR Automation and Pack Maintenance have
+  // since graduated into journey, leaving four items parked below. Read the
+  // route table for the current split - this comment records the RULE, and
+  // the table is the only place the answer lives.
   const routes: AppRoute[] = [
     // Dataflow is the JOURNEY landing item (user directive
     // 2026-07-20): users arrive here first to learn how the ingestion works

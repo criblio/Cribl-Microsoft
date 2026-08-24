@@ -3,11 +3,11 @@
  * parser.
  *
  * The request shapes are mined from the legacy automation:
- *   - Azure/CustomDeploymentTemplates/DCR-Automation/core/dcr-template-direct.json
+ *   - deprecated/Azure/CustomDeploymentTemplates/DCR-Automation/core/dcr-template-direct.json
  *     (the ARM template the legacy engine deploys in Direct mode: kind
  *     "Direct", apiVersion "2023-03-11", properties.streamDeclarations /
  *     destinations.logAnalytics / dataFlows with transformKql "source")
- *   - Azure/CustomDeploymentTemplates/DCR-Automation/core/dcr-template-with-dce.json
+ *   - deprecated/Azure/CustomDeploymentTemplates/DCR-Automation/core/dcr-template-with-dce.json
  *     (the DCE-mode template: SAME apiVersion 2023-03-11 and properties
  *     fragment, plus properties.dataCollectionEndpointId, and NO kind
  *     property - DCE-based DCRs are NOT Kind:Direct)

@@ -92,9 +92,11 @@ export function resolveFramePhase(
  * default to 'tools'.
  *
  * DEVELOPMENT (user directive 2026-07-09): the holding area for features not
- * yet validated live. Only Setup and Sentinel Integration are active in the
- * journey; everything unvalidated parks here (still reachable - parked, not
- * hidden) and MOVES OUT one item at a time as it passes live testing.
+ * yet validated live. Everything unvalidated parks here (still reachable -
+ * parked, not hidden) and MOVES OUT one item at a time as it passes live
+ * testing. It started as Setup and Sentinel Integration alone in the journey
+ * and several items have since graduated; the shell's route table is the
+ * single source of which section each item is in today.
  */
 export type NavSection = "journey" | "tools" | "development" | "diagnostics";
 

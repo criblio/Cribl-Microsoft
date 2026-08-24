@@ -2,7 +2,7 @@
  * Log Analytics schema -> DCR column-set mapping - COMPATIBILITY CONTRACT.
  *
  * Faithful port of the legacy PowerShell schema handling in
- * Azure/CustomDeploymentTemplates/DCR-Automation/core/Create-TableDCRs.ps1:
+ * deprecated/Azure/CustomDeploymentTemplates/DCR-Automation/core/Create-TableDCRs.ps1:
  *   - ConvertTo-DCRColumnType       (lines 396-432)   type mapping (DCR-08)
  *   - Get-TableColumns              (lines 1475-1617) column-source selection
  *                                    and system/guid filtering (DCR-09)

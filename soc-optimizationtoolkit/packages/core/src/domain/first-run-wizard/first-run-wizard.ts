@@ -1,5 +1,11 @@
 /**
- * First-run wizard - THE PURE RULES BEHIND THE LOCAL-APP SETUP WIZARD.
+ * First-run wizard - THE PURE RULES BEHIND THE SETUP WIZARD.
+ *
+ * Named for the local app until 2026-08-24; that shell is gone (ADR-0002) but
+ * this module is LIVE, driving the Cribl-hosted app's setup wizard through
+ * @soc/ui setup-wizard-state. Sections 2 and 3 below (target chooser,
+ * leader-connect) are the deliberately-retained exception - see the note on
+ * them there.
  *
  * Unit 22 (GUI-03 delta). The consent flow, permission matrix, and RBAC
  * preflight shipped in Phases 1-2; the Cribl auth manager already exists.

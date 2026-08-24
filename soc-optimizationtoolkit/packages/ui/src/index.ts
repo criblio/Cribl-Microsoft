@@ -124,44 +124,10 @@ export {
 } from "./screens/home/home-state";
 export type { NextActionView } from "./screens/home/home-state";
 
-// Review (porting-plan Unit 7, ux-flow-plan 5.2): the Integrate arc's
-// REVIEW stage - live-ARM deployment preview over @soc/core
-// buildDeploymentPreview (dcr-naming is the single name source), with the
-// staleness marker, the acknowledge gate arming the Deploy handoff, and
-// the pure decision layer behind it all.
-export { ReviewScreen } from "./screens/review/review-screen";
-export type { ReviewScreenProps } from "./screens/review/review-screen";
 export { DcrAutomationScreen } from "./screens/dcr-automation/dcr-automation-screen";
 export type { DcrAutomationScreenProps } from "./screens/dcr-automation/dcr-automation-screen";
 export { DcrInventoryPanel } from "./screens/dcr-automation/dcr-inventory-panel";
 export type { DcrInventoryPanelProps } from "./screens/dcr-automation/dcr-inventory-panel";
-export {
-  HANDOFF_CHECKING_REASON,
-  HANDOFF_NEEDS_ACKNOWLEDGE_REASON,
-  HANDOFF_NEEDS_PREVIEW_REASON,
-  HANDOFF_STALE_REASON,
-  REVIEW_SELECTION_NOTE,
-  STALE_NOTICE,
-  checkActionLabel,
-  deriveDeployHandoff,
-  deriveReviewRows,
-  formatReviewSummary,
-  isPreviewStale,
-  previewOptionsOf,
-  reviewCounts,
-  reviewInputsToken,
-} from "./screens/review/review-state";
-export type {
-  DeployHandoff,
-  DeployHandoffInput,
-  GeneratedPreview,
-  ReviewCounts,
-  ReviewRow,
-  ReviewRowTag,
-  ReviewScope,
-  ReviewVerdict,
-} from "./screens/review/review-state";
-
 // Integrate arc (legacy-flow-analysis.md single-page decision, ADOPTED
 // 2026-07-04): the MVP centerpiece - the single-page Integrate flagship
 // composing the built screens (Azure Targeting, the native onboardTable

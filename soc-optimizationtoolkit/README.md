@@ -23,7 +23,6 @@ npm install
 npm run dev        # cribl-app dev server (live preview inside Cribl)
 npm run build      # build all workspaces
 npm run package    # build the installable cribl-app .tgz + refresh release/
-npm run local      # build and start the local Node-hosted app
 ```
 
 Development gates: `npm run typecheck`, `npm run lint`, `npm test`.

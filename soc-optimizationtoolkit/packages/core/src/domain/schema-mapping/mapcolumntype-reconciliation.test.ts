@@ -2,7 +2,7 @@
  * mapColumnType RECONCILIATION TABLE - porting-plan Unit 5.
  *
  * Two legacy implementations existed:
- *   PS:  ConvertTo-DCRColumnType, Azure/CustomDeploymentTemplates/
+ *   PS:  ConvertTo-DCRColumnType, deprecated/Azure/CustomDeploymentTemplates/
  *        DCR-Automation/core/Create-TableDCRs.ps1 lines 396-432
  *        (the characterized compatibility contract, section 3 item 8)
  *   TS:  mapColumnType, Cribl-Microsoft_IntegrationSolution/src/main/ipc/

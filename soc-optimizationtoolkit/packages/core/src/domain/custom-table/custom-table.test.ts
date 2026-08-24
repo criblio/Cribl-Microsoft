@@ -31,7 +31,7 @@ import { SchemaMappingError } from "../schema-mapping";
 
 describe("parseTableSchemaFile", () => {
   it("parses the bare {columns} shape (the PS custom-table-schemas format)", () => {
-    // Shape mirrors Azure/CustomDeploymentTemplates/DCR-Automation/core/
+    // Shape mirrors deprecated/Azure/CustomDeploymentTemplates/DCR-Automation/core/
     // custom-table-schemas/CloudFlare_CL.json (plus the top-level "name"
     // the CrowdStrike files carry).
     const raw = JSON.stringify({

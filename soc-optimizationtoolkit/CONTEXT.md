@@ -21,6 +21,24 @@ Originally scoped as two deployment targets sharing one codebase; the local targ
 
 ## Status
 
+**READ THIS FIRST (2026-08-24).** The narrative below is a build log that runs
+from 2026-07-01 to **2026-07-14 and then stops**. Six weeks of work after it -
+the capability model, DCR gap analysis, route derivation, and the ADR-0003
+sample-acquisition rebuild - are NOT recorded here. Two things below are now
+false as written:
+
+- **"BOTH shells" / "the local shell" is obsolete.** ADR-0002 (2026-08-17)
+  dropped the local target; `apps/cribl-app` is the only shell. Read every
+  dual-shell sentence below as describing the Cribl-hosted app alone.
+- **The Browse Samples modal and the `sample-acquisition` domain are gone.**
+  ADR-0003 (2026-08-18, shipped in 1.12.0) replaced them with log-type
+  recommendation from the operator's own environment.
+
+For the CURRENT record, in order of reliability: `docs/release-notes.md` (what
+shipped, newest first), `docs/backlog.md` (what is open, and the most honest
+document in the repo), and `docs/adr/` (why). `docs/roadmap.md` is a phase
+record whose last dated entry is 2026-07-29 - it is history, not the live plan.
+
 Workspace restructured 2026-07-01. Phase 1 walking skeleton live in BOTH shells: onboardTable usecase + OnboardTableScreen over the six ports (in-memory fakes for tests); local Node host (loopback API, encrypted secrets, ARM/leader proxies) shipped 2026-07-03. Unit 1 app frame shipped: AUA gate, mode chooser, mode-filtered route table, settings screen, one budgeted status poller.
 
 Unit 2 (Azure resource discovery and targeting) shipped 2026-07-03. Core: azure-discovery usecases - Enabled-only subscription list (legacy filter pinned), workspace list (name/RG/location/customerId/sku), resource-group choices with the VERBATIM deriveResourceGroupsFromWorkspaces fallback, create-RG / create-workspace (PerGB2018, 90-day retention, attempt-bounded provisioning poll), enable-Sentinel using the workspace's ACTUAL location (legacy always-eastus bug fixed + pinned), and commitTargetScope (merge into the active profile, never replace; browse NEVER commits). UI: AzureTargetingScreen in @soc/ui - always-visible selectors disabled-with-instructions before data, ONE loader effect (legacy had three overlapping), explicit "Use this target" commit surfacing invalidation consequences, offline free-text branch, RG-name sanitization (legacy rule mined), committed-scope chip in both frames' topBar. Shells: ARM nextLink pagination via AzureManagement.requestUrl - cloud adapter and local host route POST /api/azure/request-url, both hard-restricted to https://management.azure.com/ before any request (SSRF guard). The cloud harness's panel-4 discovery stays as diagnostics; the targeting screen is the product path.
