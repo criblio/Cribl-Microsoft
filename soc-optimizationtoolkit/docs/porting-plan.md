@@ -217,7 +217,19 @@ Phase 2 exit check (roadmap): DirectNative/DirectCustom/DCE/PrivateLink parity w
 - External surface: reuses Unit 14 GitHub entries (registry schema URLs point at raw.githubusercontent.com; static registry IS the pre-bundle so no vendor-doc domains needed).
 - Depends on: Unit 14.
 
-#### Unit 16: Tiered sample acquisition and synthesis (L)
+#### Unit 16: Tiered sample acquisition and synthesis (L) - RETIRED 2026-08-19
+
+> **This unit shipped and has since been DELETED (ADR 0003).** Everything below
+> is the record of what was built, kept because the reasoning explains what the
+> replacement had to preserve - not a description of current code. Gone:
+> `SOLUTION_SAMPLE_MAP`, `lookupSolution`, `fuzzyMatchElasticPackage`, tier
+> precedence, the elastic cascade, ENG-41 synthesis, the ENG-42 filename scorer,
+> and the browse modal. Survived, rehomed: the splitter and `hasNamedFields`
+> (now `domain/sample-parsing/splitting.ts`), `matchSolutionName` (now
+> `domain/sentinel-content`), and `RemoteSampleSource` (now `ports/`).
+> Original-raw-line preservation survived too, but as a fix to
+> `parseSampleContent` covering every intake path rather than this unit's
+> per-file trick. See [sample-acquisition-plan.md](sample-acquisition-plan.md).
 
 - Covers: ENG-19, ENG-20 (redesigned: lazy fetch, prefetch dropped), ENG-41, ENG-42; completes GUI-06 (browse modal).
 - Legacy sources: `IS/sample-resolver.ts` (1873), `IS/default-samples.ts` (967).

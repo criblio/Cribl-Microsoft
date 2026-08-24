@@ -6,6 +6,277 @@ is harder to forget to update than a directory that has to be remembered.
 
 ---
 
+## 1.12.0
+
+**The Browse Samples modal is gone, and the app now says which log types to
+bring instead of guessing which file fits.** This is ADR-0003 executed in full,
+phases 0 through 5. A minor bump rather than a patch because a whole acquisition
+path was replaced, not repaired.
+
+Why the browser went: `scoreFileName` was the entire selection mechanism, and it
+scored the FILENAME against vendor-name keywords - it never opened the file. The
+one content check only ever rejected, so nothing confirmed a sample fit. The
+operator got many files per vendor, most wrong for their solution, with no way to
+tell which. A smarter fit check was designed and deliberately rejected: it is
+real work to make a browser trustworthy that should not exist, and even a correct
+one still hands the operator someone else's data as the starting point for their
+own integration.
+
+**What replaced it: `LogTypeRecommendation`, with three tiers of evidence.**
+
+- `detection` - a shipped analytic rule filters on this value. The strongest
+  claim available: the solution demonstrably breaks without it.
+- `workbook` - a shipped workbook queries it. Real, and weaker; a dashboard panel
+  is not a detection. Workbooks were already fetched, but only inside the
+  workbooks section's Analyze button, pressed long after samples are chosen. They
+  now come from the same content-first mount effect as the rules, which also
+  fixed a real inconsistency - the early content requirements saw rules alone and
+  under-counted the columns content needs.
+- `vendor` - the vendor documents this feed. Says nothing about what the solution
+  needs and everything about what exists to be collected, which is exactly the
+  decision facing an operator whose solution ships no detections at all.
+
+The tier is on every row and in the lead sentence. Collapsing them would tell an
+operator their solution requires data it has never mentioned, so it is pinned. A
+list built entirely from vendor docs reads "this solution ships no detections
+that name a log type; Zscaler documents ...", never "your solution needs".
+
+The panel and the completeness confirmation below the intake section now read ONE
+coverage result, computed once, with a pin asserting they agree.
+
+**The vendor catalog is both halves.** Thirteen hand-curated vendors, each cited
+to the vendor's own documentation, plus 157 packs mined from elastic/integrations
+(197 KB). Hand packs win the per-value dedupe - the same precedence the mapping
+packs already settled. Packs carry `excludeKeywords` because substring matching
+cannot express "most specific wins": every Zscaler Private Access solution name
+contains "zscaler", so the ZIA pack would have told a ZPA operator to collect a
+feed their product does not emit, and "Palo Alto Networks Cortex XDR" contains
+"palo alto" and would have been handed the firewall's TRAFFIC and THREAT.
+Recommending the wrong product's feeds is worse than recommending nothing, and
+both cases are pinned from both directions.
+
+**Two ways to acquire, and upload is still always there.** The panel asks one
+question first - query a Cribl Lake dataset, or capture from a live source.
+Search is not a third surface: it is HOW a Lake dataset is queried, verified live
+by finding the same datasets in both listings. Discovery is lazy, so page load
+costs one request and nothing else.
+
+- **Lake query** returns the complete log-type list and per-type volumes. Counts
+  and events are two separate reads on purpose.
+- **Filtered capture** runs one bounded `POST /system/capture` and splits the
+  result by discriminator. It PREVIEWS - nothing is tagged without a click,
+  because the sample store is replace-by-logType and a capture is the one intake
+  path where the app chose the content rather than the operator.
+
+Two capture traps worth knowing. A capture request has NO source field, so the
+source is an `__inputId` clause inside the filter string; deleting that clause
+silently widens the capture to every source in the group, and that is the one
+edit the warning checks. And the log-type predicate anchors on the SET of
+delimiters this app's parsers use rather than on a comma - the operator picks a
+source, not a format, so a comma anchor against a pipe-delimited CEF vendor
+matches nothing, which reads as "this source does not carry that log type". `/`
+is excluded on purpose so a URL path cannot match. The predicates are pinned by
+EVALUATING them as JavaScript, not by asserting on their text.
+
+**Volumes rank the recommendation (phase 5).** Lake counts reach the
+recommendation, entries and the unreferenced set carry an event count, and both
+rank by it. There is no threshold, nothing is flagged, and no headline mentions a
+volume: a cutoff correct in one tenant is wrong in the next, and this module
+already documents unreferenced log types as "NOT a problem - a vendor emits more
+than any one solution detects on". Ranking asserts only what was measured. Two
+rules the pins hold: unmeasured renders NOTHING - not 0, not "unknown" - and
+volume ranks WITHIN a tier, never across one, so a vendor-documented feed with
+890K events stays below a detection-tier log type with three.
+
+**A parsing defect found and fixed along the way.** A syslog-prefixed PAN-OS
+upload used to parse to ZERO events: detection called it syslog, and the syslog
+parser cannot match a PAN-OS body. Detection now recognises the PAN-OS positional
+fingerprint ahead of the syslog check, characterized first across both modes and
+every format, because that detector is one every vendor depends on. RFC 5424's
+`msgid` is now a discriminator too.
+
+**Removed, with the salvage recorded:** the browse modal, its state module, the
+`acquire-samples` usecase, `repo-samples` and the solution map. The splitter
+SURVIVED - rehomed to `domain/sample-parsing`, because it is load-bearing for
+capture and for mixed uploads and its only caller was on the deleted path.
+`consolidateByTableRouting` was deleted as a capability the app never had: both
+callers pass two arguments, so its branch had never executed. CEF/LEEF raw-line
+preservation turned out to be a live defect on the INTAKE path rather than a
+browse-path risk, so it was fixed in `parseSampleContent` and every intake path
+benefits - LEEF, syslog, headerless CSV and Cribl captures included.
+
+**What this release has NOT done: run against a real workspace.** Every platform
+belief behind the Lake and capture paths is pinned against a fake Cribl client,
+which catches our own logic and cannot catch a wrong belief about the platform.
+`packages/core/src/testing/live-verify.test.ts` holds those eight beliefs as
+runnable rows and skips unless `CRIBL_LIVE_BASE` and `CRIBL_LIVE_TOKEN` are set,
+so the normal gate stays hermetic. The case for running it is already on the
+record: `__inputId` turned out to be `<type>:<id>` rather than the bare id, so
+every capture would have come back empty and been reported as an idle source -
+caught by reading the vendored spec, not by any of the sixty-odd green tests over
+it.
+
+---
+
+## 1.11.15
+
+**The workspace table list is gone from DCR Gap Analysis; the listing is not.**
+Reported 2026-08-18: the section was making the screen busy for no return. It
+was built as a picker - list the workspace's tables, choose ONE for the whole
+analysis - and when the choice became per log type in 1.11.13 the picking moved
+onto the mapping-review cards while the panel kept its filter box, its ~842-row
+list and its count line. Nobody selected from any of it.
+
+The fetch stays, because the workspace's table inventory is one fact shared by
+every log type - what is per log type is the choice over it - so it remains one
+call rather than one per card. It is now a hook with no surface: on success it
+renders nothing, and the tables appearing in each Destination selector are the
+evidence that it worked.
+
+A failed listing is one line in the mapping review's existing routing-notes
+block, naming what the failure cost ("the destination selectors below offer only
+this solution's tables and the common natives") with an inline Retry. It is not
+re-attempted automatically, so one 403 cannot become a request storm.
+
+**Two overflow fixes ride along.** The triage now NAMES the fields with no
+destination equivalent instead of only counting them, and says when the pairing
+itself is the suspect - an ASim authentication sample pointed at
+CrowdStrikeAlerts left 161 of 161 overflow fields unmappable against 108
+columns, where the useful next step is checking the sample, not adding a column.
+And the remedy now depends on who owns the table: "add a column" is sound for a
+custom `_CL` table and impossible for a Microsoft-managed one, which is exactly
+what shipped for those 161 fields.
+
+**Also:** the run button reads "Deploy" in every state rather than renaming
+itself to "Deploy everything", and choosing a destination table now asks ARM
+whether it exists rather than consulting a listing that may not have loaded -
+which had been analysing against the derived schema while the UI promised live
+columns from Azure.
+
+---
+
+## 1.11.14
+
+**The live schema is now awaited before the analysis re-runs.** Choosing a
+destination table fetched its live columns and re-analysed in the same breath,
+so the run could read a catalog the new columns had not reached yet - the
+results looked like the new table and were computed against the old schema.
+`changeTable` now fetches first and passes the schema into the run it starts.
+
+## 1.11.13
+
+**A destination table is chosen PER LOG TYPE, not per analysis.** A solution
+rarely lands in one table - CrowdStrike alone spreads its log types across
+several, and each destination is its own DCR with its own schema. The live
+schema tier holds a map of every table any log type was pointed at, and
+replacement is scoped to the tables in that map; everything else still resolves
+through the derived fallback, because pointing one log type at a real table says
+nothing about the others.
+
+## 1.11.12
+
+**The gap analysis can be pointed at a table that already exists.** The workspace
+table listing feeds every log type's Destination selector, and picking a real
+table replaces the derived schema with the live columns from Azure rather than
+blending the two - a blend would match neither source, and every verdict computed
+against it would describe a table that does not exist. A `table.read` denial
+annotates the picker; it never hides or disables it, because Azure's own 403 is
+the real gate.
+
+## 1.11.11
+
+**CSV operators are told the truth about route filters.** Both route
+discriminators return early for CSV - data rows are positional, so at route time
+the event is unparsed and the field name never appears in `_raw` - which means
+every CSV log type placeholders by construction. That is correct, and it made
+the write-a-filter hint the only routing guidance a CSV vendor's operator ever
+got. It was offering `event_type === 'dns'`, a parsed-field test that cannot
+work at route time for exactly the reason the discriminators bail. The hint is
+now format-aware: CSV gets a `_raw`-based example and a line explaining why a
+field test is undefined there.
+
+## 1.11.10
+
+**One definition of "characteristic field", and an honest header.** The two
+route discriminators asked the same question - is this field characteristic of
+the log type, or of one event? - and gave different answers to the same input,
+each with its own inline arithmetic. They now share `fieldPresence`, which
+returns three states rather than a boolean so the one place the callers
+genuinely differ (`not-in-evidence`) has to be stated rather than drifted into.
+The value-discriminator header was also rewritten to describe the guards that
+actually run, after two dead ones were removed.
+
+## 1.11.9
+
+**The presence discriminator stops over-fitting on per-event ids.** A field
+present in only some of a log type's events yielded a filter that missed the
+rest; a per-event id lands there by construction across a large sample.
+
+## 1.11.8
+
+**A route filter's value must NAME its log type.** The governing rule: each
+vendor log type can be defined with the contents of the log itself, so the field
+that defines a log type carries a value that names it - `action` is "Cautioned"
+in CAUTIONED. Measured live on the Zscaler pack, the previous fewest-distinct-
+values ranking offered `client_tls_sig_pqc_offers === '1'` for ALLOWED and
+`client_tls_keyex_hybrid_offers === '0'` for web-BLOCKED: TLS capability flags,
+structurally perfect and semantically meaningless, three of four offers wrong and
+one click from being applied. Fewest-distinct-values actively favours binary
+incidental flags, because a two-valued flag scores better than a real column.
+
+## 1.11.7
+
+**Both rule-reading paths report the same count.** They disagreed, which meant
+one of the two numbers an operator saw was always wrong.
+
+## 1.11.6
+
+**A route filter is written for the rest, and three blocks got their styling.**
+Log types with no qualifying discriminator now get a placeholder filter that
+matches no event, so the route, pipeline, lookup and sample all survive and start
+working the moment an operator writes a filter - rather than a match-all, which
+made every later route unreachable because routes are final. A class-name sweep
+also found `.link-button` rendering as full chrome and the identity-mismatch
+block with no container or row layout.
+
+## 1.11.5
+
+**Route derivation gained the column test.** A discriminator must behave like a
+column across the whole corpus: every log type carrying the field is single-valued
+on it, and those values are pairwise distinct. The looser "no sibling sends this
+value" test let incidental fields through that partitioned three sample events and
+would not have survived live traffic.
+
+## 1.11.3
+
+**A pack sample id collision no longer drops every sample.** Two samples that
+hashed to the same id left the pack with one.
+
+## 1.11.1
+
+**The identity module reads the fields it owns.** It was reading fields resolved
+elsewhere, so a correction applied in one place did not reach the other.
+
+## 1.11.0
+
+**The CEF identity override is surfaced on the analysis card.** The finding used
+to exist only in the model. `IdentityBlock` and `IdentityMismatchBlock` now render
+inside each mapping-review card, including "Vendor identity does not match this
+solution's rules" with its one-click correction - and the override is carried into
+the GENERATED PIPELINE by `buildCefIdentityOverrideFn`, placed right after CEF
+extraction so the reduction rules see the corrected value. An override that only
+changed the analysis would leave deployed data still carrying the wrong vendor.
+
+## 1.10.0
+
+**The inventory standard applies across every lister.** An empty result is only a
+zero once the read was verified: an RBAC-filtered `200 []` is byte-identical to a
+genuinely empty workspace and would read as one. Every lister now distinguishes
+"nothing has been loaded" from "the read completed and found nothing", and only a
+measured capability may call the second a fact about the environment.
+
+---
+
 ## 1.9.0
 
 **DeviceVendor and DeviceProduct can be changed after they are set.** Reported

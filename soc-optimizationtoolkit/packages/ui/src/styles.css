@@ -1471,6 +1471,310 @@ button.journey-step-main:hover .journey-step-label {
   color: var(--text-muted);
 }
 
+/* Log-type recommendation (screens/samples/log-type-recommendation): what this
+ * solution's detections need, in the slot the Browse Samples button used to
+ * occupy. Advisory - deliberately quieter than the warn-toned gap line below,
+ * because a lower bound must not read like a failed check. */
+.log-type-recommendation {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  background: var(--surface-raised);
+}
+
+.log-type-recommendation-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 2px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.log-type-recommendation-list li {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.log-type-recommendation-name {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  color: var(--text);
+}
+
+/* The state word carries the whole signal, so it is the only coloured thing
+ * here - the row itself stays neutral. */
+.log-type-recommendation-state {
+  font-size: 12px;
+  line-height: 18px;
+  padding: 0 8px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+}
+
+.log-type-recommendation-have .log-type-recommendation-state {
+  color: var(--ok);
+}
+
+.log-type-recommendation-need .log-type-recommendation-state {
+  color: var(--text-muted);
+}
+
+/* Measured volume (plan Phase 5). Monospace because it is a technical value,
+ * and DELIBERATELY UNCOLOURED: a colour would be a verdict, and the decision
+ * was to attach the number and rank by it without flagging anything. The list
+ * order carries the signal instead. */
+.log-type-recommendation-volume {
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+/* Provided-but-unreferenced, now a ranked list rather than a prose run-on so
+ * each entry can carry its volume. Kept visually quieter than the
+ * recommendation rows above: this is a note, never a gap. */
+.log-type-unreferenced {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.log-type-unreferenced-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.log-type-unreferenced-list li {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--text-muted);
+}
+
+/* Sample-source picker (screens/samples/sample-source-picker): where the
+ * operator can take their own samples from. Same quiet card as the
+ * recommendation above it - both are advisory and neither gates anything. */
+.sample-source-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  background: var(--surface-raised);
+}
+
+/* The two acquisition modes, as cards rather than a select: each carries a line
+ * about what it gives you and what it costs, and that does not fit an option. */
+.acquisition-modes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 4px 0 2px;
+}
+
+.acquisition-mode {
+  flex: 1 1 240px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  text-align: left;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.acquisition-mode:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.acquisition-mode-active {
+  border-color: var(--accent);
+  background: var(--surface-raised);
+}
+
+.acquisition-mode-label {
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 20px;
+}
+
+/* A stated-up-front limit, not an error - warn-toned but not alarming. */
+.sample-source-warning {
+  color: var(--warn);
+}
+
+.sample-source-picker-notes {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 2px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Lake panel (screens/samples/lake-panel): query a Cribl Lake dataset for its
+ * log types and volumes, then take the chosen ones as samples. Same quiet card
+ * as the capture panel it sits opposite - they are two modes of one choice. */
+.lake-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  background: var(--surface-raised);
+}
+
+.lake-log-types {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 2px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.lake-log-type {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 13px;
+  line-height: 20px;
+  cursor: pointer;
+}
+
+.lake-log-type-name {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  color: var(--text);
+}
+
+/* The volume is the reason to pick one dataset over another, so it reads as a
+ * figure rather than as prose - monospace keeps the column scannable. */
+.lake-volume {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--text-muted);
+}
+
+/* A count with no window is not a fact; the window rides with it. */
+.lake-window,
+.lake-truncated,
+.lake-unavailable {
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+/* Truncation and replacement are both "you are about to be misled" - warn. */
+.lake-truncated,
+.lake-replaces {
+  color: var(--warn);
+}
+
+.lake-bound {
+  max-width: 140px;
+}
+
+.lake-outcome {
+  font-size: 13px;
+  line-height: 20px;
+  margin: 2px 0 0;
+}
+
+/* Capture panel (screens/samples/capture-panel): the bounded live capture and
+ * its confirm-before-tagging preview. */
+.capture-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  background: var(--surface-raised);
+}
+
+.capture-log-types,
+.capture-results {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 2px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.capture-log-type {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 13px;
+  line-height: 20px;
+  cursor: pointer;
+}
+
+.capture-log-type-name {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  color: var(--text);
+}
+
+.capture-filter {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 18px;
+  resize: vertical;
+}
+
+/* Both of these are "you are about to lose something" - warn, not error. */
+.capture-filter-warning,
+.capture-replaces {
+  color: var(--warn);
+}
+
+.capture-result-head {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.capture-preview {
+  max-height: 160px;
+  overflow: auto;
+}
+
+.capture-bound {
+  max-width: 120px;
+}
+
 /* Sample-set completeness confirmation (screens/samples/sample-coverage-state):
  * the consequence line, the derived comparison, and the acknowledgement that
  * arms the pack build. */
@@ -2844,6 +3148,16 @@ button.journey-step-main:hover .journey-step-label {
 
 .gap-overflow-note {
   margin-top: 6px;
+}
+
+/* "Most of this sample has no <table> equivalent." A warning rail, not an
+   error: the pairing is suspect, not proven wrong, and the operator may have
+   good reason to keep it. Matches .table-picker-note for the same reason. */
+.gap-overflow-warning {
+  margin-top: 6px;
+  color: var(--warn);
+  border-left: 2px solid var(--warn);
+  padding: 4px 10px;
 }
 
 .mapping-review-fields {
@@ -5643,86 +5957,20 @@ details[open] > summary::before {
   border-top: 1px solid var(--border);
 }
 
-/* Workspace table picker (backlog item 2). Written WITH the component rather
-   than after it: the 2026-08-17 sweep found a block that shipped naming three
-   classes no stylesheet defined, and rendered as bare divs until someone
-   looked. */
-.table-picker {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-/* The capability annotation. Deliberately informational, not an error: a
-   denied verdict does not stop the operator loading, so styling it as a
-   failure would contradict the rule it exists to express. */
-.table-picker-note {
+/* The workspace-table PANEL's rules were deleted 2026-08-18 with the panel: the
+   container, the ~842-row scrolling list, its rows, the filter input, the
+   pickable name, the kind/plan captions and the error box. The listing is a
+   hook now and renders nothing of its own; a failure is one line in the mapping
+   review's routing-notes block.
+
+   What survives is the one rule that never dressed the panel: the notice saying
+   the results on screen belong to the PREVIOUSLY selected table. Renamed from
+   .table-picker-note with the panel, because a class named after a component
+   that no longer exists is the next audit's stale reference. Informational
+   rather than an error - the results are outdated, not wrong. */
+.analysis-stale-note {
   font-size: 12px;
   color: var(--text-dim);
   border-left: 2px solid var(--warn);
   padding: 4px 10px;
-}
-.table-picker-error {
-  font-size: 12px;
-  font-family: var(--font-mono);
-  color: var(--error);
-  border: 1px solid var(--error);
-  border-radius: 4px;
-  padding: 6px 10px;
-  overflow-wrap: anywhere;
-}
-.table-picker-controls {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-.table-picker-filter {
-  flex: 1 1 220px;
-  min-width: 0;
-  font-size: 12px;
-  padding: 4px 8px;
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  background: var(--surface);
-  color: var(--text);
-}
-.table-picker-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  /* A workspace can hold hundreds of tables; scroll the list, not the page. */
-  max-height: 320px;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-}
-.table-picker-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.table-picker-pick {
-  font-family: var(--font-mono);
-  font-size: 12px;
-  padding: 3px 8px;
-  border: 1px solid transparent;
-  border-radius: 4px;
-  background: none;
-  color: var(--text);
-  cursor: pointer;
-  text-align: left;
-}
-.table-picker-pick:hover:not(:disabled) {
-  border-color: var(--accent, var(--text));
-}
-.table-picker-pick-selected {
-  border-color: var(--accent);
-  background: var(--surface-raised);
-}
-.table-picker-kind,
-.table-picker-plan {
-  font-size: 11px;
-  color: var(--text-faint);
 }

@@ -56,12 +56,29 @@ export interface PermissionsResponse {
   value: PermissionSet[];
 }
 
-/** Regex metacharacters that must be escaped when building a glob matcher. */
-const REGEX_METACHARACTERS = /[.+?^${}()|[\]\\]/g;
+/**
+ * Regex metacharacters escaped inside one LITERAL RUN of a glob.
+ *
+ * `*` is absent on purpose: {@link actionMatchesGlob} splits the glob on `*`
+ * before calling this, so the wildcard never reaches it, and the caller joins
+ * the escaped runs back together with `.*`.
+ */
+const GLOB_LITERAL_METACHARACTERS = /[.+?^${}()|[\]\\]/g;
 
-/** Escape every regex metacharacter in a literal so it matches itself. */
-function escapeRegExp(literal: string): string {
-  return literal.replace(REGEX_METACHARACTERS, "\\$&");
+/**
+ * Escape one literal run of a glob so it matches itself.
+ *
+ * DELIBERATELY NOT NAMED escapeRegExp (2026-08-20 audit). gap-analysis exports a
+ * function by that name whose character class differs from this one by exactly
+ * one character - it escapes `*` as well, because it builds a literal
+ * alternation rather than a glob. Two same-named helpers differing that subtly
+ * are an invitation to "deduplicate" them into one, and doing so here would
+ * escape the wildcard and make every Azure action pattern match itself and
+ * nothing else - so `Microsoft.Insights/*` would stop granting anything. The
+ * distinction lives in the name now rather than only in a comment.
+ */
+function escapeGlobLiteral(literal: string): string {
+  return literal.replace(GLOB_LITERAL_METACHARACTERS, "\\$&");
 }
 
 /**
@@ -80,7 +97,7 @@ function escapeRegExp(literal: string): string {
  * @returns `true` when the glob matches the entire action string.
  */
 export function actionMatchesGlob(glob: string, action: string): boolean {
-  const pattern = `^${glob.split("*").map(escapeRegExp).join(".*")}$`;
+  const pattern = `^${glob.split("*").map(escapeGlobLiteral).join(".*")}$`;
   return new RegExp(pattern, "i").test(action);
 }
 

@@ -73,7 +73,7 @@ default; every rule reads a token so both themes track. Audit light parity (>=4.
 9. **3-segment progress bar** (wizard) - rounded pill segments: green complete, blue
    current, dark empty.
 10. **Buttons** - primary = accent (blue) fill; positive/CTA = ok (green) fill with dark
-    text (Deploy All / Get Started / Continue / Browse Samples); secondary = ghost (dark
+    text (Deploy All / Get Started / Continue); secondary = ghost (dark
     fill + subtle border). Rounded ~8px.
 11. **REPOS / connections status line** - a `REPOS` label + green dots + monospace counts
     (`Sentinel (549 solutions)`), and the wizard's Connections/Repositories footer with

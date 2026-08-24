@@ -2,9 +2,11 @@
 
 The active project is the SOC Optimization Toolkit in
 `soc-optimizationtoolkit/` - a Cribl App for the Cribl Apps platform
-(Cribl.Cloud), with a local Node-hosted variant for customer-managed
-deployments. This page gets the app installed and producing value; the
+(Cribl.Cloud). This page gets the app installed and producing value; the
 [repository README](README.md) describes what it does.
+
+On a customer-managed leader, where Cribl Apps is not available, use the
+[DCR templates](README.md#choosing-a-path) instead.
 
 ## Install the app in Cribl.Cloud (recommended)
 
@@ -60,19 +62,20 @@ analyze samples, deploy DCRs + Cribl pack) - **DCR Automation** -
 `.tgz` - confirm. KV store data and settings are preserved, so the Azure
 connection and app state survive upgrades; access permissions are kept.
 
-## Local app (customer-managed Cribl)
+## Customer-managed Cribl (no Cribl Apps)
 
-For self-hosted leaders where Cribl Apps is not available:
+Cribl Apps install on Cribl.Cloud leaders only, so the toolkit cannot run
+against a customer-managed leader. Deploy the DCR by hand instead: pick the
+table's template from
+[`Azure/CustomDeploymentTemplates/DCR-Templates/SentinelNativeTables/`](Azure/CustomDeploymentTemplates/DCR-Templates/SentinelNativeTables/)
+- `DataCollectionRules(NoDCE)/` for a Direct DCR, which is the right default
+- deploy it through the Azure Portal or CLI, then point a Cribl **Microsoft
+Sentinel** destination at the DCR it creates.
 
-```bash
-cd soc-optimizationtoolkit
-npm install
-npm run local     # builds and starts the local Node host
-```
-
-The first run is an onboarding GUI that walks through connecting the
-leader and Azure. Configuration lives in
-`apps/local-app/config/local-config.json`.
+Step-by-step instructions, including the CLI and PowerShell commands and the
+parameters each template takes, are in
+[`DCR-Templates/SentinelNativeTables/README.md`](https://github.com/criblio/Cribl-Microsoft/blob/main/Azure/CustomDeploymentTemplates/DCR-Templates/SentinelNativeTables/README.md).
+The [README](README.md#the-manual-option) compares the two paths.
 
 ## Build the package from source
 

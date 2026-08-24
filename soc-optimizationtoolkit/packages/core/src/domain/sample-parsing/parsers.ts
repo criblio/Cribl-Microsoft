@@ -5,6 +5,15 @@
  *
  * Pure: no IO, no fetch, no React, no Date/crypto.
  *
+ * ORIGINAL-LINE CAPTURE (2026-08-18): every LINE-ORIENTED parser takes an
+ * optional `sourceLines` accumulator and pushes the input line that produced
+ * each record, AT THE POINT the record is produced - so a parser that FILTERS a
+ * line (parseCef skips lines without "CEF:", parseCsv drops single-field rows)
+ * cannot drift the pairing. That is what lets parseSampleContent keep the raw
+ * vendor bytes instead of a re-serialization; see its `rawEvents` note. JSON and
+ * NDJSON deliberately do not participate: re-serializing a parsed JSON record
+ * loses nothing a downstream pipeline can observe.
+ *
  * `parseCsvWithHeaders` (external header resolution) is deliberately NOT here -
  * that is Unit 12 (headerless CSV + vendor feed-config resolution). This module
  * ports only the INTERNAL headerless parseCsv used by parseSampleContent's
@@ -12,7 +21,7 @@
  */
 
 import type { SampleFormat } from "./models";
-import { PANOS_CSV_HEADERS } from "./panos-dictionary";
+import { panosHeadersFor } from "./panos-dictionary";
 
 // ---------------------------------------------------------------------------
 // Syslog prefix stripping (shared by parseCsv and capture inner detection)
@@ -92,7 +101,10 @@ export function parseNdjson(content: string): Array<Record<string, unknown>> {
  * fields) or headerless positional data (PAN-OS syslog). Ported verbatim from
  * legacy parseCsv.
  */
-export function parseCsv(content: string): Array<Record<string, unknown>> {
+export function parseCsv(
+  content: string,
+  sourceLines?: string[],
+): Array<Record<string, unknown>> {
   const lines = content.trim().split("\n").filter(Boolean);
   if (lines.length === 0) {
     return [];
@@ -112,78 +124,116 @@ export function parseCsv(content: string): Array<Record<string, unknown>> {
       firstFields.forEach((header, i) => {
         record[header] = values[i] ?? "";
       });
+      sourceLines?.push(line);
       return record;
     });
   }
 
   // Headerless: strip syslog prefix, detect PAN-OS TRAFFIC/THREAT by position 3.
-  return lines
-    .map((line) => {
-      const stripped = stripSyslogPrefix(line);
-      const values = stripped
-        .split(",")
-        .map((v) => v.trim().replace(/^"|"$/g, ""));
-      const record: Record<string, unknown> = {};
+  // A for-loop rather than map+filter so the source line is pushed only for
+  // records that SURVIVE the >1-field filter - map+filter would push for the
+  // dropped ones too and shift every later pairing by one.
+  const out: Array<Record<string, unknown>> = [];
+  for (const line of lines) {
+    const stripped = stripSyslogPrefix(line);
+    const values = stripped
+      .split(",")
+      .map((v) => v.trim().replace(/^"|"$/g, ""));
+    const record: Record<string, unknown> = {};
 
-      const logType = values[3];
-      let colNames: readonly string[] | null = null;
-      if (logType === "TRAFFIC") {
-        colNames = PANOS_CSV_HEADERS.TRAFFIC;
-      } else if (logType === "THREAT") {
-        colNames = PANOS_CSV_HEADERS.THREAT;
-      }
+    // EVERY dictionary, not the two that were hardcoded (2026-08-20 audit).
+    // PANOS_CSV_HEADERS carries eight - TRAFFIC, THREAT, SYSTEM, CONFIG,
+    // GLOBALPROTECT, AUTHENTICATION, DECRYPTION, HIP-MATCH - and six of them
+    // sat unused behind an if/else that named only the first two.
+    //
+    // This read "seven ... five" until the count was checked by hand:
+    // "HIP-MATCH" is a QUOTED key, so a pattern matching bare identifiers finds
+    // seven and calls the eighth missing. See the warning on PANOS_CSV_HEADERS,
+    // which records the same miscount happening twice on 2026-08-20.
+    //
+    // It went unnoticed because it was unreachable: an uploaded PAN-OS file was
+    // classified "syslog" and parsed to zero events, so this branch never ran on
+    // real input. The format-detection fix that routes PAN-OS here for the first
+    // time is what exposed it - a fix uncovering the next defect down.
+    //
+    // The cost of leaving it: a GLOBALPROTECT or CONFIG export parses to
+    // positional _0.._N, so field mapping sees `_3` instead of `type` and `_7`
+    // instead of `src`, and the generated pack maps numbers.
+    const logType = values[3];
+    // panosHeadersFor, not a plain index: real PAN-OS emits HIPMATCH while the
+    // dictionary keys HIP-MATCH, so an index missed every HIP-Match event.
+    const colNames: readonly string[] | null =
+      logType !== undefined ? (panosHeadersFor(logType) ?? null) : null;
 
-      if (colNames) {
-        colNames.forEach((name, i) => {
-          if (i < values.length && !name.startsWith("future_use")) {
-            record[name] = values[i] ?? "";
-          }
-        });
-      } else {
-        values.forEach((value, i) => {
-          record[`_${i}`] = value;
-        });
-      }
-      return record;
-    })
-    .filter((record) => Object.keys(record).length > 1);
+    if (colNames) {
+      colNames.forEach((name, i) => {
+        if (i < values.length && !name.startsWith("future_use")) {
+          record[name] = values[i] ?? "";
+        }
+      });
+    } else {
+      values.forEach((value, i) => {
+        record[`_${i}`] = value;
+      });
+    }
+    if (Object.keys(record).length > 1) {
+      out.push(record);
+      sourceLines?.push(line);
+    }
+  }
+  return out;
 }
 
-/** Parse key=value lines (Palo Alto, FortiGate, ...). Verbatim from legacy. */
-export function parseKv(content: string): Array<Record<string, unknown>> {
-  return content
-    .trim()
-    .split("\n")
-    .filter(Boolean)
-    .map((line) => {
-      const record: Record<string, unknown> = {};
-      // key="quoted value" | key=bareValue (a comma only splits when not
-      // followed by whitespace, so "a,b" stays one value but "a, b" does not).
-      const regex = /(\w+)=(?:"([^"]*)"|((?:[^\s,]|,(?=\S))+))/g;
-      let match: RegExpExecArray | null;
-      while ((match = regex.exec(line)) !== null) {
-        record[match[1]] = match[2] ?? match[3] ?? "";
-      }
-      if (Object.keys(record).length === 0) {
-        for (const pair of line.split(/\s+/)) {
-          const eqIdx = pair.indexOf("=");
-          if (eqIdx > 0) {
-            record[pair.slice(0, eqIdx)] = pair.slice(eqIdx + 1);
-          }
+/**
+ * Parse key=value lines (Palo Alto, FortiGate, ...). Verbatim from legacy.
+ *
+ * NOT the same function as `parseKvLine` in ./splitting, which became a sibling
+ * when the splitter was rehomed here (ADR 0003). That one is a cheap probe used
+ * only to find a DISCRIMINATOR field; this one is full field extraction and is
+ * what feeds the schema. They are deliberately separate: merging them would put
+ * the splitter's log-type naming - which is the tagged-sample store's KEY - on
+ * this function's change budget, and re-keying an operator's stored samples is
+ * silent. If you touch one, do not assume the other should follow.
+ */
+export function parseKv(
+  content: string,
+  sourceLines?: string[],
+): Array<Record<string, unknown>> {
+  const out: Array<Record<string, unknown>> = [];
+  for (const line of content.trim().split("\n").filter(Boolean)) {
+    const record: Record<string, unknown> = {};
+    // key="quoted value" | key=bareValue (a comma only splits when not
+    // followed by whitespace, so "a,b" stays one value but "a, b" does not).
+    const regex = /(\w+)=(?:"([^"]*)"|((?:[^\s,]|,(?=\S))+))/g;
+    let match: RegExpExecArray | null;
+    while ((match = regex.exec(line)) !== null) {
+      record[match[1]] = match[2] ?? match[3] ?? "";
+    }
+    if (Object.keys(record).length === 0) {
+      for (const pair of line.split(/\s+/)) {
+        const eqIdx = pair.indexOf("=");
+        if (eqIdx > 0) {
+          record[pair.slice(0, eqIdx)] = pair.slice(eqIdx + 1);
         }
       }
-      return record;
-    })
-    .filter((record) => Object.keys(record).length > 0);
+    }
+    if (Object.keys(record).length > 0) {
+      out.push(record);
+      sourceLines?.push(line);
+    }
+  }
+  return out;
 }
 
 /** Parse CEF (CEF:0|vendor|product|...|extension). Verbatim from legacy. */
-export function parseCef(content: string): Array<Record<string, unknown>> {
-  return content
-    .trim()
-    .split("\n")
-    .filter((line) => line.includes("CEF:"))
-    .map((line) => {
+export function parseCef(
+  content: string,
+  sourceLines?: string[],
+): Array<Record<string, unknown>> {
+  const out: Array<Record<string, unknown>> = [];
+  for (const line of content.trim().split("\n")) {
+    if (!line.includes("CEF:")) continue;
+    {
       const cefStart = line.indexOf("CEF:");
       const cefPart = line.slice(cefStart);
       const parts = cefPart.split("|");
@@ -208,18 +258,24 @@ export function parseCef(content: string): Array<Record<string, unknown>> {
       if (cefStart > 0) {
         record["_syslogHeader"] = line.slice(0, cefStart).trim();
       }
-      return record;
-    })
-    .filter((record) => Object.keys(record).length > 0);
+      if (Object.keys(record).length > 0) {
+        out.push(record);
+        sourceLines?.push(line);
+      }
+    }
+  }
+  return out;
 }
 
 /** Parse LEEF (LEEF:ver|vendor|product|...|tab-delimited kvp). Verbatim. */
-export function parseLeef(content: string): Array<Record<string, unknown>> {
-  return content
-    .trim()
-    .split("\n")
-    .filter((line) => line.includes("LEEF:"))
-    .map((line) => {
+export function parseLeef(
+  content: string,
+  sourceLines?: string[],
+): Array<Record<string, unknown>> {
+  const out: Array<Record<string, unknown>> = [];
+  for (const line of content.trim().split("\n")) {
+    if (!line.includes("LEEF:")) continue;
+    {
       const leefStart = line.indexOf("LEEF:");
       const parts = line.slice(leefStart).split("|");
       const record: Record<string, unknown> = {};
@@ -239,18 +295,23 @@ export function parseLeef(content: string): Array<Record<string, unknown>> {
           }
         }
       }
-      return record;
-    })
-    .filter((record) => Object.keys(record).length > 0);
+      if (Object.keys(record).length > 0) {
+        out.push(record);
+        sourceLines?.push(line);
+      }
+    }
+  }
+  return out;
 }
 
 /** Parse RFC 3164 / RFC 5424 syslog lines. Verbatim from legacy. */
-export function parseSyslog(content: string): Array<Record<string, unknown>> {
-  return content
-    .trim()
-    .split("\n")
-    .filter(Boolean)
-    .map((line) => {
+export function parseSyslog(
+  content: string,
+  sourceLines?: string[],
+): Array<Record<string, unknown>> {
+  const out: Array<Record<string, unknown>> = [];
+  for (const line of content.trim().split("\n").filter(Boolean)) {
+    {
       const record: Record<string, unknown> = { _raw: line };
       const rfc3164 = line.match(
         /^(?:<(\d+)>)?(\w{3}\s+\d+\s+\d+:\d+:\d+)\s+(\S+)\s+(\S+?)(?:\[(\d+)\])?:\s*(.*)/,
@@ -285,9 +346,13 @@ export function parseSyslog(content: string): Array<Record<string, unknown>> {
         record["MsgID"] = rfc5424[7];
         record["Message"] = rfc5424[8];
       }
-      return record;
-    })
-    .filter((record) => Object.keys(record).length > 1);
+      if (Object.keys(record).length > 1) {
+        out.push(record);
+        sourceLines?.push(line);
+      }
+    }
+  }
+  return out;
 }
 
 /**
@@ -298,6 +363,7 @@ export function parseSyslog(content: string): Array<Record<string, unknown>> {
 export function parseByFormat(
   content: string,
   format: SampleFormat,
+  sourceLines?: string[],
 ): Array<Record<string, unknown>> {
   switch (format) {
     case "json":
@@ -305,17 +371,21 @@ export function parseByFormat(
     case "ndjson":
       return parseNdjson(content);
     case "csv":
-      return parseCsv(content);
+      return parseCsv(content, sourceLines);
     case "kv":
-      return parseKv(content);
+      return parseKv(content, sourceLines);
     case "cef":
-      return parseCef(content);
+      return parseCef(content, sourceLines);
     case "leef":
-      return parseLeef(content);
+      return parseLeef(content, sourceLines);
     case "syslog":
-      return parseSyslog(content);
+      return parseSyslog(content, sourceLines);
     default: {
-      const fallback = [
+      // Annotated so the JSON/NDJSON parsers (which take no accumulator and
+      // never need one) sit in the same array as the line-oriented ones.
+      const fallback: Array<
+        (c: string, s?: string[]) => Array<Record<string, unknown>>
+      > = [
         parseJson,
         parseNdjson,
         parseCef,
@@ -326,8 +396,13 @@ export function parseByFormat(
       ];
       for (const parser of fallback) {
         try {
-          const result = parser(content);
+          // Each attempt gets a FRESH accumulator: a parser that produces
+          // unusable records still pushed lines into it, and those must not
+          // survive into the attempt that wins.
+          const attemptLines: string[] = [];
+          const result = parser(content, attemptLines);
           if (result.length > 0 && Object.keys(result[0]).length > 1) {
+            sourceLines?.push(...attemptLines);
             return result;
           }
         } catch {

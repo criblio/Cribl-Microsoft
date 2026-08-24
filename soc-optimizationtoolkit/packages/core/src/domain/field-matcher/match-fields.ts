@@ -35,6 +35,7 @@ import {
 } from "./knowledge-bases";
 import { scoreMatch, typeValueBoost } from "./scoring";
 import { SKIP_OVERFLOW_FIELDS, getOverflowConfig } from "./overflow";
+import { isCustomTableName } from "../custom-table/custom-table";
 
 /**
  * A Phase-0 field-mapping override (highest matcher priority). Despite the
@@ -315,12 +316,45 @@ export function matchFields(
   // those fields are dropped (enabled stays false, per the legacy contract).
   const warnings: string[] = [];
   if (overflow.length > 0 && !overflowFieldExists) {
+    // THE REMEDY DEPENDS ON WHO OWNS THE TABLE (user report, 2026-08-18).
+    //
+    // "Add a column to the table" is sound advice for a custom _CL table - the
+    // toolkit creates those and can extend them. It is IMPOSSIBLE for a
+    // Microsoft-managed native table, and telling an operator to do something
+    // they cannot do is worse than saying nothing.
+    //
+    // Measured: pointing a log type at CrowdStrikeAlerts (tableType Microsoft,
+    // 108 purpose-built columns, no generic overflow column) produced exactly
+    // that impossible instruction for 161 dropped fields. CommonSecurityLog
+    // has AdditionalExtensions because CEF needs an extension catch-all; a
+    // native connector table has no reason to carry one.
+    //
+    // Same predicate the onboarding path routes on, imported rather than
+    // restated, so "custom" cannot come to mean two things.
+    //
+    // THREE BRANCHES, NOT TWO (2026-08-18 audit). destTableName is optional on
+    // this function and on matchSampleToSchema, and isCustomTableName("") is
+    // false - so an UNNAMED table fell into the native branch and was told
+    // "destination is a native table, so a column cannot be added to it". That
+    // is a confident claim about a table this call does not know, and the
+    // ownership claim is the entire basis of the advice. With no name there is
+    // no owner to name, so it says what is true for both and stops.
+    const named = (destTableName ?? "").trim();
+    const table = named || "destination";
+    const remedy =
+      named === ""
+        ? `Map more of these fields onto the destination's existing columns, or ` +
+          `send this log type to a table that can hold the rest.`
+        : isCustomTableName(named)
+          ? `Add a ${overflowDef.fieldName} (${overflowDef.fieldType}) column to the ` +
+            `table to capture them.`
+          : `${table} is a native table, so a column cannot be added to it - map ` +
+            `more of these fields onto its existing columns, accept the loss, or ` +
+            `send this log type to a custom _CL table if none of it may be lost.`;
     warnings.push(
       `${overflow.length} unmatched field(s) cannot be preserved: the overflow ` +
         `column "${overflowDef.fieldName}" is absent from the ` +
-        `${destTableName || "destination"} schema, so these fields are dropped. ` +
-        `Add a ${overflowDef.fieldName} (${overflowDef.fieldType}) column to the ` +
-        `table to capture them.`,
+        `${table} schema, so these fields are dropped. ${remedy}`,
     );
   }
 

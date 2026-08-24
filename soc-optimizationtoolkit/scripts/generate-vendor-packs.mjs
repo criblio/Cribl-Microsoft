@@ -41,6 +41,22 @@ const OUT = path.join(
   "packages/core/src/assets/generated-vendor-packs.json",
 );
 
+// The LOG-TYPE catalog (ADR 0003). An Elastic integration splits a vendor's
+// output into `data_stream/<stream>/` directories, and those stream names ARE
+// the vendor's own log-type split - the thing a Sentinel solution with no
+// analytic rules can tell you nothing about. This walk already happens for
+// mining; keeping the names costs nothing and is the only breadth source for
+// log types we have.
+//
+// Written ONLY by --bulk, which sees every package's directory listing. The
+// curated API mode fetches per data stream by name and never enumerates them,
+// so it would silently write a partial catalog - it leaves this file alone.
+const LOG_TYPES_OUT = path.join(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "..",
+  "packages/core/src/assets/generated-vendor-log-types.json",
+);
+
 // NDJSON-raw vendors only (KV/CSV vendors need the vendor parser to pair
 // values; their knowledge lives in the hand-curated aliases instead).
 const TARGETS = [
@@ -311,6 +327,40 @@ function writePacks(packs) {
   for (const p of packs) console.log(`  ${p.id}: ${p.mappings.length} mappings`);
 }
 
+/**
+ * Write the log-type catalog. `streamsByPkg` maps package name to the
+ * `data_stream/` directory names seen for it.
+ *
+ * Streams whose name says nothing about a LOG TYPE are dropped: a package with
+ * a single generic stream ("log", "generic") has not told us how the vendor
+ * splits its output, and offering "log" as a recommended log type is noise
+ * dressed as knowledge.
+ */
+const UNINFORMATIVE_STREAMS = new Set(["log", "logs", "generic", "event", "events"]);
+
+function writeLogTypes(entries) {
+  const packs = entries
+    .map(({ pkg, vendor, keywords, streams }) => ({
+      id: `generated-${pkg}`,
+      vendor,
+      solutionKeywords: keywords,
+      provenance: `Generated from the elastic/integrations ${pkg} data_stream directory names (the vendor's own feed split)`,
+      docUrl: `https://github.com/elastic/integrations/tree/${FIXTURES_COMMIT}/packages/${pkg}`,
+      logTypes: [...new Set(streams)]
+        .filter((s) => !UNINFORMATIVE_STREAMS.has(s.toLowerCase()))
+        .sort()
+        .map((value) => ({ value })),
+    }))
+    .filter((p) => p.logTypes.length > 0)
+    .sort((a, b) => a.id.localeCompare(b.id));
+  const json = JSON.stringify(packs, null, 1) + "\n";
+  fs.writeFileSync(LOG_TYPES_OUT, json);
+  const total = packs.reduce((sum, p) => sum + p.logTypes.length, 0);
+  console.log(
+    `wrote ${packs.length} log-type packs / ${total} log types (${Math.round(json.length / 1024)} KiB) -> ${LOG_TYPES_OUT}`,
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Curated API mode (default): the hand-picked TARGETS via the GitHub API.
 // ---------------------------------------------------------------------------
@@ -332,6 +382,10 @@ async function runCurated() {
     const pack = packFromSources(target.pkg, target.vendor, target.keywords, bySource, 1);
     if (pack !== null) packs.push(pack);
   }
+  // No writeLogTypes here ON PURPOSE: curated mode fetches each data stream BY
+  // NAME from the TARGETS list and never enumerates a package's directory, so
+  // it cannot see the vendor's full feed split. Writing from here would replace
+  // the catalog with a partial one that looks complete.
   writePacks(packs);
 }
 
@@ -363,6 +417,9 @@ function keywordsFromTitle(title) {
 }
 
 async function runBulk(rootDir) {
+  // Stream names per package, for the log-type catalog. Bulk mode is the only
+  // mode that enumerates data_stream/, so it is the only writer.
+  const logTypeEntries = [];
   const curatedByPkg = new Map(TARGETS.map((t) => [t.pkg, t]));
   const packagesDir = path.join(rootDir, "packages");
   const packs = [];
@@ -390,8 +447,10 @@ async function runBulk(rootDir) {
       continue;
     }
     const bySource = new Map();
+    const streams = [];
     let sawFixtures = false;
     for (const stream of fs.readdirSync(dataStreamDir)) {
+      streams.push(stream);
       const pipelineDir = path.join(dataStreamDir, stream, "_dev", "test", "pipeline");
       if (!fs.existsSync(pipelineDir)) continue;
       const files = fs.readdirSync(pipelineDir);
@@ -421,6 +480,10 @@ async function runBulk(rootDir) {
     const keywords = curated?.keywords ?? keywordsFromTitle(title);
     if (vendor === "" || keywords.length === 0) continue;
     // Bulk packs need >= 2 evidence-backed mappings to earn bundle weight.
+    // The log-type catalog is recorded even when the MAPPING mine came up
+    // empty: knowing a vendor's feed split is useful on its own, and the
+    // >=2-mapping evidence bar is about field mappings, not stream names.
+    logTypeEntries.push({ pkg, vendor, keywords, streams });
     const pack = packFromSources(pkg, vendor, keywords, bySource, curated ? 1 : 2);
     if (pack !== null) packs.push(pack);
     else skipped.nothingMined++;
@@ -429,6 +492,7 @@ async function runBulk(rootDir) {
     `bulk: ${packs.length} packs; skipped ${skipped.notSecurity} non-security, ${skipped.noPipeline} without fixtures, ${skipped.nothingMined} below the evidence bar`,
   );
   writePacks(packs);
+  writeLogTypes(logTypeEntries);
 }
 
 const bulkAt = process.argv.indexOf("--bulk");
