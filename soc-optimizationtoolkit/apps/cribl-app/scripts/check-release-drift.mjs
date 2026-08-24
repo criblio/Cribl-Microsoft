@@ -54,11 +54,12 @@ const SOURCE_PATHS = [
  *   backlog: string,
  *   sourceCommitsSinceRelease: number | null,
  * }} facts
- * @returns {{errors: string[], warnings: string[], packagedVersion: string | null}}
+ * @returns {{errors: string[], warnings: string[], notes: string[], packagedVersion: string | null}}
  */
 export function evaluateReleaseDrift(facts) {
   const errors = [];
   const warnings = [];
+  const notes = [];
 
   // The user directive from 2026-07-30 is that release/ holds EXACTLY the latest
   // tgz, and package.mjs prunes to enforce it. Two tarballs means the prune was
@@ -74,7 +75,7 @@ export function evaluateReleaseDrift(facts) {
         facts.releaseTarballs.join(', ') || 'nothing'
       }). Run scripts/package.mjs - it writes the tracked copy.`,
     );
-    return { errors, warnings, packagedVersion: null };
+    return { errors, warnings, notes, packagedVersion: null };
   }
 
   if (versions.length > 1) {
@@ -115,13 +116,22 @@ export function evaluateReleaseDrift(facts) {
   // The warning, and the only finding that is about work rather than about
   // bookkeeping. It cannot be an error: unreleased source is the normal state of
   // a feature branch.
-  if (facts.sourceCommitsSinceRelease !== null && facts.sourceCommitsSinceRelease > 0) {
+  //
+  // The null case gets a NOTE rather than silence. A check that prints the same
+  // clean line whether it counted zero commits or could not count at all reports
+  // an unmeasured absence as a measured zero - which is the inventory-standard
+  // rule this repo applies to Azure listings, and it applies to its own tooling.
+  if (facts.sourceCommitsSinceRelease === null) {
+    notes.push(
+      'Unreleased source was NOT measured - git could not answer (a shallow clone has no history to count). This run says nothing about whether release/ is behind.',
+    );
+  } else if (facts.sourceCommitsSinceRelease > 0) {
     warnings.push(
       `${facts.sourceCommitsSinceRelease} source commit(s) have landed since ${packagedVersion} was packaged. The tgz in release/ does not contain them, and neither does anything anyone installs from this repo.`,
     );
   }
 
-  return { errors, warnings, packagedVersion };
+  return { errors, warnings, notes, packagedVersion };
 }
 
 /**
@@ -196,8 +206,9 @@ function annotate(level, message) {
 
 async function main() {
   const facts = await gatherFacts();
-  const { errors, warnings, packagedVersion } = evaluateReleaseDrift(facts);
+  const { errors, warnings, notes, packagedVersion } = evaluateReleaseDrift(facts);
 
+  for (const note of notes) annotate('notice', note);
   for (const warning of warnings) annotate('warning', warning);
   for (const error of errors) annotate('error', error);
 
@@ -207,9 +218,15 @@ async function main() {
     return;
   }
 
+  // Name what was checked AND what was counted, so a run that measured nothing
+  // cannot be read as a run that found nothing.
+  const unreleased =
+    facts.sourceCommitsSinceRelease === null
+      ? 'unreleased source not measured'
+      : `${facts.sourceCommitsSinceRelease} source commit(s) since it was packaged`;
+
   console.log(
-    `Release ${packagedVersion} is consistent across package.json, release/, release-notes.md and backlog.md` +
-      `${warnings.length > 0 ? ` (${warnings.length} warning(s) above)` : ''}.`,
+    `Release ${packagedVersion} is consistent across package.json, release/, release-notes.md and backlog.md (${unreleased}).`,
   );
 }
 

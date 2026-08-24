@@ -887,7 +887,10 @@ failing when any of them names a different version.
 **Unreleased source WARNS and never fails**, which is the one rule to keep if
 this is ever rewritten: a feature branch normally carries source the last package
 does not, so failing there would mean packaging on every branch to stay green,
-which is how a check gets disabled rather than obeyed. The pins live beside it in
+which is how a check gets disabled rather than obeyed. When git cannot count -
+a shallow clone has no history - the run says so rather than printing the clean
+line a measured zero would print, because this repo's own inventory standard
+applies to its tooling too. The pins live beside it in
 `check-release-drift.test.mjs`, and the pure half takes facts so the cases can be
 stated without a repo, a git history or a tarball.
 

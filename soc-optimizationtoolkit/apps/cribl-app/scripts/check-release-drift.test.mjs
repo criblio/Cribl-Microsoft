@@ -21,6 +21,7 @@ describe('evaluateReleaseDrift', () => {
 
     expect(result.errors).toEqual([]);
     expect(result.warnings).toEqual([]);
+    expect(result.notes).toEqual([]);
     expect(result.packagedVersion).toBe('1.12.0');
   });
 
@@ -111,13 +112,26 @@ describe('evaluateReleaseDrift', () => {
     expect(result.warnings[0]).toContain('55 source commit(s)');
   });
 
-  it('says nothing about unreleased source when git could not count it', () => {
+  it('does not warn when git could not count, and does not stay silent either', () => {
     // A shallow clone has no history. "0 commits since the release" there would
-    // be a measured zero invented from an unmeasured absence.
+    // be a measured zero invented from an unmeasured absence - but so would a
+    // clean run indistinguishable from one that actually counted zero, which is
+    // why the unmeasured case is a NOTE rather than nothing.
     const result = evaluateReleaseDrift(facts({ sourceCommitsSinceRelease: null }));
 
     expect(result.warnings).toEqual([]);
     expect(result.errors).toEqual([]);
+    expect(result.notes).toHaveLength(1);
+    expect(result.notes[0]).toContain('NOT measured');
+  });
+
+  it('does not confuse a measured zero with an unmeasured one', () => {
+    const measured = evaluateReleaseDrift(facts({ sourceCommitsSinceRelease: 0 }));
+    const unmeasured = evaluateReleaseDrift(facts({ sourceCommitsSinceRelease: null }));
+
+    // Both are clean runs; only one of them checked.
+    expect(measured.notes).toEqual([]);
+    expect(unmeasured.notes).toHaveLength(1);
   });
 
   it('reports every drifted claim at once rather than the first', () => {
