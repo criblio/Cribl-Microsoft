@@ -894,10 +894,15 @@ applies to its tooling too. The pins live beside it in
 `check-release-drift.test.mjs`, and the pure half takes facts so the cases can be
 stated without a repo, a git history or a tarball.
 
-**1.12.0 IS CURRENT (2026-08-24).**
-`release/soc-optimizationtoolkit-1.12.0.tgz` - ADR-0003 in full, phases 0-5.
+**1.12.1 IS CURRENT (2026-08-24).**
+`release/soc-optimizationtoolkit-1.12.1.tgz` - the guid-column cast (ADR-0004)
+and the architecture-audit cleanup, on top of 1.12.0's ADR-0003 in full.
 Release notes in [release-notes.md](release-notes.md), started as an accumulating
-file at 1.4.0 and now current through 1.12.0.
+file at 1.4.0 and now current through 1.12.1.
+
+Note for anyone running 1.12.0: it does NOT contain the guid fix. Any DCR
+deployed from it still drops guid-typed columns, and the affected table columns
+stay null with no error raised. Upgrade before deploying.
 
 THREE TIMES, and that is why the check above exists. This line said "1.5.4 IS
 CURRENT" until 2026-08-17, by which point the app was at 1.11.11 - six minor
