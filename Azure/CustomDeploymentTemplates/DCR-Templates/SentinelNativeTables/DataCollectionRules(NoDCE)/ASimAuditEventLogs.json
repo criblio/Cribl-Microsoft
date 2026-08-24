@@ -1,0 +1,550 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "dataCollectionRuleName": {
+            "type": "string",
+            "metadata": {
+                "description": "Specifies the name of the Data Collection Rule to create."
+            }
+        },
+        "location": {
+            "defaultValue": "[resourceGroup().location]",
+            "type": "string",
+            "metadata": {
+                "description": "Specifies the location in which to create the Data Collection Rule."
+            }
+        },
+        "workspaceResourceId": {
+            "type": "string",
+            "metadata": {
+                "description": "Specifies the Azure resource ID of the Log Analytics workspace to use."
+            }
+        }
+    },
+    "resources": [{
+        "type": "Microsoft.Insights/dataCollectionRules",
+        "apiVersion": "2023-03-11",
+        "name": "[parameters('dataCollectionRuleName')]",
+        "location": "[parameters('location')]",
+        "kind": "Direct",
+        "properties": {
+            "streamDeclarations": {
+                "Custom-ASimAuditEventLogs": {
+                    "columns": [{
+                            "name": "ActingAppId",
+                            "type": "string"
+                        },
+                        {
+                            "name": "ActingAppName",
+                            "type": "string"
+                        },
+                        {
+                            "name": "ActingAppType",
+                            "type": "string"
+                        },
+                        {
+                            "name": "ActingOriginalAppType",
+                            "type": "string"
+                        },
+                        {
+                            "name": "ActorOriginalUserType",
+                            "type": "string"
+                        },
+                        {
+                            "name": "ActorScope",
+                            "type": "string"
+                        },
+                        {
+                            "name": "ActorScopeId",
+                            "type": "string"
+                        },
+                        {
+                            "name": "ActorSessionId",
+                            "type": "string"
+                        },
+                        {
+                            "name": "ActorUserAadId",
+                            "type": "string"
+                        },
+                        {
+                            "name": "ActorUserId",
+                            "type": "string"
+                        },
+                        {
+                            "name": "ActorUserIdType",
+                            "type": "string"
+                        },
+                        {
+                            "name": "ActorUsername",
+                            "type": "string"
+                        },
+                        {
+                            "name": "ActorUsernameType",
+                            "type": "string"
+                        },
+                        {
+                            "name": "ActorUserSid",
+                            "type": "string"
+                        },
+                        {
+                            "name": "ActorUserType",
+                            "type": "string"
+                        },
+                        {
+                            "name": "AdditionalFields",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "DvcAction",
+                            "type": "string"
+                        },
+                        {
+                            "name": "DvcDescription",
+                            "type": "string"
+                        },
+                        {
+                            "name": "DvcDomain",
+                            "type": "string"
+                        },
+                        {
+                            "name": "DvcDomainType",
+                            "type": "string"
+                        },
+                        {
+                            "name": "DvcFQDN",
+                            "type": "string"
+                        },
+                        {
+                            "name": "DvcHostname",
+                            "type": "string"
+                        },
+                        {
+                            "name": "DvcId",
+                            "type": "string"
+                        },
+                        {
+                            "name": "DvcIdType",
+                            "type": "string"
+                        },
+                        {
+                            "name": "DvcInterface",
+                            "type": "string"
+                        },
+                        {
+                            "name": "DvcIpAddr",
+                            "type": "string"
+                        },
+                        {
+                            "name": "DvcMacAddr",
+                            "type": "string"
+                        },
+                        {
+                            "name": "DvcOriginalAction",
+                            "type": "string"
+                        },
+                        {
+                            "name": "DvcOs",
+                            "type": "string"
+                        },
+                        {
+                            "name": "DvcOsVersion",
+                            "type": "string"
+                        },
+                        {
+                            "name": "DvcScope",
+                            "type": "string"
+                        },
+                        {
+                            "name": "DvcScopeId",
+                            "type": "string"
+                        },
+                        {
+                            "name": "DvcZone",
+                            "type": "string"
+                        },
+                        {
+                            "name": "EventCount",
+                            "type": "int"
+                        },
+                        {
+                            "name": "EventEndTime",
+                            "type": "datetime"
+                        },
+                        {
+                            "name": "EventMessage",
+                            "type": "string"
+                        },
+                        {
+                            "name": "EventOriginalResultDetails",
+                            "type": "string"
+                        },
+                        {
+                            "name": "EventOriginalSeverity",
+                            "type": "string"
+                        },
+                        {
+                            "name": "EventOriginalSubType",
+                            "type": "string"
+                        },
+                        {
+                            "name": "EventOriginalType",
+                            "type": "string"
+                        },
+                        {
+                            "name": "EventOriginalUid",
+                            "type": "string"
+                        },
+                        {
+                            "name": "EventOwner",
+                            "type": "string"
+                        },
+                        {
+                            "name": "EventProduct",
+                            "type": "string"
+                        },
+                        {
+                            "name": "EventProductVersion",
+                            "type": "string"
+                        },
+                        {
+                            "name": "EventReportUrl",
+                            "type": "string"
+                        },
+                        {
+                            "name": "EventResult",
+                            "type": "string"
+                        },
+                        {
+                            "name": "EventResultDetails",
+                            "type": "string"
+                        },
+                        {
+                            "name": "EventSchemaVersion",
+                            "type": "string"
+                        },
+                        {
+                            "name": "EventSeverity",
+                            "type": "string"
+                        },
+                        {
+                            "name": "EventStartTime",
+                            "type": "datetime"
+                        },
+                        {
+                            "name": "EventSubType",
+                            "type": "string"
+                        },
+                        {
+                            "name": "EventType",
+                            "type": "string"
+                        },
+                        {
+                            "name": "EventVendor",
+                            "type": "string"
+                        },
+                        {
+                            "name": "HttpUserAgent",
+                            "type": "string"
+                        },
+                        {
+                            "name": "NewValue",
+                            "type": "string"
+                        },
+                        {
+                            "name": "Object",
+                            "type": "string"
+                        },
+                        {
+                            "name": "ObjectId",
+                            "type": "string"
+                        },
+                        {
+                            "name": "ObjectType",
+                            "type": "string"
+                        },
+                        {
+                            "name": "OldValue",
+                            "type": "string"
+                        },
+                        {
+                            "name": "Operation",
+                            "type": "string"
+                        },
+                        {
+                            "name": "OriginalObjectType",
+                            "type": "string"
+                        },
+                        {
+                            "name": "RuleName",
+                            "type": "string"
+                        },
+                        {
+                            "name": "RuleNumber",
+                            "type": "int"
+                        },
+                        {
+                            "name": "SourceSystem",
+                            "type": "string"
+                        },
+                        {
+                            "name": "SrcDescription",
+                            "type": "string"
+                        },
+                        {
+                            "name": "SrcDeviceType",
+                            "type": "string"
+                        },
+                        {
+                            "name": "SrcDomain",
+                            "type": "string"
+                        },
+                        {
+                            "name": "SrcDomainType",
+                            "type": "string"
+                        },
+                        {
+                            "name": "SrcDvcId",
+                            "type": "string"
+                        },
+                        {
+                            "name": "SrcDvcIdType",
+                            "type": "string"
+                        },
+                        {
+                            "name": "SrcDvcScope",
+                            "type": "string"
+                        },
+                        {
+                            "name": "SrcDvcScopeId",
+                            "type": "string"
+                        },
+                        {
+                            "name": "SrcFQDN",
+                            "type": "string"
+                        },
+                        {
+                            "name": "SrcGeoCity",
+                            "type": "string"
+                        },
+                        {
+                            "name": "SrcGeoCountry",
+                            "type": "string"
+                        },
+                        {
+                            "name": "SrcGeoLatitude",
+                            "type": "real"
+                        },
+                        {
+                            "name": "SrcGeoLongitude",
+                            "type": "real"
+                        },
+                        {
+                            "name": "SrcGeoRegion",
+                            "type": "string"
+                        },
+                        {
+                            "name": "SrcHostname",
+                            "type": "string"
+                        },
+                        {
+                            "name": "SrcIpAddr",
+                            "type": "string"
+                        },
+                        {
+                            "name": "SrcOriginalRiskLevel",
+                            "type": "string"
+                        },
+                        {
+                            "name": "SrcPortNumber",
+                            "type": "int"
+                        },
+                        {
+                            "name": "SrcRiskLevel",
+                            "type": "int"
+                        },
+                        {
+                            "name": "TargetAppId",
+                            "type": "string"
+                        },
+                        {
+                            "name": "TargetAppName",
+                            "type": "string"
+                        },
+                        {
+                            "name": "TargetAppType",
+                            "type": "string"
+                        },
+                        {
+                            "name": "TargetDescription",
+                            "type": "string"
+                        },
+                        {
+                            "name": "TargetDeviceType",
+                            "type": "string"
+                        },
+                        {
+                            "name": "TargetDomain",
+                            "type": "string"
+                        },
+                        {
+                            "name": "TargetDomainType",
+                            "type": "string"
+                        },
+                        {
+                            "name": "TargetDvcId",
+                            "type": "string"
+                        },
+                        {
+                            "name": "TargetDvcIdType",
+                            "type": "string"
+                        },
+                        {
+                            "name": "TargetDvcOs",
+                            "type": "string"
+                        },
+                        {
+                            "name": "TargetDvcScope",
+                            "type": "string"
+                        },
+                        {
+                            "name": "TargetDvcScopeId",
+                            "type": "string"
+                        },
+                        {
+                            "name": "TargetFQDN",
+                            "type": "string"
+                        },
+                        {
+                            "name": "TargetGeoCity",
+                            "type": "string"
+                        },
+                        {
+                            "name": "TargetGeoCountry",
+                            "type": "string"
+                        },
+                        {
+                            "name": "TargetGeoLatitude",
+                            "type": "real"
+                        },
+                        {
+                            "name": "TargetGeoLongitude",
+                            "type": "real"
+                        },
+                        {
+                            "name": "TargetGeoRegion",
+                            "type": "string"
+                        },
+                        {
+                            "name": "TargetHostname",
+                            "type": "string"
+                        },
+                        {
+                            "name": "TargetIpAddr",
+                            "type": "string"
+                        },
+                        {
+                            "name": "TargetOriginalAppType",
+                            "type": "string"
+                        },
+                        {
+                            "name": "TargetOriginalRiskLevel",
+                            "type": "string"
+                        },
+                        {
+                            "name": "TargetPortNumber",
+                            "type": "int"
+                        },
+                        {
+                            "name": "TargetRiskLevel",
+                            "type": "int"
+                        },
+                        {
+                            "name": "TargetUrl",
+                            "type": "string"
+                        },
+                        {
+                            "name": "ThreatCategory",
+                            "type": "string"
+                        },
+                        {
+                            "name": "ThreatConfidence",
+                            "type": "int"
+                        },
+                        {
+                            "name": "ThreatField",
+                            "type": "string"
+                        },
+                        {
+                            "name": "ThreatFirstReportedTime",
+                            "type": "datetime"
+                        },
+                        {
+                            "name": "ThreatId",
+                            "type": "string"
+                        },
+                        {
+                            "name": "ThreatIpAddr",
+                            "type": "string"
+                        },
+                        {
+                            "name": "ThreatIsActive",
+                            "type": "boolean"
+                        },
+                        {
+                            "name": "ThreatLastReportedTime",
+                            "type": "datetime"
+                        },
+                        {
+                            "name": "ThreatName",
+                            "type": "string"
+                        },
+                        {
+                            "name": "ThreatOriginalConfidence",
+                            "type": "string"
+                        },
+                        {
+                            "name": "ThreatOriginalRiskLevel",
+                            "type": "string"
+                        },
+                        {
+                            "name": "ThreatRiskLevel",
+                            "type": "int"
+                        },
+                        {
+                            "name": "TimeGenerated",
+                            "type": "datetime"
+                        },
+                        {
+                            "name": "ValueType",
+                            "type": "string"
+                        }
+                    ]
+                }
+            },
+            "destinations": {
+                "logAnalytics": [{
+                    "workspaceResourceId": "[parameters('workspaceResourceId')]",
+                    "name": "logAnalyticsWorkspace"
+                }]
+            },
+            "dataFlows": [{
+                    "streams": [
+                        "Custom-ASimAuditEventLogs"
+                    ],
+                    "destinations": [
+                        "logAnalyticsWorkspace"
+                    ],
+                    "transformKql": "source",
+                    "outputStream": "Microsoft-ASimAuditEventLogs"
+                }
+            ]
+        }
+    }],
+    "outputs": {
+        "dataCollectionRuleId": {
+            "type": "string",
+            "value": "[resourceId('Microsoft.Insights/dataCollectionRules', parameters('dataCollectionRuleName'))]"
+        }
+    }
+}
