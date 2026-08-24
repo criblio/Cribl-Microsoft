@@ -84,7 +84,12 @@ export function evaluateReleaseDrift(facts) {
     );
   }
 
-  const packagedVersion = versions.slice().sort().at(-1) ?? versions[0];
+  // Ordered NUMERICALLY, not lexicographically. A default sort compares strings,
+  // where "1.9.0" beats "1.12.0" - so the one state this branch exists to handle
+  // would resolve every claim below against the older tarball and report the
+  // correct files as the drifted ones. package.mjs parses versions numerically
+  // for the same reason; it cannot be imported here because it packages on load.
+  const packagedVersion = versions.slice().sort(compareVersions).at(-1) ?? versions[0];
 
   // A manifest ahead of the tarball is the double-bump this repo has already hit:
   // editing package.json and THEN packaging bumps twice, and the tgz name is the
@@ -132,6 +137,13 @@ export function evaluateReleaseDrift(facts) {
   }
 
   return { errors, warnings, notes, packagedVersion };
+}
+
+/** Compares X.Y.Z by component, so 1.12.0 sorts above 1.9.0. */
+function compareVersions(a, b) {
+  const left = a.split('.').map(Number);
+  const right = b.split('.').map(Number);
+  return left[0] - right[0] || left[1] - right[1] || left[2] - right[2];
 }
 
 /**

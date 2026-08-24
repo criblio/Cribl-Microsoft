@@ -80,8 +80,11 @@ describe('evaluateReleaseDrift', () => {
   it('refuses a release directory holding more than the latest tarball', () => {
     const result = evaluateReleaseDrift(
       facts({
+        // 1.9.0 rather than 1.11.15 on purpose: it is GREATER as a string and
+        // LESSER as a version, so a default sort picks it and this pin fails.
+        // The pair that agrees under both orderings cannot tell the two apart.
         releaseTarballs: [
-          'soc-optimizationtoolkit-1.11.15.tgz',
+          'soc-optimizationtoolkit-1.9.0.tgz',
           'soc-optimizationtoolkit-1.12.0.tgz',
         ],
       }),
