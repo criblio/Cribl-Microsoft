@@ -5,8 +5,47 @@
 is worth reading if you want the full argument - but everything required to do
 the work is below, including the reasoning you need to avoid undoing it.
 
-Written 2026-08-18 by a planning session, from a live read of the code. Nothing
-here has been executed.
+Written 2026-08-18 by a planning session, from a live read of the code.
+
+> **EXECUTION STATUS (2026-08-23), branch `feature/log-type-recommendation`,
+> PR #119: ALL PHASES 0-5 ARE DONE.** Phase 4 shipped both its paths, capture
+> and lake query, in core and UI. Phase 5 shipped 2026-08-23 - the Lake counts
+> now reach the recommendation, entries and the unreferenced set both carry a
+> volume, and both rank by it. No threshold was added, by decision.
+>
+> NOT verified against a real workspace. See "Needs live verification" - the
+> suite that settles it is `packages/core/src/testing/live-verify.test.ts`.
+>
+> Phase 3 shipped as `discoverSampleSources` (usecase), `domain/sample-sources`
+> (pure inventory) and `SampleSourcePicker` (UI). It DISCOVERS and lets the
+> operator choose; it acquires nothing - that is Phase 4, which now has a
+> selected `SampleSourceRef` to act on.
+>
+> Phase 4 capture shipped as `domain/capture-filter` (filter composition),
+> `captureSamples` (usecase) and `CapturePanel` (UI). It conjoins the
+> `__inputId` clause with the log-type predicates, runs ONE bounded
+> `POST /system/capture`, splits the result with `splitSamplesByLogType`, and
+> PREVIEWS it - nothing is tagged without a click (user direction 2026-08-19),
+> because the sample store is replace-by-logType and a capture is the one intake
+> path where the APP chose the content rather than the operator. The filter
+> anchor departs from what is written below, on purpose: see the
+> **[SUPERSEDED]** block under "Filtered capture".
+>
+> Phase 2's recommendation grew from one source of evidence to THREE - shipped
+> detections, shipped workbooks, and the vendor's own documentation, each
+> labelled. See the second **[SUPERSEDED]** block under Phase 2; it also records
+> the one command that has to be run to populate the generated half of the
+> vendor tier, which ships empty.
+>
+> Phase 0's answers are in **[sample-acquisition-phase0.md](sample-acquisition-phase0.md)**
+> and they change four things written below. Read that document before finishing
+> Phase 4; the corrections are marked inline here as **[SUPERSEDED]**.
+>
+> **Nothing is blocked any more.** The one open question - whether `/search/*`
+> is addressed at the leader or under `/m/{searchGroupId}` - was answered on
+> 2026-08-19 by reading Cribl's own Search UI network calls against a live
+> workspace: it is **group-scoped**, `/m/{searchGroupId}/search/...`. Details and
+> caveats in the phase 0 doc, section 0.1b.
 
 **Where to branch from.** This document was committed on `fix/live-schema-race`
 (PR #118) and may not be on `main` yet. Check before you branch:
@@ -147,6 +186,23 @@ across, with pins. Losing the first means CEF packs ship parsed JSON in `_raw`
 instead of the raw line; losing the second means a CrowdStrike upload fragments
 across destination tables instead of consolidating.
 
+> **[SUPERSEDED - done, but not as written]**
+> - `consolidateByTableRouting` needed NO salvage. It runs only when
+>   `eventToTable` is non-empty and both callers pass two arguments, so it has
+>   never executed. Deleted as a dead capability.
+> - Raw-line preservation was a LIVE defect on the intake path, not a browse-path
+>   risk, and CEF was the one format that already half-worked (pack-assembly
+>   reconstructs a CEF line). It was fixed in `parseSampleContent` so every intake
+>   path benefits - LEEF, syslog, headerless CSV and Cribl captures included -
+>   rather than by porting `splitRepoFile`'s line-index trick.
+> - Two more modules had live consumers off the browse path and were rehomed, not
+>   deleted: `RemoteSampleSource` (used by the Repositories screen) to `ports/`,
+>   and `matchSolutionName` (used by `analyze-samples`) to `domain/sentinel-content`.
+> - `plannedTagged` was NOT kept. Its three references are all inside
+>   `loadBrowsed`, which was the modal's Load handler.
+> - `browseSampleId` is now `splitSampleId`; `splitting.ts` lives in
+>   `domain/sample-parsing`.
+
 **Test accounting:** state the before/after test count and where every removed
 test went, the same way the 2026-08-18 table-picker removal did. A removed pin
 must be traceable to either a replacement pin or a deleted capability.
@@ -173,6 +229,85 @@ against". Blocking the build on a lower bound blocks on a guess.
 
 This phase alone is worth shipping even if every later phase is abandoned.
 
+> **[SUPERSEDED - done, but the join already existed]** The 2026-08-04
+> completeness confirmation below the intake section already computed this exact
+> join. What was missing is the FORWARD-looking reading: the confirmation is
+> backward-looking and gates the build, which is useful when the pack is built
+> and useless when the operator is deciding what to fetch. Both halves now read
+> ONE coverage result computed once in `integrate-screen`, and a pin asserts they
+> agree. The panel is `LogTypeRecommendation`; the confirmation stopped
+> re-listing the same names.
+
+> **[SUPERSEDED - one source of evidence became three]** (2026-08-19)
+>
+> `deriveExpectedLogTypes` reads analytic rules and nothing else, so a Sentinel
+> solution shipping few or no detections got "the app cannot say which log types
+> it needs". Honest, and useless - precisely when the operator most needs
+> telling. The recommendation now merges THREE tiers, each making a DIFFERENT
+> claim, and the tier is on every row and in the lead sentence:
+>
+> - `detection` - a shipped analytic rule filters on this value. The strongest
+>   evidence there is: the solution demonstrably breaks without it.
+> - `workbook` - a shipped workbook queries it. Real, weaker; a dashboard panel
+>   is not a detection. Workbooks were already being fetched, but only inside the
+>   workbooks section's `analyze()`, which is a button pressed long after the
+>   operator chooses samples. They now come from the same content-first mount
+>   effect that already fetched the rules, which also fixed a real inconsistency:
+>   the early `contentRequirements` saw rules alone and under-counted the columns
+>   content needs, while `analyze()` had always merged both.
+> - `vendor` - the VENDOR documents this feed. Says nothing about what this
+>   solution needs, everything about what exists to be collected - which is
+>   exactly the decision facing an operator whose solution ships no detections.
+>
+> Collapsing them would tell an operator their solution requires data it has
+> never mentioned, so the tier is pinned. A list built entirely from vendor docs
+> reads *"this solution ships no detections that name a log type; Zscaler
+> documents ..."* and never *"your solution needs"*. The merge is
+> `mergeLogTypeSources` in `domain/log-type-catalog`; the type is
+> `DocumentedLogType`, NOT `VendorLogType`, because `sentinel-content` already
+> exports that name for the connector-decoder's per-table projection.
+>
+> **[SUPERSEDED 2026-08-23 - the generated tier is POPULATED.** Commit df3ad5e
+> ran the miner: `generated-vendor-log-types.json` carries 157 packs (197 KB).
+> The "someone has to run it" instruction below is a FALSE TO-DO - it was true
+> when written and has been satisfied. The precedence and trap notes are still
+> accurate; only the emptiness claim is not.]**
+>
+> **The vendor tier has two sub-tiers and the generated one ships EMPTY.** The
+> precedence mirrors `vendor-mapping-packs` deliberately - same problem, same
+> answer, already settled here: HAND packs, each cited to the vendor's own
+> documentation, are declared first and win the per-value dedupe over GENERATED
+> packs mined from the elastic/integrations `data_stream` directory names.
+> Thirteen hand packs (Zscaler ZIA and ZPA, PAN-OS, CrowdStrike FDR, FortiGate,
+> Cisco ASA, Check Point, Okta, Netskope, SentinelOne, Cortex XDR,
+> Corelight/Zeek, pfSense) therefore ARE the vendor tier today, and a breadth pin
+> asserts all thirteen ids are present - with the generated tier empty, a silent
+> shrink here removes the only fallback a solution with no detections has.
+>
+> **To populate the generated tier, someone has to run:**
+>
+> ```sh
+> node scripts/generate-vendor-packs.mjs --bulk <elastic-integrations-checkout>
+> ```
+>
+> It needs a local checkout and network, which the environment this shipped in
+> did not have. Curated mode deliberately does NOT write the catalog: it fetches
+> streams by name from `TARGETS` and never enumerates a package, so it would
+> replace the catalog with a partial one that looks complete.
+>
+> Two matching traps surfaced while widening to thirteen, both worth knowing
+> before adding a fourteenth. Substring keywords cannot express "most specific
+> wins", and EVERY Zscaler Private Access solution name contains "zscaler", so
+> the ZIA pack would have told a ZPA operator to collect ZIA Web - a feed that
+> does not exist in the product they are onboarding. Same trap on "Palo Alto
+> Networks Cortex XDR", which contains "palo alto" and would have been handed the
+> firewall's TRAFFIC and THREAT. Recommending the WRONG product's feeds is worse
+> than recommending nothing, so packs carry `excludeKeywords` and both cases are
+> pinned from both directions. Okta is the one vendor that does not fit the model
+> cleanly and says so in its own provenance: it emits ONE stream partitioned by a
+> dotted `eventType`, so its entries are prefixes (`user.session`,
+> `user.authentication`) rather than separate feeds.
+
 ---
 
 ## Phase 3 - source discovery
@@ -191,13 +326,45 @@ select via dropdown which dataset applies and/or ask if they would prefer to
 upload the samples manually or capture them with a user provided filter and
 source selection."*
 
+> **[SUPERSEDED - shipped, but as TWO modes, not three surfaces]**
+> (user direction 2026-08-19)
+>
+> "Search dataset" is NOT a listed surface. Cribl Search exposes Lake datasets in
+> its own dataset list - verified live: `cribl_metrics`, `Corelight` and
+> `LogSources` appear in both `/search/datasets` and
+> `/products/lake/lakes/default/datasets` - so listing both double-listed the
+> same dataset and asked the operator to choose between a place and the
+> mechanism for reading it. **Search is HOW a Lake dataset is queried.**
+>
+> The panel now asks one question first: **query a Cribl Lake dataset**, or
+> **capture from a live source**. The mode decides what is read:
+> Lake is ONE leader request needing no worker group; capture needs a group
+> first. Routing a source INTO Lake was considered and deferred.
+>
+> Discovery is also LAZY: page load costs one request (`listGroups`) and nothing
+> else. The first cut fanned out across every Stream worker group, which was up
+> to nine, and needed a cap that silently hid groups.
+
 ---
 
-## Phase 4 - three acquisition paths
+## Phase 4 - the acquisition paths
 
 Operator-chosen, each labelled for the evidence it gives.
 
+> **[SUPERSEDED - TWO modes, not three paths]** (user direction 2026-08-19)
+> Phase 3 shipped the choice as **query a Lake dataset** or **capture from a
+> live source**; manual upload is not a mode, it is the permanently-available
+> intake below. "Search" is the MECHANISM for querying a Lake dataset, not a
+> separate path - see the note under Phase 3. The Search section below still
+> describes the right QUERY (`summarize count() by <discriminator>`); read it as
+> the lake-query mode's implementation.
+
 ### Search (best evidence)
+
+> **STATUS: DONE (2026-08-20).** Shipped as `queryLakeSamples` +
+> `fetchLakeLogTypeEvents` (usecase), `lake-panel-state` (pure) and `LakePanel`,
+> wired from `integrate-screen`. The counts and the events are two separate
+> reads on purpose - see the usecase header for why.
 
 `summarize count() by <discriminator>` over the selected dataset. Returns the
 complete log-type list AND per-type volumes. The discriminator field comes from
@@ -207,7 +374,18 @@ values".**
 
 ### Filtered capture (bounded evidence)
 
+> **STATUS: DONE (2026-08-19), core and UI.** `domain/capture-filter`,
+> `captureSamples`, `CapturePanel`. Read the two `[SUPERSEDED]` blocks in this
+> section before changing any of it.
+
 Chosen source + operator filter, then `splitSamplesByLogType`.
+
+> **[SUPERSEDED - there is no source parameter]** `CaptureParamsReq` has no
+> source field. Source selection is a `__inputId` clause INSIDE the filter
+> string, so the generated filter must conjoin it:
+> `__inputId === "<input>" && /,TRAFFIC,/i.test(_raw)`. The editable filter shown
+> to the operator has to include that clause, or editing it silently widens the
+> capture to every source. See phase0 doc section 0.2.
 
 **Vendor-derived filter suggestions, as checkboxes** (user direction
 2026-08-18). Pre-tick the log types `deriveExpectedLogTypes` says the solution
@@ -233,11 +411,64 @@ Two correctness rules, both learned the hard way and both easy to get wrong:
    before the CSV (`<14>Aug 13 10:49:03 host 1,2026/...`). Comma-bounded is the
    sweet spot.
 
+> **[SUPERSEDED - the anchor is a DELIMITER SET, not a comma]** (2026-08-19,
+> shipped as `logTypePredicate` in `domain/capture-filter`)
+>
+> Rule 2 is right about the danger and wrong about the anchor. The operator picks
+> a SOURCE, not a format - so a comma anchor against a pipe-delimited CEF vendor
+> matches nothing, which is rule 1's zero-events failure again wearing a
+> different hat: an empty capture reads as "this source does not carry that log
+> type", an answer rather than an error. The shipped anchor is the SET of
+> delimiters the formats this app actually parses use - comma (CSV/PAN-OS), pipe
+> (CEF/LEEF), tab (LEEF extension), quote and colon (JSON), equals (KV),
+> whitespace, and the line ends:
+>
+> ```js
+> __inputId === "in_syslog" && /(^|[,|\t"':= \r\n])TRAFFIC([,|\t"':= \r\n]|$)/i.test(_raw)
+> ```
+>
+> `/` is excluded ON PURPOSE, and that exclusion is what still kills the false
+> positive rule 2 exists for: a URL path like `/api/traffic/list` does not match.
+> Pinned in both directions by EVALUATING the generated predicates as JavaScript
+> rather than asserting on their text - CSV, CEF, JSON and KV all match; the URL
+> and TRAFFICKING do not.
+>
+> Rule 1 shipped exactly as written, and it is not cosmetic: PAN-OS emits
+> `GLOBALPROTECT`, and a case-sensitive test returns zero events.
+>
+> One warning is emitted, and it checks ONE thing - the edit that costs you:
+> deleting the `__inputId` clause, after which the capture runs against every
+> source in the group and returns a mixture the operator believes came from one
+> place. `captureFilterWarning` deliberately does NOT validate the JavaScript;
+> Cribl evaluates the expression, and a filter that fails to compile comes back
+> carrying Cribl's own message, which beats a guess from here.
+
 Filter expressions are **generated into the same vendor-knowledge asset as the
 packs** (`generate-vendor-packs.mjs`, extended to keep the `data_stream`
 dimension it already walks), with hand-verified overrides winning - the same
 precedence rule `vendor-mapping-packs.ts` already pins. Not a hand-maintained
 second list.
+
+> **[SUPERSEDED - the checkboxes come from the log-type CATALOG, and the
+> generated half of it is empty]** (2026-08-19)
+>
+> The suggestions are not computed here as a second opinion. They are the Phase 2
+> recommendation's three tiers, rendered as checkboxes: content-derived types
+> (detection and workbook) are PRE-TICKED, vendor-documented ones are offered
+> unticked, and an already-provided type is unticked with the reason
+> ("capturing again replaces that sample"). Unticking everything captures the
+> whole source, which is a legitimate choice - an operator who does not yet know
+> what a source sends should be able to look first.
+>
+> The generator was extended to keep the `data_stream` dimension as planned.
+> **[CORRECTED 2026-08-23: its output is no longer empty** - the miner was run
+> in df3ad5e and the catalog carries 157 generated packs. The hand-verified
+> packs still WIN the per-value dedupe, which is the point; they are no longer
+> the whole tier.]
+>
+> Editing the filter by hand STOPS the checkboxes rewriting it. Silently
+> discarding someone's edit is worse than letting the two disagree, and the
+> `__inputId` warning still fires either way.
 
 ### Manual upload (fallback)
 
@@ -250,9 +481,62 @@ failure is already modelled one step later - `route-value-discriminator.ts`
 emits a placeholder filter and tells the operator instead of a match-all that
 swallows every route. Same failure, earlier.
 
+> **[DONE 2026-08-19, for the capture path.]** A capture whose events share no
+> discriminator is FLAGGED rather than presented as one invented log type, and an
+> empty capture is returned as a RESULT with both likely causes named - the
+> filter matched nothing, or the source is idle - because "no events" is what the
+> operator will otherwise read as a fact about their source. Two more things this
+> path had to get right and did: the response is read for the THREE shapes the
+> platform returns (documented NDJSON, an already-parsed array when the bridge
+> decoded it, and a `{count, items}` envelope), and a committed sample goes
+> through `tagSampleFromContent`, the SAME content-first parse an upload uses, so
+> the format is re-detected from the captured bytes rather than carried over -
+> pinned by capturing CEF that the split labelled "unknown" and asserting it
+> lands as "cef". A capture and an upload of the same events are
+> indistinguishable afterwards, which is the equivalence that made keeping the
+> splitter through the browser's removal worthwhile.
+>
+> A pin written for this caught a real gap in the implementation rather than
+> confirming it: `plannedCaptureSamples` skipped splits with zero LINES, but a
+> split holding a whitespace-only line - or a partial event caught at the edge of
+> the capture window - produced a tagged sample with zero RECORDS. That husk
+> satisfies the "samples provided" check while giving the mapping nothing to work
+> with. Having lines is not the same as having events; both are checked now.
+
 ---
 
-## Phase 5 - volume findings (flagged, not scoped)
+## Phase 5 - volume findings
+
+> **STATUS: DONE (2026-08-23).** Shipped as `LogTypeVolume` +
+> `rankUnreferencedByVolume` in `domain/log-type-catalog/merge.ts`, an optional
+> `volumes` input to `mergeLogTypeSources`, `eventCount` on `MergedLogType` and
+> `RecommendedLogType`, and `volumeWindow` on the recommendation. The counts are
+> lifted out of the Lake panel in `integrate-screen`'s `onQuery` handler - the
+> panel is unchanged and still receives exactly what it returned - so the query
+> that produced them is the one that reports them.
+>
+> WHAT WAS BUILT TO THE DECISION BELOW, not around it: the number is attached
+> and the list is ordered; nothing is flagged, no threshold exists, and no
+> headline mentions a volume. Two rules the pins hold and a future change must
+> not quietly drop:
+>
+> - **Unmeasured renders nothing** - not 0, not "unknown". The `eventCount` key
+>   is absent rather than undefined, so nothing downstream can print a number
+>   nobody measured. A measured zero, which IS an answer, is carried.
+> - **Volume ranks WITHIN a tier, never across one.** A vendor-documented feed
+>   with 890K events stays below a detection-tier log type with three. The tier
+>   says whether you need it; the volume says how much there is. Letting volume
+>   cross tiers would dress a catalog entry in a requirement's authority, which
+>   is what the tier split exists to prevent.
+>
+> Matching rows are SUMMED rather than picked between, because they come from
+> one `summarize ... by` and therefore partition the window - disjoint sets add
+> safely. If they ever come from separate queries, that stops being true.
+>
+> Events-to-bytes is still absent, deliberately: `estimateDropSavings`'s mean
+> bytes/event could multiply a Search count, but that is a second claim (what it
+> costs) on top of the measured one (how much there is), and it was not asked
+> for. Counts only.
 
 If Search runs, per-log-type counts come back free. Crossing "log types present"
 against "log types any enabled detection reads" yields findings of the form
@@ -262,6 +546,199 @@ closer to the toolkit's stated purpose than sample selection is.
 **Verify before treating this as new work** - `coverage-analysis` may already
 cover part of it. It was raised late in planning and was not checked. Out of
 scope unless explicitly wanted.
+
+> **[CHECKED 2026-08-20 - it was right to ask. Roughly 70% already exists.]**
+>
+> **The cross-product IS `compareLogTypeCoverage`'s `unreferenced` field**
+> (`domain/coverage-analysis/expected-log-types.ts`): "provided log types that
+> matched nothing expected". The other half - what any detection reads - is
+> `deriveExpectedLogTypes`. Both are already merged, ranked and ON SCREEN via
+> `mergeLogTypeSources` and `LogTypeRecommendation`. The cost premise is stated
+> too: `packShapeSummary` already says N log types means 2N routes and 2N
+> pipelines. What is missing is a NUMBER attached to it.
+>
+> **Genuinely missing** (small, in this order):
+> 1. `MergedLogType` / `RecommendedLogType` / `LogTypeCoverage.unreferenced`
+>    carry no count - `unreferenced` is a bare `string[]`, so there is nowhere
+>    to hang 890K.
+> 2. `provided` is tagged samples only. Phase 5 needs a SECOND "present" source:
+>    what the dataset actually holds, tagged or not.
+> 3. A THRESHOLD, and this is a real decision rather than a copy edit.
+>    `expected-log-types.ts` deliberately documents `unreferenced` as *"NOT a
+>    problem - a vendor emits more than any one solution detects on"*, and the UI
+>    says "fine". Phase 5 wants the same set to read as cost. Volume is what
+>    reconciles them - 12 events/day unreferenced is fine, 890K is a finding -
+>    but somebody has to pick the line.
+> 4. No events-to-bytes conversion anywhere. `estimateDropSavings` measures
+>    FIELD bytes inside a sample already collected; it has no notion of a daily
+>    rate. Its mean-bytes-per-event could be multiplied by a Search count,
+>    though, so the pieces exist.
+>
+> **On "no ENABLED detection consumes it" - the wording is reachable, but not
+> for free, and BOTH the obvious readings of the code are wrong.**
+>
+> An investigation reported the claim unprovable, on the grounds that rules come
+> from the GitHub repo and carry no enablement state, so it would need a new ARM
+> read and new permission surface. Checking that directly: `installedContentState`
+> (`usecases/content-install/content-install.ts`) ALREADY issues a paginated
+> `GET {scope}/alertRules`. So the read is written and the ARM surface is not new.
+>
+> But it does not simply work either: that function extracts ONLY
+> `properties.displayName`, and it currently has NO production consumer - it is
+> exported and tested and called from nowhere. So the honest position is that
+> Phase 5's original wording needs the existing read wired up and two more
+> fields taken off it (`properties.enabled`, `properties.query`), not a new
+> capability.
+>
+> Two scoping facts that survive regardless:
+> - expected log types are derived from ONE SELECTED SOLUTION's repo content,
+>   while deployed rules are workspace-wide. Those are different universes and
+>   a finding must not silently mix them.
+> - until that wiring exists, the strongest honest wording is *"no rule or
+>   workbook shipped by THIS SOLUTION filters on it"* - which is a weaker claim
+>   than the plan's, and should be written that way rather than overstated.
+>
+> **The actual blocker is upstream:** Phase 5 has no input until the Lake query
+> has a UI consumer. That is Phase 4's remaining half, not Phase 5's gap.
+>
+> **[UNBLOCKED 2026-08-20.]** That half shipped. `queryLakeSamples` is wired
+> through `LakePanel` from `integrate-screen.tsx:1476`, and `LakeLogTypeVolume`
+> carries `eventCount` - with `undefined` kept distinct from `0`, because a
+> volume of zero is a claim about the data. So gap 2 above ("a SECOND present
+> source: what the dataset holds, tagged or not") is answered: the dataset's own
+> counts are on screen.
+>
+> Remaining:
+> 1. Counts have nowhere to live once merged - `unreferenced` is still a bare
+>    `string[]` and `MergedLogType` has no volume field.
+> 4. Events-to-bytes remains absent; `estimateDropSavings`'s mean bytes/event
+>    could be multiplied by a Search count, so the pieces exist.
+>
+> **THE THRESHOLD - DECIDED 2026-08-20 (user): there is no threshold.**
+>
+> Attach the volume and RANK by it. Do not render a verdict, do not flag, do not
+> call anything a finding. The 890K entry rises to the top of the list on its own
+> and the operator draws their own conclusion.
+>
+> Why this and not a cutoff. This module already documents `unreferenced` as
+> "NOT a problem - a vendor emits more than any one solution detects on", and any
+> threshold makes the app contradict its own comment on a set it was right about.
+> A cutoff is also a claim we cannot support: the line that is obviously correct
+> in one tenant is obviously wrong in the next, so it would need defending and
+> tuning forever, and every environment where it was wrong would produce a
+> confident false finding. Ranking asserts nothing that is not measured. It is
+> the same rule the vendor tier already follows - OFFERED, never assumed - and
+> the same one behind `eventCount` being optional rather than defaulting to 0.
+>
+> So Phase 5 is now entirely typing: give the merged types somewhere to carry a
+> volume, sort by it, and render the number beside the existing evidence label.
+> The wording next to an unreferenced entry stays "no rule or workbook shipped by
+> THIS SOLUTION filters on it" - see below.
+>
+> One thing NOT to lose when this is built: the honest wording is still "no rule
+> or workbook shipped by THIS SOLUTION filters on it", because expected log types
+> come from one selected solution's repo content while deployed rules are
+> workspace-wide. Volume does not make the stronger claim true.
+
+---
+
+## Needs live verification (added 2026-08-20)
+
+Phases 3 and 4 are pinned entirely against `FakeCriblClient`. That catches our
+own logic and cannot catch a wrong belief about the platform - every row below
+is a belief the code now depends on, ordered by what it costs if wrong.
+
+The case for doing this before shipping is already on the record: `__inputId`
+turned out to be `<type>:<id>`, not the bare id `/system/inputs` returns, so the
+source clause matched nothing and **every capture would have come back empty** -
+reported to the operator as an idle source. Sixty-odd tests were green over it.
+It was caught by reading the vendored spec's examples, not by a test.
+
+| # | Belief | Rests on | If wrong |
+|---|---|---|---|
+| 1 | `__inputId` is `<type>:<id>`, and `.endsWith(":id")` selects the source | Spec examples (`__inputId.startsWith("http:")`, `cribl_http:pan_traffic_syslog`) | Every capture empty, or captures the wrong source |
+| 2 | A level-0 capture of a JSON source (Event Hub, HEC, Kafka) carries broken-out fields, not just `_raw` | Spec's own level-0 example filters `sourcetype==="pan:traffic"` | The structured-field OR never fires; those sources still capture nothing |
+| 3 | Cribl Search accepts `tostring(field)` in a `where` clause | Standard Kusto; Cribl Search speaks Kusto | Numeric log types 400 instead of returning events |
+| 4 | A one-line NDJSON capture response reaches us as a decoded OBJECT | `readPortBody` JSON.parses the whole body | Single-event captures read as empty (the bug we fixed - confirm the fix, not just the diagnosis) |
+| 5 | 12s is under the real capture ceiling | `http.ts:47` `timeoutMs = 15000`, minus dispatch headroom | Captures fail blaming the bridge, or we clamp shorter than needed |
+| 6 | The Lake dataset listing is a LEADER route, and the managed lake's id is `default` | Phase 0 spike | The Lake mode has no dataset list to offer |
+| 7 | Capture needs a permission the app's own credentials hold | Not established | 403 on the primary path |
+| 8 | A Cribl filter referencing a field the event lacks is a ReferenceError that DROPS the event | `capture-filter.ts`'s stated model - never tested against the real evaluator | If Cribl tolerates undeclared names, the typeof guards are insurance rather than load-bearing. Either answer is fine; the guess is not |
+
+**Cheapest order:** one real capture against a syslog source settles 1, 4 and 5
+and 7 at once. One capture of a JSON source settles 2. One Lake query with a
+numeric discriminator settles 3 and 6.
+
+`packages/core/src/testing/live-verify.test.ts` runs all seven. It SKIPS unless
+`CRIBL_LIVE_BASE` and `CRIBL_LIVE_TOKEN` are set, so the normal gate stays
+hermetic.
+
+### How to run it (2026-08-23)
+
+**Do the traffic step first.** It is the one that sank the last attempt, and no
+amount of fixing the other two rescues a run without events: rows 1, 2 and 4 are
+all observations of a captured event, so an idle source produces an empty
+capture that is indistinguishable from a broken filter.
+
+1. **Generate traffic through a SYSLOG source**, and leave it running. Check
+   Stream Home shows events in AND out before going further - the last attempt
+   read zero over 15 minutes. One capture against a live syslog source settles
+   rows 1, 4, 5 and 7 together, which is why it is worth the setup.
+2. **Get a token.** Vault is on an internal address, so this needs the lab
+   network. The token is a bearer for the workspace API, not a browser session -
+   the suite calls the API directly and does not go through the app's proxy.
+3. **Run it:**
+
+```sh
+cd soc-optimizationtoolkit
+CRIBL_LIVE_BASE=https://<workspace>.cribl.cloud/api/v1 \
+CRIBL_LIVE_TOKEN=<bearer> \
+npx vitest run --root packages/core src/testing/live-verify.test.ts
+```
+
+Read the `[live-verify]` lines, not just the pass/fail. Each row prints its
+verdict AND what it observed, because "row 6: CONFIRMED" is worth nothing
+without the count beside it.
+
+4. **Then a JSON source** (Event Hub, HEC, Kafka) for row 2, and **one Lake
+   query over a dataset with a numeric discriminator** for rows 3 and 6.
+
+**What a green run does NOT settle.** Row 8 asserts nothing either way by
+design; the suite reports what the evaluator did and leaves the conclusion to a
+human. And `GET /search/query` - the sync route the app prefers - is spec-only:
+Cribl's own UI drives the async job path, so if the sync route is unimplemented
+the suite will show the fallback working and the preferred path never running.
+Check which `path` the query row reports.
+
+### Attempt 2026-08-20 - blocked, with two things settled anyway
+
+Tried against the lab workspace through the browser rather than a token. What
+came out of it:
+
+- **CONFIRMED live:** `GET /api/v1/m/{groupId}/system/inputs` answers 200. The
+  group-scoped addressing this app uses for inputs is right.
+- **NOTED:** the Cribl UI reaches groups via `/api/v1/products/stream/groups/{id}`
+  (the spec's normalized form) where `listGroups` uses the classic
+  `/master/groups`. Both are documented as coexisting; not a defect, but if
+  `/master/groups` ever 404s, this is the first thing to try.
+- **Corroborating only:** the UI labels a source `cribl_tcp:in_cribl_tcp` -
+  the `<type>:<id>` shape row 1 asserts. That is a UI label, NOT an observation
+  of `__inputId` on an event, so row 1 stays unverified.
+
+What blocked it, so the next attempt does not repeat it:
+
+1. The stored Cribl token had expired, and Vault is on an internal address that
+   is unreachable without the lab network.
+2. The Sources page does not render in either worker group that has workers -
+   it spins indefinitely while its own inputs API returns 200. That page is the
+   way into the UI's Live Data capture, which was the no-token route.
+3. Stream Home reported no events in or out over 15 minutes. If that is real
+   rather than the same rendering fault, a capture returns nothing whatever
+   else is fixed, and rows 1, 2 and 4 stay inconclusive. **Generate traffic
+   before the next attempt.**
+
+The token route avoids 2 entirely: the suite talks to the API and never touches
+the UI.
 
 ---
 

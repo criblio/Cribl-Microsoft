@@ -400,12 +400,29 @@ export function RuleCoverageSection({
     let cancelled = false;
     void (async () => {
       try {
-        const items = await fetchRuleContentItems(activeContent, solutionName);
+        // WORKBOOKS TOO (ADR 0003, 2026-08-19). The log-type recommendation
+        // derives from whatever content names a log type, and a solution with
+        // thin detections is often still described by its workbooks - which is
+        // exactly the case the recommendation was useless for. Fetched HERE,
+        // beside the rules, because the recommendation is needed the moment a
+        // solution is selected; the workbooks section fetches them again inside
+        // its own analyze(), the same way rules already are.
+        //
+        // It also makes the early contentRequirements consistent with what
+        // analyze() computes later (rules + workbooks), where before the mount
+        // effect saw rules alone and under-counted the columns content needs.
+        const [ruleItems, workbookItems] = await Promise.all([
+          fetchRuleContentItems(activeContent, solutionName),
+          activeContent !== undefined
+            ? acquireSolutionWorkbooks(activeContent, solutionName)
+            : Promise.resolve<ContentItem[]>([]),
+        ]);
+        const items = [...ruleItems, ...workbookItems];
         if (!cancelled) {
           onContentRequirementsChange?.(deriveContentRequirements(items));
           // Same already-fetched items feed the Sample Data section's expected
-          // log-type derivation - it must never fetch the rules a second time
-          // (the proxy request budget is shared).
+          // log-type derivation - it must never fetch them a second time (the
+          // proxy request budget is shared).
           onContentItemsChange?.(items);
         }
       } catch {

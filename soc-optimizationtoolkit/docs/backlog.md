@@ -876,30 +876,42 @@ name clash would stop being a visible failure and start being a silent reuse.
 
 ## 8. Release hygiene
 
-**Release drift will recur.** Nothing ties `release/` to source changes;
-`npm run package` is manual. The committed artifact silently fell five days and
-four commits behind before anyone noticed. Cheapest fix that does not need write
-access to a protected branch: a CI check that warns when `soc-optimizationtoolkit/**`
-source changed without a version bump since the last packaged release.
+**Release drift is CHECKED as of 2026-08-24.**
+`apps/cribl-app/scripts/check-release-drift.mjs`, run by CI on every PR touching
+`soc-optimizationtoolkit/**` and by `npm run check-release` locally. It reads the
+packaged tarball's version and holds four claims to it - `package.json`, the
+single tarball in `release/`, a `## X.Y.Z` section in
+[release-notes.md](release-notes.md), and the "IS CURRENT" line directly below -
+failing when any of them names a different version.
 
-**1.11.15 IS CURRENT (2026-08-18).**
-`release/soc-optimizationtoolkit-1.11.15.tgz`. Release notes in
-[release-notes.md](release-notes.md), started as an accumulating file at 1.4.0
-and now current through 1.11.15.
+**Unreleased source WARNS and never fails**, which is the one rule to keep if
+this is ever rewritten: a feature branch normally carries source the last package
+does not, so failing there would mean packaging on every branch to stay green,
+which is how a check gets disabled rather than obeyed. When git cannot count -
+a shallow clone has no history - the run says so rather than printing the clean
+line a measured zero would print, because this repo's own inventory standard
+applies to its tooling too. The pins live beside it in
+`check-release-drift.test.mjs`, and the pure half takes facts so the cases can be
+stated without a repo, a git history or a tarball.
 
-TWICE NOW. This line said "1.5.4 IS CURRENT" until 2026-08-17, by which point
-the app was at 1.11.11 - six minor versions and about a week of work later. It
-was corrected to 1.11.11 that day, and the 2026-08-18 architecture audit found
-it stale AGAIN at three patch versions behind, inside a single audit window.
+**1.12.0 IS CURRENT (2026-08-24).**
+`release/soc-optimizationtoolkit-1.12.0.tgz` - ADR-0003 in full, phases 0-5.
+Release notes in [release-notes.md](release-notes.md), started as an accumulating
+file at 1.4.0 and now current through 1.12.0.
+
+THREE TIMES, and that is why the check above exists. This line said "1.5.4 IS
+CURRENT" until 2026-08-17, by which point the app was at 1.11.11 - six minor
+versions and about a week of work later. It was corrected to 1.11.11 that day,
+the 2026-08-18 architecture audit found it stale AGAIN at three patch versions
+behind inside a single audit window, and it was stale a third time by 1.12.0.
 The release notes had likewise stopped at 1.9.0 and were written forward to
-1.11.14 in the same pass.
+1.11.14 in one pass.
 
-That is the entry becoming its own best evidence for the second time: a
+That is the entry becoming its own best evidence three times over: a
 hand-maintained version claim decays exactly as fast as the automated one it
-warns about, and nothing tells anyone. The correct fix is not another manual
-correction - it is the CI check below, extended to cover this file and
-release-notes.md, not just the tgz. Treat a third manual correction here as
-proof the check should have been built instead.
+warns about, and nothing tells anyone. This entry's own instruction was to treat
+a third correction as proof the check should have been built instead - so the
+third correction built it.
 
 **DO NOT HAND-BUMP THE VERSION BEFORE PACKAGING.** `npm run package` IS the
 bump: `scripts/package.mjs:73` increments the patch itself (`--minor`, `--major`
@@ -1187,13 +1199,69 @@ is "these groups differ from what we deployed, in these files we can see" rather
 than a confident clean bill - the same rule as the inventory standard. An unknown
 must not render as a zero.
 
-## Sample browser: REMOVED IN PLAN (ADR-0003, 2026-08-18) - not yet executed
+## Sample browser: REMOVED (ADR-0003) - ALL PHASES 0-5 DONE
 
-**Decision made, work not started. To execute this, open ONE document:
-[sample-acquisition-plan.md](sample-acquisition-plan.md)** - it is self-contained
-(verified file:line facts, the phases, and the traps). [ADR
-0003](adr/0003-remove-sample-browser.md) is the durable decision record and is
-background, not a prerequisite.
+**Executed 2026-08-19/20 on `feature/log-type-recommendation`.** The browser and
+its whole acquisition domain are deleted; the `LogTypeRecommendation` panel
+replaces it. To continue, open ONE document:
+[sample-acquisition-plan.md](sample-acquisition-plan.md) - it carries inline
+`[SUPERSEDED]` markers where reality diverged from it, and
+[sample-acquisition-phase0.md](sample-acquisition-phase0.md) has the API
+findings. [ADR 0003](adr/0003-remove-sample-browser.md) is the durable decision
+record and is background, not a prerequisite.
+
+**Where it stands:** Phases 0-3 done. **Phase 4 is done, BOTH paths** (core and
+UI). Capture: `domain/capture-filter`, `captureSamples`, `CapturePanel` - compose
+the filter, run one bounded `POST /system/capture`, split by log type, PREVIEW,
+and tag nothing without a click. Lake query: `queryLakeSamples`, `LakePanel`.
+**Phase 5 (volume findings) is done (2026-08-23)** - the Lake counts reach the
+recommendation, entries and the unreferenced set carry a volume and rank by it,
+with no threshold and no flagged finding by decision.
+
+**What has NOT happened: none of this has run against a real workspace.** Every
+platform belief behind Phases 3-5 is pinned against `FakeCriblClient` only; the
+suite that settles them is `packages/core/src/testing/live-verify.test.ts` and it
+skips without `CRIBL_LIVE_BASE`/`CRIBL_LIVE_TOKEN`. The 2026-08-20 attempt was
+blocked on an expired token and an idle lab - generate traffic first, or rows 1,
+2 and 4 stay inconclusive. Nor is any of it packaged: the app is still 1.11.15
+and every ADR-0003 commit is unreleased.
+
+Phase 4's first correctness trap is recorded in the plan and shipped as a
+warning: a capture request has NO source field, so the source is an `__inputId`
+clause inside the filter, and an operator deleting that clause silently widens
+the capture to every source in the group.
+
+**The plan's capture filter was not built as written, deliberately.** It
+specifies a comma anchor (`/,TRAFFIC,/i`), but the operator picks a SOURCE, not
+a format, so a comma anchor against a pipe-delimited CEF vendor matches nothing -
+the same zero-events failure the anchor exists to prevent. The shipped predicate
+anchors on the SET of delimiters this app's parsers use, excluding `/` so a URL
+path cannot match. Marked `[SUPERSEDED]` inline in the plan's Phase 4.
+
+**The log-type recommendation now has THREE tiers of evidence,** not just
+analytic rules: `detection` (a shipped rule filters on it), `workbook` (a shipped
+workbook queries it - real, weaker), and `vendor` (the vendor documents the
+feed). The third answers a solution shipping few or no detections, which the
+content-derived tiers structurally cannot. The tier is on every row because
+collapsing them would tell an operator their solution requires data it has never
+mentioned.
+
+**The vendor tier is now BOTH halves (corrected 2026-08-23).** It has a
+hand-curated half (13 vendors, each cited to vendor documentation) and a
+generated half mined from elastic/integrations. The generated half shipped empty
+at first, and this entry said so; commit df3ad5e ran
+`node scripts/generate-vendor-packs.mjs --bulk <elastic-integrations-checkout>`
+and the catalog now carries 157 generated packs (197 KB). The hand packs still
+WIN the per-value dedupe, and the breadth pin still guards all thirteen. Re-run
+the miner only to refresh against a newer elastic/integrations checkout.
+
+**A parsing defect found and fixed along the way:** a syslog-prefixed PAN-OS
+upload used to parse to ZERO events - detection called it syslog and
+`parseSyslog` cannot match a PAN-OS body. It was pinned as a KNOWN GAP first
+(fixing it means touching the detector every vendor depends on) and then fixed
+the same day: detection recognises the PAN-OS positional fingerprint via
+`isPanosFormat` ahead of the syslog check, characterized first across both modes
+and every format. Full record in the phase 0 doc, 0.3.
 
 The Browse Samples modal is being removed and replaced by a log-type
 recommendation derived from the operator's own environment.
@@ -1213,6 +1281,13 @@ deliberately named, via three paths: Cribl Search over a Lake/federated dataset
 with vendor-derived filter suggestions), or manual upload (needs no Cribl
 integration).
 
+> **[SUPERSEDED - TWO modes, not three paths]** (user direction 2026-08-19)
+> Search is not a separate surface, it is HOW a Lake dataset is queried - the
+> same datasets appear in both listings, verified live. The operator is asked one
+> question first: query a Lake dataset, or capture from a live source. Manual
+> upload is not a mode; it is the permanently-available intake below. Reasoning
+> in the plan's Phase 3.
+
 **The trap for whoever executes this:** `splitSamplesByLogType`
 (sample-acquisition/splitting.ts:64) must SURVIVE the deletion. It separates a
 mixed stream by discriminator, it is load-bearing for capture and for mixed
@@ -1220,3 +1295,12 @@ uploads, and its only current caller is `precedence.ts` on the browse path - so
 deleting the sample-acquisition domain as a unit silently removes it. Two more
 capabilities need salvaging first: CEF/LEEF raw-line preservation
 (repo-samples.ts:400,428,486) and `consolidateByTableRouting` (:505).
+
+> **[SUPERSEDED - one salvage was real, the other was dead code]** The splitter
+> survived, rehomed to `domain/sample-parsing` as `splitSamplesByLogType` with
+> `browseSampleId` renamed `splitSampleId`. Raw-line preservation turned out to
+> be a LIVE defect on the intake path rather than a browse-path risk, so it was
+> fixed in `parseSampleContent` and every intake path benefits.
+> `consolidateByTableRouting` had never executed - both callers pass two
+> arguments, so its `eventToTable` branch is unreachable - and was deleted as a
+> capability the app did not have. Phase 0 doc, 0.3.

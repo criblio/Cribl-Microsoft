@@ -1,7 +1,9 @@
 # ADR 0003: Remove the sample browser; recommend log types from the operator's own environment
 
 Date: 2026-08-18
-Status: Accepted, not yet executed
+Status: Accepted; EXECUTED in full 2026-08-23 (all phases 0-5, PR #119).
+        Not yet verified against a live workspace - see the plan's
+        "Needs live verification" table and live-verify.test.ts.
 
 > **To DO this work, read [sample-acquisition-plan.md](../sample-acquisition-plan.md)
 > instead.** That document is self-contained: verified file:line facts, the

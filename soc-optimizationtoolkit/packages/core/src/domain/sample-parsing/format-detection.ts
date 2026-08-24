@@ -25,6 +25,7 @@
 
 import type { SampleFormat } from "./models";
 import { stripSyslogPrefix } from "./parsers";
+import { isPanosFormat } from "./panos-dictionary";
 
 /** How the detector classifies content. See the module header. */
 export type DetectMode = "strict" | "lenient";
@@ -100,6 +101,31 @@ function detectLenient(content: string): SampleFormat {
     firstLine.split(" ").filter((p) => p.includes("=")).length > 2
   ) {
     return "kv";
+  }
+
+  // PAN-OS positional CSV, BEFORE the syslog check (2026-08-19).
+  //
+  // A PAN-OS source ships CSV behind a syslog header, so `<14>Aug 13 ... 1,2026/
+  // 08/13 ...` matched the priority prefix below and was classified "syslog".
+  // parseSyslog's RFC 3164/5424 regexes cannot match a PAN-OS body, every record
+  // was dropped by its >1-field filter, and a perfectly good PAN-OS export
+  // parsed to ZERO events - the operator got "could not parse any events". The
+  // bare (unwrapped) form fared little better: it fell to "unknown" and only
+  // worked because parseByFormat's fallback happened to try parseCsv.
+  //
+  // The rescue keys on {@link isPanosFormat}'s POSITIONAL FINGERPRINT - the
+  // `1,<date> <time>,<serial>,<KNOWN-TYPE>` shape with a whitelisted log type -
+  // NOT on a comma count. That distinction is the whole safety argument: a
+  // chatty syslog line carrying six commas is still syslog, and the
+  // characterization suite pins exactly that.
+  //
+  // detectCaptureInnerFormat keeps its looser >=5-comma rule ON PURPOSE. It
+  // inspects ONE already-split `_raw` value from a Cribl capture, where the
+  // content is known to be a single vendor line, so a loose rule is cheap and
+  // catches comma-delimited vendors beyond PAN-OS. This detector classifies a
+  // WHOLE UPLOADED FILE, which could be anything, so it takes the precise shape.
+  if (isPanosFormat([firstLine])) {
+    return "csv";
   }
 
   // syslog: <priority> or an RFC 3164 month-day-time prefix.

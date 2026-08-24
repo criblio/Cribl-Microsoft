@@ -6,6 +6,118 @@ is harder to forget to update than a directory that has to be remembered.
 
 ---
 
+## 1.12.0
+
+**The Browse Samples modal is gone, and the app now says which log types to
+bring instead of guessing which file fits.** This is ADR-0003 executed in full,
+phases 0 through 5. A minor bump rather than a patch because a whole acquisition
+path was replaced, not repaired.
+
+Why the browser went: `scoreFileName` was the entire selection mechanism, and it
+scored the FILENAME against vendor-name keywords - it never opened the file. The
+one content check only ever rejected, so nothing confirmed a sample fit. The
+operator got many files per vendor, most wrong for their solution, with no way to
+tell which. A smarter fit check was designed and deliberately rejected: it is
+real work to make a browser trustworthy that should not exist, and even a correct
+one still hands the operator someone else's data as the starting point for their
+own integration.
+
+**What replaced it: `LogTypeRecommendation`, with three tiers of evidence.**
+
+- `detection` - a shipped analytic rule filters on this value. The strongest
+  claim available: the solution demonstrably breaks without it.
+- `workbook` - a shipped workbook queries it. Real, and weaker; a dashboard panel
+  is not a detection. Workbooks were already fetched, but only inside the
+  workbooks section's Analyze button, pressed long after samples are chosen. They
+  now come from the same content-first mount effect as the rules, which also
+  fixed a real inconsistency - the early content requirements saw rules alone and
+  under-counted the columns content needs.
+- `vendor` - the vendor documents this feed. Says nothing about what the solution
+  needs and everything about what exists to be collected, which is exactly the
+  decision facing an operator whose solution ships no detections at all.
+
+The tier is on every row and in the lead sentence. Collapsing them would tell an
+operator their solution requires data it has never mentioned, so it is pinned. A
+list built entirely from vendor docs reads "this solution ships no detections
+that name a log type; Zscaler documents ...", never "your solution needs".
+
+The panel and the completeness confirmation below the intake section now read ONE
+coverage result, computed once, with a pin asserting they agree.
+
+**The vendor catalog is both halves.** Thirteen hand-curated vendors, each cited
+to the vendor's own documentation, plus 157 packs mined from elastic/integrations
+(197 KB). Hand packs win the per-value dedupe - the same precedence the mapping
+packs already settled. Packs carry `excludeKeywords` because substring matching
+cannot express "most specific wins": every Zscaler Private Access solution name
+contains "zscaler", so the ZIA pack would have told a ZPA operator to collect a
+feed their product does not emit, and "Palo Alto Networks Cortex XDR" contains
+"palo alto" and would have been handed the firewall's TRAFFIC and THREAT.
+Recommending the wrong product's feeds is worse than recommending nothing, and
+both cases are pinned from both directions.
+
+**Two ways to acquire, and upload is still always there.** The panel asks one
+question first - query a Cribl Lake dataset, or capture from a live source.
+Search is not a third surface: it is HOW a Lake dataset is queried, verified live
+by finding the same datasets in both listings. Discovery is lazy, so page load
+costs one request and nothing else.
+
+- **Lake query** returns the complete log-type list and per-type volumes. Counts
+  and events are two separate reads on purpose.
+- **Filtered capture** runs one bounded `POST /system/capture` and splits the
+  result by discriminator. It PREVIEWS - nothing is tagged without a click,
+  because the sample store is replace-by-logType and a capture is the one intake
+  path where the app chose the content rather than the operator.
+
+Two capture traps worth knowing. A capture request has NO source field, so the
+source is an `__inputId` clause inside the filter string; deleting that clause
+silently widens the capture to every source in the group, and that is the one
+edit the warning checks. And the log-type predicate anchors on the SET of
+delimiters this app's parsers use rather than on a comma - the operator picks a
+source, not a format, so a comma anchor against a pipe-delimited CEF vendor
+matches nothing, which reads as "this source does not carry that log type". `/`
+is excluded on purpose so a URL path cannot match. The predicates are pinned by
+EVALUATING them as JavaScript, not by asserting on their text.
+
+**Volumes rank the recommendation (phase 5).** Lake counts reach the
+recommendation, entries and the unreferenced set carry an event count, and both
+rank by it. There is no threshold, nothing is flagged, and no headline mentions a
+volume: a cutoff correct in one tenant is wrong in the next, and this module
+already documents unreferenced log types as "NOT a problem - a vendor emits more
+than any one solution detects on". Ranking asserts only what was measured. Two
+rules the pins hold: unmeasured renders NOTHING - not 0, not "unknown" - and
+volume ranks WITHIN a tier, never across one, so a vendor-documented feed with
+890K events stays below a detection-tier log type with three.
+
+**A parsing defect found and fixed along the way.** A syslog-prefixed PAN-OS
+upload used to parse to ZERO events: detection called it syslog, and the syslog
+parser cannot match a PAN-OS body. Detection now recognises the PAN-OS positional
+fingerprint ahead of the syslog check, characterized first across both modes and
+every format, because that detector is one every vendor depends on. RFC 5424's
+`msgid` is now a discriminator too.
+
+**Removed, with the salvage recorded:** the browse modal, its state module, the
+`acquire-samples` usecase, `repo-samples` and the solution map. The splitter
+SURVIVED - rehomed to `domain/sample-parsing`, because it is load-bearing for
+capture and for mixed uploads and its only caller was on the deleted path.
+`consolidateByTableRouting` was deleted as a capability the app never had: both
+callers pass two arguments, so its branch had never executed. CEF/LEEF raw-line
+preservation turned out to be a live defect on the INTAKE path rather than a
+browse-path risk, so it was fixed in `parseSampleContent` and every intake path
+benefits - LEEF, syslog, headerless CSV and Cribl captures included.
+
+**What this release has NOT done: run against a real workspace.** Every platform
+belief behind the Lake and capture paths is pinned against a fake Cribl client,
+which catches our own logic and cannot catch a wrong belief about the platform.
+`packages/core/src/testing/live-verify.test.ts` holds those eight beliefs as
+runnable rows and skips unless `CRIBL_LIVE_BASE` and `CRIBL_LIVE_TOKEN` are set,
+so the normal gate stays hermetic. The case for running it is already on the
+record: `__inputId` turned out to be `<type>:<id>` rather than the bare id, so
+every capture would have come back empty and been reported as an idle source -
+caught by reading the vendored spec, not by any of the sixty-odd green tests over
+it.
+
+---
+
 ## 1.11.15
 
 **The workspace table list is gone from DCR Gap Analysis; the listing is not.**
