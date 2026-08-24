@@ -876,30 +876,39 @@ name clash would stop being a visible failure and start being a silent reuse.
 
 ## 8. Release hygiene
 
-**Release drift will recur.** Nothing ties `release/` to source changes;
-`npm run package` is manual. The committed artifact silently fell five days and
-four commits behind before anyone noticed. Cheapest fix that does not need write
-access to a protected branch: a CI check that warns when `soc-optimizationtoolkit/**`
-source changed without a version bump since the last packaged release.
+**Release drift is CHECKED as of 2026-08-24.**
+`apps/cribl-app/scripts/check-release-drift.mjs`, run by CI on every PR touching
+`soc-optimizationtoolkit/**` and by `npm run check-release` locally. It reads the
+packaged tarball's version and holds four claims to it - `package.json`, the
+single tarball in `release/`, a `## X.Y.Z` section in
+[release-notes.md](release-notes.md), and the "IS CURRENT" line directly below -
+failing when any of them names a different version.
 
-**1.11.15 IS CURRENT (2026-08-18).**
-`release/soc-optimizationtoolkit-1.11.15.tgz`. Release notes in
-[release-notes.md](release-notes.md), started as an accumulating file at 1.4.0
-and now current through 1.11.15.
+**Unreleased source WARNS and never fails**, which is the one rule to keep if
+this is ever rewritten: a feature branch normally carries source the last package
+does not, so failing there would mean packaging on every branch to stay green,
+which is how a check gets disabled rather than obeyed. The pins live beside it in
+`check-release-drift.test.mjs`, and the pure half takes facts so the cases can be
+stated without a repo, a git history or a tarball.
 
-TWICE NOW. This line said "1.5.4 IS CURRENT" until 2026-08-17, by which point
-the app was at 1.11.11 - six minor versions and about a week of work later. It
-was corrected to 1.11.11 that day, and the 2026-08-18 architecture audit found
-it stale AGAIN at three patch versions behind, inside a single audit window.
+**1.12.0 IS CURRENT (2026-08-24).**
+`release/soc-optimizationtoolkit-1.12.0.tgz` - ADR-0003 in full, phases 0-5.
+Release notes in [release-notes.md](release-notes.md), started as an accumulating
+file at 1.4.0 and now current through 1.12.0.
+
+THREE TIMES, and that is why the check above exists. This line said "1.5.4 IS
+CURRENT" until 2026-08-17, by which point the app was at 1.11.11 - six minor
+versions and about a week of work later. It was corrected to 1.11.11 that day,
+the 2026-08-18 architecture audit found it stale AGAIN at three patch versions
+behind inside a single audit window, and it was stale a third time by 1.12.0.
 The release notes had likewise stopped at 1.9.0 and were written forward to
-1.11.14 in the same pass.
+1.11.14 in one pass.
 
-That is the entry becoming its own best evidence for the second time: a
+That is the entry becoming its own best evidence three times over: a
 hand-maintained version claim decays exactly as fast as the automated one it
-warns about, and nothing tells anyone. The correct fix is not another manual
-correction - it is the CI check below, extended to cover this file and
-release-notes.md, not just the tgz. Treat a third manual correction here as
-proof the check should have been built instead.
+warns about, and nothing tells anyone. This entry's own instruction was to treat
+a third correction as proof the check should have been built instead - so the
+third correction built it.
 
 **DO NOT HAND-BUMP THE VERSION BEFORE PACKAGING.** `npm run package` IS the
 bump: `scripts/package.mjs:73` increments the patch itself (`--minor`, `--major`

@@ -19,6 +19,12 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          # The release-drift check counts source commits landed since the
+          # release tarball last changed. A shallow clone has no history to
+          # count, and the check reports that as unmeasured rather than as zero -
+          # so the full history is what makes its warning mean anything.
+          fetch-depth: 0
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -41,3 +47,9 @@ jobs:
 
       - name: Build
         run: npm run build
+
+      # Fails when package.json, release/, release-notes.md and backlog.md stop
+      # agreeing on which version is current; warns, never fails, when source has
+      # landed since that version was packaged. See backlog.md item 8.
+      - name: Check release drift
+        run: npm run check-release --workspace apps/cribl-app
