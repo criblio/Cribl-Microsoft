@@ -364,6 +364,36 @@ function readJobId(body: unknown): string | undefined {
 }
 
 /**
+ * The job's status, from either shape of status response.
+ *
+ * `GET /search/jobs/{id}/status` answers in the SAME `{items:[...], count}`
+ * envelope the create call uses - there is no top-level `status` key, only
+ * `items[0].status`. Reading the top level alone therefore found nothing on
+ * every poll, left the status as the empty string, and made the loop run its
+ * full attempt budget before reporting the job "still pending" - for a job that
+ * was in fact `completed` on the FIRST poll. Every Lake query failed that way,
+ * on every dataset, while the suite stayed green because every status response
+ * it scripted was the spec's flattened `{status}` - the pins agreeing with the
+ * code about a shape neither had checked. They now script the envelope by
+ * default; see `jobStatus` in query-lake-samples.test.ts.
+ *
+ * Confirmed live 2026-08-24: status body keys are exactly `["items","count"]`.
+ * The bare read is kept as the fallback rather than replaced, because it is what
+ * the OpenAPI spec's own status example returns and both shapes are cheap to
+ * accept.
+ */
+function readJobStatus(body: unknown): string | undefined {
+  const items = criblEnvelopeItems(body);
+  if (items !== null) {
+    for (const item of items) {
+      const status = readString(item, "status");
+      if (status !== undefined) return status;
+    }
+  }
+  return readString(body, "status");
+}
+
+/**
  * The lifecycle Cribl's own UI runs, and therefore the one that is PROVEN:
  * create, poll status, read a results page.
  */
@@ -437,7 +467,7 @@ async function runAsyncQuery(
         `Reading the search job's status returned HTTP ${poll.status}. ${detailOf(poll.body)}`.trim(),
       );
     }
-    status = readString(poll.body, "status") ?? "";
+    status = readJobStatus(poll.body) ?? "";
     if (status === "completed") break;
     if (status === "failed" || status === "canceled") {
       return failed(
