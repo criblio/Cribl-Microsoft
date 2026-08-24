@@ -1,9 +1,12 @@
 # Cribl-Microsoft Repository .gitignore
 # ===========================================
 
-Testing files to ignore
+# Testing files to ignore
 # ============================================
-dev*
+# `dev/`, not `dev*`: unanchored `dev*` also matched every Device*.json ARM
+# template, and on Windows/macOS (core.ignorecase=true) `git add` dropped them
+# while still exiting 0. Directory form keeps Dev/ and */dev/ ignored.
+dev/
 .dev-mode
 *claude*
 *Cluade*
@@ -16,18 +19,23 @@ knowledge.md
 *.bak
 
 # DCR Automation generated output (regenerated on every deployment)
-Azure/CustomDeploymentTemplates/DCR-Automation/core/generated-templates/
-Azure/CustomDeploymentTemplates/DCR-Automation/core/cribl-dcr-configs/
-Azure/CustomDeploymentTemplates/DCR-Automation/dev/generated-templates/
-Azure/CustomDeploymentTemplates/DCR-Automation/dev/cribl-dcr-configs/
+#
+# Matched from any depth rather than anchored at the repo root. The root-anchored
+# form silently stopped matching when Azure/ moved under deprecated/ on
+# 2026-07-13, which is how a credentials-bearing azure-parameters.json became
+# tracked. These rules must survive the next move too.
+**/DCR-Automation/core/generated-templates/
+**/DCR-Automation/core/cribl-dcr-configs/
+**/DCR-Automation/dev/generated-templates/
+**/DCR-Automation/dev/cribl-dcr-configs/
 
-# User-specific DCR Automation config (contains credentials and selections)
-Azure/CustomDeploymentTemplates/DCR-Automation/core/azure-parameters.json
-Azure/CustomDeploymentTemplates/DCR-Automation/core/NativeTableList.json
-Azure/CustomDeploymentTemplates/DCR-Automation/core/CustomTableList.json
-Azure/CustomDeploymentTemplates/DCR-Automation/dev/azure-parameters.json
-Azure/CustomDeploymentTemplates/DCR-Automation/dev/NativeTableList.json
-Azure/CustomDeploymentTemplates/DCR-Automation/dev/CustomTableList.json
+# User-specific config (contains credentials and selections). Any prefix, any
+# depth: core/, dev/, prod/, dev-azure-parameters.json, devsan_azure-parameters
+# .json - the dev-prefixed ones were previously ignored only as a side effect of
+# `dev*`, so narrowing that rule would have exposed them.
+**/*azure-parameters.json
+**/DCR-Automation/*/NativeTableList.json
+**/DCR-Automation/*/CustomTableList.json
 
 
 # Test output and results
