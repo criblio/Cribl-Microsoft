@@ -60,11 +60,19 @@ variants, with the full schema for each:
   64-character names.
 
 Start with Direct unless you specifically need private endpoints or DCE
-routing. Deploy the template, then point a Cribl **Microsoft Sentinel**
-destination at the resulting DCR - see
+routing.
+
+**Instructions:
+[`DCR-Templates/SentinelNativeTables/README.md`](https://github.com/criblio/Cribl-Microsoft/blob/main/Azure/CustomDeploymentTemplates/DCR-Templates/SentinelNativeTables/README.md).**
+That is the how-to for this path and the authority on it: prerequisites,
+deployment three ways (Azure Portal, Azure CLI, PowerShell), the parameters
+every template takes, a table-by-table index, and the full DCE-versus-Direct
+comparison the summary above condenses.
+
+Once the DCR exists, point a Cribl **Microsoft Sentinel** destination at it -
+see
 [Cribl's Sentinel destination docs](https://docs.cribl.io/stream/destinations-sentinel/)
-for the destination side. Per-table details are in the
-[templates README](Azure/CustomDeploymentTemplates/DCR-Templates/SentinelNativeTables/README.md).
+for that side.
 
 ## Getting started
 

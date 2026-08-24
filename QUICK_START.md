@@ -70,8 +70,12 @@ table's template from
 [`Azure/CustomDeploymentTemplates/DCR-Templates/SentinelNativeTables/`](Azure/CustomDeploymentTemplates/DCR-Templates/SentinelNativeTables/)
 - `DataCollectionRules(NoDCE)/` for a Direct DCR, which is the right default
 - deploy it through the Azure Portal or CLI, then point a Cribl **Microsoft
-Sentinel** destination at the DCR it creates. The
-[README](README.md#the-manual-option) compares the two paths.
+Sentinel** destination at the DCR it creates.
+
+Step-by-step instructions, including the CLI and PowerShell commands and the
+parameters each template takes, are in
+[`DCR-Templates/SentinelNativeTables/README.md`](https://github.com/criblio/Cribl-Microsoft/blob/main/Azure/CustomDeploymentTemplates/DCR-Templates/SentinelNativeTables/README.md).
+The [README](README.md#the-manual-option) compares the two paths.
 
 ## Build the package from source
 
