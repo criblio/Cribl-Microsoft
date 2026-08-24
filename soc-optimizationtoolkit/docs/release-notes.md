@@ -6,6 +6,42 @@ is harder to forget to update than a directory that has to be remembered.
 
 ---
 
+## 1.12.1
+
+**Guid columns are no longer dropped, and the data no longer disappears with
+them.** Any column typed `guid`/`uniqueidentifier`/`uuid` in Log Analytics was
+removed from the DCR stream declaration entirely. Because a Kind:Direct DCR
+treats its stream declaration as the input contract, and `transformKql` is a
+pass-through of declared columns, the field was discarded at the DCR boundary
+and the table column stayed **null forever** - with the DCR deploying
+successfully and no error raised.
+
+Guid columns are now declared as `string` and promoted with `toguid()` in the
+transform. The gap analysis KQL parser learned `toguid` in the same change,
+because without it a phantom field named `toguid` appears in the analysis.
+
+This deliberately breaks the v1 bug-compatibility contract in
+`domain/schema-mapping` (RULE 2b) and two `legacy-fixtures.json` fixtures. The
+reasoning is recorded in
+[ADR 0004](adr/0004-cast-guid-columns.md): the v1 script this was ported from
+emitted an illegal `guid` type and got a loud Azure 400, so the port removed the
+400 and kept the data loss, silently. Found by following up external PR #26,
+open and unreviewed since 2026-06-11, whose author diagnosed it correctly.
+
+Not verified against live Azure - the conclusion rests on documented
+Direct-DCR stream semantics plus the absence of any repopulation path.
+
+**Housekeeping** from the 2026-08-24 architecture audit, which came back clean
+on layering, core purity, duplicated decisions and test-pin integrity: the dead
+`screens/review/` module is deleted (1,232 LOC, no consumer since the Review
+route retired), two nav comments that no longer matched the route table are
+corrected, eleven provenance paths pointing at the pre-`deprecated/` PowerShell
+tree are repaired, and five documents that contradicted the code are reconciled
+- including the capability-model plan, which now records that its "every blocked
+action falls back to a downloadable artifact" rule is **not actually clickable**.
+
+---
+
 ## 1.12.0
 
 **The Browse Samples modal is gone, and the app now says which log types to
