@@ -2,7 +2,7 @@
  * DCR/DCE name generation - COMPATIBILITY CONTRACT.
  *
  * This module is a faithful port of the legacy PowerShell naming logic in
- * Azure/CustomDeploymentTemplates/DCR-Automation/core/Create-TableDCRs.ps1
+ * deprecated/Azure/CustomDeploymentTemplates/DCR-Automation/core/Create-TableDCRs.ps1
  * (DCR name: lines 2548-2631, DCE endpoint name: lines 2667-2668).
  *
  * The output must match the legacy script byte-for-byte, including its

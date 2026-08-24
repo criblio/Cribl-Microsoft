@@ -8,7 +8,7 @@
  *     "url"|"ID", authType "oauth", dcrID, dceEndpoint, streamName,
  *     loginUrl/secret/client_id/scope; required: type,
  *     endpointURLConfiguration, loginUrl, secret, client_id).
- *   - The legacy generator Azure/CustomDeploymentTemplates/DCR-Automation/
+ *   - The legacy generator deprecated/Azure/CustomDeploymentTemplates/DCR-Automation/
  *     core/Generate-CriblDestinations.ps1 + core/dst-cribl-template.json -
  *     informs the VALUES: scope https://monitor.azure.com/.default, loginUrl
  *     https://login.microsoftonline.com/{tenant}/oauth2/v2.0/token,

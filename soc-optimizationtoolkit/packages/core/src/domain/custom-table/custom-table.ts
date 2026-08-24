@@ -13,7 +13,7 @@
  *   - Create-TableDCRs.ps1 Get-CustomTableSchemaFromFile (lines 702-779):
  *     the BARE schema-file shape {description?, retentionInDays?,
  *     totalRetentionInDays?, columns: [{name, type, description?}]} used by
- *     Azure/CustomDeploymentTemplates/DCR-Automation/core/custom-table-schemas/
+ *     deprecated/Azure/CustomDeploymentTemplates/DCR-Automation/core/custom-table-schemas/
  *     (some files also carry a top-level "name"), the per-column name/type
  *     requirement, and the 30/90 retention defaults.
  *   - Cribl-Microsoft_IntegrationSolution/src/main/ipc/azure-deploy.ts

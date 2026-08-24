@@ -1,6 +1,24 @@
 # Capability model: retiring app modes
 
-Status: PLAN. Decision taken 2026-08-05; no code moved yet.
+Status: IMPLEMENTED. Decision taken 2026-08-05; all five steps shipped
+2026-08-06 (see `backlog.md` section 1, which is the accurate record). Modes are
+gone: `AppMode`, `ModeSelect`, `filterNavItems` and the wizard's Mode step no
+longer exist, and the nav annotates rather than filters.
+
+Two follow-ons from the plan are NOT built, and this doc is the only place that
+says so:
+
+- **Rule 2 - "every blocked action falls back to a downloadable artifact" - is
+  not clickable.** `FallbackNotice` has exactly one production render site
+  (`screens/preflight/rbac-preflight-panel.tsx`) and it is rendered WITHOUT
+  `onProduce`, so no button appears. Every `onProduce` in the repo is in a test.
+- **The audit's age has no home and there is no manual re-check**; neither has a
+  production consumer.
+
+Also unmodelled: Resource Graph, subscriptions, resource groups and Cribl worker
+groups have no capability in the 11-item taxonomy. Backlog section 6 records
+that extending the taxonomy is ONE piece of work serving three separate items -
+do that rather than reusing a neighbouring capability.
 
 ## The decision
 

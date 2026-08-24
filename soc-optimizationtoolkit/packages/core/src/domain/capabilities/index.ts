@@ -1,7 +1,8 @@
 /**
  * Capability model (docs/capability-model-plan.md) - what the connected
  * identity can actually do, replacing app modes as the thing the product gates
- * on. Not yet wired into the frame; see the plan's sequencing.
+ * on. Wired into the frame since 2026-08-06: the nav ANNOTATES rather than
+ * filters, so every route renders and says what is unavailable and why.
  */
 export type {
   AzureCapability,

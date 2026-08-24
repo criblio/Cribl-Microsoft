@@ -2,7 +2,7 @@
  * Bundled vendor custom-table schema library - porting-plan Unit 5 (ENG-34).
  *
  * The JSON files are VERBATIM copies of the legacy PS engine's schema files
- * in Azure/CustomDeploymentTemplates/DCR-Automation/core/custom-table-schemas/
+ * in deprecated/Azure/CustomDeploymentTemplates/DCR-Automation/core/custom-table-schemas/
  * (the bare {columns: [...]} shape with 30/90 retention). They ship inside
  * the core package (resolveJsonModule, like dcr-naming's legacy-vectors) so
  * the air-gap-capable custom-table path needs no fetch; GitHub-sourced

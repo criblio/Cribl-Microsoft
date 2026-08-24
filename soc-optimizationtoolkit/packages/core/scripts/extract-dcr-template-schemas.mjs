@@ -7,14 +7,14 @@
 //
 // WHAT IT DOES
 //   1. Parses the 50 native Sentinel DCR ARM templates under
-//      Azure/CustomDeploymentTemplates/DCR-Templates/SentinelNativeTables/
+//      deprecated/Azure/CustomDeploymentTemplates/DCR-Templates/SentinelNativeTables/
 //      DataCollectionRules(NoDCE)/*.json, extracting
 //      resources[].properties.streamDeclarations['Custom-{table}'].columns
 //      (each {name, type}). The DCE and NoDCE column sets are IDENTICAL per table
 //      (verified: 0 mismatches across all 50; e.g. CommonSecurityLog is 157 cols in
 //      both), so only NoDCE is read.
 //   2. Folds in the custom (_CL) table schemas under
-//      Azure/CustomDeploymentTemplates/DCR-Automation/core/custom-table-schemas/*.json
+//      deprecated/Azure/CustomDeploymentTemplates/DCR-Automation/core/custom-table-schemas/*.json
 //      (tables not yet in Azure - CrowdStrike, Cloudflare, sample app), reading their
 //      bare { columns: [{name, type, description}] } shape.
 //   3. Emits ONE compact asset { tableName: [{name, type}, ...] } with top-level keys
