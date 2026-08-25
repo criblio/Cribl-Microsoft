@@ -32,7 +32,14 @@
  */
 
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { DEFAULT_CRIBL_OPTIONS } from "@soc/core";
 import type { AzureConfig } from "@soc/core";
 import { PortsProvider } from "../../ports-context";
@@ -145,12 +152,28 @@ const SOURCES: Record<string, unknown[]> = {
   grp2: [{ id: "in_other", type: "http" }],
 };
 
-/** Ports whose Cribl answers the two discovery stages and nothing else. */
+/**
+ * Two PAN-OS USERID events. USERID is genuinely undictionaried, so these parse
+ * to POSITIONAL columns - which is what makes a capture of them something the
+ * operator must be offered a chance to name (see the commit-wiring pin below).
+ */
+const PANOS_USERID = [
+  "1,2026/08/13 10:49:02,013201031064,USERID,0,2817,2026/08/13 10:48:54,vsys1,user1",
+  "1,2026/08/13 10:49:06,013201031064,USERID,0,2818,2026/08/13 10:48:58,vsys1,user2",
+];
+
+/**
+ * Ports whose Cribl answers the two discovery stages, plus a capture that
+ * returns real positional events, and nothing else.
+ */
 function discoveryPorts() {
   const request = vi.fn(
     async (opts: { method: string; path: string; groupId?: string }) => {
       if (opts.path === "/system/inputs") {
         return { status: 200, body: { items: SOURCES[opts.groupId ?? ""] ?? [] } };
+      }
+      if (opts.path === "/system/capture") {
+        return { status: 200, body: PANOS_USERID.map((raw) => ({ _raw: raw })) };
       }
       if (opts.path.startsWith("/products/lake/")) {
         return { status: 200, body: { items: [{ id: "Corelight" }] } };
@@ -172,7 +195,23 @@ function discoveryPorts() {
     packs: { list: vi.fn().mockRejectedValue(new Error("offline")) },
     packInstall: { list: vi.fn().mockRejectedValue(new Error("offline")) },
     jobs: { list: vi.fn().mockResolvedValue([]) },
+    samples: memorySampleStore(),
   } as unknown as UiPorts;
+}
+
+/** An in-memory TaggedSampleStore, keyed by log type like the real ones. */
+function memorySampleStore() {
+  const byType = new Map<string, { logType: string }>();
+  return {
+    upsert: async (sample: { logType: string }) => {
+      byType.set(sample.logType, sample);
+    },
+    get: async (logType: string) => byType.get(logType) ?? null,
+    list: async () => [...byType.values()],
+    remove: async (logType: string) => {
+      byType.delete(logType);
+    },
+  };
 }
 
 function renderWithDiscovery() {
@@ -278,5 +317,46 @@ describe("IntegrateScreen - the acquisition panel follows the picker", () => {
     expect(view.container.querySelector(".capture-panel")).toBeNull();
     // Nothing is picked in the new mode yet, so no panel replaces it either.
     expect(view.container.querySelector(".lake-panel")).toBeNull();
+  });
+});
+
+/**
+ * THE WIRE, end to end, and the reason it is pinned at SCREEN level rather than
+ * only inside the intake section.
+ *
+ * The acquisition panels are siblings of the Sample Data section, so committing
+ * a sample and OFFERING TO NAME its positional columns are two different
+ * components' jobs. This screen is the only place they meet: it writes the
+ * batch to the shared store and then announces the arrival, and the section
+ * opens the column dialog. Wire only the first half - which is exactly what
+ * shipped - and the samples land in silence, which is the live 2026-08-25
+ * report ("it adds them but doesn't give me the preview to modify them").
+ *
+ * Both panels commit through ONE callback so they cannot drift apart again; the
+ * capture path is driven here because this file already gets to a mounted
+ * CapturePanel. What the section then does with the announcement - one turn per
+ * headerless sample, nothing at all when none are - is pinned in
+ * sample-intake-section.dom.test.tsx.
+ */
+describe("IntegrateScreen - an acquired sample reaches the column dialog", () => {
+  it("offers header resolution after a CAPTURE commits positional events", async () => {
+    const view = await selectSourceInDefaultGroup();
+
+    await act(async () => {
+      fireEvent.click(screen.getByText("Run capture"));
+    });
+    // The capture produced something to commit - otherwise the assertion below
+    // would pass for a screen that captured nothing at all.
+    expect(view.container.querySelectorAll(".capture-results li")).toHaveLength(1);
+    expect(view.container.querySelector(".csv-dialog")).toBeNull();
+
+    await act(async () => {
+      fireEvent.click(screen.getByText("Add these as samples"));
+    });
+
+    expect(view.container.querySelector(".csv-dialog")).toBeTruthy();
+    expect(
+      view.container.querySelector(".csv-dialog-title")?.textContent,
+    ).toContain("Headerless CSV detected");
   });
 });

@@ -36,6 +36,15 @@
  * keeps the positional _N names. All queue/preview/mismatch decisions are the
  * pure csv-resolution-state helpers.
  *
+ * SAMPLES ALSO ARRIVE FROM SIBLING PANELS, and until 2026-08-25 they arrived
+ * WITHOUT that offer. The capture panel and the Lake panel sit ABOVE this
+ * section in IntegrateScreen and write to the SAME store, but the resolution
+ * queue is state in here, so nothing they commit could ever reach it: a Lake
+ * fetch of a headerless feed landed silently and the operator was never asked to
+ * name its columns ("fetching samples from Cribl Lake seems to work but when I
+ * click add samples it doesn't give me the preview to modify them"). The
+ * arrivalEvent prop is the seam that closes it - see its doc below.
+ *
  * COLUMN ORDERS ARE REMEMBERED (vendor-field-definition plan, Gap 3): before the
  * dialog opens, this section reads any order already known for the sample's
  * VENDOR + LOG TYPE and hands it over as the dialog's pre-fill, so a feed named
@@ -84,6 +93,21 @@ import {
 import type { CsvResolutionQueue } from "./csv-resolution-state";
 import { useVendorColumnOrder } from "./use-vendor-column-order";
 
+/**
+ * One batch of samples a SIBLING panel just wrote to the store, announced to
+ * this section so it can react once (see SampleIntakeSectionProps.arrivalEvent).
+ */
+export interface SampleArrivalEvent {
+  /**
+   * Bumped ONCE per commit by the parent. It is what makes this an event rather
+   * than a state: the section remembers the last nonce it acted on, so a
+   * re-render carrying the same batch does nothing.
+   */
+  nonce: number;
+  /** The samples that batch wrote, in acquisition order. */
+  samples: readonly TaggedSample[];
+}
+
 export interface SampleIntakeSectionProps {
   /** The tagged-sample store this section reads and writes. */
   store: TaggedSampleStore;
@@ -116,6 +140,29 @@ export interface SampleIntakeSectionProps {
    * re-keys the sample, the callback re-keys everything else.
    */
   onRenameLogType?: (from: string, to: string) => void;
+  /**
+   * Samples that landed in the store through a SIBLING acquisition panel - the
+   * capture panel or the Lake panel - rather than through the paste/upload
+   * controls in here.
+   *
+   * WHY THE PROP EXISTS. Paste and upload own the whole path from "a sample was
+   * tagged" to "the operator is asked to name its positional columns", because
+   * the resolution queue is state in this component. The acquisition panels are
+   * SIBLINGS rendered above this section, so they can reach the store and not
+   * the queue: they committed headerless CSV and offered nothing, which is the
+   * live defect this closes. The parent cannot fix that by lifting the queue -
+   * the dialog belongs beside the chips it edits - so it announces the arrival
+   * instead and this section does what upload already does with a batch.
+   *
+   * WHY AN EVENT RATHER THAN A LIST. Handed the current sample list, this
+   * section would have to guess which entries are new, and every unrelated
+   * refresh of that list would look like an arrival - re-opening the dialog on
+   * a refresh is worse than never opening it. A nonce plus its payload,
+   * consumed once against a remembered nonce, is the shape this screen already
+   * uses for exactly this (MappingReviewSection's renameEvent and
+   * dropUnneededEvent), so it is reused rather than reinvented.
+   */
+  arrivalEvent?: SampleArrivalEvent;
 }
 
 export function SampleIntakeSection({
@@ -124,6 +171,7 @@ export function SampleIntakeSection({
   definitionCache,
   onSamplesChange,
   onRenameLogType,
+  arrivalEvent,
 }: SampleIntakeSectionProps) {
   const [samples, setSamples] = useState<TaggedSample[] | null>(null);
   const [loadError, setLoadError] = useState("");
@@ -192,6 +240,36 @@ export function SampleIntakeSection({
   useEffect(() => {
     void load();
   }, [load]);
+
+  // ---- Arrival from a sibling acquisition panel (the Lake/capture seam) ----
+  // Seeded with the CURRENT nonce, not with -1: this section is remounted by
+  // key when the solution changes, and an event already consumed before that
+  // remount must not re-open its dialog on the way back.
+  const lastArrivalNonce = useRef<number>(arrivalEvent?.nonce ?? -1);
+  useEffect(() => {
+    if (arrivalEvent === undefined) {
+      return;
+    }
+    if (arrivalEvent.nonce === lastArrivalNonce.current) {
+      return;
+    }
+    lastArrivalNonce.current = arrivalEvent.nonce;
+    // RE-READ THE STORE FIRST. This section holds its own copy of the list and
+    // a sibling just wrote behind its back, so that copy is now short by
+    // exactly the arrivals. Leaving it short would not merely hide chips: the
+    // next write from in here - applying resolved headers, a rename, a remove -
+    // rebuilds the reported list from this copy, so it would report the
+    // arrivals away again while they sat in the store.
+    void load();
+    // Then offer resolution for the headerless arrivals, ONE TURN EACH, which
+    // is the batch behaviour a multi-file upload has had since Unit 12. A batch
+    // with nothing headerless in it builds a queue that is already done, and
+    // opens nothing.
+    const queue = buildResolutionQueue(arrivalEvent.samples);
+    if (!isQueueDone(queue)) {
+      setCsvQueue(queue);
+    }
+  }, [arrivalEvent, load]);
 
   // Persist an upserted sample and reflect it in the list.
   const persistUpsert = useCallback(

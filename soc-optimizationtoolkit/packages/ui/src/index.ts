@@ -180,7 +180,10 @@ export type {
 // that RE-KEYS the tagged-sample store entry and any downstream log-type-keyed
 // edits (the legacy orphaning-bug fix). Plus the pure decision layer behind it.
 export { SampleIntakeSection } from "./screens/samples/sample-intake-section";
-export type { SampleIntakeSectionProps } from "./screens/samples/sample-intake-section";
+export type {
+  SampleArrivalEvent,
+  SampleIntakeSectionProps,
+} from "./screens/samples/sample-intake-section";
 export {
   buildTaggedSample,
   chipFromTagged,

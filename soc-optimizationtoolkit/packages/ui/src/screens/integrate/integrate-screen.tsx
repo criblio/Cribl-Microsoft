@@ -140,6 +140,7 @@ import { formatStepLine } from "../../onboarding/step-line";
 import { summaryText } from "../../onboarding/summary";
 import { RecentRuns } from "../../onboarding/recent-runs";
 import { SampleIntakeSection } from "../samples/sample-intake-section";
+import type { SampleArrivalEvent } from "../samples/sample-intake-section";
 import { MappingReviewSection } from "../mapping-review/mapping-review-section";
 import type { MappingReviewRenameEvent } from "../mapping-review/mapping-review-section";
 import { PipelinePreviewSection } from "../pipeline-preview/pipeline-preview-section";
@@ -352,6 +353,14 @@ export function IntegrateScreen({
   // sample's destination table from the selected solution's connectors (no
   // manual table entry; the destination can differ per sample).
   const [samples, setSamples] = useState<TaggedSample[]>([]);
+  // Samples acquired by the CAPTURE and LAKE panels are announced to the intake
+  // section below, which owns the headerless-CSV column-naming dialog. Those
+  // panels are siblings of that section, so they can write to the shared store
+  // but cannot reach its resolution queue - the reason a Lake commit of a
+  // positional feed used to land with no way to name its columns. One nonce
+  // per commit; the section consumes it once (SampleArrivalEvent).
+  const [sampleArrival, setSampleArrival] = useState<SampleArrivalEvent>();
+  const arrivalNonce = useRef(0);
 
   // ---- DCR Gap Analysis section (Unit 18) -------------------------------
   // The mapping-review approval gate reports the CONTENT-path readiness. It is
@@ -464,6 +473,31 @@ export function IntegrateScreen({
     setSamples(list);
     setSampleCount(list.length);
   }, []);
+
+  /**
+   * The ONE commit path for every acquisition panel that is a SIBLING of the
+   * intake section - the capture panel and the Lake panel. Straight through the
+   * SAME store the intake section writes, so a captured, fetched, uploaded or
+   * pasted sample is indistinguishable afterwards - including the
+   * replace-by-logType semantics those panels' previews warn about.
+   *
+   * The nonce bump is the second half, and it is what those panels were
+   * missing: writing to the store gets the sample onto the page, but only the
+   * intake section can offer to NAME the positional columns of a headerless
+   * one, because the dialog and its queue live there. Both panels are wired to
+   * this one callback so neither can drift away from that offer again.
+   */
+  const commitAcquiredSamples = useCallback(
+    async (acquired: TaggedSample[]) => {
+      for (const sample of acquired) {
+        await ports.samples.upsert(sample);
+      }
+      handleSamplesChange(await ports.samples.list());
+      arrivalNonce.current += 1;
+      setSampleArrival({ nonce: arrivalNonce.current, samples: acquired });
+    },
+    [ports.samples, handleSamplesChange],
+  );
 
   // The Solution browser reports its selection here. On a real CHANGE (not the
   // initial pick or the on-refresh deep-link restore), the samples/mappings/
@@ -1500,16 +1534,7 @@ export function IntegrateScreen({
               ports.logger,
             )
           }
-          onCommit={async (captured) => {
-            // Straight through the SAME store the intake section writes, so a
-            // captured sample and an uploaded one are indistinguishable
-            // afterwards - including the replace-by-logType semantics the
-            // preview warned about.
-            for (const sample of captured) {
-              await ports.samples.upsert(sample);
-            }
-            handleSamplesChange(await ports.samples.list());
-          }}
+          onCommit={commitAcquiredSamples}
         />
       )}
       {lakeTarget !== null && (
@@ -1565,12 +1590,7 @@ export function IntegrateScreen({
               ports.logger,
             )
           }
-          onCommit={async (fetched) => {
-            for (const sample of fetched) {
-              await ports.samples.upsert(sample);
-            }
-            handleSamplesChange(await ports.samples.list());
-          }}
+          onCommit={commitAcquiredSamples}
         />
       )}
       <SampleIntakeSection
@@ -1580,6 +1600,7 @@ export function IntegrateScreen({
         definitionCache={ports.contentCache}
         onSamplesChange={handleSamplesChange}
         onRenameLogType={handleRenameLogType}
+        arrivalEvent={sampleArrival}
       />
       {/* Completeness confirmation (user request 2026-08-04). The app never
         * said that each unique log type becomes its own routes and pipelines,
