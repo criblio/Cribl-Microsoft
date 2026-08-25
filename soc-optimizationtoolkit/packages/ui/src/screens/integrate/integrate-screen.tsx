@@ -158,6 +158,7 @@ import {
   SearchableMultiSelect,
   SearchableSelect,
 } from "../../components/searchable-select";
+import { sleep } from "../../polling/sleep";
 import { RoleAssignmentSection } from "../role-assignment/role-assignment-section";
 import {
   dcrResourceIdFor,
@@ -1523,6 +1524,12 @@ export function IntegrateScreen({
               {
                 searchGroupId: sampleSources.groups?.searchGroupId ?? "",
                 datasetId: lakeTarget.id,
+                // WITHOUT THIS the twenty status polls fire back to back in
+                // milliseconds and the job is still running when the budget
+                // runs out - which is what every Lake query in the product did
+                // until 2026-08-24. Core reads no clock by design; the shell
+                // owes it the timer.
+                sleep,
               },
               ports.logger,
             );
@@ -1551,6 +1558,9 @@ export function IntegrateScreen({
                 discriminatorField,
                 logTypes,
                 eventsPerLogType,
+                // Same reason as onQuery above, and it matters MORE here: this
+                // runs one job per selected log type.
+                sleep,
               },
               ports.logger,
             )

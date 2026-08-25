@@ -1,7 +1,7 @@
 /**
  * Pins for query-lake-samples (plan Phase 4, ADR 0003).
  *
- * FOUR CLASSES OF FAILURE guarded here, and the first two are asserted on the
+ * FIVE CLASSES OF FAILURE guarded here, and the first two are asserted on the
  * REQUEST rather than the result, because a wrong path or a wrong group answers
  * 404 and 404 degrades into an EMPTY LOG-TYPE LIST - which the operator reads as
  * a fact about their data rather than a bug in us.
@@ -14,6 +14,9 @@
  *                fetches events for one chosen value, and must be able to fetch
  *                every value the second one LISTED - see the round-trip block.
  *   THE ROUTES   sync first (spec-only), the proven job lifecycle second.
+ *   THE SHAPES   what the LIVE API actually answers with, which for the job
+ *                status is not what the spec's own example shows - see
+ *                {@link jobStatus} and the status-envelope block.
  *   EMPTY vs FAILED  never collapsed, in either direction.
  */
 
@@ -28,6 +31,7 @@ import {
   DEFAULT_MAX_LOG_TYPES,
   DEFAULT_SAMPLE_LIMIT,
   JOB_POLL_ATTEMPTS,
+  JOB_POLL_INTERVAL_MS,
   MAX_SAMPLE_LIMIT,
   buildDiscriminatorSampleQuery,
   buildLogTypeCountQuery,
@@ -54,6 +58,35 @@ const ndjson = (rows: unknown[]): string =>
   [META, ...rows].map((row) => JSON.stringify(row)).join("\n");
 
 const ok = (body: unknown): PortHttpResponse => ({ status: 200, body });
+
+/**
+ * A job-status response IN THE SHAPE THE LIVE API ANSWERS WITH, and the default
+ * every status response in this file is scripted with.
+ *
+ * `GET /search/jobs/{id}/status?advanced=true` replies in the same
+ * `{items:[...], count}` envelope the create call uses - confirmed live
+ * 2026-08-24, body keys exactly `["items","count"]`, the status at
+ * `items[0].status`. The OpenAPI spec says otherwise: its own
+ * SearchJobStatusResponseExamplesRunning example is the FLATTENED
+ * `{status:"running", timeCreated, ...}`, which is why the bare read is kept as
+ * a fallback and pinned below rather than deleted.
+ *
+ * THE DEFECT THIS SHAPE EXISTS TO CATCH (found live 2026-08-24): the poll read
+ * the top level only, so it found nothing on every attempt, held the status at
+ * "", burned all JOB_POLL_ATTEMPTS and reported a job that was `completed` on
+ * the FIRST poll as "still pending". Every Lake query failed, on every dataset -
+ * and this suite stayed green the whole time, because every status response
+ * here was scripted as a bare `{status}` no live workspace has ever sent.
+ *
+ * FakeCriblClient is deliberately NOT where this default lives. It is a FIFO
+ * response queue with no knowledge of search jobs, and teaching it to synthesize
+ * a status body for a path it recognized would make it a Cribl simulator rather
+ * than a queue - the same reason `outputsList` is the single narrow exception
+ * there. The shape belongs where the responses are scripted, which is here, and
+ * a helper is enough to stop it drifting back.
+ */
+const jobStatus = (state: string): PortHttpResponse =>
+  ok({ items: [{ status: state }], count: 1 });
 
 /** Two log types, discriminated by a plain `type` field Search can group by. */
 const SAMPLE_ROWS = [
@@ -296,7 +329,7 @@ describe("empty is a RESULT; failed is not", () => {
     const cribl = client(
       ok(""),
       ok({ count: 1, items: [{ id: "j-1" }] }),
-      ok({ status: "completed" }),
+      jobStatus("completed"),
       ok(""),
     );
 
@@ -327,7 +360,7 @@ describe("empty is a RESULT; failed is not", () => {
       ok(ndjson(SAMPLE_ROWS)),
       ok(ndjson([])),
       ok({ count: 1, items: [{ id: "j-2" }] }),
-      ok({ status: "completed" }),
+      jobStatus("completed"),
       ok(ndjson([])),
     );
 
@@ -369,12 +402,12 @@ describe("the async job lifecycle - the route that was PROVEN live", () => {
     const cribl = client(
       { status: 404, body: "no such route" }, // the spec-only sync route
       ok({ count: 1, items: [{ id: "j-1", status: "new" }] }),
-      ok({ status: "running" }),
-      ok({ status: "completed" }),
+      jobStatus("running"),
+      jobStatus("completed"),
       ok(ndjson(SAMPLE_ROWS)),
       // Step two: the sync verdict is remembered, so it goes straight to a job.
       ok({ count: 1, items: [{ id: "j-2" }] }),
-      ok({ status: "completed" }),
+      jobStatus("completed"),
       ok(ndjson(COUNT_ROWS)),
     );
     const sleeps: number[] = [];
@@ -418,7 +451,7 @@ describe("the async job lifecycle - the route that was PROVEN live", () => {
     const cribl = client(
       { status: 404, body: "" },
       ok({ count: 1, items: [{ id: "job/1" }] }),
-      ok({ status: "completed" }),
+      jobStatus("completed"),
       ok(ndjson([{ _raw: "no discriminator here" }])),
     );
 
@@ -431,11 +464,11 @@ describe("the async job lifecycle - the route that was PROVEN live", () => {
     const cribl = client(
       ok(""), // 200, no rows - spec-only route, so not believed on its own
       ok({ count: 1, items: [{ id: "j-1" }] }),
-      ok({ status: "completed" }),
+      jobStatus("completed"),
       ok(ndjson(SAMPLE_ROWS)),
       // Sync is now known-bad for this workspace: step two skips it entirely.
       ok({ count: 1, items: [{ id: "j-2" }] }),
-      ok({ status: "completed" }),
+      jobStatus("completed"),
       ok(ndjson(COUNT_ROWS)),
     );
 
@@ -452,7 +485,7 @@ describe("the async job lifecycle - the route that was PROVEN live", () => {
     const cribl = client(
       { status: 404, body: "" },
       ok({ count: 1, items: [{ id: "j-1" }] }),
-      ...Array.from({ length: JOB_POLL_ATTEMPTS }, () => ok({ status: "running" })),
+      ...Array.from({ length: JOB_POLL_ATTEMPTS }, () => jobStatus("running")),
     );
     const sleeps: number[] = [];
 
@@ -473,7 +506,7 @@ describe("the async job lifecycle - the route that was PROVEN live", () => {
     const cribl = client(
       { status: 404, body: "" },
       ok({ count: 1, items: [{ id: "j-1" }] }),
-      ok({ status: "failed" }),
+      jobStatus("failed"),
     );
 
     const result = await run(cribl);
@@ -489,6 +522,145 @@ describe("the async job lifecycle - the route that was PROVEN live", () => {
 
     expect(result.ok).toBe(false);
     expect(result.notes.join(" ")).toContain("no job id");
+  });
+});
+
+/**
+ * The status ENVELOPE, which is a different pin from the poll's boundedness.
+ *
+ * The block above pins that the loop stops. This one pins that it ever STARTS:
+ * that the status is read out of the shape a live workspace actually sends.
+ *
+ * The defect (live 2026-08-24): the poll read a top-level `status` key that the
+ * real response does not have, so it read undefined every time, the status
+ * stayed "", and a job that was `completed` on the first attempt burned all
+ * JOB_POLL_ATTEMPTS and was reported "still pending". EVERY Lake query failed on
+ * EVERY dataset. The suite stayed green because every status response scripted
+ * here was the spec's flattened `{status}` rather than the live envelope - the
+ * fake agreeing with the code about a shape neither had checked, which is the
+ * only way a total outage hides behind a green run.
+ *
+ * So each pin here asserts a COUNT - how many status requests were issued, how
+ * many waits were asked for - rather than only that the call succeeded. Counts
+ * are what separate "read the status on the first poll" from "read nothing
+ * twenty times and gave up", and those two produced identical `ok` flags for
+ * every case but the happy one.
+ */
+describe("the job status arrives in an ENVELOPE, not as a top-level key", () => {
+  /** create -> one poll -> results, for each of the two queries. */
+  const LIFECYCLE = [
+    "GET /search/query",
+    "POST /search/jobs",
+    "GET /search/jobs/j-1/status",
+    "GET /search/jobs/j-1/results",
+    "POST /search/jobs",
+    "GET /search/jobs/j-2/status",
+    "GET /search/jobs/j-2/results",
+  ];
+
+  const statusCalls = (cribl: FakeCriblClient): number =>
+    cribl.calls.filter((c) => c.path.endsWith("/status")).length;
+
+  it("completes on the FIRST poll when the status is at items[0].status", async () => {
+    // The live shape. Before the fix this read nothing, slept, polled again,
+    // and ran out of scripted responses - so the counts below, not the ok flag,
+    // are what this pin turns on.
+    const cribl = client(
+      { status: 404, body: "" }, // the spec-only sync route
+      ok({ count: 1, items: [{ id: "j-1" }] }),
+      jobStatus("completed"),
+      ok(ndjson(SAMPLE_ROWS)),
+      ok({ count: 1, items: [{ id: "j-2" }] }),
+      jobStatus("completed"),
+      ok(ndjson(COUNT_ROWS)),
+    );
+    const sleeps: number[] = [];
+
+    const result = await run(cribl, {
+      sleep: async (ms: number) => {
+        sleeps.push(ms);
+      },
+    });
+
+    expect(cribl.calls.map((c) => `${c.method} ${c.path}`)).toEqual(LIFECYCLE);
+    // ONE status request per job, not JOB_POLL_ATTEMPTS of them.
+    expect(statusCalls(cribl)).toBe(2);
+    // And no wait was ever asked for, because nothing was ever pending.
+    expect(sleeps).toEqual([]);
+    expect(result.ok).toBe(true);
+    expect(result.path).toBe("async");
+    expect(result.discriminatorField).toBe("type");
+    expect(result.logTypes).toEqual([
+      { logType: "TRAFFIC", eventCount: 890000 },
+      { logType: "THREAT", eventCount: 12 },
+    ]);
+  });
+
+  it("still reads a BARE top-level status - the shape the spec documents", async () => {
+    // The OpenAPI example is the flattened `{status:"running", ...}`, so the
+    // fallback is not dead code: it is the only reading of the response Cribl
+    // publishes. Both shapes must produce the identical lifecycle.
+    const bare = (state: string): PortHttpResponse => ok({ status: state });
+    const cribl = client(
+      { status: 404, body: "" },
+      ok({ count: 1, items: [{ id: "j-1" }] }),
+      bare("completed"),
+      ok(ndjson(SAMPLE_ROWS)),
+      ok({ count: 1, items: [{ id: "j-2" }] }),
+      bare("completed"),
+      ok(ndjson(COUNT_ROWS)),
+    );
+    const sleeps: number[] = [];
+
+    const result = await run(cribl, {
+      sleep: async (ms: number) => {
+        sleeps.push(ms);
+      },
+    });
+
+    expect(cribl.calls.map((c) => `${c.method} ${c.path}`)).toEqual(LIFECYCLE);
+    expect(statusCalls(cribl)).toBe(2);
+    expect(sleeps).toEqual([]);
+    expect(result.ok).toBe(true);
+    expect(result.logTypes).toEqual([
+      { logType: "TRAFFIC", eventCount: 890000 },
+      { logType: "THREAT", eventCount: 12 },
+    ]);
+  });
+
+  it("keeps polling an ENVELOPE that says running, and names that state when it gives up", async () => {
+    // The bound itself is pinned above; what this adds is WHAT WAS READ. A poll
+    // that read nothing gives up saying the job was "still pending" - which is
+    // the app admitting it never learned anything, in a sentence that reads to
+    // an operator like a slow query. Naming `running` is the difference, and it
+    // is only available to a reader that found the status in the envelope.
+    const cribl = client(
+      { status: 404, body: "" },
+      ok({ count: 1, items: [{ id: "j-1" }] }),
+      ...Array.from({ length: JOB_POLL_ATTEMPTS }, () => jobStatus("running")),
+    );
+    const sleeps: number[] = [];
+
+    const result = await run(cribl, {
+      sleep: async (ms: number) => {
+        sleeps.push(ms);
+      },
+    });
+
+    // Every scripted status response was consumed and no more were asked for.
+    expect(statusCalls(cribl)).toBe(JOB_POLL_ATTEMPTS);
+    expect(cribl.calls).toHaveLength(2 + JOB_POLL_ATTEMPTS);
+    expect(sleeps).toHaveLength(JOB_POLL_ATTEMPTS - 1);
+    expect(sleeps.every((ms) => ms === JOB_POLL_INTERVAL_MS)).toBe(true);
+    expect(result.ok).toBe(false);
+    expect(result.logTypes).toEqual([]);
+    expect(result.notes.join(" ")).toContain(
+      `still running after ${JOB_POLL_ATTEMPTS} status checks`,
+    );
+    // "pending" is what the app says when it read NO status at all.
+    expect(result.notes.join(" ")).not.toContain("still pending");
+    // And a job we stopped asking about is never an empty dataset.
+    expect(result.notes.join(" ")).not.toContain("holds no events");
   });
 });
 
@@ -617,7 +789,7 @@ describe("fetchLakeLogTypeEvents - counts choose, events sample", () => {
     const cribl = client(
       ok(""),
       ok({ count: 1, items: [{ id: "j-1" }] }),
-      ok({ status: "completed" }),
+      jobStatus("completed"),
       ok(""),
     );
 

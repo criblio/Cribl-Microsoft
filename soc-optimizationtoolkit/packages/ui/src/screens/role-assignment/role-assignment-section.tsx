@@ -37,6 +37,7 @@ import type {
 import { usePorts } from "../../ports-context";
 import { SearchableSelect } from "../../components/searchable-select";
 import { formatStepLine } from "../../onboarding/step-line";
+import { sleep as realSleep } from "../../polling/sleep";
 import {
   projectRoleOutcome,
   roleAssignDisabledReason,
@@ -52,10 +53,6 @@ const KIND_LABEL: Record<"assigned" | "already" | "failed", string> = {
   failed: "failed",
 };
 
-/** Default retry pacing when the shell injects none (real timer; UI layer). */
-function defaultSleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
 
 export interface RoleAssignmentSectionProps {
   /**
@@ -189,7 +186,7 @@ export function RoleAssignmentSection({
           principalId: objectId.trim(),
           targets: [...targets],
           mintAssignmentName: minter,
-          retry: { sleep: sleep ?? defaultSleep },
+          retry: { sleep: sleep ?? realSleep },
           onProgress: (step) => {
             setSteps((prev) =>
               prev.map((s) => (s.name === step.name ? { ...step } : s)),

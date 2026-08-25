@@ -18,6 +18,7 @@ import {
   type ProvisionLabResult,
 } from "@soc/core";
 import { usePorts } from "../../ports-context";
+import { sleep } from "../../polling/sleep";
 import {
   canDeployFoundation,
   criblBundleArtifact,
@@ -152,7 +153,7 @@ export function LabProvisionerPanels({
           // The legacy 4-char random collision suffix; randomness lives in
           // the impure component layer, never in core.
           mintStorageSuffix: () => Math.random().toString(36).slice(2, 6),
-          retry: { sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)) },
+          retry: { sleep },
           onProgress: (step) => {
             setSteps((prev) =>
               prev.map((s) => (s.name === step.name ? step : s)),

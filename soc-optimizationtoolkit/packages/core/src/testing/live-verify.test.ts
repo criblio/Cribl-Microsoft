@@ -48,12 +48,34 @@ import type {
   CriblGroupSummary,
   CriblRequest,
 } from "../ports/cribl-client";
-import { deriveGroupProduct, isSearchGroup } from "../ports/cribl-client";
+import {
+  deriveGroupProduct,
+  isSearchGroup,
+  isStreamWorkerGroup,
+} from "../ports/cribl-client";
 import type { PortHttpResponse } from "../ports/http";
 
 const BASE = process.env.CRIBL_LIVE_BASE ?? "";
 const TOKEN = process.env.CRIBL_LIVE_TOKEN ?? "";
 const LIVE = BASE !== "" && TOKEN !== "";
+
+/**
+ * Pin the capture group. Optional - without it the suite resolves one that has
+ * CONNECTED WORKERS, which is the part that matters (see below).
+ */
+const GROUP = process.env.CRIBL_LIVE_GROUP ?? "";
+
+/**
+ * A REAL delay, because the whole point of this suite is to run what ships.
+ *
+ * Core takes an injected `sleep` and calls it as `await config.sleep?.(ms)`, so
+ * omitting it is a silent no-op: the poll loop still runs and simply never
+ * waits. Passing none here fired all twenty status polls inside a millisecond
+ * and reported a job "still running" that completed a second later - measuring
+ * this suite's own impatience rather than the platform.
+ */
+const liveSleep = (ms: number): Promise<void> =>
+  new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
  * The cloud adapter's body handling, reproduced deliberately.
@@ -118,6 +140,30 @@ function report(row: string, verdict: string, detail: string): void {
   console.log(`[live-verify] ${row}: ${verdict}\n              ${detail}`);
 }
 
+/**
+ * The ids of worker groups that currently have at least one worker CONNECTED,
+ * read from the leader's own worker listing.
+ *
+ * Group membership is a config fact and says nothing about whether anything is
+ * running: `/master/groups` lists a group whether or not a worker ever joined
+ * it. Capture executes on a worker, so this is the difference between a capture
+ * that can answer and a guaranteed 400.
+ */
+async function groupsWithWorkers(client: CriblClient): Promise<Set<string>> {
+  const res = await client.request({ method: "GET", path: "/master/workers" });
+  const items = ((res.body as { items?: unknown[] })?.items ?? []) as Record<
+    string,
+    unknown
+  >[];
+  const staffed = new Set<string>();
+  for (const w of items) {
+    const info = (w.info ?? {}) as Record<string, unknown>;
+    const group = w.group ?? w.workerGroup ?? info.workerGroup;
+    if (typeof group === "string" && group !== "") staffed.add(group);
+  }
+  return staffed;
+}
+
 describe.skipIf(!LIVE)("live verification against a real workspace", () => {
   const cribl = liveClient();
 
@@ -130,9 +176,34 @@ describe.skipIf(!LIVE)("live verification against a real workspace", () => {
     expect(groups.length).toBeGreaterThan(0);
 
     // A Stream group, which is where /system/inputs and /system/capture live.
-    const stream = groups.filter((g) => !isSearchGroup(g));
+    //
+    // IT MUST HAVE CONNECTED WORKERS. Capture runs ON a worker, so a group with
+    // none answers `400 {"message":"No worker nodes are connected to this worker
+    // group."}` no matter what the filter says. This used to take stream[0],
+    // which in the lab is `default` and has no workers - so rows 1, 2, 4 and 5
+    // failed on a platform precondition and row 8 read the same 400 as "Cribl
+    // rejected the undeclared field", a verdict about the evaluator drawn from a
+    // request that never reached one. Found on the 2026-08-24 live run.
+    //
+    // Note this filters on the `stream` TYPE rather than "not search": the
+    // groups listing also carries edge fleets and outposts, and capturing on an
+    // edge fleet is a different thing from the Stream capture under test.
+    const stream = groups.filter(isStreamWorkerGroup);
     expect(stream.length).toBeGreaterThan(0);
-    groupId = stream[0].id;
+
+    const staffed = await groupsWithWorkers(cribl);
+    const candidates =
+      GROUP === "" ? stream.filter((g) => staffed.has(g.id)) : stream.filter((g) => g.id === GROUP);
+
+    if (candidates.length === 0) {
+      const why =
+        GROUP === ""
+          ? `no Stream group has connected workers (staffed: ${[...staffed].join(", ") || "none"})`
+          : `CRIBL_LIVE_GROUP=${GROUP} is not a Stream group in this workspace`;
+      report("row 7 (permission)", "CANNOT RUN", why);
+      expect.fail(`${why} - capture rows cannot be settled against this workspace`);
+    }
+    groupId = candidates[0].id;
 
     const res = await cribl.request({
       method: "GET",
@@ -282,15 +353,28 @@ describe.skipIf(!LIVE)("live verification against a real workspace", () => {
 
     const bareCount = extractCapturedEvents(bare.body).lines.length;
     const guardedCount = extractCapturedEvents(guarded.body).lines.length;
+    // THE GUARDED REQUEST IS THE CONTROL. It references the same undeclared
+    // name in the form the evaluator must accept, so if IT fails the failure is
+    // environmental and says nothing about undeclared fields.
+    //
+    // This ordering is the fix for a false verdict this row produced on
+    // 2026-08-24: run against a group with no connected workers, both requests
+    // came back `400 No worker nodes are connected`, and `bare.status >= 400`
+    // reported "REJECTED outright - guards are load-bearing" - a conclusion
+    // about the JavaScript evaluator drawn from a request that never reached
+    // one. A non-2xx control now yields no verdict at all, which is the only
+    // honest reading of it.
     report(
       "row 8 (undeclared field)",
-      bare.status >= 400
-        ? "REJECTED outright - guards are load-bearing"
-        : bareCount === 0 && guardedCount > 0
-          ? "DROPS events - guards are load-bearing"
-          : bareCount > 0
-            ? "TOLERATED - guards are insurance, not load-bearing"
-            : "INCONCLUSIVE - both returned nothing, source may be idle",
+      guarded.status >= 400
+        ? "CANNOT RUN - the control request itself failed"
+        : bare.status >= 400
+          ? "REJECTED outright - guards are load-bearing"
+          : bareCount === 0 && guardedCount > 0
+            ? "DROPS events - guards are load-bearing"
+            : bareCount > 0
+              ? "TOLERATED - guards are insurance, not load-bearing"
+              : "INCONCLUSIVE - both returned nothing, source may be idle",
       `bare HTTP ${bare.status} / ${bareCount} events; guarded HTTP ${guarded.status} / ${guardedCount} events`,
     );
 
@@ -409,6 +493,7 @@ describe.skipIf(!LIVE)("live verification against a real workspace", () => {
     const counted = await queryLakeSamples(cribl, {
       searchGroupId: search.id,
       datasetId,
+      sleep: liveSleep,
     });
     report(
       "row 6 (queryLakeSamples)",
@@ -432,6 +517,7 @@ describe.skipIf(!LIVE)("live verification against a real workspace", () => {
       discriminatorField: counted.discriminatorField,
       logTypes: [counted.logTypes[0].logType],
       eventsPerLogType: 1,
+      sleep: liveSleep,
     });
     const rejected = fetched.notes.some((n) => /\b(4\d\d|5\d\d)\b/.test(n));
     report(
@@ -443,5 +529,9 @@ describe.skipIf(!LIVE)("live verification against a real workspace", () => {
       false,
     );
     expect(fetched.ok).toBe(true);
-  });
+    // A REAL wait budget. Three search jobs, each allowed 19 x 500ms of polling,
+    // is far past vitest's 5s default - and a timeout here would read as "the
+    // Lake route failed" when it in fact means "we stopped waiting". Raise this
+    // in step with JOB_POLL_INTERVAL_MS.
+  }, 120_000);
 });
