@@ -13,6 +13,15 @@
  * {@link advanceQueue} steps through them, so Apply and Skip both move to the
  * next queued file instead of ending the batch.
  *
+ * THE LIVE PREVIEW (step 2 of the vendor field-definition plan) is the other
+ * thing that lives here. {@link buildFieldPreview} is the SHARED surface every
+ * input path renders into - the pasted header row, the pasted vendor feed
+ * config, and the interactive mapper all hand it one array of names and get
+ * back the same projection: each position's name beside the real value it takes,
+ * plus the unmapped remainder counted. Positional mapping is easy to get subtly
+ * wrong, and an off-by-one that is invisible in a list of names is obvious next
+ * to values.
+ *
  * All CSV parsing is @soc/core: {@link isHeaderlessCsv} decides what needs
  * resolving, {@link parseCsvWithHeaders} re-parses once headers are supplied
  * (syslog prefix stripped before split, future_use skipped, _extra_N overflow),
@@ -27,7 +36,10 @@
 
 import {
   isHeaderlessCsv,
+  isPositionalFieldName,
   parseCsvWithHeaders,
+  parseFeedConfig,
+  positionalFieldName,
   stripSyslogPrefix,
 } from "@soc/core";
 import type { TaggedSample } from "@soc/core";
@@ -51,9 +63,22 @@ export interface CsvResolutionItem {
   csvContent: string;
   /** How many positional columns the headerless parse discovered. */
   columnCount: number;
-  /** The first few reconstructed data rows, for the preview zip. */
+  /**
+   * The first few reconstructed data rows. Row 0 feeds the preview zip; the
+   * rest feed the interactive mapper's per-position EXAMPLE VALUES, which is
+   * why this is more than one row: a single `0` identifies nothing, while
+   * `0, 0, 1, 0` beside `443, 80, 443, 22` identifies both columns at a glance.
+   * Capped at {@link EXAMPLE_ROW_COUNT}.
+   */
   firstRows: string[];
 }
+
+/**
+ * How many data rows a {@link CsvResolutionItem} carries for display. Enough
+ * that a repeated-value column (a flag, a constant) is visibly distinct from a
+ * varying one, and few enough that the mapper grid stays readable.
+ */
+export const EXAMPLE_ROW_COUNT = 5;
 
 /**
  * A first-in-first-out queue of headerless-CSV samples to resolve. `index` is
@@ -65,19 +90,109 @@ export interface CsvResolutionQueue {
   index: number;
 }
 
-/** One row of the preview zip: a header aligned to its first-row value. */
+/**
+ * One POSITION in the live preview: the name that position carries right now,
+ * aligned to the real value sitting at it in a data row.
+ *
+ * There is a row here for every position in the union of the data's columns and
+ * the operator's definition - NOT only for the names they supplied. That is the
+ * whole point of the surface: a definition covering 12 of 38 columns has to look
+ * like it covers 12 of 38, and 26 rows that read `_12 -> 192.168.0.2` are what
+ * make that visible. Listing only the 12 supplied names would render a
+ * quarter-finished definition indistinguishable from a complete one.
+ */
 export interface PreviewZipRow {
-  /** The supplied column name. */
+  /** Zero-based column position in the data row. */
+  position: number;
+  /**
+   * The name this position carries: the operator's name when they supplied one,
+   * otherwise the core {@link positionalFieldName} for this position.
+   *
+   * NEVER a guess. Nothing here infers a name from the value's shape - a
+   * confident wrong name is worse than a visible `_17`, because a wrong name
+   * silently survives into the destination schema whereas `_17` is obviously
+   * unfinished (plan: "never invent a name").
+   */
   header: string;
-  /** The value at this position in the first data row ("" when absent). */
+  /** The value at this position in the previewed data row ("" when absent). */
   value: string;
-  /** False when the first row had no value at this position (surplus header). */
+  /** False when the row had no value at this position (a surplus header). */
   hasValue: boolean;
   /**
    * True for a `future_use*` placeholder column: {@link parseCsvWithHeaders}
    * discards its value, so the preview marks it rather than implying a mapping.
+   * A placeholder still counts as MAPPED - the operator has declared the column
+   * meaningless, which is a decision, not an omission.
    */
   skipped: boolean;
+  /**
+   * True when no operator-supplied name covers this position, so it is still
+   * carrying its positional name. Decided with the core
+   * {@link isPositionalFieldName} rather than a local regex - the producer and
+   * the test for it live together in core models.ts precisely because they had
+   * drifted apart once (step 1 of the field-definition plan).
+   *
+   * A supplied name that is itself positional counts as unmapped. That is not a
+   * hypothetical: the interactive per-column mapper holds ONE array for all
+   * positions and parks the ones nobody has named yet at
+   * {@link positionalFieldName}, so "is this position named?" must be answered
+   * from the name, not from the array's length.
+   */
+  unmapped: boolean;
+}
+
+/**
+ * The live preview of a column definition against real data - the shared
+ * surface EVERY input path (pasted header row, pasted vendor feed config,
+ * interactive mapper, a pre-filled bundled order) renders into.
+ *
+ * It carries two things the operator cannot get from a name list:
+ *
+ * 1. Each name beside the real value it will take. Positional mapping is easy
+ *    to get subtly wrong and an off-by-one is INVISIBLE in a list of names.
+ *    Beside values it is obvious. The live case that motivated this: PAN-OS
+ *    CONFIG emits `1,2021/10/25 20:25:39,,CONFIG` with an EMPTY serial, so a
+ *    definition written for the documented column order - which assumes serial
+ *    is populated - shifts every name after position 2, and the shift shows up
+ *    the instant `type` reads "" and `subtype` reads "CONFIG".
+ *
+ * 2. The unmapped remainder, COUNTED. See {@link unmappedCount}.
+ */
+export interface FieldDefinitionPreview {
+  /**
+   * The rendered rows, in position order, capped at the display limit. The cap
+   * hides ROWS; it never hides the counts below - a definition covering 12 of
+   * 38 columns still reports 26 unmapped even when only 15 rows fit.
+   */
+  rows: PreviewZipRow[];
+  /**
+   * Every position considered: the union of the data's columns and the supplied
+   * names (`rows.length + hiddenCount`). Larger than {@link columnCount} when
+   * the operator supplied MORE names than the data has columns.
+   */
+  totalPositions: number;
+  /** How many positional columns the data actually has - the coverage denominator. */
+  columnCount: number;
+  /**
+   * How many of the data's `columnCount` positions carry an operator-supplied
+   * name. Surplus names beyond the data's columns are deliberately NOT counted
+   * here - they map nothing, and inflating coverage with them would be the
+   * exact false reassurance this surface exists to prevent. They are surfaced
+   * by {@link mismatch} instead.
+   */
+  mappedCount: number;
+  /** `columnCount - mappedCount`: positions still carrying a positional name. */
+  unmappedCount: number;
+  /** Positions past the display limit, reported rather than silently dropped. */
+  hiddenCount: number;
+  /**
+   * The header-count-vs-column-count comparison. It SURVIVES alongside the
+   * coverage counts rather than being replaced by them, because the two say
+   * different things: coverage says "you have not named everything yet"
+   * (expected, mid-edit), mismatch says "the set you pasted is the wrong SIZE
+   * for this data" (usually the wrong feed config, or an off-by-one).
+   */
+  mismatch: CsvMismatch;
 }
 
 /** The header-count-vs-column-count comparison behind the mismatch warning. */
@@ -146,7 +261,7 @@ export function toResolutionItem(sample: TaggedSample): CsvResolutionItem {
     sourceName: sample.parsed.sourceName,
     csvContent: lines.join("\n"),
     columnCount: sample.parsed.fields.length,
-    firstRows: lines.slice(0, 3),
+    firstRows: lines.slice(0, EXAMPLE_ROW_COUNT),
   };
 }
 
@@ -218,26 +333,131 @@ export function queuePosition(queue: CsvResolutionQueue): {
 // ---------------------------------------------------------------------------
 
 /**
- * Parse a pasted or uploaded header row into clean column names. Verbatim from
- * the legacy renderer's header-file handling:
+ * Clean ONE operator-supplied column name, verbatim from the legacy renderer's
+ * header-file handling: trim, strip surrounding single/double quotes, sanitize
+ * to an identifier (`[^A-Za-z0-9_]` -> `_`), drop leading underscores. Returns
+ * "" when nothing survives (e.g. `"!!!"`), which every caller reads as "this
+ * column is still unnamed".
+ *
+ * It is a NAMED, SHARED function rather than an inline chain because two input
+ * paths now supply names - the pasted header row and the interactive per-column
+ * mapper - and this app has already been bitten once by the same question ("what
+ * is a legal column name?") being answered twice in two places (see
+ * positionalFieldName in core models.ts). Both paths call this one.
+ *
+ * Note the useful consequence of dropping leading underscores: an operator
+ * CANNOT type a name that collides with the positional `_N` namespace, so a
+ * named column is never mistaken for an unnamed one.
+ */
+export function sanitizeColumnName(name: string): string {
+  return name
+    .trim()
+    .replace(/^["']|["']$/g, "")
+    .replace(/[^A-Za-z0-9_]/g, "_")
+    .replace(/^_+/, "");
+}
+
+/**
+ * Parse a pasted or uploaded header row into clean column names:
  *   - comma-separated when the text contains a comma, else newline-separated;
- *   - each name trimmed and stripped of surrounding single/double quotes;
- *   - each name sanitized to an identifier (`[^A-Za-z0-9_]` -> `_`), leading
- *     underscores removed;
+ *   - each name through {@link sanitizeColumnName};
  *   - empties dropped.
  */
 export function parseHeaderFileText(content: string): string[] {
   const raw = content.includes(",")
     ? content.split(",")
     : content.split("\n");
-  return raw
-    .map((h) => h.trim().replace(/^["']|["']$/g, ""))
-    .map((h) => h.replace(/[^A-Za-z0-9_]/g, "_").replace(/^_+/, ""))
-    .filter((h) => h !== "");
+  return raw.map(sanitizeColumnName).filter((h) => h !== "");
 }
 
 // ---------------------------------------------------------------------------
-// Preview zip + mismatch
+// Definition source: which input path the preview is currently showing
+// ---------------------------------------------------------------------------
+
+/**
+ * The dialog tabs that supply column names from PASTED TEXT - a header row, or
+ * a vendor output config. Both assume the operator HAS an artifact to paste.
+ */
+export type PastedDefinitionTab = "row" | "config";
+
+/**
+ * Every tab that can supply a definition. `"map"` is the interactive per-column
+ * mapper (csv-column-mapping.ts), which exists for the operator who has NEITHER
+ * artifact and names columns from their real values instead. It is in this union
+ * because the preview surface treats all three as interchangeable suppliers of
+ * one array; it is NOT in {@link PastedDefinitionTab} because it has no text to
+ * parse, so {@link resolveDefinitionSource} cannot be handed it by mistake.
+ */
+export type DefinitionTab = PastedDefinitionTab | "map";
+
+/** The column names an input path currently yields, plus what to call it. */
+export interface DefinitionSource {
+  /** The tab these names came from. */
+  tab: DefinitionTab;
+  /** The names, in column order. Empty when the text yields none (yet). */
+  headers: string[];
+  /**
+   * What the dialog says about the parse: the recognized vendor and field count,
+   * or why nothing was recognized. "" when the operator has typed nothing -
+   * there is no news before there is input.
+   */
+  label: string;
+  /** True once the active tab's text is non-blank. */
+  hasInput: boolean;
+}
+
+/**
+ * Derive the current definition from whichever tab is active. Called on EVERY
+ * keystroke, which is the point: the preview is live, so the names it shows
+ * beside the values are re-derived from the text as the operator types or
+ * pastes rather than latched by a "parse this" button.
+ *
+ * That is why the two tabs no longer latch their result into component state.
+ * They used to, and the consequence was that the preview showed a definition
+ * the visible text no longer matched - the operator edited the header row,
+ * the preview kept displaying the previous parse, and the mismatch warning
+ * argued with the textarea. THE ACTIVE TAB IS THE DEFINITION: what is on screen
+ * is what Apply applies.
+ *
+ * Both tabs return the same shape so the preview surface never branches on
+ * where names came from - the header-row tab, the feed-config tab, and (next)
+ * the interactive mapper are interchangeable suppliers of one array.
+ */
+export function resolveDefinitionSource(
+  tab: PastedDefinitionTab,
+  headerRowText: string,
+  feedConfigText: string,
+): DefinitionSource {
+  const text = tab === "row" ? headerRowText : feedConfigText;
+  if (text.trim() === "") {
+    return { tab, headers: [], label: "", hasInput: false };
+  }
+  if (tab === "row") {
+    const headers = parseHeaderFileText(text);
+    return {
+      tab,
+      headers,
+      label:
+        headers.length > 0
+          ? `Header row (${headers.length} column${headers.length === 1 ? "" : "s"})`
+          : "No column names found - check the header row.",
+      hasInput: true,
+    };
+  }
+  const config = parseFeedConfig(text);
+  return {
+    tab,
+    headers: config.fields,
+    label:
+      config.fields.length > 0
+        ? `${config.vendor} ${config.feedType} (${config.fields.length} field${config.fields.length === 1 ? "" : "s"})`
+        : "No fields detected - check the config format.",
+    hasInput: true,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// The live preview surface (name -> real value, plus the unmapped remainder)
 // ---------------------------------------------------------------------------
 
 /**
@@ -254,23 +474,123 @@ export function splitCsvRow(row: string): string[] {
 }
 
 /**
- * Zip the supplied `headers` against the first data row so the operator sees
- * name -> value alignment before applying. Capped at `limit` rows for display;
- * a `future_use*` header is marked `skipped` (its value is discarded on apply),
- * and a header with no corresponding value is marked `hasValue: false`.
+ * True when `header` is a real operator-supplied name for a column, as opposed
+ * to a placeholder for one nobody has named yet.
+ *
+ * Two things fail the test, and both mean "still unmapped":
+ *   - nothing there at all (the definition is shorter than the data, or the
+ *     entry is blank - {@link parseCsvWithHeaders} drops a blank name's value);
+ *   - a name that IS a positional name, which is how the interactive mapper
+ *     represents an un-named position inside a full-length array.
+ */
+function isSuppliedName(header: string | undefined): boolean {
+  if (header === undefined) {
+    return false;
+  }
+  const trimmed = header.trim();
+  return trimmed !== "" && !isPositionalFieldName(trimmed);
+}
+
+/**
+ * Zip a definition against one real data row, ONE ROW PER POSITION across the
+ * union of the data's columns and the supplied names.
+ *
+ * Uncapped on purpose: the display cap is a rendering concern and belongs to
+ * {@link buildFieldPreview}, which needs the full list to count the unmapped
+ * remainder correctly. Capping here would make the count depend on how many
+ * rows happened to fit, which is how "12 of 38" would quietly become "12 of 15".
+ *
+ * A position with no supplied name keeps {@link positionalFieldName} and is
+ * flagged `unmapped`; a `future_use*` name is flagged `skipped` (its value is
+ * discarded on apply); a position past the end of the row is `hasValue: false`.
  */
 export function previewZip(
   headers: readonly string[],
   firstRow: string,
-  limit = 15,
+  columnCount: number,
 ): PreviewZipRow[] {
-  const values = splitCsvRow(firstRow);
-  return headers.slice(0, limit).map((header, i) => ({
-    header,
-    value: values[i] ?? "",
-    hasValue: i < values.length,
-    skipped: header.startsWith("future_use"),
-  }));
+  // A blank row must contribute NO positions: "".split(",") is [""], which
+  // would otherwise invent a column-zero that holds an empty value.
+  const values = firstRow.trim() === "" ? [] : splitCsvRow(firstRow);
+  const total = Math.max(columnCount, headers.length, values.length);
+  const rows: PreviewZipRow[] = [];
+  for (let i = 0; i < total; i += 1) {
+    const supplied = headers[i];
+    const named = isSuppliedName(supplied);
+    const header = named
+      ? (supplied as string).trim()
+      : positionalFieldName(i);
+    rows.push({
+      position: i,
+      header,
+      value: values[i] ?? "",
+      hasValue: i < values.length,
+      skipped: named && header.startsWith("future_use"),
+      unmapped: !named,
+    });
+  }
+  return rows;
+}
+
+/** How many preview rows are rendered before the remainder is summarized. */
+export const PREVIEW_ROW_LIMIT = 15;
+
+/**
+ * Build the live preview for `headers` against `item` - the one call every
+ * input path makes, so the header-row tab, the feed-config tab and the
+ * interactive mapper all show the same thing computed the same way.
+ *
+ * Which row is previewed is decided HERE rather than by each caller: the first
+ * data row. One row is enough to expose an off-by-one (a timestamp under
+ * `serial` needs no second opinion) and every caller showing the same row keeps
+ * the surface comparable as the operator switches tabs.
+ */
+export function buildFieldPreview(
+  headers: readonly string[],
+  item: Pick<CsvResolutionItem, "columnCount" | "firstRows">,
+  limit = PREVIEW_ROW_LIMIT,
+): FieldDefinitionPreview {
+  const all = previewZip(headers, item.firstRows[0] ?? "", item.columnCount);
+  // Coverage is measured over the DATA's columns only. A definition with 40
+  // names for 38 columns covers at most 38; the two surplus names are the
+  // mismatch warning's business, not coverage's.
+  const covered = all.slice(0, item.columnCount);
+  const mappedCount = covered.filter((row) => !row.unmapped).length;
+  return {
+    rows: all.slice(0, limit),
+    totalPositions: all.length,
+    columnCount: item.columnCount,
+    mappedCount,
+    unmappedCount: covered.length - mappedCount,
+    hiddenCount: Math.max(0, all.length - limit),
+    mismatch: deriveMismatch(headers.length, item.columnCount),
+  };
+}
+
+/**
+ * The one-line coverage caption. A string, and therefore a decision about what
+ * the operator is told, which is why it lives in the pure module beside the
+ * counts rather than being assembled inline in the component.
+ *
+ * It always names the remainder explicitly, including the zero case ("Names all
+ * 38 columns"), because "no warning shown" and "nothing left to map" have to be
+ * distinguishable - silence is what let a 12-of-38 definition read as finished.
+ */
+export function coverageLine(preview: FieldDefinitionPreview): string {
+  const { columnCount, mappedCount, unmappedCount, rows } = preview;
+  if (columnCount === 0) {
+    return "No columns to map.";
+  }
+  if (unmappedCount === 0) {
+    return `Names all ${columnCount} columns.`;
+  }
+  const firstUnmapped = rows.find((row) => row.unmapped);
+  // The example name is the first unmapped position that is actually RENDERED;
+  // with a very short display cap there may be none, in which case the count
+  // stands on its own rather than naming a row the operator cannot see.
+  const example =
+    firstUnmapped === undefined ? "" : ` (${firstUnmapped.header} and so on)`;
+  return `Names ${mappedCount} of ${columnCount} columns - ${unmappedCount} still unmapped${example}.`;
 }
 
 /**
@@ -302,6 +622,16 @@ export function deriveMismatch(
  * entry - the Unit 11 replace-by-logType contract). `skipFirstRow` drops a
  * leading self-header row when the pasted CSV still carried one. Detection stays
  * content-first: the format remains CSV; only the column NAMES change.
+ *
+ * NOTE what happens to the unmapped remainder, because the preview and the
+ * apply deliberately name it differently. While the definition is being
+ * written, an uncovered position is `_N` - unnamed, and the preview says so.
+ * Once applied, the core parser parks values beyond the supplied headers at
+ * `_extra_N`, which is a DIFFERENT fact and stays different on purpose (core
+ * models.ts): `_N` means nobody has named this column, `_extra_N` means the
+ * definition the operator committed to was short. The mismatch warning is what
+ * tells them that is about to happen, which is why it survives alongside the
+ * coverage count instead of being folded into it.
  */
 export function resolveHeaders(
   item: CsvResolutionItem,

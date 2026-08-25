@@ -1576,6 +1576,8 @@ export function IntegrateScreen({
       <SampleIntakeSection
         key={contentResetKey}
         store={ports.samples}
+        solutionName={solution?.name ?? ""}
+        definitionCache={ports.contentCache}
         onSamplesChange={handleSamplesChange}
         onRenameLogType={handleRenameLogType}
       />

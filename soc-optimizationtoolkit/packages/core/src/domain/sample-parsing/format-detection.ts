@@ -128,21 +128,36 @@ function detectLenient(content: string): SampleFormat {
     return "csv";
   }
 
-  // A SYSLOG-WRAPPED PAYLOAD IS NOT RESCUED HERE, and the reason is worth
-  // keeping. A de-headered retry was tried on 2026-08-25 and reverted the same
-  // day: this function only DETECTS, while parseByFormat is handed the ORIGINAL
-  // line, so classifying `<13>1 ... {"type":"CONFIG"}` as ndjson made the parser
-  // JSON.parse a line that still had its header and produce ZERO records - a
-  // wrapped JSON payload went from "syslog, one record" to "ndjson, nothing".
-  // Detection and parsing have to agree on WHICH BYTES they are looking at, so
-  // the strip belongs at the content boundary ahead of both, not in here.
+  // A JSON PAYLOAD OVER SYSLOG. Tried and reverted on 2026-08-25, then done
+  // properly: the first attempt classified `<13>1 ... {"type":"CONFIG"}` as
+  // ndjson while parseByFormat still received the line WITH its header, so
+  // JSON.parse failed and the sample went from "syslog, one record" to
+  // "ndjson, nothing". Detection and parsing have to agree on WHICH BYTES they
+  // are reading, so parseNdjson now strips the same prefix before parsing -
+  // exactly as parseCsv's headerless branch has always done - and only then is
+  // it safe to classify on the payload here.
   //
-  // The Lake path already does exactly that: rowRawText takes the vendor payload
-  // over the transport envelope before anything downstream sees it. Uploads and
-  // captures that arrive still-wrapped keep the limitation - json and
-  // header-csv fall to `syslog` - while cef, leef and kv survive it because
-  // their probes are unanchored substring tests, and PAN-OS survives via the
-  // positional fingerprint above.
+  // JSON ONLY, and that restriction is load-bearing. A payload is accepted here
+  // only if it PROVES what it is by parsing. Accepting `csv` from a de-headered
+  // line reclassified `<134>Jan  1 12:00:00 host app: a, b, c, d, e, f, g` as
+  // csv, because once the header is gone "a, b, c, d, e, f, g" IS a valid
+  // identifier header row - that is the genuine ambiguity of headerless comma
+  // text, not a bug in the strip, and the characterization suite pins that line
+  // as syslog.
+  //
+  // cef/leef/kv never reach this branch: their probes are unanchored substring
+  // tests that matched the wrapped line already. PAN-OS reaches `csv` above via
+  // its positional fingerprint, and parseCsv strips for itself. So this closes
+  // the one remaining anchored case.
+  const stripped = stripSyslogPrefix(firstLine).trim();
+  if (stripped !== firstLine.trim() && stripped.startsWith("{")) {
+    try {
+      JSON.parse(stripped);
+      return "ndjson";
+    } catch {
+      // Not JSON once unwrapped either; fall through to syslog.
+    }
+  }
 
   // syslog: <priority> or an RFC 3164 month-day-time prefix.
   if (/^<\d+>/.test(trimmed) || /^\w{3}\s+\d+\s+\d+:\d+:\d+/.test(trimmed)) {

@@ -36,14 +36,26 @@
  * keeps the positional _N names. All queue/preview/mismatch decisions are the
  * pure csv-resolution-state helpers.
  *
+ * COLUMN ORDERS ARE REMEMBERED (vendor-field-definition plan, Gap 3): before the
+ * dialog opens, this section reads any order already known for the sample's
+ * VENDOR + LOG TYPE and hands it over as the dialog's pre-fill, so a feed named
+ * once is not asked about again - and a known vendor arrives pre-filled for the
+ * operator to CONFIRM against real values rather than to supply from scratch.
+ * On apply the order is remembered, EXCEPT when it is the bundled one the
+ * operator merely confirmed. The vendor is named by the curated
+ * detectVendorIdentity from the selected solution - the solution names the
+ * vendor, it never keys the order. Every decision is @soc/core
+ * vendor-field-definitions; the load/save loop is useVendorColumnOrder.
+ *
  * The store is keyed by log type with replace-by-logType semantics, so tagging
  * the same log type twice overwrites it (one chip per log type). The pure
  * decisions (chip derivation, dedupe, rename re-key, validation) live in
  * sample-intake-state.ts; this component only renders and drives store IO.
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import type { TaggedSample, TaggedSampleStore } from "@soc/core";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { detectVendorIdentity } from "@soc/core";
+import type { ContentCache, TaggedSample, TaggedSampleStore } from "@soc/core";
 import {
   chipFromTagged,
   dedupeByLogType,
@@ -70,10 +82,26 @@ import {
   singleItemQueue,
 } from "./csv-resolution-state";
 import type { CsvResolutionQueue } from "./csv-resolution-state";
+import { useVendorColumnOrder } from "./use-vendor-column-order";
 
 export interface SampleIntakeSectionProps {
   /** The tagged-sample store this section reads and writes. */
   store: TaggedSampleStore;
+  /**
+   * The selected Sentinel solution's name, used ONLY to name the vendor a
+   * column order belongs to (via the curated detectVendorIdentity). The order
+   * itself is keyed to VENDOR + LOG TYPE, never to the solution - a PAN-OS
+   * TRAFFIC column order is true whichever solution is selected. With no
+   * solution, or an un-curated one, no vendor can be named and nothing is
+   * remembered: absent is absent.
+   */
+  solutionName?: string;
+  /**
+   * Where remembered column orders live (ports.contentCache). Undefined in a
+   * shell that binds no cache - the dialog then still pre-fills from the
+   * BUNDLED orders and simply remembers nothing.
+   */
+  definitionCache?: ContentCache;
   /**
    * Report the current tagged-sample list after every change (initial load,
    * add, rename, remove) so the page can derive samplesProvided for the
@@ -92,6 +120,8 @@ export interface SampleIntakeSectionProps {
 
 export function SampleIntakeSection({
   store,
+  solutionName = "",
+  definitionCache,
   onSamplesChange,
   onRenameLogType,
 }: SampleIntakeSectionProps) {
@@ -116,6 +146,24 @@ export function SampleIntakeSection({
   const [csvQueue, setCsvQueue] = useState<CsvResolutionQueue | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  // The item the dialog is (about to be) resolving, and the remembered column
+  // order for ITS vendor + log type. The vendor comes from ONE place - the
+  // curated detectVendorIdentity - which is what lets the store key on a
+  // canonical name rather than on whatever the solution happened to be called.
+  const csvItem = csvQueue === null ? null : currentItem(csvQueue);
+  const vendor = useMemo(
+    () => detectVendorIdentity(solutionName)?.vendor ?? "",
+    [solutionName],
+  );
+  const columnOrder = useVendorColumnOrder(
+    definitionCache,
+    vendor,
+    csvItem?.logType ?? "",
+  );
+  // Destructured so the apply callback depends on the STABLE persister rather
+  // than on the state object, which is rebuilt every render.
+  const { remember: rememberColumnOrder } = columnOrder;
 
   // Keep the reporter callback in a ref so the load effect does not re-run when
   // the parent passes a fresh callback identity each render.
@@ -307,6 +355,12 @@ export function SampleIntakeSection({
         const resolved = resolveHeaders(item, headers);
         await store.upsert(resolved);
         commit(upsertSample(samples ?? [], resolved));
+        // REMEMBER the order for this vendor + log type, so the same feed
+        // acquired next week is not asked again. A bundled order the operator
+        // merely confirmed stores nothing - remember() refuses it, because the
+        // app supplied those names and assent is not knowledge. Persisting is
+        // fire-and-forget: a failed write must never fail the apply.
+        rememberColumnOrder(headers);
       } catch (err) {
         setUploadError(`Header resolution failed: ${String(err)}`);
       } finally {
@@ -314,7 +368,7 @@ export function SampleIntakeSection({
       }
       advanceCsvQueue();
     },
-    [csvQueue, store, samples, commit, advanceCsvQueue],
+    [csvQueue, store, samples, commit, advanceCsvQueue, rememberColumnOrder],
   );
 
   return (
@@ -561,21 +615,33 @@ export function SampleIntakeSection({
       )}
 
       {/* CSV header-resolution dialog (Unit 12). Keyed by queue index so each
-          queued file gets a fresh dialog (transient tab/paste state resets). */}
+          queued file gets a fresh dialog (transient tab/paste state resets).
+          HELD BACK until the remembered column order for this item's vendor +
+          log type has been read: the dialog seeds its header box ONCE at mount,
+          so opening before the read lands would show an empty box and then be
+          unable to fill it without overwriting whatever the operator had
+          started typing. The wait is one KV read, and only when a cache is
+          bound and the scope can be named. */}
       {csvQueue !== null &&
-        (() => {
-          const item = currentItem(csvQueue);
-          return item === null ? null : (
-            <CsvHeaderDialog
-              key={csvQueue.index}
-              item={item}
-              position={queuePosition(csvQueue)}
-              onApply={(headers) => void applyCsvHeaders(headers)}
-              onSkip={advanceCsvQueue}
-              busy={busy}
-            />
-          );
-        })()}
+        !columnOrder.loading &&
+        csvItem !== null && (
+          <CsvHeaderDialog
+            key={csvQueue.index}
+            item={csvItem}
+            position={queuePosition(csvQueue)}
+            onApply={(headers) => void applyCsvHeaders(headers)}
+            onSkip={advanceCsvQueue}
+            busy={busy}
+            {...(columnOrder.resolved === null
+              ? {}
+              : {
+                  prefill: {
+                    columns: columnOrder.resolved.columns,
+                    notice: columnOrder.notice,
+                  },
+                })}
+          />
+        )}
     </div>
   );
 }

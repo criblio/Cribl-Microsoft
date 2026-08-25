@@ -39,7 +39,24 @@ import { panosHeadersFor } from "./panos-dictionary";
  * PAN-OS CSV line must have its prefix removed before commas are counted).
  */
 export function stripSyslogPrefix(line: string): string {
-  const rfc5424 = line.match(/^<\d+>\d+\s+\S+\s+\S+\s+\S+\s+\S+\s+\S+\s+(.*)/);
+  // RFC 5424 has SIX fields after VERSION: TIMESTAMP, HOSTNAME, APP-NAME,
+  // PROCID, MSGID, STRUCTURED-DATA. This consumed only five until 2026-08-25,
+  // so the structured-data element was left glued to the message and
+  // `<13>1 <ts> host app - - - {"src":"1.2.3.4"}` stripped to `- {"src":...}`.
+  //
+  // It went unnoticed because the only caller that could see it was PAN-OS, and
+  // there the damage lands in positional field 0 - which every dictionary lists
+  // as `future_use1` and skips. A JSON payload has no such luck: the leftover
+  // `- ` means the line no longer starts with `{`, so it parsed to nothing.
+  // The existing pins covered only the non-standard PAN-OS fallback branch
+  // below, never this one.
+  //
+  // STRUCTURED-DATA is OPTIONAL here because senders that omit it exist, and
+  // matching either `-` or a `[...]` element keeps a real SD block from being
+  // mistaken for the message.
+  const rfc5424 = line.match(
+    /^<\d+>\d+\s+\S+\s+\S+\s+\S+\s+\S+\s+\S+(?:\s+(?:-|\[[^\]]*\]))?\s+(.*)/,
+  );
   if (rfc5424) {
     return rfc5424[1];
   }
@@ -85,11 +102,27 @@ export function parseJson(content: string): Array<Record<string, unknown>> {
 export function parseNdjson(content: string): Array<Record<string, unknown>> {
   const records: Array<Record<string, unknown>> = [];
   for (const line of content.trim().split("\n")) {
-    if (!line.trim().startsWith("{")) {
+    // A PARSER STRIPS THE TRANSPORT PREFIX IT MIGHT ARRIVE BEHIND, and until
+    // 2026-08-25 this one did not while parseCsv did. The asymmetry was the
+    // whole defect: a JSON payload shipped over syslog
+    // (`<13>1 ... cribl-hw01 app - - - {"src":"1.2.3.4"}`) failed the
+    // startsWith("{") test, `continue` skipped it, and the sample parsed to
+    // ZERO records - while the same payload as CSV parsed fine, because
+    // parseCsv's headerless branch calls stripSyslogPrefix before splitting.
+    //
+    // ONLY WHEN IT PROVES ITSELF. The stripped form is used only if it actually
+    // JSON.parses, so this cannot reinterpret an ordinary syslog line that
+    // happens to contain a brace - which is the same self-evidencing rule the
+    // detector applies, and the reason both can now agree on these bytes.
+    const trimmed = line.trim();
+    const candidate = trimmed.startsWith("{")
+      ? trimmed
+      : stripSyslogPrefix(trimmed).trim();
+    if (!candidate.startsWith("{")) {
       continue;
     }
     try {
-      records.push(JSON.parse(line) as Record<string, unknown>);
+      records.push(JSON.parse(candidate) as Record<string, unknown>);
     } catch {
       // Skip malformed lines (legacy filtered them out silently).
     }

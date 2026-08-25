@@ -567,14 +567,35 @@ describe("windowLabel", () => {
  * anything other than what the commit writes is worse than no preview, because
  * the operator has now approved bytes they did not see. So these pins compare
  * the previewed text against the SAMPLE, not against a fixture.
+ *
+ * ONE EXCEPTION, and it is the right way round: where core UNWRAPS a transport
+ * frame (a syslog-framed payload that JSON.parses, since 2026-08-25), the
+ * preview still shows the bytes that arrived and the store holds the unwrapped
+ * payload. The operator sees MORE than is stored, never something other than
+ * what is stored - and seeing the frame is what they asked for. Pinned
+ * explicitly below rather than left as a gap between two tests.
  */
 describe("lakeSamplePreviews", () => {
   /**
    * The shape that caused the report: the vendor's own PAN-OS line arriving
    * inside a syslog transport frame. Whether core strips it is core's business
    * (rowRawText); what matters here is that whatever arrives is what is SHOWN.
+   *
+   * The payload is a POSITIONAL PAN-OS CSV line, which is what the comment
+   * above always described. It used to be a JSON object, and that stopped being
+   * a fair example on 2026-08-25 when core taught parseNdjson to strip a syslog
+   * frame from a payload that JSON.parses: a self-describing payload is now
+   * unwrapped on the way into the store, so it can no longer demonstrate an
+   * envelope SURVIVING. A positional CSV line cannot describe itself, is stored
+   * verbatim, and therefore still can - see the companion test below, which
+   * pins the JSON case as the divergence it now genuinely is.
    */
   const WRAPPED =
+    "<13>1 2026-08-25T16:35:36.206Z cribl-hw01 PAN-OS - CONFIG - " +
+    "1,2021/10/25 20:25:39,,CONFIG,0,2021/10/25 20:25:44";
+
+  /** The same frame around a payload that CAN describe itself. */
+  const WRAPPED_JSON =
     "<13>1 2026-08-25T16:35:36.206Z cribl-hw01 PAN-OS - CONFIG - " +
     '{"type":"CONFIG","seq":0}';
 
@@ -619,6 +640,33 @@ describe("lakeSamplePreviews", () => {
     // And it is legible AS an envelope: the operator can see the frame around
     // the payload, which is the whole reason they asked to look.
     expect(previews[0].preview[0]).toContain("cribl-hw01");
+  });
+
+  it("shows the frame even where the commit will UNWRAP it (JSON payload)", () => {
+    // The one place the preview and the store legitimately differ, pinned here
+    // so it is a decision on the record rather than a surprise found later.
+    //
+    // Since 2026-08-25 core strips a syslog frame from a payload that
+    // JSON.parses, so a wrapped JSON line is stored as its OWN fields. The
+    // preview still shows the bytes that ARRIVED, frame and all, and that is
+    // the right way round: the operator asked to see the transport wrapper
+    // precisely because it was invisible before, and showing less than arrived
+    // would restore the original defect. They see more than is stored, never
+    // something other than what is stored.
+    const events = fetched("CONFIG", [WRAPPED_JSON]);
+    const samples = plannedLakeSamples(events, "lake:cribl_logs");
+    const previews = lakeSamplePreviews(events, samples);
+
+    // Previewed: the wire bytes, envelope intact.
+    expect(previews[0].preview[0]).toBe(WRAPPED_JSON);
+    expect(previews[0].preview[0]).toContain("cribl-hw01");
+    // Stored: the payload alone, unwrapped and re-serialized.
+    expect(samples[0].format).toBe("ndjson");
+    expect(samples[0].rawEvents).toEqual(['{"type":"CONFIG","seq":0}']);
+    // The envelope fields are GONE, not merely reordered - if the RFC 5424
+    // branch of stripSyslogPrefix regressed, "Priority"/"MsgID" would be back
+    // as record keys and this is what would catch it.
+    expect(Object.keys(samples[0].parsed.records[0])).toEqual(["type", "seq"]);
   });
 
   it("names the label these events would be STORED under, not just the row's", () => {
