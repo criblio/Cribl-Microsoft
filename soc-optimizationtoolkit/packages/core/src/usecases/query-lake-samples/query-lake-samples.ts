@@ -708,7 +708,7 @@ function rowRawText(row: Record<string, unknown>): string {
  * does for the drop reviewer - so there is one definition of what an event
  * weighs in this app, not two.
  */
-export function meanEventBytesOfRows(
+function meanEventBytesOfRows(
   rows: ReadonlyArray<Record<string, unknown>>,
 ): number | undefined {
   return meanEventBytes(estimateDropSavings(rows.map(rowRawText), []));
@@ -729,7 +729,7 @@ export function meanEventBytesOfRows(
  * whole sample with {@link meanEventBytesOfRows}. That is the one case where a
  * dataset-wide mean is not a substitution: the dataset IS the log type.
  */
-export function meanEventBytesByLogType(
+function meanEventBytesByLogType(
   rows: ReadonlyArray<Record<string, unknown>>,
   field: string,
 ): Map<string, number> {
