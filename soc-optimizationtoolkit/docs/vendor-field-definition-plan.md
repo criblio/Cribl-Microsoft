@@ -1,6 +1,15 @@
 # Vendor field definitions: naming positional columns
 
-Status: PLAN. Decision to build taken 2026-08-25; no code moved yet.
+Status: BUILT 2026-08-25, all four steps. Kept as the record of WHY, not as a
+to-do list - the sequencing and the decisions below are what the code now
+implements, and the two remaining gaps are named at the end.
+
+Confirmed working against the live preview the same day: pasting a PAN-OS
+USERID line (a type with no bundled column order) opens "Headerless CSV
+detected (15 columns)"; the mapper shows each position with two rows of its own
+values; naming two columns reports "2 of 15 columns named, 13 stay positional";
+and reopening the saved definition comes back as two named and thirteen
+unmapped rather than claiming to be finished.
 
 The operator question this answers: **"my samples came back as `field_3` and
 `_17` - how do I tell the app what those columns are?"**
@@ -160,6 +169,18 @@ their own data outranks a shipped table, not least because vendor column orders
 change between firmware versions. But the override is recorded and shown - a
 mistaken paste replacing a correct shipped order must be visible rather than
 silent, which is the whole difference between this and "operator wins quietly".
+
+## What is NOT built
+
+- **The override notice reaches the dialog but not the chip.** It renders above
+  the tabs, where the decision is made; someone looking at a sample later has no
+  way to see that its column order overrides a bundled one.
+- **Only curated vendors are remembered.** The vendor is derived from
+  `detectVendorIdentity(solutionName)`, so a solution outside
+  `KNOWN_VENDOR_IDENTITIES` yields no vendor and nothing is stored - honest per
+  "absent is absent", but it means the feature reaches about eighteen vendors.
+  Letting the operator name the vendor themselves closes it and needs a UI seam
+  that was deliberately not built.
 
 ## Open questions
 
