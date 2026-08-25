@@ -15,7 +15,10 @@
  *     has, which puts them off a commit that would cost them one sample;
  *   - rounding a partial haul up to a success;
  *   - blaming a shortfall on empty data when the picks were folded into one
- *     sample, which sends them to widen a window over data they already have.
+ *     sample, which sends them to widen a window over data they already have;
+ *   - previewing something OTHER than what the commit will write, which is
+ *     worse than showing nothing: it clears the operator to store bytes they
+ *     were never actually shown.
  */
 
 import { describe, expect, it } from "vitest";
@@ -31,12 +34,15 @@ import {
   lakeCollisions,
   lakeLogTypeChoices,
   lakeOffersSamples,
+  lakePreviewHeadline,
+  lakeSamplePreviews,
   mergedLakeLogTypeCount,
   plannedLakeSamples,
   selectedLakeLogTypes,
   toggleLakeChoice,
   windowLabel,
 } from "./lake-panel-state";
+import { PREVIEW_LINES } from "./planned-samples";
 
 const WINDOW = { earliest: "-24h", latest: "now" };
 
@@ -553,6 +559,152 @@ describe("windowLabel", () => {
   });
 });
 
+/**
+ * THE PREVIEW, which exists because a Lake sample's bytes were invisible until
+ * after they were stored (user report 2026-08-25).
+ *
+ * The failure it must not have is subtle and total: a preview that shows
+ * anything other than what the commit writes is worse than no preview, because
+ * the operator has now approved bytes they did not see. So these pins compare
+ * the previewed text against the SAMPLE, not against a fixture.
+ */
+describe("lakeSamplePreviews", () => {
+  /**
+   * The shape that caused the report: the vendor's own PAN-OS line arriving
+   * inside a syslog transport frame. Whether core strips it is core's business
+   * (rowRawText); what matters here is that whatever arrives is what is SHOWN.
+   */
+  const WRAPPED =
+    "<13>1 2026-08-25T16:35:36.206Z cribl-hw01 PAN-OS - CONFIG - " +
+    '{"type":"CONFIG","seq":0}';
+
+  const fetched = (logType: string, rawEvents: string[]) => [
+    { logType, rawEvents },
+  ];
+
+  it("previews the FETCHED bytes, verbatim, and only the first few", () => {
+    const rawEvents = [
+      '{"n":0}',
+      '{"n":1}',
+      '{"n":2}',
+      '{"n":3}',
+      '{"n":4}',
+    ];
+    const events = fetched("TRAFFIC", rawEvents);
+    const previews = lakeSamplePreviews(
+      events,
+      plannedLakeSamples(events, "lake:cribl_logs"),
+    );
+
+    expect(previews).toHaveLength(1);
+    expect(PREVIEW_LINES).toBe(3);
+    // The exact lines, in order, unedited - not a count of them.
+    expect(previews[0].preview).toEqual(['{"n":0}', '{"n":1}', '{"n":2}']);
+    // The WHOLE haul is still reported: previewing 3 of 5 must not read as a
+    // sample of 3, which would understate what the commit is about to store.
+    expect(previews[0].eventCount).toBe(5);
+  });
+
+  it("shows the SAME TEXT the commit will store, envelope and all", () => {
+    // The pin the whole feature rests on. A preview that reformatted, trimmed
+    // or re-serialized would hide exactly the defect it exists to surface - the
+    // operator would read a clean vendor line and store a wrapped one.
+    const events = fetched("CONFIG", [WRAPPED]);
+    const samples = plannedLakeSamples(events, "lake:cribl_logs");
+    const previews = lakeSamplePreviews(events, samples);
+
+    expect(samples).toHaveLength(1);
+    expect(previews[0].preview).toEqual(samples[0].rawEvents);
+    expect(previews[0].preview[0]).toBe(WRAPPED);
+    // And it is legible AS an envelope: the operator can see the frame around
+    // the payload, which is the whole reason they asked to look.
+    expect(previews[0].preview[0]).toContain("cribl-hw01");
+  });
+
+  it("names the label these events would be STORED under, not just the row's", () => {
+    // The row is Search's casing; the sample about to be overwritten is the
+    // operator's. Both come from the same store fold the commit uses, so the
+    // preview cannot promise a replacement the commit declines to make.
+    const events = fetched("TRAFFIC", ['{"a":1}']);
+    const samples = plannedLakeSamples(events, "lake:cribl_logs", ["traffic"]);
+    const previews = lakeSamplePreviews(events, samples, ["traffic"]);
+
+    expect(previews[0].logType).toBe("TRAFFIC");
+    expect(previews[0].storeLabel).toBe("traffic");
+    expect(previews[0].replacesExisting).toBe(true);
+    expect(samples[0].logType).toBe("traffic");
+    expect(previews[0].willBeAdded).toBe(true);
+  });
+
+  it("marks a row the commit will DROP, rather than leaving it to the summary", () => {
+    // Blank lines parse to no record, so plannedLakeSamples refuses to store a
+    // husk - and until now the operator learned that only from a shortfall
+    // sentence after the fact, with the log-type list already gone.
+    const events = [
+      { logType: "GOOD", rawEvents: ['{"a":1}'] },
+      { logType: "JUNK", rawEvents: ["   "] },
+    ];
+    const samples = plannedLakeSamples(events, "lake:cribl_logs");
+    const previews = lakeSamplePreviews(events, samples);
+
+    expect(samples.map((s) => s.logType)).toEqual(["GOOD"]);
+    expect(previews.map((p) => p.logType)).toEqual(["GOOD", "JUNK"]);
+    expect(previews.map((p) => p.willBeAdded)).toEqual([true, false]);
+    // The dropped row is still SHOWN with its bytes: "this is what came back and
+    // it is unusable" is the answer, not a row that quietly disappears.
+    expect(previews[1].preview).toEqual(["   "]);
+  });
+
+  it("calls a MERGED pair added, because both really are", () => {
+    // Two case variants folding onto the operator's one label cost one sample
+    // and lose nothing. Marking the second "will not be added" would be the
+    // pre-commit version of the shortfall lie mergedLakeLogTypeCount fixed.
+    const events = [
+      { logType: "TRAFFIC", rawEvents: ['{"n":"upper"}'] },
+      { logType: "traffic", rawEvents: ['{"n":"lower"}'] },
+    ];
+    const samples = plannedLakeSamples(events, "lake:cribl_logs", ["Traffic"]);
+    const previews = lakeSamplePreviews(events, samples, ["Traffic"]);
+
+    expect(samples.map((s) => s.logType)).toEqual(["Traffic"]);
+    expect(previews.map((p) => p.storeLabel)).toEqual(["Traffic", "Traffic"]);
+    expect(previews.map((p) => p.willBeAdded)).toEqual([true, true]);
+  });
+
+  it("previews nothing for a haul that came back empty", () => {
+    // No events, no rows - never a row with an empty body, which reads as "your
+    // data looks like this" about data that never arrived.
+    expect(lakeSamplePreviews([], [])).toEqual([]);
+  });
+});
+
+describe("lakePreviewHeadline", () => {
+  const previews = (counts: number[]) =>
+    lakeSamplePreviews(
+      counts.map((count, i) => ({
+        logType: `T${i}`,
+        rawEvents: Array.from({ length: count }, () => '{"a":1}'),
+      })),
+      [],
+    );
+
+  it("counts the whole haul and says nothing is stored yet", () => {
+    expect(lakePreviewHeadline(previews([2, 1, 1]))).toBe(
+      "Fetched 4 events in 3 log types. Nothing is added until you confirm.",
+    );
+    expect(lakePreviewHeadline(previews([1]))).toBe(
+      "Fetched 1 event in 1 log type. Nothing is added until you confirm.",
+    );
+  });
+
+  it("says NOTHING at all for an empty haul", () => {
+    // The panel renders no preview block then, and deriveLakeCommitView owns
+    // that sentence - two modules describing an empty haul is two chances to
+    // confuse "nothing came back" with "nothing was usable".
+    expect(lakePreviewHeadline([])).toBe("");
+  });
+});
+
 describe("deriveLakeCommitView", () => {
   it("is silent before a fetch and busy during one", () => {
     expect(deriveLakeCommitView(null, false, 0, 0).status).toBe("idle");
@@ -583,6 +735,55 @@ describe("deriveLakeCommitView", () => {
     );
     expect(unusable.status).toBe("unusable");
     expect(unusable.headline).toContain("none of them parsed");
+  });
+
+  it("tells NO EVENTS apart from events that parsed to nothing", () => {
+    // A successful fetch that returned nothing at all was reported as "Events
+    // came back, but none of them parsed into a usable sample" - a sentence
+    // about events that do not exist. The two send the operator to opposite
+    // places: a wider window or a different log type, versus a look at the shape
+    // of data they do have.
+    const none = deriveLakeCommitView(fetchResult({ events: [] }), false, 0, 2);
+    const husks = deriveLakeCommitView(
+      fetchResult({ events: [{ logType: "T", rawEvents: ["   "] }] }),
+      false,
+      0,
+      1,
+    );
+
+    expect(none.status).toBe("no-events");
+    expect(none.headline).toContain("returned no events");
+    expect(none.headline).not.toContain("parsed");
+    expect(husks.status).toBe("unusable");
+    // Three distinct sentences for three distinct answers, and a failed read is
+    // the third - none of them may collapse into another.
+    const failed = deriveLakeCommitView(
+      fetchResult({ ok: false }),
+      false,
+      0,
+      1,
+    );
+    expect(new Set([none.headline, husks.headline, failed.headline]).size).toBe(
+      3,
+    );
+  });
+
+  it("keeps the platform's own notes on the no-events answer", () => {
+    // fetchLakeLogTypeEvents names each log type that returned nothing. That is
+    // the only per-log-type detail there is, and dropping it would leave the
+    // operator with a summary and no idea which pick was empty.
+    const view = deriveLakeCommitView(
+      fetchResult({
+        notes: ['"THREAT" returned no events in this window, so it was not added.'],
+      }),
+      false,
+      0,
+      1,
+    );
+    expect(view.status).toBe("no-events");
+    expect(view.notes).toEqual([
+      '"THREAT" returned no events in this window, so it was not added.',
+    ]);
   });
 
   it("NAMES a partial haul rather than rounding it up to a success", () => {

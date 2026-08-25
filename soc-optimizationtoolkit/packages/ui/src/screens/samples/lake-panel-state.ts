@@ -8,12 +8,18 @@
  *   1. queryLakeSamples   -> which log types, and HOW MANY events of each.
  *                            COUNTS, not bodies. This is what the operator picks
  *                            from.
- *   2. fetchLakeLogTypeEvents -> the actual events for the log types they ticked.
- *                            THIS is what becomes tagged samples.
+ *   2. fetchLakeLogTypeEvents -> the actual events for the log types they ticked,
+ *                            SHOWN before they are taken
+ *                            ({@link lakeSamplePreviews}).
+ *   3. the commit           -> those same events, tagged into the store. No
+ *                            search, no re-fetch: step two's bytes.
  *
- * Keeping them apart is the point: fetching bodies for every log type up front
- * would pull them for the ones the operator discards, on the biggest datasets,
- * which is exactly where it hurts most (see the usecase's own note).
+ * Keeping one and two apart is the point: fetching bodies for every log type up
+ * front would pull them for the ones the operator discards, on the biggest
+ * datasets, which is exactly where it hurts most (see the usecase's own note).
+ * Keeping two and three apart costs NO extra search - the fetch is the same one
+ * the commit used to run inside itself - and it is what lets an operator see the
+ * bytes before they are stored, the way the capture panel always has.
  *
  * FOUR THINGS THIS MODULE EXISTS TO GET RIGHT:
  *
@@ -65,6 +71,7 @@ import { estimatedLogTypeBytes } from "@soc/core";
 import {
   existingLabelsByCase,
   plannedSamplesFrom,
+  previewLines,
   sampleStoreKey,
   storeLabelFor,
 } from "./planned-samples";
@@ -425,7 +432,107 @@ export function windowLabel(window: LakeWindow): string {
 }
 
 // ---------------------------------------------------------------------------
-// Step two: the events, and what they commit to
+// Step two: the events, previewed before they are taken
+// ---------------------------------------------------------------------------
+
+/**
+ * One fetched log type as the preview renders it - the capture panel's
+ * {@link CapturedLogTypeView} for a Lake haul, deliberately.
+ *
+ * WHY THIS EXISTS (user report 2026-08-25). Lake samples were reaching the store
+ * carrying a syslog transport envelope wrapped around the vendor's own bytes,
+ * and there was no point in the flow where anyone could SEE that: the events
+ * were fetched and committed inside one click. The capture panel had shown its
+ * events before tagging them since the day it was written; this is the same
+ * confirmation, on the path that lacked it.
+ *
+ * THE TEXT IS THE FETCH'S OWN, not a re-query and not a reformat. Anything else
+ * would be a preview of something other than what lands in the store, which is
+ * worse than no preview at all - it would show a clean vendor line while an
+ * enveloped one was committed.
+ */
+export interface LakeSamplePreview {
+  /** The log type as the FETCH returned it - the row the operator ticked. */
+  logType: string;
+  /**
+   * The label these events would actually be STORED under: the operator's own
+   * casing when one of their samples collides ({@link storeLabelFor}), the
+   * dataset's otherwise. Read from the SAME store fold the commit uses, so the
+   * preview cannot name a sample the commit will not write.
+   */
+  storeLabel: string;
+  /** Events fetched for it. The whole haul; {@link preview} shows its head. */
+  eventCount: number;
+  /** The first few lines, exactly as they arrived. */
+  preview: string[];
+  /** True when committing this would replace an existing tagged sample. */
+  replacesExisting: boolean;
+  /**
+   * False when the commit will DROP these events because they parse to no
+   * record ({@link plannedSamplesFrom} refuses to store a husk).
+   *
+   * Said on the row rather than left to the summary afterwards: an operator
+   * looking at three previews and pressing the button has been told they are
+   * taking three samples, and finding out from a shortfall sentence that one of
+   * them was never addable is finding out too late to pick something else.
+   */
+  willBeAdded: boolean;
+}
+
+/**
+ * Project a fetched haul into what the panel shows BEFORE the commit.
+ *
+ * Takes the planned SAMPLES rather than re-parsing the events, for the reason
+ * {@link mergedLakeLogTypeCount} takes them: the parse has already been run
+ * once to decide what would be committed, and a second one here could disagree
+ * with it. `willBeAdded` is therefore the commit's own answer, not a prediction
+ * of it.
+ */
+export function lakeSamplePreviews(
+  events: readonly LakeLogTypeEvents[],
+  samples: readonly TaggedSample[],
+  existingLogTypes: readonly string[] = [],
+): LakeSamplePreview[] {
+  const byKey = existingLabelsByCase(existingLogTypes);
+  const added = new Set(samples.map((s) => s.logType));
+
+  return events.map((entry) => {
+    const storeLabel = storeLabelFor(entry.logType, byKey);
+    return {
+      logType: entry.logType,
+      storeLabel,
+      eventCount: entry.rawEvents.length,
+      preview: previewLines(entry.rawEvents),
+      replacesExisting: byKey.has(sampleStoreKey(entry.logType)),
+      willBeAdded: added.has(storeLabel),
+    };
+  });
+}
+
+/**
+ * What the preview says it is holding, and that nothing has been stored yet.
+ *
+ * EMPTY FOR AN EMPTY HAUL, because the panel renders no preview block at all
+ * then: a fetch that produced nothing to take is reported by
+ * {@link deriveLakeCommitView}, which owns the difference between "no events
+ * came back" and "events came back and parsed to nothing". A second sentence
+ * about it here is a second place for those two to be confused.
+ */
+export function lakePreviewHeadline(
+  previews: readonly LakeSamplePreview[],
+): string {
+  if (previews.length === 0) return "";
+  const events = previews.reduce((sum, entry) => sum + entry.eventCount, 0);
+  const kinds = previews.length;
+  return (
+    `Fetched ${events} event${events === 1 ? "" : "s"}` +
+    ` in ${kinds} log type${kinds === 1 ? "" : "s"}.` +
+    " Nothing is added until you confirm."
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Step three: what the commit reports afterwards
 // ---------------------------------------------------------------------------
 
 /**
@@ -434,11 +541,21 @@ export function windowLabel(window: LakeWindow): string {
  * `unusable` is separate from `failed` for the same reason empty is separate
  * from failed: Search answered, the events arrived, and they parsed to nothing
  * this app can map. That is a data problem, not an access problem.
+ *
+ * `no-events` is the third of those (2026-08-25). A fetch that succeeds and
+ * returns NO events at all was reported as `unusable` - under a headline reading
+ * "Events came back, but none of them parsed into a usable sample", about a
+ * fetch where no event came back at all. It is the empty-versus-failed collapse
+ * this file keeps closing, one step further in: the operator was sent to look at
+ * their data's shape when what they needed was a wider window or another log
+ * type. The two are told apart by the haul itself, not by a count of what
+ * survived the parse.
  */
 export type LakeCommitStatus =
   | "idle"
   | "fetching"
   | "failed"
+  | "no-events"
   | "unusable"
   | "done";
 
@@ -487,6 +604,18 @@ export function deriveLakeCommitView(
     };
   }
   if (plannedCount === 0) {
+    // NOTHING WAS ADDED, and the two reasons for that send the operator to
+    // opposite places. Read off the HAUL rather than off the parse: with no
+    // events there was never anything to parse, and saying otherwise describes
+    // events that do not exist.
+    if (result.events.length === 0) {
+      return {
+        status: "no-events",
+        headline:
+          "The search ran and returned no events for the log types you picked, so nothing was added.",
+        notes: result.notes,
+      };
+    }
     // Events came back and none of them parsed into a record. Storing that
     // would produce husks - samples with a name and no fields, which satisfy
     // the "samples provided" check while giving the mapping nothing.

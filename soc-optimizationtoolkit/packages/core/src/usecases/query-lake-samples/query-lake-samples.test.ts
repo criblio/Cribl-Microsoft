@@ -165,6 +165,88 @@ const jobsCreated = (cribl: FakeCriblClient): number =>
 const run = (cribl: FakeCriblClient, extra = {}) =>
   queryLakeSamples(cribl, { searchGroupId: GROUP, datasetId: DATASET, ...extra });
 
+describe("the sample is the EVENT, not the transport envelope it arrived in", () => {
+  // Live 2026-08-25: a Cribl syslog source leaves the vendor's bytes in
+  // `message` and keeps the whole received frame in `_raw`. Taking `_raw` gave
+  // the operator a 60-character RFC5424 header glued to the front of every
+  // PAN-OS event - and because PAN-OS is POSITIONAL CSV, that shifted every
+  // column. Of five log types from ONE dataset, CONFIG and USERID came back as
+  // SYSLOG with nine envelope fields and no PAN-OS fields at all, while
+  // TRAFFIC/THREAT/SYSTEM came back with 73/38/13 real ones.
+  const lakeRow = (raw: string, message?: string): Record<string, unknown> =>
+    message === undefined ? { _raw: raw } : { _raw: raw, message };
+
+  const ENVELOPE = "<13>1 2026-08-25T16:35:36.206Z cribl-hw01 PAN-OS - CONFIG - ";
+  const PAYLOAD = "1,2013/03/25 23:59:02,1606001116,CONFIG,0,0,2012/02/25 00:53:22";
+
+  it("takes the payload when _raw provably ENDS WITH it", async () => {
+    const cribl = client(
+      ok({ count: 1, items: [{ id: "j-1" }] }),
+      jobStatus("completed"),
+      ok(ndjson([lakeRow(ENVELOPE + PAYLOAD, PAYLOAD)])),
+    );
+    const out = await fetchLakeLogTypeEvents(cribl, {
+      searchGroupId: GROUP,
+      datasetId: DATASET,
+      discriminatorField: "msgid",
+      logTypes: ["CONFIG"],
+    });
+    expect(out.ok).toBe(true);
+    expect(out.events).toHaveLength(1);
+    // The envelope is GONE, and the payload is byte-identical - not trimmed,
+    // not re-serialized.
+    expect(out.events[0].rawEvents).toEqual([PAYLOAD]);
+    expect(out.events[0].rawEvents[0].startsWith("<13>")).toBe(false);
+  });
+
+  it("KEEPS _raw when message is not its tail - the test is proof, not a guess", async () => {
+    // A source whose `message` is something else entirely. Stripping here would
+    // discard the event and keep a fragment, so the rule must decline.
+    const cribl = client(
+      ok({ count: 1, items: [{ id: "j-1" }] }),
+      jobStatus("completed"),
+      ok(ndjson([lakeRow(ENVELOPE + PAYLOAD, "an unrelated summary field")])),
+    );
+    const out = await fetchLakeLogTypeEvents(cribl, {
+      searchGroupId: GROUP,
+      datasetId: DATASET,
+      discriminatorField: "msgid",
+      logTypes: ["CONFIG"],
+    });
+    expect(out.events[0].rawEvents).toEqual([ENVELOPE + PAYLOAD]);
+  });
+
+  it("KEEPS _raw when there is no message field at all", async () => {
+    const cribl = client(
+      ok({ count: 1, items: [{ id: "j-1" }] }),
+      jobStatus("completed"),
+      ok(ndjson([lakeRow(PAYLOAD)])),
+    );
+    const out = await fetchLakeLogTypeEvents(cribl, {
+      searchGroupId: GROUP,
+      datasetId: DATASET,
+      discriminatorField: "msgid",
+      logTypes: ["CONFIG"],
+    });
+    expect(out.events[0].rawEvents).toEqual([PAYLOAD]);
+  });
+
+  it("KEEPS _raw when message EQUALS it - stripping would empty the event", async () => {
+    const cribl = client(
+      ok({ count: 1, items: [{ id: "j-1" }] }),
+      jobStatus("completed"),
+      ok(ndjson([lakeRow(PAYLOAD, PAYLOAD)])),
+    );
+    const out = await fetchLakeLogTypeEvents(cribl, {
+      searchGroupId: GROUP,
+      datasetId: DATASET,
+      discriminatorField: "msgid",
+      logTypes: ["CONFIG"],
+    });
+    expect(out.events[0].rawEvents).toEqual([PAYLOAD]);
+  });
+});
+
 describe("step one's sample size is a CORRECTNESS setting, not a performance one", () => {
   it("reads enough events that a skewed dataset still shows its minority log type", () => {
     // Detection needs >= 2 distinct values IN THE SAMPLE. Real datasets are

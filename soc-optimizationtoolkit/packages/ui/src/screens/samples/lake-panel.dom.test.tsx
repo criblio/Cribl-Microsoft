@@ -13,9 +13,14 @@
  * that had quietly lost its job.
  *
  * Five things here exist ONLY in the component and are pinned nowhere else:
- *   - the two-step flow itself, and the invariant underneath it - NOTHING ENTERS
- *     THE SAMPLE STORE WITHOUT A DELIBERATE CLICK, which is a statement about a
- *     rendered button and a handler;
+ *   - the three-step flow itself, and the invariant underneath it - NOTHING
+ *     ENTERS THE SAMPLE STORE WITHOUT A DELIBERATE CLICK, which is a statement
+ *     about a rendered button and a handler;
+ *   - the PREVIEW between the fetch and the store write (user report
+ *     2026-08-25), and the property that makes it worth having: the searches are
+ *     spent once, by the fetch, and the commit runs none. A preview that
+ *     re-fetched would double the job count on the most expensive step in the
+ *     app, and nothing in the pure module could see it;
  *   - the field and bounds the fetch is addressed with, which must be the ones
  *     the query established and the operator can see, not recomposed at submit;
  *   - the promises the two buttons await, and the controls they lock meanwhile;
@@ -166,8 +171,16 @@ const findButton = (c: HTMLElement) =>
   c.querySelectorAll<HTMLButtonElement>(".run-button")[0];
 const discardButton = (c: HTMLElement) =>
   c.querySelectorAll<HTMLButtonElement>(".run-button")[1];
+/**
+ * The two primary actions, addressed by their OWN classes rather than by
+ * position. One spends search jobs and the other writes to the store, and a
+ * helper that picked "the first .next-action-button" would silently follow
+ * whichever block moved first.
+ */
+const fetchButton = (c: HTMLElement) =>
+  c.querySelector<HTMLButtonElement>(".lake-fetch-button");
 const commitButton = (c: HTMLElement) =>
-  c.querySelector<HTMLButtonElement>(".next-action-button");
+  c.querySelector<HTMLButtonElement>(".lake-commit-button");
 const perLogType = (c: HTMLElement) =>
   c.querySelector<HTMLInputElement>(".lake-bound input") as HTMLInputElement;
 const outcomes = (c: HTMLElement) => c.querySelectorAll(".lake-outcome");
@@ -175,6 +188,12 @@ const outcomeStatus = (c: HTMLElement) =>
   c.querySelector(".lake-outcome")?.getAttribute("data-status");
 const outcomeHeadline = (c: HTMLElement) =>
   c.querySelector(".lake-outcome .panel-desc")?.textContent;
+/** The preview between the fetch and the store write. */
+const previewRows = (c: HTMLElement) => c.querySelectorAll(".lake-previews li");
+const previewText = (c: HTMLElement) =>
+  [...c.querySelectorAll(".lake-preview")].map((p) => p.textContent);
+const previewHeadline = (c: HTMLElement) =>
+  c.querySelector(".lake-fetched .panel-desc")?.textContent;
 
 /** Step one: count the log types. */
 const runQuery = (c: HTMLElement) =>
@@ -182,11 +201,23 @@ const runQuery = (c: HTMLElement) =>
     fireEvent.click(findButton(c));
   });
 
-/** Step two: fetch events for the ticked rows and commit them. */
+/** Step two: fetch events for the ticked rows. Nothing is stored by this. */
+const fetchEvents = (c: HTMLElement) =>
+  act(async () => {
+    fireEvent.click(fetchButton(c) as HTMLButtonElement);
+  });
+
+/** Step three: store the previewed events. No search runs here. */
 const addSamples = (c: HTMLElement) =>
   act(async () => {
     fireEvent.click(commitButton(c) as HTMLButtonElement);
   });
+
+/** The whole take, for the pins that are not about the steps themselves. */
+const fetchAndAdd = async (c: HTMLElement) => {
+  await fetchEvents(c);
+  await addSamples(c);
+};
 
 /** A query the test controls the timing of, for the in-flight pins. */
 function deferredQuery() {
@@ -231,7 +262,9 @@ describe("LakePanel - before anything is counted", () => {
     expect(status(container)).toBe("idle");
     expect(headline(container)).toContain("Nothing is added until you confirm");
     expect(rows(container)).toHaveLength(0);
+    expect(fetchButton(container)).toBeNull();
     expect(commitButton(container)).toBeNull();
+    expect(previewRows(container)).toHaveLength(0);
     expect(container.querySelectorAll(".lake-window")).toHaveLength(0);
     expect(outcomes(container)).toHaveLength(0);
     expect(findButton(container).textContent).toBe("Find log types");
@@ -374,7 +407,7 @@ describe("LakePanel - what the counts say", () => {
     expect(headline(failed.container)).toContain("could not be read");
     expect(failed.container.textContent).toContain("The search returned HTTP 403.");
     expect(rows(failed.container)).toHaveLength(0);
-    expect(commitButton(failed.container)).toBeNull();
+    expect(fetchButton(failed.container)).toBeNull();
     // No window sentence either: there are no volumes for it to qualify.
     expect(failed.container.querySelectorAll(".lake-window")).toHaveLength(0);
     const failedHeadline = headline(failed.container);
@@ -391,7 +424,7 @@ describe("LakePanel - what the counts say", () => {
     expect(headline(empty.container)).toContain("now");
     expect(empty.container.textContent).toContain("The window held no events.");
     expect(rows(empty.container)).toHaveLength(0);
-    expect(commitButton(empty.container)).toBeNull();
+    expect(fetchButton(empty.container)).toBeNull();
     const emptyHeadline = headline(empty.container);
     cleanup();
 
@@ -407,7 +440,7 @@ describe("LakePanel - what the counts say", () => {
       "tells one log type from another",
     );
     expect(rows(unsplittable.container)).toHaveLength(0);
-    expect(commitButton(unsplittable.container)).toBeNull();
+    expect(fetchButton(unsplittable.container)).toBeNull();
     const unsplittableHeadline = headline(unsplittable.container);
 
     // Three statuses, three sentences: no pair may collapse into one.
@@ -498,10 +531,10 @@ describe("LakePanel - when the dataset itself is the log type", () => {
     });
     await runQuery(container);
 
-    expect(commitButton(container)?.disabled).toBe(false);
+    expect(fetchButton(container)?.disabled).toBe(false);
     expect(perLogType(container).value).toBe(String(DEFAULT_SAMPLE_LIMIT));
 
-    await addSamples(container);
+    await fetchAndAdd(container);
 
     expect(onFetchEvents).toHaveBeenCalledTimes(1);
     expect(onFetchEvents).toHaveBeenCalledWith(
@@ -530,7 +563,7 @@ describe("LakePanel - when the dataset itself is the log type", () => {
 
     expect(status(container)).toBe("no-discriminator");
     expect(rows(container)).toHaveLength(0);
-    expect(commitButton(container)).toBeNull();
+    expect(fetchButton(container)).toBeNull();
     expect(named(container)).toHaveLength(0);
     expect(onFetchEvents).toHaveBeenCalledTimes(0);
   });
@@ -545,7 +578,7 @@ describe("LakePanel - when the dataset itself is the log type", () => {
     await runQuery(container);
 
     expect(ticked(container)).toBe(0);
-    expect(commitButton(container)?.disabled).toBe(true);
+    expect(fetchButton(container)?.disabled).toBe(true);
     fireEvent.click(boxes(container)[0]);
 
     const replaces = container.querySelectorAll(".lake-replaces");
@@ -557,11 +590,12 @@ describe("LakePanel - when the dataset itself is the log type", () => {
 });
 
 describe("LakePanel - nothing enters the store without a click", () => {
-  it("counts the dataset and commits NOTHING until Add as samples is pressed", async () => {
-    // The two-step flow's whole point: step one returns counts, which are what
-    // the operator CHOOSES from and useless as a sample. A panel that fetched
-    // bodies or committed on the back of the query would satisfy every pure test
-    // in the suite.
+  it("counts, then fetches, then commits - each on its own click", async () => {
+    // The three-step flow's whole point. Step one returns counts, which are what
+    // the operator CHOOSES from and useless as a sample. Step two returns the
+    // events and STOPS - that pause is the preview. Step three writes. A panel
+    // that fetched bodies on the back of the query, or committed on the back of
+    // the fetch, would satisfy every pure test in the suite.
     const { container, onFetchEvents, onCommit } = renderPanel();
     await runQuery(container);
 
@@ -569,9 +603,22 @@ describe("LakePanel - nothing enters the store without a click", () => {
     expect(ticked(container)).toBe(3);
     expect(onFetchEvents).toHaveBeenCalledTimes(0);
     expect(onCommit).toHaveBeenCalledTimes(0);
+    expect(previewRows(container)).toHaveLength(0);
+
+    await fetchEvents(container);
+
+    // The events are in hand and NOTHING is in the store yet.
+    expect(onFetchEvents).toHaveBeenCalledTimes(1);
+    expect(onCommit).toHaveBeenCalledTimes(0);
+    expect(previewRows(container)).toHaveLength(3);
+    expect(commitButton(container)?.disabled).toBe(false);
 
     await addSamples(container);
 
+    // The store write costs NO search: the commit re-uses the fetch's events.
+    // A commit that re-fetched would double the job count on the most expensive
+    // step in the app, and the sample would be a different set of events from
+    // the one just approved.
     expect(onFetchEvents).toHaveBeenCalledTimes(1);
     expect(onCommit).toHaveBeenCalledTimes(1);
     const committed = onCommit.mock.calls[0][0];
@@ -581,11 +628,84 @@ describe("LakePanel - nothing enters the store without a click", () => {
       "THREAT",
     ]);
     expect(committed[0].parsed.records).toHaveLength(2);
-    // The counts have done their job and go, so a second press cannot commit the
-    // same haul twice.
+    // The counts and the preview have both done their job and go, so a second
+    // press cannot commit the same haul twice.
     expect(rows(container)).toHaveLength(0);
+    expect(previewRows(container)).toHaveLength(0);
+    expect(fetchButton(container)).toBeNull();
     expect(commitButton(container)).toBeNull();
     expect(outcomeStatus(container)).toBe("done");
+  });
+
+  it("previews the ACTUAL fetched lines, collapsed, before anything is stored", async () => {
+    // The user-reported gap (2026-08-25): Lake samples carried a syslog
+    // transport envelope around the vendor's own bytes and there was nowhere to
+    // see it until after the commit. What makes this pin worth having is the
+    // TEXT - a preview showing a tidied or re-serialized line would render
+    // perfectly and hide the one thing the operator is looking for.
+    const wrapped = (seq: number) =>
+      `<13>1 2026-08-25T16:35:3${seq}.206Z cribl-hw01 PAN-OS - CONFIG - ` +
+      `1,2026/08/25 16:35:3${seq},007,CONFIG,0,${seq}`;
+    const rawEvents = [wrapped(0), wrapped(1)];
+    const { container, onCommit } = renderPanel({
+      query: queryResult({
+        discriminatorField: "sourcetype",
+        logTypes: [{ logType: "CONFIG", eventCount: 12 }],
+      }),
+      fetched: fetchResult({ events: [{ logType: "CONFIG", rawEvents }] }),
+    });
+    await runQuery(container);
+    await fetchEvents(container);
+
+    expect(previewRows(container)).toHaveLength(1);
+    expect(previewHeadline(container)).toBe(
+      "Fetched 2 events in 1 log type. Nothing is added until you confirm.",
+    );
+    // Byte for byte, envelope and all - this is the whole feature.
+    expect(previewText(container)).toEqual([rawEvents.join("\n")]);
+    expect(previewText(container)[0]).toContain("cribl-hw01");
+
+    // COLLAPSED, as the capture panel's preview is: five log types of fifty
+    // events each would otherwise bury the button that commits them.
+    const details = container.querySelectorAll<HTMLDetailsElement>(
+      ".lake-previews details",
+    );
+    expect(details).toHaveLength(1);
+    expect(details[0].open).toBe(false);
+    expect(details[0].querySelector("summary")?.textContent).toBe("Preview");
+
+    // And what is previewed is what is STORED - the same lines, unedited. This
+    // is the assertion the feature exists for: an operator who reads the box and
+    // presses the button gets exactly what they read.
+    expect(onCommit).toHaveBeenCalledTimes(0);
+    await addSamples(container);
+    expect(onCommit.mock.calls[0][0][0].rawEvents).toEqual(rawEvents);
+  });
+
+  it("locks the picks while a haul waits, and lets them go on Discard", async () => {
+    // The events below were fetched for the rows ticked at the time. Re-ticking
+    // underneath them would leave the panel describing one selection and
+    // committing another - so the way out is Add or Discard, and Discard keeps
+    // the counts the operator already paid a search for.
+    const { container, onQuery, onFetchEvents, onCommit } = renderPanel();
+    await runQuery(container);
+    await fetchEvents(container);
+
+    expect([...boxes(container)].filter((b) => b.disabled)).toHaveLength(3);
+    expect(perLogType(container).disabled).toBe(true);
+    expect(fetchButton(container)?.disabled).toBe(true);
+    expect(findButton(container).disabled).toBe(true);
+
+    fireEvent.click(screen.getByText("Discard these events"));
+
+    expect(previewRows(container)).toHaveLength(0);
+    expect(onCommit).toHaveBeenCalledTimes(0);
+    // The counts survive, unlocked, so picking again costs no second count.
+    expect(rows(container)).toHaveLength(3);
+    expect([...boxes(container)].filter((b) => b.disabled)).toHaveLength(0);
+    expect(fetchButton(container)?.disabled).toBe(false);
+    expect(onQuery).toHaveBeenCalledTimes(1);
+    expect(onFetchEvents).toHaveBeenCalledTimes(1);
   });
 
   it("fetches with the field the query established and the bound on screen", async () => {
@@ -600,7 +720,7 @@ describe("LakePanel - nothing enters the store without a click", () => {
     fireEvent.click(boxes(container)[1]); // untick TRAFFIC
     expect(ticked(container)).toBe(2);
 
-    await addSamples(container);
+    await fetchEvents(container);
 
     expect(onFetchEvents).toHaveBeenCalledTimes(1);
     // Exactly the ticked rows: an unticked one arriving here would cost a search
@@ -625,7 +745,7 @@ describe("LakePanel - nothing enters the store without a click", () => {
     // default and landing the next keystroke on the end of it.
     expect(perLogType(container).value).toBe("");
 
-    await addSamples(container);
+    await fetchEvents(container);
 
     expect(onFetchEvents).toHaveBeenCalledWith(
       "sourcetype",
@@ -642,9 +762,9 @@ describe("LakePanel - nothing enters the store without a click", () => {
 
     for (let i = 0; i < 3; i += 1) fireEvent.click(boxes(container)[i]);
     expect(ticked(container)).toBe(0);
-    expect(commitButton(container)?.disabled).toBe(true);
+    expect(fetchButton(container)?.disabled).toBe(true);
 
-    fireEvent.click(commitButton(container) as HTMLButtonElement);
+    fireEvent.click(fetchButton(container) as HTMLButtonElement);
     expect(onFetchEvents).toHaveBeenCalledTimes(0);
   });
 
@@ -668,8 +788,8 @@ describe("LakePanel - nothing enters the store without a click", () => {
       "Volumes cover -24h to now.",
     );
 
-    expect(commitButton(container)?.disabled).toBe(true);
-    fireEvent.click(commitButton(container) as HTMLButtonElement);
+    expect(fetchButton(container)?.disabled).toBe(true);
+    fireEvent.click(fetchButton(container) as HTMLButtonElement);
     expect(onFetchEvents).toHaveBeenCalledTimes(0);
   });
 
@@ -768,7 +888,7 @@ describe("LakePanel - while a read is in flight", () => {
     expect(findButton(container).textContent).toBe("Finding log types...");
     expect(findButton(container).disabled).toBe(true);
     expect(rows(container)).toHaveLength(0);
-    expect(commitButton(container)).toBeNull();
+    expect(fetchButton(container)).toBeNull();
     expect(onQuery).toHaveBeenCalledTimes(1);
 
     await finish(THREE_TYPES);
@@ -787,12 +907,12 @@ describe("LakePanel - while a read is in flight", () => {
     const { container, onCommit } = renderPanel({ props: { onFetchEvents } });
 
     await runQuery(container);
-    fireEvent.click(commitButton(container) as HTMLButtonElement);
+    fireEvent.click(fetchButton(container) as HTMLButtonElement);
 
     expect(outcomeStatus(container)).toBe("fetching");
     expect(outcomeHeadline(container)).toBe("Fetching events...");
-    expect(commitButton(container)?.textContent).toBe("Fetching events...");
-    expect(commitButton(container)?.disabled).toBe(true);
+    expect(fetchButton(container)?.textContent).toBe("Fetching events...");
+    expect(fetchButton(container)?.disabled).toBe(true);
     expect(findButton(container).disabled).toBe(true);
     expect(discardButton(container).disabled).toBe(true);
     expect(perLogType(container).disabled).toBe(true);
@@ -803,8 +923,43 @@ describe("LakePanel - while a read is in flight", () => {
 
     await finish(FETCHED);
 
+    // The fetch answered into a PREVIEW, not into the store.
     expect(onFetchEvents).toHaveBeenCalledTimes(1);
+    expect(onCommit).toHaveBeenCalledTimes(0);
+    expect(previewRows(container)).toHaveLength(3);
+    expect(rows(container)).toHaveLength(3);
+  });
+
+  it("locks the panel while the STORE WRITE runs, and says which one it is", async () => {
+    // A second lock, for a second await. The store is replace-by-logType so a
+    // double commit is idempotent - what this stops is the operator ACTING on a
+    // panel mid-write: discarding the events, or re-fetching them, against a
+    // commit whose result they cannot see yet.
+    let resolveCommit: () => void = () => {};
+    const onCommit = vi.fn(
+      (_samples: TaggedSample[]) =>
+        new Promise<void>((resolve) => {
+          resolveCommit = resolve;
+        }),
+    );
+    const { container } = renderPanel({ props: { onCommit } });
+
+    await runQuery(container);
+    await fetchEvents(container);
+    fireEvent.click(commitButton(container) as HTMLButtonElement);
+
     expect(onCommit).toHaveBeenCalledTimes(1);
+    // Named apart from the fetch: they fail differently, and "Fetching" over a
+    // store write would send a failure hunt at the wrong half of the flow.
+    expect(commitButton(container)?.textContent).toBe("Adding samples...");
+    expect(commitButton(container)?.disabled).toBe(true);
+    expect(previewRows(container)).toHaveLength(3);
+    expect(findButton(container).disabled).toBe(true);
+
+    await act(async () => resolveCommit());
+
+    expect(onCommit).toHaveBeenCalledTimes(1);
+    expect(previewRows(container)).toHaveLength(0);
     expect(rows(container)).toHaveLength(0);
     expect(outcomeStatus(container)).toBe("done");
   });
@@ -827,6 +982,18 @@ describe("LakePanel - what the commit reports afterwards", () => {
     });
 
     await runQuery(container);
+    await fetchEvents(container);
+
+    // The hole is visible BEFORE the commit too: the row is previewed with its
+    // blank line and marked as one the commit will not take.
+    expect(previewRows(container)).toHaveLength(3);
+    const dropped = container.querySelectorAll(".lake-preview-dropped");
+    expect(dropped).toHaveLength(1);
+    expect(previewRows(container)[2].textContent).toContain("THREAT");
+    expect(dropped[0].textContent).toBe(
+      "these lines parsed to no record, so this one will not be added",
+    );
+
     await addSamples(container);
 
     expect(onCommit).toHaveBeenCalledTimes(1);
@@ -877,6 +1044,14 @@ describe("LakePanel - what the commit reports afterwards", () => {
     fireEvent.click(boxes(container)[1]);
     expect(ticked(container)).toBe(2);
 
+    await fetchEvents(container);
+
+    // Both rows preview as ADDABLE, because both really are added - as one
+    // sample. Marking the second "will not be added" would be the pre-commit
+    // version of the lie the summary below stopped telling.
+    expect(previewRows(container)).toHaveLength(2);
+    expect(container.querySelectorAll(".lake-preview-dropped")).toHaveLength(0);
+
     await addSamples(container);
 
     // One sample, under the operator's own casing: that IS the collapse.
@@ -889,10 +1064,12 @@ describe("LakePanel - what the commit reports afterwards", () => {
     expect(outcomeHeadline(container)).not.toContain("returned nothing usable");
   });
 
-  it("adds nothing and KEEPS the counts when the fetch fails or parses to nothing", async () => {
-    // Two different answers that must not fold together: the search failed, or
-    // the search answered and the events carried no records. Neither may put a
-    // husk in the store, and both must leave the rows up - re-running the count
+  it("previews NOTHING and keeps the counts when a fetch yields no sample", async () => {
+    // THREE different answers that must not fold together: the search failed,
+    // the search answered with no events at all, or it answered with events that
+    // carried no records. None may put a husk in the store, none may render an
+    // empty preview box - which would read as "this is what your data looks
+    // like" - and all three must leave the rows up, because re-running the count
     // to pick again would spend a search the operator already paid for.
     const failed = renderPanel({
       fetched: fetchResult({
@@ -901,17 +1078,42 @@ describe("LakePanel - what the commit reports afterwards", () => {
       }),
     });
     await runQuery(failed.container);
-    await addSamples(failed.container);
+    await fetchEvents(failed.container);
 
     expect(failed.onCommit).toHaveBeenCalledTimes(0);
+    expect(previewRows(failed.container)).toHaveLength(0);
+    expect(commitButton(failed.container)).toBeNull();
     expect(outcomeStatus(failed.container)).toBe("failed");
     expect(outcomeHeadline(failed.container)).toContain("nothing was added");
     expect(failed.container.textContent).toContain(
       '"TRAFFIC" could not be fetched.',
     );
     expect(rows(failed.container)).toHaveLength(3);
-    expect(commitButton(failed.container)?.disabled).toBe(false);
-    const failedStatus = outcomeStatus(failed.container);
+    expect(fetchButton(failed.container)?.disabled).toBe(false);
+    const failedHeadline = outcomeHeadline(failed.container);
+    cleanup();
+
+    // The search ran and the window held none of the picked log types. Reported
+    // as "Events came back, but none of them parsed" until 2026-08-25 - a
+    // sentence about events that never existed, sending the operator to inspect
+    // the shape of data they do not have.
+    const none = renderPanel({
+      fetched: fetchResult({
+        notes: ['"TRAFFIC" returned no events in this window.'],
+      }),
+    });
+    await runQuery(none.container);
+    await fetchEvents(none.container);
+
+    expect(none.onCommit).toHaveBeenCalledTimes(0);
+    expect(previewRows(none.container)).toHaveLength(0);
+    expect(outcomeStatus(none.container)).toBe("no-events");
+    expect(outcomeHeadline(none.container)).toContain("returned no events");
+    expect(none.container.textContent).toContain(
+      '"TRAFFIC" returned no events in this window.',
+    );
+    expect(rows(none.container)).toHaveLength(3);
+    const noneHeadline = outcomeHeadline(none.container);
     cleanup();
 
     const unusable = renderPanel({
@@ -920,13 +1122,21 @@ describe("LakePanel - what the commit reports afterwards", () => {
       }),
     });
     await runQuery(unusable.container);
-    await addSamples(unusable.container);
+    await fetchEvents(unusable.container);
 
     expect(unusable.onCommit).toHaveBeenCalledTimes(0);
+    expect(previewRows(unusable.container)).toHaveLength(0);
     expect(outcomeStatus(unusable.container)).toBe("unusable");
     expect(outcomeHeadline(unusable.container)).toContain("none of them parsed");
     expect(rows(unusable.container)).toHaveLength(3);
-    expect(failedStatus).not.toBe(outcomeStatus(unusable.container));
+
+    expect(
+      new Set([
+        failedHeadline,
+        noneHeadline,
+        outcomeHeadline(unusable.container),
+      ]).size,
+    ).toBe(3);
   });
 
   it("drops the previous dataset's counts AND its summary when the dataset changes", async () => {
@@ -937,7 +1147,7 @@ describe("LakePanel - what the commit reports afterwards", () => {
       fetched: fetchResult({ ok: false, notes: ["The search returned HTTP 400."] }),
     });
     await runQuery(container);
-    await addSamples(container);
+    await fetchEvents(container);
     expect(rows(container)).toHaveLength(3);
     expect(outcomes(container)).toHaveLength(1);
 
@@ -949,5 +1159,22 @@ describe("LakePanel - what the commit reports afterwards", () => {
     expect(container.querySelectorAll(".field-label")[0].textContent).toBe(
       "Lake dataset: corelight",
     );
+  });
+
+  it("drops a WAITING haul when the dataset changes, rather than committing it", async () => {
+    // The preview outlives the click that fetched it, so it can outlive the
+    // dataset too - and a commit taken from it would file one dataset's events
+    // under a panel headed by another's name.
+    const { container, props, rerender, onCommit } = renderPanel();
+    await runQuery(container);
+    await fetchEvents(container);
+    expect(previewRows(container)).toHaveLength(3);
+
+    rerender(<LakePanel {...props} datasetId="corelight" />);
+
+    expect(previewRows(container)).toHaveLength(0);
+    expect(commitButton(container)).toBeNull();
+    expect(onCommit).toHaveBeenCalledTimes(0);
+    expect(status(container)).toBe("idle");
   });
 });

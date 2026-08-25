@@ -10,9 +10,25 @@
  * TWO BUTTONS, TWO READS, and the split is the whole design. "Find log types"
  * runs a `summarize count()` and returns COUNTS - names and volumes, no event
  * bodies. Counts are what the operator needs to CHOOSE and are useless as a
- * sample. "Add as samples" then fetches actual events, and only for the ticked
+ * sample. "Fetch events" then fetches actual events, and only for the ticked
  * rows: doing it up front would pull bodies for every log type they go on to
  * discard, on the biggest datasets, which is where it hurts most.
+ *
+ * A THIRD BUTTON THAT COSTS NOTHING (user report 2026-08-25). The fetch used to
+ * commit what it fetched in the same click, so the first time anyone saw a Lake
+ * event was after it was in the store - which is how samples carrying a syslog
+ * transport envelope around the vendor's own bytes got there unnoticed. The
+ * fetch now HOLDS its events, shows them, and stores them only on "Add as
+ * samples". The capture panel has worked this way since it was written; this is
+ * that same confirm step, on the path that lacked it.
+ *
+ * THE SEARCH BUDGET IS UNCHANGED, and that is the reason this shape was chosen
+ * over the obvious alternatives. Fetching on expand, or behind a per-row Preview
+ * button, would run a search job per log type for the preview and another for
+ * the commit - double, on the step that is already one job per ticked row. The
+ * events shown here are the ones the commit was ALREADY fetching; nothing was
+ * added to the flow but a click, and what the operator reads is the text the
+ * commit is handed - unedited, envelope and all.
  *
  * The commit summary OUTLIVES the log-type list on purpose. A fetch can lose one
  * log type and keep the rest, so clearing the panel on success would round a
@@ -53,17 +69,40 @@ import {
   lakeCollisions,
   lakeLogTypeChoices,
   lakeOffersSamples,
+  lakePreviewHeadline,
+  lakeSamplePreviews,
   mergedLakeLogTypeCount,
   plannedLakeSamples,
   selectedLakeLogTypes,
   toggleLakeChoice,
   windowLabel,
 } from "./lake-panel-state";
-import type { LakeLogTypeChoice } from "./lake-panel-state";
+import type { LakeLogTypeChoice, LakeSamplePreview } from "./lake-panel-state";
 // The picker's byte formatter, reused rather than reproduced - see the note at
 // its definition; it is the coarse hint register an estimate belongs in.
 import { formatBytes } from "./sample-source-picker-state";
 import { useNumericField } from "./use-numeric-field";
+
+/**
+ * A fetched haul waiting on the operator's word - the events, and everything
+ * already decided about them.
+ *
+ * THE SAMPLES ARE COMPUTED ONCE, HERE, and the commit sends exactly these. Not
+ * re-planned at commit time, because the parse would then run against whatever
+ * the store held by then rather than against what the preview described - and
+ * the preview's whole claim is that it shows what is about to be written.
+ */
+interface PendingLakeFetch {
+  result: FetchLakeEventsResult;
+  /** What a commit will write, verbatim. */
+  samples: TaggedSample[];
+  /** The same haul as the operator sees it, rows and lines. */
+  previews: LakeSamplePreview[];
+  /** Log types ticked when the fetch ran - what the summary is measured against. */
+  requested: number;
+  /** Picks folded into another sample rather than lost; see the outcome below. */
+  merged: number;
+}
 
 /** What a commit established, kept beside the fetch so partials stay visible. */
 interface CommitOutcome {
@@ -123,13 +162,20 @@ export function LakePanel({
   const eventsPerLogType = useNumericField(DEFAULT_SAMPLE_LIMIT);
   const [querying, setQuerying] = useState(false);
   const [fetching, setFetching] = useState(false);
+  // The store write is awaited separately from the fetch, as the capture panel
+  // awaits its commit: they fail differently, and while this one runs the panel
+  // is showing a preview of samples already on their way in.
+  const [committing, setCommitting] = useState(false);
+  const [pending, setPending] = useState<PendingLakeFetch | null>(null);
   const [outcome, setOutcome] = useState<CommitOutcome | null>(null);
 
   // A different dataset means different log types and a different commit. Left
-  // on screen, the old counts would be read as this dataset's.
+  // on screen, the old counts would be read as this dataset's - and a pending
+  // preview would offer another dataset's events under this one's name.
   useEffect(() => {
     setResult(null);
     setChoices([]);
+    setPending(null);
     setOutcome(null);
   }, [datasetId]);
 
@@ -143,15 +189,19 @@ export function LakePanel({
   );
   const selected = selectedLakeLogTypes(choices);
   const collisions = lakeCollisions(choices);
-  // `fetching` spans the fetch AND the store write, so it is what keeps the
-  // operator off the panel mid-commit.
-  const locked = querying || fetching;
+  // THE SELECTION HALF, locked while any request is in flight AND while a haul
+  // is waiting to be confirmed. That last clause is the one worth stating: the
+  // events below were fetched for the rows ticked at the time, so a tick changed
+  // afterwards would describe a selection that is not what is about to be
+  // stored. The way out is Add or Discard, not a quiet edit underneath.
+  const locked = querying || fetching || committing || pending !== null;
   const unavailable = searchGroupId.trim() === "";
 
   const run = async () => {
     setQuerying(true);
     setResult(null);
     setChoices([]);
+    setPending(null);
     setOutcome(null);
     try {
       const next = await onQuery();
@@ -164,7 +214,13 @@ export function LakePanel({
     }
   };
 
-  const commit = async () => {
+  /**
+   * ONE SEARCH JOB PER TICKED LOG TYPE, and this is the only place that spends
+   * them. Pressing this again pays again, which is why the panel locks below
+   * rather than leaving a second press a click away - and why the preview reuses
+   * these events instead of fetching its own.
+   */
+  const fetchEvents = async () => {
     // THE SAME QUESTION THE BUTTON ASKS, from the same function - a control that
     // does nothing when pressed is worse than a disabled one, and two copies of
     // this condition is how they come to disagree. It allows a missing field
@@ -172,6 +228,7 @@ export function LakePanel({
     // deliberately unfiltered.
     if (!canFetchLakeSamples(view, selected.length)) return;
     setFetching(true);
+    setPending(null);
     setOutcome(null);
     try {
       const fetched = await onFetchEvents(
@@ -184,20 +241,55 @@ export function LakePanel({
         `lake:${datasetId}`,
         existingLogTypes,
       );
-      setOutcome({
+      if (samples.length === 0) {
+        // NOTHING TO PREVIEW AND NOTHING TO TAKE. Reported straight away rather
+        // than rendered as an empty preview box, which reads as "your data looks
+        // like this" about data that never arrived. The counts stay up, so
+        // picking again costs no second count.
+        setOutcome({
+          result: fetched,
+          planned: 0,
+          requested: selected.length,
+          merged: 0,
+        });
+        return;
+      }
+      setPending({
         result: fetched,
-        planned: samples.length,
+        samples,
+        // Both folded against the store AS IT IS NOW, in one read, so the
+        // preview's labels and the commit's cannot come from two different
+        // stores - the rule lakeLogTypeChoices follows for the same reason.
+        previews: lakeSamplePreviews(fetched.events, samples, existingLogTypes),
         requested: selected.length,
         merged: mergedLakeLogTypeCount(selected, samples, existingLogTypes),
       });
-      if (samples.length > 0) {
-        await onCommit(samples);
-        // The counts have done their job; the summary above stays.
-        setResult(null);
-        setChoices([]);
-      }
     } finally {
       setFetching(false);
+    }
+  };
+
+  /** The store write, and nothing else - no search runs here. */
+  const commit = async () => {
+    if (pending === null) return;
+    setCommitting(true);
+    try {
+      await onCommit(pending.samples);
+      setOutcome({
+        result: pending.result,
+        planned: pending.samples.length,
+        requested: pending.requested,
+        merged: pending.merged,
+      });
+      // Cleared only once the store has it, as the capture panel clears its
+      // preview: dropping the events first would leave a failed commit with
+      // nothing on screen to retry from, and re-fetching costs searches.
+      setPending(null);
+      // The counts have done their job; the summary above stays.
+      setResult(null);
+      setChoices([]);
+    } finally {
+      setCommitting(false);
     }
   };
 
@@ -205,6 +297,15 @@ export function LakePanel({
     setResult(null);
     setChoices([]);
   };
+
+  /**
+   * Throw the fetched events away and leave the COUNTS standing.
+   *
+   * Deliberately not a return to idle: the operator has already paid for the
+   * count, and the reason to reject a preview is usually to tick different rows.
+   * Taking the list down with the events would make them buy it again.
+   */
+  const discardEvents = () => setPending(null);
 
   return (
     <div className="lake-panel" data-status={view.status}>
@@ -271,8 +372,8 @@ export function LakePanel({
         <>
           <span className="field-hint">
             Tick the log types worth taking as samples. The highest-volume ones
-            are pre-selected; each one you take is another search against the
-            dataset.
+            are pre-selected; fetching them runs one more search against the
+            dataset per tick. You see the events before anything is stored.
           </span>
           <ul className="lake-log-types">
             {choices.map((choice) => (
@@ -338,16 +439,91 @@ export function LakePanel({
               {collisions.length === 1 ? "" : "s"}.
             </span>
           )}
+          {/* TWO PRIMARY ACTIONS LIVE ON THIS PANEL now - this one spends
+              searches, the one under the preview writes to the store - and they
+              are told apart by a qualifier class rather than by document order.
+              Order is what a test reading `.next-action-button` would have to
+              rely on, and it changes the moment a block moves. */}
           <button
-            className="next-action-button"
-            onClick={() => void commit()}
+            className="next-action-button lake-fetch-button"
+            onClick={() => void fetchEvents()}
             disabled={locked || !canFetchLakeSamples(view, selected.length)}
           >
-            {fetching ? "Fetching events..." : "Add as samples"}
+            {fetching ? "Fetching events..." : "Fetch events"}
           </button>
           <button className="run-button" onClick={discard} disabled={locked}>
             Discard
           </button>
+        </div>
+      )}
+
+      {/* WHAT IS ABOUT TO BE STORED, in the bytes it will be stored in. The
+          operator's one chance to see that a Lake event carries a transport
+          envelope around the vendor's line, or that a log type came back as
+          something other than what its name promised - which until 2026-08-25
+          was only discoverable after the sample was in the store. Collapsed, as
+          the capture panel's is: a haul of five log types must stay scannable,
+          and the operator opens the ones they want to check. */}
+      {pending !== null && (
+        <div className="lake-fetched">
+          <p className="panel-desc">{lakePreviewHeadline(pending.previews)}</p>
+          <ul className="lake-previews">
+            {pending.previews.map((entry) => (
+              <li key={entry.logType}>
+                <div className="lake-preview-head">
+                  <span className="lake-log-type-name">{entry.logType}</span>
+                  <span className="field-hint">
+                    {entry.eventCount} event{entry.eventCount === 1 ? "" : "s"}
+                  </span>
+                  {entry.replacesExisting && (
+                    <span className="field-hint lake-replaces">
+                      replaces your existing {entry.storeLabel} sample
+                    </span>
+                  )}
+                  {/* Said BEFORE the commit, not only in the shortfall sentence
+                      afterwards: a row that cannot be stored is one the operator
+                      would want to swap for another while the list is still up. */}
+                  {!entry.willBeAdded && (
+                    <span className="field-hint lake-preview-dropped">
+                      these lines parsed to no record, so this one will not be
+                      added
+                    </span>
+                  )}
+                </div>
+                <details>
+                  <summary className="field-hint">Preview</summary>
+                  <pre className="result lake-preview">
+                    {entry.preview.join("\n")}
+                  </pre>
+                </details>
+              </li>
+            ))}
+          </ul>
+          {/* The fetch's OWN notes, here rather than only after the commit. A
+              haul can lose a log type and keep the rest, and the sentence naming
+              which one was lost is worth reading while there is still a choice
+              to make about it. */}
+          {pending.result.notes.map((note) => (
+            <p className="field-hint" key={note}>
+              {note}
+            </p>
+          ))}
+          <div className="panel-controls">
+            <button
+              className="next-action-button lake-commit-button"
+              onClick={() => void commit()}
+              disabled={committing}
+            >
+              {committing ? "Adding samples..." : "Add as samples"}
+            </button>
+            <button
+              className="run-button"
+              onClick={discardEvents}
+              disabled={committing}
+            >
+              Discard these events
+            </button>
+          </div>
         </div>
       )}
 

@@ -339,18 +339,82 @@ export function parsePanosLine(
 }
 
 /**
- * True when the first non-empty line looks like PAN-OS syslog+CSV: the
- * `1,<date>,<serial>,<TYPE>,` positional fingerprint. Verbatim from the legacy
- * sample-resolver.ts `isPanosFormat` (regex flags preserved: case-insensitive).
+ * A PAN-OS timestamp in either form the firewall emits: the classic
+ * `2013/03/25 23:59:02` and the ISO-8601 `2021-11-09T21:45:36.000000Z` that
+ * GLOBALPROTECT records carry.
+ */
+const PANOS_TIMESTAMP =
+  "(?:\\d{4}/\\d{2}/\\d{2}\\s+\\d{2}:\\d{2}:\\d{2}|\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?Z?)";
+
+/**
+ * The PAN-OS log types this recognizes. THE ALLOW-LIST IS THE SAFETY ARGUMENT -
+ * see {@link isPanosFormat}. `AUDIT` and `AUTH` were absent until 2026-08-25.
+ */
+const PANOS_TYPES =
+  "TRAFFIC|THREAT|SYSTEM|CONFIG|GLOBALPROTECT|AUTHENTICATION|AUTH|AUDIT|DECRYPTION|HIP-MATCH|HIPMATCH|CORRELATION|GTP|SCTP|TUNNEL|USERID|IPTAG|WILDFIRE|URL|DATA";
+
+/**
+ * The positional fingerprint: a PAN-OS TIMESTAMP field followed, one or two
+ * fields later, by a whitelisted PAN-OS LOG TYPE field.
+ *
+ * The optional `[^,]*,` is what accommodates two real column orders:
+ *   `1,<ts>,<serial>,TRAFFIC,...`   type in field 3 (most types)
+ *   `<serial>,<ts>,audit,...`       type in field 2 (AUDIT)
+ */
+const PANOS_FINGERPRINT = new RegExp(
+  `,${PANOS_TIMESTAMP},(?:[^,]*,)?(?:${PANOS_TYPES})(?:,|$)`,
+  "i",
+);
+
+/**
+ * How many lines to inspect. Detection used to read ONLY the first, which made
+ * the format of a 50-event sample depend on which event happened to sort first.
+ */
+const PANOS_DETECT_LINES = 10;
+
+/**
+ * True when any of the first {@link PANOS_DETECT_LINES} non-empty lines carries
+ * the PAN-OS positional fingerprint.
+ *
+ * WHAT THE FINGERPRINT IS, AND WHY IT IS NOT A COMMA COUNT. It requires a PAN-OS
+ * TIMESTAMP in a CSV field, followed one or two fields later by a WHITELISTED
+ * PAN-OS log type in its own field. The allow-list is the whole safety argument:
+ * a chatty syslog line carrying six commas is still syslog, a CEF line with
+ * `extra=a,b,c` is still CEF, and the characterization suite pins exactly that.
+ * Loosening this to "enough commas" would break all three.
+ *
+ * RELAXED 2026-08-25 against a live Cribl Lake dataset, where the previous form
+ * (`1,<date>,<digits>,<TYPE>`) missed four real variants and produced samples
+ * with no PAN-OS fields at all. Measured over 200 live events:
+ *
+ *   AUDIT          0/9   -> the type was missing from the list AND its layout
+ *                          puts the type in field 2, not field 3
+ *   USERID        23/35  -> serial is the literal `<serial-number>`
+ *   GLOBALPROTECT 13/16  -> ISO-8601 timestamp and a literal `no-serial`
+ *   CONFIG        18/19  -> serial is EMPTY: `1,2021/10/25 20:25:39,,CONFIG`
+ *
+ * All 13 log types now match 200/200, and every refusal pin still holds. The
+ * serial is `[^,]*` because PAN-OS genuinely emits it empty, as digits, and as a
+ * placeholder - it never carried information this decision needs.
+ *
+ * READING TEN LINES RATHER THAN ONE is the other half. A sample is 50 events;
+ * with a single-line test, one odd event landing first reclassified the other
+ * 49. That is exactly what happened to CONFIG: 18 of its 19 events matched, the
+ * one that did not was first, and the whole sample was read as syslog - nine
+ * envelope fields, zero PAN-OS ones.
  */
 export function isPanosFormat(rawEvents: readonly string[]): boolean {
   if (rawEvents.length === 0) {
     return false;
   }
-  const first = rawEvents.find((l) => l.trim()) || "";
-  return /1,\d{4}\/\d{2}\/\d{2}\s+\d{2}:\d{2}:\d{2},\d+,(TRAFFIC|THREAT|SYSTEM|CONFIG|GLOBALPROTECT|AUTHENTICATION|DECRYPTION|HIP-MATCH|CORRELATION|GTP|SCTP|TUNNEL|USERID|IPTAG|HIPMATCH|WILDFIRE|URL|DATA)/i.test(
-    first,
-  );
+  let seen = 0;
+  for (const line of rawEvents) {
+    if (!line.trim()) continue;
+    if (PANOS_FINGERPRINT.test(line)) return true;
+    seen += 1;
+    if (seen >= PANOS_DETECT_LINES) break;
+  }
+  return false;
 }
 
 /**

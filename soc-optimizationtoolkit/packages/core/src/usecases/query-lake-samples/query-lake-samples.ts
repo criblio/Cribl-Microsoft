@@ -693,10 +693,44 @@ function readCount(row: Record<string, unknown>): number | undefined {
  * the serialized-row fallback and a padded one is measured without its padding.
  * Both are inherited deliberately rather than worked around - the sample keeps
  * exactly these bytes, so the estimate describes exactly what would be kept.
+ *
+ * THE TRANSPORT ENVELOPE IS NOT THE EVENT (2026-08-25, from live data). When a
+ * source parses a transport envelope it leaves the vendor's own bytes in
+ * `message` and keeps the WHOLE received frame in `_raw`. Taking `_raw` then
+ * hands the operator the envelope with the event buried inside it:
+ *
+ *   _raw     <13>1 2026-08-25T16:35:36.206Z cribl-hw01 PAN-OS - CONFIG - 1,2013/...
+ *   message  1,2013/...
+ *
+ * That is not cosmetic. Observed in the app against a real Cribl Lake dataset:
+ * of five PAN-OS log types taken from ONE dataset, CONFIG and USERID were
+ * detected as SYSLOG and yielded NINE fields - Priority, Version, Timestamp,
+ * Hostname, AppName, ProcID, MsgID, Message - none of them PAN-OS, while
+ * TRAFFIC, THREAT and SYSTEM yielded 73, 38 and 13 real PAN-OS fields. Same
+ * dataset, same source, different answers, because PAN-OS is POSITIONAL CSV and
+ * its fingerprint only survives the 60-character prefix on the longer rows. The
+ * envelope also misreports origin: its hostname is the Cribl worker that
+ * forwarded the event (`cribl-hw01`), not the firewall that emitted it.
+ *
+ * THE TEST IS PROOF, NOT A GUESS, and that is why it is stated this way rather
+ * than as "strip a syslog header". No format is sniffed and nothing is parsed:
+ * `message` is used only when `_raw` provably ENDS WITH it, which is exactly the
+ * condition "`_raw` is some envelope followed by this payload". A source whose
+ * `_raw` IS the vendor line, or whose `message` is something else entirely,
+ * fails the test and keeps `_raw`. Verified 40/40 rows on the live dataset.
+ *
+ * Both callers move together, which is the point of one definition: the sample
+ * loses the envelope and the byte estimate stops counting bytes the app no
+ * longer ships.
  */
 function rowRawText(row: Record<string, unknown>): string {
   const raw = readString(row, "_raw");
-  return raw !== undefined ? raw : JSON.stringify(row);
+  if (raw === undefined) return JSON.stringify(row);
+  const message = readString(row, "message");
+  if (message !== undefined && message !== raw && raw.endsWith(message)) {
+    return message;
+  }
+  return raw;
 }
 
 /**

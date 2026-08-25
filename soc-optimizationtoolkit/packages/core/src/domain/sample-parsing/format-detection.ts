@@ -128,6 +128,22 @@ function detectLenient(content: string): SampleFormat {
     return "csv";
   }
 
+  // A SYSLOG-WRAPPED PAYLOAD IS NOT RESCUED HERE, and the reason is worth
+  // keeping. A de-headered retry was tried on 2026-08-25 and reverted the same
+  // day: this function only DETECTS, while parseByFormat is handed the ORIGINAL
+  // line, so classifying `<13>1 ... {"type":"CONFIG"}` as ndjson made the parser
+  // JSON.parse a line that still had its header and produce ZERO records - a
+  // wrapped JSON payload went from "syslog, one record" to "ndjson, nothing".
+  // Detection and parsing have to agree on WHICH BYTES they are looking at, so
+  // the strip belongs at the content boundary ahead of both, not in here.
+  //
+  // The Lake path already does exactly that: rowRawText takes the vendor payload
+  // over the transport envelope before anything downstream sees it. Uploads and
+  // captures that arrive still-wrapped keep the limitation - json and
+  // header-csv fall to `syslog` - while cef, leef and kv survive it because
+  // their probes are unanchored substring tests, and PAN-OS survives via the
+  // positional fingerprint above.
+
   // syslog: <priority> or an RFC 3164 month-day-time prefix.
   if (/^<\d+>/.test(trimmed) || /^\w{3}\s+\d+\s+\d+:\d+:\d+/.test(trimmed)) {
     return "syslog";

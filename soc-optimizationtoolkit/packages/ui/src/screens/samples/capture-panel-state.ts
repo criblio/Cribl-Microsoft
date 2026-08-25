@@ -30,7 +30,7 @@ import type {
   TaggedSample,
 } from "@soc/core";
 import { buildCaptureFilter, captureFilterWarning } from "@soc/core";
-import { plannedSamplesFrom, sampleStoreKey } from "./planned-samples";
+import { plannedSamplesFrom, previewLines, sampleStoreKey } from "./planned-samples";
 import type { RecommendedLogType } from "./sample-coverage-state";
 
 /** One log-type checkbox on the capture panel. */
@@ -129,9 +129,6 @@ export interface CaptureView {
   collisions: string[];
 }
 
-/** How many raw lines the preview shows per log type. */
-const PREVIEW_LINES = 3;
-
 /**
  * Project a capture result into what the panel renders.
  *
@@ -185,7 +182,9 @@ export function deriveCaptureView(
   const logTypes = result.splits.map((split) => ({
     logType: split.logType,
     eventCount: split.eventCount,
-    preview: split.rawEvents.slice(0, PREVIEW_LINES),
+    // The shared projection, so this panel and the Lake one show the same
+    // amount of the same unedited text - see previewLines.
+    preview: previewLines(split.rawEvents),
     replacesExisting: existing.has(sampleStoreKey(split.logType)),
   }));
   const collisions = logTypes.filter((l) => l.replacesExisting).map((l) => l.logType);

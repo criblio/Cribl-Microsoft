@@ -102,6 +102,33 @@ export function storeLabelFor(
 }
 
 /**
+ * How many raw lines a preview shows per log type, and the ONE place either
+ * acquisition panel decides it.
+ *
+ * Three, because a preview is for RECOGNISING an event's shape - is this CEF, is
+ * there a transport envelope in front of the vendor's own bytes - and not for
+ * reading the haul. Shared for the same reason the conversion below is: two
+ * panels each previewing "the first few lines" by their own number is two
+ * answers to one question, and an operator comparing a captured sample with a
+ * Lake one would be comparing different amounts of evidence.
+ */
+export const PREVIEW_LINES = 3;
+
+/**
+ * The first few raw lines of an acquired log type, EXACTLY as they arrived.
+ *
+ * Not reformatted, not pretty-printed, not trimmed, and that is the whole value
+ * of it: the preview has to be the bytes {@link plannedSamplesFrom} would tag,
+ * or it stops being evidence about what is going into the store. Tidying a line
+ * here would hide precisely the defect a preview exists to catch - the syslog
+ * envelope that reached a Lake sample unseen (2026-08-25) is what one line of
+ * unedited text would have shown on screen.
+ */
+export function previewLines(rawEvents: readonly string[]): string[] {
+  return rawEvents.slice(0, PREVIEW_LINES);
+}
+
+/**
  * Convert acquired events into storage tagged samples - one per log type.
  *
  * Re-tags through {@link tagSampleFromContent}, the SAME content-first parse an

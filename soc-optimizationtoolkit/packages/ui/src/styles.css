@@ -1692,14 +1692,49 @@ button.journey-step-main:hover .journey-step-label {
   margin: 0;
 }
 
-/* Truncation and replacement are both "you are about to be misled" - warn. */
+/* Truncation, replacement and a row that cannot be stored are all "you are
+ * about to be misled" - warn. */
 .lake-truncated,
-.lake-replaces {
+.lake-replaces,
+.lake-preview-dropped {
   color: var(--warn);
 }
 
 .lake-bound {
   max-width: 140px;
+}
+
+/* The fetched events, held for confirmation before anything is stored. Shaped
+ * like the capture panel's result list below, because it is the same moment in
+ * the other acquisition path - the operator reading what they are about to
+ * take. */
+.lake-fetched {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.lake-previews {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 2px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.lake-preview-head {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* Bounded rather than free-running: a fifty-event haul must not push the
+ * commit button off the screen it belongs to. */
+.lake-preview {
+  max-height: 160px;
+  overflow: auto;
 }
 
 .lake-outcome {
