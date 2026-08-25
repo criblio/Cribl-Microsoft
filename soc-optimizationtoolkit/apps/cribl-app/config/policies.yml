@@ -171,13 +171,9 @@ policies:
   #
   # Cribl Search, the OTHER half of ADR 0003 Phase 4: read which log types a
   # Lake dataset holds and how much of each, so the operator is told which
-  # samples to provide instead of guessing. All three are group-scoped under the
-  # SEARCH group, not the Stream worker group (see the NOTE above), and all
-  # three READ - no dataset, job schedule, or saved search is ever written.
-  #   /m/:gid/search/query (get)      - the single-round-trip query. Preferred,
-  #                                     and spec-only: Cribl's own UI was never
-  #                                     seen to call it, so the job routes below
-  #                                     are the fallback rather than an extra.
+  # samples to provide instead of guessing. Both are group-scoped under the
+  # SEARCH group, not the Stream worker group (see the NOTE above), and both
+  # READ - no dataset, job schedule, or saved search is ever written.
   #   /m/:gid/search/jobs (post)      - the second NON-GET this feature adds, and
   #                                     like the capture POST it CREATES NOTHING
   #                                     durable: a search job is the query
@@ -187,8 +183,18 @@ policies:
   #                                     ({id}/status?advanced=true then
   #                                     {id}/results?offset&limit), which is the
   #                                     lifecycle verified live 2026-08-19.
-  - object: '/m/:gid/search/query'
-    actions: ['GET']
+  #
+  # WITHDRAWN 2026-08-25: /m/:gid/search/query (get). It was declared as "the
+  # single-round-trip query, preferred", on the spec's word that it returns
+  # results inline. Live probing showed it does not: given a window it answers
+  # 200 with {"job":{"id":...,"status":"queued"}} and no rows, i.e. it CREATES A
+  # JOB and hands back the handle, then serves that job's results on a second
+  # call carrying ?jobId. Same lifecycle as the two routes above, different door,
+  # no round trip saved - and because the app treated its empty reply as a
+  # disappointment and fell through to POST /search/jobs, every Lake query was
+  # creating two jobs and orphaning one. query-lake-samples.ts now runs the job
+  # lifecycle only, so nothing calls this path; per the least-privilege rule at
+  # the top of this file, the grant goes with the caller.
   - object: '/m/:gid/search/jobs'
     actions: ['POST']
   - object: '/m/:gid/search/jobs/*'

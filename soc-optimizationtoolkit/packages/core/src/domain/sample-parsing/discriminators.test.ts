@@ -28,7 +28,7 @@ describe("DISCRIMINATOR_FIELDS reconciliation", () => {
     expect(new Set(DISCRIMINATOR_FIELDS).size).toBe(DISCRIMINATOR_FIELDS.length);
   });
 
-  it("carries RFC 5424's msgid, LAST so the payload still wins", () => {
+  it("carries RFC 5424's msgid, in the envelope tail so the payload wins", () => {
     // Added 2026-08-21. RFC 5424 defines MSGID to "identify the type of
     // message", so a compliant syslog sender has already answered what this
     // list asks, and Cribl surfaces it without anyone parsing a payload.
@@ -41,21 +41,35 @@ describe("DISCRIMINATOR_FIELDS reconciliation", () => {
     // wrapped around it. The envelope is what the sender CLAIMS; the payload is
     // what the device wrote.
     //
-    // This used to assert msgid was literally last. It is not any more -
-    // `data_source` joined the envelope tail on 2026-08-25 - and pinning the
-    // last INDEX pinned the wrong thing: it would have failed on any new
-    // envelope field while permitting msgid to drift above `type`, which is the
-    // move that would actually break behaviour.
+    // This used to assert msgid was literally LAST, which stopped being true
+    // when `data_source` joined the envelope tail on 2026-08-25.
+    //
+    // The first replacement checked msgid against four named payload fields.
+    // That was WEAKER than what it replaced and the relaxation was not
+    // intended: three of those four sit in the high-confidence prefix, so the
+    // binding constraint was `category` at index 11, and `dataset`,
+    // `sourcetype`, `action` and `module` silently lost their protection -
+    // msgid could be moved above any of them with the suite still green. Since
+    // selection returns the FIRST qualifying field, that is a real behaviour
+    // change on any event carrying both.
+    //
+    // This form is strictly stronger than "msgid is last" AND survives new
+    // envelope fields: EVERY envelope field must rank below EVERY non-envelope
+    // one. Adding a payload field extends the constraint automatically.
     const envelopeFields = ["msgid", "data_source"];
-    const payloadFields = ["type", "subtype", "event_simpleName", "category"];
-    for (const envelope of envelopeFields) {
-      for (const payload of payloadFields) {
-        expect(
-          DISCRIMINATOR_FIELDS.indexOf(envelope),
-          `${envelope} must rank below the payload field ${payload}`,
-        ).toBeGreaterThan(DISCRIMINATOR_FIELDS.indexOf(payload));
-      }
-    }
+    const payloadFields = DISCRIMINATOR_FIELDS.filter(
+      (f) => !envelopeFields.includes(f),
+    );
+    const firstEnvelope = Math.min(
+      ...envelopeFields.map((f) => DISCRIMINATOR_FIELDS.indexOf(f)),
+    );
+    const lastPayload = Math.max(
+      ...payloadFields.map((f) => DISCRIMINATOR_FIELDS.indexOf(f)),
+    );
+    expect(
+      firstEnvelope,
+      `every envelope field must rank below every payload field; payload tail is ${DISCRIMINATOR_FIELDS[lastPayload]}`,
+    ).toBeGreaterThan(lastPayload);
     // And every envelope field sits in the tail, so none can self-select on a
     // single distinct value.
     for (const envelope of envelopeFields) {
@@ -102,17 +116,33 @@ describe("DISCRIMINATOR_FIELDS reconciliation", () => {
     // never reach two values); adding them to the high-confidence prefix would
     // make every dataset self-report as a single named log type, which is a
     // claim about the data rather than a reading of it.
-    for (const datasetLevel of ["datatype", "schemaId", "source"]) {
+    for (const datasetLevel of ["datatype", "schemaId"]) {
       expect(DISCRIMINATOR_FIELDS).not.toContain(datasetLevel);
     }
-    // A single-valued dataset-level field must not select even when it is the
-    // only thing on the record.
+
+    // `source` is deliberately NOT pinned out, and the difference is the point.
+    // The measurement above is one workspace, and for `source` the INFERENCE
+    // does not generalise: on file and directory inputs Cribl sets `source` per
+    // event to the file path, so a dataset fed by a file monitor across many
+    // paths has many distinct values. Note the asymmetry that makes the trap
+    // visible - its sibling `sourcetype` is IN the list, on legacy evidence.
+    // Pinning `source` out on lab data would be over-fitting one lake.
+    //
+    // What IS pinned: a dataset-level field must not select on its own when it
+    // carries a single value, and must lose to a real discriminator when both
+    // are present. That is behaviour, not membership.
     expect(
       selectDiscriminatorField([
-        { datatype: "logs", schemaId: "s1" },
-        { datatype: "logs", schemaId: "s1" },
+        { datatype: "logs", schemaId: "s1", other: "x" },
+        { datatype: "logs", schemaId: "s1", other: "y" },
       ]),
     ).toBeUndefined();
+    expect(
+      selectDiscriminatorField([
+        { datatype: "logs", eventType: "login" },
+        { datatype: "logs", eventType: "logout" },
+      ]),
+    ).toBe("eventType");
   });
 
   it("prefers a payload `type` over the syslog envelope's msgid", () => {

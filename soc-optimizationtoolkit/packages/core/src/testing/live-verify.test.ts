@@ -34,6 +34,7 @@ import { describe, expect, it } from "vitest";
 
 import { buildCaptureFilter } from "../domain/capture-filter/capture-filter";
 import { extractCapturedEvents } from "../usecases/capture-samples/capture-samples";
+import { criblEnvelopeItems } from "../domain/cribl-api/envelope";
 import {
   DEFAULT_LAKE_ID,
   lakeDatasetsPath,
@@ -79,8 +80,17 @@ const liveSleep = (ms: number): Promise<void> =>
 
 /** Pin the Lake dataset. Optional - without it the suite walks the listing. */
 const DATASET = process.env.CRIBL_LIVE_DATASET ?? "";
-/** How many datasets to try before giving up. An empty one costs ~1.4s. */
-const MAX_DATASET_ATTEMPTS = 12;
+/**
+ * How many datasets to walk before giving up.
+ *
+ * THE WHOLE LISTING BY DEFAULT. This was 12, which is the alphabetically-first
+ * twelve - the same uncorrelated ordering the walk exists to escape, just
+ * wider. In the lab it could not reach `winevt_plwindows`, the one dataset the
+ * `data_source` finding came from, because it sorts near the end of 31. An
+ * empty dataset costs ~1.4s and the walk stops at the first usable one, so the
+ * worst case is affordable and the common case is short.
+ */
+const MAX_DATASET_ATTEMPTS = Number(process.env.CRIBL_LIVE_MAX_DATASETS ?? "40");
 
 /** What queryLakeSamples hands back, named so the walk can hold one. */
 type LakeCount = Awaited<ReturnType<typeof queryLakeSamples>>;
@@ -159,13 +169,26 @@ function report(row: string, verdict: string, detail: string): void {
  */
 async function groupsWithWorkers(client: CriblClient): Promise<Set<string>> {
   const res = await client.request({ method: "GET", path: "/master/workers" });
+  // READ THE STATUS. A 403 here yields no items, which becomes an empty set,
+  // which surfaces as "no Stream group has connected workers" - a permission
+  // failure reported as a fact about the workspace. Fail loudly instead.
+  if (res.status !== 200) {
+    report("worker listing", "CANNOT RUN", `GET /master/workers -> HTTP ${res.status}`);
+    throw new Error(`/master/workers answered HTTP ${res.status}`);
+  }
   const items = ((res.body as { items?: unknown[] })?.items ?? []) as Record<
     string,
     unknown
   >[];
   const staffed = new Set<string>();
   for (const w of items) {
+    // CONNECTED, not merely listed - MasterWorkerEntry carries `disconnected`,
+    // and a group whose only worker has dropped answers the capture 400 exactly
+    // as an empty group does.
+    if (w.disconnected === true) continue;
     const info = (w.info ?? {}) as Record<string, unknown>;
+    // `group` is the documented field; the others are tolerated fallbacks for
+    // shapes the vendored spec does not describe.
     const group = w.group ?? w.workerGroup ?? info.workerGroup;
     if (typeof group === "string" && group !== "") staffed.add(group);
   }
@@ -291,8 +314,18 @@ describe.skipIf(!LIVE)("live verification against a real workspace", () => {
     // idle source. Confirmed 2026-08-25 by parsing the same capture by hand:
     // 40 of 40 events carried __inputId (cribl_tcp:in_cribl_tcp_WinEvt_plwindows,
     // syslog:PaloAlto:tcp, datagen:paloaltorfc5424, ...).
+    // ALL FOUR SHAPES the shipped extractor handles, not just the NDJSON one.
+    // capture-samples.ts documents a bare OBJECT (a one-line capture parses
+    // cleanly and never reaches the string branch - row 4 exists to pin exactly
+    // that) and the `{count, items}` envelope some leaders wrap it in. Handling
+    // only the string shape meant those two fell through to `decoded` SILENTLY,
+    // reproducing the payload-not-envelope false negative this block was written
+    // to fix, with nothing in the output saying so.
+    const wrapped = criblEnvelopeItems(control.body);
     const envelopes: Record<string, unknown>[] = Array.isArray(control.body)
       ? (control.body as Record<string, unknown>[])
+      : wrapped !== null
+      ? (wrapped as Record<string, unknown>[])
       : typeof control.body === "string"
         ? control.body
             .split(/\r?\n/)
@@ -307,7 +340,25 @@ describe.skipIf(!LIVE)("live verification against a real workspace", () => {
             })
             .filter((e): e is Record<string, unknown> => e !== null)
         : [];
-    const rawBodies = envelopes.length > 0 ? envelopes : decoded;
+    const singleObject =
+      envelopes.length === 0 &&
+      control.body !== null &&
+      typeof control.body === "object" &&
+      !Array.isArray(control.body)
+        ? [control.body as Record<string, unknown>]
+        : [];
+    const rawBodies =
+      envelopes.length > 0 ? envelopes : singleObject.length > 0 ? singleObject : decoded;
+    // SAY WHICH SOURCE WAS READ. A silent fallback to the payload is how row 1
+    // reported "no __inputId" for months; if it ever happens again the run
+    // should announce it rather than look like a finding about the platform.
+    if (rawBodies === decoded) {
+      report(
+        "rows 1/2 (source)",
+        "FELL BACK TO PAYLOAD",
+        "no envelope shape matched; __inputId cannot be observed from _raw - treat rows 1/2 as unmeasured",
+      );
+    }
     const withInputId = rawBodies.filter(
       (e) => typeof e.__inputId === "string",
     );
@@ -565,7 +616,7 @@ describe.skipIf(!LIVE)("live verification against a real workspace", () => {
     }
 
     const tried: string[] = [];
-    let chosen: { id: string; counted: LakeCount } | undefined;
+    let chosen: { id: string; counted: LakeCount; discriminatorField: string } | undefined;
     let sawEvents = false;
 
     for (const entry of candidates) {
@@ -586,7 +637,12 @@ describe.skipIf(!LIVE)("live verification against a real workspace", () => {
         `dataset "${entry.id}" could not be read: ${counted.notes.join(" | ")}`,
       ).toBe(true);
 
-      if (!counted.noDiscriminator) sawEvents = true;
+      // BACKWARDS UNTIL 2026-08-25. `noDiscriminator` is false for an EMPTY
+      // dataset (the base default) and true only when rows arrived and no field
+      // qualified - so `!noDiscriminator` set this on exactly the datasets
+      // where nothing was seen, and cleared it on the ones where data was. The
+      // two reports below then pointed the reader at the wrong fix each time.
+      if (counted.noDiscriminator || counted.logTypes.length > 0) sawEvents = true;
       // The NOTES matter as much as the count. "0 log types" alone cannot tell
       // an empty dataset from one whose rows never arrived, and those need
       // different fixes.
@@ -596,7 +652,9 @@ describe.skipIf(!LIVE)("live verification against a real workspace", () => {
           (counted.notes.length > 0 ? ` [${counted.notes.join(" ; ")}]` : ""),
       );
       if (counted.discriminatorField !== undefined && counted.logTypes.length > 0) {
-        chosen = { id: entry.id, counted };
+        // Narrowed HERE, where the check happens, so the field stays a string
+        // downstream without a re-check that can never fail.
+        chosen = { id: entry.id, counted, discriminatorField: counted.discriminatorField };
         break;
       }
     }
@@ -623,10 +681,6 @@ describe.skipIf(!LIVE)("live verification against a real workspace", () => {
     const counted = chosen.counted;
     const datasetId = chosen.id;
 
-    if (counted.discriminatorField === undefined || counted.logTypes.length === 0) {
-      report("row 3 (tostring)", "SKIPPED", "dataset yielded no log types to fetch");
-      return;
-    }
 
     // Row 3: buildLogTypeEventQuery emits `where tostring(field)=="value"`. This
     // runs that exact query. A dataset that legitimately holds nothing for the
@@ -635,7 +689,7 @@ describe.skipIf(!LIVE)("live verification against a real workspace", () => {
     const fetched = await fetchLakeLogTypeEvents(cribl, {
       searchGroupId: search.id,
       datasetId,
-      discriminatorField: counted.discriminatorField,
+      discriminatorField: chosen.discriminatorField,
       logTypes: [counted.logTypes[0].logType],
       eventsPerLogType: 1,
       sleep: liveSleep,

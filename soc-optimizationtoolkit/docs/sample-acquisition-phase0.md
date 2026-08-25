@@ -19,6 +19,14 @@ change, both recorded below.
 > (0.3, which also turned up a second parsing defect recorded there). 0.1's
 > synchronous `/search/query` is still spec-only - the lake-query path is being
 > built now.
+>
+> **STATUS (2026-08-25) - EVERY REMAINING SPEC-ONLY CLAIM HERE IS NOW LIVE, AND
+> ONE OF THEM WAS WRONG.** All eight beliefs in the plan's "Needs live
+> verification" table were settled against the lab workspace
+> `main-busy-yonath-kz1bxn7`. The correction that lands in this document:
+> **`GET /search/query` is NOT synchronous** - it creates a job. The 0.1 table
+> row and the "Synchronous path" section below are corrected in place. The
+> regex/JavaScript-evaluator assumption in 0.2 held, and the capture path ran.
 
 ---
 
@@ -34,7 +42,7 @@ The toolkit's "Search is an architecture concept only" note is about the
 | Federated datasets? | Yes - `GET /search/federated_search/engines` | spec |
 | List Lake datasets? | Yes - `GET /products/lake/lakes/{lakeId}/datasets` | spec, tag `lake` |
 | Run a query? | Yes, two ways (below) | spec, tags `query` / `search` |
-| Synchronous? | **Yes** - `GET /search/query` returns results directly | spec |
+| Synchronous? | ~~**Yes** - `GET /search/query` returns results directly~~ **NO.** Corrected 2026-08-25: it CREATES A JOB. See below | spec, falsified live |
 | Auth? | Platform-injected; the app sets no headers | `adapters.ts:479` |
 | Permission? | Declare the path in `config/policies.yml` | same-PR contract |
 
@@ -43,9 +51,46 @@ The toolkit's "Search is an architecture concept only" note is about the
 `application/x-ndjson` (`SearchJobResults`) in the response body. No job
 polling. This is the cheap one.
 
+> **[SUPERSEDED 2026-08-25 - THERE IS NO SYNCHRONOUS PATH. This was the one
+> claim in this document that the live run falsified.]**
+>
+> Read from the spec, `GET /search/query` looked like a single round trip that
+> returns results in the body. Called against a real workspace it behaves like
+> this:
+>
+> - **without `earliest`/`latest` it 400s.** They are not optional.
+> - **with them it CREATES A JOB** and returns
+>   `{isFinished:false, job:{id, status:"queued"}}`. No results.
+> - **re-called with that `jobId` it returns results.**
+>
+> So it is the SAME job lifecycle as `POST /search/jobs`, entered through a
+> different door - not a cheaper alternative to it. "No job polling" is wrong;
+> "this is the cheap one" is wrong. The right mental model is one lifecycle with
+> two entry points, and its `200 with no rows` is not an answer about the data -
+> it is the job sitting in `queued`.
+>
+> **The route has been DELETED from `queryLakeSamples`** (2026-08-25) and its
+> `/m/:gid/search/query` grant WITHDRAWN from `policies.yml`. Trying it first was
+> not free: the fallback fired on every query and created a SECOND job, so every
+> Lake query orphaned one and a full operator flow orphaned two, and the dead
+> route's failure note was rendered to the operator under a success headline.
+> Polling its `job.id` instead would have been correct but pointless - both doors
+> cost create + poll + read - so what remains is the lifecycle Cribl's own UI was
+> observed running. Item 4 of "What changes in the plan" below still recommends
+> preferring the sync route; it is corrected there.
+
 **Async path:** `POST /search/jobs` (`CreateSearchJobSchema`: `query` required,
 plus `earliest`/`latest`/`timezone`/`sampleRate`) then
 `GET /search/jobs/{id}/status` and `GET /search/jobs/{id}/results`.
+
+> **[LIVE DETAIL, 2026-08-25 - the status is in an ENVELOPE.]**
+> `GET /search/jobs/{id}/status?advanced=true` answers in Cribl's standard
+> `{items:[...], count}` shape, and the status is at **`items[0].status`**. There
+> is NO top-level `status`. This is not a nicety: the app read it at the top
+> level, got `undefined` on all twenty polls, and reported every Lake job "still
+> pending" - including jobs that were `completed` on the first poll. Fixed in
+> `readJobStatus`, which mirrors the `readJobId` helper that had been handling
+> the same envelope correctly two functions away.
 
 Every `/search/*` operation is marked **"(Cribl.Cloud only)"** in the spec.
 That is not a constraint for us - ADR 0002 already made this app Cribl.Cloud
@@ -63,6 +108,14 @@ vendored spec - it is a real route the codebase established for Unit 20's Lake
 dataset create. Its GET is the obvious candidate for listing Lake datasets from
 the app, and is a cheaper first probe than the specced
 `/products/lake/lakes/{lakeId}/datasets` (which needs a `lakeId` we do not have).
+
+> **[ANSWERED LIVE 2026-08-25 - the `lakeId` we did not have is `default`.]**
+> `GET /products/lake/lakes/default/datasets` is a LEADER route (no `/m/` prefix)
+> and answered with **31 datasets** in the lab workspace. So the specced path is
+> usable directly and no probe of the undocumented one was needed. One number
+> worth carrying: **24 of those 31 are EMPTY over `-24h`**, which is why anything
+> walking this listing must report which datasets it walked - "0 log types" alone
+> cannot tell an empty dataset from one whose rows never arrived.
 
 ### 0.1b - RESOLVED 2026-08-19: `/search/*` is GROUP-scoped
 
@@ -102,6 +155,12 @@ Do not hard-code `default_search`; it is this workspace's id, not a constant.
    addressing question is settled for the whole `/search/*` family, which was
    the actual gate; if `/search/query` disappoints, the job lifecycle above is
    a proven fallback and its full shape is now known.
+
+   > **[RESOLVED 2026-08-25, and the caution was well placed.]** It was called,
+   > and it disappointed in the most instructive way: it is not synchronous at
+   > all - it creates a job. Preferring the async lifecycle as the fallback is
+   > what kept the feature working. See the `[SUPERSEDED]` block under
+   > "Synchronous path" above.
 2. The UI authenticates by session cookie; the app authenticates through the
    platform's injected credential. Path shape is what transfers here, not auth.
 
@@ -185,6 +244,29 @@ not the bare one.
 > **The live call is still unmade.** The predicates are pinned by evaluating
 > them as JavaScript locally, which proves the regexes, not Cribl's evaluator.
 > The residual risk above is unchanged and now applies to the delimiter-set form.
+>
+> **[MADE 2026-08-25. The residual risk is closed.]** Captures ran against the
+> lab workspace and returned events, so Cribl's evaluator does run these
+> expressions. Three things came out of it that the local pins could not have
+> reached:
+>
+> - **`__inputId` really is `<type>:<id>` - and sometimes `<type>:<a>:<b>`.**
+>   Observed on 40 of 40 captured events: `cribl_tcp:in_cribl_tcp_WinEvt_customer`,
+>   `syslog:PaloAlto:tcp`, `datagen:paloaltorfc5424`, `cribl:CriblLogs`. The
+>   shipped `inputPredicate` matches the SECOND colon segment, which is exactly
+>   why it survives the three-segment form; an `.endsWith(":" + id)` rule would
+>   have matched nothing on any syslog source.
+> - **Cribl TOLERATES a filter referencing a field the event lacks.** Bare and
+>   guarded filters both returned events. The `typeof` guards in
+>   `capture-filter.ts` are therefore INSURANCE, not load-bearing, and that
+>   module's stated model - an undeclared name is a ReferenceError that drops the
+>   event - is wrong. The guards stay: they are harmless and correct, and only the
+>   reason given for them was a guess.
+> - **A capture needs a worker.** `POST /system/capture` against a worker group
+>   with no connected workers returns
+>   `400 {"message":"No worker nodes are connected to this worker group."}`
+>   before any filter is evaluated. The capture runs ON a worker, so choosing a
+>   group means choosing one that has some.
 
 **Permission:** `/m/:gid/system/capture` needs a `POST` entry in
 `policies.yml`. It is the first *write-shaped* product-API path this app would
@@ -355,6 +437,13 @@ scoped as such, not smuggled in as a salvage.
    query, with the proven `POST /search/jobs` lifecycle as the fallback.
    *IN PROGRESS 2026-08-20. `policies.yml` carries a note where the entries go
    and says why they are not declared yet - nothing calls them.*
+   *DONE, and the preference was HOLLOW (2026-08-25): `GET /search/query` creates
+   a job like the other door does, so "prefer it, fall back to jobs" described one
+   lifecycle tried twice rather than a cheap path with a safety net - and it cost
+   an orphaned job per query plus a platform error rendered under a success
+   headline. The route is DELETED and its policy grant withdrawn; only
+   `POST /search/jobs` remains. `/m/:gid/search/*` addressing and the
+   `listGroups()` resolution are unchanged and confirmed.*
 5. **New, from doing (2)**: PAN-OS format detection dropped every event of a
    syslog-prefixed upload. Recorded as a KNOWN GAP, then fixed the same day -
    see the section above 0.3's dead-code note.

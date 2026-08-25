@@ -32,13 +32,50 @@
  * isSearchGroup (discover-sample-sources stage one); `default_search` is one
  * workspace's id, not a constant.
  *
- * SYNC FIRST, ASYNC PROVEN. `GET /search/query` returning results inline is
- * SPEC-ONLY - the live UI never called it - so it is tried first for its single
- * round trip, and the job lifecycle that WAS observed live (POST /search/jobs,
- * poll status, GET results) takes over the moment it disappoints. An empty sync
- * answer counts as disappointing; see {@link createSearchRunner}.
+ * ONE ROUTE - THE JOB LIFECYCLE (settled live 2026-08-25). This module used to
+ * try `GET /search/query` FIRST, on the spec's word that it returns results
+ * inline for a single round trip, and fall through to `POST /search/jobs` the
+ * moment it "disappointed". Probing the live workspace settled what that route
+ * actually does, and the premise was wrong in the expensive direction:
  *
- * NDJSON, NOT JSON, on both result routes. The port hands the body over as a
+ *   GET /search/query?query=<kql>                    -> 400  (no window given)
+ *   GET /search/query?query=<kql>&earliest=-24h&latest=now&offset=0&limit=5
+ *       -> 200 {"isFinished":false,"totalEventCount":0,
+ *               "job":{"id":"...","status":"queued"}}
+ *   GET /search/query?jobId=<that id>&offset=0&limit=5
+ *       -> 200 NDJSON: the metadata line, then the rows, once the job finished
+ *
+ * It CREATES A JOB and hands back the handle. It is the same lifecycle through a
+ * different door, not a synchronous route - so there was never a round trip to
+ * save, and its "200 with no rows" was never an answer about the data: it was
+ * the job sitting in `queued`, on every single call.
+ *
+ * WHAT THAT COST, and why it is worth this much comment. The fallback fired
+ * every time, ran `POST /search/jobs`, and created a SECOND job - so every Lake
+ * query ORPHANED one. The "sync is unusable" verdict was memoized per runner and
+ * there is one runner per usecase call, so a full operator flow
+ * (queryLakeSamples, then fetchLakeLogTypeEvents) orphaned two. And the first
+ * route's failure note was unshifted to the FRONT of `notes`, which the Lake
+ * panel renders under a SUCCESS headline - raw platform error text shown to an
+ * operator whose query had in fact worked.
+ *
+ * WHY THE ROUTE WAS DELETED RATHER THAN POLLED. Its `job.id` could have been
+ * polled instead, which would have been one job per query too. Both doors cost
+ * create + poll + read - identical round trips - so keeping the GET buys nothing
+ * and costs a second create route, a second job-id envelope to read (`job.id`,
+ * not the `items[].id` the POST answers with), and a second thing to keep
+ * working. It is also the door Cribl's own UI does NOT use. So it is gone, along
+ * with its `/m/:gid/search/query` grant in policies.yml, and what remains is the
+ * lifecycle the UI was observed running: POST /search/jobs, poll status, GET
+ * results. One job per query, always.
+ *
+ * AN EMPTY ANSWER IS NOW BELIEVED, which is the behaviour change that follows.
+ * The old code refused to call a dataset empty on the spec-only route's word and
+ * spent a job confirming it. Only the proven route is left, so "the job
+ * completed and returned no rows" IS an empty window and is reported as one -
+ * still as `ok` with a note, never as a failure.
+ *
+ * NDJSON, NOT JSON, on the results route. The port hands the body over as a
  * STRING and it is split by line here; JSON.parsing it whole is the documented
  * mistake.
  *
@@ -58,9 +95,10 @@ import {
 import { selectDiscriminatorField } from "../../domain/sample-parsing/discriminators";
 import { is2xx } from "../arm-http";
 
-/** The synchronous query route, in a SEARCH-group context. Spec-only. */
-export const SEARCH_QUERY_PATH = "/search/query";
-/** The async job lifecycle's root, same context. Proven live. */
+/**
+ * The job lifecycle's root, in a SEARCH-group context. The ONLY query route
+ * this module uses; `GET /search/query` was removed 2026-08-25 (see the header).
+ */
 export const SEARCH_JOBS_PATH = "/search/jobs";
 /** `?advanced=true` is what Cribl's own UI asks for; matched deliberately. */
 export const searchJobStatusPath = (jobId: string): string =>
@@ -72,9 +110,31 @@ export const searchJobResultsPath = (jobId: string): string =>
 export const DEFAULT_EARLIEST = "-24h";
 export const DEFAULT_LATEST = "now";
 
-/** How many events step one reads to decide WHICH FIELD. Small on purpose. */
+/** How many events a log-type fetch returns per type. Small on purpose. */
 export const DEFAULT_SAMPLE_LIMIT = 50;
 export const MAX_SAMPLE_LIMIT = 500;
+
+/**
+ * How many events step one reads to decide WHICH FIELD - and it is NOT small,
+ * because "small on purpose" made log-type detection a coin flip.
+ *
+ * Step one picks the discriminator by looking for a field with >= 2 distinct
+ * values in the sample. Real datasets are SKEWED, so a sample can miss the
+ * minority value entirely and the whole dataset then reports "no field
+ * distinguishes one log type from another" - the app telling an operator their
+ * data has no log types when it has two.
+ *
+ * Measured live 2026-08-25 on `winevt_plwindows`: 766,570 DNS events to 22,792
+ * Security, i.e. 97.1% one value. At the old limit of 50 the chance of drawing
+ * no Security event at all is 0.971^50 = 23%, and it was observed both ways on
+ * the same dataset within one session - two runs found both channels, two found
+ * one. At 500 the same figure is 0.971^500, about three in ten million.
+ *
+ * This costs one larger response on a query that already runs a job; it does
+ * NOT change how many events a log-type FETCH returns (DEFAULT_SAMPLE_LIMIT
+ * above), which is a different question with a different answer.
+ */
+export const DISCRIMINATOR_SAMPLE_LIMIT = 500;
 /** How many distinct log types step two will return. */
 export const DEFAULT_MAX_LOG_TYPES = 200;
 export const MAX_LOG_TYPES_LIMIT = 1000;
@@ -89,8 +149,10 @@ export const COUNT_COLUMN = "eventCount";
 export const JOB_POLL_ATTEMPTS = 20;
 export const JOB_POLL_INTERVAL_MS = 500;
 
-/** Which route produced an answer. */
-export type SearchPath = "sync" | "async";
+// A `SearchPath` type ("sync" | "async") and a `path` field on the result used
+// to say WHICH ROUTE ANSWERED. With one route left they answer "async" forever,
+// which is a constant dressed as a diagnostic, so both were removed with the
+// sync route. Nothing outside this usecase's own tests ever read them.
 
 /** One log type the dataset holds, with its volume over the queried window. */
 export interface LakeLogTypeVolume {
@@ -139,8 +201,6 @@ export interface QueryLakeSamplesResult {
   logTypes: LakeLogTypeVolume[];
   /** The window the volumes cover - a count means nothing without it. */
   window: { earliest: string; latest: string };
-  /** Which route answered; undefined when nothing was ever requested. */
-  path?: SearchPath;
   /**
    * True when the sample carried NO field distinguishing one log type from
    * another. Surfaced exactly as capture-samples surfaces it: the operator is
@@ -277,78 +337,28 @@ function detailOf(body: unknown): string {
 }
 
 // ---------------------------------------------------------------------------
-// The two routes
+// The route
 // ---------------------------------------------------------------------------
 
-/** One attempt at one query, whichever route ran it. */
+/** One attempt at one query. */
 interface SearchRun {
   ok: boolean;
   rows: Array<Record<string, unknown>>;
-  path: SearchPath;
+  /**
+   * OPERATOR-FACING, and EMPTY ON SUCCESS. A note here is rendered by the Lake
+   * panel beneath whatever headline the run earned, so anything pushed on a
+   * successful run is error text under a success banner - which is exactly what
+   * the deleted sync route did every time it "disappointed".
+   */
   notes: string[];
 }
 
-/** What both routes need to address the workspace. */
+/** What the route needs to address the workspace. */
 interface RunnerConfig {
   searchGroupId: string;
   earliest: string;
   latest: string;
   sleep?: (ms: number) => Promise<void>;
-}
-
-/** The spec-only single-round-trip route. */
-async function runSyncQuery(
-  cribl: CriblClient,
-  config: RunnerConfig,
-  query: string,
-  limit: number,
-  logger?: Logger,
-): Promise<SearchRun> {
-  const failed = (note: string): SearchRun => ({
-    ok: false,
-    rows: [],
-    path: "sync",
-    notes: [note],
-  });
-
-  let status: number;
-  let body: unknown;
-  try {
-    const response = await cribl.request({
-      method: "GET",
-      path: SEARCH_QUERY_PATH,
-      groupId: config.searchGroupId,
-      query: {
-        query,
-        earliest: config.earliest,
-        latest: config.latest,
-        offset: "0",
-        limit: String(limit),
-      },
-    });
-    status = response.status;
-    body = response.body;
-  } catch (err) {
-    logger?.warn("query-lake-samples: sync query failed", {
-      error: String(err),
-    });
-    return failed(
-      `The direct search route could not be reached (${String(err)}), so a search job was run instead.`,
-    );
-  }
-
-  if (!is2xx(status)) {
-    return failed(
-      `The direct search route answered HTTP ${status}, so a search job was run instead. ${detailOf(body)}`.trim(),
-    );
-  }
-  const rows = searchResultRows(body);
-  if (rows === null) {
-    return failed(
-      "The direct search route answered in a shape this app does not recognize, so a search job was run instead.",
-    );
-  }
-  return { ok: true, rows, path: "sync", notes: [] };
 }
 
 /** Read the created job's id out of whichever envelope it arrived in. */
@@ -394,10 +404,15 @@ function readJobStatus(body: unknown): string | undefined {
 }
 
 /**
- * The lifecycle Cribl's own UI runs, and therefore the one that is PROVEN:
- * create, poll status, read a results page.
+ * The lifecycle Cribl's own UI runs, and since 2026-08-25 the only one this
+ * module runs: create, poll status, read a results page.
+ *
+ * EXACTLY ONE JOB PER CALL. There is no second create anywhere in this file, and
+ * that is the property to preserve - the deleted sync route created one job of
+ * its own before this function created another, so every query left one behind
+ * to expire on Cribl's clock rather than ours.
  */
-async function runAsyncQuery(
+async function runSearchJob(
   cribl: CriblClient,
   config: RunnerConfig,
   query: string,
@@ -407,7 +422,7 @@ async function runAsyncQuery(
   const notes: string[] = [];
   const failed = (note: string): SearchRun => {
     notes.push(note);
-    return { ok: false, rows: [], path: "async", notes };
+    return { ok: false, rows: [], notes };
   };
 
   let created: { status: number; body: unknown };
@@ -510,58 +525,27 @@ async function runAsyncQuery(
       "The search job's results came back in a shape this app does not recognize.",
     );
   }
-  return { ok: true, rows, path: "async", notes };
+  return { ok: true, rows, notes };
 }
 
 /**
- * Run one query, sync first and job second.
+ * Bind the addressing so a usecase can ask for a query and nothing else.
  *
- * AN EMPTY SYNC ANSWER IS NOT AN EMPTY DATASET. `GET /search/query` is
- * spec-only - it was never observed running against a live workspace - so
- * "200 with no rows" is as consistent with a route that does nothing here as
- * with a dataset that holds nothing, and reporting the first as the second
- * tells an operator their data is missing. The proven job path settles it, and
- * the extra round trip is only ever paid when there is nothing to show.
- *
- * The verdict is remembered: once the sync route has proved unusable in this
- * workspace, the second query goes straight to the job path.
+ * A FACTORY THAT REMEMBERS NOTHING, deliberately. It used to carry a per-runner
+ * verdict - whether the sync route had proved usable in this workspace - and
+ * that memo is what made the orphaned-job count depend on how many runners a
+ * flow built: two, because queryLakeSamples and fetchLakeLogTypeEvents each
+ * build their own and each re-learned the same lesson. With one route there is
+ * no verdict to hold, so this is now partial application and nothing more. Keep
+ * it that way: state here is state that cannot be seen from a call site.
  */
 function createSearchRunner(
   cribl: CriblClient,
   config: RunnerConfig,
   logger?: Logger,
 ): (query: string, limit: number) => Promise<SearchRun> {
-  let syncUsable = true;
-
-  return async (query: string, limit: number): Promise<SearchRun> => {
-    if (!syncUsable) {
-      return runAsyncQuery(cribl, config, query, limit, logger);
-    }
-
-    const sync = await runSyncQuery(cribl, config, query, limit, logger);
-    if (sync.ok && sync.rows.length > 0) return sync;
-
-    const job = await runAsyncQuery(cribl, config, query, limit, logger);
-    if (!sync.ok) {
-      syncUsable = false;
-      job.notes.unshift(...sync.notes);
-      return job;
-    }
-    if (job.ok && job.rows.length > 0) {
-      syncUsable = false;
-      job.notes.push(
-        `The direct search route reported no events where a search job found ${job.rows.length}, so the job path was used for this workspace.`,
-      );
-    } else if (!job.ok) {
-      // Both routes were asked and neither established anything. Reported as a
-      // FAILED read, never as an empty dataset - the only evidence for empty
-      // came from the route we do not trust yet.
-      job.notes.push(
-        "The direct search route reported no events, and the search job that would confirm the dataset is genuinely empty did not run.",
-      );
-    }
-    return job;
-  };
+  return (query: string, limit: number): Promise<SearchRun> =>
+    runSearchJob(cribl, config, query, limit, logger);
 }
 
 // ---------------------------------------------------------------------------
@@ -676,10 +660,14 @@ function clampLimit(
 /**
  * Query one Lake dataset for its log types and their volumes.
  *
- * Two round trips in the happy case, and the second one only happens because
- * the first told us what to group by. Everything that can go wrong folds into
- * `notes` with `ok` false; nothing throws, because a dataset that cannot be
- * queried must still leave capture and manual upload standing.
+ * TWO QUERIES in the happy case - so two search jobs, and the second one only
+ * happens because the first told us what to group by. Two is the floor, not a
+ * budget: it was four until 2026-08-25, half of them orphaned by the sync route
+ * that turned out to create a job of its own (see the header).
+ *
+ * Everything that can go wrong folds into `notes` with `ok` false; nothing
+ * throws, because a dataset that cannot be queried must still leave capture and
+ * manual upload standing.
  */
 export async function queryLakeSamples(
   cribl: CriblClient,
@@ -691,7 +679,7 @@ export async function queryLakeSamples(
   const latest = options.latest ?? DEFAULT_LATEST;
   const sample = clampLimit(
     options.sampleLimit,
-    DEFAULT_SAMPLE_LIMIT,
+    DISCRIMINATOR_SAMPLE_LIMIT,
     MAX_SAMPLE_LIMIT,
     "Sample size",
   );
@@ -755,14 +743,16 @@ export async function queryLakeSamples(
     notes.push(
       `The dataset "${datasetId}" could not be read, so its log types are unknown.`,
     );
-    return base(false, { path: sampleRun.path });
+    return base(false);
   }
   if (sampleRun.rows.length === 0) {
     // A RESULT. The dataset exists and answered; the window is what is empty.
+    // Believed on the JOB's word, which is the proven route - the old code paid
+    // a second job to confirm this because the route that said it was spec-only.
     notes.push(
       `The dataset "${datasetId}" holds no events between ${earliest} and ${latest}. Widen the window, or pick a dataset that is still receiving data.`,
     );
-    return base(true, { path: sampleRun.path });
+    return base(true);
   }
 
   const discriminatorField = selectDiscriminatorField(sampleRun.rows);
@@ -774,7 +764,7 @@ export async function queryLakeSamples(
       dataset: datasetId,
       sampled: sampleRun.rows.length,
     });
-    return base(true, { path: sampleRun.path, noDiscriminator: true });
+    return base(true, { noDiscriminator: true });
   }
 
   // STEP TWO - what values that field takes, at dataset scale.
@@ -787,7 +777,7 @@ export async function queryLakeSamples(
     notes.push(
       `The log types in "${datasetId}" could not be counted. The events do carry a "${discriminatorField}" field, so a retry is worth it before falling back to a capture.`,
     );
-    return base(false, { discriminatorField, path: countRun.path });
+    return base(false, { discriminatorField });
   }
 
   const readout = readCountRows(countRun.rows, discriminatorField);
@@ -805,7 +795,7 @@ export async function queryLakeSamples(
     notes.push(
       `Events in "${datasetId}" carry a "${discriminatorField}" field, but counting it returned no groups. The window may be too narrow, or every event may leave the field empty.`,
     );
-    return base(true, { discriminatorField, path: countRun.path });
+    return base(true, { discriminatorField });
   }
 
   const truncated = countRun.rows.length >= cap.value;
@@ -819,7 +809,6 @@ export async function queryLakeSamples(
     dataset: datasetId,
     discriminator: discriminatorField,
     logTypes: readout.logTypes.length,
-    path: countRun.path,
     truncated,
   });
   return {
@@ -827,7 +816,6 @@ export async function queryLakeSamples(
     discriminatorField,
     logTypes: readout.logTypes,
     window: { earliest, latest },
-    path: countRun.path,
     noDiscriminator: false,
     truncated,
     notes,

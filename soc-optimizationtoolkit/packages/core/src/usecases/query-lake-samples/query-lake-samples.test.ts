@@ -13,7 +13,9 @@
  *                FIELD, then a summarize that answers WHAT VALUES. A third
  *                fetches events for one chosen value, and must be able to fetch
  *                every value the second one LISTED - see the round-trip block.
- *   THE ROUTES   sync first (spec-only), the proven job lifecycle second.
+ *   THE ROUTE    ONE job per query, and no second create anywhere. The sync
+ *                `GET /search/query` was deleted 2026-08-25 once live probing
+ *                showed it creates a job of its own - see the orphan block.
  *   THE SHAPES   what the LIVE API actually answers with, which for the job
  *                status is not what the spec's own example shows - see
  *                {@link jobStatus} and the status-envelope block.
@@ -30,6 +32,7 @@ import {
   DEFAULT_LATEST,
   DEFAULT_MAX_LOG_TYPES,
   DEFAULT_SAMPLE_LIMIT,
+  DISCRIMINATOR_SAMPLE_LIMIT,
   JOB_POLL_ATTEMPTS,
   JOB_POLL_INTERVAL_MS,
   MAX_SAMPLE_LIMIT,
@@ -104,39 +107,107 @@ function client(...responses: PortHttpResponse[]): FakeCriblClient {
   return cribl;
 }
 
-/** The happy path: both queries answered by the sync route. */
-function syncClient(): FakeCriblClient {
-  return client(ok(ndjson(SAMPLE_ROWS)), ok(ndjson(COUNT_ROWS)));
+/**
+ * ONE query's worth of responses: create, a single completed poll, one results
+ * page. Three, because that is what one query now costs - the FIFO fake serves
+ * them in order and throws on a fourth, so a fixture built from this helper
+ * fails loudly if the code under test ever creates a second job for one query.
+ *
+ * Every fixture below was a ONE-response `ok(ndjson(...))` until 2026-08-25,
+ * served by the sync route that has since been deleted. They were reshaped onto
+ * the job path rather than dropped: the pins are about the RESULT - the counts,
+ * the empty-vs-failed split, the numeric round trip - and none of that changed.
+ */
+const jobRun = (jobId: string, body: unknown): PortHttpResponse[] => [
+  ok({ count: 1, items: [{ id: jobId }] }),
+  jobStatus("completed"),
+  ok(body),
+];
+
+/** The path every lifecycle walks, for one query's job id. */
+const lifecycleOf = (jobId: string): string[] => [
+  "POST /search/jobs",
+  `GET /search/jobs/${jobId}/status`,
+  `GET /search/jobs/${jobId}/results`,
+];
+
+/** The happy path: the sample query, then the summarize, one job each. */
+function countingClient(): FakeCriblClient {
+  return client(
+    ...jobRun("j-1", ndjson(SAMPLE_ROWS)),
+    ...jobRun("j-2", ndjson(COUNT_ROWS)),
+  );
 }
+
+/** How many search jobs a run created. The orphan pins turn on this. */
+const jobsCreated = (cribl: FakeCriblClient): number =>
+  cribl.calls.filter((c) => c.method === "POST" && c.path === "/search/jobs")
+    .length;
 
 const run = (cribl: FakeCriblClient, extra = {}) =>
   queryLakeSamples(cribl, { searchGroupId: GROUP, datasetId: DATASET, ...extra });
 
+describe("step one's sample size is a CORRECTNESS setting, not a performance one", () => {
+  it("reads enough events that a skewed dataset still shows its minority log type", () => {
+    // Detection needs >= 2 distinct values IN THE SAMPLE. Real datasets are
+    // skewed, so too small a sample misses the minority value entirely and the
+    // app then tells the operator their data has no log types when it has two.
+    //
+    // Measured live 2026-08-25 on winevt_plwindows: 766,570 DNS events to
+    // 22,792 Security, i.e. 97.1% one value. At the old limit of 50 the chance
+    // of drawing zero Security events is 0.971^50 = 23%, and BOTH outcomes were
+    // observed on that dataset within one session - two runs found both
+    // channels, two found one and reported "no discriminator".
+    expect(DISCRIMINATOR_SAMPLE_LIMIT).toBe(500);
+    const missChance = (n: number): number => Math.pow(0.971, n);
+    expect(missChance(50)).toBeGreaterThan(0.2);
+    expect(missChance(DISCRIMINATOR_SAMPLE_LIMIT)).toBeLessThan(1e-6);
+  });
+
+  it("does NOT enlarge a log-type FETCH, which is a different question", () => {
+    // One constant used to serve both. Raising it wholesale would pull 500
+    // events per selected log type: the fetch is about how much sample data to
+    // hand the operator, step one is about whether the field can be found.
+    expect(DEFAULT_SAMPLE_LIMIT).toBe(50);
+    expect(DISCRIMINATOR_SAMPLE_LIMIT).toBeGreaterThan(DEFAULT_SAMPLE_LIMIT);
+  });
+});
+
 describe("addressing - /search/* is GROUP-scoped under the SEARCH group", () => {
-  it("GETs /search/query in the search group's context", async () => {
-    const cribl = syncClient();
+  it("POSTs /search/jobs in the search group's context", async () => {
+    const cribl = countingClient();
 
     await run(cribl);
 
     const call = cribl.calls[0];
-    expect(call.method).toBe("GET");
-    expect(call.path).toBe("/search/query");
-    // The adapter renders this as /m/default_search/search/query. A leader-level
+    expect(call.method).toBe("POST");
+    expect(call.path).toBe("/search/jobs");
+    // The adapter renders this as /m/default_search/search/jobs. A leader-level
     // call (groupId undefined) is the failure this pin exists for.
     expect(call.groupId).toBe(GROUP);
+    // And not only the create: a poll or a results page addressed at the leader
+    // 404s just as invisibly.
+    expect(cribl.calls.every((c) => c.groupId === GROUP)).toBe(true);
   });
 
-  it("passes the query, the window and the page bounds as query params", async () => {
-    const cribl = syncClient();
+  it("carries the query and window in the create BODY, the page bounds on the results GET", async () => {
+    // The window travels in the body because a job is created with it; only the
+    // results page is paginated, and it is a different call from the create.
+    const cribl = countingClient();
 
     await run(cribl);
 
-    expect(cribl.calls[0].query).toEqual({
-      query: `dataset="${DATASET}" | limit ${DEFAULT_SAMPLE_LIMIT}`,
+    expect(cribl.calls[0].body).toEqual({
+      query: `dataset="${DATASET}" | limit ${DISCRIMINATOR_SAMPLE_LIMIT}`,
       earliest: DEFAULT_EARLIEST,
       latest: DEFAULT_LATEST,
+    });
+    expect(cribl.calls[2].path).toBe("/search/jobs/j-1/results");
+    expect(cribl.calls[2].query).toEqual({
       offset: "0",
-      limit: String(DEFAULT_SAMPLE_LIMIT),
+      // The results page must be big enough to read BACK everything step one
+      // asked for, so this tracks the sample size rather than the fetch size.
+      limit: String(DISCRIMINATOR_SAMPLE_LIMIT),
     });
   });
 
@@ -171,21 +242,27 @@ describe("the two queries - KQL, and the split the plan mandates", () => {
   it("asks for a small sample first, then summarizes the field it found", async () => {
     // "Capture answers which field; Search answers what values." The second
     // query must group by the field the FIRST one's rows established.
-    const cribl = syncClient();
+    const cribl = countingClient();
 
     const result = await queryLakeSamples(cribl, {
       searchGroupId: GROUP,
       datasetId: DATASET,
     });
 
-    expect(cribl.calls).toHaveLength(2);
-    expect(cribl.calls[0].query?.query).toBe(
-      `dataset="${DATASET}" | limit ${DEFAULT_SAMPLE_LIMIT}`,
-    );
-    expect(cribl.calls[1].query?.query).toBe(
-      `dataset="${DATASET}" | summarize ${COUNT_COLUMN}=count() by type` +
+    const created = cribl.calls.filter((c) => c.path === "/search/jobs");
+    expect(created).toHaveLength(2);
+    expect(created[0].body).toEqual({
+      query: `dataset="${DATASET}" | limit ${DISCRIMINATOR_SAMPLE_LIMIT}`,
+      earliest: DEFAULT_EARLIEST,
+      latest: DEFAULT_LATEST,
+    });
+    expect(created[1].body).toEqual({
+      query:
+        `dataset="${DATASET}" | summarize ${COUNT_COLUMN}=count() by type` +
         ` | sort by ${COUNT_COLUMN} desc | limit ${DEFAULT_MAX_LOG_TYPES}`,
-    );
+      earliest: DEFAULT_EARLIEST,
+      latest: DEFAULT_LATEST,
+    });
     expect(result.discriminatorField).toBe("type");
   });
 
@@ -203,12 +280,18 @@ describe("the two queries - KQL, and the split the plan mandates", () => {
   });
 
   it("clamps the bounds and SAYS it did", async () => {
-    const cribl = syncClient();
+    const cribl = countingClient();
 
     const result = await run(cribl, { sampleLimit: 999999 });
 
-    expect(cribl.calls[0].query?.limit).toBe(String(MAX_SAMPLE_LIMIT));
-    expect(cribl.calls[0].query?.query).toContain(`limit ${MAX_SAMPLE_LIMIT}`);
+    // The clamp has to reach BOTH places the bound is spent: the KQL the job is
+    // created with, and the results page it is read back through.
+    expect(cribl.calls[0].body).toEqual({
+      query: `dataset="${DATASET}" | limit ${MAX_SAMPLE_LIMIT}`,
+      earliest: DEFAULT_EARLIEST,
+      latest: DEFAULT_LATEST,
+    });
+    expect(cribl.calls[2].query?.limit).toBe(String(MAX_SAMPLE_LIMIT));
     expect(result.notes.join(" ")).toContain(String(MAX_SAMPLE_LIMIT));
   });
 });
@@ -218,11 +301,15 @@ describe("the discriminator must be a field SEARCH can group by", () => {
     // Selecting over a LOCALLY parsed _raw would hand step two a field the
     // engine cannot see; the summarize would return nothing, which reads as
     // "this dataset holds no log types".
-    const cribl = client(ok(ndjson([{ _raw: "1,2026,fw,TRAFFIC,end" }])));
+    const cribl = client(...jobRun("j-1", ndjson([{ _raw: "1,2026,fw,TRAFFIC,end" }])));
 
     const result = await run(cribl);
 
-    expect(cribl.calls).toHaveLength(1);
+    // One job, then a full stop: the summarize is never created.
+    expect(cribl.calls.map((c) => `${c.method} ${c.path}`)).toEqual(
+      lifecycleOf("j-1"),
+    );
+    expect(jobsCreated(cribl)).toBe(1);
     expect(result.ok).toBe(true);
     expect(result.noDiscriminator).toBe(true);
     expect(result.discriminatorField).toBeUndefined();
@@ -233,7 +320,7 @@ describe("the discriminator must be a field SEARCH can group by", () => {
 
 describe("the result", () => {
   it("returns per-log-type names AND volumes, biggest first", async () => {
-    const result = await run(syncClient());
+    const result = await run(countingClient());
 
     expect(result.ok).toBe(true);
     expect(result.logTypes).toEqual([
@@ -245,14 +332,13 @@ describe("the result", () => {
       earliest: DEFAULT_EARLIEST,
       latest: DEFAULT_LATEST,
     });
-    expect(result.path).toBe("sync");
     expect(result.truncated).toBe(false);
   });
 
   it("keeps a NUMERIC discriminator value instead of dropping the log type", async () => {
     const cribl = client(
-      ok(ndjson([{ eventType: 4624 }, { eventType: 4625 }])),
-      ok(ndjson([{ eventType: 4624, [COUNT_COLUMN]: 7 }])),
+      ...jobRun("j-1", ndjson([{ eventType: 4624 }, { eventType: 4625 }])),
+      ...jobRun("j-2", ndjson([{ eventType: 4624, [COUNT_COLUMN]: 7 }])),
     );
 
     const result = await run(cribl);
@@ -264,8 +350,8 @@ describe("the result", () => {
   it("reports an unreadable volume as UNKNOWN, never as zero", async () => {
     // Zero is a claim about the data. We would be making it up.
     const cribl = client(
-      ok(ndjson(SAMPLE_ROWS)),
-      ok(ndjson([{ type: "TRAFFIC", total: 5 }])),
+      ...jobRun("j-1", ndjson(SAMPLE_ROWS)),
+      ...jobRun("j-2", ndjson([{ type: "TRAFFIC", total: 5 }])),
     );
 
     const result = await run(cribl);
@@ -277,8 +363,8 @@ describe("the result", () => {
 
   it("reads the engine's own count_ column when the alias is ignored", async () => {
     const cribl = client(
-      ok(ndjson(SAMPLE_ROWS)),
-      ok(ndjson([{ type: "TRAFFIC", count_: 42 }])),
+      ...jobRun("j-1", ndjson(SAMPLE_ROWS)),
+      ...jobRun("j-2", ndjson([{ type: "TRAFFIC", count_: 42 }])),
     );
 
     const result = await run(cribl);
@@ -288,8 +374,9 @@ describe("the result", () => {
 
   it("leaves out groups with no discriminator value and counts them in a note", async () => {
     const cribl = client(
-      ok(ndjson(SAMPLE_ROWS)),
-      ok(
+      ...jobRun("j-1", ndjson(SAMPLE_ROWS)),
+      ...jobRun(
+        "j-2",
         ndjson([
           { type: "TRAFFIC", [COUNT_COLUMN]: 3 },
           { type: "", [COUNT_COLUMN]: 9 },
@@ -305,8 +392,9 @@ describe("the result", () => {
 
   it("says the list may be truncated when it fills the cap", async () => {
     const cribl = client(
-      ok(ndjson(SAMPLE_ROWS)),
-      ok(
+      ...jobRun("j-1", ndjson(SAMPLE_ROWS)),
+      ...jobRun(
+        "j-2",
         ndjson([
           { type: "A", [COUNT_COLUMN]: 2 },
           { type: "B", [COUNT_COLUMN]: 1 },
@@ -323,45 +411,43 @@ describe("the result", () => {
 });
 
 describe("empty is a RESULT; failed is not", () => {
-  it("names the empty WINDOW when the dataset answers with no events", async () => {
-    // The sync route is spec-only, so an empty sync answer is confirmed by the
-    // proven job path before it is reported as emptiness (see below).
-    const cribl = client(
-      ok(""),
-      ok({ count: 1, items: [{ id: "j-1" }] }),
-      jobStatus("completed"),
-      ok(""),
-    );
+  it("names the empty WINDOW when the dataset answers with no events, on ONE job", async () => {
+    // A COMPLETED job that returned no rows IS an empty window, and is believed
+    // on the first asking. Until 2026-08-25 it was not: the sync route's empty
+    // reply was treated as inconclusive and a job was spent confirming it - a
+    // second job, on top of the one the sync route had silently created itself.
+    const cribl = client(...jobRun("j-1", ""));
 
     const result = await run(cribl);
 
+    expect(cribl.calls.map((c) => `${c.method} ${c.path}`)).toEqual(
+      lifecycleOf("j-1"),
+    );
+    expect(jobsCreated(cribl)).toBe(1);
     expect(result.ok).toBe(true);
     expect(result.logTypes).toEqual([]);
     expect(result.noDiscriminator).toBe(false);
     expect(result.notes.join(" ")).toContain("holds no events between -24h and now");
   });
 
-  it("reports a FAILED read when neither route could establish anything", async () => {
-    // The only evidence for "empty" came from the route we do not trust yet, so
-    // this must not render like the case above.
-    const cribl = client(ok(""), { status: 403, body: "forbidden" });
+  it("reports a FAILED read when the job could not be created", async () => {
+    // Nothing was ever established about the data, so this must not render like
+    // the case above - a 403 that reads as "your dataset is empty" is the one
+    // wrong answer this feature must never give.
+    const cribl = client({ status: 403, body: "forbidden" });
 
     const result = await run(cribl);
 
     expect(result.ok).toBe(false);
     expect(result.logTypes).toEqual([]);
     expect(result.notes.join(" ")).toContain("search permission");
-    expect(result.notes.join(" ")).toContain("did not run");
     expect(result.notes.join(" ")).not.toContain("holds no events");
   });
 
   it("distinguishes 'the field exists but counts nothing' from a failure", async () => {
     const cribl = client(
-      ok(ndjson(SAMPLE_ROWS)),
-      ok(ndjson([])),
-      ok({ count: 1, items: [{ id: "j-2" }] }),
-      jobStatus("completed"),
-      ok(ndjson([])),
+      ...jobRun("j-1", ndjson(SAMPLE_ROWS)),
+      ...jobRun("j-2", ndjson([])),
     );
 
     const result = await run(cribl);
@@ -384,8 +470,7 @@ describe("empty is a RESULT; failed is not", () => {
 
   it("keeps the discriminator it learned when only the COUNT query fails", async () => {
     const cribl = client(
-      ok(ndjson(SAMPLE_ROWS)),
-      { status: 500, body: "boom" },
+      ...jobRun("j-1", ndjson(SAMPLE_ROWS)),
       { status: 500, body: "boom" },
     );
 
@@ -397,15 +482,13 @@ describe("empty is a RESULT; failed is not", () => {
   });
 });
 
-describe("the async job lifecycle - the route that was PROVEN live", () => {
+describe("the job lifecycle - the ONLY route, and the one PROVEN live", () => {
   it("runs create, status?advanced=true, results?offset&limit, all group-scoped", async () => {
     const cribl = client(
-      { status: 404, body: "no such route" }, // the spec-only sync route
       ok({ count: 1, items: [{ id: "j-1", status: "new" }] }),
       jobStatus("running"),
       jobStatus("completed"),
       ok(ndjson(SAMPLE_ROWS)),
-      // Step two: the sync verdict is remembered, so it goes straight to a job.
       ok({ count: 1, items: [{ id: "j-2" }] }),
       jobStatus("completed"),
       ok(ndjson(COUNT_ROWS)),
@@ -419,7 +502,6 @@ describe("the async job lifecycle - the route that was PROVEN live", () => {
     });
 
     expect(cribl.calls.map((c) => `${c.method} ${c.path}`)).toEqual([
-      "GET /search/query",
       "POST /search/jobs",
       "GET /search/jobs/j-1/status",
       "GET /search/jobs/j-1/status",
@@ -429,27 +511,27 @@ describe("the async job lifecycle - the route that was PROVEN live", () => {
       "GET /search/jobs/j-2/results",
     ]);
     expect(cribl.calls.every((c) => c.groupId === GROUP)).toBe(true);
-    expect(cribl.calls[1].body).toEqual({
-      query: `dataset="${DATASET}" | limit ${DEFAULT_SAMPLE_LIMIT}`,
+    expect(cribl.calls[0].body).toEqual({
+      query: `dataset="${DATASET}" | limit ${DISCRIMINATOR_SAMPLE_LIMIT}`,
       earliest: DEFAULT_EARLIEST,
       latest: DEFAULT_LATEST,
     });
-    expect(cribl.calls[2].query).toEqual({ advanced: "true" });
-    expect(cribl.calls[4].query).toEqual({
+    expect(cribl.calls[1].query).toEqual({ advanced: "true" });
+    expect(cribl.calls[3].query).toEqual({
       offset: "0",
-      limit: String(DEFAULT_SAMPLE_LIMIT),
+      // The results page must be big enough to read BACK everything step one
+      // asked for, so this tracks the sample size rather than the fetch size.
+      limit: String(DISCRIMINATOR_SAMPLE_LIMIT),
     });
     // Core reads no clock and starts no timer: the delay is the shell's, and it
     // is asked for only between polls that are still pending.
     expect(sleeps).toEqual([500]);
     expect(result.ok).toBe(true);
-    expect(result.path).toBe("async");
     expect(result.logTypes).toHaveLength(2);
   });
 
   it("percent-encodes a job id rather than growing a path segment", async () => {
     const cribl = client(
-      { status: 404, body: "" },
       ok({ count: 1, items: [{ id: "job/1" }] }),
       jobStatus("completed"),
       ok(ndjson([{ _raw: "no discriminator here" }])),
@@ -457,33 +539,56 @@ describe("the async job lifecycle - the route that was PROVEN live", () => {
 
     await run(cribl);
 
-    expect(cribl.calls[2].path).toBe("/search/jobs/job%2F1/status");
+    expect(cribl.calls[1].path).toBe("/search/jobs/job%2F1/status");
   });
 
-  it("uses the job's rows when the sync route wrongly reported nothing", async () => {
-    const cribl = client(
-      ok(""), // 200, no rows - spec-only route, so not believed on its own
-      ok({ count: 1, items: [{ id: "j-1" }] }),
-      jobStatus("completed"),
-      ok(ndjson(SAMPLE_ROWS)),
-      // Sync is now known-bad for this workspace: step two skips it entirely.
-      ok({ count: 1, items: [{ id: "j-2" }] }),
-      jobStatus("completed"),
-      ok(ndjson(COUNT_ROWS)),
-    );
+  /**
+   * THE ORPHAN. Two pins, one per usecase, because the bug's size depended on
+   * which one you ran (the second is in the fetch block below).
+   *
+   * The app used to try `GET /search/query` first, for a round trip it never
+   * saved: given a window that route CREATES A JOB and answers 200 with
+   * `{"job":{"id":...,"status":"queued"}}` and no rows (probed live
+   * 2026-08-25). The app read the empty reply as a disappointment, fell through
+   * to `POST /search/jobs`, and left the first job behind - so a two-query
+   * queryLakeSamples run created FOUR jobs and orphaned two. The verdict was
+   * memoized per runner and each usecase builds its own, so a full operator flow
+   * re-learned the same lesson and orphaned two more.
+   *
+   * A COUNT is the only thing that catches it. Every result assertion in this
+   * file - ok, log types, volumes, notes - was already green while it happened.
+   */
+  it("creates exactly ONE job per query, and never calls the sync route", async () => {
+    const cribl = countingClient();
 
     const result = await run(cribl);
 
-    expect(cribl.calls).toHaveLength(7);
-    expect(cribl.calls.filter((c) => c.path === "/search/query")).toHaveLength(1);
+    expect(jobsCreated(cribl)).toBe(2);
+    expect(cribl.calls.some((c) => c.path === "/search/query")).toBe(false);
+    expect(cribl.calls.map((c) => `${c.method} ${c.path}`)).toEqual([
+      ...lifecycleOf("j-1"),
+      ...lifecycleOf("j-2"),
+    ]);
     expect(result.ok).toBe(true);
     expect(result.logTypes).toHaveLength(2);
-    expect(result.notes.join(" ")).toContain("reported no events where a search job found 2");
+  });
+
+  it("puts NO platform error text in the notes of a query that SUCCEEDED", async () => {
+    // The sync route's failure note was unshifted to the FRONT of `notes`, and
+    // the Lake panel renders notes under whatever headline the run earned - so
+    // an operator whose query worked was shown "The direct search route answered
+    // HTTP 400 ..." above their log types. A successful run's only notes are
+    // ones about the DATA.
+    const cribl = countingClient();
+
+    const result = await run(cribl);
+
+    expect(result.ok).toBe(true);
+    expect(result.notes).toEqual([]);
   });
 
   it("treats a job that never finishes as FAILED, not as an empty dataset", async () => {
     const cribl = client(
-      { status: 404, body: "" },
       ok({ count: 1, items: [{ id: "j-1" }] }),
       ...Array.from({ length: JOB_POLL_ATTEMPTS }, () => jobStatus("running")),
     );
@@ -496,7 +601,7 @@ describe("the async job lifecycle - the route that was PROVEN live", () => {
     });
 
     // Bounded: create + exactly JOB_POLL_ATTEMPTS status reads, then it stops.
-    expect(cribl.calls).toHaveLength(2 + JOB_POLL_ATTEMPTS);
+    expect(cribl.calls).toHaveLength(1 + JOB_POLL_ATTEMPTS);
     expect(sleeps).toHaveLength(JOB_POLL_ATTEMPTS - 1);
     expect(result.ok).toBe(false);
     expect(result.notes.join(" ")).toContain(`${JOB_POLL_ATTEMPTS} status checks`);
@@ -504,7 +609,6 @@ describe("the async job lifecycle - the route that was PROVEN live", () => {
 
   it("reports a job Cribl itself failed", async () => {
     const cribl = client(
-      { status: 404, body: "" },
       ok({ count: 1, items: [{ id: "j-1" }] }),
       jobStatus("failed"),
     );
@@ -516,7 +620,7 @@ describe("the async job lifecycle - the route that was PROVEN live", () => {
   });
 
   it("reports a created job that carried no id", async () => {
-    const cribl = client({ status: 404, body: "" }, ok({ count: 0, items: [] }));
+    const cribl = client(ok({ count: 0, items: [] }));
 
     const result = await run(cribl);
 
@@ -548,15 +652,7 @@ describe("the async job lifecycle - the route that was PROVEN live", () => {
  */
 describe("the job status arrives in an ENVELOPE, not as a top-level key", () => {
   /** create -> one poll -> results, for each of the two queries. */
-  const LIFECYCLE = [
-    "GET /search/query",
-    "POST /search/jobs",
-    "GET /search/jobs/j-1/status",
-    "GET /search/jobs/j-1/results",
-    "POST /search/jobs",
-    "GET /search/jobs/j-2/status",
-    "GET /search/jobs/j-2/results",
-  ];
+  const LIFECYCLE = [...lifecycleOf("j-1"), ...lifecycleOf("j-2")];
 
   const statusCalls = (cribl: FakeCriblClient): number =>
     cribl.calls.filter((c) => c.path.endsWith("/status")).length;
@@ -565,15 +661,7 @@ describe("the job status arrives in an ENVELOPE, not as a top-level key", () => 
     // The live shape. Before the fix this read nothing, slept, polled again,
     // and ran out of scripted responses - so the counts below, not the ok flag,
     // are what this pin turns on.
-    const cribl = client(
-      { status: 404, body: "" }, // the spec-only sync route
-      ok({ count: 1, items: [{ id: "j-1" }] }),
-      jobStatus("completed"),
-      ok(ndjson(SAMPLE_ROWS)),
-      ok({ count: 1, items: [{ id: "j-2" }] }),
-      jobStatus("completed"),
-      ok(ndjson(COUNT_ROWS)),
-    );
+    const cribl = countingClient();
     const sleeps: number[] = [];
 
     const result = await run(cribl, {
@@ -588,7 +676,6 @@ describe("the job status arrives in an ENVELOPE, not as a top-level key", () => 
     // And no wait was ever asked for, because nothing was ever pending.
     expect(sleeps).toEqual([]);
     expect(result.ok).toBe(true);
-    expect(result.path).toBe("async");
     expect(result.discriminatorField).toBe("type");
     expect(result.logTypes).toEqual([
       { logType: "TRAFFIC", eventCount: 890000 },
@@ -602,7 +689,6 @@ describe("the job status arrives in an ENVELOPE, not as a top-level key", () => 
     // publishes. Both shapes must produce the identical lifecycle.
     const bare = (state: string): PortHttpResponse => ok({ status: state });
     const cribl = client(
-      { status: 404, body: "" },
       ok({ count: 1, items: [{ id: "j-1" }] }),
       bare("completed"),
       ok(ndjson(SAMPLE_ROWS)),
@@ -635,7 +721,6 @@ describe("the job status arrives in an ENVELOPE, not as a top-level key", () => 
     // an operator like a slow query. Naming `running` is the difference, and it
     // is only available to a reader that found the status in the envelope.
     const cribl = client(
-      { status: 404, body: "" },
       ok({ count: 1, items: [{ id: "j-1" }] }),
       ...Array.from({ length: JOB_POLL_ATTEMPTS }, () => jobStatus("running")),
     );
@@ -649,7 +734,7 @@ describe("the job status arrives in an ENVELOPE, not as a top-level key", () => 
 
     // Every scripted status response was consumed and no more were asked for.
     expect(statusCalls(cribl)).toBe(JOB_POLL_ATTEMPTS);
-    expect(cribl.calls).toHaveLength(2 + JOB_POLL_ATTEMPTS);
+    expect(cribl.calls).toHaveLength(1 + JOB_POLL_ATTEMPTS);
     expect(sleeps).toHaveLength(JOB_POLL_ATTEMPTS - 1);
     expect(sleeps.every((ms) => ms === JOB_POLL_INTERVAL_MS)).toBe(true);
     expect(result.ok).toBe(false);
@@ -732,7 +817,7 @@ describe("fetchLakeLogTypeEvents - counts choose, events sample", () => {
 
   it("keeps the vendor _raw, which is the point of a Lake sample", async () => {
     const cribl = client(
-      ok(ndjson([{ type: "TRAFFIC", _raw: "1,2026/08/13,fw01,TRAFFIC,end" }])),
+      ...jobRun("j-1", ndjson([{ type: "TRAFFIC", _raw: "1,2026/08/13,fw01,TRAFFIC,end" }])),
     );
 
     const result = await fetchRun(cribl);
@@ -744,7 +829,7 @@ describe("fetchLakeLogTypeEvents - counts choose, events sample", () => {
   });
 
   it("serializes a row with NO _raw rather than dropping the event", async () => {
-    const cribl = client(ok(ndjson([{ type: "TRAFFIC", a: 1 }])));
+    const cribl = client(...jobRun("j-1", ndjson([{ type: "TRAFFIC", a: 1 }])));
 
     const result = await fetchRun(cribl);
 
@@ -753,22 +838,44 @@ describe("fetchLakeLogTypeEvents - counts choose, events sample", () => {
 
   it("runs ONE query per chosen log type - each becomes its own sample", async () => {
     const cribl = client(
-      ok(ndjson([{ type: "TRAFFIC", _raw: "a" }])),
-      ok(ndjson([{ type: "THREAT", _raw: "b" }])),
+      ...jobRun("j-1", ndjson([{ type: "TRAFFIC", _raw: "a" }])),
+      ...jobRun("j-2", ndjson([{ type: "THREAT", _raw: "b" }])),
     );
 
     const result = await fetchRun(cribl, { logTypes: ["TRAFFIC", "THREAT"] });
 
-    expect(cribl.calls).toHaveLength(2);
+    expect(cribl.calls.map((c) => `${c.method} ${c.path}`)).toEqual([
+      ...lifecycleOf("j-1"),
+      ...lifecycleOf("j-2"),
+    ]);
     expect(result.events.map((e) => e.logType)).toEqual(["TRAFFIC", "THREAT"]);
+  });
+
+  it("creates ONE job per log type - the SECOND half of the orphan pin", async () => {
+    // The other half is in the job-lifecycle block. This usecase built its own
+    // runner with its own memoized "sync is unusable" verdict, so it re-learned
+    // the lesson from scratch and orphaned a job of its own - which is why a
+    // full operator flow leaked TWO, and why the count is pinned in both
+    // places rather than once.
+    const cribl = client(
+      ...jobRun("j-1", ndjson([{ type: "TRAFFIC", _raw: "a" }])),
+      ...jobRun("j-2", ndjson([{ type: "THREAT", _raw: "b" }])),
+    );
+
+    const result = await fetchRun(cribl, { logTypes: ["TRAFFIC", "THREAT"] });
+
+    expect(jobsCreated(cribl)).toBe(2);
+    expect(cribl.calls.some((c) => c.path === "/search/query")).toBe(false);
+    expect(result.ok).toBe(true);
+    // A successful fetch says nothing to the operator about routes or HTTP.
+    expect(result.notes).toEqual([]);
   });
 
   it("PARTIAL SUCCESS is success - one failure does not cost the others", async () => {
     // The operator picked several. Returning nothing because the second 400'd
     // would throw away a good sample they can use.
     const cribl = client(
-      ok(ndjson([{ type: "TRAFFIC", _raw: "a" }])),
-      { status: 400, body: "bad query" },
+      ...jobRun("j-1", ndjson([{ type: "TRAFFIC", _raw: "a" }])),
       { status: 400, body: "bad query" },
     );
 
@@ -782,19 +889,15 @@ describe("fetchLakeLogTypeEvents - counts choose, events sample", () => {
   });
 
   it("reports a log type that returned nothing, rather than an empty sample", async () => {
-    // An empty SYNC answer is inconclusive by design, so the job path has to
-    // confirm the emptiness before it is reported as such - four responses, not
-    // one. Scripting it fully is what makes this pin about the EMPTY outcome
-    // rather than about a half-scripted fake.
-    const cribl = client(
-      ok(""),
-      ok({ count: 1, items: [{ id: "j-1" }] }),
-      jobStatus("completed"),
-      ok(""),
-    );
+    // A job that COMPLETED and returned no rows is an empty window, believed on
+    // the first asking. This fixture used to script four responses because an
+    // empty sync answer was inconclusive and a job was spent confirming it;
+    // three is the whole lifecycle now.
+    const cribl = client(...jobRun("j-1", ""));
 
     const result = await fetchRun(cribl);
 
+    expect(jobsCreated(cribl)).toBe(1);
     expect(result.events).toEqual([]);
     // ok is TRUE: every request succeeded and the window is simply empty.
     // This pin asserted false until the 2026-08-20 bug-hunt - it had codified
@@ -820,12 +923,14 @@ describe("fetchLakeLogTypeEvents - counts choose, events sample", () => {
   });
 
   it("addresses the SEARCH group, like every other /search/* call", async () => {
-    const cribl = client(ok(ndjson([{ type: "TRAFFIC", _raw: "a" }])));
+    const cribl = client(...jobRun("j-1", ndjson([{ type: "TRAFFIC", _raw: "a" }])));
 
     await fetchRun(cribl);
 
-    expect(cribl.calls[0].groupId).toBe(GROUP);
-    expect(cribl.calls[0].path).toContain("/search/");
+    // Every call in the lifecycle, not only the create - a poll addressed at
+    // the leader 404s as invisibly as a create does.
+    expect(cribl.calls.every((c) => c.groupId === GROUP)).toBe(true);
+    expect(cribl.calls.every((c) => c.path.startsWith("/search/"))).toBe(true);
   });
 });
 
@@ -844,8 +949,8 @@ describe("fetchLakeLogTypeEvents - counts choose, events sample", () => {
 describe("a NUMERIC log type round-trips - listed by step two, FETCHED by step three", () => {
   it("carries 4624 out of the count query and into a query the engine answers", async () => {
     const counting = client(
-      ok(ndjson([{ eventType: 4624 }, { eventType: 4625 }])),
-      ok(ndjson([{ eventType: 4624, [COUNT_COLUMN]: 7 }])),
+      ...jobRun("j-1", ndjson([{ eventType: 4624 }, { eventType: 4625 }])),
+      ...jobRun("j-2", ndjson([{ eventType: 4624, [COUNT_COLUMN]: 7 }])),
     );
 
     const listed = await run(counting);
@@ -857,7 +962,10 @@ describe("a NUMERIC log type round-trips - listed by step two, FETCHED by step t
     // between - that hand-off IS the round trip, and it is where the value's
     // number-ness was lost.
     const fetching = client(
-      ok(ndjson([{ eventType: 4624, _raw: "An account was successfully logged on." }])),
+      ...jobRun(
+        "j-3",
+        ndjson([{ eventType: 4624, _raw: "An account was successfully logged on." }]),
+      ),
     );
 
     const fetched = await fetchLakeLogTypeEvents(fetching, {
@@ -867,11 +975,14 @@ describe("a NUMERIC log type round-trips - listed by step two, FETCHED by step t
       logTypes: listed.logTypes.map((entry) => entry.logType),
     });
 
-    expect(fetching.calls).toHaveLength(1);
-    expect(fetching.calls[0].query?.query).toBe(
-      `dataset="${DATASET}" | where tostring(eventType)=="4624"` +
+    expect(jobsCreated(fetching)).toBe(1);
+    expect(fetching.calls[0].body).toEqual({
+      query:
+        `dataset="${DATASET}" | where tostring(eventType)=="4624"` +
         ` | limit ${DEFAULT_SAMPLE_LIMIT}`,
-    );
+      earliest: DEFAULT_EARLIEST,
+      latest: DEFAULT_LATEST,
+    });
     expect(fetched.ok).toBe(true);
     expect(fetched.events).toEqual([
       { logType: "4624", rawEvents: ["An account was successfully logged on."] },
@@ -881,7 +992,7 @@ describe("a NUMERIC log type round-trips - listed by step two, FETCHED by step t
   it("fetches a value that merely LOOKS numeric but arrived as a string", async () => {
     // `type` is a string column whose values happen to be digits. The cast is a
     // no-op on it, which is what lets one code path serve both columns.
-    const cribl = client(ok(ndjson([{ type: "4624", _raw: "x" }])));
+    const cribl = client(...jobRun("j-1", ndjson([{ type: "4624", _raw: "x" }])));
 
     const result = await fetchLakeLogTypeEvents(cribl, {
       searchGroupId: GROUP,
@@ -890,9 +1001,11 @@ describe("a NUMERIC log type round-trips - listed by step two, FETCHED by step t
       logTypes: ["4624"],
     });
 
-    expect(cribl.calls[0].query?.query).toBe(
-      `dataset="${DATASET}" | where tostring(type)=="4624" | limit ${DEFAULT_SAMPLE_LIMIT}`,
-    );
+    expect(cribl.calls[0].body).toEqual({
+      query: `dataset="${DATASET}" | where tostring(type)=="4624" | limit ${DEFAULT_SAMPLE_LIMIT}`,
+      earliest: DEFAULT_EARLIEST,
+      latest: DEFAULT_LATEST,
+    });
     expect(result.ok).toBe(true);
     expect(result.events).toEqual([{ logType: "4624", rawEvents: ["x"] }]);
   });
@@ -901,8 +1014,9 @@ describe("a NUMERIC log type round-trips - listed by step two, FETCHED by step t
     // readGroupValue accepts booleans - some vendors emit allow/deny that way -
     // and a bool column refuses a string comparison exactly as a long does.
     const cribl = client(
-      ok(ndjson([{ action: true }, { action: false }])),
-      ok(
+      ...jobRun("j-1", ndjson([{ action: true }, { action: false }])),
+      ...jobRun(
+        "j-2",
         ndjson([
           { action: true, [COUNT_COLUMN]: 31 },
           { action: false, [COUNT_COLUMN]: 4 },
@@ -925,10 +1039,7 @@ describe("a NUMERIC log type round-trips - listed by step two, FETCHED by step t
   it("names the numeric log type in the note when its fetch DOES fail", async () => {
     // A per-log-type failure is only actionable if the operator can tell which
     // one was lost, and a bare code like 4624 is the easiest kind to lose.
-    const cribl = client(
-      { status: 400, body: "bad query" },
-      { status: 400, body: "bad query" },
-    );
+    const cribl = client({ status: 400, body: "bad query" });
 
     const result = await fetchLakeLogTypeEvents(cribl, {
       searchGroupId: GROUP,

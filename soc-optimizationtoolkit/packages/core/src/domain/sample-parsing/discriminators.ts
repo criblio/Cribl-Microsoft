@@ -17,7 +17,9 @@
  *        eventType, dataset, action, DeviceEventClassID, Activity, module]
  *
  * Reconciliation decisions (pinned by discriminators.test.ts):
- * - The list is the UNION of all three (16 fields), no member dropped.
+ * - The list is the UNION of all three, no member dropped. It was 16 at
+ *   reconciliation; `msgid` (2026-08-21) and `data_source` (2026-08-25) were
+ *   added later with their own justifications below, so it is 18 now.
  * - Order = B's authoritative ordering, because B alone encoded a semantic in
  *   its order (index < 6 => a single distinct value still selects the field).
  *   B's high-confidence six lead; the remaining union members follow.
@@ -69,10 +71,16 @@ export const DISCRIMINATOR_FIELDS: readonly string[] = Object.freeze([
   // payload parsing is required to see it.
   //
   // Measured on a live Cribl Lake dataset 2026-08-25, which is why it is here
-  // and why `datatype`/`schemaId`/`source` are NOT. Those three appear on every
-  // Lake row and looked like obvious additions, but each carried exactly ONE
-  // distinct value in every dataset sampled - they describe the dataset, not
-  // the event, so they can never split one. `data_source` did split, at scale:
+  // and why `datatype` and `schemaId` are NOT. Those appear on every Lake row
+  // and looked like obvious additions, but each carried exactly ONE distinct
+  // value in every dataset sampled - they describe the DATASET, not the event,
+  // so they can never split one.
+  //
+  // `source` was measured the same way and is deliberately NOT ruled out: the
+  // measurement holds for this lake, but the inference does not generalise -
+  // on file and directory inputs Cribl sets `source` per event to the file
+  // path. Re-measure before adding it; do not assume either way.
+  // `data_source` did split, at scale:
   //   dataset="winevt_plwindows" | summarize count() by data_source
   //     Microsoft-Windows-DNS-Client/Operational   766,570
   //     Security                                    22,792
