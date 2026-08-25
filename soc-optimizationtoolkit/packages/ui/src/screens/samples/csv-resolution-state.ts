@@ -350,11 +350,26 @@ export function queuePosition(queue: CsvResolutionQueue): {
  * named column is never mistaken for an unnamed one.
  */
 export function sanitizeColumnName(name: string): string {
-  return name
-    .trim()
-    .replace(/^["']|["']$/g, "")
-    .replace(/[^A-Za-z0-9_]/g, "_")
-    .replace(/^_+/, "");
+  const trimmed = name.trim().replace(/^["']|["']$/g, "");
+  // THE CANONICAL UNNAMED TOKEN SURVIVES, and it has to, because this function
+  // sits on a ROUND TRIP as well as on operator input. A saved partial
+  // definition is seeded back into the header-row textarea as ordinary text,
+  // and it carries `_0`/`_5` for the positions nobody has named yet. Stripping
+  // the underscore turned those placeholders into REAL names - `0`, `5` - so
+  // reopening a half-finished definition reported "Names all 15 columns" when
+  // 13 were unnamed, and applying it would have named columns after their own
+  // index and made the sample stop looking headerless, which is precisely the
+  // reopen trap this whole step exists to close. Seen in the live preview
+  // 2026-08-25, not by a test: every pinned round-trip used a FULL vendor
+  // dictionary, which contains no placeholders.
+  //
+  // The operator-collision guard this note used to claim now lives where the
+  // operator actually types - see the mapper's own handling - because that is
+  // the only place a `_5` can be a mistake rather than the app's own token.
+  if (isPositionalFieldName(trimmed)) {
+    return trimmed;
+  }
+  return trimmed.replace(/[^A-Za-z0-9_]/g, "_").replace(/^_+/, "");
 }
 
 /**

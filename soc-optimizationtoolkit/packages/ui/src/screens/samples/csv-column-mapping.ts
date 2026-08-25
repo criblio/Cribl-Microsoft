@@ -45,7 +45,7 @@
  * Pure: no IO, no fetch, no React, no Date, no crypto, no Math.random.
  */
 
-import { positionalFieldName } from "@soc/core";
+import { isPositionalFieldName, positionalFieldName } from "@soc/core";
 import { sanitizeColumnName, splitCsvRow } from "./csv-resolution-state";
 import type {
   CsvResolutionItem,
@@ -180,6 +180,26 @@ export function columnExamples(
 // ---------------------------------------------------------------------------
 
 /**
+ * The operator's typed name for a position, or "" when they have not named it.
+ *
+ * A NAME THAT IS THE POSITIONAL TOKEN MEANS UNNAMED, which is the only reading
+ * that is both honest and safe. `sanitizeColumnName` deliberately preserves an
+ * exact `_N` token, because a saved partial definition round-trips through the
+ * pasted-header textarea carrying placeholders for the positions nobody named -
+ * and stripping the underscore there turned those placeholders into real names,
+ * so reopening a half-finished definition claimed every column was named.
+ *
+ * That preservation is right for the round trip and wrong for a person typing,
+ * so the collision guard lives HERE, where the text really is operator input:
+ * typing `_5` cannot mint a name the shared preview would then have to decide
+ * was unmapped. It reads as "leave this one alone", which is what it looks like.
+ */
+function operatorName(draft: string): string {
+  const name = sanitizeColumnName(draft);
+  return isPositionalFieldName(name) ? "" : name;
+}
+
+/**
  * Project the item plus the operator's drafts into one row per column position.
  * Always `item.columnCount` rows: every position is offered a name, and the
  * ones without a name are visible as unmapped rather than hidden.
@@ -190,7 +210,7 @@ export function buildColumnMappingRows(
 ): ColumnMappingRow[] {
   const names = new Map<string, number>();
   for (let i = 0; i < item.columnCount; i += 1) {
-    const name = sanitizeColumnName(drafts[i] ?? "");
+    const name = operatorName(drafts[i] ?? "");
     if (name !== "") {
       names.set(name, (names.get(name) ?? 0) + 1);
     }
@@ -199,7 +219,7 @@ export function buildColumnMappingRows(
   const rows: ColumnMappingRow[] = [];
   for (let i = 0; i < item.columnCount; i += 1) {
     const draft = drafts[i] ?? "";
-    const name = sanitizeColumnName(draft);
+    const name = operatorName(draft);
     rows.push({
       index: i,
       positionalName: positionalFieldName(i),

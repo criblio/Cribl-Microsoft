@@ -204,14 +204,46 @@ describe("buildColumnMappingRows", () => {
   });
 
   it("an operator CANNOT type a name that collides with the positional namespace", () => {
-    // Leading underscores are stripped, so "_3" becomes "3" - a named column is
-    // never mistaken for an unnamed one.
+    // CHANGED 2026-08-25. This used to rely on sanitizeColumnName stripping the
+    // leading underscore, so "_3" became the real name "3". That stripping had
+    // to go: a saved PARTIAL definition round-trips through the pasted-header
+    // textarea carrying `_N` for every position nobody named, and turning those
+    // placeholders into names "0", "1", "2" made a half-finished definition
+    // report that it named every column - and applying it would have made the
+    // sample stop looking headerless, so it could never be reopened to finish.
+    // Caught in the live preview, not by a test: every pinned round trip used a
+    // FULL vendor dictionary, which contains no placeholders.
+    //
+    // The guard now lives where the text really is operator input. Typing the
+    // positional token means UNNAMED, which is what it looks like.
     const rows = buildColumnMappingRows(genericItem(), draftsOf({ 0: "_3" }));
-    expect(rows[0].name).toBe("3");
-    // The shared preview decides "unmapped" from the NAME via core's predicate,
-    // so this property is what keeps a named column out of the unmapped count.
-    expect(isPositionalFieldName(rows[0].name)).toBe(false);
-    expect(isPositionalFieldName(rows[0].positionalName)).toBe(true);
+    expect(rows[0].name).toBe("");
+    expect(rows[0].mapped).toBe(false);
+    // Still the property that matters: a MAPPED row's name is never positional,
+    // so the shared preview can decide "unmapped" from the name alone.
+    const named = buildColumnMappingRows(genericItem(), draftsOf({ 0: "src_ip" }));
+    expect(named[0].mapped).toBe(true);
+    expect(isPositionalFieldName(named[0].name)).toBe(false);
+    expect(isPositionalFieldName(named[0].positionalName)).toBe(true);
+  });
+
+  it("round-trips a PARTIAL definition through the header-row text unchanged", () => {
+    // The defect the live preview surfaced, pinned end to end: name two of five
+    // positions, render the resolved array as pasted-header text the way the
+    // pre-fill seed does, parse it back, and the placeholders must survive as
+    // placeholders. If they do not, reopening reports full coverage and the
+    // sample can never be finished.
+    const rows = buildColumnMappingRows(
+      { columnCount: 5, firstRows: ["a,b,c,d,e"] },
+      draftsOf({ 2: "log_type", 3: "action" }),
+    );
+    const resolved = resolvedColumnNames(rows);
+    expect(resolved).toEqual(["_0", "_1", "log_type", "action", "_4"]);
+
+    const seeded = parseHeaderFileText(resolved.join(String.fromCharCode(10)));
+    expect(seeded).toEqual(resolved);
+    // And the placeholders still READ as unnamed on the way back in.
+    expect(seeded.filter((n) => isPositionalFieldName(n))).toHaveLength(3);
   });
 
   it("still returns one row per position when the sample has no example rows", () => {
