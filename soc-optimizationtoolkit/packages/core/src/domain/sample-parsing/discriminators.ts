@@ -61,6 +61,29 @@ export const DISCRIMINATOR_FIELDS: readonly string[] = Object.freeze([
   // so a `type` recovered from the payload still wins: the envelope is what the
   // sender claims, the payload is what the device wrote.
   "msgid",
+  // NOT from any of the three legacy copies (added 2026-08-25, from LIVE data).
+  // Cribl's Windows Event source puts the Windows CHANNEL here - Security,
+  // System, Application, Microsoft-Windows-DNS-Client/Operational - and the
+  // channel IS the log type for Windows events. Same justification as `msgid`
+  // directly above: the collector has already named the type in a field, so no
+  // payload parsing is required to see it.
+  //
+  // Measured on a live Cribl Lake dataset 2026-08-25, which is why it is here
+  // and why `datatype`/`schemaId`/`source` are NOT. Those three appear on every
+  // Lake row and looked like obvious additions, but each carried exactly ONE
+  // distinct value in every dataset sampled - they describe the dataset, not
+  // the event, so they can never split one. `data_source` did split, at scale:
+  //   dataset="winevt_plwindows" | summarize count() by data_source
+  //     Microsoft-Windows-DNS-Client/Operational   766,570
+  //     Security                                    22,792
+  // Without this entry that dataset reported NO log types at all, and the
+  // operator was told to go capture from a live source instead - for data
+  // already sitting in their lake, already split, already counted.
+  //
+  // In the LOW-CONFIDENCE tail on purpose: it needs >= 2 distinct values, so a
+  // single-channel dataset still reports no discriminator rather than claiming
+  // the whole dataset is one named type. That is the honest answer for it.
+  "data_source",
 ]);
 
 /**

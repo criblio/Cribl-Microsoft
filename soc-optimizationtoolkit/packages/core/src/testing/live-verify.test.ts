@@ -77,6 +77,14 @@ const GROUP = process.env.CRIBL_LIVE_GROUP ?? "";
 const liveSleep = (ms: number): Promise<void> =>
   new Promise((resolve) => setTimeout(resolve, ms));
 
+/** Pin the Lake dataset. Optional - without it the suite walks the listing. */
+const DATASET = process.env.CRIBL_LIVE_DATASET ?? "";
+/** How many datasets to try before giving up. An empty one costs ~1.4s. */
+const MAX_DATASET_ATTEMPTS = 12;
+
+/** What queryLakeSamples hands back, named so the walk can hold one. */
+type LakeCount = Awaited<ReturnType<typeof queryLakeSamples>>;
+
 /**
  * The cloud adapter's body handling, reproduced deliberately.
  *
@@ -238,7 +246,14 @@ describe.skipIf(!LIVE)("live verification against a real workspace", () => {
       method: "POST",
       path: "/system/capture",
       groupId,
-      body: { filter: "true", maxEvents: 20, duration: 10, level: 0 },
+      // 50 rather than 20, and the reason is row 1. A busy worker emits its own
+      // internal stats events constantly, and NOT ALL of those carry
+      // __inputId - so a small unfiltered grab can come back entirely internal
+      // and row 1 reports "no captured event carried __inputId" about a field
+      // that is present on every SOURCE event. Observed 2026-08-25: 20 events
+      // caught none, 40 caught five distinct input ids. Duration stays 10s
+      // because row 5 pins the clamp on it.
+      body: { filter: "true", maxEvents: 50, duration: 10, level: 0 },
     });
 
     // Row 5: a 10s capture must survive the transport at all.
@@ -266,9 +281,33 @@ describe.skipIf(!LIVE)("live verification against a real workspace", () => {
         }
       })
       .filter((e): e is Record<string, unknown> => e !== null);
-    const rawBodies = Array.isArray(control.body)
+    // THE ENVELOPE, not the payload. extractCapturedEvents returns the `_raw`
+    // STRINGS - the inner event - so `decoded` above is the vendor payload with
+    // its own fields (Id, ProviderName, ... for Windows). `__inputId` is a
+    // field of the CAPTURE ENVELOPE, sitting beside `_raw`, so it is gone by
+    // then. Rows 1 and 2 both ask about the envelope, and reading them off the
+    // payload is why row 1 reported "no captured event carried __inputId" on
+    // every run since this suite was written - a structural blind spot, not an
+    // idle source. Confirmed 2026-08-25 by parsing the same capture by hand:
+    // 40 of 40 events carried __inputId (cribl_tcp:in_cribl_tcp_WinEvt_plwindows,
+    // syslog:PaloAlto:tcp, datagen:paloaltorfc5424, ...).
+    const envelopes: Record<string, unknown>[] = Array.isArray(control.body)
       ? (control.body as Record<string, unknown>[])
-      : decoded;
+      : typeof control.body === "string"
+        ? control.body
+            .split(/\r?\n/)
+            .map((l) => l.trim())
+            .filter((l) => l !== "")
+            .map((l) => {
+              try {
+                return JSON.parse(l) as Record<string, unknown>;
+              } catch {
+                return null;
+              }
+            })
+            .filter((e): e is Record<string, unknown> => e !== null)
+        : [];
+    const rawBodies = envelopes.length > 0 ? envelopes : decoded;
     const withInputId = rawBodies.filter(
       (e) => typeof e.__inputId === "string",
     );
@@ -281,8 +320,21 @@ describe.skipIf(!LIVE)("live verification against a real workspace", () => {
         qualified ? "CONFIRMED type-qualified" : "BARE id - fix is wrong",
         `observed __inputId = ${observed}`,
       );
-      // The suffix clause must select the value the platform really sends.
-      const known = inputs.find((i) => observed.endsWith(`:${i.id}`) || observed === i.id);
+      // THE SHIPPED RULE, not a restatement of it. inputPredicate compares the
+      // SECOND COLON SEGMENT (capture-filter.ts), and this line used to use the
+      // `.endsWith(":" + id)` form that predicate deliberately REPLACED on
+      // 2026-08-21 - because `"syslog:pfsense:10.0.0.1".endsWith(":pfsense")`
+      // is false. So on any three-segment syslog id the harness would have
+      // failed and blamed the platform for a defect the product had already
+      // fixed. Observed live 2026-08-25: `syslog:PaloAlto:tcp` against an input
+      // whose id is `PaloAlto`.
+      //
+      // Restating a shipped rule in the probe is the same sin as hand-rolling a
+      // client: it verifies something we do not ship.
+      const segmentOf = (v: string): string | undefined => v.split(":")[1];
+      const known = inputs.find(
+        (i) => observed === i.id || segmentOf(observed) === i.id,
+      );
       expect(
         known,
         `no /system/inputs id matches observed __inputId ${observed}`,
@@ -300,13 +352,28 @@ describe.skipIf(!LIVE)("live verification against a real workspace", () => {
     }
 
     // ROW 2: are structured fields present at LEVEL 0, or only _raw?
+    //
+    // THE QUESTION IS "ANY BROKEN-OUT FIELD", NOT FOUR PARTICULAR NAMES. This
+    // used to look for sourcetype/type/subtype/eventType and report "only _raw
+    // on this source" when it found none - which it duly did against a Windows
+    // Event source whose events carry Id, ProviderName, LogName, MachineName,
+    // RecordId and seven more. Every one of those is a broken-out field, so the
+    // belief was CONFIRMED while the row said the opposite, and the detail line
+    // printed the very keys that refuted it. Fixed 2026-08-25, same class of
+    // error as row 8's.
+    //
+    // `_raw`, `_time` and the `__`-prefixed control fields are excluded because
+    // they are the envelope every event has; what row 2 asks is whether the
+    // source ALSO parsed a payload.
     const sample = rawBodies[0] ?? {};
-    const structured = ["sourcetype", "type", "subtype", "eventType"].filter(
-      (f) => sample[f] !== undefined,
+    const structured = Object.keys(sample).filter(
+      (k) => k !== "_raw" && k !== "_time" && !k.startsWith("__"),
     );
     report(
       "row 2 (level-0 fields)",
-      structured.length > 0 ? "CONFIRMED present" : "only _raw on this source",
+      structured.length > 0
+        ? `CONFIRMED present (${structured.length} broken-out fields)`
+        : "only _raw on this source",
       `keys: ${Object.keys(sample).slice(0, 12).join(", ")}`,
     );
   });
@@ -483,24 +550,78 @@ describe.skipIf(!LIVE)("live verification against a real workspace", () => {
       return;
     }
 
-    const datasets = entries.map((e) => ({ id: e.id }));
+    // NOT entries[0]. The listing is sorted by label, so entries[0] is whichever
+    // dataset id sorts first alphabetically - uncorrelated with holding data or
+    // a discriminator. In the lab that is `azure_alerts_validation`: populated
+    // and fast, but single-log-type, so row 3 was skipped on EVERY run and
+    // tostring() went permanently untested behind a green row 6. Walk instead,
+    // and say what was walked.
+    const candidates =
+      DATASET === ""
+        ? entries.slice(0, MAX_DATASET_ATTEMPTS)
+        : entries.filter((e) => e.id === DATASET);
+    if (candidates.length === 0) {
+      expect.fail(`CRIBL_LIVE_DATASET=${DATASET} is not in this lake listing`);
+    }
 
-    // THE SHIPPED FUNCTIONS, not a hand-rolled approximation of them. The app
-    // tries the sync route before the job lifecycle and owns its own query
-    // text; a probe that posted its own search would confirm a client we do not
-    // ship, which is the failure mode this whole suite is a reaction to.
-    const datasetId = String(datasets[0].id);
-    const counted = await queryLakeSamples(cribl, {
-      searchGroupId: search.id,
-      datasetId,
-      sleep: liveSleep,
-    });
+    const tried: string[] = [];
+    let chosen: { id: string; counted: LakeCount } | undefined;
+    let sawEvents = false;
+
+    for (const entry of candidates) {
+      // THE SHIPPED FUNCTION, not a hand-rolled approximation of it - it owns
+      // its own query text and route choice, which is the whole reason this
+      // suite exists.
+      const counted = await queryLakeSamples(cribl, {
+        searchGroupId: search.id,
+        datasetId: entry.id,
+        sleep: liveSleep,
+      });
+
+      // A FAILED READ IS ROW 6'S FAILURE and must not be walked past: skipping
+      // it would let a 403 or a poll timeout hide behind the next dataset that
+      // happened to work, collapsing "could not read" into "nothing to see".
+      expect(
+        counted.ok,
+        `dataset "${entry.id}" could not be read: ${counted.notes.join(" | ")}`,
+      ).toBe(true);
+
+      if (!counted.noDiscriminator) sawEvents = true;
+      // The NOTES matter as much as the count. "0 log types" alone cannot tell
+      // an empty dataset from one whose rows never arrived, and those need
+      // different fixes.
+      tried.push(
+        `${entry.id}: ${counted.logTypes.length} log types` +
+          (counted.noDiscriminator ? " (no discriminator)" : "") +
+          (counted.notes.length > 0 ? ` [${counted.notes.join(" ; ")}]` : ""),
+      );
+      if (counted.discriminatorField !== undefined && counted.logTypes.length > 0) {
+        chosen = { id: entry.id, counted };
+        break;
+      }
+    }
+
     report(
       "row 6 (queryLakeSamples)",
-      counted.ok ? "CONFIRMED" : "FAILED",
-      `${counted.logTypes.length} log types by ${counted.discriminatorField ?? "(none)"}; ${counted.notes.join(" | ") || "no notes"}`,
+      chosen === undefined ? "NO USABLE DATASET" : "CONFIRMED",
+      chosen === undefined
+        ? `tried ${tried.length}: ${tried.join(" | ")}`
+        : `${chosen.id} -> ${chosen.counted.logTypes.length} log types by ${chosen.counted.discriminatorField}`,
     );
-    expect(counted.ok).toBe(true);
+
+    if (chosen === undefined) {
+      // NOT a failure. A lake holding nothing groupable is a real state the app
+      // must handle, and failing here would assert a conclusion about someone's
+      // data. It IS reported loudly, because it means tostring() went untested.
+      report(
+        "row 3 (tostring)",
+        sawEvents ? "UNTESTED - data present, no discriminator" : "INCONCLUSIVE - every dataset idle",
+        `tried ${tried.join(" | ")}`,
+      );
+      return;
+    }
+    const counted = chosen.counted;
+    const datasetId = chosen.id;
 
     if (counted.discriminatorField === undefined || counted.logTypes.length === 0) {
       report("row 3 (tostring)", "SKIPPED", "dataset yielded no log types to fetch");
