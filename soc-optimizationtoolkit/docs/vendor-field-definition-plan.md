@@ -123,16 +123,49 @@ Filling in the six missing PAN-OS column orders is deliberately NOT on this
 list. It would fix this vendor and teach the app nothing; step 1 lets the
 operator fix any vendor, including the next one.
 
+## Decisions taken 2026-08-25 (user)
+
+**1. A column order is keyed to VENDOR + LOG TYPE, not to the solution.**
+
+It is a fact about the data, not about the workflow: a PAN-OS TRAFFIC order is
+true whichever Sentinel solution is selected. So it deliberately does NOT reuse
+the learned-mappings key, even though that is the closest existing machinery and
+would have been cheaper - reusing it would re-ask for the same vendor under a
+different solution and would record a vendor fact in a solution-shaped slot.
+
+Not scoped per connection. This is a single-tenant deployment (one Azure tenant,
+one Cribl workspace), so a per-connection scope would be machinery guarding
+against a situation that cannot arise here. If that ever stops being true, this
+is the paragraph to revisit - the key gains a connection component, nothing else
+changes.
+
+**2. A known vendor PRE-FILLS the dialog, and the operator confirms.**
+
+When the solution already names the vendor, the bundled order is applied and
+shown with real values beside each name, so the operator is confirming rather
+than supplying. This is the fastest path and it is only safe BECAUSE of the live
+preview: a bundled order that is wrong for their firmware shows up as values
+that stop making sense next to their names, immediately, before anything is
+stored.
+
+Note this differs from how vendor IDENTITY chips behave (offered, never
+auto-picked) and the difference is deliberate: an identity chip asserts
+something about the operator's environment that we cannot see, while a column
+order is checkable on screen against their own data the instant it is applied.
+
+**3. An operator-supplied order beats the bundled one, AND THEY ARE TOLD.**
+
+Same precedence as learned mappings beating bundled packs: the person looking at
+their own data outranks a shipped table, not least because vendor column orders
+change between firmware versions. But the override is recorded and shown - a
+mistaken paste replacing a correct shipped order must be visible rather than
+silent, which is the whole difference between this and "operator wins quietly".
+
 ## Open questions
 
-- Does a resolved column order belong to the SOLUTION (like learned mappings) or
-  to the vendor/log type independent of solution? A PAN-OS TRAFFIC order is true
-  regardless of which Sentinel solution is selected, which argues for the second
-  and against reusing the learned-mappings key directly.
-- Should a shipped `parseFeedConfig` vendor pre-fill the dialog when the sample's
-  vendor is already known from the solution, so the operator confirms rather than
-  supplies?
-- `PANOS_CSV_HEADERS` is a bundled column order. If operator-supplied orders are
-  persisted, which wins when they disagree? The operator's, on the same reasoning
-  that learned mappings beat bundled packs - but it should be recorded, and the
-  operator should be able to see that they are overriding something.
+- Where does the override notice live - on the sample chip, in the dialog, or
+  both? The dialog is where the decision is made; the chip is where someone
+  looking later would need to see it.
+- Does a persisted order need a version or a captured-on date, so a firmware
+  change can be reasoned about later rather than silently disagreeing with a
+  future bundled update?
