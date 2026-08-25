@@ -80,6 +80,23 @@ const liveSleep = (ms: number): Promise<void> =>
 
 /** Pin the Lake dataset. Optional - without it the suite walks the listing. */
 const DATASET = process.env.CRIBL_LIVE_DATASET ?? "";
+
+/**
+ * Narrow the Lake query window. Optional; the usecase's own default is -24h.
+ *
+ * Worth having because a dataset accumulates: a run that wants to observe what
+ * is arriving NOW competes with everything already in the window, and the
+ * discriminator sample is drawn from the whole of it. Observed 2026-08-25 on a
+ * dataset holding 5,212 unparsed events against 16 parsed ones - 0.3% - where
+ * no sample of any practical size would have found the parsed field.
+ *
+ * NOTE, and it is a product gap rather than a harness one: the app's own
+ * exhaustion note advises "a narrower time window is the cheapest next try",
+ * but no UI control exposes earliest/latest, so an operator cannot take that
+ * advice. This env var gives the SUITE the lever the product does not give the
+ * operator.
+ */
+const WINDOW = process.env.CRIBL_LIVE_WINDOW ?? "";
 /**
  * How many datasets to walk before giving up.
  *
@@ -627,6 +644,7 @@ describe.skipIf(!LIVE)("live verification against a real workspace", () => {
         searchGroupId: search.id,
         datasetId: entry.id,
         sleep: liveSleep,
+        ...(WINDOW === "" ? {} : { earliest: WINDOW }),
       });
 
       // A FAILED READ IS ROW 6'S FAILURE and must not be walked past: skipping
@@ -689,6 +707,7 @@ describe.skipIf(!LIVE)("live verification against a real workspace", () => {
     const fetched = await fetchLakeLogTypeEvents(cribl, {
       searchGroupId: search.id,
       datasetId,
+      ...(WINDOW === "" ? {} : { earliest: WINDOW }),
       discriminatorField: chosen.discriminatorField,
       logTypes: [counted.logTypes[0].logType],
       eventsPerLogType: 1,
