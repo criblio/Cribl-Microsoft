@@ -142,6 +142,40 @@ export interface SplitSample {
 export const RAW_EVENTS_CAP = 200;
 
 /**
+ * THE ONE NAME FOR A COLUMN NOBODY HAS NAMED YET - position `i`, zero-based.
+ *
+ * It lives here, in the module every parser already imports, because the
+ * question "what do we call an unnamed positional column?" was being answered
+ * twice and the two answers disagreed. `parseCsv` and the PAN-OS branch in
+ * parsers.ts emitted `_0.._N`; `parsePanosLine` emitted `field_0..field_N`.
+ *
+ * That was not cosmetic. `isHeaderlessCsv` - the predicate that decides whether
+ * to OFFER the operator the column-naming dialog - tests for the `_N` form. So
+ * a headerless CSV sample was offered the dialog and a PAN-OS sample with no
+ * recorded column order was not: positional, needing names, and invisible to
+ * the app's own namer. Measured on a live Cribl Lake dataset 2026-08-25, six of
+ * the thirteen PAN-OS log types present had no column order and therefore no
+ * route to being named - AUDIT, AUTH, CORRELATION, HIPMATCH, IPTAG, USERID.
+ *
+ * `_extra_N` in csv-headers.ts is deliberately NOT this. That names a value
+ * BEYOND the headers the operator supplied, which is a different fact about a
+ * different problem - the operator's definition was short, not absent - and
+ * collapsing the two would lose that distinction.
+ */
+export function positionalFieldName(index: number): string {
+  return `_${index}`;
+}
+
+/**
+ * Whether `name` is a {@link positionalFieldName} - i.e. a column still waiting
+ * to be named. The producer and the test live together on purpose: they were
+ * apart, and they drifted.
+ */
+export function isPositionalFieldName(name: string): boolean {
+  return /^_\d+$/.test(name);
+}
+
+/**
  * How many distinct example values {@link DiscoveredField.examples} retains
  * per field. Legacy default was 3.
  */

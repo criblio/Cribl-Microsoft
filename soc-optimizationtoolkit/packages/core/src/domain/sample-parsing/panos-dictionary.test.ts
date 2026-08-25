@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 
+import { isHeaderlessCsv } from "./log-type";
+import { positionalFieldName } from "./models";
 import {
   PANOS_CANONICAL_INDEX20,
   PANOS_CSV_HEADERS,
@@ -103,12 +105,41 @@ describe("parsePanosLine ('1,' slice fingerprint)", () => {
     expect(parsePanosLine("1,too,few")).toBeNull();
   });
 
-  it("falls back to generic field_N names for an unknown log type", () => {
+  it("falls back to THE SHARED positional names for an unknown log type", () => {
+    // CHANGED 2026-08-25, deliberately: this used to assert `field_0`/`field_3`.
+    // Two modules were independently naming an unnamed column - parseCsv and
+    // the PAN-OS branch of parsers.ts said `_0`, parsePanosLine said `field_0` -
+    // and `isHeaderlessCsv`, the predicate that decides whether to OFFER the
+    // operator the column-naming dialog, only recognised `_N`. So a PAN-OS log
+    // type with no recorded column order was positional, needed names, and was
+    // invisible to the app's own namer. Six of the thirteen types on the live
+    // lab dataset were in that state.
     const parsed = parsePanosLine("1,2024/01/01,001,MYSTERY,a,b,c,d");
     expect(parsed?.logType).toBe("MYSTERY");
     expect(parsed?.fields.type).toBe("MYSTERY");
-    expect(parsed?.fields.field_0).toBe("1");
-    expect(parsed?.fields.field_3).toBe("MYSTERY");
+    expect(parsed?.fields[positionalFieldName(0)]).toBe("1");
+    expect(parsed?.fields[positionalFieldName(3)]).toBe("MYSTERY");
+    // The old names are GONE, not merely joined by new ones - two conventions
+    // is the defect, so recognising both would preserve it.
+    expect(parsed?.fields.field_0).toBeUndefined();
+  });
+
+  it("is now OFFERED the naming dialog, which is the point of the change", () => {
+    // The behaviour the rename exists for. An unknown-type PAN-OS line parses
+    // to mostly positional names, and isHeaderlessCsv is what routes a sample
+    // to CsvHeaderDialog - so this is the difference between an operator who
+    // can name AUDIT/USERID/IPTAG columns and one who cannot.
+    const parsed = parsePanosLine("1,2024/01/01,001,MYSTERY,a,b,c,d");
+    const fields = Object.keys(parsed?.fields ?? {}).map((name) => ({ name }));
+    expect(isHeaderlessCsv(fields)).toBe(true);
+
+    // And a type WITH a recorded column order is not - it already has names,
+    // so asking the operator for them would be noise.
+    const named = parsePanosLine(
+      "1,2024/01/01 00:00:00,001,TRAFFIC,end,1,2024/01/01 00:00:00,10.0.0.1,10.0.0.2",
+    );
+    const namedFields = Object.keys(named?.fields ?? {}).map((name) => ({ name }));
+    expect(isHeaderlessCsv(namedFields)).toBe(false);
   });
 });
 

@@ -20,6 +20,7 @@
  * dispatch (PAN-OS positional column naming).
  */
 
+import { positionalFieldName } from "./models";
 import type { SampleFormat } from "./models";
 import { panosHeadersFor } from "./panos-dictionary";
 
@@ -173,7 +174,7 @@ export function parseCsv(
       });
     } else {
       values.forEach((value, i) => {
-        record[`_${i}`] = value;
+        record[positionalFieldName(i)] = value;
       });
     }
     if (Object.keys(record).length > 1) {

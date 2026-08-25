@@ -39,6 +39,8 @@
  * Pure: no IO, no fetch, no React, no Date/crypto.
  */
 
+import { positionalFieldName } from "./models";
+
 /**
  * PAN-OS numeric log-type id (the CEF DeviceEventClassID PAN-OS emits) to the
  * human-readable log-type name. DEDUPLICATED from the two identical legacy
@@ -330,7 +332,7 @@ export function parsePanosLine(
     fields["type"] = logType;
     for (let i = 0; i < Math.min(20, values.length); i += 1) {
       if (values[i]) {
-        fields[`field_${i}`] = values[i];
+        fields[positionalFieldName(i)] = values[i];
       }
     }
   }
