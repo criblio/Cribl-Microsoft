@@ -20,6 +20,13 @@
  *                status is not what the spec's own example shows - see
  *                {@link jobStatus} and the status-envelope block.
  *   EMPTY vs FAILED  never collapsed, in either direction.
+ *
+ * A SIXTH since 2026-08-25: EMPTY vs SINGLE-LOG-TYPE. A dataset nothing splits
+ * is now OFFERED under its own name with a measured volume rather than sent
+ * away, and the one thing that must never happen is the two collapsing back
+ * into each other - an empty window has nothing to offer and nothing to name,
+ * while a populated one has both. Pinned side by side in "a dataset with events
+ * but no discriminator is offered as ONE log type".
  */
 
 import { describe, expect, it } from "vitest";
@@ -100,6 +107,17 @@ const COUNT_ROWS = [
   { type: "THREAT", [COUNT_COLUMN]: 12 },
   { type: "TRAFFIC", [COUNT_COLUMN]: 890000 },
 ];
+
+/**
+ * The mean bytes/event step one MEASURES for each SAMPLE_ROWS log type (plan
+ * Phase 5, last item).
+ *
+ * Both `_raw` values are 29 characters and there is exactly one event of each,
+ * so each log type's mean is its own single event's length. Spelled out rather
+ * than computed from the fixture, so editing either `_raw` has to be noticed
+ * here instead of silently re-baselining every count assertion below.
+ */
+const SAMPLED_MEAN = 29;
 
 function client(...responses: PortHttpResponse[]): FakeCriblClient {
   const cribl = new FakeCriblClient();
@@ -297,24 +315,248 @@ describe("the two queries - KQL, and the split the plan mandates", () => {
 });
 
 describe("the discriminator must be a field SEARCH can group by", () => {
-  it("stops after the sample when the log type is buried in _raw", async () => {
+  it("never asks the engine to group by a field it cannot see", async () => {
     // Selecting over a LOCALLY parsed _raw would hand step two a field the
     // engine cannot see; the summarize would return nothing, which reads as
-    // "this dataset holds no log types".
-    const cribl = client(...jobRun("j-1", ndjson([{ _raw: "1,2026,fw,TRAFFIC,end" }])));
+    // "this dataset holds no log types". So step two's `by` clause is only ever
+    // written from a field the SAMPLE ROWS carried.
+    const cribl = client(
+      ...jobRun("j-1", ndjson([{ _raw: "1,2026,fw,TRAFFIC,end" }])),
+      ...jobRun("j-2", ndjson([{ [COUNT_COLUMN]: 1216 }])),
+    );
 
     const result = await run(cribl);
 
-    // One job, then a full stop: the summarize is never created.
-    expect(cribl.calls.map((c) => `${c.method} ${c.path}`)).toEqual(
-      lifecycleOf("j-1"),
+    expect(result.discriminatorField).toBeUndefined();
+    const created = cribl.calls.filter((c) => c.path === "/search/jobs");
+    expect(created).toHaveLength(2);
+    // "TRAFFIC" is sitting in that _raw. Nothing may group by it.
+    expect(JSON.stringify(created[1].body)).not.toContain("TRAFFIC");
+    expect(JSON.stringify(created[1].body)).not.toContain(" by ");
+  });
+});
+
+/**
+ * A DATASET THAT HOLDS ONE LOG TYPE IS AN ANSWER, NOT A DEAD END (2026-08-25).
+ *
+ * Measured live: of 31 lake datasets 24 were empty over -24h, and of the
+ * populated ones exactly ONE yielded a discriminator. `winevt_dcronly` (1,216
+ * events, one Windows channel) and `azure_alerts_validation` (265) are
+ * single-log-type BY DESIGN - the data is split per dataset, which is how a lake
+ * is organised. The app answered every one of them with "capture a sample and
+ * name the log type yourself", sending the operator to a different acquisition
+ * mode for data already in their lake.
+ *
+ * TWO THINGS ARE PINNED TOGETHER HERE and they are the whole feature:
+ *
+ *   THE OFFER    the dataset becomes ONE log type with a real volume, so the
+ *                operator can take a sample from it.
+ *   THE NAMING   that log type is the DATASET'S name and says so. This app does
+ *                not get to claim a vendor log type it never observed, which is
+ *                why `datasetAsLogType` is a flag rather than something a caller
+ *                is left to infer from a string.
+ *
+ * And EMPTY is pinned right beside it, because the two used to be the same dead
+ * end on screen: an empty window offers NOTHING and names NOTHING.
+ */
+describe("a dataset with events but no discriminator is offered as ONE log type", () => {
+  /** One _raw-only row: real events, and nothing to group them by. */
+  const UNSPLITTABLE = [{ _raw: "1,2026,fw,TRAFFIC,end" }];
+  /**
+   * The mean this path measures: `_raw` is 21 characters and it is the only
+   * sampled row (plan Phase 5).
+   *
+   * A DATASET-WIDE MEAN IS THE RIGHT ONE HERE, uniquely. Everywhere else a mean
+   * must come from the log type's own events, but having no discriminator is
+   * exactly the statement that every sampled event belongs to this one log type
+   * - so the whole sample IS its sample.
+   */
+  const UNSPLITTABLE_MEAN = 21;
+
+  it("counts the whole dataset with an UNGROUPED summarize and offers it", async () => {
+    const cribl = client(
+      ...jobRun("j-1", ndjson(UNSPLITTABLE)),
+      ...jobRun("j-2", ndjson([{ [COUNT_COLUMN]: 1216 }])),
     );
-    expect(jobsCreated(cribl)).toBe(1);
+
+    const result = await run(cribl);
+
+    // Step two still runs - the same ONE extra job the `by` form costs, which
+    // is why the two-jobs-per-query budget is unchanged.
+    expect(jobsCreated(cribl)).toBe(2);
+    expect(cribl.calls.map((c) => `${c.method} ${c.path}`)).toEqual([
+      ...lifecycleOf("j-1"),
+      ...lifecycleOf("j-2"),
+    ]);
+    // NO `by` clause, no sort, no limit: an ungrouped summarize is one row.
+    expect(cribl.calls[3].body).toEqual({
+      query: `dataset="${DATASET}" | summarize ${COUNT_COLUMN}=count()`,
+      earliest: DEFAULT_EARLIEST,
+      latest: DEFAULT_LATEST,
+    });
+
     expect(result.ok).toBe(true);
     expect(result.noDiscriminator).toBe(true);
+    expect(result.datasetAsLogType).toBe(true);
     expect(result.discriminatorField).toBeUndefined();
+    // ONE log type, named after the dataset, carrying the MEASURED total - and
+    // the mean event size measured off the same sample that failed to split.
+    expect(result.logTypes).toEqual([
+      {
+        logType: DATASET,
+        eventCount: 1216,
+        meanEventBytes: UNSPLITTABLE_MEAN,
+      },
+    ]);
+    expect(result.truncated).toBe(false);
+  });
+
+  it("measures the WHOLE sample as this one log type's events", async () => {
+    // Phase 5 on the single-log-type path, and the case where the mean is most
+    // trustworthy: no discriminator MEANS every sampled event is this log type,
+    // so nothing is being borrowed from a different one. Three events of
+    // 10, 20 and 30 bytes average to 20.
+    const cribl = client(
+      ...jobRun(
+        "j-1",
+        ndjson([
+          { _raw: "a".repeat(10) },
+          { _raw: "b".repeat(20) },
+          { _raw: "c".repeat(30) },
+        ]),
+      ),
+      ...jobRun("j-2", ndjson([{ [COUNT_COLUMN]: 1000 }])),
+    );
+
+    const result = await run(cribl);
+
+    expect(result.logTypes).toEqual([
+      { logType: DATASET, eventCount: 1000, meanEventBytes: 20 },
+    ]);
+    // Still ONE job per query - the mean cost no third search.
+    expect(jobsCreated(cribl)).toBe(2);
+  });
+
+  it("says the name is the DATASET'S, not a log type found in the data", async () => {
+    const cribl = client(
+      ...jobRun("j-1", ndjson(UNSPLITTABLE)),
+      ...jobRun("j-2", ndjson([{ [COUNT_COLUMN]: 1216 }])),
+    );
+
+    const result = await run(cribl);
+
+    const said = result.notes.join(" ");
+    expect(said).toContain("named after the dataset");
+    expect(said).toContain("not a log type found in the data");
+    // The old dead-end advice is gone: the sample is right here to take.
+    expect(said).not.toContain("capture a sample and name the log type yourself");
+  });
+
+  it("counts NOTHING off step one's rows, which are capped by our own bound", async () => {
+    // The tempting shortcut, and the one thing this must never do. Step one is
+    // capped at DISCRIMINATOR_SAMPLE_LIMIT, so its row count measures OUR bound:
+    // a dataset with 1,216 events would report 500. The count has to come from
+    // the engine, over the window, or not at all.
+    const rows = Array.from({ length: 7 }, (_unused, i) => ({ _raw: `line ${i}` }));
+    const cribl = client(
+      ...jobRun("j-1", ndjson(rows)),
+      ...jobRun("j-2", ndjson([{ [COUNT_COLUMN]: 1216 }])),
+    );
+
+    const result = await run(cribl);
+
+    // Each `line N` is 6 characters, so the mean is 6 - measured off the sample
+    // exactly as the count is NOT.
+    expect(result.logTypes).toEqual([
+      { logType: DATASET, eventCount: 1216, meanEventBytes: 6 },
+    ]);
+    expect(result.logTypes[0].eventCount).not.toBe(rows.length);
+  });
+
+  it("leaves the volume UNKNOWN when the count fails, and still offers the sample", async () => {
+    // The count failing costs the NUMBER, never the offer: the dataset was read
+    // and its events are still there to take. `ok` stays true, because nothing
+    // about the read failed - the empty-vs-failed split, applied to a volume.
+    const cribl = client(
+      ...jobRun("j-1", ndjson(UNSPLITTABLE)),
+      { status: 500, body: "boom" },
+    );
+
+    const result = await run(cribl);
+
+    expect(result.ok).toBe(true);
+    expect(result.datasetAsLogType).toBe(true);
+    // The events WERE measured - step one read them - but with no count there is
+    // nothing to multiply, so the row carries a mean and NO byte estimate.
+    expect(result.logTypes).toEqual([
+      { logType: DATASET, meanEventBytes: UNSPLITTABLE_MEAN },
+    ]);
+    // Undefined, NEVER zero - a volume of zero is a claim about the data.
+    expect(result.logTypes[0].eventCount).toBeUndefined();
+    expect(result.notes.join(" ")).toContain("unknown rather than zero");
+    // The offer survives, and the platform's own words arrive AFTER it.
+    const offer = result.notes.findIndex((n) => n.includes("single log type"));
+    const detail = result.notes.findIndex((n) => n.includes("HTTP 500"));
+    expect(offer).toBeGreaterThanOrEqual(0);
+    expect(detail).toBeGreaterThan(offer);
+  });
+
+  it("leaves the volume UNKNOWN when the count column is unreadable", async () => {
+    const cribl = client(
+      ...jobRun("j-1", ndjson(UNSPLITTABLE)),
+      ...jobRun("j-2", ndjson([{ total: 1216 }])),
+    );
+
+    const result = await run(cribl);
+
+    expect(result.ok).toBe(true);
+    // The mean survives an unreadable COUNT - they are measured off different
+    // queries - but with no count there is nothing to multiply, so no byte
+    // estimate can follow it either.
+    expect(result.logTypes).toEqual([
+      { logType: DATASET, meanEventBytes: UNSPLITTABLE_MEAN },
+    ]);
+    expect(result.notes.join(" ")).toContain("unknown rather than zero");
+  });
+
+  it("EMPTY offers nothing and names nothing - the case this must not become", async () => {
+    // The two used to be one dead end on screen: both showed no rows and sent
+    // the operator away. They are different facts and must stay different
+    // shapes - an empty window has nothing to name, and naming a dataset after
+    // itself with no events in it would be inventing a log type outright.
+    const cribl = client(...jobRun("j-1", ""));
+
+    const result = await run(cribl);
+
+    expect(jobsCreated(cribl)).toBe(1);
+    expect(result.ok).toBe(true);
+    expect(result.noDiscriminator).toBe(false);
+    expect(result.datasetAsLogType).toBe(false);
     expect(result.logTypes).toEqual([]);
-    expect(result.notes.join(" ")).toContain("capture a sample");
+    expect(result.notes.join(" ")).toContain("holds no events between -24h and now");
+    expect(result.notes.join(" ")).not.toContain("single log type");
+  });
+
+  it("does NOT name a dataset after itself when the READ failed", async () => {
+    // Nothing was established about the data at all. Offering a log type here
+    // would put a name on a dataset the app never managed to look at.
+    const cribl = client({ status: 403, body: "forbidden" });
+
+    const result = await run(cribl);
+
+    expect(result.ok).toBe(false);
+    expect(result.datasetAsLogType).toBe(false);
+    expect(result.logTypes).toEqual([]);
+  });
+
+  it("keeps datasetAsLogType FALSE for every name that came out of the data", async () => {
+    // The flag is the honesty claim; a grouped list must never carry it, or the
+    // caveat "this name is the dataset's" would print over real log types.
+    const result = await run(countingClient());
+
+    expect(result.datasetAsLogType).toBe(false);
+    expect(result.noDiscriminator).toBe(false);
+    expect(result.logTypes.map((t) => t.logType)).toEqual(["TRAFFIC", "THREAT"]);
   });
 });
 
@@ -323,9 +565,11 @@ describe("the result", () => {
     const result = await run(countingClient());
 
     expect(result.ok).toBe(true);
+    // The mean rides along with every count: step one's rows were measured as
+    // well as read, so each log type carries its own bytes-per-event.
     expect(result.logTypes).toEqual([
-      { logType: "TRAFFIC", eventCount: 890000 },
-      { logType: "THREAT", eventCount: 12 },
+      { logType: "TRAFFIC", eventCount: 890000, meanEventBytes: SAMPLED_MEAN },
+      { logType: "THREAT", eventCount: 12, meanEventBytes: SAMPLED_MEAN },
     ]);
     // A volume means nothing without the window it covers.
     expect(result.window).toEqual({
@@ -344,7 +588,12 @@ describe("the result", () => {
     const result = await run(cribl);
 
     expect(result.discriminatorField).toBe("eventType");
-    expect(result.logTypes).toEqual([{ logType: "4624", eventCount: 7 }]);
+    // No `_raw` on these rows, so the mean is measured over the serialized row -
+    // the same bytes fetchLakeLogTypeEvents would take as the sample.
+    // `{"eventType":4624}` is 18 characters.
+    expect(result.logTypes).toEqual([
+      { logType: "4624", eventCount: 7, meanEventBytes: 18 },
+    ]);
   });
 
   it("reports an unreadable volume as UNKNOWN, never as zero", async () => {
@@ -356,7 +605,11 @@ describe("the result", () => {
 
     const result = await run(cribl);
 
-    expect(result.logTypes).toEqual([{ logType: "TRAFFIC" }]);
+    // The events WERE measured - the sample held a TRAFFIC row - but the count
+    // was not, so there is nothing to multiply and no byte estimate can follow.
+    expect(result.logTypes).toEqual([
+      { logType: "TRAFFIC", meanEventBytes: SAMPLED_MEAN },
+    ]);
     expect(result.logTypes[0].eventCount).toBeUndefined();
     expect(result.notes.join(" ")).toContain("unknown rather than zero");
   });
@@ -369,7 +622,9 @@ describe("the result", () => {
 
     const result = await run(cribl);
 
-    expect(result.logTypes).toEqual([{ logType: "TRAFFIC", eventCount: 42 }]);
+    expect(result.logTypes).toEqual([
+      { logType: "TRAFFIC", eventCount: 42, meanEventBytes: SAMPLED_MEAN },
+    ]);
   });
 
   it("leaves out groups with no discriminator value and counts them in a note", async () => {
@@ -407,6 +662,147 @@ describe("the result", () => {
     expect(result.truncated).toBe(true);
     expect(result.logTypes.map((t) => t.logType)).toEqual(["A", "B"]);
     expect(result.notes.join(" ")).toContain("may hold more");
+  });
+});
+
+/**
+ * EVENTS TO BYTES (sample-acquisition plan Phase 5, the last unbuilt item).
+ *
+ * A Lake volume reaching the operator as an event COUNT is hard to reason about
+ * against a Sentinel bill, which is charged by volume. Step one already pulls
+ * real events to decide WHICH FIELD and then throws their bodies away; these pin
+ * that they are measured instead, per log type, at the cost of no extra job.
+ *
+ * What every case here is really guarding is the REFUSAL. The number is a mean
+ * from a few hundred sampled events multiplied by a count over the whole window,
+ * so where it cannot be measured it must be ABSENT - a defaulted zero would read
+ * as a measurement and would under-report a cost, which is the expensive
+ * direction to be wrong in.
+ */
+describe("the mean event size comes from STEP ONE's own events", () => {
+  it("measures each log type over ITS OWN sampled events, not the dataset's", async () => {
+    // Two log types whose events differ in size by 10x. A dataset-wide mean
+    // would price both at roughly the same figure and be wrong about both.
+    const big = "x".repeat(200);
+    const small = "y".repeat(20);
+    const cribl = client(
+      ...jobRun(
+        "j-1",
+        ndjson([
+          { type: "BIG", _raw: big },
+          { type: "BIG", _raw: big },
+          { type: "SMALL", _raw: small },
+        ]),
+      ),
+      ...jobRun(
+        "j-2",
+        ndjson([
+          { type: "BIG", [COUNT_COLUMN]: 1000 },
+          { type: "SMALL", [COUNT_COLUMN]: 5000 },
+        ]),
+      ),
+    );
+
+    const result = await run(cribl);
+
+    expect(result.logTypes).toEqual([
+      { logType: "SMALL", eventCount: 5000, meanEventBytes: 20 },
+      { logType: "BIG", eventCount: 1000, meanEventBytes: 200 },
+    ]);
+    // Neither carries the dataset-wide mean, which would be (200+200+20)/3 = 140.
+    expect(result.logTypes.map((t) => t.meanEventBytes)).not.toContain(140);
+  });
+
+  it("averages a log type's events rather than taking the first one", async () => {
+    const cribl = client(
+      ...jobRun(
+        "j-1",
+        ndjson([
+          { type: "MIXED", _raw: "x".repeat(10) },
+          { type: "MIXED", _raw: "x".repeat(30) },
+          { type: "OTHER", _raw: "y" },
+        ]),
+      ),
+      ...jobRun("j-2", ndjson([{ type: "MIXED", [COUNT_COLUMN]: 100 }])),
+    );
+
+    const result = await run(cribl);
+
+    // (10 + 30) / 2 = 20, not 10 and not 30.
+    expect(result.logTypes[0].meanEventBytes).toBe(20);
+  });
+
+  it("leaves a COUNTED but UNSAMPLED log type unmeasured - never zero", async () => {
+    // The skew case, measured live on winevt_plwindows: a 97%-dominant value
+    // can crowd the minority out of the sample while step two still counts it at
+    // dataset scale. That log type gets no mean, and therefore no byte estimate.
+    const cribl = client(
+      ...jobRun("j-1", ndjson(SAMPLE_ROWS)),
+      ...jobRun(
+        "j-2",
+        ndjson([
+          { type: "TRAFFIC", [COUNT_COLUMN]: 890000 },
+          { type: "NEVER_SAMPLED", [COUNT_COLUMN]: 4 },
+        ]),
+      ),
+    );
+
+    const result = await run(cribl);
+
+    const unsampled = result.logTypes.find(
+      (t) => t.logType === "NEVER_SAMPLED",
+    );
+    expect(unsampled?.eventCount).toBe(4);
+    expect(unsampled?.meanEventBytes).toBeUndefined();
+    // The KEY is absent, not present-and-undefined.
+    expect("meanEventBytes" in (unsampled ?? {})).toBe(false);
+  });
+
+  it("measures the SERIALIZED row when there is no vendor _raw", async () => {
+    // The same fallback fetchLakeLogTypeEvents uses to build the sample, so the
+    // mean describes the bytes that path would actually take.
+    const row = { type: "JSONONLY", extra: "abc" };
+    const cribl = client(
+      ...jobRun("j-1", ndjson([row, { type: "OTHER", extra: "z" }])),
+      ...jobRun("j-2", ndjson([{ type: "JSONONLY", [COUNT_COLUMN]: 10 }])),
+    );
+
+    const result = await run(cribl);
+
+    expect(result.logTypes[0].meanEventBytes).toBe(
+      JSON.stringify(row).length,
+    );
+    // Spelled out: `{"type":"JSONONLY","extra":"abc"}` is 33 characters.
+    expect(result.logTypes[0].meanEventBytes).toBe(33);
+  });
+
+  it("falls back to the serialized row for an EMPTY _raw, never to a 0 mean", async () => {
+    // readString treats "" as absent, so an empty _raw takes the same fallback
+    // an absent one does - which is the right answer twice over: those ARE the
+    // bytes fetchLakeLogTypeEvents would take for that row, and a mean of 0
+    // would multiply a 500-event count into a confident "~0 B".
+    const row = { type: "EMPTY", _raw: "" };
+    const cribl = client(
+      ...jobRun("j-1", ndjson([row, { type: "REAL", _raw: "abcde" }])),
+      ...jobRun("j-2", ndjson([{ type: "EMPTY", [COUNT_COLUMN]: 500 }])),
+    );
+
+    const result = await run(cribl);
+
+    expect(result.logTypes[0].eventCount).toBe(500);
+    // `{"type":"EMPTY","_raw":""}` is 26 characters - a real measurement of a
+    // real row, and emphatically not zero.
+    expect(result.logTypes[0].meanEventBytes).toBe(JSON.stringify(row).length);
+    expect(result.logTypes[0].meanEventBytes).toBe(26);
+  });
+
+  it("costs NO extra search job - the events were already in hand", async () => {
+    // The whole reason this is measured here rather than by a third query.
+    const cribl = countingClient();
+
+    await run(cribl);
+
+    expect(jobsCreated(cribl)).toBe(2);
   });
 });
 
@@ -678,8 +1074,8 @@ describe("the job status arrives in an ENVELOPE, not as a top-level key", () => 
     expect(result.ok).toBe(true);
     expect(result.discriminatorField).toBe("type");
     expect(result.logTypes).toEqual([
-      { logType: "TRAFFIC", eventCount: 890000 },
-      { logType: "THREAT", eventCount: 12 },
+      { logType: "TRAFFIC", eventCount: 890000, meanEventBytes: SAMPLED_MEAN },
+      { logType: "THREAT", eventCount: 12, meanEventBytes: SAMPLED_MEAN },
     ]);
   });
 
@@ -709,8 +1105,8 @@ describe("the job status arrives in an ENVELOPE, not as a top-level key", () => 
     expect(sleeps).toEqual([]);
     expect(result.ok).toBe(true);
     expect(result.logTypes).toEqual([
-      { logType: "TRAFFIC", eventCount: 890000 },
-      { logType: "THREAT", eventCount: 12 },
+      { logType: "TRAFFIC", eventCount: 890000, meanEventBytes: SAMPLED_MEAN },
+      { logType: "THREAT", eventCount: 12, meanEventBytes: SAMPLED_MEAN },
     ]);
   });
 
@@ -909,10 +1305,14 @@ describe("fetchLakeLogTypeEvents - counts choose, events sample", () => {
 
   it("requests NOTHING when the selection or addressing is incomplete", async () => {
     // A blank search group would 404 at the leader and read as a Cribl fault.
+    //
+    // `discriminatorField: ""` LEFT THIS LIST on 2026-08-25 and is pinned in the
+    // block below instead: a missing field is no longer incomplete addressing,
+    // it is the undiscriminated dataset, which has exactly one log type and a
+    // query with no `where` clause.
     for (const bad of [
       { searchGroupId: "" },
       { datasetId: "" },
-      { discriminatorField: "" },
       { logTypes: [] },
     ]) {
       const cribl = new FakeCriblClient();
@@ -931,6 +1331,151 @@ describe("fetchLakeLogTypeEvents - counts choose, events sample", () => {
     // the leader 404s as invisibly as a create does.
     expect(cribl.calls.every((c) => c.groupId === GROUP)).toBe(true);
     expect(cribl.calls.every((c) => c.path.startsWith("/search/"))).toBe(true);
+  });
+});
+
+/**
+ * TAKING THE SAMPLE from a dataset that is its own log type (2026-08-25).
+ *
+ * The offer is worth nothing if the commit cannot address it, and the commit
+ * path assumed a discriminator on both sides: the guard refused a blank field
+ * outright, and the query builder composed a `where` clause round it. Both are
+ * pinned here, along with the one thing that must NOT be allowed to follow -
+ * fetching the whole dataset repeatedly under several names.
+ */
+describe("fetching the ONE log type of an undiscriminated dataset", () => {
+  it("runs an UNFILTERED query and labels it with the name it was given", async () => {
+    // No field exists, so there is nothing to compare against. A `where` here
+    // would filter on a missing column, return nothing, and be reported as
+    // "this log type returned no events in this window" about a dataset the app
+    // had just counted - the empty-vs-failed collapse, again.
+    const cribl = client(
+      ...jobRun("j-1", ndjson([{ _raw: "1,2026,fw,TRAFFIC,end" }])),
+    );
+
+    const result = await fetchLakeLogTypeEvents(cribl, {
+      searchGroupId: GROUP,
+      datasetId: DATASET,
+      logTypes: [DATASET],
+    });
+
+    expect(jobsCreated(cribl)).toBe(1);
+    expect(cribl.calls[0].body).toEqual({
+      query: `dataset="${DATASET}" | limit ${DEFAULT_SAMPLE_LIMIT}`,
+      earliest: DEFAULT_EARLIEST,
+      latest: DEFAULT_LATEST,
+    });
+    expect(JSON.stringify(cribl.calls[0].body)).not.toContain("where");
+    expect(result.ok).toBe(true);
+    expect(result.events).toEqual([
+      { logType: DATASET, rawEvents: ["1,2026,fw,TRAFFIC,end"] },
+    ]);
+  });
+
+  it("treats an EMPTY discriminatorField exactly as an absent one", async () => {
+    // The panel hands through whatever the query reported, and a caller that
+    // normalises undefined to "" must not fall into a different behaviour.
+    const cribl = client(...jobRun("j-1", ndjson([{ _raw: "x" }])));
+
+    const result = await fetchLakeLogTypeEvents(cribl, {
+      searchGroupId: GROUP,
+      datasetId: DATASET,
+      discriminatorField: "   ",
+      logTypes: [DATASET],
+    });
+
+    expect(cribl.calls[0].body).toEqual({
+      query: `dataset="${DATASET}" | limit ${DEFAULT_SAMPLE_LIMIT}`,
+      earliest: DEFAULT_EARLIEST,
+      latest: DEFAULT_LATEST,
+    });
+    expect(result.events).toEqual([{ logType: DATASET, rawEvents: ["x"] }]);
+  });
+
+  it("REFUSES several log types with no field, rather than fetching one dataset twice", async () => {
+    // The query is unfiltered, so it answers the same for every name. Running
+    // it per name would write the SAME events into the store under two labels -
+    // the app claiming a log type it never observed, and the pack then building
+    // a route pair for each. Refused, not narrowed to the first: a caller that
+    // asked for two is working from a wrong belief.
+    const cribl = new FakeCriblClient();
+
+    const result = await fetchLakeLogTypeEvents(cribl, {
+      searchGroupId: GROUP,
+      datasetId: DATASET,
+      logTypes: [DATASET, "THREAT"],
+    });
+
+    expect(cribl.calls).toHaveLength(0);
+    expect(result.ok).toBe(false);
+    expect(result.events).toEqual([]);
+    expect(result.notes).toHaveLength(1);
+    expect(result.notes[0]).toContain("no field to tell them apart");
+  });
+
+  it("still filters when a field IS given - the unfiltered query is not the default", async () => {
+    const cribl = client(...jobRun("j-1", ndjson([{ type: "TRAFFIC", _raw: "a" }])));
+
+    await fetchLakeLogTypeEvents(cribl, {
+      searchGroupId: GROUP,
+      datasetId: DATASET,
+      discriminatorField: "type",
+      logTypes: ["TRAFFIC"],
+    });
+
+    expect(cribl.calls[0].body).toEqual({
+      query: `dataset="${DATASET}" | where tostring(type)=="TRAFFIC" | limit ${DEFAULT_SAMPLE_LIMIT}`,
+      earliest: DEFAULT_EARLIEST,
+      latest: DEFAULT_LATEST,
+    });
+  });
+
+  it("builds the same two shapes from the query builder itself", () => {
+    expect(buildLogTypeEventQuery(DATASET, undefined, DATASET, 50)).toBe(
+      `dataset="${DATASET}" | limit 50`,
+    );
+    expect(buildLogTypeEventQuery(DATASET, "", DATASET, 50)).toBe(
+      `dataset="${DATASET}" | limit 50`,
+    );
+    expect(buildLogTypeEventQuery(DATASET, "type", "TRAFFIC", 50)).toBe(
+      `dataset="${DATASET}" | where tostring(type)=="TRAFFIC" | limit 50`,
+    );
+  });
+
+  it("round-trips the name the QUERY offered, with no re-typing in between", async () => {
+    // The whole path in one test: the dataset is counted, named after itself,
+    // and that exact name plus its absent field address the fetch.
+    const counting = client(
+      ...jobRun("j-1", ndjson([{ _raw: "1,2026,fw,TRAFFIC,end" }])),
+      ...jobRun("j-2", ndjson([{ [COUNT_COLUMN]: 1216 }])),
+    );
+
+    const listed = await run(counting);
+
+    expect(listed.datasetAsLogType).toBe(true);
+    // `1,2026,fw,TRAFFIC,end` is 21 characters, and it is the whole sample.
+    expect(listed.logTypes).toEqual([
+      { logType: DATASET, eventCount: 1216, meanEventBytes: 21 },
+    ]);
+
+    const fetching = client(...jobRun("j-3", ndjson([{ _raw: "an event" }])));
+    const fetched = await fetchLakeLogTypeEvents(fetching, {
+      searchGroupId: GROUP,
+      datasetId: DATASET,
+      discriminatorField: listed.discriminatorField,
+      logTypes: listed.logTypes.map((entry) => entry.logType),
+    });
+
+    expect(jobsCreated(fetching)).toBe(1);
+    expect(fetching.calls[0].body).toEqual({
+      query: `dataset="${DATASET}" | limit ${DEFAULT_SAMPLE_LIMIT}`,
+      earliest: DEFAULT_EARLIEST,
+      latest: DEFAULT_LATEST,
+    });
+    expect(fetched.ok).toBe(true);
+    expect(fetched.events).toEqual([
+      { logType: DATASET, rawEvents: ["an event"] },
+    ]);
   });
 });
 
@@ -956,7 +1501,9 @@ describe("a NUMERIC log type round-trips - listed by step two, FETCHED by step t
     const listed = await run(counting);
 
     expect(listed.discriminatorField).toBe("eventType");
-    expect(listed.logTypes).toEqual([{ logType: "4624", eventCount: 7 }]);
+    expect(listed.logTypes).toEqual([
+      { logType: "4624", eventCount: 7, meanEventBytes: 18 },
+    ]);
 
     // Step three is handed exactly what step two produced, with no re-typing in
     // between - that hand-off IS the round trip, and it is where the value's
@@ -1027,9 +1574,10 @@ describe("a NUMERIC log type round-trips - listed by step two, FETCHED by step t
     const result = await run(cribl);
 
     expect(result.discriminatorField).toBe("action");
+    // `{"action":true}` is 15 characters; `{"action":false}` is 16.
     expect(result.logTypes).toEqual([
-      { logType: "true", eventCount: 31 },
-      { logType: "false", eventCount: 4 },
+      { logType: "true", eventCount: 31, meanEventBytes: 15 },
+      { logType: "false", eventCount: 4, meanEventBytes: 16 },
     ]);
     expect(
       buildLogTypeEventQuery(DATASET, "action", result.logTypes[0].logType, 50),

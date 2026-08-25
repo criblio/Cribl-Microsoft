@@ -16,6 +16,7 @@ import {
   documentedLogTypesForSolution,
 } from "./vendor-log-types";
 import {
+  estimatedLogTypeBytes,
   evidenceCounts,
   mergeLogTypeSources,
   rankUnreferencedByVolume,
@@ -563,5 +564,294 @@ describe("rankUnreferencedByVolume", () => {
 
   it("is empty for an empty set, and does not fail without volumes", () => {
     expect(rankUnreferencedByVolume([])).toEqual([]);
+  });
+
+  it("ranks a log type named after its DATASET on the same terms as any other", () => {
+    // Since 2026-08-25 a Lake dataset that nothing splits is offered as ONE log
+    // type carrying the DATASET'S name, with a volume from an ungrouped
+    // `summarize count()`. Its row satisfies LogTypeVolume like any other, so
+    // this needed no new shape - what it does need is to keep obeying the same
+    // rules: the count is attached and ranked, nothing is flagged, and no
+    // verdict is drawn from where the name came from. That provenance belongs
+    // on the Lake panel, where the operator can act on it; here it is a
+    // provided log type that no detection references, which is fine.
+    const ranked = rankUnreferencedByVolume(
+      ["winevt_dcronly", "traffic"],
+      [
+        { logType: "winevt_dcronly", eventCount: 1216 },
+        { logType: "traffic", eventCount: 12 },
+      ],
+    );
+
+    expect(ranked).toEqual([
+      { value: "winevt_dcronly", eventCount: 1216 },
+      { value: "traffic", eventCount: 12 },
+    ]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Events to BYTES (sample-acquisition plan Phase 5, last item)
+// ---------------------------------------------------------------------------
+//
+// A count is hard to reason about against a Sentinel bill, which is charged by
+// volume. These guard the conversion that answers it, and the rule is the same
+// one the counts obey, one notch stricter: the estimate is ATTACHED and RANKED,
+// never judged, and ABSENT whenever it cannot be computed. A defaulted zero here
+// would under-report an ingest cost by however much was left out - and it would
+// read as measured, because bytes look like a measurement.
+
+describe("estimatedLogTypeBytes", () => {
+  it("is the count times the mean, rounded to whole bytes", () => {
+    expect(
+      estimatedLogTypeBytes({
+        logType: "TRAFFIC",
+        eventCount: 890123,
+        meanEventBytes: 620.4,
+      }),
+    ).toBe(Math.round(890123 * 620.4));
+    // Spelled out, so the pin fails on a changed formula rather than agreeing
+    // with whatever the code computes: 890,123 x 620.4 = 552,232,309.2, which
+    // rounds DOWN to 552,232,309.
+    expect(
+      estimatedLogTypeBytes({
+        logType: "TRAFFIC",
+        eventCount: 890123,
+        meanEventBytes: 620.4,
+      }),
+    ).toBe(552232309);
+  });
+
+  it("is UNDEFINED without a mean - the log type was never sampled", () => {
+    // The skew case, and the common one: a dataset can count a minority log
+    // type at dataset scale without any of its events reaching the sample.
+    const bytes = estimatedLogTypeBytes({
+      logType: "SECURITY",
+      eventCount: 22792,
+    });
+    expect(bytes).toBeUndefined();
+    expect(bytes).not.toBe(0);
+  });
+
+  it("is UNDEFINED without a count, however well the events were measured", () => {
+    expect(
+      estimatedLogTypeBytes({ logType: "TRAFFIC", meanEventBytes: 620 }),
+    ).toBeUndefined();
+  });
+
+  it("refuses a ZERO mean rather than pricing a busy log type at 0 B", () => {
+    // meanEventBytes already refuses to produce one; this is the second guard,
+    // because the failure it prevents is "890,123 events, ~0 B estimated".
+    const bytes = estimatedLogTypeBytes({
+      logType: "TRAFFIC",
+      eventCount: 890123,
+      meanEventBytes: 0,
+    });
+    expect(bytes).toBeUndefined();
+    expect(bytes).not.toBe(0);
+  });
+
+  it("refuses a non-finite figure rather than propagating NaN", () => {
+    expect(
+      estimatedLogTypeBytes({
+        logType: "TRAFFIC",
+        eventCount: 10,
+        meanEventBytes: Number.NaN,
+      }),
+    ).toBeUndefined();
+    expect(
+      estimatedLogTypeBytes({
+        logType: "TRAFFIC",
+        eventCount: Number.POSITIVE_INFINITY,
+        meanEventBytes: 620,
+      }),
+    ).toBeUndefined();
+  });
+
+  it("gives a MEASURED zero count zero bytes, which is a real answer", () => {
+    // The distinction this module keeps everywhere: a measured zero is an
+    // answer, an unmeasured value is not. Zero events genuinely is zero bytes.
+    expect(
+      estimatedLogTypeBytes({
+        logType: "QUIET",
+        eventCount: 0,
+        meanEventBytes: 620,
+      }),
+    ).toBe(0);
+  });
+});
+
+describe("byte-estimate attachment", () => {
+  const sized = (
+    logType: string,
+    eventCount: number,
+    meanEventBytes?: number,
+  ): LogTypeVolume =>
+    meanEventBytes === undefined
+      ? { logType, eventCount }
+      : { logType, eventCount, meanEventBytes };
+
+  it("attaches the estimate beside the count it was derived from", () => {
+    const merged = mergeLogTypeSources({
+      expected: [expected("TRAFFIC", ["alert-rule"])],
+      vendorLogTypes: [],
+      provided: [],
+      volumes: [sized("TRAFFIC", 1000, 512)],
+    });
+
+    expect(merged[0].eventCount).toBe(1000);
+    expect(merged[0].estimatedBytes).toBe(512000);
+  });
+
+  it("leaves an entry with a count but NO SAMPLE unestimated - never zero", () => {
+    const merged = mergeLogTypeSources({
+      expected: [expected("TRAFFIC", ["alert-rule"])],
+      vendorLogTypes: [],
+      provided: [],
+      volumes: [sized("TRAFFIC", 890123)],
+    });
+
+    expect(merged[0].eventCount).toBe(890123);
+    // The KEY is absent, not present-and-undefined: a renderer testing for the
+    // property must see nothing to show.
+    expect("estimatedBytes" in merged[0]).toBe(false);
+  });
+
+  it("sums the estimate across disjoint rows, as it sums the counts", () => {
+    const merged = mergeLogTypeSources({
+      expected: [expected("TRAFFIC", ["alert-rule"])],
+      vendorLogTypes: [],
+      provided: [],
+      volumes: [sized("pan-traffic", 100, 500), sized("gp-traffic", 25, 200)],
+    });
+
+    expect(merged[0].eventCount).toBe(125);
+    // 100 x 500 + 25 x 200 = 55,000. Each row keeps its OWN mean: reusing one
+    // row's mean for the other would price GLOBALPROTECT with TRAFFIC's bytes.
+    expect(merged[0].estimatedBytes).toBe(55000);
+  });
+
+  it("drops the estimate ENTIRELY when one summed row lacks a mean", () => {
+    // ALL OR NOTHING. A partial sum would sit beside a count covering more
+    // events than it does - "125 events, ~50 KB" where the 50 KB speaks for
+    // 100 of them - and under-reporting a cost is the expensive direction.
+    const merged = mergeLogTypeSources({
+      expected: [expected("TRAFFIC", ["alert-rule"])],
+      vendorLogTypes: [],
+      provided: [],
+      volumes: [sized("pan-traffic", 100, 500), sized("gp-traffic", 25)],
+    });
+
+    expect(merged[0].eventCount).toBe(125);
+    expect("estimatedBytes" in merged[0]).toBe(false);
+  });
+
+  it("reaches a vendor entry through its ALIASES, as the count does", () => {
+    const merged = mergeLogTypeSources({
+      expected: [],
+      vendorLogTypes: [
+        {
+          value: "ZIA Web",
+          aliases: ["NSSWeblog"],
+          vendor: "Zscaler",
+          provenance: "test fixture",
+        },
+      ],
+      provided: [],
+      volumes: [sized("NSSWeblog", 40, 1024)],
+    });
+
+    expect(merged[0].eventCount).toBe(40);
+    expect(merged[0].estimatedBytes).toBe(40960);
+  });
+
+  it("RANKS BY BYTES when every measured entry carries an estimate", () => {
+    // The whole point of the conversion: 100 events at 10 KB outweighs 900 at
+    // 200 B, and only the byte order says so. Same tier, so evidence does not
+    // decide it.
+    const merged = mergeLogTypeSources({
+      expected: [
+        expected("MANY_TINY", ["alert-rule"]),
+        expected("FEW_HUGE", ["alert-rule"]),
+      ],
+      vendorLogTypes: [],
+      provided: [],
+      volumes: [sized("MANY_TINY", 900, 200), sized("FEW_HUGE", 100, 10240)],
+    });
+
+    expect(merged.map((m) => m.value)).toEqual(["FEW_HUGE", "MANY_TINY"]);
+    expect(merged[0].estimatedBytes).toBe(1024000);
+    expect(merged[1].estimatedBytes).toBe(180000);
+    // And the count order really is the OPPOSITE one, so this pin fails if the
+    // list quietly reverts to ranking by events.
+    expect(merged[0].eventCount).toBe(100);
+    expect(merged[1].eventCount).toBe(900);
+  });
+
+  it("falls back to the COUNT order when any measured entry lacks an estimate", () => {
+    // Mixing the keys would compare 900 events against 1,024,000 bytes as if
+    // they were one quantity, and promoting the estimated entries would rank on
+    // how well we measured rather than on what we measured.
+    const merged = mergeLogTypeSources({
+      expected: [
+        expected("MANY_TINY", ["alert-rule"]),
+        expected("FEW_HUGE", ["alert-rule"]),
+      ],
+      vendorLogTypes: [],
+      provided: [],
+      volumes: [sized("MANY_TINY", 900), sized("FEW_HUGE", 100, 10240)],
+    });
+
+    expect(merged.map((m) => m.value)).toEqual(["MANY_TINY", "FEW_HUGE"]);
+    expect(merged[0].eventCount).toBe(900);
+    expect("estimatedBytes" in merged[0]).toBe(false);
+    expect(merged[1].estimatedBytes).toBe(1024000);
+  });
+
+  it("still NEVER lets a byte estimate cross a tier boundary", () => {
+    // The rule volume already obeys, restated for the new key: a busy feed the
+    // vendor merely documents must not outrank a quiet one a shipped detection
+    // depends on, however many bytes it weighs.
+    const busyVendor = documentedLogTypesForSolution("Palo Alto Networks")[0]
+      .value;
+    const merged = mergeLogTypeSources({
+      expected: [expected("QUIET_BUT_NEEDED", ["alert-rule"])],
+      vendorLogTypes: documentedLogTypesForSolution("Palo Alto Networks"),
+      provided: [],
+      volumes: [sized(busyVendor, 900000, 2048), sized("QUIET_BUT_NEEDED", 3, 8)],
+    });
+
+    expect(merged[0].value).toBe("QUIET_BUT_NEEDED");
+    expect(merged[0].evidence).toBe("detection");
+    expect(merged[0].estimatedBytes).toBe(24);
+    const vendorRow = merged.find((m) => m.value === busyVendor);
+    expect(vendorRow?.estimatedBytes).toBe(1843200000);
+  });
+
+  it("ranks the UNREFERENCED set by bytes on the same all-or-nothing rule", () => {
+    const ranked = rankUnreferencedByVolume(
+      ["hipmatch", "globalprotect"],
+      [
+        sized("hipmatch", 900, 4096),
+        sized("globalprotect", 890000, 200),
+      ],
+    );
+
+    // 900 x 4096 = 3,686,400 against 890,000 x 200 = 178,000,000.
+    expect(ranked.map((u) => u.value)).toEqual(["globalprotect", "hipmatch"]);
+    expect(ranked[0].estimatedBytes).toBe(178000000);
+    expect(ranked[1].estimatedBytes).toBe(3686400);
+  });
+
+  it("leaves the unreferenced set untouched when nothing was sampled", () => {
+    // The state before any Lake query and after one that sampled nothing: the
+    // count key still decides, and no entry gains a byte figure.
+    const ranked = rankUnreferencedByVolume(
+      ["hipmatch", "globalprotect"],
+      [sized("globalprotect", 890000), sized("hipmatch", 12)],
+    );
+
+    expect(ranked.map((u) => u.value)).toEqual(["globalprotect", "hipmatch"]);
+    expect(ranked.every((u) => !("estimatedBytes" in u))).toBe(true);
   });
 });

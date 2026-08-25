@@ -26,4 +26,12 @@ export type {
 } from "./merge";
 // evidenceCounts is module-local: test-only at the 2026-08-20 audit, and the
 // UI counts tiers off the entries it already has.
-export { mergeLogTypeSources, rankUnreferencedByVolume } from "./merge";
+// estimatedLogTypeBytes IS exported, unlike evidenceCounts: the Lake panel does
+// the same events-to-bytes conversion for its own per-row volumes, and a second
+// multiplication in the UI would be a second place for the app to decide what
+// an unmeasured log type weighs.
+export {
+  estimatedLogTypeBytes,
+  mergeLogTypeSources,
+  rankUnreferencedByVolume,
+} from "./merge";

@@ -24,6 +24,15 @@
  * {@link rankUnreferencedByVolume} for why that is a decision rather than an
  * omission.
  *
+ * VOLUME IS TWO NUMBERS since the plan's last Phase 5 item shipped: the events
+ * counted, and an ESTIMATE of what they weigh. Sentinel bills by volume rather
+ * than by event, so a count alone leaves the operator doing arithmetic they have
+ * no inputs for. The estimate is mean event size (measured over a SAMPLE of that
+ * log type's own events) times the count - see {@link estimatedLogTypeBytes} -
+ * and every renderer of it owes the reader the word "estimated". It is subject
+ * to the same refusal as the count: absent when it cannot be computed, never
+ * defaulted to zero.
+ *
  * Pure: no IO, no fetch, no React, no Date/crypto.
  */
 
@@ -66,6 +75,17 @@ export interface MergedLogType {
    * {@link LogTypeVolume}.
    */
   eventCount?: number;
+  /**
+   * ESTIMATED bytes over that same window: mean event size x
+   * {@link eventCount}. UNDEFINED whenever either half is missing - see
+   * {@link estimatedLogTypeBytes}, which is the only thing that computes it.
+   *
+   * An ESTIMATE, and it must be rendered as one. Sentinel bills by volume
+   * rather than by event, so this is the number an operator can reason about
+   * cost with - but the mean behind it comes from a SAMPLE of the log type's
+   * events, not from every event counted.
+   */
+  estimatedBytes?: number;
 }
 
 /**
@@ -87,6 +107,51 @@ export interface LogTypeVolume {
   logType: string;
   /** Events over that source's window; undefined when it came back unreadable. */
   eventCount?: number;
+  /**
+   * MEAN BYTES PER EVENT for this log type, measured over a SAMPLE of its own
+   * events - `meanEventBytes(estimateDropSavings(sampled, []))`. Undefined when
+   * no sample of this log type was available to measure, which is a real and
+   * common state: the Lake query samples a few hundred events to pick its
+   * discriminator, and a skewed dataset's minority log types can be counted at
+   * dataset scale without appearing in that sample at all.
+   *
+   * WHAT MAY BE PASSED HERE: a mean measured over actual events of THIS log
+   * type. WHAT MAY NOT: a mean measured over the whole dataset and reused for
+   * every row. That would be inventing this log type's size from other log
+   * types' events, and a firewall's TRAFFIC and THREAT records differ by more
+   * than enough to make it a lie.
+   */
+  meanEventBytes?: number;
+}
+
+/**
+ * EVENTS TO BYTES for one measured row - mean event size x event count, rounded
+ * to whole bytes. The plan's remaining Phase 5 item, and the ONLY place the
+ * multiplication happens; every byte figure in the app traces back here.
+ *
+ * UNDEFINED IS THE DEFAULT ANSWER, not zero, and it is returned in every case
+ * where the product would be a number nobody measured:
+ *  - no count            -> nothing to multiply.
+ *  - no mean             -> this log type's events were never sampled.
+ *  - either non-finite   -> an unreadable figure must not become a byte total.
+ *  - a mean of zero      -> `meanEventBytes` already refuses to produce one; the
+ *    guard is repeated because a zero slipping through here would turn a
+ *    million-event log type into a confident "0 B".
+ *
+ * A count of ZERO with a real mean DOES yield 0, and that is correct: zero
+ * events genuinely is zero bytes. The distinction this module keeps everywhere -
+ * a measured zero is an answer, an unmeasured value is not - holds here too.
+ */
+export function estimatedLogTypeBytes(
+  volume: LogTypeVolume,
+): number | undefined {
+  const { eventCount, meanEventBytes } = volume;
+  if (eventCount === undefined || meanEventBytes === undefined) return undefined;
+  if (!Number.isFinite(eventCount) || !Number.isFinite(meanEventBytes)) {
+    return undefined;
+  }
+  if (meanEventBytes <= 0 || eventCount < 0) return undefined;
+  return Math.round(eventCount * meanEventBytes);
 }
 
 // Both IMPORTED, not re-derived (2026-08-20 audit). This module used to carry
@@ -137,14 +202,84 @@ export interface MergeLogTypeInput {
 function sumVolumeFor(
   keys: readonly string[],
   volumes: readonly LogTypeVolume[],
-): number | undefined {
-  let total: number | undefined;
+): VolumeTotal {
+  let eventCount: number | undefined;
+  let estimatedBytes: number | undefined;
+  let someRowLacksAnEstimate = false;
+
   for (const row of volumes) {
     if (row.eventCount === undefined) continue;
     if (!isCovered(row.logType, keys)) continue;
-    total = (total ?? 0) + row.eventCount;
+    eventCount = (eventCount ?? 0) + row.eventCount;
+    const bytes = estimatedLogTypeBytes(row);
+    if (bytes === undefined) {
+      someRowLacksAnEstimate = true;
+      continue;
+    }
+    estimatedBytes = (estimatedBytes ?? 0) + bytes;
+  }
+
+  const total: VolumeTotal = {};
+  if (eventCount !== undefined) total.eventCount = eventCount;
+  // ALL OR NOTHING on the bytes, deliberately. A partial sum would sit beside a
+  // count that covers MORE events than it does - "890,123 events, ~4 MB" where
+  // the 4 MB speaks for a third of them - and an operator reading that as this
+  // log type's ingest volume would be off by whatever we silently left out.
+  // Under-reporting a cost figure is the expensive direction to be wrong in.
+  if (estimatedBytes !== undefined && !someRowLacksAnEstimate) {
+    total.estimatedBytes = estimatedBytes;
   }
   return total;
+}
+
+/** What one log type's matching volume rows add up to. */
+interface VolumeTotal {
+  eventCount?: number;
+  estimatedBytes?: number;
+}
+
+/**
+ * WHICH measured key a list ranks by - one choice for the whole list, never per
+ * entry.
+ *
+ * Bytes is the better key when it exists: Sentinel bills by volume, and the two
+ * orders genuinely disagree - 100 events at 10 KB outweighs 900 at 200 B, and
+ * only the byte order says so.
+ *
+ * But it is a LIST-LEVEL choice because a mixed comparator would not be a total
+ * order. Ranking "bytes where present, count otherwise" compares 890,123
+ * (events) against 2,400,000 (bytes) as if they were the same quantity, and the
+ * result depends on which pairs the sort happens to visit. Promoting the
+ * estimated entries above the unestimated ones instead would rank on how well
+ * we measured rather than on what we measured - a verdict, which is exactly what
+ * the 2026-08-20 decision forbids.
+ *
+ * So: every entry that carries a count must also carry an estimate, or the list
+ * ranks by count. Both orders are total and deterministic; neither invents a
+ * number; and the common states behave sensibly - before any Lake query nothing
+ * is measured and the count key changes nothing, while a query that measured
+ * everything ranks the way cost does.
+ */
+function ranksByBytes(entries: readonly VolumeTotal[]): boolean {
+  let anyMeasured = false;
+  for (const entry of entries) {
+    if (entry.eventCount === undefined) continue;
+    if (entry.estimatedBytes === undefined) return false;
+    anyMeasured = true;
+  }
+  return anyMeasured;
+}
+
+/**
+ * The sort key for one entry under the chosen measure.
+ *
+ * UNMEASURED IS -1 under either key, which keeps the recorded rule intact: it
+ * sorts below even a measured ZERO, because zero is an answer and absence is
+ * not. Under the byte key an entry without an estimate also has no count (that
+ * is what {@link ranksByBytes} established), so -1 still means "unmeasured".
+ */
+function volumeKey(entry: VolumeTotal, byBytes: boolean): number {
+  return (byBytes ? entry.estimatedBytes : entry.eventCount) ?? -1;
 }
 
 /**
@@ -175,8 +310,11 @@ export function mergeLogTypeSources(
       referencedBy: entry.referencedBy,
       provided: isCovered(entry.value, providedNorm),
     };
-    const eventCount = sumVolumeFor([key], volumes);
-    if (eventCount !== undefined) merged.eventCount = eventCount;
+    const volume = sumVolumeFor([key], volumes);
+    if (volume.eventCount !== undefined) merged.eventCount = volume.eventCount;
+    if (volume.estimatedBytes !== undefined) {
+      merged.estimatedBytes = volume.estimatedBytes;
+    }
     out.push(merged);
   }
 
@@ -197,8 +335,11 @@ export function mergeLogTypeSources(
     // Aliases participate here for the same reason they do in `provided`: the
     // vendor's "ZIA Web" and the dataset's "NSSWeblog" are one feed, and a
     // volume found under either belongs to this row.
-    const eventCount = sumVolumeFor(keys, volumes);
-    if (eventCount !== undefined) merged.eventCount = eventCount;
+    const volume = sumVolumeFor(keys, volumes);
+    if (volume.eventCount !== undefined) merged.eventCount = volume.eventCount;
+    if (volume.estimatedBytes !== undefined) {
+      merged.estimatedBytes = volume.estimatedBytes;
+    }
     out.push(merged);
   }
 
@@ -213,10 +354,15 @@ export function mergeLogTypeSources(
   // Unmeasured sorts last within its tier (-1), below even a measured zero, and
   // deliberately matches the `?? -1` the Lake query already uses to rank its
   // own rows.
+  //
+  // WHICH measure is a list-level choice - estimated BYTES when every measured
+  // entry has one, events otherwise. See {@link ranksByBytes}; the choice is
+  // made once here so a single sort key orders the whole list.
+  const byBytes = ranksByBytes(out);
   return out.sort(
     (a, b) =>
       EVIDENCE_RANK[a.evidence] - EVIDENCE_RANK[b.evidence] ||
-      (b.eventCount ?? -1) - (a.eventCount ?? -1) ||
+      volumeKey(b, byBytes) - volumeKey(a, byBytes) ||
       (b.referencedBy?.length ?? 0) - (a.referencedBy?.length ?? 0) ||
       a.value.localeCompare(b.value),
   );
@@ -228,6 +374,12 @@ export interface UnreferencedLogType {
   value: string;
   /** Events measured over the volume source's window; undefined if unmeasured. */
   eventCount?: number;
+  /**
+   * ESTIMATED bytes over that window - mean event size x {@link eventCount},
+   * undefined whenever either half is missing. Rendered as an estimate, never
+   * as a measurement; see {@link estimatedLogTypeBytes}.
+   */
+  estimatedBytes?: number;
 }
 
 /**
@@ -254,16 +406,21 @@ export function rankUnreferencedByVolume(
   unreferenced: readonly string[],
   volumes: readonly LogTypeVolume[] = [],
 ): UnreferencedLogType[] {
-  return unreferenced
-    .map((value) => {
-      const key = normalize(value);
-      const entry: UnreferencedLogType = { value };
-      const eventCount =
-        key === "" ? undefined : sumVolumeFor([key], volumes);
-      if (eventCount !== undefined) entry.eventCount = eventCount;
-      return entry;
-    })
-    .sort((a, b) => (b.eventCount ?? -1) - (a.eventCount ?? -1));
+  const entries = unreferenced.map((value) => {
+    const key = normalize(value);
+    const entry: UnreferencedLogType = { value };
+    const volume = key === "" ? {} : sumVolumeFor([key], volumes);
+    if (volume.eventCount !== undefined) entry.eventCount = volume.eventCount;
+    if (volume.estimatedBytes !== undefined) {
+      entry.estimatedBytes = volume.estimatedBytes;
+    }
+    return entry;
+  });
+  // Same list-level measure the merged list uses, for the same reason - and it
+  // keeps the tie rule above true: with nothing measured, every key is -1, every
+  // comparison ties, and the caller's order survives.
+  const byBytes = ranksByBytes(entries);
+  return entries.sort((a, b) => volumeKey(b, byBytes) - volumeKey(a, byBytes));
 }
 
 /** How many of the merged log types come from each tier. */

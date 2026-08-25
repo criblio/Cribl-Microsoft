@@ -25,10 +25,12 @@ import type {
 } from "@soc/core";
 import {
   DEFAULT_PRESELECTED,
+  canFetchLakeSamples,
   deriveLakeCommitView,
   deriveLakeQueryView,
   lakeCollisions,
   lakeLogTypeChoices,
+  lakeOffersSamples,
   mergedLakeLogTypeCount,
   plannedLakeSamples,
   selectedLakeLogTypes,
@@ -45,10 +47,23 @@ const queryResult = (
   logTypes: [],
   window: WINDOW,
   noDiscriminator: false,
+  datasetAsLogType: false,
   truncated: false,
   notes: [],
   ok: true,
   ...over,
+});
+
+/**
+ * What core returns for a populated dataset that nothing splits: ONE log type,
+ * named after the dataset, with a volume measured by an ungrouped
+ * `summarize count()` and NO discriminator field.
+ */
+const DATASET_AS_LOG_TYPE = queryResult({
+  noDiscriminator: true,
+  datasetAsLogType: true,
+  logTypes: [{ logType: "cribl_logs", eventCount: 1216 }],
+  notes: ["named after the dataset"],
 });
 
 const fetchResult = (
@@ -93,6 +108,43 @@ describe("lakeLogTypeChoices", () => {
       "F",
       "G",
     ]);
+  });
+
+  // The BYTE ESTIMATE on a pickable row (plan Phase 5, last item). Whether a log
+  // type is worth ticking is partly a cost question, and Sentinel charges by
+  // volume - but the figure is a sampled mean times a window-wide count, so it
+  // must be absent rather than zero whenever it cannot be computed.
+
+  it("carries the estimate for a row whose events were sampled", () => {
+    const choices = lakeLogTypeChoices([
+      { logType: "TRAFFIC", eventCount: 890123, meanEventBytes: 620 },
+    ]);
+
+    expect(choices[0].eventCount).toBe(890123);
+    // 890,123 x 620 = 551,876,260.
+    expect(choices[0].estimatedBytes).toBe(551876260);
+  });
+
+  it("leaves a counted-but-unsampled row unestimated - never zero", () => {
+    const choices = lakeLogTypeChoices([
+      { logType: "SECURITY", eventCount: 22792 },
+    ]);
+
+    expect(choices[0].eventCount).toBe(22792);
+    expect(choices[0].estimatedBytes).toBeUndefined();
+    // The KEY is absent, so a renderer testing for the property shows nothing.
+    expect("estimatedBytes" in choices[0]).toBe(false);
+  });
+
+  it("estimates nothing from a mean with no count to multiply", () => {
+    // The unreadable-count row: it already renders "volume unknown", and a byte
+    // figure beside that would be a total nobody could have measured.
+    const choices = lakeLogTypeChoices([
+      { logType: "TRAFFIC", meanEventBytes: 620 },
+    ]);
+
+    expect(choices[0].eventCount).toBeUndefined();
+    expect("estimatedBytes" in choices[0]).toBe(false);
   });
 
   it("does NOT pre-select a log type the operator already provided", () => {
@@ -292,6 +344,10 @@ describe("deriveLakeQueryView", () => {
     // A dataset full of events that nothing distinguishes is not an idle
     // dataset, and telling the operator it is would send them to widen a window
     // that is already wide enough.
+    //
+    // This is now the shape where core offered NOTHING with it - which core no
+    // longer produces, but the port's type still permits and the branch below
+    // is one condition away from rendering a row-less panel as ready.
     const view = deriveLakeQueryView(
       queryResult({ noDiscriminator: true, notes: ["no field distinguishes"] }),
       false,
@@ -299,6 +355,88 @@ describe("deriveLakeQueryView", () => {
     expect(view.status).toBe("no-discriminator");
     expect(view.headline).toContain("tells one log type from another");
     expect(view.notes).toEqual(["no field distinguishes"]);
+    expect(view.datasetAsLogType).toBe(false);
+    // Nothing to take: no controls, no commit.
+    expect(lakeOffersSamples(view)).toBe(false);
+    expect(canFetchLakeSamples(view, 1)).toBe(false);
+  });
+
+  it("gives a DATASET OFFERED AS ONE LOG TYPE a status of its own, and a commit", () => {
+    // The gap this closes. `winevt_dcronly` holds 1,216 events of one Windows
+    // channel; nothing splits them, and the app used to answer with a dead-end
+    // sentence pointing at a different acquisition mode. It is a takeable
+    // sample, so the view carries the window and the controls that a grouped
+    // list carries - the ONE thing it must add is that the name is the
+    // dataset's.
+    const view = deriveLakeQueryView(DATASET_AS_LOG_TYPE, false);
+
+    expect(view.status).toBe("dataset-as-log-type");
+    expect(view.headline).toBe(
+      'Nothing on these events tells one log type from another, so "cribl_logs" is offered as a single log type.',
+    );
+    expect(view.datasetAsLogType).toBe(true);
+    // No field, and that is the point - the fetch runs unfiltered.
+    expect(view.discriminatorField).toBeUndefined();
+    // A volume needs its window, and this one has a real volume.
+    expect(view.window).toEqual(WINDOW);
+    expect(view.notes).toEqual(["named after the dataset"]);
+    expect(lakeOffersSamples(view)).toBe(true);
+    expect(canFetchLakeSamples(view, 1)).toBe(true);
+  });
+
+  it("keeps EMPTY and DATASET-AS-LOG-TYPE apart, which is the whole point", () => {
+    // The two used to be one dead end on screen: no rows, no commit, go away.
+    // They are opposite facts - one dataset is idle, the other is full - and
+    // they send the operator to opposite places.
+    const empty = deriveLakeQueryView(queryResult(), false);
+    const single = deriveLakeQueryView(DATASET_AS_LOG_TYPE, false);
+
+    expect(empty.status).toBe("empty");
+    expect(single.status).toBe("dataset-as-log-type");
+    expect(empty.headline).not.toBe(single.headline);
+    expect(empty.datasetAsLogType).toBe(false);
+    expect(lakeOffersSamples(empty)).toBe(false);
+    expect(lakeOffersSamples(single)).toBe(true);
+    // Four distinct sentences for four distinct answers, none folding into
+    // another.
+    const headlines = [
+      deriveLakeQueryView(queryResult({ ok: false }), false).headline,
+      empty.headline,
+      deriveLakeQueryView(queryResult({ noDiscriminator: true }), false).headline,
+      single.headline,
+    ];
+    expect(new Set(headlines).size).toBe(4);
+  });
+
+  it("offers the dataset's row like any other, volume and all", () => {
+    // Downstream of the view: the row is an ordinary choice, so it pre-selects,
+    // collides and stores exactly as a discovered log type does. Its volume is
+    // the dataset's own total, carried through unchanged.
+    const choices = lakeLogTypeChoices(
+      DATASET_AS_LOG_TYPE.logTypes,
+      [],
+    );
+    expect(choices).toHaveLength(1);
+    expect(choices[0].value).toBe("cribl_logs");
+    expect(choices[0].eventCount).toBe(1216);
+    expect(choices[0].selected).toBe(true);
+    expect(selectedLakeLogTypes(choices)).toEqual(["cribl_logs"]);
+  });
+
+  it("still offers the sample when core could not count the dataset", () => {
+    // A lost count costs the NUMBER, never the offer. The row renders with no
+    // volume - never zero, and never the size of the sample core read to find a
+    // field - and is still committable.
+    const uncounted = queryResult({
+      noDiscriminator: true,
+      datasetAsLogType: true,
+      logTypes: [{ logType: "cribl_logs" }],
+    });
+    const view = deriveLakeQueryView(uncounted, false);
+
+    expect(view.status).toBe("dataset-as-log-type");
+    expect(canFetchLakeSamples(view, 1)).toBe(true);
+    expect(lakeLogTypeChoices(uncounted.logTypes)[0].eventCount).toBeUndefined();
   });
 
   it("summarises a ready result and carries the window and the group field", () => {
@@ -345,6 +483,66 @@ describe("deriveLakeQueryView", () => {
     );
     expect(view.status).toBe("querying");
     expect(view.window).toBeNull();
+  });
+});
+
+/**
+ * The one condition the BUTTON and the HANDLER both ask.
+ *
+ * They were written twice and the button was left enabled over a handler that
+ * silently returned (2026-08-20 audit) - a control that does nothing whatever
+ * when pressed reads as a broken app. Now there is one function, and it has a
+ * second rule to get right: a missing discriminator is addressable when the
+ * DATASET is the log type and never otherwise, because the fetch it addresses
+ * is unfiltered and returns the whole dataset.
+ */
+describe("canFetchLakeSamples", () => {
+  const ready = deriveLakeQueryView(
+    queryResult({
+      discriminatorField: "sourcetype",
+      logTypes: [{ logType: "TRAFFIC", eventCount: 5 }],
+    }),
+    false,
+  );
+
+  it("needs a selection, whatever the status", () => {
+    expect(canFetchLakeSamples(ready, 0)).toBe(false);
+    expect(canFetchLakeSamples(ready, 1)).toBe(true);
+    expect(canFetchLakeSamples(deriveLakeQueryView(DATASET_AS_LOG_TYPE, false), 0)).toBe(
+      false,
+    );
+  });
+
+  it("refuses every status with nothing on offer", () => {
+    for (const view of [
+      deriveLakeQueryView(null, false),
+      deriveLakeQueryView(null, true),
+      deriveLakeQueryView(queryResult({ ok: false }), false),
+      deriveLakeQueryView(queryResult(), false),
+      deriveLakeQueryView(queryResult({ noDiscriminator: true }), false),
+    ]) {
+      expect(canFetchLakeSamples(view, 3)).toBe(false);
+      expect(lakeOffersSamples(view)).toBe(false);
+    }
+  });
+
+  it("refuses a READY list that carries no field to fetch by", () => {
+    // Log types came back with nothing to filter them with. Allowing this would
+    // run the unfiltered query once per row and store the whole dataset under
+    // each of their names - log types the app never observed together.
+    const fieldless = deriveLakeQueryView(
+      queryResult({ logTypes: [{ logType: "TRAFFIC", eventCount: 5 }] }),
+      false,
+    );
+    expect(fieldless.status).toBe("ready");
+    expect(fieldless.datasetAsLogType).toBe(false);
+    expect(canFetchLakeSamples(fieldless, 1)).toBe(false);
+  });
+
+  it("allows a MISSING field only when the dataset itself is the log type", () => {
+    const single = deriveLakeQueryView(DATASET_AS_LOG_TYPE, false);
+    expect(single.discriminatorField).toBeUndefined();
+    expect(canFetchLakeSamples(single, 1)).toBe(true);
   });
 });
 

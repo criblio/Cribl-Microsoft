@@ -530,6 +530,15 @@ swallows every route. Same failure, earlier.
 > panel is unchanged and still receives exactly what it returned - so the query
 > that produced them is the one that reports them.
 >
+> **THE LAST ITEM CLOSED 2026-08-25: events to BYTES.** A volume now reaches the
+> operator as a count AND an estimate of what it weighs, because Sentinel bills
+> by volume and a count alone leaves them doing arithmetic they have no inputs
+> for. `meanEventBytes` (drop-savings) x the Search count, via the single
+> `estimatedLogTypeBytes`; the mean is measured off step one's own sample rows,
+> per log type, for no extra search job. It renders as "~2.1 GB estimated" beside
+> the count on the Lake panel and the recommendation, and is ABSENT - never zero -
+> wherever it cannot be computed. Item 4 in both lists below has the detail.
+>
 > WHAT WAS BUILT TO THE DECISION BELOW, not around it: the number is attached
 > and the list is ordered; nothing is flagged, no threshold exists, and no
 > headline mentions a volume. Two rules the pins hold and a future change must
@@ -584,10 +593,13 @@ scope unless explicitly wanted.
 >    says "fine". Phase 5 wants the same set to read as cost. Volume is what
 >    reconciles them - 12 events/day unreferenced is fine, 890K is a finding -
 >    but somebody has to pick the line.
-> 4. No events-to-bytes conversion anywhere. `estimateDropSavings` measures
+> 4. ~~No events-to-bytes conversion anywhere. `estimateDropSavings` measures
 >    FIELD bytes inside a sample already collected; it has no notion of a daily
 >    rate. Its mean-bytes-per-event could be multiplied by a Search count,
->    though, so the pieces exist.
+>    though, so the pieces exist.~~ **BUILT 2026-08-25** - see the same numbered
+>    item in the "Remaining" list below for how, and for what it refuses to
+>    estimate. Still no daily rate: the estimate covers the QUERIED WINDOW, which
+>    is the only period anything here measured.
 >
 > **On "no ENABLED detection consumes it" - the wording is reachable, but not
 > for free, and BOTH the obvious readings of the code are wrong.**
@@ -626,8 +638,34 @@ scope unless explicitly wanted.
 > Remaining:
 > 1. Counts have nowhere to live once merged - `unreferenced` is still a bare
 >    `string[]` and `MergedLogType` has no volume field.
-> 4. Events-to-bytes remains absent; `estimateDropSavings`'s mean bytes/event
->    could be multiplied by a Search count, so the pieces exist.
+> 4. ~~Events-to-bytes remains absent; `estimateDropSavings`'s mean bytes/event
+>    could be multiplied by a Search count, so the pieces exist.~~
+>    **BUILT 2026-08-25.** It was assembled from exactly those pieces:
+>    `meanEventBytes(savings)` in `drop-savings.ts` divides the measured bytes by
+>    the measured events, and `estimatedLogTypeBytes(volume)` in
+>    `log-type-catalog/merge.ts` is the ONLY multiplication in the app.
+>
+>    WHERE THE MEAN COMES FROM, which was the open question: step one of the Lake
+>    query. It already pulls up to `DISCRIMINATOR_SAMPLE_LIMIT` real events to
+>    decide which field discriminates and then discards their bodies; those rows
+>    are now also grouped by that same field and measured, so each log type's mean
+>    is drawn from ITS OWN events at the cost of no extra search job. A dataset
+>    offered as one log type measures the whole sample, which is the one case a
+>    dataset-wide mean is not a substitution.
+>
+>    THE REFUSALS ARE THE FEATURE. `meanEventBytes` returns undefined for zero
+>    events and for zero bytes; `estimatedLogTypeBytes` returns undefined without
+>    a count, without a mean, for a non-finite figure, and for a zero mean - so a
+>    counted-but-unsampled log type (the skew case) shows its count alone rather
+>    than "~0 B". Summing is all-or-nothing: if any summed row lacks a mean the
+>    whole estimate goes, because a partial byte total beside a full count
+>    under-reports a cost while reading as measured.
+>
+>    RANKING is a LIST-LEVEL choice - bytes when every measured entry carries an
+>    estimate, events otherwise. Mixing the keys per entry would not be a total
+>    order, and promoting the estimated entries would rank on how well we measured
+>    rather than on what we measured. No threshold was added; the 2026-08-20
+>    decision holds.
 >
 > **THE THRESHOLD - DECIDED 2026-08-20 (user): there is no threshold.**
 >
@@ -908,6 +946,41 @@ on their own; the fourth degraded every query that did work:
 additions. Measured live, each carries exactly ONE distinct value in every
 dataset sampled - they describe the DATASET, not the event, so they can never
 split one. Pinned negatively so the next reader does not re-derive it.
+
+**A FIFTH DEFECT, found in the same run and fixed 2026-08-25: for most real
+datasets the Lake mode yielded NOTHING.** Not a failure - a dead end, which is
+harder to notice because every gate was green and every sentence on screen was
+true. Of the 31 datasets in the lab lake, 24 held no events over -24h and only
+ONE of the populated remainder yielded a discriminator. `winevt_dcronly` (1,216
+events, a single Windows channel) and `azure_alerts_validation` (265) are
+single-log-type BY DESIGN: the data is already split per dataset, which is how
+people organise a lake. Each of them was answered with "No field on these events
+distinguishes one log type from another ... capture a sample and name the log
+type yourself instead" - the app sending the operator to a DIFFERENT acquisition
+mode for data sitting in front of it, already named by the dataset itself.
+
+What was wrong was the inference, not the observation. A populated dataset that
+nothing splits holds ONE log type, so:
+
+- Step two still runs, without its `by` clause: `dataset="X" | summarize
+  eventCount=count()`. One extra job, exactly what the grouped form costs, so
+  the two-jobs-per-query budget is unchanged. The count could NOT come from step
+  one's rows - those are capped at `DISCRIMINATOR_SAMPLE_LIMIT`, so a
+  1,216-event dataset would have reported 500, a measurement of our own bound.
+- The log type is named after the DATASET, and `datasetAsLogType: true` says so
+  all the way to the panel, which prints the caveat beside the row. The app does
+  not get to claim a vendor log type it never observed - the same rule that
+  keeps `data_source` in the low-confidence tail.
+- The commit path took the field as optional: no field means no `where` clause
+  and the whole dataset is fetched, which is only addressable for ONE log type.
+  Asking for several with no field is refused rather than served, because the
+  unfiltered query answers identically for each and would write the same events
+  into the store under names nobody observed.
+- EMPTY and SINGLE-LOG-TYPE are pinned side by side, in core and in the panel.
+  They rendered as the same dead end before, and they are opposite facts.
+
+A lost count costs the number and never the offer: `ok` stays true, the volume
+stays undefined rather than becoming a zero, and the sample is still takeable.
 
 ### Attempt 2026-08-20 - blocked, with two things settled anyway
 

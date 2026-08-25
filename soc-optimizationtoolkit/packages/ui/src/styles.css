@@ -1684,7 +1684,8 @@ button.journey-step-main:hover .journey-step-label {
 /* A count with no window is not a fact; the window rides with it. */
 .lake-window,
 .lake-truncated,
-.lake-unavailable {
+.lake-unavailable,
+.lake-dataset-named {
   font-size: 12px;
   line-height: 18px;
   color: var(--text-muted);

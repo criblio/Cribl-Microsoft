@@ -40,6 +40,15 @@
  * 4. TRUNCATION IS NOT COMPLETENESS. A list that hit the row cap reads as the
  *    whole dataset unless it says otherwise.
  *
+ * 5. AN UNSPLITTABLE DATASET IS NOT AN EMPTY ONE, and since 2026-08-25 it is
+ *    not a dead end either. When nothing distinguishes a populated dataset's
+ *    events it holds ONE log type, which core offers under the DATASET'S name
+ *    with a measured volume. Two things follow that this module owes the
+ *    operator: the row is committable (so the controls and the window sentence
+ *    appear for it, {@link lakeOffersSamples}), and the name is stated as the
+ *    dataset's rather than as something found in the data. Getting the second
+ *    wrong would have the app invent a vendor log type it never observed.
+ *
  * Pure: no IO, no fetch, no React, no Date/crypto. Number FORMATTING is left to
  * the component - `toLocaleString` is a rendering choice, and pinning its output
  * here would pin the test runner's locale.
@@ -52,6 +61,7 @@ import type {
   QueryLakeSamplesResult,
   TaggedSample,
 } from "@soc/core";
+import { estimatedLogTypeBytes } from "@soc/core";
 import {
   existingLabelsByCase,
   plannedSamplesFrom,
@@ -97,6 +107,16 @@ export interface LakeLogTypeChoice {
    * volume of zero is a claim about the data, and we would be making it up.
    */
   eventCount?: number;
+  /**
+   * ESTIMATED bytes over that window - {@link eventCount} times the mean size of
+   * this log type's sampled events, computed by core's `estimatedLogTypeBytes`.
+   * Undefined whenever either half is missing, and rendered as an estimate.
+   *
+   * Worth showing HERE, on the row the operator ticks: what a log type costs to
+   * ingest into Sentinel is charged by volume, so it is part of deciding whether
+   * to take it - and "890,123 events" alone does not answer that.
+   */
+  estimatedBytes?: number;
   /** Whether it starts ticked. */
   selected: boolean;
   /** True when taking this would replace an existing tagged sample. */
@@ -146,6 +166,13 @@ export function lakeLogTypeChoices(
     };
     if (entry.eventCount !== undefined) {
       choice.eventCount = entry.eventCount;
+    }
+    // The multiplication is CORE's, not this module's. A second events-to-bytes
+    // rule in the UI would be a second place to decide what an unmeasured log
+    // type weighs, and the answer to that has to be "nothing at all", once.
+    const estimatedBytes = estimatedLogTypeBytes(entry);
+    if (estimatedBytes !== undefined) {
+      choice.estimatedBytes = estimatedBytes;
     }
     if (replacesExisting) {
       choice.note =
@@ -221,6 +248,15 @@ export function lakeCollisions(
  * ONE sample the operator can rename; a Lake query with nothing to group by
  * produces NO rows at all, because step two never ran. Folding it into `empty`
  * would tell an operator their dataset is idle when it is full.
+ *
+ * `dataset-as-log-type` IS THE ANSWER TO THAT (2026-08-25), and the two must not
+ * be confused either. A populated dataset that nothing splits holds ONE log
+ * type, and core now offers it under the dataset's own name with a real count -
+ * so this status has rows, a window and a commit, where `no-discriminator` has
+ * none of the three. `no-discriminator` remains for a result that reports the
+ * missing field WITHOUT offering anything, which core no longer produces but the
+ * port's type still permits; a status that silently renders a row-less panel as
+ * ready would be worse than one branch that is currently unreachable.
  */
 export type LakeQueryStatus =
   | "idle"
@@ -228,6 +264,7 @@ export type LakeQueryStatus =
   | "failed"
   | "empty"
   | "no-discriminator"
+  | "dataset-as-log-type"
   | "ready";
 
 export interface LakeQueryView {
@@ -237,6 +274,17 @@ export interface LakeQueryView {
   window: LakeWindow | null;
   /** The field Search grouped by - step two cannot be addressed without it. */
   discriminatorField?: string;
+  /**
+   * True when the one row on offer is named after the DATASET rather than after
+   * anything observed in the events.
+   *
+   * Carried rather than inferred from the status so the two things it decides
+   * stay in one place: whether the panel prints the naming caveat, and whether
+   * a fetch can be addressed with NO discriminator field. Inferring the second
+   * from "the field is missing" is what would let a genuinely field-less result
+   * enable a button that fetches the whole dataset under a name nobody saw.
+   */
+  datasetAsLogType: boolean;
   /** True when the list hit the row cap and the dataset may hold more. */
   truncated: boolean;
   notes: readonly string[];
@@ -255,6 +303,7 @@ export function deriveLakeQueryView(
   const base = {
     window: null,
     truncated: false,
+    datasetAsLogType: false,
     notes: [] as readonly string[],
   };
 
@@ -284,6 +333,22 @@ export function deriveLakeQueryView(
     };
   }
   if (result.noDiscriminator) {
+    // OFFERED, not refused. The dataset is populated and nothing splits it, so
+    // it holds one log type and core names it after the dataset. The panel
+    // renders that row, its measured volume and a commit - what it must NOT do
+    // is present the name as a log type anyone found in the data, which is what
+    // `datasetAsLogType` on the view goes on to say.
+    if (result.datasetAsLogType && result.logTypes.length > 0) {
+      return {
+        ...base,
+        window,
+        status: "dataset-as-log-type",
+        datasetAsLogType: true,
+        headline: `Nothing on these events tells one log type from another, so "${result.datasetId}" is offered as a single log type.`,
+        notes: result.notes,
+      };
+    }
+    // Nothing was offered with it, so this stays the dead end it always was.
     return {
       ...base,
       window,
@@ -308,6 +373,8 @@ export function deriveLakeQueryView(
     status: "ready",
     headline: `${kinds} log type${kinds === 1 ? "" : "s"} in "${result.datasetId}", highest volume first.`,
     window,
+    // A field grouped these, so every name on offer came out of the data.
+    datasetAsLogType: false,
     truncated: result.truncated,
     notes: result.notes,
   };
@@ -315,6 +382,41 @@ export function deriveLakeQueryView(
     view.discriminatorField = result.discriminatorField;
   }
   return view;
+}
+
+/**
+ * Whether this view has rows the operator can actually take.
+ *
+ * TWO statuses do, and the second one is easy to forget: a dataset offered as a
+ * single log type is as committable as a grouped list. The panel asks this
+ * rather than comparing statuses inline, so a new offering status cannot reach
+ * the screen with its window sentence and its controls silently missing.
+ */
+export function lakeOffersSamples(view: LakeQueryView): boolean {
+  return view.status === "ready" || view.status === "dataset-as-log-type";
+}
+
+/**
+ * Whether a fetch can be ADDRESSED from this view and this selection.
+ *
+ * THE BUTTON AND THE HANDLER ASK THE SAME QUESTION, which is the whole reason
+ * this is a function rather than a condition written twice. A control that does
+ * nothing whatever when pressed reads to an operator as a broken app rather
+ * than as a missing field, and the two conditions drifting apart is exactly how
+ * that happens.
+ *
+ * The field may be absent ONLY when the dataset itself is the log type: with no
+ * field the fetch runs unfiltered and returns the whole dataset, so allowing it
+ * for a result that merely lacked a discriminator would take those events under
+ * a name nobody observed.
+ */
+export function canFetchLakeSamples(
+  view: LakeQueryView,
+  selectedCount: number,
+): boolean {
+  if (selectedCount === 0) return false;
+  if (!lakeOffersSamples(view)) return false;
+  return view.discriminatorField !== undefined || view.datasetAsLogType;
 }
 
 /** Render a window as the operator sees it. Bounds are relative, not dates. */

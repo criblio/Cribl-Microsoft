@@ -23,7 +23,11 @@
  *     between a partial haul reported as partial and one rounded up to clean;
  *   - the commit BUTTON agreeing with the commit HANDLER's own guard, so a
  *     query with no field to fetch by disables the control instead of leaving
- *     it enabled over a handler that silently returns.
+ *     it enabled over a handler that silently returns;
+ *   - the caveat beside a dataset offered as its own log type, which exists
+ *     ONLY on screen: nothing downstream can say "that name is the dataset's,
+ *     not something we found in your data", and without it the row reads as a
+ *     log type this app discovered.
  */
 
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -49,10 +53,22 @@ const queryResult = (
   logTypes: [],
   window: WINDOW,
   noDiscriminator: false,
+  datasetAsLogType: false,
   truncated: false,
   notes: [],
   ok: true,
   ...over,
+});
+
+/**
+ * A populated dataset that nothing splits: ONE log type under the DATASET'S own
+ * name, counted at dataset scale, with no discriminator field to fetch by.
+ */
+const DATASET_AS_LOG_TYPE = queryResult({
+  noDiscriminator: true,
+  datasetAsLogType: true,
+  logTypes: [{ logType: "cribl_logs", eventCount: 1216 }],
+  notes: ["Rename the sample on its chip once added."],
 });
 
 const fetchResult = (
@@ -109,7 +125,10 @@ function renderPanel(scenario: Scenario = {}) {
   const onQuery = vi.fn(async () => scenario.query ?? THREE_TYPES);
   const onFetchEvents = vi.fn(
     async (
-      _field: string,
+      // `string | undefined`, matching the prop: a dataset offered as its own
+      // log type is fetched with NO field, and a spy typed `string` would let
+      // the panel default it to something the operator never saw.
+      _field: string | undefined,
       _logTypes: readonly string[],
       _eventsPerLogType: number,
     ) => scenario.fetched ?? FETCHED,
@@ -188,7 +207,11 @@ function deferredQuery() {
 function deferredFetch() {
   let resolveWith: (value: FetchLakeEventsResult) => void = () => {};
   const onFetchEvents = vi.fn(
-    (_field: string, _logTypes: readonly string[], _eventsPerLogType: number) =>
+    (
+      _field: string | undefined,
+      _logTypes: readonly string[],
+      _eventsPerLogType: number,
+    ) =>
       new Promise<FetchLakeEventsResult>((resolve) => {
         resolveWith = resolve;
       }),
@@ -281,6 +304,34 @@ describe("LakePanel - what the counts say", () => {
     expect(volumes[2].textContent).toBe("volume unknown");
   });
 
+  it("adds the BYTE ESTIMATE to a row whose events were sampled", async () => {
+    // The plan's last Phase 5 item: a count cannot be reasoned about against a
+    // Sentinel bill, which is charged by volume. The figure is a sampled mean
+    // times a window-wide count, so the row says "~" and "estimated".
+    const { container } = renderPanel({
+      query: queryResult({
+        discriminatorField: "sourcetype",
+        logTypes: [
+          // 1,000 x 2,048 = 2,048,000 B, which formats as "2 MB".
+          { logType: "TRAFFIC", eventCount: 1000, meanEventBytes: 2048 },
+          // Counted but never sampled: the count stands alone.
+          { logType: "SECURITY", eventCount: 22792 },
+        ],
+      }),
+    });
+    await runQuery(container);
+
+    const volumes = container.querySelectorAll(".lake-volume");
+    expect(volumes).toHaveLength(2);
+    expect(volumes[0].textContent).toBe(
+      `${(1000).toLocaleString()} events, ~2 MB estimated`,
+    );
+    // NOT "22,792 events, ~0 B estimated". An unsampled log type gets no byte
+    // figure at all rather than a defaulted zero, which would read as measured.
+    expect(volumes[1].textContent).toBe(`${(22792).toLocaleString()} events`);
+    expect(volumes[1].textContent).not.toContain("0 B");
+  });
+
   it("says when the list hit the row cap, and does not say so otherwise", async () => {
     // A truncated list reads as the whole dataset. An operator who believed it
     // would onboard the top rows and never look for the log type that mattered.
@@ -311,6 +362,10 @@ describe("LakePanel - what the counts say", () => {
     // an unsplittable feed they must name themselves. Folding any two would tell
     // them something false about their data, and each is one branch away from
     // rendering as another.
+    //
+    // A FOURTH joined them on 2026-08-25 and is pinned in its own block below:
+    // a populated dataset that nothing splits, which is now OFFERED under its
+    // own name instead of joining the three dead ends here.
     const failed = renderPanel({
       query: queryResult({ ok: false, notes: ["The search returned HTTP 403."] }),
     });
@@ -359,6 +414,145 @@ describe("LakePanel - what the counts say", () => {
     expect(
       new Set([failedHeadline, emptyHeadline, unsplittableHeadline]).size,
     ).toBe(3);
+  });
+});
+
+/**
+ * A DATASET OFFERED AS ITS OWN LOG TYPE (2026-08-25).
+ *
+ * Measured live: of 31 lake datasets 24 were empty over -24h and only ONE of the
+ * populated ones yielded a discriminator. `winevt_dcronly` - 1,216 events, a
+ * single Windows channel - is single-log-type by design, which is how a lake is
+ * organised, and the panel answered it with a dead-end sentence pointing at a
+ * different acquisition mode entirely.
+ *
+ * What must be true on screen now, and none of it is visible to the pure tests:
+ * the row is RENDERED and TICKABLE, the commit button is enabled, the fetch is
+ * addressed with NO field, and the caveat naming the dataset is on screen beside
+ * it. That last one is the honesty condition - without it the operator reads
+ * `winevt_dcronly` as a log type this app discovered in their data.
+ */
+describe("LakePanel - when the dataset itself is the log type", () => {
+  const named = (c: HTMLElement) => c.querySelectorAll(".lake-dataset-named");
+
+  it("renders the row, its measured volume and its window", async () => {
+    const { container } = renderPanel({ query: DATASET_AS_LOG_TYPE });
+    await runQuery(container);
+
+    expect(status(container)).toBe("dataset-as-log-type");
+    expect(headline(container)).toBe(
+      'Nothing on these events tells one log type from another, so "cribl_logs" is offered as a single log type.',
+    );
+    expect(rows(container)).toHaveLength(1);
+    expect(ticked(container)).toBe(1);
+    expect(
+      container.querySelector(".lake-log-type-name")?.textContent,
+    ).toBe("cribl_logs");
+    // The dataset's own total, formatted with the same call the component makes.
+    expect(container.querySelector(".lake-volume")?.textContent).toBe(
+      `${(1216).toLocaleString()} events`,
+    );
+    // A volume is not a fact without its window, and this row carries one.
+    const window = container.querySelectorAll(".lake-window");
+    expect(window).toHaveLength(1);
+    // No "grouped by" clause: there is no field, and claiming one would be a lie
+    // about how the number was produced.
+    expect(window[0].textContent).toBe("Volumes cover -24h to now.");
+  });
+
+  it("says on screen that the name is the DATASET'S, not a discovered log type", async () => {
+    // The honesty condition. Without this the row is indistinguishable from
+    // GLOBALPROTECT or TRAFFIC - a log type the app claims to have found.
+    const { container } = renderPanel({ query: DATASET_AS_LOG_TYPE });
+    await runQuery(container);
+
+    const caveat = named(container);
+    expect(caveat).toHaveLength(1);
+    expect(caveat[0].textContent).toContain("the dataset's");
+    expect(caveat[0].textContent).toContain("not a log type found in the data");
+    expect(caveat[0].textContent).toContain("Rename it on its chip once added");
+    cleanup();
+
+    // And it is NOT permanent scenery: a grouped list carries no such caveat,
+    // or it would qualify names that came straight out of the data.
+    const grouped = renderPanel();
+    await runQuery(grouped.container);
+    expect(named(grouped.container)).toHaveLength(0);
+    cleanup();
+
+    // Nor does an empty dataset, which has nothing to name at all.
+    const empty = renderPanel({ query: queryResult() });
+    await runQuery(empty.container);
+    expect(named(empty.container)).toHaveLength(0);
+    expect(rows(empty.container)).toHaveLength(0);
+  });
+
+  it("commits it with NO discriminator field, and stores it under the dataset's name", async () => {
+    // The commit path used to assume a field on both sides: the button was
+    // disabled without one and the handler returned early. Both now allow it
+    // for exactly this case, and the fetch is addressed with `undefined` rather
+    // than a string nobody chose.
+    const { container, onFetchEvents, onCommit } = renderPanel({
+      query: DATASET_AS_LOG_TYPE,
+      fetched: fetchResult({ events: [events("cribl_logs", 3)] }),
+    });
+    await runQuery(container);
+
+    expect(commitButton(container)?.disabled).toBe(false);
+    expect(perLogType(container).value).toBe(String(DEFAULT_SAMPLE_LIMIT));
+
+    await addSamples(container);
+
+    expect(onFetchEvents).toHaveBeenCalledTimes(1);
+    expect(onFetchEvents).toHaveBeenCalledWith(
+      undefined,
+      ["cribl_logs"],
+      DEFAULT_SAMPLE_LIMIT,
+    );
+    expect(onCommit).toHaveBeenCalledTimes(1);
+    const committed = onCommit.mock.calls[0][0];
+    expect(committed.map((s) => s.logType)).toEqual(["cribl_logs"]);
+    expect(committed[0].parsed.records).toHaveLength(3);
+    expect(outcomeStatus(container)).toBe("done");
+    expect(outcomeHeadline(container)).toBe(
+      "Added 1 sample from this dataset.",
+    );
+  });
+
+  it("offers NOTHING when core reported no field AND no row", async () => {
+    // The old shape, which core no longer produces but the port's type still
+    // permits. It must stay a dead end: a row-less panel rendered as ready
+    // would show a commit button with nothing whatever behind it.
+    const { container, onFetchEvents } = renderPanel({
+      query: queryResult({ noDiscriminator: true }),
+    });
+    await runQuery(container);
+
+    expect(status(container)).toBe("no-discriminator");
+    expect(rows(container)).toHaveLength(0);
+    expect(commitButton(container)).toBeNull();
+    expect(named(container)).toHaveLength(0);
+    expect(onFetchEvents).toHaveBeenCalledTimes(0);
+  });
+
+  it("warns about replacing the operator's own sample of the same name", async () => {
+    // The dataset's name collides like any other label - the row is an ordinary
+    // choice once it exists, and the store is still replace-by-logType.
+    const { container } = renderPanel({
+      query: DATASET_AS_LOG_TYPE,
+      props: { existingLogTypes: ["Cribl_Logs"] },
+    });
+    await runQuery(container);
+
+    expect(ticked(container)).toBe(0);
+    expect(commitButton(container)?.disabled).toBe(true);
+    fireEvent.click(boxes(container)[0]);
+
+    const replaces = container.querySelectorAll(".lake-replaces");
+    expect(replaces).toHaveLength(2);
+    expect(replaces[1].textContent).toBe(
+      "Adding these replaces your existing Cribl_Logs sample.",
+    );
   });
 });
 

@@ -20,12 +20,20 @@
  *
  * THE COMMIT BUTTON AGREES WITH THE COMMIT HANDLER (2026-08-20 audit). The
  * handler cannot address step two without the field step one grouped by, so it
- * returns early when there is none - and the button now disables on that same
- * condition instead of being left enabled over it. queryLakeSamples sets the
- * field on every path that returns log types, so the state is unreachable
- * today; the port's TYPE allows it, and the cost of the two disagreeing is a
- * button that does nothing whatever when pressed, which an operator reads as a
- * broken app rather than as a missing field.
+ * returns early when there is none - and the button disables on that same
+ * condition instead of being left enabled over it. Both now ask
+ * `canFetchLakeSamples`, one function, because the cost of the two disagreeing
+ * is a button that does nothing whatever when pressed, which an operator reads
+ * as a broken app rather than as a missing field.
+ *
+ * A DATASET CAN BE ITS OWN LOG TYPE (2026-08-25). When nothing splits a
+ * populated dataset, core offers it as ONE log type under the DATASET'S name
+ * with a measured volume, and this panel commits it like any other row - the
+ * fetch simply carries no field and runs unfiltered. What the panel owes that
+ * row is the caveat beside it: the name is the dataset's, not a log type anyone
+ * found in the data. Before this, a dataset like `winevt_dcronly` - 1,216
+ * events, one Windows channel - offered NOTHING and pointed the operator at a
+ * different acquisition mode for data already in their lake.
  *
  * All decisions are the pure lake-panel-state; this renders and wires. The ports
  * stay with the screen (onQuery/onFetchEvents), as they do for CapturePanel.
@@ -39,10 +47,12 @@ import type {
 } from "@soc/core";
 import { DEFAULT_SAMPLE_LIMIT, MAX_SAMPLE_LIMIT } from "@soc/core";
 import {
+  canFetchLakeSamples,
   deriveLakeCommitView,
   deriveLakeQueryView,
   lakeCollisions,
   lakeLogTypeChoices,
+  lakeOffersSamples,
   mergedLakeLogTypeCount,
   plannedLakeSamples,
   selectedLakeLogTypes,
@@ -50,6 +60,9 @@ import {
   windowLabel,
 } from "./lake-panel-state";
 import type { LakeLogTypeChoice } from "./lake-panel-state";
+// The picker's byte formatter, reused rather than reproduced - see the note at
+// its definition; it is the coarse hint register an estimate belongs in.
+import { formatBytes } from "./sample-source-picker-state";
 import { useNumericField } from "./use-numeric-field";
 
 /** What a commit established, kept beside the fetch so partials stay visible. */
@@ -80,9 +93,16 @@ export interface LakePanelProps {
   existingLogTypes: readonly string[];
   /** Count the dataset's log types. Resolves with the result; never throws. */
   onQuery: () => Promise<QueryLakeSamplesResult>;
-  /** Fetch events for the ticked log types. Resolves; never throws. */
+  /**
+   * Fetch events for the ticked log types. Resolves; never throws.
+   *
+   * `discriminatorField` is UNDEFINED for a dataset offered as a single log
+   * type - there is no field, and core fetches it unfiltered. Passed through as
+   * the query reported it rather than defaulted to a string, so the fetch is
+   * addressed with what the operator can see on screen.
+   */
   onFetchEvents: (
-    discriminatorField: string,
+    discriminatorField: string | undefined,
     logTypes: readonly string[],
     eventsPerLogType: number,
   ) => Promise<FetchLakeEventsResult>;
@@ -145,17 +165,20 @@ export function LakePanel({
   };
 
   const commit = async () => {
-    // Step two cannot be ADDRESSED without the field step one grouped by, so
-    // this narrows what onFetchEvents is given. The button is disabled on the
-    // same condition (see below) rather than left enabled over a handler that
-    // silently returns - a control that does nothing when pressed is the worse
-    // half of this pair.
-    const field = view.discriminatorField;
-    if (field === undefined || selected.length === 0) return;
+    // THE SAME QUESTION THE BUTTON ASKS, from the same function - a control that
+    // does nothing when pressed is worse than a disabled one, and two copies of
+    // this condition is how they come to disagree. It allows a missing field
+    // only when the dataset itself is the log type, where the fetch is
+    // deliberately unfiltered.
+    if (!canFetchLakeSamples(view, selected.length)) return;
     setFetching(true);
     setOutcome(null);
     try {
-      const fetched = await onFetchEvents(field, selected, eventsPerLogType.value);
+      const fetched = await onFetchEvents(
+        view.discriminatorField,
+        selected,
+        eventsPerLogType.value,
+      );
       const samples = plannedLakeSamples(
         fetched.events,
         `lake:${datasetId}`,
@@ -207,9 +230,24 @@ export function LakePanel({
 
       <p className="panel-desc">{view.headline}</p>
 
+      {/* WHOSE NAME THIS IS. The row below carries the dataset's own id, and on
+          a panel full of vendor log types it would otherwise read as one more
+          of them - the app claiming a log type nobody observed. Said here as
+          well as in the usecase's note, for the same reason the truncation
+          caveat is: this panel must not depend on another module's wording to
+          keep its own screen honest. */}
+      {view.datasetAsLogType && (
+        <p className="field-hint lake-dataset-named">
+          That name is the dataset&apos;s, not a log type found in the data -
+          nothing on these events tells one type from another, so they are
+          offered as one sample. Rename it on its chip once added if you know
+          what these events are.
+        </p>
+      )}
+
       {/* A VOLUME MEANS NOTHING WITHOUT ITS WINDOW. The bounds are relative and
           belong to the query, so they are reported rather than assumed. */}
-      {view.status === "ready" && view.window !== null && (
+      {lakeOffersSamples(view) && view.window !== null && (
         <p className="field-hint lake-window">
           Volumes cover {windowLabel(view.window)}
           {view.discriminatorField !== undefined
@@ -247,10 +285,21 @@ export function LakePanel({
                     disabled={locked}
                   />
                   <span className="lake-log-type-name">{choice.value}</span>
+                  {/* The count, and what it is ESTIMATED to weigh. Two numbers
+                      because they answer two halves of "is this worth taking":
+                      Sentinel charges by volume, so the byte figure is the one
+                      that maps to a bill. It carries "~" and the word
+                      "estimated" wherever it renders - the mean behind it comes
+                      from the events this query sampled, not from every event
+                      counted - and it is simply absent when the log type was
+                      never sampled, exactly as the count is when unreadable. */}
                   <span className="field-hint lake-volume">
                     {choice.eventCount === undefined
                       ? "volume unknown"
                       : `${choice.eventCount.toLocaleString()} events`}
+                    {choice.estimatedBytes !== undefined &&
+                      formatBytes(choice.estimatedBytes) !== "" &&
+                      `, ~${formatBytes(choice.estimatedBytes)} estimated`}
                   </span>
                   {choice.note !== undefined && (
                     <span className="field-hint lake-replaces">
@@ -270,7 +319,7 @@ export function LakePanel({
         </p>
       ))}
 
-      {view.status === "ready" && (
+      {lakeOffersSamples(view) && (
         <div className="panel-controls">
           <label className="field lake-bound">
             <span className="field-label">Events per log type</span>
@@ -292,11 +341,7 @@ export function LakePanel({
           <button
             className="next-action-button"
             onClick={() => void commit()}
-            disabled={
-              locked ||
-              selected.length === 0 ||
-              view.discriminatorField === undefined
-            }
+            disabled={locked || !canFetchLakeSamples(view, selected.length)}
           >
             {fetching ? "Fetching events..." : "Add as samples"}
           </button>

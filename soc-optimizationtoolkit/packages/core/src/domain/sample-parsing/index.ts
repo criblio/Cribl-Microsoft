@@ -91,6 +91,7 @@ export {
   dropSavingsLine,
   dropSavingsPercent,
   estimateDropSavings,
+  meanEventBytes,
   mergeDropSavings,
 } from "./drop-savings";
 

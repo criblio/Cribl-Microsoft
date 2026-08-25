@@ -16,6 +16,30 @@
  *   2. dataset="X" | summarize eventCount=count() by <field> ...
  *      the same field enumerated at dataset scale                -> WHAT VALUES
  *
+ * WHEN NO FIELD SPLITS THEM, step two still runs - it simply drops the `by`
+ * clause (2026-08-25). A dataset holding ONE log type is how people ORGANISE a
+ * lake, not a dead end. Measured live on the lab workspace: of 31 datasets 24
+ * were empty over -24h, and of the populated ones exactly one yielded a
+ * discriminator - `winevt_dcronly` sat there with 1,216 events of a single
+ * Windows channel and `azure_alerts_validation` with 265, each split per dataset
+ * by design. The app answered all of them with "capture a sample and name the
+ * log type yourself", sending the operator to a different acquisition mode for
+ * data already in front of them.
+ *
+ * So the dataset is now OFFERED as one log type, counted by a bare
+ * `summarize count()`, and NAMED AFTER THE DATASET. The name is the dataset's
+ * own and is reported as exactly that (`datasetAsLogType`): this app does not
+ * get to claim a vendor log type it never observed, which is the same reason
+ * `data_source` sits in the low-confidence tail of DISCRIMINATOR_FIELDS.
+ *
+ * STEP ONE'S ROWS ARE READ TWICE (Phase 5's last item, 2026-08-25). Having been
+ * fetched to answer WHICH FIELD, they are also grouped by that field and
+ * measured, giving a mean bytes-per-event for each log type they contain. That
+ * mean times step two's count is the byte ESTIMATE the operator needs to reason
+ * about a Sentinel bill, which is charged by volume and not by event - and it
+ * costs no extra search job, because the events were already in hand and their
+ * bodies were previously thrown away. See LakeLogTypeVolume.meanEventBytes.
+ *
  * The field is chosen over the rows SEARCH RETURNED, never over a locally
  * parsed _raw. That is not a shortcut, it is the correctness condition: step 2
  * asks the engine to group by that field, so it has to be a field the engine can
@@ -93,6 +117,10 @@ import {
   readString,
 } from "../../domain/cribl-api/envelope";
 import { selectDiscriminatorField } from "../../domain/sample-parsing/discriminators";
+import {
+  estimateDropSavings,
+  meanEventBytes,
+} from "../../domain/sample-parsing/drop-savings";
 import { is2xx } from "../arm-http";
 
 /**
@@ -164,6 +192,33 @@ export interface LakeLogTypeVolume {
    * zero is a claim about the data, and we would be making it up.
    */
   eventCount?: number;
+  /**
+   * MEAN BYTES PER EVENT for this log type, measured over STEP ONE'S SAMPLE.
+   * Undefined when that sample held none of this log type's events.
+   *
+   * A count is hard to reason about against a Sentinel bill, which is charged by
+   * volume; this is what lets one become a byte estimate (`estimatedLogTypeBytes`
+   * in log-type-catalog does the multiplication, and nothing else does).
+   *
+   * MEASURED, NOT ASSUMED - and free, which is why it is done here. Step one
+   * already pulls up to DISCRIMINATOR_SAMPLE_LIMIT real events from this
+   * dataset over this same window, and then reads nothing but their field NAMES
+   * to pick a discriminator; their bodies were discarded. Grouping those same
+   * rows by the same field the counts are grouped by yields a per-log-type mean
+   * from that log type's own events, at the cost of no extra search job.
+   *
+   * WHY IT IS AN ESTIMATE and must be labelled one: the count covers every
+   * event in the window, the mean covers at most a few hundred of them. A log
+   * type whose event sizes vary widely will have a mean drawn from a sample that
+   * may not represent them.
+   *
+   * ABSENT RATHER THAN SUBSTITUTED when this log type was not sampled. A mean
+   * taken across the whole dataset would always be available and would always be
+   * wrong - it would price THREAT records using TRAFFIC records' bytes. The
+   * skewed datasets that make this happen are exactly the ones where the two
+   * differ most.
+   */
+  meanEventBytes?: number;
 }
 
 /** Options for {@link queryLakeSamples}. */
@@ -205,8 +260,27 @@ export interface QueryLakeSamplesResult {
    * True when the sample carried NO field distinguishing one log type from
    * another. Surfaced exactly as capture-samples surfaces it: the operator is
    * far better placed to name the log type than any later step is.
+   *
+   * NOT A DEAD END on its own - see {@link datasetAsLogType}, which says what
+   * was offered in spite of it.
    */
   noDiscriminator: boolean;
+  /**
+   * True when the single entry in {@link logTypes} is named after the DATASET
+   * rather than after anything observed in the events.
+   *
+   * The honesty flag for the whole feature. When no field splits a populated
+   * dataset it holds one log type, and the only name anyone has for it is the
+   * dataset's - so it is offered under that name and this says so, loudly
+   * enough that a caller cannot render it as a discovered vendor log type. It
+   * is set only alongside `noDiscriminator`, and only when events were actually
+   * seen: an EMPTY window leaves both false and offers nothing, because there
+   * is nothing there to name.
+   *
+   * The volume on that entry is a real `summarize count()` over the window, not
+   * the size of step one's sample - see {@link buildDatasetTotalQuery}.
+   */
+  datasetAsLogType: boolean;
   /** True when the list hit the row cap and there may be more log types. */
   truncated: boolean;
   /** Operator-facing notes: an empty window, a fallback, an HTTP error. */
@@ -258,6 +332,24 @@ export function buildLogTypeCountQuery(
     ` | sort by ${COUNT_COLUMN} desc` +
     ` | limit ${limit}`
   );
+}
+
+/**
+ * Step two WITHOUT a `by` clause: how many events the dataset holds, full stop.
+ *
+ * The volume of an UNDISCRIMINATED dataset, and the only honest number for one.
+ * The cheaper answer that suggests itself - "step one's rows are already in
+ * hand, count those" - is precisely what this exists to avoid: those rows are
+ * capped at {@link DISCRIMINATOR_SAMPLE_LIMIT}, so their length measures OUR
+ * bound rather than the operator's data. A 1,216-event dataset would report 500
+ * and a 400-event one would report 400, and nothing on screen would say which
+ * kind of number the operator was looking at. {@link LakeLogTypeVolume} states
+ * the same rule from the other side: a bounded grab is not a volume.
+ *
+ * No sort and no limit, because an ungrouped summarize returns ONE row.
+ */
+export function buildDatasetTotalQuery(datasetId: string): string {
+  return `dataset="${quoteDataset(datasetId)}" | summarize ${COUNT_COLUMN}=count()`;
 }
 
 // ---------------------------------------------------------------------------
@@ -588,6 +680,76 @@ function readCount(row: Record<string, unknown>): number | undefined {
   );
 }
 
+/**
+ * ONE result row as the bytes it represents: the vendor's own `_raw` when the
+ * row carries one, the serialized row otherwise.
+ *
+ * ONE DEFINITION, used by both the sample-taking in `fetchLakeLogTypeEvents` and
+ * the byte measurement below, because they must agree: the mean this measures is
+ * meant to describe the events that path would take. Two rules would let the
+ * estimate describe bytes the app never actually ships.
+ *
+ * `readString` TRIMS and treats "" as absent, so a whitespace-only `_raw` takes
+ * the serialized-row fallback and a padded one is measured without its padding.
+ * Both are inherited deliberately rather than worked around - the sample keeps
+ * exactly these bytes, so the estimate describes exactly what would be kept.
+ */
+function rowRawText(row: Record<string, unknown>): string {
+  const raw = readString(row, "_raw");
+  return raw !== undefined ? raw : JSON.stringify(row);
+}
+
+/**
+ * MEAN BYTES PER EVENT over a set of result rows, or undefined when there is
+ * nothing measurable.
+ *
+ * `[]` dropped fields asks `estimateDropSavings` for `originalBytes` and nothing
+ * else, which is exactly the "measure the real size of real events" it already
+ * does for the drop reviewer - so there is one definition of what an event
+ * weighs in this app, not two.
+ */
+export function meanEventBytesOfRows(
+  rows: ReadonlyArray<Record<string, unknown>>,
+): number | undefined {
+  return meanEventBytes(estimateDropSavings(rows.map(rowRawText), []));
+}
+
+/**
+ * MEAN BYTES PER EVENT per log type, measured over step one's sample rows.
+ *
+ * The events-to-bytes half of a Lake volume (sample-acquisition plan Phase 5).
+ * Rows are grouped by the SAME field step two counts by - so a log type's mean
+ * is drawn from that log type's own events.
+ *
+ * A log type absent from the sample gets NO ENTRY, and callers must leave its
+ * estimate undefined rather than reach for a dataset-wide mean. Pure.
+ *
+ * The DATASET-AS-ONE-LOG-TYPE path does not call this - it has no field to group
+ * by, and every sampled row belongs to its single log type, so it measures the
+ * whole sample with {@link meanEventBytesOfRows}. That is the one case where a
+ * dataset-wide mean is not a substitution: the dataset IS the log type.
+ */
+export function meanEventBytesByLogType(
+  rows: ReadonlyArray<Record<string, unknown>>,
+  field: string,
+): Map<string, number> {
+  const grouped = new Map<string, Array<Record<string, unknown>>>();
+  for (const row of rows) {
+    const logType = readGroupValue(row, field);
+    if (logType === undefined) continue;
+    const bucket = grouped.get(logType);
+    if (bucket === undefined) grouped.set(logType, [row]);
+    else bucket.push(row);
+  }
+
+  const means = new Map<string, number>();
+  for (const [logType, group] of grouped) {
+    const mean = meanEventBytesOfRows(group);
+    if (mean !== undefined) means.set(logType, mean);
+  }
+  return means;
+}
+
 interface CountReadout {
   logTypes: LakeLogTypeVolume[];
   /** Rows whose group key was empty - events carrying no log type at all. */
@@ -606,6 +768,7 @@ interface CountReadout {
 function readCountRows(
   rows: Array<Record<string, unknown>>,
   field: string,
+  means: ReadonlyMap<string, number>,
 ): CountReadout {
   const logTypes: LakeLogTypeVolume[] = [];
   let skipped = 0;
@@ -619,9 +782,15 @@ function readCountRows(
     }
     const eventCount = readCount(row);
     if (eventCount === undefined) unknownCounts += 1;
-    logTypes.push(
-      eventCount === undefined ? { logType } : { logType, eventCount },
-    );
+    const entry: LakeLogTypeVolume = { logType };
+    if (eventCount !== undefined) entry.eventCount = eventCount;
+    // Keyed on the value STEP TWO grouped by, matched against the value step one
+    // grouped by - both from readGroupValue over the same field, so they are the
+    // same strings. A log type the sample never held simply has no mean, and its
+    // byte estimate stays absent.
+    const mean = means.get(logType);
+    if (mean !== undefined) entry.meanEventBytes = mean;
+    logTypes.push(entry);
   }
 
   logTypes.sort((a, b) => {
@@ -703,6 +872,11 @@ export async function queryLakeSamples(
     logTypes: [],
     window: { earliest, latest },
     noDiscriminator: false,
+    // Both default FALSE, and the pair is what keeps an EMPTY window apart from
+    // a single-log-type one. Every early return below - no search group, no
+    // dataset, a failed read, an empty window - offers nothing and says nothing
+    // about naming; only the branch that actually saw events sets them.
+    datasetAsLogType: false,
     truncated: false,
     notes,
     ok,
@@ -757,14 +931,68 @@ export async function queryLakeSamples(
 
   const discriminatorField = selectDiscriminatorField(sampleRun.rows);
   if (discriminatorField === undefined) {
+    // ONE LOG TYPE, NAMED AFTER THE DATASET (2026-08-25). Events ARRIVED - the
+    // empty-window branch above already returned - and nothing splits them, so
+    // this dataset holds a single log type. That is the normal shape of a lake,
+    // not a failure, and the old answer ("capture a sample and name the log
+    // type yourself") sent the operator to a different acquisition mode for
+    // data sitting right here.
+    //
+    // Step two STILL RUNS, ungrouped, so the row carries a measured volume
+    // rather than none. It costs the same one job the `by` form costs, which is
+    // why the two-jobs-per-query budget is unchanged.
+    const totalRun = await runSearch(buildDatasetTotalQuery(datasetId), 1);
+    const totalRow = totalRun.ok ? totalRun.rows[0] : undefined;
+    const total = totalRow === undefined ? undefined : readCount(totalRow);
+
     notes.push(
-      "No field on these events distinguishes one log type from another, so Search has nothing to count by. When the log type is buried in the raw message, Search cannot group on it without a parser - capture a sample and name the log type yourself instead.",
+      `No field on these events distinguishes one log type from another, so "${datasetId}" is offered as a single log type. When the log type is buried in the raw message, Search cannot group on it without a parser; a dataset that holds only one log type has nothing to group by in the first place.`,
     );
-    logger?.info("query-lake-samples: no discriminator", {
+    notes.push(
+      `That log type is named after the dataset, because the dataset's name is the only name these events came with - it is not a log type found in the data. Rename the sample on its chip once added if you know what these events are.`,
+    );
+    // The platform's own words, if the count failed. Pushed AFTER the two notes
+    // that explain the offer, so an operator whose sample is still perfectly
+    // takeable does not read an HTTP error first.
+    notes.push(...totalRun.notes);
+    if (total === undefined) {
+      // NOT a failed query: the dataset was read and the sample is still there
+      // to take. Only the volume was lost, and it stays unknown rather than
+      // becoming a zero nobody measured.
+      notes.push(
+        `The events in "${datasetId}" could not be counted, so this log type's volume is shown as unknown rather than zero. The sample itself can still be taken.`,
+      );
+    }
+
+    logger?.info("query-lake-samples: dataset offered as one log type", {
       dataset: datasetId,
       sampled: sampleRun.rows.length,
+      // ABSENT rather than zero when the count could not be read, in the log as
+      // on screen: a `counted` key nobody measured is a number a later reader
+      // would quote.
+      ...(total !== undefined ? { counted: total } : {}),
     });
-    return base(true, { noDiscriminator: true });
+    // The byte estimate reaches this row too (Phase 5). Every sampled event
+    // belongs to this single log type - that is what having no discriminator
+    // MEANS here - so the whole sample's mean is this log type's own mean, and
+    // measuring it needs no grouping and no extra job. It is the one place a
+    // dataset-wide mean is not a substitution for a per-log-type one.
+    const mean = meanEventBytesOfRows(sampleRun.rows);
+    return base(true, {
+      noDiscriminator: true,
+      datasetAsLogType: true,
+      logTypes: [
+        {
+          logType: datasetId,
+          // Both kept ABSENT rather than zeroed when unmeasured, and they fail
+          // independently: an unreadable count leaves a measured mean with
+          // nothing to multiply, which is a row that says "volume unknown" and
+          // no bytes at all.
+          ...(total !== undefined ? { eventCount: total } : {}),
+          ...(mean !== undefined ? { meanEventBytes: mean } : {}),
+        },
+      ],
+    });
   }
 
   // STEP TWO - what values that field takes, at dataset scale.
@@ -780,7 +1008,12 @@ export async function queryLakeSamples(
     return base(false, { discriminatorField });
   }
 
-  const readout = readCountRows(countRun.rows, discriminatorField);
+  // The mean event size per log type, measured off STEP ONE'S rows - the ones
+  // already in hand. Computed here rather than inside readCountRows because it
+  // reads the SAMPLE while that reads the COUNTS, and those are two different
+  // result sets from two different queries.
+  const means = meanEventBytesByLogType(sampleRun.rows, discriminatorField);
+  const readout = readCountRows(countRun.rows, discriminatorField, means);
   if (readout.skipped > 0) {
     notes.push(
       `${readout.skipped} group${readout.skipped === 1 ? "" : "s"} carried no "${discriminatorField}" value and ${readout.skipped === 1 ? "was" : "were"} left out.`,
@@ -817,6 +1050,8 @@ export async function queryLakeSamples(
     logTypes: readout.logTypes,
     window: { earliest, latest },
     noDiscriminator: false,
+    // A field grouped these, so every name here came OUT OF THE DATA.
+    datasetAsLogType: false,
     truncated,
     notes,
     ok: true,
@@ -862,13 +1097,27 @@ export async function queryLakeSamples(
  * state kept in step to spare one cast. The cast costs index usage on that
  * column, which a `| limit 50` behind a single-value filter was never going to
  * feel.
+ *
+ * NO FIELD MEANS NO FILTER (2026-08-25), not no query. When `queryLakeSamples`
+ * found nothing to group by it offered the dataset itself as one log type, and
+ * for that row every event in the window IS the log type - so the `where`
+ * clause is dropped rather than composed against a field that does not exist.
+ * A filter on a missing field returns nothing, which the app would then report
+ * as "this log type returned no events in this window" about a dataset it had
+ * just counted: the empty-versus-failed collapse this file keeps closing.
  */
 export function buildLogTypeEventQuery(
   datasetId: string,
-  field: string,
+  field: string | undefined,
   logType: string,
   limit: number,
 ): string {
+  if (field === undefined || field.trim() === "") {
+    // `logType` is deliberately UNUSED here. It is the DATASET'S name, carried
+    // so the events can be labelled once they arrive - not a value that exists
+    // on any event, and so not something to compare against.
+    return `dataset="${quoteDataset(datasetId)}" | limit ${limit}`;
+  }
   // The value is compared with `==` against a quoted literal, so a value
   // carrying a quote would break the query. Cribl's own dataset ids and
   // discriminator values are tame, but the value here came from data rather
@@ -879,8 +1128,15 @@ export function buildLogTypeEventQuery(
 
 /** Options for {@link fetchLakeLogTypeEvents}. */
 export interface FetchLakeEventsOptions extends QueryLakeSamplesOptions {
-  /** The field the log types were grouped by (from the query result). */
-  discriminatorField: string;
+  /**
+   * The field the log types were grouped by (from the query result), or ABSENT
+   * when the query found none and offered the dataset itself as one log type
+   * ({@link QueryLakeSamplesResult.datasetAsLogType}).
+   *
+   * Without it exactly ONE log type may be requested and it is fetched
+   * unfiltered - see the guard in {@link fetchLakeLogTypeEvents}.
+   */
+  discriminatorField?: string;
   /** The log-type values the operator chose to take. */
   logTypes: readonly string[];
   /** Events per log type; clamped to 1..{@link MAX_SAMPLE_LIMIT}. */
@@ -909,6 +1165,13 @@ export interface FetchLakeEventsResult {
  * the others - they picked several, and returning nothing because the third of
  * five 400'd would throw away four good samples. Each failure becomes a note
  * naming which log type was lost.
+ *
+ * TWO SHAPES OF SELECTION, and the guards below keep them apart. With a
+ * discriminator field, any number of log types may be taken and each is
+ * filtered to. WITHOUT one there is exactly one log type - the dataset's own
+ * name - and its query is unfiltered; asking for several under those terms is
+ * refused rather than served, because the unfiltered query answers the same for
+ * all of them.
  */
 export async function fetchLakeLogTypeEvents(
   cribl: CriblClient,
@@ -918,14 +1181,29 @@ export async function fetchLakeLogTypeEvents(
   const notes: string[] = [];
   const datasetId = options.datasetId.trim();
   const searchGroupId = options.searchGroupId.trim();
-  const field = options.discriminatorField.trim();
+  const field = options.discriminatorField?.trim() ?? "";
   const wanted = options.logTypes.map((t) => t.trim()).filter((t) => t !== "");
 
-  if (searchGroupId === "" || datasetId === "" || field === "" || wanted.length === 0) {
+  if (searchGroupId === "" || datasetId === "" || wanted.length === 0) {
     // Nothing addressable. Reported rather than requested - a blank group id
     // would otherwise 404 at the leader and read as a Cribl fault.
     notes.push(
-      "No dataset, search group, discriminator field or log-type selection was given, so no events were requested.",
+      "No dataset, search group or log-type selection was given, so no events were requested.",
+    );
+    return { events: [], notes, ok: false };
+  }
+  if (field === "" && wanted.length > 1) {
+    // WITHOUT A FIELD THERE IS EXACTLY ONE LOG TYPE, and the query that fetches
+    // it is unfiltered. Running that once per requested name would hand the SAME
+    // events back under several labels - the app claiming log types it never
+    // observed, written into the store that drives route and pipeline
+    // generation, where each label becomes its own route pair.
+    //
+    // Refused rather than silently narrowed to the first name: a caller that
+    // asked for four is a caller working from a wrong belief, and quietly
+    // serving one of them leaves that belief in place.
+    notes.push(
+      `${wanted.length} log types were requested with no field to tell them apart, so nothing was fetched. When nothing distinguishes a dataset's events it holds one log type, and only that one can be taken.`,
     );
     return { events: [], notes, ok: false };
   }
@@ -968,10 +1246,7 @@ export async function fetchLakeLogTypeEvents(
     // `_raw` is the vendor's own bytes and the whole reason a Lake sample is
     // worth having; a row without one is serialized, the same fallback the
     // capture path uses.
-    const rawEvents = run.rows.map((row) => {
-      const raw = readString(row, "_raw");
-      return raw !== undefined ? raw : JSON.stringify(row);
-    });
+    const rawEvents = run.rows.map(rowRawText);
     if (rawEvents.length === 0) {
       notes.push(
         `"${logType}" returned no events in this window, so it was not added.`,

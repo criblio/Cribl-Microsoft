@@ -91,6 +91,14 @@ export const DISCRIMINATOR_FIELDS: readonly string[] = Object.freeze([
   // In the LOW-CONFIDENCE tail on purpose: it needs >= 2 distinct values, so a
   // single-channel dataset still reports no discriminator rather than claiming
   // the whole dataset is one named type. That is the honest answer for it.
+  //
+  // AND IT IS NO LONGER A DEAD END (2026-08-25), which is what makes staying in
+  // the tail affordable. "No discriminator" says only that nothing here splits
+  // these events; queryLakeSamples answers it by offering the dataset as ONE
+  // log type under THE DATASET'S OWN NAME, labelled as the dataset's. Promoting
+  // `data_source` to the high-confidence prefix would instead name that log
+  // type "Security" off a single observed value - a vendor log type asserted
+  // from one row, which is precisely the claim this list must not make.
   "data_source",
 ]);
 
