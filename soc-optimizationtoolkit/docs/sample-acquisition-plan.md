@@ -137,6 +137,7 @@ only if the file has moved.
 | 16 reconciled discriminator fields; first six are high-confidence | `domain/sample-parsing/discriminators.ts` (`DISCRIMINATOR_FIELDS`) |
 | *(count corrected: EIGHTEEN as of 2026-08-25 - `msgid` was added 2026-08-21 for RFC 5424, `data_source` 2026-08-25 from live Lake data. Both sit in the LOW-confidence tail; the reconciled sixteen and the high-confidence six are unchanged)* | same file |
 | PAN-OS: 8 log types + documented column order, cited to vendor docs | `domain/sample-parsing/panos-dictionary.ts` |
+| *(count corrected: TWELVE as of 2026-08-25 - AUDIT, CORRELATION, IPTAG and USERID were transcribed from Palo Alto's published `Format:` lines and confirmed against four sources each. AUTH remains absent on purpose: the vendor publishes no such log type, so there is nothing to transcribe)* | same file |
 | Expected log types are already derived from solution detections | `domain/coverage-analysis/expected-log-types.ts` (`deriveExpectedLogTypes`) |
 | Expected-vs-provided comparison already exists | same domain, `compareLogTypeCoverage` |
 | We already GET `/system/inputs` and `/routes` from the operator's Cribl | `usecases/live-architecture/fetch-live-architecture.ts:22,24` |

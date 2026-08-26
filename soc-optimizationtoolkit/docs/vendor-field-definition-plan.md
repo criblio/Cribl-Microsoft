@@ -152,6 +152,13 @@ Filling in the six missing PAN-OS column orders is deliberately NOT on this
 list. It would fix this vendor and teach the app nothing; step 1 lets the
 operator fix any vendor, including the next one.
 
+> **SUPERSEDED 2026-08-25** - the user asked for those orders directly and four
+> shipped (AUDIT, CORRELATION, IPTAG, USERID); HIPMATCH was never missing and
+> AUTH is declined because the vendor publishes no such log type. See the fuller
+> UPDATE note under Gap 1. The paragraph above is kept because its REASONING
+> still holds - step 1 is what lets an operator fix the next vendor, and these
+> are bundled orders that only pre-fill the dialog.
+
 ## Decisions taken 2026-08-25 (user)
 
 **1. A column order is keyed to VENDOR + LOG TYPE, not to the solution.**
