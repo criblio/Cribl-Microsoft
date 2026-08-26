@@ -158,34 +158,196 @@ function distinctTypes(types: readonly FieldType[]): FieldType[] {
 }
 
 /**
- * Best-guess the timestamp field: a known candidate name wins first, then the
- * first datetime-typed field, then the first field whose name contains "time".
- * Returns undefined when nothing qualifies. Candidate list verbatim from legacy
- * guessTimestampField.
+ * The candidate names a timestamp field is likely to answer to. VERBATIM from
+ * legacy guessTimestampField, order included - the order is a ranking (the most
+ * unambiguous names first) and {@link candidateRank} still reads it that way.
+ *
+ * MATCHED LOOSELY since 2026-08-26, which the exact-string version was not: a
+ * FortiGate event carries `eventtime` and this list carries `eventTime`, so the
+ * epoch second sitting right there was invisible and the picker fell through to
+ * `time`. Case and separators are noise in a field name, so both are collapsed
+ * before comparing (see {@link candidateKey}) and the list is left alone.
+ */
+const TIMESTAMP_CANDIDATE_NAMES = [
+  "timestamp", "Timestamp", "time", "Time", "datetime", "DateTime",
+  "EventTime", "eventTime", "TimeGenerated", "created_at", "createdAt",
+  "date", "Date", "EdgeStartTimestamp", "Datetime", "start_time",
+  "event_time", "log_time", "receive_time", "_time",
+];
+
+/** A field name reduced to what actually identifies it: letters and digits. */
+function candidateKey(name: string): string {
+  return name.toLowerCase().replace(/[^a-z0-9]+/g, "");
+}
+
+const CANDIDATE_RANK: ReadonlyMap<string, number> = new Map(
+  // First occurrence wins, so "timestamp"/"Timestamp" collapse to rank 0 and the
+  // list's ordering survives the collapse intact.
+  [...TIMESTAMP_CANDIDATE_NAMES].reverse().map((name, i) => [
+    candidateKey(name),
+    TIMESTAMP_CANDIDATE_NAMES.length - 1 - i,
+  ]),
+);
+
+/** Position in {@link TIMESTAMP_CANDIDATE_NAMES}, or Infinity for a non-candidate. */
+function candidateRank(name: string): number {
+  return CANDIDATE_RANK.get(candidateKey(name)) ?? Infinity;
+}
+
+/**
+ * A clock reading with NO DATE: "21:15:15", "9:05", "23:59:59.250".
+ *
+ * FortiGate emits exactly this in its `time` field, beside a separate `date`,
+ * and it is why type evidence has to be able to overrule a name. A time of day
+ * cannot order two events a day apart and cannot become a TimeGenerated, so a
+ * field whose values all look like this is not a timestamp field however
+ * perfectly it is named - and a pack or DCR built on it is wrong in production
+ * while looking right in the preview.
+ */
+const TIME_OF_DAY_ONLY = /^\d{1,2}:\d{2}(:\d{2})?([.,]\d{1,9})?$/;
+
+/**
+ * Whether this field's OWN VALUES rule it out as a timestamp.
+ *
+ * Judged on the examples the parser actually collected, and only when it
+ * collected some: a field with no examples is unknown, not disqualified. Every
+ * example must look like a bare clock reading before the field is refused, so a
+ * column that is sometimes "21:15:15" and sometimes a full ISO stamp survives.
+ */
+function isDisqualified(field: DiscoveredField): boolean {
+  if (field.type === "boolean" || field.type === "dynamic") return true;
+  return (
+    field.examples.length > 0 &&
+    field.examples.every((value) => TIME_OF_DAY_ONLY.test(value.trim()))
+  );
+}
+
+/**
+ * Fields the SEARCH ENGINE added, not the vendor - `_time`, `_raw`, and the `_N`
+ * columns our own headerless-CSV parser mints.
+ *
+ * A LEADING UNDERSCORE IS THE CONVENTION in both Cribl Search and Splunk, and
+ * the distinction is not cosmetic: `_time` exists in a Lake-sourced sample and
+ * will NOT exist on events arriving from the real source, so a pipeline or DCR
+ * keyed on it previews perfectly here and breaks the moment live data flows.
+ * The legacy list already knew this much - `_time` sat LAST in it - but a
+ * position in one list only helps against the names in that list, and `_time`
+ * was still beating Okta's `published`, which is not in it at all.
+ */
+function isSyntheticField(name: string): boolean {
+  return name.startsWith("_");
+}
+
+/**
+ * Where a field sits in the evidence order; LOWER IS STRONGER.
+ *
+ * Plain constants rather than an enum because this package compiles under
+ * `erasableSyntaxOnly`.
+ *
+ *   NAMED_AND_TYPED  named like a timestamp AND typed datetime. Nothing beats
+ *                    the two kinds of evidence agreeing.
+ *   NAMED            named like a timestamp and its type does not object - an
+ *                    epoch int, a date-shaped string. This outranks TYPED on
+ *                    purpose; see the note on guessTimestampField.
+ *   TYPED            typed datetime under a name this app does not recognize.
+ *                    Okta's `published`.
+ *   TIMEISH          nothing but "time" somewhere in the name. The weakest
+ *                    thing still worth guessing from.
+ *   NONE             not a candidate at all; never returned.
+ */
+const TIER_NAMED_AND_TYPED = 0;
+const TIER_NAMED = 1;
+const TIER_TYPED = 2;
+const TIER_TIMEISH = 3;
+const TIER_NONE = 4;
+
+function tierOf(field: DiscoveredField): number {
+  const named = candidateRank(field.name) !== Infinity;
+  if (field.type === "datetime") {
+    return named ? TIER_NAMED_AND_TYPED : TIER_TYPED;
+  }
+  if (named) return TIER_NAMED;
+  if (field.name.toLowerCase().includes("time")) return TIER_TIMEISH;
+  return TIER_NONE;
+}
+
+/**
+ * Best-guess the timestamp field.
+ *
+ * TYPE EVIDENCE OUTRANKS A NAME GUESS (2026-08-26). This used to walk the
+ * candidate-name list FIRST and only fall through to a datetime-typed field if
+ * no name matched, so the two things the parser KNOWS about a field - what it is
+ * called and what its values look like - were never weighed against each other.
+ * Both live consequences were observed in the running app:
+ *
+ *   FORTIGATE  picked `time`, a `string` holding "21:15:15" - a clock reading
+ *              with no date - while `eventtime` (a real epoch second) and `date`
+ *              sat unused beside it. The name matched; the VALUE said the field
+ *              cannot be a timestamp, and nothing was listening.
+ *   OKTA       picked `_time` (last in the list) over `published`, typed
+ *              `datetime` and holding a full ISO stamp. `_time` is Cribl
+ *              Search's own field: it exists in a Lake-sourced sample and not on
+ *              events from the real Okta source, so the pack built from it looks
+ *              right here and breaks in production.
+ *
+ * THE ORDER IS FOUR KEYS, and each one exists because of a case above:
+ *
+ *   1. SYNTHETIC     OUTERMOST, so `_time` is the LAST RESORT it should always
+ *                    have been: ANY real field with any timestamp evidence at
+ *                    all beats it. It has to sit above the tier rather than
+ *                    inside it, because `_time` is a strong NAME - it is in the
+ *                    candidate list - and would otherwise outrank Okta's
+ *                    `published` on the name alone, which is the exact bug.
+ *                    Demoted, never excluded: a sample carrying nothing else is
+ *                    better served by a guess it can override than by silence.
+ *   2. TIER          agreement (named AND typed datetime) > named with a type
+ *                    that does not object > typed datetime alone > "time"
+ *                    somewhere in the name. See the TIER_ constants above.
+ *   3. CANDIDATE RANK the legacy list, unchanged, breaking ties between equally
+ *                    evidenced fields - which is the job it is actually good at.
+ *   4. FIELD ORDER   first seen wins, so the answer is stable for one input.
+ *
+ * DISQUALIFICATION IS SEPARATE from ranking and comes first: a field whose
+ * values are all bare clock readings, or that is typed boolean or dynamic,
+ * CANNOT be an event timestamp and is not a candidate at any tier
+ * ({@link isDisqualified}). Returning it would be a confident wrong answer; with
+ * it gone, FortiGate's `eventtime` wins on its own merits and a sample that
+ * really has nothing usable gets `undefined` and an operator's own choice.
+ *
+ * A NAME STILL BEATS A STRANGER'S TYPE, deliberately, and that is what tier 1
+ * over tier 2 says: `timestamp` holding an epoch-ms string is the event time,
+ * and some unrelated `other` field that happens to be ISO-shaped is not.
+ * Pinned in sample-parsing.test.ts, and unchanged since legacy.
  */
 export function guessTimestampField(
   fields: ReadonlyArray<DiscoveredField>,
 ): string | undefined {
-  const candidates = [
-    "timestamp", "Timestamp", "time", "Time", "datetime", "DateTime",
-    "EventTime", "eventTime", "TimeGenerated", "created_at", "createdAt",
-    "date", "Date", "EdgeStartTimestamp", "Datetime", "start_time",
-    "event_time", "log_time", "receive_time", "_time",
-  ];
-  for (const candidate of candidates) {
-    if (fields.some((f) => f.name === candidate)) {
-      return candidate;
+  let best: { field: DiscoveredField; key: readonly number[] } | undefined;
+  fields.forEach((field, index) => {
+    if (isDisqualified(field)) return;
+    const tier = tierOf(field);
+    if (tier === TIER_NONE) return;
+    const key = [
+      isSyntheticField(field.name) ? 1 : 0,
+      tier,
+      candidateRank(field.name),
+      index,
+    ];
+    if (best === undefined || isLower(key, best.key)) {
+      best = { field, key };
     }
+  });
+  return best?.field.name;
+}
+
+/** Lexicographic compare of two equal-length ranking keys. */
+function isLower(a: readonly number[], b: readonly number[]): boolean {
+  for (let i = 0; i < a.length; i += 1) {
+    const left = a[i] ?? 0;
+    const right = b[i] ?? 0;
+    if (left !== right) return left < right;
   }
-  const datetimeField = fields.find((f) => f.type === "datetime");
-  if (datetimeField) {
-    return datetimeField.name;
-  }
-  const timeish = fields.find((f) => f.name.toLowerCase().includes("time"));
-  if (timeish) {
-    return timeish.name;
-  }
-  return undefined;
+  return false;
 }
 
 // ---------------------------------------------------------------------------

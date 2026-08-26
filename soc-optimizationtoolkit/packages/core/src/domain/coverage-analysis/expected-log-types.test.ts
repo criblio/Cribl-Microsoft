@@ -239,4 +239,68 @@ describe("logTypeNameMatches - THE one predicate", () => {
     expect(logTypeNameMatches("TRAFFIC", ["", "traffic"])).toBe(true);
     expect(logTypeNameMatches("-", ["traffic"])).toBe(false);
   });
+
+  /**
+   * A GENERIC TAG MAY NOT CLAIM A SPECIFIC LOG TYPE (2026-08-26).
+   *
+   * Observed live: a FortiGate sample tagged "event" was credited against a
+   * Zscaler solution's required "Tunnel Event", because normalize("Tunnel
+   * Event") is "tunnelevent" and it contains normalize("event"). The solution's
+   * unmet-log-type count fell from 9 to 8 and the operator was told a Zscaler
+   * tunnel detection was covered by FortiGate system-event data containing no
+   * Zscaler tunnel fields. A real coverage gap rendered as a false green - the
+   * expensive direction to be wrong in, because it is the direction that arms
+   * the pack build.
+   *
+   * BOTH SIDES ARE PINNED TOGETHER, because the fix is only correct if it keeps
+   * the case the substring arm exists for. Word boundaries cannot separate them:
+   * `providedNorm` arrives with its separators already stripped, so
+   * "tunnelevent" ends in "event" exactly the way "panostraffic" ends in
+   * "traffic" and nothing in the strings tells the two apart.
+   */
+  describe("the substring arm keeps what it is for and stops inventing coverage", () => {
+    it("STOPS: a bare generic noun no longer covers a specific log type", () => {
+      expect(logTypeNameMatches("Tunnel Event", ["event"])).toBe(false);
+      // The same shape under every spelling the tag could arrive in.
+      expect(logTypeNameMatches("Tunnel Event", ["Event", "EVENTS"])).toBe(false);
+      expect(logTypeNameMatches("Firewall Log", ["log"])).toBe(false);
+      expect(logTypeNameMatches("Audit Record", ["records"])).toBe(false);
+    });
+
+    it("KEEPS: a qualified tag still covers the name it qualifies", () => {
+      // The documented case, in both directions, unchanged.
+      expect(logTypeNameMatches("TRAFFIC", ["panos-traffic"])).toBe(true);
+      expect(logTypeNameMatches("PAN-OS Traffic", ["traffic"])).toBe(true);
+      // And the vendor catalog's alias path, which leans on the same tolerance:
+      // "ZIA DNS" carries the alias "dns", and this is how a dataset tagged
+      // "zscalernss-dns" is recognised as that feed.
+      expect(logTypeNameMatches("dns", ["zscalernss-dns"])).toBe(true);
+    });
+
+    it("KEEPS: a log type genuinely CALLED 'event' is still coverable", () => {
+      // Fortinet's own `type` field takes the literal value "event", so this is
+      // a real expected log type and not a hypothetical. Two ways it is covered,
+      // and neither is the broadening the rule refuses:
+      expect(logTypeNameMatches("event", ["event"])).toBe(true); // exact
+      expect(logTypeNameMatches("event", ["fortigate-event"])).toBe(true); // qualified
+    });
+
+    it("refuses the generic tag WITHOUT refusing the sample it came from", () => {
+      // The end-to-end shape of the live defect. The tag is reported as
+      // unreferenced - neutrally, the way an unmatched tag always is - rather
+      // than counted as coverage or silently dropped.
+      const zscaler = [
+        {
+          value: "Tunnel Event",
+          field: "DeviceEventClassID",
+          referencedBy: ["Zscaler tunnel detection"],
+          referencedTypes: ["alert-rule" as const],
+        },
+      ];
+      const out = compareLogTypeCoverage(zscaler, ["event"]);
+      expect(out.missing.map((m) => m.value)).toEqual(["Tunnel Event"]);
+      expect(out.matched).toEqual([]);
+      expect(out.unreferenced).toEqual(["event"]);
+    });
+  });
 });

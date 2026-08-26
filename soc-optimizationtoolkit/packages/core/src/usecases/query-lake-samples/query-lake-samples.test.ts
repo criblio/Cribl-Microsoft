@@ -32,6 +32,7 @@
 import { describe, expect, it } from "vitest";
 
 import { FakeCriblClient } from "../../testing/fake-cribl-client";
+import { FakeLogger } from "../../testing/fake-logger";
 import type { PortHttpResponse } from "../../ports/http";
 import {
   COUNT_COLUMN,
@@ -528,10 +529,24 @@ describe("a dataset with events but no discriminator is offered as ONE log type"
     const result = await run(cribl);
 
     const said = result.notes.join(" ");
-    expect(said).toContain("named after the dataset");
-    expect(said).toContain("not a log type found in the data");
+    // CHANGED 2026-08-26: this used to assert core's PROSE said "named after the
+    // dataset" / "not a log type found in the data". Those sentences moved to
+    // the Lake panel, which already switched on the boolean below and was
+    // saying both of them itself - four sentences for one idea on one card.
+    //
+    // The replacement is STRICTLY STRONGER, not weaker: the disclosure is now
+    // pinned as the FACT that drives it, and a boolean cannot drift in wording
+    // the way two independently-maintained sentences did. The panel owns the
+    // words and pins them at its own layer (lake-panel.dom.test.tsx).
+    expect(result.datasetAsLogType).toBe(true);
+    expect(result.logTypes[0]?.logType).toBe(DATASET);
+    // What core still says is the one thing the flag cannot carry: WHY nothing
+    // was groupable. Kept, because no caller can derive it.
+    expect(said).toContain("buried in the raw message");
     // The old dead-end advice is gone: the sample is right here to take.
     expect(said).not.toContain("capture a sample and name the log type yourself");
+    // And core no longer re-states what the flag already says.
+    expect(said).not.toContain("named after the dataset");
   });
 
   it("counts NOTHING off step one's rows, which are capped by our own bound", async () => {
@@ -576,11 +591,92 @@ describe("a dataset with events but no discriminator is offered as ONE log type"
     // Undefined, NEVER zero - a volume of zero is a claim about the data.
     expect(result.logTypes[0].eventCount).toBeUndefined();
     expect(result.notes.join(" ")).toContain("unknown rather than zero");
-    // The offer survives, and the platform's own words arrive AFTER it.
-    const offer = result.notes.findIndex((n) => n.includes("single log type"));
-    const detail = result.notes.findIndex((n) => n.includes("HTTP 500"));
-    expect(offer).toBeGreaterThanOrEqual(0);
-    expect(detail).toBeGreaterThan(offer);
+    // THE OFFER SURVIVES, pinned as the FACT rather than as prose (2026-08-26).
+    // This used to search `notes` for "single log type". That sentence moved to
+    // the Lake panel, which switches on the flag below and was already saying it
+    // in its own words - core repeating it put four sentences for one idea on a
+    // single card. `datasetAsLogType` is what actually carries the offer, and a
+    // boolean cannot drift in wording the way the two copies did.
+    expect(result.datasetAsLogType).toBe(true);
+    expect(result.logTypes.map((t) => t.logType)).toEqual([DATASET]);
+  });
+
+  /**
+   * A SUCCESSFUL RESULT CARRIES NO FAILED SUB-QUERY'S ERROR TEXT (2026-08-26).
+   *
+   * THIS PIN DELIBERATELY REPLACES ONE. The old assertion was that the count
+   * query's platform error DID appear in `notes`, merely AFTER the offer:
+   *
+   *     const detail = result.notes.findIndex((n) => n.includes("HTTP 500"));
+   *     expect(detail).toBeGreaterThan(offer);
+   *
+   * Ordering was the wrong remedy and the live app showed why. `notes` is
+   * operator-facing hint text and the Lake panel renders every entry the same
+   * way beneath the headline the result earned - and this result is `ok: true`,
+   * an OFFER. So an operator read "so 'X' is offered as a single log type"
+   * followed by "the search job was still running after 20 status checks, so no
+   * log types could be read", the second sentence denying the first, printed
+   * beside a log type they could see and tick. Below that sat the sentence that
+   * actually applied to them. Moving the error further down does not stop it
+   * contradicting the offer; it only buries the explanation deeper.
+   *
+   * So the error text now goes to the LOGGER and the operator keeps the one
+   * sentence that is true for them. What is pinned is the pair: nothing raw in
+   * `notes`, and nothing lost from the log.
+   */
+  it("keeps the failed count query's platform error OUT of a successful result's notes", async () => {
+    const logger = new FakeLogger();
+    const cribl = client(
+      ...jobRun("j-1", ndjson(UNSPLITTABLE)),
+      { status: 500, body: "boom" },
+    );
+
+    const result = await queryLakeSamples(
+      cribl,
+      { searchGroupId: GROUP, datasetId: DATASET },
+      logger,
+    );
+
+    expect(result.ok).toBe(true);
+    const said = result.notes.join(" ");
+    // Not the HTTP status, not the body, not the phrasing that denies the offer.
+    expect(said).not.toContain("HTTP 500");
+    expect(said).not.toContain("boom");
+    expect(said).not.toContain("no log types could be read");
+    // What the operator DOES get: the offer, and why the volume is missing.
+    // The offer is the FLAG, not a sentence in `notes` - see the pin above; the
+    // Lake panel owns the words and pins them at its own layer.
+    expect(result.datasetAsLogType).toBe(true);
+    expect(said).toContain("unknown rather than zero");
+    expect(said).toContain("sample itself can still be taken");
+    // Nothing was swallowed - the platform's words reached the logger instead.
+    const warned = logger.entries.filter((e) => e.level === "warn");
+    expect(warned).toHaveLength(1);
+    expect(String(warned[0].context?.detail)).toContain("HTTP 500");
+    expect(String(warned[0].context?.detail)).toContain("boom");
+  });
+
+  it("logs NO count-failure warning when the count query succeeded", async () => {
+    // The mirror of the pin above, and what makes it a signal rather than a
+    // habit: SearchRun.notes is empty on success, so a warning here would mean
+    // the code had started reporting a healthy query as a failed one.
+    const logger = new FakeLogger();
+    const cribl = client(
+      ...jobRun("j-1", ndjson(UNSPLITTABLE)),
+      ...jobRun("j-2", ndjson([{ [COUNT_COLUMN]: 1216 }])),
+    );
+
+    const result = await queryLakeSamples(
+      cribl,
+      { searchGroupId: GROUP, datasetId: DATASET },
+      logger,
+    );
+
+    expect(result.ok).toBe(true);
+    expect(result.logTypes[0].eventCount).toBe(1216);
+    expect(logger.entries.filter((e) => e.level === "warn")).toEqual([]);
+    // And no stray error text rode in on the success path either.
+    expect(result.notes.join(" ")).not.toContain("could not be counted");
   });
 
   it("leaves the volume UNKNOWN when the count column is unreadable", async () => {
@@ -1373,6 +1469,54 @@ describe("fetchLakeLogTypeEvents - counts choose, events sample", () => {
     expect(result.ok).toBe(false);
     expect(result.events.map((e) => e.logType)).toEqual(["TRAFFIC"]);
     expect(result.notes.join(" ")).toContain("THREAT");
+  });
+
+  /**
+   * THE THREE STATES OF A FETCH, PINNED SIDE BY SIDE (2026-08-26).
+   *
+   * `ok` alone answers none of the questions a renderer asks, and the interface
+   * doc used to say the opposite of the code: "False when EVERY requested log
+   * type failed; a partial haul is ok". The implementation has always been
+   * `ok: failed === 0`, false the moment ANY log type fails. A renderer believed
+   * the prose, branched on `!ok` as "nothing was added", and printed exactly
+   * that sentence to an operator whose partial haul was being stored.
+   *
+   * The pins above each cover one state; this one puts all three in one place so
+   * the PAIRING is the pin. `ok` says whether anything failed; `events` says
+   * whether anything was got. Neither answers for the other.
+   */
+  it("distinguishes complete, PARTIAL and total failure by (ok, events) TOGETHER", async () => {
+    // COMPLETE: nothing failed, and a haul came back.
+    const complete = await fetchRun(
+      client(...jobRun("j-1", ndjson([{ type: "TRAFFIC", _raw: "a" }]))),
+    );
+    expect([complete.ok, complete.events.length]).toEqual([true, 1]);
+
+    // COMPLETE AND EMPTY: nothing failed, the window simply holds none of it.
+    // `ok` is TRUE here, so `ok` can never be read as "something came back".
+    const empty = await fetchRun(client(...jobRun("j-1", "")));
+    expect([empty.ok, empty.events.length]).toEqual([true, 0]);
+
+    // PARTIAL: something failed AND something came back. This is the state the
+    // wrong branch was built on - `!ok` here does NOT mean nothing was added.
+    const partial = await fetchRun(
+      client(
+        ...jobRun("j-1", ndjson([{ type: "TRAFFIC", _raw: "a" }])),
+        { status: 400, body: "bad query" },
+      ),
+      { logTypes: ["TRAFFIC", "THREAT"] },
+    );
+    expect([partial.ok, partial.events.length]).toEqual([false, 1]);
+    expect(partial.events[0].rawEvents).toEqual(["a"]);
+
+    // TOTAL: everything failed, and only here does `!ok` mean nothing was added.
+    const total = await fetchRun(client({ status: 400, body: "bad query" }));
+    expect([total.ok, total.events.length]).toEqual([false, 0]);
+
+    // REFUSED before any query ran - reads as total failure, which is correct:
+    // nothing was added and nothing is recoverable from this result.
+    const refused = await fetchRun(new FakeCriblClient(), { logTypes: [] });
+    expect([refused.ok, refused.events.length]).toEqual([false, 0]);
   });
 
   it("reports a log type that returned nothing, rather than an empty sample", async () => {

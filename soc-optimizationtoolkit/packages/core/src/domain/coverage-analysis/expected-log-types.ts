@@ -81,6 +81,29 @@ export function normalizeLogTypeName(value: string): string {
 const normalize = normalizeLogTypeName;
 
 /**
+ * Words that are the GENERIC NOUN for "a log record" and identify no kind of
+ * data on their own.
+ *
+ * Compared against the NORMALIZED form, so "log-type" and "logType" both arrive
+ * here as "logtype".
+ *
+ * DELIBERATELY TIGHT. Every entry has to be a word that could never distinguish
+ * one vendor feed from another, because each one costs a real match somewhere:
+ * "alert", "audit", "session" and "activity" are all plausibly generic and are
+ * all left OUT, because they are also real feed names ("ZIA Alerts", "Azure
+ * Activity"). The list is not a stop-word list for English; it is the handful of
+ * words a sample tag can carry while telling you nothing.
+ */
+const GENERIC_LOG_WORDS: ReadonlySet<string> = new Set([
+  "event", "events", "eventtype", "eventtypes",
+  "log", "logs", "logtype", "logtypes", "logfile", "logfiles",
+  "message", "messages", "msg", "msgs",
+  "record", "records", "entry", "entries",
+  "data", "type", "types",
+  "generic", "other", "unknown", "misc", "none",
+]);
+
+/**
  * Whether a PROVIDED log-type name covers an EXPECTED one.
  *
  * THE one implementation (2026-08-20 audit found three). Separator- and
@@ -93,7 +116,44 @@ const normalize = normalizeLogTypeName;
  * same screen, and nothing made them stay in step.
  *
  * `providedNorm` is pre-normalized so a caller comparing many values does not
- * re-normalize the provided list per comparison.
+ * re-normalize the provided list per comparison. That is also why the rule below
+ * cannot reach for word boundaries, which would be the obvious fix: by the time
+ * a name arrives here its separators are GONE - "panos-traffic" and "PAN-OS
+ * Traffic" are both "panostraffic" - so "tunnelevent" ends in "event" exactly as
+ * "panostraffic" ends in "traffic", and no tokenizer can tell the two apart from
+ * what it is given.
+ *
+ * THE TWO DIRECTIONS ARE NOT THE SAME CLAIM, which is what the rule turns on:
+ *
+ *   p.includes(key)   the tag is MORE specific than the expected name - it
+ *                     carries a vendor or product qualifier the content's
+ *                     literal does not. "panos-traffic" over "TRAFFIC". This is
+ *                     the documented case and it stays permissive; it is also
+ *                     the only thing that lets a Fortinet solution's literal
+ *                     "event" be covered by a sample tagged "fortigate-event".
+ *
+ *   key.includes(p)   the tag is LESS specific than the expected name, and this
+ *                     is the direction that invented coverage. Observed live: a
+ *                     FortiGate sample tagged "event" was credited against a
+ *                     Zscaler solution's "Tunnel Event", because "tunnelevent"
+ *                     contains "event". The solution's unmet count dropped 9 to
+ *                     8 and the operator was told a Zscaler tunnel detection was
+ *                     covered by FortiGate system-event data carrying no Zscaler
+ *                     tunnel fields - a real gap rendered as a false green.
+ *
+ * So the broader-tag direction now asks one more question: does what the tag
+ * actually SAYS name a kind of data? "traffic" does, so "PAN-OS Traffic" is
+ * still covered by a sample tagged "traffic" (pinned). "event" does not - it is
+ * the generic noun for a log record ({@link GENERIC_LOG_WORDS}) - so it may only
+ * match a log type genuinely called "event", by exact equality.
+ *
+ * WHY NOT JUST DELETE THE BROADER-TAG ARM. It is the arm the vendor catalog
+ * leans on: "ZIA DNS" carries the alias "dns", and a dataset tagged
+ * "zscalernss-dns" is recognised through it. That is the other direction, but
+ * the same tolerance, and the aliases are why some Zscaler feeds match and
+ * others do not - "ZIA Firewall" lists "NSSFWlog"/"firewall"/"fwlog" and none of
+ * them is a substring of "zscalernssfw", which is the whole reason that one
+ * reads as uncovered while its DNS sibling does not.
  *
  * BOTH empty-name guards are load-bearing and BOTH live here, not in the
  * callers. A name that normalizes to "" - an operator may tag a sample "-",
@@ -110,9 +170,14 @@ export function logTypeNameMatches(
 ): boolean {
   const key = normalizeLogTypeName(value);
   if (key === "") return false;
-  return providedNorm.some(
-    (p) => p !== "" && (p === key || p.includes(key) || key.includes(p)),
-  );
+  return providedNorm.some((p) => {
+    if (p === "") return false;
+    if (p === key) return true;
+    // The tag is the qualified form of the expected name: still permissive.
+    if (p.includes(key)) return true;
+    // The tag is the BROADER name. It counts only if it says something.
+    return key.includes(p) && !GENERIC_LOG_WORDS.has(p);
+  });
 }
 
 /** Escape a field name for safe inclusion in the extraction patterns. */
@@ -247,6 +312,9 @@ export function deriveExpectedLogTypes(
  * `provided` is the tagged-sample log-type list. Matching is separator- and
  * case-insensitive, and a provided name COUNTS as a match when it contains the
  * expected token (an operator who tags "panos-traffic" has covered "TRAFFIC").
+ * A tag BROADER than the expected name counts too, but only when the tag names
+ * a kind of data - see {@link logTypeNameMatches}, which is the one place that
+ * decision is made.
  */
 export function compareLogTypeCoverage(
   expected: readonly ExpectedLogType[],

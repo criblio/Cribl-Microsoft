@@ -1179,16 +1179,56 @@ export async function queryLakeSamples(
     const totalRow = totalRun.ok ? totalRun.rows[0] : undefined;
     const total = totalRow === undefined ? undefined : readCount(totalRow);
 
+    // ONLY THE PART THE CALLER CANNOT DERIVE (trimmed 2026-08-26). This used to
+    // push two more sentences: "No field on these events distinguishes one log
+    // type from another, so X is offered as a single log type" and "That log
+    // type is named after the dataset ... Rename the sample on its chip once
+    // added". Both were re-statements of `datasetAsLogType`, which is on the
+    // result as a BOOLEAN and is what the Lake panel already switches on - so
+    // the panel said each of them in its own words, in better places (one as the
+    // headline, one beside the name), and core said them again below the list.
+    // Four sentences for one idea on a single card, which reads as the app not
+    // trusting the reader.
+    //
+    // THE FACT IS THE CONTRACT; THE WORDS ARE THE CALLER'S. A boolean cannot
+    // drift in wording, so pinning `datasetAsLogType` guarantees the disclosure
+    // more strongly than pinning prose ever did - and it stops two layers
+    // owning one sentence between them. What stays here is the only thing a
+    // caller CANNOT read off the flag: why no field was groupable.
     notes.push(
-      `No field on these events distinguishes one log type from another, so "${datasetId}" is offered as a single log type. When the log type is buried in the raw message, Search cannot group on it without a parser; a dataset that holds only one log type has nothing to group by in the first place.`,
+      `When the log type is buried in the raw message, Search cannot group on it without a parser; a dataset that holds only one log type has nothing to group by in the first place.`,
     );
-    notes.push(
-      `That log type is named after the dataset, because the dataset's name is the only name these events came with - it is not a log type found in the data. Rename the sample on its chip once added if you know what these events are.`,
-    );
-    // The platform's own words, if the count failed. Pushed AFTER the two notes
-    // that explain the offer, so an operator whose sample is still perfectly
-    // takeable does not read an HTTP error first.
-    notes.push(...totalRun.notes);
+    // THE FAILED SUB-QUERY'S OWN WORDS DO NOT GO IN `notes` (defect fixed
+    // 2026-08-26). This used to be `notes.push(...totalRun.notes)`, and those
+    // notes are error text: SearchRun.notes is empty on success, so anything in
+    // it means the count query FAILED. This result is returned `ok: true` - the
+    // sample is there and takeable - and the Lake panel renders every note as
+    // undifferentiated hint text under whatever headline the result earned. So
+    // an operator read
+    //
+    //   "Nothing on these events tells one log type from another, so 'X' is
+    //    offered as a single log type."
+    //   "The search job was still running after 20 status checks, so no log
+    //    types could be read."
+    //
+    // - "no log types could be read" printed beside a readable, tickable log
+    // type, and the sentence that mitigates it pushed BELOW the error. That is
+    // the exact shape the module header calls out as the sync route's defect,
+    // one step in. Reordering would not fix it: the error text is a claim about
+    // a query the operator was never told about, and it contradicts the offer
+    // sitting next to it whatever order it appears in.
+    //
+    // NOTHING IS LOST, it is just addressed to the right reader. The platform's
+    // message goes to the LOGGER, where whoever debugs the workspace will look
+    // for it, and the operator gets the one sentence that is true for them: the
+    // volume is unknown, the sample is still takeable. Only `notes` is
+    // operator-facing; this file's own SearchRun doc already says so.
+    if (!totalRun.ok) {
+      logger?.warn("query-lake-samples: dataset total count failed", {
+        dataset: datasetId,
+        detail: totalRun.notes.join(" "),
+      });
+    }
     if (total === undefined) {
       // NOT a failed query: the dataset was read and the sample is still there
       // to take. Only the volume was lost, and it stays unknown rather than
@@ -1449,21 +1489,75 @@ export interface LakeLogTypeEvents {
   rawEvents: string[];
 }
 
-/** What {@link fetchLakeLogTypeEvents} produced. */
+/**
+ * What {@link fetchLakeLogTypeEvents} produced.
+ *
+ * READ `ok` TOGETHER WITH `events` - NEITHER ONE IS THE ANSWER ON ITS OWN.
+ *
+ * This doc used to say `ok` was "False when EVERY requested log type failed; a
+ * partial haul is ok", which is the OPPOSITE of what this module has always
+ * done, and the doc is what a renderer believed: the Lake panel read `!ok` as
+ * "nothing was added" and printed that sentence while a partial haul's samples
+ * were being stored. The implementation is the sane one and is unchanged; this
+ * doc is what was wrong, so it is now stated as the three states a caller must
+ * actually distinguish:
+ *
+ *   ok === true                 EVERY requested log type was queried without
+ *                               failure. `events` MAY STILL BE EMPTY - a window
+ *                               that genuinely holds none of the chosen log
+ *                               types is a true answer, not a failure, and the
+ *                               per-log-type notes name which returned nothing.
+ *
+ *   !ok && events.length > 0    PARTIAL, and this is the state the wrong branch
+ *                               was built on. Some log types failed and are
+ *                               named in `notes`; the rest ARE in `events`, and
+ *                               a caller that stores them HAS added samples. A
+ *                               headline saying otherwise contradicts the store.
+ *
+ *   !ok && events.length === 0  Nothing came back: every requested log type
+ *                               failed, or the request was refused before any
+ *                               query ran (no dataset, no search group, no
+ *                               selection, or several log types with no field
+ *                               to tell them apart). `notes` says which.
+ *
+ * NO COUNT FIELDS WERE ADDED for "requested" vs "produced", and that is a
+ * decision rather than an omission: `events.length` IS the produced count, and
+ * the one caller that needs the requested count already holds it - it is what
+ * it passed in `logTypes` and what it hands its own view function. A field that
+ * only restates two numbers the caller already has would be a third thing to
+ * keep in step, and the miscommunication here was never arithmetic: it was one
+ * sentence of prose that said the opposite of the code.
+ */
 export interface FetchLakeEventsResult {
+  /**
+   * The log types that DID produce events, in requested order. Every entry here
+   * is a sample the caller can store, whatever `ok` says.
+   */
   events: LakeLogTypeEvents[];
   notes: string[];
-  /** False when EVERY requested log type failed; a partial haul is ok. */
+  /**
+   * TRUE MEANS "NOTHING FAILED" - never "something came back".
+   *
+   * FALSE the moment ANY requested log type fails, so a partial haul is
+   * `ok: false` WITH a non-empty `events`. It is NOT a verdict on the haul:
+   * `ok: true` with an empty `events` is the ordinary shape of an empty window.
+   * See the three states on {@link FetchLakeEventsResult} before branching on
+   * this alone.
+   */
   ok: boolean;
 }
 
 /**
  * Fetch events for each chosen log type.
  *
- * PARTIAL SUCCESS IS SUCCESS. One log type failing must not cost the operator
- * the others - they picked several, and returning nothing because the third of
- * five 400'd would throw away four good samples. Each failure becomes a note
- * naming which log type was lost.
+ * A PARTIAL HAUL IS KEPT, AND IT IS STILL `ok: false`. One log type failing must
+ * not cost the operator the others - they picked several, and returning nothing
+ * because the third of five 400'd would throw away four good samples. So the
+ * four survive in `events` and each failure becomes a note naming which log type
+ * was lost, while `ok` goes false because something DID fail. Those two facts
+ * are not in tension and must be read together; {@link FetchLakeEventsResult}
+ * spells out the three states, because a caller that read `!ok` as "nothing was
+ * added" told the operator exactly that about samples it then stored.
  *
  * TWO SHAPES OF SELECTION, and the guards below keep them apart. With a
  * discriminator field, any number of log types may be taken and each is
@@ -1600,5 +1694,9 @@ export async function fetchLakeLogTypeEvents(
   // ok = "nothing FAILED", not "something came back". A window that genuinely
   // holds none of the chosen log types is a true answer, and the per-log-type
   // notes already say which returned nothing.
+  //
+  // AND A PARTIAL HAUL IS `ok: false` WITH EVENTS, which is the pairing every
+  // caller has to read - see the three states on FetchLakeEventsResult, whose
+  // doc used to claim the reverse and cost the Lake panel a wrong headline.
   return { events, notes, ok: failed === 0 };
 }
