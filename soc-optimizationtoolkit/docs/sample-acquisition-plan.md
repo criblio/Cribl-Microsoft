@@ -982,6 +982,60 @@ nothing splits holds ONE log type, so:
 A lost count costs the number and never the offer: `ok` stays true, the volume
 stays undefined rather than becoming a zero, and the sample is still takeable.
 
+**A SIXTH DEFECT, reported from the live app 2026-08-25: the group with NO
+discriminator value was reported and then discarded.** Querying the Lake dataset
+`PaloAlto` answered "13 log types in PaloAlto, highest volume first" and then "1
+group carried no msgid value and was left out". `summarize count() by msgid`
+returns a group for the events that carry no msgid, with a real count - and
+`readGroupValue` collapsed that group's key into the same `undefined` it used for
+a key it could not read at all, so the row was dropped. Reported beats silent,
+but those events then had no route to becoming a sample: nothing could shape
+them, and in the generated pack they would arrive unshaped.
+
+It is the fifth defect's bargain one level down, and it is resolved the same way:
+
+- The group is OFFERED as a row of its own, with the platform's `summarize`
+  count. Several value-less groups (an engine may return `null` and `""`
+  separately) fold into ONE row and their counts sum, because one filter selects
+  all of them. If any part of that sum came back unreadable the whole count stays
+  undefined - a partial total understates the events it speaks for, which is the
+  same all-or-nothing rule `merge.ts` keeps for summed bytes.
+- It is NAMED `(no msgid)` - minted from the FIELD, never read out of the data -
+  and `LakeLogTypeVolume.unnamed` says so per row, all the way to the caveat the
+  panel prints beside it. This is the harder case than the dataset-named row: it
+  sits IN a list of twelve names the data really did supply, so an uncaveated
+  label reads as a thirteenth vendor log type.
+- The byte estimate follows the standing rule untouched: measured from that
+  row's OWN sampled events when step one held any, absent otherwise.
+- Ambiguity is REFUSED rather than resolved. If a real log type in the dataset is
+  already spelled `(no msgid)`, no row is minted - two rows sharing one name
+  would send the fetch, which recognises the pick BY its name, after the wrong
+  events.
+- **The fetch filter is grounded in the spec, not guessed.**
+  `where tostring(field)=="value"` cannot express "there is no value": every
+  literal IS a value. The vendored `cribl-openapi.json` attests exactly one
+  null-ish Kusto predicate for Cribl Search - `isnotempty(vendor)`, as a dataset
+  ruleset's `kustoExpression` - alongside `| where <expr>`, `field == "literal"`
+  and the bare literal `false`. So the filter is `isnotempty(msgid)==false`,
+  built from those forms alone. `isempty`, `isnull` and `not()` appear NOWHERE in
+  the spec and are not used. The obvious alternative - excluding the known values
+  with `!in` - is unattested AND semantically wrong: Kusto's null comparisons are
+  not true, so the null key would be filtered out by the very predicate meant to
+  select it, returning nothing while looking right.
+- **And the filter is CHECKED rather than trusted**, because a composition of
+  attested atoms is still a query no one here has run. `fetchLakeLogTypeEvents`
+  reads the rows that come back and refuses the haul if any of them DOES carry a
+  value in that field. All three outcomes are then honest: Cribl rejects the
+  filter and the existing failure path names the HTTP error; Cribl accepts it and
+  means something else, and the note says so; or it works. An empty answer for
+  this row is reported as AMBIGUOUS - unlike every other log type, where empty
+  just means the window holds none of it - and the count the operator has on
+  screen is what tells the two apart.
+
+Still unverified against a live workspace: whether Cribl Search accepts
+`isnotempty(field)==false`. The check above is what makes shipping it safe
+without that answer.
+
 ### Attempt 2026-08-20 - blocked, with two things settled anyway
 
 Tried against the lab workspace through the browser rather than a token. What

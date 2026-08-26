@@ -51,6 +51,15 @@
  * events, one Windows channel - offered NOTHING and pointed the operator at a
  * different acquisition mode for data already in their lake.
  *
+ * SO CAN A GROUP WITH NO NAME (user report 2026-08-25). `summarize by msgid`
+ * returns a group for the events carrying no msgid; the panel used to report it
+ * ("1 group carried no msgid value and was left out") and leave those events
+ * with no route to becoming a sample at all. Core now offers that group as a
+ * row labelled "(no msgid)" with its real count, and what this panel owes it is
+ * the same thing it owes the dataset-named row: the caveat, beside it, saying
+ * the label describes what these events LACK rather than naming what they are.
+ *
+
  * All decisions are the pure lake-panel-state; this renders and wires. The ports
  * stay with the screen (onQuery/onFetchEvents), as they do for CapturePanel.
  */
@@ -402,6 +411,26 @@ export function LakePanel({
                       formatBytes(choice.estimatedBytes) !== "" &&
                       `, ~${formatBytes(choice.estimatedBytes)} estimated`}
                   </span>
+                  {/* WHOSE NAME THIS IS, said on the row itself. This one is
+                      the group of events that carry NO value in the field
+                      everything else was grouped by, and its label was minted
+                      from that field rather than read out of the data. Beside
+                      twelve names that ARE the data's, an uncaveated
+                      "(no msgid)" is the app claiming a thirteenth log type it
+                      never observed - so the caveat travels with the row and
+                      not in a note below the list. The field is named because
+                      "no value" is only meaningful against a field. */}
+                  {choice.unnamed && (
+                    <span className="field-hint lake-unnamed">
+                      these events carry no
+                      {view.discriminatorField !== undefined
+                        ? ` ${view.discriminatorField}`
+                        : ""}{" "}
+                      value - that name describes what they lack, not a log type
+                      found in the data. Rename it on its chip once added if you
+                      know what these events are.
+                    </span>
+                  )}
                   {choice.note !== undefined && (
                     <span className="field-hint lake-replaces">
                       {choice.note}

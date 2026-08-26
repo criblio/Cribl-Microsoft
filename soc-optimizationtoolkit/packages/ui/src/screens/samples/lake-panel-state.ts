@@ -21,7 +21,7 @@
  * the commit used to run inside itself - and it is what lets an operator see the
  * bytes before they are stored, the way the capture panel always has.
  *
- * FOUR THINGS THIS MODULE EXISTS TO GET RIGHT:
+ * SIX THINGS THIS MODULE EXISTS TO GET RIGHT:
  *
  * 1. EMPTY AND FAILED ARE DIFFERENT ANSWERS. `ok: false` is "the read failed";
  *    `ok: true` with no log types is "this dataset genuinely holds none in this
@@ -54,6 +54,15 @@
  *    appear for it, {@link lakeOffersSamples}), and the name is stated as the
  *    dataset's rather than as something found in the data. Getting the second
  *    wrong would have the app invent a vendor log type it never observed.
+ *
+ * 6. A ROW CAN BE OFFERED WITHOUT HAVING A NAME (user report 2026-08-25). The
+ *    `summarize by msgid` group for the events that carry NO msgid is a real
+ *    group with a real count, and core now offers it under a label it MINTED
+ *    from the field - "(no msgid)". That is item 5's bargain per row rather
+ *    than per dataset, and it lands in the hardest place for it: beside twelve
+ *    log types whose names ARE the data's. {@link LakeLogTypeChoice.unnamed}
+ *    carries core's own word for which row that is, so the caveat sits on the
+ *    row and never has to be inferred from how the label is spelled.
  *
  * Pure: no IO, no fetch, no React, no Date/crypto. Number FORMATTING is left to
  * the component - `toLocaleString` is a rendering choice, and pinning its output
@@ -128,6 +137,18 @@ export interface LakeLogTypeChoice {
   selected: boolean;
   /** True when taking this would replace an existing tagged sample. */
   replacesExisting: boolean;
+  /**
+   * True when this row is the group whose discriminator value was ABSENT, so
+   * its {@link value} is a label core MINTED from the field ("(no msgid)")
+   * rather than a name anything in the data carries.
+   *
+   * Carried on the row for the same reason {@link LakeQueryView.datasetAsLogType}
+   * is carried on the view: a row that reads as a vendor log type when it is
+   * not is the app claiming something it never observed, and the panel must be
+   * able to say so beside THIS row rather than in a note far below a list of
+   * twelve real ones.
+   */
+  unnamed: boolean;
   /** Why the row needs a caveat, when it does. */
   note?: string;
 }
@@ -170,6 +191,12 @@ export function lakeLogTypeChoices(
       storeLabel: storeLabelFor(entry.logType, byKey),
       selected,
       replacesExisting,
+      // Read from the volume, never inferred from the NAME here. Core mints the
+      // label and core says which row it minted; a second rule in the UI that
+      // decided by looking for parentheses would eventually disagree with it,
+      // and the disagreement would be a real vendor log type presented with a
+      // caveat about a field it does carry.
+      unnamed: entry.unnamed === true,
     };
     if (entry.eventCount !== undefined) {
       choice.eventCount = entry.eventCount;

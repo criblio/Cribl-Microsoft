@@ -153,6 +153,59 @@ describe("lakeLogTypeChoices", () => {
     expect("estimatedBytes" in choices[0]).toBe(false);
   });
 
+  // THE ROW WITH NO NAME (user report 2026-08-25). Core offers the `summarize
+  // by` group whose value was ABSENT under a label it minted from the field.
+  // The panel's job is to take that row like any other AND to carry core's own
+  // word for which row it is, so the caveat never has to be inferred from how
+  // the label is spelled.
+
+  it("marks core's minted row as unnamed, and every other row as named", () => {
+    const choices = lakeLogTypeChoices([
+      { logType: "TRAFFIC", eventCount: 890123, meanEventBytes: 620 },
+      { logType: "(no msgid)", eventCount: 4211, unnamed: true },
+    ]);
+
+    expect(choices.map((c) => c.unnamed)).toEqual([false, true]);
+    // Takeable like any other row: offered, tickable, and pre-selected on its
+    // volume rather than pushed to the end for lacking a name.
+    expect(choices[1].selected).toBe(true);
+    expect(selectedLakeLogTypes(choices)).toEqual(["TRAFFIC", "(no msgid)"]);
+    // THE PLATFORM'S COUNT SURVIVES. It is a real group of real events; only
+    // the name is ours.
+    expect(choices[1].eventCount).toBe(4211);
+    // And its byte estimate is absent because it was never sampled - the
+    // standing rule, applied here unchanged.
+    expect("estimatedBytes" in choices[1]).toBe(false);
+  });
+
+  it("estimates the unnamed row's bytes when its OWN events were sampled", () => {
+    const choices = lakeLogTypeChoices([
+      { logType: "(no msgid)", eventCount: 4211, meanEventBytes: 300, unnamed: true },
+    ]);
+
+    // 4,211 x 300 = 1,263,300. The events are real, so their cost is too.
+    expect(choices[0].estimatedBytes).toBe(1263300);
+    expect(choices[0].unnamed).toBe(true);
+  });
+
+  it("marks nothing unnamed when every row came out of the data", () => {
+    const choices = lakeLogTypeChoices([
+      { logType: "TRAFFIC", eventCount: 3 },
+      { logType: "THREAT", eventCount: 2 },
+    ]);
+
+    expect(choices.every((c) => c.unnamed === false)).toBe(true);
+  });
+
+  it("reads the flag from CORE, never from the shape of the label", () => {
+    // A vendor whose own log type is spelled with parentheses is still a log
+    // type found in the data. A UI-side rule that decided by looking for "(no "
+    // would caveat this row about a field it does carry.
+    const choices = lakeLogTypeChoices([{ logType: "(no msgid)", eventCount: 9 }]);
+
+    expect(choices[0].unnamed).toBe(false);
+  });
+
   it("does NOT pre-select a log type the operator already provided", () => {
     const choices = lakeLogTypeChoices(
       [

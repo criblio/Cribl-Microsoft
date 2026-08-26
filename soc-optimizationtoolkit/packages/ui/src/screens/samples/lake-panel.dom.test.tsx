@@ -12,7 +12,7 @@
  * the cautionary tale: fourteen thoroughly-tested pure decisions behind a panel
  * that had quietly lost its job.
  *
- * Five things here exist ONLY in the component and are pinned nowhere else:
+ * Eight things here exist ONLY in the component and are pinned nowhere else:
  *   - the three-step flow itself, and the invariant underneath it - NOTHING
  *     ENTERS THE SAMPLE STORE WITHOUT A DELIBERATE CLICK, which is a statement
  *     about a rendered button and a handler;
@@ -32,7 +32,11 @@
  *   - the caveat beside a dataset offered as its own log type, which exists
  *     ONLY on screen: nothing downstream can say "that name is the dataset's,
  *     not something we found in your data", and without it the row reads as a
- *     log type this app discovered.
+ *     log type this app discovered;
+ *   - the same caveat beside the row for events that carry NO value in the
+ *     discriminator field, which is the harder case: that row sits IN a list of
+ *     names the data really did supply, so an uncaveated "(no msgid)" reads as
+ *     one more of them.
  */
 
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -1176,5 +1180,111 @@ describe("LakePanel - what the commit reports afterwards", () => {
     expect(commitButton(container)).toBeNull();
     expect(onCommit).toHaveBeenCalledTimes(0);
     expect(status(container)).toBe("idle");
+  });
+});
+
+/**
+ * THE ROW FOR EVENTS THAT CARRY NO VALUE (user report 2026-08-25).
+ *
+ * Observed live on a PaloAlto lake dataset: 13 log types listed, and then "1
+ * group carried no msgid value and was left out". Those events had a real count
+ * and no route to becoming a sample - unshapeable, and unshaped in the
+ * generated pack.
+ *
+ * Core now offers them as a row labelled "(no msgid)". What only the component
+ * can be held to is the honesty of that row ON SCREEN: it is rendered, it is
+ * tickable, it is fetched with the field the query established - and the caveat
+ * saying the label describes what these events LACK sits BESIDE it, among
+ * twelve names that really did come out of the data. Nothing downstream can say
+ * that; without it the operator reads a thirteenth vendor log type.
+ */
+describe("LakePanel - the group whose discriminator value is absent", () => {
+  const unnamedHints = (c: HTMLElement) => c.querySelectorAll(".lake-unnamed");
+
+  /** Two real log types and core's minted row, all inside the tick budget. */
+  const WITH_UNNAMED = queryResult({
+    discriminatorField: "msgid",
+    logTypes: [
+      { logType: "TRAFFIC", eventCount: 412908 },
+      { logType: "(no msgid)", eventCount: 4211, unnamed: true },
+    ],
+  });
+
+  it("renders the row, its count, and the caveat naming the field", async () => {
+    const { container } = renderPanel({ query: WITH_UNNAMED });
+
+    await runQuery(container);
+
+    expect(rows(container)).toHaveLength(2);
+    const row = rows(container)[1];
+    expect(row.querySelector(".lake-log-type-name")?.textContent).toBe(
+      "(no msgid)",
+    );
+    // THE PLATFORM'S COUNT, on screen, formatted like every other row's.
+    expect(row.querySelector(".lake-volume")?.textContent).toContain(
+      "4,211 events",
+    );
+    // ONE caveat, on THAT row, and it names the field - "no value" means
+    // nothing without one.
+    expect(unnamedHints(container)).toHaveLength(1);
+    const caveat = row.querySelector(".lake-unnamed")?.textContent ?? "";
+    expect(caveat).toContain("carry no msgid value");
+    expect(caveat).toContain("not a log type found in the data");
+  });
+
+  it("shows no such caveat when every row came out of the data", async () => {
+    const { container } = renderPanel();
+
+    await runQuery(container);
+
+    expect(rows(container)).toHaveLength(3);
+    expect(unnamedHints(container)).toHaveLength(0);
+  });
+
+  it("fetches it with the field the query established, like any other row", async () => {
+    // The row is takeable, which is the whole point of offering it - and it is
+    // addressed with the SAME field, because core's query builder is what turns
+    // that pick into the no-value filter. A panel that dropped the field here
+    // would send it down the unfiltered dataset-as-log-type path instead.
+    const { container, onFetchEvents } = renderPanel({
+      query: WITH_UNNAMED,
+      fetched: fetchResult({
+        events: [
+          {
+            logType: "(no msgid)",
+            rawEvents: ['{"seq":1}', '{"seq":2}'],
+          },
+        ],
+      }),
+    });
+    await runQuery(container);
+    // Untick the real log type so only the minted row is asked for.
+    fireEvent.click(boxes(container)[0]);
+    expect(ticked(container)).toBe(1);
+
+    await fetchEvents(container);
+
+    expect(onFetchEvents).toHaveBeenCalledTimes(1);
+    expect(onFetchEvents.mock.calls[0][0]).toBe("msgid");
+    expect(onFetchEvents.mock.calls[0][1]).toEqual(["(no msgid)"]);
+    expect(previewRows(container)).toHaveLength(1);
+  });
+
+  it("stores it under the label it was offered as, with nothing renamed", async () => {
+    const { container, onCommit } = renderPanel({
+      query: WITH_UNNAMED,
+      fetched: fetchResult({
+        events: [{ logType: "(no msgid)", rawEvents: ['{"seq":1}'] }],
+      }),
+    });
+    await runQuery(container);
+    fireEvent.click(boxes(container)[0]);
+
+    await fetchAndAdd(container);
+
+    expect(onCommit).toHaveBeenCalledTimes(1);
+    expect(onCommit.mock.calls[0][0].map((s) => s.logType)).toEqual([
+      "(no msgid)",
+    ]);
   });
 });

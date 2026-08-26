@@ -1681,15 +1681,25 @@ button.journey-step-main:hover .journey-step-label {
   color: var(--text-muted);
 }
 
-/* A count with no window is not a fact; the window rides with it. */
+/* A count with no window is not a fact; the window rides with it.
+ *
+ * .lake-unnamed joins them because it is the same register: a caveat about what
+ * a name MEANS, not a warning that something is about to be lost. It sits ON a
+ * row inside the wrapping label, so it takes a full basis - the row it caveats
+ * still has to show its own name and volume on one line. */
 .lake-window,
 .lake-truncated,
 .lake-unavailable,
-.lake-dataset-named {
+.lake-dataset-named,
+.lake-unnamed {
   font-size: 12px;
   line-height: 18px;
   color: var(--text-muted);
   margin: 0;
+}
+
+.lake-unnamed {
+  flex-basis: 100%;
 }
 
 /* Truncation, replacement and a row that cannot be stored are all "you are

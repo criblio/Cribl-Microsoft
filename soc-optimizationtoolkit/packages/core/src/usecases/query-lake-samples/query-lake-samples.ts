@@ -32,6 +32,40 @@
  * get to claim a vendor log type it never observed, which is the same reason
  * `data_source` sits in the low-confidence tail of DISCRIMINATOR_FIELDS.
  *
+ * THE GROUP WITH NO VALUE IS ALSO OFFERED (user report 2026-08-25), and it is
+ * the same honesty problem one step in. `summarize count() by msgid` returns a
+ * group for the events that carry NO msgid, with a real count - the live app
+ * reported "1 group carried no msgid value and was left out" about 13 log types
+ * in a PaloAlto dataset. Reported is better than silent, but those events then
+ * had no route to becoming a sample at all: they could never be shaped, and in
+ * the generated pack they would arrive unshaped.
+ *
+ * They are now offered as a row of their own, under a label MINTED from the
+ * field rather than found in the data - `(no msgid)`, see
+ * {@link unnamedLogTypeLabel}. The parentheses are load-bearing: this row has to
+ * read as a DESCRIPTION OF WHAT THESE EVENTS LACK sitting among vendor log
+ * types, never as a thirteenth vendor log type. It is the `datasetAsLogType`
+ * bargain again - offer the events, name them after the only thing anyone
+ * actually knows about them, and say so loudly enough that no caller can render
+ * the name as discovered.
+ *
+ * FETCHING IT NEEDS A DIFFERENT FILTER, and that is the part that had to be
+ * grounded rather than guessed. `where tostring(field)=="value"` cannot express
+ * "there is no value". The vendored OpenAPI spec attests exactly one null-ish
+ * Kusto predicate for Cribl Search - `isnotempty(vendor)`, as a dataset
+ * ruleset's `kustoExpression` - plus `| where <expr>`, `==` against a literal,
+ * and the bare literal `false`. So the filter is composed of only those:
+ * `| where isnotempty(msgid)==false`. `isempty`, `isnull` and `not()` appear
+ * NOWHERE in the spec and are not used here.
+ *
+ * AND IT IS CHECKED RATHER THAN TRUSTED. Composing attested atoms is still a
+ * query no one here has run, so {@link fetchLakeLogTypeEvents} reads the rows
+ * that come back and refuses the haul if any of them DOES carry a value in that
+ * field. All three ways it can go are then honest: Cribl rejects the filter and
+ * the existing failure path names the HTTP error; Cribl accepts it and means
+ * something else, and the check says so; or it works. What is never possible is
+ * events with a msgid being stored under a label saying they have none.
+ *
  * STEP ONE'S ROWS ARE READ TWICE (Phase 5's last item, 2026-08-25). Having been
  * fetched to answer WHICH FIELD, they are also grouped by that field and
  * measured, giving a mean bytes-per-event for each log type they contain. That
@@ -173,6 +207,40 @@ export const MAX_LOG_TYPES_LIMIT = 1000;
  */
 export const COUNT_COLUMN = "eventCount";
 
+/**
+ * The label the group whose discriminator value is ABSENT is offered under.
+ *
+ * NOT A NAME FOUND IN THE DATA, and the shape says so. `(no msgid)` reads as a
+ * sentence about what these events lack; `msgid` alone, or `unknown`, or
+ * `other` would read as one more vendor log type on a panel full of them, which
+ * is the one thing this app must never do (the same rule `datasetAsLogType`
+ * keeps for a dataset offered under its own name).
+ *
+ * MINTED HERE AND RECOGNISED HERE, which is what makes it safe to carry the row
+ * through the operator's selection as a plain string. `buildLogTypeEventQuery`
+ * needs to know that this pick means "filter for the absence of a value" rather
+ * than "compare against this text", and the alternative - a flag on
+ * LakeLogTypeVolume, kept in step through the panel's choices and
+ * FetchLakeEventsOptions.logTypes - is exactly the three-layers-of-state trade
+ * that builder's own note already rejected for numeric values. The round trip
+ * closes inside one module instead.
+ *
+ * The one way that can go wrong is a dataset holding a REAL discriminator value
+ * spelled `(no msgid)`, which would make two rows share a name and send the
+ * fetch after the wrong events. {@link readCountRows} watches for it and
+ * declines to mint rather than offering an ambiguous row.
+ */
+export function unnamedLogTypeLabel(field: string): string {
+  return `(no ${field.trim()})`;
+}
+
+/** Whether a chosen log type is {@link unnamedLogTypeLabel} for this field. */
+export function isUnnamedLogTypeLabel(logType: string, field: string): boolean {
+  const name = field.trim();
+  if (name === "") return false;
+  return logType.trim() === unnamedLogTypeLabel(name);
+}
+
 /** Attempt bound on the job poll, and the delay the SHELL is asked for. */
 export const JOB_POLL_ATTEMPTS = 20;
 export const JOB_POLL_INTERVAL_MS = 500;
@@ -219,6 +287,21 @@ export interface LakeLogTypeVolume {
    * differ most.
    */
   meanEventBytes?: number;
+  /**
+   * True when this row is the group whose discriminator value was ABSENT - the
+   * events that carry no value in the field everything else was grouped by.
+   *
+   * Its {@link logType} is {@link unnamedLogTypeLabel}, minted from the field
+   * rather than read out of the data, and this flag is what a renderer must
+   * check before presenting that string as a log type anyone observed. Absent
+   * on every other row, which is the honest default: every other name here came
+   * out of a `summarize by`.
+   *
+   * The COUNT on this row is the platform's own, exactly as it is on the rest.
+   * The events are real and there are a measured number of them; only the name
+   * is ours.
+   */
+  unnamed?: boolean;
 }
 
 /** Options for {@link queryLakeSamples}. */
@@ -645,24 +728,51 @@ function createSearchRunner(
 // ---------------------------------------------------------------------------
 
 /**
- * A group key as text. Not readString: a discriminator value is legitimately
+ * What a summarize row's group key IS - a name, an absence, or something this
+ * app cannot read as either.
+ *
+ * THREE OUTCOMES RATHER THAN TWO (user report 2026-08-25). This used to answer
+ * `string | undefined`, and `undefined` covered both "these events carry no
+ * msgid" and "the key came back as an object". The first is a real group of
+ * real events with a real count and is now offered; the second is a shape this
+ * app does not understand and must stay left out. Collapsing them cost the
+ * first one any route to becoming a sample.
+ */
+type GroupKey =
+  | { kind: "named"; value: string }
+  | { kind: "absent" }
+  | { kind: "unreadable" };
+
+/**
+ * Classify a group key. Not readString: a discriminator value is legitimately
  * numeric (a Windows EventID, say), and dropping those would hide whole log
  * types.
  *
  * The NUMBER-NESS IS LOST HERE, deliberately - a log type is a name by the time
  * an operator picks it. {@link buildLogTypeEventQuery} is what makes that safe
  * on the way back in; read its note before changing either.
+ *
+ * `absent` is null, undefined, or the EXACTLY empty string - the three things
+ * the fetch filter `isnotempty(field)==false` provably selects. A
+ * WHITESPACE-ONLY key is deliberately NOT absent: `isnotempty(" ")` has no
+ * reason to be false, so claiming those events under a label promising they
+ * carry no value would offer a row whose fetch cannot return them. They stay
+ * `unreadable` and stay reported, which is what they were before.
  */
-function readGroupValue(
-  row: Record<string, unknown>,
-  field: string,
-): string | undefined {
+function readGroupKey(row: Record<string, unknown>, field: string): GroupKey {
   const raw = readProp(row, field);
-  if (typeof raw === "string" || typeof raw === "number" || typeof raw === "boolean") {
-    const text = String(raw).trim();
-    return text === "" ? undefined : text;
+  if (raw === undefined || raw === null) return { kind: "absent" };
+  if (typeof raw === "string") {
+    if (raw === "") return { kind: "absent" };
+    const text = raw.trim();
+    return text === ""
+      ? { kind: "unreadable" }
+      : { kind: "named", value: text };
   }
-  return undefined;
+  if (typeof raw === "number" || typeof raw === "boolean") {
+    return { kind: "named", value: String(raw) };
+  }
+  return { kind: "unreadable" };
 }
 
 /**
@@ -762,14 +872,25 @@ function meanEventBytesOfRows(
  * by, and every sampled row belongs to its single log type, so it measures the
  * whole sample with {@link meanEventBytesOfRows}. That is the one case where a
  * dataset-wide mean is not a substitution: the dataset IS the log type.
+ *
+ * `unnamedLabel` is the label the ABSENT-valued group was offered under, or
+ * undefined when no such row was offered. Passed in rather than re-derived so
+ * the sample rows are bucketed under EXACTLY the label the counts were, which is
+ * the same "both sides key on the same string" rule the named rows rely on. When
+ * nothing was offered, sampled rows with no value are measured into nothing -
+ * their bytes belong to a row that does not exist.
  */
 function meanEventBytesByLogType(
   rows: ReadonlyArray<Record<string, unknown>>,
   field: string,
+  unnamedLabel: string | undefined,
 ): Map<string, number> {
   const grouped = new Map<string, Array<Record<string, unknown>>>();
   for (const row of rows) {
-    const logType = readGroupValue(row, field);
+    const key = readGroupKey(row, field);
+    let logType: string | undefined;
+    if (key.kind === "named") logType = key.value;
+    else if (key.kind === "absent") logType = unnamedLabel;
     if (logType === undefined) continue;
     const bucket = grouped.get(logType);
     if (bucket === undefined) grouped.set(logType, [row]);
@@ -785,8 +906,18 @@ function meanEventBytesByLogType(
 }
 
 interface CountReadout {
+  /** Log types with their platform counts, biggest first. Means attach after. */
   logTypes: LakeLogTypeVolume[];
-  /** Rows whose group key was empty - events carrying no log type at all. */
+  /**
+   * The label the ABSENT-valued group was offered under, when one was offered.
+   * Undefined when the dataset had no such group, or when the label was taken.
+   */
+  unnamedLabel?: string;
+  /** How many summarize groups carried no value in the field. */
+  unnamedGroups: number;
+  /** True when a real group already answers to {@link unnamedLogTypeLabel}. */
+  unnamedLabelTaken: boolean;
+  /** Rows whose group key this app could not read as a name OR an absence. */
   skipped: number;
   /** Rows whose volume could not be read from any known column. */
   unknownCounts: number;
@@ -797,33 +928,76 @@ interface CountReadout {
  *
  * Sorted here as well as in the query, and deliberately: the local order is
  * total and deterministic (count descending, then name ascending) whatever
- * order the engine chose, so the same dataset renders the same way twice.
+ * order the engine chose, so the same dataset renders the same way twice. The
+ * offered no-value row sorts by its count like every other row - it is a real
+ * group of real events and gets no special position.
+ *
+ * MEANS ARE NOT ATTACHED HERE any more, because the caller cannot measure them
+ * until this has decided whether the no-value row exists and what it is called.
+ * Two phases, one label.
  */
 function readCountRows(
   rows: Array<Record<string, unknown>>,
   field: string,
-  means: ReadonlyMap<string, number>,
 ): CountReadout {
   const logTypes: LakeLogTypeVolume[] = [];
+  const absent: Array<Record<string, unknown>> = [];
+  const namedValues = new Set<string>();
   let skipped = 0;
   let unknownCounts = 0;
 
   for (const row of rows) {
-    const logType = readGroupValue(row, field);
-    if (logType === undefined) {
+    const key = readGroupKey(row, field);
+    if (key.kind === "unreadable") {
       skipped += 1;
       continue;
     }
+    if (key.kind === "absent") {
+      absent.push(row);
+      continue;
+    }
+    namedValues.add(key.value);
     const eventCount = readCount(row);
     if (eventCount === undefined) unknownCounts += 1;
-    const entry: LakeLogTypeVolume = { logType };
+    const entry: LakeLogTypeVolume = { logType: key.value };
     if (eventCount !== undefined) entry.eventCount = eventCount;
-    // Keyed on the value STEP TWO grouped by, matched against the value step one
-    // grouped by - both from readGroupValue over the same field, so they are the
-    // same strings. A log type the sample never held simply has no mean, and its
-    // byte estimate stays absent.
-    const mean = means.get(logType);
-    if (mean !== undefined) entry.meanEventBytes = mean;
+    logTypes.push(entry);
+  }
+
+  const label = unnamedLogTypeLabel(field);
+  // AMBIGUITY IS REFUSED, not resolved. A dataset holding a real value spelled
+  // "(no msgid)" would give two rows one name, and the fetch - which recognises
+  // the pick BY that name - would then serve one of them the other's events.
+  const unnamedLabelTaken = absent.length > 0 && namedValues.has(label);
+  let unnamedLabel: string | undefined;
+
+  if (absent.length > 0 && !unnamedLabelTaken) {
+    unnamedLabel = label;
+    // ONE ROW FOR ALL OF THEM. An engine can return a null group and an
+    // empty-string group separately; both are "these events carry no value",
+    // both are what the fetch filter selects, so offering two identically
+    // labelled rows would be offering the same query twice.
+    //
+    // ALL OR NOTHING on the folded count, the rule merge.ts states for summed
+    // bytes: a partial sum is a number smaller than the events it claims to
+    // speak for, and under-reporting a volume is the expensive direction. With
+    // any part unreadable the whole row's count stays absent - never zero.
+    let total: number | undefined;
+    let anyUnreadable = false;
+    for (const row of absent) {
+      const rowCount = readCount(row);
+      if (rowCount === undefined) {
+        anyUnreadable = true;
+        continue;
+      }
+      total = (total ?? 0) + rowCount;
+    }
+    if (anyUnreadable) {
+      total = undefined;
+      unknownCounts += 1;
+    }
+    const entry: LakeLogTypeVolume = { logType: label, unnamed: true };
+    if (total !== undefined) entry.eventCount = total;
     logTypes.push(entry);
   }
 
@@ -833,7 +1007,33 @@ function readCountRows(
     if (left !== right) return right - left;
     return a.logType.localeCompare(b.logType);
   });
-  return { logTypes, skipped, unknownCounts };
+  const readout: CountReadout = {
+    logTypes,
+    unnamedGroups: absent.length,
+    unnamedLabelTaken,
+    skipped,
+    unknownCounts,
+  };
+  if (unnamedLabel !== undefined) readout.unnamedLabel = unnamedLabel;
+  return readout;
+}
+
+/**
+ * Attach each row's measured mean, keyed on the label BOTH sides used.
+ *
+ * A log type the sample never held simply has no mean, and its byte estimate
+ * stays absent - which is a real and common state on a skewed dataset, and the
+ * reason the rule is stated on {@link LakeLogTypeVolume.meanEventBytes} rather
+ * than left to this loop.
+ */
+function attachMeans(
+  logTypes: LakeLogTypeVolume[],
+  means: ReadonlyMap<string, number>,
+): void {
+  for (const entry of logTypes) {
+    const mean = means.get(entry.logType);
+    if (mean !== undefined) entry.meanEventBytes = mean;
+  }
 }
 
 /** Clamp a caller-supplied bound, and say so when it moved. */
@@ -1042,15 +1242,41 @@ export async function queryLakeSamples(
     return base(false, { discriminatorField });
   }
 
-  // The mean event size per log type, measured off STEP ONE'S rows - the ones
-  // already in hand. Computed here rather than inside readCountRows because it
-  // reads the SAMPLE while that reads the COUNTS, and those are two different
-  // result sets from two different queries.
-  const means = meanEventBytesByLogType(sampleRun.rows, discriminatorField);
-  const readout = readCountRows(countRun.rows, discriminatorField, means);
+  // THE COUNTS FIRST, THE BYTES SECOND, and the order is forced: the mean for
+  // the no-value row can only be measured once readCountRows has decided that
+  // row exists and what it is called. Both then key on that one label.
+  //
+  // The means come off STEP ONE'S rows - the ones already in hand - which is why
+  // they are computed here rather than inside readCountRows: that reads the
+  // COUNTS, this reads the SAMPLE, and they are two result sets from two
+  // different queries.
+  const readout = readCountRows(countRun.rows, discriminatorField);
+  const means = meanEventBytesByLogType(
+    sampleRun.rows,
+    discriminatorField,
+    readout.unnamedLabel,
+  );
+  attachMeans(readout.logTypes, means);
+
+  if (readout.unnamedLabel !== undefined) {
+    const n = readout.unnamedGroups;
+    notes.push(
+      `${n} group${n === 1 ? "" : "s"} carried no "${discriminatorField}" value. Those events are offered as "${readout.unnamedLabel}" - that is a description of what they lack, not a log type found in the data. Rename the sample on its chip once added if you know what these events are.`,
+    );
+  }
+  if (readout.unnamedLabelTaken) {
+    // The one case where the events genuinely cannot be offered, said plainly
+    // rather than folded into the generic left-out sentence: the reason is a
+    // name collision in THIS dataset, and nothing about a wider window or a
+    // different acquisition mode would change it.
+    const n = readout.unnamedGroups;
+    notes.push(
+      `${n} group${n === 1 ? "" : "s"} carried no "${discriminatorField}" value and ${n === 1 ? "was" : "were"} left out: those events would be offered as "${unnamedLogTypeLabel(discriminatorField)}", and a log type in this dataset is already called that.`,
+    );
+  }
   if (readout.skipped > 0) {
     notes.push(
-      `${readout.skipped} group${readout.skipped === 1 ? "" : "s"} carried no "${discriminatorField}" value and ${readout.skipped === 1 ? "was" : "were"} left out.`,
+      `${readout.skipped} group${readout.skipped === 1 ? "" : "s"} came back with a "${discriminatorField}" value this app could not read as a name and ${readout.skipped === 1 ? "was" : "were"} left out.`,
     );
   }
   if (readout.unknownCounts > 0) {
@@ -1077,6 +1303,14 @@ export async function queryLakeSamples(
     discriminator: discriminatorField,
     logTypes: readout.logTypes.length,
     truncated,
+    // Only when there IS one. A `unnamedGroups: 0` line in the log is a fact
+    // about most datasets and noise in all of them.
+    ...(readout.unnamedGroups > 0
+      ? {
+          unnamedGroups: readout.unnamedGroups,
+          unnamedOffered: readout.unnamedLabel !== undefined,
+        }
+      : {}),
   });
   return {
     datasetId,
@@ -1139,6 +1373,30 @@ export async function queryLakeSamples(
  * A filter on a missing field returns nothing, which the app would then report
  * as "this log type returned no events in this window" about a dataset it had
  * just counted: the empty-versus-failed collapse this file keeps closing.
+ *
+ * NO VALUE NEEDS A DIFFERENT FILTER ENTIRELY (user report 2026-08-25).
+ * `tostring(field)=="..."` cannot express "this field has no value" for any
+ * choice of text: every literal is a value, and the events in question have
+ * none. The pick that means it is {@link unnamedLogTypeLabel}, and it emits
+ * `isnotempty(field)==false`.
+ *
+ * WHY THAT PREDICATE AND NOT `isempty` OR `isnull`. The vendored OpenAPI spec
+ * (packages/core/assets/cribl-openapi.json) attests `isnotempty(vendor)` as a
+ * Cribl Search dataset ruleset's `kustoExpression`, alongside `| where <expr>`,
+ * `field == "literal"` comparisons and the bare Kusto literal `false`. It
+ * attests no `isempty`, no `isnull` and no `not()` anywhere. So the filter is
+ * built only from forms Cribl's own spec writes down, and the complement is
+ * taken by comparing the attested predicate against the attested literal rather
+ * than by reaching for an unattested negation operator.
+ *
+ * The obvious alternative - excluding the known values, `field !in (...)` -
+ * was rejected on both counts: `!in` is unattested here, AND Kusto's null
+ * comparisons are not true, so a null key would be filtered OUT by the very
+ * predicate meant to select it. It would return nothing while looking right.
+ *
+ * The composition is still a query no one here has run, which is why
+ * {@link fetchLakeLogTypeEvents} verifies what comes back instead of trusting
+ * it.
  */
 export function buildLogTypeEventQuery(
   datasetId: string,
@@ -1152,12 +1410,19 @@ export function buildLogTypeEventQuery(
     // on any event, and so not something to compare against.
     return `dataset="${quoteDataset(datasetId)}" | limit ${limit}`;
   }
+  const name = field.trim();
+  if (isUnnamedLogTypeLabel(logType, name)) {
+    // The label is OURS, minted from the field, so there is nothing here that
+    // came from data and nothing to escape - the field name is a plain
+    // identifier from DISCRIMINATOR_FIELDS.
+    return `dataset="${quoteDataset(datasetId)}" | where isnotempty(${name})==false | limit ${limit}`;
+  }
   // The value is compared with `==` against a quoted literal, so a value
   // carrying a quote would break the query. Cribl's own dataset ids and
   // discriminator values are tame, but the value here came from data rather
   // than from configuration, so it is escaped the same way the dataset id is.
   const value = logType.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
-  return `dataset="${quoteDataset(datasetId)}" | where tostring(${field})=="${value}" | limit ${limit}`;
+  return `dataset="${quoteDataset(datasetId)}" | where tostring(${name})=="${value}" | limit ${limit}`;
 }
 
 /** Options for {@link fetchLakeLogTypeEvents}. */
@@ -1268,6 +1533,11 @@ export async function fetchLakeLogTypeEvents(
   // treats as its worst shape, in the direction that cries wolf.
   let failed = 0;
   for (const logType of wanted) {
+    // Recognised from the NAME, which is the whole reason the label is minted
+    // and read in this one module - see unnamedLogTypeLabel. The pick reached
+    // here as a plain string through the operator's selection, exactly as every
+    // other log type does.
+    const isUnnamed = isUnnamedLogTypeLabel(logType, field);
     const run = await runSearch(
       buildLogTypeEventQuery(datasetId, field, logType, limit.value),
       limit.value,
@@ -1277,13 +1547,45 @@ export async function fetchLakeLogTypeEvents(
       notes.push(`"${logType}" could not be fetched: ${run.notes.join(" ")}`);
       continue;
     }
+    // THE NO-VALUE ROW IS VERIFIED, NOT TRUSTED. Its filter is composed of
+    // forms the vendored spec attests (see buildLogTypeEventQuery) but the
+    // composition has never run, so what came back is checked against what was
+    // asked for: every event here is supposed to carry NO value in this field.
+    // One that does is proof the filter did not mean what we believe, and
+    // storing the haul would put events with a msgid into a sample whose name
+    // says they have none - the app claiming something it did not observe, in
+    // the store that drives route and pipeline generation.
+    //
+    // Refused rather than filtered down to the rows that do qualify: a haul
+    // quietly reshaped by us is a sample the operator cannot reason about, and
+    // the belief that produced it would survive to the next dataset.
+    if (isUnnamed) {
+      const withValue = run.rows.filter(
+        (row) => readGroupKey(row, field).kind === "named",
+      ).length;
+      if (withValue > 0) {
+        failed += 1;
+        notes.push(
+          `"${logType}" was not added: ${withValue} of the ${run.rows.length} events it returned DO carry a "${field}" value, so Cribl Search did not read that filter as "this field has no value". The named log types in this dataset are unaffected.`,
+        );
+        continue;
+      }
+    }
     // `_raw` is the vendor's own bytes and the whole reason a Lake sample is
     // worth having; a row without one is serialized, the same fallback the
     // capture path uses.
     const rawEvents = run.rows.map(rowRawText);
     if (rawEvents.length === 0) {
       notes.push(
-        `"${logType}" returned no events in this window, so it was not added.`,
+        isUnnamed
+          ? // AN EMPTY ANSWER HERE IS AMBIGUOUS and says so, which is the whole
+            // reason this branch exists. Every other log type came back empty
+            // because the window holds none of it; this one may ALSO have come
+            // back empty because Cribl Search does not read the filter the way
+            // this app composed it. The count the operator just saw is the
+            // evidence that tells them which.
+            `"${logType}" returned no events in this window, so it was not added. That row was fetched with "isnotempty(${field})==false"; if the count said this dataset holds events with no "${field}", Search did not read that filter the way this app meant it.`
+          : `"${logType}" returned no events in this window, so it was not added.`,
       );
       continue;
     }
