@@ -19,6 +19,20 @@
  * lock replaced a `busy` prop that the only caller never passed, so the commit
  * and discard buttons had been permanently enabled - including mid-write.
  *
+ * THE COMMIT NOW REPORTS WHAT IT ACHIEVED (2026-08-26 audit), which this panel
+ * had no way to do at all. It committed through plannedCaptureSamples - which
+ * drops any log type whose lines parse to no record - and then cleared the
+ * result, so the headline reverted to "Capture a short, filtered sample from
+ * this source. Nothing is added until you confirm": false the moment after a
+ * commit, and identical whether 3 of 3 or 1 of 3 log types reached the store.
+ * The Lake panel's header states the rule in as many words - "clearing the panel
+ * on success would round a partial haul up to a clean one" - and the two commit
+ * through the SAME conversion, so it is the same drop that has to be reported.
+ *
+ * AND A REFUSED WRITE IS SAID OUT LOUD. `onCommit` was awaited with no catch, so
+ * a store that rejected left the button enabled and changed nothing else - a
+ * failure rendered as absence, which an operator cannot tell from a slow write.
+ *
  * All decisions are the pure capture-panel-state; this renders and wires.
  */
 
@@ -34,13 +48,18 @@ import type { RecommendedLogType } from "./sample-coverage-state";
 import {
   captureLogTypeChoices,
   composeFilter,
+  deriveCaptureCommitView,
   deriveCaptureView,
   filterWarning,
   plannedCaptureSamples,
   toggleChoice,
 } from "./capture-panel-state";
+import { commitErrorText } from "./planned-samples";
 import { useNumericField } from "./use-numeric-field";
-import type { CaptureLogTypeChoice } from "./capture-panel-state";
+import type {
+  CaptureCommitOutcome,
+  CaptureLogTypeChoice,
+} from "./capture-panel-state";
 
 export interface CapturePanelProps {
   /** The source the operator selected. Capture is only offered for one. */
@@ -84,6 +103,14 @@ export function CapturePanel({
   // `running` because a capture and a commit fail differently and lock the same
   // controls for different reasons.
   const [committing, setCommitting] = useState(false);
+  // WHAT THE LAST COMMIT ESTABLISHED, kept after the preview goes. Without it
+  // the panel reverted to its idle sentence - "Nothing is added until you
+  // confirm" - immediately after adding something, and said the same thing
+  // whether every log type landed or one of three did.
+  const [outcome, setOutcome] = useState<CaptureCommitOutcome | null>(null);
+  // Why the store write refused, when it did. Apart from `outcome` because a
+  // rejected write establishes nothing about what landed.
+  const [storeError, setStoreError] = useState<string | null>(null);
 
   // A different source means different suggestions and a different filter.
   useEffect(() => {
@@ -91,9 +118,14 @@ export function CapturePanel({
     setFilterEdited(false);
     setFilter(composeFilter(source.id, seeded));
     setResult(null);
+    // The summary belongs to the source it was captured from; left up, it reads
+    // as a report about the source now named above it.
+    setOutcome(null);
+    setStoreError(null);
   }, [seeded, source.id]);
 
   const view = deriveCaptureView(result, running, existingLogTypes);
+  const commitView = deriveCaptureCommitView(outcome, committing, storeError);
   const warning = filterWarning(filter, source.id);
   // One lock for the whole panel, as the Lake panel does with querying/fetching:
   // every control here describes a request that is already in flight.
@@ -110,6 +142,10 @@ export function CapturePanel({
   const run = async () => {
     setRunning(true);
     setResult(null);
+    // The previous commit's summary is about the previous capture; a new run
+    // makes it stale before it makes it wrong.
+    setOutcome(null);
+    setStoreError(null);
     try {
       setResult(await onCapture(filter, maxEvents.value, duration.value));
     } finally {
@@ -117,23 +153,43 @@ export function CapturePanel({
     }
   };
 
+  /**
+   * The store write, and what it actually achieved.
+   *
+   * THE SAMPLES ARE COMPUTED ONCE, HERE, and both the write and the summary read
+   * that one list - so the count reported is the count handed over rather than a
+   * second guess at it. plannedCaptureSamples DROPS a log type whose lines parse
+   * to no record, which is exactly the shortfall this panel used to hide.
+   */
   const commit = async () => {
     if (result === null) return;
+    const samples = plannedCaptureSamples(
+      result.splits,
+      `capture:${source.id}`,
+      existingLogTypes,
+    );
     setCommitting(true);
+    setStoreError(null);
     try {
-      await onCommit(
-        plannedCaptureSamples(
-          result.splits,
-          `capture:${source.id}`,
-          existingLogTypes,
-        ),
-      );
-      // Cleared only once the store has it: dropping the preview first would
-      // leave a failed commit with nothing on screen to retry from.
-      setResult(null);
+      await onCommit(samples);
+      setOutcome({ stored: samples.length, returned: result.splits.length });
+      // Cleared only once the store has it, AND only when it took something: a
+      // commit that stored nothing leaves the preview up, because the only way
+      // back to it is another capture.
+      if (samples.length > 0) setResult(null);
+    } catch (error) {
+      // A rejected write used to change NOTHING on screen - the button simply
+      // un-disabled, which an operator cannot tell from a slow store.
+      setStoreError(commitErrorText(error));
     } finally {
       setCommitting(false);
     }
+  };
+
+  /** Throw the preview away. The last commit's summary is not about it. */
+  const discard = () => {
+    setResult(null);
+    setStoreError(null);
   };
 
   return (
@@ -230,7 +286,14 @@ export function CapturePanel({
         </button>
       </div>
 
-      <p className="panel-desc">{view.headline}</p>
+      {/* THE IDLE SENTENCE IS NOT PRINTED OVER AN OUTCOME (2026-08-26 audit).
+          A commit clears the preview, which returns this headline to "Capture a
+          short, filtered sample from this source. Nothing is added until you
+          confirm" - which is false the moment something has been added. It is an
+          instruction about the NEXT capture, so it waits for one. */}
+      {(view.status !== "idle" || commitView.status === "idle") && (
+        <p className="panel-desc">{view.headline}</p>
+      )}
 
       {view.noDiscriminator && (
         <p className="field-hint">
@@ -286,13 +349,18 @@ export function CapturePanel({
           >
             {committing ? "Adding samples..." : "Add these as samples"}
           </button>
-          <button
-            className="run-button"
-            onClick={() => setResult(null)}
-            disabled={locked}
-          >
+          <button className="run-button" onClick={discard} disabled={locked}>
             Discard
           </button>
+        </div>
+      )}
+
+      {/* WHAT THE COMMIT ACHIEVED, which outlives the preview for the reason the
+          Lake panel's summary outlives its log-type list: clearing the panel on
+          success rounds a partial haul up to a clean one. */}
+      {commitView.status !== "idle" && (
+        <div className="capture-outcome" data-status={commitView.status}>
+          <p className="panel-desc">{commitView.headline}</p>
         </div>
       )}
     </div>

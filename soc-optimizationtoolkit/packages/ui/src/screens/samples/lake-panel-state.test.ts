@@ -34,6 +34,7 @@ import {
   lakeCollisions,
   lakeLogTypeChoices,
   lakeOffersSamples,
+  lakePreselectionHint,
   lakePreviewHeadline,
   lakeSamplePreviews,
   mergedLakeLogTypeCount,
@@ -394,9 +395,94 @@ describe("deriveLakeQueryView", () => {
     );
     expect(empty.status).toBe("empty");
     expect(empty.headline).toContain("answered");
-    expect(empty.headline).toContain("-24h");
-    expect(empty.headline).toContain("now");
+    // CHANGED 2026-08-26: the window is still IN the sentence - "holds nothing"
+    // is only true of a period - but it is no longer the raw Kusto tokens
+    // "-24h" and "now", which were the app quoting its own query language at
+    // someone who never wrote it. The pin follows the copy deliberately; what it
+    // guards is that the window is still stated, and windowLabel's own pins
+    // guard the translation.
+    expect(empty.headline).toContain("the last 24 hours");
+    expect(empty.headline).not.toContain("-24h");
     expect(empty.notes).toEqual(["holds no events"]);
+  });
+
+  /**
+   * A DATASET KNOWN TO HOLD EVENTS, described as holding none (2026-08-26).
+   *
+   * Core reaches a row-less `ok: true` result down two paths. One is an empty
+   * window. The other runs only after step one returned rows - the dataset
+   * PROVABLY holds events - and reports that the GROUPING came back with no
+   * groups; core's own note beside it says as much, so the old shared headline
+   * contradicted the note printed underneath it. The field is the evidence that
+   * separates them: core cannot name a discriminator without having read events
+   * to find one.
+   */
+  it("does not call a dataset it counted events in an EMPTY one", () => {
+    const counted = deriveLakeQueryView(
+      queryResult({
+        discriminatorField: "sourcetype",
+        notes: [
+          'Events in "cribl_logs" carry a "sourcetype" field, but counting it returned no groups.',
+        ],
+      }),
+      false,
+    );
+
+    expect(counted.status).toBe("no-groups");
+    expect(counted.headline).toBe(
+      'The dataset "cribl_logs" holds events, but grouping them by sourcetype produced no log types.',
+    );
+    // The half that was a confident wrong answer: it must not say the dataset
+    // holds nothing, in any of the shapes that sentence took.
+    expect(counted.headline).not.toContain("holds no");
+    expect(counted.headline).not.toContain("answered, and holds");
+    // Core's explanation survives - it is the half that says WHICH cause.
+    expect(counted.notes).toHaveLength(1);
+    // Nothing to take, exactly as before: this is not a new offering status.
+    expect(lakeOffersSamples(counted)).toBe(false);
+    expect(canFetchLakeSamples(counted, 3)).toBe(false);
+  });
+
+  it("keeps an EMPTY WINDOW and an EMPTY GROUPING apart, headline and status", () => {
+    // The two are one condition apart in core and were one sentence apart on
+    // screen: the operator is sent to widen a window in one case and to look at
+    // a field's values in the other.
+    const emptyWindow = deriveLakeQueryView(queryResult(), false);
+    const emptyGrouping = deriveLakeQueryView(
+      queryResult({ discriminatorField: "sourcetype" }),
+      false,
+    );
+
+    expect(emptyWindow.status).toBe("empty");
+    expect(emptyGrouping.status).toBe("no-groups");
+    expect(emptyWindow.headline).not.toBe(emptyGrouping.headline);
+    // Only the window one claims the dataset is empty, because only it observed
+    // an empty dataset.
+    expect(emptyWindow.headline).toContain("holds no events");
+    expect(emptyGrouping.headline).toContain("holds events");
+    // FIVE distinct sentences for five distinct answers now, none folding into
+    // another.
+    expect(
+      new Set([
+        deriveLakeQueryView(queryResult({ ok: false }), false).headline,
+        emptyWindow.headline,
+        emptyGrouping.headline,
+        deriveLakeQueryView(queryResult({ noDiscriminator: true }), false)
+          .headline,
+        deriveLakeQueryView(DATASET_AS_LOG_TYPE, false).headline,
+      ]).size,
+    ).toBe(5);
+  });
+
+  it("carries the field onto the no-groups view, because the headline names it", () => {
+    // "grouping them by sourcetype" is only sayable from the field, and a view
+    // that dropped it would have to fall back to a vaguer sentence.
+    const counted = deriveLakeQueryView(
+      queryResult({ discriminatorField: "msgid" }),
+      false,
+    );
+    expect(counted.discriminatorField).toBe("msgid");
+    expect(counted.headline).toContain("msgid");
   });
 
   it("gives NO DISCRIMINATOR its own status, not empty", () => {
@@ -605,10 +691,60 @@ describe("canFetchLakeSamples", () => {
   });
 });
 
+/**
+ * CHANGED 2026-08-26: the bounds are still the ones the query used, but they are
+ * no longer printed as raw Kusto tokens.
+ *
+ * "-24h" and "now" are query-language literals, and this sentence is the ONE
+ * thing that turns a bare count into a fact - so it was the least legible line
+ * on the screen, with a leading "-" that reads as a minus sign rather than as
+ * "ago". The previous pin asserted the tokens verbatim; it is replaced rather
+ * than weakened, and the replacement adds the property that actually matters:
+ * a bound this module cannot parse is passed through UNTRANSLATED, never guessed
+ * at, because a phrase invented for it would state a window nobody queried.
+ */
 describe("windowLabel", () => {
-  it("renders the relative bounds the query actually used", () => {
-    expect(windowLabel({ earliest: "-24h", latest: "now" })).toBe("-24h to now");
-    expect(windowLabel({ earliest: "-7d", latest: "-1d" })).toBe("-7d to -1d");
+  it("renders a relative-to-now window as the period it covers", () => {
+    expect(windowLabel({ earliest: "-24h", latest: "now" })).toBe(
+      "the last 24 hours",
+    );
+    expect(windowLabel({ earliest: "-7d", latest: "now" })).toBe(
+      "the last 7 days",
+    );
+    // Singular, on the bound most likely to be typed by hand.
+    expect(windowLabel({ earliest: "-1h", latest: "now" })).toBe(
+      "the last hour",
+    );
+    expect(windowLabel({ earliest: "-1d", latest: "now" })).toBe("the last day");
+  });
+
+  it("renders a window that does NOT end at now as two bounds", () => {
+    expect(windowLabel({ earliest: "-7d", latest: "-1d" })).toBe(
+      "7 days ago to 1 day ago",
+    );
+    expect(windowLabel({ earliest: "-90m", latest: "-30m" })).toBe(
+      "90 minutes ago to 30 minutes ago",
+    );
+  });
+
+  it("passes an UNRECOGNISED bound through untouched, rather than guessing", () => {
+    // An absolute timestamp, a token from a Kusto dialect this app does not
+    // parse, an empty string. Printing the operator's own bound back is the only
+    // honest answer; translating it would state a window that was never queried.
+    expect(
+      windowLabel({ earliest: "2026-08-01T00:00:00Z", latest: "now" }),
+    ).toBe("2026-08-01T00:00:00Z to now");
+    expect(windowLabel({ earliest: "-3fortnights", latest: "now" })).toBe(
+      "-3fortnights to now",
+    );
+    // "-0h" is not a period, so it is not translated into one either.
+    expect(windowLabel({ earliest: "-0h", latest: "now" })).toBe("-0h to now");
+  });
+
+  it("reads an empty latest bound as now, which is what Search does with it", () => {
+    expect(windowLabel({ earliest: "-24h", latest: "" })).toBe(
+      "the last 24 hours",
+    );
   });
 });
 
@@ -804,6 +940,148 @@ describe("lakePreviewHeadline", () => {
     // confuse "nothing came back" with "nothing was usable".
     expect(lakePreviewHeadline([])).toBe("");
   });
+
+  /**
+   * FETCHED AND STORED NEVER RECONCILED (user report 2026-08-26).
+   *
+   * "Fetched 200 events in 4 log types", each row at "50 events", and the chips
+   * that followed read 26, 19 and 17. The mechanism was investigated and the
+   * obvious causes ruled out, so this does not fix a drop - it states both
+   * numbers when they differ, so a recurrence reads as an accounting difference
+   * on the screen that made the claim rather than as corruption two clicks later.
+   */
+  it("states the STORED total beside the fetched one when they differ", () => {
+    // Four raw lines, of which one is a blank that parses to no record.
+    const events = [
+      {
+        logType: "TRAFFIC",
+        rawEvents: ['{"a":1}', '{"a":2}', '{"a":3}', "   "],
+      },
+    ];
+    const samples = plannedLakeSamples(events, "lake:cribl_logs");
+    const headline = lakePreviewHeadline(
+      lakeSamplePreviews(events, samples),
+      samples,
+    );
+
+    expect(samples[0].parsed.eventCount).toBe(3);
+    expect(headline).toBe(
+      "Fetched 4 events in 1 log type, which parse into 3 stored events. Nothing is added until you confirm.",
+    );
+  });
+
+  it("says nothing extra when the two numbers AGREE", () => {
+    // Restating one number twice on every haul is noise, and noise is what stops
+    // the caveat being read on the haul that needs it.
+    const events = [{ logType: "TRAFFIC", rawEvents: ['{"a":1}', '{"a":2}'] }];
+    const samples = plannedLakeSamples(events, "lake:cribl_logs");
+
+    expect(
+      lakePreviewHeadline(lakeSamplePreviews(events, samples), samples),
+    ).toBe("Fetched 2 events in 1 log type. Nothing is added until you confirm.");
+  });
+
+  it("counts a MERGED pair's stored events once, not once per row", () => {
+    // Two picks folding onto the operator's label are ONE sample. Summing the
+    // rows would count its events twice and invent a mismatch.
+    const events = [
+      { logType: "TRAFFIC", rawEvents: ['{"n":"upper"}'] },
+      { logType: "traffic", rawEvents: ['{"n":"lower"}'] },
+    ];
+    const samples = plannedLakeSamples(events, "lake:cribl_logs", ["Traffic"]);
+    const previews = lakeSamplePreviews(events, samples, ["Traffic"]);
+
+    expect(samples).toHaveLength(1);
+    // Two lines fetched, one sample of one event stored - and both numbers said.
+    expect(lakePreviewHeadline(previews, samples)).toBe(
+      "Fetched 2 events in 2 log types, which parse into 1 stored event. Nothing is added until you confirm.",
+    );
+    // The ROW-level figure goes absent for both, because neither row owns it.
+    expect(previews.map((p) => p.storedEventCount)).toEqual([
+      undefined,
+      undefined,
+    ]);
+  });
+
+  it("carries the stored count on a row that owns it, and only when known", () => {
+    const events = [
+      { logType: "GOOD", rawEvents: ['{"a":1}', '{"a":2}', "   "] },
+      { logType: "JUNK", rawEvents: ["   "] },
+    ];
+    const samples = plannedLakeSamples(events, "lake:cribl_logs");
+    const previews = lakeSamplePreviews(events, samples);
+
+    expect(previews[0].eventCount).toBe(3);
+    expect(previews[0].storedEventCount).toBe(2);
+    // JUNK produced no sample at all, so there is no stored count to state -
+    // absent rather than zero, which would read as a measured emptiness.
+    expect(previews[1].willBeAdded).toBe(false);
+    expect("storedEventCount" in previews[1]).toBe(false);
+  });
+
+  it("leaves the headline unchanged for a caller with no samples in hand", () => {
+    // The reconciliation is opt-in: a caller that cannot supply the stored side
+    // gets the sentence it always got, rather than a total silently read as 0.
+    expect(lakePreviewHeadline(previews([2, 1, 1]))).toBe(
+      "Fetched 4 events in 3 log types. Nothing is added until you confirm.",
+    );
+  });
+});
+
+/**
+ * WHAT THE HINT ABOVE THE LIST MAY CLAIM (2026-08-26 audit).
+ *
+ * "The highest-volume ones are pre-selected" was printed unconditionally, and it
+ * is false in exactly the case lakeLogTypeChoices creates on purpose: when every
+ * row would replace a sample the operator already has, nothing is ticked at all.
+ */
+describe("lakePreselectionHint", () => {
+  it("says nothing is pre-selected when nothing is, and why", () => {
+    const allProvided = lakeLogTypeChoices(
+      [{ logType: "TRAFFIC" }, { logType: "THREAT" }],
+      ["traffic", "threat"],
+    );
+
+    expect(selectedLakeLogTypes(allProvided)).toEqual([]);
+    expect(lakePreselectionHint(allProvided)).toBe(
+      "None are pre-selected: you already have a sample for every log type here, so taking one replaces yours.",
+    );
+    expect(lakePreselectionHint(allProvided)).not.toContain("are pre-selected;");
+  });
+
+  it("claims a pre-selection only when there was one to make", () => {
+    const some = lakeLogTypeChoices(
+      [{ logType: "TRAFFIC" }, { logType: "THREAT" }],
+      ["traffic"],
+    );
+
+    expect(selectedLakeLogTypes(some)).toEqual(["THREAT"]);
+    expect(lakePreselectionHint(some)).toBe(
+      "The highest-volume ones you do not already have are pre-selected.",
+    );
+  });
+
+  it("describes the list as it ARRIVED, not as it is ticked now", () => {
+    // Derived from the live ticks it would rewrite itself under the operator,
+    // and a hint that changes when you tick a box is not a hint about
+    // pre-selection.
+    const choices = lakeLogTypeChoices([
+      { logType: "TRAFFIC" },
+      { logType: "THREAT" },
+    ]);
+    const before = lakePreselectionHint(choices);
+    const untickedAll = toggleLakeChoice(
+      toggleLakeChoice(choices, "TRAFFIC"),
+      "THREAT",
+    );
+
+    expect(selectedLakeLogTypes(untickedAll)).toEqual([]);
+    expect(lakePreselectionHint(untickedAll)).toBe(before);
+  });
+
+  it("says nothing at all when there are no rows to describe", () => {
+    expect(lakePreselectionHint([])).toBe("");
+  });
 });
 
 describe("deriveLakeCommitView", () => {
@@ -939,6 +1217,168 @@ describe("deriveLakeCommitView", () => {
     expect(deriveLakeCommitView(fetchResult(), false, 1, 1).headline).toBe(
       "Added 1 sample from this dataset.",
     );
+  });
+
+  /**
+   * A PARTIAL FETCH THAT STORED SAMPLES AND SAID NOTHING WAS ADDED (2026-08-26).
+   *
+   * Core's `ok` is `failed === 0` - false when ANY log type failed, not when all
+   * did. This projection tested `ok` before it looked at what had been stored, so
+   * ticking five log types and losing one produced four samples in the store
+   * under the headline "No events could be fetched for the log types you picked,
+   * so nothing was added", with the four new chips directly below it. Every pin
+   * that existed for `ok: false` passed `plannedCount: 0`, which is exactly why
+   * it never surfaced - so these pass a plannedCount that is not zero.
+   */
+  it("reports what a PARTIALLY FAILED fetch actually stored", () => {
+    const view = deriveLakeCommitView(
+      fetchResult({
+        ok: false,
+        events: [
+          { logType: "A", rawEvents: ['{"a":1}'] },
+          { logType: "B", rawEvents: ['{"b":1}'] },
+          { logType: "C", rawEvents: ['{"c":1}'] },
+          { logType: "D", rawEvents: ['{"d":1}'] },
+        ],
+        notes: ['"THREAT" could not be fetched: HTTP 400.'],
+      }),
+      false,
+      4,
+      5,
+    );
+
+    // NOT "failed", which is what four stored samples were reported as.
+    expect(view.status).toBe("partial");
+    expect(view.headline).toBe(
+      "Added 4 samples from the 5 log types you picked. 1 of them could not be fetched, or returned nothing usable - the notes below name which.",
+    );
+    // The sentence that was printed over four new chips must not survive
+    // anywhere in this answer.
+    expect(view.headline).not.toContain("nothing was added");
+    expect(view.notes).toEqual(['"THREAT" could not be fetched: HTTP 400.']);
+  });
+
+  it("keeps a PARTIAL fetch and a TOTAL failure as different answers", () => {
+    // Same `ok: false` on both sides; what separates them is whether anything
+    // reached the store. Folding them is the defect this block exists for.
+    const partial = deriveLakeCommitView(
+      fetchResult({ ok: false, events: [{ logType: "A", rawEvents: ["x"] }] }),
+      false,
+      1,
+      2,
+    );
+    const total = deriveLakeCommitView(fetchResult({ ok: false }), false, 0, 2);
+
+    expect(partial.status).toBe("partial");
+    expect(total.status).toBe("failed");
+    expect(partial.headline).not.toBe(total.headline);
+    expect(partial.headline).toContain("Added 1 sample");
+    expect(total.headline).toContain("nothing was added");
+  });
+
+  it("names a MERGE exactly and the rest only as far as it is known", () => {
+    // The merged count IS measured, so it is stated as a number. The rest of the
+    // shortfall is a mix of failed fetches and unusable events that `ok: false`
+    // does not break down - core reports that per log type in `notes` and nowhere
+    // else - so it is named as both causes rather than attributed to one.
+    const view = deriveLakeCommitView(
+      fetchResult({ ok: false, events: [{ logType: "A", rawEvents: ["x"] }] }),
+      false,
+      1,
+      4,
+      1,
+    );
+
+    expect(view.headline).toBe(
+      "Added 1 sample from the 4 log types you picked. 1 shares a sample name with another and was added as part of it. 2 of them could not be fetched, or returned nothing usable - the notes below name which.",
+    );
+  });
+
+  it("still names the failure when the merge accounts for the whole shortfall", () => {
+    // plannedCount + merged === requestedCount, so there is no remainder to
+    // attribute - and a haul that says only "1 was added as part of another"
+    // would have hidden a failed log type entirely.
+    const view = deriveLakeCommitView(
+      fetchResult({ ok: false, events: [{ logType: "A", rawEvents: ["x"] }] }),
+      false,
+      1,
+      2,
+      1,
+    );
+
+    expect(view.status).toBe("partial");
+    expect(view.headline).toContain("added as part of it");
+    expect(view.headline).toContain("Some could not be fetched");
+  });
+
+  it("still says nothing was added when a partial failure stored NOTHING", () => {
+    // The other side of reading the store first: some log types failed and the
+    // ones that answered parsed to no records. Nothing reached the store, so
+    // this is not a partial success - and the notes still name each failure.
+    const view = deriveLakeCommitView(
+      fetchResult({
+        ok: false,
+        events: [{ logType: "A", rawEvents: ["   "] }],
+        notes: ['"B" could not be fetched.'],
+      }),
+      false,
+      0,
+      2,
+    );
+
+    expect(view.status).toBe("unusable");
+    expect(view.headline).toContain("nothing was added");
+    expect(view.notes).toEqual(['"B" could not be fetched.']);
+  });
+
+  /**
+   * A REJECTED STORE WRITE, which rendered as NOTHING AT ALL (2026-08-26).
+   *
+   * The commit awaited `onCommit` with no catch, so a store that refused left
+   * the button enabled and changed nothing else - no outcome, no error, the
+   * preview still sitting there. That is the empty-versus-failed collapse in a
+   * third direction: failure shown as absence.
+   */
+  it("names a REFUSED store write, and says the events are still there", () => {
+    const view = deriveLakeCommitView(
+      null,
+      false,
+      0,
+      3,
+      0,
+      "KV store quota exceeded",
+    );
+
+    expect(view.status).toBe("store-failed");
+    expect(view.headline).toBe(
+      'The samples could not be saved: KV store quota exceeded. The fetched events are still here - press "Add as samples" to try again.',
+    );
+    // It must NOT claim how much landed: a rejected write does not report where
+    // it stopped, and "nothing was added" would be a guess.
+    expect(view.headline).not.toContain("nothing was added");
+  });
+
+  it("keeps a refused WRITE apart from a failed FETCH", () => {
+    // They send the operator to opposite halves of the app - the store, versus
+    // Cribl Search - and both used to be silent or mislabelled.
+    const write = deriveLakeCommitView(null, false, 0, 1, 0, "disk full");
+    const fetch = deriveLakeCommitView(fetchResult({ ok: false }), false, 0, 1);
+
+    expect(write.status).toBe("store-failed");
+    expect(fetch.status).toBe("failed");
+    expect(write.headline).not.toBe(fetch.headline);
+  });
+
+  it("lets a store failure win over a stale outcome, and a fetch over both", () => {
+    // Ordering, which decides what an operator reads when two things are true at
+    // once. A live request outranks any report; a refused write outranks the
+    // report of the commit before it, because it is the thing that just happened.
+    expect(
+      deriveLakeCommitView(fetchResult(), true, 2, 2, 0, "disk full").status,
+    ).toBe("fetching");
+    expect(
+      deriveLakeCommitView(fetchResult(), false, 2, 2, 0, "disk full").status,
+    ).toBe("store-failed");
   });
 });
 
@@ -1080,6 +1520,35 @@ describe("mergedLakeLogTypeCount", () => {
     );
     expect(samples).toEqual([]);
     expect(mergedLakeLogTypeCount(["TRAFFIC", "traffic"], samples, ["traffic"])).toBe(0);
+  });
+
+  it("counts nothing for a pick whose fetch brought back NOTHING", () => {
+    // The case-variant pair again, but this time only one of them returned
+    // events - the other 400'd, and core kept the good one (partial success is
+    // success). Without the fetched list the failed pick was counted as "added
+    // as part of" its sibling's sample: a claim that its events are sitting in a
+    // sample they never reached, printed over a shortfall the operator should
+    // act on.
+    const samples = plannedLakeSamples(
+      [{ logType: "traffic", rawEvents: ['{"n":"lower"}'] }],
+      "lake:cribl_logs",
+      ["traffic"],
+    );
+
+    expect(samples).toHaveLength(1);
+    expect(
+      mergedLakeLogTypeCount(["TRAFFIC", "traffic"], samples, ["traffic"], [
+        "traffic",
+      ]),
+    ).toBe(0);
+    // And when BOTH came back, it is a merge again - the fetched list narrows
+    // the count, it does not disable it.
+    expect(
+      mergedLakeLogTypeCount(["TRAFFIC", "traffic"], both(["traffic"]), ["traffic"], [
+        "TRAFFIC",
+        "traffic",
+      ]),
+    ).toBe(1);
   });
 
   it("counts nothing for picks that each became their own sample", () => {

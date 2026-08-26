@@ -326,8 +326,12 @@ describe("LakePanel - what the counts say", () => {
 
     const window = container.querySelectorAll(".lake-window");
     expect(window).toHaveLength(1);
+    // CHANGED 2026-08-26: the same window, no longer as the Kusto tokens the
+    // query was written in. This sentence is the only thing turning the counts
+    // beside it into facts, so "-24h" - which reads as a minus sign - was the
+    // least legible line on the screen. The bounds are still the query's own.
     expect(window[0].textContent).toBe(
-      "Volumes cover -24h to now, grouped by sourcetype.",
+      "Volumes cover the last 24 hours, grouped by sourcetype.",
     );
 
     // Formatted with the SAME call the component makes, so this pins the number
@@ -369,6 +373,61 @@ describe("LakePanel - what the counts say", () => {
     expect(volumes[1].textContent).not.toContain("0 B");
   });
 
+  it("counts ONE event in the singular, like every sibling count on screen", async () => {
+    // The volume row was the only count in this area with no plural handling, so
+    // a log type with one event in the window rendered "1 events" - on the row
+    // the operator reads to decide whether it is worth a search.
+    const { container } = renderPanel({
+      query: queryResult({
+        discriminatorField: "sourcetype",
+        logTypes: [
+          { logType: "RARE", eventCount: 1 },
+          { logType: "TWO", eventCount: 2 },
+          // Singular AND an estimate, which is where a naive fix breaks.
+          { logType: "ONE_SIZED", eventCount: 1, meanEventBytes: 2048 },
+        ],
+      }),
+    });
+    await runQuery(container);
+
+    const volumes = container.querySelectorAll(".lake-volume");
+    expect(volumes[0].textContent).toBe("1 event");
+    expect(volumes[0].textContent).not.toBe("1 events");
+    expect(volumes[1].textContent).toBe("2 events");
+    expect(volumes[2].textContent).toBe("1 event, ~2 KB estimated");
+  });
+
+  it("claims a pre-selection only when it actually made one", async () => {
+    // The hint said "The highest-volume ones are pre-selected" over a list where
+    // nothing was ticked, which happens by design whenever every row would
+    // replace a sample the operator already has. The behaviour is right; the
+    // sentence sent them hunting for a tick that was never made.
+    const { container } = renderPanel({
+      query: queryResult({
+        discriminatorField: "sourcetype",
+        logTypes: [
+          { logType: "TRAFFIC", eventCount: 9 },
+          { logType: "THREAT", eventCount: 4 },
+        ],
+      }),
+      props: { existingLogTypes: ["traffic", "threat"] },
+    });
+    await runQuery(container);
+
+    expect(ticked(container)).toBe(0);
+    expect(container.textContent).toContain("None are pre-selected");
+    expect(container.textContent).not.toContain("ones are pre-selected");
+    cleanup();
+
+    // And where there IS a pre-selection, it is still described as one.
+    const some = renderPanel();
+    await runQuery(some.container);
+    expect(ticked(some.container)).toBe(3);
+    expect(some.container.textContent).toContain(
+      "The highest-volume ones you do not already have are pre-selected.",
+    );
+  });
+
   it("says when the list hit the row cap, and does not say so otherwise", async () => {
     // A truncated list reads as the whole dataset. An operator who believed it
     // would onboard the top rows and never look for the log type that mattered.
@@ -385,6 +444,10 @@ describe("LakePanel - what the counts say", () => {
     expect(warning).toHaveLength(1);
     expect(warning[0].textContent).toContain("hit the row cap");
     expect(warning[0].textContent).toContain("may hold more log types");
+    // CHANGED 2026-08-26: it no longer adds "The highest-volume ones are shown",
+    // which was the third telling of that on one screen - the ready headline
+    // ends "highest volume first" and core's note names the cap with its number.
+    expect(warning[0].textContent).not.toContain("highest-volume");
     cleanup();
 
     // A complete list must not carry the caveat, or it stops being read.
@@ -424,8 +487,8 @@ describe("LakePanel - what the counts say", () => {
     expect(status(empty.container)).toBe("empty");
     expect(headline(empty.container)).toContain("answered");
     // The window is IN the sentence - "holds nothing" is only true of a period.
-    expect(headline(empty.container)).toContain("-24h");
-    expect(headline(empty.container)).toContain("now");
+    // CHANGED 2026-08-26 from the raw "-24h"/"now" tokens; see windowLabel.
+    expect(headline(empty.container)).toContain("the last 24 hours");
     expect(empty.container.textContent).toContain("The window held no events.");
     expect(rows(empty.container)).toHaveLength(0);
     expect(fetchButton(empty.container)).toBeNull();
@@ -451,6 +514,35 @@ describe("LakePanel - what the counts say", () => {
     expect(
       new Set([failedHeadline, emptyHeadline, unsplittableHeadline]).size,
     ).toBe(3);
+  });
+
+  it("does not tell an operator a counted dataset holds nothing", async () => {
+    // Core's own note under this headline said the dataset carries the field and
+    // the counting returned no groups - so the two contradicted each other on
+    // one screen, and the headline was the confident-wrong half. It is reachable
+    // only after step one returned rows, which is why the field is present on a
+    // result with no log types at all.
+    const { container } = renderPanel({
+      query: queryResult({
+        discriminatorField: "sourcetype",
+        notes: [
+          'Events in "cribl_logs" carry a "sourcetype" field, but counting it returned no groups. The window may be too narrow, or every event may leave the field empty.',
+        ],
+      }),
+    });
+    await runQuery(container);
+
+    expect(status(container)).toBe("no-groups");
+    expect(headline(container)).toBe(
+      'The dataset "cribl_logs" holds events, but grouping them by sourcetype produced no log types.',
+    );
+    expect(headline(container)).not.toContain("holds no");
+    // Core's note is the half that says WHICH cause, and it stays.
+    expect(container.textContent).toContain("counting it returned no groups");
+    // Still a dead end for this query: nothing to tick, nothing to fetch.
+    expect(rows(container)).toHaveLength(0);
+    expect(fetchButton(container)).toBeNull();
+    expect(container.querySelectorAll(".lake-window")).toHaveLength(0);
   });
 });
 
@@ -494,7 +586,7 @@ describe("LakePanel - when the dataset itself is the log type", () => {
     expect(window).toHaveLength(1);
     // No "grouped by" clause: there is no field, and claiming one would be a lie
     // about how the number was produced.
-    expect(window[0].textContent).toBe("Volumes cover -24h to now.");
+    expect(window[0].textContent).toBe("Volumes cover the last 24 hours.");
   });
 
   it("says on screen that the name is the DATASET'S, not a discovered log type", async () => {
@@ -686,6 +778,56 @@ describe("LakePanel - nothing enters the store without a click", () => {
     expect(onCommit.mock.calls[0][0][0].rawEvents).toEqual(rawEvents);
   });
 
+  it("shows FETCHED and STORED together when the two numbers differ", async () => {
+    // The user's report: the confirm screen said "Fetched 200 events in 4 log
+    // types" with every row at "50 events", and the chips that followed read 26,
+    // 19 and 17 - two numbers about the same haul with nothing on screen
+    // connecting them. The mechanism was investigated and the obvious causes
+    // ruled out, so this does not fix a drop; it makes the difference visible
+    // where the claim is made, so a recurrence explains itself.
+    const { container } = renderPanel({
+      query: queryResult({
+        discriminatorField: "sourcetype",
+        logTypes: [{ logType: "CONFIG", eventCount: 12 }],
+      }),
+      fetched: fetchResult({
+        events: [
+          {
+            logType: "CONFIG",
+            // Four lines, one of them blank - it parses to no record.
+            rawEvents: ['{"a":1}', '{"a":2}', '{"a":3}', "   "],
+          },
+        ],
+      }),
+    });
+    await runQuery(container);
+    await fetchEvents(container);
+
+    expect(previewHeadline(container)).toBe(
+      "Fetched 4 events in 1 log type, which parse into 3 stored events. Nothing is added until you confirm.",
+    );
+    expect(
+      container.querySelector(".lake-preview-count")?.textContent,
+    ).toBe("4 events, 3 stored");
+  });
+
+  it("says nothing extra when fetched and stored AGREE", async () => {
+    // Restating one number twice on every haul is noise, and noise is what stops
+    // the caveat being read on the haul that needs it.
+    const { container } = renderPanel();
+    await runQuery(container);
+    await fetchEvents(container);
+
+    expect(previewHeadline(container)).toBe(
+      "Fetched 4 events in 3 log types. Nothing is added until you confirm.",
+    );
+    expect(
+      [...container.querySelectorAll(".lake-preview-count")].map(
+        (n) => n.textContent,
+      ),
+    ).toEqual(["2 events", "1 event", "1 event"]);
+  });
+
   it("locks the picks while a haul waits, and lets them go on Discard", async () => {
     // The events below were fetched for the rows ticked at the time. Re-ticking
     // underneath them would leave the panel describing one selection and
@@ -789,7 +931,7 @@ describe("LakePanel - nothing enters the store without a click", () => {
     expect(rows(container)).toHaveLength(1);
     expect(ticked(container)).toBe(1);
     expect(container.querySelector(".lake-window")?.textContent).toBe(
-      "Volumes cover -24h to now.",
+      "Volumes cover the last 24 hours.",
     );
 
     expect(fetchButton(container)?.disabled).toBe(true);
@@ -1141,6 +1283,135 @@ describe("LakePanel - what the commit reports afterwards", () => {
         outcomeHeadline(unusable.container),
       ]).size,
     ).toBe(3);
+  });
+
+  /**
+   * A PARTIAL FETCH, END TO END (2026-08-26).
+   *
+   * The defect this closes was only visible here: `deriveLakeCommitView` said
+   * "nothing was added" while `commit` had ALREADY called `onCommit` with the
+   * samples that did arrive - so the store and the sentence describing it
+   * disagreed, on one screen, at the same moment. Only the component holds both
+   * halves.
+   */
+  it("stores what a partial fetch returned, and says so instead of denying it", async () => {
+    const { container, onCommit } = renderPanel({
+      fetched: fetchResult({
+        // Core's `ok` is `failed === 0`, so ONE lost log type makes this false
+        // while two perfectly good hauls sit in `events`.
+        ok: false,
+        events: [events("GLOBALPROTECT", 2), events("TRAFFIC", 1)],
+        notes: ['"THREAT" could not be fetched: HTTP 400.'],
+      }),
+    });
+    await runQuery(container);
+    await fetchEvents(container);
+
+    // The preview is offered at all, which the `ok` test never reached: a
+    // partial haul used to be reported before its events were ever shown.
+    expect(previewRows(container)).toHaveLength(2);
+
+    await addSamples(container);
+
+    // TWO SAMPLES REALLY WERE WRITTEN.
+    expect(onCommit).toHaveBeenCalledTimes(1);
+    expect(onCommit.mock.calls[0][0].map((s) => s.logType)).toEqual([
+      "GLOBALPROTECT",
+      "TRAFFIC",
+    ]);
+    // ...so the panel must not say nothing was.
+    expect(outcomeStatus(container)).toBe("partial");
+    expect(outcomeHeadline(container)).toBe(
+      "Added 2 samples from the 3 log types you picked. 1 of them could not be fetched, or returned nothing usable - the notes below name which.",
+    );
+    expect(outcomeHeadline(container)).not.toContain("nothing was added");
+    // And the note naming the lost one survives beside it.
+    expect(container.textContent).toContain(
+      '"THREAT" could not be fetched: HTTP 400.',
+    );
+  });
+
+  /**
+   * A REFUSED STORE WRITE (2026-08-26).
+   *
+   * `commit` awaited `onCommit` inside try/finally with NO catch. A rejected
+   * write un-disabled the button and changed nothing else: no outcome, no error,
+   * the preview still sitting there - indistinguishable from a slow store. This
+   * pin exists only here because the rejection is the component's to catch.
+   */
+  it("names a REJECTED store write and keeps the events to retry from", async () => {
+    const onCommit = vi.fn(async (_samples: TaggedSample[]) => {
+      throw new Error("KV store quota exceeded");
+    });
+    const { container } = renderPanel({ props: { onCommit } });
+    await runQuery(container);
+    await fetchEvents(container);
+
+    await addSamples(container);
+
+    expect(onCommit).toHaveBeenCalledTimes(1);
+    expect(outcomes(container)).toHaveLength(1);
+    expect(outcomeStatus(container)).toBe("store-failed");
+    expect(outcomeHeadline(container)).toContain("could not be saved");
+    // The platform's own words, not a paraphrase - it is the only clue there is.
+    expect(outcomeHeadline(container)).toContain("KV store quota exceeded");
+    // NOTHING is claimed about what landed: a rejected write does not say where
+    // it stopped.
+    expect(outcomeHeadline(container)).not.toContain("Added");
+    expect(outcomeHeadline(container)).not.toContain("nothing was added");
+
+    // The retry is a second press of the same button over the same events, and
+    // it costs no search - so all of it is still on screen and usable.
+    expect(previewRows(container)).toHaveLength(3);
+    expect(commitButton(container)?.disabled).toBe(false);
+    expect(rows(container)).toHaveLength(3);
+
+    await addSamples(container);
+    expect(onCommit).toHaveBeenCalledTimes(2);
+  });
+
+  it("clears the store error once a retry succeeds", async () => {
+    // A failure sentence left standing over a successful commit is the same
+    // defect pointed the other way.
+    let attempts = 0;
+    const onCommit = vi.fn(async (_samples: TaggedSample[]) => {
+      attempts += 1;
+      if (attempts === 1) throw new Error("transient");
+    });
+    const { container } = renderPanel({ props: { onCommit } });
+    await runQuery(container);
+    await fetchEvents(container);
+
+    await addSamples(container);
+    expect(outcomeStatus(container)).toBe("store-failed");
+
+    await addSamples(container);
+
+    expect(outcomeStatus(container)).toBe("done");
+    expect(outcomeHeadline(container)).toBe(
+      "Added 3 samples from this dataset.",
+    );
+    expect(container.textContent).not.toContain("could not be saved");
+  });
+
+  it("stops printing 'nothing is added until you confirm' once something was", async () => {
+    // The commit clears the counts, which returns the query headline to its idle
+    // instruction - directly above a summary saying what was just added.
+    const { container } = renderPanel();
+    await runQuery(container);
+    expect(headline(container)).toContain("3 log types");
+
+    await fetchAndAdd(container);
+
+    expect(outcomeHeadline(container)).toBe(
+      "Added 3 samples from this dataset.",
+    );
+    expect(container.textContent).not.toContain(
+      "Nothing is added until you confirm",
+    );
+    // Not permanently gone: the next query is what the sentence is about.
+    await runQuery(container);
+    expect(headline(container)).toContain("3 log types");
   });
 
   it("drops the previous dataset's counts AND its summary when the dataset changes", async () => {

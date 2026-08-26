@@ -31,6 +31,7 @@ import { deriveCaptureView, plannedCaptureSamples } from "./capture-panel-state"
 import { lakeSamplePreviews, plannedLakeSamples } from "./lake-panel-state";
 import {
   PREVIEW_LINES,
+  commitErrorText,
   plannedSamplesFrom,
   previewLines,
   sampleStoreKey,
@@ -154,5 +155,48 @@ describe("the capture and Lake paths share ONE conversion", () => {
     const fromLake = plannedLakeSamples([{ logType: "JUNK", rawEvents }], "acquired");
     expect(fromCapture).toEqual([]);
     expect(fromLake).toEqual([]);
+  });
+});
+
+/**
+ * WHAT TO SAY WHEN THE STORE WRITE REFUSES - shared for the same reason the
+ * conversion above is, and added for a defect both panels had (2026-08-26).
+ *
+ * Both awaited `onCommit` inside try/finally with NO catch, so a rejected write
+ * rendered as NOTHING: the button un-disabled and the operator could not tell a
+ * refused write from a slow one. Failure shown as absence is the empty-vs-failed
+ * collapse in its quietest direction.
+ */
+describe("commitErrorText", () => {
+  it("quotes the platform's own message, which is the only clue there is", () => {
+    expect(commitErrorText(new Error("KV store quota exceeded"))).toBe(
+      "KV store quota exceeded",
+    );
+    expect(commitErrorText(new Error("  HTTP 413  "))).toBe("HTTP 413");
+    expect(commitErrorText("upsert rejected")).toBe("upsert rejected");
+  });
+
+  it("says the reason is MISSING rather than inventing a plausible one", () => {
+    // A guessed cause sends the operator somewhere that may have nothing to do
+    // with the failure; naming the gap sends them to the console.
+    for (const thrown of [
+      new Error(""),
+      new Error("   "),
+      "",
+      "   ",
+      undefined,
+      null,
+      { code: 500 },
+    ]) {
+      expect(commitErrorText(thrown)).toBe("the store gave no reason");
+    }
+  });
+
+  it("never returns an empty string, because the caller interpolates it", () => {
+    // Both panels compose "could not be saved: ${reason}." around this, and an
+    // empty reason leaves a sentence that has stopped explaining anything.
+    for (const thrown of [new Error(""), null, 0, false]) {
+      expect(commitErrorText(thrown).trim()).not.toBe("");
+    }
   });
 });

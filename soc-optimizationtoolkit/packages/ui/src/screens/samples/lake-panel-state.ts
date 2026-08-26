@@ -216,6 +216,32 @@ export function lakeLogTypeChoices(
   });
 }
 
+/**
+ * What the hint above the list may truthfully say about the ticks.
+ *
+ * "The highest-volume ones are pre-selected" was printed unconditionally, and it
+ * is false in exactly the case the rule above creates: when EVERY row would
+ * replace a sample the operator already has, nothing is pre-selected at all
+ * (2026-08-26 audit). The behaviour is right - re-taking a curated sample is a
+ * deliberate act - but an operator reading that sentence over a list of empty
+ * boxes is being told the panel did something it declined to do, and the natural
+ * next move is to hunt for the tick that went missing.
+ *
+ * Read off `replacesExisting` rather than off the live ticks, deliberately. This
+ * describes what the list ARRIVED as; deriving it from what is ticked NOW would
+ * rewrite the sentence under the operator as they work, and a hint that changes
+ * when you tick a box is not a hint about pre-selection.
+ */
+export function lakePreselectionHint(
+  choices: readonly LakeLogTypeChoice[],
+): string {
+  if (choices.length === 0) return "";
+  if (choices.every((c) => c.replacesExisting)) {
+    return "None are pre-selected: you already have a sample for every log type here, so taking one replaces yours.";
+  }
+  return "The highest-volume ones you do not already have are pre-selected.";
+}
+
 /** The values currently ticked, in the order they are offered. */
 export function selectedLakeLogTypes(
   choices: readonly LakeLogTypeChoice[],
@@ -291,12 +317,26 @@ export function lakeCollisions(
  * missing field WITHOUT offering anything, which core no longer produces but the
  * port's type still permits; a status that silently renders a row-less panel as
  * ready would be worse than one branch that is currently unreachable.
+ *
+ * `no-groups` IS THE SECOND SPLIT OF `empty` (2026-08-26 audit), closing the same
+ * collapse one step further in. Core reaches a row-less `ok: true` result down
+ * TWO paths and only one of them is an empty window. The other runs only AFTER
+ * step one returned rows - so the dataset PROVABLY holds events - and it is the
+ * GROUPING that came back with nothing (query-lake-samples.ts, the
+ * `readout.logTypes.length === 0` branch, which carries the discriminator field
+ * the empty-window branch cannot). Both wore the sentence "holds no log types
+ * between -24h and now", which for the second is the app stating the opposite of
+ * what core had just observed - with core's own note beside it saying so, so the
+ * headline and the note contradicted each other on one screen. That branch also
+ * covers a count whose every group was UNREADABLE, which is this app failing,
+ * printed as a fact about the operator's data.
  */
 export type LakeQueryStatus =
   | "idle"
   | "querying"
   | "failed"
   | "empty"
+  | "no-groups"
   | "no-discriminator"
   | "dataset-as-log-type"
   | "ready";
@@ -393,11 +433,32 @@ export function deriveLakeQueryView(
     };
   }
   if (result.logTypes.length === 0) {
+    // TWO ANSWERS WEAR THIS SHAPE and only one of them is about an idle dataset.
+    // The FIELD is what tells them apart, and it is evidence rather than a
+    // convention: core can only name a discriminator after step one returned
+    // events to read it off, so a row-less result that carries one is a result
+    // about a dataset that demonstrably holds events.
+    if (result.discriminatorField !== undefined) {
+      return {
+        ...base,
+        window,
+        status: "no-groups",
+        discriminatorField: result.discriminatorField,
+        // NOT "holds no log types". The events are there and were read; what
+        // came back with nothing is the grouping, and core's note says which of
+        // its causes applies. Claiming the dataset is empty here would send the
+        // operator to widen a window over data they already have - or, when the
+        // groups were simply unreadable, hand them this app's own failure as a
+        // fact about their data.
+        headline: `The dataset "${result.datasetId}" holds events, but grouping them by ${result.discriminatorField} produced no log types.`,
+        notes: result.notes,
+      };
+    }
     return {
       ...base,
       window,
       status: "empty",
-      headline: `The dataset "${result.datasetId}" answered, and holds no log types between ${window.earliest} and ${window.latest}.`,
+      headline: `The dataset "${result.datasetId}" answered, and holds no events over ${windowLabel(window)}.`,
       notes: result.notes,
     };
   }
@@ -453,9 +514,69 @@ export function canFetchLakeSamples(
   return view.discriminatorField !== undefined || view.datasetAsLogType;
 }
 
-/** Render a window as the operator sees it. Bounds are relative, not dates. */
+/**
+ * The units a relative Kusto bound can carry, spelled the way an operator reads
+ * them. Anything outside this map is a token this module declines to translate.
+ */
+const BOUND_UNITS: Readonly<Record<string, string | undefined>> = {
+  s: "second",
+  m: "minute",
+  h: "hour",
+  d: "day",
+  w: "week",
+};
+
+function isNowBound(bound: string): boolean {
+  return bound === "" || bound.toLowerCase() === "now";
+}
+
+/** "-24h" -> {24, "hour"}. Null for anything that is not one of these. */
+function relativeBound(bound: string): { amount: number; unit: string } | null {
+  const match = /^-(\d+)([smhdw])$/.exec(bound.toLowerCase());
+  if (match === null) return null;
+  const amount = Number(match[1]);
+  const unit = BOUND_UNITS[match[2]];
+  // A zero-length window is not a period, so it is not described as one - it is
+  // handed back untranslated with everything else this cannot read.
+  if (unit === undefined || !Number.isFinite(amount) || amount === 0) return null;
+  return { amount, unit };
+}
+
+/** "24 hours", "1 day" - the quantity alone, for either phrasing below. */
+function boundQuantity(parts: { amount: number; unit: string }): string {
+  return `${parts.amount} ${parts.unit}${parts.amount === 1 ? "" : "s"}`;
+}
+
+/**
+ * Render a window as the operator sees it.
+ *
+ * THE BOUNDS ARE KUSTO TOKENS, NOT TIMES, and until 2026-08-26 they were printed
+ * raw: "between -24h and now", "Volumes cover -24h to now." That is the app
+ * quoting its own query language at someone who never wrote it, and the leading
+ * "-" reads as a minus sign rather than as "ago" - so the one sentence that turns
+ * a volume into a fact was the least legible on the screen.
+ *
+ * AN UNRECOGNISED TOKEN IS PRINTED AS IT IS, never guessed at. A bound this
+ * module cannot parse is one whose meaning it does not know, and inventing a
+ * phrase for it would state a window that was never queried - the same rule the
+ * counts follow when a volume comes back unreadable.
+ */
 export function windowLabel(window: LakeWindow): string {
-  return `${window.earliest} to ${window.latest}`;
+  const earliest = window.earliest.trim();
+  const latest = window.latest.trim();
+  const from = relativeBound(earliest);
+  // The overwhelmingly common shape, and the only one with a natural phrase:
+  // a relative start against the present.
+  if (from !== null && isNowBound(latest)) {
+    return `the last ${from.amount === 1 ? from.unit : boundQuantity(from)}`;
+  }
+  return `${boundPhrase(earliest)} to ${boundPhrase(latest)}`;
+}
+
+function boundPhrase(bound: string): string {
+  if (isNowBound(bound)) return "now";
+  const parts = relativeBound(bound);
+  return parts === null ? bound : `${boundQuantity(parts)} ago`;
 }
 
 // ---------------------------------------------------------------------------
@@ -504,6 +625,25 @@ export interface LakeSamplePreview {
    * them was never addable is finding out too late to pick something else.
    */
   willBeAdded: boolean;
+  /**
+   * Events the STORED sample will report - `parsed.eventCount`, which is the
+   * number this sample's chip goes on to show - when it can be attributed to
+   * this row alone.
+   *
+   * THE TWO NUMBERS NEVER RECONCILED (user report 2026-08-26). The confirm
+   * screen said "Fetched 200 events in 4 log types" and listed each row at "50
+   * events"; the chips that appeared read 26, 19 and 17. The mechanism was
+   * investigated and the obvious causes ruled out - Search returns exactly the
+   * rows asked for, the parser keeps them, RAW_EVENTS_CAP is not reached, and
+   * nothing dedupes on the commit path - so this does NOT fix a drop. It states
+   * BOTH numbers when they differ, so a recurrence explains itself on the screen
+   * that made the claim instead of reading as corruption two clicks later.
+   *
+   * ABSENT WHERE IT WOULD BE AMBIGUOUS: two rows that fold onto ONE store label
+   * produce ONE sample between them, and printing its count beside each row
+   * would attribute the same events twice.
+   */
+  storedEventCount?: number;
 }
 
 /**
@@ -522,10 +662,24 @@ export function lakeSamplePreviews(
 ): LakeSamplePreview[] {
   const byKey = existingLabelsByCase(existingLogTypes);
   const added = new Set(samples.map((s) => s.logType));
+  // What each stored sample will REPORT, keyed the way the store keys it. Read
+  // off the planned samples for the same reason `willBeAdded` is: this is the
+  // commit's own number, not a second count of the same lines.
+  const storedByLabel = new Map(
+    samples.map((s) => [s.logType, s.parsed.eventCount] as const),
+  );
+  // How many ROWS resolve to each label, which is what decides whether the
+  // number above can be attributed to one of them.
+  const rowsPerLabel = new Map<string, number>();
+  for (const entry of events) {
+    const label = storeLabelFor(entry.logType, byKey);
+    rowsPerLabel.set(label, (rowsPerLabel.get(label) ?? 0) + 1);
+  }
 
   return events.map((entry) => {
     const storeLabel = storeLabelFor(entry.logType, byKey);
-    return {
+    const stored = storedByLabel.get(storeLabel);
+    const preview: LakeSamplePreview = {
       logType: entry.logType,
       storeLabel,
       eventCount: entry.rawEvents.length,
@@ -533,6 +687,10 @@ export function lakeSamplePreviews(
       replacesExisting: byKey.has(sampleStoreKey(entry.logType)),
       willBeAdded: added.has(storeLabel),
     };
+    if (stored !== undefined && rowsPerLabel.get(storeLabel) === 1) {
+      preview.storedEventCount = stored;
+    }
+    return preview;
   });
 }
 
@@ -547,13 +705,28 @@ export function lakeSamplePreviews(
  */
 export function lakePreviewHeadline(
   previews: readonly LakeSamplePreview[],
+  samples?: readonly TaggedSample[],
 ): string {
   if (previews.length === 0) return "";
   const events = previews.reduce((sum, entry) => sum + entry.eventCount, 0);
   const kinds = previews.length;
+  // THE STORED TOTAL, when the caller can supply it. Summed over the SAMPLES
+  // rather than over the rows, so two picks folded into one sample are counted
+  // once - the row-level figure deliberately goes absent in that case, and a
+  // total built from it would inherit the gap.
+  const stored =
+    samples === undefined
+      ? undefined
+      : samples.reduce((sum, s) => sum + s.parsed.eventCount, 0);
+  // Said ONLY when the two disagree. Restating one number twice on every haul is
+  // noise, and noise is what stops a caveat being read on the haul that needs it.
+  const reconciled =
+    stored !== undefined && stored !== events
+      ? `, which parse into ${stored} stored event${stored === 1 ? "" : "s"}`
+      : "";
   return (
     `Fetched ${events} event${events === 1 ? "" : "s"}` +
-    ` in ${kinds} log type${kinds === 1 ? "" : "s"}.` +
+    ` in ${kinds} log type${kinds === 1 ? "" : "s"}${reconciled}.` +
     " Nothing is added until you confirm."
   );
 }
@@ -577,6 +750,21 @@ export function lakePreviewHeadline(
  * their data's shape when what they needed was a wider window or another log
  * type. The two are told apart by the haul itself, not by a count of what
  * survived the parse.
+ *
+ * `partial` is the fourth (2026-08-26 audit), and it was the loudest of the lot.
+ * Core's `ok` is `failed === 0` - false when ANY log type failed, not when all
+ * did - so a haul that lost one pick and kept four arrived here with `ok: false`
+ * AND four samples already written by the commit. This projection tested `ok`
+ * before it looked at what had been stored, so the panel printed "No events could
+ * be fetched for the log types you picked, so nothing was added" with the four
+ * new chips sitting directly below it. WHAT WAS STORED IS THEREFORE READ FIRST:
+ * a haul that produced samples reports what it produced, and names its shortfall,
+ * and only a haul that produced NOTHING can be one of the three answers above.
+ *
+ * `store-failed` is the fifth, and it is the same collapse in a third direction.
+ * The store write was awaited with no catch at all, so a rejected write rendered
+ * as NOTHING: the button un-disabled, the preview stayed, and the operator could
+ * not tell a refused write from a slow one.
  */
 export type LakeCommitStatus =
   | "idle"
@@ -584,6 +772,8 @@ export type LakeCommitStatus =
   | "failed"
   | "no-events"
   | "unusable"
+  | "partial"
+  | "store-failed"
   | "done";
 
 export interface LakeCommitView {
@@ -615,14 +805,51 @@ export function deriveLakeCommitView(
   plannedCount: number,
   requestedCount: number,
   mergedCount = 0,
+  storeError: string | null = null,
 ): LakeCommitView {
   if (fetching) {
     return { status: "fetching", headline: "Fetching events...", notes: [] };
   }
+  if (storeError !== null) {
+    // THE WRITE ITSELF REFUSED, which is neither an empty haul nor a failed
+    // search - the events are in hand and on screen. It says nothing about how
+    // much of the haul landed, because a rejected upsert loop does not report
+    // where it stopped, and "nothing was added" would be a guess. What it does
+    // say is that the preview is still there to retry from, since it is.
+    return {
+      status: "store-failed",
+      headline: `The samples could not be saved: ${storeError}. The fetched events are still here - press "Add as samples" to try again.`,
+      notes: [],
+    };
+  }
   if (result === null) {
     return { status: "idle", headline: "", notes: [] };
   }
-  if (!result.ok) {
+  // WHAT WAS STORED IS READ BEFORE `ok`, and that order is the whole fix. Core's
+  // `ok` is false when ANY log type failed, so a partial haul - four fetched, one
+  // lost - arrives here as `ok: false` with four samples already in the store.
+  // Testing `ok` first answered "nothing was added" over four new chips.
+  if (plannedCount > 0) {
+    if (!result.ok) {
+      return {
+        status: "partial",
+        headline:
+          `Added ${plannedCount} sample${plannedCount === 1 ? "" : "s"} from the` +
+          ` ${requestedCount} log type${requestedCount === 1 ? "" : "s"} you picked. ` +
+          partialFetchShortfall(plannedCount, requestedCount, mergedCount),
+        notes: result.notes,
+      };
+    }
+    return {
+      status: "done",
+      headline:
+        plannedCount < requestedCount
+          ? `Added ${plannedCount} of the ${requestedCount} log types you picked; ${shortfallReason(plannedCount, requestedCount, mergedCount)}.`
+          : `Added ${plannedCount} sample${plannedCount === 1 ? "" : "s"} from this dataset.`,
+      notes: result.notes,
+    };
+  }
+  if (!result.ok && result.events.length === 0) {
     return {
       status: "failed",
       headline:
@@ -630,37 +857,64 @@ export function deriveLakeCommitView(
       notes: result.notes,
     };
   }
-  if (plannedCount === 0) {
-    // NOTHING WAS ADDED, and the two reasons for that send the operator to
-    // opposite places. Read off the HAUL rather than off the parse: with no
-    // events there was never anything to parse, and saying otherwise describes
-    // events that do not exist.
-    if (result.events.length === 0) {
-      return {
-        status: "no-events",
-        headline:
-          "The search ran and returned no events for the log types you picked, so nothing was added.",
-        notes: result.notes,
-      };
-    }
-    // Events came back and none of them parsed into a record. Storing that
-    // would produce husks - samples with a name and no fields, which satisfy
-    // the "samples provided" check while giving the mapping nothing.
+  // NOTHING WAS ADDED, and the two reasons for that send the operator to
+  // opposite places. Read off the HAUL rather than off the parse: with no
+  // events there was never anything to parse, and saying otherwise describes
+  // events that do not exist.
+  if (result.events.length === 0) {
     return {
-      status: "unusable",
+      status: "no-events",
       headline:
-        "Events came back, but none of them parsed into a usable sample, so nothing was added.",
+        "The search ran and returned no events for the log types you picked, so nothing was added.",
       notes: result.notes,
     };
   }
+  // Events came back and none of them parsed into a record. Storing that would
+  // produce husks - samples with a name and no fields, which satisfy the
+  // "samples provided" check while giving the mapping nothing. Reached whether
+  // or not a SIBLING log type also failed to fetch: nothing was added either
+  // way, and `notes` names each failure by log type.
   return {
-    status: "done",
+    status: "unusable",
     headline:
-      plannedCount < requestedCount
-        ? `Added ${plannedCount} of the ${requestedCount} log types you picked; ${shortfallReason(plannedCount, requestedCount, mergedCount)}.`
-        : `Added ${plannedCount} sample${plannedCount === 1 ? "" : "s"} from this dataset.`,
+      "Events came back, but none of them parsed into a usable sample, so nothing was added.",
     notes: result.notes,
   };
+}
+
+/**
+ * What a PARTIAL haul lost, for a fetch that stored something and still failed.
+ *
+ * Deliberately vaguer than {@link shortfallReason}, because less is known here.
+ * `ok: false` says at least one log type failed but not HOW MANY - core reports
+ * that per log type in `notes` and nowhere else - so a shortfall split between
+ * "failed" and "returned nothing usable" cannot be attributed. Naming a number
+ * for either half would be a sum nobody measured, so the causes are named
+ * together and the operator is pointed at the notes that separate them.
+ *
+ * The merged clause stays exact, because merges ARE counted
+ * ({@link mergedLakeLogTypeCount}), and it is the one part of a shortfall that
+ * must never be reported as missing data.
+ */
+function partialFetchShortfall(
+  plannedCount: number,
+  requestedCount: number,
+  mergedCount: number,
+): string {
+  const merged = Math.max(Math.min(mergedCount, requestedCount - plannedCount), 0);
+  const lost = requestedCount - plannedCount - merged;
+  const clauses: string[] = [];
+  if (merged > 0) {
+    clauses.push(
+      `${merged} ${merged === 1 ? "shares" : "share"} a sample name with another and ${merged === 1 ? "was" : "were"} added as part of it.`,
+    );
+  }
+  clauses.push(
+    lost > 0
+      ? `${lost} of them could not be fetched, or returned nothing usable - the notes below name which.`
+      : "Some could not be fetched - the notes below name which.",
+  );
+  return clauses.join(" ");
 }
 
 /**
@@ -735,17 +989,28 @@ export function plannedLakeSamples(
  *
  * The extras are what is counted, not the group - two picks sharing one label
  * cost ONE sample, not two.
+ *
+ * A PICK THAT BROUGHT BACK NOTHING WAS NOT MERGED INTO ANYTHING (2026-08-26
+ * audit). `fetchedLogTypes` is the list that actually returned events, and
+ * without it a pick whose fetch FAILED, against a case-variant sibling that
+ * succeeded, was counted as "added as part of" the sibling's sample - a claim
+ * that its events are sitting in a sample they never reached. Optional so a
+ * caller with no haul in hand reads exactly as before; the panel always has one.
  */
 export function mergedLakeLogTypeCount(
   selected: readonly string[],
   samples: readonly TaggedSample[],
   existingLogTypes: readonly string[] = [],
+  fetchedLogTypes?: readonly string[],
 ): number {
   const byKey = existingLabelsByCase(existingLogTypes);
   const added = new Set(samples.map((s) => s.logType));
+  const returned =
+    fetchedLogTypes === undefined ? null : new Set(fetchedLogTypes);
 
   const picksPerLabel = new Map<string, number>();
   for (const pick of selected) {
+    if (returned !== null && !returned.has(pick)) continue;
     const label = storeLabelFor(pick, byKey);
     picksPerLabel.set(label, (picksPerLabel.get(label) ?? 0) + 1);
   }

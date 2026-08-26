@@ -34,6 +34,14 @@
  * log type and keep the rest, so clearing the panel on success would round a
  * partial haul up to a clean one.
  *
+ * AND IT REPORTS WHAT THE STORE ACTUALLY TOOK (2026-08-26 audit). `commit` calls
+ * `onCommit` unconditionally, so a partial haul's samples are written - while
+ * the summary, which tested core's `ok` before it looked at what had been
+ * stored, answered "nothing was added" with the new chips directly below it.
+ * Core's `ok` is `failed === 0`: false when ANY log type failed, not when all
+ * did. The write is also CAUGHT now; it used to be awaited with no catch, so a
+ * rejected store write changed nothing whatever on screen.
+ *
  * THE COMMIT BUTTON AGREES WITH THE COMMIT HANDLER (2026-08-20 audit). The
  * handler cannot address step two without the field step one grouped by, so it
  * returns early when there is none - and the button disables on that same
@@ -78,6 +86,7 @@ import {
   lakeCollisions,
   lakeLogTypeChoices,
   lakeOffersSamples,
+  lakePreselectionHint,
   lakePreviewHeadline,
   lakeSamplePreviews,
   mergedLakeLogTypeCount,
@@ -87,6 +96,7 @@ import {
   windowLabel,
 } from "./lake-panel-state";
 import type { LakeLogTypeChoice, LakeSamplePreview } from "./lake-panel-state";
+import { commitErrorText } from "./planned-samples";
 // The picker's byte formatter, reused rather than reproduced - see the note at
 // its definition; it is the coarse hint register an estimate belongs in.
 import { formatBytes } from "./sample-source-picker-state";
@@ -177,6 +187,10 @@ export function LakePanel({
   const [committing, setCommitting] = useState(false);
   const [pending, setPending] = useState<PendingLakeFetch | null>(null);
   const [outcome, setOutcome] = useState<CommitOutcome | null>(null);
+  // Why the STORE write refused, when it did. Held apart from `outcome` because
+  // a rejected write establishes nothing about what landed - there is no haul to
+  // report, only a reason and a preview still waiting to be retried.
+  const [storeError, setStoreError] = useState<string | null>(null);
 
   // A different dataset means different log types and a different commit. Left
   // on screen, the old counts would be read as this dataset's - and a pending
@@ -186,6 +200,7 @@ export function LakePanel({
     setChoices([]);
     setPending(null);
     setOutcome(null);
+    setStoreError(null);
   }, [datasetId]);
 
   const view = deriveLakeQueryView(result, querying);
@@ -195,6 +210,7 @@ export function LakePanel({
     outcome?.planned ?? 0,
     outcome?.requested ?? 0,
     outcome?.merged ?? 0,
+    storeError,
   );
   const selected = selectedLakeLogTypes(choices);
   const collisions = lakeCollisions(choices);
@@ -212,6 +228,7 @@ export function LakePanel({
     setChoices([]);
     setPending(null);
     setOutcome(null);
+    setStoreError(null);
     try {
       const next = await onQuery();
       setResult(next);
@@ -239,6 +256,7 @@ export function LakePanel({
     setFetching(true);
     setPending(null);
     setOutcome(null);
+    setStoreError(null);
     try {
       const fetched = await onFetchEvents(
         view.discriminatorField,
@@ -271,17 +289,35 @@ export function LakePanel({
         // stores - the rule lakeLogTypeChoices follows for the same reason.
         previews: lakeSamplePreviews(fetched.events, samples, existingLogTypes),
         requested: selected.length,
-        merged: mergedLakeLogTypeCount(selected, samples, existingLogTypes),
+        // Folded against what actually CAME BACK, so a pick whose fetch failed
+        // is never reported as having been added inside a sibling's sample.
+        merged: mergedLakeLogTypeCount(
+          selected,
+          samples,
+          existingLogTypes,
+          fetched.events.map((e) => e.logType),
+        ),
       });
     } finally {
       setFetching(false);
     }
   };
 
-  /** The store write, and nothing else - no search runs here. */
+  /**
+   * The store write, and nothing else - no search runs here.
+   *
+   * A REJECTED WRITE IS CAUGHT AND SAID (2026-08-26 audit). This was awaited
+   * inside `try { ... } finally { setCommitting(false) }` with no catch, so a
+   * store that refused left the button enabled and NOTHING else changed: no
+   * outcome, no error, the preview still sitting there. An operator cannot tell
+   * that apart from a slow write, and pressing again is their only move.
+   * Failure rendered as nothing is this file's own empty-versus-failed collapse,
+   * pointed at the one step that touches the store.
+   */
   const commit = async () => {
     if (pending === null) return;
     setCommitting(true);
+    setStoreError(null);
     try {
       await onCommit(pending.samples);
       setOutcome({
@@ -297,6 +333,12 @@ export function LakePanel({
       // The counts have done their job; the summary above stays.
       setResult(null);
       setChoices([]);
+    } catch (error) {
+      // Everything above is deliberately SKIPPED: the preview, the counts and
+      // the ticks all stay exactly where they were, because the retry is a
+      // second press of the same button over the same events - and it costs no
+      // search.
+      setStoreError(commitErrorText(error));
     } finally {
       setCommitting(false);
     }
@@ -314,7 +356,12 @@ export function LakePanel({
    * count, and the reason to reject a preview is usually to tick different rows.
    * Taking the list down with the events would make them buy it again.
    */
-  const discardEvents = () => setPending(null);
+  const discardEvents = () => {
+    setPending(null);
+    // The error was about THESE events; with them gone it describes a retry the
+    // operator can no longer make.
+    setStoreError(null);
+  };
 
   return (
     <div className="lake-panel" data-status={view.status}>
@@ -338,20 +385,31 @@ export function LakePanel({
         </button>
       </div>
 
-      <p className="panel-desc">{view.headline}</p>
+      {/* THE IDLE SENTENCE IS NOT PRINTED OVER AN OUTCOME (2026-08-26 audit).
+          A commit clears the counts, which returns this headline to "Nothing is
+          added until you confirm" - directly above a summary saying what was
+          just added. The instruction is true of the NEXT query and false of the
+          screen it is on, so it waits for one. */}
+      {(view.status !== "idle" || commitView.status === "idle") && (
+        <p className="panel-desc">{view.headline}</p>
+      )}
 
       {/* WHOSE NAME THIS IS. The row below carries the dataset's own id, and on
           a panel full of vendor log types it would otherwise read as one more
           of them - the app claiming a log type nobody observed. Said here as
           well as in the usecase's note, for the same reason the truncation
           caveat is: this panel must not depend on another module's wording to
-          keep its own screen honest. */}
+          keep its own screen honest.
+
+          IT NO LONGER RESTATES THE HEADLINE (2026-08-26 audit). "Nothing on
+          these events tells one type from another, so they are offered as one
+          sample" is the sentence immediately above; a caveat that opens by
+          repeating it is read as scenery, and the half that matters - whose
+          name this is - was buried in the middle of it. */}
       {view.datasetAsLogType && (
         <p className="field-hint lake-dataset-named">
-          That name is the dataset&apos;s, not a log type found in the data -
-          nothing on these events tells one type from another, so they are
-          offered as one sample. Rename it on its chip once added if you know
-          what these events are.
+          That name is the dataset&apos;s, not a log type found in the data.
+          Rename it on its chip once added if you know what these events are.
         </p>
       )}
 
@@ -369,20 +427,31 @@ export function LakePanel({
 
       {/* Said here rather than left to the usecase's note: a silently truncated
           list reads as the whole dataset, and this panel must not depend on
-          another module's wording to say otherwise. */}
+          another module's wording to say otherwise.
+
+          IT SAYS THE CAVEAT AND NOTHING ELSE (2026-08-26 audit). "The
+          highest-volume ones are shown" was the THIRD telling of that on one
+          screen - the ready headline already ends "highest volume first", and
+          core's own note names the cap with its actual number. What only this
+          line says is that the list is incomplete, so that is all it says. */}
       {view.truncated && (
         <p className="field-hint lake-truncated">
           This list hit the row cap, so the dataset may hold more log types than
-          these. The highest-volume ones are shown.
+          these.
         </p>
       )}
 
       {choices.length > 0 && (
         <>
+          {/* The pre-selection clause is DERIVED, not asserted: when every row
+              would replace a sample the operator already has, none of them are
+              ticked, and a sentence claiming otherwise sends them hunting for a
+              tick that was never made. */}
           <span className="field-hint">
-            Tick the log types worth taking as samples. The highest-volume ones
-            are pre-selected; fetching them runs one more search against the
-            dataset per tick. You see the events before anything is stored.
+            Tick the log types worth taking as samples.{" "}
+            {lakePreselectionHint(choices)} Fetching them runs one more search
+            against the dataset per tick. You see the events before anything is
+            stored.
           </span>
           <ul className="lake-log-types">
             {choices.map((choice) => (
@@ -406,7 +475,10 @@ export function LakePanel({
                   <span className="field-hint lake-volume">
                     {choice.eventCount === undefined
                       ? "volume unknown"
-                      : `${choice.eventCount.toLocaleString()} events`}
+                      : // Plural handled here as it is on every sibling count.
+                        // This was the one place that rendered "1 events", on
+                        // the row the operator reads to decide what to take.
+                        `${choice.eventCount.toLocaleString()} event${choice.eventCount === 1 ? "" : "s"}`}
                     {choice.estimatedBytes !== undefined &&
                       formatBytes(choice.estimatedBytes) !== "" &&
                       `, ~${formatBytes(choice.estimatedBytes)} estimated`}
@@ -495,14 +567,25 @@ export function LakePanel({
           and the operator opens the ones they want to check. */}
       {pending !== null && (
         <div className="lake-fetched">
-          <p className="panel-desc">{lakePreviewHeadline(pending.previews)}</p>
+          <p className="panel-desc">
+            {lakePreviewHeadline(pending.previews, pending.samples)}
+          </p>
           <ul className="lake-previews">
             {pending.previews.map((entry) => (
               <li key={entry.logType}>
                 <div className="lake-preview-head">
                   <span className="lake-log-type-name">{entry.logType}</span>
-                  <span className="field-hint">
+                  {/* BOTH NUMBERS WHEN THEY DIFFER (user report 2026-08-26).
+                      This row said "50 events" and the chip it produced said
+                      26, with nothing on screen connecting the two. The second
+                      figure is the sample's own, so a recurrence reads as an
+                      accounting difference rather than as lost data - and if
+                      they agree, nothing extra is said. */}
+                  <span className="field-hint lake-preview-count">
                     {entry.eventCount} event{entry.eventCount === 1 ? "" : "s"}
+                    {entry.storedEventCount !== undefined &&
+                      entry.storedEventCount !== entry.eventCount &&
+                      `, ${entry.storedEventCount} stored`}
                   </span>
                   {entry.replacesExisting && (
                     <span className="field-hint lake-replaces">

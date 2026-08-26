@@ -102,6 +102,31 @@ export function storeLabelFor(
 }
 
 /**
+ * What to SAY when the store write itself rejects - the one copy, shared by both
+ * commits for the reason everything else here is shared.
+ *
+ * WHY THIS EXISTS AT ALL (2026-08-26 audit). Both panels awaited `onCommit`
+ * inside a `try { ... } finally { setCommitting(false) }` with NO catch. A
+ * rejected write un-disabled the button and changed nothing else: no outcome, no
+ * error, the preview still sitting there. The operator pressed "Add as samples",
+ * saw nothing happen, and could not tell a refused write from a slow one - the
+ * empty-versus-failed collapse this codebase keeps closing, in the direction
+ * where a failure is rendered as NOTHING AT ALL.
+ *
+ * THE REASON IS QUOTED, NEVER INVENTED. When the rejection carries no message
+ * this says so rather than substituting a plausible cause; "the store gave no
+ * reason" sends the operator to the console, while a guessed cause sends them
+ * somewhere that may have nothing to do with it.
+ */
+export function commitErrorText(error: unknown): string {
+  if (error instanceof Error && error.message.trim() !== "") {
+    return error.message.trim();
+  }
+  if (typeof error === "string" && error.trim() !== "") return error.trim();
+  return "the store gave no reason";
+}
+
+/**
  * How many raw lines a preview shows per log type, and the ONE place either
  * acquisition panel decides it.
  *
