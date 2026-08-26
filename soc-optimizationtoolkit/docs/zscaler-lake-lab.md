@@ -145,6 +145,71 @@ nothing; the same capture at 85s returned 24 events per datagen), and ~5 minutes
 before searching Lake - the `cribl_lake` Destination holds a file open for
 `maxFileOpenTimeSec: 300`.
 
+## Three more benches, for the families Zscaler does not cover
+
+Added 2026-08-26. Built by `scripts/zscaler-lab/build_more_benches.py`, wired
+the same way (sample file -> datagen -> `cribl_lake` Destination -> route ahead
+of `garbagecollection`).
+
+| Dataset | Family | Discriminator | Verified |
+|---|---|---|---|
+| `fortigate_kv` | key=value, self-describing | `type` (3 values) | traffic 1849 / utm 1225 / event 612 |
+| `okta_json` | nested JSON, no `_raw` | `eventType` (5 values) | 5 groups, session.start 2x the rest |
+| `broken_feed` | ragged CSV | **none, on purpose** | 1 group, whole dataset |
+
+`fortigate_kv` uses field names from the toolkit's OWN alias table
+(`field-matcher/knowledge-bases.ts` - `srcintf`, `sentbyte`, `policyid` and
+friends all map to Sentinel columns there), so the bench exercises mappings the
+app really has. `okta_json` uses the System Log event-type families the repo
+already records in `log-type-catalog/vendor-log-types.ts`, and emits PARSED
+fields with no `_raw` - which is what a JSON source produces and the only bench
+that reaches `rowRawText`'s `JSON.stringify(row)` fallback.
+
+`broken_feed` is twelve hand-built hazards: an empty column that shifts every
+name after it, short and long rows for the same nominal type, an unescaped comma
+inside a value next to a correctly-quoted one, a trailing delimiter, a truncated
+row, a row of only delimiters, free text and a JSON object smuggled into a CSV
+feed, and ragged whitespace. It carries no field beyond `_raw`, so it also
+exercises the `datasetAsLogType` path.
+
+## Verified against the live app, 2026-08-26
+
+Driven in the Cribl Live Preview (`/apps/a/__local__`), solution scoped to
+Zscaler Internet Access.
+
+- **The Lake panel found all four log types** in `zscaler_csv` with byte
+  estimates, and the ordering is a real check rather than a smoke test: Web is
+  the largest per event (widest CSV row, ~56 MB over ~133k events) while Tunnel
+  is the most numerous (20 of the 68 rows) - which is what the generator makes.
+- **The user-reported bug is fixed.** "Add as samples" now opens the naming
+  dialog: *"Headerless CSV detected (20 columns) ... Resolving file 1 of 4"*,
+  each position beside its real value.
+- **The feed-config tab recognised the vendor.** Pasting a Zscaler NSS format
+  string chipped **"Zscaler nss (20 fields)"**, reported *"Names all 20
+  columns"*, and the live preview put every name against the right value with no
+  off-by-one. Applied for Tunnel (20) and DNS (21).
+- **Column counts round-tripped exactly** - tunnel 20, dns 21, fw 29, web 36,
+  matching `CSV_ORDER`. The hex-escaped comma survived: `_2` reads
+  `Req(allow)%2CRes(allow)`, one column, not two.
+- **Naming the columns is what makes the feed recognisable.** After resolving
+  DNS and Tunnel, the solution's feed list flipped those two from `not provided`
+  to **`provided`**, while Firewall and Web - deliberately skipped - stayed
+  unmatched and kept their **Resolve headers** button. That is the reopen path
+  and the value of the feature in one screen.
+- **`broken_feed` answered honestly**: *"Nothing on these events tells one log
+  type from another, so 'broken_feed' is offered as a single log type."*
+
+### `eventsPerSec` is not events per second
+
+Set to 4, the benches produced roughly **330 events/sec each** - `zscaler_csv`
+alone reached 1.4M events across four log types in about two hours. The knob is
+per worker process, and this group has two workers with many processes, so the
+configured number is multiplied by something like 80x.
+
+Dropped to 1 on all six benches on 2026-08-26. **Retention is still 30 days on
+all six**, which at the observed rate is a lot of Lake storage for a lab - worth
+a decision, not silently left.
+
 ## Sibling bench: the `PaloAlto` dataset, and the origin defect it had
 
 The PAN-OS bench predates this one and is wired differently - datagen
