@@ -162,8 +162,20 @@ of `garbagecollection`).
 friends all map to Sentinel columns there), so the bench exercises mappings the
 app really has. `okta_json` uses the System Log event-type families the repo
 already records in `log-type-catalog/vendor-log-types.ts`, and emits PARSED
-fields with no `_raw` - which is what a JSON source produces and the only bench
-that reaches `rowRawText`'s `JSON.stringify(row)` fallback.
+fields with no `_raw` - which is what a JSON source produces.
+
+**It does NOT reach `rowRawText`'s `JSON.stringify(row)` fallback, despite what
+this doc first said.** Measured 2026-08-26: a capture on `datagen:dg_okta_json`
+shows `_raw` on 0 of 20 events at the source, but 40 of 40 events READ BACK FROM
+LAKE carry a `_raw` holding the JSON as a string. The Lake write path adds it -
+the route is `passthru`, so nothing in the pipeline did. It round-trips exactly
+(no key appears only in `_raw`), and the nesting survives whole: `actor`,
+`client.geographicalContext.geolocation`, `outcome`, and `target` as a real
+list, on 40 of 40.
+
+So the structured path is still exercised, but the `_raw`-absent branch is not,
+and no Lake-sourced bench can exercise it. Reaching that branch needs a sample
+that never went through Lake - a paste or an upload.
 
 `broken_feed` is twelve hand-built hazards: an empty column that shifts every
 name after it, short and long rows for the same nominal type, an unescaped comma
@@ -199,12 +211,31 @@ Zscaler Internet Access.
 - **`broken_feed` answered honestly**: *"Nothing on these events tells one log
   type from another, so 'broken_feed' is offered as a single log type."*
 
-### `eventsPerSec` is not events per second
+### `eventsPerSec` is per worker process - a 2x multiplier here
 
-Set to 4, the benches produced roughly **330 events/sec each** - `zscaler_csv`
-alone reached 1.4M events across four log types in about two hours. The knob is
-per worker process, and this group has two workers with many processes, so the
-configured number is multiplied by something like 80x.
+**Corrected 2026-08-26 after measuring it properly.** This section first claimed
+~330 events/sec and a multiplier "of something like 80x". That was wrong, and
+wrong in an instructive way: it divided a `-24h` count by an ASSUMED ~2h of
+runtime, when `zscaler_csv` already held 20.5h of history. Dividing a real
+number by a guessed one produces a confident wrong answer, which is the same
+defect class this app exists to avoid.
+
+Measured by bucketing `| summarize n=count() by bin(_time, 30m)`, the rate has a
+hard changepoint at the moment the config changed:
+
+```
+eventsPerSec: 4   ->  8.00 events/sec
+eventsPerSec: 1   ->  2.00 events/sec
+```
+
+So the multiplier is **2**, which is the worker-process count (inferred - not
+confirmed against worker config). Still worth knowing, because the knob is not
+what it says: the number to trust is the one you measure off the dataset.
+
+One consequence while reading counts: the drop to 1 happened partway through the
+`-24h` window the app queries, so for a day afterwards the Zscaler trio's totals
+read roughly 4x higher than the current rate implies and shrink as the old
+volume ages out.
 
 Dropped to 1 on all six benches on 2026-08-26, and their Lake retention dropped
 from 30 days to **7** the same day. Seven days is all the benches need - the app
