@@ -386,6 +386,41 @@ describe("volume attachment", () => {
     expect(merged[0].eventCount).toBe(12);
   });
 
+  it("refuses a GENERIC row the same way coverage refuses it", () => {
+    // ORIENTATION PIN (defect fixed 2026-08-26). sumVolumeFor called the matcher
+    // with the measured row in the EXPECTED slot and the recommendation in the
+    // PROVIDED one - backwards. logTypeNameMatches is deliberately asymmetric,
+    // so the reversal swapped which rule applied: a Lake row named "event"
+    // (FortiGate system events) was refused as COVERAGE for "Tunnel Event" and
+    // simultaneously accepted as its VOLUME. Two answers to one question on one
+    // screen, which is the shape this file exists to prevent.
+    const merged = mergeLogTypeSources({
+      expected: [expected("Tunnel Event", ["alert-rule"])],
+      vendorLogTypes: [],
+      provided: [],
+      volumes: [vol("event", 4806)],
+    });
+
+    expect(merged).toHaveLength(1);
+    // Undefined, never 0 - nobody measured a zero here.
+    expect(merged[0].eventCount).toBeUndefined();
+    // And the two answers agree: not covered, so not counted either.
+    expect(merged[0].provided).toBe(false);
+  });
+
+  it("still counts a row whose tag is the QUALIFIED form of the expected name", () => {
+    // The other half of the asymmetry, and the reason the permissive arm cannot
+    // simply be deleted: "pan-traffic" is TRAFFIC with a vendor qualifier.
+    const merged = mergeLogTypeSources({
+      expected: [expected("Tunnel Event", ["alert-rule"])],
+      vendorLogTypes: [],
+      provided: [],
+      volumes: [vol("zscaler-tunnel-event", 512)],
+    });
+
+    expect(merged[0].eventCount).toBe(512);
+  });
+
   it("SUMS disjoint rows rather than picking one", () => {
     // The rows come from one summarize-by, so they partition the window and
     // adding them double-counts nothing. Picking the larger would under-report

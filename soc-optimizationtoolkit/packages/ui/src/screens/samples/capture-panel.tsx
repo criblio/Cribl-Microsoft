@@ -112,17 +112,41 @@ export function CapturePanel({
   // rejected write establishes nothing about what landed.
   const [storeError, setStoreError] = useState<string | null>(null);
 
-  // A different source means different suggestions and a different filter.
+  // RE-SEED THE PICKS when the recommendation changes, and when the source does
+  // - a different source means different suggestions and a different filter.
+  // Only the picks: see the second effect for why the capture and its summary
+  // are NOT reset here.
   useEffect(() => {
     setChoices(seeded);
     setFilterEdited(false);
     setFilter(composeFilter(source.id, seeded));
+  }, [seeded, source.id]);
+
+  /**
+   * THE CAPTURE AND ITS SUMMARY BELONG TO THE SOURCE, so they reset when the
+   * SOURCE changes and at no other time. Left up across a source change, the
+   * summary reads as a report about the source now named above it.
+   *
+   * SPLIT OUT OF THE EFFECT ABOVE 2026-08-26, because keying this on `seeded`
+   * made a successful commit erase its own result. `seeded` is memoised on
+   * `recommended`, and committing samples ALWAYS changes the recommendation -
+   * coverage is what the recommendation is computed from. So the order was:
+   * commit writes the samples, `setOutcome` records what it stored, the parent
+   * re-renders with new coverage, `recommended` gets a new identity, this effect
+   * fires, and `setOutcome(null)` wiped the summary before it ever painted.
+   *
+   * The panel therefore fell back to its idle sentence - "Nothing is added until
+   * you confirm" - immediately after adding something, which is the exact defect
+   * the outcome state was added to fix. It reproduced on every commit and was
+   * invisible to the component's own tests, because those re-render with a
+   * STABLE `recommended`; only the live app supplies a fresh array. The pin
+   * added alongside this re-renders with a new one.
+   */
+  useEffect(() => {
     setResult(null);
-    // The summary belongs to the source it was captured from; left up, it reads
-    // as a report about the source now named above it.
     setOutcome(null);
     setStoreError(null);
-  }, [seeded, source.id]);
+  }, [source.id]);
 
   const view = deriveCaptureView(result, running, existingLogTypes);
   const commitView = deriveCaptureCommitView(outcome, committing, storeError);

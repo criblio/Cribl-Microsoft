@@ -686,6 +686,48 @@ describe("CapturePanel - what the commit reports afterwards", () => {
     expect(outcomes(container)).toHaveLength(0);
     expect(headline(container)).toContain("Nothing is added until you confirm");
   });
+
+  /**
+   * THE COMMIT MUST SURVIVE ITS OWN CONSEQUENCES (live defect, 2026-08-26).
+   *
+   * Every test above re-renders with the SAME `recommended` array. The live app
+   * never does: `recommended` is the coverage recommendation, committing samples
+   * changes coverage, so a fresh array arrives on the render that the commit
+   * itself triggered.
+   *
+   * `seeded` is memoised on `recommended`, and the reset effect used to be keyed
+   * on `seeded` - so the sequence was: store the samples, `setOutcome` records
+   * what landed, parent re-renders with new coverage, effect fires,
+   * `setOutcome(null)`. The summary was erased before it painted and the panel
+   * fell back to "Nothing is added until you confirm" - the very sentence the
+   * outcome state exists to replace - immediately after adding something.
+   *
+   * Reproduced on the live preview against a real PaloAlto capture: 3 events in
+   * 2 log types committed, chips written, panel back to the idle instruction.
+   *
+   * A NEW ARRAY WITH THE SAME CONTENT is the whole point of this pin. Identity
+   * is what the memo compares, so passing `RECOMMENDED` again would prove
+   * nothing.
+   */
+  it("keeps the summary when the RECOMMENDATION is recomputed by the commit", async () => {
+    const { props } = makeProps();
+    const { container, rerender } = render(<CapturePanel {...props} />);
+    await act(async () => {
+      fireEvent.click(runButton(container));
+    });
+    await addSamples(container);
+    expect(outcomeHeadline(container)).toBe("Added 2 samples from this capture.");
+
+    // What the parent does on the render the commit provoked.
+    rerender(<CapturePanel {...props} recommended={[...RECOMMENDED]} />);
+
+    expect(outcomes(container)).toHaveLength(1);
+    expect(outcomeStatus(container)).toBe("done");
+    expect(outcomeHeadline(container)).toBe("Added 2 samples from this capture.");
+    expect(container.textContent).not.toContain(
+      "Nothing is added until you confirm",
+    );
+  });
 });
 
 describe("CapturePanel - changing source", () => {

@@ -209,7 +209,25 @@ function sumVolumeFor(
 
   for (const row of volumes) {
     if (row.eventCount === undefined) continue;
-    if (!isCovered(row.logType, keys)) continue;
+    // THE MEASURED ROW IS THE PROVIDED SIDE, and the recommendation key is the
+    // expected one - the same orientation compareLogTypeCoverage uses, because
+    // it is the same question: does what the environment actually sends cover
+    // what this entry asks for?
+    //
+    // ORIENTATION CORRECTED 2026-08-26. This read `isCovered(row.logType, keys)`,
+    // putting the measured row in the EXPECTED slot and the recommendation in
+    // the PROVIDED one. `logTypeNameMatches` is deliberately asymmetric - a more
+    // specific tag covers a broader expected name, a broader tag does not cover
+    // a specific one unless it says something - so reversing the arguments
+    // reverses which of those two rules applies.
+    //
+    // It went unnoticed while the matcher was symmetric. It stopped being
+    // harmless the moment `event` was refused as coverage for "Tunnel Event":
+    // in this inverted call the permissive arm fired instead, so the same pair
+    // was NOT coverage and WAS volume - a Lake row of FortiGate system events
+    // summing its count into a Zscaler tunnel recommendation, on the same screen
+    // that had just declined to call it provided.
+    if (!keys.some((k) => isCovered(k, [normalize(row.logType)]))) continue;
     eventCount = (eventCount ?? 0) + row.eventCount;
     const bytes = estimatedLogTypeBytes(row);
     if (bytes === undefined) {
