@@ -206,9 +206,10 @@ alone reached 1.4M events across four log types in about two hours. The knob is
 per worker process, and this group has two workers with many processes, so the
 configured number is multiplied by something like 80x.
 
-Dropped to 1 on all six benches on 2026-08-26. **Retention is still 30 days on
-all six**, which at the observed rate is a lot of Lake storage for a lab - worth
-a decision, not silently left.
+Dropped to 1 on all six benches on 2026-08-26, and their Lake retention dropped
+from 30 days to **7** the same day. Seven days is all the benches need - the app
+queries Lake over `-24h` - and it caps what a continuously-fed lab can
+accumulate. The PaloAlto dataset is untouched at 30.
 
 ## Sibling bench: the `PaloAlto` dataset, and the origin defect it had
 
