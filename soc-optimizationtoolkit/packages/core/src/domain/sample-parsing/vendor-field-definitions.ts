@@ -228,10 +228,14 @@ interface BundledVendorOrders {
  * registry rather than a PAN-OS special case because the whole point of the
  * plan's step 1 was to let the operator fix ANY vendor, including the next one.
  *
- * `panosHeadersFor` covers eight PAN-OS log types and deliberately answers
- * `undefined` for the rest (AUDIT, AUTH, CORRELATION, IPTAG, USERID ...) - those
- * have no recorded order, which is exactly the case where an operator-supplied
- * one is new knowledge rather than an override.
+ * `panosHeadersFor` covers twelve PAN-OS log types since 2026-08-25 (the
+ * original eight plus AUDIT, CORRELATION, IPTAG and USERID, each transcribed
+ * from Palo Alto's published Format line) and deliberately answers `undefined`
+ * for the rest - AUTH, GTP, SCTP, WILDFIRE and friends. Those have no recorded
+ * order, which is exactly the case where an operator-supplied one is new
+ * knowledge rather than an override. AUTH in particular is a DECISION: the
+ * vendor publishes no such log type, so there is nothing to transcribe and
+ * inventing one would mislabel every column after the first mistake.
  */
 const BUNDLED_COLUMN_ORDERS: readonly BundledVendorOrders[] = [
   { scopes: ["paloalto", "panos"], lookup: panosHeadersFor },

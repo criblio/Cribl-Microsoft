@@ -80,6 +80,26 @@ DECRYPTION, AUTHENTICATION) and are absent for six that the lake actually
 carries: **AUDIT, AUTH, CORRELATION, HIPMATCH, IPTAG, USERID**. Those six parse
 to `field_N` and have no route to being named.
 
+> **UPDATE 2026-08-25 - five of those six are now resolved.** This plan argued
+> against shipping the missing orders, on the grounds that it "would fix one
+> vendor and teach the app nothing". The user asked for them directly, which
+> supersedes that; the general path is untouched, because these are BUNDLED
+> orders that pre-fill the dialog and an operator-supplied order still beats
+> them.
+>
+> - **HIPMATCH was never actually missing** - the dictionary keys it
+>   `HIP-MATCH` and `panosHeadersFor` folds the separator, so it resolved all
+>   along. This paragraph was stale on that one point.
+> - **AUDIT, CORRELATION, IPTAG, USERID** now have orders transcribed from Palo
+>   Alto's published syslog field descriptions, each cross-checked against the
+>   current NGFW page, a second PAN-OS version, and the vendor's own fixture
+>   data. Citations sit beside each entry in `panos-dictionary.ts`.
+> - **AUTH is deliberately still absent.** Palo Alto publishes no log type
+>   called AUTH, so there is nothing to transcribe; inferring one from sample
+>   values or borrowing AUTHENTICATION's would mislabel every column after the
+>   first mistake. It still parses positionally and is still offered the
+>   dialog - which is exactly the case Gap 2 and Gap 3 exist to serve.
+
 This is the cheapest fix with the largest effect and should land first, on its
 own. It is also exactly the class the architecture audit calls a duplicated
 decision: one question - "what do we call an unnamed column?" - answered twice.

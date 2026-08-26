@@ -64,9 +64,9 @@ why per-solution vendor knowledge is too coarse -
 
 The repo hit the log-type problem and worked around it by dropping the ambiguous
 fields. PAN-OS is the one vendor that got the real treatment
-(`panos-dictionary.ts`: eight log types, documented column order each, cited to
-the Palo Alto syslog field-descriptions page). That shape is right; it exists
-once.
+(`panos-dictionary.ts`: twelve log types as of 2026-08-25, documented column
+order each, cited to the Palo Alto syslog field-descriptions page). That shape is
+right; it exists once.
 
 ## Decision
 

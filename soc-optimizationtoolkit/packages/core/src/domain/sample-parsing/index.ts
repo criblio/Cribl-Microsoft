@@ -85,6 +85,7 @@ export {
   PANOS_LEGACY_PARSER_INDEX20,
   PANOS_CANONICAL_INDEX20,
   panosHeadersFor,
+  panosLogTypeFrom,
   parsePanosLine,
   isPanosFormat,
   convertPanosToJson,

@@ -153,13 +153,14 @@ const SOURCES: Record<string, unknown[]> = {
 };
 
 /**
- * Two PAN-OS USERID events. USERID is genuinely undictionaried, so these parse
+ * Two PAN-OS AUTH events. AUTH is genuinely undictionaried - Palo Alto publishes
+ * no AUTH log type, so the toolkit declines to guess one - and these parse
  * to POSITIONAL columns - which is what makes a capture of them something the
  * operator must be offered a chance to name (see the commit-wiring pin below).
  */
-const PANOS_USERID = [
-  "1,2026/08/13 10:49:02,013201031064,USERID,0,2817,2026/08/13 10:48:54,vsys1,user1",
-  "1,2026/08/13 10:49:06,013201031064,USERID,0,2818,2026/08/13 10:48:58,vsys1,user2",
+const PANOS_AUTH = [
+  "1,2026/08/13 10:49:02,013201031064,AUTH,0,2817,2026/08/13 10:48:54,vsys1,user1",
+  "1,2026/08/13 10:49:06,013201031064,AUTH,0,2818,2026/08/13 10:48:58,vsys1,user2",
 ];
 
 /**
@@ -173,7 +174,7 @@ function discoveryPorts() {
         return { status: 200, body: { items: SOURCES[opts.groupId ?? ""] ?? [] } };
       }
       if (opts.path === "/system/capture") {
-        return { status: 200, body: PANOS_USERID.map((raw) => ({ _raw: raw })) };
+        return { status: 200, body: PANOS_AUTH.map((raw) => ({ _raw: raw })) };
       }
       if (opts.path.startsWith("/products/lake/")) {
         return { status: 200, body: { items: [{ id: "Corelight" }] } };

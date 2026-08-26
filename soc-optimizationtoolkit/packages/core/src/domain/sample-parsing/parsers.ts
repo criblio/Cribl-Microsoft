@@ -22,7 +22,7 @@
 
 import { positionalFieldName } from "./models";
 import type { SampleFormat } from "./models";
-import { panosHeadersFor } from "./panos-dictionary";
+import { panosHeadersFor, panosLogTypeFrom } from "./panos-dictionary";
 
 // ---------------------------------------------------------------------------
 // Syslog prefix stripping (shared by parseCsv and capture inner detection)
@@ -193,11 +193,15 @@ export function parseCsv(
     // The cost of leaving it: a GLOBALPROTECT or CONFIG export parses to
     // positional _0.._N, so field mapping sees `_3` instead of `type` and `_7`
     // instead of `src`, and the generated pack maps numbers.
-    const logType = values[3];
+    // panosLogTypeFrom, not `values[3]`: AUDIT omits the leading FUTURE_USE, so
+    // its type sits at index 2 and index 3 holds the content-version number.
+    // Read blindly at 3, an audit line asked for a column order named "2561"
+    // and got none - which is why this said `values[3]` until 2026-08-25 and
+    // AUDIT could not have been named even once its order was recorded.
+    const logType = panosLogTypeFrom(values);
     // panosHeadersFor, not a plain index: real PAN-OS emits HIPMATCH while the
     // dictionary keys HIP-MATCH, so an index missed every HIP-Match event.
-    const colNames: readonly string[] | null =
-      logType !== undefined ? (panosHeadersFor(logType) ?? null) : null;
+    const colNames: readonly string[] | null = panosHeadersFor(logType) ?? null;
 
     if (colNames) {
       colNames.forEach((name, i) => {

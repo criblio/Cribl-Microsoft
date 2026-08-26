@@ -26,7 +26,7 @@
  *     short by exactly the samples that just arrived.
  *   - "a pasted PAN-OS export" - behaviour that has been live and unpinned: a
  *     log type PAN-OS documents a column order for is named on the way in and is
- *     NOT asked about, while one it does not (USERID, AUDIT, IPTAG...) stays
+ *     NOT asked about, while one it does not (AUTH, WILDFIRE, GTP...) stays
  *     positional and IS. That asymmetry is the whole reason the dialog exists,
  *     and it was resting on a chain of four decisions in three modules with no
  *     test standing at the end of it.
@@ -47,22 +47,30 @@ afterEach(cleanup);
 /**
  * Real PAN-OS lines, two per log type. The distinguishing property is the log
  * type in field 3: PAN-OS documents a column order for TRAFFIC and does not for
- * USERID or IPTAG, so the first parses to NAMED fields and the other two to
+ * AUTH or WILDFIRE, so the first parses to NAMED fields and the other two to
  * positional `_0.._N`. The column counts differ (9 vs 10) on purpose, so the
  * dialog's own title says WHICH queued sample is on screen.
+ *
+ * These were USERID and IPTAG until 2026-08-25, when both gained a column order
+ * transcribed from Palo Alto's published field descriptions and stopped being
+ * positional. The subjects moved to two types that are STILL undictionaried
+ * rather than the tests being weakened - what is under test here is the
+ * named-vs-positional asymmetry, not those two log types. AUTH is the pointed
+ * choice: it is live on the lab dataset and the toolkit deliberately declines
+ * to guess an order for it, because Palo Alto publishes none.
  */
 const PANOS = {
   traffic: [
     "1,2026/08/13 10:49:02,013201031064,TRAFFIC,end,2817,2026/08/13 10:48:54,10.0.0.5,8.8.8.8",
     "1,2026/08/13 10:49:05,013201031064,TRAFFIC,end,2818,2026/08/13 10:48:57,10.0.0.6,8.8.4.4",
   ].join("\n"),
-  userid: [
-    "1,2026/08/13 10:49:02,013201031064,USERID,0,2817,2026/08/13 10:48:54,vsys1,user1",
-    "1,2026/08/13 10:49:06,013201031064,USERID,0,2818,2026/08/13 10:48:58,vsys1,user2",
+  auth: [
+    "1,2026/08/13 10:49:02,013201031064,AUTH,0,2817,2026/08/13 10:48:54,vsys1,user1",
+    "1,2026/08/13 10:49:06,013201031064,AUTH,0,2818,2026/08/13 10:48:58,vsys1,user2",
   ].join("\n"),
-  iptag: [
-    "1,2026/08/13 10:49:02,013201031064,IPTAG,0,2817,2026/08/13 10:48:54,vsys1,10.0.0.9,tag1",
-    "1,2026/08/13 10:49:07,013201031064,IPTAG,0,2819,2026/08/13 10:48:59,vsys1,10.0.0.10,tag2",
+  wildfire: [
+    "1,2026/08/13 10:49:02,013201031064,WILDFIRE,0,2817,2026/08/13 10:48:54,vsys1,10.0.0.9,tag1",
+    "1,2026/08/13 10:49:07,013201031064,WILDFIRE,0,2819,2026/08/13 10:48:59,vsys1,10.0.0.10,tag2",
   ].join("\n"),
 };
 
@@ -184,25 +192,25 @@ describe("SampleIntakeSection - an arrival from a sibling panel", () => {
     const view = await mount(store);
     expect(dialogs(view.container)).toHaveLength(0);
 
-    await siblingCommits(view, store, [lakeSample("USERID", PANOS.userid)], 1);
+    await siblingCommits(view, store, [lakeSample("AUTH", PANOS.auth)], 1);
 
     expect(dialogs(view.container)).toHaveLength(1);
     expect(dialogTitle(view.container)).toBe(
       "Headerless CSV detected (9 columns)",
     );
-    expect(dialogCaption(view.container)).toContain("lake:USERID");
+    expect(dialogCaption(view.container)).toContain("lake:AUTH");
   });
 
   it("opens NOTHING when the commit's samples are already named", async () => {
     const { store } = makeStore();
     const view = await mount(store);
 
-    await siblingCommits(view, store, [lakeSample("Auth", NAMED_JSON)], 1);
+    await siblingCommits(view, store, [lakeSample("Named", NAMED_JSON)], 1);
 
     expect(dialogs(view.container)).toHaveLength(0);
     // And the arrival WAS processed - "no dialog" has to be distinguishable
     // from "the event never reached this section", which is the bug.
-    expect(chipNames(view.container)).toEqual(["Auth"]);
+    expect(chipNames(view.container)).toEqual(["Named"]);
   });
 
   it("queues EVERY headerless sample in a multi-log-type commit, one turn each", async () => {
@@ -215,9 +223,9 @@ describe("SampleIntakeSection - an arrival from a sibling panel", () => {
       view,
       store,
       [
-        lakeSample("USERID", PANOS.userid),
-        lakeSample("Auth", NAMED_JSON),
-        lakeSample("IPTAG", PANOS.iptag),
+        lakeSample("AUTH", PANOS.auth),
+        lakeSample("Named", NAMED_JSON),
+        lakeSample("WILDFIRE", PANOS.wildfire),
       ],
       1,
     );
@@ -226,7 +234,7 @@ describe("SampleIntakeSection - an arrival from a sibling panel", () => {
     expect(dialogTitle(view.container)).toBe(
       "Headerless CSV detected (9 columns)",
     );
-    expect(dialogCaption(view.container)).toContain("lake:USERID");
+    expect(dialogCaption(view.container)).toContain("lake:AUTH");
     expect(dialogCaption(view.container)).toContain("Resolving file 1 of 2");
 
     // Turn two: the OTHER headerless arrival - not the named one, which was
@@ -235,13 +243,13 @@ describe("SampleIntakeSection - an arrival from a sibling panel", () => {
     expect(dialogTitle(view.container)).toBe(
       "Headerless CSV detected (10 columns)",
     );
-    expect(dialogCaption(view.container)).toContain("lake:IPTAG");
+    expect(dialogCaption(view.container)).toContain("lake:WILDFIRE");
     expect(dialogCaption(view.container)).toContain("Resolving file 2 of 2");
 
     // Two headerless samples, two turns, then done.
     clickButton(view.container, "Skip");
     expect(dialogs(view.container)).toHaveLength(0);
-    expect(chipNames(view.container)).toEqual(["USERID", "Auth", "IPTAG"]);
+    expect(chipNames(view.container)).toEqual(["AUTH", "Named", "WILDFIRE"]);
   });
 
   it("fires ONCE per commit, not on every re-render carrying the batch", async () => {
@@ -250,20 +258,20 @@ describe("SampleIntakeSection - an arrival from a sibling panel", () => {
     // worse experience than the bug being fixed.
     const { store } = makeStore();
     const view = await mount(store);
-    await siblingCommits(view, store, [lakeSample("USERID", PANOS.userid)], 1);
+    await siblingCommits(view, store, [lakeSample("AUTH", PANOS.auth)], 1);
 
     clickButton(view.container, "Skip");
     expect(dialogs(view.container)).toHaveLength(0);
 
     // A fresh object carrying the SAME nonce: a re-render, not a new commit.
     await act(async () => {
-      view.show({ nonce: 1, samples: [lakeSample("USERID", PANOS.userid)] });
+      view.show({ nonce: 1, samples: [lakeSample("AUTH", PANOS.auth)] });
     });
     expect(dialogs(view.container)).toHaveLength(0);
 
     // A genuinely new commit still opens, so the guard is a nonce check and not
     // a one-shot latch.
-    await siblingCommits(view, store, [lakeSample("IPTAG", PANOS.iptag)], 2);
+    await siblingCommits(view, store, [lakeSample("WILDFIRE", PANOS.wildfire)], 2);
     expect(dialogTitle(view.container)).toBe(
       "Headerless CSV detected (10 columns)",
     );
@@ -279,12 +287,12 @@ describe("SampleIntakeSection - an arrival from a sibling panel", () => {
     const view = await mount(store);
     expect(store.list).toHaveBeenCalledTimes(1);
 
-    await siblingCommits(view, store, [lakeSample("USERID", PANOS.userid)], 1);
+    await siblingCommits(view, store, [lakeSample("AUTH", PANOS.auth)], 1);
 
     expect(store.list).toHaveBeenCalledTimes(2);
-    expect(chipNames(view.container)).toEqual(["Existing", "USERID"]);
+    expect(chipNames(view.container)).toEqual(["Existing", "AUTH"]);
     const reported = view.onSamplesChange.mock.calls.at(-1)?.[0] as TaggedSample[];
-    expect(reported.map((s) => s.logType)).toEqual(["Existing", "USERID"]);
+    expect(reported.map((s) => s.logType)).toEqual(["Existing", "AUTH"]);
   });
 });
 
@@ -313,20 +321,20 @@ async function paste(
 
 describe("SampleIntakeSection - a pasted PAN-OS export", () => {
   it("is asked about a log type PAN-OS has NO bundled column order for", async () => {
-    // USERID is genuinely undictionaried (pinned in panos-dictionary.test.ts),
+    // AUTH is genuinely undictionaried (pinned in panos-dictionary.test.ts),
     // so the parse can only name its columns positionally - which is exactly
     // the case the dialog exists for.
     const { store } = makeStore();
     const view = await mount(store);
 
-    await paste(view.container, "PanUserId", PANOS.userid);
+    await paste(view.container, "PanAuth", PANOS.auth);
 
     expect(dialogs(view.container)).toHaveLength(1);
     expect(dialogTitle(view.container)).toBe(
       "Headerless CSV detected (9 columns)",
     );
     // The columns really are unnamed, which is WHY it is asked.
-    expect(chipFields(view.container, "PanUserId")).toEqual([
+    expect(chipFields(view.container, "PanAuth")).toEqual([
       "_0",
       "_1",
       "_2",

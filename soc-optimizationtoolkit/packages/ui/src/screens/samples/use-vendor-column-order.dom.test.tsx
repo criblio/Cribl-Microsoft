@@ -66,8 +66,12 @@ describe("useVendorColumnOrder - pre-fill", () => {
   });
 
   it("resolves NOTHING for a log type with no bundled order and none stored", async () => {
+    // AUTH, not USERID: USERID gained a cited bundled order on 2026-08-25.
+    // AUTH is the PAN-OS type the toolkit deliberately ships no order for,
+    // because Palo Alto publishes none - so it is what "no bundled order"
+    // genuinely looks like now.
     const cache = new FakeContentCache();
-    const { seen } = mountOrder(cache, PANOS, "USERID");
+    const { seen } = mountOrder(cache, PANOS, "AUTH");
     await waitFor(() => expect(seen.current?.loading).toBe(false));
     // Never invent a name: the columns stay positional.
     expect(seen.current?.resolved).toBeNull();
@@ -192,13 +196,16 @@ describe("useVendorColumnOrder - reuse across sessions", () => {
 
   it("does NOT hand one log type's order to another", async () => {
     const cache = new FakeContentCache();
-    const first = mountOrder(cache, PANOS, "USERID");
+    // Two types that BOTH still lack a bundled order, so a null answer can only
+    // mean "this log type's stored order did not leak", never "the bundled one
+    // filled in". USERID/IPTAG stopped serving that purpose on 2026-08-25.
+    const first = mountOrder(cache, PANOS, "AUTH");
     await waitFor(() => expect(first.seen.current?.loading).toBe(false));
     act(() => first.seen.current?.remember(["a", "b", "c"]));
     await waitFor(() => expect(cache.size).toBe(1));
     cleanup();
 
-    const second = mountOrder(cache, PANOS, "IPTAG");
+    const second = mountOrder(cache, PANOS, "WILDFIRE");
     await waitFor(() => expect(second.seen.current?.loading).toBe(false));
     expect(second.seen.current?.resolved).toBeNull();
   });

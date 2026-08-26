@@ -136,19 +136,32 @@ describe("bundledColumnOrder - what operator input can override", () => {
     );
   });
 
-  it("is UNDEFINED for the live log types with no recorded order", () => {
-    // The six the plan measured against a live Cribl Lake dataset. Undefined is
-    // the honest answer: an operator order for these is new knowledge, not an
-    // override.
-    for (const logType of [
-      "AUDIT",
-      "AUTH",
-      "CORRELATION",
-      "IPTAG",
-      "USERID",
-      "WILDFIRE",
-    ]) {
-      expect(bundledColumnOrder(PANOS, logType)).toBeUndefined();
+  it("now bundles the four orders cited on 2026-08-25", () => {
+    // Four of the six the plan measured against a live Cribl Lake dataset were
+    // given orders transcribed from Palo Alto's published Format lines, so they
+    // reach the dialog as a PRE-FILL rather than a blank grid. Bundled, not
+    // final - the operator still overrides, which the pins below cover.
+    for (const logType of ["AUDIT", "CORRELATION", "IPTAG", "USERID"]) {
+      const order = bundledColumnOrder(PANOS, logType);
+      expect(order, logType).toBeDefined();
+      expect(order?.length, logType).toBeGreaterThan(7);
+    }
+    // Both vendor spellings resolve, via the separator fold in panosHeadersFor.
+    expect(bundledColumnOrder(PANOS, "USER-ID")).toBe(
+      bundledColumnOrder(PANOS, "USERID"),
+    );
+    expect(bundledColumnOrder(PANOS, "IP-TAG")).toBe(
+      bundledColumnOrder(PANOS, "IPTAG"),
+    );
+  });
+
+  it("is STILL UNDEFINED for the log types with no recorded order", () => {
+    // AUTH is the deliberate decline: Palo Alto publishes no AUTH log type, so
+    // there is nothing to transcribe and guessing one would mislabel every
+    // column after the first mistake. Undefined is the honest answer - an
+    // operator order for these is new knowledge, not an override.
+    for (const logType of ["AUTH", "WILDFIRE", "GTP", "SCTP"]) {
+      expect(bundledColumnOrder(PANOS, logType), logType).toBeUndefined();
     }
   });
 
@@ -212,7 +225,12 @@ describe("buildVendorFieldDefinition - what gets stored", () => {
   });
 
   it("stores new knowledge for a log type with NO bundled order, unrecorded", () => {
-    const stored = buildVendorFieldDefinition(PANOS, "USERID", [
+    // AUTH, not USERID: USERID gained a cited bundled order on 2026-08-25, so
+    // it no longer demonstrates the no-bundled-order case. AUTH is the one the
+    // toolkit deliberately declines to record, which makes it the honest
+    // stand-in - and this is the path that lets an operator supply what the
+    // vendor never published.
+    const stored = buildVendorFieldDefinition(PANOS, "AUTH", [
       "receive_time",
       "serial",
       "type",
@@ -286,7 +304,9 @@ describe("resolveColumnOrder - the precedence", () => {
 
   it("is NULL when neither a stored nor a bundled order exists", () => {
     // Never invent a name: the columns stay positional and are shown unmapped.
-    expect(resolveColumnOrder(PANOS, "USERID", null)).toBeNull();
+    // AUTH is the PAN-OS type with no recorded order (USERID has had one since
+    // 2026-08-25), so it is what "neither stored nor bundled" looks like today.
+    expect(resolveColumnOrder(PANOS, "AUTH", null)).toBeNull();
     expect(resolveColumnOrder("Zscaler", "web", null)).toBeNull();
   });
 });
@@ -371,11 +391,13 @@ describe("describeColumnOrder - decision 3's 'and they are told'", () => {
   });
 
   it("does NOT claim an override when nothing was replaced", () => {
-    const stored = buildVendorFieldDefinition(PANOS, "USERID", ["a", "b"]);
+    // AUTH again: with no bundled order there is nothing an operator order
+    // could have replaced, so the notice must not claim one.
+    const stored = buildVendorFieldDefinition(PANOS, "AUTH", ["a", "b"]);
     const text = describeColumnOrder(
-      present(resolveColumnOrder(PANOS, "USERID", stored)),
+      present(resolveColumnOrder(PANOS, "AUTH", stored)),
     );
-    expect(text).toContain("Your saved Palo Alto Networks USERID");
+    expect(text).toContain("Your saved Palo Alto Networks AUTH");
     expect(text).not.toContain("REPLACES");
   });
 });
