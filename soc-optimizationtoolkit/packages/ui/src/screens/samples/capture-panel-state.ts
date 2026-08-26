@@ -30,7 +30,7 @@ import type {
   TaggedSample,
 } from "@soc/core";
 import { buildCaptureFilter, captureFilterWarning } from "@soc/core";
-import { plannedSamplesFrom, sampleStoreKey } from "./planned-samples";
+import { plannedSamplesFrom, previewLines, sampleStoreKey } from "./planned-samples";
 import type { RecommendedLogType } from "./sample-coverage-state";
 
 /** One log-type checkbox on the capture panel. */
@@ -129,9 +129,6 @@ export interface CaptureView {
   collisions: string[];
 }
 
-/** How many raw lines the preview shows per log type. */
-const PREVIEW_LINES = 3;
-
 /**
  * Project a capture result into what the panel renders.
  *
@@ -185,7 +182,9 @@ export function deriveCaptureView(
   const logTypes = result.splits.map((split) => ({
     logType: split.logType,
     eventCount: split.eventCount,
-    preview: split.rawEvents.slice(0, PREVIEW_LINES),
+    // The shared projection, so this panel and the Lake one show the same
+    // amount of the same unedited text - see previewLines.
+    preview: previewLines(split.rawEvents),
     replacesExisting: existing.has(sampleStoreKey(split.logType)),
   }));
   const collisions = logTypes.filter((l) => l.replacesExisting).map((l) => l.logType);
@@ -199,6 +198,97 @@ export function deriveCaptureView(
     notes: result.notes,
     noDiscriminator: result.noDiscriminator,
     collisions,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// What the commit reports afterwards
+// ---------------------------------------------------------------------------
+
+/**
+ * How the capture panel's COMMIT half reads.
+ *
+ * WHY IT EXISTS AT ALL (2026-08-26 audit). This panel had no outcome state. On
+ * commit it called {@link plannedCaptureSamples} - which silently drops any log
+ * type whose lines parse to no record - and then cleared the result, which
+ * returned the headline to its IDLE sentence: "Capture a short, filtered sample
+ * from this source. Nothing is added until you confirm." That is actively false
+ * the moment after a commit, and it reads identically whether 3 of 3 or 1 of 3
+ * log types reached the store. The Lake panel's header states the rule this
+ * breaks in as many words - "clearing the panel on success would round a partial
+ * haul up to a clean one" - and the two panels commit through the SAME
+ * conversion, so the drop they both have to report is the same drop.
+ *
+ * `unusable` is separate from `partial` for the reason those two are separate
+ * everywhere in this codebase: nothing was stored at all, which is a different
+ * message and a different next move from most-of-it-landed.
+ *
+ * `store-failed` is the third, and the only one that is not about the data: the
+ * write itself refused. It was awaited with no catch, so a rejection rendered as
+ * NOTHING - the button un-disabled and the preview stayed, indistinguishable
+ * from a slow write.
+ */
+export type CaptureCommitStatus =
+  | "idle"
+  | "committing"
+  | "store-failed"
+  | "unusable"
+  | "partial"
+  | "done";
+
+export interface CaptureCommitView {
+  status: CaptureCommitStatus;
+  headline: string;
+}
+
+/** What one commit established, measured against what the capture returned. */
+export interface CaptureCommitOutcome {
+  /** Samples the store was handed - what survived the content-first parse. */
+  stored: number;
+  /**
+   * Log types the CAPTURE returned, which is what `stored` is measured against.
+   * Not the number of ticked checkboxes: the operator asks for log types and the
+   * source supplies what it has, so a tick that produced no events was never a
+   * shortfall in the commit.
+   */
+  returned: number;
+}
+
+/** Project a finished (or refused) commit into what the panel reports. */
+export function deriveCaptureCommitView(
+  outcome: CaptureCommitOutcome | null,
+  committing: boolean,
+  storeError: string | null = null,
+): CaptureCommitView {
+  if (committing) {
+    return { status: "committing", headline: "Adding samples..." };
+  }
+  if (storeError !== null) {
+    // Says nothing about how much landed, because a rejected write does not
+    // report where it stopped. What it does say is that the preview is still on
+    // screen to retry from, since it is.
+    return {
+      status: "store-failed",
+      headline: `The samples could not be saved: ${storeError}. The capture is still here - press "Add these as samples" to try again.`,
+    };
+  }
+  if (outcome === null) return { status: "idle", headline: "" };
+  if (outcome.stored === 0) {
+    return {
+      status: "unusable",
+      headline:
+        "Events came back, but none of them parsed into a usable sample, so nothing was added.",
+    };
+  }
+  if (outcome.stored < outcome.returned) {
+    return {
+      status: "partial",
+      headline: `Added ${outcome.stored} of the ${outcome.returned} log types this capture returned; the rest held nothing this app could parse into a record.`,
+    };
+  }
+  return {
+    status: "done",
+    headline: `Added ${outcome.stored} sample${outcome.stored === 1 ? "" : "s"} from this capture.`,
   };
 }
 

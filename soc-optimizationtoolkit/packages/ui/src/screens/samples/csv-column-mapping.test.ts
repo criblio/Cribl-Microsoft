@@ -1,0 +1,532 @@
+/**
+ * Contract tests for the interactive column-mapping tab's pure state
+ * (vendor-field-definition-plan "Gap 2").
+ *
+ * The three properties the plan makes binding, pinned here as behaviour rather
+ * than as shape:
+ *
+ * 1. PARTIAL IS LEGITIMATE. Naming 2 of 6 columns yields 2 named columns and 4
+ *    still positional - not an error, not a refusal to apply, and above all not
+ *    four deleted columns. The "" contrast test below shows exactly what would
+ *    have happened without the positional fill-in, which is why it exists.
+ * 2. NOTHING IS INVENTED. No name is derived from a value's shape anywhere; an
+ *    unnamed position keeps the core positionalFieldName and is counted as
+ *    unmapped.
+ * 3. AN UNNAMED POSITION SURVIVES THE ROUND TRIP. Apply and the re-parse leave
+ *    it positional, still carrying its value, and still recognisable to
+ *    isHeaderlessCsv so the sample can be resolved again later.
+ *
+ * Duplicate handling is pinned against what core parseCsvWithHeaders ACTUALLY
+ * does (last position with the name wins, the earlier column is lost) rather
+ * than against a rule invented for this tab.
+ */
+
+import { describe, expect, it } from "vitest";
+import type { ParsedSample, TaggedSample } from "@soc/core";
+import {
+  isPositionalFieldName,
+  parseCsvWithHeaders,
+  parseSampleContent,
+} from "@soc/core";
+import { buildTaggedSample } from "./sample-intake-state";
+import {
+  buildFieldPreview,
+  duplicateSentence,
+  isHeaderlessCsvSample,
+  parseHeaderFileText,
+  resolveHeaders,
+  sanitizeColumnName,
+  toResolutionItem,
+} from "./csv-resolution-state";
+import {
+  EMPTY_COLUMN_DRAFTS,
+  buildColumnMappingRows,
+  clearColumnDrafts,
+  columnExamples,
+  columnMappingProgressLabel,
+  deriveColumnMappingSummary,
+  mapperDefinitionSource,
+  resolvedColumnNames,
+  setColumnDraft,
+} from "./csv-column-mapping";
+import type { ColumnDrafts, MappableItem } from "./csv-column-mapping";
+
+// A 6-column headerless feed. The port column repeats a value and the flag
+// column is mostly zeros - the exact shape the design argues about, where one
+// row's value is ambiguous and four rows' values are not.
+const GENERIC_ROWS = [
+  "2026-07-05,10.0.0.1,443,allow,web,0",
+  "2026-07-05,10.0.0.2,80,deny,web,0",
+  "2026-07-05,10.0.0.3,443,allow,web,1",
+  "2026-07-05,10.0.0.4,22,allow,ssh,0",
+];
+
+function headerlessCsvSample(
+  logType: string,
+  rows: string[],
+  sourceName = "feed.csv",
+): TaggedSample {
+  const parsed: ParsedSample = parseSampleContent(rows.join("\n"), {
+    sourceName,
+  });
+  return buildTaggedSample(logType, parsed);
+}
+
+/** The item under test, straight from a real headerless parse. */
+function genericItem() {
+  return toResolutionItem(headerlessCsvSample("Web", GENERIC_ROWS));
+}
+
+/** Build drafts from an index -> typed-text map. */
+function draftsOf(entries: Record<number, string>): ColumnDrafts {
+  let drafts = EMPTY_COLUMN_DRAFTS;
+  for (const [index, text] of Object.entries(entries)) {
+    drafts = setColumnDraft(drafts, Number(index), text);
+  }
+  return drafts;
+}
+
+// ---------------------------------------------------------------------------
+// Drafts
+// ---------------------------------------------------------------------------
+
+describe("setColumnDraft", () => {
+  it("records a typed name at its position without touching the others", () => {
+    const drafts = draftsOf({ 1: "src_ip", 3: "action" });
+    expect(Object.keys(drafts)).toHaveLength(2);
+    expect(drafts[1]).toBe("src_ip");
+    expect(drafts[3]).toBe("action");
+    expect(drafts[0]).toBeUndefined();
+  });
+
+  it("REMOVES the key when the input is cleared, so the position is unmapped again", () => {
+    const drafts = setColumnDraft(draftsOf({ 1: "src_ip" }), 1, "");
+    // Not stored as "" - the position returns to genuinely unnamed.
+    expect(Object.keys(drafts)).toHaveLength(0);
+    expect(Object.prototype.hasOwnProperty.call(drafts, 1)).toBe(false);
+  });
+
+  it("does not mutate the drafts it was given", () => {
+    const before = draftsOf({ 0: "time" });
+    const after = setColumnDraft(before, 1, "src");
+    expect(Object.keys(before)).toHaveLength(1);
+    expect(Object.keys(after)).toHaveLength(2);
+  });
+
+  it("clearColumnDrafts returns to nothing named", () => {
+    expect(Object.keys(clearColumnDrafts())).toHaveLength(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Example values - the affordance
+// ---------------------------------------------------------------------------
+
+describe("columnExamples", () => {
+  it("gives several rows' values for one position, in row order", () => {
+    // The whole point: `443, 80, 443, 22` identifies a port column where a lone
+    // `443` merely hints at one.
+    expect(columnExamples(GENERIC_ROWS, 2)).toEqual(["443", "80", "443", "22"]);
+  });
+
+  it("KEEPS repeats, because the repetition is the signal", () => {
+    // A flag column reads as a flag column precisely because it is mostly one
+    // value; deduping to ["0","1"] would throw that away.
+    expect(columnExamples(GENERIC_ROWS, 5)).toEqual(["0", "0", "1", "0"]);
+  });
+
+  it("yields empty strings for a position no row reaches", () => {
+    expect(columnExamples(GENERIC_ROWS, 99)).toEqual(["", "", "", ""]);
+  });
+
+  it("splits the way the core parser will (quotes stripped, values trimmed)", () => {
+    expect(columnExamples(['"a", b ,"c"'], 1)).toEqual(["b"]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Row derivation
+// ---------------------------------------------------------------------------
+
+describe("buildColumnMappingRows", () => {
+  it("offers EVERY position a name, each carrying its own real values", () => {
+    const rows = buildColumnMappingRows(genericItem(), EMPTY_COLUMN_DRAFTS);
+    expect(rows).toHaveLength(6);
+    expect(rows.map((r) => r.index)).toEqual([0, 1, 2, 3, 4, 5]);
+    expect(rows.map((r) => r.positionalName)).toEqual([
+      "_0",
+      "_1",
+      "_2",
+      "_3",
+      "_4",
+      "_5",
+    ]);
+    expect(rows[1].examples).toEqual([
+      "10.0.0.1",
+      "10.0.0.2",
+      "10.0.0.3",
+      "10.0.0.4",
+    ]);
+  });
+
+  it("NEVER invents a name: an untouched mapping names nothing", () => {
+    const rows = buildColumnMappingRows(genericItem(), EMPTY_COLUMN_DRAFTS);
+    // Values that look exactly like IP addresses, dates, ports and verbs, and
+    // still not one guessed name among them.
+    expect(rows.filter((r) => r.mapped)).toHaveLength(0);
+    expect(rows.every((r) => r.name === "")).toBe(true);
+  });
+
+  it("cleans a typed name with the SAME rules as the pasted header row", () => {
+    const rows = buildColumnMappingRows(
+      genericItem(),
+      draftsOf({ 0: " dst-port ", 1: '"src ip"', 2: "_leadus" }),
+    );
+    expect(rows[0].name).toBe("dst_port");
+    expect(rows[1].name).toBe("src_ip");
+    expect(rows[2].name).toBe("leadus");
+    // ...and they are the same rules because it is the same function.
+    expect(parseHeaderFileText("dst-port")).toEqual([
+      sanitizeColumnName("dst-port"),
+    ]);
+  });
+
+  it("keeps the raw draft so the input never fights the operator mid-word", () => {
+    const rows = buildColumnMappingRows(genericItem(), draftsOf({ 0: "src " }));
+    expect(rows[0].draft).toBe("src ");
+    expect(rows[0].name).toBe("src");
+  });
+
+  it("marks a name that sanitizes away as invalid and leaves the position unmapped", () => {
+    const rows = buildColumnMappingRows(
+      genericItem(),
+      draftsOf({ 0: "!!!", 1: "   " }),
+    );
+    expect(rows[0].invalid).toBe(true);
+    expect(rows[0].mapped).toBe(false);
+    expect(rows[0].name).toBe("");
+    // Whitespace alone is not an error, it is just an untouched position.
+    expect(rows[1].invalid).toBe(false);
+    expect(rows[1].mapped).toBe(false);
+  });
+
+  it("an operator CANNOT type a name that collides with the positional namespace", () => {
+    // CHANGED 2026-08-25. This used to rely on sanitizeColumnName stripping the
+    // leading underscore, so "_3" became the real name "3". That stripping had
+    // to go: a saved PARTIAL definition round-trips through the pasted-header
+    // textarea carrying `_N` for every position nobody named, and turning those
+    // placeholders into names "0", "1", "2" made a half-finished definition
+    // report that it named every column - and applying it would have made the
+    // sample stop looking headerless, so it could never be reopened to finish.
+    // Caught in the live preview, not by a test: every pinned round trip used a
+    // FULL vendor dictionary, which contains no placeholders.
+    //
+    // The guard now lives where the text really is operator input. Typing the
+    // positional token means UNNAMED, which is what it looks like.
+    const rows = buildColumnMappingRows(genericItem(), draftsOf({ 0: "_3" }));
+    expect(rows[0].name).toBe("");
+    expect(rows[0].mapped).toBe(false);
+    // Still the property that matters: a MAPPED row's name is never positional,
+    // so the shared preview can decide "unmapped" from the name alone.
+    const named = buildColumnMappingRows(genericItem(), draftsOf({ 0: "src_ip" }));
+    expect(named[0].mapped).toBe(true);
+    expect(isPositionalFieldName(named[0].name)).toBe(false);
+    expect(isPositionalFieldName(named[0].positionalName)).toBe(true);
+  });
+
+  it("round-trips a PARTIAL definition through the header-row text unchanged", () => {
+    // The defect the live preview surfaced, pinned end to end: name two of five
+    // positions, render the resolved array as pasted-header text the way the
+    // pre-fill seed does, parse it back, and the placeholders must survive as
+    // placeholders. If they do not, reopening reports full coverage and the
+    // sample can never be finished.
+    const rows = buildColumnMappingRows(
+      { columnCount: 5, firstRows: ["a,b,c,d,e"] },
+      draftsOf({ 2: "log_type", 3: "action" }),
+    );
+    const resolved = resolvedColumnNames(rows);
+    expect(resolved).toEqual(["_0", "_1", "log_type", "action", "_4"]);
+
+    const seeded = parseHeaderFileText(resolved.join(String.fromCharCode(10)));
+    expect(seeded).toEqual(resolved);
+    // And the placeholders still READ as unnamed on the way back in.
+    expect(seeded.filter((n) => isPositionalFieldName(n))).toHaveLength(3);
+  });
+
+  it("still returns one row per position when the sample has no example rows", () => {
+    const bare: MappableItem = { columnCount: 3, firstRows: [] };
+    const rows = buildColumnMappingRows(bare, EMPTY_COLUMN_DRAFTS);
+    expect(rows).toHaveLength(3);
+    expect(rows[0].examples).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Summary: partial naming is the normal case
+// ---------------------------------------------------------------------------
+
+describe("deriveColumnMappingSummary", () => {
+  it("counts a PARTIAL definition as partial, not as broken", () => {
+    const rows = buildColumnMappingRows(
+      genericItem(),
+      draftsOf({ 1: "src_ip", 3: "action" }),
+    );
+    const summary = deriveColumnMappingSummary(rows);
+    expect(summary).toEqual({
+      namedCount: 2,
+      unnamedCount: 4,
+      totalCount: 6,
+      duplicateNames: [],
+      invalidPositions: [],
+      ready: true,
+    });
+  });
+
+  it("is not ready with nothing named (applying would equal skipping)", () => {
+    const rows = buildColumnMappingRows(genericItem(), EMPTY_COLUMN_DRAFTS);
+    const summary = deriveColumnMappingSummary(rows);
+    expect(summary.namedCount).toBe(0);
+    expect(summary.unnamedCount).toBe(6);
+    expect(summary.ready).toBe(false);
+  });
+
+  it("reports each duplicated name once and every colliding position", () => {
+    const rows = buildColumnMappingRows(
+      genericItem(),
+      draftsOf({ 1: "src", 3: "src", 4: "app", 5: "app" }),
+    );
+    const summary = deriveColumnMappingSummary(rows);
+    expect(summary.duplicateNames).toEqual(["src", "app"]);
+    expect(rows.filter((r) => r.duplicate).map((r) => r.index)).toEqual([
+      1, 3, 4, 5,
+    ]);
+    // The colliding positions are still counted as named - the collapse is
+    // surfaced, not prevented by silently discarding one of them.
+    expect(summary.namedCount).toBe(4);
+    expect(summary.ready).toBe(true);
+  });
+
+  it("treats names that only collide AFTER cleaning as duplicates", () => {
+    const rows = buildColumnMappingRows(
+      genericItem(),
+      draftsOf({ 0: "src ip", 1: "src-ip" }),
+    );
+    // Both clean to src_ip, so both would key the same field.
+    expect(deriveColumnMappingSummary(rows).duplicateNames).toEqual(["src_ip"]);
+  });
+
+  it("lists the positions whose typed text sanitized away", () => {
+    const rows = buildColumnMappingRows(
+      genericItem(),
+      draftsOf({ 0: "ok", 2: "!!!", 4: "###" }),
+    );
+    const summary = deriveColumnMappingSummary(rows);
+    expect(summary.invalidPositions).toEqual([2, 4]);
+    expect(summary.namedCount).toBe(1);
+  });
+});
+
+describe("columnMappingProgressLabel", () => {
+  it("says how much of the definition is covered", () => {
+    const rows = buildColumnMappingRows(
+      genericItem(),
+      draftsOf({ 1: "src_ip", 3: "action" }),
+    );
+    expect(columnMappingProgressLabel(deriveColumnMappingSummary(rows))).toBe(
+      "2 of 6 columns named, 4 stay positional.",
+    );
+  });
+
+  it("says nothing is named when nothing is", () => {
+    const rows = buildColumnMappingRows(genericItem(), EMPTY_COLUMN_DRAFTS);
+    expect(
+      columnMappingProgressLabel(deriveColumnMappingSummary(rows)),
+    ).toContain("No columns named yet");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The tab as a supplier of a definition, and the warning that MOVED off it
+// ---------------------------------------------------------------------------
+
+describe("mapperDefinitionSource", () => {
+  // CHANGED 2026-08-26. The duplicate sentence used to be built here as well
+  // as on the mapper's own grid, so this tab said it twice and the two PASTED
+  // tabs - which ran no duplicate check whatsoever - said it never. It now
+  // lives once, on the shared preview, where every tab reads it. Row-level
+  // marking stays here: only this tab has inputs to mark.
+  it("no longer builds the duplicate sentence - the shared preview does", () => {
+    const item = genericItem();
+    const source = mapperDefinitionSource(item, draftsOf({ 1: "src", 3: "src" }));
+    expect(source.label).toBe("2 of 6 columns named, 4 stay positional.");
+    // Not lost, relocated: the same duplicate, reported once, on the surface
+    // the header-row and feed-config tabs render into as well.
+    expect(duplicateSentence(buildFieldPreview(source.headers, item))).toBe(
+      "Duplicate name: src - each keeps only the last column that uses it, " +
+        "so only 5 of the 6 columns reach the sample.",
+    );
+    // And the row marking that only this tab can do is untouched.
+    const rows = buildColumnMappingRows(item, draftsOf({ 1: "src", 3: "src" }));
+    expect(rows.filter((r) => r.duplicate).map((r) => r.index)).toEqual([1, 3]);
+  });
+
+  it("still reports an unusable name, which only this tab can see", () => {
+    // The operator typed something; no other tab has a per-position input for
+    // it to have been typed into, so this one stays where it is.
+    const source = mapperDefinitionSource(
+      genericItem(),
+      draftsOf({ 0: "ts", 2: "!!!" }),
+    );
+    expect(source.label).toBe(
+      "1 of 6 columns named, 5 stay positional. Unusable name at _2 - those " +
+        "columns stay unmapped.",
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Resolved names: one per column, positional where unnamed
+// ---------------------------------------------------------------------------
+
+describe("resolvedColumnNames", () => {
+  it("fills every unnamed position with its positional name", () => {
+    const rows = buildColumnMappingRows(
+      genericItem(),
+      draftsOf({ 1: "src_ip", 3: "action" }),
+    );
+    expect(resolvedColumnNames(rows)).toEqual([
+      "_0",
+      "src_ip",
+      "_2",
+      "action",
+      "_4",
+      "_5",
+    ]);
+  });
+
+  it("always produces exactly one name per column, so this path never mismatches", () => {
+    const item = genericItem();
+    const rows = buildColumnMappingRows(item, draftsOf({ 0: "time" }));
+    expect(resolvedColumnNames(rows)).toHaveLength(item.columnCount);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// ROUND TRIP through the real core parser
+// ---------------------------------------------------------------------------
+
+describe("apply round trip (core parseCsvWithHeaders)", () => {
+  it("names the mapped columns and leaves the rest POSITIONAL WITH THEIR VALUES", () => {
+    const item = genericItem();
+    const rows = buildColumnMappingRows(
+      item,
+      draftsOf({ 1: "src_ip", 3: "action" }),
+    );
+    const resolved = resolveHeaders(item, resolvedColumnNames(rows));
+
+    const names = resolved.parsed.fields.map((f) => f.name);
+    // Nothing lost: 6 columns in, 6 fields out.
+    expect(names).toHaveLength(6);
+    expect(names).toEqual(["_0", "src_ip", "_2", "action", "_4", "_5"]);
+
+    const first = resolved.parsed.records[0];
+    expect(first.src_ip).toBe("10.0.0.1");
+    expect(first.action).toBe("allow");
+    // The unnamed positions still carry their data.
+    expect(first._2).toBe("443");
+    expect(first._5).toBe("0");
+    // Re-keyed onto the same log type, still CSV.
+    expect(resolved.logType).toBe("Web");
+    expect(resolved.format).toBe("csv");
+  });
+
+  it("leaves the re-parsed sample RESOLVABLE AGAIN, since most columns are still unnamed", () => {
+    const item = genericItem();
+    const rows = buildColumnMappingRows(item, draftsOf({ 1: "src_ip" }));
+    const resolved = resolveHeaders(item, resolvedColumnNames(rows));
+    // 5 of 6 fields are still positional, so the dialog will offer itself again
+    // and the operator can finish the definition later.
+    expect(isHeaderlessCsvSample(resolved)).toBe(true);
+    const again = toResolutionItem(resolved);
+    expect(again.columnCount).toBe(6);
+    const reRows = buildColumnMappingRows(again, EMPTY_COLUMN_DRAFTS);
+    expect(deriveColumnMappingSummary(reRows).unnamedCount).toBe(6);
+  });
+
+  // RETARGETED 2026-08-26 at core, where the behaviour it documents lives.
+  // This used to assert through resolveHeaders, which forwarded blanks
+  // verbatim; resolveHeaders now fills them in (applicableHeaders), so the
+  // blank-deletes-the-column FACT survives only one call deeper. Asserting it
+  // against core keeps the reason resolvedColumnNames pads - and the second
+  // half pins that the UI path can no longer walk into it.
+  it("CONTRAST: blank names would delete the columns nobody named", () => {
+    // parseCsvWithHeaders discards the value under an empty header, so a
+    // partial definition expressed with blanks silently destroys 4 of 6.
+    const item = genericItem();
+    const withBlanks = parseCsvWithHeaders(
+      item.csvContent,
+      ["", "src_ip", "", "action", "", ""],
+      { sourceName: "feed.csv" },
+    );
+    expect(withBlanks.fields.map((f) => f.name)).toEqual(["src_ip", "action"]);
+    expect(withBlanks.records[0]._2).toBeUndefined();
+
+    // ...and resolveHeaders will not hand core such an array. Same input, every
+    // column kept, each unnamed one carrying the positional name the preview
+    // showed for it.
+    const throughUi = resolveHeaders(item, ["", "src_ip", "", "action", "", ""]);
+    expect(throughUi.parsed.fields.map((f) => f.name)).toEqual([
+      "_0",
+      "src_ip",
+      "_2",
+      "action",
+      "_4",
+      "_5",
+    ]);
+    expect(throughUi.parsed.records[0]._2).toBe("443");
+  });
+
+  it("duplicate names COLLAPSE - the later position wins and the earlier column is lost", () => {
+    const item = genericItem();
+    const rows = buildColumnMappingRows(
+      item,
+      draftsOf({ 1: "src", 3: "src" }),
+    );
+    const resolved = resolveHeaders(item, resolvedColumnNames(rows));
+    const names = resolved.parsed.fields.map((f) => f.name);
+    // 6 columns, 5 fields: two positions keyed one field.
+    expect(names).toHaveLength(5);
+    expect(names.filter((n) => n === "src")).toHaveLength(1);
+    // Position 3 won; position 1's 10.0.0.1 is gone. Pinned as the REASON the
+    // duplicate warning exists, not as behaviour anyone wants.
+    expect(resolved.parsed.records[0].src).toBe("allow");
+    expect(deriveColumnMappingSummary(rows).duplicateNames).toEqual(["src"]);
+  });
+
+  it("naming ALL of them leaves nothing positional", () => {
+    const item = genericItem();
+    const rows = buildColumnMappingRows(
+      item,
+      draftsOf({
+        0: "ts",
+        1: "src_ip",
+        2: "dport",
+        3: "action",
+        4: "app",
+        5: "flag",
+      }),
+    );
+    const summary = deriveColumnMappingSummary(rows);
+    expect(summary.unnamedCount).toBe(0);
+    const resolved = resolveHeaders(item, resolvedColumnNames(rows));
+    expect(resolved.parsed.fields.map((f) => f.name)).toEqual([
+      "ts",
+      "src_ip",
+      "dport",
+      "action",
+      "app",
+      "flag",
+    ]);
+    expect(isHeaderlessCsvSample(resolved)).toBe(false);
+  });
+});

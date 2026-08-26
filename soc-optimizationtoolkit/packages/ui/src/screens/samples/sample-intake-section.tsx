@@ -27,14 +27,50 @@
  *   - REMOVE a tagged sample.
  *
  * UNIT 12 EXTENSION (ENG-16/17, GUI-07): when an intaken sample is detected as
- * headerless positional CSV (isHeaderlessCsvSample), a CSV header-resolution
- * affordance is surfaced on that chip and the CsvHeaderDialog opens. Across a
- * MULTI-FILE batch, EVERY headerless CSV is QUEUED for its own resolution turn
- * (the legacy renderer dropped the rest of the batch after the first - fixed and
- * pinned in csv-resolution-state). Applying resolved headers re-parses the
- * sample via the core parseCsvWithHeaders and re-keys its TaggedSample; skipping
- * keeps the positional _N names. All queue/preview/mismatch decisions are the
- * pure csv-resolution-state helpers.
+ * headerless positional CSV (isHeaderlessCsvSample), the CsvHeaderDialog opens
+ * unasked. Across a MULTI-FILE batch, EVERY headerless CSV is QUEUED for its own
+ * turn (the legacy renderer dropped the rest of the batch after the first -
+ * fixed and pinned in csv-resolution-state). Applying re-parses the sample via
+ * the core parseCsvWithHeaders and re-keys its TaggedSample; skipping keeps the
+ * positional _N names. All queue/preview/mismatch decisions are the pure
+ * csv-resolution-state helpers.
+ *
+ * THE CHIP'S OWN OFFER ASKS A DIFFERENT QUESTION - firstUnnamedColumn, not
+ * isHeaderlessCsvSample. Volunteering the dialog is for a sample that arrived
+ * with no header row at all; the chip button is for one with ANY column still
+ * unnamed, which is what a partial definition leaves. The two were the same
+ * predicate, so applying a definition that covered most of the columns took the
+ * button and its hint away with the job unfinished.
+ *
+ * SAMPLES ALSO ARRIVE FROM SIBLING PANELS, and until 2026-08-25 they arrived
+ * WITHOUT that offer. The capture panel and the Lake panel sit ABOVE this
+ * section in IntegrateScreen and write to the SAME store, but the resolution
+ * queue is state in here, so nothing they commit could ever reach it: a Lake
+ * fetch of a headerless feed landed silently and the operator was never asked to
+ * name its columns ("fetching samples from Cribl Lake seems to work but when I
+ * click add samples it doesn't give me the preview to modify them"). The
+ * arrivalEvent prop is the seam that closes it - see its doc below.
+ *
+ * COLUMN ORDERS ARE REMEMBERED (vendor-field-definition plan, Gap 3): before the
+ * dialog opens, this section reads any order already known for the sample's
+ * VENDOR + LOG TYPE and hands it over as the dialog's pre-fill, so a feed named
+ * once is not asked about again - and a known vendor arrives pre-filled for the
+ * operator to CONFIRM against real values rather than to supply from scratch.
+ * On apply the order is remembered, EXCEPT when it is the bundled one the
+ * operator merely confirmed. The vendor is named by the curated
+ * detectVendorIdentity from the selected solution - the solution names the
+ * vendor, it never keys the order. Every decision is @soc/core
+ * vendor-field-definitions; the load/save loop is useVendorColumnOrder.
+ *
+ * AND THE PROVENANCE IS VISIBLE AFTERWARDS (2026-08-26). The notice reached the
+ * dialog and stopped there, so once the dialog closed a sample named from a
+ * bundled dictionary, one named from the operator's own stored order, and one
+ * typed by hand from real values looked identical on the chip - a later reader
+ * could not tell whether anyone had ever confirmed those names against values.
+ * SampleChipColumnOrder renders the same core sentence on the chip, and only
+ * when the sample's fields actually match the order it describes. The dialog
+ * also gained the control the notice implied: `forget`, documented as the way
+ * back from a mistaken paste, had been written and wired to nothing.
  *
  * The store is keyed by log type with replace-by-logType semantics, so tagging
  * the same log type twice overwrites it (one chip per log type). The pure
@@ -42,8 +78,9 @@
  * sample-intake-state.ts; this component only renders and drives store IO.
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import type { TaggedSample, TaggedSampleStore } from "@soc/core";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { detectVendorIdentity } from "@soc/core";
+import type { ContentCache, TaggedSample, TaggedSampleStore } from "@soc/core";
 import {
   chipFromTagged,
   dedupeByLogType,
@@ -62,7 +99,9 @@ import { CsvHeaderDialog } from "./csv-header-dialog";
 import {
   advanceQueue,
   buildResolutionQueue,
+  columnOrderMatchesSample,
   currentItem,
+  firstUnnamedColumn,
   isHeaderlessCsvSample,
   isQueueDone,
   queuePosition,
@@ -70,10 +109,41 @@ import {
   singleItemQueue,
 } from "./csv-resolution-state";
 import type { CsvResolutionQueue } from "./csv-resolution-state";
+import { useVendorColumnOrder } from "./use-vendor-column-order";
+
+/**
+ * One batch of samples a SIBLING panel just wrote to the store, announced to
+ * this section so it can react once (see SampleIntakeSectionProps.arrivalEvent).
+ */
+export interface SampleArrivalEvent {
+  /**
+   * Bumped ONCE per commit by the parent. It is what makes this an event rather
+   * than a state: the section remembers the last nonce it acted on, so a
+   * re-render carrying the same batch does nothing.
+   */
+  nonce: number;
+  /** The samples that batch wrote, in acquisition order. */
+  samples: readonly TaggedSample[];
+}
 
 export interface SampleIntakeSectionProps {
   /** The tagged-sample store this section reads and writes. */
   store: TaggedSampleStore;
+  /**
+   * The selected Sentinel solution's name, used ONLY to name the vendor a
+   * column order belongs to (via the curated detectVendorIdentity). The order
+   * itself is keyed to VENDOR + LOG TYPE, never to the solution - a PAN-OS
+   * TRAFFIC column order is true whichever solution is selected. With no
+   * solution, or an un-curated one, no vendor can be named and nothing is
+   * remembered: absent is absent.
+   */
+  solutionName?: string;
+  /**
+   * Where remembered column orders live (ports.contentCache). Undefined in a
+   * shell that binds no cache - the dialog then still pre-fills from the
+   * BUNDLED orders and simply remembers nothing.
+   */
+  definitionCache?: ContentCache;
   /**
    * Report the current tagged-sample list after every change (initial load,
    * add, rename, remove) so the page can derive samplesProvided for the
@@ -88,12 +158,38 @@ export interface SampleIntakeSectionProps {
    * re-keys the sample, the callback re-keys everything else.
    */
   onRenameLogType?: (from: string, to: string) => void;
+  /**
+   * Samples that landed in the store through a SIBLING acquisition panel - the
+   * capture panel or the Lake panel - rather than through the paste/upload
+   * controls in here.
+   *
+   * WHY THE PROP EXISTS. Paste and upload own the whole path from "a sample was
+   * tagged" to "the operator is asked to name its positional columns", because
+   * the resolution queue is state in this component. The acquisition panels are
+   * SIBLINGS rendered above this section, so they can reach the store and not
+   * the queue: they committed headerless CSV and offered nothing, which is the
+   * live defect this closes. The parent cannot fix that by lifting the queue -
+   * the dialog belongs beside the chips it edits - so it announces the arrival
+   * instead and this section does what upload already does with a batch.
+   *
+   * WHY AN EVENT RATHER THAN A LIST. Handed the current sample list, this
+   * section would have to guess which entries are new, and every unrelated
+   * refresh of that list would look like an arrival - re-opening the dialog on
+   * a refresh is worse than never opening it. A nonce plus its payload,
+   * consumed once against a remembered nonce, is the shape this screen already
+   * uses for exactly this (MappingReviewSection's renameEvent and
+   * dropUnneededEvent), so it is reused rather than reinvented.
+   */
+  arrivalEvent?: SampleArrivalEvent;
 }
 
 export function SampleIntakeSection({
   store,
+  solutionName = "",
+  definitionCache,
   onSamplesChange,
   onRenameLogType,
+  arrivalEvent,
 }: SampleIntakeSectionProps) {
   const [samples, setSamples] = useState<TaggedSample[] | null>(null);
   const [loadError, setLoadError] = useState("");
@@ -114,8 +210,39 @@ export function SampleIntakeSection({
   // A multi-file batch queues EVERY headerless CSV; the per-chip affordance
   // opens a single-item queue. null = no dialog.
   const [csvQueue, setCsvQueue] = useState<CsvResolutionQueue | null>(null);
+  // Bumped when the operator FORGETS a saved column order, purely to re-key the
+  // dialog. The dialog seeds its header box once at mount (deliberately - a
+  // late load must not overwrite typing), so the only honest way to show the
+  // bundled order that now answers is to give it a fresh dialog. Discarding
+  // what was typed is the point: forgetting is the way back from a mistaken
+  // paste, and the paste is what is being taken back.
+  const [prefillEpoch, setPrefillEpoch] = useState(0);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  // The item the dialog is (about to be) resolving, and the remembered column
+  // order for ITS vendor + log type. The vendor comes from ONE place - the
+  // curated detectVendorIdentity - which is what lets the store key on a
+  // canonical name rather than on whatever the solution happened to be called.
+  const csvItem = csvQueue === null ? null : currentItem(csvQueue);
+  const vendor = useMemo(
+    () => detectVendorIdentity(solutionName)?.vendor ?? "",
+    [solutionName],
+  );
+  const columnOrder = useVendorColumnOrder(
+    definitionCache,
+    vendor,
+    csvItem?.logType ?? "",
+  );
+  // Destructured so the apply callback depends on the STABLE persister rather
+  // than on the state object, which is rebuilt every render.
+  const { remember: rememberColumnOrder, forget: forgetColumnOrder } =
+    columnOrder;
+
+  const forgetSavedOrder = useCallback(() => {
+    forgetColumnOrder();
+    setPrefillEpoch((epoch) => epoch + 1);
+  }, [forgetColumnOrder]);
 
   // Keep the reporter callback in a ref so the load effect does not re-run when
   // the parent passes a fresh callback identity each render.
@@ -144,6 +271,36 @@ export function SampleIntakeSection({
   useEffect(() => {
     void load();
   }, [load]);
+
+  // ---- Arrival from a sibling acquisition panel (the Lake/capture seam) ----
+  // Seeded with the CURRENT nonce, not with -1: this section is remounted by
+  // key when the solution changes, and an event already consumed before that
+  // remount must not re-open its dialog on the way back.
+  const lastArrivalNonce = useRef<number>(arrivalEvent?.nonce ?? -1);
+  useEffect(() => {
+    if (arrivalEvent === undefined) {
+      return;
+    }
+    if (arrivalEvent.nonce === lastArrivalNonce.current) {
+      return;
+    }
+    lastArrivalNonce.current = arrivalEvent.nonce;
+    // RE-READ THE STORE FIRST. This section holds its own copy of the list and
+    // a sibling just wrote behind its back, so that copy is now short by
+    // exactly the arrivals. Leaving it short would not merely hide chips: the
+    // next write from in here - applying resolved headers, a rename, a remove -
+    // rebuilds the reported list from this copy, so it would report the
+    // arrivals away again while they sat in the store.
+    void load();
+    // Then offer resolution for the headerless arrivals, ONE TURN EACH, which
+    // is the batch behaviour a multi-file upload has had since Unit 12. A batch
+    // with nothing headerless in it builds a queue that is already done, and
+    // opens nothing.
+    const queue = buildResolutionQueue(arrivalEvent.samples);
+    if (!isQueueDone(queue)) {
+      setCsvQueue(queue);
+    }
+  }, [arrivalEvent, load]);
 
   // Persist an upserted sample and reflect it in the list.
   const persistUpsert = useCallback(
@@ -307,6 +464,12 @@ export function SampleIntakeSection({
         const resolved = resolveHeaders(item, headers);
         await store.upsert(resolved);
         commit(upsertSample(samples ?? [], resolved));
+        // REMEMBER the order for this vendor + log type, so the same feed
+        // acquired next week is not asked again. A bundled order the operator
+        // merely confirmed stores nothing - remember() refuses it, because the
+        // app supplied those names and assent is not knowledge. Persisting is
+        // fire-and-forget: a failed write must never fail the apply.
+        rememberColumnOrder(headers);
       } catch (err) {
         setUploadError(`Header resolution failed: ${String(err)}`);
       } finally {
@@ -314,7 +477,7 @@ export function SampleIntakeSection({
       }
       advanceCsvQueue();
     },
-    [csvQueue, store, samples, commit, advanceCsvQueue],
+    [csvQueue, store, samples, commit, advanceCsvQueue, rememberColumnOrder],
   );
 
   return (
@@ -421,7 +584,15 @@ export function SampleIntakeSection({
             const rows = fieldRows(sample.parsed);
             const preview = rawPreviewLines(sample);
             const isRenaming = renaming?.from === sample.logType;
-            const headerless = isHeaderlessCsvSample(sample);
+            // "Are any columns still unnamed?", NOT "did this arrive with no
+            // header row?". The second question is right for volunteering the
+            // dialog on intake and wrong for the chip: it needs a MAJORITY of
+            // positional fields, so applying a definition that covered most of
+            // the columns removed the affordance to finish the rest.
+            // "" when every column has a name. Naming the FIRST one that does
+            // not lets the hint point at a column really in this sample rather
+            // than illustrating with a `_0` that may already be named.
+            const firstUnnamed = firstUnnamedColumn(sample);
             return (
               <div className="sample-chip" key={sample.logType}>
                 <div className="sample-chip-head">
@@ -473,7 +644,7 @@ export function SampleIntakeSection({
                   </span>
                   {!isRenaming && (
                     <span className="sample-chip-actions">
-                      {headerless && (
+                      {firstUnnamed !== "" && (
                         <button
                           className="run-button"
                           onClick={() =>
@@ -482,7 +653,7 @@ export function SampleIntakeSection({
                           disabled={busy}
                           title="Name the positional CSV columns"
                         >
-                          Resolve headers
+                          Name columns
                         </button>
                       )}
                       <button
@@ -508,11 +679,28 @@ export function SampleIntakeSection({
                     </span>
                   )}
                 </div>
-                {headerless && !isRenaming && (
+                {firstUnnamed !== "" && !isRenaming && (
                   <p className="field-hint">
-                    Headerless CSV: columns are positional (_0, _1, ...). Resolve
-                    headers to name them for accurate field mapping.
+                    Some columns are still unnamed ({firstUnnamed} and so on).
+                    Name them so the gap analysis can match them to the
+                    destination schema.
                   </p>
+                )}
+                {/* WHERE THESE COLUMN NAMES CAME FROM. Without it, a sample
+                    named from a bundled vendor dictionary, one named from the
+                    operator's own remembered order, and one typed by hand from
+                    real values are indistinguishable afterwards - so a later
+                    reader seeing `receive_time / src / dst` cannot tell whether
+                    anyone ever confirmed those names against values, which is
+                    exactly the off-by-one the preview surface exists to expose.
+                    core describeColumnOrder returns plain text for precisely
+                    this second caller. */}
+                {!isRenaming && (
+                  <SampleChipColumnOrder
+                    cache={definitionCache}
+                    vendor={vendor}
+                    sample={sample}
+                  />
                 )}
                 {isRenaming && renameError !== "" && (
                   <p className="field-hint">{renameError}</p>
@@ -561,21 +749,81 @@ export function SampleIntakeSection({
       )}
 
       {/* CSV header-resolution dialog (Unit 12). Keyed by queue index so each
-          queued file gets a fresh dialog (transient tab/paste state resets). */}
+          queued file gets a fresh dialog (transient tab/paste state resets).
+          HELD BACK until the remembered column order for this item's vendor +
+          log type has been read: the dialog seeds its header box ONCE at mount,
+          so opening before the read lands would show an empty box and then be
+          unable to fill it without overwriting whatever the operator had
+          started typing. The wait is one KV read, and only when a cache is
+          bound and the scope can be named. */}
       {csvQueue !== null &&
-        (() => {
-          const item = currentItem(csvQueue);
-          return item === null ? null : (
-            <CsvHeaderDialog
-              key={csvQueue.index}
-              item={item}
-              position={queuePosition(csvQueue)}
-              onApply={(headers) => void applyCsvHeaders(headers)}
-              onSkip={advanceCsvQueue}
-              busy={busy}
-            />
-          );
-        })()}
+        !columnOrder.loading &&
+        csvItem !== null && (
+          <CsvHeaderDialog
+            key={`${csvQueue.index}-${prefillEpoch}`}
+            item={csvItem}
+            position={queuePosition(csvQueue)}
+            onApply={(headers) => void applyCsvHeaders(headers)}
+            onSkip={advanceCsvQueue}
+            busy={busy}
+            {...(columnOrder.resolved === null
+              ? {}
+              : {
+                  prefill: {
+                    columns: columnOrder.resolved.columns,
+                    notice: columnOrder.notice,
+                  },
+                })}
+            {...(columnOrder.resolved?.source === "operator"
+              ? // Only a STORED order can be forgotten. Offering the control for
+                // a bundled pre-fill would be a button that does nothing: with
+                // nothing stored, the bundled order is already what answers.
+                { onForgetSavedOrder: forgetSavedOrder }
+              : {})}
+          />
+        )}
     </div>
+  );
+}
+
+/**
+ * The provenance line on one chip: where this sample's column names came from.
+ *
+ * ITS OWN COMPONENT because it needs a hook per sample - the remembered order is
+ * scoped to VENDOR + LOG TYPE, and the chips are a list. The section's own
+ * useVendorColumnOrder is scoped to the queued item and cannot answer for a chip
+ * that is not in the dialog.
+ *
+ * IT STAYS SILENT UNLESS IT MATCHES. A remembered or bundled order exists for a
+ * scope whether or not THIS sample was ever named from it, so
+ * columnOrderMatchesSample checks that the sample really carries those names
+ * before attributing them. Captioning a hand-typed sample with somebody else's
+ * provenance would be the same failure as inventing a column name - a confident
+ * wrong answer where an honest silence was available.
+ */
+function SampleChipColumnOrder({
+  cache,
+  vendor,
+  sample,
+}: {
+  cache: ContentCache | undefined;
+  vendor: string;
+  sample: TaggedSample;
+}) {
+  const { resolved, notice, loading } = useVendorColumnOrder(
+    cache,
+    vendor,
+    sample.logType,
+  );
+  if (
+    loading ||
+    resolved === null ||
+    notice === "" ||
+    !columnOrderMatchesSample(resolved.columns, sample)
+  ) {
+    return null;
+  }
+  return (
+    <p className="field-hint sample-chip-provenance">Column names: {notice}</p>
   );
 }

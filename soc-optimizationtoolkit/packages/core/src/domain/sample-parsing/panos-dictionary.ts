@@ -23,6 +23,50 @@
  *              byte-for-byte identical. That numeric-id map is DEDUPLICATED here
  *              to a single {@link PANOS_LOG_TYPES}.
  *
+ * FOUR ORDERS ADDED 2026-08-25 - AUDIT, CORRELATION, IPTAG, USERID. They were
+ * measured PRESENT on a live Cribl Lake dataset with no column order, so they
+ * parsed to `_0.._N` forever. THE RULE APPLIED, and the reason this took
+ * citations rather than recollection: a WRONG order is far worse than none. It
+ * mislabels every field after the first mistake, and those names drive DCR
+ * mappings and generated pipelines downstream - a positional `_7` an operator
+ * can see is unfinished beats a confident `dst_ip` that is really the user
+ * field. So each order below is TRANSCRIBED from Palo Alto's published "Format:"
+ * line, never inferred from sample values and never borrowed from a sibling log
+ * type. Per-entry citations sit beside each entry.
+ *
+ * Each of the four was confirmed FOUR ways before it was written down:
+ *   1. the PAN-OS 11.0 admin guide page cited in the header above,
+ *   2. the current NGFW guide at docs.paloaltonetworks.com/ngfw/administration/
+ *      monitoring/use-syslog-for-monitoring/syslog-field-descriptions/...,
+ *   3. a SECOND PAN-OS version of the same page (11.1, 10.2 or 9.1), and
+ *   4. Palo Alto's own fixture data in elastic/integrations
+ *      (packages/panw/data_stream/panos/_dev/test/pipeline/
+ *      test-panw-panos-{userid,ip-tag,correlated-events,audit}-sample.log),
+ *      whose placeholder values literally spell the field name at the index the
+ *      doc predicts - `...,vsys-name,d-name,vsys-id,...` for IPTAG,
+ *      `...,o-name,o-id,evidence` for CORRELATION. Those fixture lines are the
+ *      real sample lines the tests assert against.
+ *
+ * AUTH IS DELIBERATELY STILL ABSENT. It is present on the live dataset and it is
+ * in the {@link isPanosFormat} allow-list, but Palo Alto publishes NO log type
+ * called AUTH - the syslog-field-descriptions index has 17 log-type pages and
+ * none of them is AUTH - and no vendor fixture emits one. It is plausibly an
+ * abbreviation of AUTHENTICATION or a SYSTEM subtype that leaked into the type
+ * position, and choosing between those guesses is exactly the invention this
+ * file refuses. Reusing AUTHENTICATION's order for it would be borrowing another
+ * log type's order, which is the same mistake wearing a plausible hat. AUTH
+ * therefore still resolves to `undefined` and parses positionally, ON PURPOSE,
+ * and a test pins that so the decision stays visible instead of being forgotten.
+ *
+ * ONE THIRD-PARTY DISAGREEMENT, ADJUDICATED. syslog-ng's scl/paloalto/panos.conf
+ * inserts TWO extra `future_use` columns into USERID between `factorno` and
+ * `ugflags`, which would shift every USERID column from index 30 on. Palo Alto's
+ * own pages for 9.1, 11.0 and 11.1 all run factorno -> ugflags -> userbysource
+ * with nothing between, and the vendor's USERID fixture carries `0x80000000` -
+ * a flags value - at index 30, exactly where the doc puts User Group Flags and
+ * where syslog-ng would put a placeholder. The vendor doc wins; the fixture is
+ * why we can say so rather than merely prefer it.
+ *
  * CONSCIOUS CHOICE at the drifted TRAFFIC/THREAT index 20 ('log_action' vs
  * 'logset'): this port keeps 'logset' (Source B). Rationale, pinned by
  * panos-dictionary.test.ts:
@@ -38,6 +82,8 @@
  *
  * Pure: no IO, no fetch, no React, no Date/crypto.
  */
+
+import { positionalFieldName } from "./models";
 
 /**
  * PAN-OS numeric log-type id (the CEF DeviceEventClassID PAN-OS emits) to the
@@ -81,20 +127,29 @@ export const PANOS_LEGACY_PARSER_INDEX20 = "log_action";
 export const PANOS_CANONICAL_INDEX20 = "logset";
 
 /**
- * The canonical PAN-OS 11.0 per-log-type column dictionaries (Source B,
- * verbatim). Eight log types: TRAFFIC, THREAT, SYSTEM, CONFIG, GLOBALPROTECT,
- * AUTHENTICATION, DECRYPTION, HIP-MATCH. `future_use*` placeholders are retained
- * in the order (so positions stay correct) but skipped when a line is named.
+ * The canonical PAN-OS per-log-type column dictionaries. TWELVE log types: the
+ * original eight from Source B (TRAFFIC, THREAT, SYSTEM, CONFIG, GLOBALPROTECT,
+ * AUTHENTICATION, DECRYPTION, HIP-MATCH) plus the four transcribed from Palo
+ * Alto's published field descriptions on 2026-08-25 (AUDIT, CORRELATION, IPTAG,
+ * USERID - see the header for the four-way confirmation each one passed).
+ * `future_use*` placeholders are retained in the order (so positions stay
+ * correct) but skipped when a line is named.
  *
  * NOTE for anyone counting these with a grep: `"HIP-MATCH"` is QUOTED, because
  * the hyphen is not a bare identifier. A pattern matching unquoted keys finds
- * seven and concludes the eighth is missing - which happened twice on
- * 2026-08-20, once in an audit and once in the check meant to verify it.
+ * ELEVEN and concludes the twelfth is missing - which happened twice on
+ * 2026-08-20, once in an audit and once in the check meant to verify it. The
+ * key count is pinned in panos-dictionary.test.ts; trust that over a grep.
  *
- * `isPanosFormat` recognises MORE types than are dictionaried here
- * (CORRELATION, GTP, USERID, WILDFIRE...). Those are correctly detected as
+ * `isPanosFormat` still recognises MORE types than are dictionaried here (AUTH,
+ * GTP, SCTP, TUNNEL-INSPECTION, WILDFIRE...). Those are correctly detected as
  * PAN-OS and then parsed positionally, which is the honest outcome for a type
- * whose column order is not recorded.
+ * whose column order is not recorded - and for AUTH it is a decision, not an
+ * oversight; see the header.
+ *
+ * These are BUNDLED orders. They pre-fill the column-naming dialog and an
+ * operator-supplied order still beats them - see `bundledColumnOrder` and
+ * `resolveColumnOrder` in vendor-field-definitions.ts.
  */
 export const PANOS_CSV_HEADERS: Readonly<Record<string, readonly string[]>> =
   Object.freeze({
@@ -211,6 +266,77 @@ export const PANOS_CSV_HEADERS: Readonly<Record<string, readonly string[]>> =
       "dg_hier_level_3", "dg_hier_level_4", "vsys_name", "device_name", "vsys_id",
       "srcipv6", "hostid", "serialnumber", "mac", "high_res_timestamp",
     ],
+    // ADDED 2026-08-25. Source: Palo Alto "User-ID Log Fields", the 37-entry
+    // Format line -
+    // .../syslog-field-descriptions/user-id-log-fields
+    // (identical on pan-os/11-0, pan-os/11-1 and ngfw/administration; the
+    // pan-os/9-1 page is the same order truncated at `userbysource`).
+    // Index 0 is `future_use1` because the vendor prints "FUTURE_USER" there -
+    // a typo for FUTURE_USE that has survived every version of the page, and
+    // the fixture confirms the slot holds the usual literal `1`.
+    // "Source Port"/"Destination Port" are spelled `sport`/`dport` to match how
+    // this file already transliterates those two vendor labels in TRAFFIC;
+    // syslog-ng calls the same two `beginport`/`endport`.
+    USERID: [
+      "future_use1", "receive_time", "serial", "type", "subtype", "future_use2",
+      "generated_time", "vsys", "ip", "user", "datasourcename", "eventid",
+      "repeatcnt", "timeout", "sport", "dport", "datasource", "datasourcetype",
+      "seqno", "actionflags", "dg_hier_level_1", "dg_hier_level_2",
+      "dg_hier_level_3", "dg_hier_level_4", "vsys_name", "device_name",
+      "vsys_id", "factortype", "factorcompletiontime", "factorno", "ugflags",
+      "userbysource", "tag_name", "high_res_timestamp", "origin_datasource",
+      "future_use3", "cluster_name",
+    ],
+    // ADDED 2026-08-25. Source: Palo Alto "IP-Tag Log Fields", the 27-entry
+    // Format line -
+    // .../syslog-field-descriptions/ip-tag-log-fields
+    // (identical on pan-os/11-0, pan-os/10-2 and ngfw/administration).
+    // The vendor's own fixture line is the clearest confirmation in this file:
+    // its placeholder values read `Data Source Name, Data Source Type,
+    // Data Source Subtype, ..., vsys-name, d-name, vsys-id` at exactly the
+    // indices the Format line predicts.
+    IPTAG: [
+      "future_use1", "receive_time", "serial", "type", "subtype", "future_use2",
+      "generated_time", "vsys", "ip", "tag_name", "eventid", "repeatcnt",
+      "timeout", "datasourcename", "datasourcetype", "datasourcesubtype",
+      "seqno", "actionflags", "dg_hier_level_1", "dg_hier_level_2",
+      "dg_hier_level_3", "dg_hier_level_4", "vsys_name", "device_name",
+      "vsys_id", "high_res_timestamp", "cluster_name",
+    ],
+    // ADDED 2026-08-25. Source: Palo Alto "Correlated Events Log Fields", the
+    // 22-entry Format line -
+    // .../syslog-field-descriptions/correlated-events-log-fields
+    // (identical on pan-os/11-0, pan-os/10-2 and ngfw/administration).
+    // TRANSCRIPTION NOTE: the vendor prints "Source Address. Source User" with a
+    // PERIOD where every other separator is a comma, on every version of the
+    // page. They are two fields, not one - syslog-ng's panos.conf splits them
+    // the same way and the vendor fixture carries `81.2.69.142,src-user` at
+    // those two indices, so the period is a typo and not a merged column.
+    CORRELATION: [
+      "future_use1", "receive_time", "serial", "type", "subtype", "future_use2",
+      "generated_time", "src", "srcuser", "vsys", "category", "severity",
+      "dg_hier_level_1", "dg_hier_level_2", "dg_hier_level_3",
+      "dg_hier_level_4", "vsys_name", "device_name", "vsys_id", "objectname",
+      "object_id", "evidence",
+    ],
+    // ADDED 2026-08-25. Source: Palo Alto "Audit Log Fields", the 8-entry
+    // Format line -
+    // .../syslog-field-descriptions/audit-log-fields
+    // (identical on pan-os/11-0, pan-os/11-1 and ngfw/administration).
+    //
+    // THIS ONE HAS NO LEADING `future_use1`, and that is the whole reason
+    // readPanosLogType exists: AUDIT is the sub-format that omits it, so every
+    // column sits one to the LEFT of where the other eleven put it and `serial`
+    // - not FUTURE_USE - is index 0. Do not "fix" the missing placeholder.
+    //
+    // The vendor's field descriptions pin the two ambiguous-looking tail slots:
+    // `eventid` is the command's SOURCE (cli, gui, gui-op, gnmi, rest) and
+    // `severity` is its OUTCOME (none, success, failure) - which is why the
+    // fixture reads `...,gui-op,suser,"<show>...</show>",success`.
+    AUDIT: [
+      "serial", "generated_time", "subtype", "future_use1", "eventid", "object",
+      "cmd", "severity",
+    ],
   });
 
 /**
@@ -229,12 +355,18 @@ export const PANOS_CSV_HEADERS: Readonly<Record<string, readonly string[]>> =
  * subtype 15 to "HIP-MATCH" and 100 to "HIPMATCH" - so the vendor genuinely
  * ships both and the dictionary picked the wrong one to key on.
  *
- * NORMALIZING RATHER THAN ADDING A KEY is deliberate. The eight-entry key set is
- * pinned in two places and one pin asserts `PANOS_CSV_HEADERS.USERID` is
- * undefined ON PURPOSE - there is no USER-ID column list, and inventing a ninth
- * key to paper over a lookup bug would make that pin lie. Folding the separator
- * at lookup time fixes the spelling without claiming a dictionary we do not have:
- * `USERID` still resolves to nothing, because there is nothing to resolve to.
+ * NORMALIZING RATHER THAN ADDING A KEY is deliberate: folding the separator at
+ * lookup time fixes a SPELLING without claiming a dictionary we do not have. It
+ * is also what lets the four orders added on 2026-08-25 carry ONE key each and
+ * still answer to both of the vendor's spellings - `USERID` also serves
+ * `USER-ID` (PANOS_LOG_TYPES maps subtype 17 and 4096 to the two spellings), and
+ * `IPTAG` also serves `IP-TAG` (subtypes 16 and 2048).
+ *
+ * WHAT IT MUST NOT DO IS MANUFACTURE A COLUMN LIST. `AUTH` folds to `AUTH`,
+ * which matches no key, so it stays `undefined` - it must NOT be allowed to
+ * reach AUTHENTICATION's order by any loosening of this fold, because Palo Alto
+ * publishes no AUTH log type and borrowing a sibling's order is the exact
+ * failure this dictionary is built to avoid. A test pins that.
  */
 export function panosHeadersFor(
   logType: string,
@@ -286,8 +418,15 @@ export function panosHeadersFor(
  * exactly the left-shift signature, and it does not need a list of every
  * sub-format Palo Alto might add. A normal line cannot trip it - TRAFFIC and
  * THREAT are not numeric.
+ *
+ * EXPORTED 2026-08-25 because `parseCsv` - the branch that actually names live
+ * uploads and Lake samples - read `values[3]` directly and so could never reach
+ * an AUDIT dictionary: it saw the content-version number `2561` and looked up
+ * a column order for that. Adding AUDIT's order without this would have left it
+ * dead code on the one path that matters. Two parsers, one answer to "which log
+ * type is this line?".
  */
-function readPanosLogType(values: readonly string[]): string {
+export function panosLogTypeFrom(values: readonly string[]): string {
   const atThree = (values[3] ?? "").trim();
   const atTwo = (values[2] ?? "").trim();
   const shifted =
@@ -311,8 +450,8 @@ export function parsePanosLine(
   }
 
   // Field[3] is the log type (TRAFFIC, THREAT, SYSTEM, CONFIG, ...) - EXCEPT
-  // for audit logs, see readPanosLogType.
-  const logType = readPanosLogType(values);
+  // for audit logs, see panosLogTypeFrom.
+  const logType = panosLogTypeFrom(values);
   const headers = panosHeadersFor(logType);
 
   const fields: Record<string, string> = {};
@@ -330,7 +469,7 @@ export function parsePanosLine(
     fields["type"] = logType;
     for (let i = 0; i < Math.min(20, values.length); i += 1) {
       if (values[i]) {
-        fields[`field_${i}`] = values[i];
+        fields[positionalFieldName(i)] = values[i];
       }
     }
   }
@@ -339,18 +478,82 @@ export function parsePanosLine(
 }
 
 /**
- * True when the first non-empty line looks like PAN-OS syslog+CSV: the
- * `1,<date>,<serial>,<TYPE>,` positional fingerprint. Verbatim from the legacy
- * sample-resolver.ts `isPanosFormat` (regex flags preserved: case-insensitive).
+ * A PAN-OS timestamp in either form the firewall emits: the classic
+ * `2013/03/25 23:59:02` and the ISO-8601 `2021-11-09T21:45:36.000000Z` that
+ * GLOBALPROTECT records carry.
+ */
+const PANOS_TIMESTAMP =
+  "(?:\\d{4}/\\d{2}/\\d{2}\\s+\\d{2}:\\d{2}:\\d{2}|\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?Z?)";
+
+/**
+ * The PAN-OS log types this recognizes. THE ALLOW-LIST IS THE SAFETY ARGUMENT -
+ * see {@link isPanosFormat}. `AUDIT` and `AUTH` were absent until 2026-08-25.
+ */
+const PANOS_TYPES =
+  "TRAFFIC|THREAT|SYSTEM|CONFIG|GLOBALPROTECT|AUTHENTICATION|AUTH|AUDIT|DECRYPTION|HIP-MATCH|HIPMATCH|CORRELATION|GTP|SCTP|TUNNEL|USERID|IPTAG|WILDFIRE|URL|DATA";
+
+/**
+ * The positional fingerprint: a PAN-OS TIMESTAMP field followed, one or two
+ * fields later, by a whitelisted PAN-OS LOG TYPE field.
+ *
+ * The optional `[^,]*,` is what accommodates two real column orders:
+ *   `1,<ts>,<serial>,TRAFFIC,...`   type in field 3 (most types)
+ *   `<serial>,<ts>,audit,...`       type in field 2 (AUDIT)
+ */
+const PANOS_FINGERPRINT = new RegExp(
+  `,${PANOS_TIMESTAMP},(?:[^,]*,)?(?:${PANOS_TYPES})(?:,|$)`,
+  "i",
+);
+
+/**
+ * How many lines to inspect. Detection used to read ONLY the first, which made
+ * the format of a 50-event sample depend on which event happened to sort first.
+ */
+const PANOS_DETECT_LINES = 10;
+
+/**
+ * True when any of the first {@link PANOS_DETECT_LINES} non-empty lines carries
+ * the PAN-OS positional fingerprint.
+ *
+ * WHAT THE FINGERPRINT IS, AND WHY IT IS NOT A COMMA COUNT. It requires a PAN-OS
+ * TIMESTAMP in a CSV field, followed one or two fields later by a WHITELISTED
+ * PAN-OS log type in its own field. The allow-list is the whole safety argument:
+ * a chatty syslog line carrying six commas is still syslog, a CEF line with
+ * `extra=a,b,c` is still CEF, and the characterization suite pins exactly that.
+ * Loosening this to "enough commas" would break all three.
+ *
+ * RELAXED 2026-08-25 against a live Cribl Lake dataset, where the previous form
+ * (`1,<date>,<digits>,<TYPE>`) missed four real variants and produced samples
+ * with no PAN-OS fields at all. Measured over 200 live events:
+ *
+ *   AUDIT          0/9   -> the type was missing from the list AND its layout
+ *                          puts the type in field 2, not field 3
+ *   USERID        23/35  -> serial is the literal `<serial-number>`
+ *   GLOBALPROTECT 13/16  -> ISO-8601 timestamp and a literal `no-serial`
+ *   CONFIG        18/19  -> serial is EMPTY: `1,2021/10/25 20:25:39,,CONFIG`
+ *
+ * All 13 log types now match 200/200, and every refusal pin still holds. The
+ * serial is `[^,]*` because PAN-OS genuinely emits it empty, as digits, and as a
+ * placeholder - it never carried information this decision needs.
+ *
+ * READING TEN LINES RATHER THAN ONE is the other half. A sample is 50 events;
+ * with a single-line test, one odd event landing first reclassified the other
+ * 49. That is exactly what happened to CONFIG: 18 of its 19 events matched, the
+ * one that did not was first, and the whole sample was read as syslog - nine
+ * envelope fields, zero PAN-OS ones.
  */
 export function isPanosFormat(rawEvents: readonly string[]): boolean {
   if (rawEvents.length === 0) {
     return false;
   }
-  const first = rawEvents.find((l) => l.trim()) || "";
-  return /1,\d{4}\/\d{2}\/\d{2}\s+\d{2}:\d{2}:\d{2},\d+,(TRAFFIC|THREAT|SYSTEM|CONFIG|GLOBALPROTECT|AUTHENTICATION|DECRYPTION|HIP-MATCH|CORRELATION|GTP|SCTP|TUNNEL|USERID|IPTAG|HIPMATCH|WILDFIRE|URL|DATA)/i.test(
-    first,
-  );
+  let seen = 0;
+  for (const line of rawEvents) {
+    if (!line.trim()) continue;
+    if (PANOS_FINGERPRINT.test(line)) return true;
+    seen += 1;
+    if (seen >= PANOS_DETECT_LINES) break;
+  }
+  return false;
 }
 
 /**

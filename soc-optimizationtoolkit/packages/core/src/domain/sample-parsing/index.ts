@@ -14,7 +14,18 @@ export type {
   TaggedSample,
   SplitSample,
 } from "./models";
-export { RAW_EVENTS_CAP, MAX_FIELD_EXAMPLES } from "./models";
+export {
+  RAW_EVENTS_CAP,
+  MAX_FIELD_EXAMPLES,
+  // THE ONE NAME FOR AN UNNAMED COLUMN. Exported because the UI's interactive
+  // column mapper has to speak it too: a position the operator has not named
+  // must round-trip as positional, and re-testing /^_\d+$/ in the renderer is
+  // how the two conventions drifted apart in the first place (see models.ts).
+  positionalFieldName,
+  isPositionalFieldName,
+  isOverflowFieldName,
+  overflowFieldName,
+} from "./models";
 
 export type { CappedTaggedSample } from "./cap-bytes";
 export { TAGGED_SAMPLE_MAX_BYTES, capTaggedSampleBytes } from "./cap-bytes";
@@ -76,6 +87,7 @@ export {
   PANOS_LEGACY_PARSER_INDEX20,
   PANOS_CANONICAL_INDEX20,
   panosHeadersFor,
+  panosLogTypeFrom,
   parsePanosLine,
   isPanosFormat,
   convertPanosToJson,
@@ -91,6 +103,7 @@ export {
   dropSavingsLine,
   dropSavingsPercent,
   estimateDropSavings,
+  meanEventBytes,
   mergeDropSavings,
 } from "./drop-savings";
 
@@ -104,3 +117,24 @@ export {
   hasNamedFields,
   convertPanosSplitAtLoad,
 } from "./splitting";
+
+// Remembered column orders per VENDOR + LOG TYPE (plan Gap 3 / step 4): the
+// operator names a positional column once, not once per sample.
+export type {
+  BundledOverride,
+  ColumnOrderSource,
+  ResolvedColumnOrder,
+  VendorFieldDefinition,
+} from "./vendor-field-definitions";
+export {
+  VENDOR_FIELD_DEFINITION_NAMESPACE,
+  VENDOR_FIELD_DEFINITION_VERSION,
+  bundledColumnOrder,
+  buildVendorFieldDefinition,
+  describeColumnOrder,
+  diffBundledOrder,
+  normalizeDefinitionScope,
+  parseVendorFieldDefinition,
+  resolveColumnOrder,
+  vendorFieldDefinitionKey,
+} from "./vendor-field-definitions";

@@ -17,7 +17,9 @@
  *        eventType, dataset, action, DeviceEventClassID, Activity, module]
  *
  * Reconciliation decisions (pinned by discriminators.test.ts):
- * - The list is the UNION of all three (16 fields), no member dropped.
+ * - The list is the UNION of all three, no member dropped. It was 16 at
+ *   reconciliation; `msgid` (2026-08-21) and `data_source` (2026-08-25) were
+ *   added later with their own justifications below, so it is 18 now.
  * - Order = B's authoritative ordering, because B alone encoded a semantic in
  *   its order (index < 6 => a single distinct value still selects the field).
  *   B's high-confidence six lead; the remaining union members follow.
@@ -61,6 +63,43 @@ export const DISCRIMINATOR_FIELDS: readonly string[] = Object.freeze([
   // so a `type` recovered from the payload still wins: the envelope is what the
   // sender claims, the payload is what the device wrote.
   "msgid",
+  // NOT from any of the three legacy copies (added 2026-08-25, from LIVE data).
+  // Cribl's Windows Event source puts the Windows CHANNEL here - Security,
+  // System, Application, Microsoft-Windows-DNS-Client/Operational - and the
+  // channel IS the log type for Windows events. Same justification as `msgid`
+  // directly above: the collector has already named the type in a field, so no
+  // payload parsing is required to see it.
+  //
+  // Measured on a live Cribl Lake dataset 2026-08-25, which is why it is here
+  // and why `datatype` and `schemaId` are NOT. Those appear on every Lake row
+  // and looked like obvious additions, but each carried exactly ONE distinct
+  // value in every dataset sampled - they describe the DATASET, not the event,
+  // so they can never split one.
+  //
+  // `source` was measured the same way and is deliberately NOT ruled out: the
+  // measurement holds for this lake, but the inference does not generalise -
+  // on file and directory inputs Cribl sets `source` per event to the file
+  // path. Re-measure before adding it; do not assume either way.
+  // `data_source` did split, at scale:
+  //   dataset="winevt_plwindows" | summarize count() by data_source
+  //     Microsoft-Windows-DNS-Client/Operational   766,570
+  //     Security                                    22,792
+  // Without this entry that dataset reported NO log types at all, and the
+  // operator was told to go capture from a live source instead - for data
+  // already sitting in their lake, already split, already counted.
+  //
+  // In the LOW-CONFIDENCE tail on purpose: it needs >= 2 distinct values, so a
+  // single-channel dataset still reports no discriminator rather than claiming
+  // the whole dataset is one named type. That is the honest answer for it.
+  //
+  // AND IT IS NO LONGER A DEAD END (2026-08-25), which is what makes staying in
+  // the tail affordable. "No discriminator" says only that nothing here splits
+  // these events; queryLakeSamples answers it by offering the dataset as ONE
+  // log type under THE DATASET'S OWN NAME, labelled as the dataset's. Promoting
+  // `data_source` to the high-confidence prefix would instead name that log
+  // type "Security" off a single observed value - a vendor log type asserted
+  // from one row, which is precisely the claim this list must not make.
+  "data_source",
 ]);
 
 /**

@@ -13,8 +13,15 @@ Written 2026-08-18 by a planning session, from a live read of the code.
 > now reach the recommendation, entries and the unreferenced set both carry a
 > volume, and both rank by it. No threshold was added, by decision.
 >
-> NOT verified against a real workspace. See "Needs live verification" - the
-> suite that settles it is `packages/core/src/testing/live-verify.test.ts`.
+> **VERIFIED against a real workspace 2026-08-25 - the gate is CLOSED.** All
+> EIGHT rows of "Needs live verification" are settled against the lab workspace
+> `main-busy-yonath-kz1bxn7` (Stream group `DatacenterEast`, Lake dataset
+> `winevt_plwindows`). The suite that settled them is
+> `packages/core/src/testing/live-verify.test.ts`. Read the
+> **"Attempt 2026-08-25 - CLOSED"** section before trusting any earlier sentence
+> in this document about what is unverified; it also records the four PRODUCT
+> defects and seven HARNESS defects the run exposed, four of the latter having
+> been returning confident wrong answers rather than failing.
 >
 > Phase 3 shipped as `discoverSampleSources` (usecase), `domain/sample-sources`
 > (pure inventory) and `SampleSourcePicker` (UI). It DISCOVERS and lets the
@@ -128,7 +135,9 @@ only if the file has moved.
 | `SOLUTION_SAMPLE_MAP` has no non-test consumer outside its own module | grep: only `index.ts:31` + its own test |
 | Log-type splitting by discriminator already works | `domain/sample-acquisition/splitting.ts:64` (`splitSamplesByLogType`) |
 | 16 reconciled discriminator fields; first six are high-confidence | `domain/sample-parsing/discriminators.ts` (`DISCRIMINATOR_FIELDS`) |
+| *(count corrected: EIGHTEEN as of 2026-08-25 - `msgid` was added 2026-08-21 for RFC 5424, `data_source` 2026-08-25 from live Lake data. Both sit in the LOW-confidence tail; the reconciled sixteen and the high-confidence six are unchanged)* | same file |
 | PAN-OS: 8 log types + documented column order, cited to vendor docs | `domain/sample-parsing/panos-dictionary.ts` |
+| *(count corrected: TWELVE as of 2026-08-25 - AUDIT, CORRELATION, IPTAG and USERID were transcribed from Palo Alto's published `Format:` lines and confirmed against four sources each. AUTH remains absent on purpose: the vendor publishes no such log type, so there is nothing to transcribe)* | same file |
 | Expected log types are already derived from solution detections | `domain/coverage-analysis/expected-log-types.ts` (`deriveExpectedLogTypes`) |
 | Expected-vs-provided comparison already exists | same domain, `compareLogTypeCoverage` |
 | We already GET `/system/inputs` and `/routes` from the operator's Cribl | `usecases/live-architecture/fetch-live-architecture.ts:22,24` |
@@ -361,10 +370,17 @@ Operator-chosen, each labelled for the evidence it gives.
 
 ### Search (best evidence)
 
-> **STATUS: DONE (2026-08-20).** Shipped as `queryLakeSamples` +
-> `fetchLakeLogTypeEvents` (usecase), `lake-panel-state` (pure) and `LakePanel`,
-> wired from `integrate-screen`. The counts and the events are two separate
-> reads on purpose - see the usecase header for why.
+> **STATUS: DONE (2026-08-20), and RUN LIVE (2026-08-25).** Shipped as
+> `queryLakeSamples` + `fetchLakeLogTypeEvents` (usecase), `lake-panel-state`
+> (pure) and `LakePanel`, wired from `integrate-screen`. The counts and the
+> events are two separate reads on purpose - see the usecase header for why.
+>
+> It did NOT work when first pointed at a real workspace, and it failed silently
+> both ways: the job status was read at the top level when it lives at
+> `items[0].status`, and no clock was injected so the poll loop never waited.
+> Only an EMPTY dataset could complete in time. Both are fixed, and the end-to-end
+> path is now confirmed - `winevt_plwindows` -> 2 log types by `data_source`.
+> Details in "Attempt 2026-08-25".
 
 `summarize count() by <discriminator>` over the selected dataset. Returns the
 complete log-type list AND per-type volumes. The discriminator field comes from
@@ -515,6 +531,15 @@ swallows every route. Same failure, earlier.
 > panel is unchanged and still receives exactly what it returned - so the query
 > that produced them is the one that reports them.
 >
+> **THE LAST ITEM CLOSED 2026-08-25: events to BYTES.** A volume now reaches the
+> operator as a count AND an estimate of what it weighs, because Sentinel bills
+> by volume and a count alone leaves them doing arithmetic they have no inputs
+> for. `meanEventBytes` (drop-savings) x the Search count, via the single
+> `estimatedLogTypeBytes`; the mean is measured off step one's own sample rows,
+> per log type, for no extra search job. It renders as "~2.1 GB estimated" beside
+> the count on the Lake panel and the recommendation, and is ABSENT - never zero -
+> wherever it cannot be computed. Item 4 in both lists below has the detail.
+>
 > WHAT WAS BUILT TO THE DECISION BELOW, not around it: the number is attached
 > and the list is ordered; nothing is flagged, no threshold exists, and no
 > headline mentions a volume. Two rules the pins hold and a future change must
@@ -569,10 +594,13 @@ scope unless explicitly wanted.
 >    says "fine". Phase 5 wants the same set to read as cost. Volume is what
 >    reconciles them - 12 events/day unreferenced is fine, 890K is a finding -
 >    but somebody has to pick the line.
-> 4. No events-to-bytes conversion anywhere. `estimateDropSavings` measures
+> 4. ~~No events-to-bytes conversion anywhere. `estimateDropSavings` measures
 >    FIELD bytes inside a sample already collected; it has no notion of a daily
 >    rate. Its mean-bytes-per-event could be multiplied by a Search count,
->    though, so the pieces exist.
+>    though, so the pieces exist.~~ **BUILT 2026-08-25** - see the same numbered
+>    item in the "Remaining" list below for how, and for what it refuses to
+>    estimate. Still no daily rate: the estimate covers the QUERIED WINDOW, which
+>    is the only period anything here measured.
 >
 > **On "no ENABLED detection consumes it" - the wording is reachable, but not
 > for free, and BOTH the obvious readings of the code are wrong.**
@@ -611,8 +639,34 @@ scope unless explicitly wanted.
 > Remaining:
 > 1. Counts have nowhere to live once merged - `unreferenced` is still a bare
 >    `string[]` and `MergedLogType` has no volume field.
-> 4. Events-to-bytes remains absent; `estimateDropSavings`'s mean bytes/event
->    could be multiplied by a Search count, so the pieces exist.
+> 4. ~~Events-to-bytes remains absent; `estimateDropSavings`'s mean bytes/event
+>    could be multiplied by a Search count, so the pieces exist.~~
+>    **BUILT 2026-08-25.** It was assembled from exactly those pieces:
+>    `meanEventBytes(savings)` in `drop-savings.ts` divides the measured bytes by
+>    the measured events, and `estimatedLogTypeBytes(volume)` in
+>    `log-type-catalog/merge.ts` is the ONLY multiplication in the app.
+>
+>    WHERE THE MEAN COMES FROM, which was the open question: step one of the Lake
+>    query. It already pulls up to `DISCRIMINATOR_SAMPLE_LIMIT` real events to
+>    decide which field discriminates and then discards their bodies; those rows
+>    are now also grouped by that same field and measured, so each log type's mean
+>    is drawn from ITS OWN events at the cost of no extra search job. A dataset
+>    offered as one log type measures the whole sample, which is the one case a
+>    dataset-wide mean is not a substitution.
+>
+>    THE REFUSALS ARE THE FEATURE. `meanEventBytes` returns undefined for zero
+>    events and for zero bytes; `estimatedLogTypeBytes` returns undefined without
+>    a count, without a mean, for a non-finite figure, and for a zero mean - so a
+>    counted-but-unsampled log type (the skew case) shows its count alone rather
+>    than "~0 B". Summing is all-or-nothing: if any summed row lacks a mean the
+>    whole estimate goes, because a partial byte total beside a full count
+>    under-reports a cost while reading as measured.
+>
+>    RANKING is a LIST-LEVEL choice - bytes when every measured entry carries an
+>    estimate, events otherwise. Mixing the keys per entry would not be a total
+>    order, and promoting the estimated entries would rank on how well we measured
+>    rather than on what we measured. No threshold was added; the 2026-08-20
+>    decision holds.
 >
 > **THE THRESHOLD - DECIDED 2026-08-20 (user): there is no threshold.**
 >
@@ -642,7 +696,13 @@ scope unless explicitly wanted.
 
 ---
 
-## Needs live verification (added 2026-08-20)
+## Needs live verification (added 2026-08-20) - ALL EIGHT SETTLED 2026-08-25
+
+> **STATUS: CLOSED 2026-08-25.** Every row below was answered against the lab
+> workspace `main-busy-yonath-kz1bxn7`. The table of beliefs is KEPT as written -
+> it is the record of what the code was resting on, and the "If wrong" column is
+> what made the run worth doing - and the verdicts follow it in a second table.
+> Where a belief turned out to be wrong, the second table says so.
 
 Phases 3 and 4 are pinned entirely against `FakeCriblClient`. That catches our
 own logic and cannot catch a wrong belief about the platform - every row below
@@ -665,50 +725,317 @@ It was caught by reading the vendored spec's examples, not by a test.
 | 7 | Capture needs a permission the app's own credentials hold | Not established | 403 on the primary path |
 | 8 | A Cribl filter referencing a field the event lacks is a ReferenceError that DROPS the event | `capture-filter.ts`'s stated model - never tested against the real evaluator | If Cribl tolerates undeclared names, the typeof guards are insurance rather than load-bearing. Either answer is fine; the guess is not |
 
+### The verdicts (observed 2026-08-25, lab workspace `main-busy-yonath-kz1bxn7`)
+
+| # | Verdict | What was actually observed |
+|---|---|---|
+| 1 | **CONFIRMED**, and the shipped predicate selects the source | 40 of 40 captured events carried `__inputId`. Values seen: `cribl_tcp:in_cribl_tcp_WinEvt_customer`, `syslog:PaloAlto:tcp` (THREE segments), `datagen:paloaltorfc5424`, `cribl:CriblLogs`. The shipped `inputPredicate` matches on the SECOND colon segment, which is why it survives the three-segment form that `.endsWith(":id")` would have missed |
+| 2 | **CONFIRMED** | A level-0 capture carries broken-out fields beside `_raw`, not `_raw` alone. The structured-field OR can fire |
+| 3 | **CONFIRMED - and this had never run before, in any form** | Cribl Search accepted `tostring()` in a `where` clause. Numeric discriminators do not 400 |
+| 4 | **CONFIRMED** | A one-line NDJSON capture response reaches us as a decoded OBJECT, exactly as `readPortBody` implies. The fix is confirmed, not just the diagnosis |
+| 5 | **CONFIRMED** | A 10s capture completed inside the ceiling; the 12s clamp has headroom |
+| 6 | **CONFIRMED, both halves** | `GET /products/lake/lakes/default/datasets` is a LEADER route and answered with 31 datasets, so the managed lake's id IS `default`. `queryLakeSamples` also ran END TO END: `winevt_plwindows` resolved to 2 log types by `data_source` |
+| 7 | **CONFIRMED** | 15 enabled inputs listed and captures succeed on the app's own credential. No 403 |
+| 8 | **ANSWERED - Cribl TOLERATES undeclared fields.** The belief as stated was WRONG | Bare and guarded filters BOTH returned events. So the `typeof` guards in `capture-filter.ts` are INSURANCE, not load-bearing, and that module's stated model - "a ReferenceError that DROPS the event" - is the thing that was wrong. **The guards stay.** They are harmless, they are correct, and they cost one `typeof` per clause; what was wrong was the reason given for them, not the code |
+
+**Also established live 2026-08-25, as facts rather than beliefs:**
+
+- **`POST /system/capture` needs a worker.** Against a worker group with no
+  connected workers it returns `400 {"message":"No worker nodes are connected to
+  this worker group."}`. The capture runs ON a worker, not on the leader, so
+  "which group" is really "which group has workers" - see "How to run it".
+- **`GET /search/jobs/{id}/status?advanced=true` answers in the Cribl envelope.**
+  The status is at `items[0].status` inside `{items:[...], count}`; there is NO
+  top-level `status`. A top-level read returns `undefined` on every poll, which
+  reads as a job that never finishes.
+- **`GET /search/query` is NOT a synchronous route.** See the correction below.
+- **24 of the 31 lake datasets are EMPTY over `-24h`**, which is why the suite
+  walks the listing instead of taking `entries[0]`: alphabetical order is
+  uncorrelated with holding data, and "0 log types" alone cannot tell an empty
+  dataset from one whose rows never arrived.
+
+### `GET /search/query` is the job lifecycle with a different door
+
+> **[SUPERSEDED 2026-08-25 - the "SYNC FIRST" framing is FALSIFIED]**
+>
+> Phase 0 recorded `GET /search/query` as the synchronous route and this plan
+> preferred it for its single round trip. Observed live, it is not synchronous:
+>
+> - without `earliest`/`latest` it **400s**;
+> - with them it **CREATES A JOB** and returns
+>   `{isFinished:false, job:{id, status:"queued"}}` - no results;
+> - re-called with that `jobId` it returns results.
+>
+> That is the same job lifecycle `POST /search/jobs` drives, entered through a
+> different door. There was never a round trip to save, so "prefer the cheap
+> route, fall back to jobs" described one lifecycle attempted twice.
+>
+> **What the wrong premise cost, which is why this is worth the words.** The
+> fallback fired on EVERY query and issued its own `POST /search/jobs`, so every
+> Lake query ORPHANED a job; the "sync is unusable" verdict was memoized per
+> runner and there is one runner per usecase call, so a full operator flow
+> (`queryLakeSamples`, then `fetchLakeLogTypeEvents`) orphaned two. Worse, the
+> dead route's failure note was unshifted to the FRONT of `notes`, which the Lake
+> panel renders under a SUCCESS headline - raw platform error text shown to an
+> operator whose query had in fact worked. And its `200 with no rows` was never an
+> answer about the data: it was the job sitting in `queued`, every time.
+>
+> **The route is now DELETED from the product** (2026-08-25), along with its
+> `/m/:gid/search/query` grant in `policies.yml`. Polling its `job.id` instead was
+> considered and rejected: both doors cost create + poll + read, so keeping the
+> GET buys nothing and costs a second create route, a second job-id envelope to
+> read (`job.id`, not the `items[].id` the POST answers with), and a second thing
+> to keep working - and it is the door Cribl's own UI does not use. One behaviour
+> change follows: **an empty answer is now BELIEVED.** With only the proven route
+> left, "the job completed and returned no rows" IS an empty window and is
+> reported as one - still `ok` with a note, never as a failure. Phase 0's
+> "Synchronous? **Yes**" row is corrected in place.
+
 **Cheapest order:** one real capture against a syslog source settles 1, 4 and 5
 and 7 at once. One capture of a JSON source settles 2. One Lake query with a
 numeric discriminator settles 3 and 6.
 
-`packages/core/src/testing/live-verify.test.ts` runs all seven. It SKIPS unless
+`packages/core/src/testing/live-verify.test.ts` runs all eight. It SKIPS unless
 `CRIBL_LIVE_BASE` and `CRIBL_LIVE_TOKEN` are set, so the normal gate stays
 hermetic.
 
-### How to run it (2026-08-23)
+### How to run it (2026-08-23, corrected 2026-08-25 by doing it)
 
-**Do the traffic step first.** It is the one that sank the last attempt, and no
-amount of fixing the other two rescues a run without events: rows 1, 2 and 4 are
-all observations of a captured event, so an idle source produces an empty
-capture that is indistinguishable from a broken filter.
+**Do the traffic step first.** It is the one that sank the 2026-08-20 attempt,
+and no amount of fixing the others rescues a run without events: rows 1, 2 and 4
+are all observations of a captured event, so an idle source produces an empty
+capture that is indistinguishable from a broken filter. Step 2 was added after
+the 2026-08-25 run, which had traffic and still could not capture - a group
+without workers 400s before a filter is ever evaluated.
 
 1. **Generate traffic through a SYSLOG source**, and leave it running. Check
-   Stream Home shows events in AND out before going further - the last attempt
-   read zero over 15 minutes. One capture against a live syslog source settles
-   rows 1, 4, 5 and 7 together, which is why it is worth the setup.
-2. **Get a token.** Vault is on an internal address, so this needs the lab
+   Stream Home shows events in AND out before going further - the 2026-08-20
+   attempt read zero over 15 minutes. One capture against a live syslog source
+   settles rows 1, 4, 5 and 7 together, which is why it is worth the setup.
+2. **Pick a worker group that HAS CONNECTED WORKERS.** This is a platform
+   precondition, not a preference: `POST /system/capture` against a group with
+   none returns `400 {"message":"No worker nodes are connected to this worker
+   group."}` before any filter is evaluated. The capture runs on a worker. The
+   suite resolves a group with workers on its own and filters on the stream
+   TYPE - "not a search group" had been letting edge fleets through - but pin
+   one with `CRIBL_LIVE_GROUP` when the workspace has several.
+3. **Get a token.** Vault is on an internal address, so this needs the lab
    network. The token is a bearer for the workspace API, not a browser session -
    the suite calls the API directly and does not go through the app's proxy.
-3. **Run it:**
+4. **Run it:**
 
 ```sh
 cd soc-optimizationtoolkit
 CRIBL_LIVE_BASE=https://<workspace>.cribl.cloud/api/v1 \
 CRIBL_LIVE_TOKEN=<bearer> \
+CRIBL_LIVE_GROUP=DatacenterEast \
+CRIBL_LIVE_DATASET=winevt_plwindows \
 npx vitest run --root packages/core src/testing/live-verify.test.ts
 ```
 
+| Variable | Required? | What it does |
+|---|---|---|
+| `CRIBL_LIVE_BASE` | **yes** - the suite SKIPS without it | `https://<workspace>.cribl.cloud/api/v1` |
+| `CRIBL_LIVE_TOKEN` | **yes** - the suite SKIPS without it | Bearer for the workspace API |
+| `CRIBL_LIVE_GROUP` | optional | Pins the CAPTURE group. Without it the suite resolves a Stream group that has connected workers, which is the part that matters |
+| `CRIBL_LIVE_DATASET` | optional | Pins the Lake dataset. Without it the suite WALKS the listing (up to 12 datasets, ~1.4s each when empty). Worth setting: 24 of the lab's 31 datasets are empty over `-24h`, so an unpinned walk spends most of its time proving nothing |
+
 Read the `[live-verify]` lines, not just the pass/fail. Each row prints its
 verdict AND what it observed, because "row 6: CONFIRMED" is worth nothing
-without the count beside it.
+without the count beside it. The Lake row also prints every dataset it walked
+and each one's notes - "0 log types" alone cannot tell an empty dataset from one
+whose rows never arrived.
 
-4. **Then a JSON source** (Event Hub, HEC, Kafka) for row 2, and **one Lake
+5. **Then a JSON source** (Event Hub, HEC, Kafka) for row 2, and **one Lake
    query over a dataset with a numeric discriminator** for rows 3 and 6.
 
 **What a green run does NOT settle.** Row 8 asserts nothing either way by
 design; the suite reports what the evaluator did and leaves the conclusion to a
-human. And `GET /search/query` - the sync route the app prefers - is spec-only:
-Cribl's own UI drives the async job path, so if the sync route is unimplemented
-the suite will show the fallback working and the preferred path never running.
-Check which `path` the query row reports.
+human. (It has since been read: Cribl TOLERATES undeclared fields - see the
+verdicts table.) One trap in reading row 8 was itself a defect and is fixed: a
+`400` was being read as "Cribl rejected the undeclared field", which is a
+verdict about the JavaScript evaluator drawn from a request that never reached
+one. The GUARDED request is now the control, and a failed control yields no
+verdict at all.
+
+> **[SUPERSEDED 2026-08-25]** This section used to end by telling you to
+> "check which `path` the query row reports", on the belief that
+> `GET /search/query` was a synchronous route that might simply be
+> unimplemented. It is implemented, and it is not synchronous - it creates a job.
+> See "`GET /search/query` is the job lifecycle with a different door" above.
+
+### Attempt 2026-08-25 - CLOSED. All eight settled
+
+Run against the lab workspace `main-busy-yonath-kz1bxn7` with a token, Stream
+group `DatacenterEast`, Lake dataset `winevt_plwindows`. The verdicts are in the
+table above. What it took, recorded because the interesting half is not the
+verdicts:
+
+**THE HARNESS WAS ANSWERING FOUR OF THE EIGHT WRONGLY** - each a confident wrong
+answer rather than a failure, which is worse, because a red run gets
+investigated and a green one does not:
+
+- **Row 1 could never have passed.** It read `__inputId` from
+  `extractCapturedEvents`' output, which returns the `_raw` PAYLOAD strings - so
+  the capture ENVELOPE, where `__inputId` lives beside `_raw`, was gone before
+  the check ran. It had reported "no captured event carried `__inputId`" on every
+  run since it was written. It parses the envelope now: 40 of 40.
+- **Row 1's id match restated `.endsWith(":" + id)`** - the exact form the
+  shipped `inputPredicate` REPLACED on 2026-08-21, because `syslog:PaloAlto:tcp`
+  does not end with `:PaloAlto`. It would have failed on any syslog source and
+  blamed the platform for a defect the product had already fixed. It now uses the
+  shipped rule: the second colon segment.
+- **Row 2 looked for four hardcoded field names** and reported "only `_raw` on
+  this source" about events carrying sixteen broken-out fields - printing the
+  very keys that refuted it. It asks the actual question now: is there anything
+  besides the envelope.
+- **Row 8 read any 400 as a rejection** of the undeclared field. The guarded
+  request is the control now, and a failed control yields no verdict.
+- **The control capture took 20 events**, and a busy worker's own internal stats
+  events do not all carry `__inputId`, so a small grab came back entirely
+  internal. Raised to 50; the duration stays 10s because row 5 pins the clamp
+  on it.
+- **The Lake row took `entries[0]`** - whichever dataset id sorts first
+  alphabetically, uncorrelated with holding data, and 24 of 31 are empty. It
+  walks now and reports what it walked.
+- **It took the first Stream group**, which in this lab has no connected workers,
+  so every capture 400'd on a platform precondition. It resolves a group with
+  workers now (`CRIBL_LIVE_GROUP` pins one) and filters on the stream TYPE
+  rather than "not search", which had been letting edge fleets through.
+
+**FOUR PRODUCT DEFECTS, all silent.** The first three each stopped the Lake path
+on their own; the fourth degraded every query that did work:
+
+1. **The Lake job status was never read.** The poll did
+   `readString(poll.body, "status")`, a TOP-LEVEL read, but the live response is
+   `{items:[...], count}` with the status at `items[0].status`. The read returned
+   `undefined` on all twenty polls, the loop burned its budget, and every Lake
+   query reported the job "still pending" - for jobs that were `completed` on the
+   FIRST poll.
+2. **The shell never injected a clock.** Core reads no clock by design and calls
+   `await config.sleep?.(ms)`, so a missing injection is a no-op rather than an
+   error: twenty polls fired inside ~4s, measurably shorter than any populated
+   dataset takes to search. Only an EMPTY dataset could finish in time - the
+   failure mode disguised as a pass.
+3. **`data_source` was missing from `DISCRIMINATOR_FIELDS`.** Cribl's Windows
+   Event source puts the Windows CHANNEL there, and for Windows events the
+   channel IS the log type. Without it the lab's one genuinely security-shaped
+   dataset reported NO log types at all and the operator was told to go capture
+   from a live source - for data already in their lake, already split, already
+   counted:
+
+   ```
+   dataset="winevt_plwindows" | summarize count() by data_source
+     Microsoft-Windows-DNS-Client/Operational   766,570
+     Security                                    22,792
+   ```
+
+   It sits in the LOW-CONFIDENCE tail, so a single-channel dataset still reports
+   no discriminator rather than claiming the whole dataset is one named type.
+
+4. **The preferred query route was never a query route.** `GET /search/query`
+   creates a job, so its "200 with no rows" was the job sitting in `queued` -
+   read by the app as disappointment, every single time. The fallback then issued
+   its own `POST /search/jobs`, so every Lake query ORPHANED a job and a full
+   operator flow orphaned two; and the dead route's failure note was unshifted to
+   the FRONT of `notes`, which the Lake panel renders under a SUCCESS headline.
+   Operators saw raw platform error text on queries that had worked. The route
+   and its `/m/:gid/search/query` grant are both gone - see the correction above.
+
+**What was deliberately NOT added, and this is the more useful half:**
+`datatype`, `schemaId` and `source` are on every Lake row and look like obvious
+additions. Measured live, each carries exactly ONE distinct value in every
+dataset sampled - they describe the DATASET, not the event, so they can never
+split one. Pinned negatively so the next reader does not re-derive it.
+
+**A FIFTH DEFECT, found in the same run and fixed 2026-08-25: for most real
+datasets the Lake mode yielded NOTHING.** Not a failure - a dead end, which is
+harder to notice because every gate was green and every sentence on screen was
+true. Of the 31 datasets in the lab lake, 24 held no events over -24h and only
+ONE of the populated remainder yielded a discriminator. `winevt_dcronly` (1,216
+events, a single Windows channel) and `azure_alerts_validation` (265) are
+single-log-type BY DESIGN: the data is already split per dataset, which is how
+people organise a lake. Each of them was answered with "No field on these events
+distinguishes one log type from another ... capture a sample and name the log
+type yourself instead" - the app sending the operator to a DIFFERENT acquisition
+mode for data sitting in front of it, already named by the dataset itself.
+
+What was wrong was the inference, not the observation. A populated dataset that
+nothing splits holds ONE log type, so:
+
+- Step two still runs, without its `by` clause: `dataset="X" | summarize
+  eventCount=count()`. One extra job, exactly what the grouped form costs, so
+  the two-jobs-per-query budget is unchanged. The count could NOT come from step
+  one's rows - those are capped at `DISCRIMINATOR_SAMPLE_LIMIT`, so a
+  1,216-event dataset would have reported 500, a measurement of our own bound.
+- The log type is named after the DATASET, and `datasetAsLogType: true` says so
+  all the way to the panel, which prints the caveat beside the row. The app does
+  not get to claim a vendor log type it never observed - the same rule that
+  keeps `data_source` in the low-confidence tail.
+- The commit path took the field as optional: no field means no `where` clause
+  and the whole dataset is fetched, which is only addressable for ONE log type.
+  Asking for several with no field is refused rather than served, because the
+  unfiltered query answers identically for each and would write the same events
+  into the store under names nobody observed.
+- EMPTY and SINGLE-LOG-TYPE are pinned side by side, in core and in the panel.
+  They rendered as the same dead end before, and they are opposite facts.
+
+A lost count costs the number and never the offer: `ok` stays true, the volume
+stays undefined rather than becoming a zero, and the sample is still takeable.
+
+**A SIXTH DEFECT, reported from the live app 2026-08-25: the group with NO
+discriminator value was reported and then discarded.** Querying the Lake dataset
+`PaloAlto` answered "13 log types in PaloAlto, highest volume first" and then "1
+group carried no msgid value and was left out". `summarize count() by msgid`
+returns a group for the events that carry no msgid, with a real count - and
+`readGroupValue` collapsed that group's key into the same `undefined` it used for
+a key it could not read at all, so the row was dropped. Reported beats silent,
+but those events then had no route to becoming a sample: nothing could shape
+them, and in the generated pack they would arrive unshaped.
+
+It is the fifth defect's bargain one level down, and it is resolved the same way:
+
+- The group is OFFERED as a row of its own, with the platform's `summarize`
+  count. Several value-less groups (an engine may return `null` and `""`
+  separately) fold into ONE row and their counts sum, because one filter selects
+  all of them. If any part of that sum came back unreadable the whole count stays
+  undefined - a partial total understates the events it speaks for, which is the
+  same all-or-nothing rule `merge.ts` keeps for summed bytes.
+- It is NAMED `(no msgid)` - minted from the FIELD, never read out of the data -
+  and `LakeLogTypeVolume.unnamed` says so per row, all the way to the caveat the
+  panel prints beside it. This is the harder case than the dataset-named row: it
+  sits IN a list of twelve names the data really did supply, so an uncaveated
+  label reads as a thirteenth vendor log type.
+- The byte estimate follows the standing rule untouched: measured from that
+  row's OWN sampled events when step one held any, absent otherwise.
+- Ambiguity is REFUSED rather than resolved. If a real log type in the dataset is
+  already spelled `(no msgid)`, no row is minted - two rows sharing one name
+  would send the fetch, which recognises the pick BY its name, after the wrong
+  events.
+- **The fetch filter is grounded in the spec, not guessed.**
+  `where tostring(field)=="value"` cannot express "there is no value": every
+  literal IS a value. The vendored `cribl-openapi.json` attests exactly one
+  null-ish Kusto predicate for Cribl Search - `isnotempty(vendor)`, as a dataset
+  ruleset's `kustoExpression` - alongside `| where <expr>`, `field == "literal"`
+  and the bare literal `false`. So the filter is `isnotempty(msgid)==false`,
+  built from those forms alone. `isempty`, `isnull` and `not()` appear NOWHERE in
+  the spec and are not used. The obvious alternative - excluding the known values
+  with `!in` - is unattested AND semantically wrong: Kusto's null comparisons are
+  not true, so the null key would be filtered out by the very predicate meant to
+  select it, returning nothing while looking right.
+- **And the filter is CHECKED rather than trusted**, because a composition of
+  attested atoms is still a query no one here has run. `fetchLakeLogTypeEvents`
+  reads the rows that come back and refuses the haul if any of them DOES carry a
+  value in that field. All three outcomes are then honest: Cribl rejects the
+  filter and the existing failure path names the HTTP error; Cribl accepts it and
+  means something else, and the note says so; or it works. An empty answer for
+  this row is reported as AMBIGUOUS - unlike every other log type, where empty
+  just means the window holds none of it - and the count the operator has on
+  screen is what tells the two apart.
+
+Still unverified against a live workspace: whether Cribl Search accepts
+`isnotempty(field)==false`. The check above is what makes shipping it safe
+without that answer.
 
 ### Attempt 2026-08-20 - blocked, with two things settled anyway
 
@@ -723,7 +1050,10 @@ came out of it:
   `/master/groups` ever 404s, this is the first thing to try.
 - **Corroborating only:** the UI labels a source `cribl_tcp:in_cribl_tcp` -
   the `<type>:<id>` shape row 1 asserts. That is a UI label, NOT an observation
-  of `__inputId` on an event, so row 1 stays unverified.
+  of `__inputId` on an event, so row 1 stays unverified. *(Settled 2026-08-25 by
+  reading `__inputId` off 40 captured events - see the section above. The label
+  was right, and it was also incomplete: `syslog:PaloAlto:tcp` has THREE
+  segments.)*
 
 What blocked it, so the next attempt does not repeat it:
 
@@ -739,6 +1069,13 @@ What blocked it, so the next attempt does not repeat it:
 
 The token route avoids 2 entirely: the suite talks to the API and never touches
 the UI.
+
+> **[CLOSED 2026-08-25.]** The token route was taken and it did avoid 2. Blocker
+> 3 was real rather than a rendering fault, and generating traffic first was the
+> right instruction - but it was not sufficient on its own: the group the suite
+> picked had no connected workers, so captures 400'd on a precondition before any
+> event mattered. "Generate traffic" and "pick a group with workers" are two
+> requirements, and only the first was written down.
 
 ---
 

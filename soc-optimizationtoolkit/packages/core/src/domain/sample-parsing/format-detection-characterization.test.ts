@@ -170,6 +170,20 @@ describe("PAN-OS positional CSV", () => {
         "1,2026/08/13 10:49:02,013201031064,DECRYPTION,0,2817,2026/08/13 10:48:54,10.0.0.7,8.8.4.4",
       "HIP-MATCH":
         "1,2026/08/13 10:49:02,013201031064,HIP-MATCH,0,2817,2026/08/13 10:48:54,user1,vsys1",
+      // The four orders added 2026-08-25 from Palo Alto's published Format
+      // lines. Same rule as the eight above: every dictionary is covered here,
+      // never a sample of them.
+      USERID:
+        "1,2026/08/13 10:49:02,013201031064,USERID,login,2817,2026/08/13 10:48:54,vsys1,10.0.0.8",
+      IPTAG:
+        "1,2026/08/13 10:49:02,013201031064,IPTAG,login,2817,2026/08/13 10:48:54,vsys1,10.0.0.9",
+      CORRELATION:
+        "1,2026/08/13 10:49:02,013201031064,CORRELATION,0,2817,2026/08/13 10:48:54,10.0.0.10,src-user",
+      // AUDIT is the odd one out and is covered separately below: it omits the
+      // leading FUTURE_USE, so its type sits at index 2 and its order has no
+      // `type` column at all - the log type lands in `subtype`.
+      AUDIT:
+        '003001000000,2024/04/18 18:35:20,audit,2561,gui-op,Mustang,"<show><config-locks/></show>",success',
     };
     // Every dictionary is covered - not a sample of them. "HIP-MATCH" is
     // QUOTED in the dictionary because of its hyphen, which is how two separate
@@ -177,26 +191,36 @@ describe("PAN-OS positional CSV", () => {
     expect(Object.keys(bodies).sort()).toEqual(Object.keys(PANOS_CSV_HEADERS).sort());
     for (const [logType, body] of Object.entries(bodies)) {
       const records = parseCsv(body);
-      expect(records).toHaveLength(1);
-      // Named via the dictionary - `type` exists only when one was applied.
-      expect(records[0].type).toBe(logType);
-      expect(records[0]._3).toBeUndefined();
+      expect(records, logType).toHaveLength(1);
+      // Named via the dictionary - a positional _3 means none was applied.
+      expect(records[0]._3, logType).toBeUndefined();
+      if (logType === "AUDIT") {
+        expect(records[0].subtype).toBe("audit");
+        expect(records[0].serial).toBe("003001000000");
+      } else {
+        expect(records[0].type, logType).toBe(logType);
+      }
     }
   });
 
   it("still parses a type with NO dictionary positionally, rather than dropping it", () => {
     // isPanosFormat recognises more types than there are dictionaries for
-    // (HIP-MATCH, CORRELATION, GTP...). Those must still parse - positionally
-    // is the honest outcome when the column order is not recorded - and must
-    // not silently vanish.
+    // (AUTH, GTP, SCTP, WILDFIRE...). Those must still parse - positionally is
+    // the honest outcome when the column order is not recorded - and must not
+    // silently vanish.
+    //
+    // This used USERID until 2026-08-25, when USERID gained a cited order. The
+    // subject moved to WILDFIRE rather than the assertion being deleted,
+    // because the behaviour under test is "undictionaried types survive", not
+    // anything about USERID.
     const records = parseCsv(
-      "1,2026/08/13 10:49:02,013201031064,USERID,0,2817,2026/08/13 10:48:54,vsys1,user1",
+      "1,2026/08/13 10:49:02,013201031064,WILDFIRE,0,2817,2026/08/13 10:48:54,vsys1,user1",
     );
     expect(records).toHaveLength(1);
-    expect(records[0]._3).toBe("USERID");
+    expect(records[0]._3).toBe("WILDFIRE");
     expect(records[0].type).toBeUndefined();
-    // USERID is genuinely undictionaried - assert that rather than trusting it.
-    expect(PANOS_CSV_HEADERS.USERID).toBeUndefined();
+    // WILDFIRE is genuinely undictionaried - assert that rather than trusting it.
+    expect(PANOS_CSV_HEADERS.WILDFIRE).toBeUndefined();
   });
 
   it("leaves STRICT mode alone - it classifies one split event", () => {

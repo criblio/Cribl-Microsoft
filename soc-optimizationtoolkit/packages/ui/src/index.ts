@@ -180,7 +180,10 @@ export type {
 // that RE-KEYS the tagged-sample store entry and any downstream log-type-keyed
 // edits (the legacy orphaning-bug fix). Plus the pure decision layer behind it.
 export { SampleIntakeSection } from "./screens/samples/sample-intake-section";
-export type { SampleIntakeSectionProps } from "./screens/samples/sample-intake-section";
+export type {
+  SampleArrivalEvent,
+  SampleIntakeSectionProps,
+} from "./screens/samples/sample-intake-section";
 export {
   buildTaggedSample,
   chipFromTagged,
@@ -328,11 +331,19 @@ export type {
 // queue state that resolves EVERY headerless CSV in a multi-file batch instead
 // of dropping the rest after the first (the legacy silent-drop fix). Applying
 // re-parses via the core parseCsvWithHeaders and re-keys the tagged sample.
+//
+// buildFieldPreview / coverageLine / resolveDefinitionSource are the LIVE
+// PREVIEW surface (vendor field-definition plan step 2): every input path hands
+// them one array of names and gets back each position's name beside its real
+// value plus the unmapped remainder, counted.
 export { CsvHeaderDialog } from "./screens/samples/csv-header-dialog";
 export type { CsvHeaderDialogProps } from "./screens/samples/csv-header-dialog";
 export {
+  PREVIEW_ROW_LIMIT,
   advanceQueue,
+  buildFieldPreview,
   buildResolutionQueue,
+  coverageLine,
   currentItem,
   deriveMismatch,
   isHeaderlessCsvSample,
@@ -342,6 +353,7 @@ export {
   queuePosition,
   reconstructCsvLines,
   remainingCount,
+  resolveDefinitionSource,
   resolveHeaders,
   singleItemQueue,
   splitCsvRow,
@@ -351,8 +363,43 @@ export type {
   CsvMismatch,
   CsvResolutionItem,
   CsvResolutionQueue,
+  DefinitionSource,
+  DefinitionTab,
+  FieldDefinitionPreview,
+  PastedDefinitionTab,
   PreviewZipRow,
 } from "./screens/samples/csv-resolution-state";
+
+// The INTERACTIVE column mapper (vendor field-definition plan step 3, "Gap 2"):
+// the third input path, for the operator who has neither a header row nor a
+// vendor feed config to paste. It shows every column POSITION beside its real
+// values and lets them name it - naming `_7` is guesswork, naming the column
+// that reads `192.168.0.2` is not. Unnamed positions stay positional; nothing
+// here infers a name from a value's shape. It supplies the SHARED live preview
+// above through mapperDefinitionSource, rather than growing a preview of its own.
+export {
+  EMPTY_COLUMN_DRAFTS,
+  buildColumnMappingRows,
+  clearColumnDrafts,
+  columnExamples,
+  columnMappingProgressLabel,
+  deriveColumnMappingSummary,
+  mapperDefinitionSource,
+  resolvedColumnNames,
+  setColumnDraft,
+} from "./screens/samples/csv-column-mapping";
+export type {
+  ColumnDrafts,
+  ColumnMappingRow,
+  ColumnMappingSummary,
+  MappableItem,
+} from "./screens/samples/csv-column-mapping";
+
+// Remembered column orders (vendor-field-definition plan, Gap 3): the
+// ContentCache load/save loop around the pure @soc/core decisions, so a vendor
+// + log type named once is never asked about again.
+export { useVendorColumnOrder } from "./screens/samples/use-vendor-column-order";
+export type { VendorColumnOrderState } from "./screens/samples/use-vendor-column-order";
 
 // Azure targeting (Unit 2): the subscription -> workspace -> resource-group
 // cascade, create/enable actions, explicit scope commit, and the pure state

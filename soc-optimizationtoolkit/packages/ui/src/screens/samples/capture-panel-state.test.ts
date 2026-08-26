@@ -1,10 +1,14 @@
 /**
  * Pins for the capture panel's pure decisions (plan Phase 4, ADR 0003).
  *
- * The two failures worth guarding: suggesting the wrong log types (which wastes
- * a capture and can return nothing), and letting a commit silently overwrite a
- * sample the operator already curated - the store is replace-by-logType, so
- * that loss is invisible without a warning.
+ * The failures worth guarding: suggesting the wrong log types (which wastes a
+ * capture and can return nothing), letting a commit silently overwrite a sample
+ * the operator already curated - the store is replace-by-logType, so that loss
+ * is invisible without a warning - and, since 2026-08-26, ROUNDING A COMMIT UP
+ * TO A CLEAN ONE. plannedCaptureSamples drops a log type whose lines parse to no
+ * record, and the panel had nowhere to say so: it cleared the preview and
+ * reverted to its idle sentence, which reads identically whether three of three
+ * or one of three reached the store.
  */
 
 import { describe, expect, it } from "vitest";
@@ -12,6 +16,7 @@ import type { CaptureSamplesResult } from "@soc/core";
 import {
   captureLogTypeChoices,
   composeFilter,
+  deriveCaptureCommitView,
   deriveCaptureView,
   filterWarning,
   plannedCaptureSamples,
@@ -299,5 +304,100 @@ describe("plannedCaptureSamples", () => {
       "capture:x",
     );
     expect(samples.every((s) => s.parsed.records.length > 0)).toBe(true);
+  });
+});
+
+/**
+ * WHAT A COMMIT REPORTS AFTERWARDS - a half this panel simply did not have
+ * (2026-08-26 audit).
+ *
+ * On commit it called plannedCaptureSamples, which silently drops a log type
+ * whose lines parse to no record, and then cleared the result. With no outcome
+ * state the headline reverted to the IDLE sentence - "Capture a short, filtered
+ * sample from this source. Nothing is added until you confirm." - which is
+ * actively false the moment after something has been added, and identical
+ * whether 3 of 3 or 1 of 3 log types were stored. The Lake panel rejects exactly
+ * this in its own header: "clearing the panel on success would round a partial
+ * haul up to a clean one."
+ */
+describe("deriveCaptureCommitView", () => {
+  it("is silent until a commit has happened", () => {
+    expect(deriveCaptureCommitView(null, false).status).toBe("idle");
+    expect(deriveCaptureCommitView(null, false).headline).toBe("");
+  });
+
+  it("says a full commit was full", () => {
+    expect(deriveCaptureCommitView({ stored: 2, returned: 2 }, false)).toEqual({
+      status: "done",
+      headline: "Added 2 samples from this capture.",
+    });
+    expect(
+      deriveCaptureCommitView({ stored: 1, returned: 1 }, false).headline,
+    ).toBe("Added 1 sample from this capture.");
+  });
+
+  it("NAMES a partial commit rather than rounding it up", () => {
+    // The defect itself: one of three log types held nothing storable, and the
+    // panel said the same thing it says when all three land.
+    const partial = deriveCaptureCommitView({ stored: 2, returned: 3 }, false);
+
+    expect(partial.status).toBe("partial");
+    expect(partial.headline).toBe(
+      "Added 2 of the 3 log types this capture returned; the rest held nothing this app could parse into a record.",
+    );
+    // The two must not read the same, which is the whole point.
+    expect(partial.headline).not.toBe(
+      deriveCaptureCommitView({ stored: 3, returned: 3 }, false).headline,
+    );
+  });
+
+  it("keeps NOTHING STORED apart from a partial commit", () => {
+    // Every split parsed to a husk. Nothing was added, which is a different
+    // message and a different next move from most-of-it-landed.
+    const none = deriveCaptureCommitView({ stored: 0, returned: 3 }, false);
+
+    expect(none.status).toBe("unusable");
+    expect(none.headline).toContain("nothing was added");
+    expect(none.headline).not.toContain("Added 0");
+  });
+
+  it("names a REFUSED store write, and claims nothing about what landed", () => {
+    // The write was awaited with no catch, so a rejection rendered as NOTHING -
+    // the button un-disabled and the preview stayed, indistinguishable from a
+    // slow store.
+    const failed = deriveCaptureCommitView(null, false, "KV store quota exceeded");
+
+    expect(failed.status).toBe("store-failed");
+    expect(failed.headline).toBe(
+      'The samples could not be saved: KV store quota exceeded. The capture is still here - press "Add these as samples" to try again.',
+    );
+    // A rejected write does not report where it stopped, so neither does this.
+    expect(failed.headline).not.toContain("nothing was added");
+    expect(failed.headline).not.toContain("Added");
+  });
+
+  it("lets the live write outrank both a stale outcome and a stale error", () => {
+    expect(
+      deriveCaptureCommitView({ stored: 2, returned: 2 }, true).status,
+    ).toBe("committing");
+    expect(deriveCaptureCommitView(null, true, "disk full").status).toBe(
+      "committing",
+    );
+    // Once it settles, the failure is what just happened and outranks the report
+    // of the commit before it.
+    expect(
+      deriveCaptureCommitView({ stored: 2, returned: 2 }, false, "disk full")
+        .status,
+    ).toBe("store-failed");
+  });
+
+  it("gives four distinct sentences to four distinct answers", () => {
+    const headlines = [
+      deriveCaptureCommitView({ stored: 3, returned: 3 }, false).headline,
+      deriveCaptureCommitView({ stored: 1, returned: 3 }, false).headline,
+      deriveCaptureCommitView({ stored: 0, returned: 3 }, false).headline,
+      deriveCaptureCommitView(null, false, "disk full").headline,
+    ];
+    expect(new Set(headlines).size).toBe(4);
   });
 });

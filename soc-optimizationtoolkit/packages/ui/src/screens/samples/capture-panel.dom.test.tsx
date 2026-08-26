@@ -166,6 +166,15 @@ const commitButton = (c: HTMLElement) =>
 const resultRows = (c: HTMLElement) => c.querySelectorAll(".capture-results li");
 const status = (c: HTMLElement) =>
   c.querySelector(".capture-panel")?.getAttribute("data-status");
+/** What the last commit established, which outlives the preview it came from. */
+const outcomes = (c: HTMLElement) => c.querySelectorAll(".capture-outcome");
+const outcomeStatus = (c: HTMLElement) =>
+  c.querySelector(".capture-outcome")?.getAttribute("data-status");
+const outcomeHeadline = (c: HTMLElement) =>
+  c.querySelector(".capture-outcome .panel-desc")?.textContent;
+/** The query headline. The outcome renders a .panel-desc of its own. */
+const headline = (c: HTMLElement) =>
+  c.querySelector(".capture-panel > .panel-desc")?.textContent;
 
 const ticked = (c: HTMLElement) => [...boxes(c)].filter((b) => b.checked).length;
 
@@ -523,6 +532,159 @@ describe("CapturePanel - nothing enters the store without a click", () => {
     expect(replaces[1].textContent).toBe(
       "Adding these replaces your existing TRAFFIC sample.",
     );
+  });
+});
+
+/**
+ * WHAT THE COMMIT REPORTS AFTERWARDS (2026-08-26 audit).
+ *
+ * This panel had no outcome state at all. A commit called plannedCaptureSamples
+ * - which silently drops any log type whose lines parse to no record - and then
+ * cleared the result, returning the headline to its IDLE sentence: "Capture a
+ * short, filtered sample from this source. Nothing is added until you confirm."
+ * That is false the moment after a commit, and identical whether 3 of 3 or 1 of 3
+ * log types were stored. The Lake panel's header rejects exactly this: "clearing
+ * the panel on success would round a partial haul up to a clean one."
+ *
+ * These live only in the component: the pure view is now pinned in
+ * capture-panel-state.test.ts, but WHETHER THE PANEL RENDERS IT, and whether the
+ * false idle sentence is still printed over it, is a statement about this file.
+ */
+describe("CapturePanel - what the commit reports afterwards", () => {
+  /** A capture whose middle split holds nothing storable. */
+  const ONE_HUSK = result({
+    rawEvents: ['{"type":"TRAFFIC"}', "   ", '{"type":"THREAT"}'],
+    splits: [
+      split("TRAFFIC", ['{"type":"TRAFFIC"}']),
+      split("JUNK", ["   "]),
+      split("THREAT", ['{"type":"THREAT"}']),
+    ],
+  });
+
+  const runCapture = (c: HTMLElement) =>
+    act(async () => {
+      fireEvent.click(runButton(c));
+    });
+  const addSamples = (c: HTMLElement) =>
+    act(async () => {
+      fireEvent.click(commitButton(c) as HTMLButtonElement);
+    });
+
+  it("reports a FULL commit instead of reverting to the idle instruction", async () => {
+    const { container } = renderPanel();
+    await runCapture(container);
+    await addSamples(container);
+
+    expect(outcomes(container)).toHaveLength(1);
+    expect(outcomeStatus(container)).toBe("done");
+    expect(outcomeHeadline(container)).toBe("Added 2 samples from this capture.");
+    // The sentence that used to occupy this screen, about a capture that had
+    // just been added.
+    expect(container.textContent).not.toContain(
+      "Nothing is added until you confirm",
+    );
+  });
+
+  it("NAMES a partial commit rather than rounding it up to a clean one", async () => {
+    const onCapture = vi.fn(
+      async (_filter: string, _maxEvents: number, _duration: number) => ONE_HUSK,
+    );
+    const { container, onCommit } = renderPanel({ onCapture });
+    await runCapture(container);
+
+    // Three log types on screen, and the store is about to get two.
+    expect(resultRows(container)).toHaveLength(3);
+
+    await addSamples(container);
+
+    expect(onCommit.mock.calls[0][0].map((s) => s.logType)).toEqual([
+      "TRAFFIC",
+      "THREAT",
+    ]);
+    expect(outcomeStatus(container)).toBe("partial");
+    expect(outcomeHeadline(container)).toBe(
+      "Added 2 of the 3 log types this capture returned; the rest held nothing this app could parse into a record.",
+    );
+    // The whole defect: it must not read the same as a clean commit.
+    expect(outcomeHeadline(container)).not.toBe(
+      "Added 3 samples from this capture.",
+    );
+  });
+
+  it("keeps the preview when a commit stored NOTHING, and says so", async () => {
+    // Every split a husk. Clearing the screen would leave the operator with an
+    // idle panel and no idea why nothing appeared - and the only way back to the
+    // events is another capture.
+    const onCapture = vi.fn(
+      async (_filter: string, _maxEvents: number, _duration: number) =>
+        result({
+          rawEvents: ["   "],
+          splits: [split("JUNK", ["   "])],
+        }),
+    );
+    const { container, onCommit } = renderPanel({ onCapture });
+    await runCapture(container);
+    await addSamples(container);
+
+    expect(onCommit.mock.calls[0][0]).toEqual([]);
+    expect(outcomeStatus(container)).toBe("unusable");
+    expect(outcomeHeadline(container)).toContain("nothing was added");
+    expect(resultRows(container)).toHaveLength(1);
+  });
+
+  it("names a REJECTED store write and keeps the capture to retry from", async () => {
+    // The commit was awaited with no catch, so a refused write un-disabled the
+    // button and changed nothing else - indistinguishable from a slow store.
+    const onCommit = vi.fn(async (_samples: TaggedSample[]) => {
+      throw new Error("KV store quota exceeded");
+    });
+    const { container } = renderPanel({ onCommit });
+    await runCapture(container);
+    await addSamples(container);
+
+    expect(onCommit).toHaveBeenCalledTimes(1);
+    expect(outcomeStatus(container)).toBe("store-failed");
+    expect(outcomeHeadline(container)).toContain("could not be saved");
+    expect(outcomeHeadline(container)).toContain("KV store quota exceeded");
+    // Nothing is claimed about what landed, and the capture is still here.
+    expect(outcomeHeadline(container)).not.toContain("Added");
+    expect(resultRows(container)).toHaveLength(2);
+    expect(commitButton(container)?.disabled).toBe(false);
+    // Both halves stay readable: what was captured AND why it would not save.
+    expect(headline(container)).toBe("Captured 3 events in 2 log types (ndjson).");
+
+    await addSamples(container);
+    expect(onCommit).toHaveBeenCalledTimes(2);
+  });
+
+  it("clears the summary when a new capture starts", async () => {
+    // It describes the PREVIOUS capture; left up over a running one it reads as
+    // the answer to the request now in flight.
+    const { container } = renderPanel();
+    await runCapture(container);
+    await addSamples(container);
+    expect(outcomes(container)).toHaveLength(1);
+
+    await runCapture(container);
+
+    expect(outcomes(container)).toHaveLength(0);
+    expect(headline(container)).toBe("Captured 3 events in 2 log types (ndjson).");
+  });
+
+  it("drops the summary when the SOURCE changes", async () => {
+    // Left up, it reads as a report about the source now named above it.
+    const { props } = makeProps();
+    const { container, rerender } = render(<CapturePanel {...props} />);
+    await act(async () => {
+      fireEvent.click(runButton(container));
+    });
+    await addSamples(container);
+    expect(outcomes(container)).toHaveLength(1);
+
+    rerender(<CapturePanel {...props} source={OTHER_SOURCE} />);
+
+    expect(outcomes(container)).toHaveLength(0);
+    expect(headline(container)).toContain("Nothing is added until you confirm");
   });
 });
 

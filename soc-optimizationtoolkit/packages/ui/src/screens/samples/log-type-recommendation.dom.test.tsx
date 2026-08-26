@@ -265,6 +265,61 @@ describe("LogTypeRecommendation - measured volume (plan Phase 5)", () => {
     expect(container.textContent).not.toContain("Volumes counted");
   });
 
+  // The BYTE ESTIMATE (plan Phase 5, last item). A count alone cannot be
+  // reasoned about against a Sentinel bill, which is charged by volume - but the
+  // figure that can is a mean from a SAMPLE times a count over the whole window,
+  // so every one of these turns on it reading as an estimate and on it being
+  // absent, rather than zero, whenever it could not be computed.
+
+  it("renders the estimate beside the count, marked as an estimate", () => {
+    const { container } = renderFor([THREE_TYPES], [], true, "", {
+      // 1,000 events at a measured 512 B mean = 512,000 B = "500 KB".
+      volumes: [{ logType: "TRAFFIC", eventCount: 1000, meanEventBytes: 512 }],
+      window: WINDOW,
+    });
+
+    const volume = container.querySelector(".log-type-recommendation-volume");
+    expect(volume?.textContent).toBe(" - 1,000 events, ~500 KB estimated");
+    // And the sentence saying WHAT the estimate is, so a byte figure beside a
+    // counted one cannot read as equally measured.
+    expect(container.textContent).toContain(
+      "Byte figures are estimates: the mean size of the events sampled",
+    );
+  });
+
+  it("shows the count ALONE when the log type was never sampled", () => {
+    // A counted log type with no sample of its own: the count renders, the
+    // estimate does not, and nothing stands in for it.
+    const { container } = renderFor([THREE_TYPES], [], true, "", {
+      volumes: [{ logType: "TRAFFIC", eventCount: 890123 }],
+      window: WINDOW,
+    });
+
+    const volume = container.querySelector(".log-type-recommendation-volume");
+    expect(volume?.textContent).toBe(" - 890,123 events");
+    expect(container.textContent).not.toContain("estimated");
+    expect(container.textContent).not.toContain("0 B");
+    // The explaining sentence stays away too - there is no estimate to explain.
+    expect(container.textContent).not.toContain("Byte figures are estimates");
+  });
+
+  it("never prints ~0 B for a busy log type whose mean came back as zero", () => {
+    // The worst shape this feature could take: a defaulted zero reading as a
+    // measured fact. Core refuses the zero mean; this pins that the refusal
+    // survives all the way to the screen.
+    const { container } = renderFor([THREE_TYPES], [], true, "", {
+      volumes: [
+        { logType: "TRAFFIC", eventCount: 890123, meanEventBytes: 0 },
+      ],
+      window: WINDOW,
+    });
+
+    const volume = container.querySelector(".log-type-recommendation-volume");
+    expect(volume?.textContent).toBe(" - 890,123 events");
+    expect(container.textContent).not.toContain("0 B");
+    expect(container.textContent).not.toContain("estimated");
+  });
+
   it("ranks the unreferenced note by volume, still as a note", () => {
     const { container } = renderFor(
       ['T | where type == "TRAFFIC"'],

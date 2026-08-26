@@ -5,6 +5,10 @@
  * much of each. capture-samples is the other half.
  */
 
+// `SearchPath` was exported here until 2026-08-25. It named which of two routes
+// answered; there is one route now (the sync GET created a job of its own and
+// was deleted), so the type and the `path` field it described are both gone.
+// Nothing outside this usecase's tests had ever read either.
 export type {
   FetchLakeEventsOptions,
   FetchLakeEventsResult,
@@ -12,7 +16,6 @@ export type {
   LakeLogTypeVolume,
   QueryLakeSamplesOptions,
   QueryLakeSamplesResult,
-  SearchPath,
 } from "./query-lake-samples";
 // THE SEARCH PLUMBING IS DELIBERATELY NOT EXPORTED: the two route paths and
 // their job-id builders, the poll bounds, the step-one and step-two query
@@ -36,6 +39,7 @@ export type {
 // where a rule about this usecase's query text belongs.
 export {
   DEFAULT_SAMPLE_LIMIT,
+  DISCRIMINATOR_SAMPLE_LIMIT,
   MAX_SAMPLE_LIMIT,
   fetchLakeLogTypeEvents,
   queryLakeSamples,

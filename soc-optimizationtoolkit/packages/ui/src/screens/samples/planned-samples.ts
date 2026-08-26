@@ -102,6 +102,58 @@ export function storeLabelFor(
 }
 
 /**
+ * What to SAY when the store write itself rejects - the one copy, shared by both
+ * commits for the reason everything else here is shared.
+ *
+ * WHY THIS EXISTS AT ALL (2026-08-26 audit). Both panels awaited `onCommit`
+ * inside a `try { ... } finally { setCommitting(false) }` with NO catch. A
+ * rejected write un-disabled the button and changed nothing else: no outcome, no
+ * error, the preview still sitting there. The operator pressed "Add as samples",
+ * saw nothing happen, and could not tell a refused write from a slow one - the
+ * empty-versus-failed collapse this codebase keeps closing, in the direction
+ * where a failure is rendered as NOTHING AT ALL.
+ *
+ * THE REASON IS QUOTED, NEVER INVENTED. When the rejection carries no message
+ * this says so rather than substituting a plausible cause; "the store gave no
+ * reason" sends the operator to the console, while a guessed cause sends them
+ * somewhere that may have nothing to do with it.
+ */
+export function commitErrorText(error: unknown): string {
+  if (error instanceof Error && error.message.trim() !== "") {
+    return error.message.trim();
+  }
+  if (typeof error === "string" && error.trim() !== "") return error.trim();
+  return "the store gave no reason";
+}
+
+/**
+ * How many raw lines a preview shows per log type, and the ONE place either
+ * acquisition panel decides it.
+ *
+ * Three, because a preview is for RECOGNISING an event's shape - is this CEF, is
+ * there a transport envelope in front of the vendor's own bytes - and not for
+ * reading the haul. Shared for the same reason the conversion below is: two
+ * panels each previewing "the first few lines" by their own number is two
+ * answers to one question, and an operator comparing a captured sample with a
+ * Lake one would be comparing different amounts of evidence.
+ */
+export const PREVIEW_LINES = 3;
+
+/**
+ * The first few raw lines of an acquired log type, EXACTLY as they arrived.
+ *
+ * Not reformatted, not pretty-printed, not trimmed, and that is the whole value
+ * of it: the preview has to be the bytes {@link plannedSamplesFrom} would tag,
+ * or it stops being evidence about what is going into the store. Tidying a line
+ * here would hide precisely the defect a preview exists to catch - the syslog
+ * envelope that reached a Lake sample unseen (2026-08-25) is what one line of
+ * unedited text would have shown on screen.
+ */
+export function previewLines(rawEvents: readonly string[]): string[] {
+  return rawEvents.slice(0, PREVIEW_LINES);
+}
+
+/**
  * Convert acquired events into storage tagged samples - one per log type.
  *
  * Re-tags through {@link tagSampleFromContent}, the SAME content-first parse an

@@ -1204,7 +1204,7 @@ is "these groups differ from what we deployed, in these files we can see" rather
 than a confident clean bill - the same rule as the inventory standard. An unknown
 must not render as a zero.
 
-## Sample browser: REMOVED (ADR-0003) - ALL PHASES 0-5 DONE
+## Sample browser: REMOVED (ADR-0003) - ALL PHASES 0-5 DONE, VERIFIED LIVE 2026-08-25
 
 **Executed 2026-08-19/20 on `feature/log-type-recommendation`.** The browser and
 its whole acquisition domain are deleted; the `LogTypeRecommendation` panel
@@ -1223,13 +1223,58 @@ and tag nothing without a click. Lake query: `queryLakeSamples`, `LakePanel`.
 recommendation, entries and the unreferenced set carry a volume and rank by it,
 with no threshold and no flagged finding by decision.
 
-**What has NOT happened: none of this has run against a real workspace.** Every
+> **[SUPERSEDED 2026-08-25 - BOTH halves of the paragraph below are now false.]**
+> This ran against a real workspace and it is packaged. The original text is kept
+> because its "if wrong" framing is what made the run worth doing.
+
+~~**What has NOT happened: none of this has run against a real workspace.** Every
 platform belief behind Phases 3-5 is pinned against `FakeCriblClient` only; the
 suite that settles them is `packages/core/src/testing/live-verify.test.ts` and it
 skips without `CRIBL_LIVE_BASE`/`CRIBL_LIVE_TOKEN`. The 2026-08-20 attempt was
 blocked on an expired token and an idle lab - generate traffic first, or rows 1,
 2 and 4 stay inconclusive. Nor is any of it packaged: the app is still 1.11.15
-and every ADR-0003 commit is unreleased.
+and every ADR-0003 commit is unreleased.~~
+
+**IT HAS NOW RUN. All eight platform beliefs are SETTLED (2026-08-25)** against
+the lab workspace `main-busy-yonath-kz1bxn7`, Stream group `DatacenterEast`,
+Lake dataset `winevt_plwindows`. Rows 1-7 CONFIRMED; row 8 answered the other
+way - **Cribl TOLERATES a filter referencing an undeclared field**, so the
+`typeof` guards in `capture-filter.ts` are insurance rather than load-bearing.
+The guards stay; what was wrong was the module's stated model, not the code. The
+full verdict table, and what each row actually observed, is in the plan's
+"Needs live verification" section.
+
+**And it is packaged.** ADR-0003 shipped in full in 1.12.0; **1.12.1 is current**
+(see the release entry above). The "still 1.11.15, everything unreleased" claim
+was true when written on 2026-08-23 and stopped being true the next day.
+
+**The run's real yield was defects, not confirmations.** Four PRODUCT defects,
+all silent, the first three each enough on their own to stop the Lake path: the
+job status was read at the top level when it lives at `items[0].status` in the
+`{items,count}` envelope, so every job reported "still pending"; no clock was
+injected into the poll loop, so twenty polls fired inside ~4s and only an EMPTY
+dataset could finish in time; `data_source` was missing from
+`DISCRIMINATOR_FIELDS`, so the lab's one security-shaped dataset reported no log
+types at all - for 789K events already split by Windows channel; and the
+"preferred" query route was never a query route (below), which orphaned a job per
+query and showed operators a platform error under a success headline. Plus seven
+HARNESS defects, four of which had been returning confident wrong answers rather
+than failing (row 1 could never have passed - it read `__inputId` off the payload
+strings, after the envelope carrying `__inputId` had been discarded). A green run
+of a lying harness is worse than a red one, because nobody investigates it.
+
+**Two platform facts worth keeping out of the plan's depths:** a capture runs ON
+a worker, so `POST /system/capture` against a group with no connected workers
+returns `400 {"message":"No worker nodes are connected to this worker group."}`;
+and `GET /search/query` is **not** a synchronous route - it creates a job and
+returns `{isFinished:false, job:{id,status:"queued"}}`. The phase 0 doc's
+"Synchronous? Yes" row is corrected there. That route has been DELETED from
+`queryLakeSamples` and its `/m/:gid/search/query` grant withdrawn from
+`policies.yml`: preferring it cost an ORPHANED job on every Lake query (two per
+operator flow) and put its raw platform error under a SUCCESS headline in the
+Lake panel, while buying nothing - both doors cost create + poll + read. With
+only the proven lifecycle left, an empty answer is now believed rather than
+re-confirmed with a second job.
 
 Phase 4's first correctness trap is recorded in the plan and shipped as a
 warning: a capture request has NO source field, so the source is an `__inputId`

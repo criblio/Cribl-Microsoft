@@ -1,9 +1,12 @@
 # ADR 0003: Remove the sample browser; recommend log types from the operator's own environment
 
 Date: 2026-08-18
-Status: Accepted; EXECUTED in full 2026-08-23 (all phases 0-5, PR #119).
-        Not yet verified against a live workspace - see the plan's
-        "Needs live verification" table and live-verify.test.ts.
+Status: Accepted; EXECUTED in full 2026-08-23 (all phases 0-5, PR #119);
+        VERIFIED against a live workspace 2026-08-25 - all EIGHT platform
+        beliefs in the plan's "Needs live verification" table are settled
+        against the lab workspace main-busy-yonath-kz1bxn7. Shipped in 1.12.0.
+        Verdicts and the defects the run exposed are in the plan; what the
+        verification changed HERE is in "Verified live" at the end.
 
 > **To DO this work, read [sample-acquisition-plan.md](../sample-acquisition-plan.md)
 > instead.** That document is self-contained: verified file:line facts, the
@@ -61,9 +64,9 @@ why per-solution vendor knowledge is too coarse -
 
 The repo hit the log-type problem and worked around it by dropping the ambiguous
 fields. PAN-OS is the one vendor that got the real treatment
-(`panos-dictionary.ts`: eight log types, documented column order each, cited to
-the Palo Alto syslog field-descriptions page). That shape is right; it exists
-once.
+(`panos-dictionary.ts`: twelve log types as of 2026-08-25, documented column
+order each, cited to the Palo Alto syslog field-descriptions page). That shape is
+right; it exists once.
 
 ## Decision
 
@@ -146,3 +149,34 @@ capture remains useful even where Search is unavailable.
 - **The Sentinel-repo sample corpus stops being a dependency.**
   `REPO_SAMPLE_DATA_DIRS`, `SOLUTION_SAMPLE_MAP` and the ~70-entry
   `ABBREVIATIONS` list retire with the browser.
+
+## Verified live (2026-08-25)
+
+The decision above rested on a platform this repo had only READ ABOUT. That gap
+was closed on 2026-08-25 against the lab workspace `main-busy-yonath-kz1bxn7`
+(Stream group `DatacenterEast`, Lake dataset `winevt_plwindows`). All eight
+beliefs in the plan's "Needs live verification" table are settled; the verdicts,
+the four product defects and the seven harness defects the run exposed are
+recorded in [sample-acquisition-plan.md](../sample-acquisition-plan.md) under
+"Attempt 2026-08-25 - CLOSED". **The decision itself is unchanged** - nothing
+observed argues for reviving the browser. Three things bear on this record:
+
+- **Both acquisition mechanisms work as the decision assumed.** A filtered
+  capture returns vendor bytes off a live source, and a Lake query returns the
+  complete log-type list with per-type volumes. "Capture answers what is flowing
+  now; Search answers what this source produces" survives contact.
+- **The vendor knowledge gained a member from live data, as predicted.**
+  `DISCRIMINATOR_FIELDS` did not know about `data_source`, where Cribl's Windows
+  Event source puts the Windows CHANNEL - and for Windows events the channel IS
+  the log type. Without it the lab's one security-shaped dataset reported NO log
+  types and the operator was told to go capture from a live source, for 789K
+  events already in their lake, already split, already counted. Three sibling
+  fields (`datatype`, `schemaId`, `source`) were deliberately NOT added: each
+  carries exactly one distinct value per dataset, so it describes the dataset
+  rather than the event and can never split one.
+- **One belief was WRONG, and it is worth naming.** `capture-filter.ts` states
+  that a filter referencing a field the event lacks is a ReferenceError that
+  DROPS the event, and its `typeof` guards were written for that. Live, Cribl
+  TOLERATES undeclared names - bare and guarded filters both returned events. The
+  guards stay: they are harmless, correct, and cost one `typeof` per clause. What
+  was wrong is the stated model, not the code.

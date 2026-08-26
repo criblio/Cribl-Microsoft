@@ -224,6 +224,16 @@ export interface RecommendedLogType {
    * before any query, and must never render as zero.
    */
   eventCount?: number;
+  /**
+   * ESTIMATED bytes over that same window - the mean size of this log type's
+   * sampled events times {@link eventCount}, computed in core.
+   *
+   * Undefined far more often than the count is: it needs a sample of THIS log
+   * type's events, and a skewed dataset can count a log type at dataset scale
+   * without any of its events appearing in the sample. Renders only with the
+   * word "estimated" beside it.
+   */
+  estimatedBytes?: number;
 }
 
 /** Operator-facing name for an evidence tier. */
@@ -328,6 +338,9 @@ export function deriveLogTypeRecommendation(
         if (m.docUrl !== undefined) entry.docUrl = m.docUrl;
         if (m.doc !== undefined) entry.doc = m.doc;
         if (m.eventCount !== undefined) entry.eventCount = m.eventCount;
+        if (m.estimatedBytes !== undefined) {
+          entry.estimatedBytes = m.estimatedBytes;
+        }
         return entry;
       }),
       unreferenced,
@@ -346,6 +359,7 @@ export function deriveLogTypeRecommendation(
     if (m.docUrl !== undefined) entry.docUrl = m.docUrl;
     if (m.doc !== undefined) entry.doc = m.doc;
     if (m.eventCount !== undefined) entry.eventCount = m.eventCount;
+    if (m.estimatedBytes !== undefined) entry.estimatedBytes = m.estimatedBytes;
     return entry;
   });
 

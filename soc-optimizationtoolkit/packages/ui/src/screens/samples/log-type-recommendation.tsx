@@ -17,10 +17,21 @@
 
 import type { LogTypeRecommendation as Recommendation } from "./sample-coverage-state";
 import { evidenceLabel } from "./sample-coverage-state";
+// The picker's formatter, reused rather than reproduced: "the shortest honest
+// unit, deliberately coarse - a hint, never an accounting figure" is exactly the
+// register a byte ESTIMATE belongs in, and a second formatter would be a second
+// place for KB and KiB to drift apart.
+import { formatBytes } from "./sample-source-picker-state";
 
 export interface LogTypeRecommendationProps {
   /** The derived recommendation (pure; see sample-coverage-state). */
   recommendation: Recommendation;
+}
+
+/** What a row knows about its own volume. */
+interface Volume {
+  eventCount?: number;
+  estimatedBytes?: number;
 }
 
 /**
@@ -30,10 +41,20 @@ export interface LogTypeRecommendationProps {
  * Lake query runs, every entry is unmeasured, and a zero there would be the app
  * inventing a fact about the operator's data. Same refusal the core makes by
  * leaving `eventCount` undefined rather than defaulting it.
+ *
+ * THE BYTES ARE AN ESTIMATE AND SAY SO, twice over - a "~" and the word
+ * "estimated". They are mean event size times the count, and the mean was
+ * measured over a sample rather than over every event counted, so presenting
+ * them the way the count is presented would overstate what was measured. When
+ * there is no estimate the events stand alone; nothing is substituted.
  */
-function volumeText(eventCount: number | undefined): string | null {
+function volumeText(volume: Volume): string | null {
+  const { eventCount, estimatedBytes } = volume;
   if (eventCount === undefined) return null;
-  return `${eventCount.toLocaleString()} event${eventCount === 1 ? "" : "s"}`;
+  const events = `${eventCount.toLocaleString()} event${eventCount === 1 ? "" : "s"}`;
+  if (estimatedBytes === undefined) return events;
+  const bytes = formatBytes(estimatedBytes);
+  return bytes === "" ? events : `${events}, ~${bytes} estimated`;
 }
 
 export function LogTypeRecommendation({
@@ -46,6 +67,12 @@ export function LogTypeRecommendation({
   const hasVolume =
     entries.some((e) => e.eventCount !== undefined) ||
     unreferenced.some((u) => u.eventCount !== undefined);
+  // Whether an ESTIMATE is on screen, which is a separate question: a count can
+  // render without one, and the sentence explaining what the estimate is must
+  // not appear when there is no estimate to explain.
+  const hasEstimate =
+    entries.some((e) => e.estimatedBytes !== undefined) ||
+    unreferenced.some((u) => u.estimatedBytes !== undefined);
 
   return (
     <div className="log-type-recommendation" data-status={status}>
@@ -103,10 +130,10 @@ export function LogTypeRecommendation({
                     in a column of its own: "a rule needs it" and "there is this
                     much of it" are two halves of one decision. It is a NUMBER
                     and nothing else - no threshold, no flag, no verdict. */}
-                {volumeText(entry.eventCount) !== null && (
+                {volumeText(entry) !== null && (
                   <span className="log-type-recommendation-volume">
                     {" - "}
-                    {volumeText(entry.eventCount)}
+                    {volumeText(entry)}
                   </span>
                 )}
               </span>
@@ -131,9 +158,9 @@ export function LogTypeRecommendation({
                 <span className="log-type-recommendation-name">
                   {entry.value}
                 </span>
-                {volumeText(entry.eventCount) !== null && (
+                {volumeText(entry) !== null && (
                   <span className="log-type-recommendation-volume">
-                    {volumeText(entry.eventCount)}
+                    {volumeText(entry)}
                   </span>
                 )}
               </li>
@@ -149,6 +176,18 @@ export function LogTypeRecommendation({
           Volumes counted in the Lake dataset over {volumeWindow.earliest} to{" "}
           {volumeWindow.latest}, and describe what your environment sends - not
           what this solution needs.
+          {/* WHAT the estimate is, stated wherever it renders. A byte figure
+              beside a counted one reads as equally measured unless it is said
+              otherwise, and this one is a mean from a few hundred sampled
+              events multiplied by a count covering the whole window. Shown only
+              when an estimate is actually on screen. */}
+          {hasEstimate && (
+            <>
+              {" "}
+              Byte figures are estimates: the mean size of the events sampled
+              for each log type, multiplied by its count.
+            </>
+          )}
         </p>
       )}
 

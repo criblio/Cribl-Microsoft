@@ -1681,24 +1681,70 @@ button.journey-step-main:hover .journey-step-label {
   color: var(--text-muted);
 }
 
-/* A count with no window is not a fact; the window rides with it. */
+/* A count with no window is not a fact; the window rides with it.
+ *
+ * .lake-unnamed joins them because it is the same register: a caveat about what
+ * a name MEANS, not a warning that something is about to be lost. It sits ON a
+ * row inside the wrapping label, so it takes a full basis - the row it caveats
+ * still has to show its own name and volume on one line. */
 .lake-window,
 .lake-truncated,
-.lake-unavailable {
+.lake-unavailable,
+.lake-dataset-named,
+.lake-unnamed {
   font-size: 12px;
   line-height: 18px;
   color: var(--text-muted);
   margin: 0;
 }
 
-/* Truncation and replacement are both "you are about to be misled" - warn. */
+.lake-unnamed {
+  flex-basis: 100%;
+}
+
+/* Truncation, replacement and a row that cannot be stored are all "you are
+ * about to be misled" - warn. */
 .lake-truncated,
-.lake-replaces {
+.lake-replaces,
+.lake-preview-dropped {
   color: var(--warn);
 }
 
 .lake-bound {
   max-width: 140px;
+}
+
+/* The fetched events, held for confirmation before anything is stored. Shaped
+ * like the capture panel's result list below, because it is the same moment in
+ * the other acquisition path - the operator reading what they are about to
+ * take. */
+.lake-fetched {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.lake-previews {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 2px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.lake-preview-head {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* Bounded rather than free-running: a fifty-event haul must not push the
+ * commit button off the screen it belongs to. */
+.lake-preview {
+  max-height: 160px;
+  overflow: auto;
 }
 
 .lake-outcome {
@@ -2265,6 +2311,115 @@ button.journey-step-main:hover .journey-step-label {
   gap: 8px;
 }
 
+/* Interactive column mapper (screens/samples/csv-column-mapper.tsx): one row per
+   column POSITION - the positional name, the real values from the sample, and a
+   box to name it. The values column is given the room because it is the
+   affordance: you name the box by reading what is in it, not by reading "_7". */
+
+.csv-map-grid {
+  display: flex;
+  flex-direction: column;
+  max-height: 300px;
+  overflow: auto;
+  border: 1px solid var(--border-subtle);
+  background: var(--surface-raised);
+}
+
+.csv-map-head,
+.csv-map-row {
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr) 200px;
+  gap: 10px;
+  align-items: start;
+  padding: 5px 8px;
+}
+
+.csv-map-head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  background: var(--surface-raised);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.csv-map-row + .csv-map-row {
+  border-top: 1px solid var(--border-subtle);
+}
+
+.csv-map-row-warn {
+  background: var(--warn-bg);
+}
+
+.csv-map-position {
+  font-family: 'Consolas', 'Menlo', 'Courier New', monospace;
+  font-size: 12px;
+  line-height: 26px;
+  color: var(--text-muted);
+}
+
+.csv-map-position-mapped {
+  color: var(--accent-strong);
+}
+
+.csv-map-examples {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  min-width: 0;
+  padding-top: 5px;
+  font-family: 'Consolas', 'Menlo', 'Courier New', monospace;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--text);
+}
+
+.csv-map-value {
+  word-break: break-all;
+}
+
+.csv-map-value + .csv-map-value {
+  padding-left: 8px;
+  border-left: 1px solid var(--border-subtle);
+}
+
+.csv-map-empty {
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.csv-map-name {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.csv-map-input {
+  width: 100%;
+  padding: 4px 6px;
+  font-family: inherit;
+  font-size: 12px;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+
+.csv-map-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.csv-map-note {
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--warn);
+}
+
 .csv-dialog-status {
   display: flex;
   flex-direction: column;
@@ -2287,6 +2442,18 @@ button.journey-step-main:hover .journey-step-label {
   color: var(--warn);
 }
 
+/* Where a pre-filled column order came from, and what an order of the
+   operator's own REPLACED. Given its own bordered block rather than reading as
+   ordinary hint text: an override that looks like every other line of small
+   grey print is an override nobody notices, which is the failure the
+   "and they are told" decision exists to prevent. */
+.csv-dialog-prefill {
+  padding: 6px 10px;
+  border-left: 2px solid var(--accent-border);
+  background: var(--accent-bg);
+  color: var(--accent-strong);
+}
+
 .csv-preview-wrap {
   display: flex;
   flex-direction: column;
@@ -2304,9 +2471,26 @@ button.journey-step-main:hover .journey-step-label {
   border: 1px solid var(--border-subtle);
 }
 
+/* The coverage caption ("Names 12 of 38 columns - 26 still unmapped"). It sits
+   ABOVE the rows and is never hidden by the row display cap, because the count
+   is the part that stops a quarter-finished definition reading as finished. */
+.csv-preview-coverage {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
 .csv-preview-row {
   display: flex;
   gap: 12px;
+}
+
+/* A position nobody has named yet: still carrying its positional _N name. Muted
+   rather than alarming - an unmapped column is expected mid-edit, not an error
+   - but visibly different from a named one so the remainder can be scanned. */
+.csv-preview-row-unmapped .csv-preview-header {
+  font-weight: 400;
+  font-style: italic;
+  color: var(--text-muted);
 }
 
 .csv-preview-header {

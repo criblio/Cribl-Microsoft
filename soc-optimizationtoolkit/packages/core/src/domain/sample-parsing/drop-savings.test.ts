@@ -8,6 +8,7 @@ import {
   dropSavingsLine,
   dropSavingsPercent,
   estimateDropSavings,
+  meanEventBytes,
   mergeDropSavings,
 } from "./drop-savings";
 
@@ -58,5 +59,48 @@ describe("aggregation and formatting", () => {
     );
     expect(dropSavingsLine({ events: 2, originalBytes: 100, droppedBytes: 0 })).toBe("");
     expect(dropSavingsLine({ events: 0, originalBytes: 0, droppedBytes: 0 })).toBe("");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// meanEventBytes - the events-to-bytes piece (sample-acquisition plan Phase 5)
+// ---------------------------------------------------------------------------
+//
+// This mean is multiplied by a Lake event count to estimate a log type's ingest
+// volume, so a wrong or invented value here is a wrong COST figure on screen -
+// scaled by up to a million. The refusals matter more than the arithmetic.
+
+describe("meanEventBytes", () => {
+  it("is the measured bytes divided by the measured events", () => {
+    expect(
+      meanEventBytes({ events: 4, originalBytes: 2480, droppedBytes: 0 }),
+    ).toBe(620);
+  });
+
+  it("measures real events end to end, unrounded", () => {
+    // Two events of 10 and 15 bytes: the mean is 12.5, and it stays 12.5.
+    // Rounding an intermediate that a million-event count later multiplies
+    // would bias the estimate by up to half a byte per event - half a megabyte.
+    const events = ["0123456789", "012345678901234"];
+    const mean = meanEventBytes(estimateDropSavings(events, []));
+    expect(mean).toBe(12.5);
+  });
+
+  it("is UNDEFINED with no events measured, never 0", () => {
+    // 0/0. A mean of "0 B" for a log type nobody sampled is a claim about the
+    // operator's data that nobody made.
+    const mean = meanEventBytes(estimateDropSavings([], []));
+    expect(mean).toBeUndefined();
+    expect(mean).not.toBe(0);
+  });
+
+  it("is UNDEFINED when the sampled events measured zero bytes, never 0", () => {
+    // The degenerate sample (empty lines). A mean of 0 would multiply a
+    // 890,123-event count into a confident "~0 B" - the worst shape this
+    // estimate can take, because it reads as measured.
+    const savings = estimateDropSavings(["", ""], []);
+    expect(savings.events).toBe(2);
+    expect(savings.originalBytes).toBe(0);
+    expect(meanEventBytes(savings)).toBeUndefined();
   });
 });

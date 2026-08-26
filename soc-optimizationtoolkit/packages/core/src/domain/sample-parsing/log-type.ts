@@ -9,6 +9,7 @@
  */
 
 import type { SampleFormat } from "./models";
+import { isPositionalFieldName } from "./models";
 
 /**
  * Guess a log-type label for an uploaded sample from its filename, falling back
@@ -57,7 +58,7 @@ export function isHeaderlessCsv(
   if (fields.length < 3) {
     return false;
   }
-  const numericFields = fields.filter((f) => /^_\d+$/.test(f.name));
+  const numericFields = fields.filter((f) => isPositionalFieldName(f.name));
   return numericFields.length > fields.length * 0.5;
 }
 
