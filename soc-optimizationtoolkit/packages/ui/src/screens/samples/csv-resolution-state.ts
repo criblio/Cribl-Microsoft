@@ -55,6 +55,7 @@
 import {
   isHeaderlessCsv,
   isPositionalFieldName,
+  isOverflowFieldName,
   parseCsvWithHeaders,
   parseFeedConfig,
   positionalFieldName,
@@ -268,15 +269,13 @@ export function isHeaderlessCsvSample(sample: TaggedSample): boolean {
   return isHeaderlessCsv(sample.parsed.fields);
 }
 
-/**
- * The overflow prefix core parseCsvWithHeaders parks a value at when the
- * supplied header set ran out (`_extra_12`). Read here ONLY to recognise a
- * sample some earlier build applied a short definition to, so its columns can
- * still be named - {@link applicableHeaders} means this app no longer PRODUCES
- * such a sample. Duplicating a core producer's spelling is a smell; if a third
- * reader ever appears this belongs beside positionalFieldName in core models.
- */
-const OVERFLOW_FIELD_PREFIX = "_extra_";
+// The overflow spelling core parseCsvWithHeaders parks a surplus value at
+// (`_extra_12`) now lives in core beside its producer, as isOverflowFieldName.
+// It is read here ONLY to recognise a sample some earlier build applied a short
+// definition to, so its columns can still be named - applicableHeaders means
+// this app no longer PRODUCES such a sample. That is exactly why the local copy
+// this replaced was dangerous: no test creates such a sample, so a rename in
+// core would have left this matching nothing, silently.
 
 /**
  * The name of the first column NOBODY HAS NAMED, or "" when every column has a
@@ -310,7 +309,7 @@ export function firstUnnamedColumn(sample: TaggedSample): string {
   const unnamed = sample.parsed.fields.find(
     (field) =>
       isPositionalFieldName(field.name) ||
-      field.name.startsWith(OVERFLOW_FIELD_PREFIX),
+      isOverflowFieldName(field.name),
   );
   return unnamed === undefined ? "" : unnamed.name;
 }
@@ -352,7 +351,7 @@ export function columnOrderMatchesSample(
     .filter(
       (name) =>
         !isPositionalFieldName(name) &&
-        !name.startsWith(OVERFLOW_FIELD_PREFIX),
+        !isOverflowFieldName(name),
     );
   if (carried.length === 0) {
     return false;

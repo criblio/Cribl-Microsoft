@@ -15,6 +15,7 @@
 import {
   RAW_EVENTS_CAP,
   type ParsedSample,
+  overflowFieldName,
 } from "./models";
 import { stripSyslogPrefix } from "./parsers";
 import { collectFields, guessTimestampField } from "./parse-sample";
@@ -88,9 +89,11 @@ export function parseCsvWithHeaders(
         record[name] = values[i] ?? "";
       }
     }
-    // Overflow: values beyond the supplied headers become _extra_${i}.
+    // Overflow: values beyond the supplied headers. The spelling lives in
+    // models.ts beside its recogniser - they were apart, and a recogniser
+    // that only ever sees legacy samples would not have noticed a rename.
     for (let i = headers.length; i < values.length; i += 1) {
-      record[`_extra_${i}`] = values[i];
+      record[overflowFieldName(i)] = values[i];
     }
 
     if (Object.keys(record).length > 0) {

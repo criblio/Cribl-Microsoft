@@ -176,6 +176,34 @@ export function isPositionalFieldName(name: string): boolean {
 }
 
 /**
+ * THE ONE NAME FOR A VALUE BEYOND THE HEADERS SUPPLIED - absolute value index
+ * `i`, so `_extra_12` is the thirteenth VALUE, not the thirteenth surplus one.
+ *
+ * A different fact from {@link positionalFieldName} and deliberately not folded
+ * into it: `_N` says nobody named this column, `_extra_N` says the operator's
+ * definition was SHORT. See the note above.
+ *
+ * PROMOTED HERE 2026-08-26, ahead of the threshold its previous home set. It
+ * lived as a private `OVERFLOW_FIELD_PREFIX` in the UI's csv-resolution-state,
+ * whose comment called duplicating a core producer's spelling "a smell" and set
+ * promotion at "a third reader ever appears". The reader count is the wrong
+ * trigger. The one reader recognises samples an OLDER build left behind, and
+ * this app no longer produces such samples - so no test creates one, and a
+ * rename of the producer below would leave the recogniser matching nothing,
+ * silently, with a green suite. That is the failure shape this codebase treats
+ * as its worst, so producer and recogniser now live together, as
+ * {@link isPositionalFieldName} already does with its own producer.
+ */
+export function overflowFieldName(index: number): string {
+  return `_extra_${index}`;
+}
+
+/** Whether `name` is an {@link overflowFieldName}. */
+export function isOverflowFieldName(name: string): boolean {
+  return /^_extra_\d+$/.test(name);
+}
+
+/**
  * How many distinct example values {@link DiscoveredField.examples} retains
  * per field. Legacy default was 3.
  */

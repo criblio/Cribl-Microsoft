@@ -23,6 +23,8 @@ export {
   // how the two conventions drifted apart in the first place (see models.ts).
   positionalFieldName,
   isPositionalFieldName,
+  isOverflowFieldName,
+  overflowFieldName,
 } from "./models";
 
 export type { CappedTaggedSample } from "./cap-bytes";

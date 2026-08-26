@@ -199,9 +199,13 @@ silent, which is the whole difference between this and "operator wins quietly".
 
 ## What is NOT built
 
-- **The override notice reaches the dialog but not the chip.** It renders above
-  the tabs, where the decision is made; someone looking at a sample later has no
-  way to see that its column order overrides a bundled one.
+- ~~**The override notice reaches the dialog but not the chip.**~~ **BUILT
+  2026-08-26.** The chip now renders `describeColumnOrder`'s sentence, guarded by
+  a check that runs sample -> order and compares SEQUENCE rather than membership,
+  because the subject is positional and a real export is routinely narrower than
+  the order that named it. `forget` is wired too - it had been returned by
+  `useVendorColumnOrder` since it was written, documented as "the way back from a
+  mistaken paste", with no caller anywhere but its own test.
 - **Only curated vendors are remembered.** The vendor is derived from
   `detectVendorIdentity(solutionName)`, so a solution outside
   `KNOWN_VENDOR_IDENTITIES` yields no vendor and nothing is stored - honest per
@@ -211,9 +215,10 @@ silent, which is the whole difference between this and "operator wins quietly".
 
 ## Open questions
 
-- Where does the override notice live - on the sample chip, in the dialog, or
-  both? The dialog is where the decision is made; the chip is where someone
-  looking later would need to see it.
+- ~~Where does the override notice live?~~ **Answered 2026-08-26: both.** The
+  dialog is where the decision is made, so it stays there; the chip is where
+  someone looking later needs it, and without it a sample named from a bundled
+  dictionary, from a stored order, or by hand were indistinguishable afterwards.
 - Does a persisted order need a version or a captured-on date, so a firmware
   change can be reasoned about later rather than silently disagreeing with a
   future bundled update?
