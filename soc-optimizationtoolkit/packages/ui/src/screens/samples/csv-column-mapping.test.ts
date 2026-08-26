@@ -23,9 +23,15 @@
 
 import { describe, expect, it } from "vitest";
 import type { ParsedSample, TaggedSample } from "@soc/core";
-import { isPositionalFieldName, parseSampleContent } from "@soc/core";
+import {
+  isPositionalFieldName,
+  parseCsvWithHeaders,
+  parseSampleContent,
+} from "@soc/core";
 import { buildTaggedSample } from "./sample-intake-state";
 import {
+  buildFieldPreview,
+  duplicateSentence,
   isHeaderlessCsvSample,
   parseHeaderFileText,
   resolveHeaders,
@@ -39,6 +45,7 @@ import {
   columnExamples,
   columnMappingProgressLabel,
   deriveColumnMappingSummary,
+  mapperDefinitionSource,
   resolvedColumnNames,
   setColumnDraft,
 } from "./csv-column-mapping";
@@ -339,6 +346,45 @@ describe("columnMappingProgressLabel", () => {
 });
 
 // ---------------------------------------------------------------------------
+// The tab as a supplier of a definition, and the warning that MOVED off it
+// ---------------------------------------------------------------------------
+
+describe("mapperDefinitionSource", () => {
+  // CHANGED 2026-08-26. The duplicate sentence used to be built here as well
+  // as on the mapper's own grid, so this tab said it twice and the two PASTED
+  // tabs - which ran no duplicate check whatsoever - said it never. It now
+  // lives once, on the shared preview, where every tab reads it. Row-level
+  // marking stays here: only this tab has inputs to mark.
+  it("no longer builds the duplicate sentence - the shared preview does", () => {
+    const item = genericItem();
+    const source = mapperDefinitionSource(item, draftsOf({ 1: "src", 3: "src" }));
+    expect(source.label).toBe("2 of 6 columns named, 4 stay positional.");
+    // Not lost, relocated: the same duplicate, reported once, on the surface
+    // the header-row and feed-config tabs render into as well.
+    expect(duplicateSentence(buildFieldPreview(source.headers, item))).toBe(
+      "Duplicate name: src - each keeps only the last column that uses it, " +
+        "so only 5 of the 6 columns reach the sample.",
+    );
+    // And the row marking that only this tab can do is untouched.
+    const rows = buildColumnMappingRows(item, draftsOf({ 1: "src", 3: "src" }));
+    expect(rows.filter((r) => r.duplicate).map((r) => r.index)).toEqual([1, 3]);
+  });
+
+  it("still reports an unusable name, which only this tab can see", () => {
+    // The operator typed something; no other tab has a per-position input for
+    // it to have been typed into, so this one stays where it is.
+    const source = mapperDefinitionSource(
+      genericItem(),
+      draftsOf({ 0: "ts", 2: "!!!" }),
+    );
+    expect(source.label).toBe(
+      "1 of 6 columns named, 5 stay positional. Unusable name at _2 - those " +
+        "columns stay unmapped.",
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Resolved names: one per column, positional where unnamed
 // ---------------------------------------------------------------------------
 
@@ -407,24 +453,37 @@ describe("apply round trip (core parseCsvWithHeaders)", () => {
     expect(deriveColumnMappingSummary(reRows).unnamedCount).toBe(6);
   });
 
+  // RETARGETED 2026-08-26 at core, where the behaviour it documents lives.
+  // This used to assert through resolveHeaders, which forwarded blanks
+  // verbatim; resolveHeaders now fills them in (applicableHeaders), so the
+  // blank-deletes-the-column FACT survives only one call deeper. Asserting it
+  // against core keeps the reason resolvedColumnNames pads - and the second
+  // half pins that the UI path can no longer walk into it.
   it("CONTRAST: blank names would delete the columns nobody named", () => {
-    // This is why resolvedColumnNames fills in positional names rather than "".
-    // parseCsvWithHeaders discards the value under an empty header, so a partial
-    // definition expressed with blanks silently destroys 4 of the 6 columns.
+    // parseCsvWithHeaders discards the value under an empty header, so a
+    // partial definition expressed with blanks silently destroys 4 of 6.
     const item = genericItem();
-    const withBlanks = resolveHeaders(item, [
-      "",
+    const withBlanks = parseCsvWithHeaders(
+      item.csvContent,
+      ["", "src_ip", "", "action", "", ""],
+      { sourceName: "feed.csv" },
+    );
+    expect(withBlanks.fields.map((f) => f.name)).toEqual(["src_ip", "action"]);
+    expect(withBlanks.records[0]._2).toBeUndefined();
+
+    // ...and resolveHeaders will not hand core such an array. Same input, every
+    // column kept, each unnamed one carrying the positional name the preview
+    // showed for it.
+    const throughUi = resolveHeaders(item, ["", "src_ip", "", "action", "", ""]);
+    expect(throughUi.parsed.fields.map((f) => f.name)).toEqual([
+      "_0",
       "src_ip",
-      "",
+      "_2",
       "action",
-      "",
-      "",
+      "_4",
+      "_5",
     ]);
-    expect(withBlanks.parsed.fields.map((f) => f.name)).toEqual([
-      "src_ip",
-      "action",
-    ]);
-    expect(withBlanks.parsed.records[0]._2).toBeUndefined();
+    expect(throughUi.parsed.records[0]._2).toBe("443");
   });
 
   it("duplicate names COLLAPSE - the later position wins and the earlier column is lost", () => {

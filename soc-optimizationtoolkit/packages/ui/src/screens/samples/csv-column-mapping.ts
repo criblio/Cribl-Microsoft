@@ -32,6 +32,10 @@
  * {@link sanitizeColumnName} - the same cleaning the pasted-header-row path
  * applies - and the duplicate/short-header consequences reported here are the
  * ones core parseCsvWithHeaders actually produces, not new rules of our own.
+ * Since 2026-08-26 the duplicate SENTENCE is borrowed too: this tab still marks
+ * the offending inputs row by row (only it has inputs to mark), but the summary
+ * warning is csv-resolution-state's duplicateSentence, on the shared preview,
+ * so the two pasted tabs inherit a check they never had.
  *
  * IT DOES NOT GROW ITS OWN PREVIEW. {@link resolvedColumnNames} is the single
  * seam to the rest of the dialog: one name per position, positional where
@@ -333,11 +337,14 @@ export function mapperDefinitionSource(
   const rows = buildColumnMappingRows(item, drafts);
   const summary = deriveColumnMappingSummary(rows);
   const problems: string[] = [];
-  if (summary.duplicateNames.length > 0) {
-    problems.push(
-      `Duplicate name${summary.duplicateNames.length === 1 ? "" : "s"}: ${summary.duplicateNames.join(", ")} - each keeps only the last column that uses it.`,
-    );
-  }
+  // NO DUPLICATE SENTENCE HERE ANY MORE. It moved to buildFieldPreview's
+  // duplicateSentence, on the SHARED preview surface, because a repeated name
+  // is a fact about the definition rather than about the tab that typed it -
+  // and the two pasted tabs, which ran no duplicate check at all, needed it
+  // more than this one did. Row-level marking (ColumnMappingRow.duplicate,
+  // rendered against the offending inputs) stays here where the inputs are:
+  // that is the part only this tab can do. What used to be said twice inside
+  // this tab is now said once, on the surface every tab reads.
   if (summary.invalidPositions.length > 0) {
     problems.push(
       `Unusable name${summary.invalidPositions.length === 1 ? "" : "s"} at ${summary.invalidPositions.map(positionalFieldName).join(", ")} - those columns stay unmapped.`,

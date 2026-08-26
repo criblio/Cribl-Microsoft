@@ -191,6 +191,120 @@ describe("CsvHeaderDialog - the mismatch warning survives alongside coverage", (
     expect(pairs(container)).toHaveLength(8);
     expect(pairs(container)[7]).toEqual(["h", "(no value)"]);
   });
+
+  it("states only the clause this mismatch's DIRECTION makes true", () => {
+    // It used to state both - "Surplus values spill to _extra_N; extra headers
+    // stay unmapped" - for every mismatch, so half of it was always describing
+    // something that was not happening. Too MANY names here: nothing spills.
+    const { container } = renderDialog(makeItem());
+    fireEvent.change(activeTextarea(container), {
+      target: { value: "a,b,c,d,e,f,g,h" },
+    });
+    const warning = container.querySelector(".csv-dialog-mismatch")?.textContent;
+    expect(warning).toContain("The last 2 names map nothing");
+    expect(warning).not.toContain("stay unnamed");
+    expect(warning).not.toContain("_extra_");
+  });
+
+  it("states the other clause, and the SAME name the preview shows, when short", () => {
+    const { container } = renderDialog(
+      makeItem({ columnCount: 38, firstRows: [WIDE_ROW] }),
+    );
+    fireEvent.change(activeTextarea(container), {
+      target: {
+        value: Array.from({ length: 12 }, (_v, i) => `c${i}`).join(","),
+      },
+    });
+    const warning = container.querySelector(".csv-dialog-mismatch")?.textContent;
+    // The defect this closes: `_12` in the coverage line and the preview rows,
+    // `_extra_12` in the warning - three names on screen for the same 26
+    // positions, and only one of them was what Apply would produce.
+    expect(warning).toContain("The last 26 columns stay unnamed (_12 and so on)");
+    expect(warning).not.toContain("_extra_");
+    expect(coverage(container)).toContain("(_12 and so on)");
+    expect(pairs(container)[12][0]).toBe("_12 (unmapped)");
+  });
+});
+
+describe("CsvHeaderDialog - duplicate names are caught in EVERY tab", () => {
+  it("warns from a pasted header row, which used to check nothing", () => {
+    const { container } = renderDialog(
+      makeItem({ columnCount: 4, firstRows: ["1,2,3,4"] }),
+    );
+    fireEvent.change(activeTextarea(container), {
+      target: { value: "src,dst,src,app" },
+    });
+    // Silently, core parseCsvWithHeaders keeps only the LAST `src`. The old
+    // coverage line said "Names all 4 columns" - one column short of true.
+    expect(coverage(container)).toBe(
+      "Names all 4 columns. Duplicate name: src - each keeps only the last " +
+        "column that uses it, so only 3 of the 4 columns reach the sample.",
+    );
+  });
+
+  it("warns from a pasted feed config too", () => {
+    const { container } = renderDialog(
+      makeItem({ columnCount: 3, firstRows: ["1,2,3"] }),
+    );
+    fireEvent.click(tabNamed(container, "Paste feed config"));
+    fireEvent.change(activeTextarea(container), {
+      target: { value: "%s{src},%s{dst},%s{src}" },
+    });
+    expect(coverage(container)).toContain("Duplicate name: src");
+  });
+});
+
+describe("CsvHeaderDialog - the way back from a mistaken paste", () => {
+  const savedNotice =
+    'Your saved Palo Alto Networks TRAFFIC column order (6 columns) REPLACES ' +
+    'the bundled order (6 columns) - they first differ at column 3: bundled ' +
+    '"serial", yours "device".';
+
+  const forgetButton = (c: HTMLElement) =>
+    Array.from(c.querySelectorAll("button")).find(
+      (b) => b.textContent === "Forget my saved order",
+    );
+
+  it("offers the undo the override notice implies", () => {
+    // useVendorColumnOrder.forget was written, documented as "the way back
+    // from a mistaken paste", and wired to nothing anywhere in the app - so
+    // the notice announced a replacement the operator could not reverse.
+    const onForgetSavedOrder = vi.fn();
+    const { container } = render(
+      <CsvHeaderDialog
+        item={makeItem()}
+        position={{ current: 1, total: 1 }}
+        onApply={vi.fn()}
+        onSkip={vi.fn()}
+        prefill={{ columns: ["a", "b", "c"], notice: savedNotice }}
+        onForgetSavedOrder={onForgetSavedOrder}
+      />,
+    );
+    expect(container.querySelector(".csv-dialog-prefill")?.textContent).toContain(
+      "REPLACES the bundled order",
+    );
+    fireEvent.click(forgetButton(container) as HTMLElement);
+    expect(onForgetSavedOrder).toHaveBeenCalledTimes(1);
+  });
+
+  it("does NOT offer it for a bundled pre-fill, where it would do nothing", () => {
+    // With nothing stored, the bundled order is already what answers; a button
+    // that cannot change anything is worse than no button.
+    const { container } = render(
+      <CsvHeaderDialog
+        item={makeItem()}
+        position={{ current: 1, total: 1 }}
+        onApply={vi.fn()}
+        onSkip={vi.fn()}
+        prefill={{
+          columns: ["a", "b", "c"],
+          notice: "Bundled Palo Alto Networks TRAFFIC column order (3 columns).",
+        }}
+      />,
+    );
+    expect(container.querySelector(".csv-dialog-prefill")).not.toBeNull();
+    expect(forgetButton(container)).toBeUndefined();
+  });
 });
 
 describe("CsvHeaderDialog - an off-by-one is visibly wrong", () => {

@@ -34,7 +34,12 @@
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
-import type { TaggedSample, TaggedSampleStore } from "@soc/core";
+import {
+  FakeContentCache,
+  buildVendorFieldDefinition,
+  vendorFieldDefinitionKey,
+} from "@soc/core";
+import type { ContentCache, TaggedSample, TaggedSampleStore } from "@soc/core";
 import { SampleIntakeSection } from "./sample-intake-section";
 import { tagSampleFromContent } from "./sample-intake-state";
 
@@ -235,7 +240,13 @@ describe("SampleIntakeSection - an arrival from a sibling panel", () => {
       "Headerless CSV detected (9 columns)",
     );
     expect(dialogCaption(view.container)).toContain("lake:AUTH");
-    expect(dialogCaption(view.container)).toContain("Resolving file 1 of 2");
+    // CHANGED 2026-08-26: the caption said "Resolving file 1 of 2" for a
+    // sample whose sourceName is `lake:AUTH`. Nothing on this path is a file -
+    // the queue holds TAGGED SAMPLES, one per log type, and a queued one may
+    // have arrived as an upload, a paste, or (as here) a Lake dataset. The
+    // wording was pinned as-is, so test and component agreed on copy that was
+    // wrong for the very path the arrival seam exists to serve.
+    expect(dialogCaption(view.container)).toContain("Naming log type 1 of 2");
 
     // Turn two: the OTHER headerless arrival - not the named one, which was
     // never queued, and not a repeat of the first.
@@ -244,7 +255,10 @@ describe("SampleIntakeSection - an arrival from a sibling panel", () => {
       "Headerless CSV detected (10 columns)",
     );
     expect(dialogCaption(view.container)).toContain("lake:WILDFIRE");
-    expect(dialogCaption(view.container)).toContain("Resolving file 2 of 2");
+    // Same copy change as turn one - see the comment above.
+    expect(dialogCaption(view.container)).toContain("Naming log type 2 of 2");
+    // And it never calls a Lake dataset a file.
+    expect(dialogCaption(view.container)).not.toContain("file");
 
     // Two headerless samples, two turns, then done.
     clickButton(view.container, "Skip");
@@ -368,5 +382,237 @@ describe("SampleIntakeSection - a pasted PAN-OS export", () => {
       "src",
       "dst",
     ]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// A PARTIAL definition, which is an encouraged action and used to be terminal
+// ---------------------------------------------------------------------------
+
+/** The dialog's own header-row box, not the section's paste box. */
+const dialogTextarea = (c: HTMLElement) =>
+  c.querySelector(".csv-dialog textarea.sample-paste") as HTMLTextAreaElement;
+
+const buttonLabels = (c: HTMLElement) =>
+  Array.from(c.querySelectorAll("button")).map((b) => b.textContent ?? "");
+
+describe("SampleIntakeSection - applying a definition that covers PART of the columns", () => {
+  /** Paste PANOS.auth, then apply `headers` in the dialog it opens. */
+  async function pasteThenApply(
+    view: Awaited<ReturnType<typeof mount>>,
+    headers: string,
+  ): Promise<void> {
+    await paste(view.container, "PanAuth", PANOS.auth);
+    fireEvent.change(dialogTextarea(view.container), {
+      target: { value: headers },
+    });
+    await act(async () => {
+      clickButton(view.container, "Apply headers");
+    });
+  }
+
+  it("leaves the unnamed columns POSITIONAL, exactly as the preview showed them", async () => {
+    // THE DEFECT: core parseCsvWithHeaders parked the surplus values at
+    // `_extra_7`, so the operator read `_7` in the coverage line, `_7
+    // (unmapped)` in the preview rows and `_extra_N` in the mismatch warning -
+    // three names for the same two positions - and got a fourth outcome.
+    const { store } = makeStore();
+    const view = await mount(store);
+    await pasteThenApply(
+      view,
+      "receive_time,serial,type,subtype,eventid,vsys,user",
+    );
+
+    const fields = chipFields(view.container, "PanAuth");
+    expect(fields).toEqual([
+      "receive_time",
+      "serial",
+      "type",
+      "subtype",
+      "eventid",
+      "vsys",
+      "user",
+      "_7",
+      "_8",
+    ]);
+    expect(fields.some((f) => f.startsWith("_extra_"))).toBe(false);
+  });
+
+  it("KEEPS the offer to finish, which applying used to destroy", async () => {
+    // 7 of 9 columns named leaves a MINORITY positional, so core
+    // isHeaderlessCsv says no - and the chip used to ask exactly that question.
+    // Both the button and the hint vanished with two columns still unnamed and
+    // no route back to the dialog: a dead end reached by a normal action.
+    const { store } = makeStore();
+    const view = await mount(store);
+    await pasteThenApply(
+      view,
+      "receive_time,serial,type,subtype,eventid,vsys,user",
+    );
+
+    expect(dialogs(view.container)).toHaveLength(0);
+    expect(buttonLabels(view.container)).toContain("Name columns");
+    // And the hint names a column really in THIS sample - `_0` is long since
+    // named here, so illustrating with it would send the operator looking for
+    // something that is not there.
+    expect(view.container.textContent).toContain(
+      "Some columns are still unnamed (_7 and so on)",
+    );
+
+    // And it really does re-open, on the same nine positions, with the seven
+    // names already applied - the definition is finished, not redone.
+    clickButton(view.container, "Name columns");
+    expect(dialogTitle(view.container)).toBe(
+      "Headerless CSV detected (9 columns)",
+    );
+  });
+
+  it("stops offering once every column has a name", async () => {
+    // The other half: "still unnamed" has to be distinguishable from "done", or
+    // the affordance is just noise on every chip.
+    const { store } = makeStore();
+    const view = await mount(store);
+    await pasteThenApply(view, "a,b,c,d,e,f,g,h,i");
+
+    expect(chipFields(view.container, "PanAuth")).toEqual([
+      "a",
+      "b",
+      "c",
+      "d",
+      "e",
+      "f",
+      "g",
+      "h",
+      "i",
+    ]);
+    expect(buttonLabels(view.container)).not.toContain("Name columns");
+    expect(view.container.textContent).not.toContain(
+      "Some columns are still unnamed",
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Provenance on the chip, and the undo the override notice implies
+// ---------------------------------------------------------------------------
+
+/** A solution name detectVendorIdentity resolves to "Palo Alto Networks". */
+const PANOS_SOLUTION = "Palo Alto Networks PAN-OS";
+
+const provenance = (c: HTMLElement) =>
+  Array.from(c.querySelectorAll(".sample-chip-provenance")).map(
+    (n) => n.textContent ?? "",
+  );
+
+/** Mount with a solution and a definition cache bound, and wait for the load. */
+async function mountWithVendor(
+  store: TaggedSampleStore,
+  definitionCache: ContentCache,
+) {
+  const onSamplesChange = vi.fn();
+  const view = render(
+    <SampleIntakeSection
+      store={store}
+      solutionName={PANOS_SOLUTION}
+      definitionCache={definitionCache}
+      onSamplesChange={onSamplesChange}
+    />,
+  );
+  await waitFor(() => {
+    expect(onSamplesChange).toHaveBeenCalled();
+  });
+  return { ...view, onSamplesChange };
+}
+
+describe("SampleIntakeSection - where a chip's column names came from", () => {
+  it("says so on the chip, not only inside the dialog", async () => {
+    // THE DEFECT: the notice was passed to the dialog and nowhere else, so once
+    // the dialog closed a sample named from a bundled dictionary, one named
+    // from the operator's own stored order and one typed by hand from real
+    // values were indistinguishable. A later reader seeing `receive_time / src
+    // / dst` could not tell whether anyone ever confirmed those names against
+    // values - which is the off-by-one the preview surface exists to expose.
+    const { store } = makeStore();
+    const cache = new FakeContentCache();
+    const view = await mountWithVendor(store, cache);
+
+    await paste(view.container, "TRAFFIC", PANOS.traffic);
+
+    await waitFor(() => {
+      expect(provenance(view.container)).toHaveLength(1);
+    });
+    expect(provenance(view.container)[0]).toContain(
+      "Bundled Palo Alto Networks TRAFFIC column order",
+    );
+  });
+
+  it("STAYS SILENT when the names did not come from that order", async () => {
+    // A remembered or bundled order exists for the scope whether or not this
+    // sample was ever named from it. Captioning a hand-typed sample with
+    // somebody else's provenance is the same failure as inventing a name.
+    const { store } = makeStore();
+    const cache = new FakeContentCache();
+    const view = await mountWithVendor(store, cache);
+
+    // AUTH rows tagged as TRAFFIC: the scope resolves the bundled TRAFFIC
+    // order, but these columns were never named from it.
+    await paste(view.container, "TRAFFIC", PANOS.auth);
+    clickButton(view.container, "Skip");
+    expect(dialogs(view.container)).toHaveLength(0);
+    // Columns still positional, nothing to attribute, so nothing is claimed.
+    expect(chipFields(view.container, "TRAFFIC")[0]).toBe("_0");
+    expect(provenance(view.container)).toEqual([]);
+
+    // ...and the silence is about THIS SAMPLE, not about a missing scope:
+    // replacing the chip's content with rows that really did come from that
+    // order captions it, under the very same log type.
+    await paste(view.container, "TRAFFIC", PANOS.traffic);
+    await waitFor(() => {
+      expect(provenance(view.container)).toHaveLength(1);
+    });
+  });
+
+  it("wires FORGET, so a mistaken saved order can be taken back", async () => {
+    // useVendorColumnOrder.forget was written, documented as "the way back from
+    // a mistaken paste", and its only caller anywhere was its own test - while
+    // the notice told the operator their order had REPLACED the bundled one.
+    const { store } = makeStore();
+    const cache = new FakeContentCache();
+    const key = vendorFieldDefinitionKey(
+      "Palo Alto Networks",
+      "AUTH",
+    ) as string;
+    const mistake = buildVendorFieldDefinition("Palo Alto Networks", "AUTH", [
+      "wrong_a",
+      "wrong_b",
+      "wrong_c",
+    ]);
+    await cache.set(key, mistake);
+
+    const view = await mountWithVendor(store, cache);
+    await paste(view.container, "AUTH", PANOS.auth);
+
+    // The dialog opens pre-filled with the mistake, and says it is theirs.
+    await waitFor(() => {
+      expect(dialogs(view.container)).toHaveLength(1);
+    });
+    expect(
+      view.container.querySelector(".csv-dialog-prefill")?.textContent,
+    ).toContain("Your saved Palo Alto Networks AUTH column order");
+    expect(dialogTextarea(view.container).value).toBe(
+      "wrong_a\nwrong_b\nwrong_c",
+    );
+
+    await act(async () => {
+      clickButton(view.container, "Forget my saved order");
+    });
+
+    // Gone from the store, and the dialog is back to knowing nothing about
+    // AUTH - which is the honest state, since PAN-OS publishes no AUTH order.
+    await waitFor(async () => {
+      expect(await cache.get(key)).toBeNull();
+    });
+    expect(view.container.querySelector(".csv-dialog-prefill")).toBeNull();
+    expect(dialogTextarea(view.container).value).toBe("");
   });
 });

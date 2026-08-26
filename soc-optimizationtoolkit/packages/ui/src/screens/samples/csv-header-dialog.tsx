@@ -39,13 +39,24 @@
  * would be confidently wrong and would survive silently into the destination
  * schema, whereas `_17` is visibly unfinished.
  *
+ * WHAT THE PREVIEW PROMISES IS WHAT APPLY PRODUCES (2026-08-26). The names on
+ * screen ARE the array handed to the core parser - one applicableHeaders call
+ * feeds both - so a position shown as `_12 (unmapped)` lands as `_12`, the
+ * sample stays recognisable as headerless, and a half-finished definition can
+ * be picked up again from the chip. It used to diverge: the surplus values were
+ * parked at `_extra_12`, which put three names for the same 26 positions on one
+ * screen and quietly removed the way back to this dialog.
+ *
  * A MISMATCH WARNING still appears when the header count differs from the CSV
  * column count, ALONGSIDE the coverage count rather than replaced by it: they
- * say different things (see FieldDefinitionPreview.mismatch). SKIP leaves the
- * sample with its positional _N names; APPLY re-parses through the core
- * parseCsvWithHeaders and re-keys the tagged sample (handled by the section).
- * Both actions advance the resolution queue - the batch never stops after the
- * first file (the legacy silent-drop fix lives in the section's queue).
+ * say different things (see FieldDefinitionPreview.mismatch). It states the one
+ * clause its direction makes true. DUPLICATE NAMES are reported on the shared
+ * preview too, so the pasted tabs inherit a check that used to exist only in
+ * the mapper. SKIP leaves the sample with its positional _N names; APPLY
+ * re-parses through the core parseCsvWithHeaders and re-keys the tagged sample
+ * (handled by the section). Both actions advance the resolution queue - the
+ * batch never stops after the first log type (the legacy silent-drop fix lives
+ * in the section's queue).
  *
  * This component owns only transient per-item dialog state (which tab, the two
  * pasted texts, and the mapper's per-column drafts - the headers themselves are
@@ -60,6 +71,7 @@ import {
   PREVIEW_ROW_LIMIT,
   buildFieldPreview,
   coverageLine,
+  mismatchLine,
   resolveDefinitionSource,
 } from "./csv-resolution-state";
 import type {
@@ -108,6 +120,23 @@ export interface CsvHeaderDialogProps {
    * replaced a bundled one, what it replaced (decision 3: they are told).
    */
   prefill?: { columns: readonly string[]; notice: string };
+  /**
+   * Drop the operator's STORED column order for this vendor + log type, so the
+   * bundled one answers again (useVendorColumnOrder.forget).
+   *
+   * THE OTHER HALF OF DECISION 3. The notice tells the operator their saved
+   * order REPLACED the vendor's - and until 2026-08-26 that was all it did.
+   * `forget` was written, documented as "the way back from a mistaken paste",
+   * and wired to nothing anywhere in the app: the dialog announced a decision
+   * the operator could not undo, and re-pasting the bundled order by hand would
+   * not have undone it either, because a stored order that MATCHES the bundled
+   * one is still a stored order.
+   *
+   * Passed ONLY when there is a stored order to drop. Forgetting a bundled
+   * pre-fill is a no-op dressed as a control, so the button is simply absent
+   * then rather than present and inert.
+   */
+  onForgetSavedOrder?: () => void;
 }
 
 export function CsvHeaderDialog({
@@ -117,6 +146,7 @@ export function CsvHeaderDialog({
   onSkip,
   busy = false,
   prefill,
+  onForgetSavedOrder,
 }: CsvHeaderDialogProps) {
   const [tab, setTab] = useState<DefinitionTab>("row");
   // Seeded ONCE, at mount: the section holds the dialog back until the stored
@@ -173,21 +203,42 @@ export function CsvHeaderDialog({
         <div className="csv-dialog-title">
           Headerless CSV detected ({item.columnCount} columns)
         </div>
+        {/* "log type N of M", never "file N of M". The queue holds TAGGED
+            SAMPLES, one per log type, and a queued one may have arrived as an
+            upload, a paste, or a Lake dataset - the case that motivated the
+            arrival seam in the first place, whose sourceName is `lake:AUTH`.
+            Nothing about that is a file, and the caption used to say so. */}
         <p className="field-hint">
-          {item.sourceName} has no header row. Provide field names so its columns
-          map to the destination schema, or skip to keep positional names (_0,
-          _1, ...).
+          {item.sourceName} has no header row. Name its columns so they map to
+          the destination schema, or skip to keep positional names (_0, _1,
+          ...).
           {position.total > 1
-            ? ` Resolving file ${position.current} of ${position.total}.`
+            ? ` Naming log type ${position.current} of ${position.total}.`
             : ""}
         </p>
 
         {/* Where a pre-filled order came from, and what it replaced. Kept above
             the tabs, next to the sentence explaining the dialog, because it is
             about the WHOLE definition rather than about whichever tab is open -
-            and because an override must be visible without hunting for it. */}
+            and because an override must be visible without hunting for it.
+            The button beside it is the UNDO for what the sentence announces:
+            a notice saying "yours replaced the vendor's" with no way back is
+            half a decision. */}
         {prefill !== undefined && prefill.notice !== "" && (
-          <p className="field-hint csv-dialog-prefill">{prefill.notice}</p>
+          <p className="field-hint csv-dialog-prefill">
+            {prefill.notice}
+            {onForgetSavedOrder !== undefined && (
+              <button
+                type="button"
+                className="run-button csv-dialog-forget"
+                onClick={onForgetSavedOrder}
+                disabled={busy}
+                title="Drop the saved column order for this vendor and log type, and start again from the bundled one"
+              >
+                Forget my saved order
+              </button>
+            )}
+          </p>
         )}
 
         {/* Tabs */}
@@ -294,11 +345,13 @@ export function CsvHeaderDialog({
             }
           >
             <span>{source.label}</span>
+            {/* One clause, the one that applies. A mismatch has a DIRECTION -
+                too few names or too many - and the warning used to state both
+                consequences for every mismatch, so half of it was always
+                describing something that was not happening. */}
             {mismatch.mismatch && (
               <span className="csv-dialog-mismatch">
-                Header count {mismatch.headerCount} differs from CSV columns{" "}
-                {mismatch.columnCount}. Surplus values spill to _extra_N; extra
-                headers stay unmapped. Apply anyway or correct the header set.
+                {mismatchLine(mismatch)}
               </span>
             )}
           </div>

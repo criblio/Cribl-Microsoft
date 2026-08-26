@@ -7,18 +7,23 @@
  */
 import { describe, expect, it } from "vitest";
 import type { ParsedSample, TaggedSample } from "@soc/core";
-import { parseSampleContent } from "@soc/core";
+import { parseCsvWithHeaders, parseSampleContent } from "@soc/core";
 import { buildTaggedSample, tagSampleFromContent } from "./sample-intake-state";
 import {
   PREVIEW_ROW_LIMIT,
   advanceQueue,
+  applicableHeaders,
   buildFieldPreview,
   buildResolutionQueue,
+  columnOrderMatchesSample,
   coverageLine,
   currentItem,
   deriveMismatch,
+  duplicateSentence,
+  firstUnnamedColumn,
   isHeaderlessCsvSample,
   isQueueDone,
+  mismatchLine,
   parseHeaderFileText,
   previewZip,
   queuePosition,
@@ -525,6 +530,160 @@ describe("coverageLine", () => {
       "Names 0 of 38 columns - 38 still unmapped (_0 and so on).",
     );
   });
+
+  it("STOPS OVER-CLAIMING when two columns share a name", () => {
+    // The defect: a pasted header row repeating a name lost a column in
+    // silence AND reported full coverage - a claim one short of true, on the
+    // one surface built to make coverage honest.
+    const preview = buildFieldPreview(["src", "dst", "src"], {
+      columnCount: 3,
+      firstRows: ["1,2,3"],
+    });
+    expect(coverageLine(preview)).toBe(
+      "Names all 3 columns. Duplicate name: src - each keeps only the last " +
+        "column that uses it, so only 2 of the 3 columns reach the sample.",
+    );
+  });
+
+  it("says it alongside an unfinished definition too, without losing either fact", () => {
+    const preview = buildFieldPreview(["src", "src"], {
+      columnCount: 4,
+      firstRows: ["1,2,3,4"],
+    });
+    expect(coverageLine(preview)).toBe(
+      "Names 2 of 4 columns - 2 still unmapped (_2 and so on). Duplicate " +
+        "name: src - each keeps only the last column that uses it, so only 3 " +
+        "of the 4 columns reach the sample.",
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Duplicate names: detected on the SHARED surface, so all three tabs inherit it
+// ---------------------------------------------------------------------------
+
+describe("buildFieldPreview - duplicate names", () => {
+  it("reports each repeated name once, in first-seen order, and what it costs", () => {
+    const preview = buildFieldPreview(["src", "dst", "src", "dst", "app"], {
+      columnCount: 5,
+      firstRows: ["1,2,3,4,5"],
+    });
+    expect(preview.duplicateNames).toEqual(["src", "dst"]);
+    // Two collisions, two columns lost: core parseCsvWithHeaders assigns by
+    // NAME, so the later position simply overwrites the earlier one.
+    expect(preview.collapsedCount).toBe(2);
+  });
+
+  it("is what the PASTED tabs now inherit - they ran no check at all", () => {
+    // Same duplicate reported identically whichever tab supplied it, which is
+    // the whole reason the check moved here from the interactive mapper.
+    const item = { columnCount: 3, firstRows: ["1,2,3"] };
+    const fromRow = buildFieldPreview(
+      resolveDefinitionSource("row", "src,dst,src", "").headers,
+      item,
+    );
+    const fromConfig = buildFieldPreview(
+      resolveDefinitionSource("config", "", "%s{src},%s{dst},%s{src}").headers,
+      item,
+    );
+    expect(fromRow.duplicateNames).toEqual(["src"]);
+    expect(fromConfig.duplicateNames).toEqual(["src"]);
+    expect(duplicateSentence(fromRow)).toBe(duplicateSentence(fromConfig));
+  });
+
+  it("MATCHES what core actually does - the collapse is real", () => {
+    // Pinned against the parser rather than against a rule invented here: the
+    // count the warning quotes has to be the count of columns that vanish.
+    const sample = headerlessCsvSample("Web", GENERIC_ROWS);
+    const item = toResolutionItem(sample);
+    const headers = ["src", "src", "dport", "action", "app", "status"];
+    const preview = buildFieldPreview(headers, item);
+    expect(preview.collapsedCount).toBe(1);
+    const resolved = resolveHeaders(item, headers);
+    expect(resolved.parsed.fields).toHaveLength(
+      item.columnCount - preview.collapsedCount,
+    );
+    // Position 1 won; position 0's value is gone.
+    expect(resolved.parsed.records[0].src).toBe("10.0.0.1");
+  });
+
+  it("does not call two future_use placeholders a duplicate", () => {
+    // The parser discards their values instead of keying them, so they cannot
+    // collide - and a PAN-OS order is full of them.
+    const preview = buildFieldPreview(
+      ["future_use", "future_use", "serial"],
+      { columnCount: 3, firstRows: ["1,2,0123"] },
+    );
+    expect(preview.duplicateNames).toEqual([]);
+    expect(preview.collapsedCount).toBe(0);
+  });
+
+  it("does not call two unnamed positions a duplicate", () => {
+    const preview = buildFieldPreview([], { columnCount: 4, firstRows: ["1,2,3,4"] });
+    expect(preview.duplicateNames).toEqual([]);
+    expect(preview.collapsedCount).toBe(0);
+  });
+
+  it("ignores a repeat that lands past the data's columns", () => {
+    // A surplus name keys nothing because no value ever reaches it; the
+    // mismatch warning is what reports it, not the duplicate count.
+    const preview = buildFieldPreview(["src", "dst", "src"], {
+      columnCount: 2,
+      firstRows: ["1,2"],
+    });
+    expect(preview.duplicateNames).toEqual([]);
+    expect(preview.mismatch.mismatch).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// mismatchLine: ONE clause, the one the direction makes true
+// ---------------------------------------------------------------------------
+
+describe("mismatchLine", () => {
+  it("says the columns stay unnamed when the header set is SHORT", () => {
+    expect(mismatchLine(deriveMismatch(12, 38))).toBe(
+      "Header count 12 differs from CSV columns 38. The last 26 columns stay " +
+        "unnamed (_12 and so on) - no values are lost. Apply anyway or correct " +
+        "the header set.",
+    );
+  });
+
+  it("says the extra names map nothing when the header set is LONG", () => {
+    expect(mismatchLine(deriveMismatch(8, 6))).toBe(
+      "Header count 8 differs from CSV columns 6. The last 2 names map " +
+        "nothing - this data has no column there. Apply anyway or correct the " +
+        "header set.",
+    );
+  });
+
+  it("agrees with the name the APPLY will actually use", () => {
+    // The warning used to name the remainder `_extra_N` while the coverage
+    // line and the preview rows named the same positions `_N`. One position,
+    // one name, on every surface.
+    const item = { columnCount: 38, firstRows: [WIDE_ROW] };
+    const twelve = Array.from({ length: 12 }, (_v, i) => `c${i}`);
+    const preview = buildFieldPreview(twelve, item);
+    const example = preview.rows.find((r) => r.unmapped)?.header;
+    expect(example).toBe("_12");
+    expect(mismatchLine(preview.mismatch)).toContain("(_12 and so on)");
+    expect(coverageLine(preview)).toContain("(_12 and so on)");
+    expect(mismatchLine(preview.mismatch)).not.toContain("_extra_");
+  });
+
+  it("says nothing at all when the counts agree", () => {
+    expect(mismatchLine(deriveMismatch(6, 6))).toBe("");
+    expect(mismatchLine(deriveMismatch(0, 6))).toBe("");
+  });
+
+  it("uses the singular for a one-column difference, in both directions", () => {
+    expect(mismatchLine(deriveMismatch(5, 6))).toContain(
+      "The last 1 column stays unnamed (_5 and so on)",
+    );
+    expect(mismatchLine(deriveMismatch(7, 6))).toContain(
+      "The last 1 name maps nothing",
+    );
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -634,12 +793,302 @@ describe("resolveHeaders", () => {
     expect(action).toBe("allow");
   });
 
-  it("spills surplus values to _extra_N when fewer headers are supplied", () => {
+  // CHANGED 2026-08-26, deliberately. This pin used to assert that 4 headers
+  // for 6 columns spilled the last two values to `_extra_4` / `_extra_5`,
+  // because resolveHeaders forwarded the operator's array to core verbatim.
+  // It now PADS through applicableHeaders, so the uncovered positions land as
+  // `_4` / `_5` - the same names the preview showed for them a moment earlier.
+  //
+  // WHY THE BEHAVIOUR CHANGED: `_extra_N` is not a positional name, so a
+  // sample with 4 named columns and 2 overflow ones stopped satisfying core
+  // isHeaderlessCsv - the "Name columns" affordance and its hint vanished, and
+  // a partial definition (an explicitly supported action) became a dead end
+  // with no route back to the dialog. It also put two names for the same
+  // position on one screen: `_4` in the coverage line and preview rows,
+  // `_extra_4` in the mismatch warning.
+  //
+  // core's overflow is UNTOUCHED and still pinned in its own csv-headers.test
+  // - it is right for a caller whose header set is authoritative. This app is
+  // simply no longer such a caller. Asserted as absence AND presence so the
+  // change cannot be read as "the assertion was dropped".
+  it("leaves the uncovered positions POSITIONAL, not _extra_N, when fewer headers are supplied", () => {
     const item = toResolutionItem(headerlessCsvSample("Web", GENERIC_ROWS));
-    // Only 4 headers for 6 columns -> the last two spill to overflow.
+    // Only 4 headers for 6 columns.
     const resolved = resolveHeaders(item, ["time", "src", "dport", "action"]);
     const names = resolved.parsed.fields.map((f) => f.name);
-    expect(names).toContain("_extra_4");
-    expect(names).toContain("_extra_5");
+    expect(names).toEqual(["time", "src", "dport", "action", "_4", "_5"]);
+    expect(names).not.toContain("_extra_4");
+    expect(names).not.toContain("_extra_5");
+    // Nothing was lost: the unnamed columns still carry their values.
+    expect(resolved.parsed.records[0]._4).toBe("web");
+    expect(resolved.parsed.records[0]._5).toBe("200");
+  });
+
+  it("leaves a partly-named sample RESOLVABLE AGAIN - the dead end is gone", () => {
+    // The whole point of the padding. Before it, this sample's fields were 4
+    // named + 2 `_extra_N`, nothing positional, so isHeaderlessCsv said no and
+    // BOTH the chip button and its hint disappeared permanently.
+    const item = toResolutionItem(headerlessCsvSample("Web", GENERIC_ROWS));
+    const resolved = resolveHeaders(item, ["time", "src", "dport", "action"]);
+    expect(firstUnnamedColumn(resolved)).toBe("_4");
+    // And re-opening it offers the SAME six positions, with the four already
+    // named columns intact, so the definition can be finished rather than redone.
+    const again = toResolutionItem(resolved);
+    expect(again.columnCount).toBe(6);
+    expect(again.firstRows[0]).toBe("2026-07-05,10.0.0.1,443,allow,web,200");
+  });
+
+  it("applies EXACTLY what the preview rendered, name for name", () => {
+    // The promise, pinned as an identity rather than as two matching literals:
+    // one applicableHeaders call feeds both surfaces, so they cannot drift.
+    const item = toResolutionItem(headerlessCsvSample("Web", GENERIC_ROWS));
+    const headers = ["time", "src"];
+    const preview = buildFieldPreview(headers, item);
+    const resolved = resolveHeaders(item, headers);
+    expect(preview.rows.map((r) => r.header)).toEqual(
+      applicableHeaders(headers, item.columnCount),
+    );
+    expect(resolved.parsed.fields.map((f) => f.name)).toEqual(
+      preview.rows.map((r) => r.header),
+    );
+  });
+
+  it("does not forward a BLANK name, which would delete that column", () => {
+    // core parseCsvWithHeaders discards the value under an empty name, so a
+    // blank entry would silently destroy a column the preview had just shown
+    // carrying its value. Unreachable from the dialog today (parseHeaderFileText
+    // drops empties, the mapper never emits one) - pinned so the guarantee does
+    // not depend on that staying true.
+    const item = toResolutionItem(headerlessCsvSample("Web", GENERIC_ROWS));
+    const resolved = resolveHeaders(item, ["time", "", "dport"]);
+    expect(resolved.parsed.fields.map((f) => f.name)).toEqual([
+      "time",
+      "_1",
+      "dport",
+      "_3",
+      "_4",
+      "_5",
+    ]);
+    expect(resolved.parsed.records[0]._1).toBe("10.0.0.1");
+  });
+
+  it("keeps surplus names, which map nothing but must not be invented away", () => {
+    const item = toResolutionItem(headerlessCsvSample("Web", GENERIC_ROWS));
+    const resolved = resolveHeaders(item, [
+      "a",
+      "b",
+      "c",
+      "d",
+      "e",
+      "f",
+      "g",
+      "h",
+    ]);
+    // 8 names, 6 columns: the last two key nothing because no value reaches
+    // them, and no positional name is minted for them either.
+    expect(resolved.parsed.fields.map((f) => f.name)).toEqual([
+      "a",
+      "b",
+      "c",
+      "d",
+      "e",
+      "f",
+    ]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// applicableHeaders: the ONE array the preview renders and the apply applies
+// ---------------------------------------------------------------------------
+
+describe("applicableHeaders", () => {
+  it("pads a short definition to the column count with positional names", () => {
+    expect(applicableHeaders(["time", "src"], 5)).toEqual([
+      "time",
+      "src",
+      "_2",
+      "_3",
+      "_4",
+    ]);
+  });
+
+  it("fills in a blank and a positional entry alike - both mean unnamed", () => {
+    expect(applicableHeaders(["time", "  ", "_9", "dst"], 4)).toEqual([
+      "time",
+      "_1",
+      "_2",
+      "dst",
+    ]);
+  });
+
+  it("leaves surplus names alone rather than trimming them", () => {
+    // Trimming would hide the mismatch the warning exists to report.
+    expect(applicableHeaders(["a", "b", "c"], 1)).toEqual(["a", "b", "c"]);
+  });
+
+  it("is a no-op on a definition that already covers every column", () => {
+    const exact = ["a", "b", "c"];
+    expect(applicableHeaders(exact, 3)).toEqual(exact);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// firstUnnamedColumn: the per-chip offer, which is NOT isHeaderlessCsvSample
+// ---------------------------------------------------------------------------
+
+describe("firstUnnamedColumn", () => {
+  it("is true while ANY column is unnamed, even a small minority", () => {
+    // The case isHeaderlessCsv gets wrong for this question: it needs a
+    // MAJORITY of positional fields, so a definition covering 5 of 6 columns
+    // used to take the affordance away with one column still unfinished.
+    const item = toResolutionItem(headerlessCsvSample("Web", GENERIC_ROWS));
+    const nearlyDone = resolveHeaders(item, [
+      "time",
+      "src",
+      "dport",
+      "action",
+      "app",
+    ]);
+    expect(isHeaderlessCsvSample(nearlyDone)).toBe(false);
+    expect(firstUnnamedColumn(nearlyDone)).toBe("_5");
+  });
+
+  it("is false once every column is named", () => {
+    const item = toResolutionItem(headerlessCsvSample("Web", GENERIC_ROWS));
+    const done = resolveHeaders(item, [
+      "time",
+      "src",
+      "dport",
+      "action",
+      "app",
+      "status",
+    ]);
+    expect(firstUnnamedColumn(done)).toBe("");
+  });
+
+  it("recognises the _extra_N an OLDER build left behind", () => {
+    // Stored tagged samples outlive a release. Built by calling core the way
+    // resolveHeaders used to - which also keeps core's overflow behaviour
+    // pinned from this package, now asserted where it belongs (a direct core
+    // call) rather than through a UI helper that no longer produces it.
+    const item = toResolutionItem(headerlessCsvSample("Web", GENERIC_ROWS));
+    const legacy = buildTaggedSample(
+      "Web",
+      parseCsvWithHeaders(item.csvContent, ["time", "src"], {
+        sourceName: "feed.csv",
+      }),
+    );
+    expect(legacy.parsed.fields.map((f) => f.name)).toEqual([
+      "time",
+      "src",
+      "_extra_2",
+      "_extra_3",
+      "_extra_4",
+      "_extra_5",
+    ]);
+    // No positional fields at all, so the old predicate says "nothing to do"...
+    expect(isHeaderlessCsvSample(legacy)).toBe(false);
+    // ...while four columns plainly have no name. That gap WAS the dead end.
+    expect(firstUnnamedColumn(legacy)).toBe("_extra_2");
+  });
+
+  it("never offers to re-parse a NON-CSV sample as CSV", () => {
+    // A JSON document whose keys happen to look positional is not a headerless
+    // CSV, and re-parsing it as one would destroy it.
+    const json = tagSampleFromContent("J", '{"a":1,"_0":2,"c":3}');
+    expect(json.format).not.toBe("csv");
+    expect(firstUnnamedColumn(json)).toBe("");
+  });
+
+  it("still offers a headerless sample the content detector labels 'unknown'", () => {
+    // The format gate must not exclude the very samples the dialog exists for:
+    // Unit 11's detector calls a numeric-first-row feed "unknown" while still
+    // parsing it to positional records.
+    const csv = headerlessCsvSample("Web", GENERIC_ROWS);
+    expect(csv.format).not.toBe("csv");
+    expect(firstUnnamedColumn(csv)).toBe("_0");
+  });
+
+  it("names a column really in THIS sample, not always _0", () => {
+    // What the chip's hint illustrates with. After a partial apply `_0` is
+    // named, so pointing at it would send the operator looking for something
+    // that is not there.
+    const item = toResolutionItem(headerlessCsvSample("Web", GENERIC_ROWS));
+    expect(
+      firstUnnamedColumn(resolveHeaders(item, ["time", "src", "dport"])),
+    ).toBe("_3");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// columnOrderMatchesSample: the guard on the chip's provenance sentence
+// ---------------------------------------------------------------------------
+
+describe("columnOrderMatchesSample", () => {
+  const item = toResolutionItem(headerlessCsvSample("Web", GENERIC_ROWS));
+  const order = ["time", "src", "dport", "action", "app", "status"];
+
+  it("matches the sample its names actually produced", () => {
+    expect(columnOrderMatchesSample(order, resolveHeaders(item, order))).toBe(
+      true,
+    );
+  });
+
+  it("does NOT attribute an order to a sample that was named some other way", () => {
+    // The remembered order exists per vendor + log type whether or not THIS
+    // sample came from it. Captioning a hand-typed sample with somebody else's
+    // provenance is the same failure as inventing a column name.
+    const byHand = resolveHeaders(item, [
+      "when",
+      "client",
+      "port",
+      "verdict",
+      "service",
+      "code",
+    ]);
+    expect(columnOrderMatchesSample(order, byHand)).toBe(false);
+  });
+
+  it("says nothing for a still-positional sample", () => {
+    expect(
+      columnOrderMatchesSample(order, headerlessCsvSample("Web", GENERIC_ROWS)),
+    ).toBe(false);
+  });
+
+  it("still matches a sample NARROWER than the order that named it", () => {
+    // A real export truncated to the first few columns is the common case, not
+    // the exception. Running the test the other way - "is every name in the
+    // order present?" - would silence the notice for exactly those samples.
+    const narrow = toResolutionItem(
+      headerlessCsvSample("Web", ["2026-07-05,10.0.0.1,443"]),
+    );
+    const named = resolveHeaders(narrow, ["time", "src", "dport"]);
+    expect(columnOrderMatchesSample(order, named)).toBe(true);
+  });
+
+  it("refuses names that appear SHUFFLED, because position is the meaning", () => {
+    const shuffled = resolveHeaders(item, [
+      "action",
+      "time",
+      "src",
+      "dport",
+      "app",
+      "status",
+    ]);
+    expect(columnOrderMatchesSample(order, shuffled)).toBe(false);
+  });
+
+  it("ignores future_use and positional entries, which never become fields", () => {
+    // A saved PARTIAL definition carries positional placeholders, and a PAN-OS
+    // order carries future_use ones; the parser keys neither, so neither can be
+    // required to be present.
+    const partial = ["_0", "src", "_2", "action", "_4", "_5"];
+    expect(
+      columnOrderMatchesSample(partial, resolveHeaders(item, partial)),
+    ).toBe(true);
+    // ...and an order made ENTIRELY of placeholders claims nothing.
+    expect(columnOrderMatchesSample(["_0", "_1"], resolveHeaders(item, order))).toBe(
+      false,
+    );
   });
 });
