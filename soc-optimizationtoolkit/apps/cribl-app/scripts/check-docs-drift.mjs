@@ -235,6 +235,11 @@ export function evaluateDocsDrift(facts) {
     }
   }
 
+  const board = facts.docs.find((d) => d.path.endsWith('docs/board.md'));
+  if (board !== undefined) {
+    for (const finding of boardFindings(board)) errors.push(finding);
+  }
+
   // Counted and said out loud. A suppression nobody can see is how this check
   // would quietly stop meaning anything.
   const suppressed = facts.docs.reduce((n, d) => n + countOccurrences(d.text, SUPPRESS), 0);
@@ -278,6 +283,57 @@ function leadingWord(value) {
 function namesSuccessor(text, raw) {
   if (readKey(text, 'Superseded by') !== null) return true;
   return /superseded\s+(?:in\s+part\s+)?by\s+\S/i.test(raw);
+}
+
+/**
+ * The board's own structural rules. Small on purpose: a board is a working
+ * surface, and a checker that argued with its prose would just get the prose
+ * removed. These three catch the ways it rots SILENTLY.
+ *
+ * Two IDs the same is the one that actually bites - the second card looks
+ * tracked, gets referenced in a commit message, and points at the wrong story.
+ */
+export function boardFindings(board) {
+  const out = [];
+  // Epic keys are the backticked first cell of the epics table: | `REL` | ... |
+  const declared = new Set(
+    [...board.text.matchAll(/^\|\s*`([A-Z]{1,5})`\s*\|/gm)].map((m) => m[1]),
+  );
+  // Stories are bolded ids at the head of a bullet: - **REL-1** Do the thing
+  const stories = [...board.text.matchAll(/^\s*-\s+\*\*([A-Z]{1,5}-[A-Z]?\d+)\*\*/gm)];
+
+  const seen = new Map();
+  const used = new Set();
+  for (const [, id] of stories) {
+    used.add(id.split('-')[0]);
+    seen.set(id, (seen.get(id) ?? 0) + 1);
+  }
+
+  for (const [id, count] of seen) {
+    if (count > 1) {
+      out.push(
+        `${board.path} lists ${id} ${count} times. A duplicated id looks tracked, gets named in a commit message, and points at whichever card the reader found first.`,
+      );
+    }
+  }
+
+  for (const epic of [...used].sort()) {
+    if (!declared.has(epic)) {
+      out.push(
+        `${board.path} has ${epic}-* stories but no \`${epic}\` row in the epics table. Either add the epic or re-key the stories - an epic nobody declared is one nobody is tracking.`,
+      );
+    }
+  }
+
+  for (const epic of [...declared].sort()) {
+    if (!used.has(epic)) {
+      out.push(
+        `${board.path} declares epic \`${epic}\` but no story carries it. An epic that emptied out has either shipped, in which case say so, or lost its work.`,
+      );
+    }
+  }
+
+  return out;
 }
 
 function countOccurrences(text, needle) {
