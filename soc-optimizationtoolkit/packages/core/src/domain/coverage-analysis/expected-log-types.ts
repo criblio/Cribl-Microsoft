@@ -195,6 +195,31 @@ export interface DiscriminatorValue {
 }
 
 /**
+ * A SUBSTITUTION TOKEN, not a log type (live defect, 2026-08-27).
+ *
+ * Sentinel workbooks parameterise their queries, so a shipped workbook can carry
+ * `Activity == "{activities}"` or `DeviceEventClassID == "{EventClass}"`. The
+ * extraction below reads the quoted text and cannot tell a parameter from a
+ * literal, so `PaloAlto-PAN-OS` recommended `{activities}` and `{EventClass}`
+ * alongside TRAFFIC and THREAT.
+ *
+ * That is not merely untidy. Those entries were pre-ticked in the capture
+ * picker and regex-escaped into the live filter, where no event can ever match
+ * them; they were counted in "N log types still have no sample", so that warning
+ * could never reach zero; and because every tagged log type becomes a route and
+ * pipeline pair, satisfying one would have put a route named for a template
+ * token into a deployed pack.
+ *
+ * ANY brace rejects, not just a wholly-wrapped token: `"{Env}-traffic"` is
+ * equally unusable, and no vendor log type contains a brace. A braced GUID
+ * would also be rejected, which is right - as a log type to hand an operator it
+ * is no more answerable than the parameter is.
+ */
+export function isTemplatePlaceholder(value: string): boolean {
+  return /[{}]/.test(value);
+}
+
+/**
  * Extract the literal values a query compares against a discriminator field.
  *
  * Deliberately does NOT reuse extractKqlFields' cleaning: that function strips
@@ -212,7 +237,7 @@ export function extractDiscriminatorValues(kql: string): DiscriminatorValue[] {
 
   const push = (field: string, raw: string): void => {
     const value = raw.trim();
-    if (value === "") {
+    if (value === "" || isTemplatePlaceholder(value)) {
       return;
     }
     // Dedupe per (field, value) so a value repeated across clauses counts once.

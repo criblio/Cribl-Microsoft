@@ -171,15 +171,20 @@ to nothing - no artifact substitutes for read access.
 - **HON-6** Give the audit's AGE a home and add a manual re-check.
   The nav was tried and was the wrong surface. Two candidates remain: the frame
   footer, or the connection bar beside the existing chips. `backlog.md:84-88`.
-- **HON-8** Make Azure targeting finish its own initial load.
-  Found live 2026-08-27 driving PaloAlto. The panel sits on "Checking Azure
-  permissions..." and "Loading subscriptions..." indefinitely - 40 seconds
-  observed, no timeout, no error. **Refresh from Azure** clears both in about a
-  second, and the three ARM calls it makes all return 200, so nothing was ever
-  wrong with the credentials or the proxy. No request was in flight during the
-  stuck period. A spinner that never resolves is worse than an honest unknown,
-  because it reads as progress and gives the operator no reason to press the
-  button that would fix it. *bug, SETTLED. `backlog.md` item 13a.*
+> **HON-8 and HON-9 SHIPPED 2026-08-27**, both verified in the live product
+> against the lab workspace, not just in tests. HON-8 was a claim ledger that
+> outlived the run that made it: the loader marked its key loaded before
+> awaiting, the cleanup cancelled the run so its answer was discarded, and the
+> claim stayed - so the next run skipped a fetch nobody was waiting for. HON-9
+> was `extractDiscriminatorValues` taking the quoted text out of
+> `Activity == "{activities}"` verbatim.
+>
+> One thing worth carrying: the HON-8 fix has a SECOND half - a cancelled run
+> must stop working, not merely stop setting state - that resisted three
+> attempts at a unit pin and is verified only live. It is called out in
+> `azure-targeting-screen.dom.test.tsx` so nobody deletes it on the strength of
+> a green suite. FX-4's sweep should treat it as a known-unpinned guard.
+
 - **HON-9** Stop offering workbook parameter placeholders as log types.
   Found live 2026-08-27. `PaloAlto-PAN-OS` recommends `{activities}` and
   `{EventClass}` - Sentinel's KQL parameter syntax, taken literally by the

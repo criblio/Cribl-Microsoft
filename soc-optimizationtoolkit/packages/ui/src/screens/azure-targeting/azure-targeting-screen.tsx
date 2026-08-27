@@ -57,6 +57,8 @@ import { usePorts } from "../../ports-context";
 import { SearchableSelect } from "../../components/searchable-select";
 import {
   buildLoaderPlan,
+  shouldClaimLoad,
+  releaseClaimOnCancel,
   formatScopeChip,
   sanitizeResourceGroupName,
   validateResourceGroupName,
@@ -223,29 +225,42 @@ export function AzureTargetingScreen(props: AzureTargetingScreenProps) {
   useEffect(() => {
     const plan = buildLoaderPlan({ offline, subscriptionId: browseSub, reloadNonce });
     let cancelled = false;
+    // What THIS run claimed and has not yet finished. The cleanup releases these
+    // so a torn-down run cannot leave a claim behind that makes the next run
+    // skip a fetch nobody is waiting for - see releaseClaimOnCancel.
+    let claimedSubs = false;
+    let claimedDeps = false;
     void (async () => {
-      if (
-        plan.subscriptionsKey !== "" &&
-        loadedRef.current.subscriptionsKey !== plan.subscriptionsKey
-      ) {
+      if (shouldClaimLoad(loadedRef.current.subscriptionsKey, plan.subscriptionsKey)) {
         loadedRef.current.subscriptionsKey = plan.subscriptionsKey;
+        claimedSubs = true;
         setSubsLoad({ status: "loading" });
         try {
           const list = await listSubscriptions(ports.azure, ports.logger);
           if (!cancelled) {
+            claimedSubs = false;
             setSubsLoad({ status: "loaded", list });
           }
         } catch (err) {
           if (!cancelled) {
+            claimedSubs = false;
             setSubsLoad({ status: "error", error: String(err) });
           }
         }
       }
-      if (plan.dependentsKey === "") {
+      // A CANCELLED RUN STOPS WORKING, not merely stops setting state. Without
+      // this the torn-down run walked on into the dependents fetch below,
+      // claimed that key, and discarded the answer - and its cleanup had already
+      // gone, so nothing released the claim. The next run then skipped
+      // dependents and "Loading workspaces..." never resolved. Guarding only the
+      // setState calls fixed the subscriptions half and left this one broken,
+      // which is exactly what driving it live exposed.
+      if (cancelled) {
         return;
       }
-      if (loadedRef.current.dependentsKey !== plan.dependentsKey) {
+      if (shouldClaimLoad(loadedRef.current.dependentsKey, plan.dependentsKey)) {
         loadedRef.current.dependentsKey = plan.dependentsKey;
+        claimedDeps = true;
         setDepLoad({ status: "loading" });
         try {
           const workspaces = await listWorkspaces(
@@ -260,10 +275,12 @@ export function AzureTargetingScreen(props: AzureTargetingScreenProps) {
             ports.logger,
           );
           if (!cancelled) {
+            claimedDeps = false;
             setDepLoad({ status: "loaded", workspaces, choices });
           }
         } catch (err) {
           if (!cancelled) {
+            claimedDeps = false;
             setDepLoad({ status: "error", error: String(err) });
           }
         }
@@ -271,6 +288,20 @@ export function AzureTargetingScreen(props: AzureTargetingScreenProps) {
     })();
     return () => {
       cancelled = true;
+      // Synchronously, BEFORE the next run is invoked - that ordering is the
+      // whole fix. A run torn down mid-fetch has its result discarded, so its
+      // claim has to go with it or the next run skips the fetch and the panel
+      // never leaves "loading".
+      loadedRef.current.subscriptionsKey = releaseClaimOnCancel(
+        loadedRef.current.subscriptionsKey,
+        plan.subscriptionsKey,
+        claimedSubs,
+      );
+      loadedRef.current.dependentsKey = releaseClaimOnCancel(
+        loadedRef.current.dependentsKey,
+        plan.dependentsKey,
+        claimedDeps,
+      );
     };
   }, [ports.azure, ports.logger, offline, browseSub, reloadNonce]);
 

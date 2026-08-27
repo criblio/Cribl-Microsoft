@@ -14,6 +14,7 @@ import {
   compareLogTypeCoverage,
   deriveExpectedLogTypes,
   extractDiscriminatorValues,
+  isTemplatePlaceholder,
   logTypeNameMatches,
 } from "./expected-log-types";
 import type { ContentItem } from "./models";
@@ -302,5 +303,65 @@ describe("logTypeNameMatches - THE one predicate", () => {
       expect(out.matched).toEqual([]);
       expect(out.unreferenced).toEqual(["event"]);
     });
+  });
+});
+
+/**
+ * Pins for the workbook-parameter guard.
+ *
+ * Found live on 2026-08-27 driving PaloAlto-PAN-OS: the recommendation listed
+ * `{activities}` and `{EventClass}` beside TRAFFIC and THREAT, because a shipped
+ * workbook parameterises its queries and the extractor takes the quoted text
+ * verbatim. They were pre-ticked in the capture picker, regex-escaped into a
+ * live filter where nothing can match them, and counted in a "still have no
+ * sample" warning that therefore could never reach zero.
+ */
+describe("isTemplatePlaceholder", () => {
+  it("rejects the two tokens PaloAlto actually shipped", () => {
+    expect(isTemplatePlaceholder("{activities}")).toBe(true);
+    expect(isTemplatePlaceholder("{EventClass}")).toBe(true);
+  });
+
+  it("rejects a token embedded in otherwise real text", () => {
+    // "{Env}-traffic" is as unusable as the bare token, so the rule is ANY
+    // brace rather than a wholly-wrapped one.
+    expect(isTemplatePlaceholder("{Env}-traffic")).toBe(true);
+  });
+
+  it("accepts the PAN log types that merely LOOK like placeholders", () => {
+    // The trap for anyone tightening this: `end` and `url` sit in the same
+    // recommendation and are genuine PAN-OS subtypes (traffic end, threat url).
+    // A guard that took them would be worse than the bug it fixed.
+    expect(isTemplatePlaceholder("end")).toBe(false);
+    expect(isTemplatePlaceholder("url")).toBe(false);
+    expect(isTemplatePlaceholder("TRAFFIC")).toBe(false);
+    expect(isTemplatePlaceholder("wildfire-virus")).toBe(false);
+  });
+});
+
+describe("extractDiscriminatorValues - workbook parameters", () => {
+  it("drops a parameterised comparison and keeps the literal beside it", () => {
+    const out = extractDiscriminatorValues(
+      'CommonSecurityLog | where DeviceEventClassID == "{EventClass}" or DeviceEventClassID == "TRAFFIC"',
+    );
+
+    expect(out.map((v) => v.value)).toEqual(["TRAFFIC"]);
+  });
+
+  it("drops a parameterised set member without dropping its siblings", () => {
+    const out = extractDiscriminatorValues(
+      'CommonSecurityLog | where Activity in ("{activities}", "end", "url")',
+    );
+
+    expect(out.map((v) => v.value)).toEqual(["end", "url"]);
+  });
+
+  it("yields nothing at all when every comparison is parameterised", () => {
+    // The honest outcome is an empty list, not a list of tokens. An empty
+    // result already reads as "nothing to compare against" here, which is the
+    // right answer - it must never read as "you have everything".
+    expect(
+      extractDiscriminatorValues('T | where Activity == "{activities}"'),
+    ).toEqual([]);
   });
 });

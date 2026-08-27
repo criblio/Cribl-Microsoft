@@ -6,7 +6,9 @@ import {
   commitNoticeText,
   formatScopeChip,
   parseTargetScope,
+  releaseClaimOnCancel,
   sanitizeResourceGroupName,
+  shouldClaimLoad,
   serializeTargetScope,
   validateResourceGroupName,
 } from "./targeting-state";
@@ -171,5 +173,72 @@ describe("target-scope codec", () => {
       resourceGroup: "",
       workspaceName: "",
     });
+  });
+});
+
+/**
+ * Pins for the loader claim ledger.
+ *
+ * The defect (live, 2026-08-27): the loader claimed its key before awaiting, the
+ * cleanup cancelled the run so its result was discarded, and the claim was left
+ * behind. The next run saw the key taken, skipped the fetch, and the panel sat
+ * on "Checking Azure permissions..." and "Loading subscriptions..." forever with
+ * no request in flight and no error. StrictMode's mount/unmount/remount made it
+ * fire on every single mount rather than as an occasional race.
+ */
+describe("shouldClaimLoad", () => {
+  it("claims a key nobody holds", () => {
+    expect(shouldClaimLoad("", "subs:0")).toBe(true);
+  });
+
+  it("does NOT re-claim a key it already holds", () => {
+    // The dedupe this ledger exists for: a re-render must not start a second
+    // fetch for data that already arrived.
+    expect(shouldClaimLoad("subs:0", "subs:0")).toBe(false);
+  });
+
+  it("claims again once the key moves", () => {
+    // What Refresh from Azure does - it bumps reloadNonce, so the key changes.
+    expect(shouldClaimLoad("subs:0", "subs:1")).toBe(true);
+  });
+
+  it("never claims an empty plan key", () => {
+    // Offline, or no subscription selected yet: there is nothing to fetch.
+    expect(shouldClaimLoad("", "")).toBe(false);
+    expect(shouldClaimLoad("dep:0:sub", "")).toBe(false);
+  });
+});
+
+describe("releaseClaimOnCancel", () => {
+  it("RELEASES a claim the cancelled run made itself", () => {
+    // THE DEFECT. Without this the next run inherits a claim whose result was
+    // thrown away, skips the fetch, and the panel never leaves "loading".
+    expect(releaseClaimOnCancel("subs:0", "subs:0", true)).toBe("");
+  });
+
+  it("keeps the claim when the run had already finished", () => {
+    // A completed run passes claimedHere: false. Releasing here would refetch
+    // on every re-render, which is what the ledger exists to prevent.
+    expect(releaseClaimOnCancel("subs:0", "subs:0", false)).toBe("subs:0");
+  });
+
+  it("leaves a claim made by a DIFFERENT run alone", () => {
+    // Someone else moved the key on while this run was in flight. It is not
+    // this run's to release.
+    expect(releaseClaimOnCancel("subs:1", "subs:0", true)).toBe("subs:1");
+  });
+
+  it("is a no-op when this run claimed nothing", () => {
+    expect(releaseClaimOnCancel("subs:0", "", false)).toBe("subs:0");
+  });
+
+  it("round-trips: claim, cancel, then the next run claims again", () => {
+    // The sequence StrictMode forces on every mount, end to end.
+    let claimed = "";
+    const key = "subs:0";
+    expect(shouldClaimLoad(claimed, key)).toBe(true);
+    claimed = key;
+    claimed = releaseClaimOnCancel(claimed, key, true);
+    expect(shouldClaimLoad(claimed, key)).toBe(true);
   });
 });
