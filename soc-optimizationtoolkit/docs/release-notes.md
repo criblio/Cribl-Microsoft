@@ -8,6 +8,77 @@ is harder to forget to update than a directory that has to be remembered.
 
 ---
 
+## 1.12.2
+
+**Cribl Lake is a working sample source.** The Lake query ran but returned
+nothing usable; it now runs, enumerates the log types a dataset actually holds,
+and sizes them in bytes. Log-type detection was a coin flip - a dataset whose
+events carry no discriminator was assigned one at random - and now reports what
+it found, including an explicit group for events carrying no `msgid` rather than
+silently folding them elsewhere. A single-log-type dataset is offered as such
+instead of being described as a mixture of one.
+
+**Positional CSV columns can be named.** A comma-delimited vendor feed arrives
+as `field1..fieldN` and nothing said which was which. Columns can now be named
+from a bundled vendor order, the naming is visible before it is applied, a
+half-named definition stays reopenable rather than being lost, and samples that
+arrive by Lake query or capture get the same offer as pasted ones. Four PAN-OS
+column orders were transcribed from Palo Alto's published field descriptions -
+transcribed, not inferred: a fifth (`AUTH`) was declined because Palo Alto
+publishes no such log type and guessing one would mislabel every column after
+the first mistake.
+
+**Four live defects, all found by driving the product rather than reading it.**
+
+- A successful commit erased its own summary. The re-seed effect was keyed on a
+  value rebuilt from coverage, and committing samples always changes coverage -
+  so the panel fell back to "Nothing is added until you confirm" immediately
+  after adding something.
+- A hand-edited capture filter was recomposed away by the same identity change,
+  and to a NARROWER filter than the operator wrote, because the just-committed
+  log types came back `provided` and un-ticked themselves.
+- The dataflow canvas discarded a node drag and the undo history that would have
+  recovered it, whenever the diagram was redrawn for a reason not in its storage
+  key - ticking a flow was enough.
+- The mapping review would not let a field be kept: with "Drop unneeded fields"
+  on, a field moved back to overflow was re-dropped on the next render.
+
+**Azure targeting finishes its own initial load.** It sat on "Checking Azure
+permissions..." and "Loading subscriptions..." indefinitely, with no request in
+flight and no error. Refresh from Azure appeared to fix it - it only worked
+because it changes the loader key. The cause was a claim that outlived the run
+that made it: the loader marks a key claimed before awaiting, the cleanup
+cancels the run and discards its answer, and the claim stayed behind, so the
+next run skipped a fetch nobody was waiting for.
+
+**Workbook parameters are no longer offered as log types.** Sentinel workbooks
+parameterise their queries, so `PaloAlto-PAN-OS` recommended `{activities}` and
+`{EventClass}` beside TRAFFIC and THREAT - pre-ticked, compiled into a live
+capture filter where nothing can match them, and counted in a warning that could
+therefore never reach zero.
+
+**Documentation is checked like code.** Nine documents were found asserting
+things the repo had already disproved, the worst an unbuilt plan still telling a
+future reader to build for a shell deleted six weeks earlier. Every document now
+declares whether its instructions bind (`Living` / `Proposed` / `Record` /
+`Superseded`), accepted ADRs must name what they invalidate, proposed plans
+expire, and `npm run check-docs` fails the build on a live document naming a
+deleted path. `docs/board.md` is new: the Kanban index over the backlog.
+
+**Also**: a Zscaler NSS lab (three Lake datasets, three wire formats) and three
+more Lake benches, capped at 7-day retention; the acquisition panels report what
+a commit actually stored rather than what was requested.
+
+**What this release has NOT done.** It is not installed anywhere: the lab
+workspace still runs its own installed build, and packaging does not deploy.
+One guard in the Azure targeting fix - that a cancelled run stops working rather
+than merely stopping its state writes - is verified only against the live
+product and resisted three attempts at a unit pin; it is called out in
+`azure-targeting-screen.dom.test.tsx` so a green suite is not mistaken for
+cover.
+
+---
+
 ## 1.12.1
 
 **Guid columns are no longer dropped, and the data no longer disappears with
