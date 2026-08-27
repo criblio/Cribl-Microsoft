@@ -1517,3 +1517,51 @@ read the generated pipeline in Pipeline preview and check for the `serialize`
 function with `dstField: AdditionalExtensions`. Whatever is found gets recorded
 here, including "could not reproduce" - a report that turns out to be a schema
 problem is worth the same write-up as one that turns out to be a generator bug.
+
+### 14a. NOT REPRODUCED on the CEF path - verified live 2026-08-27
+
+Driven end to end in the live preview: Zscaler Internet Access, samples pulled
+from the `zscaler_cef` Lake dataset through the app's own query path (4 log types
+found and volume-ranked, 200 events fetched, 4 samples committed), gap analysis
+run, all 4 mappings approved, pipeline preview read.
+
+**The serialize function is generated.** For every log type the pipeline carries
+eight functions in order, and number seven is
+`serialize / overflow / "Serialize unmapped fields into AdditionalExtensions as
+JSON"`. All four log types overflowed (8, 3, 10 and 10 fields) into a
+CommonSecurityLog destination that does carry the column.
+
+**The preview is not an approximation, which was the next thing to doubt.** Both
+the preview (`pipeline-preview-state.ts:45`) and the pack build
+(`pack-assembly/scaffold.ts:257`) call the SAME `generatePipelineConfForPlan`.
+There is no second generator that could disagree, so "correct in the preview,
+missing in the pack" is not a state this code can reach.
+
+### 14b. What is left, and the likeliest explanation
+
+Two of the three original paths remain, and neither is a generator bug:
+
+**The drop policy can empty the catch-all.** A field marked `drop` is
+deliberately excluded from the serialize (`pipeline-conf.ts:740`, a 2026-07-13
+live fix - dropped fields were being serialized and shipped anyway). If the
+unused-field policy drops every field that would have overflowed, `overflow`
+reaches zero, `enabled` goes false, and the function is correctly absent. This
+run could not hit it: the analysis reported "preserving all (content parses the
+catch-all opaquely)", so nothing was droppable. A solution whose content does NOT
+parse the catch-all opaquely, with the policy set to drop, is the case to try.
+
+**The destination schema may lack the column.** `enabled` also requires
+`overflowFieldExists` (`match-fields.ts:271`). A destination without an overflow
+column produces no serialize - and already raises a warning
+(`match-fields.ts:355`), so it should be visible rather than silent.
+
+**What to ask the reporter**, rather than guessing further: which solution and
+destination table, whether "Drop unneeded fields" was on, and whether the gap
+analysis showed a non-zero Overflow count for the log type in question. That last
+number decides it - a zero Overflow with no serialize is correct behaviour, and
+a non-zero Overflow with no serialize is the defect.
+
+Worth noting even if this closes as not-a-bug: nothing tells an operator WHY the
+catch-all is absent. "No serialize because nothing overflowed" and "no serialize
+because the column is missing" are different facts, and the pipeline preview
+shows neither - it just has one fewer function than it might.
