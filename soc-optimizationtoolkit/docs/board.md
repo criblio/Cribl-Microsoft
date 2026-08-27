@@ -403,6 +403,12 @@ Small and mostly independent. Good filler between larger stories.
   the right belt-and-braces split today and a silent single point of failure the
   moment a second person works here. *chore, UNDECIDED. Related to the
   unanchored-pattern problem already fixed once in 1.12.1.*
+  **Evidence, 2026-08-27:** the architecture-audit hook was counting every
+  commit, so a batch of merges tripped it and then a release commit tripped it
+  again - two audits opened on nothing having changed. It now counts only
+  commits touching source, and that correction exists on ONE machine. A fresh
+  clone gets the version that cries wolf, and an audit that always fires is one
+  people learn to wave through.
 
 ### REL - Release, continued
 
