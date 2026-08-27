@@ -11,7 +11,7 @@ two cannot disagree.
 alternatives. This board holds only what is a unit of work, what state it is
 in, and what it waits on.
 
-**66 in the backlog, 0 in progress, 1 done.**
+**67 in the backlog, 0 in progress, 2 done.**
 
 ## Epics
 
@@ -26,7 +26,7 @@ in, and what it waits on.
 | `PK` | Pack maintenance parity | 2 | Includes a silent data-loss defect |
 | `VND` | Vendor field definitions | 2 | Positional CSV naming, reaching past ~18 vendors |
 | `DBT` | Debt, spec grounding, verification | 15 | Copy fixes, unverified claims, retired docs |
-| `GEN` | Pipeline and pack generation | 1 | What the build actually emits; had no epic until a regression was reported against it |
+| `GEN` | Pipeline and pack generation | 2 | What the build actually emits; had no epic until a regression was reported against it |
 | `D` | Open decisions | 10 | Blocked on a call, not on effort; each is cheap once answered |
 
 ---
@@ -42,20 +42,6 @@ _Nothing here._
 ## Backlog - now (10)
 
 Next to pick up. Nothing blocks these.
-
-- **GEN-1** Find out whether the overflow serialize is missing from generated pipelines
-  `bug` `unconfirmed`
-  REPORTED 2026-08-27: the additional-extension field is said not to be
-  created in the pack's pipeline. For CommonSecurityLog that is
-  `AdditionalExtensions`, the catch-all carrying every source field with no
-  column - so if it is absent the pack ships and those fields are silently
-  gone, which is ADR-0004's shape again: successful deploy, no error, data
-  that never arrives. **Not yet reproduced.** Three ways to reach a missing
-  function and only one is a defect: nothing overflowed (correct), the
-  destination schema has no overflow column (a warning already exists for
-  this), or it overflowed into an existing column and the function still was
-  not emitted. Telling them apart is the job. *bug, UNCONFIRMED. `backlog.md`
-  item 14.* ### REL - Ship what is built
 
 - **REL-2** Record the 2026-08-25 live verification in the release notes
   `chore` `settled`
@@ -115,9 +101,29 @@ Next to pick up. Nothing blocks these.
   measured, do not re-add: Event Hub namespace creation is `arm.deploy`; every
   Cribl-side write is `source.manage`. ---
 
+- **GEN-2** A rebuilt pack accumulates pipelines with no configuration
+  `bug` `settled`
+  CONFIRMED live 2026-08-27 in `ms-sentinel-zscaler-internet` v1.0.6 (worker
+  group `default`), built by Rebuild pack only over an existing pack of the
+  same name. The 8 pipelines the build intends are all correct - 4 reduction
+  at 16 functions and 4 transform at 8 - but the pack's Pipelines tab ALSO
+  lists a dozen-plus nameless entries at 0 functions, each hovering to
+  "Missing pipeline configuration". They are leftovers of earlier builds: the
+  install overwrites a pack whose previous version had different log-type
+  names, and the entries whose `conf.yml` no longer ships are not removed. Why
+  it bites: every rebuild adds more, so the pack degrades the more it is
+  maintained; an operator opening the pack cannot tell the 8 real pipelines
+  from the wreckage; and a broken entry is indistinguishable from a pipeline
+  the build genuinely failed to write. Overwrite currently goes through the
+  conflict ladder in `usecases/install-pack/install-pack.ts` - the question is
+  whether the PATCH-upgrade rung merges where it should replace. Exact count
+  not pinned; get it from the pack's own registry rather than the UI list.
+  *bug, CONFIRMED. Related to [[PK-1]], which is about packs a HUMAN edited;
+  this one the build does to itself.*
+
 ---
 
-## Backlog - next (7)
+## Backlog - next (8)
 
 Settled and unblocked, sequenced behind now.
 
@@ -176,6 +182,23 @@ Settled and unblocked, sequenced behind now.
   artifact" rule has no button. Targets: Integrate deploy, Batch Deploy, DCR
   Automation. Must stay worded as an offer, not an error - there is a pin on
   the absence of alert semantics. `backlog.md:113-116`. ---
+
+- **GEN-3** Stamp the toolkit version into the pack it builds
+  `feature` `settled`
+  Given a `.crbl`, nothing says which toolkit build produced it. The manifest
+  carries exactly eight fields (`domain/pack-assembly/package-json.ts`) -
+  name, version, author, description, displayName, tags, exports,
+  minLogStreamVersion - and `author` is the constant "Cribl SOC Toolkit" while
+  `version` is just highest-installed-plus-one, so it tracks how many times
+  the pack was rebuilt, not what built it. The persisted `PackBuildRecord`
+  does not carry it either. The app version exists only as `__APP_VERSION__`
+  for the UI footer. COST, paid on 2026-08-27: asked whether a pack in the
+  workspace was the one just built, the artifact could not answer; it took a
+  git-log check and a sample-count comparison to establish provenance. Every
+  future regression report about "the pack" pays this again. Cheapest fix: one
+  more manifest field, set from the same define the footer reads. *feature,
+  settled. Serves [[GEN-2]] too - a stamp distinguishes this build's pipelines
+  from a previous build's leftovers.*
 
 ---
 
@@ -452,7 +475,14 @@ Settled, gated on something above.
   `chore` `settled`
   Packaging does not deploy - the lab runs the installed app, so this work
   stays invisible there until someone uploads the tgz through the Apps page.
-  The lab is on 1.2.212. `backlog.md:949-951`.
+  The lab is on 1.2.212. `backlog.md:949-951`. MEASURED 2026-08-27: the
+  installed app in the lab workspace reports v1.11.2 in its own footer while
+  `main` is at 1.12.2, and its stored GitHub token is rejected (`GET
+  commits/master: HTTP 401 Bad credentials`), so section 1 of Sentinel
+  Integration cannot load the solution index there at all. The `__local__`
+  live preview has a working token, which is why this went unnoticed - every
+  recent walkthrough drove the dev app. Anyone opening the INSTALLED app today
+  hits a dead first step.
 
 - **REL-6** Clear the external queue
   `chore` `settled`
@@ -531,9 +561,30 @@ Settled, gated on something above.
 
 ---
 
-## Done (1)
+## Done (2)
 
 Kept briefly so a reader can see what just landed; prune when the list grows.
+
+- **GEN-1** Overflow serialize reaches the built pack - report not reproduced
+  `bug` `settled`
+  REPORTED 2026-08-27: the additional-extension field was said not to be
+  created in the pack's pipeline. NOT REPRODUCED, and now checked in the
+  artifact the report is actually about - a pack built end to end and
+  installed into Cribl, not the preview. Run: Zscaler Internet Access, 4 log
+  types pulled live from the `zscaler_cef` Lake dataset (200 events fetched,
+  stored 50/26/19/17, all detected CEF), destination CommonSecurityLog, gap
+  analysis reporting Overflow 8 for zscalernss-tunnel (6 unmappable, 2
+  outranked) - a NON-ZERO overflow, which is the condition that must emit the
+  function. The installed pack `ms-sentinel-zscaler-internet` v1.0.6 in worker
+  group `default` carries, in each of its 4 transform pipelines, a group `(7)
+  Overflow Collection` holding an enabled `Serialize`: type JSON Object,
+  description "Serialize unmapped fields into AdditionalExtensions as JSON",
+  **Destination field `AdditionalExtensions`**, and a Fields-to-serialize
+  exclusion list that ends `!AdditionalExtensions`, `*`. So the catch-all is
+  emitted and populated. Zero overflow correctly emits nothing; that is the
+  likely shape of the original report, so the question to put back to the
+  reporter is what Overflow count their gap analysis showed. *bug, closed as
+  not-reproduced. `backlog.md` item 14.*
 
 - **REL-4** Cut and package a release
   `chore` `settled`
