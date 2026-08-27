@@ -10,13 +10,15 @@
  */
 import { EMPTY_OVERFLOW_TRIAGE } from "@soc/core";
 import { describe, expect, it } from "vitest";
-import type { GapFieldMapping, GapReport } from "@soc/core";
+import type { GapFieldMapping, GapReport, MatchAction } from "@soc/core";
+import type { UnusedFieldAssessment } from "./mapping-review-state";
 import {
   INITIAL_MAPPING_REVIEW_STATE,
   MAPPING_REVIEW_STALE_NOTICE,
   OVERFLOW_COVERAGE_NOTE,
   analyzeButtonLabel,
   approvalBarText,
+  autoDropPlan,
   deriveMappingReviewGate,
   effectiveMappings,
   fieldMappingsLabel,
@@ -698,5 +700,134 @@ describe("deriveLiveStats (live tiles + the Dropped tile, 2026-07-12)", () => {
     // Analysis facts pass through untouched.
     expect(byKey.get("source-fields")?.value).toBe(4);
     expect(byKey.get("dcr-handles")?.value).toBe(2);
+  });
+});
+
+/**
+ * Pins for the unused-field auto-drop plan.
+ *
+ * The defect these exist for (2026-08-26): the restore branch consulted the
+ * already-dropped set and the drop branch did not. The effect around it re-ran
+ * on every mapping edit, so a field the operator moved back to overflow was
+ * seen at overflow again and re-dropped. The row snapped back under them with
+ * no message, and there was no way to keep the field while the policy was on.
+ */
+describe("autoDropPlan", () => {
+  const row = (source: string, action: MatchAction): GapFieldMapping => ({
+    source,
+    dest: `${source}_dest`,
+    sourceType: "string",
+    destType: "string",
+    confidence: "exact",
+    action,
+    needsCoercion: false,
+    description: "",
+  });
+
+  const assessment = (droppable: string[]): UnusedFieldAssessment => ({
+    droppable,
+    keptByContent: [],
+    blocked: null,
+  });
+
+  it("drops an overflow field nothing has dropped yet", () => {
+    const plan = autoDropPlan(
+      "drop",
+      "traffic",
+      assessment(["spare"]),
+      [row("spare", "overflow")],
+      new Set(),
+    );
+
+    expect(plan.drop).toEqual(["spare"]);
+    expect(plan.restore).toEqual([]);
+  });
+
+  it("does NOT re-drop a field the operator moved back to overflow", () => {
+    // THE DEFECT. The field reads as overflow again - that is exactly what an
+    // operator restoring it looks like - and the only thing separating that
+    // from a fresh field is the memory of having dropped it once.
+    const plan = autoDropPlan(
+      "drop",
+      "traffic",
+      assessment(["spare"]),
+      [row("spare", "overflow")],
+      new Set(["traffic|spare"]),
+    );
+
+    expect(plan.drop).toEqual([]);
+  });
+
+  it("keys the memory per LOG TYPE, not per field name", () => {
+    // Two tables can carry the same source field. Dropping it in one must not
+    // silently exempt it in the other.
+    const plan = autoDropPlan(
+      "drop",
+      "threat",
+      assessment(["spare"]),
+      [row("spare", "overflow")],
+      new Set(["traffic|spare"]),
+    );
+
+    expect(plan.drop).toEqual(["spare"]);
+  });
+
+  it("restores only what the policy itself dropped", () => {
+    const plan = autoDropPlan(
+      "preserve",
+      "traffic",
+      assessment(["mine", "theirs"]),
+      [row("mine", "drop"), row("theirs", "drop")],
+      new Set(["traffic|mine"]),
+    );
+
+    // "theirs" was dropped by hand, so preserve does not reach into it.
+    expect(plan.restore).toEqual(["mine"]);
+  });
+
+  it("lets a policy round-trip ask again", () => {
+    // Switching to preserve forgets the field, so switching back may re-drop
+    // it. That is the deliberate way to re-run the machine's decision, and it
+    // is what keeps the fix above from making the policy a one-shot.
+    const forgotten = new Set<string>();
+    const plan = autoDropPlan(
+      "drop",
+      "traffic",
+      assessment(["spare"]),
+      [row("spare", "overflow")],
+      forgotten,
+    );
+
+    expect(plan.drop).toEqual(["spare"]);
+  });
+
+  it("drops nothing at all when the assessment is blocked", () => {
+    // No requirements, or an opaque catch-all: the evidence cannot support a
+    // drop, so nothing is dropped regardless of the policy.
+    for (const blocked of ["no-requirements", "opaque-catch-all"] as const) {
+      const plan = autoDropPlan(
+        "drop",
+        "traffic",
+        { droppable: ["spare"], keptByContent: [], blocked },
+        [row("spare", "overflow")],
+        new Set(),
+      );
+
+      expect(plan.drop).toEqual([]);
+    }
+  });
+
+  it("leaves a row alone when it is not at overflow", () => {
+    // Only overflow rows are droppable. A field that already maps to a column
+    // is carrying data, and the policy has no business touching it.
+    const plan = autoDropPlan(
+      "drop",
+      "traffic",
+      assessment(["mapped"]),
+      [row("mapped", "keep")],
+      new Set(),
+    );
+
+    expect(plan.drop).toEqual([]);
   });
 });

@@ -76,6 +76,27 @@ export function loadEdits(key: string): DiagramEditState | null {
   }
 }
 
+/**
+ * Whether a redraw should discard the in-memory arrangement and reload from
+ * storage. Pure so the rule can be stated without a canvas.
+ *
+ * THE ARRANGEMENT BELONGS TO THE KEY, NOT TO EVERY REDRAW. The diagram object
+ * is rebuilt whenever the view state moves - a flow ticked, a pack expanded -
+ * and none of that is in the key. Reloading on every rebuild threw away
+ * whatever had not yet been written by the 400 ms debounced save, and cleared
+ * the undo history that would have recovered it.
+ *
+ * No key means nothing to reload from, so a new diagram resets: that is the
+ * unsaved-canvas case and it is the one time a redraw should start clean.
+ */
+export function shouldReloadEdits(
+  loadedKey: string | undefined,
+  nextKey: string | undefined,
+): boolean {
+  if (nextKey === undefined) return true;
+  return loadedKey !== nextKey;
+}
+
 /** Persist (or clear, when empty) the edits for a diagram key. */
 export function saveEdits(key: string, state: DiagramEditState): void {
   try {
