@@ -818,11 +818,13 @@ describe("autoDropPlan", () => {
   });
 
   it("leaves a row alone when it is not at overflow", () => {
+    // Only overflow rows are droppable. A field that already maps to a column
+    // is carrying data, and the policy has no business touching it.
     const plan = autoDropPlan(
       "drop",
       "traffic",
       assessment(["mapped"]),
-      [row("mapped", "map")],
+      [row("mapped", "keep")],
       new Set(),
     );
 
