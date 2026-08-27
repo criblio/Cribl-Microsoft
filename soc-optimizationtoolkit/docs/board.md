@@ -171,7 +171,7 @@ to nothing - no artifact substitutes for read access.
 - **HON-6** Give the audit's AGE a home and add a manual re-check.
   The nav was tried and was the wrong surface. Two candidates remain: the frame
   footer, or the connection bar beside the existing chips. `backlog.md:84-88`.
-> **HON-8 and HON-9 SHIPPED 2026-08-27**, both verified in the live product
+> **HON-8 and HON-9 FIXED in PR #134**, open 2026-08-27, both verified in the live product
 > against the lab workspace, not just in tests. HON-8 was a claim ledger that
 > outlived the run that made it: the loader marked its key loaded before
 > awaiting, the cleanup cancelled the run so its answer was discarded, and the
