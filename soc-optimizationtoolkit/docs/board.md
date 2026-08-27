@@ -64,52 +64,43 @@ column with the question noted.
 
 ## Now
 
-> **Updated 2026-08-26.** REL-1 and the whole FX epic are in review; the three
-> PRs are named on their cards. Nothing here is merged yet, so nothing has moved
-> off the board - a card leaves Now when its PR lands, not when it opens.
+> **Updated 2026-08-27.** Move 1 of the roadmap is DONE: PRs #128, #129, #130
+> and #131 are all merged, `main` is at `714a66c`, and the full gate is green on
+> it (4,470 tests, lint, typecheck, docs-drift). Move 2 (CAP) is promoted here.
+>
+> The shipped cards left this column rather than sitting in it marked done - a
+> board that keeps its trophies stops showing what is next. What they were and
+> why is in the merge commits; the epic note below keeps the one lesson worth
+> carrying.
 
 ### REL - Ship what is built
 
-- **REL-1** Open the PR for `fix/capture-outcome-and-volume-orientation`.
-  DONE - PR #129, with FX-1 folded in as suggested, since it was the other half
-  of the same commit.
 - **REL-2** Record the 2026-08-25 live verification in the release notes.
   The 1.12.0 entry ends "has NOT done: run against a real workspace", which was
   true of that release. No later entry records the run, so a reader working
-  newest-first still concludes ADR-0003 is unverified. *Size: one entry.*
+  newest-first still concludes ADR-0003 is unverified. *chore, SETTLED.
+  Size: one entry.*
 - **REL-3** Rotate the Azure client secret from the retired local-app config.
   `~/.soc-toolkit-local-app-retired/config/local-config.json` holds a live
   secret. Flagged for rotation by `adr/0002-drop-local-target.md:57-62` and
-  still outstanding. *Security. Size: minutes.*
+  still outstanding. *chore, SETTLED. Security. Size: minutes.*
+- **REL-4** Cut and package a release. Now the most overdue card on the board:
+  the tarball in `release/` predates four merged PRs, and the lab workspace is
+  further behind still. `npm run package` performs the bump; do not hand-bump.
 
 ### FX - Effect-identity defects
 
-The class: a `useEffect` keyed on a `useMemo` whose identity changes on every
-commit, resetting state the operator owns. `51d272d` fixed the outcome half and
-left the filter half. Safe reference pattern: `lake-panel.tsx:198-204` (keyed on
-a primitive). Guard precedent: `integrate-screen.tsx:398-402` (touched-ref).
+SHIPPED 2026-08-26/27, all three instances: the capture filter (#129), the
+canvas arrangement and the mapping-review drop branch (#131).
 
-- **FX-1** Guard the capture filter re-seed with the `filterEdited` latch.
-  `capture-panel.tsx:119-123`. CONFIRMED: the panel is mounted with
-  `key={captureTarget.id}`, so a source change remounts and the only way this
-  effect ever re-fires is a `recommended` identity change - every one of which
-  clears the latch and recomposes the filter. Fires on commit, and also with no
-  operator action at all when the content read resolves or Lake volumes land.
-  IN REVIEW - PR #129. The latch became a ref, because listing it as a
-  dependency would re-run the effect the instant the operator typed and re-seed
-  the checkboxes under them. Two pins, mutation-checked; the source-change branch
-  was kept and proved load-bearing by the existing pin.
-- **FX-2** Reload the canvas arrangement per key, not per redraw.
-  IN REVIEW - PR #131. Confirmed and worse than the card first said: the persist
-  effect debounces 400 ms and cancels the pending write in its cleanup, so the
-  same firing that discarded the drag also emptied the undo history that would
-  have recovered it. The card's title used to read "include the view state in the
-  `storageKey`" - that was the wrong fix, because it would file a separate
-  arrangement per flow combination and the layout would vanish on every toggle.
-- **FX-3** Guard the drop branch in mapping review.
-  IN REVIEW - PR #131. Confirmed. Both branches now come from one pure
-  `autoDropPlan`, which is what made the asymmetry visible: side by side, drop
-  plainly ignored the memory restore consults.
+The lesson worth keeping, because it is what made all three findable: an effect
+keyed on a value whose identity moves for reasons unrelated to the state it
+resets. Safe reference `lake-panel.tsx:198-204` (primitive key); guard
+precedents `integrate-screen.tsx:398-410` and `azure-resources-section.tsx:259-262`.
+Two of the three fixes also extracted the decision to a pure function
+(`shouldReloadEdits`, `autoDropPlan`) - which is what made the third one's
+asymmetry visible at a glance.
+
 - **FX-4** Sweep for the class rather than the instances. THREE confirmed from
   one reading; nothing says the fourth is not there. `useEffect` keyed on a memo,
   a callback, or an inline object/array prop, whose body resets state the
@@ -118,10 +109,6 @@ a primitive). Guard precedent: `integrate-screen.tsx:398-402` (touched-ref).
   `azure-resources-section.tsx:259-262`. *chore. UNDECIDED whether this is a
   one-off sweep or a lint rule - oxlint has no exhaustive-deps equivalent, and a
   custom rule is a bigger commitment than the three fixes were.*
-
----
-
-## Next
 
 ### CAP - Capability taxonomy extension
 
@@ -148,6 +135,10 @@ only measurements. No probe ever grants a write.
 
 Already measured, do not re-add: Event Hub namespace creation is `arm.deploy`;
 every Cribl-side write is `source.manage`.
+
+---
+
+## Next
 
 ### HON - Inventory and diagnostic honesty
 
@@ -379,10 +370,6 @@ Small and mostly independent. Good filler between larger stories.
 
 ### REL - Release, continued
 
-- **REL-4** Cut and package the next release. `npm run package` performs the
-  bump; do not hand-bump. 21 source commits have landed since the 1.12.1
-  tarball, and `check-release` reports the drift while still exiting 0 because
-  the four version claims agree with each other.
 - **REL-5** Upload the current package to the lab workspace. Packaging does not
   deploy - the lab runs the installed app, so this work stays invisible there
   until someone uploads the tgz through the Apps page. The lab is on 1.2.212.
