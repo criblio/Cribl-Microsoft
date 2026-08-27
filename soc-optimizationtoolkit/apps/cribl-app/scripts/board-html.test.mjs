@@ -5,7 +5,8 @@
 // disagreement is this file's fault), and rendering card text as markup.
 
 import { describe, expect, it } from 'vitest';
-import { renderBoardHtml } from './board-html.mjs';
+import { columnsFrom, renderBoardHtml } from './board-html.mjs';
+import { STATUSES } from './board.mjs';
 
 const story = (over) => ({
   id: 'REL-1',
@@ -23,6 +24,28 @@ const story = (over) => ({
 const board = (stories, epics) => ({
   epics: epics ?? [{ key: 'REL', name: 'Ship it', why: 'because' }],
   stories,
+});
+
+describe('columnsFrom', () => {
+  it('DERIVES a column for every declared status', () => {
+    // The audit finding of 2026-08-27: this file used to hardcode its own copy
+    // of the three statuses while validateBoard accepted STATUSES. The two
+    // agreed by luck, and a fourth status would have validated fine and then
+    // rendered into no column at all.
+    expect(columnsFrom(STATUSES).map((c) => c.status)).toEqual([...STATUSES]);
+  });
+
+  it('gives an UNKNOWN status a column keyed by its own name', () => {
+    // The pin that actually fails if the list is hardcoded again: a status
+    // nobody wrote a title for must still get somewhere to live, because a
+    // missing column loses cards silently.
+    const cols = columnsFrom(['backlog', 'archived']);
+
+    expect(cols).toEqual([
+      { status: 'backlog', title: 'Backlog' },
+      { status: 'archived', title: 'archived' },
+    ]);
+  });
 });
 
 describe('renderBoardHtml', () => {

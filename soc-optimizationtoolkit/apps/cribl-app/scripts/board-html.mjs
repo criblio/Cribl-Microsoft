@@ -10,14 +10,34 @@
 //
 // Pure: takes data, returns a string. The server does the IO.
 
-import { blockers, PRIORITIES } from './board.mjs';
+import { blockers, PRIORITIES, STATUSES } from './board.mjs';
 
-/** Columns are PROGRESS. Priority is a lane inside the backlog, not a column. */
-const COLUMNS = [
-  { status: 'backlog', title: 'Backlog' },
-  { status: 'in-progress', title: 'In progress' },
-  { status: 'done', title: 'Done' },
-];
+/** Display names; the LIST of columns is not ours to decide. */
+const COLUMN_TITLES = {
+  backlog: 'Backlog',
+  'in-progress': 'In progress',
+  done: 'Done',
+};
+
+/**
+ * Columns are PROGRESS, DERIVED from the declared vocabulary. Priority is a
+ * lane inside the backlog, not a column.
+ *
+ * Derived rather than listed because the audit on 2026-08-27 caught this file
+ * hardcoding its own copy of the three statuses. `STATUSES` is what
+ * `validateBoard` accepts, so a fourth status would have passed validation and
+ * then rendered into NO column - a card present in board.json, absent from the
+ * page, and invisible to every count, because each column only counts what it
+ * already renders. A status with no title here still gets a column, keyed by
+ * its own name: an ugly heading beats a disappeared card.
+ *
+ * @param {readonly string[]} statuses
+ */
+export function columnsFrom(statuses) {
+  return statuses.map((status) => ({ status, title: COLUMN_TITLES[status] ?? status }));
+}
+
+const COLUMNS = columnsFrom(STATUSES);
 
 function esc(s) {
   return String(s ?? '')
