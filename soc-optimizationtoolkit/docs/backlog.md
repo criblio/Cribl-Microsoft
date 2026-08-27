@@ -901,7 +901,7 @@ applies to its tooling too. The pins live beside it in
 `check-release-drift.test.mjs`, and the pure half takes facts so the cases can be
 stated without a repo, a git history or a tarball.
 
-**1.12.2 IS CURRENT (2026-08-27).**
+**1.12.3 IS CURRENT (2026-08-27).**
 `release/soc-optimizationtoolkit-1.12.1.tgz` - the guid-column cast (ADR-0004)
 and the architecture-audit cleanup, on top of 1.12.0's ADR-0003 in full.
 Release notes in [release-notes.md](release-notes.md), started as an accumulating
@@ -1565,3 +1565,151 @@ Worth noting even if this closes as not-a-bug: nothing tells an operator WHY the
 catch-all is absent. "No serialize because nothing overflowed" and "no serialize
 because the column is missing" are different facts, and the pipeline preview
 shows neither - it just has one fewer function than it might.
+
+
+### 14c. Closed on the DEPLOYED PACK, not the preview - verified live 2026-08-27
+
+14a read the pipeline preview and argued from shared code that the pack could not
+differ. That argument is sound but it is still an argument; the report is about
+"the pack that gets created", so the pack is what had to be opened. It now has
+been.
+
+Built end to end through the app and installed into Cribl by the app's own
+upload path (`PUT` then `POST /m/{group}/packs`), then read back in the Cribl UI:
+
+- Source: 4 log types pulled live from the `zscaler_cef` Lake dataset - 200
+  events fetched, stored as 50 / 26 / 19 / 17, every one detected as CEF.
+- Destination `CommonSecurityLog`. Gap analysis reported **Overflow 8** for
+  `zscalernss-tunnel` (6 unmappable, 2 outranked), and "Unused fields: preserving
+  all", so the drop policy was not in play. A NON-ZERO overflow is precisely the
+  condition that must emit the function.
+- Result: pack `ms-sentinel-zscaler-internet` **v1.0.6** in worker group
+  `default`, 8 routes and 8 pipelines, sample files carrying the same 50/26/19/17
+  counts - which is how the pack was confirmed to be this run's and not an older
+  artifact.
+
+In each of the four transform pipelines, function group `(7) Overflow Collection`
+holds an enabled `Serialize`: type JSON Object, description "Serialize unmapped
+fields into AdditionalExtensions as JSON", **Destination field
+`AdditionalExtensions`**, and a Fields-to-serialize exclusion list running from
+`!_*` through every mapped CommonSecurityLog column, ending `!AdditionalExtensions`
+then `*`. That is the catch-all shape: exclude what is mapped, sweep the rest.
+
+**The report does not reproduce.** The question for the reporter is unchanged and
+is now the only thing that can settle it: what Overflow count did their gap
+analysis show. Zero with no serialize is correct; non-zero with no serialize is
+the defect, and this run could not produce it.
+
+### 14d. Two defects the pack review turned up on the way
+
+Neither is what was reported; both were found by opening the artifact.
+
+**Rebuilt packs accumulate broken pipeline entries** (board `GEN-2`). Alongside
+the 8 correct pipelines, the pack lists a dozen-plus nameless entries at 0
+functions, each hovering to "Missing pipeline configuration" - leftovers from
+earlier builds of the same pack name whose `conf.yml` no longer ships and which
+the overwrite does not remove. Every rebuild adds more, so a pack gets worse the
+more it is maintained, and a stale entry looks exactly like a pipeline the build
+failed to write. This is distinct from `PK-1`, which is about packs a HUMAN
+edited.
+
+**A pack cannot say what built it** (board `GEN-3`). Establishing that v1.0.6 was
+this run's output took a git-log check and a sample-count comparison, because the
+manifest carries no toolkit version - `author` is a constant and `version` only
+counts rebuilds. Every future report about "the pack" pays that cost again.
+
+### 14e. Method note - the stale app that nearly produced a false finding
+
+The first pass drove `/apps/a/soc-optimizationtoolkit`, the INSTALLED app, and
+found the Cribl Lake sample picker completely absent - which would have been
+filed as a serious defect. It was not one. The installed app is v1.11.2 against
+`main`'s 1.12.2, and predates the picker; the source at
+`samples/sample-source-picker.tsx:95` renders its label unconditionally, so
+"component present in source, absent on screen" was the tell that the running
+build was not the source. The live preview at `/apps/a/__local__` showed the
+picker immediately.
+
+Two things made this cheap to get wrong: the dev server on :5173 had been running
+since the previous evening, so it also predated today's commits, and the app's
+own footer version is the only visible difference between the two shells. Recorded
+as `REL-5` evidence. **Check the footer version before believing a UI finding.**
+
+### 14f. The orphaned pipelines, root-caused and fixed - 2026-08-27
+
+14d filed this as a defect found on the way. It is now closed, and the diagnosis
+is worth keeping because the obvious explanation was wrong.
+
+**The hypothesis that failed.** The natural reading was that the app generates
+pipelines for log types the solution needs but which have no sample - the run
+did acknowledge "8 log types referenced by this solution's detections still have
+no sample" immediately before building. It is wrong, and one control settles it:
+`ms-sentinel-cloudflare` v1.0.0 has never been rebuilt and is spotless (1
+transform, 1 reduction, 4 stock pipelines, zero orphans) despite its solution
+having plenty of unsampled log types. The generator writes exactly two pipelines
+per TAGGED table (`scaffold.ts:254-263`), which is why 4 log types produced 8
+routes and 8 pipelines, exactly as the UI predicted.
+
+**What the orphans actually track is a LOG-TYPE RENAME between builds** - not
+the rebuild itself. That correction came from checking the two packs in
+`AzureManaged` before deleting them, which is the only reason it was caught:
+both are rebuilt AND clean, because their log types never moved.
+
+| Pack | Group | Version | Log types changed? | Orphans |
+|---|---|---|---|---|
+| `ms-sentinel-cloudflare` | default | 1.0.0 | never rebuilt | 0 |
+| `ms-sentinel` | AzureManaged | 1.0.1 | no | 0 |
+| `ms-sentinel-zscaler-internet` | AzureManaged | 1.0.3 | no | 0 |
+| `ms-sentinel` (Gigamon) | default | 1.0.3 | yes | 4 |
+| `ms-sentinel-zscaler-internet` | default | 1.0.6 | yes | 12+ |
+
+The `AzureManaged` Zscaler pack kept `ALLOWED` / `CAUTIONED` / `firewall-BLOCKED`
+and friends across its rebuilds, so each merge overwrote the same ids. The
+`default` one moved to `zscalernss-*` names when its samples were re-pulled from
+Lake, and stranded the entire previous set. Re-deriving log types from a fresh
+sample set is the ordinary way to rename them, so this is a common path, not an
+exotic one.
+
+**The mechanism.** Overwriting an installed pack took rung 3 of the conflict
+ladder, `PATCH /packs/{id}` - Cribl's "Upgrade a Pack" - and an upgrade MERGES
+the archive over what is already there. The rung returned on success
+(`install-pack.ts:113-121`), so the DELETE+POST replace below it only ran when
+the PATCH itself failed. Pipeline directory ids are derived from the operator's
+free-text log type (`pipelineSuffix`, `naming.ts:94-103`), so a rename between
+builds - `ZIA DNS` one time, `zscalernss-dns` the next - produces a disjoint set
+of ids. The previous set is no longer in the archive, the merge does not remove
+it, and Cribl lists each survivor as a nameless pipeline at 0 functions reading
+"Missing pipeline configuration". Nothing in the repo ever enumerated or pruned
+what was already installed; the archive is only ever a snapshot of the current
+build.
+
+Worth naming plainly: **the UI had been promising a replace all along** -
+"Building will overwrite it there" (`integrate-screen.tsx:1941`) - while the
+code performed a merge. The defect was a gap between a button's promise and its
+implementation, not a generator bug, which is why reading the generator (14a)
+could never have found it.
+
+**The fix (shipped in 1.12.3).** Rungs 3 and 4 swapped: an overwrite now DELETEs
+the existing pack and re-POSTs, so the old tree goes with it. The upgrade is
+kept for the single case that needs it - the 2026-07-13 lesson, a pack whose
+pipelines are referenced by routes outside it cannot be deleted - and that path
+now reports itself through a new `onNote` channel rather than passing as a clean
+overwrite, because it still leaves earlier pipelines behind. `onNote` exists
+because the return value cannot express a successful-but-degraded install, which
+is the silent-success shape this codebase keeps getting bitten by.
+
+**Pins.** Four added. Disabling the replace branch kills three of them, so they
+are load-bearing rather than decorative. The existing pin *"escalates a conflict
+to the PATCH upgrade and stops there on success"* had encoded this defect AS
+INTENDED BEHAVIOUR, asserting `deletedIds === []`; it was re-pointed at the
+delete-refused fallback rather than deleted, so the case it really guards still
+has a pin.
+
+**Lab state.** Both damaged packs were deleted from worker group `default`:
+`ms-sentinel-zscaler-internet` v1.0.6 and `ms-sentinel` (Gigamon) v1.0.3. The
+three remaining toolkit packs were each opened and verified clean, so nothing
+else needed removing - `ms-sentinel-cloudflare` v1.0.0 in `default`, and
+`ms-sentinel` v1.0.1 plus `ms-sentinel-zscaler-internet` v1.0.3 in
+`AzureManaged`. An earlier note here claimed those last two carried the same
+damage; that was inference from their version numbers, and opening them
+disproved it. The fix stops NEW leftovers; it does not clean up existing ones,
+because the replace only happens on the next rebuild of each pack.
