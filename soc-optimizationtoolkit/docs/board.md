@@ -11,7 +11,7 @@ two cannot disagree.
 alternatives. This board holds only what is a unit of work, what state it is
 in, and what it waits on.
 
-**66 in the backlog, 0 in progress, 3 done.**
+**65 in the backlog, 0 in progress, 4 done.**
 
 ## Epics
 
@@ -25,7 +25,7 @@ in, and what it waits on.
 | `WIN` | Windows event analysis | 3 | Backlog item 5; Sentinel-side and Lake-side halves |
 | `PK` | Pack maintenance parity | 2 | Includes a silent data-loss defect |
 | `VND` | Vendor field definitions | 2 | Positional CSV naming, reaching past ~18 vendors |
-| `DBT` | Debt, spec grounding, verification | 15 | Copy fixes, unverified claims, retired docs |
+| `DBT` | Debt, spec grounding, verification | 14 | Copy fixes, unverified claims, retired docs |
 | `GEN` | Pipeline and pack generation | 1 | What the build actually emits; had no epic until a regression was reported against it |
 | `D` | Open decisions | 10 | Blocked on a call, not on effort; each is cheap once answered |
 
@@ -183,7 +183,7 @@ Settled and unblocked, sequenced behind now.
 
 ---
 
-## Backlog - later (49)
+## Backlog - later (48)
 
 Settled, gated on something above.
 
@@ -441,17 +441,6 @@ Settled, gated on something above.
   absent-versus-zero distinction the inventory standard exists to protect.
   *bug, SETTLED. `backlog.md` item 13e.*
 
-- **DBT-13** Decide whether the Claude hooks should travel with the repo
-  `chore` `undecided`
-  `.gitignore` matches `*claude*` unanchored, so all of `.claude/` is ignored
-  - including `hooks/`, which now holds the architecture-audit cadence, the
-  docs-drift check and the board-freshness check. None of them exist in a
-  fresh clone, so every enforcement that matters has to be duplicated in CI.
-  That is the right belt-and-braces split today and a silent single point of
-  failure the moment a second person works here. *chore, UNDECIDED. Related to
-  the unanchored-pattern problem already fixed once in 1.12.1.* ### REL -
-  Release, continued
-
 - **REL-5** Upload the current package to the lab workspace
   `chore` `settled`
   Packaging does not deploy - the lab runs the installed app, so this work
@@ -542,7 +531,7 @@ Settled, gated on something above.
 
 ---
 
-## Done (3)
+## Done (4)
 
 Kept briefly so a reader can see what just landed; prune when the list grows.
 
@@ -585,6 +574,28 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   Two of the three fixes also extracted the decision to a pure function
   (`shouldReloadEdits`, `autoDropPlan`) - which is what made the third one's
   asymmetry visible at a glance.
+
+- **DBT-13** The Claude hooks travel with the repo
+  `chore` `settled`
+  DECIDED and shipped 2026-08-27: they travel. `.gitignore` matched `*claude*`
+  unanchored, so all of `.claude/` was invisible to git - including `hooks/`,
+  which holds the architecture-audit cadence, the docs-drift check and the
+  board-freshness check. None of them existed in a fresh clone, so every
+  enforcement that mattered had to be duplicated in CI or simply did not run
+  for anyone else. The patterns are now anchored and `.claude/hooks/*.sh`,
+  `.claude/skills/` and `CLAUDE.md` are tracked; `settings.local.json` stays
+  ignored. THE EVIDENCE THAT SETTLED IT, recorded while the fix was still
+  unmergeable: the architecture-audit hook was counting every commit, so a
+  batch of merges tripped it and then a release commit tripped it again - two
+  audits opened on nothing having changed. The hook now counts only commits
+  touching source and excludes merges, mirroring what
+  `check-release-drift.mjs` does with SOURCE_PATHS. That correction lived on
+  ONE machine and could not be committed, so a fresh clone would have kept the
+  version that cries wolf - and an audit that always fires is one people learn
+  to wave through. A fix that cannot travel is not a fix. *chore, settled. The
+  unanchored-pattern class was already fixed once in 1.12.1; this was the
+  second instance, which is why the rule is now anchored rather than
+  re-tuned.*
 
 - **GEN-2** A rebuilt pack no longer inherits the previous build's pipelines
   `bug` `settled`

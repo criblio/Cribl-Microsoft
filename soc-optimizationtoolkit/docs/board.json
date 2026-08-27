@@ -705,13 +705,12 @@
     {
       "id": "DBT-13",
       "epic": "DBT",
-      "title": "Decide whether the Claude hooks should travel with the repo",
+      "title": "The Claude hooks travel with the repo",
       "type": "chore",
-      "status": "backlog",
-      "priority": "later",
-      "settled": "undecided",
+      "status": "done",
+      "settled": "settled",
       "dependsOn": [],
-      "detail": "`.gitignore` matches `*claude*` unanchored, so all of `.claude/` is ignored - including `hooks/`, which now holds the architecture-audit cadence, the docs-drift check and the board-freshness check. None of them exist in a fresh clone, so every enforcement that matters has to be duplicated in CI. That is the right belt-and-braces split today and a silent single point of failure the moment a second person works here. *chore, UNDECIDED. Related to the unanchored-pattern problem already fixed once in 1.12.1.*  ### REL - Release, continued"
+      "detail": "DECIDED and shipped 2026-08-27: they travel. `.gitignore` matched `*claude*` unanchored, so all of `.claude/` was invisible to git - including `hooks/`, which holds the architecture-audit cadence, the docs-drift check and the board-freshness check. None of them existed in a fresh clone, so every enforcement that mattered had to be duplicated in CI or simply did not run for anyone else. The patterns are now anchored and `.claude/hooks/*.sh`, `.claude/skills/` and `CLAUDE.md` are tracked; `settings.local.json` stays ignored. THE EVIDENCE THAT SETTLED IT, recorded while the fix was still unmergeable: the architecture-audit hook was counting every commit, so a batch of merges tripped it and then a release commit tripped it again - two audits opened on nothing having changed. The hook now counts only commits touching source and excludes merges, mirroring what `check-release-drift.mjs` does with SOURCE_PATHS. That correction lived on ONE machine and could not be committed, so a fresh clone would have kept the version that cries wolf - and an audit that always fires is one people learn to wave through. A fix that cannot travel is not a fix. *chore, settled. The unanchored-pattern class was already fixed once in 1.12.1; this was the second instance, which is why the rule is now anchored rather than re-tuned.*"
     },
     {
       "id": "REL-5",
