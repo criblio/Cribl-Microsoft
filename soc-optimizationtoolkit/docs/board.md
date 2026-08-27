@@ -49,7 +49,7 @@ column with the question noted.
 
 | Key | Epic | Why it exists |
 |---|---|---|
-| `REL` | Ship what is built | 21 commits sit unreleased; the lab runs 1.2.212 |
+| `REL` | Ship what is built | The packaged tarball trails `main`, and the lab trails the tarball |
 | `FX` | Effect-identity defects | One confirmed live defect class, three instances |
 | `CAP` | Capability taxonomy extension | The single upstream blocker for three other epics |
 | `HON` | Inventory and diagnostic honesty | Measured gaps where the app reports a confident wrong answer |
@@ -87,6 +87,10 @@ column with the question noted.
 - **REL-4** Cut and package a release. Now the most overdue card on the board:
   the tarball in `release/` predates four merged PRs, and the lab workspace is
   further behind still. `npm run package` performs the bump; do not hand-bump.
+  For the current number run `npm run check-release --workspace apps/cribl-app`
+  - do not copy it into this file. The epics table used to carry a hand-typed
+  "21 commits sit unreleased"; it read 25 four days later, which is the whole
+  reason that check exists.
 
 ### FX - Effect-identity defects
 
