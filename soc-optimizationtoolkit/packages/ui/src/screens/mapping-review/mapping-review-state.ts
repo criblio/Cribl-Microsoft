@@ -537,6 +537,51 @@ export interface RequirementsForAssessment {
 }
 
 /** One table's unused-overflow assessment. */
+/**
+ * What the unused-field policy wants to change, for ONE table, as data.
+ *
+ * Pure so the rule can be argued with directly. It was previously inlined in an
+ * effect that also dispatched, which is how the asymmetry below survived: the
+ * restore branch consulted the already-dropped set and the drop branch did not.
+ * Since the effect re-ran on every mapping edit, a field the operator moved back
+ * to overflow was seen at overflow again and re-dropped, so it could not be
+ * kept - the row snapped back with no message. Fixed 2026-08-26.
+ *
+ * `alreadyDropped` is the memory that makes this idempotent: drop acts once per
+ * field, and only a switch to preserve (which forgets the field) lets it act
+ * again. Keys are `logType|source`.
+ */
+export function autoDropPlan(
+  policy: "drop" | "preserve",
+  logType: string,
+  assessment: UnusedFieldAssessment,
+  effective: readonly GapFieldMapping[],
+  alreadyDropped: ReadonlySet<string>,
+): { drop: string[]; restore: string[] } {
+  const drop: string[] = [];
+  const restore: string[] = [];
+
+  if (policy === "drop" && assessment.blocked === null) {
+    for (const source of assessment.droppable) {
+      if (alreadyDropped.has(`${logType}|${source}`)) continue;
+      const row = effective.find((m) => m.source === source);
+      if (row === undefined || row.action !== "overflow") continue;
+      drop.push(source);
+    }
+  }
+
+  if (policy === "preserve") {
+    for (const source of assessment.droppable) {
+      // Only what THIS policy dropped. A field the operator dropped by hand is
+      // their decision and preserve does not reach into it.
+      if (!alreadyDropped.has(`${logType}|${source}`)) continue;
+      restore.push(source);
+    }
+  }
+
+  return { drop, restore };
+}
+
 export interface UnusedFieldAssessment {
   /** Overflow sources required by neither rules nor workbooks - droppable. */
   droppable: string[];

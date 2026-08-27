@@ -108,6 +108,7 @@ import type { RequirementsForAssessment } from "./mapping-review-state";
 import {
   INITIAL_MAPPING_REVIEW_STATE,
   assessUnusedOverflow,
+  autoDropPlan,
   MAPPING_REVIEW_NO_SAMPLES_REASON,
   MAPPING_REVIEW_STALE_NOTICE,
   OVERFLOW_COVERAGE_NOTE,
@@ -539,45 +540,48 @@ export function MappingReviewSection({
     return byLogType;
   }, [reports, review, samples]);
 
-  // Auto-apply as reviewable EDITS (visible in the mapping table, reverted
-  // by Reset All or by switching the policy). autoDroppedRef tracks exactly
-  // what this effect set so preserve only reverts machine drops.
+  // Auto-apply as reviewable EDITS (visible in the mapping table, reverted by
+  // switching the policy back to preserve). autoDroppedRef tracks exactly what
+  // this effect set, so preserve only reverts machine drops - and so drop only
+  // fires once per field.
+  //
+  // This used to say "reverted by Reset All or by switching the policy". Reset
+  // All dispatches `reset-approvals`, which clears `approvals` and leaves
+  // `mappingEdits` untouched (mapping-review-state.ts:187-191), so it never
+  // reverted these. Corrected 2026-08-26.
   const autoDroppedRef = useRef(new Set<string>());
   useEffect(() => {
     for (const report of reports) {
       const assessment = assessments.get(report.logType);
       if (assessment === undefined) continue;
-      const effective = effectiveMappings(review, report);
-      if (unusedPolicy === "drop" && assessment.blocked === null) {
-        for (const source of assessment.droppable) {
-          const key = `${report.logType}|${source}`;
-          const row = effective.find((m) => m.source === source);
-          if (row === undefined || row.action !== "overflow") continue;
-          autoDroppedRef.current.add(key);
-          dispatch({
-            type: "edit-mapping",
-            logType: report.logType,
-            sourceField: source,
-            field: "action",
-            value: "drop",
-            baseline: report.fieldMappings,
-          });
-        }
+      const { drop, restore } = autoDropPlan(
+        unusedPolicy,
+        report.logType,
+        assessment,
+        effectiveMappings(review, report),
+        autoDroppedRef.current,
+      );
+      for (const source of drop) {
+        autoDroppedRef.current.add(`${report.logType}|${source}`);
+        dispatch({
+          type: "edit-mapping",
+          logType: report.logType,
+          sourceField: source,
+          field: "action",
+          value: "drop",
+          baseline: report.fieldMappings,
+        });
       }
-      if (unusedPolicy === "preserve") {
-        for (const source of assessment.droppable) {
-          const key = `${report.logType}|${source}`;
-          if (!autoDroppedRef.current.has(key)) continue;
-          autoDroppedRef.current.delete(key);
-          dispatch({
-            type: "edit-mapping",
-            logType: report.logType,
-            sourceField: source,
-            field: "action",
-            value: "overflow",
-            baseline: report.fieldMappings,
-          });
-        }
+      for (const source of restore) {
+        autoDroppedRef.current.delete(`${report.logType}|${source}`);
+        dispatch({
+          type: "edit-mapping",
+          logType: report.logType,
+          sourceField: source,
+          field: "action",
+          value: "overflow",
+          baseline: report.fieldMappings,
+        });
       }
     }
   }, [reports, assessments, unusedPolicy, review]);

@@ -50,7 +50,7 @@ import {
   sourceTypeChips,
   type LaidOutDiagram,
 } from "./arch-layout";
-import { emptyEdits, loadEdits, saveEdits } from "./arch-edits";
+import { emptyEdits, loadEdits, saveEdits, shouldReloadEdits } from "./arch-edits";
 import type { DiagramEditState } from "./arch-edits";
 // React Flow's stylesheet is imported by the SHELL entry point (cribl-app
 // main.tsx), matching how @soc/ui/styles.css is loaded - a library component
@@ -968,8 +968,36 @@ export function ArchitectureFlow({
     redoRef.current = [];
   }, []);
 
-  // Load persisted edits per diagram key; no key = reset on diagram change.
+  /**
+   * Load persisted edits per diagram key; no key = reset on diagram change.
+   *
+   * THE ARRANGEMENT BELONGS TO THE KEY, NOT TO EVERY REDRAW (fixed 2026-08-26).
+   * `diagram` is a `useMemo` in the parent keyed on the view state - selected
+   * flows, expanded packs, expanded routes - none of which appear in
+   * `storageKey` (`architecture-screen.tsx:462` is group plus the Azure filter).
+   * So ticking a flow produced a new `diagram` identity, this effect fired, and
+   * it reloaded from storage and emptied undo/redo.
+   *
+   * That is worse than it sounds. The persist effect below debounces by 400 ms
+   * and clears the pending timer in its cleanup, so a node dragged inside that
+   * window was never written - and the same firing wiped the history that would
+   * have brought it back. Drag a node, tick a flow, lose the drag with no undo.
+   *
+   * Reloading per key rather than per redraw is also the behaviour an operator
+   * expects: ticking a flow ADDS nodes to the picture they are arranging, and
+   * their arrangement should still be there. Putting the view state INTO the key
+   * would have been the other option and is worse - it would file a separate
+   * arrangement per flow combination, so the layout would vanish on every toggle
+   * and reappear only if they toggled back.
+   *
+   * Guard-ref rather than narrower deps so the dependency array stays exhaustive
+   * and the no-key path keeps resetting on a new diagram, which is correct:
+   * without a key there is nowhere to reload from.
+   */
+  const loadedForKeyRef = useRef<string | undefined>(undefined);
   useEffect(() => {
+    if (!shouldReloadEdits(loadedForKeyRef.current, storageKey)) return;
+    loadedForKeyRef.current = storageKey;
     historyRef.current = [];
     redoRef.current = [];
     setEdits(
