@@ -1,5 +1,7 @@
 # Zscaler NSS lab: three Lake datasets, three wire formats
 
+Status: Living - describes a lab that is running now. Retire this when the datasets go.
+
 Built 2026-08-25 on the `busy-yonath-kz1bxn7` workspace, Stream group
 `DatacenterEast`. Purpose: give the Lake sample-selection feature a test bed
 where the SAME four log types arrive in three different wire formats, because

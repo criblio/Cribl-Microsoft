@@ -1,5 +1,7 @@
 # Sentinel repo mapping sources (research 2026-07-12)
 
+Status: Record - research, 2026-07-12. A survey of eight solutions as they stood that day.
+
 How Microsoft Sentinel solutions in github.com/Azure/Azure-Sentinel declare
 destination tables and field mappings, surveyed across eight representative
 solutions (CrowdStrike FDR V2, Zscaler, Cloudflare, Netskopev2, SentinelOne,

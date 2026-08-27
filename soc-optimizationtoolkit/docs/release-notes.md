@@ -1,5 +1,7 @@
 # Release notes
 
+Status: Record - an append-only log of what shipped, newest first. Every entry is true of its own release and is never edited afterwards.
+
 Newest first. One accumulating file rather than the per-version directory used
 by the deprecated PowerShell toolkit: this app releases often, and a single file
 is harder to forget to update than a directory that has to be remembered.

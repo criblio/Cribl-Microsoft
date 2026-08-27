@@ -1,5 +1,7 @@
 # Sample acquisition plan - replacing the browser with a log-type recommendation
 
+Status: Record - the ADR 0003 plan, shipped in 1.12.0. Superseded sections are marked inline.
+
 **START HERE. This is the only document you need to execute this work.**
 [ADR 0003](adr/0003-remove-sample-browser.md) is the durable decision record and
 is worth reading if you want the full argument - but everything required to do

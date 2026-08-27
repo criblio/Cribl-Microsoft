@@ -2,6 +2,7 @@
 
 Date: 2026-08-23
 Status: Accepted
+Invalidates: none
 Breaks, deliberately: the v1 bug-compatibility contract in
 `domain/schema-mapping` (RULE 2b) and two `legacy-fixtures.json` fixtures
 

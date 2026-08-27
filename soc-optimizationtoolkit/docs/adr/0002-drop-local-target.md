@@ -3,6 +3,20 @@
 Date: 2026-08-17
 Status: Accepted
 Supersedes, in part: ADR 0001 (dual-target architecture)
+Invalidates: porting-plan.md, ux-flow-plan.md, ui-refinement-reference.md, capability-model-plan.md, features/content-preserving-native-reroute.md, CONTEXT.md
+
+<!--
+Invalidates is the field this repo learned it needed the hard way. This decision
+was written correctly on 2026-08-17 and STILL left six documents instructing a
+future reader to build for a shell that no longer existed - including one
+unbuilt plan, which is the worst case, because nobody had followed it yet and so
+nobody had discovered it was wrong. They were found by hand on 2026-08-26, nine
+days later.
+
+The named files must each mention this ADR. check-docs-drift.mjs enforces that,
+so a decision can no longer stay inside the decision log.
+-->
+
 
 ## Context
 

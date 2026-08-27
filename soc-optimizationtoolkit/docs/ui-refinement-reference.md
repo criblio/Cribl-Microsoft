@@ -1,5 +1,7 @@
 # UI Refinement: Reference-Driven, Per Functional Area
 
+Status: Record - a screenshot workflow against the legacy app, last refreshed 2026-07-14. Archival candidate.
+
 Approach (user decision, 2026-07-04): refine the new app's visual experience one FUNCTIONAL AREA at a time, using screenshots of the legacy app as the reference for each area. This replaces a single big design pass with area-scoped passes tied to the porting units, so each area is refined against a concrete "this is the bar" reference rather than invented design.
 
 ## How this works
@@ -11,7 +13,7 @@ Approach (user decision, 2026-07-04): refine the new app's visual experience one
 
 ## Foundations (done incrementally alongside area passes)
 
-The dark-mode work already tokenized all colors into CSS custom properties, every screen renders through shared `@soc/ui` components, and logic lives in pure modules behind the presentation - so an area's visual pass restyles tokens/components, never logic, and both shells update at once. As areas are refined, a shared component vocabulary (buttons, cards, field rows, status pills, loading/empty/success states, spacing/type scale) accretes in `@soc/ui`; a final holistic visual + accessibility QA pass closes the effort.
+The dark-mode work already tokenized all colors into CSS custom properties, every screen renders through shared `@soc/ui` components, and logic lives in pure modules behind the presentation - so an area's visual pass restyles tokens/components, never logic. (This used to read "and both shells update at once"; the local shell was dropped 2026-08-17 by ADR-0002 and `apps/cribl-app` is the only one.) As areas are refined, a shared component vocabulary (buttons, cards, field rows, status pills, loading/empty/success states, spacing/type scale) accretes in `@soc/ui`; a final holistic visual + accessibility QA pass closes the effort.
 
 ## Functional-area map (legacy page -> new screens -> unit)
 
@@ -61,4 +63,4 @@ Note: rule + workbook coverage (Unit 23) - the rule analysis lives inside Sentin
 
 ## Per-area refinement pass (what I do with the references)
 
-For each area, once its screenshots are in place: (1) I catalog the legacy layout, hierarchy, state handling, and review moments worth keeping; (2) name what to improve (the anti-patterns and any dated visuals); (3) refine the new screen's components/styles in `@soc/ui` against the reference, extending the shared component vocabulary; (4) verify both shells, light and dark, and the keep-list holds; (5) commit as a scoped "UI refine: <area>" change. Areas already built get refined now; areas not built yet are refined as their unit lands, with the reference already captured.
+For each area, once its screenshots are in place: (1) I catalog the legacy layout, hierarchy, state handling, and review moments worth keeping; (2) name what to improve (the anti-patterns and any dated visuals); (3) refine the new screen's components/styles in `@soc/ui` against the reference, extending the shared component vocabulary; (4) verify light and dark, and the keep-list holds (was: verify both shells - ADR-0002 left one); (5) commit as a scoped "UI refine: <area>" change. Areas already built get refined now; areas not built yet are refined as their unit lands, with the reference already captured.
