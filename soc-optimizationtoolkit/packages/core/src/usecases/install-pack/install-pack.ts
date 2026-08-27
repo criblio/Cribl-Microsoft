@@ -18,15 +18,34 @@
  *    install POST now pins {id} explicitly (PackRequestBody.id in the
  *    vendored spec). The name is never server-guessed.
  *
+ * A FOURTH failure moved the last two rungs (live 2026-08-27). PATCH is
+ * Cribl's "Upgrade a Pack", and an upgrade MERGES the archive over what is
+ * already installed. Pipeline directory ids come from the operator's log type
+ * (`pipelineSuffix`, domain/pack-assembly/naming.ts), so as soon as a log type
+ * is renamed between builds the previous build's pipeline ids are no longer in
+ * the archive - and the merge leaves them behind with no conf.yml, which the
+ * Cribl UI lists as a nameless pipeline at 0 functions, "Missing pipeline
+ * configuration". Measured across three app-built packs in one workspace:
+ * a never-rebuilt pack at v1.0.0 carried none, v1.0.3 carried 4, v1.0.6
+ * carried 12+. It got worse the more the pack was maintained, and the UI had
+ * been promising "Building will overwrite it there" the whole time.
+ * So an overwrite now REPLACES (delete, then install) and only merges when the
+ * delete is refused - which is the one case the 2026-07-13 lesson covers.
+ *
  * The ladder, in order:
  *   1. POST {source, id}              - the plain install, id pinned.
  *   2. Delete the NAMED conflicting pack + retry (bounded) - the conflict
  *      message names the blocking pack, which can be a stray under a
  *      DIFFERENT id (live 2026-07-13: strays from the id-guessing era
  *      blocked every reinstall while the expected id "did not exist").
- *   3. PATCH /packs/{id} {source}    - the documented upgrade.
- *   4. DELETE /packs/{id} + POST     - last resort; the DELETE's status and
- *      body are CAPTURED and reported, never swallowed.
+ *   3. DELETE /packs/{id} + POST     - the overwrite, and a REPLACE: the old
+ *      pack's tree goes with it, so no earlier build's pipelines survive.
+ *      The DELETE's status and body are CAPTURED and reported, never
+ *      swallowed.
+ *   4. PATCH /packs/{id} {source}    - only when that DELETE is REFUSED (a
+ *      pack whose pipelines are referenced by routes outside it cannot be
+ *      deleted). This merges, so it is reported through `onNote` rather than
+ *      passing as a clean overwrite.
  * Whatever rung succeeds, a returned pack id must MATCH the requested one
  * (sanitize-tolerant compare) - a server-side rename is deleted and reported
  * instead of silently accepted.
@@ -66,11 +85,18 @@ function samePackId(a: string, b: string): boolean {
  * Install an uploaded pack source, escalating through the conflict ladder.
  * Returns the installed pack summary; throws with the FULL trail (upgrade
  * failure, refused delete, unexpected rename) on failure.
+ *
+ * `onNote` carries a SUCCESSFUL-but-degraded outcome, which a return value
+ * cannot: rung 4 installs the pack and still leaves earlier builds' pipelines
+ * in it. Defaulting it to a no-op keeps every existing caller compiling, but a
+ * shell that drops it is choosing not to show the operator why their pack has
+ * pipelines they did not ask for.
  */
 export async function installViaConflictLadder(
   fileName: string,
   source: string,
   transport: PackInstallTransport,
+  onNote: (note: string) => void = () => {},
 ): Promise<InstalledPack> {
   const expectedId = packIdFromCrblFileName(fileName);
   // The id is PINNED on every POST (live 2026-07-13: without it the server
@@ -113,31 +139,45 @@ export async function installViaConflictLadder(
     const named = outcome.conflictingPackId;
     const targetId =
       named !== undefined && samePackId(named, expectedId) ? named : expectedId;
-    const upgraded = interpretInstallResponse(
-      ...(await transport.upgradePack(targetId, { source })),
-    );
-    if (upgraded.kind === "installed") {
-      outcome = upgraded;
-    } else {
-      upgradeDetail =
-        upgraded.kind === "error"
-          ? ` (upgrade attempt: ${upgraded.error})`
-          : " (upgrade attempt also conflicted)";
-      const [delStatus, delBody] = await transport.deletePack(targetId);
-      if (delStatus < 200 || delStatus >= 300) {
-        deleteDetail =
-          ` (existing pack '${targetId}' could not be deleted: HTTP ${delStatus}` +
-          ` ${delBody.slice(0, 200)} - if its pipelines are referenced by` +
-          " routes outside the pack, detach those routes in Cribl and retry)";
-      }
+
+    // REPLACE FIRST (live 2026-08-27). Deleting takes the old pack's whole
+    // tree with it, which is the only way a rebuild stops inheriting pipeline
+    // ids from log types it no longer has.
+    const [delStatus, delBody] = await transport.deletePack(targetId);
+    if (delStatus >= 200 && delStatus < 300) {
       outcome = interpretInstallResponse(...(await transport.post(installBody)));
+    } else {
+      // The 2026-07-13 case: a pack whose pipelines are referenced by routes
+      // OUTSIDE it cannot be deleted. Merging is then better than failing -
+      // but it is not the clean overwrite the UI promised, so say so.
+      deleteDetail =
+        ` (existing pack '${targetId}' could not be deleted: HTTP ${delStatus}` +
+        ` ${delBody.slice(0, 200)} - if its pipelines are referenced by` +
+        " routes outside the pack, detach those routes in Cribl and retry)";
+      const upgraded = interpretInstallResponse(
+        ...(await transport.upgradePack(targetId, { source })),
+      );
+      if (upgraded.kind === "installed") {
+        outcome = upgraded;
+        onNote(
+          `Pack '${targetId}' could not be deleted, so it was upgraded in` +
+            " place instead of replaced. Pipelines from earlier builds may" +
+            " remain in the pack; remove any that show 'Missing pipeline" +
+            " configuration'.",
+        );
+      } else {
+        upgradeDetail =
+          upgraded.kind === "error"
+            ? ` (upgrade attempt: ${upgraded.error})`
+            : " (upgrade attempt also conflicted)";
+      }
     }
   }
 
   if (outcome.kind !== "installed") {
     throw new Error(
       outcome.kind === "conflict"
-        ? `Pack install still conflicts after upgrade and delete-and-retry` +
+        ? `Pack install still conflicts after delete-and-retry and upgrade` +
           ` (conflict: ${outcome.detail})${strayDetail}${upgradeDetail}${deleteDetail}`
         : outcome.error,
     );

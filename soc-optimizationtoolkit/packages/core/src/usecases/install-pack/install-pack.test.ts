@@ -68,24 +68,19 @@ describe("installViaConflictLadder", () => {
     expect(t.deletedIds).toEqual([]);
   });
 
-  it("escalates a conflict to the PATCH upgrade and stops there on success", async () => {
-    // The id-preserving reinstall: never a rename, never a delete.
-    const t = transport({ posts: [CONFLICT], upgrade: [200, installedBody()] });
-    const pack = await installViaConflictLadder("MS-Sentinel_1.0.0.crbl", "src.crbl", t);
-    expect(pack.id).toBe("MS-Sentinel");
-    expect(t.upgradedIds).toEqual(["MS-Sentinel"]);
-    expect(t.deletedIds).toEqual([]);
-    expect(t.postBodies.length).toBe(1);
-  });
-
-  it("falls back to delete-and-retry when the upgrade fails", async () => {
-    const t = transport({
-      posts: [CONFLICT, [200, installedBody()]],
-      upgrade: [500, "upgrade exploded"],
-    });
+  it("REPLACES a same-id pack - deletes it, re-POSTs, and never merges", async () => {
+    // THE 2026-08-27 DEFECT. This used to escalate to PATCH ("Upgrade a
+    // Pack") and stop there, and an upgrade MERGES: pipeline ids from a
+    // previous build - whose log types no longer exist - survived with no
+    // conf.yml behind them, showing in Cribl as nameless 0-function
+    // pipelines reading "Missing pipeline configuration". Measured live:
+    // 0 of them in a never-rebuilt v1.0.0 pack, 4 in a v1.0.3, 12+ in a
+    // v1.0.6. An overwrite has to actually overwrite.
+    const t = transport({ posts: [CONFLICT, [200, installedBody()]] });
     const pack = await installViaConflictLadder("MS-Sentinel_1.0.0.crbl", "src.crbl", t);
     expect(pack.id).toBe("MS-Sentinel");
     expect(t.deletedIds).toEqual(["MS-Sentinel"]);
+    expect(t.upgradedIds).toEqual([]);
     // Both POSTs pin the id.
     expect(t.postBodies).toEqual([
       { source: "src.crbl", id: "MS-Sentinel" },
@@ -93,7 +88,72 @@ describe("installViaConflictLadder", () => {
     ]);
   });
 
-  it("targets the NAMED case-variant id in the upgrade rung", async () => {
+  it("falls back to the PATCH upgrade only when the DELETE is refused", async () => {
+    // The 2026-07-13 case that keeps the merge rung alive: a pack whose
+    // pipelines are referenced by routes outside it cannot be deleted.
+    // Merging beats failing here - but it is still a merge.
+    const t = transport({
+      posts: [CONFLICT],
+      del: [409, "referenced by routes"],
+      upgrade: [200, installedBody()],
+    });
+    const pack = await installViaConflictLadder("MS-Sentinel_1.0.0.crbl", "src.crbl", t);
+    expect(pack.id).toBe("MS-Sentinel");
+    expect(t.deletedIds).toEqual(["MS-Sentinel"]);
+    expect(t.upgradedIds).toEqual(["MS-Sentinel"]);
+    expect(t.postBodies.length).toBe(1);
+  });
+
+  it("REPORTS the degraded merge, so leftovers are expected and not mysterious", async () => {
+    // A successful install that is not a clean overwrite. The return value
+    // cannot say so, which is exactly why onNote exists - without it this is
+    // the silent-success shape this codebase keeps getting bitten by.
+    const notes: string[] = [];
+    const t = transport({
+      posts: [CONFLICT],
+      del: [409, "referenced by routes"],
+      upgrade: [200, installedBody()],
+    });
+    await installViaConflictLadder("MS-Sentinel_1.0.0.crbl", "src.crbl", t, (n) =>
+      notes.push(n),
+    );
+    expect(notes).toHaveLength(1);
+    expect(notes[0]).toContain("upgraded in place instead of replaced");
+    expect(notes[0]).toContain("Missing pipeline configuration");
+  });
+
+  it("says nothing when the overwrite was a clean replace", async () => {
+    // The note must mark the DEGRADED path only - a note on every rebuild
+    // would train the operator to ignore it.
+    const notes: string[] = [];
+    const t = transport({ posts: [CONFLICT, [200, installedBody()]] });
+    await installViaConflictLadder("MS-Sentinel_1.0.0.crbl", "src.crbl", t, (n) =>
+      notes.push(n),
+    );
+    expect(notes).toEqual([]);
+  });
+
+  it("still throws with the delete AND upgrade trail when both rungs fail", async () => {
+    const t = transport({
+      posts: [CONFLICT],
+      del: [409, "referenced by routes"],
+      upgrade: [500, "upgrade exploded"],
+    });
+    // Both rungs' evidence survives into the message - the refused delete is
+    // the actionable half (detach the routes) and the upgrade error says why
+    // the fallback did not save it. Order is not pinned, presence is.
+    let message = "";
+    try {
+      await installViaConflictLadder("MS-Sentinel_1.0.0.crbl", "src.crbl", t);
+    } catch (e) {
+      message = (e as Error).message;
+    }
+    expect(message).toContain("could not be deleted: HTTP 409");
+    expect(message).toContain("referenced by routes");
+    expect(message).toContain("upgrade attempt");
+  });
+
+  it("targets the NAMED case-variant id in the REPLACE rung", async () => {
     // The exact live 2026-07-13 failure: an installed "ms-sentinel" blocks
     // "MS-Sentinel" (ids are case-insensitive) but PATCH/DELETE on our
     // spelling report not-installed. The rungs must use the server's.
@@ -101,29 +161,29 @@ describe("installViaConflictLadder", () => {
       500,
       '{"status":"error","message":"failed to install: Pack Id conflicts with existing Pack \\"ms-sentinel\\". Pack Ids are case-insensitive and must be unique."}',
     ];
-    const t = transport({
-      posts: [caseConflict],
-      upgrade: [200, installedBody("ms-sentinel")],
-    });
+    const t = transport({ posts: [caseConflict, [200, installedBody()]] });
     const pack = await installViaConflictLadder("MS-Sentinel_1.0.0.crbl", "src.crbl", t);
-    // The installed spelling is accepted (same id per Cribl), never a stray.
-    expect(pack.id).toBe("ms-sentinel");
-    expect(t.upgradedIds).toEqual(["ms-sentinel"]);
-    expect(t.deletedIds).toEqual([]);
+    expect(pack.id).toBe("MS-Sentinel");
+    // The server's spelling on the DELETE, our pinned id on the re-POST.
+    expect(t.deletedIds).toEqual(["ms-sentinel"]);
+    expect(t.upgradedIds).toEqual([]);
   });
 
-  it("deletes the NAMED case-variant id when the upgrade fails", async () => {
+  it("upgrades the NAMED case-variant id when its delete is refused", async () => {
     const caseConflict: [number, string] = [
       500,
       '{"message":"Pack Id conflicts with existing Pack \\"ms-sentinel\\"."}',
     ];
     const t = transport({
-      posts: [caseConflict, [200, installedBody()]],
-      upgrade: [500, "failed to upgrade: exploded"],
+      posts: [caseConflict],
+      del: [409, "referenced by routes"],
+      upgrade: [200, installedBody("ms-sentinel")],
     });
     const pack = await installViaConflictLadder("MS-Sentinel_1.0.0.crbl", "src.crbl", t);
-    expect(pack.id).toBe("MS-Sentinel");
+    // The installed spelling is accepted (same id per Cribl), never a stray.
+    expect(pack.id).toBe("ms-sentinel");
     expect(t.deletedIds).toEqual(["ms-sentinel"]);
+    expect(t.upgradedIds).toEqual(["ms-sentinel"]);
   });
 
   it("deletes the NAMED conflicting stray and retries when the conflict names a different id", async () => {

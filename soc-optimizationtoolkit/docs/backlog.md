@@ -901,7 +901,7 @@ applies to its tooling too. The pins live beside it in
 `check-release-drift.test.mjs`, and the pure half takes facts so the cases can be
 stated without a repo, a git history or a tarball.
 
-**1.12.2 IS CURRENT (2026-08-27).**
+**1.12.3 IS CURRENT (2026-08-27).**
 `release/soc-optimizationtoolkit-1.12.1.tgz` - the guid-column cast (ADR-0004)
 and the architecture-audit cleanup, on top of 1.12.0's ADR-0003 in full.
 Release notes in [release-notes.md](release-notes.md), started as an accumulating
@@ -1633,3 +1633,69 @@ Two things made this cheap to get wrong: the dev server on :5173 had been runnin
 since the previous evening, so it also predated today's commits, and the app's
 own footer version is the only visible difference between the two shells. Recorded
 as `REL-5` evidence. **Check the footer version before believing a UI finding.**
+
+### 14f. The orphaned pipelines, root-caused and fixed - 2026-08-27
+
+14d filed this as a defect found on the way. It is now closed, and the diagnosis
+is worth keeping because the obvious explanation was wrong.
+
+**The hypothesis that failed.** The natural reading was that the app generates
+pipelines for log types the solution needs but which have no sample - the run
+did acknowledge "8 log types referenced by this solution's detections still have
+no sample" immediately before building. It is wrong, and one control settles it:
+`ms-sentinel-cloudflare` v1.0.0 has never been rebuilt and is spotless (1
+transform, 1 reduction, 4 stock pipelines, zero orphans) despite its solution
+having plenty of unsampled log types. The generator writes exactly two pipelines
+per TAGGED table (`scaffold.ts:254-263`), which is why 4 log types produced 8
+routes and 8 pipelines, exactly as the UI predicted.
+
+**What the orphans actually track is rebuild count**, measured across the three
+app-built packs in one worker group:
+
+| Pack | Version | Orphans |
+|---|---|---|
+| `ms-sentinel-cloudflare` | 1.0.0 (never rebuilt) | 0 |
+| `ms-sentinel` (Gigamon) | 1.0.3 | 4 |
+| `ms-sentinel-zscaler-internet` | 1.0.6 | 12+ |
+
+**The mechanism.** Overwriting an installed pack took rung 3 of the conflict
+ladder, `PATCH /packs/{id}` - Cribl's "Upgrade a Pack" - and an upgrade MERGES
+the archive over what is already there. The rung returned on success
+(`install-pack.ts:113-121`), so the DELETE+POST replace below it only ran when
+the PATCH itself failed. Pipeline directory ids are derived from the operator's
+free-text log type (`pipelineSuffix`, `naming.ts:94-103`), so a rename between
+builds - `ZIA DNS` one time, `zscalernss-dns` the next - produces a disjoint set
+of ids. The previous set is no longer in the archive, the merge does not remove
+it, and Cribl lists each survivor as a nameless pipeline at 0 functions reading
+"Missing pipeline configuration". Nothing in the repo ever enumerated or pruned
+what was already installed; the archive is only ever a snapshot of the current
+build.
+
+Worth naming plainly: **the UI had been promising a replace all along** -
+"Building will overwrite it there" (`integrate-screen.tsx:1941`) - while the
+code performed a merge. The defect was a gap between a button's promise and its
+implementation, not a generator bug, which is why reading the generator (14a)
+could never have found it.
+
+**The fix (shipped in 1.12.3).** Rungs 3 and 4 swapped: an overwrite now DELETEs
+the existing pack and re-POSTs, so the old tree goes with it. The upgrade is
+kept for the single case that needs it - the 2026-07-13 lesson, a pack whose
+pipelines are referenced by routes outside it cannot be deleted - and that path
+now reports itself through a new `onNote` channel rather than passing as a clean
+overwrite, because it still leaves earlier pipelines behind. `onNote` exists
+because the return value cannot express a successful-but-degraded install, which
+is the silent-success shape this codebase keeps getting bitten by.
+
+**Pins.** Four added. Disabling the replace branch kills three of them, so they
+are load-bearing rather than decorative. The existing pin *"escalates a conflict
+to the PATCH upgrade and stops there on success"* had encoded this defect AS
+INTENDED BEHAVIOUR, asserting `deletedIds === []`; it was re-pointed at the
+delete-refused fallback rather than deleted, so the case it really guards still
+has a pin.
+
+**Lab state.** The bad `ms-sentinel-zscaler-internet` v1.0.6 was deleted from
+worker group `default`. Two packs elsewhere carry the same damage and were left
+alone: `ms-sentinel` v1.0.3 in `default` (4 orphans) and
+`ms-sentinel-zscaler-internet` v1.0.3 in `AzureManaged`. The fix stops NEW
+leftovers; it does not clean up existing ones, because the replace only happens
+on the next rebuild of each pack.

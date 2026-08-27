@@ -11,7 +11,7 @@ two cannot disagree.
 alternatives. This board holds only what is a unit of work, what state it is
 in, and what it waits on.
 
-**67 in the backlog, 0 in progress, 2 done.**
+**66 in the backlog, 0 in progress, 3 done.**
 
 ## Epics
 
@@ -26,7 +26,7 @@ in, and what it waits on.
 | `PK` | Pack maintenance parity | 2 | Includes a silent data-loss defect |
 | `VND` | Vendor field definitions | 2 | Positional CSV naming, reaching past ~18 vendors |
 | `DBT` | Debt, spec grounding, verification | 15 | Copy fixes, unverified claims, retired docs |
-| `GEN` | Pipeline and pack generation | 2 | What the build actually emits; had no epic until a regression was reported against it |
+| `GEN` | Pipeline and pack generation | 1 | What the build actually emits; had no epic until a regression was reported against it |
 | `D` | Open decisions | 10 | Blocked on a call, not on effort; each is cheap once answered |
 
 ---
@@ -39,7 +39,7 @@ _Nothing here._
 
 ---
 
-## Backlog - now (10)
+## Backlog - now (9)
 
 Next to pick up. Nothing blocks these.
 
@@ -100,26 +100,6 @@ Next to pick up. Nothing blocks these.
   `backlog.md:321-329` calls "honest, but inert". Depends on CAP-1. Already
   measured, do not re-add: Event Hub namespace creation is `arm.deploy`; every
   Cribl-side write is `source.manage`. ---
-
-- **GEN-2** A rebuilt pack accumulates pipelines with no configuration
-  `bug` `settled`
-  CONFIRMED live 2026-08-27 in `ms-sentinel-zscaler-internet` v1.0.6 (worker
-  group `default`), built by Rebuild pack only over an existing pack of the
-  same name. The 8 pipelines the build intends are all correct - 4 reduction
-  at 16 functions and 4 transform at 8 - but the pack's Pipelines tab ALSO
-  lists a dozen-plus nameless entries at 0 functions, each hovering to
-  "Missing pipeline configuration". They are leftovers of earlier builds: the
-  install overwrites a pack whose previous version had different log-type
-  names, and the entries whose `conf.yml` no longer ships are not removed. Why
-  it bites: every rebuild adds more, so the pack degrades the more it is
-  maintained; an operator opening the pack cannot tell the 8 real pipelines
-  from the wreckage; and a broken entry is indistinguishable from a pipeline
-  the build genuinely failed to write. Overwrite currently goes through the
-  conflict ladder in `usecases/install-pack/install-pack.ts` - the question is
-  whether the PATCH-upgrade rung merges where it should replace. Exact count
-  not pinned; get it from the pack's own registry rather than the UI list.
-  *bug, CONFIRMED. Related to [[PK-1]], which is about packs a HUMAN edited;
-  this one the build does to itself.*
 
 ---
 
@@ -197,8 +177,9 @@ Settled and unblocked, sequenced behind now.
   git-log check and a sample-count comparison to establish provenance. Every
   future regression report about "the pack" pays this again. Cheapest fix: one
   more manifest field, set from the same define the footer reads. *feature,
-  settled. Serves [[GEN-2]] too - a stamp distinguishes this build's pipelines
-  from a previous build's leftovers.*
+  settled. [[GEN-2]] is fixed, so leftovers no longer accumulate - but the
+  provenance gap stands on its own: it cost a git-log check to answer "is this
+  pack today's?" during that very investigation.*
 
 ---
 
@@ -561,7 +542,7 @@ Settled, gated on something above.
 
 ---
 
-## Done (2)
+## Done (3)
 
 Kept briefly so a reader can see what just landed; prune when the list grows.
 
@@ -604,3 +585,33 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   Two of the three fixes also extracted the decision to a pure function
   (`shouldReloadEdits`, `autoDropPlan`) - which is what made the third one's
   asymmetry visible at a glance.
+
+- **GEN-2** A rebuilt pack no longer inherits the previous build's pipelines
+  `bug` `settled`
+  FIXED and shipped in 1.12.3. CONFIRMED live 2026-08-27, then root-caused and
+  closed. THE MECHANISM: an overwrite of an already-installed pack took rung 3
+  of the conflict ladder, `PATCH /packs/{id}` - Cribl's "Upgrade a Pack",
+  which MERGES rather than replaces (install-pack.ts:113-121, which returned
+  on success so the DELETE+POST replace at :126-133 only ran when the PATCH
+  failed). Pipeline directory ids come from the operator's log type via
+  `pipelineSuffix` (naming.ts:94-103), so a log-type rename between builds
+  strands the whole previous set: the ids survive the merge with no conf.yml
+  and Cribl lists them as nameless 0-function pipelines reading "Missing
+  pipeline configuration". THE MEASUREMENT that settled it, three app-built
+  packs in one workspace: `ms-sentinel-cloudflare` v1.0.0, never rebuilt, ZERO
+  orphans; `ms-sentinel` v1.0.3, four; `ms-sentinel-zscaler-internet` v1.0.6,
+  twelve-plus. Orphans track rebuild count. A HYPOTHESIS WORTH RECORDING
+  BECAUSE IT WAS WRONG: that the app was generating pipelines for log types
+  with no sample. The Cloudflare control refutes it - that solution has many
+  unsampled log types and a spotless pack - and the generator writes exactly
+  two pipelines per TAGGED table (scaffold.ts:254-263), which is why the run
+  produced 8 routes for 4 log types. THE FIX: rungs 3 and 4 swapped, so an
+  overwrite deletes then reinstalls and the old tree goes with it; the merge
+  is kept only for the case that needs it (a pack whose pipelines are
+  referenced by routes outside it cannot be deleted) and now reports itself
+  through a new `onNote` channel instead of passing as a clean overwrite. The
+  code finally matches what the UI already promised at
+  integrate-screen.tsx:1941. Four pins added, three of which fail if the
+  replace branch is disabled; the existing pin that had encoded the merge as
+  intended behaviour was re-pointed at the delete-refused path. *bug, fixed.
+  `backlog.md` item 14d/14f.*

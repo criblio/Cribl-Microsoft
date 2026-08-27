@@ -1767,9 +1767,11 @@ function criblBodyText(body: unknown): string {
  */
 export class PlatformPackInstall implements PackInstallClient {
   private readonly cribl: CriblClient;
+  private readonly logger: Logger;
 
-  constructor(cribl: CriblClient) {
+  constructor(cribl: CriblClient, logger: Logger) {
     this.cribl = cribl;
+    this.logger = logger;
   }
 
   async listDeployed(groups: readonly string[]): Promise<DeployedGroupPacks[]> {
@@ -1823,7 +1825,12 @@ export class PlatformPackInstall implements PackInstallClient {
         });
         return [res.status, criblBodyText(res.body)];
       },
-    });
+    },
+      // A pack that installed but could only be MERGED still carries earlier
+      // builds' pipelines. That is a successful return with a caveat, so the
+      // only place it can surface is here.
+      (note) => this.logger.warn(note),
+    );
   }
 }
 
@@ -1900,7 +1907,7 @@ export function makeCloudPorts(tenantId: string, logger: Logger): CloudPorts {
     sampleSource: new PlatformRemoteSampleSource(),
     githubPat: new PlatformGithubPat(),
     packs: new PlatformPackStore(),
-    packInstall: new PlatformPackInstall(cribl),
+    packInstall: new PlatformPackInstall(cribl, logger),
     graph: new PlatformGraphDirectory(tenantId),
     mintAssignmentName: () => crypto.randomUUID(),
     logger,
