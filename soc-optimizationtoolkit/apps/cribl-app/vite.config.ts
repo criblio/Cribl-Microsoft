@@ -5,6 +5,7 @@ import { join } from 'path'
 import react from '@vitejs/plugin-react'
 // @ts-ignore
 import { servePackageTgz } from './scripts/pkgutil.mjs'
+import { appVersionFrom } from './scripts/app-version.mjs'
 
 // The app version shown in the always-visible sidebar footer, read from THIS
 // app's package.json (the package script bumps it on every build, so the
@@ -58,9 +59,12 @@ const injectScriptFromQueryPlugin = () => {
       let appName;
       let appVersion;
       try {
-        const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf-8')) as { name?: string; version?: string };
-        appName = pkg.name;
-        appVersion = pkg.version;
+        const pkgText = readFileSync(join(root, 'package.json'), 'utf-8');
+        appName = (JSON.parse(pkgText) as { name?: string }).name;
+        // Pure, and pinned in scripts/app-version.test.mjs: null here means
+        // SKIP the injection below, so the footer falls back to the
+        // build-time define rather than rendering "vundefined".
+        appVersion = appVersionFrom(pkgText) ?? undefined;
       } catch {
         /* ignore missing or invalid package.json */
       }

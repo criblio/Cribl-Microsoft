@@ -8,6 +8,39 @@ is harder to forget to update than a directory that has to be remembered.
 
 ---
 
+## 1.12.3
+
+**A rebuilt pack no longer inherits the previous build's pipelines.** Building a
+pack over one that was already installed took Cribl's "Upgrade a Pack" (`PATCH
+/packs/{id}`), and an upgrade MERGES the archive over what is there. Pipeline
+directory ids are derived from the operator's log type, so the moment a log type
+was renamed between builds the earlier ids were no longer in the archive - and
+the merge left them behind with no configuration. In the Cribl UI they appear as
+nameless pipelines with 0 functions reading "Missing pipeline configuration".
+The trigger is the rename rather than the rebuild: across five app-built packs
+in one workspace, the two whose log types changed between builds carried four
+and twelve-plus leftovers, while a never-rebuilt pack and two rebuilt ones whose
+log types stayed put carried none. Re-deriving log types from a fresh sample set
+is exactly what renames them, so the common case hits it - and an operator could
+not tell a leftover from a pipeline the build had failed to write.
+
+An overwrite now REPLACES: the existing pack is deleted and reinstalled, so its
+old tree goes with it. The documented upgrade is kept for the one case that
+needs it - a pack whose pipelines are referenced by routes outside it cannot be
+deleted - and that path now says so out loud instead of passing as a clean
+overwrite, because it still leaves the earlier pipelines in place. This makes
+the code do what the button already promised: "Building will overwrite it
+there."
+
+**Verified against the deployed pack, not the preview.** A report that the
+`AdditionalExtensions` catch-all was missing from generated pipelines was closed
+as not reproduced, after building a pack end to end from live Cribl Lake samples
+and reading it back in Cribl: with a non-zero overflow (8 fields for one log
+type) every transform pipeline carries an Overflow Collection group whose
+`Serialize` writes to `AdditionalExtensions`.
+
+---
+
 ## 1.12.2
 
 **Cribl Lake is a working sample source.** The Lake query ran but returned

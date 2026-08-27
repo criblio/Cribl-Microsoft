@@ -8,9 +8,12 @@
 # while still exiting 0. Directory form keeps Dev/ and */dev/ ignored.
 dev/
 .dev-mode
-*claude*
-*Cluade*
-*CLAUDE*
+# CLAUDE.md is TRACKED. The old rules here were `*claude*`, `*Cluade*` and
+# `*CLAUDE*`, unanchored, and they hid the file that tells every contributor
+# and every agent how this repo works - a fresh clone got no project
+# instructions at all. See the .claude/ exception under Dot Directories below;
+# this is the third unanchored pattern here to hide something it never meant
+# to (compare `dev*` above and the DCR-Automation rules below).
 knowledge.md
 
 # Backup configuration files
@@ -73,6 +76,18 @@ logs/
 # =======================
 # All hidden directories starting with dot
 .*/
+# ...except .claude/, which holds this repo's own working agreements rather
+# than a personal editor cache: the hooks enforcing the audit cadence, the
+# docs-drift check and the board-freshness check. A correction to one of them
+# on 2026-08-27 could not be committed, which is what prompted this.
+!.claude/
+# Personal, machine-specific - Claude Code's own convention is that
+# settings.json is shared and settings.local.json is not.
+.claude/settings.local.json
+# Vendored from upstream and re-pulled rather than maintained here. The
+# lab-specific architecture-audit skill is already tracked and stays so;
+# gitignore does not untrack what is already in the index.
+.claude/skills/
 .vscode/
 .vs/
 .idea/

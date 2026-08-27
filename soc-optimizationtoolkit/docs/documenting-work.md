@@ -90,21 +90,29 @@ Work lives in two places and they do not overlap:
 - `backlog.md` - the reasoning, the measurements, the rejected alternatives.
 - `board.md` - what is a unit of work, what state it is in, what it waits on.
 
-**The board's structure is checked too**, by the same script - three rules, kept
-few on purpose, because a board is a working surface and a checker that argued
-with its prose would get the prose deleted rather than the rule obeyed:
+**THE BOARD IS DATA, since 2026-08-27.** `docs/board.json` is the source of
+truth for what is in the backlog, what is in progress and what is done;
+`docs/board.md` is GENERATED from it by `npm run board` and must never be
+edited by hand. CI fails if the two disagree.
 
-- **No duplicate story id.** The one that actually bites: the second card looks
-  tracked, gets named in a commit message, and points at whichever one the
-  reader found first.
-- **No story whose epic is not in the epics table.** An epic nobody declared is
-  an epic nobody is tracking.
-- **No declared epic without stories.** It either shipped, in which case say so,
-  or it lost its work.
+Why it changed: prose read well and groomed badly. There was no reliable way to
+ask what is blocked on what, and the structural check could only see what a
+regex could find - not even that, in the end. Two cards written
+`**AZR-S1 (spike)**` put the type inside the bold, so the id pattern never
+matched and BOTH spikes were invisible to every tool that read the board,
+including the duplicate-id check itself. Moving to data is what surfaced them.
 
-What the check cannot do is tell whether a card is in the right COLUMN. A Stop
-hook counts commits since `board.md` last changed and asks for an update once
-enough have landed, but moving the card stays a judgement call.
+Each story carries an `id`, `epic`, `title`, `type`, `status`
+(backlog / in-progress / done), a `priority` while it is in the backlog
+(now / next / later), `settled` (settled / undecided / unconfirmed), a
+`dependsOn` list, and `detail`. `npm run check-board` validates all of it, and
+the dependency rules are the ones prose could not enforce: no cycles, no
+dependency on a story that does not exist, nothing in progress whose blocker is
+still in the backlog, and nothing done that depends on something open.
+
+JSON rather than YAML because every YAML parser is a dependency, `@soc/core`
+carries zero runtime deps, and a docs tool is a poor reason to be the first to
+add one. The cost lands on multi-line prose, which the renderer wraps.
 
 A new item needs an ID, a type (bug / feature / chore / spike), one line of
 evidence pointing at where the detail lives, and one distinction that matters

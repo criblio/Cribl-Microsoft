@@ -7,7 +7,7 @@
 // hypothetical - it is the repo going back to where it was.
 
 import { describe, expect, it } from 'vitest';
-import { PROPOSED_STALE_DAYS, boardFindings, evaluateDocsDrift } from './check-docs-drift.mjs';
+import { PROPOSED_STALE_DAYS, evaluateDocsDrift } from './check-docs-drift.mjs';
 
 const TODAY = '2026-08-26';
 
@@ -415,81 +415,5 @@ describe('evaluateDocsDrift - an ADR must carry its own consequences', () => {
     );
 
     expect(result.errors).toEqual([]);
-  });
-});
-
-/**
- * Pins for the board's structural rules.
- *
- * Deliberately few. The board is a working surface, and a checker that argued
- * with its prose would get the prose removed instead of the rule obeyed. These
- * three catch the ways it rots without anyone noticing.
- */
-describe('boardFindings', () => {
-  const board = (body) => ({ path: 'docs/board.md', text: body });
-
-  const EPICS =
-    '| Key | Epic | Why |\n|---|---|---|\n' +
-    '| `REL` | Ship what is built | ... |\n' +
-    '| `FX` | Effect-identity defects | ... |\n';
-
-  it('passes a board whose stories all belong to a declared epic', () => {
-    const result = boardFindings(
-      board(`${EPICS}\n- **REL-1** Open the PR.\n- **FX-1** Guard the latch.\n`),
-    );
-
-    expect(result).toEqual([]);
-  });
-
-  it('catches a duplicated story id', () => {
-    // The one that actually bites: the second card looks tracked, gets named in
-    // a commit message, and points at whichever one the reader found first.
-    // FX-1 is present so the empty-epic rule stays quiet and this asserts on
-    // the duplicate alone.
-    const result = boardFindings(
-      board(`${EPICS}\n- **REL-1** Open the PR.\n- **REL-1** Something else.\n- **FX-1** Guard it.\n`),
-    );
-
-    expect(result).toHaveLength(1);
-    expect(result[0]).toContain('REL-1 2 times');
-  });
-
-  it('catches a story whose epic was never declared', () => {
-    const result = boardFindings(
-      board(`${EPICS}\n- **REL-1** Open the PR.\n- **FX-1** Guard it.\n- **ZZZ-1** From nowhere.\n`),
-    );
-
-    expect(result).toHaveLength(1);
-    expect(result[0]).toContain('ZZZ-* stories but no `ZZZ` row');
-  });
-
-  it('catches an epic that quietly emptied out', () => {
-    // It either shipped, in which case say so, or it lost its work. Both are
-    // worth knowing and neither announces itself.
-    const result = boardFindings(board(`${EPICS}\n- **REL-1** Open the PR.\n`));
-
-    expect(result).toHaveLength(1);
-    expect(result[0]).toContain('declares epic `FX` but no story carries it');
-  });
-
-  it('reads a spike id with a letter in it', () => {
-    // AZR-S1 and AZR-S2 are spikes. A stricter id pattern would file them under
-    // an epic called AZR-S and report two problems that are not there.
-    const result = boardFindings(
-      board(
-        '| Key | Epic | Why |\n|---|---|---|\n| `AZR` | Azure onboarding | ... |\n\n' +
-          '- **AZR-S1** Verify the API grain.\n- **AZR-0** Port the model.\n',
-      ),
-    );
-
-    expect(result).toEqual([]);
-  });
-
-  it('ignores bold text that is not a story id', () => {
-    const result = boardFindings(
-      board(`${EPICS}\n- **REL-1** Open the PR.\n- **FX-1** Guard it.\n\n- **Note** prose.\n`),
-    );
-
-    expect(result).toEqual([]);
   });
 });

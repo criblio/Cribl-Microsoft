@@ -1,0 +1,869 @@
+{
+  "epics": [
+    {
+      "key": "REL",
+      "name": "Ship what is built",
+      "why": "The packaged tarball trails `main`, and the lab trails the tarball"
+    },
+    {
+      "key": "FX",
+      "name": "Effect-identity defects",
+      "why": "One confirmed live defect class, three instances"
+    },
+    {
+      "key": "CAP",
+      "name": "Capability taxonomy extension",
+      "why": "The single upstream blocker for three other epics"
+    },
+    {
+      "key": "HON",
+      "name": "Inventory and diagnostic honesty",
+      "why": "Measured gaps where the app reports a confident wrong answer"
+    },
+    {
+      "key": "AZR",
+      "name": "Azure native source onboarding",
+      "why": "The largest unstarted block (backlog item 6)"
+    },
+    {
+      "key": "WIN",
+      "name": "Windows event analysis",
+      "why": "Backlog item 5; Sentinel-side and Lake-side halves"
+    },
+    {
+      "key": "PK",
+      "name": "Pack maintenance parity",
+      "why": "Includes a silent data-loss defect"
+    },
+    {
+      "key": "VND",
+      "name": "Vendor field definitions",
+      "why": "Positional CSV naming, reaching past ~18 vendors"
+    },
+    {
+      "key": "DBT",
+      "name": "Debt, spec grounding, verification",
+      "why": "Copy fixes, unverified claims, retired docs"
+    },
+    {
+      "key": "GEN",
+      "name": "Pipeline and pack generation",
+      "why": "What the build actually emits; had no epic until a regression was reported against it"
+    },
+    {
+      "key": "D",
+      "name": "Open decisions",
+      "why": "Blocked on a call, not on effort; each is cheap once answered"
+    }
+  ],
+  "stories": [
+    {
+      "id": "GEN-1",
+      "epic": "GEN",
+      "title": "Overflow serialize reaches the built pack - report not reproduced",
+      "type": "bug",
+      "status": "done",
+      "settled": "settled",
+      "dependsOn": [],
+      "detail": "REPORTED 2026-08-27: the additional-extension field was said not to be created in the pack's pipeline. NOT REPRODUCED, and now checked in the artifact the report is actually about - a pack built end to end and installed into Cribl, not the preview. Run: Zscaler Internet Access, 4 log types pulled live from the `zscaler_cef` Lake dataset (200 events fetched, stored 50/26/19/17, all detected CEF), destination CommonSecurityLog, gap analysis reporting Overflow 8 for zscalernss-tunnel (6 unmappable, 2 outranked) - a NON-ZERO overflow, which is the condition that must emit the function. The installed pack `ms-sentinel-zscaler-internet` v1.0.6 in worker group `default` carries, in each of its 4 transform pipelines, a group `(7) Overflow Collection` holding an enabled `Serialize`: type JSON Object, description \"Serialize unmapped fields into AdditionalExtensions as JSON\", **Destination field `AdditionalExtensions`**, and a Fields-to-serialize exclusion list that ends `!AdditionalExtensions`, `*`. So the catch-all is emitted and populated. Zero overflow correctly emits nothing; that is the likely shape of the original report, so the question to put back to the reporter is what Overflow count their gap analysis showed. *bug, closed as not-reproduced. `backlog.md` item 14.*"
+    },
+    {
+      "id": "REL-2",
+      "epic": "REL",
+      "title": "Record the 2026-08-25 live verification in the release notes",
+      "type": "chore",
+      "status": "backlog",
+      "priority": "now",
+      "settled": "settled",
+      "dependsOn": [],
+      "detail": "The 1.12.0 entry ends \"has NOT done: run against a real workspace\", which was true of that release. No later entry records the run, so a reader working newest-first still concludes ADR-0003 is unverified. *chore, SETTLED. Size: one entry.*"
+    },
+    {
+      "id": "REL-3",
+      "epic": "REL",
+      "title": "Rotate the Azure client secret from the retired local-app config",
+      "type": "chore",
+      "status": "backlog",
+      "priority": "now",
+      "settled": "settled",
+      "dependsOn": [],
+      "detail": "`~/.soc-toolkit-local-app-retired/config/local-config.json` holds a live secret. Flagged for rotation by `adr/0002-drop-local-target.md:57-62` and still outstanding. *chore, SETTLED. Security. Size: minutes.*"
+    },
+    {
+      "id": "REL-4",
+      "epic": "REL",
+      "title": "Cut and package a release",
+      "type": "chore",
+      "status": "done",
+      "priority": "now",
+      "settled": "settled",
+      "dependsOn": [],
+      "detail": "Now the most overdue card on the board: the tarball in `release/` predates four merged PRs, and the lab workspace is further behind still. `npm run package` performs the bump; do not hand-bump. For the current number run `npm run check-release --workspace apps/cribl-app` - do not copy it into this file. The epics table used to carry a hand-typed \"21 commits sit unreleased\"; it read 25 four days later, which is the whole reason that check exists.  ### FX - Effect-identity defects  SHIPPED 2026-08-26/27, all three instances: the capture filter (#129), the canvas arrangement and the mapping-review drop branch (#131).  The lesson worth keeping, because it is what made all three findable: an effect keyed on a value whose identity moves for reasons unrelated to the state it resets. Safe reference `lake-panel.tsx:198-204` (primitive key); guard precedents `integrate-screen.tsx:398-410` and `azure-resources-section.tsx:259-262`. Two of the three fixes also extracted the decision to a pure function (`shouldReloadEdits`, `autoDropPlan`) - which is what made the third one's asymmetry visible at a glance."
+    },
+    {
+      "id": "FX-4",
+      "epic": "FX",
+      "title": "Sweep for the class rather than the instances",
+      "type": "chore",
+      "status": "backlog",
+      "priority": "now",
+      "settled": "undecided",
+      "dependsOn": [],
+      "detail": "THREE confirmed from one reading; nothing says the fourth is not there. `useEffect` keyed on a memo, a callback, or an inline object/array prop, whose body resets state the operator owns. Safe reference: `lake-panel.tsx:198-204` (primitive key). Guard precedents: `integrate-screen.tsx:398-410`, `azure-resources-section.tsx:259-262`. *chore. UNDECIDED whether this is a one-off sweep or a lint rule - oxlint has no exhaustive-deps equivalent, and a custom rule is a bigger commitment than the three fixes were.*  ### CAP - Capability taxonomy extension  Build this ONCE. `backlog.md:806-808` says so explicitly - it serves three separate backlog items and doing it per-surface means building it three times. Today the taxonomy is 11 capabilities (`capabilities.ts:22-36`). Every addition needs a real probe or the step-2 mapping rule drops it, since that rule records only measurements. No probe ever grants a write."
+    },
+    {
+      "id": "CAP-1",
+      "epic": "CAP",
+      "title": "Add `resourcegraph.read` and its probe",
+      "type": "chore",
+      "status": "backlog",
+      "priority": "now",
+      "settled": "settled",
+      "dependsOn": [],
+      "detail": "The gap recorded in backlog items 1 and 4 and again under 6d. `backlog.md:74-82`, `:321-329`, `:786-808`."
+    },
+    {
+      "id": "CAP-2",
+      "epic": "CAP",
+      "title": "Add policy assignment and remediation capabilities plus probes (`Microsoft.Authorization`, `Mic",
+      "type": "chore",
+      "status": "backlog",
+      "priority": "now",
+      "settled": "settled",
+      "dependsOn": [],
+      "detail": "rosoft.PolicyInsights`). Gates AZR-4."
+    },
+    {
+      "id": "CAP-3",
+      "epic": "CAP",
+      "title": "Add managed-identity creation plus probe",
+      "type": "chore",
+      "status": "backlog",
+      "priority": "now",
+      "settled": "settled",
+      "dependsOn": [],
+      "detail": "Gates AZR-4."
+    },
+    {
+      "id": "CAP-4",
+      "epic": "CAP",
+      "title": "Add Sentinel incident read (Microsoft Sentinel Reader)",
+      "type": "chore",
+      "status": "backlog",
+      "priority": "now",
+      "settled": "settled",
+      "dependsOn": [],
+      "detail": "Modelled nowhere - `azure-permissions.ts:239,244` knows only the Contributor actions. Gates AZR-7."
+    },
+    {
+      "id": "CAP-5",
+      "epic": "CAP",
+      "title": "Add the two Graph scopes (`Organization.Read.All`, `SecurityEvents.Read.All`) plus probes",
+      "type": "chore",
+      "status": "backlog",
+      "priority": "now",
+      "settled": "settled",
+      "dependsOn": [],
+      "detail": "Gates AZR-6."
+    },
+    {
+      "id": "CAP-6",
+      "epic": "CAP",
+      "title": "Make the four unmeasured listers measurable - subscriptions, resource groups, Resource Graph, C",
+      "type": "chore",
+      "status": "backlog",
+      "priority": "now",
+      "settled": "settled",
+      "dependsOn": [
+        "CAP-1"
+      ],
+      "detail": "ribl worker groups. They render `unmeasuredInventoryMessage` today, which `backlog.md:321-329` calls \"honest, but inert\". Depends on CAP-1.  Already measured, do not re-add: Event Hub namespace creation is `arm.deploy`; every Cribl-side write is `source.manage`.  ---"
+    },
+    {
+      "id": "HON-1",
+      "epic": "HON",
+      "title": "Wire `emptyTableListMessage` into the picker screen",
+      "type": "chore",
+      "status": "backlog",
+      "priority": "next",
+      "settled": "settled",
+      "dependsOn": [],
+      "detail": "The last of the three pure decisions still owed its wiring. `backlog.md:303-306`."
+    },
+    {
+      "id": "HON-2",
+      "epic": "HON",
+      "title": "Honour the scope rule at the remaining lister call sites",
+      "type": "chore",
+      "status": "backlog",
+      "priority": "next",
+      "settled": "settled",
+      "dependsOn": [],
+      "detail": "A verdict is evidence only about the scope it was measured at, and that includes off-scope denials. `emptyInventoryMessage` now requires a scope argument, so the compiler prompts each new call site. `backlog.md:308-319`."
+    },
+    {
+      "id": "HON-3",
+      "epic": "HON",
+      "title": "Surface `droppedColumns` and `unknownTypeColumns` in the UI",
+      "type": "chore",
+      "status": "backlog",
+      "priority": "next",
+      "settled": "settled",
+      "dependsOn": [],
+      "detail": "The diagnostics already exist and reach nobody - repo-wide the only consumers are two test files. Already propagated through `dcr-request.ts`, so this is a rendering job, not plumbing. `adr/0004:87-88`, named there as the strongest argument for doing it next."
+    },
+    {
+      "id": "HON-4",
+      "epic": "HON",
+      "title": "Tell operators that DCRs deployed before the guid fix still lose fields",
+      "type": "chore",
+      "status": "backlog",
+      "priority": "next",
+      "settled": "settled",
+      "dependsOn": [],
+      "detail": "`update-dcr` regenerates the declaration so an update fixes it, but nothing sweeps and nothing warns. Pairs with HON-3. `adr/0004:107-112`."
+    },
+    {
+      "id": "HON-5",
+      "epic": "HON",
+      "title": "Warn a CSV vendor's operator before the preview that the pack can never route automatically",
+      "type": "chore",
+      "status": "backlog",
+      "priority": "next",
+      "settled": "settled",
+      "dependsOn": [],
+      "detail": "Both route discriminators return early for CSV by construction, so every CSV log type placeholders even when its values name their log types perfectly. The format-aware hint shipped in 1.11.11; the earlier warning did not. `backlog.md:1063-1065`."
+    },
+    {
+      "id": "HON-6",
+      "epic": "HON",
+      "title": "Give the audit's AGE a home and add a manual re-check",
+      "type": "chore",
+      "status": "backlog",
+      "priority": "next",
+      "settled": "settled",
+      "dependsOn": [
+        "D-1"
+      ],
+      "detail": "The nav was tried and was the wrong surface. Two candidates remain: the frame footer, or the connection bar beside the existing chips. `backlog.md:84-88`. > **HON-8 and HON-9 SHIPPED, PR #134 merged 2026-08-27**, both verified in the live product > against the lab workspace, not just in tests. HON-8 was a claim ledger that > outlived the run that made it: the loader marked its key loaded before > awaiting, the cleanup cancelled the run so its answer was discarded, and the > claim stayed - so the next run skipped a fetch nobody was waiting for. HON-9 > was `extractDiscriminatorValues` taking the quoted text out of > `Activity == \"{activities}\"` verbatim. > > One thing worth carrying: the HON-8 fix has a SECOND half - a cancelled run > must stop working, not merely stop setting state - that resisted three > attempts at a unit pin and is verified only live. It is called out in > `azure-targeting-screen.dom.test.tsx` so nobody deletes it on the strength of > a green suite. FX-4's sweep should treat it as a known-unpinned guard."
+    },
+    {
+      "id": "HON-7",
+      "epic": "HON",
+      "title": "Make the fallback offer reachable beside the actions",
+      "type": "chore",
+      "status": "backlog",
+      "priority": "next",
+      "settled": "settled",
+      "dependsOn": [
+        "D-2"
+      ],
+      "detail": "`FallbackNotice` renders without `onProduce` in production, so the capability model's \"every blocked action falls back to a downloadable artifact\" rule has no button. Targets: Integrate deploy, Batch Deploy, DCR Automation. Must stay worded as an offer, not an error - there is a pin on the absence of alert semantics. `backlog.md:113-116`.  ---"
+    },
+    {
+      "id": "AZR-S1",
+      "epic": "AZR",
+      "title": "Verify whether XDR streaming and the Sentinel incidents API are complementary or alternatives",
+      "type": "spike",
+      "status": "backlog",
+      "priority": "later",
+      "settled": "undecided",
+      "dependsOn": [],
+      "detail": "Streaming carries alert-grain tables; path B returns the incident object with triage state. Settle before building either AZR-6 or AZR-7 - presenting A as a replacement loses triage state silently, presenting them as unrelated builds two overlapping feeds without telling anyone. `backlog.md:679-703`."
+    },
+    {
+      "id": "AZR-S2",
+      "epic": "AZR",
+      "title": "Decide whether the app creates Cribl sources over the API",
+      "type": "spike",
+      "status": "backlog",
+      "priority": "later",
+      "settled": "undecided",
+      "dependsOn": [],
+      "detail": "Every `/system/inputs` reference in the codebase is a read; Event Hub Discovery ends at a JSON download (`eventhub-discovery-screen.tsx:503-515`). The write-side plumbing exists (`guided-deploy/wire-source.ts`, `secret-provisioning.ts`) but a `POST /system/inputs` applier is net-new. This decision constrains AZR-2, AZR-4, AZR-6 and AZR-8, so make it once, early, on the smallest surface.  Then, in order:"
+    },
+    {
+      "id": "AZR-0",
+      "epic": "AZR",
+      "title": "Port `resource-coverage.json` to the app KV store as the selection model",
+      "type": "chore",
+      "status": "backlog",
+      "priority": "later",
+      "settled": "settled",
+      "dependsOn": [],
+      "detail": "The checkbox model exists as a file - port it, do not invent one. Its `method` values ARE the section keys. Keep the tier/profile sub-selections and the `notSupported` block verbatim. Precedes every sub-item. `backlog.md:476-482`."
+    },
+    {
+      "id": "AZR-1",
+      "epic": "AZR",
+      "title": "Establish the additive-only contract",
+      "type": "chore",
+      "status": "backlog",
+      "priority": "later",
+      "settled": "settled",
+      "dependsOn": [],
+      "detail": "Checkboxes only ever deploy; unticking removes from the desired selection and does nothing to Azure; teardown is a separate, separately-confirmed Remove action. No checkbox may destroy anything - pin that with a test. The UI must distinguish \"not selected\" from \"not deployed\". `backlog.md:771-784`."
+    },
+    {
+      "id": "AZR-2",
+      "epic": "AZR",
+      "title": "TRACER BULLET: Entra ID tenant diagnostics, one category group",
+      "type": "chore",
+      "status": "backlog",
+      "priority": "later",
+      "settled": "settled",
+      "dependsOn": [
+        "AZR-S2",
+        "AZR-0",
+        "AZR-1"
+      ],
+      "detail": "One ARM PUT to `microsoft.aadiam/diagnosticSettings`, catalogued as porting nearly one-to-one. Checkbox grain is the category, with Standard (9) and HighVolume (15) as presets, and the non-interactive sign-in volume warning at its own checkbox rather than in a footnote. Requires an Entra directory-role precondition, which the ARM RBAC evaluator provably cannot measure - a real finding this slice surfaces early. Non-negotiable: state the `_CL` divergence and UEBA consequence at the moment a sign-in category is ticked. Resolve the LOG-07 drift (a SecurityOnly profile that `resource-coverage.json` omits). `backlog.md:536-553`."
+    },
+    {
+      "id": "AZR-3",
+      "epic": "AZR",
+      "title": "Defender for Cloud continuous export",
+      "type": "chore",
+      "status": "backlog",
+      "priority": "later",
+      "settled": "settled",
+      "dependsOn": [
+        "AZR-0",
+        "AZR-1"
+      ],
+      "detail": "Per subscription, a `Microsoft.Security/automations` resource. Detects which of 12 paid plans are enabled and never enables one - keep that property. `backlog.md:554-559`."
+    },
+    {
+      "id": "AZR-8",
+      "epic": "AZR",
+      "title": "Blob-only sources as visible unavailable rows",
+      "type": "chore",
+      "status": "backlog",
+      "priority": "later",
+      "settled": "settled",
+      "dependsOn": [
+        "AZR-S2",
+        "AZR-0",
+        "AZR-1"
+      ],
+      "detail": "vNet and NSG Flow Logs have no Event Hub path; the blob path already exists end to end. The `notSupported` block is a feature of the legacy config, not an omission. Smallest sub-item by a wide margin. `backlog.md:705-721`."
+    },
+    {
+      "id": "AZR-9",
+      "epic": "AZR",
+      "title": "Link the AMA plus DCR path to the app's own DCR Automation and Integrate routes rather than dup",
+      "type": "chore",
+      "status": "backlog",
+      "priority": "later",
+      "settled": "settled",
+      "dependsOn": [
+        "AZR-0",
+        "AZR-1"
+      ],
+      "detail": "licating them. Natural place to surface WIN. `backlog.md:723-735`."
+    },
+    {
+      "id": "AZR-4",
+      "epic": "AZR",
+      "title": "Azure Policy initiatives - the bulk of the platform",
+      "type": "chore",
+      "status": "backlog",
+      "priority": "later",
+      "settled": "settled",
+      "dependsOn": [
+        "AZR-S2",
+        "CAP-2",
+        "CAP-3",
+        "AZR-0",
+        "AZR-1"
+      ],
+      "detail": "Built-in Audit or AllLogs (one or the other), eight community tiers with a per-service expander, plus Activity Log, AKS and PostgreSQLFlexible as visible checkboxes because the bundled initiative excludes them silently. DeployIfNotExists fires only for new resources, so bulk remediation is mandatory. Compliance data lags 15-30 minutes, so a fresh deployment reads as non-compliant and the UI has to say why rather than look broken. No policy modelling exists in the repo today. `backlog.md:484-534`."
+    },
+    {
+      "id": "AZR-5",
+      "epic": "AZR",
+      "title": "Diagnostic-settings cleanup, preview only",
+      "type": "chore",
+      "status": "backlog",
+      "priority": "later",
+      "settled": "settled",
+      "dependsOn": [
+        "AZR-0",
+        "AZR-1"
+      ],
+      "detail": "Enumerate exactly what would be removed, grouped by resource type and target namespace, and stop. No delete capability in the GUI in this pass. `backlog.md:522-534`."
+    },
+    {
+      "id": "AZR-6",
+      "epic": "AZR",
+      "title": "Defender XDR guided worklist",
+      "type": "chore",
+      "status": "backlog",
+      "priority": "later",
+      "settled": "settled",
+      "dependsOn": [
+        "AZR-S1",
+        "AZR-S2",
+        "CAP-5",
+        "AZR-0",
+        "AZR-1"
+      ],
+      "detail": "Licence check then usage probe - a licence held is not a product in use. The checkboxes here are a worklist, not a deployment: Microsoft exposes no configuration API for XDR streaming, so the last step is a portal visit, forever. Tables absent from the Streaming API show greyed with the reason. `backlog.md:561-620`."
+    },
+    {
+      "id": "AZR-7",
+      "epic": "AZR",
+      "title": "Sentinel incidents via a Cribl REST collector",
+      "type": "chore",
+      "status": "backlog",
+      "priority": "later",
+      "settled": "settled",
+      "dependsOn": [
+        "AZR-S1",
+        "CAP-4",
+        "DBT-1",
+        "AZR-0",
+        "AZR-1"
+      ],
+      "detail": "Filter on `lastModifiedTimeUtc`, not `createdTimeUtc` - filtering on creation misses every update to an open incident. Repeat deliveries are correct; dedupe downstream on incident GUID plus `lastModifiedTimeUtc`. Build on `lab-cribl.ts:149`. `backlog.md:622-677`."
+    },
+    {
+      "id": "AZR-10",
+      "epic": "AZR",
+      "title": "Dataflow diagrams, one per category",
+      "type": "chore",
+      "status": "backlog",
+      "priority": "later",
+      "settled": "settled",
+      "dependsOn": [
+        "AZR-0",
+        "AZR-1"
+      ],
+      "detail": "Do not build a new diagram implementation - the renderer and layout exist and the work is data, new entries in `architecture-patterns.ts`. Draw the manual portal step in AZR-6 as a step, and draw AZR-7 flowing the other way. Trail each section by one. `backlog.md:737-767`."
+    },
+    {
+      "id": "AZR-11",
+      "epic": "AZR",
+      "title": "Make the prerequisite ordering explicit",
+      "type": "chore",
+      "status": "backlog",
+      "priority": "later",
+      "settled": "settled",
+      "dependsOn": [
+        "AZR-0"
+      ],
+      "detail": "Nearly every section needs an Event Hub namespace first, and the policy sections need Policy Contributor plus User Access Administrator at MG scope. `backlog.md:810-814`."
+    },
+    {
+      "id": "AZR-12",
+      "epic": "AZR",
+      "title": "Check `eventhub-discovery` for overlap before building a second Event Hub surface",
+      "type": "chore",
+      "status": "backlog",
+      "priority": "later",
+      "settled": "settled",
+      "dependsOn": [],
+      "detail": "`backlog.md:816-818`.  ### WIN - Windows event analysis  Backlog item 5. Two goals related only by subject; keep them separable, because one is Sentinel-side and one is Lake-side and either could ship alone."
+    },
+    {
+      "id": "WIN-1",
+      "epic": "WIN",
+      "title": "The screen shell and route, opting in to `table.read`",
+      "type": "chore",
+      "status": "backlog",
+      "priority": "later",
+      "settled": "settled",
+      "dependsOn": [],
+      "detail": "New route ids fail toward reachable, so this must opt in. A denial annotates and never hides - and unusually, the DCR-template path means the screen still does real work under a denial. Say so on the screen. `backlog.md:338-344`, `:403-410`."
+    },
+    {
+      "id": "WIN-2",
+      "epic": "WIN",
+      "title": "Derive the enrichment catalog, ranked by content reference",
+      "type": "chore",
+      "status": "backlog",
+      "priority": "later",
+      "settled": "settled",
+      "dependsOn": [
+        "D-4"
+      ],
+      "detail": "Derive it; do not write it from memory. Four in-tree sources, and the formula is (schema columns) minus (what the raw event carries), ranked by how much content references each. The ranking is what makes this a screen rather than a documentation page. Show unreferenced fields AS unreferenced - dropping them turns a measured zero into an unmeasured absence. `backlog.md:345-401`."
+    },
+    {
+      "id": "WIN-3",
+      "epic": "WIN",
+      "title": "Produce SecurityEvent and WindowsEvent as two separate catalogs and let them differ",
+      "type": "chore",
+      "status": "backlog",
+      "priority": "later",
+      "settled": "settled",
+      "dependsOn": [],
+      "detail": "`backlog.md:398-401`.  ### PK - Pack maintenance parity"
+    },
+    {
+      "id": "PK-1",
+      "epic": "PK",
+      "title": "Detect packs modified in the Cribl UI before overwriting them",
+      "type": "chore",
+      "status": "backlog",
+      "priority": "later",
+      "settled": "settled",
+      "dependsOn": [],
+      "detail": "The data-loss one. Maintenance rebuilds from our stored definition and installs over the deployed pack, silently discarding any route filter, pipeline function, lookup row or destination an operator changed since. Needs a three-way comparison, per worker group, because the answer differs per group. Build on `deployedGroups` and `installedPackVersions`. Answer early: how much of a deployed pack can the API actually return? If the readback is lossy, the honest surface names the files it can see - an unknown must not render as a zero. `backlog.md:1169-1205`."
+    },
+    {
+      "id": "PK-2",
+      "epic": "PK",
+      "title": "Bring the new sample analysis into maintenance",
+      "type": "chore",
+      "status": "backlog",
+      "priority": "later",
+      "settled": "settled",
+      "dependsOn": [
+        "D-6"
+      ],
+      "detail": "An operator maintaining a pack today edits it through a strictly weaker view than the one they built it with - maintenance cannot tell them a mapping is now dropping 161 fields. Reuse `triageOverflow`, `matchFields`, `resolveSampleRouting` and `createLiveTableSchemaCatalog`; a second mapping verdict computed a second way is the duplicated-decision failure this codebase keeps finding. `backlog.md:1137-1167`. See also the two decisions under VND/decisions below.  ### VND - Vendor field definitions"
+    },
+    {
+      "id": "VND-3",
+      "epic": "VND",
+      "title": "Measure the column-order shortfall instead of hedging about it",
+      "type": "bug",
+      "status": "backlog",
+      "priority": "later",
+      "settled": "undecided",
+      "dependsOn": [],
+      "detail": "Found live 2026-08-27: THREAT arrived with 38 fields and was named from the bundled 120-column PAN order; TRAFFIC, 41 against 115. Positional naming maps field[i] to name[i], so a feed missing any middle column mis-names everything after it, silently. The copy says \"check the values beside each name before applying\", which is a hedge where the app already holds the number. *bug, UNDECIDED whether a large shortfall should warn or block. `backlog.md` 13c.*"
+    },
+    {
+      "id": "VND-1",
+      "epic": "VND",
+      "title": "Let the operator name the vendor",
+      "type": "chore",
+      "status": "backlog",
+      "priority": "later",
+      "settled": "settled",
+      "dependsOn": [
+        "D-7"
+      ],
+      "detail": "Today the vendor comes from `detectVendorIdentity(solutionName)`, so anything outside `KNOWN_VENDOR_IDENTITIES` stores nothing - honest, but it caps the feature at about eighteen vendors. Needs a UI seam that was deliberately not built. `vendor-field-definition-plan.md:209-214`.  ### DBT - Debt, spec grounding, verification  Small and mostly independent. Good filler between larger stories."
+    },
+    {
+      "id": "DBT-1",
+      "epic": "DBT",
+      "title": "Pin how the REST collector is modelled in the vendored spec",
+      "type": "chore",
+      "status": "backlog",
+      "priority": "later",
+      "settled": "settled",
+      "dependsOn": [],
+      "detail": "`InputRest` has no schema under that name; it is likely `InputCollection` with a collector conf. Blocks AZR-7 and WIN-5. `backlog.md:975-977`."
+    },
+    {
+      "id": "DBT-2",
+      "epic": "DBT",
+      "title": "Add the guid cast to the live-verification suite",
+      "type": "chore",
+      "status": "backlog",
+      "priority": "later",
+      "settled": "settled",
+      "dependsOn": [],
+      "detail": "The fix shipped in 1.12.1 without ever being observed against live Azure, and `toguid()` returns null silently on malformed input - so a wrong cast fails the same quiet way the drop did. The suite ran live on 2026-08-25 and carries no guid row. `adr/0004:118-124`."
+    },
+    {
+      "id": "DBT-3",
+      "epic": "DBT",
+      "title": "Reconcile the Entra `Kind:Direct` copy with what has been measured",
+      "type": "chore",
+      "status": "backlog",
+      "priority": "later",
+      "settled": "settled",
+      "dependsOn": [],
+      "detail": "`architecture-patterns.ts:422,426` states flatly that native Entra tables do not accept Kind:Direct DCRs, with no snapshot date and no hedge, while the plan doc that is its only source still calls it unverified. Either measure it or carry the caveat."
+    },
+    {
+      "id": "DBT-4",
+      "epic": "DBT",
+      "title": "Name inline breaker rulesets instead of showing \"Default selection\"",
+      "type": "chore",
+      "status": "backlog",
+      "priority": "later",
+      "settled": "settled",
+      "dependsOn": [],
+      "detail": "The spec's `EventBreakerExistingOrNewExisting` carries `existingRule`. `backlog.md:968-973`."
+    },
+    {
+      "id": "DBT-5",
+      "epic": "DBT",
+      "title": "Produce live evidence for the `no access` and `not connected` nav states",
+      "type": "chore",
+      "status": "backlog",
+      "priority": "later",
+      "settled": "settled",
+      "dependsOn": [],
+      "detail": "Both are still test-only. ADR-0002 removed the cheapest way to produce them, so each now costs a throwaway KV profile. `backlog.md:846-849`."
+    },
+    {
+      "id": "DBT-6",
+      "epic": "DBT",
+      "title": "Exercise the `_raw`-absent branch with a non-Lake sample",
+      "type": "chore",
+      "status": "backlog",
+      "priority": "later",
+      "settled": "settled",
+      "dependsOn": [],
+      "detail": "The Lake write path adds `_raw`, so no Lake-sourced bench can reach that branch - it needs a paste or an upload. `zscaler-lake-lab.md:167-179`."
+    },
+    {
+      "id": "DBT-7",
+      "epic": "DBT",
+      "title": "Confirm the `eventsPerSec` 2x multiplier against worker config",
+      "type": "chore",
+      "status": "backlog",
+      "priority": "later",
+      "settled": "settled",
+      "dependsOn": [],
+      "detail": "Inferred as the worker-process count from a hard changepoint, not confirmed. `zscaler-lake-lab.md:225-238`."
+    },
+    {
+      "id": "DBT-8",
+      "epic": "DBT",
+      "title": "Correct the external datagen research note",
+      "type": "chore",
+      "status": "backlog",
+      "priority": "later",
+      "settled": "settled",
+      "dependsOn": [],
+      "detail": "The recorded \"verified create call\" returns HTTP 200 and produces no sample file; a datagen bound to it emits nothing while reporting health Green. The correct shape is `POST /api/v1/m/{group}/system/samples` with a `context.events` array, and it is not in the OpenAPI spec. `zscaler-lake-lab.md:104-131`."
+    },
+    {
+      "id": "DBT-9",
+      "epic": "DBT",
+      "title": "Say \"are deleted\" instead of \"reset\" in the Sample Data helper text",
+      "type": "chore",
+      "status": "backlog",
+      "priority": "later",
+      "settled": "settled",
+      "dependsOn": [],
+      "detail": "The deletion is correct and intended; the wording is what misleads. One string. `backlog.md:955-960`."
+    },
+    {
+      "id": "DBT-10",
+      "epic": "DBT",
+      "title": "Reconcile the field matcher's target list with the generator's output",
+      "type": "chore",
+      "status": "backlog",
+      "priority": "later",
+      "settled": "settled",
+      "dependsOn": [],
+      "detail": "Lower urgency after ADR-0004 - the two now agree about guid columns, which removed the only known instance. `adr/0004:89-91`."
+    },
+    {
+      "id": "DBT-11",
+      "epic": "DBT",
+      "title": "Archive three retired docs rather than keep patching them: `ux-flow-plan.md` (its plan shipped,",
+      "type": "chore",
+      "status": "backlog",
+      "priority": "later",
+      "settled": "settled",
+      "dependsOn": [],
+      "detail": "its standing gate is retired), `legacy-flow-analysis.md` (its one decision was adopted 2026-07-04), `ui-refinement-reference.md` (it points at a path now under `deprecated/`). `porting-plan.md` is the borderline one - patched for now, next in line if the annotation load keeps growing."
+    },
+    {
+      "id": "DBT-12",
+      "epic": "DBT",
+      "title": "Re-derive `BREAKER_CONFIGURABLE_INPUT_TYPES` whenever the spec is re-vendored",
+      "type": "chore",
+      "status": "backlog",
+      "priority": "later",
+      "settled": "settled",
+      "dependsOn": [],
+      "detail": "Recurring, conditional. It is derived, not hand-written - do not edit it by hand. `backlog.md:979-982`."
+    },
+    {
+      "id": "DBT-14",
+      "epic": "DBT",
+      "title": "Stop the solution list swallowing the mouse wheel",
+      "type": "bug",
+      "status": "backlog",
+      "priority": "later",
+      "settled": "settled",
+      "dependsOn": [],
+      "detail": "Found live 2026-08-27: with the pointer over the list, the wheel moves neither the list nor the page - the pointer must leave the list before anything scrolls. Five of eight results were reachable. This is the reproduction the old nested-scrolling question never had, which is what turns it from an annoyance into a bug. *bug, SETTLED. `backlog.md` item 13d.*"
+    },
+    {
+      "id": "DBT-15",
+      "epic": "DBT",
+      "title": "Give every solution row a delivery-fit badge, or say why not",
+      "type": "bug",
+      "status": "backlog",
+      "priority": "later",
+      "settled": "settled",
+      "dependsOn": [],
+      "detail": "\"Palo Alto Cortex XDR\" renders none while all seven of its siblings do. Blank reads as neither \"not measured\" nor \"does not apply\" - the absent-versus-zero distinction the inventory standard exists to protect. *bug, SETTLED. `backlog.md` item 13e.*"
+    },
+    {
+      "id": "DBT-13",
+      "epic": "DBT",
+      "title": "The Claude hooks travel with the repo",
+      "type": "chore",
+      "status": "done",
+      "settled": "settled",
+      "dependsOn": [],
+      "detail": "DECIDED and shipped 2026-08-27: they travel. `.gitignore` matched `*claude*` unanchored, so all of `.claude/` was invisible to git - including `hooks/`, which holds the architecture-audit cadence, the docs-drift check and the board-freshness check. None of them existed in a fresh clone, so every enforcement that mattered had to be duplicated in CI or simply did not run for anyone else. The patterns are now anchored and `.claude/hooks/*.sh`, `.claude/skills/` and `CLAUDE.md` are tracked; `settings.local.json` stays ignored. THE EVIDENCE THAT SETTLED IT, recorded while the fix was still unmergeable: the architecture-audit hook was counting every commit, so a batch of merges tripped it and then a release commit tripped it again - two audits opened on nothing having changed. The hook now counts only commits touching source and excludes merges, mirroring what `check-release-drift.mjs` does with SOURCE_PATHS. That correction lived on ONE machine and could not be committed, so a fresh clone would have kept the version that cries wolf - and an audit that always fires is one people learn to wave through. A fix that cannot travel is not a fix. *chore, settled. The unanchored-pattern class was already fixed once in 1.12.1; this was the second instance, which is why the rule is now anchored rather than re-tuned.*"
+    },
+    {
+      "id": "REL-5",
+      "epic": "REL",
+      "title": "Upload the current package to the lab workspace",
+      "type": "chore",
+      "status": "backlog",
+      "priority": "later",
+      "settled": "settled",
+      "dependsOn": [],
+      "detail": "Packaging does not deploy - the lab runs the installed app, so this work stays invisible there until someone uploads the tgz through the Apps page. The lab is on 1.2.212. `backlog.md:949-951`. MEASURED 2026-08-27: the installed app in the lab workspace reports v1.11.2 in its own footer while `main` is at 1.12.2, and its stored GitHub token is rejected (`GET commits/master: HTTP 401 Bad credentials`), so section 1 of Sentinel Integration cannot load the solution index there at all. The `__local__` live preview has a working token, which is why this went unnoticed - every recent walkthrough drove the dev app. Anyone opening the INSTALLED app today hits a dead first step."
+    },
+    {
+      "id": "REL-6",
+      "epic": "REL",
+      "title": "Clear the external queue",
+      "type": "chore",
+      "status": "backlog",
+      "priority": "later",
+      "settled": "settled",
+      "dependsOn": [],
+      "detail": "Issue #47 was fixed on 2026-08-24 by PRs #120 and #121 and never closed. PR #26 diagnosed the guid issue correctly and is credited in the 1.12.1 notes, but its own edit to `AWSCloudTrail.json` appears unapplied - verify, then merge or close with credit. PR #25 targets paths that all moved to `deprecated/` and is unmergeable. The bug-triage tracker (#84) counts itself as one of its own two pending items.  ---"
+    },
+    {
+      "id": "D-1",
+      "epic": "D",
+      "title": "`HON-6` placement: frame footer, or connection bar beside the existing secret/target/platform-l",
+      "type": "decision",
+      "status": "backlog",
+      "priority": "later",
+      "settled": "undecided",
+      "dependsOn": [],
+      "detail": "ink chips? Excluded already: the nav (tried, wrong surface) and the preflight panel (re-measures on arrival, so it would only ever read \"just now\")."
+    },
+    {
+      "id": "D-2",
+      "epic": "D",
+      "title": "`HON-7` surface area: which of Integrate deploy, Batch Deploy and DCR Automation get the fallba",
+      "type": "decision",
+      "status": "backlog",
+      "priority": "later",
+      "settled": "undecided",
+      "dependsOn": [],
+      "detail": "ck offer, and does each own its `onProduce`? One prop away in any of them."
+    },
+    {
+      "id": "D-3",
+      "epic": "D",
+      "title": "How do capabilities reach the roughly eight listing screens - keep prop-drilling from the shell",
+      "type": "decision",
+      "status": "backlog",
+      "priority": "later",
+      "settled": "undecided",
+      "dependsOn": [],
+      "detail": ", or carry them in `PortsContext` beside `config`? One seam change against updating every `PortsProvider` call site. Cheap now, less so later; at eight listers this is the duplication that drifts. `backlog.md:331-336`."
+    },
+    {
+      "id": "D-4",
+      "epic": "D",
+      "title": "`WIN` scope: does the enrichment catalog only report, or does it also produce pipeline enrichme",
+      "type": "decision",
+      "status": "backlog",
+      "priority": "later",
+      "settled": "undecided",
+      "dependsOn": [],
+      "detail": "nt functions? Reporting first is a legitimate slice, but a catalog that only affects analysis leaves deployed data still missing the fields. `backlog.md:390-397`."
+    },
+    {
+      "id": "D-5",
+      "epic": "D",
+      "title": "`WIN-5` JSON or Parquet for the Cribl Lake copy",
+      "type": "decision",
+      "status": "backlog",
+      "priority": "later",
+      "settled": "undecided",
+      "dependsOn": [],
+      "detail": "The choice is already live and made silently - `lab-cribl.ts` carries Parquet chunk settings and nothing presents the tradeoff. The answer must be MEASURED against how Federated Search actually executes, not reasoned from general Parquet knowledge, because being specific to Cribl's engine is the entire value. Schema stability is the sharp dimension: the Windows tables are wide and sparse, Parquet is columnar and typed. `backlog.md:412-441`."
+    },
+    {
+      "id": "D-6",
+      "epic": "D",
+      "title": "`PK-2` source of truth: does maintenance re-analyse, or read a stored analysis? Re-analysing ne",
+      "type": "decision",
+      "status": "backlog",
+      "priority": "later",
+      "settled": "undecided",
+      "dependsOn": [],
+      "detail": "eds the original samples, which the pack carries but which may no longer represent live traffic; a stored verdict is cheap and goes stale silently. A third option - re-analyse against the LIVE table schema and show what changed since the pack was built - is probably the honest one, and is the same fetch the picker already makes. `backlog.md:1137-1167`."
+    },
+    {
+      "id": "D-7",
+      "epic": "D",
+      "title": "`VND-2` Does a persisted column order need a version or a captured-on date, so a firmware chang",
+      "type": "decision",
+      "status": "backlog",
+      "priority": "later",
+      "settled": "undecided",
+      "dependsOn": [],
+      "detail": "e can be reasoned about later rather than silently disagreeing with a future bundled update? The only genuinely open question left in that plan. `vendor-field-definition-plan.md:222-224`."
+    },
+    {
+      "id": "D-8",
+      "epic": "D",
+      "title": "`AZR` Resource Graph change tracking - offer it at all? Recorded under `notSupported` as query-",
+      "type": "decision",
+      "status": "backlog",
+      "priority": "later",
+      "settled": "undecided",
+      "dependsOn": [],
+      "detail": "only with no streaming path. If offered, it is a second scheduled collector, and it lands on the same Resource Graph gap CAP-1 closes. `backlog.md:629-633`. > **D-9 became DBT-14 on 2026-08-27.** It asked what to do about three-level > nested scrolling and had no fix proposed, because nobody had reproduced the > harm. Driving PaloAlto did: the wheel over the solution list moves nothing at > all. That is not a question any more, so it left this column."
+    },
+    {
+      "id": "D-10",
+      "epic": "D",
+      "title": "`DBT` Setup wizard header promises three phases while the stepper shows one",
+      "type": "decision",
+      "status": "backlog",
+      "priority": "later",
+      "settled": "undecided",
+      "dependsOn": [],
+      "detail": "Either drop the enumeration from the header, or promote the sub-steps. Measured on two live walkthroughs 2026-08-06. `backlog.md:826-832`."
+    },
+    {
+      "id": "D-11",
+      "epic": "D",
+      "title": "`AZR-5` per-table successor for deprecated guid columns (`AwsRequestId` to `AwsRequestId_`)",
+      "type": "decision",
+      "status": "backlog",
+      "priority": "later",
+      "settled": "undecided",
+      "dependsOn": [],
+      "detail": "Explicitly out of scope for ADR-0004 as a per-table content decision. Matters because CloudTrail's `requestID` is frequently not a UUID, so `toguid()` returns null and drops it silently. `adr/0004:82-86`.  ---"
+    },
+    {
+      "id": "GEN-2",
+      "epic": "GEN",
+      "title": "A rebuilt pack no longer inherits the previous build's pipelines",
+      "type": "bug",
+      "status": "done",
+      "settled": "settled",
+      "dependsOn": [],
+      "detail": "FIXED and shipped in 1.12.3. CONFIRMED live 2026-08-27, then root-caused and closed. THE MECHANISM: an overwrite of an already-installed pack took rung 3 of the conflict ladder, `PATCH /packs/{id}` - Cribl's \"Upgrade a Pack\", which MERGES rather than replaces (install-pack.ts:113-121, which returned on success so the DELETE+POST replace at :126-133 only ran when the PATCH failed). Pipeline directory ids come from the operator's log type via `pipelineSuffix` (naming.ts:94-103), so a log-type rename between builds strands the whole previous set: the ids survive the merge with no conf.yml and Cribl lists them as nameless 0-function pipelines reading \"Missing pipeline configuration\". THE MEASUREMENT that settled it, five app-built packs in one workspace: the two whose log types were RENAMED between builds carried 4 and 12+ orphans; a never-rebuilt pack and two REBUILT ones whose log types stayed put carried none. So the trigger is the rename, not the rebuild - caught only by opening the two AzureManaged packs instead of deleting them on inference. A HYPOTHESIS WORTH RECORDING BECAUSE IT WAS WRONG: that the app was generating pipelines for log types with no sample. The Cloudflare control refutes it - that solution has many unsampled log types and a spotless pack - and the generator writes exactly two pipelines per TAGGED table (scaffold.ts:254-263), which is why the run produced 8 routes for 4 log types. THE FIX: rungs 3 and 4 swapped, so an overwrite deletes then reinstalls and the old tree goes with it; the merge is kept only for the case that needs it (a pack whose pipelines are referenced by routes outside it cannot be deleted) and now reports itself through a new `onNote` channel instead of passing as a clean overwrite. The code finally matches what the UI already promised at integrate-screen.tsx:1941. Four pins added, three of which fail if the replace branch is disabled; the existing pin that had encoded the merge as intended behaviour was re-pointed at the delete-refused path. *bug, fixed. `backlog.md` item 14d/14f.*"
+    },
+    {
+      "id": "GEN-3",
+      "epic": "GEN",
+      "title": "Stamp the toolkit version into the pack it builds",
+      "type": "feature",
+      "status": "backlog",
+      "priority": "next",
+      "settled": "settled",
+      "dependsOn": [],
+      "detail": "Given a `.crbl`, nothing says which toolkit build produced it. The manifest carries exactly eight fields (`domain/pack-assembly/package-json.ts`) - name, version, author, description, displayName, tags, exports, minLogStreamVersion - and `author` is the constant \"Cribl SOC Toolkit\" while `version` is just highest-installed-plus-one, so it tracks how many times the pack was rebuilt, not what built it. The persisted `PackBuildRecord` does not carry it either. The app version exists only as `__APP_VERSION__` for the UI footer. COST, paid on 2026-08-27: asked whether a pack in the workspace was the one just built, the artifact could not answer; it took a git-log check and a sample-count comparison to establish provenance. Every future regression report about \"the pack\" pays this again. Cheapest fix: one more manifest field, set from the same define the footer reads. *feature, settled. [[GEN-2]] is fixed, so leftovers no longer accumulate - but the provenance gap stands on its own: it cost a git-log check to answer \"is this pack today's?\" during that very investigation.*"
+    }
+  ]
+}
