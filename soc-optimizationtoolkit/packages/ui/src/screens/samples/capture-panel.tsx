@@ -36,7 +36,7 @@
  * All decisions are the pure capture-panel-state; this renders and wires.
  */
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { CaptureSamplesResult, SampleSourceRef, TaggedSample } from "@soc/core";
 import {
   DEFAULT_DURATION_SECONDS,
@@ -84,10 +84,21 @@ export function CapturePanel({
   const seeded = useMemo(() => captureLogTypeChoices(recommended), [recommended]);
   const [choices, setChoices] = useState<CaptureLogTypeChoice[]>(seeded);
   const [filter, setFilter] = useState(() => composeFilter(source.id, seeded));
-  // True once the operator has edited the filter by hand: after that the
-  // checkboxes stop rewriting it, because silently discarding someone's edit is
-  // worse than letting the two disagree.
-  const [filterEdited, setFilterEdited] = useState(false);
+  // True once the operator has edited the filter by hand: after that NEITHER the
+  // checkboxes NOR the re-seed rewrites it, because silently discarding
+  // someone's edit is worse than letting the two disagree.
+  //
+  // A REF, NOT STATE, since 2026-08-26. The re-seed effect below has to read this
+  // without listing it as a dependency: adding it would make the effect re-run
+  // the instant the operator typed, and that run would re-seed the CHECKBOXES
+  // out from under them. Nothing renders the flag, so there is nothing to
+  // re-render for. Same touched-ref discipline as the pack-name and table
+  // prefills in integrate-screen.tsx:398-410.
+  const filterEditedRef = useRef(false);
+  // Which source the picks were last seeded for, so the effect can tell a SOURCE
+  // change from a RECOMMENDATION change - they want opposite things from the
+  // latch. Same guard-ref shape as azure-resources-section.tsx:259-262.
+  const seededForSourceRef = useRef(source.id);
   const maxEvents = useNumericField(DEFAULT_MAX_EVENTS);
   // The one that bites hardest cleared: 0 clamps to a ONE-SECOND capture, which
   // on a quiet source returns nothing and is then reported as an idle source.
@@ -112,14 +123,40 @@ export function CapturePanel({
   // rejected write establishes nothing about what landed.
   const [storeError, setStoreError] = useState<string | null>(null);
 
-  // RE-SEED THE PICKS when the recommendation changes, and when the source does
-  // - a different source means different suggestions and a different filter.
-  // Only the picks: see the second effect for why the capture and its summary
-  // are NOT reset here.
+  /**
+   * RE-SEED THE PICKS when the recommendation changes, and when the source does
+   * - a different source means different suggestions and a different filter.
+   * Only the picks: see the second effect for why the capture and its summary
+   * are NOT reset here.
+   *
+   * A HAND-EDITED FILTER SURVIVES A RE-SEED, since 2026-08-26. This effect used
+   * to clear the latch and recompose the filter unconditionally, which made the
+   * edit unkeepable: `seeded` is memoised on `recommended`, `recommended` is
+   * rebuilt from coverage, and committing samples always changes coverage. So
+   * the same identity change that 51d272d stopped from erasing the SUMMARY was
+   * still erasing the FILTER one line up - the fix landed on half the defect.
+   *
+   * Worse than a no-op recompose: the just-committed log types come back
+   * `provided`, so they un-tick and the filter recomposes NARROWER than the one
+   * the operator wrote. And a commit is not the only trigger - the same memo
+   * moves when the rule-coverage read resolves or Lake volumes land, so the edit
+   * could vanish with no operator action at all.
+   *
+   * The source case still clears the latch, because a filter written for one
+   * source is not an answer about another. Today the parent mounts this panel
+   * with `key={captureTarget.id}` so a source change remounts and the refs reset
+   * anyway - but a component that is only correct because of how its parent keys
+   * it is one refactor away from being wrong, and the branch costs a ref.
+   */
   useEffect(() => {
     setChoices(seeded);
-    setFilterEdited(false);
-    setFilter(composeFilter(source.id, seeded));
+    if (seededForSourceRef.current !== source.id) {
+      seededForSourceRef.current = source.id;
+      filterEditedRef.current = false;
+    }
+    if (!filterEditedRef.current) {
+      setFilter(composeFilter(source.id, seeded));
+    }
   }, [seeded, source.id]);
 
   /**
@@ -158,7 +195,7 @@ export function CapturePanel({
   const toggle = (value: string) => {
     const next = toggleChoice(choices, value);
     setChoices(next);
-    if (!filterEdited) {
+    if (!filterEditedRef.current) {
       setFilter(composeFilter(source.id, next));
     }
   };
@@ -254,7 +291,7 @@ export function CapturePanel({
           value={filter}
           onChange={(e) => {
             setFilter(e.target.value);
-            setFilterEdited(true);
+            filterEditedRef.current = true;
           }}
           spellCheck={false}
           rows={3}

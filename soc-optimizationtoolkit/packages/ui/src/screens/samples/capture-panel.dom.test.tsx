@@ -281,6 +281,55 @@ describe("CapturePanel - the filter belongs to the operator", () => {
     expect(filterBox(container).value).toBe(edited);
   });
 
+  /**
+   * THE EDIT MUST SURVIVE A RECOMMENDATION IT DID NOT ASK FOR (live defect,
+   * 2026-08-26). The other half of the defect 51d272d fixed.
+   *
+   * The test above proves the latch holds against a CHECKBOX. Nothing proved it
+   * held against a re-seed, and it did not: the re-seed effect cleared the latch
+   * and recomposed the filter unconditionally, on `[seeded, source.id]`. Since
+   * `seeded` is memoised on `recommended`, and `recommended` is rebuilt from
+   * coverage, and committing samples always changes coverage, every commit wiped
+   * the edit - and so did the rule-coverage read resolving, or Lake volumes
+   * landing, with no operator action at all.
+   *
+   * A NEW ARRAY WITH THE SAME CONTENT, for the same reason as the summary pin
+   * below: identity is what the memo compares, so re-passing `RECOMMENDED` would
+   * prove nothing.
+   *
+   * Asserted as an exact match rather than a `toContain`, because the failure
+   * this guards is not a blanked filter - it is a DIFFERENT one. The committed
+   * log types come back `provided`, so they un-tick and the recompose is
+   * narrower than what the operator wrote, which still captures something and
+   * therefore still looks like it worked.
+   */
+  it("KEEPS a hand-edited filter when the RECOMMENDATION is recomputed", () => {
+    const { props } = makeProps();
+    const { container, rerender } = render(<CapturePanel {...props} />);
+    const edited = '__inputId === "in_syslog" && sourcetype == "pan:traffic"';
+
+    fireEvent.change(filterBox(container), { target: { value: edited } });
+
+    // What the parent does on the render a commit provokes.
+    rerender(<CapturePanel {...props} recommended={[...RECOMMENDED]} />);
+
+    expect(filterBox(container).value).toBe(edited);
+  });
+
+  it("still yields the filter to the checkboxes if the operator never edited it", () => {
+    // The latch is now a ref that outlives a re-seed, so pin that it starts open
+    // and STAYS open: a latch stuck closed by the re-seed would make every
+    // checkbox inert and would pass the test above for the wrong reason.
+    const { props } = makeProps();
+    const { container, rerender } = render(<CapturePanel {...props} />);
+
+    rerender(<CapturePanel {...props} recommended={[...RECOMMENDED]} />);
+    fireEvent.click(boxes(container)[3]); // HIPMATCH
+
+    expect(ticked(container)).toBe(3);
+    expect(filterBox(container).value).toContain("HIPMATCH");
+  });
+
   it("warns when an edit drops the __inputId clause, and names the fix", () => {
     // The one edit that fails silently: the capture succeeds and returns a
     // mixture from every source in the group, which reads like an answer.
