@@ -117,6 +117,44 @@ export function buildLoaderPlan(input: LoaderPlanInput): LoaderPlan {
   };
 }
 
+/**
+ * Whether this run should start the fetch for `planKey`, given the key a
+ * previous run already claimed. An empty plan key means there is nothing to
+ * fetch; an equal claim means someone already has it.
+ */
+export function shouldClaimLoad(claimedKey: string, planKey: string): boolean {
+  return planKey !== "" && claimedKey !== planKey;
+}
+
+/**
+ * What the claim becomes when a run is torn down before it finished.
+ *
+ * A CLAIM MUST NOT OUTLIVE THE RUN THAT MADE IT (live defect, 2026-08-27). The
+ * loader marks its key claimed BEFORE awaiting, so a concurrent render cannot
+ * start a second fetch. The cleanup then sets `cancelled`, which makes the
+ * in-flight result get discarded - and the claim was being left behind. The next
+ * run saw the key already claimed, skipped the fetch, and the panel sat on
+ * "Checking Azure permissions..." and "Loading subscriptions..." with no request
+ * in flight and no error, until someone pressed Refresh from Azure - which only
+ * worked because it bumps reloadNonce and therefore changes the key.
+ *
+ * StrictMode makes this fire on EVERY mount, mount/unmount/remount being exactly
+ * the sequence above, which is why the Sentinel Integration screen showed it
+ * every single time rather than as a race.
+ *
+ * Releasing in the cleanup, synchronously, is what makes it correct: the next
+ * run is invoked after the cleanup, so it sees the key free and refetches. A
+ * run that COMPLETED passes `claimedHere: false` and keeps its claim, which is
+ * what stops a re-render refetching data that already arrived.
+ */
+export function releaseClaimOnCancel(
+  claimedKey: string,
+  planKey: string,
+  claimedHere: boolean,
+): string {
+  return claimedHere && claimedKey === planKey ? "" : claimedKey;
+}
+
 // ---------------------------------------------------------------------------
 // Commit notice (connection-bar notice pattern)
 // ---------------------------------------------------------------------------
