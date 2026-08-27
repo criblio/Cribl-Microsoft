@@ -104,11 +104,27 @@ including the duplicate-id check itself. Moving to data is what surfaced them.
 
 Each story carries an `id`, `epic`, `title`, `type`, `status`
 (backlog / in-progress / done), a `priority` while it is in the backlog
-(now / next / later), `settled` (settled / undecided / unconfirmed), a
-`dependsOn` list, and `detail`. `npm run check-board` validates all of it, and
-the dependency rules are the ones prose could not enforce: no cycles, no
-dependency on a story that does not exist, nothing in progress whose blocker is
-still in the backlog, and nothing done that depends on something open.
+(now / next / later), `settled` (settled / undecided / unconfirmed),
+`verified` (pins / live / both / none), a `dependsOn` list, and `detail`.
+`npm run check-board` validates all of it, and the dependency rules are the
+ones prose could not enforce: no cycles, no dependency on a story that does not
+exist, nothing in progress whose blocker is still in the backlog, and nothing
+done that depends on something open.
+
+`settled` and `verified` are different axes and are easy to conflate. `settled`
+is decision-confidence - whether anything is still undecided. `verified` is
+evidence - how a finished story was confirmed. A story can be perfectly settled
+and never verified. `verified` is REQUIRED once a story is done, optional
+before it, and `none` is a legitimate answer for docs and process work: the
+rule forces the question to be answered, not a particular answer to be given.
+
+Be honest about its limits. A validator can check that the field is PRESENT; it
+cannot check that it is TRUE, so this is a claim, and claims in this repo rot.
+It earns its place because the failure it prevents kept recurring - GEN-1
+closed on a live run against the deployed pack, GEN-2 on pins plus a five-pack
+measurement, and the board rendered them identically. The evidence itself still
+belongs in `backlog.md` and in the pins; the field only says which of those to
+go and read.
 
 JSON rather than YAML because every YAML parser is a dependency, `@soc/core`
 carries zero runtime deps, and a docs tool is a poor reason to be the first to

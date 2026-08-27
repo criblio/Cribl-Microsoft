@@ -66,6 +66,13 @@ function card(story, byId) {
     `<span class="tag type-${esc(story.type)}">${esc(story.type)}</span>`,
     `<span class="tag settled-${esc(story.settled)}">${esc(story.settled)}</span>`,
   ];
+  if (story.verified !== undefined) {
+    // `none` is a legitimate answer and still the one to notice, so it is
+    // styled like the other amber "look at this" tags rather than hidden.
+    tags.push(
+      `<span class="tag verified-${esc(story.verified)}">verified: ${esc(story.verified)}</span>`,
+    );
+  }
   if (blocked.length > 0) {
     tags.push(
       `<span class="tag blocked">blocked by ${blocked.map(esc).join(', ')}</span>`,
@@ -184,6 +191,10 @@ input[type=search]{background:var(--panel);border:1px solid var(--line);color:va
 .tag.type-feature{background:#16303a;color:#7fd4f0}
 .tag.type-decision{background:#2c2440;color:#c0a6ff}
 .tag.type-spike{background:#2b2a17;color:#e0d27a}
+.tag.verified-both{background:#14301f;color:#7ee0a8}
+.tag.verified-live{background:#14301f;color:#7ee0a8}
+.tag.verified-pins{background:#16303a;color:#7fd4f0}
+.tag.verified-none{background:#3a2a12;color:#ffbe5c}
 .tag.settled-undecided{background:#3a2a12;color:#ffbe5c}
 .tag.settled-unconfirmed{background:#3a2a12;color:#ffbe5c}
 .tag.blocked{background:#3a2a12;color:#ffbe5c}
