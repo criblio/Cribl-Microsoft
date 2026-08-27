@@ -1361,3 +1361,99 @@ capabilities need salvaging first: CEF/LEEF raw-line preservation
 > `consolidateByTableRouting` had never executed - both callers pass two
 > arguments, so its `eventToTable` branch is unreachable - and was deleted as a
 > capability the app did not have. Phase 0 doc, 0.3.
+
+## 13. PaloAlto end-to-end walkthrough - LIVE, 2026-08-27
+
+Driven against the live workspace through the `__local__` live preview, so the
+code under test was `main` at `714a66c`, not the 1.2.212 build installed in the
+workspace. Connection reported `secret: live (verified)`, target
+`law-jpederson-eastus @ rg-jpederson-QuickstartLab`, `platform link: ok`.
+
+Journey: Sentinel Integration -> `PaloAlto-PAN-OS` -> capture from
+`paloaltorfc5424` (datagen, group DatacenterEast) -> commit -> DCR gap analysis.
+Captured 9 events in 2 log types, format detected `csv`: THREAT (5), TRAFFIC (4).
+
+**What worked, recorded so nobody re-opens it.** The capture path ran end to end
+against a real source. The commit reported `Added 2 samples from this capture.`
+and the summary SURVIVED - `51d272d` confirmed live. The filter recomposed
+correctly afterwards, dropping THREAT and TRAFFIC from the alternation now that
+they are provided. Vendor identity resolved `DeviceVendor = Palo Alto Networks`
+and `DeviceProduct = PAN-OS` with known-value chips. The pairing warning fired on
+TRAFFIC: "Most of this sample has no CommonSecurityLog equivalent (13 of 16
+overflow fields)". Vendor-derived log types (CONFIG, DECRYPTION, GLOBALPROTECT,
+HIPMATCH, SYSTEM, USERID) were correctly NOT ticked and annotated "documented by
+the vendor, not required by this solution". The DISABLED source was annotated as
+such in the picker. Deploy stayed gated on mapping approval.
+
+### 13a. Azure targeting never finishes its initial load (HON-8)
+
+Arriving at Select Azure Resources, the panel showed `Checking Azure
+permissions...` and `Loading subscriptions...` and stayed there - observed over
+40 seconds, no timeout, no error, no verdict. Clicking **Refresh from Azure**
+resolved both in about a second: `Connected - 1 subscription(s) visible.`,
+subscription `Pay-As-You-Go`.
+
+Network tracking was armed BEFORE the refresh and captured no ARM request in
+flight during the stuck period; after the refresh, three appeared and all
+returned 200 (`/subscriptions`, `/workspaces`, `/resourcegroups`). So the
+credentials and the proxy were fine the whole time. Whether the initial fetch was
+never issued or issued and its result dropped is not settled here - what is
+settled is that the panel sits in a permanent in-progress state and only a manual
+refresh clears it.
+
+This is the inventory standard's own rule turned inside out. The standard forbids
+rendering an unmeasured state as a measured one; a spinner that never resolves is
+the worse variant, because it reads as progress rather than as absence, and the
+operator has no reason to suspect a button would fix it.
+
+### 13b. Workbook parameter placeholders are offered as log types (HON-9)
+
+`PaloAlto-PAN-OS` recommends fifteen content-derived log types, two of which are
+not log types at all: `{activities}` and `{EventClass}`. Their evidence column
+reads "a shipped workbook queries it - 1 item", so they come from workbook KQL
+where `{...}` is Sentinel's parameter-substitution syntax. The extractor is
+taking the literal token.
+
+Three consequences, in increasing order of harm:
+
+1. They are listed for the operator to provide, and cannot be.
+2. They are pre-ticked in the capture picker and compiled into the live filter,
+   regex-escaped: `...|wildfire-virus|\{activities\}|\{EventClass\}|end|url)...`
+   No PAN-OS event can contain those literals, so the alternations are dead.
+3. They are counted in "N log types referenced by this solution's detections
+   still have no sample". It read 15 before the capture and 13 after; the
+   achievable floor is 11, so that warning can never be satisfied.
+
+The sharp one is what happens if a placeholder is ever satisfied. The panel's own
+copy says each tagged log type becomes its own route and pipeline pair - so a
+sample tagged `{activities}` would put a route named for a template token into a
+deployed pack.
+
+`end` and `url` in the same list are NOT defects: both are genuine PAN-OS
+subtypes (traffic end, threat url).
+
+### 13c. Positional CSV naming applies a 120-column order to a 38-field event (VND-3)
+
+THREAT: 5 events, 38 fields, "Bundled Palo Alto Networks THREAT column order
+(120 columns)". TRAFFIC: 41 fields against a 115-column order. Positional naming
+maps field[i] to name[i], so a feed that omits any middle column mis-names every
+column after it, silently.
+
+The copy hedges - "check the values beside each name before applying" - but
+nothing MEASURES the discrepancy. A hedge is not a measurement, and 38-of-120 is
+a number the app already has and could show. Worth deciding whether a large
+shortfall should warn rather than hedge.
+
+### 13d. The solution list swallows the mouse wheel (DBT-14)
+
+With the pointer over the solution list, wheel scrolling moves neither the list
+nor the page. The pointer has to be moved outside the list before the page will
+scroll at all. Eight results were visible and five were reachable. This is the
+concrete reproduction the old open question about nested scrolling never had.
+
+### 13e. One solution renders no delivery-fit badge (DBT-15)
+
+In the eight `Palo` results, "Palo Alto Cortex XDR" carries no fit badge while
+all seven siblings carry one (Legacy, Supported, or Recommended). Blank is
+ambiguous between "not measured" and "does not apply", which is the same
+absent-versus-zero distinction the inventory standard exists to protect.
