@@ -90,6 +90,22 @@ Work lives in two places and they do not overlap:
 - `backlog.md` - the reasoning, the measurements, the rejected alternatives.
 - `board.md` - what is a unit of work, what state it is in, what it waits on.
 
+**The board's structure is checked too**, by the same script - three rules, kept
+few on purpose, because a board is a working surface and a checker that argued
+with its prose would get the prose deleted rather than the rule obeyed:
+
+- **No duplicate story id.** The one that actually bites: the second card looks
+  tracked, gets named in a commit message, and points at whichever one the
+  reader found first.
+- **No story whose epic is not in the epics table.** An epic nobody declared is
+  an epic nobody is tracking.
+- **No declared epic without stories.** It either shipped, in which case say so,
+  or it lost its work.
+
+What the check cannot do is tell whether a card is in the right COLUMN. A Stop
+hook counts commits since `board.md` last changed and asks for an update once
+enough have landed, but moving the card stays a judgement call.
+
 A new item needs an ID, a type (bug / feature / chore / spike), one line of
 evidence pointing at where the detail lives, and one distinction that matters
 more than any of the others:

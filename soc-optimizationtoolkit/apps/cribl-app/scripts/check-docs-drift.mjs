@@ -80,7 +80,7 @@ const HEADER_LINES = 40;
  * that the next person can add a line here the day they delete something, which
  * is the only moment anyone knows the whole list.
  */
-export const RETIRED = [
+const RETIRED = [
   {
     token: 'apps/local-app',
     since: 'ADR 0002 (2026-08-17)',
