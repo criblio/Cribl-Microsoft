@@ -58,6 +58,7 @@ column with the question noted.
 | `PK` | Pack maintenance parity | Includes a silent data-loss defect |
 | `VND` | Vendor field definitions | Positional CSV naming, reaching past ~18 vendors |
 | `DBT` | Debt, spec grounding, verification | Copy fixes, unverified claims, retired docs |
+| `GEN` | Pipeline and pack generation | What the build actually emits; had no epic until a regression was reported against it |
 | `D` | Open decisions | Blocked on a call, not on effort; each is cheap once answered |
 
 ---
@@ -72,6 +73,21 @@ column with the question noted.
 > board that keeps its trophies stops showing what is next. What they were and
 > why is in the merge commits; the epic note below keeps the one lesson worth
 > carrying.
+
+### GEN - Pipeline and pack generation
+
+- **GEN-1** Find out whether the overflow serialize is missing from generated
+  pipelines. REPORTED 2026-08-27: the additional-extension field is said not to
+  be created in the pack's pipeline. For CommonSecurityLog that is
+  `AdditionalExtensions`, the catch-all carrying every source field with no
+  column - so if it is absent the pack ships and those fields are silently
+  gone, which is ADR-0004's shape again: successful deploy, no error, data that
+  never arrives.
+  **Not yet reproduced.** Three ways to reach a missing function and only one
+  is a defect: nothing overflowed (correct), the destination schema has no
+  overflow column (a warning already exists for this), or it overflowed into an
+  existing column and the function still was not emitted. Telling them apart is
+  the job. *bug, UNCONFIRMED. `backlog.md` item 14.*
 
 ### REL - Ship what is built
 

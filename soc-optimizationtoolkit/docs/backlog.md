@@ -1457,3 +1457,63 @@ In the eight `Palo` results, "Palo Alto Cortex XDR" carries no fit badge while
 all seven siblings carry one (Legacy, Supported, or Recommended). Blank is
 ambiguous between "not measured" and "does not apply", which is the same
 absent-versus-zero distinction the inventory standard exists to protect.
+
+## 14. Overflow serialize missing from the generated pipeline - REPORTED 2026-08-27
+
+**Reported, not yet reproduced.** Field reports say the additional-extension
+field is not actually created in the pipeline inside the pack the app builds.
+For a CommonSecurityLog destination that is `AdditionalExtensions`, the catch-all
+that carries every source field with no column of its own. If it is missing, the
+pack ships and the unmapped fields are silently gone - the same shape as the guid
+defect (ADR 0004): a successful deploy, no error, and data that never arrives.
+
+Filed before investigating, deliberately. The first version of this session's
+response was to open the code and start reading, which is how a report becomes an
+undocumented fix nobody can find later.
+
+### What the code says, before any live check
+
+`pipeline-conf.ts:717` gates the whole serialize function on:
+
+```
+const hasOverflow = overflowConfig?.enabled && overflowConfig.sourceFields.length > 0;
+```
+
+and `match-fields.ts:366-372` builds that config as:
+
+```
+enabled: overflow.length > 0 && overflowFieldExists,
+sourceFields: overflow.map((o) => o.sourceName),
+```
+
+where `overflowFieldExists` is whether the DESTINATION schema actually contains
+the overflow column (`match-fields.ts:271-273`). So there are three ways to reach
+"no serialize function", and they are not equally benign:
+
+1. Nothing overflowed - correct, and the function should be absent.
+2. Fields overflowed but the destination schema has no overflow column -
+   `match-fields.ts:355` already pushes a warning for this, so it should be
+   visible rather than silent.
+3. Fields overflowed, the column exists, and the function is still missing -
+   that would be the regression.
+
+Telling those apart is the whole job. A missing function is only a defect in
+case 3, and case 2 is a schema problem wearing a generator problem's clothes.
+
+### Suspects worth eliminating
+
+Recent work that touches what counts as overflow, in rough order of proximity:
+the drop-unneeded-fields policy (a field marked `drop` is deliberately excluded
+from the catch-all, `pipeline-conf.ts:740`), the positional CSV column naming
+(field names arrive differently), and the live-schema fetch (whether the fetched
+CommonSecurityLog schema carries `AdditionalExtensions` at all).
+
+### How it will be verified
+
+End to end in the live preview against the lab workspace: Zscaler solution,
+samples pulled from Cribl Lake through the app's own query path (which also
+exercises the 1.12.2 Lake work on data this session created), gap analysis, then
+read the generated pipeline in Pipeline preview and check for the `serialize`
+function with `dstField: AdditionalExtensions`. Whatever is found gets recorded
+here, including "could not reproduce" - a report that turns out to be a schema
+problem is worth the same write-up as one that turns out to be a generator bug.
