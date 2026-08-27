@@ -171,7 +171,7 @@ to nothing - no artifact substitutes for read access.
 - **HON-6** Give the audit's AGE a home and add a manual re-check.
   The nav was tried and was the wrong surface. Two candidates remain: the frame
   footer, or the connection bar beside the existing chips. `backlog.md:84-88`.
-> **HON-8 and HON-9 FIXED in PR #134**, open 2026-08-27, both verified in the live product
+> **HON-8 and HON-9 SHIPPED, PR #134 merged 2026-08-27**, both verified in the live product
 > against the lab workspace, not just in tests. HON-8 was a claim ledger that
 > outlived the run that made it: the loader marked its key loaded before
 > awaiting, the cleanup cancelled the run so its answer was discarded, and the
@@ -185,16 +185,6 @@ to nothing - no artifact substitutes for read access.
 > `azure-targeting-screen.dom.test.tsx` so nobody deletes it on the strength of
 > a green suite. FX-4's sweep should treat it as a known-unpinned guard.
 
-- **HON-9** Stop offering workbook parameter placeholders as log types.
-  Found live 2026-08-27. `PaloAlto-PAN-OS` recommends `{activities}` and
-  `{EventClass}` - Sentinel's KQL parameter syntax, taken literally by the
-  extractor. They are pre-ticked and regex-escaped into the live capture filter,
-  where they can never match, and counted in the "still have no sample" warning,
-  which therefore can never reach zero (13 shown, 11 achievable). The sharp end:
-  each tagged log type becomes a route and pipeline pair, so satisfying one would
-  put a route named for a template token into a deployed pack. `end` and `url`
-  in the same list are genuine PAN subtypes and must survive any filter.
-  *bug, SETTLED. `backlog.md` item 13b.*
 - **HON-7** Make the fallback offer reachable beside the actions.
   `FallbackNotice` renders without `onProduce` in production, so the capability
   model's "every blocked action falls back to a downloadable artifact" rule has
