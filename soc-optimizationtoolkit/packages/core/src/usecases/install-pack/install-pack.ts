@@ -25,9 +25,12 @@
  * is renamed between builds the previous build's pipeline ids are no longer in
  * the archive - and the merge leaves them behind with no conf.yml, which the
  * Cribl UI lists as a nameless pipeline at 0 functions, "Missing pipeline
- * configuration". Measured across three app-built packs in one workspace:
- * a never-rebuilt pack at v1.0.0 carried none, v1.0.3 carried 4, v1.0.6
- * carried 12+. It got worse the more the pack was maintained, and the UI had
+ * configuration". The trigger is the RENAME, not the rebuild: measured across
+ * five app-built packs in one workspace, the two whose log types changed
+ * between builds carried 4 and 12+ orphans, while a never-rebuilt pack and TWO
+ * rebuilt ones whose log types stayed put (v1.0.1, v1.0.3) carried none. So it
+ * is not every rebuild - it is every rebuild that renames a log type, which is
+ * exactly what re-deriving log types from a new sample set does. The UI had
  * been promising "Building will overwrite it there" the whole time.
  * So an overwrite now REPLACES (delete, then install) and only merges when the
  * delete is refused - which is the one case the 2026-07-13 lesson covers.

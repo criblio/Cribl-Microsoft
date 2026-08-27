@@ -16,11 +16,13 @@ pack over one that was already installed took Cribl's "Upgrade a Pack" (`PATCH
 directory ids are derived from the operator's log type, so the moment a log type
 was renamed between builds the earlier ids were no longer in the archive - and
 the merge left them behind with no configuration. In the Cribl UI they appear as
-nameless pipelines with 0 functions reading "Missing pipeline configuration",
-and every rebuild added more: measured across one workspace, a never-rebuilt
-pack carried none, a v1.0.3 carried four, a v1.0.6 carried twelve or more. A
-pack therefore got worse the more it was maintained, and an operator could not
-tell a leftover from a pipeline the build had failed to write.
+nameless pipelines with 0 functions reading "Missing pipeline configuration".
+The trigger is the rename rather than the rebuild: across five app-built packs
+in one workspace, the two whose log types changed between builds carried four
+and twelve-plus leftovers, while a never-rebuilt pack and two rebuilt ones whose
+log types stayed put carried none. Re-deriving log types from a fresh sample set
+is exactly what renames them, so the common case hits it - and an operator could
+not tell a leftover from a pipeline the build had failed to write.
 
 An overwrite now REPLACES: the existing pack is deleted and reinstalled, so its
 old tree goes with it. The documented upgrade is kept for the one case that

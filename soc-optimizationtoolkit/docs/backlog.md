@@ -1649,14 +1649,25 @@ having plenty of unsampled log types. The generator writes exactly two pipelines
 per TAGGED table (`scaffold.ts:254-263`), which is why 4 log types produced 8
 routes and 8 pipelines, exactly as the UI predicted.
 
-**What the orphans actually track is rebuild count**, measured across the three
-app-built packs in one worker group:
+**What the orphans actually track is a LOG-TYPE RENAME between builds** - not
+the rebuild itself. That correction came from checking the two packs in
+`AzureManaged` before deleting them, which is the only reason it was caught:
+both are rebuilt AND clean, because their log types never moved.
 
-| Pack | Version | Orphans |
-|---|---|---|
-| `ms-sentinel-cloudflare` | 1.0.0 (never rebuilt) | 0 |
-| `ms-sentinel` (Gigamon) | 1.0.3 | 4 |
-| `ms-sentinel-zscaler-internet` | 1.0.6 | 12+ |
+| Pack | Group | Version | Log types changed? | Orphans |
+|---|---|---|---|---|
+| `ms-sentinel-cloudflare` | default | 1.0.0 | never rebuilt | 0 |
+| `ms-sentinel` | AzureManaged | 1.0.1 | no | 0 |
+| `ms-sentinel-zscaler-internet` | AzureManaged | 1.0.3 | no | 0 |
+| `ms-sentinel` (Gigamon) | default | 1.0.3 | yes | 4 |
+| `ms-sentinel-zscaler-internet` | default | 1.0.6 | yes | 12+ |
+
+The `AzureManaged` Zscaler pack kept `ALLOWED` / `CAUTIONED` / `firewall-BLOCKED`
+and friends across its rebuilds, so each merge overwrote the same ids. The
+`default` one moved to `zscalernss-*` names when its samples were re-pulled from
+Lake, and stranded the entire previous set. Re-deriving log types from a fresh
+sample set is the ordinary way to rename them, so this is a common path, not an
+exotic one.
 
 **The mechanism.** Overwriting an installed pack took rung 3 of the conflict
 ladder, `PATCH /packs/{id}` - Cribl's "Upgrade a Pack" - and an upgrade MERGES
@@ -1693,9 +1704,12 @@ INTENDED BEHAVIOUR, asserting `deletedIds === []`; it was re-pointed at the
 delete-refused fallback rather than deleted, so the case it really guards still
 has a pin.
 
-**Lab state.** The bad `ms-sentinel-zscaler-internet` v1.0.6 was deleted from
-worker group `default`. Two packs elsewhere carry the same damage and were left
-alone: `ms-sentinel` v1.0.3 in `default` (4 orphans) and
-`ms-sentinel-zscaler-internet` v1.0.3 in `AzureManaged`. The fix stops NEW
-leftovers; it does not clean up existing ones, because the replace only happens
-on the next rebuild of each pack.
+**Lab state.** Both damaged packs were deleted from worker group `default`:
+`ms-sentinel-zscaler-internet` v1.0.6 and `ms-sentinel` (Gigamon) v1.0.3. The
+three remaining toolkit packs were each opened and verified clean, so nothing
+else needed removing - `ms-sentinel-cloudflare` v1.0.0 in `default`, and
+`ms-sentinel` v1.0.1 plus `ms-sentinel-zscaler-internet` v1.0.3 in
+`AzureManaged`. An earlier note here claimed those last two carried the same
+damage; that was inference from their version numbers, and opening them
+disproved it. The fix stops NEW leftovers; it does not clean up existing ones,
+because the replace only happens on the next rebuild of each pack.

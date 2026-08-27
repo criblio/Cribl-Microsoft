@@ -73,9 +73,10 @@ describe("installViaConflictLadder", () => {
     // Pack") and stop there, and an upgrade MERGES: pipeline ids from a
     // previous build - whose log types no longer exist - survived with no
     // conf.yml behind them, showing in Cribl as nameless 0-function
-    // pipelines reading "Missing pipeline configuration". Measured live:
-    // 0 of them in a never-rebuilt v1.0.0 pack, 4 in a v1.0.3, 12+ in a
-    // v1.0.6. An overwrite has to actually overwrite.
+    // pipelines reading "Missing pipeline configuration". Measured live over
+    // five packs: the two whose log types were renamed between builds carried
+    // 4 and 12+ orphans; a never-rebuilt pack and two rebuilt ones with stable
+    // log types carried none. An overwrite has to actually overwrite.
     const t = transport({ posts: [CONFLICT, [200, installedBody()]] });
     const pack = await installViaConflictLadder("MS-Sentinel_1.0.0.crbl", "src.crbl", t);
     expect(pack.id).toBe("MS-Sentinel");

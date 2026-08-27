@@ -597,21 +597,22 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   `pipelineSuffix` (naming.ts:94-103), so a log-type rename between builds
   strands the whole previous set: the ids survive the merge with no conf.yml
   and Cribl lists them as nameless 0-function pipelines reading "Missing
-  pipeline configuration". THE MEASUREMENT that settled it, three app-built
-  packs in one workspace: `ms-sentinel-cloudflare` v1.0.0, never rebuilt, ZERO
-  orphans; `ms-sentinel` v1.0.3, four; `ms-sentinel-zscaler-internet` v1.0.6,
-  twelve-plus. Orphans track rebuild count. A HYPOTHESIS WORTH RECORDING
-  BECAUSE IT WAS WRONG: that the app was generating pipelines for log types
-  with no sample. The Cloudflare control refutes it - that solution has many
-  unsampled log types and a spotless pack - and the generator writes exactly
-  two pipelines per TAGGED table (scaffold.ts:254-263), which is why the run
-  produced 8 routes for 4 log types. THE FIX: rungs 3 and 4 swapped, so an
-  overwrite deletes then reinstalls and the old tree goes with it; the merge
-  is kept only for the case that needs it (a pack whose pipelines are
-  referenced by routes outside it cannot be deleted) and now reports itself
-  through a new `onNote` channel instead of passing as a clean overwrite. The
-  code finally matches what the UI already promised at
-  integrate-screen.tsx:1941. Four pins added, three of which fail if the
-  replace branch is disabled; the existing pin that had encoded the merge as
-  intended behaviour was re-pointed at the delete-refused path. *bug, fixed.
-  `backlog.md` item 14d/14f.*
+  pipeline configuration". THE MEASUREMENT that settled it, five app-built
+  packs in one workspace: the two whose log types were RENAMED between builds
+  carried 4 and 12+ orphans; a never-rebuilt pack and two REBUILT ones whose
+  log types stayed put carried none. So the trigger is the rename, not the
+  rebuild - caught only by opening the two AzureManaged packs instead of
+  deleting them on inference. A HYPOTHESIS WORTH RECORDING BECAUSE IT WAS
+  WRONG: that the app was generating pipelines for log types with no sample.
+  The Cloudflare control refutes it - that solution has many unsampled log
+  types and a spotless pack - and the generator writes exactly two pipelines
+  per TAGGED table (scaffold.ts:254-263), which is why the run produced 8
+  routes for 4 log types. THE FIX: rungs 3 and 4 swapped, so an overwrite
+  deletes then reinstalls and the old tree goes with it; the merge is kept
+  only for the case that needs it (a pack whose pipelines are referenced by
+  routes outside it cannot be deleted) and now reports itself through a new
+  `onNote` channel instead of passing as a clean overwrite. The code finally
+  matches what the UI already promised at integrate-screen.tsx:1941. Four pins
+  added, three of which fail if the replace branch is disabled; the existing
+  pin that had encoded the merge as intended behaviour was re-pointed at the
+  delete-refused path. *bug, fixed. `backlog.md` item 14d/14f.*
