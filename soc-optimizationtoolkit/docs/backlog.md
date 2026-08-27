@@ -901,7 +901,7 @@ applies to its tooling too. The pins live beside it in
 `check-release-drift.test.mjs`, and the pure half takes facts so the cases can be
 stated without a repo, a git history or a tarball.
 
-**1.12.1 IS CURRENT (2026-08-24).**
+**1.12.2 IS CURRENT (2026-08-27).**
 `release/soc-optimizationtoolkit-1.12.1.tgz` - the guid-column cast (ADR-0004)
 and the architecture-audit cleanup, on top of 1.12.0's ADR-0003 in full.
 Release notes in [release-notes.md](release-notes.md), started as an accumulating
