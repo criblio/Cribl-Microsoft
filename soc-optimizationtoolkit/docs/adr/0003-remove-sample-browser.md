@@ -5,6 +5,7 @@ Status: Accepted; EXECUTED in full 2026-08-23 (all phases 0-5, PR #119);
         VERIFIED against a live workspace 2026-08-25 - all EIGHT platform
         beliefs in the plan's "Needs live verification" table are settled
         against the lab workspace main-busy-yonath-kz1bxn7. Shipped in 1.12.0.
+Invalidates: sample-acquisition-plan.md, legacy-flow-analysis.md, feature-catalog.md, CONTEXT.md
         Verdicts and the defects the run exposed are in the plan; what the
         verification changed HERE is in "Verified live" at the end.
 

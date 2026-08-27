@@ -1,5 +1,7 @@
 # Spike Harness Test Plan (Live Preview + Installed)
 
+Status: Record - the original seven-panel Phase 1 harness, 2026-07-14.
+
 > HISTORICAL NOTE (2026-07-14): this plan documents the ORIGINAL seven-panel
 > Phase 1 harness. Panels 3 (App registration and connect) and 4 (Select
 > resources and grant permissions) were promoted to the Setup page as shared

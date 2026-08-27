@@ -1,5 +1,7 @@
 # UI Design Language (extracted from the legacy reference screenshots)
 
+Status: Living - the visual bar the app must meet. Restyles tokens and shared components; logic is never touched.
+
 Derived from `docs/ui-reference/00-setup-wizard/*` and `01-sentinel-integration/*`
 (the legacy Electron app, the flow the user preferred). This is the visual bar the
 new app's DARK theme must match; light mode stays a clean equivalent. The refinement

@@ -1,6 +1,6 @@
 # Inventory standard: never report "none" unless you verified you could see
 
-**Status: BINDING** (user directive 2026-08-10). Applies to EVERY inventory
+**Status: Living - BINDING** (user directive 2026-08-10). Applies to EVERY inventory
 scenario in this app - subscriptions, workspaces, resource groups, tables, DCRs,
 Event Hubs, worker groups, packs, anything that lists.
 

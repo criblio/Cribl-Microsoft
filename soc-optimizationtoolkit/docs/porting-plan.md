@@ -1,5 +1,18 @@
 # Porting Plan: Legacy Integration Solution to the Dual-Target Toolkit
 
+Status: Record - the unit-by-unit port, 2026-07. Kept for the unit records; its standing gates are retired.
+
+> **SUPERSEDED IN PART - THE TITLE'S "DUAL-TARGET" IS NO LONGER TRUE
+> (2026-08-17, ADR-0002).** The local target was built, shipped, and then
+> dropped; `apps/cribl-app` on Cribl.Cloud is the only shell and `apps/local-app`
+> is deleted. Unit records below that say "both shells" are dated accounts of
+> what shipped and are left as written; the standing gates and the working
+> agreement, which a future reader would follow as instructions, are corrected
+> in place. Separately, **Unit 16 (tiered sample acquisition, incl. the browse
+> modal) shipped and was then DELETED by ADR-0003** - see the note on that unit,
+> and read [sample-acquisition-plan.md](sample-acquisition-plan.md) for the
+> replacement.
+
 > MVP SCOPE (user, 2026-07-04): the initial release is exactly two flows - the SETUP WIZARD and the
 > SENTINEL INTEGRATION flow (see docs/legacy-flow-analysis.md). Remaining build effort focuses on
 > completing them; everything else waits until they are validated in a real environment.
@@ -14,7 +27,7 @@ Grounding rules:
 
 - Redesign-first principle governs every unit (catalog "Redesign-first principle"): legacy is a capability reference, not an implementation spec. Compatibility exceptions are characterization-pinned (section 3 below).
 - ALREADY PORTED - do not duplicate: the Phase 1 walking skeleton (onboardTable usecase, OnboardTableScreen, both shells live), the six ports + fakes (CriblClient, AzureManagement, SecretsStore, JobStore, UserContext, ArtifactSink), dcr-naming (characterized), schema-mapping (characterized), dcr-request (incl. parseDcrDeployment endpoint fallback), sentinel-destination, azure-permissions (effective-action preflight core), azure-config, azure-profiles (named connection profiles + active pointer), connection-invalidation, azure-resource-id, role-plan + change-request (human-mediated role setup), dataflow-diagram, and the local Node host + Cribl auth manager (local shell shipped 2026-07-03). Units below port DELTAS against this baseline.
-- Every unit ships as ONE reviewable increment delivering user-visible capability in BOTH shells (roadmap standing gates).
+- Every unit ships as ONE reviewable increment delivering user-visible capability in apps/cribl-app (roadmap standing gates). Was: in BOTH shells - retired with the local target (ADR-0002, 2026-08-17).
 - No emojis anywhere.
 
 Legacy source root abbreviations used below:
@@ -162,13 +175,13 @@ Legacy source root abbreviations used below:
 - External surface: NEW proxies.yml domain api.loganalytics.io with the Origin-suppressing header allowlist (same AADSTS9002326 class as ARM); NEW local-host allowlist entry - both in this unit's PR (invariant 4). Keep timespans bounded under the 30s proxy timeout.
 - Depends on: Unit 2. Unblocks Units 21 and 27.
 
-Phase 2 exit check (roadmap): DirectNative/DirectCustom/DCE/PrivateLink parity with legacy Run-DCRAutomation modes from both shells. Units 1-10 deliver it.
+Phase 2 exit check (roadmap): DirectNative/DirectCustom/DCE/PrivateLink parity with legacy Run-DCRAutomation modes from apps/cribl-app (was: from both shells - ADR-0002, 2026-08-17). Units 1-10 deliver it.
 
 ### Phase 3: Pipeline and pack engine
 
 #### Unit 11: Sample parser core and sample intake (M/L)
 
-- Covers: ENG-14, ENG-15, ENG-18, GUI-06 (upload/paste/tag portions; browse modal arrives in Unit 16).
+- Covers: ENG-14, ENG-15, ENG-18, GUI-06 (upload/paste/tag portions; the browse modal arrived in Unit 16 and was deleted again by ADR-0003 - intake is now the only sample path besides Lake query and filtered capture).
 - Legacy sources: `IS/sample-parser.ts` (892 lines; ~700 pure), `IS-R/pages/SentinelIntegration.tsx` 584-903 sample handlers.
 - New core: sample-parsing domain module - ONE format detector merging the two legacy detectors (sample-parser detectFormat vs sample-resolver detectSampleFormat) with explicit strict/lenient modes; parseSampleContent (CEF/LEEF/CSV/KV/JSON/NDJSON/syslog, type inference + merge lattice, collectFields, guessTimestampField); capture inner-_raw detection (ENG-15) as FIRST-CLASS (user memory: Cribl capture is the primary sample format; format is ALWAYS detected from rawEvents content, never declared format); tagged-sample store behind a TaggedSampleStore port (replace-by-logType semantics); auto-detect-types discriminator logic with ONE unified DISCRIMINATOR_FIELDS list (legacy had three drifted copies); detectLogType/isHeaderlessCsv/original-format-preservation heuristics from the renderer extracted as pure functions. ParsedSample/DiscoveredField/TaggedSample become shared core domain models BEFORE any consumer ports.
 - Adapters: browser File API both shells (no upload endpoint); tagged samples to KV (cloud, 200-event rawEvents cap keeps size sane) / host store (local).
@@ -441,7 +454,7 @@ Disposition of every ENG-01..52 and GUI-01..32. "Unit N" = ported/redesigned in 
 | GUI-03 | Unit 22 (delta) | consent flow + permission matrix + preflight shipped Phases 1-2; target chooser/.tgz walkthrough/leader connect are the delta |
 | GUI-04 | Unit 14 | REDESIGNED: PAT settings + lazy per-solution fetch; EDR blocklist UI reduced to content-filter note |
 | GUI-05 | Unit 14 | solution browser; deep-link contract preserved |
-| GUI-06 | Unit 11 (+ Unit 16 browse modal) | intake, tagging, format preservation |
+| GUI-06 | Unit 11 (Unit 16's browse modal RETIRED, ADR-0003) | intake, tagging, format preservation |
 | GUI-07 | Unit 12 | CSV dialog; batch-queue fix |
 | GUI-08 | Unit 18 | mapping review + approval gate; RULE badges activate with Unit 23 |
 | GUI-09 | Unit 23 | coverage panel + custom rule upload |
@@ -506,7 +519,7 @@ Each unit lands through the established loop:
 4. External surface in the same PR: proxies.yml/policies.yml change with the feature (invariant 4). New Azure-facing proxy entries always carry the Origin-suppressing header allowlist.
 5. Adversarial verify before merge: drive the affected flow end-to-end (live where feasible, as the Phase 1 slice was verified live); code review at high effort for units touching contracts (17, 19, 20); CI gates (lint, typecheck, test, build, boundary lint) green.
 6. One reviewable increment = one unit = one PR/commit train; no unit starts before its dependency units merge.
-7. Legacy stays untouched and runnable as the fallback throughout. When a unit family completes a catalog domain in BOTH shells, mark that domain superseded in feature-catalog.md (strangler-fig plan); archival only at roadmap Phase 7 parity audit.
+7. Legacy stays untouched and runnable as the fallback throughout. When a unit family completes a catalog domain in apps/cribl-app, mark that domain superseded in feature-catalog.md (strangler-fig plan); archival only at roadmap Phase 7. Was: completion in BOTH shells, and a Phase 7 PARITY audit - the parity gate retired with the local target (ADR-0002), so archival now depends on Cloud-shell coverage alone.
 8. Documentation: CONTEXT.md per package and ADRs updated when a unit changes boundaries or records a cross-cutting decision (secret placeholder convention, JobStatus 'skipped', hash domain, report format are ADR-worthy). Catalog corrections found during mining (ENG-25 scans remote not mirror; GUI-22 emits HTML not Markdown) are applied to the catalog when the owning unit lands.
 9. No emojis anywhere; commit messages follow repo guidelines.
 

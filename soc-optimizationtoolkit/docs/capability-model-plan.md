@@ -1,6 +1,6 @@
 # Capability model: retiring app modes
 
-Status: IMPLEMENTED. Decision taken 2026-08-05; all five steps shipped
+Status: Record - IMPLEMENTED. Decision taken 2026-08-05; all five steps shipped
 2026-08-06 (see `backlog.md` section 1, which is the accurate record). Modes are
 gone: `AppMode`, `ModeSelect`, `filterNavItems` and the wizard's Mode step no
 longer exist, and the nav annotates rather than filters.
@@ -160,6 +160,11 @@ live in `cribl-only` and `air-gapped` lose their honest signal entirely when
 those modes disappear. The preflight already measures Cribl capabilities (manage
 packs, destinations, sources, routes), so no new probing is needed.
 
+> **[SUPERSEDED 2026-08-17 by ADR-0002 - there is no second shell, so there is
+> no asymmetry.]** `apps/cribl-app` is the only shell and its Cribl capability
+> comes from the platform via `policies.yml`. The paragraph below is kept
+> because `CapabilityContext.criblReachable` survives as the seam it describes.
+
 One asymmetry to absorb: in the cloud shell Cribl capability is granted by the
 platform via `policies.yml`, whereas the local shell connects out to a leader.
 So the MEASUREMENT source differs per shell while the PRESENTATION is identical -
@@ -204,4 +209,5 @@ Two invariants worth pinning early:
 ## Scope
 
 Roughly 14 non-test files couple to `AppMode` / `filterNavItems` / `hasAzure` /
-`hasCribl`, across `packages/core`, `packages/ui`, and both shells.
+`hasCribl`, across `packages/core`, `packages/ui`, and both shells (two at the
+time this was written; ADR-0002 has since left one).

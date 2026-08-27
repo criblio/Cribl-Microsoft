@@ -1,6 +1,6 @@
 # Model-Assisted Mapping Improvement (Fable 5)
 
-Status: CORRECTED 2026-07-08. The original version of this document planned a
+Status: Record - CORRECTED 2026-07-08. The original version of this document planned a
 RUNTIME LLM integration (an LlmAssist port calling the Anthropic API from the
 app). That was a misreading of the intent and was built, then fully reverted -
 THE APP MUST NOT USE OR CALL AN LLM.
