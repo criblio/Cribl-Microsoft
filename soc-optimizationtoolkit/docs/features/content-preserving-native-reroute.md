@@ -10,7 +10,14 @@
 
 Status: Proposed (plan only, no code)
 Author-context: derived from a verified research digest, 2026-07-02
-Related: [feature-catalog.md](../feature-catalog.md), [roadmap.md](../roadmap.md), [ADR-0001 dual-target architecture](../adr/0001-dual-target-architecture.md)
+Related: [feature-catalog.md](../feature-catalog.md), [roadmap.md](../roadmap.md), [ADR-0001 dual-target architecture](../adr/0001-dual-target-architecture.md) (superseded in part by [ADR-0002](../adr/0002-drop-local-target.md))
+
+> **BUILD FOR ONE SHELL (2026-08-17, ADR-0002).** This plan is unbuilt, so its
+> instructions are read as instructions - and the ones that say to build for two
+> targets are corrected below, not preserved. `apps/cribl-app` on Cribl.Cloud is
+> the only shell; `apps/local-app` is deleted. The port seam this plan writes
+> against (`AzureManagement`, `GraphClient`, `CriblClient`) is unchanged, so
+> nothing else in the design moves.
 
 ## Summary
 
@@ -178,7 +185,7 @@ The end-to-end chain assembles almost entirely from building blocks that already
 
 ## 6. Proposed architecture
 
-Follows the workspace discipline in CONTEXT.md and ADR-0001: pure, testable domain logic in `@soc/core`; port interfaces are the only seam; every capability ships to BOTH targets (cloud app + local Node host); compatibility contracts pinned with characterization tests; redesign-first (harvest legacy edge cases as test cases, design fresh against platform primitives); no emojis.
+Follows the workspace discipline in CONTEXT.md and ADR-0001 as amended by ADR-0002: pure, testable domain logic in `@soc/core`; port interfaces are the only seam; every capability ships to `apps/cribl-app`, the one target (was: to BOTH targets, cloud app + local Node host); compatibility contracts pinned with characterization tests; redesign-first (harvest legacy edge cases as test cases, design fresh against platform primitives); no emojis.
 
 ### New `@soc/core` domain modules (pure, zero IO, zero fetch, zero React)
 
@@ -190,18 +197,18 @@ Follows the workspace discipline in CONTEXT.md and ADR-0001: pure, testable doma
 
 ### API clients (adapter layer, behind ports)
 
-Written against the existing `AzureManagement`, `GraphClient`, and `CriblClient` ports so both shells bind their own transport (cloud proxy vs local Node host):
+Written against the existing `AzureManagement`, `GraphClient`, and `CriblClient` ports; `apps/cribl-app` binds its own transport (the cloud proxy). The port seam is kept even with one shell (ADR-0002) - it is what would make a second target cheap again:
 - Sentinel/ARM content clients: `alertRules` (SecurityInsights), `savedSearches` (Log Analytics - hunting queries + parsers + the alias shim deploy), `workbooks` (Insights, parse `serializedData`), `workflows` (Logic, parse query actions), `watchlists`. Pin/confirm api-versions per type.
 - Cribl product API: source (`POST /system/inputs`), pipeline (`POST /pipelines`), destination (`POST /system/outputs`), plus commit/push/deploy in distributed mode - reusing the ENG-28 client pattern.
 
 ### UI feature folder (`packages/ui`)
 
-A guided "Onboard an Azure native source" flow: pick category -> preview mode selection and the content-reconciliation impact -> confirm reduction options -> deploy -> validate. Shares screens across both targets; performs no IO directly (consumes ports via context).
+A guided "Onboard an Azure native source" flow: pick category -> preview mode selection and the content-reconciliation impact -> confirm reduction options -> deploy -> validate. Screens live in `packages/ui` and perform no IO directly (they consume ports via context).
 
 ### Discipline carried from existing docs
-- Dual-target: works in `apps/cribl-app` AND `apps/local-app`; cloud-specific limits (30s proxy timeout -> polled DCR deploys, 100 req/min -> batched content enumeration, write-only encrypted KV -> server-side secret injection) shape the shared design.
+- Single target (ADR-0002, 2026-08-17; was "works in `apps/cribl-app` AND `apps/local-app`"): `apps/cribl-app` only, so the cloud limits are the ONLY limits and they shape the design outright - 30s proxy timeout -> polled DCR deploys, 100 req/min -> batched content enumeration, write-only encrypted KV -> server-side secret injection.
 - `schema-mapping`/`dcr-naming` remain compatibility contracts with characterization tests; the new alias/parser generators get characterization vectors too once a canonical shim shape is agreed.
-- proxies.yml/policies.yml (cloud) and the local host allowlist change in the same PR as the feature.
+- proxies.yml/policies.yml change in the same PR as the feature. (The local host's outbound allowlist left the external-surface rule with the local target, ADR-0002; proxies.yml/policies.yml are now the only declarations.)
 
 ---
 
@@ -216,7 +223,7 @@ It sits at the seam of two existing tiers in `feature-catalog.md`:
 **Placement recommendation.** Build it as a dedicated onboarding vertical that *depends on* Phase 2 (the full DCR engine, custom-table creation, DCE/Private Link) and *pulls forward* the LOG-07/03/16 Event Hub source path from Phase 4. Concretely, slot the walking-skeleton slice immediately after Phase 2 completes the DCR engine, then thicken it in parallel with the Phase 3 pipeline/pack work (the diagnostic-envelope reshape is a pipeline concern) and the Phase 4 Log Collection + content-governance work (the reconciliation engine shares the content analyzers).
 
 **Phased build order:**
-1. **Walking skeleton (one source, end-to-end, both shells).** `NonInteractiveUserSignInLogs` only. Deploy the tenant diagnostic setting (LOG-07 capability) -> Event Hub (LOG-03) -> Cribl `eventhub` source (LOG-16/ENG-13) -> a minimal pipeline that unrolls `records[]` and maps to `AADNonInteractiveUserSignInLogs_CL` -> `_CL` table + DCR (schema-mapping/dcr-naming) -> Cribl `sentinel` destination (DCR-27/ENG-28) -> generate the function-alias shim (table-alias-kql) -> validate one analytics rule still matches via ENG-11. This proves every seam, including the Mode B compatibility path, on the flagship example. **Before this slice, empirically validate the two biggest unknowns in a live workspace** (see section 8): whether the native Entra table accepts a Kind:Direct DCR at all, and whether the workspace lets you register a function-alias equal to a native table name.
+1. **Walking skeleton (one source, end-to-end, in `apps/cribl-app`).** `NonInteractiveUserSignInLogs` only. Deploy the tenant diagnostic setting (LOG-07 capability) -> Event Hub (LOG-03) -> Cribl `eventhub` source (LOG-16/ENG-13) -> a minimal pipeline that unrolls `records[]` and maps to `AADNonInteractiveUserSignInLogs_CL` -> `_CL` table + DCR (schema-mapping/dcr-naming) -> Cribl `sentinel` destination (DCR-27/ENG-28) -> generate the function-alias shim (table-alias-kql) -> validate one analytics rule still matches via ENG-11. This proves every seam, including the Mode B compatibility path, on the flagship example. **Before this slice, empirically validate the two biggest unknowns in a live workspace** (see section 8): whether the native Entra table accepts a Kind:Direct DCR at all, and whether the workspace lets you register a function-alias equal to a native table name.
 2. **Mode A + auto-selection.** Add the native-table catalog with the supported-tables flag and the Mode A native-DCR path; wire the auto-selector. Prove Mode A on a supported table (e.g. `SecurityEvent` or an ASim table) so the clean path is exercised even while Entra stays on Mode B.
 3. **Content-reconciliation engine breadth.** Extend beyond analytics rules to hunting queries, parsers, workbooks (parse `serializedData`), and playbooks (parse workflow JSON); add the preview + rollback UX.
 4. **ASIM path + reduction depth.** Add the `vimAuthentication` parser generator as an alternative to the name-alias; deepen the volume-reduction rules for non-interactive sign-ins and the full-fidelity fork to cheap storage.

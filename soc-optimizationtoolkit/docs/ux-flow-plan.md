@@ -1,8 +1,15 @@
 # UX Flow Plan: From Screen Collection to Guided Journey
 
+> **SUPERSEDED IN PART 2026-08-17 by ADR-0002: THERE IS ONLY ONE SHELL.** This
+> plan was written for two - `apps/cribl-app` and `apps/local-app` - and the
+> local one is deleted. Its dual-shell parity gate (section 2, pattern 6) is
+> retired, and every "both shells" / "in the local shell" instruction below
+> means `apps/cribl-app` alone. The journey structure the plan delivers -
+> Home, the stepper, the single-page Integrate arc - shipped and is current.
+
 Companion to [porting-plan.md](porting-plan.md) (which this document amends), [roadmap.md](roadmap.md), and [feature-catalog.md](feature-catalog.md). Directive: the legacy Electron app's FLOW was better - one guided corridor from first launch to a deployed, wired, validated integration. The new toolkit has shipped better mechanics (Units 1-6: persistence, honest step lists, typed options, batch queue) but arranged them as a flat screen collection whose sidebar order is the inverse of the dependency order. This plan turns the shipped spine into a guided journey WITHOUT regressing anything the new app already does better, and converges with Unit 20 (the porting plan already names its unlock chain "the product's guided UX").
 
-Scope discipline: Units 1-5 are shipped and Unit 6 is landing - nothing here reworks them; amendments only append UX requirements to unshipped units and insert one new unit (6.5) before Unit 7. All UI work obeys CONTEXT.md invariants: pure decisions in core, screens in @soc/ui over ports, both shells in the same increment, no emojis.
+Scope discipline: Units 1-5 are shipped and Unit 6 is landing - nothing here reworks them; amendments only append UX requirements to unshipped units and insert one new unit (6.5) before Unit 7. All UI work obeys CONTEXT.md invariants: pure decisions in core, screens in @soc/ui over ports, no emojis. (Was also: both shells in the same increment - retired with the local target, ADR-0002.)
 
 Legacy source root: `IS-R/` = `Cribl-Microsoft_IntegrationSolution/src/renderer/`.
 
@@ -39,7 +46,7 @@ Legacy anti-patterns this plan must NOT reproduce (already fixed or to be avoide
 3. **Always-visible-disabled affordances with instructional placeholders.** Controls are never hidden; they are disabled with the reason ("Connect first, then Refresh from Azure") - an explicit design rule in `azure-targeting-screen.tsx`.
 4. **Browse-never-commits plus explicit "Use this target" commit**, with the committed scope always visible as a topBar chip and invalidation consequences surfaced as notices (Unit 2).
 5. **Secret hygiene.** Secrets never returned to the renderer; session-only liveness with hedged, honest messaging rather than false confidence; `redactedLength` as the only sanctioned log reference (Units 2-3).
-6. **Dual-shell parity as a standing gate.** Every increment lands in both shells; shared screens take shell differences as props, not embedded prose (the harness-pointer defect in the shared Onboard footer is the counterexample to fix).
+6. **Dual-shell parity as a standing gate.** RETIRED 2026-08-17 (ADR-0002): there is one shell, so there is no parity to gate. What survives is the half that was never about two shells - shared screens take shell differences as props, not embedded prose (the harness-pointer defect in the shared Onboard footer is the counterexample to fix).
 7. **Mode-derived navigation.** Nav filtering comes from route `requires` declarations through one `filterNavItems` - nav can never disagree with the mode (Unit 1; legacy had four independent mode reads).
 8. **Options as saved defaults plus per-run tri-state overrides** ("Use saved option (on)" / on / off) with cross-field validation blocking Run with a named reason (Units 4/6).
 9. **RecentRuns as a persisted run log** embedded in the onboarding screens - the app's memory of what happened (JobStore).

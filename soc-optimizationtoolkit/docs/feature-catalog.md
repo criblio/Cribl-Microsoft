@@ -829,6 +829,18 @@ Reader-noted gaps: 1) The React renderer (src/renderer, ~pages like SentinelInte
 
 ### ENG-19. Tiered sample resolver
 
+> SUPERSEDED 2026-08-18 by ADR-0003, for this entry and for ENG-20, ENG-42, and
+> ENG-41's Tier 3: the tiered resolver and its browse modal were ported (porting
+> plan Unit 16), shipped, and then DELETED. The portability notes in this
+> cluster are kept as the record of what the legacy mechanism was; they are no
+> longer a port instruction. Samples now come from the operator - a Cribl Lake
+> query, a filtered capture, or an upload - with the log types to bring
+> recommended from the operator's own environment (`LogTypeRecommendation`).
+> Survivors, rehomed: the log-type splitter and `hasNamedFields` (now
+> `domain/sample-parsing`), `matchSolutionName` (now `domain/sentinel-content`),
+> and ENG-41's value generator (now `domain/pack-assembly/sample-values.ts`, the
+> no-real-samples fallback for pack assembly).
+
 - Source: `Cribl-Microsoft_IntegrationSolution/src/main/ipc/sample-resolver.ts` | Maturity: production | Category: discovery | Verdict: **needs-proxy**
 - Resolves raw vendor samples for pack building through tiers: Tier 0 Sentinel repo Sample Data, Tier 1 Elastic integrations test pipeline files (SOLUTION_SAMPLE_MAP ~22 curated vendors + fuzzyMatchElasticPackage against the live package list, data-stream discovery), Tier 2 criblpacks GitHub sample files, Tier 3 synthesis from vendor registry/analytics rules, Tier 4 user uploads (highest priority). Includes log-type splitting by discriminator fields, PAN-OS syslog+CSV->JSON conversion with named fields, Elastic event unwrapping (extracts inner event from agent envelopes), named-field validation (rejects _0,_1 positional data), format detection, disk caching, and browse-then-load-selected UX (samples:list-available / samples:load-selected).
 - In/Out: In: solution name (+ optional user files or selected sample IDs). Out: ResolvedSample[] {tableName, format, rawEvents, source, tier, logType}.
@@ -1013,6 +1025,13 @@ Reader-noted gaps: 1) The React renderer (src/renderer, ~pages like SentinelInte
 - Portability: Directly portable (crypto.randomBytes -> crypto.getRandomValues).
 
 ### ENG-42. Sentinel repo sample discovery
+
+> SUPERSEDED 2026-08-18 by ADR-0003 (see the note at ENG-19). This is the
+> mechanism the ADR indicts by name: the port scored the FILENAME against vendor
+> keywords and never opened the file, so "this sample belongs to this solution"
+> meant "its filename contains part of the vendor name". The abbreviation
+> dictionary, the schema-marker pre-ingested check and the scorer are deleted;
+> the Sentinel-repo sample corpus is no longer a dependency.
 
 - Source: `Cribl-Microsoft_IntegrationSolution/src/main/ipc/default-samples.ts` | Maturity: production | Category: discovery | Verdict: **needs-redesign**
 - findSentinelRepoSamples() locates vendor sample data for a solution: searches per-solution 'Sample Data' dirs and repo-root Sample Data, keyword matching with a large vendor-abbreviation dictionary (paloalto/panos/cdlevent, fortigate, checkpoint, etc.), constrains to the solution's declared CustomTables, parses files with the sample parser, splits by discriminator log types, and flags pre-ingested (already Sentinel-schema) data.
