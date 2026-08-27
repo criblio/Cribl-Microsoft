@@ -1,5 +1,7 @@
 # Board
 
+Status: Living - the Kanban index over backlog.md: epics, stories, and the order to take them in.
+
 The succinct Kanban view: nine epics, the stories under them, and the order to
 take them in. Created 2026-08-26.
 

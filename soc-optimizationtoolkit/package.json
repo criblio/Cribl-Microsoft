@@ -14,6 +14,7 @@
     "lint": "oxlint",
     "test": "npm run test --workspaces --if-present",
     "typecheck": "npm run typecheck --workspaces --if-present",
+    "check-docs": "npm run check-docs --workspace apps/cribl-app",
     "package": "npm run package --workspace apps/cribl-app"
   }
 }

@@ -1,5 +1,7 @@
 # Implementation Roadmap
 
+Status: Record - history, not the live plan. Last dated shipped entry 2026-07-29.
+
 > **STALE - THIS IS HISTORY, NOT THE LIVE PLAN (marked 2026-08-26).** The last
 > dated SHIPPED entry below is 2026-07-29; the only later material is one queued
 > request (2026-08-03) and the ADR corrections in this header and the two

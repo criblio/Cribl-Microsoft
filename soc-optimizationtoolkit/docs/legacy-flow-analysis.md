@@ -1,5 +1,7 @@
 # Legacy Flow Analysis: Setup Wizard + Sentinel Integration
 
+Status: Record - analysis of the deprecated Electron app. Its one structural decision was adopted 2026-07-04.
+
 From the reference screenshots (docs/ui-reference/00-setup-wizard, 01-sentinel-integration). Two purposes: (1) the visual/UX bar to match, (2) where the legacy WORKFLOW must be refactored because the new app lives in Cribl (a sandboxed browser iframe), not Electron on the operator's machine.
 
 ## The structural insight: the Integrate arc is ONE numbered-section page

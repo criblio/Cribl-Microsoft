@@ -1,5 +1,7 @@
 # Backlog
 
+Status: Living - the open work, newest decisions first. The most honest document in the repo.
+
 Updated 2026-08-12 (branch `feature/capability-preflight-mapping`). Each item
 states enough context to be picked up cold. Ordered by priority within each
 group.
@@ -17,7 +19,7 @@ no home. Neither blocks anything.
 (`domain/capabilities/audit-lifecycle` - the audit key, the trigger rules, age
 reporting with no time-based expiry), the persistence codec, the
 `usecases/capability-audit` orchestration, the `useCapabilityAudit` hook, and
-both shells mounting it. The audit key IS a `CapabilitySet`'s `connectionId`, so
+both shells mounting it. <!--drift-ok--> The audit key IS a `CapabilitySet`'s `connectionId`, so
 `isSetForConnection` stays the single invalidation rule. The preflight panel
 feeds the same cache rather than measuring beside it.
 
@@ -93,7 +95,7 @@ says to force the artifact "from a permission verdict", while rule 3 says the
 audit never forbids. UNREACHABLE forces (there is nowhere to send the request -
 and this is what the old `!hasCribl(mode)` check actually meant); DENIED only
 OFFERS, so the live attempt survives a stale or wrong audit. `unknown` routes
-live. `mustProduceArtifacts` now drives `forcedTemplateOnly` in both shells.
+live. `mustProduceArtifacts` now drives `forcedTemplateOnly` in both shells. <!--drift-ok-->
 
 The fallback catalog is data, keyed by a typed `kind` so the routing is a switch
 the compiler checks. Read capabilities map to NOTHING deliberately - without live
@@ -329,11 +331,16 @@ same extension item 1 needs and item 6 needs: ONE piece of work, not three, and
 each new capability needs a real probe or it contributes nothing.
 
 **Open question 2: prop-drilling.** `capabilities`/`capabilityContext` are
-threaded from both shells into each screen that lists (Integrate ->
+threaded from the shell into each screen that lists (Integrate ->
 AzureTargeting, DcrInventoryPanel so far). At ~8 listers that is the duplication
 that drifts. The alternative is carrying them in `PortsContext` beside `config`,
 which every screen already reads - one seam change against updating every
-`PortsProvider` call site in both shells. Cheap now, less so later.
+`PortsProvider` call site. Cheap now, less so later.
+
+> CORRECTED 2026-08-26 (docs-drift check): this question was written while there
+> were two shells and priced accordingly. ADR-0002 left one, so the cost of the
+> alternative is HALF what this entry claimed - which is exactly the kind of
+> stale number that decides a question wrongly without anyone noticing it moved.
 
 ## 5. Windows Event analysis screen
 
@@ -848,13 +855,13 @@ measured denial (an identity with reduced RBAC); `not connected` needs a
 connection with no identity at all - a new empty connection profile in the cloud
 shell would produce it, at the cost of a throwaway profile in the KV store.
 
-**Local shell in a browser - VERIFIED 2026-08-06.** `npm run local`, host on
+**Local shell in a browser - VERIFIED 2026-08-06.** `npm run local`, <!--drift-ok--> host on
 :4600. AUA, the two-phase wizard (Target -> Connect, no Mode step), the
 permission check as the final view, Get Started, and into the frame. This shell
 had never been run in a browser at all, and the mode removal touched its gate
 flow.
 
-> RETIRED 2026-08-17 (ADR-0002): the local shell is gone and `npm run local` no
+> RETIRED 2026-08-17 (ADR-0002): the local shell is gone and `npm run local` <!--drift-ok--> no
 > longer exists, so neither this walk nor the `unchecked` nav-state observation
 > above can be reproduced as written. The nav-state evidence still stands - the
 > annotated states live in shared @soc/ui code, not in the removed shell - but
@@ -1313,7 +1320,7 @@ the same day: detection recognises the PAN-OS positional fingerprint via
 `isPanosFormat` ahead of the syslog check, characterized first across both modes
 and every format. Full record in the phase 0 doc, 0.3.
 
-The Browse Samples modal is being removed and replaced by a log-type
+The Browse Samples modal is being removed <!--drift-ok--> and replaced by a log-type
 recommendation derived from the operator's own environment.
 
 Short version of why: `scoreFileName` (repo-samples.ts:278) is the whole

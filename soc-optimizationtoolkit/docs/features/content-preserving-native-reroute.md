@@ -9,13 +9,14 @@
 > triggers the problem this plan solves.
 
 Status: Proposed (plan only, no code)
+Last-confirmed: 2026-08-26
 Author-context: derived from a verified research digest, 2026-07-02
 Related: [feature-catalog.md](../feature-catalog.md), [roadmap.md](../roadmap.md), [ADR-0001 dual-target architecture](../adr/0001-dual-target-architecture.md) (superseded in part by [ADR-0002](../adr/0002-drop-local-target.md))
 
 > **BUILD FOR ONE SHELL (2026-08-17, ADR-0002).** This plan is unbuilt, so its
 > instructions are read as instructions - and the ones that say to build for two
 > targets are corrected below, not preserved. `apps/cribl-app` on Cribl.Cloud is
-> the only shell; `apps/local-app` is deleted. The port seam this plan writes
+> the only shell; `apps/local-app` is deleted. <!--drift-ok--> The port seam this plan writes
 > against (`AzureManagement`, `GraphClient`, `CriblClient`) is unchanged, so
 > nothing else in the design moves.
 
@@ -206,7 +207,7 @@ Written against the existing `AzureManagement`, `GraphClient`, and `CriblClient`
 A guided "Onboard an Azure native source" flow: pick category -> preview mode selection and the content-reconciliation impact -> confirm reduction options -> deploy -> validate. Screens live in `packages/ui` and perform no IO directly (they consume ports via context).
 
 ### Discipline carried from existing docs
-- Single target (ADR-0002, 2026-08-17; was "works in `apps/cribl-app` AND `apps/local-app`"): `apps/cribl-app` only, so the cloud limits are the ONLY limits and they shape the design outright - 30s proxy timeout -> polled DCR deploys, 100 req/min -> batched content enumeration, write-only encrypted KV -> server-side secret injection.
+- Single target (ADR-0002, 2026-08-17; was "works in `apps/cribl-app` AND `apps/local-app`"): <!--drift-ok--> `apps/cribl-app` only, so the cloud limits are the ONLY limits and they shape the design outright - 30s proxy timeout -> polled DCR deploys, 100 req/min -> batched content enumeration, write-only encrypted KV -> server-side secret injection.
 - `schema-mapping`/`dcr-naming` remain compatibility contracts with characterization tests; the new alias/parser generators get characterization vectors too once a canonical shim shape is agreed.
 - proxies.yml/policies.yml change in the same PR as the feature. (The local host's outbound allowlist left the external-surface rule with the local target, ADR-0002; proxies.yml/policies.yml are now the only declarations.)
 

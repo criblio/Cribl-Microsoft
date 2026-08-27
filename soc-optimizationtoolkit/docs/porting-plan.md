@@ -1,5 +1,7 @@
 # Porting Plan: Legacy Integration Solution to the Dual-Target Toolkit
 
+Status: Record - the unit-by-unit port, 2026-07. Kept for the unit records; its standing gates are retired.
+
 > **SUPERSEDED IN PART - THE TITLE'S "DUAL-TARGET" IS NO LONGER TRUE
 > (2026-08-17, ADR-0002).** The local target was built, shipped, and then
 > dropped; `apps/cribl-app` on Cribl.Cloud is the only shell and `apps/local-app`

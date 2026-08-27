@@ -1,5 +1,7 @@
 # Phase 0 findings - the three unknowns, answered
 
+Status: Record - the phase 0 verification, answered 2026-08-19 and re-run live 2026-08-25.
+
 Executed 2026-08-18 against [sample-acquisition-plan.md](sample-acquisition-plan.md)
 Phase 0. Two of the three are answered from authoritative sources; one has a
 residual live-API gap that is named precisely below rather than guessed at.

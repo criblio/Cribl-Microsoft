@@ -1,5 +1,7 @@
 # Feature Catalog: Cribl-Microsoft Repository
 
+Status: Record - a survey of the legacy toolkits, 2026-08-17. Superseded sections carry their own notes.
+
 Generated 2026-07-01 by a 14-agent parallel audit of every subsystem, for planning the integration of existing repository capabilities into the Cribl App Platform app in `soc-optimizationtoolkit/`. Total: 299 cataloged features (267 primary + 32 from the v1 prior-analysis cross-check).
 
 ## How to read this catalog
