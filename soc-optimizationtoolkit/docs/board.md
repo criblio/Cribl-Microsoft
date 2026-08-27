@@ -171,6 +171,25 @@ to nothing - no artifact substitutes for read access.
 - **HON-6** Give the audit's AGE a home and add a manual re-check.
   The nav was tried and was the wrong surface. Two candidates remain: the frame
   footer, or the connection bar beside the existing chips. `backlog.md:84-88`.
+- **HON-8** Make Azure targeting finish its own initial load.
+  Found live 2026-08-27 driving PaloAlto. The panel sits on "Checking Azure
+  permissions..." and "Loading subscriptions..." indefinitely - 40 seconds
+  observed, no timeout, no error. **Refresh from Azure** clears both in about a
+  second, and the three ARM calls it makes all return 200, so nothing was ever
+  wrong with the credentials or the proxy. No request was in flight during the
+  stuck period. A spinner that never resolves is worse than an honest unknown,
+  because it reads as progress and gives the operator no reason to press the
+  button that would fix it. *bug, SETTLED. `backlog.md` item 13a.*
+- **HON-9** Stop offering workbook parameter placeholders as log types.
+  Found live 2026-08-27. `PaloAlto-PAN-OS` recommends `{activities}` and
+  `{EventClass}` - Sentinel's KQL parameter syntax, taken literally by the
+  extractor. They are pre-ticked and regex-escaped into the live capture filter,
+  where they can never match, and counted in the "still have no sample" warning,
+  which therefore can never reach zero (13 shown, 11 achievable). The sharp end:
+  each tagged log type becomes a route and pipeline pair, so satisfying one would
+  put a route named for a template token into a deployed pack. `end` and `url`
+  in the same list are genuine PAN subtypes and must survive any filter.
+  *bug, SETTLED. `backlog.md` item 13b.*
 - **HON-7** Make the fallback offer reachable beside the actions.
   `FallbackNotice` renders without `onProduce` in production, so the capability
   model's "every blocked action falls back to a downloadable artifact" rule has
@@ -307,6 +326,13 @@ one is Sentinel-side and one is Lake-side and either could ship alone.
 
 ### VND - Vendor field definitions
 
+- **VND-3** Measure the column-order shortfall instead of hedging about it.
+  Found live 2026-08-27: THREAT arrived with 38 fields and was named from the
+  bundled 120-column PAN order; TRAFFIC, 41 against 115. Positional naming maps
+  field[i] to name[i], so a feed missing any middle column mis-names everything
+  after it, silently. The copy says "check the values beside each name before
+  applying", which is a hedge where the app already holds the number. *bug,
+  UNDECIDED whether a large shortfall should warn or block. `backlog.md` 13c.*
 - **VND-1** Let the operator name the vendor. Today the vendor comes from
   `detectVendorIdentity(solutionName)`, so anything outside
   `KNOWN_VENDOR_IDENTITIES` stores nothing - honest, but it caps the feature at
@@ -363,6 +389,17 @@ Small and mostly independent. Good filler between larger stories.
 - **DBT-12** Re-derive `BREAKER_CONFIGURABLE_INPUT_TYPES` whenever the spec is
   re-vendored. Recurring, conditional. It is derived, not hand-written - do not
   edit it by hand. `backlog.md:979-982`.
+- **DBT-14** Stop the solution list swallowing the mouse wheel.
+  Found live 2026-08-27: with the pointer over the list, the wheel moves neither
+  the list nor the page - the pointer must leave the list before anything
+  scrolls. Five of eight results were reachable. This is the reproduction the old
+  nested-scrolling question never had, which is what turns it from an annoyance
+  into a bug. *bug, SETTLED. `backlog.md` item 13d.*
+- **DBT-15** Give every solution row a delivery-fit badge, or say why not.
+  "Palo Alto Cortex XDR" renders none while all seven of its siblings do. Blank
+  reads as neither "not measured" nor "does not apply" - the absent-versus-zero
+  distinction the inventory standard exists to protect. *bug, SETTLED.
+  `backlog.md` item 13e.*
 - **DBT-13** Decide whether the Claude hooks should travel with the repo.
   `.gitignore` matches `*claude*` unanchored, so all of `.claude/` is ignored -
   including `hooks/`, which now holds the architecture-audit cadence, the
@@ -429,10 +466,10 @@ Each of these is cheap to build and blocked only on a call.
   under `notSupported` as query-only with no streaming path. If offered, it is
   a second scheduled collector, and it lands on the same Resource Graph gap
   CAP-1 closes. `backlog.md:629-633`.
-- **D-9** `DBT` Three-level nested scrolling on tall pages. The 558-row
-  solution list scrolls inside a scrolling page inside the app iframe.
-  `overscroll-behavior: contain` already stops wheel chaining at the list's
-  end; the nesting remains, and no fix is proposed. `backlog.md:962-964`.
+> **D-9 became DBT-14 on 2026-08-27.** It asked what to do about three-level
+> nested scrolling and had no fix proposed, because nobody had reproduced the
+> harm. Driving PaloAlto did: the wheel over the solution list moves nothing at
+> all. That is not a question any more, so it left this column.
 - **D-10** `DBT` Setup wizard header promises three phases while the stepper
   shows one. Either drop the enumeration from the header, or promote the
   sub-steps. Measured on two live walkthroughs 2026-08-06.
