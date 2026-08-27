@@ -1,10 +1,23 @@
 # Implementation Roadmap
 
+> **STALE - THIS IS HISTORY, NOT THE LIVE PLAN (marked 2026-08-26).** The last
+> dated SHIPPED entry below is 2026-07-29; the only later material is one queued
+> request (2026-08-03) and the ADR corrections in this header and the two
+> paragraphs after it. This file records what was planned and what shipped
+> when; it does NOT describe the current product or the work in flight,
+> and no phase list below is a to-do list. For the CURRENT record, in order of
+> reliability: [release-notes.md](release-notes.md) (what shipped, newest
+> first), [backlog.md](backlog.md) (what is open, and the most honest document
+> in the repo), and [adr/](adr/) (why). Two settled decisions post-date most of
+> this file and are summarised in the two paragraphs immediately below: ADR-0002
+> dropped the local target (ONE shell, apps/cribl-app) and ADR-0003 removed the
+> sample browser. Phase entries that predate them were left as written.
+
 Derived from [feature-catalog.md](feature-catalog.md) with all review questions resolved (2026-07-01). Phases are vertical slices: each delivers user-visible capability end-to-end. Feature IDs reference the catalog. The redesign-first principle and its compatibility contracts apply throughout.
 
 TARGET CHANGE (2026-08-17, ADR-0002): the local target is dropped; apps/cribl-app is the only shell. Phase entries below that say "both shells" are historical status records of what shipped when - left as written. The standing gates are not history, so they are corrected here.
 
-SAMPLE ACQUISITION CHANGE (2026-08-18, ADR-0003): the Browse Samples modal is being removed; samples come from the operator via Cribl Search over a Lake/federated dataset, a filtered capture, or manual upload, with the log types to provide recommended from the operator's own environment. TO EXECUTE, read docs/sample-acquisition-plan.md - one self-contained doc (verified file:line facts, phases, deletion list, and the splitting.ts trap). Decision record: docs/adr/0003-remove-sample-browser.md. EXECUTED IN FULL 2026-08-23 (all phases 0-5, PR #119): the browser and its acquisition domain are deleted, LogTypeRecommendation sits in its slot over three evidence tiers, and source discovery, filtered capture and the Lake query all ship. NOT yet verified against a live workspace - every platform belief behind phases 3-5 is pinned against FakeCriblClient only, and live-verify.test.ts is the gate.
+SAMPLE ACQUISITION CHANGE (2026-08-18, ADR-0003): the Browse Samples modal is REMOVED; samples come from the operator via Cribl Search over a Lake/federated dataset, a filtered capture, or manual upload, with the log types to provide recommended from the operator's own environment. TO EXECUTE, read docs/sample-acquisition-plan.md - one self-contained doc (verified file:line facts, phases, deletion list, and the splitting.ts trap). Decision record: docs/adr/0003-remove-sample-browser.md. EXECUTED IN FULL 2026-08-23 (all phases 0-5, PR #119): the browser and its acquisition domain are deleted, LogTypeRecommendation sits in its slot over three evidence tiers, and source discovery, filtered capture and the Lake query all ship. Shipped in 1.12.0. VERIFIED AGAINST A LIVE WORKSPACE 2026-08-25 (the lab workspace main-busy-yonath-kz1bxn7, Stream group DatacenterEast, Lake dataset winevt_plwindows): all EIGHT platform beliefs behind phases 3-5 are settled through packages/core/src/testing/live-verify.test.ts - rows 1-7 confirmed, row 8 answered the other way (Cribl TOLERATES a filter referencing an undeclared field, so capture-filter.ts's typeof guards are insurance rather than load-bearing; the stated model was wrong, not the code). The verdicts, the four product defects and the seven harness defects the run exposed are in docs/sample-acquisition-plan.md under "Attempt 2026-08-25 - CLOSED".
 
 Standing gates for every phase:
 - Capability works in apps/cribl-app. (Was: parity across both shells, which gated legacy archival; retired with the local target, so archival now depends on Cloud-shell coverage alone.)
@@ -50,7 +63,7 @@ Goal: the full DCR engine and deployment workflow at production quality.
 - Azure targeting and RBAC preflight screens (GUI-10/11/12).
 - QUEUED (user request, 2026-07-03) - Logger port and in-app diagnostics: a Logger port in @soc/core (debug/info/warn/error with structured context; injected like other ports - pure domain modules stay log-free, use-cases and adapters log through it, entries tagged with the jobId where applicable so a run's diagnostics attach to its job record). Cloud adapter: bounded in-memory ring buffer mirrored to the console in dev, persisting only warn/error to KV (respect KV write volume); local-shell adapter: file log. UI: a log viewer alongside the RecentRuns history, plus a download-support-bundle action via ArtifactSink (logs + recent job records) for troubleshooting handoffs. Hard rule carried from the secret model: no secret or token value is ever loggable - the Logger port's context type excludes them by construction and review enforces it.
 
-Exit: DirectNative/DirectCustom/DCE/PrivateLink coverage on par with legacy Run-DCRAutomation modes, from both shells.
+Exit: DirectNative/DirectCustom/DCE/PrivateLink coverage on par with legacy Run-DCRAutomation modes, from apps/cribl-app. (Was: from both shells - an unmet exit gate, so corrected rather than left as history when ADR-0002 dropped the local target.)
 
 ## Phase 3: Pipeline and pack engine
 

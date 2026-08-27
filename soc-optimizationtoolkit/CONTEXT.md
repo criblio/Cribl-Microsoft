@@ -1,5 +1,15 @@
 # CONTEXT: soc-optimizationtoolkit workspace
 
+> **THE "STATUS" SECTION BELOW IS A HISTORICAL BUILD LOG, NOT THE CURRENT
+> PRODUCT (marked 2026-08-26).** It runs 2026-07-01 to 2026-07-14 and then
+> stops. Two things it describes NO LONGER EXIST: the second shell (ADR-0002,
+> 2026-08-17 - `apps/cribl-app` is the only one, so every "both shells" and
+> "local shell" sentence in it is a dated record, never a description of today)
+> and the Browse Samples modal (ADR-0003, 2026-08-18, shipped in 1.12.0 -
+> replaced by `LogTypeRecommendation`). The workspace map and invariants above
+> the Status section ARE current. For the current build record:
+> `docs/release-notes.md`, `docs/backlog.md`, `docs/adr/`.
+
 Purpose: consolidate the Cribl-Microsoft repository's capabilities (see docs/feature-catalog.md) into one maintainable product, delivered as a Cribl App Platform app.
 
 Originally scoped as two deployment targets sharing one codebase; the local target was dropped 2026-08-17 (docs/adr/0002-drop-local-target.md). The port seam that made two targets possible STAYS - it is why removing the second shell touched no screen and no use-case.
@@ -19,25 +29,38 @@ Originally scoped as two deployment targets sharing one codebase; the local targ
 4. External-surface declarations (proxies.yml/policies.yml) change in the same PR as the feature needing them.
 5. No emojis anywhere (repo-wide rule).
 
-## Status
+## Status - HISTORICAL BUILD LOG (2026-07-01 to 2026-07-14)
 
-**READ THIS FIRST (2026-08-24).** The narrative below is a build log that runs
-from 2026-07-01 to **2026-07-14 and then stops**. Six weeks of work after it -
-the capability model, DCR gap analysis, route derivation, and the ADR-0003
-sample-acquisition rebuild - are NOT recorded here. Two things below are now
+**READ THIS FIRST (2026-08-24, re-marked 2026-08-26).** The narrative below is a
+build log that runs from 2026-07-01 to **2026-07-14 and then stops**. Six weeks
+of work after it - the capability model, DCR gap analysis, route derivation, and
+the ADR-0003 sample-acquisition rebuild - are NOT recorded here. **Nothing below
+this block describes the product as it stands today.** Two things below are now
 false as written:
 
-- **"BOTH shells" / "the local shell" is obsolete.** ADR-0002 (2026-08-17)
-  dropped the local target; `apps/cribl-app` is the only shell. Read every
-  dual-shell sentence below as describing the Cribl-hosted app alone.
+- **"BOTH shells" / "the local shell" is obsolete - the architecture is SINGLE
+  shell.** ADR-0002 (2026-08-17) dropped the local target; `apps/cribl-app` on
+  Cribl.Cloud is the only shell, and `apps/local-app` and `npm run local` are
+  deleted. Read every dual-shell sentence below as a dated record of what
+  shipped in July, never as an instruction to build for two shells.
 - **The Browse Samples modal and the `sample-acquisition` domain are gone.**
-  ADR-0003 (2026-08-18, shipped in 1.12.0) replaced them with log-type
-  recommendation from the operator's own environment.
+  ADR-0003 (2026-08-18, shipped in 1.12.0) replaced them with
+  `LogTypeRecommendation`: which log types to bring, derived from the operator's
+  own environment and ranked over three tiers of evidence - `detection` (a
+  shipped analytic rule filters on the value), `workbook` (a shipped workbook
+  queries it), `vendor` (the vendor documents the feed). Samples now arrive by
+  Lake query, filtered capture, or upload.
 
 For the CURRENT record, in order of reliability: `docs/release-notes.md` (what
 shipped, newest first), `docs/backlog.md` (what is open, and the most honest
 document in the repo), and `docs/adr/` (why). `docs/roadmap.md` is a phase
-record whose last dated entry is 2026-07-29 - it is history, not the live plan.
+record whose last dated shipped entry is 2026-07-29 - it is history, not the
+live plan, and it now says so in its own header.
+
+> **[SUPERSEDED 2026-08-17 by ADR-0002 - every "BOTH shells" / "local shell" /
+> "local host" phrase from here to the end of this file is history.]** The
+> entries are left as written because they record what shipped when; the second
+> shell they describe was deleted, so read them as the Cribl-hosted app alone.
 
 Workspace restructured 2026-07-01. Phase 1 walking skeleton live in BOTH shells: onboardTable usecase + OnboardTableScreen over the six ports (in-memory fakes for tests); local Node host (loopback API, encrypted secrets, ARM/leader proxies) shipped 2026-07-03. Unit 1 app frame shipped: AUA gate, mode chooser, mode-filtered route table, settings screen, one budgeted status poller.
 
