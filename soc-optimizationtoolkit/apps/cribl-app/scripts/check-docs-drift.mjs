@@ -235,11 +235,6 @@ export function evaluateDocsDrift(facts) {
     }
   }
 
-  const board = facts.docs.find((d) => d.path.endsWith('docs/board.md'));
-  if (board !== undefined) {
-    for (const finding of boardFindings(board)) errors.push(finding);
-  }
-
   // Counted and said out loud. A suppression nobody can see is how this check
   // would quietly stop meaning anything.
   const suppressed = facts.docs.reduce((n, d) => n + countOccurrences(d.text, SUPPRESS), 0);
@@ -285,56 +280,19 @@ function namesSuccessor(text, raw) {
   return /superseded\s+(?:in\s+part\s+)?by\s+\S/i.test(raw);
 }
 
-/**
- * The board's own structural rules. Small on purpose: a board is a working
- * surface, and a checker that argued with its prose would just get the prose
- * removed. These three catch the ways it rots SILENTLY.
- *
- * Two IDs the same is the one that actually bites - the second card looks
- * tracked, gets referenced in a commit message, and points at the wrong story.
- */
-export function boardFindings(board) {
-  const out = [];
-  // Epic keys are the backticked first cell of the epics table: | `REL` | ... |
-  const declared = new Set(
-    [...board.text.matchAll(/^\|\s*`([A-Z]{1,5})`\s*\|/gm)].map((m) => m[1]),
-  );
-  // Stories are bolded ids at the head of a bullet: - **REL-1** Do the thing
-  const stories = [...board.text.matchAll(/^\s*-\s+\*\*([A-Z]{1,5}-[A-Z]?\d+)\*\*/gm)];
-
-  const seen = new Map();
-  const used = new Set();
-  for (const [, id] of stories) {
-    used.add(id.split('-')[0]);
-    seen.set(id, (seen.get(id) ?? 0) + 1);
-  }
-
-  for (const [id, count] of seen) {
-    if (count > 1) {
-      out.push(
-        `${board.path} lists ${id} ${count} times. A duplicated id looks tracked, gets named in a commit message, and points at whichever card the reader found first.`,
-      );
-    }
-  }
-
-  for (const epic of [...used].sort()) {
-    if (!declared.has(epic)) {
-      out.push(
-        `${board.path} has ${epic}-* stories but no \`${epic}\` row in the epics table. Either add the epic or re-key the stories - an epic nobody declared is one nobody is tracking.`,
-      );
-    }
-  }
-
-  for (const epic of [...declared].sort()) {
-    if (!used.has(epic)) {
-      out.push(
-        `${board.path} declares epic \`${epic}\` but no story carries it. An epic that emptied out has either shipped, in which case say so, or lost its work.`,
-      );
-    }
-  }
-
-  return out;
-}
+// THE BOARD'S RULES MOVED, 2026-08-27. They used to live here as three regex
+// checks over board.md's prose, and they could only see what a regex could find
+// - demonstrably not even that: two cards written `**AZR-S1 (spike)**` put the
+// type inside the bold, the id pattern never matched, and both spikes were
+// invisible to this check for as long as it existed.
+//
+// board.md is now GENERATED from board.json, and board.mjs validates the data -
+// ids, epics, status, the settled/undecided distinction, and the dependency
+// graph including cycles and work started before its blocker. Keeping a second
+// copy of those rules here is the duplicated-decision failure this codebase
+// keeps finding, so there is none. What board.md still answers to from this
+// file is every rule that governs any document: it declares a Status, it names
+// no retired path, its links resolve.
 
 function countOccurrences(text, needle) {
   return text.split(needle).length - 1;

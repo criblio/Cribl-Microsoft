@@ -63,3 +63,11 @@ jobs:
       # Every one of those states fails here now.
       - name: Check docs drift
         run: npm run check-docs --workspace apps/cribl-app
+
+      # The board is DATA: docs/board.json is the source and docs/board.md is
+      # generated from it. This validates the data - ids, epics, the
+      # settled/undecided distinction, and the dependency graph including cycles
+      # and work started before its blocker - and fails if the rendered board is
+      # out of date, so the two cannot disagree.
+      - name: Check board
+        run: npm run check-board --workspace apps/cribl-app

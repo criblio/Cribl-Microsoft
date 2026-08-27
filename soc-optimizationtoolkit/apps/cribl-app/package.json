@@ -13,7 +13,9 @@
     "test": "vitest run",
     "check-release": "node scripts/check-release-drift.mjs",
     "check-docs": "node scripts/check-docs-drift.mjs",
-    "package": "npm run build && node scripts/package.mjs"
+    "package": "npm run build && node scripts/package.mjs",
+    "board": "node scripts/board.mjs",
+    "check-board": "node scripts/board.mjs --check"
   },
   "dependencies": {
     "@soc/core": "*",
