@@ -1,5 +1,7 @@
 # UX Flow Plan: From Screen Collection to Guided Journey
 
+Status: Record - the UX plan, shipped. Its dual-shell standing gate is retired by ADR 0002. Archival candidate.
+
 > **SUPERSEDED IN PART 2026-08-17 by ADR-0002: THERE IS ONLY ONE SHELL.** This
 > plan was written for two - `apps/cribl-app` and `apps/local-app` - and the
 > local one is deleted. Its dual-shell parity gate (section 2, pattern 6) is

@@ -1,5 +1,7 @@
 # CONTEXT: soc-optimizationtoolkit workspace
 
+Status: Record - a dated build log, 2026-07-01 to 2026-07-14. The READ THIS FIRST block at the top is kept true; everything below it is history.
+
 > **THE "STATUS" SECTION BELOW IS A HISTORICAL BUILD LOG, NOT THE CURRENT
 > PRODUCT (marked 2026-08-26).** It runs 2026-07-01 to 2026-07-14 and then
 > stops. Two things it describes NO LONGER EXIST: the second shell (ADR-0002,

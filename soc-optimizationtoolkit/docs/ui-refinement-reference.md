@@ -1,5 +1,7 @@
 # UI Refinement: Reference-Driven, Per Functional Area
 
+Status: Record - a screenshot workflow against the legacy app, last refreshed 2026-07-14. Archival candidate.
+
 Approach (user decision, 2026-07-04): refine the new app's visual experience one FUNCTIONAL AREA at a time, using screenshots of the legacy app as the reference for each area. This replaces a single big design pass with area-scoped passes tied to the porting units, so each area is refined against a concrete "this is the bar" reference rather than invented design.
 
 ## How this works

@@ -53,3 +53,13 @@ jobs:
       # landed since that version was packaged. See backlog.md item 8.
       - name: Check release drift
         run: npm run check-release --workspace apps/cribl-app
+
+      # DOCS AS CODE. Fails when a Living or Proposed document names a path that
+      # was deleted, points at a file that is not there, or is a plan nobody has
+      # re-read inside the window - and when an accepted ADR does not say which
+      # documents it invalidated. The audit of 2026-08-26 found nine documents
+      # asserting things the repo had already disproved, one of them an unbuilt
+      # plan still instructing a build for a shell removed six weeks earlier.
+      # Every one of those states fails here now.
+      - name: Check docs drift
+        run: npm run check-docs --workspace apps/cribl-app

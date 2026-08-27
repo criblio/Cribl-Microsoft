@@ -1,6 +1,6 @@
 # Vendor field definitions: naming positional columns
 
-Status: BUILT 2026-08-25, all four steps. Kept as the record of WHY, not as a
+Status: Record - BUILT 2026-08-25, all four steps. Kept as the record of WHY, not as a
 to-do list - the sequencing and the decisions below are what the code now
 implements, and the two remaining gaps are named at the end.
 

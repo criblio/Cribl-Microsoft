@@ -1,6 +1,6 @@
 # Capability model: retiring app modes
 
-Status: IMPLEMENTED. Decision taken 2026-08-05; all five steps shipped
+Status: Record - IMPLEMENTED. Decision taken 2026-08-05; all five steps shipped
 2026-08-06 (see `backlog.md` section 1, which is the accurate record). Modes are
 gone: `AppMode`, `ModeSelect`, `filterNavItems` and the wizard's Mode step no
 longer exist, and the nav annotates rather than filters.

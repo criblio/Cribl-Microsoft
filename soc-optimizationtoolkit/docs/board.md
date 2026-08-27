@@ -1,5 +1,7 @@
 # Board
 
+Status: Living - the Kanban index over backlog.md: epics, stories, and the order to take them in.
+
 The succinct Kanban view: nine epics, the stories under them, and the order to
 take them in. Created 2026-08-26.
 
@@ -11,6 +13,24 @@ depends on. Every story cites where its detail lives. When the two disagree,
 
 Reliability order for the whole docs tree is unchanged: `release-notes.md`
 (what shipped), `backlog.md` (what is open), `adr/` (what was decided).
+
+## This file is the board
+
+There is also a rendered Kanban view at
+https://claude.ai/code/artifact/6a0412f8-6c7e-4ba1-932b-dbf52540ce0f - filterable
+by epic, easier to scan, and **a snapshot**. It does not read this file, so it is
+only as current as the last time someone republished it. Recorded here because a
+URL that lives in a chat log is a URL that is gone after a reboot.
+
+**This file is the one that is true.** It is in git, on a branch, pushed - so it
+survives a workstation dying mid-thought, which the rendered view's source does
+not. When the two disagree, this file wins and the view needs republishing.
+
+Keeping it fresh is enforced twice: `check-docs-drift.mjs` holds its structure
+(no duplicate story ids, no undeclared epic, no epic that quietly emptied out),
+and a Stop hook counts commits since this file last changed and asks for an
+update once enough have piled up. Neither can tell whether a card is in the right
+column - that judgement stays with whoever moves it.
 
 ## Columns
 
@@ -38,17 +58,21 @@ column with the question noted.
 | `PK` | Pack maintenance parity | Includes a silent data-loss defect |
 | `VND` | Vendor field definitions | Positional CSV naming, reaching past ~18 vendors |
 | `DBT` | Debt, spec grounding, verification | Copy fixes, unverified claims, retired docs |
+| `D` | Open decisions | Blocked on a call, not on effort; each is cheap once answered |
 
 ---
 
 ## Now
 
+> **Updated 2026-08-26.** REL-1 and the whole FX epic are in review; the three
+> PRs are named on their cards. Nothing here is merged yet, so nothing has moved
+> off the board - a card leaves Now when its PR lands, not when it opens.
+
 ### REL - Ship what is built
 
 - **REL-1** Open the PR for `fix/capture-outcome-and-volume-orientation`.
-  One commit (`51d272d`), pushed, no PR, and `main` is protected so it cannot
-  land otherwise. Consider folding FX-1 in first - same file, same defect class.
-  *Size: minutes.*
+  DONE - PR #129, with FX-1 folded in as suggested, since it was the other half
+  of the same commit.
 - **REL-2** Record the 2026-08-25 live verification in the release notes.
   The 1.12.0 entry ends "has NOT done: run against a real workspace", which was
   true of that release. No later entry records the run, so a reader working
@@ -71,22 +95,29 @@ a primitive). Guard precedent: `integrate-screen.tsx:398-402` (touched-ref).
   effect ever re-fires is a `recommended` identity change - every one of which
   clears the latch and recomposes the filter. Fires on commit, and also with no
   operator action at all when the content read resolves or Lake volumes land.
-  Fix: `if (!filterEdited) setFilter(...)`, drop the `setFilterEdited(false)`.
-  *Size: small. Needs a pin that edits the filter then re-renders with a fresh
-  `recommended` - the pin added by `51d272d` would pass with the filter wiped.*
-- **FX-2** Include the diagram's view state in its `storageKey`.
-  `architecture-flow.tsx:972-978` reloads edits and clears undo/redo history
-  when `diagram` identity changes, but `storageKey`
-  (`architecture-screen.tsx:462`) omits `selectedFlows`, `expandedPacks`,
-  `expandedPackRoutes` and `routesExpanded`. Ticking a flow within the persist
-  effect's 400 ms debounce loses a node drag unrecoverably, because the same
-  cleanup clears the pending write and the history. No DOM test exists for this
-  component's edit reset. *Size: small. Verify the harm before fixing.*
+  IN REVIEW - PR #129. The latch became a ref, because listing it as a
+  dependency would re-run the effect the instant the operator typed and re-seed
+  the checkboxes under them. Two pins, mutation-checked; the source-change branch
+  was kept and proved load-bearing by the existing pin.
+- **FX-2** Reload the canvas arrangement per key, not per redraw.
+  IN REVIEW - PR #131. Confirmed and worse than the card first said: the persist
+  effect debounces 400 ms and cancels the pending write in its cleanup, so the
+  same firing that discarded the drag also emptied the undo history that would
+  have recovered it. The card's title used to read "include the view state in the
+  `storageKey`" - that was the wrong fix, because it would file a separate
+  arrangement per flow combination and the layout would vanish on every toggle.
 - **FX-3** Guard the drop branch in mapping review.
-  `mapping-review-section.tsx:551-566`. The `preserve` branch is guarded by
-  `autoDroppedRef`; the `drop` branch is not. With "Drop unneeded fields" on, a
-  field the operator restores to overflow re-triggers the effect through
-  `review` identity and snaps straight back to drop. *Size: small.*
+  IN REVIEW - PR #131. Confirmed. Both branches now come from one pure
+  `autoDropPlan`, which is what made the asymmetry visible: side by side, drop
+  plainly ignored the memory restore consults.
+- **FX-4** Sweep for the class rather than the instances. THREE confirmed from
+  one reading; nothing says the fourth is not there. `useEffect` keyed on a memo,
+  a callback, or an inline object/array prop, whose body resets state the
+  operator owns. Safe reference: `lake-panel.tsx:198-204` (primitive key).
+  Guard precedents: `integrate-screen.tsx:398-410`,
+  `azure-resources-section.tsx:259-262`. *chore. UNDECIDED whether this is a
+  one-off sweep or a lint rule - oxlint has no exhaustive-deps equivalent, and a
+  custom rule is a bigger commitment than the three fixes were.*
 
 ---
 
@@ -337,6 +368,14 @@ Small and mostly independent. Good filler between larger stories.
 - **DBT-12** Re-derive `BREAKER_CONFIGURABLE_INPUT_TYPES` whenever the spec is
   re-vendored. Recurring, conditional. It is derived, not hand-written - do not
   edit it by hand. `backlog.md:979-982`.
+- **DBT-13** Decide whether the Claude hooks should travel with the repo.
+  `.gitignore` matches `*claude*` unanchored, so all of `.claude/` is ignored -
+  including `hooks/`, which now holds the architecture-audit cadence, the
+  docs-drift check and the board-freshness check. None of them exist in a fresh
+  clone, so every enforcement that matters has to be duplicated in CI. That is
+  the right belt-and-braces split today and a silent single point of failure the
+  moment a second person works here. *chore, UNDECIDED. Related to the
+  unanchored-pattern problem already fixed once in 1.12.1.*
 
 ### REL - Release, continued
 
