@@ -10,7 +10,7 @@
 //
 // Pure: takes data, returns a string. The server does the IO.
 
-import { blockers, PRIORITIES, STATUSES } from './board.mjs';
+import { blockers, MENUS, MENU_LABELS, PLANNED_MENUS, PRIORITIES, STATUSES, menuOf } from './board.mjs';
 
 /** Display names; the LIST of columns is not ours to decide. */
 const COLUMN_TITLES = {
@@ -181,7 +181,26 @@ function featureCard(feature, data) {
   ].join('');
 }
 
-function card(story, byId) {
+/**
+ * The menu chip. Marked `planned` when the menu names a screen nobody can open
+ * yet, so the board cannot quietly imply a route exists; marked `own` when the
+ * story overrode its feature's menu, so the difference is visible rather than
+ * something you find by opening board.json.
+ */
+function menuChip(menu, isOverride) {
+  if (menu === undefined) return '';
+  const planned = PLANNED_MENUS.includes(menu);
+  const title = planned
+    ? `${MENU_LABELS[menu] ?? menu} - PLANNED. No route exists yet; an epic here builds it.`
+    : `Menu item this card is about: ${MENU_LABELS[menu] ?? menu}.` +
+      (isOverride ? ' Set on the story itself, overriding its feature.' : '');
+  return (
+    `<span class="menu${planned ? ' planned' : ''}${isOverride ? ' own' : ''}"` +
+    ` title="${esc(title)}">${esc(MENU_LABELS[menu] ?? menu)}${isOverride ? '*' : ''}</span>`
+  );
+}
+
+function card(story, byId, menu) {
   const blocked = blockers(story, byId);
   const tags = [
     tag(`type-${story.type}`, story.type, GLOSSARY.type[story.type]),
@@ -230,9 +249,11 @@ function card(story, byId) {
     `<article class="card${blocked.length ? ' is-blocked' : ''}" id="card-${esc(story.id)}"`,
     ` data-epic="${esc(story.epic)}" data-type="${esc(story.type)}"`,
     ` data-settled="${esc(story.settled)}" data-blocked="${blocked.length ? 'yes' : 'no'}"`,
+    ` data-menu="${esc(menu ?? 'none')}"`,
     ` data-text="${esc(`${story.id} ${story.title} ${story.epic} ${detail}`.toLowerCase())}">`,
     `<header><span class="id">${esc(story.id)}</span>`,
     story.feature ? `<span class="feat" title="Feature this story sits under">${esc(story.feature)}</span>` : '',
+    menuChip(menu, story.menu !== undefined),
     `<span class="epic">${esc(story.epic)}</span></header>`,
     `<h3>${esc(story.title)}</h3>`,
     `<div class="tags">${tags.join('')}</div>`,
@@ -244,11 +265,11 @@ function card(story, byId) {
   ].join('');
 }
 
-function lane(label, items, byId) {
+function lane(label, items, byId, featureById) {
   if (items.length === 0) return '';
   return (
     `<div class="lane"><h4>${esc(label)} <span class="count">${items.length}</span></h4>` +
-    items.map((s) => card(s, byId)).join('') +
+    items.map((s) => card(s, byId, menuOf(s, featureById))).join('') +
     `</div>`
   );
 }
@@ -266,6 +287,7 @@ function lane(label, items, byId) {
 export function renderBoardHtml(data, today, findings = []) {
   const stories = data.stories ?? [];
   const byId = new Map(stories.map((s) => [s.id, s]));
+  const featureById = new Map((data.features ?? []).map((f) => [f.id, f]));
   const count = (f) => stories.filter(f).length;
 
   const columns = COLUMNS.map((col) => {
@@ -275,12 +297,12 @@ export function renderBoardHtml(data, today, findings = []) {
       // Priority only means something inside the backlog; elsewhere it is
       // absent by design, so lanes would be a column of one empty heading.
       body = PRIORITIES.map((p) =>
-        lane(p, inCol.filter((s) => s.priority === p), byId),
+        lane(p, inCol.filter((s) => s.priority === p), byId, featureById),
       ).join('');
       const noPriority = inCol.filter((s) => !PRIORITIES.includes(s.priority));
-      body += lane('unprioritised', noPriority, byId);
+      body += lane('unprioritised', noPriority, byId, featureById);
     } else {
-      body = inCol.map((s) => card(s, byId)).join('');
+      body = inCol.map((s) => card(s, byId, menuOf(s, featureById))).join('');
     }
     return (
       `<section class="col" data-status="${esc(col.status)}">` +
@@ -335,7 +357,11 @@ header.top{display:flex;gap:16px;align-items:baseline;flex-wrap:wrap;padding:14p
 h1{font-size:16px;margin:0}
 .meta{color:var(--dim);font-size:12px}
 .controls{margin-left:auto;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-input[type=search]{background:var(--panel);border:1px solid var(--line);color:var(--ink);border-radius:6px;padding:5px 9px;min-width:200px}
+input[type=search],select{background:var(--panel);border:1px solid var(--line);color:var(--ink);border-radius:6px;padding:5px 9px}
+input[type=search]{min-width:200px}
+.menu{font-size:11px;color:var(--muted);border:1px solid var(--line);border-radius:4px;padding:1px 6px;margin-left:6px;white-space:nowrap}
+.menu.planned{border-style:dashed;font-style:italic}
+.menu.own{border-color:var(--accent,#888)}
 .chip{background:var(--panel);border:1px solid var(--line);color:var(--dim);border-radius:99px;padding:3px 9px;font-size:12px;cursor:pointer;font-family:inherit}
 .chip.on{border-color:var(--accent);color:var(--accent)}
 .epics{display:flex;gap:6px;flex-wrap:wrap;padding:10px 20px;border-bottom:1px solid var(--line)}
@@ -403,6 +429,17 @@ a.xref{color:var(--accent)}
   <span class="meta">${esc(stories.length)} stories &middot; ${esc((data.epics ?? []).length)} epics &middot; rendered ${esc(today)} from docs/board.json &middot; <span id="live">live</span></span>
   <div class="controls">
     <input type="search" id="q" placeholder="filter cards..." autocomplete="off">
+    <select id="menuSel" title="Show only cards about one menu item. The count is OPEN cards.">
+      <option value="">all menus</option>
+      ${MENUS.filter((m) => stories.some((s) => menuOf(s, featureById) === m))
+        .map((m) => {
+          const openN = stories.filter(
+            (s) => menuOf(s, featureById) === m && s.status !== 'done',
+          ).length;
+          return `<option value="${esc(m)}">${esc(MENU_LABELS[m] ?? m)} (${openN})</option>`;
+        })
+        .join('')}
+    </select>
     <button class="chip" id="blockedOnly">blocked only</button>
   </div>
 </header>
@@ -411,15 +448,20 @@ ${findingsBlock}
 <main class="board">${epicCol}${featureCol}${columns}</main>
 <script>
 const q=document.getElementById('q');
+const menuSel=document.getElementById('menuSel');
 const blockedBtn=document.getElementById('blockedOnly');
 let epic=null,blockedOnly=false;
 function apply(){
   const t=q.value.trim().toLowerCase();
+  const m=menuSel.value;
   for(const c of document.querySelectorAll('.card')){
     const okText=!t||c.dataset.text.includes(t);
     const okEpic=!epic||c.dataset.epic===epic;
     const okBlocked=!blockedOnly||c.dataset.blocked==='yes';
-    c.classList.toggle('hide',!(okText&&okEpic&&okBlocked));
+    // Epic and feature cards carry no menu; a menu filter is about stories, so
+    // they stay put rather than vanishing and making the board look empty.
+    const okMenu=!m||c.dataset.menu===undefined||c.dataset.menu===m||!c.dataset.menu;
+    c.classList.toggle('hide',!(okText&&okEpic&&okBlocked&&okMenu));
   }
   for(const l of document.querySelectorAll('.lane')){
     const any=[...l.querySelectorAll('.card')].some(c=>!c.classList.contains('hide'));
@@ -427,6 +469,7 @@ function apply(){
   }
 }
 q.addEventListener('input',apply);
+menuSel.addEventListener('change',apply);
 blockedBtn.addEventListener('click',()=>{blockedOnly=!blockedOnly;blockedBtn.classList.toggle('on',blockedOnly);apply();});
 for(const b of document.querySelectorAll('[data-filter-epic]')){
   b.addEventListener('click',()=>{

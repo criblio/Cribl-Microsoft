@@ -27,7 +27,15 @@ npm run board          # regenerate board.md from board.json
 npm run check-board    # validate the data and the rendered file (CI runs this)
 npm run board:serve    # live kanban on http://localhost:5175, auto-refreshes
 npm run groom          # what to work on next, and what is really blocking it
+npm run groom -- integrate   # ...narrowed to one MENU ITEM
 ```
+
+Every feature carries a `menu` - which part of the product it is about, using
+the app's own route ids. `npm run board` renders a "By menu item" rollup, and
+the live kanban has a menu filter. Two values (`azure-onboarding`,
+`windows-events`) name PLANNED screens with no route yet; `none` means no
+operator sees it (release mechanics, docs, board tooling) and is not a synonym
+for "unsure".
 
 Three rules, all learned the hard way:
 
