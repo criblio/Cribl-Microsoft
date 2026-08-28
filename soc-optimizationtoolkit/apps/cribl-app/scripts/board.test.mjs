@@ -12,7 +12,23 @@
 // notice.
 
 import { describe, expect, it } from 'vitest';
-import { blockers, renderBoard, validateBoard } from './board.mjs';
+import { applyDecision, blockers, renderBoard, validateBoard } from './board.mjs';
+
+/** A story carrying an open question with two spelled-out alternatives. */
+const withDecision = (over = {}, decision = {}) =>
+  story({
+    settled: 'undecided',
+    decision: {
+      question: 'Footer or connection bar?',
+      options: [
+        { key: 'footer', label: 'Frame footer', detail: 'One surface, always visible.' },
+        { key: 'bar', label: 'Connection bar', detail: 'Beside the existing chips.' },
+      ],
+      chosen: null,
+      ...decision,
+    },
+    ...over,
+  });
 
 const story = (over) => ({
   id: 'REL-1',
@@ -191,6 +207,103 @@ describe('validateBoard - dependencies', () => {
     );
 
     expect(out.filter((f) => f.includes('Dependency cycle'))).toHaveLength(1);
+  });
+});
+
+describe('validateBoard - decisions', () => {
+  it('accepts a well-formed unanswered decision', () => {
+    expect(validateBoard(board([withDecision()]))).toEqual([]);
+  });
+
+  it('rejects a decision with fewer than two options', () => {
+    // One option is not a decision, it is a plan.
+    const out = validateBoard(
+      board([withDecision({}, { options: [{ key: 'a', label: 'Only way' }] })]),
+    );
+
+    expect(out).toHaveLength(1);
+    expect(out[0]).toContain('fewer than two options');
+  });
+
+  it('rejects an answer that is not one of the options', () => {
+    const out = validateBoard(board([withDecision({}, { chosen: 'neither' })]));
+
+    expect(out).toHaveLength(1);
+    expect(out[0]).toContain('not one of its options');
+  });
+
+  it('rejects duplicate option keys', () => {
+    const out = validateBoard(
+      board([
+        withDecision(
+          {},
+          { options: [{ key: 'a', label: 'One' }, { key: 'a', label: 'Two' }] },
+        ),
+      ]),
+    );
+
+    expect(out.some((f) => f.includes('appears twice'))).toBe(true);
+  });
+
+  it('catches a SETTLED story whose decision is still unanswered', () => {
+    // The contradiction that matters: settled means nothing is outstanding,
+    // and an unanswered question is something outstanding.
+    const out = validateBoard(board([withDecision({ settled: 'settled' })]));
+
+    expect(out).toHaveLength(1);
+    expect(out[0]).toContain('settled but its decision is still unanswered');
+  });
+
+  it('is happy with a settled story whose decision was answered', () => {
+    expect(
+      validateBoard(board([withDecision({ settled: 'settled' }, { chosen: 'footer' })])),
+    ).toEqual([]);
+  });
+});
+
+describe('applyDecision', () => {
+  const data = () => board([withDecision({ id: 'D-1' })]);
+
+  it('records the answer', () => {
+    const out = applyDecision(data(), 'D-1', 'bar');
+
+    expect(out.ok).toBe(true);
+    expect(out.data.stories[0].decision.chosen).toBe('bar');
+  });
+
+  it('does NOT settle the card - answering is not deciding', () => {
+    // The whole contract of this feature. A click is a signal; the reasoning
+    // still has to land in backlog.md before anything is settled.
+    const out = applyDecision(data(), 'D-1', 'bar');
+
+    expect(out.data.stories[0].settled).toBe('undecided');
+  });
+
+  it('does not mutate the board it was given', () => {
+    // The server validates the RESULT before writing; that is only meaningful
+    // if the input is still intact when validation fails.
+    const before = data();
+    applyDecision(before, 'D-1', 'bar');
+
+    expect(before.stories[0].decision.chosen).toBeNull();
+  });
+
+  it('clears an answer when passed null', () => {
+    const answered = applyDecision(data(), 'D-1', 'bar').data;
+
+    expect(applyDecision(answered, 'D-1', null).data.stories[0].decision.chosen).toBeNull();
+  });
+
+  it('refuses an option the decision does not offer', () => {
+    const out = applyDecision(data(), 'D-1', 'sidebar');
+
+    expect(out.ok).toBe(false);
+    expect(out.error).toContain('not one of');
+  });
+
+  it('refuses a story that does not exist, or has no decision', () => {
+    expect(applyDecision(data(), 'NOPE-1', 'bar').ok).toBe(false);
+    expect(applyDecision(board([story({ id: 'REL-9' })]), 'REL-9', 'bar').ok).toBe(false);
   });
 });
 

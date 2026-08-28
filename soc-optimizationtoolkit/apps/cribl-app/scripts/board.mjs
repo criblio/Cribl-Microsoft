@@ -58,6 +58,99 @@ const SETTLED = ['settled', 'undecided', 'unconfirmed'];
 export const VERIFIED = ['pins', 'live', 'both', 'none'];
 
 /**
+ * An open question the board can ASK, with the alternatives spelled out, so it
+ * can be answered on the card instead of in a message that then has to be
+ * transcribed back here.
+ *
+ *   { question, options: [{ key, label, detail }], chosen: null | key }
+ *
+ * ANSWERING IS NOT DECIDING. Picking an option records `chosen` and nothing
+ * else: `settled` stays where it was. The reasoning still has to land in
+ * `backlog.md` before a card is settled, because a decision without its
+ * rejected alternatives is the thing this repo keeps having to reconstruct.
+ * The click is a signal, not a verdict - which is also why a settled story
+ * carrying an unanswered decision is a contradiction the validator reports.
+ */
+function decisionFindings(story) {
+  const d = story.decision;
+  if (d === undefined) return [];
+  const out = [];
+  const id = story.id;
+  if (typeof d !== 'object' || d === null || Array.isArray(d)) {
+    return [`${id} has a decision that is not an object.`];
+  }
+  if (typeof d.question !== 'string' || d.question.trim() === '') {
+    out.push(`${id} has a decision with no question.`);
+  }
+  const options = Array.isArray(d.options) ? d.options : [];
+  if (options.length < 2) {
+    // One option is not a decision, it is a plan.
+    out.push(`${id} has a decision with fewer than two options.`);
+  }
+  const keys = new Set();
+  for (const o of options) {
+    if (typeof o?.key !== 'string' || o.key.trim() === '') {
+      out.push(`${id} has a decision option with no key.`);
+      continue;
+    }
+    if (typeof o?.label !== 'string' || o.label.trim() === '') {
+      out.push(`${id} decision option "${o.key}" has no label.`);
+    }
+    if (keys.has(o.key)) {
+      out.push(`${id} decision option key "${o.key}" appears twice.`);
+    }
+    keys.add(o.key);
+  }
+  if (d.chosen !== null && d.chosen !== undefined && !keys.has(d.chosen)) {
+    out.push(`${id} decision chose "${d.chosen}", which is not one of its options.`);
+  }
+  if (story.settled === 'settled' && (d.chosen === null || d.chosen === undefined)) {
+    out.push(
+      `${id} is settled but its decision is still unanswered. One of the two is wrong.`,
+    );
+  }
+  return out;
+}
+
+/**
+ * Record an answer against a story's decision. PURE: returns new data, never
+ * touches the argument, so the caller can validate the result before writing
+ * it anywhere.
+ *
+ * `settled` is deliberately untouched - see the note above.
+ *
+ * @param {{epics: any[], stories: any[]}} data
+ * @param {string} storyId
+ * @param {string | null} optionKey null clears the answer
+ * @returns {{ok: true, data: any} | {ok: false, error: string}}
+ */
+export function applyDecision(data, storyId, optionKey) {
+  const story = (data.stories ?? []).find((s) => s.id === storyId);
+  if (story === undefined) {
+    return { ok: false, error: `No story "${storyId}" on this board.` };
+  }
+  if (story.decision === undefined) {
+    return { ok: false, error: `${storyId} has no decision to answer.` };
+  }
+  const keys = (story.decision.options ?? []).map((o) => o?.key);
+  if (optionKey !== null && !keys.includes(optionKey)) {
+    return {
+      ok: false,
+      error: `"${optionKey}" is not one of ${storyId}'s options (${keys.join(', ')}).`,
+    };
+  }
+  return {
+    ok: true,
+    data: {
+      ...data,
+      stories: data.stories.map((s) =>
+        s.id === storyId ? { ...s, decision: { ...s.decision, chosen: optionKey } } : s,
+      ),
+    },
+  };
+}
+
+/**
  * Every rule the board must satisfy. Ordering rules are the point: prose could
  * say "CAP blocks three epics" and nothing checked it, so it stayed a sentence a
  * reader had to notice.
@@ -113,6 +206,7 @@ export function validateBoard(data) {
     if (s.status !== 'done' && s.verified !== undefined && !VERIFIED.includes(s.verified)) {
       out.push(`${s.id} has verified "${s.verified}"; expected ${VERIFIED.join(' | ')}.`);
     }
+    out.push(...decisionFindings(s));
   }
 
   // Epics that emptied out. An epic with no stories has either shipped, in which
@@ -277,6 +371,21 @@ export function renderBoard(data, today) {
       L.push(`- **${s.id}** ${s.title}`);
       L.push(`  \`${tags.join('\` \`')}\``);
       if ((s.detail ?? '').trim() !== '') L.push(wrap(s.detail));
+      if (s.decision !== undefined) {
+        // Rendered so the markdown board shows the answer too - the kanban is
+        // where it gets clicked, but this file is what lands in a diff.
+        const chosen = s.decision.chosen ?? null;
+        L.push(
+          wrap(
+            `DECISION${chosen === null ? ' (unanswered)' : ''}: ${s.decision.question}`,
+          ),
+        );
+        for (const o of s.decision.options ?? []) {
+          const mark = o.key === chosen ? '[x]' : '[ ]';
+          const detail = (o.detail ?? '').trim();
+          L.push(`    ${mark} \`${o.key}\` ${o.label}${detail === '' ? '' : ` - ${detail}`}`);
+        }
+      }
       L.push('');
     }
   }
