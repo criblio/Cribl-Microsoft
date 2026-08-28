@@ -171,7 +171,22 @@ Next to pick up. Nothing blocks these.
   exception becomes a precedent. Threshold stated rather than derived (a
   product call, not a measurement): warn when the bundled order exceeds the
   field count by more than a quarter. Both live cases trip it - 38-of-120 and
-  41-of-115 are under half.
+  41-of-115 are under half. REPRODUCED LIVE 2026-08-28 with the apps OWN
+  NUMBERS IN THE SAME UI ROW. Pasted a standard 38-field PAN-OS THREAT syslog
+  line against solution PaloAlto-PAN-OS. The sample chip read: CSV | THREAT |
+  1 event, 35 fields, time: receive_time - and directly beneath it, "Column
+  names: Bundled Palo Alto Networks THREAT column order (120 columns) - check
+  the values beside each name before applying." So the app printed 35 and 120
+  adjacent to each other and STILL showed the hedge instead of the
+  measurement, which is exactly the cards complaint. 35 of 120 is a 71 percent
+  shortfall, well over the agreed quarter threshold, so it warns. NOTE for
+  whoever builds it: positional naming was otherwise CORRECT on this complete
+  line - receive_time, serial, type, subtype, src, dst, natsrc, rule, srcuser,
+  app, vsys, inbound_if, sessionid, sport, dport, flags, proto, threatid,
+  severity, seqno and actionflags all landed on the right values. The
+  mis-naming this card warns about needs a feed with a MISSING MIDDLE column,
+  which a complete line does not exercise - so the fix should be pinned
+  against a gapped sample, not this one.
   DECISION: When a bundled column order far exceeds the event's field count,
   warn or block?
     [ ] `measure-only` Show the number, drop the hedge - Replace "check the values beside each name before applying" with the measured 38-of-120 and stop there. backlog.md#13c says it is a number the app already has and could show.
