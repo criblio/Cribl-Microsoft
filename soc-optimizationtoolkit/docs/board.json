@@ -40,7 +40,7 @@
       "key": "CAP",
       "name": "Capability taxonomy extension",
       "kind": "enabler",
-      "why": "ENABLER EPIC: exists to unblock other epics - the single upstream blocker for three of them"
+      "why": "ENABLER EPIC: exists to unblock other work rather than to deliver on its own. Its capabilities and probes are what the Azure onboarding epic waits on"
     },
     {
       "key": "REL",
@@ -358,11 +358,11 @@
       "feature": "AZR-F9",
       "title": "Establish the additive-only contract",
       "type": "enabler",
-      "status": "backlog",
-      "priority": "later",
+      "status": "done",
       "settled": "settled",
       "dependsOn": [],
-      "detail": "Checkboxes only ever deploy; unticking removes from the desired selection and does nothing to Azure; teardown is a separate, separately-confirmed Remove action. No checkbox may destroy anything - pin that with a test. The UI must distinguish \"not selected\" from \"not deployed\". `backlog.md#6h`."
+      "detail": "Checkboxes only ever deploy; unticking removes from the desired selection and does nothing to Azure; teardown is a separate, separately-confirmed Remove action. No checkbox may destroy anything - pin that with a test. The UI must distinguish \"not selected\" from \"not deployed\". `backlog.md#6h`. BUILT 2026-08-28 as `domain/onboarding-selection`, BEFORE the screen rather than after it, so no checkbox UI ever existed without the rule. The contract is carried by the TYPE first: `DeployPlan` has no removal field, so a removal is not something the deploy path declines to emit but something it cannot express - adding one is rejected by `tsc` (TS2353) and then by a pin. `removalPlan` is the only path that can tear down, and it needs explicit ids plus `confirmed: true`; an empty list refuses as \"remove nothing\" rather than reading as a wildcard. The four states are named once in `itemState`, with `deployed-unselected` the one the decision exists to keep visible. 15 pins, the headline one exhaustive over all 64 (desired, deployed) pairs of a 3-item universe. Mutation-checked twice: dropping `leftInPlace` (the reconcile bug) fails 4 pins, adding a `remove` field fails the structural pin and the compiler. NOT built: the Remove action's discoverability (no screen yet) and the prerequisite ordering `backlog.md#6h` flags.",
+      "verified": "pins"
     },
     {
       "id": "AZR-2",
@@ -1259,6 +1259,18 @@
       "verified": "pins",
       "dependsOn": [],
       "detail": "DECIDED by the author 2026-08-28, hours after the SAFe migration introduced it: \"I don't want to score features, I'll like bounce our effort between them.\" WSJF is an economic answer to CONTENTION - many features competing for one team's finite capacity, where choosing wrong costs the delay on everything else waiting. One author moving between features has no such queue, so the score was four invented numbers per feature that would need re-inventing whenever anything moved. Removed from board.json, board.mjs, board-html.mjs and documenting-work.md; sequencing is now story priority plus what grooming derives - readiness and transitive unblock count. The reasoning is recorded in board.mjs and in documenting-work.md rather than just deleted, because the next reader of the SAFe docs will otherwise re-add it as a missing piece. Pinned by a structural check on the feature table's column count, mutation-checked both halves. *enabler, closed.*"
+    },
+    {
+      "id": "DBT-24",
+      "epic": "DBT",
+      "feature": "DBT-F5",
+      "title": "The CAP epic claims it blocks three epics; the graph says one",
+      "type": "bug",
+      "status": "done",
+      "settled": "settled",
+      "dependsOn": [],
+      "detail": "FOUND while grooming for what to pick up next, 2026-08-28. The CAP epic describes itself as \"the single upstream blocker for three of them\" [epics]. Every card that actually waits on a CAP card is an AZR card - AZR-4 needs CAP-2 and CAP-3, AZR-6 needs CAP-5, AZR-7 needs CAP-4 - so it blocks ONE epic. The claim was probably true before the D and FX epics dissolved on 2026-08-27 and their cards were redistributed; nothing re-read the epic prose afterwards. It matters because the sentence is the argument for CAP being an enabler epic at all, and an inflated one invites working CAP ahead of the thing it serves. FIXED by removing the NUMBER, not by correcting it. Writing \"one\" would have rotted again the next time the graph moved - the same way \"three\" did. The epic prose now says what CAP is FOR and leaves the count to the dependency graph, which already knows it and is checked. Honest limit: nothing enforces this. A validator cannot read prose, so the only defence against the next inflated claim is not writing a countable assertion into prose in the first place. *bug, closed.*",
+      "verified": "none"
     }
   ],
   "features": [
