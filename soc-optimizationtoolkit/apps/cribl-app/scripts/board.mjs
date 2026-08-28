@@ -32,7 +32,43 @@ const docsDir = join(__dirname, '..', '..', '..', 'docs');
 export const STATUSES = ['backlog', 'in-progress', 'done'];
 /** Sequencing WITHIN the backlog - orthogonal to progress, not a substitute. */
 export const PRIORITIES = ['now', 'next', 'later'];
-const TYPES = ['bug', 'feature', 'chore', 'spike', 'decision'];
+/**
+ * Work-item types, aligned to SAFe (Essential level) since 2026-08-28.
+ *
+ *   story     changes what an operator sees or does
+ *   enabler   infrastructure, architecture, tooling, docs, release mechanics -
+ *             SAFe's Enabler, and what `chore` used to mean here
+ *   spike     SAFe's EXPLORATION enabler: answered by investigation, never by
+ *             preference. Timeboxed, and demonstrated like any story
+ *   bug       a defect. SAFe has no distinct place for these in the hierarchy;
+ *             teams carry them in the team backlog beside stories, as here
+ *   decision  a LOCAL extension, not SAFe: a question that gates work and is
+ *             answered by a person rather than by investigation. Attached to
+ *             the feature it blocks
+ */
+const TYPES = ['story', 'enabler', 'spike', 'bug', 'decision'];
+
+/** SAFe scores each WSJF input on a modified Fibonacci scale. */
+const WSJF_SCALE = [1, 2, 3, 5, 8, 13, 20];
+
+/** Business epics deliver value; enabler epics exist to unblock other epics. */
+const EPIC_KINDS = ['business', 'enabler'];
+
+/**
+ * WSJF = (Business Value + Time Criticality + Risk Reduction / Opportunity
+ * Enablement) / Job Size. Highest first. Returns null when unscored, so an
+ * unscored feature sorts as unknown rather than as zero - a feature nobody has
+ * sized must not silently rank last.
+ *
+ * @param {{bv:number,tc:number,rr:number,size:number}|null|undefined} wsjf
+ * @returns {number|null}
+ */
+export function wsjfScore(wsjf) {
+  if (wsjf === null || wsjf === undefined) return null;
+  const { bv, tc, rr, size } = wsjf;
+  if (![bv, tc, rr, size].every((n) => typeof n === 'number' && n > 0)) return null;
+  return (bv + tc + rr) / size;
+}
 const SETTLED = ['settled', 'undecided', 'unconfirmed'];
 
 /**
@@ -212,6 +248,73 @@ function citationFindings(story, sections) {
  * @param {{epics: any[], stories: any[]}} data
  * @param {{backlogSections?: Set<string>}} [options]
  */
+/**
+ * The hierarchy rules. Epic contains Feature contains Story - and the one that
+ * actually bites is that a story's feature must live in the story's OWN epic.
+ * Without it a card can be filed under one epic while its feature sits in
+ * another, and every rollup - percent complete, counts, the epic column -
+ * quietly disagrees with itself depending on which side it counts from.
+ */
+function hierarchyFindings(data, sections) {
+  const out = [];
+  const epicKeys = new Set((data.epics ?? []).map((e) => e.key));
+  const featureIds = new Set();
+
+  for (const e of data.epics ?? []) {
+    if (e.kind !== undefined && !EPIC_KINDS.includes(e.kind)) {
+      out.push(`Epic ${e.key} has kind "${e.kind}"; expected ${EPIC_KINDS.join(' | ')}.`);
+    }
+  }
+
+  for (const f of data.features ?? []) {
+    if (featureIds.has(f.id)) {
+      out.push(`Feature ${f.id} appears twice.`);
+      continue;
+    }
+    featureIds.add(f.id);
+    if (!epicKeys.has(f.epic)) {
+      out.push(`Feature ${f.id} belongs to epic "${f.epic}", which is not declared.`);
+    }
+    if ((f.title ?? '').trim() === '') out.push(`Feature ${f.id} has no title.`);
+    if (f.anchor !== undefined && sections !== undefined && !sections.has(f.anchor)) {
+      out.push(`Feature ${f.id} cites backlog.md#${f.anchor}, which is not a section.`);
+    }
+    if (f.wsjf !== null && f.wsjf !== undefined) {
+      for (const k of ['bv', 'tc', 'rr', 'size']) {
+        if (!WSJF_SCALE.includes(f.wsjf[k])) {
+          out.push(
+            `Feature ${f.id} WSJF ${k} is "${f.wsjf[k]}"; SAFe scores each input on ${WSJF_SCALE.join(', ')}.`,
+          );
+        }
+      }
+    }
+  }
+
+  const featureById = new Map((data.features ?? []).map((f) => [f.id, f]));
+  for (const s of data.stories ?? []) {
+    if (s.feature === undefined) {
+      out.push(`${s.id} belongs to no feature. Every story sits under one.`);
+      continue;
+    }
+    const f = featureById.get(s.feature);
+    if (f === undefined) {
+      out.push(`${s.id} belongs to feature "${s.feature}", which is not declared.`);
+    } else if (f.epic !== s.epic) {
+      out.push(
+        `${s.id} is in epic ${s.epic} but its feature ${f.id} is in epic ${f.epic}. Every rollup would count it twice, differently.`,
+      );
+    }
+  }
+
+  // An epic with no feature has either shipped or lost its work.
+  for (const e of data.epics ?? []) {
+    if (!(data.features ?? []).some((f) => f.epic === e.key)) {
+      out.push(`Epic ${e.key} is declared but carries no feature.`);
+    }
+  }
+  return out;
+}
+
 export function validateBoard(data, options = {}) {
   const out = [];
   const epicKeys = new Set((data.epics ?? []).map((e) => e.key));
@@ -266,11 +369,14 @@ export function validateBoard(data, options = {}) {
 
   // Epics that emptied out. An epic with no stories has either shipped, in which
   // case say so, or lost its work.
-  for (const e of data.epics ?? []) {
-    if (![...byId.values()].some((s) => s.epic === e.key)) {
-      out.push(`Epic ${e.key} is declared but carries no story.`);
+  // Epics are now checked for FEATURES in hierarchyFindings - an epic whose
+  // features are all empty is caught here instead.
+  for (const f of data.features ?? []) {
+    if (![...byId.values()].some((s) => s.feature === f.id)) {
+      out.push(`Feature ${f.id} is declared but carries no story.`);
     }
   }
+  out.push(...hierarchyFindings(data, options.backlogSections));
 
   for (const s of byId.values()) {
     for (const dep of s.dependsOn ?? []) {
@@ -384,15 +490,38 @@ export function renderBoard(data, today) {
   L.push(`**${count((s) => s.status === 'backlog')} in the backlog, ${count((s) => s.status === 'in-progress')} in progress, ${count((s) => s.status === 'done')} done.**`);
   L.push('');
 
-  L.push('## Epics');
+  // SAFe hierarchy: Epic > Feature > Story. Rendered as a rollup so the shape
+  // is readable without opening the data.
+  L.push('## Epics and features');
   L.push('');
-  L.push('| Key | Epic | Open | Why it exists |');
-  L.push('|---|---|---|---|');
+  L.push('Epic > Feature > Story, per SAFe (Essential). An `enabler` epic exists to');
+  L.push('unblock other epics rather than to deliver on its own. WSJF sequences');
+  L.push('features: (business value + time criticality + risk reduction) / job size,');
+  L.push('highest first - an unscored feature cannot be sequenced.');
+  L.push('');
   for (const e of data.epics) {
-    const open = count((s) => s.epic === e.key && s.status !== 'done');
-    L.push(`| \`${e.key}\` | ${e.name} | ${open} | ${e.why} |`);
+    const feats = (data.features ?? []).filter((f) => f.epic === e.key);
+    const inEpic = data.stories.filter((s) => s.epic === e.key);
+    const doneN = inEpic.filter((s) => s.status === 'done').length;
+    const pct = inEpic.length === 0 ? 0 : Math.round((100 * doneN) / inEpic.length);
+    const kind = e.kind === 'enabler' ? ' _(enabler)_' : '';
+    L.push(`### \`${e.key}\` ${e.name}${kind} - ${pct}% (${doneN}/${inEpic.length})`);
+    L.push('');
+    L.push(e.why);
+    L.push('');
+    L.push('| Feature | WSJF | Done | Stories |');
+    L.push('|---|---|---|---|');
+    for (const f of feats) {
+      const kids = data.stories.filter((s) => s.feature === f.id);
+      const kd = kids.filter((s) => s.status === 'done').length;
+      const score = wsjfScore(f.wsjf);
+      const ids = kids.map((s) => s.id).join(', ');
+      L.push(
+        `| \`${f.id}\` ${f.title} | ${score === null ? 'unscored' : score.toFixed(2)} | ${kd}/${kids.length} | ${ids} |`,
+      );
+    }
+    L.push('');
   }
-  L.push('');
 
   const sections = [
     ['In progress', (s) => s.status === 'in-progress', 'Started. Anything here with an unfinished dependency is called out on its card.'],
@@ -418,6 +547,7 @@ export function renderBoard(data, today) {
     for (const s of items) {
       const blocked = blockers(s, byId);
       const tags = [
+        s.feature ?? 'no feature',
         s.type,
         s.settled,
         ...(s.verified === undefined ? [] : [`verified: ${s.verified}`]),

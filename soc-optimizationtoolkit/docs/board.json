@@ -1,65 +1,65 @@
 {
   "epics": [
     {
-      "key": "REL",
-      "name": "Ship what is built",
-      "why": "The packaged tarball trails `main`, and the lab trails the tarball"
-    },
-    {
-      "key": "FX",
-      "name": "Effect-identity defects",
-      "why": "One confirmed live defect class, three instances"
-    },
-    {
-      "key": "CAP",
-      "name": "Capability taxonomy extension",
-      "why": "The single upstream blocker for three other epics"
-    },
-    {
-      "key": "HON",
-      "name": "Inventory and diagnostic honesty",
-      "why": "Measured gaps where the app reports a confident wrong answer"
-    },
-    {
       "key": "AZR",
       "name": "Azure native source onboarding",
-      "why": "The largest unstarted block (backlog item 6)"
+      "kind": "business",
+      "why": "The largest unstarted block: every Azure telemetry source, category by category"
     },
     {
       "key": "WIN",
       "name": "Windows event analysis",
-      "why": "Backlog item 5; Sentinel-side and Lake-side halves"
+      "kind": "business",
+      "why": "Sentinel-side and Lake-side halves of Windows event handling"
     },
     {
-      "key": "PK",
-      "name": "Pack maintenance parity",
-      "why": "Includes a silent data-loss defect"
-    },
-    {
-      "key": "VND",
-      "name": "Vendor field definitions",
-      "why": "Positional CSV naming, reaching past ~18 vendors"
-    },
-    {
-      "key": "DBT",
-      "name": "Debt, spec grounding, verification",
-      "why": "Copy fixes, unverified claims, retired docs"
+      "key": "HON",
+      "name": "Inventory and diagnostic honesty",
+      "kind": "business",
+      "why": "Measured gaps where the app reports a confident wrong answer"
     },
     {
       "key": "GEN",
       "name": "Pipeline and pack generation",
-      "why": "What the build actually emits; had no epic until a regression was reported against it"
+      "kind": "business",
+      "why": "What the build actually emits"
     },
     {
-      "key": "D",
-      "name": "Open decisions",
-      "why": "Blocked on a call, not on effort; each is cheap once answered"
+      "key": "PK",
+      "name": "Pack maintenance parity",
+      "kind": "business",
+      "why": "Maintaining a pack after it is built, including a silent data-loss defect"
+    },
+    {
+      "key": "VND",
+      "name": "Vendor field definitions",
+      "kind": "business",
+      "why": "Positional CSV naming, reaching past ~18 vendors"
+    },
+    {
+      "key": "CAP",
+      "name": "Capability taxonomy extension",
+      "kind": "enabler",
+      "why": "ENABLER EPIC: exists to unblock other epics - the single upstream blocker for three of them"
+    },
+    {
+      "key": "REL",
+      "name": "Ship what is built",
+      "kind": "enabler",
+      "why": "ENABLER EPIC: release mechanics. The packaged tarball trails main, and the lab trails it"
+    },
+    {
+      "key": "DBT",
+      "name": "Quality and technical debt",
+      "kind": "enabler",
+      "why": "ENABLER EPIC: verification gaps, copy, diagram fidelity, docs and the board's own tooling"
     }
   ],
   "stories": [
     {
       "id": "GEN-1",
       "epic": "GEN",
+      "feature": "GEN-F1",
       "title": "Overflow serialize reaches the built pack - report not reproduced",
       "type": "bug",
       "status": "done",
@@ -71,8 +71,9 @@
     {
       "id": "REL-2",
       "epic": "REL",
+      "feature": "REL-F1",
       "title": "Record the 2026-08-25 live verification in the release notes",
-      "type": "chore",
+      "type": "enabler",
       "status": "done",
       "settled": "settled",
       "verified": "none",
@@ -82,8 +83,9 @@
     {
       "id": "REL-3",
       "epic": "REL",
+      "feature": "REL-F1",
       "title": "Rotate the Azure client secret from the retired local-app config",
-      "type": "chore",
+      "type": "enabler",
       "status": "backlog",
       "priority": "now",
       "settled": "settled",
@@ -93,8 +95,9 @@
     {
       "id": "REL-4",
       "epic": "REL",
+      "feature": "REL-F1",
       "title": "Cut and package a release",
-      "type": "chore",
+      "type": "enabler",
       "status": "done",
       "priority": "now",
       "settled": "settled",
@@ -104,9 +107,10 @@
     },
     {
       "id": "FX-4",
-      "epic": "FX",
+      "epic": "DBT",
+      "feature": "DBT-F6",
       "title": "Sweep for the class rather than the instances",
-      "type": "chore",
+      "type": "enabler",
       "status": "backlog",
       "priority": "now",
       "settled": "undecided",
@@ -132,8 +136,9 @@
     {
       "id": "CAP-1",
       "epic": "CAP",
+      "feature": "CAP-F1",
       "title": "Add `resourcegraph.read` and its probe",
-      "type": "chore",
+      "type": "enabler",
       "status": "backlog",
       "priority": "now",
       "settled": "settled",
@@ -143,8 +148,9 @@
     {
       "id": "CAP-2",
       "epic": "CAP",
+      "feature": "CAP-F1",
       "title": "Add policy assignment and remediation capabilities plus probes (`Microsoft.Authorization`, `Mic",
-      "type": "chore",
+      "type": "enabler",
       "status": "backlog",
       "priority": "now",
       "settled": "settled",
@@ -154,8 +160,9 @@
     {
       "id": "CAP-3",
       "epic": "CAP",
+      "feature": "CAP-F1",
       "title": "Add managed-identity creation plus probe",
-      "type": "chore",
+      "type": "enabler",
       "status": "backlog",
       "priority": "now",
       "settled": "settled",
@@ -165,8 +172,9 @@
     {
       "id": "CAP-4",
       "epic": "CAP",
+      "feature": "CAP-F1",
       "title": "Add Sentinel incident read (Microsoft Sentinel Reader)",
-      "type": "chore",
+      "type": "enabler",
       "status": "backlog",
       "priority": "now",
       "settled": "settled",
@@ -176,8 +184,9 @@
     {
       "id": "CAP-5",
       "epic": "CAP",
+      "feature": "CAP-F1",
       "title": "Add the two Graph scopes (`Organization.Read.All`, `SecurityEvents.Read.All`) plus probes",
-      "type": "chore",
+      "type": "enabler",
       "status": "backlog",
       "priority": "now",
       "settled": "settled",
@@ -187,8 +196,9 @@
     {
       "id": "CAP-6",
       "epic": "CAP",
+      "feature": "CAP-F1",
       "title": "Make the four unmeasured listers measurable - subscriptions, resource groups, Resource Graph, C",
-      "type": "chore",
+      "type": "enabler",
       "status": "backlog",
       "priority": "now",
       "settled": "settled",
@@ -200,8 +210,9 @@
     {
       "id": "HON-1",
       "epic": "HON",
+      "feature": "HON-F2",
       "title": "Wire `emptyTableListMessage` into the picker screen",
-      "type": "chore",
+      "type": "story",
       "status": "backlog",
       "priority": "next",
       "settled": "settled",
@@ -211,8 +222,9 @@
     {
       "id": "HON-2",
       "epic": "HON",
+      "feature": "HON-F2",
       "title": "Honour the scope rule at the remaining lister call sites",
-      "type": "chore",
+      "type": "story",
       "status": "backlog",
       "priority": "next",
       "settled": "settled",
@@ -222,8 +234,9 @@
     {
       "id": "HON-3",
       "epic": "HON",
+      "feature": "HON-F3",
       "title": "Surface `droppedColumns` and `unknownTypeColumns` in the UI",
-      "type": "chore",
+      "type": "story",
       "status": "backlog",
       "priority": "next",
       "settled": "settled",
@@ -233,8 +246,9 @@
     {
       "id": "HON-4",
       "epic": "HON",
+      "feature": "HON-F3",
       "title": "Tell operators that DCRs deployed before the guid fix still lose fields",
-      "type": "chore",
+      "type": "story",
       "status": "backlog",
       "priority": "next",
       "settled": "settled",
@@ -243,9 +257,10 @@
     },
     {
       "id": "HON-5",
-      "epic": "HON",
+      "epic": "VND",
+      "feature": "VND-F1",
       "title": "Warn a CSV vendor's operator before the preview that the pack can never route automatically",
-      "type": "chore",
+      "type": "story",
       "status": "backlog",
       "priority": "next",
       "settled": "settled",
@@ -255,8 +270,9 @@
     {
       "id": "HON-6",
       "epic": "HON",
+      "feature": "HON-F1",
       "title": "Give the audit's AGE a home and add a manual re-check",
-      "type": "chore",
+      "type": "story",
       "status": "backlog",
       "priority": "next",
       "settled": "settled",
@@ -268,8 +284,9 @@
     {
       "id": "HON-7",
       "epic": "HON",
+      "feature": "HON-F1",
       "title": "Make the fallback offer reachable beside the actions",
-      "type": "chore",
+      "type": "story",
       "status": "backlog",
       "priority": "next",
       "settled": "settled",
@@ -281,6 +298,7 @@
     {
       "id": "AZR-S1",
       "epic": "AZR",
+      "feature": "AZR-F5",
       "title": "Verify whether XDR streaming and the Sentinel incidents API are complementary or alternatives",
       "type": "spike",
       "status": "backlog",
@@ -292,6 +310,7 @@
     {
       "id": "AZR-S2",
       "epic": "AZR",
+      "feature": "AZR-F9",
       "title": "Decide whether the app creates Cribl sources over the API",
       "type": "spike",
       "status": "backlog",
@@ -324,8 +343,9 @@
     {
       "id": "AZR-0",
       "epic": "AZR",
+      "feature": "AZR-F1",
       "title": "Port `resource-coverage.json` to the app KV store as the selection model",
-      "type": "chore",
+      "type": "enabler",
       "status": "backlog",
       "priority": "later",
       "settled": "settled",
@@ -335,8 +355,9 @@
     {
       "id": "AZR-1",
       "epic": "AZR",
+      "feature": "AZR-F9",
       "title": "Establish the additive-only contract",
-      "type": "chore",
+      "type": "enabler",
       "status": "backlog",
       "priority": "later",
       "settled": "settled",
@@ -346,8 +367,9 @@
     {
       "id": "AZR-2",
       "epic": "AZR",
+      "feature": "AZR-F2",
       "title": "TRACER BULLET: Entra ID tenant diagnostics, one category group",
-      "type": "chore",
+      "type": "story",
       "status": "backlog",
       "priority": "later",
       "settled": "settled",
@@ -361,8 +383,9 @@
     {
       "id": "AZR-3",
       "epic": "AZR",
+      "feature": "AZR-F3",
       "title": "Defender for Cloud continuous export",
-      "type": "chore",
+      "type": "story",
       "status": "backlog",
       "priority": "later",
       "settled": "settled",
@@ -375,8 +398,9 @@
     {
       "id": "AZR-8",
       "epic": "AZR",
+      "feature": "AZR-F6",
       "title": "Blob-only sources as visible unavailable rows",
-      "type": "chore",
+      "type": "story",
       "status": "backlog",
       "priority": "later",
       "settled": "settled",
@@ -390,8 +414,9 @@
     {
       "id": "AZR-9",
       "epic": "AZR",
+      "feature": "AZR-F7",
       "title": "Link the AMA plus DCR path to the app's own DCR Automation and Integrate routes rather than dup",
-      "type": "chore",
+      "type": "story",
       "status": "backlog",
       "priority": "later",
       "settled": "settled",
@@ -404,8 +429,9 @@
     {
       "id": "AZR-4",
       "epic": "AZR",
+      "feature": "AZR-F2",
       "title": "Azure Policy initiatives - the bulk of the platform",
-      "type": "chore",
+      "type": "story",
       "status": "backlog",
       "priority": "later",
       "settled": "settled",
@@ -421,8 +447,9 @@
     {
       "id": "AZR-5",
       "epic": "AZR",
+      "feature": "AZR-F2",
       "title": "Diagnostic-settings cleanup, preview only",
-      "type": "chore",
+      "type": "story",
       "status": "backlog",
       "priority": "later",
       "settled": "settled",
@@ -435,8 +462,9 @@
     {
       "id": "AZR-6",
       "epic": "AZR",
+      "feature": "AZR-F4",
       "title": "Defender XDR guided worklist",
-      "type": "chore",
+      "type": "story",
       "status": "backlog",
       "priority": "later",
       "settled": "settled",
@@ -452,8 +480,9 @@
     {
       "id": "AZR-7",
       "epic": "AZR",
+      "feature": "AZR-F5",
       "title": "Sentinel incidents via a Cribl REST collector",
-      "type": "chore",
+      "type": "story",
       "status": "backlog",
       "priority": "later",
       "settled": "settled",
@@ -469,8 +498,9 @@
     {
       "id": "AZR-10",
       "epic": "AZR",
+      "feature": "AZR-F8",
       "title": "Dataflow diagrams, one per category",
-      "type": "chore",
+      "type": "story",
       "status": "backlog",
       "priority": "later",
       "settled": "settled",
@@ -483,8 +513,9 @@
     {
       "id": "AZR-11",
       "epic": "AZR",
+      "feature": "AZR-F9",
       "title": "Make the prerequisite ordering explicit",
-      "type": "chore",
+      "type": "enabler",
       "status": "backlog",
       "priority": "later",
       "settled": "settled",
@@ -496,8 +527,9 @@
     {
       "id": "AZR-12",
       "epic": "AZR",
+      "feature": "AZR-F9",
       "title": "Check `eventhub-discovery` for overlap before building a second Event Hub surface",
-      "type": "chore",
+      "type": "enabler",
       "status": "backlog",
       "priority": "later",
       "settled": "settled",
@@ -507,8 +539,9 @@
     {
       "id": "WIN-1",
       "epic": "WIN",
+      "feature": "WIN-F1",
       "title": "The screen shell and route, opting in to `table.read`",
-      "type": "chore",
+      "type": "story",
       "status": "backlog",
       "priority": "later",
       "settled": "settled",
@@ -518,8 +551,9 @@
     {
       "id": "WIN-2",
       "epic": "WIN",
+      "feature": "WIN-F2",
       "title": "Derive the enrichment catalog, ranked by content reference",
-      "type": "chore",
+      "type": "story",
       "status": "backlog",
       "priority": "later",
       "settled": "settled",
@@ -531,8 +565,9 @@
     {
       "id": "WIN-3",
       "epic": "WIN",
+      "feature": "WIN-F1",
       "title": "Produce SecurityEvent and WindowsEvent as two separate catalogs and let them differ",
-      "type": "chore",
+      "type": "story",
       "status": "backlog",
       "priority": "later",
       "settled": "settled",
@@ -542,8 +577,9 @@
     {
       "id": "PK-1",
       "epic": "PK",
+      "feature": "PK-F1",
       "title": "Detect packs modified in the Cribl UI before overwriting them",
-      "type": "chore",
+      "type": "story",
       "status": "backlog",
       "priority": "later",
       "settled": "settled",
@@ -553,8 +589,9 @@
     {
       "id": "PK-2",
       "epic": "PK",
+      "feature": "PK-F1",
       "title": "Bring the new sample analysis into maintenance",
-      "type": "chore",
+      "type": "story",
       "status": "backlog",
       "priority": "later",
       "settled": "settled",
@@ -566,6 +603,7 @@
     {
       "id": "VND-3",
       "epic": "VND",
+      "feature": "VND-F1",
       "title": "Measure the column-order shortfall instead of hedging about it",
       "type": "bug",
       "status": "backlog",
@@ -598,8 +636,9 @@
     {
       "id": "VND-1",
       "epic": "VND",
+      "feature": "VND-F1",
       "title": "Let the operator name the vendor",
-      "type": "chore",
+      "type": "story",
       "status": "backlog",
       "priority": "later",
       "settled": "settled",
@@ -611,8 +650,9 @@
     {
       "id": "DBT-1",
       "epic": "DBT",
+      "feature": "DBT-F3",
       "title": "Pin how the REST collector is modelled in the vendored spec",
-      "type": "chore",
+      "type": "enabler",
       "status": "backlog",
       "priority": "later",
       "settled": "settled",
@@ -622,8 +662,9 @@
     {
       "id": "DBT-2",
       "epic": "DBT",
+      "feature": "DBT-F1",
       "title": "Add the guid cast to the live-verification suite",
-      "type": "chore",
+      "type": "enabler",
       "status": "backlog",
       "priority": "later",
       "settled": "settled",
@@ -633,8 +674,9 @@
     {
       "id": "DBT-3",
       "epic": "DBT",
+      "feature": "DBT-F2",
       "title": "Reconcile the Entra `Kind:Direct` copy with what has been measured",
-      "type": "chore",
+      "type": "story",
       "status": "backlog",
       "priority": "later",
       "settled": "settled",
@@ -644,8 +686,9 @@
     {
       "id": "DBT-4",
       "epic": "DBT",
+      "feature": "DBT-F2",
       "title": "Name inline breaker rulesets instead of showing \"Default selection\"",
-      "type": "chore",
+      "type": "story",
       "status": "backlog",
       "priority": "later",
       "settled": "settled",
@@ -655,8 +698,9 @@
     {
       "id": "DBT-5",
       "epic": "DBT",
+      "feature": "DBT-F1",
       "title": "Produce live evidence for the `no access` and `not connected` nav states",
-      "type": "chore",
+      "type": "enabler",
       "status": "backlog",
       "priority": "later",
       "settled": "settled",
@@ -666,8 +710,9 @@
     {
       "id": "DBT-6",
       "epic": "DBT",
+      "feature": "DBT-F1",
       "title": "Exercise the `_raw`-absent branch with a non-Lake sample",
-      "type": "chore",
+      "type": "enabler",
       "status": "backlog",
       "priority": "later",
       "settled": "settled",
@@ -677,8 +722,9 @@
     {
       "id": "DBT-7",
       "epic": "DBT",
+      "feature": "DBT-F1",
       "title": "Confirm the `eventsPerSec` 2x multiplier against worker config",
-      "type": "chore",
+      "type": "enabler",
       "status": "backlog",
       "priority": "later",
       "settled": "settled",
@@ -688,8 +734,9 @@
     {
       "id": "DBT-8",
       "epic": "DBT",
+      "feature": "DBT-F4",
       "title": "Correct the external datagen research note",
-      "type": "chore",
+      "type": "enabler",
       "status": "backlog",
       "priority": "later",
       "settled": "settled",
@@ -699,8 +746,9 @@
     {
       "id": "DBT-9",
       "epic": "DBT",
+      "feature": "DBT-F2",
       "title": "Say \"are deleted\" instead of \"reset\" in the Sample Data helper text",
-      "type": "chore",
+      "type": "story",
       "status": "backlog",
       "priority": "later",
       "settled": "settled",
@@ -710,8 +758,9 @@
     {
       "id": "DBT-10",
       "epic": "DBT",
+      "feature": "DBT-F4",
       "title": "Reconcile the field matcher's target list with the generator's output",
-      "type": "chore",
+      "type": "enabler",
       "status": "backlog",
       "priority": "later",
       "settled": "settled",
@@ -721,8 +770,9 @@
     {
       "id": "DBT-11",
       "epic": "DBT",
+      "feature": "DBT-F4",
       "title": "Archive three retired docs rather than keep patching them: `ux-flow-plan.md` (its plan shipped,",
-      "type": "chore",
+      "type": "enabler",
       "status": "backlog",
       "priority": "later",
       "settled": "settled",
@@ -732,8 +782,9 @@
     {
       "id": "DBT-12",
       "epic": "DBT",
+      "feature": "DBT-F3",
       "title": "Re-derive `BREAKER_CONFIGURABLE_INPUT_TYPES` whenever the spec is re-vendored",
-      "type": "chore",
+      "type": "enabler",
       "status": "backlog",
       "priority": "later",
       "settled": "settled",
@@ -743,6 +794,7 @@
     {
       "id": "DBT-14",
       "epic": "DBT",
+      "feature": "DBT-F2",
       "title": "Stop the solution list swallowing the mouse wheel",
       "type": "bug",
       "status": "backlog",
@@ -754,6 +806,7 @@
     {
       "id": "DBT-15",
       "epic": "DBT",
+      "feature": "DBT-F2",
       "title": "Give every solution row a delivery-fit badge, or say why not",
       "type": "bug",
       "status": "backlog",
@@ -765,8 +818,9 @@
     {
       "id": "DBT-13",
       "epic": "DBT",
+      "feature": "DBT-F4",
       "title": "The Claude hooks travel with the repo",
-      "type": "chore",
+      "type": "enabler",
       "status": "done",
       "settled": "settled",
       "verified": "live",
@@ -776,8 +830,9 @@
     {
       "id": "REL-5",
       "epic": "REL",
+      "feature": "REL-F1",
       "title": "Upload the current package to the lab workspace",
-      "type": "chore",
+      "type": "enabler",
       "status": "backlog",
       "priority": "later",
       "settled": "settled",
@@ -787,8 +842,9 @@
     {
       "id": "REL-6",
       "epic": "REL",
+      "feature": "REL-F1",
       "title": "Clear the external queue",
-      "type": "chore",
+      "type": "enabler",
       "status": "backlog",
       "priority": "later",
       "settled": "settled",
@@ -797,7 +853,8 @@
     },
     {
       "id": "D-1",
-      "epic": "D",
+      "epic": "HON",
+      "feature": "HON-F1",
       "title": "`HON-6` placement: frame footer, or connection bar beside the existing secret/target/platform-l",
       "type": "decision",
       "status": "backlog",
@@ -824,7 +881,8 @@
     },
     {
       "id": "D-2",
-      "epic": "D",
+      "epic": "HON",
+      "feature": "HON-F1",
       "title": "`HON-7` surface area: which of Integrate deploy, Batch Deploy and DCR Automation get the fallba",
       "type": "decision",
       "status": "backlog",
@@ -856,7 +914,8 @@
     },
     {
       "id": "D-3",
-      "epic": "D",
+      "epic": "HON",
+      "feature": "HON-F2",
       "title": "How do capabilities reach the roughly eight listing screens - keep prop-drilling from the shell",
       "type": "decision",
       "status": "backlog",
@@ -883,7 +942,8 @@
     },
     {
       "id": "D-4",
-      "epic": "D",
+      "epic": "WIN",
+      "feature": "WIN-F2",
       "title": "`WIN` scope: does the enrichment catalog only report, or does it also produce pipeline enrichme",
       "type": "decision",
       "status": "backlog",
@@ -915,7 +975,8 @@
     },
     {
       "id": "D-5",
-      "epic": "D",
+      "epic": "WIN",
+      "feature": "WIN-F3",
       "title": "`WIN-5` JSON or Parquet for the Cribl Lake copy",
       "type": "decision",
       "status": "backlog",
@@ -926,7 +987,8 @@
     },
     {
       "id": "D-6",
-      "epic": "D",
+      "epic": "PK",
+      "feature": "PK-F1",
       "title": "`PK-2` source of truth: does maintenance re-analyse, or read a stored analysis? Re-analysing ne",
       "type": "decision",
       "status": "backlog",
@@ -958,7 +1020,8 @@
     },
     {
       "id": "D-7",
-      "epic": "D",
+      "epic": "VND",
+      "feature": "VND-F1",
       "title": "`VND-2` Does a persisted column order need a version or a captured-on date, so a firmware chang",
       "type": "decision",
       "status": "backlog",
@@ -990,7 +1053,8 @@
     },
     {
       "id": "D-8",
-      "epic": "D",
+      "epic": "AZR",
+      "feature": "AZR-F5",
       "title": "`AZR` Resource Graph change tracking - offer it at all? Recorded under `notSupported` as query-",
       "type": "decision",
       "status": "backlog",
@@ -1022,7 +1086,8 @@
     },
     {
       "id": "D-10",
-      "epic": "D",
+      "epic": "DBT",
+      "feature": "DBT-F2",
       "title": "`DBT` Setup wizard header promises three phases while the stepper shows one",
       "type": "decision",
       "status": "backlog",
@@ -1049,7 +1114,8 @@
     },
     {
       "id": "D-11",
-      "epic": "D",
+      "epic": "HON",
+      "feature": "HON-F3",
       "title": "`ADR-0004` per-table successor for deprecated guid columns (`AwsRequestId` to `AwsRequestId_`)",
       "type": "decision",
       "status": "backlog",
@@ -1077,6 +1143,7 @@
     {
       "id": "GEN-2",
       "epic": "GEN",
+      "feature": "GEN-F1",
       "title": "A rebuilt pack no longer inherits the previous build's pipelines",
       "type": "bug",
       "status": "done",
@@ -1088,8 +1155,9 @@
     {
       "id": "GEN-3",
       "epic": "GEN",
+      "feature": "GEN-F1",
       "title": "Stamp the toolkit version into the pack it builds",
-      "type": "feature",
+      "type": "story",
       "status": "backlog",
       "priority": "next",
       "settled": "settled",
@@ -1099,6 +1167,7 @@
     {
       "id": "DBT-16",
       "epic": "DBT",
+      "feature": "DBT-F5",
       "title": "The kanban hardcoded its own copy of the status vocabulary",
       "type": "bug",
       "status": "done",
@@ -1110,6 +1179,7 @@
     {
       "id": "DBT-17",
       "epic": "DBT",
+      "feature": "DBT-F5",
       "title": "Grooming hardcoded its own copy of the priority vocabulary",
       "type": "bug",
       "status": "done",
@@ -1121,6 +1191,7 @@
     {
       "id": "DBT-18",
       "epic": "DBT",
+      "feature": "DBT-F5",
       "title": "Two answers to what blocked means, disagreeing on a dangling dependency",
       "type": "bug",
       "status": "done",
@@ -1132,6 +1203,7 @@
     {
       "id": "DBT-19",
       "epic": "DBT",
+      "feature": "DBT-F5",
       "title": "Grooming's epic rule fired on ordinary focus",
       "type": "bug",
       "status": "done",
@@ -1143,6 +1215,7 @@
     {
       "id": "DBT-20",
       "epic": "DBT",
+      "feature": "DBT-F5",
       "title": "gitignore hid the repo's own skills",
       "type": "bug",
       "status": "done",
@@ -1154,6 +1227,7 @@
     {
       "id": "DBT-21",
       "epic": "DBT",
+      "feature": "DBT-F5",
       "title": "Two board cards asserted things the code disproved",
       "type": "bug",
       "status": "done",
@@ -1165,13 +1239,194 @@
     {
       "id": "DBT-22",
       "epic": "DBT",
+      "feature": "DBT-F4",
       "title": "CLAUDE.md describes the deprecated PowerShell toolkit as the project",
       "type": "bug",
       "status": "done",
       "settled": "settled",
+      "verified": "live",
       "dependsOn": [],
-      "detail": "FOUND 2026-08-28 by a reader, in the one file loaded into EVERY session. Its Project Overview calls this \"a PowerShell-based automation toolkit\" whose primary focus is DCR automation - but that toolkit was moved to `deprecated/` on 2026-07-13 and receives no further development, and the actual deliverable is the TypeScript Cribl App Platform app at soc-optimizationtoolkit (v1.12.3). Worse than wrong prose: every command block points at `.\\Azure\\CustomDeploymentTemplates\\DCR-Automation\\Run-DCRAutomation.ps1`, a path that has not existed for six weeks - the script is under `deprecated/`. 24 PowerShell references in all. So the file that tells every contributor and every agent how this repo works has been instructing them to run a superseded tool at a path that moved. check-docs governs docs/ and never looked at root CLAUDE.md, which is why six weeks passed. FIXED 2026-08-28: the overview now describes the TypeScript Cribl App Platform app as the deliverable, states plainly that the PowerShell toolkit is deprecated, and the DCR-Automation paths are corrected to deprecated/. DCR-Templates was deliberately LEFT at its root path - it is a public API that Cribl documentation deep-links into, so bulk rewriting every Azure/ path would have broken it. VERIFIED live by checking each linked directory resolves on disk. The sweep found FIVE more broken links beyond the reported one - Azure/dev/ and its discovery tools also moved to deprecated/, and Azure/dev/LabAutomation/ never existed at that path at all (the only trace is a React page in the deprecated Electron app). Every linked directory in CLAUDE.md now resolves on disk, checked mechanically. *bug, closed.*",
-      "verified": "live"
+      "detail": "FOUND 2026-08-28 by a reader, in the one file loaded into EVERY session. Its Project Overview calls this \"a PowerShell-based automation toolkit\" whose primary focus is DCR automation - but that toolkit was moved to `deprecated/` on 2026-07-13 and receives no further development, and the actual deliverable is the TypeScript Cribl App Platform app at soc-optimizationtoolkit (v1.12.3). Worse than wrong prose: every command block points at `.\\Azure\\CustomDeploymentTemplates\\DCR-Automation\\Run-DCRAutomation.ps1`, a path that has not existed for six weeks - the script is under `deprecated/`. 24 PowerShell references in all. So the file that tells every contributor and every agent how this repo works has been instructing them to run a superseded tool at a path that moved. check-docs governs docs/ and never looked at root CLAUDE.md, which is why six weeks passed. FIXED 2026-08-28: the overview now describes the TypeScript Cribl App Platform app as the deliverable, states plainly that the PowerShell toolkit is deprecated, and the DCR-Automation paths are corrected to deprecated/. DCR-Templates was deliberately LEFT at its root path - it is a public API that Cribl documentation deep-links into, so bulk rewriting every Azure/ path would have broken it. VERIFIED live by checking each linked directory resolves on disk. The sweep found FIVE more broken links beyond the reported one - Azure/dev/ and its discovery tools also moved to deprecated/, and Azure/dev/LabAutomation/ never existed at that path at all (the only trace is a React page in the deprecated Electron app). Every linked directory in CLAUDE.md now resolves on disk, checked mechanically. *bug, closed.*"
+    }
+  ],
+  "features": [
+    {
+      "id": "AZR-F1",
+      "epic": "AZR",
+      "title": "Onboarding foundation and coverage data",
+      "anchor": "6",
+      "wsjf": null
+    },
+    {
+      "id": "AZR-F2",
+      "epic": "AZR",
+      "title": "Azure Policy - diagnostic settings to Event Hub",
+      "anchor": "6a",
+      "wsjf": null
+    },
+    {
+      "id": "AZR-F3",
+      "epic": "AZR",
+      "title": "Direct ARM configuration - script, no policy",
+      "anchor": "6b",
+      "wsjf": null
+    },
+    {
+      "id": "AZR-F4",
+      "epic": "AZR",
+      "title": "Defender XDR export - guided portal",
+      "anchor": "6c",
+      "wsjf": null
+    },
+    {
+      "id": "AZR-F5",
+      "epic": "AZR",
+      "title": "Pull collectors - no push path exists",
+      "anchor": "6d",
+      "wsjf": null
+    },
+    {
+      "id": "AZR-F6",
+      "epic": "AZR",
+      "title": "Blob-only sources - cannot reach Event Hub",
+      "anchor": "6e",
+      "wsjf": null
+    },
+    {
+      "id": "AZR-F7",
+      "epic": "AZR",
+      "title": "Agent-based - AMA plus DCR",
+      "anchor": "6f",
+      "wsjf": null
+    },
+    {
+      "id": "AZR-F8",
+      "epic": "AZR",
+      "title": "Dataflow diagrams, one per category",
+      "anchor": "6g",
+      "wsjf": null
+    },
+    {
+      "id": "AZR-F9",
+      "epic": "AZR",
+      "title": "Shared onboarding concerns",
+      "anchor": "6h",
+      "wsjf": null
+    },
+    {
+      "id": "WIN-F1",
+      "epic": "WIN",
+      "title": "Windows Event analysis screen",
+      "anchor": "5",
+      "wsjf": null
+    },
+    {
+      "id": "WIN-F2",
+      "epic": "WIN",
+      "title": "Microsoft proprietary enrichment catalog",
+      "anchor": "5a",
+      "wsjf": null
+    },
+    {
+      "id": "WIN-F3",
+      "epic": "WIN",
+      "title": "Lake copy format - JSON vs Parquet",
+      "anchor": "5b",
+      "wsjf": null
+    },
+    {
+      "id": "HON-F1",
+      "epic": "HON",
+      "title": "Capability model follow-ons",
+      "anchor": "1",
+      "wsjf": null
+    },
+    {
+      "id": "HON-F2",
+      "epic": "HON",
+      "title": "Unverified empty inventories",
+      "anchor": "4",
+      "wsjf": null
+    },
+    {
+      "id": "HON-F3",
+      "epic": "HON",
+      "title": "Guid-column aftermath, made visible",
+      "wsjf": null
+    },
+    {
+      "id": "GEN-F1",
+      "epic": "GEN",
+      "title": "Pack generation correctness and provenance",
+      "wsjf": null
+    },
+    {
+      "id": "PK-F1",
+      "epic": "PK",
+      "title": "Pack maintenance parity",
+      "anchor": "12",
+      "wsjf": null
+    },
+    {
+      "id": "VND-F1",
+      "epic": "VND",
+      "title": "Vendor column-order naming",
+      "anchor": "13c",
+      "wsjf": null
+    },
+    {
+      "id": "CAP-F1",
+      "epic": "CAP",
+      "title": "Capability taxonomy extension",
+      "anchor": "1",
+      "wsjf": null
+    },
+    {
+      "id": "REL-F1",
+      "epic": "REL",
+      "title": "Release and deployment hygiene",
+      "anchor": "8",
+      "wsjf": null
+    },
+    {
+      "id": "DBT-F1",
+      "epic": "DBT",
+      "title": "Verification gaps",
+      "anchor": "7",
+      "wsjf": null
+    },
+    {
+      "id": "DBT-F2",
+      "epic": "DBT",
+      "title": "Copy and UX",
+      "anchor": "9",
+      "wsjf": null
+    },
+    {
+      "id": "DBT-F3",
+      "epic": "DBT",
+      "title": "Diagram fidelity",
+      "anchor": "10",
+      "wsjf": null
+    },
+    {
+      "id": "DBT-F4",
+      "epic": "DBT",
+      "title": "Docs and spec grounding",
+      "wsjf": null
+    },
+    {
+      "id": "DBT-F5",
+      "epic": "DBT",
+      "title": "Board tooling defects",
+      "wsjf": null
+    },
+    {
+      "id": "DBT-F6",
+      "epic": "DBT",
+      "title": "Effect-identity defect class",
+      "anchor": "12",
+      "wsjf": null
     }
   ]
 }

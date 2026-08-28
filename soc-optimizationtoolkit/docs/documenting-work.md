@@ -102,7 +102,28 @@ regex could find - not even that, in the end. Two cards written
 matched and BOTH spikes were invisible to every tool that read the board,
 including the duplicate-id check itself. Moving to data is what surfaced them.
 
-Each story carries an `id`, `epic`, `title`, `type`, `status`
+**The hierarchy is SAFe (Essential level), since 2026-08-28.** Epic > Feature >
+Story, with Tasks under a story. `epics[]` carries a `kind`: a **business** epic
+delivers value, an **enabler** epic exists to unblock other epics - CAP is the
+textbook case, described on its own card as "the single upstream blocker for
+three other epics". `features[]` sit under one epic and hold the work; most were
+derived from the numbered sections of `backlog.md`, which had been acting as
+features already, and carry that `anchor`.
+
+Types are SAFe's, not the old `chore` vocabulary: `story` changes what an
+operator sees, `enabler` is infrastructure/tooling/docs/release mechanics,
+`spike` is SAFe's exploration enabler (answered by investigation, never by
+preference), `bug` is a defect, and `decision` is a LOCAL extension for a
+question a person answers, attached to the feature it blocks. There is no
+separate decisions epic: a decision belongs to the feature it is holding up.
+
+Features carry `wsjf` - `(bv + tc + rr) / size`, each input on SAFe's modified
+Fibonacci scale (1, 2, 3, 5, 8, 13, 20), highest first. An unscored feature
+renders as **unscored**, never as zero: a feature nobody has sized must not
+silently sort last. Stories keep `priority` (now / next / later); WSJF sequences
+features, priority sequences stories underneath.
+
+Each story carries an `id`, `epic`, `feature`, `title`, `type`, `status`
 (backlog / in-progress / done), a `priority` while it is in the backlog
 (now / next / later), `settled` (settled / undecided / unconfirmed),
 `verified` (pins / live / both / none), a `dependsOn` list, and `detail`.

@@ -10,7 +10,7 @@
 //
 // Pure: takes data, returns a string. The server does the IO.
 
-import { blockers, PRIORITIES, STATUSES } from './board.mjs';
+import { blockers, PRIORITIES, STATUSES, wsjfScore } from './board.mjs';
 
 /** Display names; the LIST of columns is not ours to decide. */
 const COLUMN_TITLES = {
@@ -39,6 +39,46 @@ export function columnsFrom(statuses) {
 
 const COLUMNS = columnsFrom(STATUSES);
 
+/**
+ * What each piece of vocabulary MEANS, shown behind an information affordance.
+ *
+ * The keys on this board are three-letter epic codes and single words like
+ * `chore` and `settled`. They are obvious to whoever wrote them and opaque to
+ * everyone else - "I don't know what HON or REL means" was the first thing a
+ * reader said about it. The explanations already existed in board.json's epic
+ * `name` and `why`; nothing was showing them.
+ */
+const GLOSSARY = {
+  status: {
+    backlog: 'Not started. Priority orders the lanes inside this column.',
+    'in-progress': 'Being worked on right now. A card moves here BEFORE the work starts, not after it finishes.',
+    done: 'Finished. Its `verified` tag says how that was confirmed.',
+  },
+  priority: {
+    now: 'Next to pick up. Nothing should block these.',
+    next: 'Settled and unblocked, sequenced behind now.',
+    later: 'Settled, but gated on something above.',
+  },
+  type: {
+    story: 'Changes what an operator sees or does.',
+    enabler: "SAFe Enabler: infrastructure, architecture, tooling, docs or release mechanics. No operator sees it, but the work above it needs it.",
+    spike: 'SAFe exploration Enabler. Answered by INVESTIGATION, never by preference - timeboxed, and demonstrated like any story.',
+    bug: 'A defect in code that was already committed. SAFe has no separate place for these; they sit in the backlog beside stories.',
+    decision: 'A LOCAL extension, not SAFe: a question answered by a person rather than by investigation, attached to the feature it blocks.',
+  },
+  settled: {
+    settled: 'Nothing is undecided - only the work remains.',
+    undecided: 'A real question is still open. No amount of effort finishes this until it is answered.',
+    unconfirmed: 'Reported but not yet reproduced or confirmed.',
+  },
+  verified: {
+    pins: 'Confirmed by automated tests, and only those.',
+    live: 'Confirmed by driving the real product or environment, and only that.',
+    both: 'Confirmed by pins AND a live run.',
+    none: 'Neither - legitimate for docs and process work, and the value to notice on anything else.',
+  },
+};
+
 function esc(s) {
   return String(s ?? '')
     .replace(/&/g, '&amp;')
@@ -60,17 +100,102 @@ function richText(text) {
     .replace(/\[\[([^\]]+)\]\]/g, '<a class="xref" href="#card-$1">$1</a>');
 }
 
+/**
+ * The information affordance. A small `i` carrying an explanation, because the
+ * board's own vocabulary - three-letter epic keys, `enabler`, `settled` - is
+ * obvious only to whoever wrote it.
+ */
+function info(text) {
+  if (!text) return '';
+  return `<span class="i" title="${esc(text)}" aria-label="${esc(text)}" role="img">i</span>`;
+}
+
+/** A tag that explains itself. */
+function tag(cls, label, explain) {
+  return `<span class="tag ${esc(cls)}" title="${esc(explain ?? '')}">${esc(label)}</span>`;
+}
+
+function pct(done, total) {
+  return total === 0 ? 0 : Math.round((100 * done) / total);
+}
+
+function bar(done, total) {
+  const p = pct(done, total);
+  return (
+    `<div class="bar" title="${done} of ${total} done"><span style="width:${p}%"></span></div>` +
+    `<div class="bar-label">${p}% &middot; ${done}/${total}</div>`
+  );
+}
+
+/** Counts by type, so a feature says what kind of work is under it. */
+function typeCounts(kids) {
+  const n = {};
+  for (const k of kids) n[k.type] = (n[k.type] ?? 0) + 1;
+  return Object.entries(n)
+    .map(([t, c]) => `<span class="mini" title="${esc(GLOSSARY.type[t] ?? t)}">${c} ${esc(t)}</span>`)
+    .join('');
+}
+
+/** One card per epic: the largest grouping, with its features rolled up. */
+function epicCard(epic, data) {
+  const feats = (data.features ?? []).filter((f) => f.epic === epic.key);
+  const kids = (data.stories ?? []).filter((s) => s.epic === epic.key);
+  const done = kids.filter((s) => s.status === 'done').length;
+  const kind =
+    epic.kind === 'enabler'
+      ? tag('kind-enabler', 'enabler', 'An ENABLER epic: it exists to unblock other epics rather than to deliver value on its own.')
+      : tag('kind-business', 'business', 'A BUSINESS epic: it delivers value directly.');
+  return [
+    `<article class="card epic-card" data-epic="${esc(epic.key)}"`,
+    ` data-text="${esc(`${epic.key} ${epic.name} ${epic.why}`.toLowerCase())}">`,
+    `<header><span class="id">${esc(epic.key)}</span>${info(epic.why)}</header>`,
+    `<h3>${esc(epic.name)}</h3>`,
+    `<div class="tags">${kind}<span class="mini">${feats.length} features</span>${typeCounts(kids)}</div>`,
+    bar(done, kids.length),
+    `</article>`,
+  ].join('');
+}
+
+/** One card per feature: WSJF, progress, and what kind of work is under it. */
+function featureCard(feature, data) {
+  const kids = (data.stories ?? []).filter((s) => s.feature === feature.id);
+  const done = kids.filter((s) => s.status === 'done').length;
+  const score = wsjfScore(feature.wsjf);
+  const openDecisions = kids.filter(
+    (s) => s.type === 'decision' && (s.decision?.chosen ?? null) === null && s.status !== 'done',
+  ).length;
+  return [
+    `<article class="card feature-card" data-epic="${esc(feature.epic)}"`,
+    ` data-text="${esc(`${feature.id} ${feature.title} ${feature.epic}`.toLowerCase())}">`,
+    `<header><span class="id">${esc(feature.id)}</span>`,
+    `<span class="epic">${esc(feature.epic)}</span></header>`,
+    `<h3>${esc(feature.title)}</h3>`,
+    `<div class="tags">`,
+    score === null
+      ? tag('wsjf-none', 'WSJF unscored', 'No WSJF yet. SAFe sequences features by (business value + time criticality + risk reduction) / job size - an unscored feature cannot be sequenced.')
+      : tag('wsjf', `WSJF ${score.toFixed(2)}`, '(business value + time criticality + risk reduction) / job size. Higher goes first.'),
+    typeCounts(kids),
+    openDecisions > 0
+      ? tag('blocked', `${openDecisions} open decision${openDecisions > 1 ? 's' : ''}`, 'A question on this feature is unanswered, so the work behind it cannot start.')
+      : '',
+    `</div>`,
+    bar(done, kids.length),
+    feature.anchor ? `<p class="note">backlog.md#${esc(feature.anchor)}</p>` : '',
+    `</article>`,
+  ].join('');
+}
+
 function card(story, byId) {
   const blocked = blockers(story, byId);
   const tags = [
-    `<span class="tag type-${esc(story.type)}">${esc(story.type)}</span>`,
-    `<span class="tag settled-${esc(story.settled)}">${esc(story.settled)}</span>`,
+    tag(`type-${story.type}`, story.type, GLOSSARY.type[story.type]),
+    tag(`settled-${story.settled}`, story.settled, GLOSSARY.settled[story.settled]),
   ];
   if (story.verified !== undefined) {
     // `none` is a legitimate answer and still the one to notice, so it is
     // styled like the other amber "look at this" tags rather than hidden.
     tags.push(
-      `<span class="tag verified-${esc(story.verified)}">verified: ${esc(story.verified)}</span>`,
+      tag(`verified-${story.verified}`, `verified: ${story.verified}`, GLOSSARY.verified[story.verified]),
     );
   }
   if (blocked.length > 0) {
@@ -111,6 +236,7 @@ function card(story, byId) {
     ` data-settled="${esc(story.settled)}" data-blocked="${blocked.length ? 'yes' : 'no'}"`,
     ` data-text="${esc(`${story.id} ${story.title} ${story.epic} ${detail}`.toLowerCase())}">`,
     `<header><span class="id">${esc(story.id)}</span>`,
+    story.feature ? `<span class="feat" title="Feature this story sits under">${esc(story.feature)}</span>` : '',
     `<span class="epic">${esc(story.epic)}</span></header>`,
     `<h3>${esc(story.title)}</h3>`,
     `<div class="tags">${tags.join('')}</div>`,
@@ -162,10 +288,27 @@ export function renderBoardHtml(data, today, findings = []) {
     }
     return (
       `<section class="col" data-status="${esc(col.status)}">` +
-      `<h2>${esc(col.title)} <span class="count">${inCol.length}</span></h2>` +
+      `<h2>${esc(col.title)} <span class="count">${inCol.length}</span>` +
+      `${info(GLOSSARY.status[col.status])}</h2>` +
       `${body}</section>`
     );
   }).join('');
+
+  // The two rollup columns. They are NOT progress states - they are the levels
+  // above a story - so they sit left of the flow rather than inside it.
+  const epicCol =
+    `<section class="col col-rollup" data-status="epics">` +
+    `<h2>Epics <span class="count">${(data.epics ?? []).length}</span>` +
+    `${info('The largest grouping. SAFe: Epic > Feature > Story. A business epic delivers value; an enabler epic exists to unblock other epics.')}</h2>` +
+    (data.epics ?? []).map((e) => epicCard(e, data)).join('') +
+    `</section>`;
+
+  const featureCol =
+    `<section class="col col-rollup" data-status="features">` +
+    `<h2>Features <span class="count">${(data.features ?? []).length}</span>` +
+    `${info('A feature sits under one epic and holds the stories, spikes and bugs that deliver it. WSJF sequences features: (business value + time criticality + risk reduction) / job size.')}</h2>` +
+    (data.features ?? []).map((f) => featureCard(f, data)).join('') +
+    `</section>`;
 
   const epicRows = (data.epics ?? [])
     .map((e) => {
@@ -200,7 +343,8 @@ input[type=search]{background:var(--panel);border:1px solid var(--line);color:va
 .chip{background:var(--panel);border:1px solid var(--line);color:var(--dim);border-radius:99px;padding:3px 9px;font-size:12px;cursor:pointer;font-family:inherit}
 .chip.on{border-color:var(--accent);color:var(--accent)}
 .epics{display:flex;gap:6px;flex-wrap:wrap;padding:10px 20px;border-bottom:1px solid var(--line)}
-.board{display:grid;grid-template-columns:repeat(3,minmax(320px,1fr));gap:14px;padding:16px 20px;align-items:start}
+.board{display:grid;grid-template-columns:repeat(5,minmax(270px,1fr));gap:14px;padding:16px 20px;align-items:start}
+.col-rollup{background:#131c26}
 .col{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px;min-height:120px}
 .col h2{font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:var(--dim);margin:0 0 10px}
 .lane h4{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--dim);margin:12px 0 6px;border-top:1px dashed var(--line);padding-top:8px}
@@ -237,6 +381,18 @@ input[type=search]{background:var(--panel);border:1px solid var(--line);color:va
 .opt-detail{display:block;margin:3px 0 0 20px;font-size:11.5px;color:var(--dim);line-height:1.4}
 .decision .note{margin:6px 0 0;font-size:10.5px;color:var(--dim);line-height:1.4}
 .decision.answered .note{color:#8fbf9f}
+.i{display:inline-flex;align-items:center;justify-content:center;width:14px;height:14px;border:1px solid var(--dim);border-radius:50%;font-size:10px;font-style:italic;font-weight:700;color:var(--dim);cursor:help;margin-left:6px;flex:none;line-height:1}
+.i:hover{border-color:var(--accent);color:var(--accent)}
+.mini{font-size:10px;color:var(--dim);background:var(--line);border-radius:4px;padding:1px 6px}
+.bar{height:5px;background:var(--line);border-radius:3px;overflow:hidden;margin-top:8px}
+.bar span{display:block;height:100%;background:#4fbf7a}
+.bar-label{font-size:10px;color:var(--dim);margin-top:3px}
+.epic-card .id,.feature-card .id{font-size:12px}
+.feat{background:#1d2a3a;color:#8fb6e0;border-radius:99px;padding:0 7px;margin-left:6px}
+.tag.kind-enabler{background:#2c2440;color:#c0a6ff}
+.tag.kind-business{background:#16303a;color:#7fd4f0}
+.tag.wsjf{background:#14301f;color:#7ee0a8}
+.tag.wsjf-none{background:#2a2a2a;color:#9a9a9a}
 details{margin-top:7px}
 summary{cursor:pointer;color:var(--dim);font-size:11px;text-transform:uppercase;letter-spacing:.05em}
 details p{margin:6px 0 0;color:#c3d2e2;font-size:12.5px;white-space:pre-wrap}
@@ -245,6 +401,7 @@ a.xref{color:var(--accent)}
 .findings{margin:12px 20px;padding:10px 14px;border:1px solid #7a4b12;background:#2a1d0c;border-radius:8px;color:#ffcf8a}
 .findings ul{margin:6px 0 0;padding-left:18px}
 .hide{display:none}
+@media(max-width:1600px){.board{grid-template-columns:repeat(3,minmax(270px,1fr))}}
 @media(max-width:1000px){.board{grid-template-columns:1fr}}
 </style></head><body>
 <header class="top">
@@ -257,7 +414,7 @@ a.xref{color:var(--accent)}
 </header>
 <div class="epics">${epicRows}</div>
 ${findingsBlock}
-<main class="board">${columns}</main>
+<main class="board">${epicCol}${featureCol}${columns}</main>
 <script>
 const q=document.getElementById('q');
 const blockedBtn=document.getElementById('blockedOnly');
