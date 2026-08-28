@@ -11,7 +11,7 @@ two cannot disagree.
 alternatives. This board holds only what is a unit of work, what state it is
 in, and what it waits on.
 
-**63 in the backlog, 0 in progress, 15 done.**
+**62 in the backlog, 0 in progress, 16 done.**
 
 ## Epics and features
 
@@ -20,13 +20,13 @@ unblock other epics rather than to deliver on its own. Features are
 groupings, not a queue - they carry no score and no order. Priority lives
 on the stories underneath (now / next / later).
 
-### `AZR` Azure native source onboarding - 6% (1/16)
+### `AZR` Azure native source onboarding - 13% (2/16)
 
 The largest unstarted block: every Azure telemetry source, category by category
 
 | Feature | Done | Stories |
 |---|---|---|
-| `AZR-F1` Onboarding foundation and coverage data | 0/1 | AZR-0 |
+| `AZR-F1` Onboarding foundation and coverage data | 1/1 | AZR-0 |
 | `AZR-F2` Azure Policy - diagnostic settings to Event Hub | 0/3 | AZR-2, AZR-4, AZR-5 |
 | `AZR-F3` Direct ARM configuration - script, no policy | 0/1 | AZR-3 |
 | `AZR-F4` Defender XDR export - guided portal | 0/1 | AZR-6 |
@@ -119,7 +119,7 @@ _Nothing here._
 
 ---
 
-## Backlog - now (9)
+## Backlog - now (8)
 
 Next to pick up. Nothing blocks these.
 
@@ -177,13 +177,6 @@ Next to pick up. Nothing blocks these.
   `backlog.md#4` calls "honest, but inert". Depends on CAP-1. Already
   measured, do not re-add: Event Hub namespace creation is `arm.deploy`; every
   Cribl-side write is `source.manage`. ---
-
-- **AZR-0** Port `resource-coverage.json` to the app KV store as the selection model
-  `AZR-F1` `enabler` `settled`
-  The checkbox model exists as a file - port it, do not invent one. Its
-  `method` values ARE the section keys. Keep the tier/profile sub-selections
-  and the `notSupported` block verbatim. Precedes every sub-item.
-  `backlog.md#6`.
 
 ---
 
@@ -300,7 +293,7 @@ Settled, gated on something above.
     [ ] `connected-or-airgap` Write when connected, export when not - Both behind one convention, mirroring what secret-provisioning.ts already does for secrets (POST when connected, placeholder when air-gapped). NOTE: drawn from that existing convention, not from this card's own text. Costs two paths kept in step.
 
 - **AZR-2** TRACER BULLET: Entra ID tenant diagnostics, one category group
-  `AZR-F2` `story` `settled` `blocked by AZR-S2, AZR-0`
+  `AZR-F2` `story` `settled` `blocked by AZR-S2`
   One ARM PUT to `microsoft.aadiam/diagnosticSettings`, catalogued as porting
   nearly one-to-one. Checkbox grain is the category, with Standard (9) and
   HighVolume (15) as presets, and the non-interactive sign-in volume warning
@@ -312,23 +305,23 @@ Settled, gated on something above.
   `resource-coverage.json` omits). `backlog.md#6a`.
 
 - **AZR-3** Defender for Cloud continuous export
-  `AZR-F3` `story` `settled` `blocked by AZR-0`
+  `AZR-F3` `story` `settled`
   Per subscription, a `Microsoft.Security/automations` resource. Detects which
   of 12 paid plans are enabled and never enables one - keep that property.
   `backlog.md#6b`.
 
 - **AZR-8** Blob-only sources as visible unavailable rows
-  `AZR-F6` `story` `settled` `blocked by AZR-S2, AZR-0`
+  `AZR-F6` `story` `settled` `blocked by AZR-S2`
   vNet and NSG Flow Logs have no Event Hub path; the blob path already exists
   end to end. The `notSupported` block is a feature of the legacy config, not
   an omission. Smallest sub-item by a wide margin. `backlog.md#6e`.
 
 - **AZR-9** Link the AMA plus DCR path to the app's own DCR Automation and Integrate routes rather than dup
-  `AZR-F7` `story` `settled` `blocked by AZR-0`
+  `AZR-F7` `story` `settled`
   licating them. Natural place to surface WIN. `backlog.md#6f`.
 
 - **AZR-4** Azure Policy initiatives - the bulk of the platform
-  `AZR-F2` `story` `settled` `blocked by AZR-S2, CAP-2, CAP-3, AZR-0`
+  `AZR-F2` `story` `settled` `blocked by AZR-S2, CAP-2, CAP-3`
   Built-in Audit or AllLogs (one or the other), eight community tiers with a
   per-service expander, plus Activity Log, AKS and PostgreSQLFlexible as
   visible checkboxes because the bundled initiative excludes them silently.
@@ -338,13 +331,13 @@ Settled, gated on something above.
   policy modelling exists in the repo today. `backlog.md#6a`.
 
 - **AZR-5** Diagnostic-settings cleanup, preview only
-  `AZR-F2` `story` `settled` `blocked by AZR-0`
+  `AZR-F2` `story` `settled`
   Enumerate exactly what would be removed, grouped by resource type and target
   namespace, and stop. No delete capability in the GUI in this pass.
   `backlog.md#6a`.
 
 - **AZR-6** Defender XDR guided worklist
-  `AZR-F4` `story` `settled` `blocked by AZR-S1, AZR-S2, CAP-5, AZR-0`
+  `AZR-F4` `story` `settled` `blocked by AZR-S1, AZR-S2, CAP-5`
   Licence check then usage probe - a licence held is not a product in use. The
   checkboxes here are a worklist, not a deployment: Microsoft exposes no
   configuration API for XDR streaming, so the last step is a portal visit,
@@ -352,21 +345,21 @@ Settled, gated on something above.
   `backlog.md#6c`.
 
 - **AZR-7** Sentinel incidents via a Cribl REST collector
-  `AZR-F5` `story` `settled` `blocked by AZR-S1, CAP-4, DBT-1, AZR-0`
+  `AZR-F5` `story` `settled` `blocked by AZR-S1, CAP-4, DBT-1`
   Filter on `lastModifiedTimeUtc`, not `createdTimeUtc` - filtering on
   creation misses every update to an open incident. Repeat deliveries are
   correct; dedupe downstream on incident GUID plus `lastModifiedTimeUtc`.
   Build on `lab-cribl.ts:149`. `backlog.md#6d`.
 
 - **AZR-10** Dataflow diagrams, one per category
-  `AZR-F8` `story` `settled` `blocked by AZR-0`
+  `AZR-F8` `story` `settled`
   Do not build a new diagram implementation - the renderer and layout exist
   and the work is data, new entries in `architecture-patterns.ts`. Draw the
   manual portal step in AZR-6 as a step, and draw AZR-7 flowing the other way.
   Trail each section by one. `backlog.md#6g`.
 
 - **AZR-11** Make the prerequisite ordering explicit
-  `AZR-F9` `enabler` `settled` `blocked by AZR-0`
+  `AZR-F9` `enabler` `settled`
   Nearly every section needs an Event Hub namespace first, and the policy
   sections need Policy Contributor plus User Access Administrator at MG scope.
   `backlog.md#6h`.
@@ -668,7 +661,7 @@ Settled, gated on something above.
 
 ---
 
-## Done (15)
+## Done (16)
 
 Kept briefly so a reader can see what just landed; prune when the list grows.
 
@@ -732,6 +725,29 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   Two of the three fixes also extracted the decision to a pure function
   (`shouldReloadEdits`, `autoDropPlan`) - which is what made the third one's
   asymmetry visible at a glance.
+
+- **AZR-0** Port `resource-coverage.json` to the app KV store as the selection model
+  `AZR-F1` `enabler` `settled` `verified: pins`
+  The checkbox model exists as a file - port it, do not invent one. Its
+  `method` values ARE the section keys. Keep the tier/profile sub-selections
+  and the `notSupported` block verbatim. Precedes every sub-item.
+  `backlog.md#6`. BUILT 2026-08-28 as `domain/coverage-model`, split in two:
+  `coverage-catalog` is what CAN be ticked (ported, shipped in code) and
+  `coverage-selection` is what IS ticked (KV store, key
+  `azure-coverage-selection`). What ticking MEANS stays in AZR-1s
+  `onboarding-selection`, which this feeds. THE PORT IS PINNED AGAINST ITS
+  SOURCE: the tests read the real `resource-coverage.json` off disk and
+  compare description, note, method, resourceCount, community tier details,
+  Entra profiles, the notSupported block and the XDR unsupported-tables list.
+  Mutation-checked three ways - a one-word paraphrase fails, deleting a ported
+  source fails a separate completeness pin that walks the legacy file for
+  anything missed, and removing the legacy file makes the pins fail LOUDLY
+  with instructions rather than skip. HONEST GAP: the legacy file covers four
+  of the six sections. 6d (pull collectors) and 6f (agent-based) have no entry
+  and are NOT stubbed - an empty section would report coverage the port cannot
+  back; AZR-7 and AZR-9 add them. Decoding reports what it drops, because a
+  silently dropped id leaves a box unticked while the thing is still deployed.
+  Not done: the screen, the KV adapter binding (shell), prerequisite ordering.
 
 - **AZR-1** Establish the additive-only contract
   `AZR-F9` `enabler` `settled` `verified: pins`
