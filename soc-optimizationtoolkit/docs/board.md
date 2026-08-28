@@ -11,7 +11,7 @@ two cannot disagree.
 alternatives. This board holds only what is a unit of work, what state it is
 in, and what it waits on.
 
-**60 in the backlog, 0 in progress, 23 done.**
+**59 in the backlog, 0 in progress, 24 done.**
 
 ## By menu item
 
@@ -23,14 +23,14 @@ operator sees on any screen. Two menus are PLANNED and have no route yet.
 |---|---|---|---|
 | Dataflow | 2 | 0 | 0 |
 | Setup | 1 | 0 | 0 |
-| Sentinel Integration | 19 | 4 | 6 |
+| Sentinel Integration | 18 | 5 | 5 |
 | Pack Maintenance | 4 | 0 | 0 |
 | Permission Verification | 8 | 0 | 0 |
 | Azure Native Source Onboarding (planned) | 13 | 4 | 0 |
 | Windows Event analysis (planned) | 5 | 0 | 0 |
 | Cross-cutting | 8 | 15 | 1 |
 
-Open work totals 60.
+Open work totals 59.
 
 ## Epics and features
 
@@ -91,13 +91,13 @@ Maintaining a pack after it is built, including a silent data-loss defect
 |---|---|---|---|
 | `PK-F1` Pack maintenance parity | Pack Maintenance | 0/3 | PK-1, PK-2, D-6 |
 
-### `VND` Vendor field definitions - 0% (0/4)
+### `VND` Vendor field definitions - 25% (1/4)
 
 Positional CSV naming, reaching past ~18 vendors
 
 | Feature | Menu | Done | Stories |
 |---|---|---|---|
-| `VND-F1` Vendor column-order naming | Sentinel Integration | 0/4 | HON-5, VND-3, VND-1, D-7 |
+| `VND-F1` Vendor column-order naming | Sentinel Integration | 1/4 | HON-5, VND-3, VND-1, D-7 |
 
 ### `CAP` Capability taxonomy extension _(enabler)_ - 0% (0/6)
 
@@ -138,7 +138,7 @@ _Nothing here._
 
 ---
 
-## Backlog - now (7)
+## Backlog - now (6)
 
 Next to pick up. Nothing blocks these.
 
@@ -156,22 +156,30 @@ Next to pick up. Nothing blocks these.
   `backlog.md#13c`.
 
 - **VND-3** Measure the column-order shortfall instead of hedging about it
-  `VND-F1` `bug` `undecided`
+  `VND-F1` `bug` `settled`
   Found live 2026-08-27: THREAT arrived with 38 fields and was named from the
   bundled 120-column PAN order; TRAFFIC, 41 against 115. Positional naming
   maps field[i] to name[i], so a feed missing any middle column mis-names
   everything after it, silently. The copy says "check the values beside each
   name before applying", which is a hedge where the app already holds the
   number. *bug, UNDECIDED whether a large shortfall should warn or block.
-  `backlog.md` 13c.*
-  DECISION (unanswered): When a bundled column order far exceeds the event's
-  field count, warn or block?
+  `backlog.md` 13c.* ANSWERED 2026-08-28 (user): warn above a threshold, Apply
+  stays ENABLED. Reasoning at backlog.md#13c. Blocking was tempting and wrong:
+  the rest of the app is pinned to annotate-never-hide-never-disable, a short
+  feed can be legitimately named once the order is edited, and this would be
+  the only control in the product disabled on a heuristic - which is how an
+  exception becomes a precedent. Threshold stated rather than derived (a
+  product call, not a measurement): warn when the bundled order exceeds the
+  field count by more than a quarter. Both live cases trip it - 38-of-120 and
+  41-of-115 are under half.
+  DECISION: When a bundled column order far exceeds the event's field count,
+  warn or block?
     [ ] `measure-only` Show the number, drop the hedge - Replace "check the values beside each name before applying" with the measured 38-of-120 and stop there. backlog.md#13c says it is a number the app already has and could show.
-    [ ] `warn` Warn above a shortfall threshold - A large shortfall warns visibly; Apply stays enabled. Matches the capability model's annotate-never-hide-never-disable rule, and a short feed can still be legitimately named once the order is edited.
+    [x] `warn` Warn above a shortfall threshold - A large shortfall warns visibly; Apply stays enabled. Matches the capability model's annotate-never-hide-never-disable rule, and a short feed can still be legitimately named once the order is edited.
     [ ] `block` Block Apply above the threshold - Disable Apply until the order is edited or explicitly overridden. Strongest guard against mis-naming every column after the first gap, and Skip already preserves the positional _N names - but it runs against the annotate-never-hide rule the rest of the app pins.
 
 - **VND-1** Let the operator name the vendor
-  `VND-F1` `story` `settled` `blocked by D-7`
+  `VND-F1` `story` `settled`
   Today the vendor comes from `detectVendorIdentity(solutionName)`, so
   anything outside `KNOWN_VENDOR_IDENTITIES` stores nothing - honest, but it
   caps the feature at about eighteen vendors. Needs a UI seam that was
@@ -188,17 +196,6 @@ Next to pick up. Nothing blocks these.
   `DBT-F1` `enabler` `settled`
   The Lake write path adds `_raw`, so no Lake-sourced bench can reach that
   branch - it needs a paste or an upload. `zscaler-lake-lab.md:167-179`.
-
-- **D-7** `VND-2` Does a persisted column order need a version or a captured-on date, so a firmware chang
-  `VND-F1` `decision` `undecided`
-  e can be reasoned about later rather than silently disagreeing with a future
-  bundled update? The only genuinely open question left in that plan.
-  `vendor-field-definition-plan.md:222-224`.
-  DECISION (unanswered): Should a persisted vendor column order carry a
-  version, a captured-on date, or neither?
-    [ ] `neither` Store neither - Keep vendor + logType + columns + overrides. The silent-disagreement harm is already handled: resolveColumnOrder re-derives the override notice against the CURRENT bundled order, and machine-applied pass-throughs are never stored.
-    [ ] `captured-on` Stamp a captured-on date - Record when the operator captured the order, so a later divergence reads as "captured before that change" rather than an unexplained disagreement. Always available - but it dates the capture, it does not identify the firmware.
-    [ ] `version` Record a version - Sharper than a date, but the version has to come from somewhere: nothing in the sample or the CSV-header dialog supplies one today, so it means asking the operator.
 
 ---
 
@@ -673,7 +670,7 @@ Settled, gated on something above.
 
 ---
 
-## Done (23)
+## Done (24)
 
 Kept briefly so a reader can see what just landed; prune when the list grows.
 
@@ -894,6 +891,25 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   unanchored-pattern class was already fixed once in 1.12.1; this was the
   second instance, which is why the rule is now anchored rather than
   re-tuned.*
+
+- **D-7** `VND-2` Does a persisted column order need a version or a captured-on date, so a firmware chang
+  `VND-F1` `decision` `settled` `verified: none`
+  e can be reasoned about later rather than silently disagreeing with a future
+  bundled update? The only genuinely open question left in that plan.
+  `vendor-field-definition-plan.md:222-224`. ANSWERED 2026-08-28 (user):
+  neither. Reasoning at backlog.md#13c, which is what settles it. The harm is
+  already handled by resolveColumnOrder re-deriving the override notice
+  against the CURRENT bundled order, so divergence surfaces when it matters
+  instead of being reconstructed from a stamp. A date says when the capture
+  happened but not which firmware produced it - the question actually being
+  asked - and a version has nowhere to come from, so it means asking the
+  operator for something they often do not know. A field the operator guesses
+  at is worse than a field that is absent. *decision, closed.*
+  DECISION: Should a persisted vendor column order carry a version, a
+  captured-on date, or neither?
+    [x] `neither` Store neither - Keep vendor + logType + columns + overrides. The silent-disagreement harm is already handled: resolveColumnOrder re-derives the override notice against the CURRENT bundled order, and machine-applied pass-throughs are never stored.
+    [ ] `captured-on` Stamp a captured-on date - Record when the operator captured the order, so a later divergence reads as "captured before that change" rather than an unexplained disagreement. Always available - but it dates the capture, it does not identify the firmware.
+    [ ] `version` Record a version - Sharper than a date, but the version has to come from somewhere: nothing in the sample or the CSV-header dialog supplies one today, so it means asking the operator.
 
 - **GEN-2** A rebuilt pack no longer inherits the previous build's pipelines
   `GEN-F1` `bug` `settled` `verified: both`

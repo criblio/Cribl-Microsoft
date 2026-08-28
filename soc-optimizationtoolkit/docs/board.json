@@ -655,7 +655,7 @@
       "type": "bug",
       "status": "backlog",
       "priority": "now",
-      "settled": "undecided",
+      "settled": "settled",
       "dependsOn": [],
       "decision": {
         "question": "When a bundled column order far exceeds the event's field count, warn or block?",
@@ -676,9 +676,9 @@
             "detail": "Disable Apply until the order is edited or explicitly overridden. Strongest guard against mis-naming every column after the first gap, and Skip already preserves the positional _N names - but it runs against the annotate-never-hide rule the rest of the app pins."
           }
         ],
-        "chosen": null
+        "chosen": "warn"
       },
-      "detail": "Found live 2026-08-27: THREAT arrived with 38 fields and was named from the bundled 120-column PAN order; TRAFFIC, 41 against 115. Positional naming maps field[i] to name[i], so a feed missing any middle column mis-names everything after it, silently. The copy says \"check the values beside each name before applying\", which is a hedge where the app already holds the number. *bug, UNDECIDED whether a large shortfall should warn or block. `backlog.md` 13c.*"
+      "detail": "Found live 2026-08-27: THREAT arrived with 38 fields and was named from the bundled 120-column PAN order; TRAFFIC, 41 against 115. Positional naming maps field[i] to name[i], so a feed missing any middle column mis-names everything after it, silently. The copy says \"check the values beside each name before applying\", which is a hedge where the app already holds the number. *bug, UNDECIDED whether a large shortfall should warn or block. `backlog.md` 13c.* ANSWERED 2026-08-28 (user): warn above a threshold, Apply stays ENABLED. Reasoning at backlog.md#13c. Blocking was tempting and wrong: the rest of the app is pinned to annotate-never-hide-never-disable, a short feed can be legitimately named once the order is edited, and this would be the only control in the product disabled on a heuristic - which is how an exception becomes a precedent. Threshold stated rather than derived (a product call, not a measurement): warn when the bundled order exceeds the field count by more than a quarter. Both live cases trip it - 38-of-120 and 41-of-115 are under half."
     },
     {
       "id": "VND-1",
@@ -1073,9 +1073,8 @@
       "feature": "VND-F1",
       "title": "`VND-2` Does a persisted column order need a version or a captured-on date, so a firmware chang",
       "type": "decision",
-      "status": "backlog",
-      "priority": "now",
-      "settled": "undecided",
+      "status": "done",
+      "settled": "settled",
       "dependsOn": [],
       "decision": {
         "question": "Should a persisted vendor column order carry a version, a captured-on date, or neither?",
@@ -1096,9 +1095,10 @@
             "detail": "Sharper than a date, but the version has to come from somewhere: nothing in the sample or the CSV-header dialog supplies one today, so it means asking the operator."
           }
         ],
-        "chosen": null
+        "chosen": "neither"
       },
-      "detail": "e can be reasoned about later rather than silently disagreeing with a future bundled update? The only genuinely open question left in that plan. `vendor-field-definition-plan.md:222-224`."
+      "detail": "e can be reasoned about later rather than silently disagreeing with a future bundled update? The only genuinely open question left in that plan. `vendor-field-definition-plan.md:222-224`. ANSWERED 2026-08-28 (user): neither. Reasoning at backlog.md#13c, which is what settles it. The harm is already handled by resolveColumnOrder re-deriving the override notice against the CURRENT bundled order, so divergence surfaces when it matters instead of being reconstructed from a stamp. A date says when the capture happened but not which firmware produced it - the question actually being asked - and a version has nowhere to come from, so it means asking the operator for something they often do not know. A field the operator guesses at is worse than a field that is absent. *decision, closed.*",
+      "verified": "none"
     },
     {
       "id": "D-8",

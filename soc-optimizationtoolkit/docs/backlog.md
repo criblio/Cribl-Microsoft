@@ -1592,6 +1592,37 @@ nothing MEASURES the discrepancy. A hedge is not a measurement, and 38-of-120 is
 a number the app already has and could show. Worth deciding whether a large
 shortfall should warn rather than hedge.
 
+**DECIDED 2026-08-28 (user): WARN ABOVE A THRESHOLD, Apply stays enabled.** The
+measured shortfall replaces the hedge, and a large one warns visibly - but the
+button is never disabled.
+
+Blocking was the tempting answer and is the wrong one here. The rest of the app
+is pinned to the capability model's **annotate, never hide, never disable** rule,
+and a short feed can be legitimately named once the order is edited - so a block
+would stop real work to prevent a mistake the warning already makes obvious. It
+would also be the only place in the product that disables a control on a
+heuristic, which is how an exception becomes a precedent.
+
+The threshold is a product decision, not a measurement, so it is stated rather
+than derived: warn when the bundled order exceeds the event's field count by
+more than a quarter. The two live cases both trip it - THREAT at 38-of-120 and
+TRAFFIC at 41-of-115 are both under half - and an order matching its feed
+closely does not.
+
+**Column-order provenance - DECIDED 2026-08-28 (user): STORE NEITHER a version
+nor a captured-on date.** D-7, the last open question in
+`vendor-field-definition-plan.md`. A persisted order keeps vendor, logType,
+columns and overrides, and nothing else.
+
+The harm it would have guarded against is already handled: `resolveColumnOrder`
+re-derives the override notice against the CURRENT bundled order, so a later
+divergence surfaces at the moment it matters rather than being reconstructed
+from a stamp. A date would say when the capture happened but not which firmware
+produced it - the question actually being asked - and a version has nowhere to
+come from: neither the sample nor the CSV-header dialog supplies one, so it
+means asking the operator for something they frequently do not know, and a field
+the operator guesses at is worse than a field that is absent.
+
 ### 13d. The solution list swallows the mouse wheel (DBT-14)
 
 With the pointer over the solution list, wheel scrolling moves neither the list
