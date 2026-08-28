@@ -313,9 +313,8 @@
       "feature": "AZR-F9",
       "title": "Decide whether the app creates Cribl sources over the API",
       "type": "spike",
-      "status": "backlog",
-      "priority": "later",
-      "settled": "undecided",
+      "status": "done",
+      "settled": "settled",
       "dependsOn": [],
       "decision": {
         "question": "Should the app create Cribl sources over the API, or keep exporting config to import?",
@@ -336,9 +335,10 @@
             "detail": "Both behind one convention, mirroring what secret-provisioning.ts already does for secrets (POST when connected, placeholder when air-gapped). NOTE: drawn from that existing convention, not from this card's own text. Costs two paths kept in step."
           }
         ],
-        "chosen": null
+        "chosen": "connected-or-airgap"
       },
-      "detail": "Every `/system/inputs` reference in the codebase is a read; Event Hub Discovery ends at a JSON download (`eventhub-discovery-screen.tsx:503-515`). The write-side plumbing exists (`guided-deploy/wire-source.ts`, `secret-provisioning.ts`) but a `POST /system/inputs` applier is net-new. This decision constrains AZR-2, AZR-4, AZR-6 and AZR-8, so make it once, early, on the smallest surface.  Then, in order:"
+      "detail": "Every `/system/inputs` reference in the codebase is a read; Event Hub Discovery ends at a JSON download (`eventhub-discovery-screen.tsx:503-515`). The write-side plumbing exists (`guided-deploy/wire-source.ts`, `secret-provisioning.ts`) but a `POST /system/inputs` applier is net-new. This decision constrains AZR-2, AZR-4, AZR-6 and AZR-8, so make it once, early, on the smallest surface.  Then, in order: ANSWERED 2026-08-28 (user): connected-or-airgap. Reasoning recorded at backlog.md#6h, which is what settles it - the click alone never does. It is not a new stance: it is the convention secret-provisioning settled on 2026-07-03 (one convention, two delivery paths), so onboarding behaves the way the deploy path already behaves rather than the codebase carrying a third opinion about what to do with no Cribl to talk to. It refuses both halves of the false choice - pure export leaves four sections ending at a manual import step, pure API makes an air-gapped install impossible, and air-gap is a shipped path with its own export module. COMMITS TO BUILDING a POST /system/inputs applier gated on source.manage (net-new; every current reference is a read). CONSTRAINT carried forward: the connectedness test must be the one the app already uses, not a new probe - two answers to \"is there a Cribl here\" is the duplicated-decision shape the capability model exists to end. *spike, closed by decision.*",
+      "verified": "none"
     },
     {
       "id": "AZR-0",
@@ -367,18 +367,18 @@
     {
       "id": "AZR-2",
       "epic": "AZR",
-      "feature": "AZR-F2",
+      "feature": "AZR-F3",
       "title": "TRACER BULLET: Entra ID tenant diagnostics, one category group",
       "type": "story",
-      "status": "backlog",
-      "priority": "later",
+      "status": "done",
       "settled": "settled",
       "dependsOn": [
         "AZR-S2",
         "AZR-0",
         "AZR-1"
       ],
-      "detail": "One ARM PUT to `microsoft.aadiam/diagnosticSettings`, catalogued as porting nearly one-to-one. Checkbox grain is the category, with Standard (9) and HighVolume (15) as presets, and the non-interactive sign-in volume warning at its own checkbox rather than in a footnote. Requires an Entra directory-role precondition, which the ARM RBAC evaluator provably cannot measure - a real finding this slice surfaces early. Non-negotiable: state the `_CL` divergence and UEBA consequence at the moment a sign-in category is ticked. Resolve the LOG-07 drift (a SecurityOnly profile that `resource-coverage.json` omits). `backlog.md#6a`."
+      "detail": "One ARM PUT to `microsoft.aadiam/diagnosticSettings`, catalogued as porting nearly one-to-one. Checkbox grain is the category, with Standard (9) and HighVolume (15) as presets, and the non-interactive sign-in volume warning at its own checkbox rather than in a footnote. Requires an Entra directory-role precondition, which the ARM RBAC evaluator provably cannot measure - a real finding this slice surfaces early. Non-negotiable: state the `_CL` divergence and UEBA consequence at the moment a sign-in category is ticked. Resolve the LOG-07 drift (a SecurityOnly profile that `resource-coverage.json` omits). `backlog.md#6b`. BUILT 2026-08-28 as `domain/entra-diagnostics`. One tenant-level ARM PUT to microsoft.aadiam/diagnosticSettings at api-version 2017-04-01. LOG-07 DRIFT RESOLVED in favour of the script, which is the thing that actually ran: all three profiles ship - SecurityOnly (6), Standard (9), HighVolume (15) - with members pinned against the legacy .ps1 read off disk, the same provenance approach AZR-0 used. The coverage catalog still offers the two it always did, because changing what a stored selection MEANS is a separate act. Both consequences ride their categories: the 5-10x warning sits on NonInteractiveUserSignInLogs, only 2 of 15 carry a volume warning (pinned so it cannot drift into noise), and the UEBA warning names the TABLE - exactly four categories are UEBA-bound, and NonInteractiveUserSignInLogs is deliberately NOT one, with its own pin because that is the plausible-sounding fabrication. THE PREDICTED FINDING, SURFACED: the Entra directory-role precondition is modelled UNMEASURABLE rather than unmeasured. The preflight reads ARM RBAC effective actions; Entra directory roles are not ARM role assignments and appear in no scope response, so no new capability entry would close it - it needs Graph. Calling it merely unchecked would be a preflight returning green for something it never examined. Mutation-checked: dropping a category from a profile fails 3 pins, and fabricating the NonInteractive UEBA binding fails 2. A SECOND drift found and fixed in passing: backlog 6b prose listed 5 HighVolume additions for a count of 15 when the script adds 6 - RemoteNetworkHealthLogs was missing. Not built: the screen, and the Event Hub namespace (LOG-03) this points at.",
+      "verified": "pins"
     },
     {
       "id": "AZR-3",
@@ -1271,6 +1271,18 @@
       "dependsOn": [],
       "detail": "FOUND while grooming for what to pick up next, 2026-08-28. The CAP epic describes itself as \"the single upstream blocker for three of them\" [epics]. Every card that actually waits on a CAP card is an AZR card - AZR-4 needs CAP-2 and CAP-3, AZR-6 needs CAP-5, AZR-7 needs CAP-4 - so it blocks ONE epic. The claim was probably true before the D and FX epics dissolved on 2026-08-27 and their cards were redistributed; nothing re-read the epic prose afterwards. It matters because the sentence is the argument for CAP being an enabler epic at all, and an inflated one invites working CAP ahead of the thing it serves. FIXED by removing the NUMBER, not by correcting it. Writing \"one\" would have rotted again the next time the graph moved - the same way \"three\" did. The epic prose now says what CAP is FOR and leaves the count to the dependency graph, which already knows it and is checked. Honest limit: nothing enforces this. A validator cannot read prose, so the only defence against the next inflated claim is not writing a countable assertion into prose in the first place. *bug, closed.*",
       "verified": "none"
+    },
+    {
+      "id": "DBT-25",
+      "epic": "DBT",
+      "feature": "DBT-F5",
+      "title": "AZR-2 is filed under the policy feature but its content is direct-ARM",
+      "type": "bug",
+      "status": "done",
+      "settled": "settled",
+      "verified": "none",
+      "dependsOn": [],
+      "detail": "FOUND 2026-08-28 while scoping AZR-2 to build it. The card is the Entra ID tenant diagnostics tracer bullet and every fact in it - the ARM PUT to `microsoft.aadiam/diagnosticSettings`, the Standard (9) and HighVolume (15) profiles, the LOG-07 SecurityOnly drift - comes from `backlog.md#6b` (Direct ARM configuration - script, no policy). It was filed under AZR-F2 (Azure Policy, anchor 6a) and cited `backlog.md#6a`. AZR-3, the OTHER 6b bullet, was already correctly under AZR-F3. WHY THE CHECK DID NOT CATCH IT: `check-board` verifies a citation RESOLVES, not that it resolves to the right thing - 6a is a real section, so the pointer passed. This is the exact failure documenting-work.md describes for line numbers and inherits for anchors: a pointer that is silently wrong sends a reader to confidently read the wrong section. Fixed by moving AZR-2 to AZR-F3 and re-citing to 6b. NOT fixable by a validator - only the card text knows which section it means - so nothing new is enforced here and the honest mitigation is that the next audit reads citations for SENSE, not just resolution."
     }
   ],
   "features": [

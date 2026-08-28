@@ -594,7 +594,63 @@ REST calls, so they port close to one-to-one.
   checkbox, not in a footnote. Requires Entra Security or Global Admin - surface
   it as a precondition check. Drift to resolve while porting: LOG-07 documents a
   third profile, SecurityOnly (6 categories), that `resource-coverage.json`
-  `_profileOptions` omits.
+  `_profileOptions` omits. (The HighVolume enumeration above listed five
+  additions for a count of 15; the script adds SIX - `RemoteNetworkHealthLogs`
+  was missing from the prose. Corrected 2026-08-28 while building AZR-2; the
+  count was right, so only the list was misleading.)
+
+**BUILT 2026-08-28 as AZR-2, the tracer bullet** - `domain/entra-diagnostics`.
+One tenant-level ARM PUT to `microsoft.aadiam/diagnosticSettings` at
+api-version 2017-04-01, ported close to one-to-one as LOG-07 predicted.
+
+**The drift is resolved in favour of the SCRIPT**, which is the thing that
+actually ran: all three profiles ship, with members taken verbatim from
+`$SecurityLogCategories` (6), `$StandardLogCategories` (9) and
+`$HighVolumeLogCategories` (15). The tests read the legacy `.ps1` off disk and
+compare, the same provenance approach AZR-0 used. The coverage catalog keeps
+offering the two profiles it always did, because changing what an existing
+stored selection MEANS is a separate act from making a third preset available.
+
+**The two consequences ride their categories.** The 5-10x warning sits on
+`NonInteractiveUserSignInLogs` itself, and only two of fifteen categories carry
+a volume warning at all - pinned, so it cannot drift upward one
+sympathetic-looking category at a time until the warning is noise. The UEBA
+consequence names the TABLE per category rather than warning vaguely about
+sign-ins: exactly four categories are UEBA-bound (`AuditLogs`, `SigninLogs`,
+`AADServicePrincipalSignInLogs`, `AADManagedIdentitySignInLogs`), and
+`NonInteractiveUserSignInLogs` is deliberately NOT one of them. That last point
+has its own pin, because it is the plausible-sounding fabrication: it is the
+loudest sign-in category, so it reads as though it ought to carry the warning,
+and a claim that survives on sounding right is the kind this repo keeps having
+to unpick.
+
+**THE FINDING THIS SLICE SURFACED, as AZR-2 predicted it would.** Writing the
+setting needs an Entra DIRECTORY role - Security Administrator or Global
+Administrator. The permission preflight reads Azure RBAC effective actions from
+`Microsoft.Authorization/permissions` at an ARM scope. Entra directory roles are
+not ARM role assignments; they appear in no scope's response and cannot be
+derived from one. This is not a coverage gap a new capability entry would close.
+
+So it is modelled as UNMEASURABLE, not unmeasured, and the distinction is the
+whole point: "unmeasured" invites someone to add a probe, while
+"unmeasurable by this evaluator" points at Microsoft Graph - the `GraphDirectory`
+port, which today lists service principals only. Reporting it as an ordinary
+unchecked capability would be a preflight returning green for something it never
+examined, which is item 4's confident-wrong-answer shape. The honest consequence
+is that this deploy cannot be gated on a measured capability: it states the
+requirement, attempts the PUT, and reports an authorization failure faithfully.
+
+One tension worth recording because it looks like a contradiction and is not:
+the PUT sends EVERY category with `enabled` reflecting the selection, including
+`enabled: false` for unticked ones. The setting is a full replacement, so a
+category omitted from `logs` keeps whatever it had - sending only the ticked
+ones could never turn anything off, and an unticked category would keep flowing
+while the UI showed it as off. AZR-1's additive-only contract governs what a
+CHECKBOX may DESTROY; writing `enabled: false` into a setting that already
+exists destroys nothing, and nothing here deletes the setting.
+
+Not built: the screen, and the Event Hub namespace this points at (LOG-03,
+which most sections need first - see the prerequisite ordering note in 6h).
 - **Defender for Cloud continuous export** (LOG-08). Per subscription, a
   `Microsoft.Security/automations` resource streaming Security Alerts, with
   Recommendations, Secure Score and Regulatory Compliance as three more
@@ -876,6 +932,35 @@ recorded). The existing rules carry over unchanged: writes come only from
 effective actions, reads prefer probe results, and rule 3 holds throughout -
 annotate, never hide, never disable. Do this work ONCE, as a taxonomy extension
 serving all three items, rather than three times per surface.
+
+**Cribl source creation - DECIDED 2026-08-28 (user): WRITE WHEN CONNECTED,
+EXPORT WHEN NOT.** AZR-S2, which constrained 6a, 6b, 6c and 6e. The app creates
+the Event Hub / Blob source over the Cribl API when it has a workspace to write
+to, and falls back to generated config the operator imports when it does not.
+
+Not a new stance - the SAME convention `secret-provisioning` already settled on
+2026-07-03: one convention, two delivery paths, connected writes through the
+Cribl API and air-gapped emits an artifact with a placeholder to fill in by
+hand. Choosing it here means the onboarding sections behave the way the deploy
+path already behaves, instead of the codebase carrying a third opinion about
+what to do when there is no Cribl to talk to.
+
+It also refuses the two halves of the false choice. Pure export leaves 6a, 6b,
+6c and 6e each ending at a manual import step, which backlog.md#6c already calls
+the wrong call and LOG-09's portability note argues against. Pure API makes an
+air-gapped install impossible, and air-gap is a shipped path with its own export
+module, not a hypothetical.
+
+What it commits to building: a `POST /system/inputs` applier gated on
+`source.manage`, which is net-new - every `/system/inputs` reference in the
+codebase today is a read, and Event Hub Discovery ends at a JSON download
+(`eventhub-discovery-screen.tsx`). The write-side plumbing it can lean on
+already exists in `usecases/guided-deploy/wire-source.ts` and
+`secret-provisioning.ts`.
+
+The connectedness test must be the SAME one the rest of the app uses, not a new
+probe: two answers to "is there a Cribl here" is the duplicated-decision shape
+the capability model was built to end.
 
 **Prerequisite ordering is real and mostly implicit.** Nearly every section needs
 an Event Hub namespace (LOG-03) to exist first, and the policy sections need

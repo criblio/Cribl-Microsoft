@@ -29,6 +29,7 @@ export * from "./domain/dce-request";
 export * from "./domain/option-forms";
 export * from "./domain/onboarding-selection";
 export * from "./domain/coverage-model";
+export * from "./domain/entra-diagnostics";
 export * from "./domain/sentinel-destination";
 export * from "./domain/custom-table";
 export * from "./domain/journey-state";
