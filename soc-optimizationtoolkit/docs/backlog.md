@@ -488,6 +488,43 @@ has sub-selections. Its `method` values ARE the section keys -
 already specifies it porting to the app KV store. Keep two things verbatim: the
 tier/profile sub-selections, and the `notSupported` block (see 6e).
 
+**BUILT 2026-08-28 as AZR-0** - `domain/coverage-model`, in two halves that
+change for different reasons: `coverage-catalog` is what CAN be ticked (fixed,
+ported, shipped in code) and `coverage-selection` is what IS ticked (persisted
+to the KV store under `azure-coverage-selection`). What ticking MEANS stays in
+`onboarding-selection`, AZR-1's additive-only contract, which this feeds through
+`selectedItemIds`.
+
+The port is PINNED AGAINST ITS SOURCE. The tests read the real
+`resource-coverage.json` off disk and compare field by field - description,
+note, method, resourceCount, the community tier details, the Entra profiles, the
+`notSupported` block and the XDR unsupported-tables list. Mutation-checked: a
+one-word paraphrase of a description fails, and deleting a ported source fails a
+separate completeness pin that walks the legacy file looking for anything the
+catalog missed. If the legacy file is ever deleted the pins fail LOUDLY rather
+than skipping, with a message saying to remove the "ported not invented" claim
+along with them - a provenance claim must not outlive its evidence.
+
+**The legacy file covers four of the six sections, and nothing here pretends
+otherwise.** 6a (`built-in-policy` + `custom-initiative`), 6b (`script`), 6c
+(`guided-portal`) and 6e (the `notSupported` block) all port. **6d pull
+collectors and 6f agent-based have NO entry** - the legacy tool did not do them,
+and the only trace is `vmGuestLogs` under `notSupported` pointing at the separate
+DCR-Automation solution. They are not stubbed, because an empty section would
+report coverage the port cannot back. AZR-7 and AZR-9 are the cards that add
+them.
+
+Decoding is deliberately defensive and REPORTS what it drops. A KV value
+outlives the code that wrote it, so a stored id the catalog no longer has is
+dropped and named rather than discarded silently - silence there would leave an
+operator's box unticked while, under the additive-only contract, the thing is
+still deployed in Azure. A corrupt or absent value decodes to the defaults, but
+a deliberately EMPTY selection stays empty: "onboard nothing" is a real choice
+and must not be quietly overwritten with four re-ticked sources.
+
+Not done here: the screen, the KV adapter binding (a shell concern), and the
+prerequisite ordering noted at the end of 6h.
+
 ### 6a. Azure Policy - diagnostic settings to Event Hub
 
 The bulk of the platform. Policy assigns diagnostic settings across a management
