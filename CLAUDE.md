@@ -52,7 +52,26 @@ For grooming - ordering, leverage, and what is blocking what - use the
 
 ## Project Overview
 
-This is the **Cribl-Microsoft Integration** repository - a PowerShell-based automation toolkit for integrating Cribl Stream with Microsoft Azure services (Log Analytics, Sentinel). The primary focus is automating Azure Data Collection Rules (DCRs) creation and configuration.
+This is the **Cribl-Microsoft Integration** repository. Its deliverable is the
+**SOC Optimization Toolkit** in `soc-optimizationtoolkit/` - a TypeScript
+application shipped as a **Cribl App Platform app**, installed as a `.tgz` into
+a Cribl.Cloud leader UI. It integrates Cribl Stream with Microsoft Sentinel and
+Log Analytics: sample acquisition, gap analysis against destination table
+schemas, Cribl pack generation, and Data Collection Rule automation.
+
+```
+soc-optimizationtoolkit/
+  apps/cribl-app     the Cribl.Cloud app (the shell; adapters live here)
+  packages/core      pure domain logic and port interfaces - no IO, no React
+  packages/ui        React screens, shell-agnostic
+  docs/              board.json (work), backlog.md (reasoning), adr/ (decisions)
+```
+
+**The PowerShell toolkit is DEPRECATED.** It was moved to `deprecated/` on
+2026-07-13 and receives no further development. The PowerShell sections further
+down this file describe it, and their paths are relative to `deprecated/` - for
+example `deprecated/Azure/CustomDeploymentTemplates/DCR-Automation/`. Do not
+start new work there; `deprecated/README.md` records what superseded each part.
 
 ## Core Architecture
 
@@ -66,7 +85,7 @@ The repository uses a **dev/core configuration pattern**:
 
 ### Main Components
 
-1. **DCR-Automation** ([Azure/CustomDeploymentTemplates/DCR-Automation/](Azure/CustomDeploymentTemplates/DCR-Automation/))
+1. **DCR-Automation** (DEPRECATED - [deprecated/Azure/CustomDeploymentTemplates/DCR-Automation/](deprecated/Azure/CustomDeploymentTemplates/DCR-Automation/))
  - Core automation engine in `core/Create-TableDCRs.ps1` (~4,600 lines)
  - Interactive menu interface via `Run-DCRAutomation.ps1`
  - Cribl configuration generator in `core/Generate-CriblDestinations.ps1`
@@ -78,13 +97,14 @@ The repository uses a **dev/core configuration pattern**:
  - ~120 pre-built ARM templates for Sentinel native tables
  - Organized by deployment mode (DCE vs. Non-DCE)
 
-3. **Discovery Tools** ([Azure/dev/](Azure/dev/))
+3. **Discovery Tools** (DEPRECATED - [deprecated/Azure/dev/](deprecated/Azure/dev/))
  - Event Hub discovery with Resource Graph API optimization
  - vNet Flow Log discovery and Cribl config generation
+ - Superseded by the toolkit's Event Hub Discovery screen
 
-4. **Lab Automation** ([Azure/dev/LabAutomation/](Azure/dev/LabAutomation/))
- - Self-contained testing environments for various Azure services
- - Each lab includes deployment scripts and sample data
+4. **Lab Automation** - no longer exists at a path of its own. Labs are now the
+ toolkit's Labs screen (`packages/ui/src/screens/labs/`); the deprecated
+ Electron app's `LabAutomation.tsx` page is the only remaining trace.
 
 ### Key Design Patterns
 
@@ -97,15 +117,19 @@ The repository uses a **dev/core configuration pattern**:
 
 ### DCR Automation
 
+DEPRECATED since 2026-07-13 - these paths are under `deprecated/`, and the tool
+receives no further development. Kept because the moved code still runs and its
+history is preserved; new work belongs in `soc-optimizationtoolkit/`.
+
 ```powershell
 # Interactive menu (recommended for manual operations)
-.\Azure\CustomDeploymentTemplates\DCR-Automation\Run-DCRAutomation.ps1
+.\deprecated\Azure\CustomDeploymentTemplates\DCR-Automation\Run-DCRAutomation.ps1
 
 # Non-interactive mode (for automation/CI-CD)
-.\Azure\CustomDeploymentTemplates\DCR-Automation\Run-DCRAutomation.ps1 -NonInteractive -Mode DirectBoth
+.\deprecated\Azure\CustomDeploymentTemplates\DCR-Automation\Run-DCRAutomation.ps1 -NonInteractive -Mode DirectBoth
 
 # Template generation only (no deployment)
-.\Azure\CustomDeploymentTemplates\DCR-Automation\Run-DCRAutomation.ps1 -NonInteractive -Mode TemplateOnly
+.\deprecated\Azure\CustomDeploymentTemplates\DCR-Automation\Run-DCRAutomation.ps1 -NonInteractive -Mode TemplateOnly
 ```
 
 ### Discovery Tools
@@ -495,11 +519,11 @@ git push origin feature/your-feature-name
 ## File Locations Reference
 
 Key files are located in:
-- Main automation: [Azure/CustomDeploymentTemplates/DCR-Automation/](Azure/CustomDeploymentTemplates/DCR-Automation/)
+- Main automation (DEPRECATED): [deprecated/Azure/CustomDeploymentTemplates/DCR-Automation/](deprecated/Azure/CustomDeploymentTemplates/DCR-Automation/)
 - Static templates: [Azure/CustomDeploymentTemplates/DCR-Templates/](Azure/CustomDeploymentTemplates/DCR-Templates/)
-- Discovery tools: [Azure/dev/EventHubDiscovery/](Azure/dev/EventHubDiscovery/) and [Azure/dev/vNetFlowLogDiscovery/](Azure/dev/vNetFlowLogDiscovery/)
-- Labs: [Azure/dev/LabAutomation/](Azure/dev/LabAutomation/)
+- Discovery tools (DEPRECATED): [deprecated/Azure/dev/EventHubDiscovery/](deprecated/Azure/dev/EventHubDiscovery/) and [deprecated/Azure/dev/vNetFlowLogDiscovery/](deprecated/Azure/dev/vNetFlowLogDiscovery/)
 - Documentation: [KnowledgeArticles/](KnowledgeArticles/)
+- **The current toolkit**: [soc-optimizationtoolkit/](soc-optimizationtoolkit/) - see its `README.md` and `docs/`
 
 ## Output Directories
 

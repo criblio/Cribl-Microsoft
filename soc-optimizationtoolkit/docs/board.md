@@ -11,7 +11,7 @@ two cannot disagree.
 alternatives. This board holds only what is a unit of work, what state it is
 in, and what it waits on.
 
-**64 in the backlog, 0 in progress, 11 done.**
+**64 in the backlog, 0 in progress, 12 done.**
 
 ## Epics
 
@@ -595,7 +595,7 @@ Settled, gated on something above.
 
 ---
 
-## Done (11)
+## Done (12)
 
 Kept briefly so a reader can see what just landed; prune when the list grows.
 
@@ -783,3 +783,30 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   the real source is ADR-0004. Filed because board.json is committed code and
   a card that asserts a false fact is read with the same confidence as a true
   one. *bug, closed.*
+
+- **DBT-22** CLAUDE.md describes the deprecated PowerShell toolkit as the project
+  `bug` `settled` `verified: live`
+  FOUND 2026-08-28 by a reader, in the one file loaded into EVERY session. Its
+  Project Overview calls this "a PowerShell-based automation toolkit" whose
+  primary focus is DCR automation - but that toolkit was moved to
+  `deprecated/` on 2026-07-13 and receives no further development, and the
+  actual deliverable is the TypeScript Cribl App Platform app at
+  soc-optimizationtoolkit (v1.12.3). Worse than wrong prose: every command
+  block points at
+  `.\Azure\CustomDeploymentTemplates\DCR-Automation\Run-DCRAutomation.ps1`, a
+  path that has not existed for six weeks - the script is under `deprecated/`.
+  24 PowerShell references in all. So the file that tells every contributor
+  and every agent how this repo works has been instructing them to run a
+  superseded tool at a path that moved. check-docs governs docs/ and never
+  looked at root CLAUDE.md, which is why six weeks passed. FIXED 2026-08-28:
+  the overview now describes the TypeScript Cribl App Platform app as the
+  deliverable, states plainly that the PowerShell toolkit is deprecated, and
+  the DCR-Automation paths are corrected to deprecated/. DCR-Templates was
+  deliberately LEFT at its root path - it is a public API that Cribl
+  documentation deep-links into, so bulk rewriting every Azure/ path would
+  have broken it. VERIFIED live by checking each linked directory resolves on
+  disk. The sweep found FIVE more broken links beyond the reported one -
+  Azure/dev/ and its discovery tools also moved to deprecated/, and
+  Azure/dev/LabAutomation/ never existed at that path at all (the only trace
+  is a React page in the deprecated Electron app). Every linked directory in
+  CLAUDE.md now resolves on disk, checked mechanically. *bug, closed.*
