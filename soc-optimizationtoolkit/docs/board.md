@@ -71,6 +71,10 @@ Next to pick up. Nothing blocks these.
   the taxonomy is 11 capabilities (`capabilities.ts:22-36`). Every addition
   needs a real probe or the step-2 mapping rule drops it, since that rule
   records only measurements. No probe ever grants a write.
+  DECISION (unanswered): Sweep the effect-identity class once by hand, or
+  write a custom lint rule?
+    [ ] `one-off-sweep` One-off sweep of the codebase - Read every useEffect keyed on a memo, callback or inline object whose body resets operator-owned state, and fix what turns up. Cheap, and exactly the reading that found the first three - but nothing stops a fourth being written next week.
+    [ ] `lint-rule` Write a custom lint rule - A permanent guard, but bigger than the three fixes were: .oxlintrc.json enables only react/rules-of-hooks and oxlint has no exhaustive-deps equivalent, so this means AUTHORING and maintaining a rule, not switching one on.
 
 - **CAP-1** Add `resourcegraph.read` and its probe
   `chore` `settled`
@@ -191,7 +195,15 @@ Settled, gated on something above.
   Streaming carries alert-grain tables; path B returns the incident object
   with triage state. Settle before building either AZR-6 or AZR-7 - presenting
   A as a replacement loses triage state silently, presenting them as unrelated
-  builds two overlapping feeds without telling anyone. `backlog.md#6d`.
+  builds two overlapping feeds without telling anyone. `backlog.md#6d`. NOT
+  SEEDABLE AS A CLICK (2026-08-28): the cited section instructs "verify
+  against the APIs rather than reasoning it out", and the outcome handling is
+  already pre-committed - if only alerts, the honest presentation is alerts
+  via A, incidents via B. A click would record an opinion where the card
+  demands a fact. Worth carrying into the spike: the repo's own catalog lists
+  the XDR streaming tables as alert-grain only (AlertInfo, AlertEvidence,
+  UrlClickEvents), so complementary is the likely answer - still unverified,
+  which is the point.
 
 - **AZR-S2** Decide whether the app creates Cribl sources over the API
   `spike` `undecided`
@@ -201,6 +213,11 @@ Settled, gated on something above.
   `secret-provisioning.ts`) but a `POST /system/inputs` applier is net-new.
   This decision constrains AZR-2, AZR-4, AZR-6 and AZR-8, so make it once,
   early, on the smallest surface. Then, in order:
+  DECISION (unanswered): Should the app create Cribl sources over the API, or
+  keep exporting config to import?
+    [ ] `api-applier` Build a POST /system/inputs applier - The app creates the Event Hub / Blob source directly, which backlog.md#6c calls "the right call" and LOG-09's portability note demands. Net-new write surface, gated on source.manage.
+    [ ] `export-only` Keep the generated-JSON hand-off - Stay with what Event Hub Discovery does: generate configs, download, operator imports and makes the secrets. No new write surface - but AZR-2, AZR-4, AZR-6 and AZR-8 each end at a manual import step.
+    [ ] `connected-or-airgap` Write when connected, export when not - Both behind one convention, mirroring what secret-provisioning.ts already does for secrets (POST when connected, placeholder when air-gapped). NOTE: drawn from that existing convention, not from this card's own text. Costs two paths kept in step.
 
 - **AZR-0** Port `resource-coverage.json` to the app KV store as the selection model
   `chore` `settled`
@@ -344,6 +361,11 @@ Settled, gated on something above.
   name before applying", which is a hedge where the app already holds the
   number. *bug, UNDECIDED whether a large shortfall should warn or block.
   `backlog.md` 13c.*
+  DECISION (unanswered): When a bundled column order far exceeds the event's
+  field count, warn or block?
+    [ ] `measure-only` Show the number, drop the hedge - Replace "check the values beside each name before applying" with the measured 38-of-120 and stop there. backlog.md#13c says it is a number the app already has and could show.
+    [ ] `warn` Warn above a shortfall threshold - A large shortfall warns visibly; Apply stays enabled. Matches the capability model's annotate-never-hide-never-disable rule, and a short feed can still be legitimately named once the order is edited.
+    [ ] `block` Block Apply above the threshold - Disable Apply until the order is edited or explicitly overridden. Strongest guard against mis-naming every column after the first gap, and Skip already preserves the positional _N names - but it runs against the annotate-never-hide rule the rest of the app pins.
 
 - **VND-1** Let the operator name the vendor
   `chore` `settled` `blocked by D-7`
@@ -492,6 +514,11 @@ Settled, gated on something above.
   nt functions? Reporting first is a legitimate slice, but a catalog that only
   affects analysis leaves deployed data still missing the fields.
   `backlog.md#5a`.
+  DECISION (unanswered): WIN enrichment catalog: report the gap only, or also
+  emit pipeline functions?
+    [ ] `report-only` Report only - Diff schema columns against what the raw event carries, rank by content reference, stop there. backlog.md#5a warns this leaves deployed data still missing the fields - the catalog affects analysis but nothing reconstructs Account in the pipeline.
+    [ ] `report-first` Report first, produce as a tracked follow-on - Ship the reporting slice with the producing half recorded as required, not optional. backlog.md#5a calls reporting first "a legitimate slice; just do not let it become the finished state" - this is the source's own phrasing.
+    [ ] `produce-in-scope` Produce inside WIN-2 - The catalog also emits enrichment functions into the generated pipeline. Larger slice, but there is a working precedent: buildCefIdentityOverrideFn (pipeline-conf.ts:132) was added for the same reason - an override that only changed the analysis would leave deployed data carrying the wrong vendor.
 
 - **D-5** `WIN-5` JSON or Parquet for the Cribl Lake copy
   `decision` `undecided`
@@ -500,7 +527,18 @@ Settled, gated on something above.
   MEASURED against how Federated Search actually executes, not reasoned from
   general Parquet knowledge, because being specific to Cribl's engine is the
   entire value. Schema stability is the sharp dimension: the Windows tables
-  are wide and sparse, Parquet is columnar and typed. `backlog.md#5b`.
+  are wide and sparse, Parquet is columnar and typed. `backlog.md#5b`. NOT
+  SEEDABLE AS A CLICK (2026-08-28): backlog.md#5b says the deciding variable -
+  how Federated Search actually executes against each format - is not known
+  well enough to encode, so a clickable option would record a preference
+  exactly where the doc forbids answering without measurement. CORRECTION to
+  the claim above: the choice is NOT already made. The parquetChunkSizeMB /
+  parquetChunkDownloadTimeout settings in lab-cribl.ts are azure_blob SOURCE
+  options for READING Parquet out of Azure storage; they say nothing about the
+  format the Lake copy is written in. The app never sets a Lake format at all
+  - wire-source.ts POSTs only { id: dataset } - so it inherits Cribl's
+  default, which is a different and more actionable gap than "Parquet was
+  chosen silently".
 
 - **D-6** `PK-2` source of truth: does maintenance re-analyse, or read a stored analysis? Re-analysing ne
   `decision` `undecided`
@@ -520,6 +558,11 @@ Settled, gated on something above.
   e can be reasoned about later rather than silently disagreeing with a future
   bundled update? The only genuinely open question left in that plan.
   `vendor-field-definition-plan.md:222-224`.
+  DECISION (unanswered): Should a persisted vendor column order carry a
+  version, a captured-on date, or neither?
+    [ ] `neither` Store neither - Keep vendor + logType + columns + overrides. The silent-disagreement harm is already handled: resolveColumnOrder re-derives the override notice against the CURRENT bundled order, and machine-applied pass-throughs are never stored.
+    [ ] `captured-on` Stamp a captured-on date - Record when the operator captured the order, so a later divergence reads as "captured before that change" rather than an unexplained disagreement. Always available - but it dates the capture, it does not identify the firmware.
+    [ ] `version` Record a version - Sharper than a date, but the version has to come from somewhere: nothing in the sample or the CSV-header dialog supplies one today, so it means asking the operator.
 
 - **D-8** `AZR` Resource Graph change tracking - offer it at all? Recorded under `notSupported` as query-
   `decision` `undecided`
@@ -529,6 +572,11 @@ Settled, gated on something above.
   nested scrolling and had no fix proposed, because nobody had reproduced the
   > harm. Driving PaloAlto did: the wheel over the solution list moves nothing
   at > all. That is not a question any more, so it left this column.
+  DECISION (unanswered): Offer Resource Graph change tracking, and if so as a
+  row or a real collector?
+    [ ] `omit` Do not offer it - Leave it out of the onboarding menu. Cheapest, and the option backlog.md#6e argues against: an operator who ticks through every section and never sees it concludes the tool missed it.
+    [ ] `unavailable-row` Show it as an unavailable row with its reason - Port the resource-coverage.json notSupported entry as a feature: a greyed row reading query-only, no streaming path, alternative "scheduled Azure Resource Graph queries". States the absence with its reason; creates no Cribl config.
+    [ ] `scheduled-collector` Build it as a second scheduled collector - Generate a scheduled Resource Graph query collector alongside the Sentinel incidents one. Most work, and it lands on the same unmeasured Resource Graph capability that CAP-1 closes.
 
 - **D-10** `DBT` Setup wizard header promises three phases while the stepper shows one
   `decision` `undecided`
@@ -539,11 +587,18 @@ Settled, gated on something above.
     [ ] `drop-enumeration` Drop the enumeration from the header - Header stops promising what the stepper does not show.
     [ ] `promote-substeps` Promote the sub-steps into the stepper - Stepper starts showing what the header promises.
 
-- **D-11** `AZR-5` per-table successor for deprecated guid columns (`AwsRequestId` to `AwsRequestId_`)
+- **D-11** `ADR-0004` per-table successor for deprecated guid columns (`AwsRequestId` to `AwsRequestId_`)
   `decision` `undecided`
   Explicitly out of scope for ADR-0004 as a per-table content decision.
   Matters because CloudTrail's `requestID` is frequently not a UUID, so
-  `toguid()` returns null and drops it silently. `adr/0004:82-86`. ---
+  `toguid()` returns null and drops it silently. `adr/0004:82-86`. --- Source
+  is docs/adr/0004-cast-guid-columns.md, "What is NOT decided here". The card
+  previously tagged AZR-5, which is the diagnostic-settings cleanup and has
+  nothing to do with guid columns.
+  DECISION (unanswered): Route deprecated guid columns to their `_`-suffixed
+  string successor, per table?
+    [ ] `leave-as-is` Leave it at the ADR-0004 cast - AwsRequestId stays declared string and promoted with toguid(). Correct for well-formed UUIDs, but CloudTrail's requestID frequently is not one, so toguid() returns null and the value drops silently - the same quiet failure the ADR set out to fix.
+    [ ] `per-table-successor` Route deprecated guid columns to the `_` successor - Per-table content mapping AwsRequestId to AwsRequestId_. ADR-0004 calls this "a real improvement" but insists it is a per-table CONTENT decision, not a schema-mapping rule, so it must not become a new RULE 2b clause. The bundled catalog already carries both columns for AWSCloudTrail.
 
 ---
 

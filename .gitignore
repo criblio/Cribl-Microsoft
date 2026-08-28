@@ -84,10 +84,21 @@ logs/
 # Personal, machine-specific - Claude Code's own convention is that
 # settings.json is shared and settings.local.json is not.
 .claude/settings.local.json
-# Vendored from upstream and re-pulled rather than maintained here. The
-# lab-specific architecture-audit skill is already tracked and stays so;
-# gitignore does not untrack what is already in the index.
-.claude/skills/
+# Most skills here are symlinked in from claude-kit and re-pulled rather than
+# maintained in this repo, so they are ignored by default.
+#
+# The exceptions are the skills this repo OWNS - they encode working agreements
+# specific to it and are useless anywhere else, so they must travel with a
+# clone. architecture-audit was tracked before this rule existed and survived
+# only because gitignore does not untrack what is already in the index;
+# backlog-grooming hit the rule head-on and had to be let through explicitly.
+#
+# Note the `/*`: excluding `.claude/skills/` itself would make the negations
+# below unreachable, because git cannot re-include a file whose parent
+# directory is excluded.
+.claude/skills/*
+!.claude/skills/architecture-audit/
+!.claude/skills/backlog-grooming/
 .vscode/
 .vs/
 .idea/
