@@ -33,7 +33,7 @@ const story = (over) => ({
 
 const board = (stories, epics, features) => ({
   epics: epics ?? [{ key: 'A', name: 'Epic A', why: '' }],
-  features: features ?? [{ id: 'A-F1', epic: 'A', title: 'A feature', wsjf: null }],
+  features: features ?? [{ id: 'A-F1', epic: 'A', title: 'A feature' }],
   stories,
 });
 

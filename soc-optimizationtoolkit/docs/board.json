@@ -1247,6 +1247,18 @@
       "verified": "live",
       "dependsOn": [],
       "detail": "FOUND 2026-08-28 by a reader, in the one file loaded into EVERY session. Its Project Overview calls this \"a PowerShell-based automation toolkit\" whose primary focus is DCR automation - but that toolkit was moved to `deprecated/` on 2026-07-13 and receives no further development, and the actual deliverable is the TypeScript Cribl App Platform app at soc-optimizationtoolkit (v1.12.3). Worse than wrong prose: every command block points at `.\\Azure\\CustomDeploymentTemplates\\DCR-Automation\\Run-DCRAutomation.ps1`, a path that has not existed for six weeks - the script is under `deprecated/`. 24 PowerShell references in all. So the file that tells every contributor and every agent how this repo works has been instructing them to run a superseded tool at a path that moved. check-docs governs docs/ and never looked at root CLAUDE.md, which is why six weeks passed. FIXED 2026-08-28: the overview now describes the TypeScript Cribl App Platform app as the deliverable, states plainly that the PowerShell toolkit is deprecated, and the DCR-Automation paths are corrected to deprecated/. DCR-Templates was deliberately LEFT at its root path - it is a public API that Cribl documentation deep-links into, so bulk rewriting every Azure/ path would have broken it. VERIFIED live by checking each linked directory resolves on disk. The sweep found FIVE more broken links beyond the reported one - Azure/dev/ and its discovery tools also moved to deprecated/, and Azure/dev/LabAutomation/ never existed at that path at all (the only trace is a React page in the deprecated Electron app). Every linked directory in CLAUDE.md now resolves on disk, checked mechanically. *bug, closed.*"
+    },
+    {
+      "id": "DBT-23",
+      "epic": "DBT",
+      "feature": "DBT-F5",
+      "title": "Features carry no score: WSJF removed the day it was added",
+      "type": "enabler",
+      "status": "done",
+      "settled": "settled",
+      "verified": "pins",
+      "dependsOn": [],
+      "detail": "DECIDED by the author 2026-08-28, hours after the SAFe migration introduced it: \"I don't want to score features, I'll like bounce our effort between them.\" WSJF is an economic answer to CONTENTION - many features competing for one team's finite capacity, where choosing wrong costs the delay on everything else waiting. One author moving between features has no such queue, so the score was four invented numbers per feature that would need re-inventing whenever anything moved. Removed from board.json, board.mjs, board-html.mjs and documenting-work.md; sequencing is now story priority plus what grooming derives - readiness and transitive unblock count. The reasoning is recorded in board.mjs and in documenting-work.md rather than just deleted, because the next reader of the SAFe docs will otherwise re-add it as a missing piece. Pinned by a structural check on the feature table's column count, mutation-checked both halves. *enabler, closed.*"
     }
   ],
   "features": [
@@ -1254,179 +1266,153 @@
       "id": "AZR-F1",
       "epic": "AZR",
       "title": "Onboarding foundation and coverage data",
-      "anchor": "6",
-      "wsjf": null
+      "anchor": "6"
     },
     {
       "id": "AZR-F2",
       "epic": "AZR",
       "title": "Azure Policy - diagnostic settings to Event Hub",
-      "anchor": "6a",
-      "wsjf": null
+      "anchor": "6a"
     },
     {
       "id": "AZR-F3",
       "epic": "AZR",
       "title": "Direct ARM configuration - script, no policy",
-      "anchor": "6b",
-      "wsjf": null
+      "anchor": "6b"
     },
     {
       "id": "AZR-F4",
       "epic": "AZR",
       "title": "Defender XDR export - guided portal",
-      "anchor": "6c",
-      "wsjf": null
+      "anchor": "6c"
     },
     {
       "id": "AZR-F5",
       "epic": "AZR",
       "title": "Pull collectors - no push path exists",
-      "anchor": "6d",
-      "wsjf": null
+      "anchor": "6d"
     },
     {
       "id": "AZR-F6",
       "epic": "AZR",
       "title": "Blob-only sources - cannot reach Event Hub",
-      "anchor": "6e",
-      "wsjf": null
+      "anchor": "6e"
     },
     {
       "id": "AZR-F7",
       "epic": "AZR",
       "title": "Agent-based - AMA plus DCR",
-      "anchor": "6f",
-      "wsjf": null
+      "anchor": "6f"
     },
     {
       "id": "AZR-F8",
       "epic": "AZR",
       "title": "Dataflow diagrams, one per category",
-      "anchor": "6g",
-      "wsjf": null
+      "anchor": "6g"
     },
     {
       "id": "AZR-F9",
       "epic": "AZR",
       "title": "Shared onboarding concerns",
-      "anchor": "6h",
-      "wsjf": null
+      "anchor": "6h"
     },
     {
       "id": "WIN-F1",
       "epic": "WIN",
       "title": "Windows Event analysis screen",
-      "anchor": "5",
-      "wsjf": null
+      "anchor": "5"
     },
     {
       "id": "WIN-F2",
       "epic": "WIN",
       "title": "Microsoft proprietary enrichment catalog",
-      "anchor": "5a",
-      "wsjf": null
+      "anchor": "5a"
     },
     {
       "id": "WIN-F3",
       "epic": "WIN",
       "title": "Lake copy format - JSON vs Parquet",
-      "anchor": "5b",
-      "wsjf": null
+      "anchor": "5b"
     },
     {
       "id": "HON-F1",
       "epic": "HON",
       "title": "Capability model follow-ons",
-      "anchor": "1",
-      "wsjf": null
+      "anchor": "1"
     },
     {
       "id": "HON-F2",
       "epic": "HON",
       "title": "Unverified empty inventories",
-      "anchor": "4",
-      "wsjf": null
+      "anchor": "4"
     },
     {
       "id": "HON-F3",
       "epic": "HON",
-      "title": "Guid-column aftermath, made visible",
-      "wsjf": null
+      "title": "Guid-column aftermath, made visible"
     },
     {
       "id": "GEN-F1",
       "epic": "GEN",
-      "title": "Pack generation correctness and provenance",
-      "wsjf": null
+      "title": "Pack generation correctness and provenance"
     },
     {
       "id": "PK-F1",
       "epic": "PK",
       "title": "Pack maintenance parity",
-      "anchor": "12",
-      "wsjf": null
+      "anchor": "12"
     },
     {
       "id": "VND-F1",
       "epic": "VND",
       "title": "Vendor column-order naming",
-      "anchor": "13c",
-      "wsjf": null
+      "anchor": "13c"
     },
     {
       "id": "CAP-F1",
       "epic": "CAP",
       "title": "Capability taxonomy extension",
-      "anchor": "1",
-      "wsjf": null
+      "anchor": "1"
     },
     {
       "id": "REL-F1",
       "epic": "REL",
       "title": "Release and deployment hygiene",
-      "anchor": "8",
-      "wsjf": null
+      "anchor": "8"
     },
     {
       "id": "DBT-F1",
       "epic": "DBT",
       "title": "Verification gaps",
-      "anchor": "7",
-      "wsjf": null
+      "anchor": "7"
     },
     {
       "id": "DBT-F2",
       "epic": "DBT",
       "title": "Copy and UX",
-      "anchor": "9",
-      "wsjf": null
+      "anchor": "9"
     },
     {
       "id": "DBT-F3",
       "epic": "DBT",
       "title": "Diagram fidelity",
-      "anchor": "10",
-      "wsjf": null
+      "anchor": "10"
     },
     {
       "id": "DBT-F4",
       "epic": "DBT",
-      "title": "Docs and spec grounding",
-      "wsjf": null
+      "title": "Docs and spec grounding"
     },
     {
       "id": "DBT-F5",
       "epic": "DBT",
-      "title": "Board tooling defects",
-      "wsjf": null
+      "title": "Board tooling defects"
     },
     {
       "id": "DBT-F6",
       "epic": "DBT",
       "title": "Effect-identity defect class",
-      "anchor": "12",
-      "wsjf": null
+      "anchor": "12"
     }
   ]
 }

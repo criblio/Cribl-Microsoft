@@ -10,7 +10,7 @@
 //
 // Pure: takes data, returns a string. The server does the IO.
 
-import { blockers, PRIORITIES, STATUSES, wsjfScore } from './board.mjs';
+import { blockers, PRIORITIES, STATUSES } from './board.mjs';
 
 /** Display names; the LIST of columns is not ours to decide. */
 const COLUMN_TITLES = {
@@ -156,11 +156,10 @@ function epicCard(epic, data) {
   ].join('');
 }
 
-/** One card per feature: WSJF, progress, and what kind of work is under it. */
+/** One card per feature: progress, and what kind of work sits under it. */
 function featureCard(feature, data) {
   const kids = (data.stories ?? []).filter((s) => s.feature === feature.id);
   const done = kids.filter((s) => s.status === 'done').length;
-  const score = wsjfScore(feature.wsjf);
   const openDecisions = kids.filter(
     (s) => s.type === 'decision' && (s.decision?.chosen ?? null) === null && s.status !== 'done',
   ).length;
@@ -171,9 +170,6 @@ function featureCard(feature, data) {
     `<span class="epic">${esc(feature.epic)}</span></header>`,
     `<h3>${esc(feature.title)}</h3>`,
     `<div class="tags">`,
-    score === null
-      ? tag('wsjf-none', 'WSJF unscored', 'No WSJF yet. SAFe sequences features by (business value + time criticality + risk reduction) / job size - an unscored feature cannot be sequenced.')
-      : tag('wsjf', `WSJF ${score.toFixed(2)}`, '(business value + time criticality + risk reduction) / job size. Higher goes first.'),
     typeCounts(kids),
     openDecisions > 0
       ? tag('blocked', `${openDecisions} open decision${openDecisions > 1 ? 's' : ''}`, 'A question on this feature is unanswered, so the work behind it cannot start.')
@@ -306,7 +302,7 @@ export function renderBoardHtml(data, today, findings = []) {
   const featureCol =
     `<section class="col col-rollup" data-status="features">` +
     `<h2>Features <span class="count">${(data.features ?? []).length}</span>` +
-    `${info('A feature sits under one epic and holds the stories, spikes and bugs that deliver it. WSJF sequences features: (business value + time criticality + risk reduction) / job size.')}</h2>` +
+    `${info('A feature sits under one epic and holds the stories, spikes and bugs that deliver it. Features are groupings, not a queue - stories carry the priority.')}</h2>` +
     (data.features ?? []).map((f) => featureCard(f, data)).join('') +
     `</section>`;
 
@@ -391,8 +387,6 @@ input[type=search]{background:var(--panel);border:1px solid var(--line);color:va
 .feat{background:#1d2a3a;color:#8fb6e0;border-radius:99px;padding:0 7px;margin-left:6px}
 .tag.kind-enabler{background:#2c2440;color:#c0a6ff}
 .tag.kind-business{background:#16303a;color:#7fd4f0}
-.tag.wsjf{background:#14301f;color:#7ee0a8}
-.tag.wsjf-none{background:#2a2a2a;color:#9a9a9a}
 details{margin-top:7px}
 summary{cursor:pointer;color:var(--dim);font-size:11px;text-transform:uppercase;letter-spacing:.05em}
 details p{margin:6px 0 0;color:#c3d2e2;font-size:12.5px;white-space:pre-wrap}

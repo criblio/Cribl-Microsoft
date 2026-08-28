@@ -117,11 +117,21 @@ preference), `bug` is a defect, and `decision` is a LOCAL extension for a
 question a person answers, attached to the feature it blocks. There is no
 separate decisions epic: a decision belongs to the feature it is holding up.
 
-Features carry `wsjf` - `(bv + tc + rr) / size`, each input on SAFe's modified
-Fibonacci scale (1, 2, 3, 5, 8, 13, 20), highest first. An unscored feature
-renders as **unscored**, never as zero: a feature nobody has sized must not
-silently sort last. Stories keep `priority` (now / next / later); WSJF sequences
-features, priority sequences stories underneath.
+**Features are groupings, not a queue - they carry no score.** SAFe sequences
+features with WSJF, `(business value + time criticality + risk reduction) / job
+size` on a modified Fibonacci scale. It was built here on 2026-08-28 and removed
+the same day, and the reason is recorded so it does not get re-added as a
+missing piece of SAFe: WSJF is an economic answer to CONTENTION - many features
+competing for one team's finite capacity, where choosing wrong costs the delay
+on everything else waiting. There is one author here, moving between features
+rather than draining them in order, so there is no queue to sequence and the
+score would have been four invented numbers per feature, re-invented whenever
+anything moved.
+
+What sequences work instead is what the data can actually support: `priority`
+(now / next / later) on the stories, plus what `npm run groom` derives -
+readiness, and how many cards each one transitively unblocks. If a second
+developer ever works here, contention becomes real and WSJF is worth revisiting.
 
 Each story carries an `id`, `epic`, `feature`, `title`, `type`, `status`
 (backlog / in-progress / done), a `priority` while it is in the backlog

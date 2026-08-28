@@ -48,27 +48,31 @@ export const PRIORITIES = ['now', 'next', 'later'];
  */
 const TYPES = ['story', 'enabler', 'spike', 'bug', 'decision'];
 
-/** SAFe scores each WSJF input on a modified Fibonacci scale. */
-const WSJF_SCALE = [1, 2, 3, 5, 8, 13, 20];
-
 /** Business epics deliver value; enabler epics exist to unblock other epics. */
 const EPIC_KINDS = ['business', 'enabler'];
 
-/**
- * WSJF = (Business Value + Time Criticality + Risk Reduction / Opportunity
- * Enablement) / Job Size. Highest first. Returns null when unscored, so an
- * unscored feature sorts as unknown rather than as zero - a feature nobody has
- * sized must not silently rank last.
+/*
+ * FEATURES CARRY NO SCORE, AND WSJF IS NOT COMING BACK (2026-08-28).
  *
- * @param {{bv:number,tc:number,rr:number,size:number}|null|undefined} wsjf
- * @returns {number|null}
+ * SAFe sequences features by (business value + time criticality + risk
+ * reduction) / job size. It was built here and removed the same day, so this
+ * note exists to stop the next reader re-adding it as a missing piece of SAFe.
+ *
+ * Why it does not fit: WSJF is an economic answer to CONTENTION - many features
+ * competing for one team's finite capacity, where choosing wrong costs the
+ * delay on everything else in the queue. This repo has one author who moves
+ * between features rather than draining them in order, so there is no queue to
+ * sequence, and the score would have been four invented numbers per feature,
+ * re-invented whenever anything moved.
+ *
+ * What sequences work instead is what grooming can actually DERIVE from the
+ * data: story priority (now / next / later), readiness, and how many cards each
+ * one transitively unblocks. If a second developer ever arrives, contention
+ * becomes real and this is worth revisiting - which is why the reasoning is
+ * recorded rather than just deleted.
  */
-export function wsjfScore(wsjf) {
-  if (wsjf === null || wsjf === undefined) return null;
-  const { bv, tc, rr, size } = wsjf;
-  if (![bv, tc, rr, size].every((n) => typeof n === 'number' && n > 0)) return null;
-  return (bv + tc + rr) / size;
-}
+
+/** Whether anything about a story is still an open question. */
 const SETTLED = ['settled', 'undecided', 'unconfirmed'];
 
 /**
@@ -279,15 +283,6 @@ function hierarchyFindings(data, sections) {
     if (f.anchor !== undefined && sections !== undefined && !sections.has(f.anchor)) {
       out.push(`Feature ${f.id} cites backlog.md#${f.anchor}, which is not a section.`);
     }
-    if (f.wsjf !== null && f.wsjf !== undefined) {
-      for (const k of ['bv', 'tc', 'rr', 'size']) {
-        if (!WSJF_SCALE.includes(f.wsjf[k])) {
-          out.push(
-            `Feature ${f.id} WSJF ${k} is "${f.wsjf[k]}"; SAFe scores each input on ${WSJF_SCALE.join(', ')}.`,
-          );
-        }
-      }
-    }
   }
 
   const featureById = new Map((data.features ?? []).map((f) => [f.id, f]));
@@ -495,9 +490,9 @@ export function renderBoard(data, today) {
   L.push('## Epics and features');
   L.push('');
   L.push('Epic > Feature > Story, per SAFe (Essential). An `enabler` epic exists to');
-  L.push('unblock other epics rather than to deliver on its own. WSJF sequences');
-  L.push('features: (business value + time criticality + risk reduction) / job size,');
-  L.push('highest first - an unscored feature cannot be sequenced.');
+  L.push('unblock other epics rather than to deliver on its own. Features are');
+  L.push('groupings, not a queue - they carry no score and no order. Priority lives');
+  L.push('on the stories underneath (now / next / later).');
   L.push('');
   for (const e of data.epics) {
     const feats = (data.features ?? []).filter((f) => f.epic === e.key);
@@ -509,16 +504,13 @@ export function renderBoard(data, today) {
     L.push('');
     L.push(e.why);
     L.push('');
-    L.push('| Feature | WSJF | Done | Stories |');
-    L.push('|---|---|---|---|');
+    L.push('| Feature | Done | Stories |');
+    L.push('|---|---|---|');
     for (const f of feats) {
       const kids = data.stories.filter((s) => s.feature === f.id);
       const kd = kids.filter((s) => s.status === 'done').length;
-      const score = wsjfScore(f.wsjf);
       const ids = kids.map((s) => s.id).join(', ');
-      L.push(
-        `| \`${f.id}\` ${f.title} | ${score === null ? 'unscored' : score.toFixed(2)} | ${kd}/${kids.length} | ${ids} |`,
-      );
+      L.push(`| \`${f.id}\` ${f.title} | ${kd}/${kids.length} | ${ids} |`);
     }
     L.push('');
   }

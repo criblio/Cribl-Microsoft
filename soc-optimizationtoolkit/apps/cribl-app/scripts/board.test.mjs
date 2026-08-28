@@ -52,7 +52,7 @@ const story = (over) => ({
 
 const board = (stories, epics, features) => ({
   epics: epics ?? [{ key: 'REL', name: 'Ship it', why: 'because' }],
-  features: features ?? [{ id: 'REL-F1', epic: 'REL', title: 'A feature', wsjf: null }],
+  features: features ?? [{ id: 'REL-F1', epic: 'REL', title: 'A feature' }],
   stories,
 });
 
@@ -92,8 +92,8 @@ describe('validateBoard - the shape of a story', () => {
   it('catches a feature that carries no story', () => {
     const out = validateBoard(
       board([story({})], undefined, [
-        { id: 'REL-F1', epic: 'REL', title: 'A feature', wsjf: null },
-        { id: 'REL-F9', epic: 'REL', title: 'Abandoned', wsjf: null },
+        { id: 'REL-F1', epic: 'REL', title: 'A feature' },
+        { id: 'REL-F9', epic: 'REL', title: 'Abandoned' },
       ]),
     );
 
@@ -110,22 +110,12 @@ describe('validateBoard - the shape of a story', () => {
         { key: 'REL', name: 'Ship it', why: '' },
         { key: 'OTH', name: 'Other', why: '' },
       ], [
-        { id: 'REL-F1', epic: 'REL', title: 'A feature', wsjf: null },
-        { id: 'OTH-F1', epic: 'OTH', title: 'Elsewhere', wsjf: null },
+        { id: 'REL-F1', epic: 'REL', title: 'A feature' },
+        { id: 'OTH-F1', epic: 'OTH', title: 'Elsewhere' },
       ]),
     );
 
     expect(out.some((f) => f.includes('but its feature OTH-F1 is in epic OTH'))).toBe(true);
-  });
-
-  it('insists WSJF inputs sit on the modified Fibonacci scale SAFe uses', () => {
-    const out = validateBoard(
-      board([story({})], undefined, [
-        { id: 'REL-F1', epic: 'REL', title: 'A feature', wsjf: { bv: 8, tc: 3, rr: 5, size: 4 } },
-      ]),
-    );
-
-    expect(out.some((f) => f.includes('WSJF size is "4"'))).toBe(true);
   });
 
   it('insists a story is settled, undecided or unconfirmed', () => {
@@ -459,12 +449,29 @@ describe('renderBoard', () => {
     expect(renderBoard(data, '2026-08-27')).toContain('33% (1/3)');
   });
 
-  it('shows a feature as unscored rather than as zero', () => {
-    // An unsequenced feature must not look like the lowest-value one.
-    expect(renderBoard(data, '2026-08-27')).toContain('unscored');
-  });
-
   it('carries a Status line, so the docs-drift check still governs it', () => {
     expect(renderBoard(data, '2026-08-27')).toMatch(/^Status: Living/m);
+  });
+
+  it('gives the feature table THREE columns, with no score among them', () => {
+    // WSJF was built and removed on 2026-08-28 (see the note in board.mjs):
+    // scoring answers contention between features for one team's finite
+    // capacity, and there is one author here. This pin is what makes a re-add
+    // show up as a failing test in review rather than as a silent extra column.
+    //
+    // It reads the table STRUCTURE rather than searching the page for "WSJF" or
+    // "score". The first version did search the prose, and it failed on the
+    // preamble sentence that explains features carry no score - a word-search
+    // cannot tell a column from a paragraph about columns, and would have been
+    // routed around the moment it cried wolf.
+    const md = renderBoard(data, '2026-08-27');
+    const headers = md.split('\n').filter((l) => l.startsWith('| Feature |'));
+
+    expect(headers.length).toBeGreaterThan(0);
+    for (const h of headers) expect(h).toBe('| Feature | Done | Stories |');
+
+    const rows = md.split('\n').filter((l) => /^\| `[A-Z]+-F\d/.test(l));
+    expect(rows).toHaveLength(1);
+    for (const r of rows) expect(r.split('|').length - 2).toBe(3);
   });
 });
