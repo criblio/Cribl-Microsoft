@@ -39,6 +39,40 @@ and reading it back in Cribl: with a non-zero overflow (8 fields for one log
 type) every transform pipeline carries an Overflow Collection group whose
 `Serialize` writes to `AdditionalExtensions`.
 
+**Correcting the record on 1.12.0: it HAS now run against a real workspace.**
+The 1.12.0 entry below ends "What this release has NOT done: run against a real
+workspace", which was true when written and has been false since 2026-08-25.
+That entry is left as it stands - it is a record of its own release - so the
+correction lives here, at the top, because a reader working newest-first was
+otherwise still concluding that ADR-0003 shipped unverified.
+
+All eight platform beliefs in `live-verify.test.ts` are settled, against the lab
+workspace `main-busy-yonath-kz1bxn7`, Stream group `DatacenterEast`, Lake dataset
+`winevt_plwindows`. Rows 1-7 confirmed. Row 8 answered the OTHER way: Cribl
+tolerates a filter referencing an undeclared field, so the `typeof` guards in
+`capture-filter.ts` are insurance rather than load-bearing. The guards stay -
+what was wrong was the module's stated model, not its code.
+
+**The run's yield was defects, not confirmations**, which is the case for having
+run it. Four product defects, all silent, the first three each enough on their
+own to stop the Lake path: job status was read at the top level when it lives at
+`items[0].status` inside the `{items,count}` envelope, so every job reported
+"still pending"; no clock was injected into the poll loop, so twenty polls fired
+inside about four seconds and only an EMPTY dataset could finish in time;
+`data_source` was missing from `DISCRIMINATOR_FIELDS`, so the one
+security-shaped dataset reported no log types at all for 789K events already
+split by Windows channel; and `GET /search/query` turned out not to be a query
+route - it creates a job and returns `{isFinished:false, job:{...}}` - so
+preferring it orphaned a job on every Lake query and put a raw platform error
+under a success headline. It has been deleted from `queryLakeSamples` and its
+grant withdrawn from `policies.yml`.
+
+Plus seven harness defects, four of which had been returning confident wrong
+answers rather than failing: row 1 could never have passed, because it read
+`__inputId` off the payload strings after the envelope carrying `__inputId` had
+been discarded. A green run of a lying harness is worse than a red one, because
+nobody investigates it.
+
 ---
 
 ## 1.12.2

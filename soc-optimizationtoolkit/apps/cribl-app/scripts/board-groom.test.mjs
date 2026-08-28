@@ -21,7 +21,8 @@ const story = (over) => ({
   id: 'A-1',
   epic: 'A',
   title: 'A story',
-  type: 'chore',
+  type: 'enabler',
+  feature: 'A-F1',
   status: 'backlog',
   priority: 'now',
   settled: 'settled',
@@ -30,8 +31,9 @@ const story = (over) => ({
   ...over,
 });
 
-const board = (stories, epics) => ({
+const board = (stories, epics, features) => ({
   epics: epics ?? [{ key: 'A', name: 'Epic A', why: '' }],
+  features: features ?? [{ id: 'A-F1', epic: 'A', title: 'A feature' }],
   stories,
 });
 

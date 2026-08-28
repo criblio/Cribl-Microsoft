@@ -102,7 +102,38 @@ regex could find - not even that, in the end. Two cards written
 matched and BOTH spikes were invisible to every tool that read the board,
 including the duplicate-id check itself. Moving to data is what surfaced them.
 
-Each story carries an `id`, `epic`, `title`, `type`, `status`
+**The hierarchy is SAFe (Essential level), since 2026-08-28.** Epic > Feature >
+Story, with Tasks under a story. `epics[]` carries a `kind`: a **business** epic
+delivers value, an **enabler** epic exists to unblock other epics - CAP is the
+textbook case, described on its own card as "the single upstream blocker for
+three other epics". `features[]` sit under one epic and hold the work; most were
+derived from the numbered sections of `backlog.md`, which had been acting as
+features already, and carry that `anchor`.
+
+Types are SAFe's, not the old `chore` vocabulary: `story` changes what an
+operator sees, `enabler` is infrastructure/tooling/docs/release mechanics,
+`spike` is SAFe's exploration enabler (answered by investigation, never by
+preference), `bug` is a defect, and `decision` is a LOCAL extension for a
+question a person answers, attached to the feature it blocks. There is no
+separate decisions epic: a decision belongs to the feature it is holding up.
+
+**Features are groupings, not a queue - they carry no score.** SAFe sequences
+features with WSJF, `(business value + time criticality + risk reduction) / job
+size` on a modified Fibonacci scale. It was built here on 2026-08-28 and removed
+the same day, and the reason is recorded so it does not get re-added as a
+missing piece of SAFe: WSJF is an economic answer to CONTENTION - many features
+competing for one team's finite capacity, where choosing wrong costs the delay
+on everything else waiting. There is one author here, moving between features
+rather than draining them in order, so there is no queue to sequence and the
+score would have been four invented numbers per feature, re-invented whenever
+anything moved.
+
+What sequences work instead is what the data can actually support: `priority`
+(now / next / later) on the stories, plus what `npm run groom` derives -
+readiness, and how many cards each one transitively unblocks. If a second
+developer ever works here, contention becomes real and WSJF is worth revisiting.
+
+Each story carries an `id`, `epic`, `feature`, `title`, `type`, `status`
 (backlog / in-progress / done), a `priority` while it is in the backlog
 (now / next / later), `settled` (settled / undecided / unconfirmed),
 `verified` (pins / live / both / none), a `dependsOn` list, and `detail`.
@@ -110,6 +141,43 @@ Each story carries an `id`, `epic`, `title`, `type`, `status`
 ones prose could not enforce: no cycles, no dependency on a story that does not
 exist, nothing in progress whose blocker is still in the backlog, and nothing
 done that depends on something open.
+
+**A defect found in COMMITTED code becomes a card before it is fixed** - even
+when the fix takes five minutes, and even when you are going to do it right now.
+File it, move it to `in-progress`, fix it, move it to `done` with a `verified`
+value. A card opened and closed inside one session is not churn; it is the only
+way the work is visible to anyone who was not watching.
+
+The line is *committed*. A defect you introduce and fix while drafting, before
+committing, is editing and needs no card - otherwise ordinary work becomes board
+noise and people learn to skip the rule entirely. Anything found by a test, a
+review, an architecture audit, or a live walkthrough of code that is already in
+is over the line, including defects in the board's own tooling and in
+`board.json` itself.
+
+Measured on 2026-08-28: six defects were found and fixed that day with no card
+at all - two duplicated vocabularies, a disagreement about what "blocked" means,
+a report that cried wolf, a gitignore hiding this repo's own skills, and two
+cards asserting things the code disproved. All six lived only in commit
+messages. They are now DBT-16 to DBT-21, filed as done and dated, because a Done
+column that shows two defects when the day produced eight is not a record of the
+day.
+
+**Move the card to `in-progress` BEFORE starting, not after finishing.** This is
+the first step of executing a card, ahead of touching any code. Then do the
+work, then move it to `done` with its `verified` value.
+
+It is easy to skip because it feels like ceremony when you already know what you
+are doing, and skipping it is how the board stops describing reality. Measured
+on 2026-08-28: the In progress column had read `0` for an entire working session
+across every card executed in it, because each one went straight from backlog to
+done. A board that only ever shows finished work cannot answer "what is being
+worked on right now", which is most of what a board is for - and if two people
+ever work here, it is the whole of what it is for.
+
+Nothing enforces this. A diff cannot show that a card passed through
+`in-progress`, so no check can catch a card that skipped it - which is exactly
+why it is written down here instead.
 
 **Cite backlog sections, not line numbers.** A card points into its reasoning
 as `backlog.md#6g` - the numbered section - and `check-board` verifies that

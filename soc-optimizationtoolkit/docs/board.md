@@ -11,23 +11,103 @@ two cannot disagree.
 alternatives. This board holds only what is a unit of work, what state it is
 in, and what it waits on.
 
-**65 in the backlog, 0 in progress, 4 done.**
+**64 in the backlog, 0 in progress, 13 done.**
 
-## Epics
+## Epics and features
 
-| Key | Epic | Open | Why it exists |
-|---|---|---|---|
-| `REL` | Ship what is built | 4 | The packaged tarball trails `main`, and the lab trails the tarball |
-| `FX` | Effect-identity defects | 1 | One confirmed live defect class, three instances |
-| `CAP` | Capability taxonomy extension | 6 | The single upstream blocker for three other epics |
-| `HON` | Inventory and diagnostic honesty | 7 | Measured gaps where the app reports a confident wrong answer |
-| `AZR` | Azure native source onboarding | 15 | The largest unstarted block (backlog item 6) |
-| `WIN` | Windows event analysis | 3 | Backlog item 5; Sentinel-side and Lake-side halves |
-| `PK` | Pack maintenance parity | 2 | Includes a silent data-loss defect |
-| `VND` | Vendor field definitions | 2 | Positional CSV naming, reaching past ~18 vendors |
-| `DBT` | Debt, spec grounding, verification | 14 | Copy fixes, unverified claims, retired docs |
-| `GEN` | Pipeline and pack generation | 1 | What the build actually emits; had no epic until a regression was reported against it |
-| `D` | Open decisions | 10 | Blocked on a call, not on effort; each is cheap once answered |
+Epic > Feature > Story, per SAFe (Essential). An `enabler` epic exists to
+unblock other epics rather than to deliver on its own. Features are
+groupings, not a queue - they carry no score and no order. Priority lives
+on the stories underneath (now / next / later).
+
+### `AZR` Azure native source onboarding - 0% (0/16)
+
+The largest unstarted block: every Azure telemetry source, category by category
+
+| Feature | Done | Stories |
+|---|---|---|
+| `AZR-F1` Onboarding foundation and coverage data | 0/1 | AZR-0 |
+| `AZR-F2` Azure Policy - diagnostic settings to Event Hub | 0/3 | AZR-2, AZR-4, AZR-5 |
+| `AZR-F3` Direct ARM configuration - script, no policy | 0/1 | AZR-3 |
+| `AZR-F4` Defender XDR export - guided portal | 0/1 | AZR-6 |
+| `AZR-F5` Pull collectors - no push path exists | 0/3 | AZR-S1, AZR-7, D-8 |
+| `AZR-F6` Blob-only sources - cannot reach Event Hub | 0/1 | AZR-8 |
+| `AZR-F7` Agent-based - AMA plus DCR | 0/1 | AZR-9 |
+| `AZR-F8` Dataflow diagrams, one per category | 0/1 | AZR-10 |
+| `AZR-F9` Shared onboarding concerns | 0/4 | AZR-S2, AZR-1, AZR-11, AZR-12 |
+
+### `WIN` Windows event analysis - 0% (0/5)
+
+Sentinel-side and Lake-side halves of Windows event handling
+
+| Feature | Done | Stories |
+|---|---|---|
+| `WIN-F1` Windows Event analysis screen | 0/2 | WIN-1, WIN-3 |
+| `WIN-F2` Microsoft proprietary enrichment catalog | 0/2 | WIN-2, D-4 |
+| `WIN-F3` Lake copy format - JSON vs Parquet | 0/1 | D-5 |
+
+### `HON` Inventory and diagnostic honesty - 0% (0/10)
+
+Measured gaps where the app reports a confident wrong answer
+
+| Feature | Done | Stories |
+|---|---|---|
+| `HON-F1` Capability model follow-ons | 0/4 | HON-6, HON-7, D-1, D-2 |
+| `HON-F2` Unverified empty inventories | 0/3 | HON-1, HON-2, D-3 |
+| `HON-F3` Guid-column aftermath, made visible | 0/3 | HON-3, HON-4, D-11 |
+
+### `GEN` Pipeline and pack generation - 67% (2/3)
+
+What the build actually emits
+
+| Feature | Done | Stories |
+|---|---|---|
+| `GEN-F1` Pack generation correctness and provenance | 2/3 | GEN-1, GEN-2, GEN-3 |
+
+### `PK` Pack maintenance parity - 0% (0/3)
+
+Maintaining a pack after it is built, including a silent data-loss defect
+
+| Feature | Done | Stories |
+|---|---|---|
+| `PK-F1` Pack maintenance parity | 0/3 | PK-1, PK-2, D-6 |
+
+### `VND` Vendor field definitions - 0% (0/4)
+
+Positional CSV naming, reaching past ~18 vendors
+
+| Feature | Done | Stories |
+|---|---|---|
+| `VND-F1` Vendor column-order naming | 0/4 | HON-5, VND-3, VND-1, D-7 |
+
+### `CAP` Capability taxonomy extension _(enabler)_ - 0% (0/6)
+
+ENABLER EPIC: exists to unblock other epics - the single upstream blocker for three of them
+
+| Feature | Done | Stories |
+|---|---|---|
+| `CAP-F1` Capability taxonomy extension | 0/6 | CAP-1, CAP-2, CAP-3, CAP-4, CAP-5, CAP-6 |
+
+### `REL` Ship what is built _(enabler)_ - 40% (2/5)
+
+ENABLER EPIC: release mechanics. The packaged tarball trails main, and the lab trails it
+
+| Feature | Done | Stories |
+|---|---|---|
+| `REL-F1` Release and deployment hygiene | 2/5 | REL-2, REL-3, REL-4, REL-5, REL-6 |
+
+### `DBT` Quality and technical debt _(enabler)_ - 36% (9/25)
+
+ENABLER EPIC: verification gaps, copy, diagram fidelity, docs and the board's own tooling
+
+| Feature | Done | Stories |
+|---|---|---|
+| `DBT-F1` Verification gaps | 0/4 | DBT-2, DBT-5, DBT-6, DBT-7 |
+| `DBT-F2` Copy and UX | 0/6 | DBT-3, DBT-4, DBT-9, DBT-14, DBT-15, D-10 |
+| `DBT-F3` Diagram fidelity | 0/2 | DBT-1, DBT-12 |
+| `DBT-F4` Docs and spec grounding | 2/5 | DBT-8, DBT-10, DBT-11, DBT-13, DBT-22 |
+| `DBT-F5` Board tooling defects | 7/7 | DBT-16, DBT-17, DBT-18, DBT-19, DBT-20, DBT-21, DBT-23 |
+| `DBT-F6` Effect-identity defect class | 0/1 | FX-4 |
 
 ---
 
@@ -43,21 +123,14 @@ _Nothing here._
 
 Next to pick up. Nothing blocks these.
 
-- **REL-2** Record the 2026-08-25 live verification in the release notes
-  `chore` `settled`
-  The 1.12.0 entry ends "has NOT done: run against a real workspace", which
-  was true of that release. No later entry records the run, so a reader
-  working newest-first still concludes ADR-0003 is unverified. *chore,
-  SETTLED. Size: one entry.*
-
 - **REL-3** Rotate the Azure client secret from the retired local-app config
-  `chore` `settled`
+  `REL-F1` `enabler` `settled`
   `~/.soc-toolkit-local-app-retired/config/local-config.json` holds a live
   secret. Flagged for rotation by `adr/0002-drop-local-target.md:57-62` and
   still outstanding. *chore, SETTLED. Security. Size: minutes.*
 
 - **FX-4** Sweep for the class rather than the instances
-  `chore` `undecided`
+  `DBT-F6` `enabler` `undecided`
   THREE confirmed from one reading; nothing says the fourth is not there.
   `useEffect` keyed on a memo, a callback, or an inline object/array prop,
   whose body resets state the operator owns. Safe reference:
@@ -77,33 +150,40 @@ Next to pick up. Nothing blocks these.
     [ ] `lint-rule` Write a custom lint rule - A permanent guard, but bigger than the three fixes were: .oxlintrc.json enables only react/rules-of-hooks and oxlint has no exhaustive-deps equivalent, so this means AUTHORING and maintaining a rule, not switching one on.
 
 - **CAP-1** Add `resourcegraph.read` and its probe
-  `chore` `settled`
+  `CAP-F1` `enabler` `settled`
   The gap recorded in backlog items 1 and 4 and again under 6d.
   `backlog.md#1`, `:321-329`, `:786-808`.
 
 - **CAP-2** Add policy assignment and remediation capabilities plus probes (`Microsoft.Authorization`, `Mic
-  `chore` `settled`
+  `CAP-F1` `enabler` `settled`
   rosoft.PolicyInsights`). Gates AZR-4.
 
 - **CAP-3** Add managed-identity creation plus probe
-  `chore` `settled`
+  `CAP-F1` `enabler` `settled`
   Gates AZR-4.
 
 - **CAP-4** Add Sentinel incident read (Microsoft Sentinel Reader)
-  `chore` `settled`
+  `CAP-F1` `enabler` `settled`
   Modelled nowhere - `azure-permissions.ts:239,244` knows only the Contributor
   actions. Gates AZR-7.
 
 - **CAP-5** Add the two Graph scopes (`Organization.Read.All`, `SecurityEvents.Read.All`) plus probes
-  `chore` `settled`
+  `CAP-F1` `enabler` `settled`
   Gates AZR-6.
 
 - **CAP-6** Make the four unmeasured listers measurable - subscriptions, resource groups, Resource Graph, C
-  `chore` `settled` `blocked by CAP-1`
+  `CAP-F1` `enabler` `settled` `blocked by CAP-1`
   ribl worker groups. They render `unmeasuredInventoryMessage` today, which
   `backlog.md#4` calls "honest, but inert". Depends on CAP-1. Already
   measured, do not re-add: Event Hub namespace creation is `arm.deploy`; every
   Cribl-side write is `source.manage`. ---
+
+- **AZR-0** Port `resource-coverage.json` to the app KV store as the selection model
+  `AZR-F1` `enabler` `settled`
+  The checkbox model exists as a file - port it, do not invent one. Its
+  `method` values ARE the section keys. Keep the tier/profile sub-selections
+  and the `notSupported` block verbatim. Precedes every sub-item.
+  `backlog.md#6`.
 
 ---
 
@@ -112,36 +192,36 @@ Next to pick up. Nothing blocks these.
 Settled and unblocked, sequenced behind now.
 
 - **HON-1** Wire `emptyTableListMessage` into the picker screen
-  `chore` `settled`
+  `HON-F2` `story` `settled`
   The last of the three pure decisions still owed its wiring. `backlog.md#4`.
 
 - **HON-2** Honour the scope rule at the remaining lister call sites
-  `chore` `settled`
+  `HON-F2` `story` `settled`
   A verdict is evidence only about the scope it was measured at, and that
   includes off-scope denials. `emptyInventoryMessage` now requires a scope
   argument, so the compiler prompts each new call site. `backlog.md#4`.
 
 - **HON-3** Surface `droppedColumns` and `unknownTypeColumns` in the UI
-  `chore` `settled`
+  `HON-F3` `story` `settled`
   The diagnostics already exist and reach nobody - repo-wide the only
   consumers are two test files. Already propagated through `dcr-request.ts`,
   so this is a rendering job, not plumbing. `adr/0004:87-88`, named there as
   the strongest argument for doing it next.
 
 - **HON-4** Tell operators that DCRs deployed before the guid fix still lose fields
-  `chore` `settled`
+  `HON-F3` `story` `settled`
   `update-dcr` regenerates the declaration so an update fixes it, but nothing
   sweeps and nothing warns. Pairs with HON-3. `adr/0004:107-112`.
 
 - **HON-5** Warn a CSV vendor's operator before the preview that the pack can never route automatically
-  `chore` `settled`
+  `VND-F1` `story` `settled`
   Both route discriminators return early for CSV by construction, so every CSV
   log type placeholders even when its values name their log types perfectly.
   The format-aware hint shipped in 1.11.11; the earlier warning did not.
   `backlog.md#13c`.
 
 - **HON-6** Give the audit's AGE a home and add a manual re-check
-  `chore` `settled` `blocked by D-1`
+  `HON-F1` `story` `settled` `blocked by D-1`
   The nav was tried and was the wrong surface. Two candidates remain: the
   frame footer, or the connection bar beside the existing chips.
   `backlog.md#1`. > **HON-8 and HON-9 SHIPPED, PR #134 merged 2026-08-27**,
@@ -159,7 +239,7 @@ Settled and unblocked, sequenced behind now.
   as a known-unpinned guard.
 
 - **HON-7** Make the fallback offer reachable beside the actions
-  `chore` `settled` `blocked by D-2`
+  `HON-F1` `story` `settled` `blocked by D-2`
   `FallbackNotice` renders without `onProduce` in production, so the
   capability model's "every blocked action falls back to a downloadable
   artifact" rule has no button. Targets: Integrate deploy, Batch Deploy, DCR
@@ -167,7 +247,7 @@ Settled and unblocked, sequenced behind now.
   the absence of alert semantics. `backlog.md#1`. ---
 
 - **GEN-3** Stamp the toolkit version into the pack it builds
-  `feature` `settled`
+  `GEN-F1` `story` `settled`
   Given a `.crbl`, nothing says which toolkit build produced it. The manifest
   carries exactly eight fields (`domain/pack-assembly/package-json.ts`) -
   name, version, author, description, displayName, tags, exports,
@@ -186,12 +266,12 @@ Settled and unblocked, sequenced behind now.
 
 ---
 
-## Backlog - later (48)
+## Backlog - later (47)
 
 Settled, gated on something above.
 
 - **AZR-S1** Verify whether XDR streaming and the Sentinel incidents API are complementary or alternatives
-  `spike` `undecided`
+  `AZR-F5` `spike` `undecided`
   Streaming carries alert-grain tables; path B returns the incident object
   with triage state. Settle before building either AZR-6 or AZR-7 - presenting
   A as a replacement loses triage state silently, presenting them as unrelated
@@ -206,7 +286,7 @@ Settled, gated on something above.
   which is the point.
 
 - **AZR-S2** Decide whether the app creates Cribl sources over the API
-  `spike` `undecided`
+  `AZR-F9` `spike` `undecided`
   Every `/system/inputs` reference in the codebase is a read; Event Hub
   Discovery ends at a JSON download (`eventhub-discovery-screen.tsx:503-515`).
   The write-side plumbing exists (`guided-deploy/wire-source.ts`,
@@ -219,22 +299,15 @@ Settled, gated on something above.
     [ ] `export-only` Keep the generated-JSON hand-off - Stay with what Event Hub Discovery does: generate configs, download, operator imports and makes the secrets. No new write surface - but AZR-2, AZR-4, AZR-6 and AZR-8 each end at a manual import step.
     [ ] `connected-or-airgap` Write when connected, export when not - Both behind one convention, mirroring what secret-provisioning.ts already does for secrets (POST when connected, placeholder when air-gapped). NOTE: drawn from that existing convention, not from this card's own text. Costs two paths kept in step.
 
-- **AZR-0** Port `resource-coverage.json` to the app KV store as the selection model
-  `chore` `settled`
-  The checkbox model exists as a file - port it, do not invent one. Its
-  `method` values ARE the section keys. Keep the tier/profile sub-selections
-  and the `notSupported` block verbatim. Precedes every sub-item.
-  `backlog.md#6`.
-
 - **AZR-1** Establish the additive-only contract
-  `chore` `settled`
+  `AZR-F9` `enabler` `settled`
   Checkboxes only ever deploy; unticking removes from the desired selection
   and does nothing to Azure; teardown is a separate, separately-confirmed
   Remove action. No checkbox may destroy anything - pin that with a test. The
   UI must distinguish "not selected" from "not deployed". `backlog.md#6h`.
 
 - **AZR-2** TRACER BULLET: Entra ID tenant diagnostics, one category group
-  `chore` `settled` `blocked by AZR-S2, AZR-0, AZR-1`
+  `AZR-F2` `story` `settled` `blocked by AZR-S2, AZR-0, AZR-1`
   One ARM PUT to `microsoft.aadiam/diagnosticSettings`, catalogued as porting
   nearly one-to-one. Checkbox grain is the category, with Standard (9) and
   HighVolume (15) as presets, and the non-interactive sign-in volume warning
@@ -246,23 +319,23 @@ Settled, gated on something above.
   `resource-coverage.json` omits). `backlog.md#6a`.
 
 - **AZR-3** Defender for Cloud continuous export
-  `chore` `settled` `blocked by AZR-0, AZR-1`
+  `AZR-F3` `story` `settled` `blocked by AZR-0, AZR-1`
   Per subscription, a `Microsoft.Security/automations` resource. Detects which
   of 12 paid plans are enabled and never enables one - keep that property.
   `backlog.md#6b`.
 
 - **AZR-8** Blob-only sources as visible unavailable rows
-  `chore` `settled` `blocked by AZR-S2, AZR-0, AZR-1`
+  `AZR-F6` `story` `settled` `blocked by AZR-S2, AZR-0, AZR-1`
   vNet and NSG Flow Logs have no Event Hub path; the blob path already exists
   end to end. The `notSupported` block is a feature of the legacy config, not
   an omission. Smallest sub-item by a wide margin. `backlog.md#6e`.
 
 - **AZR-9** Link the AMA plus DCR path to the app's own DCR Automation and Integrate routes rather than dup
-  `chore` `settled` `blocked by AZR-0, AZR-1`
+  `AZR-F7` `story` `settled` `blocked by AZR-0, AZR-1`
   licating them. Natural place to surface WIN. `backlog.md#6f`.
 
 - **AZR-4** Azure Policy initiatives - the bulk of the platform
-  `chore` `settled` `blocked by AZR-S2, CAP-2, CAP-3, AZR-0, AZR-1`
+  `AZR-F2` `story` `settled` `blocked by AZR-S2, CAP-2, CAP-3, AZR-0, AZR-1`
   Built-in Audit or AllLogs (one or the other), eight community tiers with a
   per-service expander, plus Activity Log, AKS and PostgreSQLFlexible as
   visible checkboxes because the bundled initiative excludes them silently.
@@ -272,13 +345,13 @@ Settled, gated on something above.
   policy modelling exists in the repo today. `backlog.md#6a`.
 
 - **AZR-5** Diagnostic-settings cleanup, preview only
-  `chore` `settled` `blocked by AZR-0, AZR-1`
+  `AZR-F2` `story` `settled` `blocked by AZR-0, AZR-1`
   Enumerate exactly what would be removed, grouped by resource type and target
   namespace, and stop. No delete capability in the GUI in this pass.
   `backlog.md#6a`.
 
 - **AZR-6** Defender XDR guided worklist
-  `chore` `settled` `blocked by AZR-S1, AZR-S2, CAP-5, AZR-0, AZR-1`
+  `AZR-F4` `story` `settled` `blocked by AZR-S1, AZR-S2, CAP-5, AZR-0, AZR-1`
   Licence check then usage probe - a licence held is not a product in use. The
   checkboxes here are a worklist, not a deployment: Microsoft exposes no
   configuration API for XDR streaming, so the last step is a portal visit,
@@ -286,40 +359,40 @@ Settled, gated on something above.
   `backlog.md#6c`.
 
 - **AZR-7** Sentinel incidents via a Cribl REST collector
-  `chore` `settled` `blocked by AZR-S1, CAP-4, DBT-1, AZR-0, AZR-1`
+  `AZR-F5` `story` `settled` `blocked by AZR-S1, CAP-4, DBT-1, AZR-0, AZR-1`
   Filter on `lastModifiedTimeUtc`, not `createdTimeUtc` - filtering on
   creation misses every update to an open incident. Repeat deliveries are
   correct; dedupe downstream on incident GUID plus `lastModifiedTimeUtc`.
   Build on `lab-cribl.ts:149`. `backlog.md#6d`.
 
 - **AZR-10** Dataflow diagrams, one per category
-  `chore` `settled` `blocked by AZR-0, AZR-1`
+  `AZR-F8` `story` `settled` `blocked by AZR-0, AZR-1`
   Do not build a new diagram implementation - the renderer and layout exist
   and the work is data, new entries in `architecture-patterns.ts`. Draw the
   manual portal step in AZR-6 as a step, and draw AZR-7 flowing the other way.
   Trail each section by one. `backlog.md#6g`.
 
 - **AZR-11** Make the prerequisite ordering explicit
-  `chore` `settled` `blocked by AZR-0`
+  `AZR-F9` `enabler` `settled` `blocked by AZR-0`
   Nearly every section needs an Event Hub namespace first, and the policy
   sections need Policy Contributor plus User Access Administrator at MG scope.
   `backlog.md#6h`.
 
 - **AZR-12** Check `eventhub-discovery` for overlap before building a second Event Hub surface
-  `chore` `settled`
+  `AZR-F9` `enabler` `settled`
   `backlog.md#6h`. ### WIN - Windows event analysis Backlog item 5. Two goals
   related only by subject; keep them separable, because one is Sentinel-side
   and one is Lake-side and either could ship alone.
 
 - **WIN-1** The screen shell and route, opting in to `table.read`
-  `chore` `settled`
+  `WIN-F1` `story` `settled`
   New route ids fail toward reachable, so this must opt in. A denial annotates
   and never hides - and unusually, the DCR-template path means the screen
   still does real work under a denial. Say so on the screen. `backlog.md#5`,
   `:403-410`.
 
 - **WIN-2** Derive the enrichment catalog, ranked by content reference
-  `chore` `settled` `blocked by D-4`
+  `WIN-F2` `story` `settled` `blocked by D-4`
   Derive it; do not write it from memory. Four in-tree sources, and the
   formula is (schema columns) minus (what the raw event carries), ranked by
   how much content references each. The ranking is what makes this a screen
@@ -328,11 +401,11 @@ Settled, gated on something above.
   `backlog.md#5a`.
 
 - **WIN-3** Produce SecurityEvent and WindowsEvent as two separate catalogs and let them differ
-  `chore` `settled`
+  `WIN-F1` `story` `settled`
   `backlog.md#5`. ### PK - Pack maintenance parity
 
 - **PK-1** Detect packs modified in the Cribl UI before overwriting them
-  `chore` `settled`
+  `PK-F1` `story` `settled`
   The data-loss one. Maintenance rebuilds from our stored definition and
   installs over the deployed pack, silently discarding any route filter,
   pipeline function, lookup row or destination an operator changed since.
@@ -343,7 +416,7 @@ Settled, gated on something above.
   unknown must not render as a zero. `backlog.md#12`.
 
 - **PK-2** Bring the new sample analysis into maintenance
-  `chore` `settled` `blocked by D-6`
+  `PK-F1` `story` `settled` `blocked by D-6`
   An operator maintaining a pack today edits it through a strictly weaker view
   than the one they built it with - maintenance cannot tell them a mapping is
   now dropping 161 fields. Reuse `triageOverflow`, `matchFields`,
@@ -353,7 +426,7 @@ Settled, gated on something above.
   VND/decisions below. ### VND - Vendor field definitions
 
 - **VND-3** Measure the column-order shortfall instead of hedging about it
-  `bug` `undecided`
+  `VND-F1` `bug` `undecided`
   Found live 2026-08-27: THREAT arrived with 38 fields and was named from the
   bundled 120-column PAN order; TRAFFIC, 41 against 115. Positional naming
   maps field[i] to name[i], so a feed missing any middle column mis-names
@@ -368,7 +441,7 @@ Settled, gated on something above.
     [ ] `block` Block Apply above the threshold - Disable Apply until the order is edited or explicitly overridden. Strongest guard against mis-naming every column after the first gap, and Skip already preserves the positional _N names - but it runs against the annotate-never-hide rule the rest of the app pins.
 
 - **VND-1** Let the operator name the vendor
-  `chore` `settled` `blocked by D-7`
+  `VND-F1` `story` `settled` `blocked by D-7`
   Today the vendor comes from `detectVendorIdentity(solutionName)`, so
   anything outside `KNOWN_VENDOR_IDENTITIES` stores nothing - honest, but it
   caps the feature at about eighteen vendors. Needs a UI seam that was
@@ -377,46 +450,46 @@ Settled, gated on something above.
   between larger stories.
 
 - **DBT-1** Pin how the REST collector is modelled in the vendored spec
-  `chore` `settled`
+  `DBT-F3` `enabler` `settled`
   `InputRest` has no schema under that name; it is likely `InputCollection`
   with a collector conf. Blocks AZR-7 and WIN-5. `backlog.md#10`.
 
 - **DBT-2** Add the guid cast to the live-verification suite
-  `chore` `settled`
+  `DBT-F1` `enabler` `settled`
   The fix shipped in 1.12.1 without ever being observed against live Azure,
   and `toguid()` returns null silently on malformed input - so a wrong cast
   fails the same quiet way the drop did. The suite ran live on 2026-08-25 and
   carries no guid row. `adr/0004:118-124`.
 
 - **DBT-3** Reconcile the Entra `Kind:Direct` copy with what has been measured
-  `chore` `settled`
+  `DBT-F2` `story` `settled`
   `architecture-patterns.ts:422,426` states flatly that native Entra tables do
   not accept Kind:Direct DCRs, with no snapshot date and no hedge, while the
   plan doc that is its only source still calls it unverified. Either measure
   it or carry the caveat.
 
 - **DBT-4** Name inline breaker rulesets instead of showing "Default selection"
-  `chore` `settled`
+  `DBT-F2` `story` `settled`
   The spec's `EventBreakerExistingOrNewExisting` carries `existingRule`.
   `backlog.md#9`.
 
 - **DBT-5** Produce live evidence for the `no access` and `not connected` nav states
-  `chore` `settled`
+  `DBT-F1` `enabler` `settled`
   Both are still test-only. ADR-0002 removed the cheapest way to produce them,
   so each now costs a throwaway KV profile. `backlog.md#7`.
 
 - **DBT-6** Exercise the `_raw`-absent branch with a non-Lake sample
-  `chore` `settled`
+  `DBT-F1` `enabler` `settled`
   The Lake write path adds `_raw`, so no Lake-sourced bench can reach that
   branch - it needs a paste or an upload. `zscaler-lake-lab.md:167-179`.
 
 - **DBT-7** Confirm the `eventsPerSec` 2x multiplier against worker config
-  `chore` `settled`
+  `DBT-F1` `enabler` `settled`
   Inferred as the worker-process count from a hard changepoint, not confirmed.
   `zscaler-lake-lab.md:225-238`.
 
 - **DBT-8** Correct the external datagen research note
-  `chore` `settled`
+  `DBT-F4` `enabler` `settled`
   The recorded "verified create call" returns HTTP 200 and produces no sample
   file; a datagen bound to it emits nothing while reporting health Green. The
   correct shape is `POST /api/v1/m/{group}/system/samples` with a
@@ -424,29 +497,29 @@ Settled, gated on something above.
   `zscaler-lake-lab.md:104-131`.
 
 - **DBT-9** Say "are deleted" instead of "reset" in the Sample Data helper text
-  `chore` `settled`
+  `DBT-F2` `story` `settled`
   The deletion is correct and intended; the wording is what misleads. One
   string. `backlog.md#9`.
 
 - **DBT-10** Reconcile the field matcher's target list with the generator's output
-  `chore` `settled`
+  `DBT-F4` `enabler` `settled`
   Lower urgency after ADR-0004 - the two now agree about guid columns, which
   removed the only known instance. `adr/0004:89-91`.
 
 - **DBT-11** Archive three retired docs rather than keep patching them: `ux-flow-plan.md` (its plan shipped,
-  `chore` `settled`
+  `DBT-F4` `enabler` `settled`
   its standing gate is retired), `legacy-flow-analysis.md` (its one decision
   was adopted 2026-07-04), `ui-refinement-reference.md` (it points at a path
   now under `deprecated/`). `porting-plan.md` is the borderline one - patched
   for now, next in line if the annotation load keeps growing.
 
 - **DBT-12** Re-derive `BREAKER_CONFIGURABLE_INPUT_TYPES` whenever the spec is re-vendored
-  `chore` `settled`
+  `DBT-F3` `enabler` `settled`
   Recurring, conditional. It is derived, not hand-written - do not edit it by
   hand. `backlog.md#10`.
 
 - **DBT-14** Stop the solution list swallowing the mouse wheel
-  `bug` `settled`
+  `DBT-F2` `bug` `settled`
   Found live 2026-08-27: with the pointer over the list, the wheel moves
   neither the list nor the page - the pointer must leave the list before
   anything scrolls. Five of eight results were reachable. This is the
@@ -455,14 +528,14 @@ Settled, gated on something above.
   13d.*
 
 - **DBT-15** Give every solution row a delivery-fit badge, or say why not
-  `bug` `settled`
+  `DBT-F2` `bug` `settled`
   "Palo Alto Cortex XDR" renders none while all seven of its siblings do.
   Blank reads as neither "not measured" nor "does not apply" - the
   absent-versus-zero distinction the inventory standard exists to protect.
   *bug, SETTLED. `backlog.md` item 13e.*
 
 - **REL-5** Upload the current package to the lab workspace
-  `chore` `settled`
+  `REL-F1` `enabler` `settled`
   Packaging does not deploy - the lab runs the installed app, so this work
   stays invisible there until someone uploads the tgz through the Apps page.
   The lab is on 1.2.212. `backlog.md#8`. MEASURED 2026-08-27: the installed
@@ -474,7 +547,7 @@ Settled, gated on something above.
   dev app. Anyone opening the INSTALLED app today hits a dead first step.
 
 - **REL-6** Clear the external queue
-  `chore` `settled`
+  `REL-F1` `enabler` `settled`
   Issue #47 was fixed on 2026-08-24 by PRs #120 and #121 and never closed. PR
   #26 diagnosed the guid issue correctly and is credited in the 1.12.1 notes,
   but its own edit to `AWSCloudTrail.json` appears unapplied - verify, then
@@ -483,7 +556,7 @@ Settled, gated on something above.
   as one of its own two pending items. ---
 
 - **D-1** `HON-6` placement: frame footer, or connection bar beside the existing secret/target/platform-l
-  `decision` `undecided`
+  `HON-F1` `decision` `undecided`
   ink chips? Excluded already: the nav (tried, wrong surface) and the
   preflight panel (re-measures on arrival, so it would only ever read "just
   now").
@@ -492,7 +565,7 @@ Settled, gated on something above.
     [ ] `connection-bar` Connection bar - Beside the existing secret / target / platform-link chips.
 
 - **D-2** `HON-7` surface area: which of Integrate deploy, Batch Deploy and DCR Automation get the fallba
-  `decision` `undecided`
+  `HON-F1` `decision` `undecided`
   ck offer, and does each own its `onProduce`? One prop away in any of them.
   DECISION (unanswered): HON-7: which screens get the fallback offer, and who
   owns onProduce?
@@ -501,7 +574,7 @@ Settled, gated on something above.
     [ ] `where-producible` Only where a producer already exists - Batch Deploy already calls ports.artifacts.save; Integrate can hand over the pack build. DCR Automation waits until it has an artifact to give. Smallest step; leaves the capability rule partly unmet.
 
 - **D-3** How do capabilities reach the roughly eight listing screens - keep prop-drilling from the shell
-  `decision` `undecided`
+  `HON-F2` `decision` `undecided`
   , or carry them in `PortsContext` beside `config`? One seam change against
   updating every `PortsProvider` call site. Cheap now, less so later; at eight
   listers this is the duplication that drifts. `backlog.md#4`.
@@ -510,7 +583,7 @@ Settled, gated on something above.
     [ ] `ports-context` Carry them in PortsContext beside config - One seam change. At eight listers this is the duplication that drifts.
 
 - **D-4** `WIN` scope: does the enrichment catalog only report, or does it also produce pipeline enrichme
-  `decision` `undecided`
+  `WIN-F2` `decision` `undecided`
   nt functions? Reporting first is a legitimate slice, but a catalog that only
   affects analysis leaves deployed data still missing the fields.
   `backlog.md#5a`.
@@ -521,7 +594,7 @@ Settled, gated on something above.
     [ ] `produce-in-scope` Produce inside WIN-2 - The catalog also emits enrichment functions into the generated pipeline. Larger slice, but there is a working precedent: buildCefIdentityOverrideFn (pipeline-conf.ts:132) was added for the same reason - an override that only changed the analysis would leave deployed data carrying the wrong vendor.
 
 - **D-5** `WIN-5` JSON or Parquet for the Cribl Lake copy
-  `decision` `undecided`
+  `WIN-F3` `decision` `undecided`
   The choice is already live and made silently - `lab-cribl.ts` carries
   Parquet chunk settings and nothing presents the tradeoff. The answer must be
   MEASURED against how Federated Search actually executes, not reasoned from
@@ -541,7 +614,7 @@ Settled, gated on something above.
   chosen silently".
 
 - **D-6** `PK-2` source of truth: does maintenance re-analyse, or read a stored analysis? Re-analysing ne
-  `decision` `undecided`
+  `PK-F1` `decision` `undecided`
   eds the original samples, which the pack carries but which may no longer
   represent live traffic; a stored verdict is cheap and goes stale silently. A
   third option - re-analyse against the LIVE table schema and show what
@@ -554,7 +627,7 @@ Settled, gated on something above.
     [ ] `live-schema` Re-analyse against the LIVE table schema - Shows what changed since the pack was built; the same fetch the picker already makes. Noted on the card as probably the honest one.
 
 - **D-7** `VND-2` Does a persisted column order need a version or a captured-on date, so a firmware chang
-  `decision` `undecided`
+  `VND-F1` `decision` `undecided`
   e can be reasoned about later rather than silently disagreeing with a future
   bundled update? The only genuinely open question left in that plan.
   `vendor-field-definition-plan.md:222-224`.
@@ -565,7 +638,7 @@ Settled, gated on something above.
     [ ] `version` Record a version - Sharper than a date, but the version has to come from somewhere: nothing in the sample or the CSV-header dialog supplies one today, so it means asking the operator.
 
 - **D-8** `AZR` Resource Graph change tracking - offer it at all? Recorded under `notSupported` as query-
-  `decision` `undecided`
+  `AZR-F5` `decision` `undecided`
   only with no streaming path. If offered, it is a second scheduled collector,
   and it lands on the same Resource Graph gap CAP-1 closes. `backlog.md#6d`. >
   **D-9 became DBT-14 on 2026-08-27.** It asked what to do about three-level >
@@ -579,7 +652,7 @@ Settled, gated on something above.
     [ ] `scheduled-collector` Build it as a second scheduled collector - Generate a scheduled Resource Graph query collector alongside the Sentinel incidents one. Most work, and it lands on the same unmeasured Resource Graph capability that CAP-1 closes.
 
 - **D-10** `DBT` Setup wizard header promises three phases while the stepper shows one
-  `decision` `undecided`
+  `DBT-F2` `decision` `undecided`
   Either drop the enumeration from the header, or promote the sub-steps.
   Measured on two live walkthroughs 2026-08-06. `backlog.md#9`.
   DECISION (unanswered): Setup wizard header promises three phases; the
@@ -588,7 +661,7 @@ Settled, gated on something above.
     [ ] `promote-substeps` Promote the sub-steps into the stepper - Stepper starts showing what the header promises.
 
 - **D-11** `ADR-0004` per-table successor for deprecated guid columns (`AwsRequestId` to `AwsRequestId_`)
-  `decision` `undecided`
+  `HON-F3` `decision` `undecided`
   Explicitly out of scope for ADR-0004 as a per-table content decision.
   Matters because CloudTrail's `requestID` is frequently not a UUID, so
   `toguid()` returns null and drops it silently. `adr/0004:82-86`. --- Source
@@ -602,12 +675,12 @@ Settled, gated on something above.
 
 ---
 
-## Done (4)
+## Done (13)
 
 Kept briefly so a reader can see what just landed; prune when the list grows.
 
 - **GEN-1** Overflow serialize reaches the built pack - report not reproduced
-  `bug` `settled` `verified: live`
+  `GEN-F1` `bug` `settled` `verified: live`
   REPORTED 2026-08-27: the additional-extension field was said not to be
   created in the pack's pipeline. NOT REPRODUCED, and now checked in the
   artifact the report is actually about - a pack built end to end and
@@ -627,8 +700,29 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   reporter is what Overflow count their gap analysis showed. *bug, closed as
   not-reproduced. `backlog.md` item 14.*
 
+- **REL-2** Record the 2026-08-25 live verification in the release notes
+  `REL-F1` `enabler` `settled` `verified: none`
+  DONE 2026-08-28. The 1.12.0 entry ends "has NOT done: run against a real
+  workspace", which was true of that release; no later entry recorded the run,
+  so a reader working newest-first still concluded ADR-0003 was unverified.
+  FIXED as errata rather than by editing history: release-notes.md is an
+  append-only Record whose entries are "never edited afterwards", so the
+  1.12.0 entry stands untouched and the correction sits at the TOP, under
+  1.12.3, which is where a newest-first reader actually lands - the harm the
+  card described. The entry records what the 2026-08-25 run settled (eight
+  beliefs, row 8 answering the other way - Cribl tolerates a filter on an
+  undeclared field) and, more usefully, what it caught: four silent product
+  defects and seven harness defects, four of the latter returning confident
+  wrong answers. *chore, SETTLED. Size: one entry, as estimated.* VERIFIED:
+  none, deliberately. The 2026-08-25 run is what the entry DESCRIBES; it is
+  not what confirms this card. No pin asserts the release notes mention it,
+  and check-release-drift only enforces that a section for the packaged
+  version exists - not what it says. `none` is the honest value for prose, and
+  is exactly the uncomfortable answer the field exists to force rather than
+  let "live" borrow credibility from the thing being written about.
+
 - **REL-4** Cut and package a release
-  `chore` `settled` `verified: pins`
+  `REL-F1` `enabler` `settled` `verified: pins`
   Now the most overdue card on the board: the tarball in `release/` predates
   four merged PRs, and the lab workspace is further behind still. `npm run
   package` performs the bump; do not hand-bump. For the current number run
@@ -647,7 +741,7 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   asymmetry visible at a glance.
 
 - **DBT-13** The Claude hooks travel with the repo
-  `chore` `settled` `verified: live`
+  `DBT-F4` `enabler` `settled` `verified: live`
   DECIDED and shipped 2026-08-27: they travel. `.gitignore` matched `*claude*`
   unanchored, so all of `.claude/` was invisible to git - including `hooks/`,
   which holds the architecture-audit cadence, the docs-drift check and the
@@ -669,7 +763,7 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   re-tuned.*
 
 - **GEN-2** A rebuilt pack no longer inherits the previous build's pipelines
-  `bug` `settled` `verified: both`
+  `GEN-F1` `bug` `settled` `verified: both`
   FIXED and shipped in 1.12.3. CONFIRMED live 2026-08-27, then root-caused and
   closed. THE MECHANISM: an overwrite of an already-installed pack took rung 3
   of the conflict ladder, `PATCH /packs/{id}` - Cribl's "Upgrade a Pack",
@@ -698,3 +792,117 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   added, three of which fail if the replace branch is disabled; the existing
   pin that had encoded the merge as intended behaviour was re-pointed at the
   delete-refused path. *bug, fixed. `backlog.md` item 14d/14f.*
+
+- **DBT-16** The kanban hardcoded its own copy of the status vocabulary
+  `DBT-F5` `bug` `settled` `verified: pins`
+  FOUND by the seventh architecture audit 2026-08-27, fixed the same day,
+  filed 2026-08-28. board-html.mjs listed backlog/in-progress/done itself
+  while board.mjs owned STATUSES. They agreed by luck: a fourth status would
+  have passed validateBoard and then rendered into NO column - a card present
+  in board.json, absent from the page, invisible to every count, because a
+  column only counts what it already renders. Columns are now derived via
+  columnsFrom, and an unmapped status gets a column keyed by its own name.
+  Re-hardcoding the list kills the pin. *bug, closed.*
+
+- **DBT-17** Grooming hardcoded its own copy of the priority vocabulary
+  `DBT-F5` `bug` `settled` `verified: pins`
+  FOUND by the eighth architecture audit 2026-08-28, fixed the same day.
+  board-groom.mjs carried {now:0,next:1,later:2} while board.mjs owned
+  PRIORITIES - the same duplication DBT-16 had just fixed, one file over. A
+  fourth priority would have validated fine and then ranked BELOW later,
+  sorting the most urgent work last in a report whose entire job is ordering.
+  Now ranked by position in PRIORITIES. HONEST NOTE: its pin cannot fail
+  today, because with three priorities a hardcoded map produces identical
+  output - it is a tripwire that arms when the vocabulary grows, and the test
+  says so. *bug, closed.*
+
+- **DBT-18** Two answers to what blocked means, disagreeing on a dangling dependency
+  `DBT-F5` `bug` `settled` `verified: pins`
+  FOUND by the eighth architecture audit 2026-08-28, fixed the same day.
+  blockers() treats a dependency that is NOT on the board as blocking;
+  prerequisiteChain skips it, because it cannot order what it cannot see.
+  isReady asked the chain, so the kanban rendered "blocked by GONE-9" while
+  grooming called the same card READY. Reachable on any board mid-edit - which
+  is exactly when the live server is running and validation is failing.
+  isReady now delegates to blockers: one definition, the conservative one. A
+  goal blocked with nothing to list now says the blocker is off the board.
+  *bug, closed.*
+
+- **DBT-19** Grooming's epic rule fired on ordinary focus
+  `DBT-F5` `bug` `settled` `verified: pins`
+  FOUND on the grooming script's first run 2026-08-28, fixed before the skill
+  shipped. It flagged every epic with no `now` card and fired EIGHT times,
+  which is simply what deliberate focus looks like. A report that fires on
+  normal states is one people learn to skim, and the architecture-audit hook
+  had already had to be fixed for the same reason. It now flags a STALLED epic
+  - open cards, not one of them ready - which is a real signal rather than a
+  description of having a focus. *bug, closed.*
+
+- **DBT-20** gitignore hid the repo's own skills
+  `DBT-F5` `bug` `settled` `verified: live`
+  FOUND 2026-08-28 when the backlog-grooming skill could not be committed. THE
+  THIRD INSTANCE of this class: `.gitignore` excluded `.claude/skills/`
+  wholesale, so a skill encoding this repo's own working agreements existed
+  only on the machine that wrote it. DBT-13 had been closed that same morning
+  on the claim that the hooks now travel - the hooks did, the skills did not,
+  and architecture-audit survived only because gitignore does not untrack what
+  is already in the index. Now `.claude/skills/*` with explicit negations,
+  because git cannot re-include a file whose parent DIRECTORY is excluded.
+  Verified both ways with git check-ignore: the two owned skills visible, a
+  fresh vendored skill still ignored. *bug, closed. Same class as [[DBT-13]].*
+
+- **DBT-21** Two board cards asserted things the code disproved
+  `DBT-F5` `bug` `settled` `verified: live`
+  FOUND 2026-08-28 while researching options to seed those cards, corrected in
+  place. D-5 claimed the JSON/Parquet choice was "already live and made
+  silently" because lab-cribl.ts carries Parquet settings - those are
+  azure_blob SOURCE options for READING Parquet out of Azure storage and say
+  nothing about the format the Lake copy is written in; the app never sets a
+  Lake format at all, so it inherits Cribl's default. D-11 cited AZR-5, which
+  is the diagnostic-settings cleanup and has nothing to do with guid columns;
+  the real source is ADR-0004. Filed because board.json is committed code and
+  a card that asserts a false fact is read with the same confidence as a true
+  one. *bug, closed.*
+
+- **DBT-22** CLAUDE.md describes the deprecated PowerShell toolkit as the project
+  `DBT-F4` `bug` `settled` `verified: live`
+  FOUND 2026-08-28 by a reader, in the one file loaded into EVERY session. Its
+  Project Overview calls this "a PowerShell-based automation toolkit" whose
+  primary focus is DCR automation - but that toolkit was moved to
+  `deprecated/` on 2026-07-13 and receives no further development, and the
+  actual deliverable is the TypeScript Cribl App Platform app at
+  soc-optimizationtoolkit (v1.12.3). Worse than wrong prose: every command
+  block points at
+  `.\Azure\CustomDeploymentTemplates\DCR-Automation\Run-DCRAutomation.ps1`, a
+  path that has not existed for six weeks - the script is under `deprecated/`.
+  24 PowerShell references in all. So the file that tells every contributor
+  and every agent how this repo works has been instructing them to run a
+  superseded tool at a path that moved. check-docs governs docs/ and never
+  looked at root CLAUDE.md, which is why six weeks passed. FIXED 2026-08-28:
+  the overview now describes the TypeScript Cribl App Platform app as the
+  deliverable, states plainly that the PowerShell toolkit is deprecated, and
+  the DCR-Automation paths are corrected to deprecated/. DCR-Templates was
+  deliberately LEFT at its root path - it is a public API that Cribl
+  documentation deep-links into, so bulk rewriting every Azure/ path would
+  have broken it. VERIFIED live by checking each linked directory resolves on
+  disk. The sweep found FIVE more broken links beyond the reported one -
+  Azure/dev/ and its discovery tools also moved to deprecated/, and
+  Azure/dev/LabAutomation/ never existed at that path at all (the only trace
+  is a React page in the deprecated Electron app). Every linked directory in
+  CLAUDE.md now resolves on disk, checked mechanically. *bug, closed.*
+
+- **DBT-23** Features carry no score: WSJF removed the day it was added
+  `DBT-F5` `enabler` `settled` `verified: pins`
+  DECIDED by the author 2026-08-28, hours after the SAFe migration introduced
+  it: "I don't want to score features, I'll like bounce our effort between
+  them." WSJF is an economic answer to CONTENTION - many features competing
+  for one team's finite capacity, where choosing wrong costs the delay on
+  everything else waiting. One author moving between features has no such
+  queue, so the score was four invented numbers per feature that would need
+  re-inventing whenever anything moved. Removed from board.json, board.mjs,
+  board-html.mjs and documenting-work.md; sequencing is now story priority
+  plus what grooming derives - readiness and transitive unblock count. The
+  reasoning is recorded in board.mjs and in documenting-work.md rather than
+  just deleted, because the next reader of the SAFe docs will otherwise re-add
+  it as a missing piece. Pinned by a structural check on the feature table's
+  column count, mutation-checked both halves. *enabler, closed.*

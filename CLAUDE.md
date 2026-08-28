@@ -14,9 +14,64 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **NEVER USE EMOJIS**: Do not use emojis in any code, comments, output messages, documentation, or communication. This is a strict requirement for all files in this repository.
 
+## The board is the source of truth for work
+
+`soc-optimizationtoolkit/docs/board.json` is the source; `docs/board.md` is
+GENERATED from it and CI fails if it is edited by hand. Read the full process in
+`soc-optimizationtoolkit/docs/documenting-work.md` before changing how work is
+tracked - this section is the summary that survives into a fresh session.
+
+```bash
+cd soc-optimizationtoolkit
+npm run board          # regenerate board.md from board.json
+npm run check-board    # validate the data and the rendered file (CI runs this)
+npm run board:serve    # live kanban on http://localhost:5175, auto-refreshes
+npm run groom          # what to work on next, and what is really blocking it
+```
+
+Three rules, all learned the hard way:
+
+1. **Move a card to `in-progress` BEFORE starting**, not after finishing. The
+   In progress column read `0` for an entire session because every card went
+   straight from backlog to done, so the board only ever described finished work.
+2. **A defect found in COMMITTED code becomes a card before it is fixed**, even
+   for a five-minute fix - file it, work it, close it with a `verified` value.
+   Something you introduce and fix while drafting is editing and needs no card.
+   Six defects were found and fixed in one day with no card at all; they existed
+   only in commit messages.
+3. **`verified` on a done card says how it was confirmed** - `pins`, `live`,
+   `both` or `none`. `none` is honest for prose. Never let it borrow credibility
+   from the thing being described.
+
+Open questions can be answered on the card: a `decision` block renders as
+clickable options in the live kanban, and answering records `chosen` WITHOUT
+settling the card, because the reasoning still has to reach `backlog.md`.
+
+For grooming - ordering, leverage, and what is blocking what - use the
+`backlog-grooming` skill rather than reasoning it out.
+
 ## Project Overview
 
-This is the **Cribl-Microsoft Integration** repository - a PowerShell-based automation toolkit for integrating Cribl Stream with Microsoft Azure services (Log Analytics, Sentinel). The primary focus is automating Azure Data Collection Rules (DCRs) creation and configuration.
+This is the **Cribl-Microsoft Integration** repository. Its deliverable is the
+**SOC Optimization Toolkit** in `soc-optimizationtoolkit/` - a TypeScript
+application shipped as a **Cribl App Platform app**, installed as a `.tgz` into
+a Cribl.Cloud leader UI. It integrates Cribl Stream with Microsoft Sentinel and
+Log Analytics: sample acquisition, gap analysis against destination table
+schemas, Cribl pack generation, and Data Collection Rule automation.
+
+```
+soc-optimizationtoolkit/
+  apps/cribl-app     the Cribl.Cloud app (the shell; adapters live here)
+  packages/core      pure domain logic and port interfaces - no IO, no React
+  packages/ui        React screens, shell-agnostic
+  docs/              board.json (work), backlog.md (reasoning), adr/ (decisions)
+```
+
+**The PowerShell toolkit is DEPRECATED.** It was moved to `deprecated/` on
+2026-07-13 and receives no further development. The PowerShell sections further
+down this file describe it, and their paths are relative to `deprecated/` - for
+example `deprecated/Azure/CustomDeploymentTemplates/DCR-Automation/`. Do not
+start new work there; `deprecated/README.md` records what superseded each part.
 
 ## Core Architecture
 
@@ -30,7 +85,7 @@ The repository uses a **dev/core configuration pattern**:
 
 ### Main Components
 
-1. **DCR-Automation** ([Azure/CustomDeploymentTemplates/DCR-Automation/](Azure/CustomDeploymentTemplates/DCR-Automation/))
+1. **DCR-Automation** (DEPRECATED - [deprecated/Azure/CustomDeploymentTemplates/DCR-Automation/](deprecated/Azure/CustomDeploymentTemplates/DCR-Automation/))
  - Core automation engine in `core/Create-TableDCRs.ps1` (~4,600 lines)
  - Interactive menu interface via `Run-DCRAutomation.ps1`
  - Cribl configuration generator in `core/Generate-CriblDestinations.ps1`
@@ -42,13 +97,14 @@ The repository uses a **dev/core configuration pattern**:
  - ~120 pre-built ARM templates for Sentinel native tables
  - Organized by deployment mode (DCE vs. Non-DCE)
 
-3. **Discovery Tools** ([Azure/dev/](Azure/dev/))
+3. **Discovery Tools** (DEPRECATED - [deprecated/Azure/dev/](deprecated/Azure/dev/))
  - Event Hub discovery with Resource Graph API optimization
  - vNet Flow Log discovery and Cribl config generation
+ - Superseded by the toolkit's Event Hub Discovery screen
 
-4. **Lab Automation** ([Azure/dev/LabAutomation/](Azure/dev/LabAutomation/))
- - Self-contained testing environments for various Azure services
- - Each lab includes deployment scripts and sample data
+4. **Lab Automation** - no longer exists at a path of its own. Labs are now the
+ toolkit's Labs screen (`packages/ui/src/screens/labs/`); the deprecated
+ Electron app's `LabAutomation.tsx` page is the only remaining trace.
 
 ### Key Design Patterns
 
@@ -61,15 +117,19 @@ The repository uses a **dev/core configuration pattern**:
 
 ### DCR Automation
 
+DEPRECATED since 2026-07-13 - these paths are under `deprecated/`, and the tool
+receives no further development. Kept because the moved code still runs and its
+history is preserved; new work belongs in `soc-optimizationtoolkit/`.
+
 ```powershell
 # Interactive menu (recommended for manual operations)
-.\Azure\CustomDeploymentTemplates\DCR-Automation\Run-DCRAutomation.ps1
+.\deprecated\Azure\CustomDeploymentTemplates\DCR-Automation\Run-DCRAutomation.ps1
 
 # Non-interactive mode (for automation/CI-CD)
-.\Azure\CustomDeploymentTemplates\DCR-Automation\Run-DCRAutomation.ps1 -NonInteractive -Mode DirectBoth
+.\deprecated\Azure\CustomDeploymentTemplates\DCR-Automation\Run-DCRAutomation.ps1 -NonInteractive -Mode DirectBoth
 
 # Template generation only (no deployment)
-.\Azure\CustomDeploymentTemplates\DCR-Automation\Run-DCRAutomation.ps1 -NonInteractive -Mode TemplateOnly
+.\deprecated\Azure\CustomDeploymentTemplates\DCR-Automation\Run-DCRAutomation.ps1 -NonInteractive -Mode TemplateOnly
 ```
 
 ### Discovery Tools
@@ -459,11 +519,11 @@ git push origin feature/your-feature-name
 ## File Locations Reference
 
 Key files are located in:
-- Main automation: [Azure/CustomDeploymentTemplates/DCR-Automation/](Azure/CustomDeploymentTemplates/DCR-Automation/)
+- Main automation (DEPRECATED): [deprecated/Azure/CustomDeploymentTemplates/DCR-Automation/](deprecated/Azure/CustomDeploymentTemplates/DCR-Automation/)
 - Static templates: [Azure/CustomDeploymentTemplates/DCR-Templates/](Azure/CustomDeploymentTemplates/DCR-Templates/)
-- Discovery tools: [Azure/dev/EventHubDiscovery/](Azure/dev/EventHubDiscovery/) and [Azure/dev/vNetFlowLogDiscovery/](Azure/dev/vNetFlowLogDiscovery/)
-- Labs: [Azure/dev/LabAutomation/](Azure/dev/LabAutomation/)
+- Discovery tools (DEPRECATED): [deprecated/Azure/dev/EventHubDiscovery/](deprecated/Azure/dev/EventHubDiscovery/) and [deprecated/Azure/dev/vNetFlowLogDiscovery/](deprecated/Azure/dev/vNetFlowLogDiscovery/)
 - Documentation: [KnowledgeArticles/](KnowledgeArticles/)
+- **The current toolkit**: [soc-optimizationtoolkit/](soc-optimizationtoolkit/) - see its `README.md` and `docs/`
 
 ## Output Directories
 
