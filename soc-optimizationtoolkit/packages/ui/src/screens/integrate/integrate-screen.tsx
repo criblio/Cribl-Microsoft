@@ -178,6 +178,17 @@ const SELECTED_SOLUTION_KEY = "integrate-selected-solution~v1";
 
 export interface IntegrateScreenProps {
   /**
+   * Version of the toolkit, stamped into every pack this screen builds so a
+   * `.crbl` can say what produced it (GEN-3).
+   *
+   * REQUIRED, not optional, and that is the point: `FullContentPlan` is
+   * `Required<ContentPlanInputs>`, so omitting it is a compile error at both
+   * the preview and the build site. A pack shipped without provenance is
+   * exactly the state GEN-3 exists to end, and the shell always knows the
+   * value - `__APP_VERSION__` is a build-time define.
+   */
+  toolkitVersion: string;
+  /**
    * Measured capabilities, passed through to the Azure Resources section so an
    * empty workspace list is only reported as a zero when the read was verified
    * (docs/inventory-standard.md). Absent is safe - the message hedges.
@@ -244,6 +255,7 @@ export interface IntegrateScreenProps {
 type DeployStatus = "idle" | "running" | "ok" | "failed";
 
 export function IntegrateScreen({
+  toolkitVersion,
   scopeCommitted,
   offline,
   onCommitScope,
@@ -812,6 +824,7 @@ export function IntegrateScreen({
       routeFilterOverrides,
       enrichments,
       approved: mappingsApproved,
+      toolkitVersion,
     }),
     [
       solution?.name,
@@ -823,6 +836,7 @@ export function IntegrateScreen({
       routeFilterOverrides,
       enrichments,
       mappingsApproved,
+      toolkitVersion,
     ],
   );
   // What the solution's OWN analytic rules compare these fields against, per

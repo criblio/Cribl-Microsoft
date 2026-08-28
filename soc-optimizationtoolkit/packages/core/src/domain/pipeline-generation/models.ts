@@ -179,9 +179,23 @@ export interface TablePlan {
 export interface PipelinePlan {
   solutionName: string;
   packName: string;
+  /**
+   * The PACK's version: highest-installed-plus-one. It counts rebuilds, so it
+   * says nothing about what built the pack - see {@link toolkitVersion}.
+   */
   version: string;
   vendorPrefix: string;
   tables: TablePlan[];
+  /**
+   * Version of the toolkit that BUILT this pack, stamped into the manifest's
+   * `author` (GEN-3). Optional because core cannot read it - the shell owns
+   * `__APP_VERSION__` and injects it - and because an air-gapped or test build
+   * that omits it must still produce a valid manifest.
+   *
+   * Omitted renders the bare legacy author string, so a pack built without it
+   * is honestly silent rather than claiming a version it does not know.
+   */
+  toolkitVersion?: string;
 }
 
 /** The whole-pack planner input. */
@@ -190,4 +204,6 @@ export interface BuildPipelinePlanInput {
   packName: string;
   version?: string;
   tables: TablePlanInput[];
+  /** See {@link PipelinePlan.toolkitVersion}. Injected by the shell. */
+  toolkitVersion?: string;
 }

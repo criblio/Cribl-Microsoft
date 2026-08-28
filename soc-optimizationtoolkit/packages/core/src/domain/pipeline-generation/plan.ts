@@ -384,5 +384,11 @@ export function buildPipelinePlan(
     version,
     vendorPrefix,
     tables,
+    // Absent stays ABSENT rather than becoming "unknown": a manifest that does
+    // not know what built it says nothing, which is checkable, where a literal
+    // "unknown" would be a claim.
+    ...(input.toolkitVersion !== undefined
+      ? { toolkitVersion: input.toolkitVersion }
+      : {}),
   };
 }

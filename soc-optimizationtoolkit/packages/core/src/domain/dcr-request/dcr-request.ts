@@ -407,3 +407,68 @@ export function parseDcrDeployment(responseBody: unknown): DcrDeploymentInfo {
 
   return { immutableId, logsIngestionEndpoint, provisioningState };
 }
+
+/**
+ * The column diagnostics a DCR build produces, as one line an operator can
+ * read - or `null` when there is nothing to say.
+ *
+ * WHY THIS EXISTS. `buildDirectDcrRequest` has computed `droppedColumns` and
+ * `unknownTypeColumns` since Unit 6, and until now EVERY caller threw them
+ * away: onboard-table, onboard-batch and deployment-preview all take the
+ * request and keep only method/path/body. ADR 0004 flagged the gap - "system
+ * column drops and unknown-type fallbacks remain invisible" - and HON-3 called
+ * it a rendering job. It was not: the diagnostics reached the boundary of this
+ * module and stopped there, so the fix is this function plus one line at each
+ * caller that already writes a step detail.
+ *
+ * THE THREE CHANNELS ARE NOT THE SAME NEWS, and flattening them would be worse
+ * than saying nothing:
+ *
+ *   dropped       the column will NOT arrive. Real loss.
+ *   unknownTypes  the column arrives, but its declared type was not recognised
+ *                 and fell back to string. A fidelity loss, not a data loss.
+ *   cast          the column arrives INTACT by a two-step route (ADR 0004
+ *                 RULE 2b). Not a loss at all, and `CastColumn`'s own docblock
+ *                 says a caller surfacing diagnostics must not report these as
+ *                 missing - so they are phrased as a reassurance or omitted.
+ *
+ * Deliberately a sentence rather than a structure: the only surface that
+ * renders it today is `JobStep.detail`, which is free text the UI already
+ * shows. A structured channel would need a port change, a UI component, and a
+ * decision about where it lives - none of which ADR 0004 asked for, and all of
+ * which would have kept this invisible for another release.
+ *
+ * @param request a built Direct or DCE DCR request
+ * @returns one line, or null when nothing was dropped, unrecognised or cast
+ */
+export function describeColumnDiagnostics(request: {
+  droppedColumns: readonly DroppedColumn[];
+  unknownTypeColumns: readonly UnknownTypeColumn[];
+  castColumns: readonly CastColumn[];
+}): string | null {
+  const parts: string[] = [];
+
+  if (request.droppedColumns.length > 0) {
+    const names = request.droppedColumns.map((c) => c.name).join(", ");
+    parts.push(
+      `${request.droppedColumns.length} column(s) dropped and will NOT arrive: ${names}`,
+    );
+  }
+  if (request.unknownTypeColumns.length > 0) {
+    const named = request.unknownTypeColumns
+      .map((c) => `${c.name} (${c.laType})`)
+      .join(", ");
+    parts.push(
+      `${request.unknownTypeColumns.length} column(s) had an unrecognised type and were declared as string: ${named}`,
+    );
+  }
+  if (request.castColumns.length > 0) {
+    const names = request.castColumns.map((c) => c.name).join(", ");
+    // Phrased as arriving, not as a problem - see the docblock.
+    parts.push(
+      `${request.castColumns.length} column(s) arrive intact via a cast: ${names}`,
+    );
+  }
+
+  return parts.length === 0 ? null : parts.join(". ") + ".";
+}

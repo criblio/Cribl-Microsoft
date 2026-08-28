@@ -93,6 +93,7 @@ import type {
 import {
   buildDceDcrRequest,
   buildDirectDcrRequest,
+  describeColumnDiagnostics,
   DIRECT_DCR_API_VERSION,
 } from "../../domain/dcr-request";
 import {
@@ -573,10 +574,16 @@ async function collectTableTemplates(args: {
     body: dcrRequest.body,
   });
 
-  const detail = createsTable
+  // HON-3: templateOnly is the path where silent column loss is WORST - the
+  // operator gets an ARM template to deploy elsewhere, so there is no run to
+  // watch and no later step that could mention it. Same diagnostics, same
+  // wording as the live path.
+  const diagnostics = describeColumnDiagnostics(dcrRequest);
+  const base = createsTable
     ? `templates collected for table '${spec.table}' and DCR '${dcrName}' ` +
       "(templateOnly - not deployed)"
     : `template collected for DCR '${dcrName}' (templateOnly - not deployed)`;
+  const detail = diagnostics === null ? base : `${base}. ${diagnostics}`;
   return { requests, detail };
 }
 

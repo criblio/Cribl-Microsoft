@@ -74,6 +74,7 @@ import type { LogAnalyticsColumn } from "../../domain/schema-mapping";
 import {
   buildDceDcrRequest,
   buildDirectDcrRequest,
+  describeColumnDiagnostics,
   parseDcrDeployment,
   DIRECT_DCR_API_VERSION,
 } from "../../domain/dcr-request";
@@ -871,10 +872,16 @@ export async function onboardTable(
           `(is it Kind:Direct and api-version >= ${DIRECT_DCR_API_VERSION}?)`,
       );
     }
+    // HON-3 / ADR 0004: the DCR build has always known which columns were
+    // dropped, which types it failed to recognise, and which arrive by a cast -
+    // and every caller threw that away, so system-column drops were invisible.
+    // The step detail is where an operator already looks after a deploy.
+    const diagnostics = describeColumnDiagnostics(dcrRequest);
     await setStep(
       currentStep,
       "succeeded",
-      `immutableId ${deployment.immutableId}`,
+      `immutableId ${deployment.immutableId}` +
+        (diagnostics === null ? "" : `. ${diagnostics}`),
     );
 
     // ---- Step 6: create-cribl-destination ----------------------------

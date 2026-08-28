@@ -161,6 +161,16 @@ describe("onboardTable happy path", () => {
       "create-custom-table",
     );
 
+    // HON-3: the deploy step now SAYS which columns were dropped. This
+    // fixture's schema carries TenantId, a system column the DCR build has
+    // always removed and every caller has always discarded - so the operator
+    // was told nothing. The step detail keeps its immutableId and gains the
+    // diagnostics; both are asserted so neither can quietly replace the other.
+    const deployDetail = stepByName(job.steps, "deploy-dcr").detail;
+    expect(deployDetail).toContain(IMMUTABLE_ID);
+    expect(deployDetail).toContain("TenantId");
+    expect(deployDetail).toContain("NOT arrive");
+
     const outcome = job.result as OnboardTableOutcome;
     expect(outcome).toEqual({
       dcrName: "dcr-SecurityEvent-eastus",

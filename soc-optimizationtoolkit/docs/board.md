@@ -11,7 +11,7 @@ two cannot disagree.
 alternatives. This board holds only what is a unit of work, what state it is
 in, and what it waits on.
 
-**61 in the backlog, 0 in progress, 21 done.**
+**60 in the backlog, 0 in progress, 23 done.**
 
 ## By menu item
 
@@ -23,14 +23,14 @@ operator sees on any screen. Two menus are PLANNED and have no route yet.
 |---|---|---|---|
 | Dataflow | 2 | 0 | 0 |
 | Setup | 1 | 0 | 0 |
-| Sentinel Integration | 21 | 2 | 8 |
+| Sentinel Integration | 19 | 4 | 6 |
 | Pack Maintenance | 4 | 0 | 0 |
 | Permission Verification | 8 | 0 | 0 |
 | Azure Native Source Onboarding (planned) | 13 | 4 | 0 |
 | Windows Event analysis (planned) | 5 | 0 | 0 |
-| Cross-cutting | 7 | 15 | 1 |
+| Cross-cutting | 8 | 15 | 1 |
 
-Open work totals 61.
+Open work totals 60.
 
 ## Epics and features
 
@@ -65,7 +65,7 @@ Sentinel-side and Lake-side halves of Windows event handling
 | `WIN-F2` Microsoft proprietary enrichment catalog | Windows Event analysis (planned) | 0/2 | WIN-2, D-4 |
 | `WIN-F3` Lake copy format - JSON vs Parquet | Windows Event analysis (planned) | 0/1 | D-5 |
 
-### `HON` Inventory and diagnostic honesty - 0% (0/10)
+### `HON` Inventory and diagnostic honesty - 9% (1/11)
 
 Measured gaps where the app reports a confident wrong answer
 
@@ -73,15 +73,15 @@ Measured gaps where the app reports a confident wrong answer
 |---|---|---|---|
 | `HON-F1` Capability model follow-ons | Permission Verification | 0/4 | HON-6, HON-7*, D-1, D-2* |
 | `HON-F2` Unverified empty inventories | Sentinel Integration | 0/3 | HON-1, HON-2, D-3 |
-| `HON-F3` Guid-column aftermath, made visible | Sentinel Integration | 0/3 | HON-3, HON-4, D-11 |
+| `HON-F3` Guid-column aftermath, made visible | Sentinel Integration | 1/4 | HON-3, HON-8*, HON-4, D-11 |
 
-### `GEN` Pipeline and pack generation - 67% (2/3)
+### `GEN` Pipeline and pack generation - 100% (3/3)
 
 What the build actually emits
 
 | Feature | Menu | Done | Stories |
 |---|---|---|---|
-| `GEN-F1` Pack generation correctness and provenance | Sentinel Integration | 2/3 | GEN-1, GEN-2, GEN-3 |
+| `GEN-F1` Pack generation correctness and provenance | Sentinel Integration | 3/3 | GEN-1, GEN-2, GEN-3 |
 
 ### `PK` Pack maintenance parity - 0% (0/3)
 
@@ -138,7 +138,7 @@ _Nothing here._
 
 ---
 
-## Backlog - now (9)
+## Backlog - now (7)
 
 Next to pick up. Nothing blocks these.
 
@@ -147,13 +147,6 @@ Next to pick up. Nothing blocks these.
   `~/.soc-toolkit-local-app-retired/config/local-config.json` holds a live
   secret. Flagged for rotation by `adr/0002-drop-local-target.md:57-62` and
   still outstanding. *chore, SETTLED. Security. Size: minutes.*
-
-- **HON-3** Surface `droppedColumns` and `unknownTypeColumns` in the UI
-  `HON-F3` `story` `settled`
-  The diagnostics already exist and reach nobody - repo-wide the only
-  consumers are two test files. Already propagated through `dcr-request.ts`,
-  so this is a rendering job, not plumbing. `adr/0004:87-88`, named there as
-  the strongest argument for doing it next.
 
 - **HON-5** Warn a CSV vendor's operator before the preview that the pack can never route automatically
   `VND-F1` `story` `settled`
@@ -207,27 +200,9 @@ Next to pick up. Nothing blocks these.
     [ ] `captured-on` Stamp a captured-on date - Record when the operator captured the order, so a later divergence reads as "captured before that change" rather than an unexplained disagreement. Always available - but it dates the capture, it does not identify the firmware.
     [ ] `version` Record a version - Sharper than a date, but the version has to come from somewhere: nothing in the sample or the CSV-header dialog supplies one today, so it means asking the operator.
 
-- **GEN-3** Stamp the toolkit version into the pack it builds
-  `GEN-F1` `story` `settled`
-  Given a `.crbl`, nothing says which toolkit build produced it. The manifest
-  carries exactly eight fields (`domain/pack-assembly/package-json.ts`) -
-  name, version, author, description, displayName, tags, exports,
-  minLogStreamVersion - and `author` is the constant "Cribl SOC Toolkit" while
-  `version` is just highest-installed-plus-one, so it tracks how many times
-  the pack was rebuilt, not what built it. The persisted `PackBuildRecord`
-  does not carry it either. The app version exists only as `__APP_VERSION__`
-  for the UI footer. COST, paid on 2026-08-27: asked whether a pack in the
-  workspace was the one just built, the artifact could not answer; it took a
-  git-log check and a sample-count comparison to establish provenance. Every
-  future regression report about "the pack" pays this again. Cheapest fix: one
-  more manifest field, set from the same define the footer reads. *feature,
-  settled. [[GEN-2]] is fixed, so leftovers no longer accumulate - but the
-  provenance gap stands on its own: it cost a git-log check to answer "is this
-  pack today's?" during that very investigation.*
-
 ---
 
-## Backlog - next (21)
+## Backlog - next (22)
 
 Settled and unblocked, sequenced behind now.
 
@@ -289,6 +264,22 @@ Settled and unblocked, sequenced behind now.
   A verdict is evidence only about the scope it was measured at, and that
   includes off-scope denials. `emptyInventoryMessage` now requires a scope
   argument, so the compiler prompts each new call site. `backlog.md#4`.
+
+- **HON-8** buildDeploymentPreview has no caller - the REVIEW stage is a usecase with no screen
+  `HON-F3` `bug` `unconfirmed`
+  FOUND while building HON-3 on 2026-08-28, looking for the right surface for
+  the column diagnostics. `buildDeploymentPreview` is a full usecase - roughly
+  700 lines with its own test file, DCE handling, existing-resource checks and
+  a JSON-serializable result - and repo-wide the ONLY references are inside
+  its own file and its own test. Nothing in `packages/ui` or `apps/cribl-app`
+  calls it. journey-state describes REVIEW as a shipped stage ("the Unit 7
+  deployment-preview screen - the ux-flow-plan 5.2 REVIEW stage"), which is
+  what makes this worth a card rather than a shrug: either the screen exists
+  and does not use this, or the stage is not shipped and a live document says
+  it is. UNCONFIRMED deliberately - I have not driven the app to see what
+  REVIEW renders today, and the two possibilities need different fixes.
+  Compare with the AZR modules, which also have no consumer but are honestly
+  ahead of their screens; this one has a stage claiming to BE the consumer.
 
 - **HON-4** Tell operators that DCRs deployed before the guid fix still lose fields
   `HON-F3` `story` `settled`
@@ -682,7 +673,7 @@ Settled, gated on something above.
 
 ---
 
-## Done (21)
+## Done (23)
 
 Kept briefly so a reader can see what just landed; prune when the list grows.
 
@@ -746,6 +737,33 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   Two of the three fixes also extracted the decision to a pure function
   (`shouldReloadEdits`, `autoDropPlan`) - which is what made the third one's
   asymmetry visible at a glance.
+
+- **HON-3** Surface `droppedColumns` and `unknownTypeColumns` in the UI
+  `HON-F3` `story` `settled` `verified: pins`
+  The diagnostics already exist and reach nobody - repo-wide the only
+  consumers are two test files. Already propagated through `dcr-request.ts`,
+  so this is a rendering job, not plumbing. `adr/0004:87-88`, named there as
+  the strongest argument for doing it next. BUILT 2026-08-28. THE CARDS
+  PREMISE WAS WRONG and that is the finding: it said "already propagated
+  through dcr-request.ts, so this is a rendering job, not plumbing". The
+  diagnostics reached the BOUNDARY of dcr-request and all three callers -
+  onboard-table, onboard-batch and deployment-preview - kept only
+  method/path/body and discarded them. So it was plumbing first, rendering
+  second. Shipped as `describeColumnDiagnostics`, a pure formatter beside the
+  code that produces the three arrays, wired into the deploy-dcr step detail
+  (which the UI already renders, so no port change and no new component) and
+  into the templateOnly collectors detail - the path where silent loss is
+  WORST, because there is no run to watch. The three channels stay separate on
+  purpose: dropped means the column will NOT arrive, unknownTypes means it
+  arrives with its type flattened to string, and cast means it arrives INTACT
+  - CastColumn s own docblock forbids reporting a cast as missing, so it is
+  phrased as reassurance. Returns null when there is nothing to say, because a
+  reassurance line on every clean deploy is what trains people to stop reading
+  step detail. 7 pins plus a wiring pin on the happy path, mutation-checked:
+  removing the step-detail append fails it. ALSO FOUND: buildDeploymentPreview
+  has no caller anywhere in packages/ui or apps/cribl-app - a whole usecase
+  with no consumer - so surfacing diagnostics there would have put them where
+  nobody looks. Not fixed here; worth its own card.
 
 - **AZR-S2** Decide whether the app creates Cribl sources over the API
   `AZR-F9` `spike` `settled` `verified: none`
@@ -907,6 +925,45 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   added, three of which fail if the replace branch is disabled; the existing
   pin that had encoded the merge as intended behaviour was re-pointed at the
   delete-refused path. *bug, fixed. `backlog.md` item 14d/14f.*
+
+- **GEN-3** Stamp the toolkit version into the pack it builds
+  `GEN-F1` `story` `settled` `verified: pins`
+  Given a `.crbl`, nothing says which toolkit build produced it. The manifest
+  carries exactly eight fields (`domain/pack-assembly/package-json.ts`) -
+  name, version, author, description, displayName, tags, exports,
+  minLogStreamVersion - and `author` is the constant "Cribl SOC Toolkit" while
+  `version` is just highest-installed-plus-one, so it tracks how many times
+  the pack was rebuilt, not what built it. The persisted `PackBuildRecord`
+  does not carry it either. The app version exists only as `__APP_VERSION__`
+  for the UI footer. COST, paid on 2026-08-27: asked whether a pack in the
+  workspace was the one just built, the artifact could not answer; it took a
+  git-log check and a sample-count comparison to establish provenance. Every
+  future regression report about "the pack" pays this again. Cheapest fix: one
+  more manifest field, set from the same define the footer reads. *feature,
+  settled. [[GEN-2]] is fixed, so leftovers no longer accumulate - but the
+  provenance gap stands on its own: it cost a git-log check to answer "is this
+  pack today's?" during that very investigation.* BUILT 2026-08-28. The
+  toolkit version rides the manifests `author` - "Cribl SOC Toolkit 1.12.3" -
+  rather than a ninth key. WHY: the manifest is exactly the eight Cribl pack
+  fields and this modules contract is byte-stability with the legacy emitter,
+  so a new key changes what a .crbl CONTAINS, which is real risk for a
+  provenance stamp. `author` was already a constant with exactly one consumer
+  (its own test), and "the tool that produced this, and its version" is what
+  an author field means for a generated artifact. A pin asserts the key set is
+  still those eight. The pack `version` deliberately keeps its own meaning -
+  highest-installed-plus-one, i.e. a rebuild counter - and a pin holds the two
+  numbers apart, since conflating them is why the pack could not answer the
+  question. THREADED, not hardcoded: core is pure and cannot read
+  `__APP_VERSION__`, so it arrives as `toolkitVersion` on PipelinePlan,
+  injected by the shell. The prop on IntegrateScreen is REQUIRED rather than
+  optional, which `FullContentPlan = Required<ContentPlanInputs>` then
+  enforces at BOTH the preview and the build site - the 2026-08-17
+  audit-finding-2 mechanism doing its job, and it caught the second call site
+  for me. Absent stays absent rather than becoming "unknown": a missing stamp
+  is checkable, a literal "unknown" is a claim. The shell prefers
+  `__APP_VERSION_RUNTIME__` over the build-time define so the live preview
+  does not stamp a stale version, matching the footer. Mutation-checked:
+  ignoring the supplied version fails 2 pins.
 
 - **DBT-16** The kanban hardcoded its own copy of the status vocabulary
   `DBT-F5` `bug` `settled` `verified: pins`

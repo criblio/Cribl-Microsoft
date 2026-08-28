@@ -75,6 +75,7 @@ function renderScreen(props: Record<string, unknown> = {}) {
   return render(
     <PortsProvider ports={PORTS} config={CONFIG}>
       <IntegrateScreen
+        toolkitVersion="9.9.9-test"
         scopeCommitted
         offline={false}
         onCommitScope={vi.fn().mockResolvedValue({ ok: true } as never)}
@@ -101,7 +102,8 @@ describe("IntegrateScreen - renders", () => {
       render(
         <PortsProvider ports={PORTS} config={CONFIG}>
           <IntegrateScreen
-            scopeCommitted={false}
+            toolkitVersion="9.9.9-test"
+      scopeCommitted={false}
             offline
             onCommitScope={vi.fn().mockResolvedValue({ ok: true } as never)}
           />
@@ -220,6 +222,7 @@ function renderWithDiscovery() {
   const { container } = render(
     <PortsProvider ports={ports} config={CONFIG}>
       <IntegrateScreen
+        toolkitVersion="9.9.9-test"
         scopeCommitted
         offline={false}
         onCommitScope={vi.fn().mockResolvedValue({ ok: true } as never)}

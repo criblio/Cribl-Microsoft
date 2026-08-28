@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { buildPipelinePlan } from "../pipeline-generation";
+import type { PipelinePlan } from "../pipeline-generation";
 import {
   buildPackageJson,
   MIN_LOG_STREAM_VERSION,
@@ -56,5 +57,62 @@ describe("streamtagsFromPackage (the always-empty read fix)", () => {
     expect(streamtagsFromPackage({})).toEqual([]);
     expect(streamtagsFromPackage(null)).toEqual([]);
     expect(streamtagsFromPackage({ tags: {} })).toEqual([]);
+  });
+});
+
+describe("GEN-3 - a built pack says what built it", () => {
+  const plan = {
+    solutionName: "Zscaler",
+    packName: "ms-sentinel-zscaler",
+    version: "3",
+    vendorPrefix: "zscaler",
+    tables: [],
+  } as unknown as PipelinePlan;
+
+  it("stamps the toolkit version into author when the shell supplies one", () => {
+    // The question the card records paying for: given a .crbl in a workspace,
+    // is this the one just built? `version` cannot answer - it is
+    // highest-installed-plus-one, so it counts rebuilds.
+    const pkg = buildPackageJson({ ...plan, toolkitVersion: "1.12.3" });
+
+    expect(pkg.author).toBe("Cribl SOC Toolkit 1.12.3");
+  });
+
+  it("stays the bare legacy author when nothing supplied one", () => {
+    // Honestly silent, not "unknown". A missing stamp is checkable; a literal
+    // "unknown" is a claim, and would also break byte-stability for every
+    // existing pack rebuilt without the shell.
+    expect(buildPackageJson(plan).author).toBe("Cribl SOC Toolkit");
+    expect(buildPackageJson({ ...plan, toolkitVersion: "  " }).author).toBe(
+      "Cribl SOC Toolkit",
+    );
+  });
+
+  it("does NOT add a ninth manifest key", () => {
+    // The manifest is the eight Cribl pack fields and this module's contract is
+    // byte-stability with the legacy emitter. Provenance rides an existing
+    // field precisely so a .crbl's shape does not change.
+    const pkg = buildPackageJson({ ...plan, toolkitVersion: "1.12.3" });
+
+    expect(Object.keys(pkg).sort()).toEqual([
+      "author",
+      "description",
+      "displayName",
+      "exports",
+      "minLogStreamVersion",
+      "name",
+      "tags",
+      "version",
+    ]);
+  });
+
+  it("keeps the pack version and the toolkit version APART", () => {
+    // Two different numbers that both look like versions - conflating them is
+    // the whole reason the pack could not answer the question.
+    const pkg = buildPackageJson({ ...plan, version: "3", toolkitVersion: "1.12.3" });
+
+    expect(pkg.version).toBe("3");
+    expect(pkg.author).toContain("1.12.3");
+    expect(pkg.author).not.toContain('"3"');
   });
 });
