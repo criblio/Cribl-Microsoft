@@ -11,7 +11,7 @@ two cannot disagree.
 alternatives. This board holds only what is a unit of work, what state it is
 in, and what it waits on.
 
-**62 in the backlog, 0 in progress, 16 done.**
+**60 in the backlog, 0 in progress, 19 done.**
 
 ## Epics and features
 
@@ -20,21 +20,21 @@ unblock other epics rather than to deliver on its own. Features are
 groupings, not a queue - they carry no score and no order. Priority lives
 on the stories underneath (now / next / later).
 
-### `AZR` Azure native source onboarding - 13% (2/16)
+### `AZR` Azure native source onboarding - 25% (4/16)
 
 The largest unstarted block: every Azure telemetry source, category by category
 
 | Feature | Done | Stories |
 |---|---|---|
 | `AZR-F1` Onboarding foundation and coverage data | 1/1 | AZR-0 |
-| `AZR-F2` Azure Policy - diagnostic settings to Event Hub | 0/3 | AZR-2, AZR-4, AZR-5 |
-| `AZR-F3` Direct ARM configuration - script, no policy | 0/1 | AZR-3 |
+| `AZR-F2` Azure Policy - diagnostic settings to Event Hub | 0/2 | AZR-4, AZR-5 |
+| `AZR-F3` Direct ARM configuration - script, no policy | 1/2 | AZR-2, AZR-3 |
 | `AZR-F4` Defender XDR export - guided portal | 0/1 | AZR-6 |
 | `AZR-F5` Pull collectors - no push path exists | 0/3 | AZR-S1, AZR-7, D-8 |
 | `AZR-F6` Blob-only sources - cannot reach Event Hub | 0/1 | AZR-8 |
 | `AZR-F7` Agent-based - AMA plus DCR | 0/1 | AZR-9 |
 | `AZR-F8` Dataflow diagrams, one per category | 0/1 | AZR-10 |
-| `AZR-F9` Shared onboarding concerns | 1/4 | AZR-S2, AZR-1, AZR-11, AZR-12 |
+| `AZR-F9` Shared onboarding concerns | 2/4 | AZR-S2, AZR-1, AZR-11, AZR-12 |
 
 ### `WIN` Windows event analysis - 0% (0/5)
 
@@ -96,7 +96,7 @@ ENABLER EPIC: release mechanics. The packaged tarball trails main, and the lab t
 |---|---|---|
 | `REL-F1` Release and deployment hygiene | 2/5 | REL-2, REL-3, REL-4, REL-5, REL-6 |
 
-### `DBT` Quality and technical debt _(enabler)_ - 38% (10/26)
+### `DBT` Quality and technical debt _(enabler)_ - 41% (11/27)
 
 ENABLER EPIC: verification gaps, copy, diagram fidelity, docs and the board's own tooling
 
@@ -106,7 +106,7 @@ ENABLER EPIC: verification gaps, copy, diagram fidelity, docs and the board's ow
 | `DBT-F2` Copy and UX | 0/6 | DBT-3, DBT-4, DBT-9, DBT-14, DBT-15, D-10 |
 | `DBT-F3` Diagram fidelity | 0/2 | DBT-1, DBT-12 |
 | `DBT-F4` Docs and spec grounding | 2/5 | DBT-8, DBT-10, DBT-11, DBT-13, DBT-22 |
-| `DBT-F5` Board tooling defects | 8/8 | DBT-16, DBT-17, DBT-18, DBT-19, DBT-20, DBT-21, DBT-23, DBT-24 |
+| `DBT-F5` Board tooling defects | 9/9 | DBT-16, DBT-17, DBT-18, DBT-19, DBT-20, DBT-21, DBT-23, DBT-24, DBT-25 |
 | `DBT-F6` Effect-identity defect class | 0/1 | FX-4 |
 
 ---
@@ -259,7 +259,7 @@ Settled and unblocked, sequenced behind now.
 
 ---
 
-## Backlog - later (46)
+## Backlog - later (44)
 
 Settled, gated on something above.
 
@@ -278,32 +278,6 @@ Settled, gated on something above.
   UrlClickEvents), so complementary is the likely answer - still unverified,
   which is the point.
 
-- **AZR-S2** Decide whether the app creates Cribl sources over the API
-  `AZR-F9` `spike` `undecided`
-  Every `/system/inputs` reference in the codebase is a read; Event Hub
-  Discovery ends at a JSON download (`eventhub-discovery-screen.tsx:503-515`).
-  The write-side plumbing exists (`guided-deploy/wire-source.ts`,
-  `secret-provisioning.ts`) but a `POST /system/inputs` applier is net-new.
-  This decision constrains AZR-2, AZR-4, AZR-6 and AZR-8, so make it once,
-  early, on the smallest surface. Then, in order:
-  DECISION (unanswered): Should the app create Cribl sources over the API, or
-  keep exporting config to import?
-    [ ] `api-applier` Build a POST /system/inputs applier - The app creates the Event Hub / Blob source directly, which backlog.md#6c calls "the right call" and LOG-09's portability note demands. Net-new write surface, gated on source.manage.
-    [ ] `export-only` Keep the generated-JSON hand-off - Stay with what Event Hub Discovery does: generate configs, download, operator imports and makes the secrets. No new write surface - but AZR-2, AZR-4, AZR-6 and AZR-8 each end at a manual import step.
-    [ ] `connected-or-airgap` Write when connected, export when not - Both behind one convention, mirroring what secret-provisioning.ts already does for secrets (POST when connected, placeholder when air-gapped). NOTE: drawn from that existing convention, not from this card's own text. Costs two paths kept in step.
-
-- **AZR-2** TRACER BULLET: Entra ID tenant diagnostics, one category group
-  `AZR-F2` `story` `settled` `blocked by AZR-S2`
-  One ARM PUT to `microsoft.aadiam/diagnosticSettings`, catalogued as porting
-  nearly one-to-one. Checkbox grain is the category, with Standard (9) and
-  HighVolume (15) as presets, and the non-interactive sign-in volume warning
-  at its own checkbox rather than in a footnote. Requires an Entra
-  directory-role precondition, which the ARM RBAC evaluator provably cannot
-  measure - a real finding this slice surfaces early. Non-negotiable: state
-  the `_CL` divergence and UEBA consequence at the moment a sign-in category
-  is ticked. Resolve the LOG-07 drift (a SecurityOnly profile that
-  `resource-coverage.json` omits). `backlog.md#6a`.
-
 - **AZR-3** Defender for Cloud continuous export
   `AZR-F3` `story` `settled`
   Per subscription, a `Microsoft.Security/automations` resource. Detects which
@@ -311,7 +285,7 @@ Settled, gated on something above.
   `backlog.md#6b`.
 
 - **AZR-8** Blob-only sources as visible unavailable rows
-  `AZR-F6` `story` `settled` `blocked by AZR-S2`
+  `AZR-F6` `story` `settled`
   vNet and NSG Flow Logs have no Event Hub path; the blob path already exists
   end to end. The `notSupported` block is a feature of the legacy config, not
   an omission. Smallest sub-item by a wide margin. `backlog.md#6e`.
@@ -321,7 +295,7 @@ Settled, gated on something above.
   licating them. Natural place to surface WIN. `backlog.md#6f`.
 
 - **AZR-4** Azure Policy initiatives - the bulk of the platform
-  `AZR-F2` `story` `settled` `blocked by AZR-S2, CAP-2, CAP-3`
+  `AZR-F2` `story` `settled` `blocked by CAP-2, CAP-3`
   Built-in Audit or AllLogs (one or the other), eight community tiers with a
   per-service expander, plus Activity Log, AKS and PostgreSQLFlexible as
   visible checkboxes because the bundled initiative excludes them silently.
@@ -337,7 +311,7 @@ Settled, gated on something above.
   `backlog.md#6a`.
 
 - **AZR-6** Defender XDR guided worklist
-  `AZR-F4` `story` `settled` `blocked by AZR-S1, AZR-S2, CAP-5`
+  `AZR-F4` `story` `settled` `blocked by AZR-S1, CAP-5`
   Licence check then usage probe - a licence held is not a product in use. The
   checkboxes here are a worklist, not a deployment: Microsoft exposes no
   configuration API for XDR streaming, so the last step is a portal visit,
@@ -661,7 +635,7 @@ Settled, gated on something above.
 
 ---
 
-## Done (16)
+## Done (19)
 
 Kept briefly so a reader can see what just landed; prune when the list grows.
 
@@ -726,6 +700,34 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   (`shouldReloadEdits`, `autoDropPlan`) - which is what made the third one's
   asymmetry visible at a glance.
 
+- **AZR-S2** Decide whether the app creates Cribl sources over the API
+  `AZR-F9` `spike` `settled` `verified: none`
+  Every `/system/inputs` reference in the codebase is a read; Event Hub
+  Discovery ends at a JSON download (`eventhub-discovery-screen.tsx:503-515`).
+  The write-side plumbing exists (`guided-deploy/wire-source.ts`,
+  `secret-provisioning.ts`) but a `POST /system/inputs` applier is net-new.
+  This decision constrains AZR-2, AZR-4, AZR-6 and AZR-8, so make it once,
+  early, on the smallest surface. Then, in order: ANSWERED 2026-08-28 (user):
+  connected-or-airgap. Reasoning recorded at backlog.md#6h, which is what
+  settles it - the click alone never does. It is not a new stance: it is the
+  convention secret-provisioning settled on 2026-07-03 (one convention, two
+  delivery paths), so onboarding behaves the way the deploy path already
+  behaves rather than the codebase carrying a third opinion about what to do
+  with no Cribl to talk to. It refuses both halves of the false choice - pure
+  export leaves four sections ending at a manual import step, pure API makes
+  an air-gapped install impossible, and air-gap is a shipped path with its own
+  export module. COMMITS TO BUILDING a POST /system/inputs applier gated on
+  source.manage (net-new; every current reference is a read). CONSTRAINT
+  carried forward: the connectedness test must be the one the app already
+  uses, not a new probe - two answers to "is there a Cribl here" is the
+  duplicated-decision shape the capability model exists to end. *spike, closed
+  by decision.*
+  DECISION: Should the app create Cribl sources over the API, or keep
+  exporting config to import?
+    [ ] `api-applier` Build a POST /system/inputs applier - The app creates the Event Hub / Blob source directly, which backlog.md#6c calls "the right call" and LOG-09's portability note demands. Net-new write surface, gated on source.manage.
+    [ ] `export-only` Keep the generated-JSON hand-off - Stay with what Event Hub Discovery does: generate configs, download, operator imports and makes the secrets. No new write surface - but AZR-2, AZR-4, AZR-6 and AZR-8 each end at a manual import step.
+    [x] `connected-or-airgap` Write when connected, export when not - Both behind one convention, mirroring what secret-provisioning.ts already does for secrets (POST when connected, placeholder when air-gapped). NOTE: drawn from that existing convention, not from this card's own text. Costs two paths kept in step.
+
 - **AZR-0** Port `resource-coverage.json` to the app KV store as the selection model
   `AZR-F1` `enabler` `settled` `verified: pins`
   The checkbox model exists as a file - port it, do not invent one. Its
@@ -769,6 +771,42 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   reconcile bug) fails 4 pins, adding a `remove` field fails the structural
   pin and the compiler. NOT built: the Remove action's discoverability (no
   screen yet) and the prerequisite ordering `backlog.md#6h` flags.
+
+- **AZR-2** TRACER BULLET: Entra ID tenant diagnostics, one category group
+  `AZR-F3` `story` `settled` `verified: pins`
+  One ARM PUT to `microsoft.aadiam/diagnosticSettings`, catalogued as porting
+  nearly one-to-one. Checkbox grain is the category, with Standard (9) and
+  HighVolume (15) as presets, and the non-interactive sign-in volume warning
+  at its own checkbox rather than in a footnote. Requires an Entra
+  directory-role precondition, which the ARM RBAC evaluator provably cannot
+  measure - a real finding this slice surfaces early. Non-negotiable: state
+  the `_CL` divergence and UEBA consequence at the moment a sign-in category
+  is ticked. Resolve the LOG-07 drift (a SecurityOnly profile that
+  `resource-coverage.json` omits). `backlog.md#6b`. BUILT 2026-08-28 as
+  `domain/entra-diagnostics`. One tenant-level ARM PUT to
+  microsoft.aadiam/diagnosticSettings at api-version 2017-04-01. LOG-07 DRIFT
+  RESOLVED in favour of the script, which is the thing that actually ran: all
+  three profiles ship - SecurityOnly (6), Standard (9), HighVolume (15) - with
+  members pinned against the legacy .ps1 read off disk, the same provenance
+  approach AZR-0 used. The coverage catalog still offers the two it always
+  did, because changing what a stored selection MEANS is a separate act. Both
+  consequences ride their categories: the 5-10x warning sits on
+  NonInteractiveUserSignInLogs, only 2 of 15 carry a volume warning (pinned so
+  it cannot drift into noise), and the UEBA warning names the TABLE - exactly
+  four categories are UEBA-bound, and NonInteractiveUserSignInLogs is
+  deliberately NOT one, with its own pin because that is the
+  plausible-sounding fabrication. THE PREDICTED FINDING, SURFACED: the Entra
+  directory-role precondition is modelled UNMEASURABLE rather than unmeasured.
+  The preflight reads ARM RBAC effective actions; Entra directory roles are
+  not ARM role assignments and appear in no scope response, so no new
+  capability entry would close it - it needs Graph. Calling it merely
+  unchecked would be a preflight returning green for something it never
+  examined. Mutation-checked: dropping a category from a profile fails 3 pins,
+  and fabricating the NonInteractive UEBA binding fails 2. A SECOND drift
+  found and fixed in passing: backlog 6b prose listed 5 HighVolume additions
+  for a count of 15 when the script adds 6 - RemoteNetworkHealthLogs was
+  missing. Not built: the screen, and the Event Hub namespace (LOG-03) this
+  points at.
 
 - **DBT-13** The Claude hooks travel with the repo
   `DBT-F4` `enabler` `settled` `verified: live`
@@ -954,3 +992,21 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   limit: nothing enforces this. A validator cannot read prose, so the only
   defence against the next inflated claim is not writing a countable assertion
   into prose in the first place. *bug, closed.*
+
+- **DBT-25** AZR-2 is filed under the policy feature but its content is direct-ARM
+  `DBT-F5` `bug` `settled` `verified: none`
+  FOUND 2026-08-28 while scoping AZR-2 to build it. The card is the Entra ID
+  tenant diagnostics tracer bullet and every fact in it - the ARM PUT to
+  `microsoft.aadiam/diagnosticSettings`, the Standard (9) and HighVolume (15)
+  profiles, the LOG-07 SecurityOnly drift - comes from `backlog.md#6b` (Direct
+  ARM configuration - script, no policy). It was filed under AZR-F2 (Azure
+  Policy, anchor 6a) and cited `backlog.md#6a`. AZR-3, the OTHER 6b bullet,
+  was already correctly under AZR-F3. WHY THE CHECK DID NOT CATCH IT:
+  `check-board` verifies a citation RESOLVES, not that it resolves to the
+  right thing - 6a is a real section, so the pointer passed. This is the exact
+  failure documenting-work.md describes for line numbers and inherits for
+  anchors: a pointer that is silently wrong sends a reader to confidently read
+  the wrong section. Fixed by moving AZR-2 to AZR-F3 and re-citing to 6b. NOT
+  fixable by a validator - only the card text knows which section it means -
+  so nothing new is enforced here and the honest mitigation is that the next
+  audit reads citations for SENSE, not just resolution.
