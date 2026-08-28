@@ -111,6 +111,22 @@ ones prose could not enforce: no cycles, no dependency on a story that does not
 exist, nothing in progress whose blocker is still in the backlog, and nothing
 done that depends on something open.
 
+**Move the card to `in-progress` BEFORE starting, not after finishing.** This is
+the first step of executing a card, ahead of touching any code. Then do the
+work, then move it to `done` with its `verified` value.
+
+It is easy to skip because it feels like ceremony when you already know what you
+are doing, and skipping it is how the board stops describing reality. Measured
+on 2026-08-28: the In progress column had read `0` for an entire working session
+across every card executed in it, because each one went straight from backlog to
+done. A board that only ever shows finished work cannot answer "what is being
+worked on right now", which is most of what a board is for - and if two people
+ever work here, it is the whole of what it is for.
+
+Nothing enforces this. A diff cannot show that a card passed through
+`in-progress`, so no check can catch a card that skipped it - which is exactly
+why it is written down here instead.
+
 **Cite backlog sections, not line numbers.** A card points into its reasoning
 as `backlog.md#6g` - the numbered section - and `check-board` verifies that
 section exists. Line numbers were tried and they rot: `backlog.md` grows by

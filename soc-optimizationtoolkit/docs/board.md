@@ -11,13 +11,13 @@ two cannot disagree.
 alternatives. This board holds only what is a unit of work, what state it is
 in, and what it waits on.
 
-**65 in the backlog, 0 in progress, 4 done.**
+**64 in the backlog, 0 in progress, 5 done.**
 
 ## Epics
 
 | Key | Epic | Open | Why it exists |
 |---|---|---|---|
-| `REL` | Ship what is built | 4 | The packaged tarball trails `main`, and the lab trails the tarball |
+| `REL` | Ship what is built | 3 | The packaged tarball trails `main`, and the lab trails the tarball |
 | `FX` | Effect-identity defects | 1 | One confirmed live defect class, three instances |
 | `CAP` | Capability taxonomy extension | 6 | The single upstream blocker for three other epics |
 | `HON` | Inventory and diagnostic honesty | 7 | Measured gaps where the app reports a confident wrong answer |
@@ -39,16 +39,9 @@ _Nothing here._
 
 ---
 
-## Backlog - now (9)
+## Backlog - now (8)
 
 Next to pick up. Nothing blocks these.
-
-- **REL-2** Record the 2026-08-25 live verification in the release notes
-  `chore` `settled`
-  The 1.12.0 entry ends "has NOT done: run against a real workspace", which
-  was true of that release. No later entry records the run, so a reader
-  working newest-first still concludes ADR-0003 is unverified. *chore,
-  SETTLED. Size: one entry.*
 
 - **REL-3** Rotate the Azure client secret from the retired local-app config
   `chore` `settled`
@@ -602,7 +595,7 @@ Settled, gated on something above.
 
 ---
 
-## Done (4)
+## Done (5)
 
 Kept briefly so a reader can see what just landed; prune when the list grows.
 
@@ -626,6 +619,27 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   likely shape of the original report, so the question to put back to the
   reporter is what Overflow count their gap analysis showed. *bug, closed as
   not-reproduced. `backlog.md` item 14.*
+
+- **REL-2** Record the 2026-08-25 live verification in the release notes
+  `chore` `settled` `verified: none`
+  DONE 2026-08-28. The 1.12.0 entry ends "has NOT done: run against a real
+  workspace", which was true of that release; no later entry recorded the run,
+  so a reader working newest-first still concluded ADR-0003 was unverified.
+  FIXED as errata rather than by editing history: release-notes.md is an
+  append-only Record whose entries are "never edited afterwards", so the
+  1.12.0 entry stands untouched and the correction sits at the TOP, under
+  1.12.3, which is where a newest-first reader actually lands - the harm the
+  card described. The entry records what the 2026-08-25 run settled (eight
+  beliefs, row 8 answering the other way - Cribl tolerates a filter on an
+  undeclared field) and, more usefully, what it caught: four silent product
+  defects and seven harness defects, four of the latter returning confident
+  wrong answers. *chore, SETTLED. Size: one entry, as estimated.* VERIFIED:
+  none, deliberately. The 2026-08-25 run is what the entry DESCRIBES; it is
+  not what confirms this card. No pin asserts the release notes mention it,
+  and check-release-drift only enforces that a section for the packaged
+  version exists - not what it says. `none` is the honest value for prose, and
+  is exactly the uncomfortable answer the field exists to force rather than
+  let "live" borrow credibility from the thing being written about.
 
 - **REL-4** Cut and package a release
   `chore` `settled` `verified: pins`

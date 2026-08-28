@@ -73,11 +73,11 @@
       "epic": "REL",
       "title": "Record the 2026-08-25 live verification in the release notes",
       "type": "chore",
-      "status": "backlog",
-      "priority": "now",
+      "status": "done",
       "settled": "settled",
+      "verified": "none",
       "dependsOn": [],
-      "detail": "The 1.12.0 entry ends \"has NOT done: run against a real workspace\", which was true of that release. No later entry records the run, so a reader working newest-first still concludes ADR-0003 is unverified. *chore, SETTLED. Size: one entry.*"
+      "detail": "DONE 2026-08-28. The 1.12.0 entry ends \"has NOT done: run against a real workspace\", which was true of that release; no later entry recorded the run, so a reader working newest-first still concluded ADR-0003 was unverified. FIXED as errata rather than by editing history: release-notes.md is an append-only Record whose entries are \"never edited afterwards\", so the 1.12.0 entry stands untouched and the correction sits at the TOP, under 1.12.3, which is where a newest-first reader actually lands - the harm the card described. The entry records what the 2026-08-25 run settled (eight beliefs, row 8 answering the other way - Cribl tolerates a filter on an undeclared field) and, more usefully, what it caught: four silent product defects and seven harness defects, four of the latter returning confident wrong answers. *chore, SETTLED. Size: one entry, as estimated.* VERIFIED: none, deliberately. The 2026-08-25 run is what the entry DESCRIBES; it is not what confirms this card. No pin asserts the release notes mention it, and check-release-drift only enforces that a section for the packaged version exists - not what it says. `none` is the honest value for prose, and is exactly the uncomfortable answer the field exists to force rather than let \"live\" borrow credibility from the thing being written about."
     },
     {
       "id": "REL-3",
