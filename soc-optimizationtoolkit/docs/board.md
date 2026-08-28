@@ -11,7 +11,7 @@ two cannot disagree.
 alternatives. This board holds only what is a unit of work, what state it is
 in, and what it waits on.
 
-**64 in the backlog, 0 in progress, 13 done.**
+**63 in the backlog, 0 in progress, 15 done.**
 
 ## Epics and features
 
@@ -20,7 +20,7 @@ unblock other epics rather than to deliver on its own. Features are
 groupings, not a queue - they carry no score and no order. Priority lives
 on the stories underneath (now / next / later).
 
-### `AZR` Azure native source onboarding - 0% (0/16)
+### `AZR` Azure native source onboarding - 6% (1/16)
 
 The largest unstarted block: every Azure telemetry source, category by category
 
@@ -34,7 +34,7 @@ The largest unstarted block: every Azure telemetry source, category by category
 | `AZR-F6` Blob-only sources - cannot reach Event Hub | 0/1 | AZR-8 |
 | `AZR-F7` Agent-based - AMA plus DCR | 0/1 | AZR-9 |
 | `AZR-F8` Dataflow diagrams, one per category | 0/1 | AZR-10 |
-| `AZR-F9` Shared onboarding concerns | 0/4 | AZR-S2, AZR-1, AZR-11, AZR-12 |
+| `AZR-F9` Shared onboarding concerns | 1/4 | AZR-S2, AZR-1, AZR-11, AZR-12 |
 
 ### `WIN` Windows event analysis - 0% (0/5)
 
@@ -82,7 +82,7 @@ Positional CSV naming, reaching past ~18 vendors
 
 ### `CAP` Capability taxonomy extension _(enabler)_ - 0% (0/6)
 
-ENABLER EPIC: exists to unblock other epics - the single upstream blocker for three of them
+ENABLER EPIC: exists to unblock other work rather than to deliver on its own. Its capabilities and probes are what the Azure onboarding epic waits on
 
 | Feature | Done | Stories |
 |---|---|---|
@@ -96,7 +96,7 @@ ENABLER EPIC: release mechanics. The packaged tarball trails main, and the lab t
 |---|---|---|
 | `REL-F1` Release and deployment hygiene | 2/5 | REL-2, REL-3, REL-4, REL-5, REL-6 |
 
-### `DBT` Quality and technical debt _(enabler)_ - 36% (9/25)
+### `DBT` Quality and technical debt _(enabler)_ - 38% (10/26)
 
 ENABLER EPIC: verification gaps, copy, diagram fidelity, docs and the board's own tooling
 
@@ -106,7 +106,7 @@ ENABLER EPIC: verification gaps, copy, diagram fidelity, docs and the board's ow
 | `DBT-F2` Copy and UX | 0/6 | DBT-3, DBT-4, DBT-9, DBT-14, DBT-15, D-10 |
 | `DBT-F3` Diagram fidelity | 0/2 | DBT-1, DBT-12 |
 | `DBT-F4` Docs and spec grounding | 2/5 | DBT-8, DBT-10, DBT-11, DBT-13, DBT-22 |
-| `DBT-F5` Board tooling defects | 7/7 | DBT-16, DBT-17, DBT-18, DBT-19, DBT-20, DBT-21, DBT-23 |
+| `DBT-F5` Board tooling defects | 8/8 | DBT-16, DBT-17, DBT-18, DBT-19, DBT-20, DBT-21, DBT-23, DBT-24 |
 | `DBT-F6` Effect-identity defect class | 0/1 | FX-4 |
 
 ---
@@ -266,7 +266,7 @@ Settled and unblocked, sequenced behind now.
 
 ---
 
-## Backlog - later (47)
+## Backlog - later (46)
 
 Settled, gated on something above.
 
@@ -299,15 +299,8 @@ Settled, gated on something above.
     [ ] `export-only` Keep the generated-JSON hand-off - Stay with what Event Hub Discovery does: generate configs, download, operator imports and makes the secrets. No new write surface - but AZR-2, AZR-4, AZR-6 and AZR-8 each end at a manual import step.
     [ ] `connected-or-airgap` Write when connected, export when not - Both behind one convention, mirroring what secret-provisioning.ts already does for secrets (POST when connected, placeholder when air-gapped). NOTE: drawn from that existing convention, not from this card's own text. Costs two paths kept in step.
 
-- **AZR-1** Establish the additive-only contract
-  `AZR-F9` `enabler` `settled`
-  Checkboxes only ever deploy; unticking removes from the desired selection
-  and does nothing to Azure; teardown is a separate, separately-confirmed
-  Remove action. No checkbox may destroy anything - pin that with a test. The
-  UI must distinguish "not selected" from "not deployed". `backlog.md#6h`.
-
 - **AZR-2** TRACER BULLET: Entra ID tenant diagnostics, one category group
-  `AZR-F2` `story` `settled` `blocked by AZR-S2, AZR-0, AZR-1`
+  `AZR-F2` `story` `settled` `blocked by AZR-S2, AZR-0`
   One ARM PUT to `microsoft.aadiam/diagnosticSettings`, catalogued as porting
   nearly one-to-one. Checkbox grain is the category, with Standard (9) and
   HighVolume (15) as presets, and the non-interactive sign-in volume warning
@@ -319,23 +312,23 @@ Settled, gated on something above.
   `resource-coverage.json` omits). `backlog.md#6a`.
 
 - **AZR-3** Defender for Cloud continuous export
-  `AZR-F3` `story` `settled` `blocked by AZR-0, AZR-1`
+  `AZR-F3` `story` `settled` `blocked by AZR-0`
   Per subscription, a `Microsoft.Security/automations` resource. Detects which
   of 12 paid plans are enabled and never enables one - keep that property.
   `backlog.md#6b`.
 
 - **AZR-8** Blob-only sources as visible unavailable rows
-  `AZR-F6` `story` `settled` `blocked by AZR-S2, AZR-0, AZR-1`
+  `AZR-F6` `story` `settled` `blocked by AZR-S2, AZR-0`
   vNet and NSG Flow Logs have no Event Hub path; the blob path already exists
   end to end. The `notSupported` block is a feature of the legacy config, not
   an omission. Smallest sub-item by a wide margin. `backlog.md#6e`.
 
 - **AZR-9** Link the AMA plus DCR path to the app's own DCR Automation and Integrate routes rather than dup
-  `AZR-F7` `story` `settled` `blocked by AZR-0, AZR-1`
+  `AZR-F7` `story` `settled` `blocked by AZR-0`
   licating them. Natural place to surface WIN. `backlog.md#6f`.
 
 - **AZR-4** Azure Policy initiatives - the bulk of the platform
-  `AZR-F2` `story` `settled` `blocked by AZR-S2, CAP-2, CAP-3, AZR-0, AZR-1`
+  `AZR-F2` `story` `settled` `blocked by AZR-S2, CAP-2, CAP-3, AZR-0`
   Built-in Audit or AllLogs (one or the other), eight community tiers with a
   per-service expander, plus Activity Log, AKS and PostgreSQLFlexible as
   visible checkboxes because the bundled initiative excludes them silently.
@@ -345,13 +338,13 @@ Settled, gated on something above.
   policy modelling exists in the repo today. `backlog.md#6a`.
 
 - **AZR-5** Diagnostic-settings cleanup, preview only
-  `AZR-F2` `story` `settled` `blocked by AZR-0, AZR-1`
+  `AZR-F2` `story` `settled` `blocked by AZR-0`
   Enumerate exactly what would be removed, grouped by resource type and target
   namespace, and stop. No delete capability in the GUI in this pass.
   `backlog.md#6a`.
 
 - **AZR-6** Defender XDR guided worklist
-  `AZR-F4` `story` `settled` `blocked by AZR-S1, AZR-S2, CAP-5, AZR-0, AZR-1`
+  `AZR-F4` `story` `settled` `blocked by AZR-S1, AZR-S2, CAP-5, AZR-0`
   Licence check then usage probe - a licence held is not a product in use. The
   checkboxes here are a worklist, not a deployment: Microsoft exposes no
   configuration API for XDR streaming, so the last step is a portal visit,
@@ -359,14 +352,14 @@ Settled, gated on something above.
   `backlog.md#6c`.
 
 - **AZR-7** Sentinel incidents via a Cribl REST collector
-  `AZR-F5` `story` `settled` `blocked by AZR-S1, CAP-4, DBT-1, AZR-0, AZR-1`
+  `AZR-F5` `story` `settled` `blocked by AZR-S1, CAP-4, DBT-1, AZR-0`
   Filter on `lastModifiedTimeUtc`, not `createdTimeUtc` - filtering on
   creation misses every update to an open incident. Repeat deliveries are
   correct; dedupe downstream on incident GUID plus `lastModifiedTimeUtc`.
   Build on `lab-cribl.ts:149`. `backlog.md#6d`.
 
 - **AZR-10** Dataflow diagrams, one per category
-  `AZR-F8` `story` `settled` `blocked by AZR-0, AZR-1`
+  `AZR-F8` `story` `settled` `blocked by AZR-0`
   Do not build a new diagram implementation - the renderer and layout exist
   and the work is data, new entries in `architecture-patterns.ts`. Draw the
   manual portal step in AZR-6 as a step, and draw AZR-7 flowing the other way.
@@ -675,7 +668,7 @@ Settled, gated on something above.
 
 ---
 
-## Done (13)
+## Done (15)
 
 Kept briefly so a reader can see what just landed; prune when the list grows.
 
@@ -739,6 +732,27 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   Two of the three fixes also extracted the decision to a pure function
   (`shouldReloadEdits`, `autoDropPlan`) - which is what made the third one's
   asymmetry visible at a glance.
+
+- **AZR-1** Establish the additive-only contract
+  `AZR-F9` `enabler` `settled` `verified: pins`
+  Checkboxes only ever deploy; unticking removes from the desired selection
+  and does nothing to Azure; teardown is a separate, separately-confirmed
+  Remove action. No checkbox may destroy anything - pin that with a test. The
+  UI must distinguish "not selected" from "not deployed". `backlog.md#6h`.
+  BUILT 2026-08-28 as `domain/onboarding-selection`, BEFORE the screen rather
+  than after it, so no checkbox UI ever existed without the rule. The contract
+  is carried by the TYPE first: `DeployPlan` has no removal field, so a
+  removal is not something the deploy path declines to emit but something it
+  cannot express - adding one is rejected by `tsc` (TS2353) and then by a pin.
+  `removalPlan` is the only path that can tear down, and it needs explicit ids
+  plus `confirmed: true`; an empty list refuses as "remove nothing" rather
+  than reading as a wildcard. The four states are named once in `itemState`,
+  with `deployed-unselected` the one the decision exists to keep visible. 15
+  pins, the headline one exhaustive over all 64 (desired, deployed) pairs of a
+  3-item universe. Mutation-checked twice: dropping `leftInPlace` (the
+  reconcile bug) fails 4 pins, adding a `remove` field fails the structural
+  pin and the compiler. NOT built: the Remove action's discoverability (no
+  screen yet) and the prerequisite ordering `backlog.md#6h` flags.
 
 - **DBT-13** The Claude hooks travel with the repo
   `DBT-F4` `enabler` `settled` `verified: live`
@@ -906,3 +920,21 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   just deleted, because the next reader of the SAFe docs will otherwise re-add
   it as a missing piece. Pinned by a structural check on the feature table's
   column count, mutation-checked both halves. *enabler, closed.*
+
+- **DBT-24** The CAP epic claims it blocks three epics; the graph says one
+  `DBT-F5` `bug` `settled` `verified: none`
+  FOUND while grooming for what to pick up next, 2026-08-28. The CAP epic
+  describes itself as "the single upstream blocker for three of them" [epics].
+  Every card that actually waits on a CAP card is an AZR card - AZR-4 needs
+  CAP-2 and CAP-3, AZR-6 needs CAP-5, AZR-7 needs CAP-4 - so it blocks ONE
+  epic. The claim was probably true before the D and FX epics dissolved on
+  2026-08-27 and their cards were redistributed; nothing re-read the epic
+  prose afterwards. It matters because the sentence is the argument for CAP
+  being an enabler epic at all, and an inflated one invites working CAP ahead
+  of the thing it serves. FIXED by removing the NUMBER, not by correcting it.
+  Writing "one" would have rotted again the next time the graph moved - the
+  same way "three" did. The epic prose now says what CAP is FOR and leaves the
+  count to the dependency graph, which already knows it and is checked. Honest
+  limit: nothing enforces this. A validator cannot read prose, so the only
+  defence against the next inflated claim is not writing a countable assertion
+  into prose in the first place. *bug, closed.*

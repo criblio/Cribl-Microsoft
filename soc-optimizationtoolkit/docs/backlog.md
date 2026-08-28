@@ -790,6 +790,32 @@ confident-wrong-answer shape again), and there is no undo path via the
 checkboxes, so the Remove action needs to be discoverable enough that people do
 not go looking for one.
 
+**BUILT 2026-08-28 as AZR-1** - `domain/onboarding-selection`, ahead of the
+checkbox screen rather than after it, so no UI ever existed without the rule.
+`deployPlan(desired, deployed)` is deliberately HALF a diff: it adds what is
+selected and not yet there, and reports everything already deployed as either
+`unchanged` or `leftInPlace`. Unticking moves an item to `leftInPlace` and
+nothing else.
+
+The contract is carried by the TYPE first. `DeployPlan` has no removal field, so
+a removal is not something the deploy path declines to emit - it is something it
+cannot express. Adding one requires editing the interface, which `tsc` catches
+(TS2353, confirmed by trying it) and a pin catches after that. Teardown lives in
+`removalPlan(request, deployed)`, which takes the ids explicitly plus
+`confirmed: true`; an empty list is refused as "remove nothing" rather than read
+as a wildcard, which is the usual shape of this bug.
+
+The four states are named once, in `itemState`: `unselected`, `pending`,
+`deployed`, `deployed-unselected`. The last is the one the decision exists to
+keep visible - it is what unticking produces, it is still emitting into the
+workspace, and rendering it as `unselected` is the data-loss bug wearing a
+checkbox. Pinned exhaustively over all 64 (desired, deployed) pairs of a 3-item
+universe, which for a set-membership rule is a proof rather than a sample.
+
+Two things here are still NOT built: the discoverability of the Remove action,
+which is a screen concern and has no screen yet, and the prerequisite ordering
+noted at the end of this section, which nothing addresses.
+
 **Capability gating - DECIDED 2026-08-12 (user): ADD THE CAPABILITIES AND THEIR
 PROBES.** This settles the open question carried in items 1 and 4 as well - it
 was the same question three times, and the answer is the same one. Extend the
