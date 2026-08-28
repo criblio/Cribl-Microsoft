@@ -6,11 +6,13 @@
 // harmless. These pin the numbers, not the prose.
 
 import { describe, expect, it } from 'vitest';
+import { PRIORITIES } from './board.mjs';
 import {
   goalPlan,
   groomingFindings,
   isReady,
   prerequisiteChain,
+  rankOf,
   renderGroom,
   unblockCount,
 } from './board-groom.mjs';
@@ -121,6 +123,49 @@ describe('isReady', () => {
 
     expect(isReady(stories[0], m)).toBe(true);
     expect(isReady(stories[1], m)).toBe(false);
+  });
+
+  it('treats a dependency that is NOT ON THE BOARD as blocking', () => {
+    // The eighth audit's finding: isReady used to ask whether the prerequisite
+    // chain was empty, and the chain SKIPS unknown ids because it cannot order
+    // what it cannot see. So the kanban said "blocked by GONE-9" while grooming
+    // called the same card ready - visible on any board mid-edit, which is
+    // exactly when the live server is running. One definition of blocked, and
+    // it is the conservative one.
+    const stories = [story({ id: 'A-1', dependsOn: ['GONE-9'] })];
+
+    expect(isReady(stories[0], idx(stories))).toBe(false);
+  });
+});
+
+describe('priority ranking', () => {
+  it('ranks EVERY declared priority by its position, and unknowns last', () => {
+    // A TRIPWIRE, and worth being honest about: with today's three priorities a
+    // hardcoded {now:0,next:1,later:2} produces identical output, so this
+    // cannot fail right now and a mutation test does not kill it. It arms the
+    // moment PRIORITIES grows - which is exactly when a private copy would
+    // rank the new value BELOW `later` and sort the most urgent work last.
+    PRIORITIES.forEach((p, i) => {
+      expect(rankOf({ priority: p })).toBe(i);
+    });
+    expect(rankOf({ priority: 'nonsense' })).toBe(PRIORITIES.length);
+    expect(rankOf({})).toBe(PRIORITIES.length);
+  });
+
+  it('ranks by POSITION in the declared vocabulary, not a private copy', () => {
+    // The seventh audit fixed exactly this between STATUSES and the kanban
+    // columns; the eighth found a copy of {now,next,later} in the groom script.
+    // A priority the vocabulary knows about must never sort below one it does
+    // not - which is what a stale hardcoded map produces.
+    const stories = [
+      story({ id: 'A-1', priority: 'later' }),
+      story({ id: 'A-2', priority: 'now' }),
+      story({ id: 'A-3', priority: 'next' }),
+      story({ id: 'A-4', priority: 'nonsense' }),
+    ];
+    const order = goalPlan(board(stories)).map((g) => g.id);
+
+    expect(order).toEqual(['A-2', 'A-3', 'A-1', 'A-4']);
   });
 });
 

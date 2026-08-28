@@ -16,11 +16,24 @@
 // wrapped around it supplies the judgement, because the arithmetic can say a
 // card gates five others and still cannot say whether that matters this week.
 
-/** Ranked, lowest first. Absent priority sorts last. */
-const PRIORITY_RANK = { now: 0, next: 1, later: 2 };
+import { blockers, PRIORITIES } from './board.mjs';
 
-function rankOf(story) {
-  return PRIORITY_RANK[story.priority] ?? 3;
+/**
+ * Rank by POSITION in the declared vocabulary, not a hardcoded map.
+ *
+ * The eighth audit (2026-08-28) caught a copy of `{now:0,next:1,later:2}` here
+ * while board.mjs owned PRIORITIES - the same duplication the seventh audit had
+ * just fixed between STATUSES and the kanban's columns, reappearing one file
+ * over. A fourth priority added to PRIORITIES would have validated fine and
+ * then ranked `?? 3`, i.e. BELOW later: the most urgent work sorting last, in a
+ * report whose entire job is ordering.
+ *
+ * An unknown priority still sorts last - but now only because it is genuinely
+ * not in the vocabulary, not because nobody updated a second list.
+ */
+export function rankOf(story) {
+  const i = PRIORITIES.indexOf(story.priority);
+  return i === -1 ? PRIORITIES.length : i;
 }
 
 /**
@@ -69,9 +82,22 @@ export function unblockCount(id, byId) {
   return n;
 }
 
-/** A story with nothing unfinished in front of it. */
+/**
+ * A story with nothing unfinished in front of it.
+ *
+ * DELEGATES to board.mjs's `blockers` rather than asking whether the chain is
+ * empty, because those two are not the same question and the eighth audit found
+ * them disagreeing. `blockers` treats a dependency that is NOT ON THE BOARD as
+ * blocking; `prerequisiteChain` skips it, because it cannot order work it
+ * cannot see. On a board mid-edit - exactly when the live server is running and
+ * validation is failing - the kanban would have shown "blocked by GONE-9" while
+ * grooming called the same card ready.
+ *
+ * One definition of blocked, and it is the conservative one: an edge pointing
+ * nowhere is a problem, not a free pass.
+ */
 export function isReady(story, byId) {
-  return prerequisiteChain(story.id, byId).length === 0;
+  return blockers(story, byId).length === 0;
 }
 
 /**
@@ -84,13 +110,18 @@ export function goalPlan(data) {
     .filter((s) => s.status !== 'done')
     .map((s) => {
       const chain = prerequisiteChain(s.id, byId);
+      const ready = isReady(s, byId);
       return {
         id: s.id,
         title: s.title,
         epic: s.epic,
         priority: s.priority,
         status: s.status,
-        ready: chain.length === 0,
+        ready,
+        // Not ready, yet nothing to list: the blocker is not on the board.
+        // Surfaced rather than swallowed - it is the one case where the two
+        // notions of "blocked" legitimately differ.
+        danglingBlockers: !ready && chain.length === 0,
         prerequisites: chain.map((d) => ({
           id: d,
           title: byId.get(d)?.title ?? '',
@@ -232,7 +263,11 @@ export function renderGroom(data, today) {
     if (inBand.length === 0 && started.length === 0) continue;
     L.push(`${label.toUpperCase()} (${inBand.length + started.length})`);
     for (const g of [...started, ...inBand]) {
-      const flag = g.ready ? 'READY' : `blocked by ${g.prerequisites.length}`;
+      const flag = g.ready
+        ? 'READY'
+        : g.danglingBlockers
+          ? 'BLOCKED by a dependency that is not on the board'
+          : `blocked by ${g.prerequisites.length}`;
       const lev = g.unblocks > 0 ? `, unblocks ${g.unblocks}` : '';
       L.push(`  ${g.id}  ${g.title}`);
       L.push(`      ${flag}${lev}${g.status === 'in-progress' ? ', IN PROGRESS' : ''}`);
