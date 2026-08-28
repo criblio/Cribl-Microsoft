@@ -71,3 +71,16 @@ jobs:
       # out of date, so the two cannot disagree.
       - name: Check board
         run: npm run check-board --workspace apps/cribl-app
+
+      # check-board proves board.md matches board.json and that the data is
+      # coherent. Neither says the board still DESCRIBES the repo, and that gap
+      # was covered only by a Claude Code stop hook - which fires for whoever
+      # has hooks enabled and for nobody else. This is the same rule where
+      # everyone meets it.
+      #
+      # A WARNING, deliberately: a change can legitimately touch source without
+      # moving a card, and a check that blocks on judgement gets routed around.
+      # What it must not be is silent.
+      - name: Check board freshness
+        if: github.event_name == 'pull_request'
+        run: npm run check-board-freshness --workspace apps/cribl-app

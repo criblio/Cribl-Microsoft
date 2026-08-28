@@ -111,7 +111,7 @@
       "priority": "now",
       "settled": "undecided",
       "dependsOn": [],
-      "detail": "THREE confirmed from one reading; nothing says the fourth is not there. `useEffect` keyed on a memo, a callback, or an inline object/array prop, whose body resets state the operator owns. Safe reference: `lake-panel.tsx:198-204` (primitive key). Guard precedents: `integrate-screen.tsx:398-410`, `azure-resources-section.tsx:259-262`. *chore. UNDECIDED whether this is a one-off sweep or a lint rule - oxlint has no exhaustive-deps equivalent, and a custom rule is a bigger commitment than the three fixes were.*  ### CAP - Capability taxonomy extension  Build this ONCE. `backlog.md:806-808` says so explicitly - it serves three separate backlog items and doing it per-surface means building it three times. Today the taxonomy is 11 capabilities (`capabilities.ts:22-36`). Every addition needs a real probe or the step-2 mapping rule drops it, since that rule records only measurements. No probe ever grants a write."
+      "detail": "THREE confirmed from one reading; nothing says the fourth is not there. `useEffect` keyed on a memo, a callback, or an inline object/array prop, whose body resets state the operator owns. Safe reference: `lake-panel.tsx:198-204` (primitive key). Guard precedents: `integrate-screen.tsx:398-410`, `azure-resources-section.tsx:259-262`. *chore. UNDECIDED whether this is a one-off sweep or a lint rule - oxlint has no exhaustive-deps equivalent, and a custom rule is a bigger commitment than the three fixes were.*  ### CAP - Capability taxonomy extension  Build this ONCE. `backlog.md#12` says so explicitly - it serves three separate backlog items and doing it per-surface means building it three times. Today the taxonomy is 11 capabilities (`capabilities.ts:22-36`). Every addition needs a real probe or the step-2 mapping rule drops it, since that rule records only measurements. No probe ever grants a write."
     },
     {
       "id": "CAP-1",
@@ -122,7 +122,7 @@
       "priority": "now",
       "settled": "settled",
       "dependsOn": [],
-      "detail": "The gap recorded in backlog items 1 and 4 and again under 6d. `backlog.md:74-82`, `:321-329`, `:786-808`."
+      "detail": "The gap recorded in backlog items 1 and 4 and again under 6d. `backlog.md#1`, `:321-329`, `:786-808`."
     },
     {
       "id": "CAP-2",
@@ -179,7 +179,7 @@
       "dependsOn": [
         "CAP-1"
       ],
-      "detail": "ribl worker groups. They render `unmeasuredInventoryMessage` today, which `backlog.md:321-329` calls \"honest, but inert\". Depends on CAP-1.  Already measured, do not re-add: Event Hub namespace creation is `arm.deploy`; every Cribl-side write is `source.manage`.  ---"
+      "detail": "ribl worker groups. They render `unmeasuredInventoryMessage` today, which `backlog.md#4` calls \"honest, but inert\". Depends on CAP-1.  Already measured, do not re-add: Event Hub namespace creation is `arm.deploy`; every Cribl-side write is `source.manage`.  ---"
     },
     {
       "id": "HON-1",
@@ -190,7 +190,7 @@
       "priority": "next",
       "settled": "settled",
       "dependsOn": [],
-      "detail": "The last of the three pure decisions still owed its wiring. `backlog.md:303-306`."
+      "detail": "The last of the three pure decisions still owed its wiring. `backlog.md#4`."
     },
     {
       "id": "HON-2",
@@ -201,7 +201,7 @@
       "priority": "next",
       "settled": "settled",
       "dependsOn": [],
-      "detail": "A verdict is evidence only about the scope it was measured at, and that includes off-scope denials. `emptyInventoryMessage` now requires a scope argument, so the compiler prompts each new call site. `backlog.md:308-319`."
+      "detail": "A verdict is evidence only about the scope it was measured at, and that includes off-scope denials. `emptyInventoryMessage` now requires a scope argument, so the compiler prompts each new call site. `backlog.md#4`."
     },
     {
       "id": "HON-3",
@@ -234,7 +234,7 @@
       "priority": "next",
       "settled": "settled",
       "dependsOn": [],
-      "detail": "Both route discriminators return early for CSV by construction, so every CSV log type placeholders even when its values name their log types perfectly. The format-aware hint shipped in 1.11.11; the earlier warning did not. `backlog.md:1063-1065`."
+      "detail": "Both route discriminators return early for CSV by construction, so every CSV log type placeholders even when its values name their log types perfectly. The format-aware hint shipped in 1.11.11; the earlier warning did not. `backlog.md#13c`."
     },
     {
       "id": "HON-6",
@@ -247,7 +247,7 @@
       "dependsOn": [
         "D-1"
       ],
-      "detail": "The nav was tried and was the wrong surface. Two candidates remain: the frame footer, or the connection bar beside the existing chips. `backlog.md:84-88`. > **HON-8 and HON-9 SHIPPED, PR #134 merged 2026-08-27**, both verified in the live product > against the lab workspace, not just in tests. HON-8 was a claim ledger that > outlived the run that made it: the loader marked its key loaded before > awaiting, the cleanup cancelled the run so its answer was discarded, and the > claim stayed - so the next run skipped a fetch nobody was waiting for. HON-9 > was `extractDiscriminatorValues` taking the quoted text out of > `Activity == \"{activities}\"` verbatim. > > One thing worth carrying: the HON-8 fix has a SECOND half - a cancelled run > must stop working, not merely stop setting state - that resisted three > attempts at a unit pin and is verified only live. It is called out in > `azure-targeting-screen.dom.test.tsx` so nobody deletes it on the strength of > a green suite. FX-4's sweep should treat it as a known-unpinned guard."
+      "detail": "The nav was tried and was the wrong surface. Two candidates remain: the frame footer, or the connection bar beside the existing chips. `backlog.md#1`. > **HON-8 and HON-9 SHIPPED, PR #134 merged 2026-08-27**, both verified in the live product > against the lab workspace, not just in tests. HON-8 was a claim ledger that > outlived the run that made it: the loader marked its key loaded before > awaiting, the cleanup cancelled the run so its answer was discarded, and the > claim stayed - so the next run skipped a fetch nobody was waiting for. HON-9 > was `extractDiscriminatorValues` taking the quoted text out of > `Activity == \"{activities}\"` verbatim. > > One thing worth carrying: the HON-8 fix has a SECOND half - a cancelled run > must stop working, not merely stop setting state - that resisted three > attempts at a unit pin and is verified only live. It is called out in > `azure-targeting-screen.dom.test.tsx` so nobody deletes it on the strength of > a green suite. FX-4's sweep should treat it as a known-unpinned guard."
     },
     {
       "id": "HON-7",
@@ -260,7 +260,7 @@
       "dependsOn": [
         "D-2"
       ],
-      "detail": "`FallbackNotice` renders without `onProduce` in production, so the capability model's \"every blocked action falls back to a downloadable artifact\" rule has no button. Targets: Integrate deploy, Batch Deploy, DCR Automation. Must stay worded as an offer, not an error - there is a pin on the absence of alert semantics. `backlog.md:113-116`.  ---"
+      "detail": "`FallbackNotice` renders without `onProduce` in production, so the capability model's \"every blocked action falls back to a downloadable artifact\" rule has no button. Targets: Integrate deploy, Batch Deploy, DCR Automation. Must stay worded as an offer, not an error - there is a pin on the absence of alert semantics. `backlog.md#1`.  ---"
     },
     {
       "id": "AZR-S1",
@@ -271,7 +271,7 @@
       "priority": "later",
       "settled": "undecided",
       "dependsOn": [],
-      "detail": "Streaming carries alert-grain tables; path B returns the incident object with triage state. Settle before building either AZR-6 or AZR-7 - presenting A as a replacement loses triage state silently, presenting them as unrelated builds two overlapping feeds without telling anyone. `backlog.md:679-703`."
+      "detail": "Streaming carries alert-grain tables; path B returns the incident object with triage state. Settle before building either AZR-6 or AZR-7 - presenting A as a replacement loses triage state silently, presenting them as unrelated builds two overlapping feeds without telling anyone. `backlog.md#6d`."
     },
     {
       "id": "AZR-S2",
@@ -293,7 +293,7 @@
       "priority": "later",
       "settled": "settled",
       "dependsOn": [],
-      "detail": "The checkbox model exists as a file - port it, do not invent one. Its `method` values ARE the section keys. Keep the tier/profile sub-selections and the `notSupported` block verbatim. Precedes every sub-item. `backlog.md:476-482`."
+      "detail": "The checkbox model exists as a file - port it, do not invent one. Its `method` values ARE the section keys. Keep the tier/profile sub-selections and the `notSupported` block verbatim. Precedes every sub-item. `backlog.md#6`."
     },
     {
       "id": "AZR-1",
@@ -304,7 +304,7 @@
       "priority": "later",
       "settled": "settled",
       "dependsOn": [],
-      "detail": "Checkboxes only ever deploy; unticking removes from the desired selection and does nothing to Azure; teardown is a separate, separately-confirmed Remove action. No checkbox may destroy anything - pin that with a test. The UI must distinguish \"not selected\" from \"not deployed\". `backlog.md:771-784`."
+      "detail": "Checkboxes only ever deploy; unticking removes from the desired selection and does nothing to Azure; teardown is a separate, separately-confirmed Remove action. No checkbox may destroy anything - pin that with a test. The UI must distinguish \"not selected\" from \"not deployed\". `backlog.md#6h`."
     },
     {
       "id": "AZR-2",
@@ -319,7 +319,7 @@
         "AZR-0",
         "AZR-1"
       ],
-      "detail": "One ARM PUT to `microsoft.aadiam/diagnosticSettings`, catalogued as porting nearly one-to-one. Checkbox grain is the category, with Standard (9) and HighVolume (15) as presets, and the non-interactive sign-in volume warning at its own checkbox rather than in a footnote. Requires an Entra directory-role precondition, which the ARM RBAC evaluator provably cannot measure - a real finding this slice surfaces early. Non-negotiable: state the `_CL` divergence and UEBA consequence at the moment a sign-in category is ticked. Resolve the LOG-07 drift (a SecurityOnly profile that `resource-coverage.json` omits). `backlog.md:536-553`."
+      "detail": "One ARM PUT to `microsoft.aadiam/diagnosticSettings`, catalogued as porting nearly one-to-one. Checkbox grain is the category, with Standard (9) and HighVolume (15) as presets, and the non-interactive sign-in volume warning at its own checkbox rather than in a footnote. Requires an Entra directory-role precondition, which the ARM RBAC evaluator provably cannot measure - a real finding this slice surfaces early. Non-negotiable: state the `_CL` divergence and UEBA consequence at the moment a sign-in category is ticked. Resolve the LOG-07 drift (a SecurityOnly profile that `resource-coverage.json` omits). `backlog.md#6a`."
     },
     {
       "id": "AZR-3",
@@ -333,7 +333,7 @@
         "AZR-0",
         "AZR-1"
       ],
-      "detail": "Per subscription, a `Microsoft.Security/automations` resource. Detects which of 12 paid plans are enabled and never enables one - keep that property. `backlog.md:554-559`."
+      "detail": "Per subscription, a `Microsoft.Security/automations` resource. Detects which of 12 paid plans are enabled and never enables one - keep that property. `backlog.md#6b`."
     },
     {
       "id": "AZR-8",
@@ -348,7 +348,7 @@
         "AZR-0",
         "AZR-1"
       ],
-      "detail": "vNet and NSG Flow Logs have no Event Hub path; the blob path already exists end to end. The `notSupported` block is a feature of the legacy config, not an omission. Smallest sub-item by a wide margin. `backlog.md:705-721`."
+      "detail": "vNet and NSG Flow Logs have no Event Hub path; the blob path already exists end to end. The `notSupported` block is a feature of the legacy config, not an omission. Smallest sub-item by a wide margin. `backlog.md#6e`."
     },
     {
       "id": "AZR-9",
@@ -362,7 +362,7 @@
         "AZR-0",
         "AZR-1"
       ],
-      "detail": "licating them. Natural place to surface WIN. `backlog.md:723-735`."
+      "detail": "licating them. Natural place to surface WIN. `backlog.md#6f`."
     },
     {
       "id": "AZR-4",
@@ -379,7 +379,7 @@
         "AZR-0",
         "AZR-1"
       ],
-      "detail": "Built-in Audit or AllLogs (one or the other), eight community tiers with a per-service expander, plus Activity Log, AKS and PostgreSQLFlexible as visible checkboxes because the bundled initiative excludes them silently. DeployIfNotExists fires only for new resources, so bulk remediation is mandatory. Compliance data lags 15-30 minutes, so a fresh deployment reads as non-compliant and the UI has to say why rather than look broken. No policy modelling exists in the repo today. `backlog.md:484-534`."
+      "detail": "Built-in Audit or AllLogs (one or the other), eight community tiers with a per-service expander, plus Activity Log, AKS and PostgreSQLFlexible as visible checkboxes because the bundled initiative excludes them silently. DeployIfNotExists fires only for new resources, so bulk remediation is mandatory. Compliance data lags 15-30 minutes, so a fresh deployment reads as non-compliant and the UI has to say why rather than look broken. No policy modelling exists in the repo today. `backlog.md#6a`."
     },
     {
       "id": "AZR-5",
@@ -393,7 +393,7 @@
         "AZR-0",
         "AZR-1"
       ],
-      "detail": "Enumerate exactly what would be removed, grouped by resource type and target namespace, and stop. No delete capability in the GUI in this pass. `backlog.md:522-534`."
+      "detail": "Enumerate exactly what would be removed, grouped by resource type and target namespace, and stop. No delete capability in the GUI in this pass. `backlog.md#6a`."
     },
     {
       "id": "AZR-6",
@@ -410,7 +410,7 @@
         "AZR-0",
         "AZR-1"
       ],
-      "detail": "Licence check then usage probe - a licence held is not a product in use. The checkboxes here are a worklist, not a deployment: Microsoft exposes no configuration API for XDR streaming, so the last step is a portal visit, forever. Tables absent from the Streaming API show greyed with the reason. `backlog.md:561-620`."
+      "detail": "Licence check then usage probe - a licence held is not a product in use. The checkboxes here are a worklist, not a deployment: Microsoft exposes no configuration API for XDR streaming, so the last step is a portal visit, forever. Tables absent from the Streaming API show greyed with the reason. `backlog.md#6c`."
     },
     {
       "id": "AZR-7",
@@ -427,7 +427,7 @@
         "AZR-0",
         "AZR-1"
       ],
-      "detail": "Filter on `lastModifiedTimeUtc`, not `createdTimeUtc` - filtering on creation misses every update to an open incident. Repeat deliveries are correct; dedupe downstream on incident GUID plus `lastModifiedTimeUtc`. Build on `lab-cribl.ts:149`. `backlog.md:622-677`."
+      "detail": "Filter on `lastModifiedTimeUtc`, not `createdTimeUtc` - filtering on creation misses every update to an open incident. Repeat deliveries are correct; dedupe downstream on incident GUID plus `lastModifiedTimeUtc`. Build on `lab-cribl.ts:149`. `backlog.md#6d`."
     },
     {
       "id": "AZR-10",
@@ -441,7 +441,7 @@
         "AZR-0",
         "AZR-1"
       ],
-      "detail": "Do not build a new diagram implementation - the renderer and layout exist and the work is data, new entries in `architecture-patterns.ts`. Draw the manual portal step in AZR-6 as a step, and draw AZR-7 flowing the other way. Trail each section by one. `backlog.md:737-767`."
+      "detail": "Do not build a new diagram implementation - the renderer and layout exist and the work is data, new entries in `architecture-patterns.ts`. Draw the manual portal step in AZR-6 as a step, and draw AZR-7 flowing the other way. Trail each section by one. `backlog.md#6g`."
     },
     {
       "id": "AZR-11",
@@ -454,7 +454,7 @@
       "dependsOn": [
         "AZR-0"
       ],
-      "detail": "Nearly every section needs an Event Hub namespace first, and the policy sections need Policy Contributor plus User Access Administrator at MG scope. `backlog.md:810-814`."
+      "detail": "Nearly every section needs an Event Hub namespace first, and the policy sections need Policy Contributor plus User Access Administrator at MG scope. `backlog.md#6h`."
     },
     {
       "id": "AZR-12",
@@ -465,7 +465,7 @@
       "priority": "later",
       "settled": "settled",
       "dependsOn": [],
-      "detail": "`backlog.md:816-818`.  ### WIN - Windows event analysis  Backlog item 5. Two goals related only by subject; keep them separable, because one is Sentinel-side and one is Lake-side and either could ship alone."
+      "detail": "`backlog.md#6h`.  ### WIN - Windows event analysis  Backlog item 5. Two goals related only by subject; keep them separable, because one is Sentinel-side and one is Lake-side and either could ship alone."
     },
     {
       "id": "WIN-1",
@@ -476,7 +476,7 @@
       "priority": "later",
       "settled": "settled",
       "dependsOn": [],
-      "detail": "New route ids fail toward reachable, so this must opt in. A denial annotates and never hides - and unusually, the DCR-template path means the screen still does real work under a denial. Say so on the screen. `backlog.md:338-344`, `:403-410`."
+      "detail": "New route ids fail toward reachable, so this must opt in. A denial annotates and never hides - and unusually, the DCR-template path means the screen still does real work under a denial. Say so on the screen. `backlog.md#5`, `:403-410`."
     },
     {
       "id": "WIN-2",
@@ -489,7 +489,7 @@
       "dependsOn": [
         "D-4"
       ],
-      "detail": "Derive it; do not write it from memory. Four in-tree sources, and the formula is (schema columns) minus (what the raw event carries), ranked by how much content references each. The ranking is what makes this a screen rather than a documentation page. Show unreferenced fields AS unreferenced - dropping them turns a measured zero into an unmeasured absence. `backlog.md:345-401`."
+      "detail": "Derive it; do not write it from memory. Four in-tree sources, and the formula is (schema columns) minus (what the raw event carries), ranked by how much content references each. The ranking is what makes this a screen rather than a documentation page. Show unreferenced fields AS unreferenced - dropping them turns a measured zero into an unmeasured absence. `backlog.md#5a`."
     },
     {
       "id": "WIN-3",
@@ -500,7 +500,7 @@
       "priority": "later",
       "settled": "settled",
       "dependsOn": [],
-      "detail": "`backlog.md:398-401`.  ### PK - Pack maintenance parity"
+      "detail": "`backlog.md#5`.  ### PK - Pack maintenance parity"
     },
     {
       "id": "PK-1",
@@ -511,7 +511,7 @@
       "priority": "later",
       "settled": "settled",
       "dependsOn": [],
-      "detail": "The data-loss one. Maintenance rebuilds from our stored definition and installs over the deployed pack, silently discarding any route filter, pipeline function, lookup row or destination an operator changed since. Needs a three-way comparison, per worker group, because the answer differs per group. Build on `deployedGroups` and `installedPackVersions`. Answer early: how much of a deployed pack can the API actually return? If the readback is lossy, the honest surface names the files it can see - an unknown must not render as a zero. `backlog.md:1169-1205`."
+      "detail": "The data-loss one. Maintenance rebuilds from our stored definition and installs over the deployed pack, silently discarding any route filter, pipeline function, lookup row or destination an operator changed since. Needs a three-way comparison, per worker group, because the answer differs per group. Build on `deployedGroups` and `installedPackVersions`. Answer early: how much of a deployed pack can the API actually return? If the readback is lossy, the honest surface names the files it can see - an unknown must not render as a zero. `backlog.md#12`."
     },
     {
       "id": "PK-2",
@@ -524,7 +524,7 @@
       "dependsOn": [
         "D-6"
       ],
-      "detail": "An operator maintaining a pack today edits it through a strictly weaker view than the one they built it with - maintenance cannot tell them a mapping is now dropping 161 fields. Reuse `triageOverflow`, `matchFields`, `resolveSampleRouting` and `createLiveTableSchemaCatalog`; a second mapping verdict computed a second way is the duplicated-decision failure this codebase keeps finding. `backlog.md:1137-1167`. See also the two decisions under VND/decisions below.  ### VND - Vendor field definitions"
+      "detail": "An operator maintaining a pack today edits it through a strictly weaker view than the one they built it with - maintenance cannot tell them a mapping is now dropping 161 fields. Reuse `triageOverflow`, `matchFields`, `resolveSampleRouting` and `createLiveTableSchemaCatalog`; a second mapping verdict computed a second way is the duplicated-decision failure this codebase keeps finding. `backlog.md#12`. See also the two decisions under VND/decisions below.  ### VND - Vendor field definitions"
     },
     {
       "id": "VND-3",
@@ -559,7 +559,7 @@
       "priority": "later",
       "settled": "settled",
       "dependsOn": [],
-      "detail": "`InputRest` has no schema under that name; it is likely `InputCollection` with a collector conf. Blocks AZR-7 and WIN-5. `backlog.md:975-977`."
+      "detail": "`InputRest` has no schema under that name; it is likely `InputCollection` with a collector conf. Blocks AZR-7 and WIN-5. `backlog.md#10`."
     },
     {
       "id": "DBT-2",
@@ -592,7 +592,7 @@
       "priority": "later",
       "settled": "settled",
       "dependsOn": [],
-      "detail": "The spec's `EventBreakerExistingOrNewExisting` carries `existingRule`. `backlog.md:968-973`."
+      "detail": "The spec's `EventBreakerExistingOrNewExisting` carries `existingRule`. `backlog.md#9`."
     },
     {
       "id": "DBT-5",
@@ -603,7 +603,7 @@
       "priority": "later",
       "settled": "settled",
       "dependsOn": [],
-      "detail": "Both are still test-only. ADR-0002 removed the cheapest way to produce them, so each now costs a throwaway KV profile. `backlog.md:846-849`."
+      "detail": "Both are still test-only. ADR-0002 removed the cheapest way to produce them, so each now costs a throwaway KV profile. `backlog.md#7`."
     },
     {
       "id": "DBT-6",
@@ -647,7 +647,7 @@
       "priority": "later",
       "settled": "settled",
       "dependsOn": [],
-      "detail": "The deletion is correct and intended; the wording is what misleads. One string. `backlog.md:955-960`."
+      "detail": "The deletion is correct and intended; the wording is what misleads. One string. `backlog.md#9`."
     },
     {
       "id": "DBT-10",
@@ -680,7 +680,7 @@
       "priority": "later",
       "settled": "settled",
       "dependsOn": [],
-      "detail": "Recurring, conditional. It is derived, not hand-written - do not edit it by hand. `backlog.md:979-982`."
+      "detail": "Recurring, conditional. It is derived, not hand-written - do not edit it by hand. `backlog.md#10`."
     },
     {
       "id": "DBT-14",
@@ -724,7 +724,7 @@
       "priority": "later",
       "settled": "settled",
       "dependsOn": [],
-      "detail": "Packaging does not deploy - the lab runs the installed app, so this work stays invisible there until someone uploads the tgz through the Apps page. The lab is on 1.2.212. `backlog.md:949-951`. MEASURED 2026-08-27: the installed app in the lab workspace reports v1.11.2 in its own footer while `main` is at 1.12.2, and its stored GitHub token is rejected (`GET commits/master: HTTP 401 Bad credentials`), so section 1 of Sentinel Integration cannot load the solution index there at all. The `__local__` live preview has a working token, which is why this went unnoticed - every recent walkthrough drove the dev app. Anyone opening the INSTALLED app today hits a dead first step."
+      "detail": "Packaging does not deploy - the lab runs the installed app, so this work stays invisible there until someone uploads the tgz through the Apps page. The lab is on 1.2.212. `backlog.md#8`. MEASURED 2026-08-27: the installed app in the lab workspace reports v1.11.2 in its own footer while `main` is at 1.12.2, and its stored GitHub token is rejected (`GET commits/master: HTTP 401 Bad credentials`), so section 1 of Sentinel Integration cannot load the solution index there at all. The `__local__` live preview has a working token, which is why this went unnoticed - every recent walkthrough drove the dev app. Anyone opening the INSTALLED app today hits a dead first step."
     },
     {
       "id": "REL-6",
@@ -773,6 +773,27 @@
       "priority": "later",
       "settled": "undecided",
       "dependsOn": [],
+      "decision": {
+        "question": "HON-7: which screens get the fallback offer, and who owns onProduce?",
+        "options": [
+          {
+            "key": "each-owns",
+            "label": "All three, each wiring its own onProduce",
+            "detail": "Integrate deploy, Batch Deploy and DCR Automation each pass a producer. One prop per screen, uniform mental model - but for pack and ARM kinds it is a button that cannot really produce the artifact on the spot."
+          },
+          {
+            "key": "inline-only",
+            "label": "All three get the offer; only INLINE kinds get a button",
+            "detail": "Honours isInlineArtifact, which already splits these: role-assignment and app-registration are generated from data the app holds, while dcr-arm-bodies, table-arm-bodies, arm-template and cribl-pack come from a RUN. Run kinds point at that run instead of pretending. More wiring, no pretending."
+          },
+          {
+            "key": "where-producible",
+            "label": "Only where a producer already exists",
+            "detail": "Batch Deploy already calls ports.artifacts.save; Integrate can hand over the pack build. DCR Automation waits until it has an artifact to give. Smallest step; leaves the capability rule partly unmet."
+          }
+        ],
+        "chosen": null
+      },
       "detail": "ck offer, and does each own its `onProduce`? One prop away in any of them."
     },
     {
@@ -800,7 +821,7 @@
         ],
         "chosen": null
       },
-      "detail": ", or carry them in `PortsContext` beside `config`? One seam change against updating every `PortsProvider` call site. Cheap now, less so later; at eight listers this is the duplication that drifts. `backlog.md:331-336`."
+      "detail": ", or carry them in `PortsContext` beside `config`? One seam change against updating every `PortsProvider` call site. Cheap now, less so later; at eight listers this is the duplication that drifts. `backlog.md#4`."
     },
     {
       "id": "D-4",
@@ -811,7 +832,7 @@
       "priority": "later",
       "settled": "undecided",
       "dependsOn": [],
-      "detail": "nt functions? Reporting first is a legitimate slice, but a catalog that only affects analysis leaves deployed data still missing the fields. `backlog.md:390-397`."
+      "detail": "nt functions? Reporting first is a legitimate slice, but a catalog that only affects analysis leaves deployed data still missing the fields. `backlog.md#5a`."
     },
     {
       "id": "D-5",
@@ -822,7 +843,7 @@
       "priority": "later",
       "settled": "undecided",
       "dependsOn": [],
-      "detail": "The choice is already live and made silently - `lab-cribl.ts` carries Parquet chunk settings and nothing presents the tradeoff. The answer must be MEASURED against how Federated Search actually executes, not reasoned from general Parquet knowledge, because being specific to Cribl's engine is the entire value. Schema stability is the sharp dimension: the Windows tables are wide and sparse, Parquet is columnar and typed. `backlog.md:412-441`."
+      "detail": "The choice is already live and made silently - `lab-cribl.ts` carries Parquet chunk settings and nothing presents the tradeoff. The answer must be MEASURED against how Federated Search actually executes, not reasoned from general Parquet knowledge, because being specific to Cribl's engine is the entire value. Schema stability is the sharp dimension: the Windows tables are wide and sparse, Parquet is columnar and typed. `backlog.md#5b`."
     },
     {
       "id": "D-6",
@@ -854,7 +875,7 @@
         ],
         "chosen": null
       },
-      "detail": "eds the original samples, which the pack carries but which may no longer represent live traffic; a stored verdict is cheap and goes stale silently. A third option - re-analyse against the LIVE table schema and show what changed since the pack was built - is probably the honest one, and is the same fetch the picker already makes. `backlog.md:1137-1167`."
+      "detail": "eds the original samples, which the pack carries but which may no longer represent live traffic; a stored verdict is cheap and goes stale silently. A third option - re-analyse against the LIVE table schema and show what changed since the pack was built - is probably the honest one, and is the same fetch the picker already makes. `backlog.md#12`."
     },
     {
       "id": "D-7",
@@ -876,7 +897,7 @@
       "priority": "later",
       "settled": "undecided",
       "dependsOn": [],
-      "detail": "only with no streaming path. If offered, it is a second scheduled collector, and it lands on the same Resource Graph gap CAP-1 closes. `backlog.md:629-633`. > **D-9 became DBT-14 on 2026-08-27.** It asked what to do about three-level > nested scrolling and had no fix proposed, because nobody had reproduced the > harm. Driving PaloAlto did: the wheel over the solution list moves nothing at > all. That is not a question any more, so it left this column."
+      "detail": "only with no streaming path. If offered, it is a second scheduled collector, and it lands on the same Resource Graph gap CAP-1 closes. `backlog.md#6d`. > **D-9 became DBT-14 on 2026-08-27.** It asked what to do about three-level > nested scrolling and had no fix proposed, because nobody had reproduced the > harm. Driving PaloAlto did: the wheel over the solution list moves nothing at > all. That is not a question any more, so it left this column."
     },
     {
       "id": "D-10",
@@ -903,7 +924,7 @@
         ],
         "chosen": null
       },
-      "detail": "Either drop the enumeration from the header, or promote the sub-steps. Measured on two live walkthroughs 2026-08-06. `backlog.md:826-832`."
+      "detail": "Either drop the enumeration from the header, or promote the sub-steps. Measured on two live walkthroughs 2026-08-06. `backlog.md#9`."
     },
     {
       "id": "D-11",
