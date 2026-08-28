@@ -14,6 +14,42 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **NEVER USE EMOJIS**: Do not use emojis in any code, comments, output messages, documentation, or communication. This is a strict requirement for all files in this repository.
 
+## The board is the source of truth for work
+
+`soc-optimizationtoolkit/docs/board.json` is the source; `docs/board.md` is
+GENERATED from it and CI fails if it is edited by hand. Read the full process in
+`soc-optimizationtoolkit/docs/documenting-work.md` before changing how work is
+tracked - this section is the summary that survives into a fresh session.
+
+```bash
+cd soc-optimizationtoolkit
+npm run board          # regenerate board.md from board.json
+npm run check-board    # validate the data and the rendered file (CI runs this)
+npm run board:serve    # live kanban on http://localhost:5175, auto-refreshes
+npm run groom          # what to work on next, and what is really blocking it
+```
+
+Three rules, all learned the hard way:
+
+1. **Move a card to `in-progress` BEFORE starting**, not after finishing. The
+   In progress column read `0` for an entire session because every card went
+   straight from backlog to done, so the board only ever described finished work.
+2. **A defect found in COMMITTED code becomes a card before it is fixed**, even
+   for a five-minute fix - file it, work it, close it with a `verified` value.
+   Something you introduce and fix while drafting is editing and needs no card.
+   Six defects were found and fixed in one day with no card at all; they existed
+   only in commit messages.
+3. **`verified` on a done card says how it was confirmed** - `pins`, `live`,
+   `both` or `none`. `none` is honest for prose. Never let it borrow credibility
+   from the thing being described.
+
+Open questions can be answered on the card: a `decision` block renders as
+clickable options in the live kanban, and answering records `chosen` WITHOUT
+settling the card, because the reasoning still has to reach `backlog.md`.
+
+For grooming - ordering, leverage, and what is blocking what - use the
+`backlog-grooming` skill rather than reasoning it out.
+
 ## Project Overview
 
 This is the **Cribl-Microsoft Integration** repository - a PowerShell-based automation toolkit for integrating Cribl Stream with Microsoft Azure services (Log Analytics, Sentinel). The primary focus is automating Azure Data Collection Rules (DCRs) creation and configuration.

@@ -111,6 +111,27 @@ ones prose could not enforce: no cycles, no dependency on a story that does not
 exist, nothing in progress whose blocker is still in the backlog, and nothing
 done that depends on something open.
 
+**A defect found in COMMITTED code becomes a card before it is fixed** - even
+when the fix takes five minutes, and even when you are going to do it right now.
+File it, move it to `in-progress`, fix it, move it to `done` with a `verified`
+value. A card opened and closed inside one session is not churn; it is the only
+way the work is visible to anyone who was not watching.
+
+The line is *committed*. A defect you introduce and fix while drafting, before
+committing, is editing and needs no card - otherwise ordinary work becomes board
+noise and people learn to skip the rule entirely. Anything found by a test, a
+review, an architecture audit, or a live walkthrough of code that is already in
+is over the line, including defects in the board's own tooling and in
+`board.json` itself.
+
+Measured on 2026-08-28: six defects were found and fixed that day with no card
+at all - two duplicated vocabularies, a disagreement about what "blocked" means,
+a report that cried wolf, a gitignore hiding this repo's own skills, and two
+cards asserting things the code disproved. All six lived only in commit
+messages. They are now DBT-16 to DBT-21, filed as done and dated, because a Done
+column that shows two defects when the day produced eight is not a record of the
+day.
+
 **Move the card to `in-progress` BEFORE starting, not after finishing.** This is
 the first step of executing a card, ahead of touching any code. Then do the
 work, then move it to `done` with its `verified` value.

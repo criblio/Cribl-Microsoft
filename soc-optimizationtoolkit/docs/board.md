@@ -11,7 +11,7 @@ two cannot disagree.
 alternatives. This board holds only what is a unit of work, what state it is
 in, and what it waits on.
 
-**64 in the backlog, 0 in progress, 5 done.**
+**64 in the backlog, 0 in progress, 11 done.**
 
 ## Epics
 
@@ -595,7 +595,7 @@ Settled, gated on something above.
 
 ---
 
-## Done (5)
+## Done (11)
 
 Kept briefly so a reader can see what just landed; prune when the list grows.
 
@@ -712,3 +712,74 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   added, three of which fail if the replace branch is disabled; the existing
   pin that had encoded the merge as intended behaviour was re-pointed at the
   delete-refused path. *bug, fixed. `backlog.md` item 14d/14f.*
+
+- **DBT-16** The kanban hardcoded its own copy of the status vocabulary
+  `bug` `settled` `verified: pins`
+  FOUND by the seventh architecture audit 2026-08-27, fixed the same day,
+  filed 2026-08-28. board-html.mjs listed backlog/in-progress/done itself
+  while board.mjs owned STATUSES. They agreed by luck: a fourth status would
+  have passed validateBoard and then rendered into NO column - a card present
+  in board.json, absent from the page, invisible to every count, because a
+  column only counts what it already renders. Columns are now derived via
+  columnsFrom, and an unmapped status gets a column keyed by its own name.
+  Re-hardcoding the list kills the pin. *bug, closed.*
+
+- **DBT-17** Grooming hardcoded its own copy of the priority vocabulary
+  `bug` `settled` `verified: pins`
+  FOUND by the eighth architecture audit 2026-08-28, fixed the same day.
+  board-groom.mjs carried {now:0,next:1,later:2} while board.mjs owned
+  PRIORITIES - the same duplication DBT-16 had just fixed, one file over. A
+  fourth priority would have validated fine and then ranked BELOW later,
+  sorting the most urgent work last in a report whose entire job is ordering.
+  Now ranked by position in PRIORITIES. HONEST NOTE: its pin cannot fail
+  today, because with three priorities a hardcoded map produces identical
+  output - it is a tripwire that arms when the vocabulary grows, and the test
+  says so. *bug, closed.*
+
+- **DBT-18** Two answers to what blocked means, disagreeing on a dangling dependency
+  `bug` `settled` `verified: pins`
+  FOUND by the eighth architecture audit 2026-08-28, fixed the same day.
+  blockers() treats a dependency that is NOT on the board as blocking;
+  prerequisiteChain skips it, because it cannot order what it cannot see.
+  isReady asked the chain, so the kanban rendered "blocked by GONE-9" while
+  grooming called the same card READY. Reachable on any board mid-edit - which
+  is exactly when the live server is running and validation is failing.
+  isReady now delegates to blockers: one definition, the conservative one. A
+  goal blocked with nothing to list now says the blocker is off the board.
+  *bug, closed.*
+
+- **DBT-19** Grooming's epic rule fired on ordinary focus
+  `bug` `settled` `verified: pins`
+  FOUND on the grooming script's first run 2026-08-28, fixed before the skill
+  shipped. It flagged every epic with no `now` card and fired EIGHT times,
+  which is simply what deliberate focus looks like. A report that fires on
+  normal states is one people learn to skim, and the architecture-audit hook
+  had already had to be fixed for the same reason. It now flags a STALLED epic
+  - open cards, not one of them ready - which is a real signal rather than a
+  description of having a focus. *bug, closed.*
+
+- **DBT-20** gitignore hid the repo's own skills
+  `bug` `settled` `verified: live`
+  FOUND 2026-08-28 when the backlog-grooming skill could not be committed. THE
+  THIRD INSTANCE of this class: `.gitignore` excluded `.claude/skills/`
+  wholesale, so a skill encoding this repo's own working agreements existed
+  only on the machine that wrote it. DBT-13 had been closed that same morning
+  on the claim that the hooks now travel - the hooks did, the skills did not,
+  and architecture-audit survived only because gitignore does not untrack what
+  is already in the index. Now `.claude/skills/*` with explicit negations,
+  because git cannot re-include a file whose parent DIRECTORY is excluded.
+  Verified both ways with git check-ignore: the two owned skills visible, a
+  fresh vendored skill still ignored. *bug, closed. Same class as [[DBT-13]].*
+
+- **DBT-21** Two board cards asserted things the code disproved
+  `bug` `settled` `verified: live`
+  FOUND 2026-08-28 while researching options to seed those cards, corrected in
+  place. D-5 claimed the JSON/Parquet choice was "already live and made
+  silently" because lab-cribl.ts carries Parquet settings - those are
+  azure_blob SOURCE options for READING Parquet out of Azure storage and say
+  nothing about the format the Lake copy is written in; the app never sets a
+  Lake format at all, so it inherits Cribl's default. D-11 cited AZR-5, which
+  is the diagnostic-settings cleanup and has nothing to do with guid columns;
+  the real source is ADR-0004. Filed because board.json is committed code and
+  a card that asserts a false fact is read with the same confidence as a true
+  one. *bug, closed.*
