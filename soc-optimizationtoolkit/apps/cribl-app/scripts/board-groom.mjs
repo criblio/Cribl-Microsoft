@@ -154,11 +154,21 @@ export function groomingFindings(data) {
   // 1. Priority no longer matches readiness.
   for (const s of open) {
     const chain = prerequisiteChain(s.id, byId);
-    if (s.priority === 'now' && chain.length > 0) {
+    // A `now` card waiting on ANOTHER `now` card is a SEQUENCE, not a
+    // contradiction - "do D-7, then VND-1" is a plan, and the message's own
+    // words ("either it is not now, or those are") are already satisfied.
+    // Flagging it made the report fire on a deliberately ordered pair the
+    // moment a menu was groomed, which is the DBT-19 failure again: a report
+    // that fires on normal states is one people learn to skim.
+    const stillWaiting = chain.filter((id) => {
+      const p = byId.get(id);
+      return p !== undefined && p.priority !== 'now' && p.status !== 'in-progress';
+    });
+    if (s.priority === 'now' && stillWaiting.length > 0) {
       out.push({
         kind: 'contradiction',
         id: s.id,
-        message: `${s.id} is priority NOW but waits on ${chain.length} unfinished card(s): ${chain.join(', ')}. Either it is not now, or those are.`,
+        message: `${s.id} is priority NOW but waits on ${stillWaiting.length} card(s) that are not: ${stillWaiting.join(', ')}. Either it is not now, or those are.`,
       });
     }
     if (s.priority === 'later' && chain.length === 0 && unblockCount(s.id, byId) >= 2) {

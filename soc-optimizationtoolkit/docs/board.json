@@ -112,7 +112,7 @@
       "title": "Sweep for the class rather than the instances",
       "type": "enabler",
       "status": "backlog",
-      "priority": "now",
+      "priority": "next",
       "settled": "undecided",
       "dependsOn": [],
       "decision": {
@@ -140,7 +140,7 @@
       "title": "Add `resourcegraph.read` and its probe",
       "type": "enabler",
       "status": "backlog",
-      "priority": "now",
+      "priority": "next",
       "settled": "settled",
       "dependsOn": [],
       "detail": "The gap recorded in backlog items 1 and 4 and again under 6d. `backlog.md#1`, `:321-329`, `:786-808`."
@@ -152,7 +152,7 @@
       "title": "Add policy assignment and remediation capabilities plus probes (`Microsoft.Authorization`, `Mic",
       "type": "enabler",
       "status": "backlog",
-      "priority": "now",
+      "priority": "next",
       "settled": "settled",
       "dependsOn": [],
       "detail": "rosoft.PolicyInsights`). Gates AZR-4."
@@ -164,7 +164,7 @@
       "title": "Add managed-identity creation plus probe",
       "type": "enabler",
       "status": "backlog",
-      "priority": "now",
+      "priority": "next",
       "settled": "settled",
       "dependsOn": [],
       "detail": "Gates AZR-4."
@@ -176,7 +176,7 @@
       "title": "Add Sentinel incident read (Microsoft Sentinel Reader)",
       "type": "enabler",
       "status": "backlog",
-      "priority": "now",
+      "priority": "next",
       "settled": "settled",
       "dependsOn": [],
       "detail": "Modelled nowhere - `azure-permissions.ts:239,244` knows only the Contributor actions. Gates AZR-7."
@@ -188,7 +188,7 @@
       "title": "Add the two Graph scopes (`Organization.Read.All`, `SecurityEvents.Read.All`) plus probes",
       "type": "enabler",
       "status": "backlog",
-      "priority": "now",
+      "priority": "next",
       "settled": "settled",
       "dependsOn": [],
       "detail": "Gates AZR-6."
@@ -200,7 +200,7 @@
       "title": "Make the four unmeasured listers measurable - subscriptions, resource groups, Resource Graph, C",
       "type": "enabler",
       "status": "backlog",
-      "priority": "now",
+      "priority": "next",
       "settled": "settled",
       "dependsOn": [
         "CAP-1"
@@ -238,7 +238,7 @@
       "title": "Surface `droppedColumns` and `unknownTypeColumns` in the UI",
       "type": "story",
       "status": "backlog",
-      "priority": "next",
+      "priority": "now",
       "settled": "settled",
       "dependsOn": [],
       "detail": "The diagnostics already exist and reach nobody - repo-wide the only consumers are two test files. Already propagated through `dcr-request.ts`, so this is a rendering job, not plumbing. `adr/0004:87-88`, named there as the strongest argument for doing it next."
@@ -262,7 +262,7 @@
       "title": "Warn a CSV vendor's operator before the preview that the pack can never route automatically",
       "type": "story",
       "status": "backlog",
-      "priority": "next",
+      "priority": "now",
       "settled": "settled",
       "dependsOn": [],
       "detail": "Both route discriminators return early for CSV by construction, so every CSV log type placeholders even when its values name their log types perfectly. The format-aware hint shipped in 1.11.11; the earlier warning did not. `backlog.md#13c`."
@@ -387,7 +387,7 @@
       "feature": "AZR-F3",
       "title": "SecurityOnly is offered but cannot be stored - it reverts to Standard",
       "type": "bug",
-      "status": "in-progress",
+      "status": "backlog",
       "settled": "undecided",
       "dependsOn": [],
       "decision": {
@@ -411,7 +411,8 @@
         ],
         "chosen": null
       },
-      "detail": "FOUND by the architecture audit 2026-08-28 (ninth), one commit after AZR-2 merged, as a DUPLICATED DECISION: two modules define what Entra profiles exist and they disagree. `entra-diagnostics.ENTRA_PROFILES` has three (SecurityOnly, Standard, HighVolume); the `coverage-catalog` entraId subSelection has two. REPRODUCED, not theorised: storing SecurityOnly through `decodeSelection` yields `subSelections.entraId = [\"Standard\"]` with `dropped = [\"entraId.SecurityOnly\"]`. So the one profile an operator cannot keep is precisely the one AZR-2 added by resolving the LOG-07 drift. It is REPORTED in `dropped` rather than lost silently - that mechanism works as built - but nothing reads `dropped` yet and the choice still reverts. Worth recording exactly how the rationale failed: the entra-categories docblock says \"the coverage catalog keeps offering the two it always did, because changing what a stored selection MEANS is a separate act\". The first half is right - Standard and HighVolume keep their meaning. The second half does not follow from it: declining to make a THIRD value storable is not the same act, and nothing checked whether it was."
+      "detail": "FOUND by the architecture audit 2026-08-28 (ninth), one commit after AZR-2 merged, as a DUPLICATED DECISION: two modules define what Entra profiles exist and they disagree. `entra-diagnostics.ENTRA_PROFILES` has three (SecurityOnly, Standard, HighVolume); the `coverage-catalog` entraId subSelection has two. REPRODUCED, not theorised: storing SecurityOnly through `decodeSelection` yields `subSelections.entraId = [\"Standard\"]` with `dropped = [\"entraId.SecurityOnly\"]`. So the one profile an operator cannot keep is precisely the one AZR-2 added by resolving the LOG-07 drift. It is REPORTED in `dropped` rather than lost silently - that mechanism works as built - but nothing reads `dropped` yet and the choice still reverts. Worth recording exactly how the rationale failed: the entra-categories docblock says \"the coverage catalog keeps offering the two it always did, because changing what a stored selection MEANS is a separate act\". The first half is right - Standard and HighVolume keep their meaning. The second half does not follow from it: declining to make a THIRD value storable is not the same act, and nothing checked whether it was. PARKED 2026-08-28: moved back out of in-progress when the focus shifted to the Sentinel Integration content/pack path. The decision on it is still open and still real.",
+      "priority": "later"
     },
     {
       "id": "AZR-3",
@@ -640,7 +641,7 @@
       "title": "Measure the column-order shortfall instead of hedging about it",
       "type": "bug",
       "status": "backlog",
-      "priority": "later",
+      "priority": "now",
       "settled": "undecided",
       "dependsOn": [],
       "decision": {
@@ -673,7 +674,7 @@
       "title": "Let the operator name the vendor",
       "type": "story",
       "status": "backlog",
-      "priority": "later",
+      "priority": "now",
       "settled": "settled",
       "dependsOn": [
         "D-7"
@@ -699,7 +700,7 @@
       "title": "Add the guid cast to the live-verification suite",
       "type": "enabler",
       "status": "backlog",
-      "priority": "later",
+      "priority": "next",
       "settled": "settled",
       "dependsOn": [],
       "detail": "The fix shipped in 1.12.1 without ever being observed against live Azure, and `toguid()` returns null silently on malformed input - so a wrong cast fails the same quiet way the drop did. The suite ran live on 2026-08-25 and carries no guid row. `adr/0004:118-124`."
@@ -711,7 +712,7 @@
       "title": "Reconcile the Entra `Kind:Direct` copy with what has been measured",
       "type": "story",
       "status": "backlog",
-      "priority": "later",
+      "priority": "next",
       "settled": "settled",
       "dependsOn": [],
       "detail": "`architecture-patterns.ts:422,426` states flatly that native Entra tables do not accept Kind:Direct DCRs, with no snapshot date and no hedge, while the plan doc that is its only source still calls it unverified. Either measure it or carry the caveat."
@@ -723,7 +724,7 @@
       "title": "Name inline breaker rulesets instead of showing \"Default selection\"",
       "type": "story",
       "status": "backlog",
-      "priority": "later",
+      "priority": "now",
       "settled": "settled",
       "dependsOn": [],
       "detail": "The spec's `EventBreakerExistingOrNewExisting` carries `existingRule`. `backlog.md#9`."
@@ -748,7 +749,7 @@
       "title": "Exercise the `_raw`-absent branch with a non-Lake sample",
       "type": "enabler",
       "status": "backlog",
-      "priority": "later",
+      "priority": "now",
       "settled": "settled",
       "dependsOn": [],
       "detail": "The Lake write path adds `_raw`, so no Lake-sourced bench can reach that branch - it needs a paste or an upload. `zscaler-lake-lab.md:167-179`."
@@ -760,7 +761,7 @@
       "title": "Confirm the `eventsPerSec` 2x multiplier against worker config",
       "type": "enabler",
       "status": "backlog",
-      "priority": "later",
+      "priority": "next",
       "settled": "settled",
       "dependsOn": [],
       "detail": "Inferred as the worker-process count from a hard changepoint, not confirmed. `zscaler-lake-lab.md:225-238`."
@@ -784,7 +785,7 @@
       "title": "Say \"are deleted\" instead of \"reset\" in the Sample Data helper text",
       "type": "story",
       "status": "backlog",
-      "priority": "later",
+      "priority": "next",
       "settled": "settled",
       "dependsOn": [],
       "detail": "The deletion is correct and intended; the wording is what misleads. One string. `backlog.md#9`."
@@ -832,7 +833,7 @@
       "title": "Stop the solution list swallowing the mouse wheel",
       "type": "bug",
       "status": "backlog",
-      "priority": "later",
+      "priority": "next",
       "settled": "settled",
       "dependsOn": [],
       "detail": "Found live 2026-08-27: with the pointer over the list, the wheel moves neither the list nor the page - the pointer must leave the list before anything scrolls. Five of eight results were reachable. This is the reproduction the old nested-scrolling question never had, which is what turns it from an annoyance into a bug. *bug, SETTLED. `backlog.md` item 13d.*"
@@ -844,7 +845,7 @@
       "title": "Give every solution row a delivery-fit badge, or say why not",
       "type": "bug",
       "status": "backlog",
-      "priority": "later",
+      "priority": "next",
       "settled": "settled",
       "dependsOn": [],
       "detail": "\"Palo Alto Cortex XDR\" renders none while all seven of its siblings do. Blank reads as neither \"not measured\" nor \"does not apply\" - the absent-versus-zero distinction the inventory standard exists to protect. *bug, SETTLED. `backlog.md` item 13e.*"
@@ -921,7 +922,7 @@
       "title": "`HON-7` surface area: which of Integrate deploy, Batch Deploy and DCR Automation get the fallba",
       "type": "decision",
       "status": "backlog",
-      "priority": "later",
+      "priority": "next",
       "settled": "undecided",
       "dependsOn": [],
       "decision": {
@@ -954,7 +955,7 @@
       "title": "How do capabilities reach the roughly eight listing screens - keep prop-drilling from the shell",
       "type": "decision",
       "status": "backlog",
-      "priority": "later",
+      "priority": "next",
       "settled": "undecided",
       "dependsOn": [],
       "decision": {
@@ -1060,7 +1061,7 @@
       "title": "`VND-2` Does a persisted column order need a version or a captured-on date, so a firmware chang",
       "type": "decision",
       "status": "backlog",
-      "priority": "later",
+      "priority": "now",
       "settled": "undecided",
       "dependsOn": [],
       "decision": {
@@ -1155,7 +1156,7 @@
       "title": "`ADR-0004` per-table successor for deprecated guid columns (`AwsRequestId` to `AwsRequestId_`)",
       "type": "decision",
       "status": "backlog",
-      "priority": "later",
+      "priority": "next",
       "settled": "undecided",
       "dependsOn": [],
       "decision": {
@@ -1195,7 +1196,7 @@
       "title": "Stamp the toolkit version into the pack it builds",
       "type": "story",
       "status": "backlog",
-      "priority": "next",
+      "priority": "now",
       "settled": "settled",
       "dependsOn": [],
       "detail": "Given a `.crbl`, nothing says which toolkit build produced it. The manifest carries exactly eight fields (`domain/pack-assembly/package-json.ts`) - name, version, author, description, displayName, tags, exports, minLogStreamVersion - and `author` is the constant \"Cribl SOC Toolkit\" while `version` is just highest-installed-plus-one, so it tracks how many times the pack was rebuilt, not what built it. The persisted `PackBuildRecord` does not carry it either. The app version exists only as `__APP_VERSION__` for the UI footer. COST, paid on 2026-08-27: asked whether a pack in the workspace was the one just built, the artifact could not answer; it took a git-log check and a sample-count comparison to establish provenance. Every future regression report about \"the pack\" pays this again. Cheapest fix: one more manifest field, set from the same define the footer reads. *feature, settled. [[GEN-2]] is fixed, so leftovers no longer accumulate - but the provenance gap stands on its own: it cost a git-log check to answer \"is this pack today's?\" during that very investigation.*"
@@ -1328,9 +1329,21 @@
       "type": "bug",
       "status": "done",
       "settled": "settled",
-      "verified": "none",
       "dependsOn": [],
-      "detail": "FOUND by the architecture audit 2026-08-28 (ninth). `documenting-work.md` says a new item needs \"a type (bug / feature / chore / spike)\". `validateBoard` accepts story | enabler | spike | bug | decision, so `chore` and `feature` both FAIL check-board - the document instructs a reader straight into a broken build. The same document states the correct SAFe vocabulary about a hundred lines earlier (\"Types are SAFe's, not the old chore vocabulary\"), so it contradicts itself, and the half that is wrong is the half phrased as an instruction. That is the distinction the document OPENS with: a stale record is harmless and a stale instruction is dangerous. Missed during the SAFe migration because the migration updated the section ABOUT types and not the checklist further down that also names them. FIXED by naming the five types check-board actually accepts and pointing at the section above that explains them, so the checklist cannot drift from the validator independently again. SWEPT for the same vocabulary elsewhere: CLAUDE.md and the grooming skill are clean. Several older cards still carry a trailing *chore, settled* marker in their DETAIL prose, left over from the pre-SAFe vocabulary - those are RECORDS of how a card was described when it was written, not instructions, so they are left alone on this documents own rule that a stale record is harmless and a stale instruction is dangerous."
+      "detail": "FOUND by the architecture audit 2026-08-28 (ninth). `documenting-work.md` says a new item needs \"a type (bug / feature / chore / spike)\". `validateBoard` accepts story | enabler | spike | bug | decision, so `chore` and `feature` both FAIL check-board - the document instructs a reader straight into a broken build. The same document states the correct SAFe vocabulary about a hundred lines earlier (\"Types are SAFe's, not the old chore vocabulary\"), so it contradicts itself, and the half that is wrong is the half phrased as an instruction. That is the distinction the document OPENS with: a stale record is harmless and a stale instruction is dangerous. Missed during the SAFe migration because the migration updated the section ABOUT types and not the checklist further down that also names them. FIXED by naming the five types check-board actually accepts and pointing at the section above that explains them, so the checklist cannot drift from the validator independently again. SWEPT for the same vocabulary elsewhere: CLAUDE.md and the grooming skill are clean. Several older cards still carry a trailing *chore, settled* marker in their DETAIL prose, left over from the pre-SAFe vocabulary - those are RECORDS of how a card was described when written, not instructions, so they are left alone on this documents own rule that a stale record is harmless and a stale instruction is dangerous.",
+      "verified": "none"
+    },
+    {
+      "id": "DBT-27",
+      "epic": "DBT",
+      "feature": "DBT-F5",
+      "title": "Grooming called a deliberate now-then-now sequence a contradiction",
+      "type": "bug",
+      "status": "done",
+      "settled": "settled",
+      "verified": "pins",
+      "dependsOn": [],
+      "detail": "FOUND 2026-08-28 the moment the Sentinel Integration menu was groomed, by the report firing on work that had JUST been sequenced correctly. The rule flagged any now card with an unfinished prerequisite, so promoting D-7 and VND-1 together - answer the decision, then do the work it gates - produced \"VND-1 is priority NOW but waits on D-7\". That is a plan, not a contradiction, and the messages own words (\"either it is not now, or those are\") were already satisfied: D-7 IS now. Narrowed to flag only prerequisites that are neither now nor already in-progress, and the message now names just those rather than the whole chain. This is the DBT-19 failure a second time - a report that fires on normal states is one people learn to skim - and it is worth noticing that BOTH instances were found by running the report on a real board rather than by reading it. Four pins, mutation-checked by reverting the filter: three fail. The rule still fires on the real case, a now card blocked by something parked at later."
     }
   ],
   "features": [

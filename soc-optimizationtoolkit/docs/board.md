@@ -11,7 +11,7 @@ two cannot disagree.
 alternatives. This board holds only what is a unit of work, what state it is
 in, and what it waits on.
 
-**60 in the backlog, 1 in progress, 20 done.**
+**61 in the backlog, 0 in progress, 21 done.**
 
 ## By menu item
 
@@ -23,12 +23,12 @@ operator sees on any screen. Two menus are PLANNED and have no route yet.
 |---|---|---|---|
 | Dataflow | 2 | 0 | 0 |
 | Setup | 1 | 0 | 0 |
-| Sentinel Integration | 21 | 2 | 0 |
-| Pack Maintenance | 4 | 0 | 1 |
-| Permission Verification | 8 | 0 | 6 |
+| Sentinel Integration | 21 | 2 | 8 |
+| Pack Maintenance | 4 | 0 | 0 |
+| Permission Verification | 8 | 0 | 0 |
 | Azure Native Source Onboarding (planned) | 13 | 4 | 0 |
 | Windows Event analysis (planned) | 5 | 0 | 0 |
-| Cross-cutting | 7 | 14 | 1 |
+| Cross-cutting | 7 | 15 | 1 |
 
 Open work totals 61.
 
@@ -115,7 +115,7 @@ ENABLER EPIC: release mechanics. The packaged tarball trails main, and the lab t
 |---|---|---|---|
 | `REL-F1` Release and deployment hygiene | Cross-cutting | 2/5 | REL-2, REL-3, REL-4, REL-5, REL-6 |
 
-### `DBT` Quality and technical debt _(enabler)_ - 43% (12/28)
+### `DBT` Quality and technical debt _(enabler)_ - 45% (13/29)
 
 ENABLER EPIC: verification gaps, copy, diagram fidelity, docs and the board's own tooling
 
@@ -125,44 +125,20 @@ ENABLER EPIC: verification gaps, copy, diagram fidelity, docs and the board's ow
 | `DBT-F2` Copy and UX | Sentinel Integration | 0/6 | DBT-3, DBT-4, DBT-9, DBT-14, DBT-15, D-10* |
 | `DBT-F3` Diagram fidelity | Dataflow | 0/2 | DBT-1, DBT-12 |
 | `DBT-F4` Docs and spec grounding | Cross-cutting | 3/6 | DBT-8, DBT-10, DBT-11, DBT-13, DBT-22, DBT-26 |
-| `DBT-F5` Board tooling defects | Cross-cutting | 9/9 | DBT-16, DBT-17, DBT-18, DBT-19, DBT-20, DBT-21, DBT-23, DBT-24, DBT-25 |
+| `DBT-F5` Board tooling defects | Cross-cutting | 10/10 | DBT-16, DBT-17, DBT-18, DBT-19, DBT-20, DBT-21, DBT-23, DBT-24, DBT-25, DBT-27 |
 | `DBT-F6` Effect-identity defect class | Pack Maintenance | 0/1 | FX-4 |
 
 ---
 
-## In progress (1)
+## In progress (0)
 
 Started. Anything here with an unfinished dependency is called out on its card.
 
-- **AZR-13** SecurityOnly is offered but cannot be stored - it reverts to Standard
-  `AZR-F3` `bug` `undecided`
-  FOUND by the architecture audit 2026-08-28 (ninth), one commit after AZR-2
-  merged, as a DUPLICATED DECISION: two modules define what Entra profiles
-  exist and they disagree. `entra-diagnostics.ENTRA_PROFILES` has three
-  (SecurityOnly, Standard, HighVolume); the `coverage-catalog` entraId
-  subSelection has two. REPRODUCED, not theorised: storing SecurityOnly
-  through `decodeSelection` yields `subSelections.entraId = ["Standard"]` with
-  `dropped = ["entraId.SecurityOnly"]`. So the one profile an operator cannot
-  keep is precisely the one AZR-2 added by resolving the LOG-07 drift. It is
-  REPORTED in `dropped` rather than lost silently - that mechanism works as
-  built - but nothing reads `dropped` yet and the choice still reverts. Worth
-  recording exactly how the rationale failed: the entra-categories docblock
-  says "the coverage catalog keeps offering the two it always did, because
-  changing what a stored selection MEANS is a separate act". The first half is
-  right - Standard and HighVolume keep their meaning. The second half does not
-  follow from it: declining to make a THIRD value storable is not the same
-  act, and nothing checked whether it was.
-  DECISION (unanswered): The coverage catalog is a VERBATIM port of
-  resource-coverage.json, whose `_profileOptions` has only Standard and
-  HighVolume. AZR-2 deliberately added SecurityOnly. Where should the profile
-  list live?
-    [ ] `derive` Catalog derives from entra-diagnostics - ENTRA_PROFILES becomes the single authority and the catalog imports it. The provenance pin changes from "equals the legacy two" to "contains the legacy two, plus SecurityOnly which AZR-2 added deliberately". Removes the duplication for good - but it WEAKENS a verbatim pin written this morning, which is the move check 3 of the audit exists to catch, so it has to be a decision rather than a quiet edit.
-    [ ] `widen-catalog` Hand-add SecurityOnly to the catalog - Smallest diff. Leaves TWO hand-maintained lists that must agree - the duplicated decision that caused this in the first place - so the next profile change breaks it again.
-    [ ] `drop-securityonly` Withdraw SecurityOnly - Keeps the port pristine and re-opens the LOG-07 drift AZR-2 was asked to resolve. Honest, but it undoes a deliberate decision instead of fixing the plumbing under it.
+_Nothing here._
 
 ---
 
-## Backlog - now (8)
+## Backlog - now (9)
 
 Next to pick up. Nothing blocks these.
 
@@ -171,6 +147,89 @@ Next to pick up. Nothing blocks these.
   `~/.soc-toolkit-local-app-retired/config/local-config.json` holds a live
   secret. Flagged for rotation by `adr/0002-drop-local-target.md:57-62` and
   still outstanding. *chore, SETTLED. Security. Size: minutes.*
+
+- **HON-3** Surface `droppedColumns` and `unknownTypeColumns` in the UI
+  `HON-F3` `story` `settled`
+  The diagnostics already exist and reach nobody - repo-wide the only
+  consumers are two test files. Already propagated through `dcr-request.ts`,
+  so this is a rendering job, not plumbing. `adr/0004:87-88`, named there as
+  the strongest argument for doing it next.
+
+- **HON-5** Warn a CSV vendor's operator before the preview that the pack can never route automatically
+  `VND-F1` `story` `settled`
+  Both route discriminators return early for CSV by construction, so every CSV
+  log type placeholders even when its values name their log types perfectly.
+  The format-aware hint shipped in 1.11.11; the earlier warning did not.
+  `backlog.md#13c`.
+
+- **VND-3** Measure the column-order shortfall instead of hedging about it
+  `VND-F1` `bug` `undecided`
+  Found live 2026-08-27: THREAT arrived with 38 fields and was named from the
+  bundled 120-column PAN order; TRAFFIC, 41 against 115. Positional naming
+  maps field[i] to name[i], so a feed missing any middle column mis-names
+  everything after it, silently. The copy says "check the values beside each
+  name before applying", which is a hedge where the app already holds the
+  number. *bug, UNDECIDED whether a large shortfall should warn or block.
+  `backlog.md` 13c.*
+  DECISION (unanswered): When a bundled column order far exceeds the event's
+  field count, warn or block?
+    [ ] `measure-only` Show the number, drop the hedge - Replace "check the values beside each name before applying" with the measured 38-of-120 and stop there. backlog.md#13c says it is a number the app already has and could show.
+    [ ] `warn` Warn above a shortfall threshold - A large shortfall warns visibly; Apply stays enabled. Matches the capability model's annotate-never-hide-never-disable rule, and a short feed can still be legitimately named once the order is edited.
+    [ ] `block` Block Apply above the threshold - Disable Apply until the order is edited or explicitly overridden. Strongest guard against mis-naming every column after the first gap, and Skip already preserves the positional _N names - but it runs against the annotate-never-hide rule the rest of the app pins.
+
+- **VND-1** Let the operator name the vendor
+  `VND-F1` `story` `settled` `blocked by D-7`
+  Today the vendor comes from `detectVendorIdentity(solutionName)`, so
+  anything outside `KNOWN_VENDOR_IDENTITIES` stores nothing - honest, but it
+  caps the feature at about eighteen vendors. Needs a UI seam that was
+  deliberately not built. `vendor-field-definition-plan.md:209-214`. ### DBT -
+  Debt, spec grounding, verification Small and mostly independent. Good filler
+  between larger stories.
+
+- **DBT-4** Name inline breaker rulesets instead of showing "Default selection"
+  `DBT-F2` `story` `settled`
+  The spec's `EventBreakerExistingOrNewExisting` carries `existingRule`.
+  `backlog.md#9`.
+
+- **DBT-6** Exercise the `_raw`-absent branch with a non-Lake sample
+  `DBT-F1` `enabler` `settled`
+  The Lake write path adds `_raw`, so no Lake-sourced bench can reach that
+  branch - it needs a paste or an upload. `zscaler-lake-lab.md:167-179`.
+
+- **D-7** `VND-2` Does a persisted column order need a version or a captured-on date, so a firmware chang
+  `VND-F1` `decision` `undecided`
+  e can be reasoned about later rather than silently disagreeing with a future
+  bundled update? The only genuinely open question left in that plan.
+  `vendor-field-definition-plan.md:222-224`.
+  DECISION (unanswered): Should a persisted vendor column order carry a
+  version, a captured-on date, or neither?
+    [ ] `neither` Store neither - Keep vendor + logType + columns + overrides. The silent-disagreement harm is already handled: resolveColumnOrder re-derives the override notice against the CURRENT bundled order, and machine-applied pass-throughs are never stored.
+    [ ] `captured-on` Stamp a captured-on date - Record when the operator captured the order, so a later divergence reads as "captured before that change" rather than an unexplained disagreement. Always available - but it dates the capture, it does not identify the firmware.
+    [ ] `version` Record a version - Sharper than a date, but the version has to come from somewhere: nothing in the sample or the CSV-header dialog supplies one today, so it means asking the operator.
+
+- **GEN-3** Stamp the toolkit version into the pack it builds
+  `GEN-F1` `story` `settled`
+  Given a `.crbl`, nothing says which toolkit build produced it. The manifest
+  carries exactly eight fields (`domain/pack-assembly/package-json.ts`) -
+  name, version, author, description, displayName, tags, exports,
+  minLogStreamVersion - and `author` is the constant "Cribl SOC Toolkit" while
+  `version` is just highest-installed-plus-one, so it tracks how many times
+  the pack was rebuilt, not what built it. The persisted `PackBuildRecord`
+  does not carry it either. The app version exists only as `__APP_VERSION__`
+  for the UI footer. COST, paid on 2026-08-27: asked whether a pack in the
+  workspace was the one just built, the artifact could not answer; it took a
+  git-log check and a sample-count comparison to establish provenance. Every
+  future regression report about "the pack" pays this again. Cheapest fix: one
+  more manifest field, set from the same define the footer reads. *feature,
+  settled. [[GEN-2]] is fixed, so leftovers no longer accumulate - but the
+  provenance gap stands on its own: it cost a git-log check to answer "is this
+  pack today's?" during that very investigation.*
+
+---
+
+## Backlog - next (21)
+
+Settled and unblocked, sequenced behind now.
 
 - **FX-4** Sweep for the class rather than the instances
   `DBT-F6` `enabler` `undecided`
@@ -221,12 +280,6 @@ Next to pick up. Nothing blocks these.
   measured, do not re-add: Event Hub namespace creation is `arm.deploy`; every
   Cribl-side write is `source.manage`. ---
 
----
-
-## Backlog - next (8)
-
-Settled and unblocked, sequenced behind now.
-
 - **HON-1** Wire `emptyTableListMessage` into the picker screen
   `HON-F2` `story` `settled`
   The last of the three pure decisions still owed its wiring. `backlog.md#4`.
@@ -237,24 +290,10 @@ Settled and unblocked, sequenced behind now.
   includes off-scope denials. `emptyInventoryMessage` now requires a scope
   argument, so the compiler prompts each new call site. `backlog.md#4`.
 
-- **HON-3** Surface `droppedColumns` and `unknownTypeColumns` in the UI
-  `HON-F3` `story` `settled`
-  The diagnostics already exist and reach nobody - repo-wide the only
-  consumers are two test files. Already propagated through `dcr-request.ts`,
-  so this is a rendering job, not plumbing. `adr/0004:87-88`, named there as
-  the strongest argument for doing it next.
-
 - **HON-4** Tell operators that DCRs deployed before the guid fix still lose fields
   `HON-F3` `story` `settled`
   `update-dcr` regenerates the declaration so an update fixes it, but nothing
   sweeps and nothing warns. Pairs with HON-3. `adr/0004:107-112`.
-
-- **HON-5** Warn a CSV vendor's operator before the preview that the pack can never route automatically
-  `VND-F1` `story` `settled`
-  Both route discriminators return early for CSV by construction, so every CSV
-  log type placeholders even when its values name their log types perfectly.
-  The format-aware hint shipped in 1.11.11; the earlier warning did not.
-  `backlog.md#13c`.
 
 - **HON-6** Give the audit's AGE a home and add a manual re-check
   `HON-F1` `story` `settled` `blocked by D-1`
@@ -282,27 +321,80 @@ Settled and unblocked, sequenced behind now.
   Automation. Must stay worded as an offer, not an error - there is a pin on
   the absence of alert semantics. `backlog.md#1`. ---
 
-- **GEN-3** Stamp the toolkit version into the pack it builds
-  `GEN-F1` `story` `settled`
-  Given a `.crbl`, nothing says which toolkit build produced it. The manifest
-  carries exactly eight fields (`domain/pack-assembly/package-json.ts`) -
-  name, version, author, description, displayName, tags, exports,
-  minLogStreamVersion - and `author` is the constant "Cribl SOC Toolkit" while
-  `version` is just highest-installed-plus-one, so it tracks how many times
-  the pack was rebuilt, not what built it. The persisted `PackBuildRecord`
-  does not carry it either. The app version exists only as `__APP_VERSION__`
-  for the UI footer. COST, paid on 2026-08-27: asked whether a pack in the
-  workspace was the one just built, the artifact could not answer; it took a
-  git-log check and a sample-count comparison to establish provenance. Every
-  future regression report about "the pack" pays this again. Cheapest fix: one
-  more manifest field, set from the same define the footer reads. *feature,
-  settled. [[GEN-2]] is fixed, so leftovers no longer accumulate - but the
-  provenance gap stands on its own: it cost a git-log check to answer "is this
-  pack today's?" during that very investigation.*
+- **DBT-2** Add the guid cast to the live-verification suite
+  `DBT-F1` `enabler` `settled`
+  The fix shipped in 1.12.1 without ever being observed against live Azure,
+  and `toguid()` returns null silently on malformed input - so a wrong cast
+  fails the same quiet way the drop did. The suite ran live on 2026-08-25 and
+  carries no guid row. `adr/0004:118-124`.
+
+- **DBT-3** Reconcile the Entra `Kind:Direct` copy with what has been measured
+  `DBT-F2` `story` `settled`
+  `architecture-patterns.ts:422,426` states flatly that native Entra tables do
+  not accept Kind:Direct DCRs, with no snapshot date and no hedge, while the
+  plan doc that is its only source still calls it unverified. Either measure
+  it or carry the caveat.
+
+- **DBT-7** Confirm the `eventsPerSec` 2x multiplier against worker config
+  `DBT-F1` `enabler` `settled`
+  Inferred as the worker-process count from a hard changepoint, not confirmed.
+  `zscaler-lake-lab.md:225-238`.
+
+- **DBT-9** Say "are deleted" instead of "reset" in the Sample Data helper text
+  `DBT-F2` `story` `settled`
+  The deletion is correct and intended; the wording is what misleads. One
+  string. `backlog.md#9`.
+
+- **DBT-14** Stop the solution list swallowing the mouse wheel
+  `DBT-F2` `bug` `settled`
+  Found live 2026-08-27: with the pointer over the list, the wheel moves
+  neither the list nor the page - the pointer must leave the list before
+  anything scrolls. Five of eight results were reachable. This is the
+  reproduction the old nested-scrolling question never had, which is what
+  turns it from an annoyance into a bug. *bug, SETTLED. `backlog.md` item
+  13d.*
+
+- **DBT-15** Give every solution row a delivery-fit badge, or say why not
+  `DBT-F2` `bug` `settled`
+  "Palo Alto Cortex XDR" renders none while all seven of its siblings do.
+  Blank reads as neither "not measured" nor "does not apply" - the
+  absent-versus-zero distinction the inventory standard exists to protect.
+  *bug, SETTLED. `backlog.md` item 13e.*
+
+- **D-2** `HON-7` surface area: which of Integrate deploy, Batch Deploy and DCR Automation get the fallba
+  `HON-F1` `decision` `undecided`
+  ck offer, and does each own its `onProduce`? One prop away in any of them.
+  DECISION (unanswered): HON-7: which screens get the fallback offer, and who
+  owns onProduce?
+    [ ] `each-owns` All three, each wiring its own onProduce - Integrate deploy, Batch Deploy and DCR Automation each pass a producer. One prop per screen, uniform mental model - but for pack and ARM kinds it is a button that cannot really produce the artifact on the spot.
+    [ ] `inline-only` All three get the offer; only INLINE kinds get a button - Honours isInlineArtifact, which already splits these: role-assignment and app-registration are generated from data the app holds, while dcr-arm-bodies, table-arm-bodies, arm-template and cribl-pack come from a RUN. Run kinds point at that run instead of pretending. More wiring, no pretending.
+    [ ] `where-producible` Only where a producer already exists - Batch Deploy already calls ports.artifacts.save; Integrate can hand over the pack build. DCR Automation waits until it has an artifact to give. Smallest step; leaves the capability rule partly unmet.
+
+- **D-3** How do capabilities reach the roughly eight listing screens - keep prop-drilling from the shell
+  `HON-F2` `decision` `undecided`
+  , or carry them in `PortsContext` beside `config`? One seam change against
+  updating every `PortsProvider` call site. Cheap now, less so later; at eight
+  listers this is the duplication that drifts. `backlog.md#4`.
+  DECISION (unanswered): How do capabilities reach the ~8 listing screens?
+    [ ] `prop-drill` Keep prop-drilling from the shell - No seam change; every PortsProvider call site updates. Cheap now, less so later.
+    [ ] `ports-context` Carry them in PortsContext beside config - One seam change. At eight listers this is the duplication that drifts.
+
+- **D-11** `ADR-0004` per-table successor for deprecated guid columns (`AwsRequestId` to `AwsRequestId_`)
+  `HON-F3` `decision` `undecided`
+  Explicitly out of scope for ADR-0004 as a per-table content decision.
+  Matters because CloudTrail's `requestID` is frequently not a UUID, so
+  `toguid()` returns null and drops it silently. `adr/0004:82-86`. --- Source
+  is docs/adr/0004-cast-guid-columns.md, "What is NOT decided here". The card
+  previously tagged AZR-5, which is the diagnostic-settings cleanup and has
+  nothing to do with guid columns.
+  DECISION (unanswered): Route deprecated guid columns to their `_`-suffixed
+  string successor, per table?
+    [ ] `leave-as-is` Leave it at the ADR-0004 cast - AwsRequestId stays declared string and promoted with toguid(). Correct for well-formed UUIDs, but CloudTrail's requestID frequently is not one, so toguid() returns null and the value drops silently - the same quiet failure the ADR set out to fix.
+    [ ] `per-table-successor` Route deprecated guid columns to the `_` successor - Per-table content mapping AwsRequestId to AwsRequestId_. ADR-0004 calls this "a real improvement" but insists it is a per-table CONTENT decision, not a schema-mapping rule, so it must not become a new RULE 2b clause. The bundled catalog already carries both columns for AWSCloudTrail.
 
 ---
 
-## Backlog - later (44)
+## Backlog - later (31)
 
 Settled, gated on something above.
 
@@ -320,6 +412,34 @@ Settled, gated on something above.
   the XDR streaming tables as alert-grain only (AlertInfo, AlertEvidence,
   UrlClickEvents), so complementary is the likely answer - still unverified,
   which is the point.
+
+- **AZR-13** SecurityOnly is offered but cannot be stored - it reverts to Standard
+  `AZR-F3` `bug` `undecided`
+  FOUND by the architecture audit 2026-08-28 (ninth), one commit after AZR-2
+  merged, as a DUPLICATED DECISION: two modules define what Entra profiles
+  exist and they disagree. `entra-diagnostics.ENTRA_PROFILES` has three
+  (SecurityOnly, Standard, HighVolume); the `coverage-catalog` entraId
+  subSelection has two. REPRODUCED, not theorised: storing SecurityOnly
+  through `decodeSelection` yields `subSelections.entraId = ["Standard"]` with
+  `dropped = ["entraId.SecurityOnly"]`. So the one profile an operator cannot
+  keep is precisely the one AZR-2 added by resolving the LOG-07 drift. It is
+  REPORTED in `dropped` rather than lost silently - that mechanism works as
+  built - but nothing reads `dropped` yet and the choice still reverts. Worth
+  recording exactly how the rationale failed: the entra-categories docblock
+  says "the coverage catalog keeps offering the two it always did, because
+  changing what a stored selection MEANS is a separate act". The first half is
+  right - Standard and HighVolume keep their meaning. The second half does not
+  follow from it: declining to make a THIRD value storable is not the same
+  act, and nothing checked whether it was. PARKED 2026-08-28: moved back out
+  of in-progress when the focus shifted to the Sentinel Integration
+  content/pack path. The decision on it is still open and still real.
+  DECISION (unanswered): The coverage catalog is a VERBATIM port of
+  resource-coverage.json, whose `_profileOptions` has only Standard and
+  HighVolume. AZR-2 deliberately added SecurityOnly. Where should the profile
+  list live?
+    [ ] `derive` Catalog derives from entra-diagnostics - ENTRA_PROFILES becomes the single authority and the catalog imports it. The provenance pin changes from "equals the legacy two" to "contains the legacy two, plus SecurityOnly which AZR-2 added deliberately". Removes the duplication for good - but it WEAKENS a verbatim pin written this morning, which is the move check 3 of the audit exists to catch, so it has to be a decision rather than a quiet edit.
+    [ ] `widen-catalog` Hand-add SecurityOnly to the catalog - Smallest diff. Leaves TWO hand-maintained lists that must agree - the duplicated decision that caused this in the first place - so the next profile change breaks it again.
+    [ ] `drop-securityonly` Withdraw SecurityOnly - Keeps the port pristine and re-opens the LOG-07 drift AZR-2 was asked to resolve. Honest, but it undoes a deliberate decision instead of fixing the plumbing under it.
 
 - **AZR-3** Defender for Cloud continuous export
   `AZR-F3` `story` `settled`
@@ -428,68 +548,15 @@ Settled, gated on something above.
   codebase keeps finding. `backlog.md#12`. See also the two decisions under
   VND/decisions below. ### VND - Vendor field definitions
 
-- **VND-3** Measure the column-order shortfall instead of hedging about it
-  `VND-F1` `bug` `undecided`
-  Found live 2026-08-27: THREAT arrived with 38 fields and was named from the
-  bundled 120-column PAN order; TRAFFIC, 41 against 115. Positional naming
-  maps field[i] to name[i], so a feed missing any middle column mis-names
-  everything after it, silently. The copy says "check the values beside each
-  name before applying", which is a hedge where the app already holds the
-  number. *bug, UNDECIDED whether a large shortfall should warn or block.
-  `backlog.md` 13c.*
-  DECISION (unanswered): When a bundled column order far exceeds the event's
-  field count, warn or block?
-    [ ] `measure-only` Show the number, drop the hedge - Replace "check the values beside each name before applying" with the measured 38-of-120 and stop there. backlog.md#13c says it is a number the app already has and could show.
-    [ ] `warn` Warn above a shortfall threshold - A large shortfall warns visibly; Apply stays enabled. Matches the capability model's annotate-never-hide-never-disable rule, and a short feed can still be legitimately named once the order is edited.
-    [ ] `block` Block Apply above the threshold - Disable Apply until the order is edited or explicitly overridden. Strongest guard against mis-naming every column after the first gap, and Skip already preserves the positional _N names - but it runs against the annotate-never-hide rule the rest of the app pins.
-
-- **VND-1** Let the operator name the vendor
-  `VND-F1` `story` `settled` `blocked by D-7`
-  Today the vendor comes from `detectVendorIdentity(solutionName)`, so
-  anything outside `KNOWN_VENDOR_IDENTITIES` stores nothing - honest, but it
-  caps the feature at about eighteen vendors. Needs a UI seam that was
-  deliberately not built. `vendor-field-definition-plan.md:209-214`. ### DBT -
-  Debt, spec grounding, verification Small and mostly independent. Good filler
-  between larger stories.
-
 - **DBT-1** Pin how the REST collector is modelled in the vendored spec
   `DBT-F3` `enabler` `settled`
   `InputRest` has no schema under that name; it is likely `InputCollection`
   with a collector conf. Blocks AZR-7 and WIN-5. `backlog.md#10`.
 
-- **DBT-2** Add the guid cast to the live-verification suite
-  `DBT-F1` `enabler` `settled`
-  The fix shipped in 1.12.1 without ever being observed against live Azure,
-  and `toguid()` returns null silently on malformed input - so a wrong cast
-  fails the same quiet way the drop did. The suite ran live on 2026-08-25 and
-  carries no guid row. `adr/0004:118-124`.
-
-- **DBT-3** Reconcile the Entra `Kind:Direct` copy with what has been measured
-  `DBT-F2` `story` `settled`
-  `architecture-patterns.ts:422,426` states flatly that native Entra tables do
-  not accept Kind:Direct DCRs, with no snapshot date and no hedge, while the
-  plan doc that is its only source still calls it unverified. Either measure
-  it or carry the caveat.
-
-- **DBT-4** Name inline breaker rulesets instead of showing "Default selection"
-  `DBT-F2` `story` `settled`
-  The spec's `EventBreakerExistingOrNewExisting` carries `existingRule`.
-  `backlog.md#9`.
-
 - **DBT-5** Produce live evidence for the `no access` and `not connected` nav states
   `DBT-F1` `enabler` `settled`
   Both are still test-only. ADR-0002 removed the cheapest way to produce them,
   so each now costs a throwaway KV profile. `backlog.md#7`.
-
-- **DBT-6** Exercise the `_raw`-absent branch with a non-Lake sample
-  `DBT-F1` `enabler` `settled`
-  The Lake write path adds `_raw`, so no Lake-sourced bench can reach that
-  branch - it needs a paste or an upload. `zscaler-lake-lab.md:167-179`.
-
-- **DBT-7** Confirm the `eventsPerSec` 2x multiplier against worker config
-  `DBT-F1` `enabler` `settled`
-  Inferred as the worker-process count from a hard changepoint, not confirmed.
-  `zscaler-lake-lab.md:225-238`.
 
 - **DBT-8** Correct the external datagen research note
   `DBT-F4` `enabler` `settled`
@@ -498,11 +565,6 @@ Settled, gated on something above.
   correct shape is `POST /api/v1/m/{group}/system/samples` with a
   `context.events` array, and it is not in the OpenAPI spec.
   `zscaler-lake-lab.md:104-131`.
-
-- **DBT-9** Say "are deleted" instead of "reset" in the Sample Data helper text
-  `DBT-F2` `story` `settled`
-  The deletion is correct and intended; the wording is what misleads. One
-  string. `backlog.md#9`.
 
 - **DBT-10** Reconcile the field matcher's target list with the generator's output
   `DBT-F4` `enabler` `settled`
@@ -520,22 +582,6 @@ Settled, gated on something above.
   `DBT-F3` `enabler` `settled`
   Recurring, conditional. It is derived, not hand-written - do not edit it by
   hand. `backlog.md#10`.
-
-- **DBT-14** Stop the solution list swallowing the mouse wheel
-  `DBT-F2` `bug` `settled`
-  Found live 2026-08-27: with the pointer over the list, the wheel moves
-  neither the list nor the page - the pointer must leave the list before
-  anything scrolls. Five of eight results were reachable. This is the
-  reproduction the old nested-scrolling question never had, which is what
-  turns it from an annoyance into a bug. *bug, SETTLED. `backlog.md` item
-  13d.*
-
-- **DBT-15** Give every solution row a delivery-fit badge, or say why not
-  `DBT-F2` `bug` `settled`
-  "Palo Alto Cortex XDR" renders none while all seven of its siblings do.
-  Blank reads as neither "not measured" nor "does not apply" - the
-  absent-versus-zero distinction the inventory standard exists to protect.
-  *bug, SETTLED. `backlog.md` item 13e.*
 
 - **REL-5** Upload the current package to the lab workspace
   `REL-F1` `enabler` `settled`
@@ -566,24 +612,6 @@ Settled, gated on something above.
   DECISION (unanswered): Where does the HON-6 freshness indicator go?
     [ ] `footer` Frame footer - One always-visible surface, away from the connection chips.
     [ ] `connection-bar` Connection bar - Beside the existing secret / target / platform-link chips.
-
-- **D-2** `HON-7` surface area: which of Integrate deploy, Batch Deploy and DCR Automation get the fallba
-  `HON-F1` `decision` `undecided`
-  ck offer, and does each own its `onProduce`? One prop away in any of them.
-  DECISION (unanswered): HON-7: which screens get the fallback offer, and who
-  owns onProduce?
-    [ ] `each-owns` All three, each wiring its own onProduce - Integrate deploy, Batch Deploy and DCR Automation each pass a producer. One prop per screen, uniform mental model - but for pack and ARM kinds it is a button that cannot really produce the artifact on the spot.
-    [ ] `inline-only` All three get the offer; only INLINE kinds get a button - Honours isInlineArtifact, which already splits these: role-assignment and app-registration are generated from data the app holds, while dcr-arm-bodies, table-arm-bodies, arm-template and cribl-pack come from a RUN. Run kinds point at that run instead of pretending. More wiring, no pretending.
-    [ ] `where-producible` Only where a producer already exists - Batch Deploy already calls ports.artifacts.save; Integrate can hand over the pack build. DCR Automation waits until it has an artifact to give. Smallest step; leaves the capability rule partly unmet.
-
-- **D-3** How do capabilities reach the roughly eight listing screens - keep prop-drilling from the shell
-  `HON-F2` `decision` `undecided`
-  , or carry them in `PortsContext` beside `config`? One seam change against
-  updating every `PortsProvider` call site. Cheap now, less so later; at eight
-  listers this is the duplication that drifts. `backlog.md#4`.
-  DECISION (unanswered): How do capabilities reach the ~8 listing screens?
-    [ ] `prop-drill` Keep prop-drilling from the shell - No seam change; every PortsProvider call site updates. Cheap now, less so later.
-    [ ] `ports-context` Carry them in PortsContext beside config - One seam change. At eight listers this is the duplication that drifts.
 
 - **D-4** `WIN` scope: does the enrichment catalog only report, or does it also produce pipeline enrichme
   `WIN-F2` `decision` `undecided`
@@ -629,17 +657,6 @@ Settled, gated on something above.
     [ ] `stored` Read a stored analysis - Cheap, and goes stale silently.
     [ ] `live-schema` Re-analyse against the LIVE table schema - Shows what changed since the pack was built; the same fetch the picker already makes. Noted on the card as probably the honest one.
 
-- **D-7** `VND-2` Does a persisted column order need a version or a captured-on date, so a firmware chang
-  `VND-F1` `decision` `undecided`
-  e can be reasoned about later rather than silently disagreeing with a future
-  bundled update? The only genuinely open question left in that plan.
-  `vendor-field-definition-plan.md:222-224`.
-  DECISION (unanswered): Should a persisted vendor column order carry a
-  version, a captured-on date, or neither?
-    [ ] `neither` Store neither - Keep vendor + logType + columns + overrides. The silent-disagreement harm is already handled: resolveColumnOrder re-derives the override notice against the CURRENT bundled order, and machine-applied pass-throughs are never stored.
-    [ ] `captured-on` Stamp a captured-on date - Record when the operator captured the order, so a later divergence reads as "captured before that change" rather than an unexplained disagreement. Always available - but it dates the capture, it does not identify the firmware.
-    [ ] `version` Record a version - Sharper than a date, but the version has to come from somewhere: nothing in the sample or the CSV-header dialog supplies one today, so it means asking the operator.
-
 - **D-8** `AZR` Resource Graph change tracking - offer it at all? Recorded under `notSupported` as query-
   `AZR-F5` `decision` `undecided`
   only with no streaming path. If offered, it is a second scheduled collector,
@@ -663,22 +680,9 @@ Settled, gated on something above.
     [ ] `drop-enumeration` Drop the enumeration from the header - Header stops promising what the stepper does not show.
     [ ] `promote-substeps` Promote the sub-steps into the stepper - Stepper starts showing what the header promises.
 
-- **D-11** `ADR-0004` per-table successor for deprecated guid columns (`AwsRequestId` to `AwsRequestId_`)
-  `HON-F3` `decision` `undecided`
-  Explicitly out of scope for ADR-0004 as a per-table content decision.
-  Matters because CloudTrail's `requestID` is frequently not a UUID, so
-  `toguid()` returns null and drops it silently. `adr/0004:82-86`. --- Source
-  is docs/adr/0004-cast-guid-columns.md, "What is NOT decided here". The card
-  previously tagged AZR-5, which is the diagnostic-settings cleanup and has
-  nothing to do with guid columns.
-  DECISION (unanswered): Route deprecated guid columns to their `_`-suffixed
-  string successor, per table?
-    [ ] `leave-as-is` Leave it at the ADR-0004 cast - AwsRequestId stays declared string and promoted with toguid(). Correct for well-formed UUIDs, but CloudTrail's requestID frequently is not one, so toguid() returns null and the value drops silently - the same quiet failure the ADR set out to fix.
-    [ ] `per-table-successor` Route deprecated guid columns to the `_` successor - Per-table content mapping AwsRequestId to AwsRequestId_. ADR-0004 calls this "a real improvement" but insists it is a per-table CONTENT decision, not a schema-mapping rule, so it must not become a new RULE 2b clause. The bundled catalog already carries both columns for AWSCloudTrail.
-
 ---
 
-## Done (20)
+## Done (21)
 
 Kept briefly so a reader can see what just landed; prune when the list grows.
 
@@ -1072,6 +1076,23 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   validator independently again. SWEPT for the same vocabulary elsewhere:
   CLAUDE.md and the grooming skill are clean. Several older cards still carry
   a trailing *chore, settled* marker in their DETAIL prose, left over from the
-  pre-SAFe vocabulary - those are RECORDS of how a card was described when it
-  was written, not instructions, so they are left alone on this documents own
-  rule that a stale record is harmless and a stale instruction is dangerous.
+  pre-SAFe vocabulary - those are RECORDS of how a card was described when
+  written, not instructions, so they are left alone on this documents own rule
+  that a stale record is harmless and a stale instruction is dangerous.
+
+- **DBT-27** Grooming called a deliberate now-then-now sequence a contradiction
+  `DBT-F5` `bug` `settled` `verified: pins`
+  FOUND 2026-08-28 the moment the Sentinel Integration menu was groomed, by
+  the report firing on work that had JUST been sequenced correctly. The rule
+  flagged any now card with an unfinished prerequisite, so promoting D-7 and
+  VND-1 together - answer the decision, then do the work it gates - produced
+  "VND-1 is priority NOW but waits on D-7". That is a plan, not a
+  contradiction, and the messages own words ("either it is not now, or those
+  are") were already satisfied: D-7 IS now. Narrowed to flag only
+  prerequisites that are neither now nor already in-progress, and the message
+  now names just those rather than the whole chain. This is the DBT-19 failure
+  a second time - a report that fires on normal states is one people learn to
+  skim - and it is worth noticing that BOTH instances were found by running
+  the report on a real board rather than by reading it. Four pins,
+  mutation-checked by reverting the filter: three fail. The rule still fires
+  on the real case, a now card blocked by something parked at later.
