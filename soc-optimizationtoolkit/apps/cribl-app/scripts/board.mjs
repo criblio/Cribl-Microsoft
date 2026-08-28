@@ -158,7 +158,61 @@ export function applyDecision(data, storyId, optionKey) {
  * @param {{epics: any[], stories: any[]}} data
  * @returns {string[]} findings, empty when the board is sound
  */
-export function validateBoard(data) {
+/**
+ * Every `## 5.` / `### 6g.` section id in a backlog.md's text.
+ *
+ * @param {string} text
+ * @returns {Set<string>}
+ */
+export function backlogSectionIds(text) {
+  const ids = new Set();
+  for (const line of String(text ?? '').split(/\r?\n/)) {
+    const m = /^#{2,3}\s+(\d+[a-z]?)\.\s+\S/.exec(line);
+    if (m) ids.add(m[1]);
+  }
+  return ids;
+}
+
+/**
+ * Citations from a card into backlog.md.
+ *
+ * WHY ANCHORS AND NOT LINE NUMBERS. Cards used to cite `backlog.md:113-116`.
+ * Nothing checked them, and on 2026-08-28 a count found 7 of 39 landing on
+ * blank lines and several pointing at the wrong topic entirely - AZR-10
+ * ("Dataflow diagrams") had drifted into "Agent-based - AMA plus DCR" - because
+ * backlog.md grows by insertion and every number below the insertion moves.
+ * A pointer that is silently wrong is worse than no pointer: it sends a reader
+ * to confidently read the wrong section.
+ *
+ * Section ids do not move when text is inserted above them, and their existence
+ * IS checkable, which is the whole difference.
+ *
+ * The section list is injected rather than read here so this stays pure; main()
+ * supplies it. Without it the anchors are not resolved - the format rule below
+ * still applies.
+ */
+function citationFindings(story, sections) {
+  const out = [];
+  const detail = story.detail ?? '';
+  for (const m of detail.matchAll(/backlog\.md:(\d+)(?:-\d+)?/g)) {
+    out.push(
+      `${story.id} cites backlog.md:${m[1]} by LINE NUMBER. Line numbers move whenever text is inserted above them; cite a section instead, e.g. backlog.md#6g.`,
+    );
+  }
+  if (sections === undefined) return out;
+  for (const m of detail.matchAll(/backlog\.md#(\d+[a-z]?)\b/g)) {
+    if (!sections.has(m[1])) {
+      out.push(`${story.id} cites backlog.md#${m[1]}, which is not a section in backlog.md.`);
+    }
+  }
+  return out;
+}
+
+/**
+ * @param {{epics: any[], stories: any[]}} data
+ * @param {{backlogSections?: Set<string>}} [options]
+ */
+export function validateBoard(data, options = {}) {
   const out = [];
   const epicKeys = new Set((data.epics ?? []).map((e) => e.key));
   const byId = new Map();
@@ -207,6 +261,7 @@ export function validateBoard(data) {
       out.push(`${s.id} has verified "${s.verified}"; expected ${VERIFIED.join(' | ')}.`);
     }
     out.push(...decisionFindings(s));
+    out.push(...citationFindings(s, options.backlogSections));
   }
 
   // Epics that emptied out. An epic with no stories has either shipped, in which
@@ -398,7 +453,12 @@ async function main() {
   const mdPath = join(docsDir, 'board.md');
   const data = JSON.parse(await readFile(dataPath, 'utf8'));
 
-  const findings = validateBoard(data);
+  // Resolve card citations against the real backlog. A missing backlog is not
+  // fatal - the format rule still applies - but a present one is checked.
+  const backlogText = await readFile(join(docsDir, 'backlog.md'), 'utf8').catch(() => '');
+  const backlogSections = backlogText === '' ? undefined : backlogSectionIds(backlogText);
+
+  const findings = validateBoard(data, { backlogSections });
   const prefix = process.env.GITHUB_ACTIONS === 'true' ? '::error::' : 'error: ';
   for (const f of findings) console.log(`${prefix}${f}`);
   if (findings.length > 0) {

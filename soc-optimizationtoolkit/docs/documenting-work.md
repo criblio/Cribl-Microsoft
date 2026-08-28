@@ -111,6 +111,24 @@ ones prose could not enforce: no cycles, no dependency on a story that does not
 exist, nothing in progress whose blocker is still in the backlog, and nothing
 done that depends on something open.
 
+**Cite backlog sections, not line numbers.** A card points into its reasoning
+as `backlog.md#6g` - the numbered section - and `check-board` verifies that
+section exists. Line numbers were tried and they rot: `backlog.md` grows by
+insertion, so every number below the insertion moves. A count on 2026-08-28
+found 7 of 39 line citations landing on blank lines and several pointing at the
+wrong topic entirely, including one about dataflow diagrams that had drifted
+into the agent-based section. A pointer that is silently wrong is worse than no
+pointer, because it sends a reader to confidently read the wrong thing.
+
+**Two checks, doing different jobs.** `check-board` proves `board.md` matches
+`board.json` and that the data is coherent. It does NOT say the board still
+describes the repo - only that it is internally consistent. That second question
+is `check-board-freshness`, which runs on pull requests and says so when watched
+source moved and `board.json` did not. It is a warning, not a gate: a rename or
+a typo fix legitimately touches source without moving a card, and a check that
+blocks on judgement gets routed around. What it must not be is silent, which is
+what it was when the rule lived only in a local hook.
+
 `settled` and `verified` are different axes and are easy to conflate. `settled`
 is decision-confidence - whether anything is still undecided. `verified` is
 evidence - how a finished story was confirmed. A story can be perfectly settled

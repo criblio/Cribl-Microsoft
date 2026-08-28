@@ -12,7 +12,13 @@
 // notice.
 
 import { describe, expect, it } from 'vitest';
-import { applyDecision, blockers, renderBoard, validateBoard } from './board.mjs';
+import {
+  applyDecision,
+  backlogSectionIds,
+  blockers,
+  renderBoard,
+  validateBoard,
+} from './board.mjs';
 
 /** A story carrying an open question with two spelled-out alternatives. */
 const withDecision = (over = {}, decision = {}) =>
@@ -258,6 +264,62 @@ describe('validateBoard - decisions', () => {
     expect(
       validateBoard(board([withDecision({ settled: 'settled' }, { chosen: 'footer' })])),
     ).toEqual([]);
+  });
+});
+
+describe('backlogSectionIds', () => {
+  it('reads ## and ### numbered section ids, including letter suffixes', () => {
+    const ids = backlogSectionIds(
+      ['# Backlog', '## 5. Windows Event analysis screen', '### 6g. Dataflow diagrams', 'prose'].join(
+        '\n',
+      ),
+    );
+
+    expect([...ids].sort()).toEqual(['5', '6g']);
+  });
+
+  it('ignores headings that are not numbered sections', () => {
+    expect([...backlogSectionIds('## Overview\n### Notes\n#### 9. Too deep')]).toEqual([]);
+  });
+});
+
+describe('validateBoard - citations into backlog.md', () => {
+  const cite = (detail) => board([story({ detail })]);
+
+  it('REJECTS a line-number citation', () => {
+    // The 2026-08-28 count: 7 of 39 line citations had drifted onto blank
+    // lines and several pointed at the wrong section entirely, because
+    // backlog.md grows by insertion. A silently wrong pointer sends a reader
+    // to confidently read the wrong thing.
+    const out = validateBoard(cite('see backlog.md:113-116'));
+
+    expect(out).toHaveLength(1);
+    expect(out[0]).toContain('by LINE NUMBER');
+  });
+
+  it('accepts an anchor that resolves to a real section', () => {
+    expect(
+      validateBoard(cite('see backlog.md#6g'), { backlogSections: new Set(['6g']) }),
+    ).toEqual([]);
+  });
+
+  it('REJECTS an anchor with no such section', () => {
+    const out = validateBoard(cite('see backlog.md#99z'), {
+      backlogSections: new Set(['6g']),
+    });
+
+    expect(out).toHaveLength(1);
+    expect(out[0]).toContain('not a section in backlog.md');
+  });
+
+  it('still rejects the line format when no section list is supplied', () => {
+    // The format rule does not need the backlog to be readable; only anchor
+    // RESOLUTION does. A missing backlog must not silently disable the check.
+    expect(validateBoard(cite('see backlog.md:900'))).toHaveLength(1);
+  });
+
+  it('leaves anchors unresolved, not rejected, without a section list', () => {
+    expect(validateBoard(cite('see backlog.md#6g'))).toEqual([]);
   });
 });
 

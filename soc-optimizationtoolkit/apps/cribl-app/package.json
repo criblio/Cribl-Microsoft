@@ -16,7 +16,8 @@
     "package": "npm run build && node scripts/package.mjs",
     "board": "node scripts/board.mjs",
     "board:serve": "node scripts/board-serve.mjs",
-    "check-board": "node scripts/board.mjs --check"
+    "check-board": "node scripts/board.mjs --check",
+    "check-board-freshness": "node scripts/board-freshness.mjs"
   },
   "dependencies": {
     "@soc/core": "*",
