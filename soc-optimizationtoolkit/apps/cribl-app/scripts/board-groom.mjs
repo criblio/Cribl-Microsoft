@@ -16,7 +16,7 @@
 // wrapped around it supplies the judgement, because the arithmetic can say a
 // card gates five others and still cannot say whether that matters this week.
 
-import { blockers, PRIORITIES } from './board.mjs';
+import { blockers, MENUS, PRIORITIES } from './board.mjs';
 
 /**
  * Rank by POSITION in the declared vocabulary, not a hardcoded map.
@@ -235,12 +235,61 @@ export function groomingFindings(data) {
 }
 
 /** The human-readable report. */
-export function renderGroom(data, today) {
+/**
+ * Narrow a board to ONE menu item, keeping the features and epics that still
+ * have stories. Added 2026-08-28 so grooming can answer the question the board
+ * is most often asked - what is left before menu X works end to end.
+ *
+ * Filtering the STORIES only would leave the leverage and blocker counts
+ * measuring the whole board while the listing showed one menu, which is the
+ * kind of half-applied filter that reads as a smaller number rather than a
+ * different question. Dependencies ACROSS menus are kept and marked, because a
+ * card outside the menu that blocks one inside it is exactly what an
+ * end-to-end push needs to know about.
+ */
+export function forMenu(data, menu) {
+  const featureById = new Map((data.features ?? []).map((f) => [f.id, f]));
+  const inMenu = (s) => (s.menu ?? featureById.get(s.feature)?.menu) === menu;
+  const kept = (data.stories ?? []).filter(inMenu);
+  const keptIds = new Set(kept.map((s) => s.id));
+  const outside = new Map();
+  for (const s of kept) {
+    for (const dep of s.dependsOn ?? []) {
+      if (keptIds.has(dep)) continue;
+      const d = (data.stories ?? []).find((x) => x.id === dep);
+      if (d !== undefined) outside.set(dep, d);
+    }
+  }
+  const stories = [...kept, ...outside.values()];
+  const featureIds = new Set(stories.map((s) => s.feature));
+  const features = (data.features ?? []).filter((f) => featureIds.has(f.id));
+  const epicKeys = new Set(features.map((f) => f.epic));
+  return {
+    ...data,
+    stories,
+    features,
+    epics: (data.epics ?? []).filter((e) => epicKeys.has(e.key)),
+    crossMenu: [...outside.keys()],
+  };
+}
+
+export function renderGroom(data, today, menu) {
+  if (menu !== undefined) data = forMenu(data, menu);
   const goals = goalPlan(data);
   const findings = groomingFindings(data);
   const L = [];
-  L.push(`Backlog grooming - ${today}`);
+  L.push(`Backlog grooming - ${today}${menu === undefined ? '' : ` - ${menu} only`}`);
   L.push('');
+  if (menu !== undefined) {
+    const open = data.stories.filter((s) => s.status !== 'done').length;
+    L.push(`${open} open of ${data.stories.length} shown.`);
+    if ((data.crossMenu ?? []).length > 0) {
+      L.push(
+        `Pulled in from other menus because something here waits on them: ${data.crossMenu.join(', ')}.`,
+      );
+    }
+    L.push('');
+  }
 
   const byKind = (k) => findings.filter((f) => f.kind === k);
   const sections = [
@@ -289,7 +338,21 @@ async function main() {
   const docsDir = join(here, '..', '..', '..', 'docs');
   const data = JSON.parse(await readFile(join(docsDir, 'board.json'), 'utf8'));
   const today = new Date().toISOString().slice(0, 10);
-  console.log(renderGroom(data, today));
+  // `npm run groom -- integrate`, or `--menu integrate` when called directly.
+  //
+  // Both forms, because npm eats the flag: `npm run groom -- --menu integrate`
+  // arrives as `node board-groom.mjs integrate` with a warning, so a flag-only
+  // parser silently reports the WHOLE board while the header says one menu -
+  // a filter that quietly does nothing is worse than no filter.
+  const argv = process.argv.slice(2);
+  const flag = argv.indexOf('--menu');
+  const asked = flag === -1 ? argv.find((a) => !a.startsWith('-')) : argv[flag + 1];
+  if (asked !== undefined && !MENUS.includes(asked)) {
+    console.error(`Unknown menu "${asked}". One of: ${MENUS.join(', ')}`);
+    process.exitCode = 1;
+    return;
+  }
+  console.log(renderGroom(data, today, asked));
 }
 
 if (process.argv[1] && (await import('node:url')).fileURLToPath(import.meta.url) === process.argv[1]) {

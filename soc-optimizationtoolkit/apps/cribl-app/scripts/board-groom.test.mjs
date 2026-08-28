@@ -8,6 +8,7 @@
 import { describe, expect, it } from 'vitest';
 import { PRIORITIES } from './board.mjs';
 import {
+  forMenu,
   goalPlan,
   groomingFindings,
   isReady,
@@ -33,7 +34,7 @@ const story = (over) => ({
 
 const board = (stories, epics, features) => ({
   epics: epics ?? [{ key: 'A', name: 'Epic A', why: '' }],
-  features: features ?? [{ id: 'A-F1', epic: 'A', title: 'A feature' }],
+  features: features ?? [{ id: 'A-F1', epic: 'A', menu: 'none', title: 'A feature' }],
   stories,
 });
 
@@ -328,5 +329,76 @@ describe('renderGroom', () => {
     const text = renderGroom(board(stories), '2026-08-28');
 
     expect(text).toContain('do first: A-1');
+  });
+});
+
+describe('forMenu - narrowing the board to one menu item', () => {
+  const TWO_MENUS = [
+    { id: 'A-F1', epic: 'A', menu: 'integrate', title: 'Integrate work' },
+    { id: 'B-F1', epic: 'B', menu: 'packs', title: 'Packs work' },
+  ];
+  const EPICS = [
+    { key: 'A', name: 'Epic A', why: '' },
+    { key: 'B', name: 'Epic B', why: '' },
+  ];
+
+  it('keeps only the stories whose menu matches', () => {
+    const data = board(
+      [story({ id: 'A-1' }), story({ id: 'B-1', epic: 'B', feature: 'B-F1' })],
+      EPICS,
+      TWO_MENUS,
+    );
+
+    expect(forMenu(data, 'integrate').stories.map((s) => s.id)).toEqual(['A-1']);
+  });
+
+  it('honours a STORY override, not just its feature', () => {
+    const data = board(
+      [story({ id: 'A-1' }), story({ id: 'A-2', menu: 'packs' })],
+      EPICS,
+      TWO_MENUS,
+    );
+
+    expect(forMenu(data, 'integrate').stories.map((s) => s.id)).toEqual(['A-1']);
+    expect(forMenu(data, 'packs').stories.map((s) => s.id)).toEqual(['A-2']);
+  });
+
+  it('PULLS IN a blocker from another menu, and names it', () => {
+    // The point of the whole exercise: a card outside the menu that gates one
+    // inside it is exactly what an end-to-end push has to know about. Dropping
+    // it would report the goal as READY when it is not.
+    const data = board(
+      [
+        story({ id: 'A-1', dependsOn: ['B-1'] }),
+        story({ id: 'B-1', epic: 'B', feature: 'B-F1' }),
+      ],
+      EPICS,
+      TWO_MENUS,
+    );
+    const narrowed = forMenu(data, 'integrate');
+
+    expect(narrowed.stories.map((s) => s.id).sort()).toEqual(['A-1', 'B-1']);
+    expect(narrowed.crossMenu).toEqual(['B-1']);
+  });
+
+  it('drops features and epics left with no story', () => {
+    const data = board(
+      [story({ id: 'A-1' }), story({ id: 'B-1', epic: 'B', feature: 'B-F1' })],
+      EPICS,
+      TWO_MENUS,
+    );
+    const narrowed = forMenu(data, 'integrate');
+
+    expect(narrowed.features.map((f) => f.id)).toEqual(['A-F1']);
+    expect(narrowed.epics.map((e) => e.key)).toEqual(['A']);
+  });
+
+  it('says in the header which menu it narrowed to', () => {
+    // A filtered report that looks like an unfiltered one is how a smaller
+    // number gets read as progress.
+    const data = board([story({ id: 'A-1' })], EPICS, TWO_MENUS);
+
+    expect(renderGroom(data, '2026-08-28', 'integrate')).toContain('integrate only');
+    expect(renderGroom(data, '2026-08-28')).not.toContain('only');
   });
 });

@@ -48,6 +48,94 @@ export const PRIORITIES = ['now', 'next', 'later'];
  */
 const TYPES = ['story', 'enabler', 'spike', 'bug', 'decision'];
 
+/**
+ * WHICH MENU ITEM a piece of work is about. Added 2026-08-28 (user request) so
+ * the board can be read the way the product is navigated - "what is left before
+ * Sentinel Integration works end to end" is the question this answers, and
+ * before this the only way to ask it was to read 81 cards.
+ *
+ * The SHIPPED ids are the app's own route ids, copied from the nav registration
+ * in `apps/cribl-app/src/App.tsx`, so the vocabulary cannot describe a menu the
+ * app does not have. Their order here is the nav's order, by section.
+ *
+ * Two ids are NOT routes and are marked so below, because conflating them with
+ * shipped menus is how a rollup starts overstating what exists:
+ *
+ *   azure-onboarding  PLANNED. backlog.md#6 calls it a menu item; there is no
+ *                     route, no screen, and AZR is the epic that builds it
+ *   windows-events    PLANNED. backlog.md#5's Windows Event analysis screen
+ *
+ * And one is the honest escape hatch:
+ *
+ *   none              genuinely cross-cutting - release mechanics, the board's
+ *                     own tooling, docs. NOT a dumping ground for "unsure":
+ *                     if a card changes what an operator sees anywhere, it has
+ *                     a menu.
+ */
+export const MENUS = [
+  // journey
+  'architecture',
+  'home',
+  'integrate',
+  'dcr-automation',
+  'packs',
+  // tools
+  'repositories',
+  'labs',
+  'logs',
+  'settings',
+  // development
+  'siem-migration',
+  'preflight',
+  'eventhub-discovery',
+  'mapping-catalog',
+  // diagnostics
+  'harness',
+  // planned - no route exists yet
+  'azure-onboarding',
+  'windows-events',
+  // cross-cutting
+  'none',
+];
+
+/** Human labels, matching the nav exactly where a route exists. */
+export const MENU_LABELS = {
+  architecture: 'Dataflow',
+  home: 'Setup',
+  integrate: 'Sentinel Integration',
+  'dcr-automation': 'DCR Automation',
+  packs: 'Pack Maintenance',
+  repositories: 'Repositories',
+  labs: 'Labs',
+  logs: 'Logs',
+  settings: 'Settings',
+  'siem-migration': 'SIEM Migration',
+  preflight: 'Permission Verification',
+  'eventhub-discovery': 'Event Hub Discovery',
+  'mapping-catalog': 'Mapping Catalog',
+  harness: 'Diagnostics',
+  'azure-onboarding': 'Azure Native Source Onboarding (planned)',
+  'windows-events': 'Windows Event analysis (planned)',
+  none: 'Cross-cutting',
+};
+
+/** The two that name a screen nobody can open yet. */
+export const PLANNED_MENUS = ['azure-onboarding', 'windows-events'];
+
+/**
+ * A story's menu: its own if it overrides, otherwise its feature's.
+ *
+ * The tag lives on the FEATURE by default and stories inherit, for the same
+ * reason `epic` does - 26 features are maintainable by hand and 81 stories are
+ * not, and a feature that spans two menus is usually a feature that wants
+ * splitting. The per-story override exists because a few genuinely differ: a
+ * doc card under a product feature, say.
+ */
+export function menuOf(story, featureById) {
+  if (story.menu !== undefined) return story.menu;
+  return featureById.get(story.feature)?.menu;
+}
+
 /** Business epics deliver value; enabler epics exist to unblock other epics. */
 const EPIC_KINDS = ['business', 'enabler'];
 
@@ -283,6 +371,16 @@ function hierarchyFindings(data, sections) {
     if (f.anchor !== undefined && sections !== undefined && !sections.has(f.anchor)) {
       out.push(`Feature ${f.id} cites backlog.md#${f.anchor}, which is not a section.`);
     }
+    // REQUIRED on a feature, because the whole value of the tag is being able
+    // to ask "what is left for menu X" and get an answer that is not quietly
+    // missing a third of the board.
+    if (f.menu === undefined) {
+      out.push(`Feature ${f.id} has no menu. Use "none" if it is genuinely cross-cutting.`);
+    } else if (!MENUS.includes(f.menu)) {
+      out.push(
+        `Feature ${f.id} has menu "${f.menu}", which is not a menu item (${MENUS.join(' | ')}).`,
+      );
+    }
   }
 
   const featureById = new Map((data.features ?? []).map((f) => [f.id, f]));
@@ -290,6 +388,17 @@ function hierarchyFindings(data, sections) {
     if (s.feature === undefined) {
       out.push(`${s.id} belongs to no feature. Every story sits under one.`);
       continue;
+    }
+    // An OVERRIDE must still name a real menu, and must actually differ -
+    // a story restating its feature's menu is a second copy that can go stale.
+    if (s.menu !== undefined) {
+      if (!MENUS.includes(s.menu)) {
+        out.push(`${s.id} has menu "${s.menu}", which is not a menu item.`);
+      } else if (featureById.get(s.feature)?.menu === s.menu) {
+        out.push(
+          `${s.id} repeats its feature's menu "${s.menu}". Stories inherit; drop the field.`,
+        );
+      }
     }
     const f = featureById.get(s.feature);
     if (f === undefined) {
@@ -485,6 +594,32 @@ export function renderBoard(data, today) {
   L.push(`**${count((s) => s.status === 'backlog')} in the backlog, ${count((s) => s.status === 'in-progress')} in progress, ${count((s) => s.status === 'done')} done.**`);
   L.push('');
 
+  // BY MENU ITEM, first, because it is the question most often asked of this
+  // board: what is left before menu X works end to end. The SAFe rollup below
+  // answers a different one - how the work is grouped - and answering that
+  // first buried this.
+  const featureById0 = new Map((data.features ?? []).map((f) => [f.id, f]));
+  const open = data.stories.filter((s) => s.status !== 'done');
+  L.push('## By menu item');
+  L.push('');
+  L.push('Which part of the product each card is about, using the app\'s own route');
+  L.push('ids. `Cross-cutting` is release mechanics, docs and board tooling - work no');
+  L.push('operator sees on any screen. Two menus are PLANNED and have no route yet.');
+  L.push('');
+  L.push('| Menu | Open | Done | Now |');
+  L.push('|---|---|---|---|');
+  for (const menu of MENUS) {
+    const mine = data.stories.filter((s) => menuOf(s, featureById0) === menu);
+    if (mine.length === 0) continue;
+    const openN = mine.filter((s) => s.status !== 'done').length;
+    const doneN = mine.filter((s) => s.status === 'done').length;
+    const nowN = mine.filter((s) => s.status !== 'done' && s.priority === 'now').length;
+    L.push(`| ${MENU_LABELS[menu] ?? menu} | ${openN} | ${doneN} | ${nowN} |`);
+  }
+  L.push('');
+  L.push(`Open work totals ${open.length}.`);
+  L.push('');
+
   // SAFe hierarchy: Epic > Feature > Story. Rendered as a rollup so the shape
   // is readable without opening the data.
   L.push('## Epics and features');
@@ -504,13 +639,17 @@ export function renderBoard(data, today) {
     L.push('');
     L.push(e.why);
     L.push('');
-    L.push('| Feature | Done | Stories |');
-    L.push('|---|---|---|');
+    L.push('| Feature | Menu | Done | Stories |');
+    L.push('|---|---|---|---|');
     for (const f of feats) {
       const kids = data.stories.filter((s) => s.feature === f.id);
       const kd = kids.filter((s) => s.status === 'done').length;
-      const ids = kids.map((s) => s.id).join(', ');
-      L.push(`| \`${f.id}\` ${f.title} | ${kd}/${kids.length} | ${ids} |`);
+      // A story that overrides gets a * so the table does not silently claim
+      // its feature's menu covers everything underneath.
+      const ids = kids.map((s) => (s.menu === undefined ? s.id : `${s.id}*`)).join(', ');
+      L.push(
+        `| \`${f.id}\` ${f.title} | ${MENU_LABELS[f.menu] ?? f.menu} | ${kd}/${kids.length} | ${ids} |`,
+      );
     }
     L.push('');
   }

@@ -285,6 +285,7 @@
       "id": "HON-7",
       "epic": "HON",
       "feature": "HON-F1",
+      "menu": "integrate",
       "title": "Make the fallback offer reachable beside the actions",
       "type": "story",
       "status": "backlog",
@@ -315,6 +316,7 @@
       "type": "spike",
       "status": "done",
       "settled": "settled",
+      "verified": "none",
       "dependsOn": [],
       "decision": {
         "question": "Should the app create Cribl sources over the API, or keep exporting config to import?",
@@ -337,8 +339,7 @@
         ],
         "chosen": "connected-or-airgap"
       },
-      "detail": "Every `/system/inputs` reference in the codebase is a read; Event Hub Discovery ends at a JSON download (`eventhub-discovery-screen.tsx:503-515`). The write-side plumbing exists (`guided-deploy/wire-source.ts`, `secret-provisioning.ts`) but a `POST /system/inputs` applier is net-new. This decision constrains AZR-2, AZR-4, AZR-6 and AZR-8, so make it once, early, on the smallest surface.  Then, in order: ANSWERED 2026-08-28 (user): connected-or-airgap. Reasoning recorded at backlog.md#6h, which is what settles it - the click alone never does. It is not a new stance: it is the convention secret-provisioning settled on 2026-07-03 (one convention, two delivery paths), so onboarding behaves the way the deploy path already behaves rather than the codebase carrying a third opinion about what to do with no Cribl to talk to. It refuses both halves of the false choice - pure export leaves four sections ending at a manual import step, pure API makes an air-gapped install impossible, and air-gap is a shipped path with its own export module. COMMITS TO BUILDING a POST /system/inputs applier gated on source.manage (net-new; every current reference is a read). CONSTRAINT carried forward: the connectedness test must be the one the app already uses, not a new probe - two answers to \"is there a Cribl here\" is the duplicated-decision shape the capability model exists to end. *spike, closed by decision.*",
-      "verified": "none"
+      "detail": "Every `/system/inputs` reference in the codebase is a read; Event Hub Discovery ends at a JSON download (`eventhub-discovery-screen.tsx:503-515`). The write-side plumbing exists (`guided-deploy/wire-source.ts`, `secret-provisioning.ts`) but a `POST /system/inputs` applier is net-new. This decision constrains AZR-2, AZR-4, AZR-6 and AZR-8, so make it once, early, on the smallest surface.  Then, in order: ANSWERED 2026-08-28 (user): connected-or-airgap. Reasoning recorded at backlog.md#6h, which is what settles it - the click alone never does. It is not a new stance: it is the convention secret-provisioning settled on 2026-07-03 (one convention, two delivery paths), so onboarding behaves the way the deploy path already behaves rather than the codebase carrying a third opinion about what to do with no Cribl to talk to. It refuses both halves of the false choice - pure export leaves four sections ending at a manual import step, pure API makes an air-gapped install impossible, and air-gap is a shipped path with its own export module. COMMITS TO BUILDING a POST /system/inputs applier gated on source.manage (net-new; every current reference is a read). CONSTRAINT carried forward: the connectedness test must be the one the app already uses, not a new probe - two answers to \"is there a Cribl here\" is the duplicated-decision shape the capability model exists to end. *spike, closed by decision.*"
     },
     {
       "id": "AZR-0",
@@ -348,9 +349,9 @@
       "type": "enabler",
       "status": "done",
       "settled": "settled",
+      "verified": "pins",
       "dependsOn": [],
-      "detail": "The checkbox model exists as a file - port it, do not invent one. Its `method` values ARE the section keys. Keep the tier/profile sub-selections and the `notSupported` block verbatim. Precedes every sub-item. `backlog.md#6`. BUILT 2026-08-28 as `domain/coverage-model`, split in two: `coverage-catalog` is what CAN be ticked (ported, shipped in code) and `coverage-selection` is what IS ticked (KV store, key `azure-coverage-selection`). What ticking MEANS stays in AZR-1s `onboarding-selection`, which this feeds. THE PORT IS PINNED AGAINST ITS SOURCE: the tests read the real `resource-coverage.json` off disk and compare description, note, method, resourceCount, community tier details, Entra profiles, the notSupported block and the XDR unsupported-tables list. Mutation-checked three ways - a one-word paraphrase fails, deleting a ported source fails a separate completeness pin that walks the legacy file for anything missed, and removing the legacy file makes the pins fail LOUDLY with instructions rather than skip. HONEST GAP: the legacy file covers four of the six sections. 6d (pull collectors) and 6f (agent-based) have no entry and are NOT stubbed - an empty section would report coverage the port cannot back; AZR-7 and AZR-9 add them. Decoding reports what it drops, because a silently dropped id leaves a box unticked while the thing is still deployed. Not done: the screen, the KV adapter binding (shell), prerequisite ordering.",
-      "verified": "pins"
+      "detail": "The checkbox model exists as a file - port it, do not invent one. Its `method` values ARE the section keys. Keep the tier/profile sub-selections and the `notSupported` block verbatim. Precedes every sub-item. `backlog.md#6`. BUILT 2026-08-28 as `domain/coverage-model`, split in two: `coverage-catalog` is what CAN be ticked (ported, shipped in code) and `coverage-selection` is what IS ticked (KV store, key `azure-coverage-selection`). What ticking MEANS stays in AZR-1s `onboarding-selection`, which this feeds. THE PORT IS PINNED AGAINST ITS SOURCE: the tests read the real `resource-coverage.json` off disk and compare description, note, method, resourceCount, community tier details, Entra profiles, the notSupported block and the XDR unsupported-tables list. Mutation-checked three ways - a one-word paraphrase fails, deleting a ported source fails a separate completeness pin that walks the legacy file for anything missed, and removing the legacy file makes the pins fail LOUDLY with instructions rather than skip. HONEST GAP: the legacy file covers four of the six sections. 6d (pull collectors) and 6f (agent-based) have no entry and are NOT stubbed - an empty section would report coverage the port cannot back; AZR-7 and AZR-9 add them. Decoding reports what it drops, because a silently dropped id leaves a box unticked while the thing is still deployed. Not done: the screen, the KV adapter binding (shell), prerequisite ordering."
     },
     {
       "id": "AZR-1",
@@ -360,9 +361,9 @@
       "type": "enabler",
       "status": "done",
       "settled": "settled",
+      "verified": "pins",
       "dependsOn": [],
-      "detail": "Checkboxes only ever deploy; unticking removes from the desired selection and does nothing to Azure; teardown is a separate, separately-confirmed Remove action. No checkbox may destroy anything - pin that with a test. The UI must distinguish \"not selected\" from \"not deployed\". `backlog.md#6h`. BUILT 2026-08-28 as `domain/onboarding-selection`, BEFORE the screen rather than after it, so no checkbox UI ever existed without the rule. The contract is carried by the TYPE first: `DeployPlan` has no removal field, so a removal is not something the deploy path declines to emit but something it cannot express - adding one is rejected by `tsc` (TS2353) and then by a pin. `removalPlan` is the only path that can tear down, and it needs explicit ids plus `confirmed: true`; an empty list refuses as \"remove nothing\" rather than reading as a wildcard. The four states are named once in `itemState`, with `deployed-unselected` the one the decision exists to keep visible. 15 pins, the headline one exhaustive over all 64 (desired, deployed) pairs of a 3-item universe. Mutation-checked twice: dropping `leftInPlace` (the reconcile bug) fails 4 pins, adding a `remove` field fails the structural pin and the compiler. NOT built: the Remove action's discoverability (no screen yet) and the prerequisite ordering `backlog.md#6h` flags.",
-      "verified": "pins"
+      "detail": "Checkboxes only ever deploy; unticking removes from the desired selection and does nothing to Azure; teardown is a separate, separately-confirmed Remove action. No checkbox may destroy anything - pin that with a test. The UI must distinguish \"not selected\" from \"not deployed\". `backlog.md#6h`. BUILT 2026-08-28 as `domain/onboarding-selection`, BEFORE the screen rather than after it, so no checkbox UI ever existed without the rule. The contract is carried by the TYPE first: `DeployPlan` has no removal field, so a removal is not something the deploy path declines to emit but something it cannot express - adding one is rejected by `tsc` (TS2353) and then by a pin. `removalPlan` is the only path that can tear down, and it needs explicit ids plus `confirmed: true`; an empty list refuses as \"remove nothing\" rather than reading as a wildcard. The four states are named once in `itemState`, with `deployed-unselected` the one the decision exists to keep visible. 15 pins, the headline one exhaustive over all 64 (desired, deployed) pairs of a 3-item universe. Mutation-checked twice: dropping `leftInPlace` (the reconcile bug) fails 4 pins, adding a `remove` field fails the structural pin and the compiler. NOT built: the Remove action's discoverability (no screen yet) and the prerequisite ordering `backlog.md#6h` flags."
     },
     {
       "id": "AZR-2",
@@ -372,13 +373,13 @@
       "type": "story",
       "status": "done",
       "settled": "settled",
+      "verified": "pins",
       "dependsOn": [
         "AZR-S2",
         "AZR-0",
         "AZR-1"
       ],
-      "detail": "One ARM PUT to `microsoft.aadiam/diagnosticSettings`, catalogued as porting nearly one-to-one. Checkbox grain is the category, with Standard (9) and HighVolume (15) as presets, and the non-interactive sign-in volume warning at its own checkbox rather than in a footnote. Requires an Entra directory-role precondition, which the ARM RBAC evaluator provably cannot measure - a real finding this slice surfaces early. Non-negotiable: state the `_CL` divergence and UEBA consequence at the moment a sign-in category is ticked. Resolve the LOG-07 drift (a SecurityOnly profile that `resource-coverage.json` omits). `backlog.md#6b`. BUILT 2026-08-28 as `domain/entra-diagnostics`. One tenant-level ARM PUT to microsoft.aadiam/diagnosticSettings at api-version 2017-04-01. LOG-07 DRIFT RESOLVED in favour of the script, which is the thing that actually ran: all three profiles ship - SecurityOnly (6), Standard (9), HighVolume (15) - with members pinned against the legacy .ps1 read off disk, the same provenance approach AZR-0 used. The coverage catalog still offers the two it always did, because changing what a stored selection MEANS is a separate act. Both consequences ride their categories: the 5-10x warning sits on NonInteractiveUserSignInLogs, only 2 of 15 carry a volume warning (pinned so it cannot drift into noise), and the UEBA warning names the TABLE - exactly four categories are UEBA-bound, and NonInteractiveUserSignInLogs is deliberately NOT one, with its own pin because that is the plausible-sounding fabrication. THE PREDICTED FINDING, SURFACED: the Entra directory-role precondition is modelled UNMEASURABLE rather than unmeasured. The preflight reads ARM RBAC effective actions; Entra directory roles are not ARM role assignments and appear in no scope response, so no new capability entry would close it - it needs Graph. Calling it merely unchecked would be a preflight returning green for something it never examined. Mutation-checked: dropping a category from a profile fails 3 pins, and fabricating the NonInteractive UEBA binding fails 2. A SECOND drift found and fixed in passing: backlog 6b prose listed 5 HighVolume additions for a count of 15 when the script adds 6 - RemoteNetworkHealthLogs was missing. Not built: the screen, and the Event Hub namespace (LOG-03) this points at.",
-      "verified": "pins"
+      "detail": "One ARM PUT to `microsoft.aadiam/diagnosticSettings`, catalogued as porting nearly one-to-one. Checkbox grain is the category, with Standard (9) and HighVolume (15) as presets, and the non-interactive sign-in volume warning at its own checkbox rather than in a footnote. Requires an Entra directory-role precondition, which the ARM RBAC evaluator provably cannot measure - a real finding this slice surfaces early. Non-negotiable: state the `_CL` divergence and UEBA consequence at the moment a sign-in category is ticked. Resolve the LOG-07 drift (a SecurityOnly profile that `resource-coverage.json` omits). `backlog.md#6b`. BUILT 2026-08-28 as `domain/entra-diagnostics`. One tenant-level ARM PUT to microsoft.aadiam/diagnosticSettings at api-version 2017-04-01. LOG-07 DRIFT RESOLVED in favour of the script, which is the thing that actually ran: all three profiles ship - SecurityOnly (6), Standard (9), HighVolume (15) - with members pinned against the legacy .ps1 read off disk, the same provenance approach AZR-0 used. The coverage catalog still offers the two it always did, because changing what a stored selection MEANS is a separate act. Both consequences ride their categories: the 5-10x warning sits on NonInteractiveUserSignInLogs, only 2 of 15 carry a volume warning (pinned so it cannot drift into noise), and the UEBA warning names the TABLE - exactly four categories are UEBA-bound, and NonInteractiveUserSignInLogs is deliberately NOT one, with its own pin because that is the plausible-sounding fabrication. THE PREDICTED FINDING, SURFACED: the Entra directory-role precondition is modelled UNMEASURABLE rather than unmeasured. The preflight reads ARM RBAC effective actions; Entra directory roles are not ARM role assignments and appear in no scope response, so no new capability entry would close it - it needs Graph. Calling it merely unchecked would be a preflight returning green for something it never examined. Mutation-checked: dropping a category from a profile fails 3 pins, and fabricating the NonInteractive UEBA binding fails 2. A SECOND drift found and fixed in passing: backlog 6b prose listed 5 HighVolume additions for a count of 15 when the script adds 6 - RemoteNetworkHealthLogs was missing. Not built: the screen, and the Event Hub namespace (LOG-03) this points at."
     },
     {
       "id": "AZR-13",
@@ -731,6 +732,7 @@
       "id": "DBT-5",
       "epic": "DBT",
       "feature": "DBT-F1",
+      "menu": "none",
       "title": "Produce live evidence for the `no access` and `not connected` nav states",
       "type": "enabler",
       "status": "backlog",
@@ -915,6 +917,7 @@
       "id": "D-2",
       "epic": "HON",
       "feature": "HON-F1",
+      "menu": "integrate",
       "title": "`HON-7` surface area: which of Integrate deploy, Batch Deploy and DCR Automation get the fallba",
       "type": "decision",
       "status": "backlog",
@@ -1120,6 +1123,7 @@
       "id": "D-10",
       "epic": "DBT",
       "feature": "DBT-F2",
+      "menu": "home",
       "title": "`DBT` Setup wizard header promises three phases while the stepper shows one",
       "type": "decision",
       "status": "backlog",
@@ -1300,9 +1304,9 @@
       "type": "bug",
       "status": "done",
       "settled": "settled",
+      "verified": "none",
       "dependsOn": [],
-      "detail": "FOUND while grooming for what to pick up next, 2026-08-28. The CAP epic describes itself as \"the single upstream blocker for three of them\" [epics]. Every card that actually waits on a CAP card is an AZR card - AZR-4 needs CAP-2 and CAP-3, AZR-6 needs CAP-5, AZR-7 needs CAP-4 - so it blocks ONE epic. The claim was probably true before the D and FX epics dissolved on 2026-08-27 and their cards were redistributed; nothing re-read the epic prose afterwards. It matters because the sentence is the argument for CAP being an enabler epic at all, and an inflated one invites working CAP ahead of the thing it serves. FIXED by removing the NUMBER, not by correcting it. Writing \"one\" would have rotted again the next time the graph moved - the same way \"three\" did. The epic prose now says what CAP is FOR and leaves the count to the dependency graph, which already knows it and is checked. Honest limit: nothing enforces this. A validator cannot read prose, so the only defence against the next inflated claim is not writing a countable assertion into prose in the first place. *bug, closed.*",
-      "verified": "none"
+      "detail": "FOUND while grooming for what to pick up next, 2026-08-28. The CAP epic describes itself as \"the single upstream blocker for three of them\" [epics]. Every card that actually waits on a CAP card is an AZR card - AZR-4 needs CAP-2 and CAP-3, AZR-6 needs CAP-5, AZR-7 needs CAP-4 - so it blocks ONE epic. The claim was probably true before the D and FX epics dissolved on 2026-08-27 and their cards were redistributed; nothing re-read the epic prose afterwards. It matters because the sentence is the argument for CAP being an enabler epic at all, and an inflated one invites working CAP ahead of the thing it serves. FIXED by removing the NUMBER, not by correcting it. Writing \"one\" would have rotted again the next time the graph moved - the same way \"three\" did. The epic prose now says what CAP is FOR and leaves the count to the dependency graph, which already knows it and is checked. Honest limit: nothing enforces this. A validator cannot read prose, so the only defence against the next inflated claim is not writing a countable assertion into prose in the first place. *bug, closed.*"
     },
     {
       "id": "DBT-25",
@@ -1324,161 +1328,187 @@
       "type": "bug",
       "status": "done",
       "settled": "settled",
+      "verified": "none",
       "dependsOn": [],
-      "detail": "FOUND by the architecture audit 2026-08-28 (ninth). `documenting-work.md` says a new item needs \"a type (bug / feature / chore / spike)\". `validateBoard` accepts story | enabler | spike | bug | decision, so `chore` and `feature` both FAIL check-board - the document instructs a reader straight into a broken build. The same document states the correct SAFe vocabulary about a hundred lines earlier (\"Types are SAFe's, not the old chore vocabulary\"), so it contradicts itself, and the half that is wrong is the half phrased as an instruction. That is the distinction the document OPENS with: a stale record is harmless and a stale instruction is dangerous. Missed during the SAFe migration because the migration updated the section ABOUT types and not the checklist further down that also names them. FIXED by naming the five types check-board actually accepts and pointing at the section above that explains them, so the checklist cannot drift from the validator independently again. SWEPT for the same vocabulary elsewhere: CLAUDE.md and the grooming skill are clean. Several older cards still carry a trailing *chore, settled* marker in their DETAIL prose, left over from the pre-SAFe vocabulary - those are RECORDS of how a card was described when it was written, not instructions, so they are left alone on this documents own rule that a stale record is harmless and a stale instruction is dangerous.",
-      "verified": "none"
+      "detail": "FOUND by the architecture audit 2026-08-28 (ninth). `documenting-work.md` says a new item needs \"a type (bug / feature / chore / spike)\". `validateBoard` accepts story | enabler | spike | bug | decision, so `chore` and `feature` both FAIL check-board - the document instructs a reader straight into a broken build. The same document states the correct SAFe vocabulary about a hundred lines earlier (\"Types are SAFe's, not the old chore vocabulary\"), so it contradicts itself, and the half that is wrong is the half phrased as an instruction. That is the distinction the document OPENS with: a stale record is harmless and a stale instruction is dangerous. Missed during the SAFe migration because the migration updated the section ABOUT types and not the checklist further down that also names them. FIXED by naming the five types check-board actually accepts and pointing at the section above that explains them, so the checklist cannot drift from the validator independently again. SWEPT for the same vocabulary elsewhere: CLAUDE.md and the grooming skill are clean. Several older cards still carry a trailing *chore, settled* marker in their DETAIL prose, left over from the pre-SAFe vocabulary - those are RECORDS of how a card was described when it was written, not instructions, so they are left alone on this documents own rule that a stale record is harmless and a stale instruction is dangerous."
     }
   ],
   "features": [
     {
       "id": "AZR-F1",
       "epic": "AZR",
+      "menu": "azure-onboarding",
       "title": "Onboarding foundation and coverage data",
       "anchor": "6"
     },
     {
       "id": "AZR-F2",
       "epic": "AZR",
+      "menu": "azure-onboarding",
       "title": "Azure Policy - diagnostic settings to Event Hub",
       "anchor": "6a"
     },
     {
       "id": "AZR-F3",
       "epic": "AZR",
+      "menu": "azure-onboarding",
       "title": "Direct ARM configuration - script, no policy",
       "anchor": "6b"
     },
     {
       "id": "AZR-F4",
       "epic": "AZR",
+      "menu": "azure-onboarding",
       "title": "Defender XDR export - guided portal",
       "anchor": "6c"
     },
     {
       "id": "AZR-F5",
       "epic": "AZR",
+      "menu": "azure-onboarding",
       "title": "Pull collectors - no push path exists",
       "anchor": "6d"
     },
     {
       "id": "AZR-F6",
       "epic": "AZR",
+      "menu": "azure-onboarding",
       "title": "Blob-only sources - cannot reach Event Hub",
       "anchor": "6e"
     },
     {
       "id": "AZR-F7",
       "epic": "AZR",
+      "menu": "azure-onboarding",
       "title": "Agent-based - AMA plus DCR",
       "anchor": "6f"
     },
     {
       "id": "AZR-F8",
       "epic": "AZR",
+      "menu": "azure-onboarding",
       "title": "Dataflow diagrams, one per category",
       "anchor": "6g"
     },
     {
       "id": "AZR-F9",
       "epic": "AZR",
+      "menu": "azure-onboarding",
       "title": "Shared onboarding concerns",
       "anchor": "6h"
     },
     {
       "id": "WIN-F1",
       "epic": "WIN",
+      "menu": "windows-events",
       "title": "Windows Event analysis screen",
       "anchor": "5"
     },
     {
       "id": "WIN-F2",
       "epic": "WIN",
+      "menu": "windows-events",
       "title": "Microsoft proprietary enrichment catalog",
       "anchor": "5a"
     },
     {
       "id": "WIN-F3",
       "epic": "WIN",
+      "menu": "windows-events",
       "title": "Lake copy format - JSON vs Parquet",
       "anchor": "5b"
     },
     {
       "id": "HON-F1",
       "epic": "HON",
+      "menu": "preflight",
       "title": "Capability model follow-ons",
       "anchor": "1"
     },
     {
       "id": "HON-F2",
       "epic": "HON",
+      "menu": "integrate",
       "title": "Unverified empty inventories",
       "anchor": "4"
     },
     {
       "id": "HON-F3",
       "epic": "HON",
+      "menu": "integrate",
       "title": "Guid-column aftermath, made visible"
     },
     {
       "id": "GEN-F1",
       "epic": "GEN",
+      "menu": "integrate",
       "title": "Pack generation correctness and provenance"
     },
     {
       "id": "PK-F1",
       "epic": "PK",
+      "menu": "packs",
       "title": "Pack maintenance parity",
       "anchor": "12"
     },
     {
       "id": "VND-F1",
       "epic": "VND",
+      "menu": "integrate",
       "title": "Vendor column-order naming",
       "anchor": "13c"
     },
     {
       "id": "CAP-F1",
       "epic": "CAP",
+      "menu": "preflight",
       "title": "Capability taxonomy extension",
       "anchor": "1"
     },
     {
       "id": "REL-F1",
       "epic": "REL",
+      "menu": "none",
       "title": "Release and deployment hygiene",
       "anchor": "8"
     },
     {
       "id": "DBT-F1",
       "epic": "DBT",
+      "menu": "integrate",
       "title": "Verification gaps",
       "anchor": "7"
     },
     {
       "id": "DBT-F2",
       "epic": "DBT",
+      "menu": "integrate",
       "title": "Copy and UX",
       "anchor": "9"
     },
     {
       "id": "DBT-F3",
       "epic": "DBT",
+      "menu": "architecture",
       "title": "Diagram fidelity",
       "anchor": "10"
     },
     {
       "id": "DBT-F4",
       "epic": "DBT",
+      "menu": "none",
       "title": "Docs and spec grounding"
     },
     {
       "id": "DBT-F5",
       "epic": "DBT",
+      "menu": "none",
       "title": "Board tooling defects"
     },
     {
       "id": "DBT-F6",
       "epic": "DBT",
+      "menu": "packs",
       "title": "Effect-identity defect class",
       "anchor": "12"
     }

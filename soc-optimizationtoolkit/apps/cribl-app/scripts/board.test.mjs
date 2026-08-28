@@ -52,7 +52,7 @@ const story = (over) => ({
 
 const board = (stories, epics, features) => ({
   epics: epics ?? [{ key: 'REL', name: 'Ship it', why: 'because' }],
-  features: features ?? [{ id: 'REL-F1', epic: 'REL', title: 'A feature' }],
+  features: features ?? [{ id: 'REL-F1', epic: 'REL', menu: 'none', title: 'A feature' }],
   stories,
 });
 
@@ -92,8 +92,8 @@ describe('validateBoard - the shape of a story', () => {
   it('catches a feature that carries no story', () => {
     const out = validateBoard(
       board([story({})], undefined, [
-        { id: 'REL-F1', epic: 'REL', title: 'A feature' },
-        { id: 'REL-F9', epic: 'REL', title: 'Abandoned' },
+        { id: 'REL-F1', epic: 'REL', menu: 'none', title: 'A feature' },
+        { id: 'REL-F9', epic: 'REL', menu: 'none', title: 'Abandoned' },
       ]),
     );
 
@@ -110,12 +110,67 @@ describe('validateBoard - the shape of a story', () => {
         { key: 'REL', name: 'Ship it', why: '' },
         { key: 'OTH', name: 'Other', why: '' },
       ], [
-        { id: 'REL-F1', epic: 'REL', title: 'A feature' },
-        { id: 'OTH-F1', epic: 'OTH', title: 'Elsewhere' },
+        { id: 'REL-F1', epic: 'REL', menu: 'none', title: 'A feature' },
+        { id: 'OTH-F1', epic: 'OTH', menu: 'none', title: 'Elsewhere' },
       ]),
     );
 
     expect(out.some((f) => f.includes('but its feature OTH-F1 is in epic OTH'))).toBe(true);
+  });
+
+  it('REQUIRES every feature to name a menu item', () => {
+    // Added 2026-08-28. The tag's whole value is being able to ask "what is
+    // left before Sentinel Integration works end to end" and trust the answer.
+    // One untagged feature makes that answer quietly short.
+    const out = validateBoard(
+      board([story({})], undefined, [{ id: 'REL-F1', epic: 'REL', title: 'A feature' }]),
+    );
+
+    expect(out).toHaveLength(1);
+    expect(out[0]).toContain('has no menu');
+  });
+
+  it('rejects a menu that is not one of the app\'s routes', () => {
+    // The vocabulary is copied from the nav registration, so an invented menu
+    // is a card claiming to be about a screen that does not exist.
+    const out = validateBoard(
+      board([story({})], undefined, [
+        { id: 'REL-F1', epic: 'REL', menu: 'dashboard', title: 'A feature' },
+      ]),
+    );
+
+    expect(out).toHaveLength(1);
+    expect(out[0]).toContain('not a menu item');
+  });
+
+  it('lets a STORY override its feature\'s menu', () => {
+    // A few genuinely differ - a fallback offer that lands on the Integrate
+    // deploy while its feature is about the capability audit.
+    expect(
+      validateBoard(board([story({ menu: 'integrate' })], undefined, [
+        { id: 'REL-F1', epic: 'REL', menu: 'none', title: 'A feature' },
+      ])),
+    ).toEqual([]);
+  });
+
+  it('rejects an override that just RESTATES the feature\'s menu', () => {
+    // A second copy of the same fact is a second thing to keep in step, and
+    // this one goes stale silently the moment the feature is re-tagged.
+    const out = validateBoard(
+      board([story({ menu: 'none' })], undefined, [
+        { id: 'REL-F1', epic: 'REL', menu: 'none', title: 'A feature' },
+      ]),
+    );
+
+    expect(out).toHaveLength(1);
+    expect(out[0]).toContain('repeats its feature');
+  });
+
+  it('rejects a story override naming a menu that does not exist', () => {
+    const out = validateBoard(board([story({ menu: 'nowhere' })]));
+
+    expect(out).toHaveLength(1);
+    expect(out[0]).toContain('not a menu item');
   });
 
   it('insists a story is settled, undecided or unconfirmed', () => {
@@ -453,7 +508,7 @@ describe('renderBoard', () => {
     expect(renderBoard(data, '2026-08-27')).toMatch(/^Status: Living/m);
   });
 
-  it('gives the feature table THREE columns, with no score among them', () => {
+  it('gives the feature table exactly its four columns, with no score among them', () => {
     // WSJF was built and removed on 2026-08-28 (see the note in board.mjs):
     // scoring answers contention between features for one team's finite
     // capacity, and there is one author here. This pin is what makes a re-add
@@ -464,14 +519,19 @@ describe('renderBoard', () => {
     // preamble sentence that explains features carry no score - a word-search
     // cannot tell a column from a paragraph about columns, and would have been
     // routed around the moment it cried wolf.
+    //
+    // RE-POINTED 2026-08-28 from three columns to four: `Menu` was added
+    // deliberately, and exact-header matching means such a change has to be
+    // made here on purpose. That is the pin working, not the pin being in the
+    // way - the same reason it would catch a `Score` column.
     const md = renderBoard(data, '2026-08-27');
     const headers = md.split('\n').filter((l) => l.startsWith('| Feature |'));
 
     expect(headers.length).toBeGreaterThan(0);
-    for (const h of headers) expect(h).toBe('| Feature | Done | Stories |');
+    for (const h of headers) expect(h).toBe('| Feature | Menu | Done | Stories |');
 
     const rows = md.split('\n').filter((l) => /^\| `[A-Z]+-F\d/.test(l));
     expect(rows).toHaveLength(1);
-    for (const r of rows) expect(r.split('|').length - 2).toBe(3);
+    for (const r of rows) expect(r.split('|').length - 2).toBe(4);
   });
 });

@@ -13,6 +13,25 @@ in, and what it waits on.
 
 **60 in the backlog, 1 in progress, 20 done.**
 
+## By menu item
+
+Which part of the product each card is about, using the app's own route
+ids. `Cross-cutting` is release mechanics, docs and board tooling - work no
+operator sees on any screen. Two menus are PLANNED and have no route yet.
+
+| Menu | Open | Done | Now |
+|---|---|---|---|
+| Dataflow | 2 | 0 | 0 |
+| Setup | 1 | 0 | 0 |
+| Sentinel Integration | 21 | 2 | 0 |
+| Pack Maintenance | 4 | 0 | 1 |
+| Permission Verification | 8 | 0 | 6 |
+| Azure Native Source Onboarding (planned) | 13 | 4 | 0 |
+| Windows Event analysis (planned) | 5 | 0 | 0 |
+| Cross-cutting | 7 | 14 | 1 |
+
+Open work totals 61.
+
 ## Epics and features
 
 Epic > Feature > Story, per SAFe (Essential). An `enabler` epic exists to
@@ -24,90 +43,90 @@ on the stories underneath (now / next / later).
 
 The largest unstarted block: every Azure telemetry source, category by category
 
-| Feature | Done | Stories |
-|---|---|---|
-| `AZR-F1` Onboarding foundation and coverage data | 1/1 | AZR-0 |
-| `AZR-F2` Azure Policy - diagnostic settings to Event Hub | 0/2 | AZR-4, AZR-5 |
-| `AZR-F3` Direct ARM configuration - script, no policy | 1/3 | AZR-2, AZR-13, AZR-3 |
-| `AZR-F4` Defender XDR export - guided portal | 0/1 | AZR-6 |
-| `AZR-F5` Pull collectors - no push path exists | 0/3 | AZR-S1, AZR-7, D-8 |
-| `AZR-F6` Blob-only sources - cannot reach Event Hub | 0/1 | AZR-8 |
-| `AZR-F7` Agent-based - AMA plus DCR | 0/1 | AZR-9 |
-| `AZR-F8` Dataflow diagrams, one per category | 0/1 | AZR-10 |
-| `AZR-F9` Shared onboarding concerns | 2/4 | AZR-S2, AZR-1, AZR-11, AZR-12 |
+| Feature | Menu | Done | Stories |
+|---|---|---|---|
+| `AZR-F1` Onboarding foundation and coverage data | Azure Native Source Onboarding (planned) | 1/1 | AZR-0 |
+| `AZR-F2` Azure Policy - diagnostic settings to Event Hub | Azure Native Source Onboarding (planned) | 0/2 | AZR-4, AZR-5 |
+| `AZR-F3` Direct ARM configuration - script, no policy | Azure Native Source Onboarding (planned) | 1/3 | AZR-2, AZR-13, AZR-3 |
+| `AZR-F4` Defender XDR export - guided portal | Azure Native Source Onboarding (planned) | 0/1 | AZR-6 |
+| `AZR-F5` Pull collectors - no push path exists | Azure Native Source Onboarding (planned) | 0/3 | AZR-S1, AZR-7, D-8 |
+| `AZR-F6` Blob-only sources - cannot reach Event Hub | Azure Native Source Onboarding (planned) | 0/1 | AZR-8 |
+| `AZR-F7` Agent-based - AMA plus DCR | Azure Native Source Onboarding (planned) | 0/1 | AZR-9 |
+| `AZR-F8` Dataflow diagrams, one per category | Azure Native Source Onboarding (planned) | 0/1 | AZR-10 |
+| `AZR-F9` Shared onboarding concerns | Azure Native Source Onboarding (planned) | 2/4 | AZR-S2, AZR-1, AZR-11, AZR-12 |
 
 ### `WIN` Windows event analysis - 0% (0/5)
 
 Sentinel-side and Lake-side halves of Windows event handling
 
-| Feature | Done | Stories |
-|---|---|---|
-| `WIN-F1` Windows Event analysis screen | 0/2 | WIN-1, WIN-3 |
-| `WIN-F2` Microsoft proprietary enrichment catalog | 0/2 | WIN-2, D-4 |
-| `WIN-F3` Lake copy format - JSON vs Parquet | 0/1 | D-5 |
+| Feature | Menu | Done | Stories |
+|---|---|---|---|
+| `WIN-F1` Windows Event analysis screen | Windows Event analysis (planned) | 0/2 | WIN-1, WIN-3 |
+| `WIN-F2` Microsoft proprietary enrichment catalog | Windows Event analysis (planned) | 0/2 | WIN-2, D-4 |
+| `WIN-F3` Lake copy format - JSON vs Parquet | Windows Event analysis (planned) | 0/1 | D-5 |
 
 ### `HON` Inventory and diagnostic honesty - 0% (0/10)
 
 Measured gaps where the app reports a confident wrong answer
 
-| Feature | Done | Stories |
-|---|---|---|
-| `HON-F1` Capability model follow-ons | 0/4 | HON-6, HON-7, D-1, D-2 |
-| `HON-F2` Unverified empty inventories | 0/3 | HON-1, HON-2, D-3 |
-| `HON-F3` Guid-column aftermath, made visible | 0/3 | HON-3, HON-4, D-11 |
+| Feature | Menu | Done | Stories |
+|---|---|---|---|
+| `HON-F1` Capability model follow-ons | Permission Verification | 0/4 | HON-6, HON-7*, D-1, D-2* |
+| `HON-F2` Unverified empty inventories | Sentinel Integration | 0/3 | HON-1, HON-2, D-3 |
+| `HON-F3` Guid-column aftermath, made visible | Sentinel Integration | 0/3 | HON-3, HON-4, D-11 |
 
 ### `GEN` Pipeline and pack generation - 67% (2/3)
 
 What the build actually emits
 
-| Feature | Done | Stories |
-|---|---|---|
-| `GEN-F1` Pack generation correctness and provenance | 2/3 | GEN-1, GEN-2, GEN-3 |
+| Feature | Menu | Done | Stories |
+|---|---|---|---|
+| `GEN-F1` Pack generation correctness and provenance | Sentinel Integration | 2/3 | GEN-1, GEN-2, GEN-3 |
 
 ### `PK` Pack maintenance parity - 0% (0/3)
 
 Maintaining a pack after it is built, including a silent data-loss defect
 
-| Feature | Done | Stories |
-|---|---|---|
-| `PK-F1` Pack maintenance parity | 0/3 | PK-1, PK-2, D-6 |
+| Feature | Menu | Done | Stories |
+|---|---|---|---|
+| `PK-F1` Pack maintenance parity | Pack Maintenance | 0/3 | PK-1, PK-2, D-6 |
 
 ### `VND` Vendor field definitions - 0% (0/4)
 
 Positional CSV naming, reaching past ~18 vendors
 
-| Feature | Done | Stories |
-|---|---|---|
-| `VND-F1` Vendor column-order naming | 0/4 | HON-5, VND-3, VND-1, D-7 |
+| Feature | Menu | Done | Stories |
+|---|---|---|---|
+| `VND-F1` Vendor column-order naming | Sentinel Integration | 0/4 | HON-5, VND-3, VND-1, D-7 |
 
 ### `CAP` Capability taxonomy extension _(enabler)_ - 0% (0/6)
 
 ENABLER EPIC: exists to unblock other work rather than to deliver on its own. Its capabilities and probes are what the Azure onboarding epic waits on
 
-| Feature | Done | Stories |
-|---|---|---|
-| `CAP-F1` Capability taxonomy extension | 0/6 | CAP-1, CAP-2, CAP-3, CAP-4, CAP-5, CAP-6 |
+| Feature | Menu | Done | Stories |
+|---|---|---|---|
+| `CAP-F1` Capability taxonomy extension | Permission Verification | 0/6 | CAP-1, CAP-2, CAP-3, CAP-4, CAP-5, CAP-6 |
 
 ### `REL` Ship what is built _(enabler)_ - 40% (2/5)
 
 ENABLER EPIC: release mechanics. The packaged tarball trails main, and the lab trails it
 
-| Feature | Done | Stories |
-|---|---|---|
-| `REL-F1` Release and deployment hygiene | 2/5 | REL-2, REL-3, REL-4, REL-5, REL-6 |
+| Feature | Menu | Done | Stories |
+|---|---|---|---|
+| `REL-F1` Release and deployment hygiene | Cross-cutting | 2/5 | REL-2, REL-3, REL-4, REL-5, REL-6 |
 
 ### `DBT` Quality and technical debt _(enabler)_ - 43% (12/28)
 
 ENABLER EPIC: verification gaps, copy, diagram fidelity, docs and the board's own tooling
 
-| Feature | Done | Stories |
-|---|---|---|
-| `DBT-F1` Verification gaps | 0/4 | DBT-2, DBT-5, DBT-6, DBT-7 |
-| `DBT-F2` Copy and UX | 0/6 | DBT-3, DBT-4, DBT-9, DBT-14, DBT-15, D-10 |
-| `DBT-F3` Diagram fidelity | 0/2 | DBT-1, DBT-12 |
-| `DBT-F4` Docs and spec grounding | 3/6 | DBT-8, DBT-10, DBT-11, DBT-13, DBT-22, DBT-26 |
-| `DBT-F5` Board tooling defects | 9/9 | DBT-16, DBT-17, DBT-18, DBT-19, DBT-20, DBT-21, DBT-23, DBT-24, DBT-25 |
-| `DBT-F6` Effect-identity defect class | 0/1 | FX-4 |
+| Feature | Menu | Done | Stories |
+|---|---|---|---|
+| `DBT-F1` Verification gaps | Sentinel Integration | 0/4 | DBT-2, DBT-5*, DBT-6, DBT-7 |
+| `DBT-F2` Copy and UX | Sentinel Integration | 0/6 | DBT-3, DBT-4, DBT-9, DBT-14, DBT-15, D-10* |
+| `DBT-F3` Diagram fidelity | Dataflow | 0/2 | DBT-1, DBT-12 |
+| `DBT-F4` Docs and spec grounding | Cross-cutting | 3/6 | DBT-8, DBT-10, DBT-11, DBT-13, DBT-22, DBT-26 |
+| `DBT-F5` Board tooling defects | Cross-cutting | 9/9 | DBT-16, DBT-17, DBT-18, DBT-19, DBT-20, DBT-21, DBT-23, DBT-24, DBT-25 |
+| `DBT-F6` Effect-identity defect class | Pack Maintenance | 0/1 | FX-4 |
 
 ---
 

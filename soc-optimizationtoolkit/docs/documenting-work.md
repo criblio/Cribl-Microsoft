@@ -133,6 +133,32 @@ What sequences work instead is what the data can actually support: `priority`
 readiness, and how many cards each one transitively unblocks. If a second
 developer ever works here, contention becomes real and WSJF is worth revisiting.
 
+**Every feature names a MENU ITEM, since 2026-08-28.** `menu` says which part
+of the product a card is about, using the app's own route ids copied from the
+nav registration in `App.tsx` - so the vocabulary cannot describe a screen the
+app does not have. The tag exists because the question most often asked of this
+board is "what is left before Sentinel Integration works end to end", and
+before this the only way to ask it was to read every card.
+
+It lives on the FEATURE and stories inherit, for the same reason `epic` does:
+26 features are maintainable by hand and 81 stories are not, and a feature
+spanning two menus usually wants splitting. A story may override when it
+genuinely differs - a fallback offer landing on the Integrate deploy while its
+feature is about the capability audit - and `check-board` rejects an override
+that merely restates its feature's menu, because a second copy of a fact is a
+second thing to keep in step.
+
+Two values name screens nobody can open yet, `azure-onboarding` and
+`windows-events`, and they render as PLANNED so a rollup cannot imply a route
+exists. `none` is for work no operator sees on any screen - release mechanics,
+docs, the board's own tooling - and it is not a synonym for "unsure": if a card
+changes what an operator sees anywhere, it has a menu.
+
+`npm run groom -- integrate` narrows grooming to one menu. It pulls in blockers
+from OTHER menus and names them, because a card outside the menu that gates one
+inside it is exactly what an end-to-end push needs to know; dropping it would
+report a goal as ready when it is not.
+
 Each story carries an `id`, `epic`, `feature`, `title`, `type`, `status`
 (backlog / in-progress / done), a `priority` while it is in the backlog
 (now / next / later), `settled` (settled / undecided / unconfirmed),
