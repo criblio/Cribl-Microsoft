@@ -381,6 +381,38 @@
       "verified": "pins"
     },
     {
+      "id": "AZR-13",
+      "epic": "AZR",
+      "feature": "AZR-F3",
+      "title": "SecurityOnly is offered but cannot be stored - it reverts to Standard",
+      "type": "bug",
+      "status": "in-progress",
+      "settled": "undecided",
+      "dependsOn": [],
+      "decision": {
+        "question": "The coverage catalog is a VERBATIM port of resource-coverage.json, whose `_profileOptions` has only Standard and HighVolume. AZR-2 deliberately added SecurityOnly. Where should the profile list live?",
+        "options": [
+          {
+            "key": "derive",
+            "label": "Catalog derives from entra-diagnostics",
+            "detail": "ENTRA_PROFILES becomes the single authority and the catalog imports it. The provenance pin changes from \"equals the legacy two\" to \"contains the legacy two, plus SecurityOnly which AZR-2 added deliberately\". Removes the duplication for good - but it WEAKENS a verbatim pin written this morning, which is the move check 3 of the audit exists to catch, so it has to be a decision rather than a quiet edit."
+          },
+          {
+            "key": "widen-catalog",
+            "label": "Hand-add SecurityOnly to the catalog",
+            "detail": "Smallest diff. Leaves TWO hand-maintained lists that must agree - the duplicated decision that caused this in the first place - so the next profile change breaks it again."
+          },
+          {
+            "key": "drop-securityonly",
+            "label": "Withdraw SecurityOnly",
+            "detail": "Keeps the port pristine and re-opens the LOG-07 drift AZR-2 was asked to resolve. Honest, but it undoes a deliberate decision instead of fixing the plumbing under it."
+          }
+        ],
+        "chosen": null
+      },
+      "detail": "FOUND by the architecture audit 2026-08-28 (ninth), one commit after AZR-2 merged, as a DUPLICATED DECISION: two modules define what Entra profiles exist and they disagree. `entra-diagnostics.ENTRA_PROFILES` has three (SecurityOnly, Standard, HighVolume); the `coverage-catalog` entraId subSelection has two. REPRODUCED, not theorised: storing SecurityOnly through `decodeSelection` yields `subSelections.entraId = [\"Standard\"]` with `dropped = [\"entraId.SecurityOnly\"]`. So the one profile an operator cannot keep is precisely the one AZR-2 added by resolving the LOG-07 drift. It is REPORTED in `dropped` rather than lost silently - that mechanism works as built - but nothing reads `dropped` yet and the choice still reverts. Worth recording exactly how the rationale failed: the entra-categories docblock says \"the coverage catalog keeps offering the two it always did, because changing what a stored selection MEANS is a separate act\". The first half is right - Standard and HighVolume keep their meaning. The second half does not follow from it: declining to make a THIRD value storable is not the same act, and nothing checked whether it was."
+    },
+    {
       "id": "AZR-3",
       "epic": "AZR",
       "feature": "AZR-F3",
@@ -1283,6 +1315,18 @@
       "verified": "none",
       "dependsOn": [],
       "detail": "FOUND 2026-08-28 while scoping AZR-2 to build it. The card is the Entra ID tenant diagnostics tracer bullet and every fact in it - the ARM PUT to `microsoft.aadiam/diagnosticSettings`, the Standard (9) and HighVolume (15) profiles, the LOG-07 SecurityOnly drift - comes from `backlog.md#6b` (Direct ARM configuration - script, no policy). It was filed under AZR-F2 (Azure Policy, anchor 6a) and cited `backlog.md#6a`. AZR-3, the OTHER 6b bullet, was already correctly under AZR-F3. WHY THE CHECK DID NOT CATCH IT: `check-board` verifies a citation RESOLVES, not that it resolves to the right thing - 6a is a real section, so the pointer passed. This is the exact failure documenting-work.md describes for line numbers and inherits for anchors: a pointer that is silently wrong sends a reader to confidently read the wrong section. Fixed by moving AZR-2 to AZR-F3 and re-citing to 6b. NOT fixable by a validator - only the card text knows which section it means - so nothing new is enforced here and the honest mitigation is that the next audit reads citations for SENSE, not just resolution."
+    },
+    {
+      "id": "DBT-26",
+      "epic": "DBT",
+      "feature": "DBT-F4",
+      "title": "documenting-work.md tells a reader to use board types that fail CI",
+      "type": "bug",
+      "status": "done",
+      "settled": "settled",
+      "dependsOn": [],
+      "detail": "FOUND by the architecture audit 2026-08-28 (ninth). `documenting-work.md` says a new item needs \"a type (bug / feature / chore / spike)\". `validateBoard` accepts story | enabler | spike | bug | decision, so `chore` and `feature` both FAIL check-board - the document instructs a reader straight into a broken build. The same document states the correct SAFe vocabulary about a hundred lines earlier (\"Types are SAFe's, not the old chore vocabulary\"), so it contradicts itself, and the half that is wrong is the half phrased as an instruction. That is the distinction the document OPENS with: a stale record is harmless and a stale instruction is dangerous. Missed during the SAFe migration because the migration updated the section ABOUT types and not the checklist further down that also names them. FIXED by naming the five types check-board actually accepts and pointing at the section above that explains them, so the checklist cannot drift from the validator independently again. SWEPT for the same vocabulary elsewhere: CLAUDE.md and the grooming skill are clean. Several older cards still carry a trailing *chore, settled* marker in their DETAIL prose, left over from the pre-SAFe vocabulary - those are RECORDS of how a card was described when it was written, not instructions, so they are left alone on this documents own rule that a stale record is harmless and a stale instruction is dangerous.",
+      "verified": "none"
     }
   ],
   "features": [
