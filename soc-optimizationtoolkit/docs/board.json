@@ -849,7 +849,7 @@
       "priority": "next",
       "settled": "settled",
       "dependsOn": [],
-      "detail": "Found live 2026-08-27: with the pointer over the list, the wheel moves neither the list nor the page - the pointer must leave the list before anything scrolls. Five of eight results were reachable. This is the reproduction the old nested-scrolling question never had, which is what turns it from an annoyance into a bug. *bug, SETTLED. `backlog.md` item 13d.*"
+      "detail": "Found live 2026-08-27: with the pointer over the list, the wheel moves neither the list nor the page - the pointer must leave the list before anything scrolls. Five of eight results were reachable. This is the reproduction the old nested-scrolling question never had, which is what turns it from an annoyance into a bug. *bug, SETTLED. `backlog.md` item 13d.* NOT RE-TESTABLE BY BROWSER AUTOMATION (tried 2026-08-28): wheel events do not reach the app at all through the Cribl shell iframe - scrolling over the list, over the page heading, and over the outer margin all moved nothing. So automation cannot distinguish \"the list swallows the wheel\" from \"the wheel never arrived\", and an automated run would either report a false confirmation or a false all-clear. This card stays on the HUMAN reproduction that filed it. Whoever fixes it should verify by hand for the same reason."
     },
     {
       "id": "DBT-15",
@@ -861,7 +861,19 @@
       "priority": "next",
       "settled": "settled",
       "dependsOn": [],
-      "detail": "\"Palo Alto Cortex XDR\" renders none while all seven of its siblings do. Blank reads as neither \"not measured\" nor \"does not apply\" - the absent-versus-zero distinction the inventory standard exists to protect. *bug, SETTLED. `backlog.md` item 13e.*"
+      "detail": "\"Palo Alto Cortex XDR\" renders none while all seven of its siblings do. Blank reads as neither \"not measured\" nor \"does not apply\" - the absent-versus-zero distinction the inventory standard exists to protect. *bug, SETTLED. `backlog.md` item 13e.* CONFIRMED LIVE 2026-08-28 in the dev app (/apps/a/__local__), unfiltered solution list: AbuseIPDB and Acronis Cyber Protect Cloud carry NO fit badge while 1Password and Agari show Supported, 42Crunch API Protection and AbnormalSecurity show Recommended, and Agent 365 shows Legacy. So the blank is not a rendering failure of one row - the badge column works, and these rows genuinely have nothing to show. Was reported from the eight Palo results; reproduces on the default list, which makes it easier to test."
+    },
+    {
+      "id": "DBT-28",
+      "epic": "DBT",
+      "feature": "DBT-F2",
+      "title": "The solution deep link does not override a stored selection",
+      "type": "bug",
+      "status": "backlog",
+      "priority": "next",
+      "settled": "unconfirmed",
+      "dependsOn": [],
+      "detail": "FOUND 2026-08-28 driving the dev app. The Select Sentinel Solution card advertises `Deep link: #/?solution=1Password`. Navigating the live preview to `/apps/a/__local__#/?solution=Palo%20Alto%20Networks` left 1Password selected - the stored selection won and the URL had no effect. TWO CANDIDATE CAUSES and I have not separated them, which is why this is unconfirmed rather than a fix: (1) on the Cribl shell the app runs in an IFRAME and the hash lands on the OUTER frame, so the app may never see it at all - in which case the advertised link is only usable in a standalone shell and the copy is overstating; (2) integrate-screen.tsx says the link is \"consumed once so Clear works\", so a persisted selection may be designed to win. Settle which before changing anything: if (1), the deep link is broken on the only shipped shell and the card that advertises it is misleading; if (2), it behaves as designed and the COPY needs to say that a stored selection takes precedence. Worth noting the reporter could not tell from the outside, which is the actual defect either way."
     },
     {
       "id": "DBT-13",

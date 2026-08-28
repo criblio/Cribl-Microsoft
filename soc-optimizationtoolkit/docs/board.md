@@ -11,7 +11,7 @@ two cannot disagree.
 alternatives. This board holds only what is a unit of work, what state it is
 in, and what it waits on.
 
-**59 in the backlog, 0 in progress, 24 done.**
+**60 in the backlog, 0 in progress, 24 done.**
 
 ## By menu item
 
@@ -23,14 +23,14 @@ operator sees on any screen. Two menus are PLANNED and have no route yet.
 |---|---|---|---|
 | Dataflow | 2 | 0 | 0 |
 | Setup | 1 | 0 | 0 |
-| Sentinel Integration | 18 | 5 | 5 |
+| Sentinel Integration | 19 | 5 | 5 |
 | Pack Maintenance | 4 | 0 | 0 |
 | Permission Verification | 8 | 0 | 0 |
 | Azure Native Source Onboarding (planned) | 13 | 4 | 0 |
 | Windows Event analysis (planned) | 5 | 0 | 0 |
 | Cross-cutting | 8 | 15 | 1 |
 
-Open work totals 59.
+Open work totals 60.
 
 ## Epics and features
 
@@ -115,14 +115,14 @@ ENABLER EPIC: release mechanics. The packaged tarball trails main, and the lab t
 |---|---|---|---|
 | `REL-F1` Release and deployment hygiene | Cross-cutting | 2/5 | REL-2, REL-3, REL-4, REL-5, REL-6 |
 
-### `DBT` Quality and technical debt _(enabler)_ - 45% (13/29)
+### `DBT` Quality and technical debt _(enabler)_ - 43% (13/30)
 
 ENABLER EPIC: verification gaps, copy, diagram fidelity, docs and the board's own tooling
 
 | Feature | Menu | Done | Stories |
 |---|---|---|---|
 | `DBT-F1` Verification gaps | Sentinel Integration | 0/4 | DBT-2, DBT-5*, DBT-6, DBT-7 |
-| `DBT-F2` Copy and UX | Sentinel Integration | 0/6 | DBT-3, DBT-4, DBT-9, DBT-14, DBT-15, D-10* |
+| `DBT-F2` Copy and UX | Sentinel Integration | 0/7 | DBT-3, DBT-4, DBT-9, DBT-14, DBT-15, DBT-28, D-10* |
 | `DBT-F3` Diagram fidelity | Dataflow | 0/2 | DBT-1, DBT-12 |
 | `DBT-F4` Docs and spec grounding | Cross-cutting | 3/6 | DBT-8, DBT-10, DBT-11, DBT-13, DBT-22, DBT-26 |
 | `DBT-F5` Board tooling defects | Cross-cutting | 10/10 | DBT-16, DBT-17, DBT-18, DBT-19, DBT-20, DBT-21, DBT-23, DBT-24, DBT-25, DBT-27 |
@@ -199,7 +199,7 @@ Next to pick up. Nothing blocks these.
 
 ---
 
-## Backlog - next (22)
+## Backlog - next (23)
 
 Settled and unblocked, sequenced behind now.
 
@@ -340,14 +340,45 @@ Settled and unblocked, sequenced behind now.
   anything scrolls. Five of eight results were reachable. This is the
   reproduction the old nested-scrolling question never had, which is what
   turns it from an annoyance into a bug. *bug, SETTLED. `backlog.md` item
-  13d.*
+  13d.* NOT RE-TESTABLE BY BROWSER AUTOMATION (tried 2026-08-28): wheel events
+  do not reach the app at all through the Cribl shell iframe - scrolling over
+  the list, over the page heading, and over the outer margin all moved
+  nothing. So automation cannot distinguish "the list swallows the wheel" from
+  "the wheel never arrived", and an automated run would either report a false
+  confirmation or a false all-clear. This card stays on the HUMAN reproduction
+  that filed it. Whoever fixes it should verify by hand for the same reason.
 
 - **DBT-15** Give every solution row a delivery-fit badge, or say why not
   `DBT-F2` `bug` `settled`
   "Palo Alto Cortex XDR" renders none while all seven of its siblings do.
   Blank reads as neither "not measured" nor "does not apply" - the
   absent-versus-zero distinction the inventory standard exists to protect.
-  *bug, SETTLED. `backlog.md` item 13e.*
+  *bug, SETTLED. `backlog.md` item 13e.* CONFIRMED LIVE 2026-08-28 in the dev
+  app (/apps/a/__local__), unfiltered solution list: AbuseIPDB and Acronis
+  Cyber Protect Cloud carry NO fit badge while 1Password and Agari show
+  Supported, 42Crunch API Protection and AbnormalSecurity show Recommended,
+  and Agent 365 shows Legacy. So the blank is not a rendering failure of one
+  row - the badge column works, and these rows genuinely have nothing to show.
+  Was reported from the eight Palo results; reproduces on the default list,
+  which makes it easier to test.
+
+- **DBT-28** The solution deep link does not override a stored selection
+  `DBT-F2` `bug` `unconfirmed`
+  FOUND 2026-08-28 driving the dev app. The Select Sentinel Solution card
+  advertises `Deep link: #/?solution=1Password`. Navigating the live preview
+  to `/apps/a/__local__#/?solution=Palo%20Alto%20Networks` left 1Password
+  selected - the stored selection won and the URL had no effect. TWO CANDIDATE
+  CAUSES and I have not separated them, which is why this is unconfirmed
+  rather than a fix: (1) on the Cribl shell the app runs in an IFRAME and the
+  hash lands on the OUTER frame, so the app may never see it at all - in which
+  case the advertised link is only usable in a standalone shell and the copy
+  is overstating; (2) integrate-screen.tsx says the link is "consumed once so
+  Clear works", so a persisted selection may be designed to win. Settle which
+  before changing anything: if (1), the deep link is broken on the only
+  shipped shell and the card that advertises it is misleading; if (2), it
+  behaves as designed and the COPY needs to say that a stored selection takes
+  precedence. Worth noting the reporter could not tell from the outside, which
+  is the actual defect either way.
 
 - **D-2** `HON-7` surface area: which of Integrate deploy, Batch Deploy and DCR Automation get the fallba
   `HON-F1` `decision` `undecided`
