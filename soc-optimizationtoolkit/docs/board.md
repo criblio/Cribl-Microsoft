@@ -11,7 +11,7 @@ two cannot disagree.
 alternatives. This board holds only what is a unit of work, what state it is
 in, and what it waits on.
 
-**60 in the backlog, 0 in progress, 19 done.**
+**60 in the backlog, 1 in progress, 20 done.**
 
 ## Epics and features
 
@@ -20,7 +20,7 @@ unblock other epics rather than to deliver on its own. Features are
 groupings, not a queue - they carry no score and no order. Priority lives
 on the stories underneath (now / next / later).
 
-### `AZR` Azure native source onboarding - 25% (4/16)
+### `AZR` Azure native source onboarding - 24% (4/17)
 
 The largest unstarted block: every Azure telemetry source, category by category
 
@@ -28,7 +28,7 @@ The largest unstarted block: every Azure telemetry source, category by category
 |---|---|---|
 | `AZR-F1` Onboarding foundation and coverage data | 1/1 | AZR-0 |
 | `AZR-F2` Azure Policy - diagnostic settings to Event Hub | 0/2 | AZR-4, AZR-5 |
-| `AZR-F3` Direct ARM configuration - script, no policy | 1/2 | AZR-2, AZR-3 |
+| `AZR-F3` Direct ARM configuration - script, no policy | 1/3 | AZR-2, AZR-13, AZR-3 |
 | `AZR-F4` Defender XDR export - guided portal | 0/1 | AZR-6 |
 | `AZR-F5` Pull collectors - no push path exists | 0/3 | AZR-S1, AZR-7, D-8 |
 | `AZR-F6` Blob-only sources - cannot reach Event Hub | 0/1 | AZR-8 |
@@ -96,7 +96,7 @@ ENABLER EPIC: release mechanics. The packaged tarball trails main, and the lab t
 |---|---|---|
 | `REL-F1` Release and deployment hygiene | 2/5 | REL-2, REL-3, REL-4, REL-5, REL-6 |
 
-### `DBT` Quality and technical debt _(enabler)_ - 41% (11/27)
+### `DBT` Quality and technical debt _(enabler)_ - 43% (12/28)
 
 ENABLER EPIC: verification gaps, copy, diagram fidelity, docs and the board's own tooling
 
@@ -105,17 +105,41 @@ ENABLER EPIC: verification gaps, copy, diagram fidelity, docs and the board's ow
 | `DBT-F1` Verification gaps | 0/4 | DBT-2, DBT-5, DBT-6, DBT-7 |
 | `DBT-F2` Copy and UX | 0/6 | DBT-3, DBT-4, DBT-9, DBT-14, DBT-15, D-10 |
 | `DBT-F3` Diagram fidelity | 0/2 | DBT-1, DBT-12 |
-| `DBT-F4` Docs and spec grounding | 2/5 | DBT-8, DBT-10, DBT-11, DBT-13, DBT-22 |
+| `DBT-F4` Docs and spec grounding | 3/6 | DBT-8, DBT-10, DBT-11, DBT-13, DBT-22, DBT-26 |
 | `DBT-F5` Board tooling defects | 9/9 | DBT-16, DBT-17, DBT-18, DBT-19, DBT-20, DBT-21, DBT-23, DBT-24, DBT-25 |
 | `DBT-F6` Effect-identity defect class | 0/1 | FX-4 |
 
 ---
 
-## In progress (0)
+## In progress (1)
 
 Started. Anything here with an unfinished dependency is called out on its card.
 
-_Nothing here._
+- **AZR-13** SecurityOnly is offered but cannot be stored - it reverts to Standard
+  `AZR-F3` `bug` `undecided`
+  FOUND by the architecture audit 2026-08-28 (ninth), one commit after AZR-2
+  merged, as a DUPLICATED DECISION: two modules define what Entra profiles
+  exist and they disagree. `entra-diagnostics.ENTRA_PROFILES` has three
+  (SecurityOnly, Standard, HighVolume); the `coverage-catalog` entraId
+  subSelection has two. REPRODUCED, not theorised: storing SecurityOnly
+  through `decodeSelection` yields `subSelections.entraId = ["Standard"]` with
+  `dropped = ["entraId.SecurityOnly"]`. So the one profile an operator cannot
+  keep is precisely the one AZR-2 added by resolving the LOG-07 drift. It is
+  REPORTED in `dropped` rather than lost silently - that mechanism works as
+  built - but nothing reads `dropped` yet and the choice still reverts. Worth
+  recording exactly how the rationale failed: the entra-categories docblock
+  says "the coverage catalog keeps offering the two it always did, because
+  changing what a stored selection MEANS is a separate act". The first half is
+  right - Standard and HighVolume keep their meaning. The second half does not
+  follow from it: declining to make a THIRD value storable is not the same
+  act, and nothing checked whether it was.
+  DECISION (unanswered): The coverage catalog is a VERBATIM port of
+  resource-coverage.json, whose `_profileOptions` has only Standard and
+  HighVolume. AZR-2 deliberately added SecurityOnly. Where should the profile
+  list live?
+    [ ] `derive` Catalog derives from entra-diagnostics - ENTRA_PROFILES becomes the single authority and the catalog imports it. The provenance pin changes from "equals the legacy two" to "contains the legacy two, plus SecurityOnly which AZR-2 added deliberately". Removes the duplication for good - but it WEAKENS a verbatim pin written this morning, which is the move check 3 of the audit exists to catch, so it has to be a decision rather than a quiet edit.
+    [ ] `widen-catalog` Hand-add SecurityOnly to the catalog - Smallest diff. Leaves TWO hand-maintained lists that must agree - the duplicated decision that caused this in the first place - so the next profile change breaks it again.
+    [ ] `drop-securityonly` Withdraw SecurityOnly - Keeps the port pristine and re-opens the LOG-07 drift AZR-2 was asked to resolve. Honest, but it undoes a deliberate decision instead of fixing the plumbing under it.
 
 ---
 
@@ -635,7 +659,7 @@ Settled, gated on something above.
 
 ---
 
-## Done (19)
+## Done (20)
 
 Kept briefly so a reader can see what just landed; prune when the list grows.
 
@@ -1010,3 +1034,25 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   fixable by a validator - only the card text knows which section it means -
   so nothing new is enforced here and the honest mitigation is that the next
   audit reads citations for SENSE, not just resolution.
+
+- **DBT-26** documenting-work.md tells a reader to use board types that fail CI
+  `DBT-F4` `bug` `settled` `verified: none`
+  FOUND by the architecture audit 2026-08-28 (ninth). `documenting-work.md`
+  says a new item needs "a type (bug / feature / chore / spike)".
+  `validateBoard` accepts story | enabler | spike | bug | decision, so `chore`
+  and `feature` both FAIL check-board - the document instructs a reader
+  straight into a broken build. The same document states the correct SAFe
+  vocabulary about a hundred lines earlier ("Types are SAFe's, not the old
+  chore vocabulary"), so it contradicts itself, and the half that is wrong is
+  the half phrased as an instruction. That is the distinction the document
+  OPENS with: a stale record is harmless and a stale instruction is dangerous.
+  Missed during the SAFe migration because the migration updated the section
+  ABOUT types and not the checklist further down that also names them. FIXED
+  by naming the five types check-board actually accepts and pointing at the
+  section above that explains them, so the checklist cannot drift from the
+  validator independently again. SWEPT for the same vocabulary elsewhere:
+  CLAUDE.md and the grooming skill are clean. Several older cards still carry
+  a trailing *chore, settled* marker in their DETAIL prose, left over from the
+  pre-SAFe vocabulary - those are RECORDS of how a card was described when it
+  was written, not instructions, so they are left alone on this documents own
+  rule that a stale record is harmless and a stale instruction is dangerous.

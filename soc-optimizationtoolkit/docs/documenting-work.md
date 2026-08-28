@@ -216,9 +216,10 @@ JSON rather than YAML because every YAML parser is a dependency, `@soc/core`
 carries zero runtime deps, and a docs tool is a poor reason to be the first to
 add one. The cost lands on multi-line prose, which the renderer wraps.
 
-A new item needs an ID, a type (bug / feature / chore / spike), one line of
-evidence pointing at where the detail lives, and one distinction that matters
-more than any of the others:
+A new item needs an ID, a type (`story` / `enabler` / `spike` / `bug` /
+`decision` - the SAFe vocabulary described above, and the only five
+`check-board` accepts), one line of evidence pointing at where the detail lives,
+and one distinction that matters more than any of the others:
 
 **Settled or undecided?** Settled means the call is made and only the work
 remains. Undecided means no amount of effort finishes it, because a question is
