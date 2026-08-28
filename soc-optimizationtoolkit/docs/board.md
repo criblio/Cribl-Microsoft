@@ -536,7 +536,7 @@ Settled, gated on something above.
 Kept briefly so a reader can see what just landed; prune when the list grows.
 
 - **GEN-1** Overflow serialize reaches the built pack - report not reproduced
-  `bug` `settled`
+  `bug` `settled` `verified: live`
   REPORTED 2026-08-27: the additional-extension field was said not to be
   created in the pack's pipeline. NOT REPRODUCED, and now checked in the
   artifact the report is actually about - a pack built end to end and
@@ -557,7 +557,7 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   not-reproduced. `backlog.md` item 14.*
 
 - **REL-4** Cut and package a release
-  `chore` `settled`
+  `chore` `settled` `verified: pins`
   Now the most overdue card on the board: the tarball in `release/` predates
   four merged PRs, and the lab workspace is further behind still. `npm run
   package` performs the bump; do not hand-bump. For the current number run
@@ -576,7 +576,7 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   asymmetry visible at a glance.
 
 - **DBT-13** The Claude hooks travel with the repo
-  `chore` `settled`
+  `chore` `settled` `verified: live`
   DECIDED and shipped 2026-08-27: they travel. `.gitignore` matched `*claude*`
   unanchored, so all of `.claude/` was invisible to git - including `hooks/`,
   which holds the architecture-audit cadence, the docs-drift check and the
@@ -598,7 +598,7 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   re-tuned.*
 
 - **GEN-2** A rebuilt pack no longer inherits the previous build's pipelines
-  `bug` `settled`
+  `bug` `settled` `verified: both`
   FIXED and shipped in 1.12.3. CONFIRMED live 2026-08-27, then root-caused and
   closed. THE MECHANISM: an overwrite of an already-installed pack took rung 3
   of the conflict ladder, `PATCH /packs/{id}` - Cribl's "Upgrade a Pack",

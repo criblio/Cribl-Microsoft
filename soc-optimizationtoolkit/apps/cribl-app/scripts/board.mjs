@@ -36,6 +36,28 @@ const TYPES = ['bug', 'feature', 'chore', 'spike', 'decision'];
 const SETTLED = ['settled', 'undecided', 'unconfirmed'];
 
 /**
+ * HOW a finished story was confirmed - the evidence axis, and the counterpart
+ * to `settled`, which is about decision-confidence. The two are not
+ * interchangeable: a story can be perfectly settled and never verified.
+ *
+ *   pins  automated tests, and only those
+ *   live  driven against the real product or environment, and only that
+ *   both  pins AND a live run
+ *   none  neither - legitimate for docs and process work, and the value you
+ *         are meant to notice on anything else
+ *
+ * WHAT THIS FIELD CAN AND CANNOT DO. Required on `done` so nobody can quietly
+ * finish a story without saying how they know. Its truth is NOT checkable -
+ * nothing stops someone typing `both` - so it is a claim, and this repo's own
+ * history says hand-maintained claims rot. It is worth having anyway because
+ * the failure it prevents is the one that keeps recurring: GEN-1 closed on a
+ * live check and GEN-2 on pins plus a five-pack measurement, and the board
+ * rendered them identically. The evidence itself still lives in `backlog.md`
+ * and in the pins; this only forces the question to be answered.
+ */
+export const VERIFIED = ['pins', 'live', 'both', 'none'];
+
+/**
  * Every rule the board must satisfy. Ordering rules are the point: prose could
  * say "CAP blocks three epics" and nothing checked it, so it stayed a sentence a
  * reader had to notice.
@@ -78,6 +100,18 @@ export function validateBoard(data) {
     }
     if ((s.title ?? '').trim() === '') {
       out.push(`${s.id} has no title.`);
+    }
+    // Required on done, optional before it: a story can pick up pins while it
+    // is still in progress, but it cannot FINISH without saying how it was
+    // confirmed. Checking presence is all a validator can do - the value's
+    // truth is a claim - and presence is what stops "done" being silent.
+    if (s.status === 'done' && !VERIFIED.includes(s.verified)) {
+      out.push(
+        `${s.id} is done but does not say how it was verified; expected ${VERIFIED.join(' | ')}. A finished story that cannot answer this is one nobody can re-check.`,
+      );
+    }
+    if (s.status !== 'done' && s.verified !== undefined && !VERIFIED.includes(s.verified)) {
+      out.push(`${s.id} has verified "${s.verified}"; expected ${VERIFIED.join(' | ')}.`);
     }
   }
 
@@ -234,7 +268,12 @@ export function renderBoard(data, today) {
     }
     for (const s of items) {
       const blocked = blockers(s, byId);
-      const tags = [s.type, s.settled, ...(blocked.length ? [`blocked by ${blocked.join(', ')}`] : [])];
+      const tags = [
+        s.type,
+        s.settled,
+        ...(s.verified === undefined ? [] : [`verified: ${s.verified}`]),
+        ...(blocked.length ? [`blocked by ${blocked.join(', ')}`] : []),
+      ];
       L.push(`- **${s.id}** ${s.title}`);
       L.push(`  \`${tags.join('\` \`')}\``);
       if ((s.detail ?? '').trim() !== '') L.push(wrap(s.detail));

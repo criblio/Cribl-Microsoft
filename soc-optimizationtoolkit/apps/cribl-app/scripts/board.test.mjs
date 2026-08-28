@@ -72,8 +72,51 @@ describe('validateBoard - the shape of a story', () => {
     expect(out[0]).toContain('neither settled nor undecided');
   });
 
+  it('REQUIRES a done story to say how it was verified', () => {
+    // The point of the field: a story cannot reach done silently. GEN-1 closed
+    // on a live check and GEN-2 on pins plus a live measurement, and before
+    // this the board rendered the two identically.
+    const out = validateBoard(board([story({ status: 'done', priority: undefined })]));
+
+    expect(out).toHaveLength(1);
+    expect(out[0]).toContain('does not say how it was verified');
+  });
+
+  it('accepts every verified value on a done story, including none', () => {
+    // `none` is a legitimate answer for docs and process work. Forcing the
+    // question is the goal; forcing a particular answer would just make people
+    // type the prettiest one.
+    for (const v of ['pins', 'live', 'both', 'none']) {
+      expect(
+        validateBoard(board([story({ status: 'done', priority: undefined, verified: v })])),
+      ).toEqual([]);
+    }
+  });
+
+  it('does NOT require verified before a story is done', () => {
+    // A story picks up pins while it is in progress; demanding the field early
+    // would only teach people to fill it in speculatively.
+    expect(validateBoard(board([story({ status: 'backlog', priority: 'now' })]))).toEqual([]);
+    expect(validateBoard(board([story({ status: 'in-progress', priority: undefined })]))).toEqual(
+      [],
+    );
+  });
+
+  it('still rejects a BOGUS verified value on a story that is not done', () => {
+    // Optional does not mean unchecked - otherwise a typo sits there until the
+    // story is finished and then suddenly fails.
+    const out = validateBoard(
+      board([story({ status: 'in-progress', priority: undefined, verified: 'probably' })]),
+    );
+
+    expect(out).toHaveLength(1);
+    expect(out[0]).toContain('expected pins | live | both | none');
+  });
+
   it('only requires a priority while the story is in the backlog', () => {
-    expect(validateBoard(board([story({ status: 'done', priority: undefined })]))).toEqual([]);
+    expect(
+      validateBoard(board([story({ status: 'done', priority: undefined, verified: 'pins' })])),
+    ).toEqual([]);
     expect(
       validateBoard(board([story({ status: 'backlog', priority: undefined })])),
     ).toHaveLength(1);
@@ -108,7 +151,7 @@ describe('validateBoard - dependencies', () => {
 
   it('catches a done story whose dependency is not done', () => {
     const out = validateBoard(
-      two({ status: 'done', dependsOn: ['REL-2'] }, { status: 'backlog' }),
+      two({ status: 'done', verified: 'pins', dependsOn: ['REL-2'] }, { status: 'backlog' }),
     );
 
     expect(out).toHaveLength(1);
@@ -117,7 +160,12 @@ describe('validateBoard - dependencies', () => {
 
   it('accepts in-progress work whose blocker is already done', () => {
     expect(
-      validateBoard(two({ status: 'in-progress', dependsOn: ['REL-2'] }, { status: 'done' })),
+      validateBoard(
+        two(
+          { status: 'in-progress', dependsOn: ['REL-2'] },
+          { status: 'done', verified: 'pins' },
+        ),
+      ),
     ).toEqual([]);
   });
 
