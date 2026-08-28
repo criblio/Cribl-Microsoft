@@ -347,7 +347,7 @@
       "title": "Port `resource-coverage.json` to the app KV store as the selection model",
       "type": "enabler",
       "status": "backlog",
-      "priority": "later",
+      "priority": "now",
       "settled": "settled",
       "dependsOn": [],
       "detail": "The checkbox model exists as a file - port it, do not invent one. Its `method` values ARE the section keys. Keep the tier/profile sub-selections and the `notSupported` block verbatim. Precedes every sub-item. `backlog.md#6`."

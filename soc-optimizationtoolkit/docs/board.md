@@ -119,7 +119,7 @@ _Nothing here._
 
 ---
 
-## Backlog - now (8)
+## Backlog - now (9)
 
 Next to pick up. Nothing blocks these.
 
@@ -177,6 +177,13 @@ Next to pick up. Nothing blocks these.
   `backlog.md#4` calls "honest, but inert". Depends on CAP-1. Already
   measured, do not re-add: Event Hub namespace creation is `arm.deploy`; every
   Cribl-side write is `source.manage`. ---
+
+- **AZR-0** Port `resource-coverage.json` to the app KV store as the selection model
+  `AZR-F1` `enabler` `settled`
+  The checkbox model exists as a file - port it, do not invent one. Its
+  `method` values ARE the section keys. Keep the tier/profile sub-selections
+  and the `notSupported` block verbatim. Precedes every sub-item.
+  `backlog.md#6`.
 
 ---
 
@@ -259,7 +266,7 @@ Settled and unblocked, sequenced behind now.
 
 ---
 
-## Backlog - later (48)
+## Backlog - later (47)
 
 Settled, gated on something above.
 
@@ -291,13 +298,6 @@ Settled, gated on something above.
     [ ] `api-applier` Build a POST /system/inputs applier - The app creates the Event Hub / Blob source directly, which backlog.md#6c calls "the right call" and LOG-09's portability note demands. Net-new write surface, gated on source.manage.
     [ ] `export-only` Keep the generated-JSON hand-off - Stay with what Event Hub Discovery does: generate configs, download, operator imports and makes the secrets. No new write surface - but AZR-2, AZR-4, AZR-6 and AZR-8 each end at a manual import step.
     [ ] `connected-or-airgap` Write when connected, export when not - Both behind one convention, mirroring what secret-provisioning.ts already does for secrets (POST when connected, placeholder when air-gapped). NOTE: drawn from that existing convention, not from this card's own text. Costs two paths kept in step.
-
-- **AZR-0** Port `resource-coverage.json` to the app KV store as the selection model
-  `AZR-F1` `enabler` `settled`
-  The checkbox model exists as a file - port it, do not invent one. Its
-  `method` values ARE the section keys. Keep the tier/profile sub-selections
-  and the `notSupported` block verbatim. Precedes every sub-item.
-  `backlog.md#6`.
 
 - **AZR-1** Establish the additive-only contract
   `AZR-F9` `enabler` `settled`

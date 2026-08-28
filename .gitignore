@@ -99,6 +99,11 @@ logs/
 .claude/skills/*
 !.claude/skills/architecture-audit/
 !.claude/skills/backlog-grooming/
+# `.claude/skills/README.md` is ALSO tracked, but not by a rule here: the
+# blanket `!README.md` further down re-includes every README in an ignored
+# directory, and being later in the file it wins. Do not add a negation for it
+# above - a second rule that can never fire is the drift this file already
+# documents elsewhere. The README says so itself.
 .vscode/
 .vs/
 .idea/
