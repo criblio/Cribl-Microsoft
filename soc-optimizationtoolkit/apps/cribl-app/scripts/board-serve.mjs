@@ -13,12 +13,12 @@
 // Its own port, because 5173 is the Cribl dev app and a second Vite grabs 5174.
 
 import { createServer } from 'node:http';
-import { readFile } from 'node:fs/promises';
+import { readFile, writeFile } from 'node:fs/promises';
 import { watch } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { validateBoard } from './board.mjs';
+import { applyDecision, renderBoard, validateBoard } from './board.mjs';
 import { renderBoardHtml } from './board-html.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -55,8 +55,71 @@ async function page() {
   return renderBoardHtml(data, today, validateBoard(data));
 }
 
+/**
+ * Record an answer against a decision.
+ *
+ * Re-reads board.json first rather than trusting anything the page was
+ * rendered from - it may have been hand-edited since - and validates the
+ * RESULT before writing, so a click can never leave the board in a state
+ * check-board would reject. board.md is re-rendered in the same breath,
+ * because a write that made CI fail would be a poor kind of convenience.
+ */
+async function decide(body) {
+  let data;
+  try {
+    data = JSON.parse(await readFile(boardPath, 'utf8'));
+  } catch (e) {
+    return { status: 500, text: `board.json could not be read: ${e}` };
+  }
+  const applied = applyDecision(data, body.id, body.option ?? null);
+  if (!applied.ok) return { status: 400, text: applied.error };
+
+  const findings = validateBoard(applied.data);
+  if (findings.length > 0) {
+    return { status: 409, text: `That answer would break the board:\n${findings.join('\n')}` };
+  }
+
+  // CRLF and two-space indent, matching what board.mjs and the repo write.
+  const json = JSON.stringify(applied.data, null, 2).replace(/\n/g, '\r\n') + '\r\n';
+  await writeFile(boardPath, json, 'utf8');
+  const today = new Date().toISOString().slice(0, 10);
+  await writeFile(join(docsDir, 'board.md'), renderBoard(applied.data, today), 'utf8');
+  return { status: 200, text: 'recorded' };
+}
+
+function readJsonBody(req) {
+  return new Promise((resolve, reject) => {
+    let raw = '';
+    req.on('data', (c) => {
+      raw += c;
+      // A local dev tool still should not accept an unbounded body.
+      if (raw.length > 64_000) reject(new Error('body too large'));
+    });
+    req.on('end', () => {
+      try {
+        resolve(JSON.parse(raw));
+      } catch (e) {
+        reject(e);
+      }
+    });
+    req.on('error', reject);
+  });
+}
+
 const server = createServer(async (req, res) => {
   const url = (req.url ?? '/').split('?')[0];
+
+  if (url === '/decide' && req.method === 'POST') {
+    let out;
+    try {
+      out = await decide(await readJsonBody(req));
+    } catch (e) {
+      out = { status: 400, text: `bad request: ${e instanceof Error ? e.message : e}` };
+    }
+    res.writeHead(out.status, { 'Content-Type': 'text/plain; charset=utf-8' });
+    res.end(out.text);
+    return;
+  }
 
   if (url === '/events') {
     res.writeHead(200, {

@@ -139,6 +139,80 @@ describe('renderBoardHtml', () => {
     expect(html).toContain('href="#card-REL-2"');
   });
 
+  it('renders a decision as pickable options, wired to the story', () => {
+    const html = renderBoardHtml(
+      board([
+        story({
+          id: 'D-1',
+          settled: 'undecided',
+          decision: {
+            question: 'Footer or connection bar?',
+            options: [
+              { key: 'footer', label: 'Frame footer' },
+              { key: 'bar', label: 'Connection bar' },
+            ],
+            chosen: null,
+          },
+        }),
+      ]),
+      '2026-08-28',
+    );
+
+    expect(html).toContain('Footer or connection bar?');
+    expect(html).toContain('name="dec-D-1"');
+    expect(html).toContain('value="footer"');
+    expect(html).toContain('value="bar"');
+    expect(html).toContain('data-story="D-1"');
+  });
+
+  it('SAYS that a click records an answer rather than settling the card', () => {
+    // Without this the green tick reads as "decided", which is exactly the
+    // conflation the feature is built to avoid.
+    const html = renderBoardHtml(
+      board([
+        story({
+          settled: 'undecided',
+          decision: {
+            question: 'A or B?',
+            options: [
+              { key: 'a', label: 'A' },
+              { key: 'b', label: 'B' },
+            ],
+            chosen: null,
+          },
+        }),
+      ]),
+      '2026-08-28',
+    );
+
+    expect(html).toContain('does not settle the card');
+  });
+
+  it('marks the chosen option and still says the card is undecided', () => {
+    const html = renderBoardHtml(
+      board([
+        story({
+          settled: 'undecided',
+          decision: {
+            question: 'A or B?',
+            options: [
+              { key: 'a', label: 'A' },
+              { key: 'b', label: 'B' },
+            ],
+            chosen: 'b',
+          },
+        }),
+      ]),
+      '2026-08-28',
+    );
+
+    // Exactly one option is pre-selected, and it is b.
+    expect(html.match(/ checked>/g)).toHaveLength(1);
+    expect(html).toMatch(/value="b"[^>]* checked>/);
+    expect(html).toContain('class="opt picked"');
+    expect(html).toContain('Still <strong>undecided</strong>');
+  });
+
   it('shows validation findings instead of hiding them', () => {
     // The server passes validateBoard's output straight in. A board that
     // breaks its own rules is exactly when someone is looking at this page.

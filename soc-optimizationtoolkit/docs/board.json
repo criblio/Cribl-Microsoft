@@ -746,6 +746,22 @@
       "priority": "later",
       "settled": "undecided",
       "dependsOn": [],
+      "decision": {
+        "question": "Where does the HON-6 freshness indicator go?",
+        "options": [
+          {
+            "key": "footer",
+            "label": "Frame footer",
+            "detail": "One always-visible surface, away from the connection chips."
+          },
+          {
+            "key": "connection-bar",
+            "label": "Connection bar",
+            "detail": "Beside the existing secret / target / platform-link chips."
+          }
+        ],
+        "chosen": null
+      },
       "detail": "ink chips? Excluded already: the nav (tried, wrong surface) and the preflight panel (re-measures on arrival, so it would only ever read \"just now\")."
     },
     {
@@ -768,6 +784,22 @@
       "priority": "later",
       "settled": "undecided",
       "dependsOn": [],
+      "decision": {
+        "question": "How do capabilities reach the ~8 listing screens?",
+        "options": [
+          {
+            "key": "prop-drill",
+            "label": "Keep prop-drilling from the shell",
+            "detail": "No seam change; every PortsProvider call site updates. Cheap now, less so later."
+          },
+          {
+            "key": "ports-context",
+            "label": "Carry them in PortsContext beside config",
+            "detail": "One seam change. At eight listers this is the duplication that drifts."
+          }
+        ],
+        "chosen": null
+      },
       "detail": ", or carry them in `PortsContext` beside `config`? One seam change against updating every `PortsProvider` call site. Cheap now, less so later; at eight listers this is the duplication that drifts. `backlog.md:331-336`."
     },
     {
@@ -801,6 +833,27 @@
       "priority": "later",
       "settled": "undecided",
       "dependsOn": [],
+      "decision": {
+        "question": "PK-2 source of truth: what does pack maintenance read?",
+        "options": [
+          {
+            "key": "re-analyse",
+            "label": "Re-analyse the pack's samples",
+            "detail": "Needs the original samples, which the pack carries but which may no longer represent live traffic."
+          },
+          {
+            "key": "stored",
+            "label": "Read a stored analysis",
+            "detail": "Cheap, and goes stale silently."
+          },
+          {
+            "key": "live-schema",
+            "label": "Re-analyse against the LIVE table schema",
+            "detail": "Shows what changed since the pack was built; the same fetch the picker already makes. Noted on the card as probably the honest one."
+          }
+        ],
+        "chosen": null
+      },
       "detail": "eds the original samples, which the pack carries but which may no longer represent live traffic; a stored verdict is cheap and goes stale silently. A third option - re-analyse against the LIVE table schema and show what changed since the pack was built - is probably the honest one, and is the same fetch the picker already makes. `backlog.md:1137-1167`."
     },
     {
@@ -834,6 +887,22 @@
       "priority": "later",
       "settled": "undecided",
       "dependsOn": [],
+      "decision": {
+        "question": "Setup wizard header promises three phases; the stepper shows one.",
+        "options": [
+          {
+            "key": "drop-enumeration",
+            "label": "Drop the enumeration from the header",
+            "detail": "Header stops promising what the stepper does not show."
+          },
+          {
+            "key": "promote-substeps",
+            "label": "Promote the sub-steps into the stepper",
+            "detail": "Stepper starts showing what the header promises."
+          }
+        ],
+        "chosen": null
+      },
       "detail": "Either drop the enumeration from the header, or promote the sub-steps. Measured on two live walkthroughs 2026-08-06. `backlog.md:826-832`."
     },
     {

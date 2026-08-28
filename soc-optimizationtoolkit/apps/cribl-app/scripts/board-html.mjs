@@ -79,6 +79,32 @@ function card(story, byId) {
     );
   }
   const detail = (story.detail ?? '').trim();
+  const d = story.decision;
+  const decisionBlock =
+    d === undefined
+      ? ''
+      : [
+          `<div class="decision${d.chosen ? ' answered' : ''}">`,
+          `<p class="q">${richText(d.question)}</p>`,
+          ...(d.options ?? []).map(
+            (o) =>
+              `<label class="opt${o.key === d.chosen ? ' picked' : ''}">` +
+              `<input type="radio" name="dec-${esc(story.id)}" value="${esc(o.key)}"` +
+              ` data-story="${esc(story.id)}"${o.key === d.chosen ? ' checked' : ''}>` +
+              `<span class="opt-label">${esc(o.label)}</span>` +
+              ((o.detail ?? '').trim() === ''
+                ? ''
+                : `<span class="opt-detail">${richText(o.detail)}</span>`) +
+              `</label>`,
+          ),
+          // Says out loud what a click does, so nobody reads it as "decided".
+          `<p class="note">${
+            d.chosen
+              ? 'Answer recorded. Still <strong>undecided</strong> until the reasoning lands in backlog.md.'
+              : 'Picking an option records your answer only - it does not settle the card.'
+          }</p>`,
+          `</div>`,
+        ].join('');
   return [
     `<article class="card${blocked.length ? ' is-blocked' : ''}" id="card-${esc(story.id)}"`,
     ` data-epic="${esc(story.epic)}" data-type="${esc(story.type)}"`,
@@ -88,6 +114,7 @@ function card(story, byId) {
     `<span class="epic">${esc(story.epic)}</span></header>`,
     `<h3>${esc(story.title)}</h3>`,
     `<div class="tags">${tags.join('')}</div>`,
+    decisionBlock,
     detail === ''
       ? ''
       : `<details><summary>detail</summary><p>${richText(detail)}</p></details>`,
@@ -198,6 +225,18 @@ input[type=search]{background:var(--panel);border:1px solid var(--line);color:va
 .tag.settled-undecided{background:#3a2a12;color:#ffbe5c}
 .tag.settled-unconfirmed{background:#3a2a12;color:#ffbe5c}
 .tag.blocked{background:#3a2a12;color:#ffbe5c}
+.decision{margin-top:8px;border:1px solid #7a5a12;background:#241d0e;border-radius:6px;padding:8px 9px}
+.decision.answered{border-color:#2f5e3f;background:#12210f}
+.decision .q{margin:0 0 7px;font-size:12px;color:#ffd79a;line-height:1.4}
+.decision.answered .q{color:#a9e6bd}
+.opt{display:block;margin:0 0 5px;padding:5px 7px;border:1px solid var(--line);border-radius:5px;cursor:pointer;background:#0e1620}
+.opt:hover{border-color:var(--accent)}
+.opt.picked{border-color:#4fbf7a;background:#10241a}
+.opt input{margin-right:6px;vertical-align:top}
+.opt-label{font-size:12px;font-weight:600}
+.opt-detail{display:block;margin:3px 0 0 20px;font-size:11.5px;color:var(--dim);line-height:1.4}
+.decision .note{margin:6px 0 0;font-size:10.5px;color:var(--dim);line-height:1.4}
+.decision.answered .note{color:#8fbf9f}
 details{margin-top:7px}
 summary{cursor:pointer;color:var(--dim);font-size:11px;text-transform:uppercase;letter-spacing:.05em}
 details p{margin:6px 0 0;color:#c3d2e2;font-size:12.5px;white-space:pre-wrap}
@@ -244,6 +283,17 @@ for(const b of document.querySelectorAll('[data-filter-epic]')){
     epic=epic===k?null:k;
     for(const o of document.querySelectorAll('[data-filter-epic]'))o.classList.toggle('on',o.dataset.filterEpic===epic);
     apply();
+  });
+}
+// Answering a decision writes board.json; the resulting change event reloads
+// the page, so the card re-renders from the file rather than from optimism.
+for(const r of document.querySelectorAll('.decision input[type=radio]')){
+  r.addEventListener('change',async()=>{
+    const body=JSON.stringify({id:r.dataset.story,option:r.value});
+    try{
+      const res=await fetch('/decide',{method:'POST',headers:{'Content-Type':'application/json'},body});
+      if(!res.ok){alert('Could not record that answer: '+(await res.text()));r.checked=false;}
+    }catch(e){alert('Could not reach the board server: '+e);r.checked=false;}
   });
 }
 // Live reload: the server pushes on every board.json write.
