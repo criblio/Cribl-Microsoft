@@ -11,7 +11,7 @@ two cannot disagree.
 alternatives. This board holds only what is a unit of work, what state it is
 in, and what it waits on.
 
-**60 in the backlog, 0 in progress, 24 done.**
+**61 in the backlog, 0 in progress, 24 done.**
 
 ## By menu item
 
@@ -24,13 +24,13 @@ operator sees on any screen. Two menus are PLANNED and have no route yet.
 | Dataflow | 2 | 0 | 0 |
 | Setup | 1 | 0 | 0 |
 | Sentinel Integration | 19 | 5 | 5 |
-| Pack Maintenance | 4 | 0 | 0 |
+| Pack Maintenance | 5 | 0 | 1 |
 | Permission Verification | 8 | 0 | 0 |
 | Azure Native Source Onboarding (planned) | 13 | 4 | 0 |
 | Windows Event analysis (planned) | 5 | 0 | 0 |
 | Cross-cutting | 8 | 15 | 1 |
 
-Open work totals 60.
+Open work totals 61.
 
 ## Epics and features
 
@@ -83,13 +83,13 @@ What the build actually emits
 |---|---|---|---|
 | `GEN-F1` Pack generation correctness and provenance | Sentinel Integration | 3/3 | GEN-1, GEN-2, GEN-3 |
 
-### `PK` Pack maintenance parity - 0% (0/3)
+### `PK` Pack maintenance parity - 0% (0/4)
 
 Maintaining a pack after it is built, including a silent data-loss defect
 
 | Feature | Menu | Done | Stories |
 |---|---|---|---|
-| `PK-F1` Pack maintenance parity | Pack Maintenance | 0/3 | PK-1, PK-2, D-6 |
+| `PK-F1` Pack maintenance parity | Pack Maintenance | 0/4 | PK-1, PK-2, PK-3, D-6 |
 
 ### `VND` Vendor field definitions - 25% (1/4)
 
@@ -138,7 +138,7 @@ _Nothing here._
 
 ---
 
-## Backlog - now (6)
+## Backlog - now (7)
 
 Next to pick up. Nothing blocks these.
 
@@ -154,6 +154,24 @@ Next to pick up. Nothing blocks these.
   log type placeholders even when its values name their log types perfectly.
   The format-aware hint shipped in 1.11.11; the earlier warning did not.
   `backlog.md#13c`.
+
+- **PK-3** Pack Maintenance renders empty until you press Refresh
+  `PK-F1` `bug` `settled`
+  FOUND LIVE 2026-08-28, immediately after building and installing a pack.
+  Navigating to Pack Maintenance shows the heading, the description "Every
+  pack built by this app...", and a lone Refresh button - NO list, no spinner,
+  no empty-state sentence, and no hint that a click is required. Pressing
+  Refresh then loads "12 builds across 4 packs, 4.3 MiB stored" including the
+  pack built seconds earlier. So the first thing an operator sees on this
+  screen is indistinguishable from "this app has never built a pack", which is
+  the ABSENT-VERSUS-ZERO distinction docs/inventory-standard.md exists to
+  protect and the same failure HON-1 and HON-2 are about on the picker and the
+  listers. Sharper here than usual because the build log one screen earlier
+  says "Build record saved - the pack is also downloadable from the Packs
+  screen", so the app tells the operator to go somewhere that then appears to
+  contradict it. Cheapest honest fix is an initial load; if a manual load is
+  deliberate (cost, or the live packs API call), the screen has to SAY so
+  rather than render as an empty inventory.
 
 - **VND-3** Measure the column-order shortfall instead of hedging about it
   `VND-F1` `bug` `settled`
@@ -989,7 +1007,7 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   delete-refused path. *bug, fixed. `backlog.md` item 14d/14f.*
 
 - **GEN-3** Stamp the toolkit version into the pack it builds
-  `GEN-F1` `story` `settled` `verified: pins`
+  `GEN-F1` `story` `settled` `verified: both`
   Given a `.crbl`, nothing says which toolkit build produced it. The manifest
   carries exactly eight fields (`domain/pack-assembly/package-json.ts`) -
   name, version, author, description, displayName, tags, exports,
@@ -1025,7 +1043,18 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   is checkable, a literal "unknown" is a claim. The shell prefers
   `__APP_VERSION_RUNTIME__` over the build-time define so the live preview
   does not stamp a stale version, matching the footer. Mutation-checked:
-  ignoring the supplied version fails 2 pins.
+  ignoring the supplied version fails 2 pins. VERIFIED LIVE 2026-08-28: the
+  dev app built MS-Sentinel-PaloAlto-PAN_1.0.0.crbl (60,439 bytes) with this
+  change in it, and it installed as ms-sentinel-paloalto-pan on the default
+  worker group. ONE RISK CHECKED RATHER THAN ASSUMED: Pack Maintenance
+  regenerates the .crbl on download from a stored definition rather than
+  serving persisted bytes, and PackBuildRecord does NOT carry toolkitVersion -
+  the card said as much. Followed it through: the stored definition is
+  PackScaffoldInput, whose `plan` is a full PipelinePlan, and PipelinePlan is
+  exactly where toolkitVersion now lives. So the stamp survives regeneration.
+  Packs built BEFORE this change carry no toolkitVersion in their stored
+  definition and therefore regenerate with the bare legacy author - correct
+  and honest, since they genuinely do not know what built them.
 
 - **DBT-16** The kanban hardcoded its own copy of the status vocabulary
   `DBT-F5` `bug` `settled` `verified: pins`
