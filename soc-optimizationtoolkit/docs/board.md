@@ -11,7 +11,7 @@ two cannot disagree.
 alternatives. This board holds only what is a unit of work, what state it is
 in, and what it waits on.
 
-**61 in the backlog, 0 in progress, 21 done.**
+**61 in the backlog, 0 in progress, 24 done.**
 
 ## By menu item
 
@@ -23,12 +23,12 @@ operator sees on any screen. Two menus are PLANNED and have no route yet.
 |---|---|---|---|
 | Dataflow | 2 | 0 | 0 |
 | Setup | 1 | 0 | 0 |
-| Sentinel Integration | 21 | 2 | 8 |
-| Pack Maintenance | 4 | 0 | 0 |
+| Sentinel Integration | 19 | 5 | 5 |
+| Pack Maintenance | 5 | 0 | 1 |
 | Permission Verification | 8 | 0 | 0 |
 | Azure Native Source Onboarding (planned) | 13 | 4 | 0 |
 | Windows Event analysis (planned) | 5 | 0 | 0 |
-| Cross-cutting | 7 | 15 | 1 |
+| Cross-cutting | 8 | 15 | 1 |
 
 Open work totals 61.
 
@@ -65,7 +65,7 @@ Sentinel-side and Lake-side halves of Windows event handling
 | `WIN-F2` Microsoft proprietary enrichment catalog | Windows Event analysis (planned) | 0/2 | WIN-2, D-4 |
 | `WIN-F3` Lake copy format - JSON vs Parquet | Windows Event analysis (planned) | 0/1 | D-5 |
 
-### `HON` Inventory and diagnostic honesty - 0% (0/10)
+### `HON` Inventory and diagnostic honesty - 9% (1/11)
 
 Measured gaps where the app reports a confident wrong answer
 
@@ -73,31 +73,31 @@ Measured gaps where the app reports a confident wrong answer
 |---|---|---|---|
 | `HON-F1` Capability model follow-ons | Permission Verification | 0/4 | HON-6, HON-7*, D-1, D-2* |
 | `HON-F2` Unverified empty inventories | Sentinel Integration | 0/3 | HON-1, HON-2, D-3 |
-| `HON-F3` Guid-column aftermath, made visible | Sentinel Integration | 0/3 | HON-3, HON-4, D-11 |
+| `HON-F3` Guid-column aftermath, made visible | Sentinel Integration | 1/4 | HON-3, HON-8*, HON-4, D-11 |
 
-### `GEN` Pipeline and pack generation - 67% (2/3)
+### `GEN` Pipeline and pack generation - 100% (3/3)
 
 What the build actually emits
 
 | Feature | Menu | Done | Stories |
 |---|---|---|---|
-| `GEN-F1` Pack generation correctness and provenance | Sentinel Integration | 2/3 | GEN-1, GEN-2, GEN-3 |
+| `GEN-F1` Pack generation correctness and provenance | Sentinel Integration | 3/3 | GEN-1, GEN-2, GEN-3 |
 
-### `PK` Pack maintenance parity - 0% (0/3)
+### `PK` Pack maintenance parity - 0% (0/4)
 
 Maintaining a pack after it is built, including a silent data-loss defect
 
 | Feature | Menu | Done | Stories |
 |---|---|---|---|
-| `PK-F1` Pack maintenance parity | Pack Maintenance | 0/3 | PK-1, PK-2, D-6 |
+| `PK-F1` Pack maintenance parity | Pack Maintenance | 0/4 | PK-1, PK-2, PK-3, D-6 |
 
-### `VND` Vendor field definitions - 0% (0/4)
+### `VND` Vendor field definitions - 25% (1/4)
 
 Positional CSV naming, reaching past ~18 vendors
 
 | Feature | Menu | Done | Stories |
 |---|---|---|---|
-| `VND-F1` Vendor column-order naming | Sentinel Integration | 0/4 | HON-5, VND-3, VND-1, D-7 |
+| `VND-F1` Vendor column-order naming | Sentinel Integration | 1/4 | HON-5, VND-3, VND-1, D-7 |
 
 ### `CAP` Capability taxonomy extension _(enabler)_ - 0% (0/6)
 
@@ -115,14 +115,14 @@ ENABLER EPIC: release mechanics. The packaged tarball trails main, and the lab t
 |---|---|---|---|
 | `REL-F1` Release and deployment hygiene | Cross-cutting | 2/5 | REL-2, REL-3, REL-4, REL-5, REL-6 |
 
-### `DBT` Quality and technical debt _(enabler)_ - 45% (13/29)
+### `DBT` Quality and technical debt _(enabler)_ - 43% (13/30)
 
 ENABLER EPIC: verification gaps, copy, diagram fidelity, docs and the board's own tooling
 
 | Feature | Menu | Done | Stories |
 |---|---|---|---|
 | `DBT-F1` Verification gaps | Sentinel Integration | 0/4 | DBT-2, DBT-5*, DBT-6, DBT-7 |
-| `DBT-F2` Copy and UX | Sentinel Integration | 0/6 | DBT-3, DBT-4, DBT-9, DBT-14, DBT-15, D-10* |
+| `DBT-F2` Copy and UX | Sentinel Integration | 0/7 | DBT-3, DBT-4, DBT-9, DBT-14, DBT-15, DBT-28, D-10* |
 | `DBT-F3` Diagram fidelity | Dataflow | 0/2 | DBT-1, DBT-12 |
 | `DBT-F4` Docs and spec grounding | Cross-cutting | 3/6 | DBT-8, DBT-10, DBT-11, DBT-13, DBT-22, DBT-26 |
 | `DBT-F5` Board tooling defects | Cross-cutting | 10/10 | DBT-16, DBT-17, DBT-18, DBT-19, DBT-20, DBT-21, DBT-23, DBT-24, DBT-25, DBT-27 |
@@ -138,7 +138,7 @@ _Nothing here._
 
 ---
 
-## Backlog - now (9)
+## Backlog - now (7)
 
 Next to pick up. Nothing blocks these.
 
@@ -148,13 +148,6 @@ Next to pick up. Nothing blocks these.
   secret. Flagged for rotation by `adr/0002-drop-local-target.md:57-62` and
   still outstanding. *chore, SETTLED. Security. Size: minutes.*
 
-- **HON-3** Surface `droppedColumns` and `unknownTypeColumns` in the UI
-  `HON-F3` `story` `settled`
-  The diagnostics already exist and reach nobody - repo-wide the only
-  consumers are two test files. Already propagated through `dcr-request.ts`,
-  so this is a rendering job, not plumbing. `adr/0004:87-88`, named there as
-  the strongest argument for doing it next.
-
 - **HON-5** Warn a CSV vendor's operator before the preview that the pack can never route automatically
   `VND-F1` `story` `settled`
   Both route discriminators return early for CSV by construction, so every CSV
@@ -162,23 +155,64 @@ Next to pick up. Nothing blocks these.
   The format-aware hint shipped in 1.11.11; the earlier warning did not.
   `backlog.md#13c`.
 
+- **PK-3** Pack Maintenance renders empty until you press Refresh
+  `PK-F1` `bug` `settled`
+  FOUND LIVE 2026-08-28, immediately after building and installing a pack.
+  Navigating to Pack Maintenance shows the heading, the description "Every
+  pack built by this app...", and a lone Refresh button - NO list, no spinner,
+  no empty-state sentence, and no hint that a click is required. Pressing
+  Refresh then loads "12 builds across 4 packs, 4.3 MiB stored" including the
+  pack built seconds earlier. So the first thing an operator sees on this
+  screen is indistinguishable from "this app has never built a pack", which is
+  the ABSENT-VERSUS-ZERO distinction docs/inventory-standard.md exists to
+  protect and the same failure HON-1 and HON-2 are about on the picker and the
+  listers. Sharper here than usual because the build log one screen earlier
+  says "Build record saved - the pack is also downloadable from the Packs
+  screen", so the app tells the operator to go somewhere that then appears to
+  contradict it. Cheapest honest fix is an initial load; if a manual load is
+  deliberate (cost, or the live packs API call), the screen has to SAY so
+  rather than render as an empty inventory.
+
 - **VND-3** Measure the column-order shortfall instead of hedging about it
-  `VND-F1` `bug` `undecided`
+  `VND-F1` `bug` `settled`
   Found live 2026-08-27: THREAT arrived with 38 fields and was named from the
   bundled 120-column PAN order; TRAFFIC, 41 against 115. Positional naming
   maps field[i] to name[i], so a feed missing any middle column mis-names
   everything after it, silently. The copy says "check the values beside each
   name before applying", which is a hedge where the app already holds the
   number. *bug, UNDECIDED whether a large shortfall should warn or block.
-  `backlog.md` 13c.*
-  DECISION (unanswered): When a bundled column order far exceeds the event's
-  field count, warn or block?
+  `backlog.md` 13c.* ANSWERED 2026-08-28 (user): warn above a threshold, Apply
+  stays ENABLED. Reasoning at backlog.md#13c. Blocking was tempting and wrong:
+  the rest of the app is pinned to annotate-never-hide-never-disable, a short
+  feed can be legitimately named once the order is edited, and this would be
+  the only control in the product disabled on a heuristic - which is how an
+  exception becomes a precedent. Threshold stated rather than derived (a
+  product call, not a measurement): warn when the bundled order exceeds the
+  field count by more than a quarter. Both live cases trip it - 38-of-120 and
+  41-of-115 are under half. REPRODUCED LIVE 2026-08-28 with the apps OWN
+  NUMBERS IN THE SAME UI ROW. Pasted a standard 38-field PAN-OS THREAT syslog
+  line against solution PaloAlto-PAN-OS. The sample chip read: CSV | THREAT |
+  1 event, 35 fields, time: receive_time - and directly beneath it, "Column
+  names: Bundled Palo Alto Networks THREAT column order (120 columns) - check
+  the values beside each name before applying." So the app printed 35 and 120
+  adjacent to each other and STILL showed the hedge instead of the
+  measurement, which is exactly the cards complaint. 35 of 120 is a 71 percent
+  shortfall, well over the agreed quarter threshold, so it warns. NOTE for
+  whoever builds it: positional naming was otherwise CORRECT on this complete
+  line - receive_time, serial, type, subtype, src, dst, natsrc, rule, srcuser,
+  app, vsys, inbound_if, sessionid, sport, dport, flags, proto, threatid,
+  severity, seqno and actionflags all landed on the right values. The
+  mis-naming this card warns about needs a feed with a MISSING MIDDLE column,
+  which a complete line does not exercise - so the fix should be pinned
+  against a gapped sample, not this one.
+  DECISION: When a bundled column order far exceeds the event's field count,
+  warn or block?
     [ ] `measure-only` Show the number, drop the hedge - Replace "check the values beside each name before applying" with the measured 38-of-120 and stop there. backlog.md#13c says it is a number the app already has and could show.
-    [ ] `warn` Warn above a shortfall threshold - A large shortfall warns visibly; Apply stays enabled. Matches the capability model's annotate-never-hide-never-disable rule, and a short feed can still be legitimately named once the order is edited.
+    [x] `warn` Warn above a shortfall threshold - A large shortfall warns visibly; Apply stays enabled. Matches the capability model's annotate-never-hide-never-disable rule, and a short feed can still be legitimately named once the order is edited.
     [ ] `block` Block Apply above the threshold - Disable Apply until the order is edited or explicitly overridden. Strongest guard against mis-naming every column after the first gap, and Skip already preserves the positional _N names - but it runs against the annotate-never-hide rule the rest of the app pins.
 
 - **VND-1** Let the operator name the vendor
-  `VND-F1` `story` `settled` `blocked by D-7`
+  `VND-F1` `story` `settled`
   Today the vendor comes from `detectVendorIdentity(solutionName)`, so
   anything outside `KNOWN_VENDOR_IDENTITIES` stores nothing - honest, but it
   caps the feature at about eighteen vendors. Needs a UI seam that was
@@ -196,38 +230,9 @@ Next to pick up. Nothing blocks these.
   The Lake write path adds `_raw`, so no Lake-sourced bench can reach that
   branch - it needs a paste or an upload. `zscaler-lake-lab.md:167-179`.
 
-- **D-7** `VND-2` Does a persisted column order need a version or a captured-on date, so a firmware chang
-  `VND-F1` `decision` `undecided`
-  e can be reasoned about later rather than silently disagreeing with a future
-  bundled update? The only genuinely open question left in that plan.
-  `vendor-field-definition-plan.md:222-224`.
-  DECISION (unanswered): Should a persisted vendor column order carry a
-  version, a captured-on date, or neither?
-    [ ] `neither` Store neither - Keep vendor + logType + columns + overrides. The silent-disagreement harm is already handled: resolveColumnOrder re-derives the override notice against the CURRENT bundled order, and machine-applied pass-throughs are never stored.
-    [ ] `captured-on` Stamp a captured-on date - Record when the operator captured the order, so a later divergence reads as "captured before that change" rather than an unexplained disagreement. Always available - but it dates the capture, it does not identify the firmware.
-    [ ] `version` Record a version - Sharper than a date, but the version has to come from somewhere: nothing in the sample or the CSV-header dialog supplies one today, so it means asking the operator.
-
-- **GEN-3** Stamp the toolkit version into the pack it builds
-  `GEN-F1` `story` `settled`
-  Given a `.crbl`, nothing says which toolkit build produced it. The manifest
-  carries exactly eight fields (`domain/pack-assembly/package-json.ts`) -
-  name, version, author, description, displayName, tags, exports,
-  minLogStreamVersion - and `author` is the constant "Cribl SOC Toolkit" while
-  `version` is just highest-installed-plus-one, so it tracks how many times
-  the pack was rebuilt, not what built it. The persisted `PackBuildRecord`
-  does not carry it either. The app version exists only as `__APP_VERSION__`
-  for the UI footer. COST, paid on 2026-08-27: asked whether a pack in the
-  workspace was the one just built, the artifact could not answer; it took a
-  git-log check and a sample-count comparison to establish provenance. Every
-  future regression report about "the pack" pays this again. Cheapest fix: one
-  more manifest field, set from the same define the footer reads. *feature,
-  settled. [[GEN-2]] is fixed, so leftovers no longer accumulate - but the
-  provenance gap stands on its own: it cost a git-log check to answer "is this
-  pack today's?" during that very investigation.*
-
 ---
 
-## Backlog - next (21)
+## Backlog - next (23)
 
 Settled and unblocked, sequenced behind now.
 
@@ -289,6 +294,22 @@ Settled and unblocked, sequenced behind now.
   A verdict is evidence only about the scope it was measured at, and that
   includes off-scope denials. `emptyInventoryMessage` now requires a scope
   argument, so the compiler prompts each new call site. `backlog.md#4`.
+
+- **HON-8** buildDeploymentPreview has no caller - the REVIEW stage is a usecase with no screen
+  `HON-F3` `bug` `unconfirmed`
+  FOUND while building HON-3 on 2026-08-28, looking for the right surface for
+  the column diagnostics. `buildDeploymentPreview` is a full usecase - roughly
+  700 lines with its own test file, DCE handling, existing-resource checks and
+  a JSON-serializable result - and repo-wide the ONLY references are inside
+  its own file and its own test. Nothing in `packages/ui` or `apps/cribl-app`
+  calls it. journey-state describes REVIEW as a shipped stage ("the Unit 7
+  deployment-preview screen - the ux-flow-plan 5.2 REVIEW stage"), which is
+  what makes this worth a card rather than a shrug: either the screen exists
+  and does not use this, or the stage is not shipped and a live document says
+  it is. UNCONFIRMED deliberately - I have not driven the app to see what
+  REVIEW renders today, and the two possibilities need different fixes.
+  Compare with the AZR modules, which also have no consumer but are honestly
+  ahead of their screens; this one has a stage claiming to BE the consumer.
 
 - **HON-4** Tell operators that DCRs deployed before the guid fix still lose fields
   `HON-F3` `story` `settled`
@@ -352,14 +373,45 @@ Settled and unblocked, sequenced behind now.
   anything scrolls. Five of eight results were reachable. This is the
   reproduction the old nested-scrolling question never had, which is what
   turns it from an annoyance into a bug. *bug, SETTLED. `backlog.md` item
-  13d.*
+  13d.* NOT RE-TESTABLE BY BROWSER AUTOMATION (tried 2026-08-28): wheel events
+  do not reach the app at all through the Cribl shell iframe - scrolling over
+  the list, over the page heading, and over the outer margin all moved
+  nothing. So automation cannot distinguish "the list swallows the wheel" from
+  "the wheel never arrived", and an automated run would either report a false
+  confirmation or a false all-clear. This card stays on the HUMAN reproduction
+  that filed it. Whoever fixes it should verify by hand for the same reason.
 
 - **DBT-15** Give every solution row a delivery-fit badge, or say why not
   `DBT-F2` `bug` `settled`
   "Palo Alto Cortex XDR" renders none while all seven of its siblings do.
   Blank reads as neither "not measured" nor "does not apply" - the
   absent-versus-zero distinction the inventory standard exists to protect.
-  *bug, SETTLED. `backlog.md` item 13e.*
+  *bug, SETTLED. `backlog.md` item 13e.* CONFIRMED LIVE 2026-08-28 in the dev
+  app (/apps/a/__local__), unfiltered solution list: AbuseIPDB and Acronis
+  Cyber Protect Cloud carry NO fit badge while 1Password and Agari show
+  Supported, 42Crunch API Protection and AbnormalSecurity show Recommended,
+  and Agent 365 shows Legacy. So the blank is not a rendering failure of one
+  row - the badge column works, and these rows genuinely have nothing to show.
+  Was reported from the eight Palo results; reproduces on the default list,
+  which makes it easier to test.
+
+- **DBT-28** The solution deep link does not override a stored selection
+  `DBT-F2` `bug` `unconfirmed`
+  FOUND 2026-08-28 driving the dev app. The Select Sentinel Solution card
+  advertises `Deep link: #/?solution=1Password`. Navigating the live preview
+  to `/apps/a/__local__#/?solution=Palo%20Alto%20Networks` left 1Password
+  selected - the stored selection won and the URL had no effect. TWO CANDIDATE
+  CAUSES and I have not separated them, which is why this is unconfirmed
+  rather than a fix: (1) on the Cribl shell the app runs in an IFRAME and the
+  hash lands on the OUTER frame, so the app may never see it at all - in which
+  case the advertised link is only usable in a standalone shell and the copy
+  is overstating; (2) integrate-screen.tsx says the link is "consumed once so
+  Clear works", so a persisted selection may be designed to win. Settle which
+  before changing anything: if (1), the deep link is broken on the only
+  shipped shell and the card that advertises it is misleading; if (2), it
+  behaves as designed and the COPY needs to say that a stored selection takes
+  precedence. Worth noting the reporter could not tell from the outside, which
+  is the actual defect either way.
 
 - **D-2** `HON-7` surface area: which of Integrate deploy, Batch Deploy and DCR Automation get the fallba
   `HON-F1` `decision` `undecided`
@@ -682,7 +734,7 @@ Settled, gated on something above.
 
 ---
 
-## Done (21)
+## Done (24)
 
 Kept briefly so a reader can see what just landed; prune when the list grows.
 
@@ -746,6 +798,33 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   Two of the three fixes also extracted the decision to a pure function
   (`shouldReloadEdits`, `autoDropPlan`) - which is what made the third one's
   asymmetry visible at a glance.
+
+- **HON-3** Surface `droppedColumns` and `unknownTypeColumns` in the UI
+  `HON-F3` `story` `settled` `verified: pins`
+  The diagnostics already exist and reach nobody - repo-wide the only
+  consumers are two test files. Already propagated through `dcr-request.ts`,
+  so this is a rendering job, not plumbing. `adr/0004:87-88`, named there as
+  the strongest argument for doing it next. BUILT 2026-08-28. THE CARDS
+  PREMISE WAS WRONG and that is the finding: it said "already propagated
+  through dcr-request.ts, so this is a rendering job, not plumbing". The
+  diagnostics reached the BOUNDARY of dcr-request and all three callers -
+  onboard-table, onboard-batch and deployment-preview - kept only
+  method/path/body and discarded them. So it was plumbing first, rendering
+  second. Shipped as `describeColumnDiagnostics`, a pure formatter beside the
+  code that produces the three arrays, wired into the deploy-dcr step detail
+  (which the UI already renders, so no port change and no new component) and
+  into the templateOnly collectors detail - the path where silent loss is
+  WORST, because there is no run to watch. The three channels stay separate on
+  purpose: dropped means the column will NOT arrive, unknownTypes means it
+  arrives with its type flattened to string, and cast means it arrives INTACT
+  - CastColumn s own docblock forbids reporting a cast as missing, so it is
+  phrased as reassurance. Returns null when there is nothing to say, because a
+  reassurance line on every clean deploy is what trains people to stop reading
+  step detail. 7 pins plus a wiring pin on the happy path, mutation-checked:
+  removing the step-detail append fails it. ALSO FOUND: buildDeploymentPreview
+  has no caller anywhere in packages/ui or apps/cribl-app - a whole usecase
+  with no consumer - so surfacing diagnostics there would have put them where
+  nobody looks. Not fixed here; worth its own card.
 
 - **AZR-S2** Decide whether the app creates Cribl sources over the API
   `AZR-F9` `spike` `settled` `verified: none`
@@ -877,6 +956,25 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   second instance, which is why the rule is now anchored rather than
   re-tuned.*
 
+- **D-7** `VND-2` Does a persisted column order need a version or a captured-on date, so a firmware chang
+  `VND-F1` `decision` `settled` `verified: none`
+  e can be reasoned about later rather than silently disagreeing with a future
+  bundled update? The only genuinely open question left in that plan.
+  `vendor-field-definition-plan.md:222-224`. ANSWERED 2026-08-28 (user):
+  neither. Reasoning at backlog.md#13c, which is what settles it. The harm is
+  already handled by resolveColumnOrder re-deriving the override notice
+  against the CURRENT bundled order, so divergence surfaces when it matters
+  instead of being reconstructed from a stamp. A date says when the capture
+  happened but not which firmware produced it - the question actually being
+  asked - and a version has nowhere to come from, so it means asking the
+  operator for something they often do not know. A field the operator guesses
+  at is worse than a field that is absent. *decision, closed.*
+  DECISION: Should a persisted vendor column order carry a version, a
+  captured-on date, or neither?
+    [x] `neither` Store neither - Keep vendor + logType + columns + overrides. The silent-disagreement harm is already handled: resolveColumnOrder re-derives the override notice against the CURRENT bundled order, and machine-applied pass-throughs are never stored.
+    [ ] `captured-on` Stamp a captured-on date - Record when the operator captured the order, so a later divergence reads as "captured before that change" rather than an unexplained disagreement. Always available - but it dates the capture, it does not identify the firmware.
+    [ ] `version` Record a version - Sharper than a date, but the version has to come from somewhere: nothing in the sample or the CSV-header dialog supplies one today, so it means asking the operator.
+
 - **GEN-2** A rebuilt pack no longer inherits the previous build's pipelines
   `GEN-F1` `bug` `settled` `verified: both`
   FIXED and shipped in 1.12.3. CONFIRMED live 2026-08-27, then root-caused and
@@ -907,6 +1005,56 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   added, three of which fail if the replace branch is disabled; the existing
   pin that had encoded the merge as intended behaviour was re-pointed at the
   delete-refused path. *bug, fixed. `backlog.md` item 14d/14f.*
+
+- **GEN-3** Stamp the toolkit version into the pack it builds
+  `GEN-F1` `story` `settled` `verified: both`
+  Given a `.crbl`, nothing says which toolkit build produced it. The manifest
+  carries exactly eight fields (`domain/pack-assembly/package-json.ts`) -
+  name, version, author, description, displayName, tags, exports,
+  minLogStreamVersion - and `author` is the constant "Cribl SOC Toolkit" while
+  `version` is just highest-installed-plus-one, so it tracks how many times
+  the pack was rebuilt, not what built it. The persisted `PackBuildRecord`
+  does not carry it either. The app version exists only as `__APP_VERSION__`
+  for the UI footer. COST, paid on 2026-08-27: asked whether a pack in the
+  workspace was the one just built, the artifact could not answer; it took a
+  git-log check and a sample-count comparison to establish provenance. Every
+  future regression report about "the pack" pays this again. Cheapest fix: one
+  more manifest field, set from the same define the footer reads. *feature,
+  settled. [[GEN-2]] is fixed, so leftovers no longer accumulate - but the
+  provenance gap stands on its own: it cost a git-log check to answer "is this
+  pack today's?" during that very investigation.* BUILT 2026-08-28. The
+  toolkit version rides the manifests `author` - "Cribl SOC Toolkit 1.12.3" -
+  rather than a ninth key. WHY: the manifest is exactly the eight Cribl pack
+  fields and this modules contract is byte-stability with the legacy emitter,
+  so a new key changes what a .crbl CONTAINS, which is real risk for a
+  provenance stamp. `author` was already a constant with exactly one consumer
+  (its own test), and "the tool that produced this, and its version" is what
+  an author field means for a generated artifact. A pin asserts the key set is
+  still those eight. The pack `version` deliberately keeps its own meaning -
+  highest-installed-plus-one, i.e. a rebuild counter - and a pin holds the two
+  numbers apart, since conflating them is why the pack could not answer the
+  question. THREADED, not hardcoded: core is pure and cannot read
+  `__APP_VERSION__`, so it arrives as `toolkitVersion` on PipelinePlan,
+  injected by the shell. The prop on IntegrateScreen is REQUIRED rather than
+  optional, which `FullContentPlan = Required<ContentPlanInputs>` then
+  enforces at BOTH the preview and the build site - the 2026-08-17
+  audit-finding-2 mechanism doing its job, and it caught the second call site
+  for me. Absent stays absent rather than becoming "unknown": a missing stamp
+  is checkable, a literal "unknown" is a claim. The shell prefers
+  `__APP_VERSION_RUNTIME__` over the build-time define so the live preview
+  does not stamp a stale version, matching the footer. Mutation-checked:
+  ignoring the supplied version fails 2 pins. VERIFIED LIVE 2026-08-28: the
+  dev app built MS-Sentinel-PaloAlto-PAN_1.0.0.crbl (60,439 bytes) with this
+  change in it, and it installed as ms-sentinel-paloalto-pan on the default
+  worker group. ONE RISK CHECKED RATHER THAN ASSUMED: Pack Maintenance
+  regenerates the .crbl on download from a stored definition rather than
+  serving persisted bytes, and PackBuildRecord does NOT carry toolkitVersion -
+  the card said as much. Followed it through: the stored definition is
+  PackScaffoldInput, whose `plan` is a full PipelinePlan, and PipelinePlan is
+  exactly where toolkitVersion now lives. So the stamp survives regeneration.
+  Packs built BEFORE this change carry no toolkitVersion in their stored
+  definition and therefore regenerate with the bare legacy author - correct
+  and honest, since they genuinely do not know what built them.
 
 - **DBT-16** The kanban hardcoded its own copy of the status vocabulary
   `DBT-F5` `bug` `settled` `verified: pins`

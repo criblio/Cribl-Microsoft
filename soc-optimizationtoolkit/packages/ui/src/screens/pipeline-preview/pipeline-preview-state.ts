@@ -182,6 +182,12 @@ export interface PipelinePreviewInputs {
   solutionName: string;
   packName: string;
   version?: string;
+  /**
+   * Version of the toolkit building this pack (GEN-3), stamped into the
+   * manifest's `author`. The SHELL owns it - `__APP_VERSION__` is a Vite
+   * define and @soc/core is pure - so it arrives as input like everything else.
+   */
+  toolkitVersion?: string;
   /** The Unit 18 gap reports (typed input, already computed). */
   reports: GapReport[];
   /**
@@ -547,6 +553,9 @@ export function derivePipelinePreview(
     solutionName: inputs.solutionName,
     packName: inputs.packName,
     ...(inputs.version !== undefined ? { version: inputs.version } : {}),
+    ...(inputs.toolkitVersion !== undefined
+      ? { toolkitVersion: inputs.toolkitVersion }
+      : {}),
     tables: planTables.map((r) =>
       reportToPlanInput(
         r,

@@ -68,6 +68,8 @@ export type { PackageJson } from "./package-json";
 export {
   MIN_LOG_STREAM_VERSION,
   buildPackageJson,
+  packAuthor,
+  PACK_AUTHOR,
   renderPackageJson,
   streamtagsFromPackage,
 } from "./package-json";

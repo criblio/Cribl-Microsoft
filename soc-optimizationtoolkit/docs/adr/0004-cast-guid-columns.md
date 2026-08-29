@@ -87,6 +87,12 @@ precisely rather than deleted.
   not a schema-mapping rule. Deferred, and recorded in the backlog.
 - Surfacing `droppedColumns`/`unknownTypeColumns` in the UI is still worth doing
   - system-column drops and unknown-type fallbacks remain invisible. Deferred.
+  **DONE 2026-08-28 as HON-3** <!--drift-ok--> via `describeColumnDiagnostics`
+  and the `deploy-dcr` step detail, plus the templateOnly collector's detail.
+  The premise that it was "a rendering job" was wrong: the diagnostics reached
+  the boundary of `dcr-request` and all three callers discarded them, so it was
+  plumbing first. `castColumns` is reported as arriving intact, never as a loss
+  - the distinction RULE 2b above requires.
 - Reconciling the field matcher's target list with the generator's output is
   deferred: after this change the two agree about guid columns, which removes
   today's only known instance of the mismatch.

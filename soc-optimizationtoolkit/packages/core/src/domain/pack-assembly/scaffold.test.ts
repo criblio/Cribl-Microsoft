@@ -316,6 +316,44 @@ describe("assemblePack - deterministic .crbl + build record", () => {
     expect(built.crblFileName).toBe("paloalto-pan-os-sentinel_1.0.0.crbl");
   });
 
+  it("carries GEN-3's toolkit stamp INSIDE the shipped .crbl, not just in the builder", () => {
+    // The unit pin on buildPackageJson proves the string is composed right. It
+    // does NOT prove the stamp survives scaffolding, tar and gzip into the
+    // artifact an operator actually installs - and the artifact is the only
+    // thing that can answer "what built this pack?".
+    //
+    // This matters more than it looks: Pack Maintenance REGENERATES the .crbl
+    // on download from the stored definition rather than serving saved bytes,
+    // and PackBuildRecord does not carry toolkitVersion. The stamp survives
+    // only because the stored definition is a full PipelinePlan, which is where
+    // toolkitVersion lives. If that ever changes, every downloaded pack quietly
+    // loses its provenance and nothing else here would notice.
+    const input = scaffoldInput();
+    const built = assemblePack({
+      ...input,
+      plan: { ...input.plan, toolkitVersion: "1.12.3" },
+    });
+    const manifest = parseUstarTar(ungzipStored(built.crbl)).find((e) =>
+      e.path.endsWith("package.json"),
+    );
+
+    expect(manifest).toBeDefined();
+    const pkg = JSON.parse(new TextDecoder().decode(manifest!.content));
+    expect(pkg.author).toBe("Cribl SOC Toolkit 1.12.3");
+  });
+
+  it("ships the bare author when nothing stamped a toolkit version", () => {
+    // A pack built without the shell is honestly silent rather than claiming a
+    // version it does not know.
+    const built = assemblePack(scaffoldInput());
+    const manifest = parseUstarTar(ungzipStored(built.crbl)).find((e) =>
+      e.path.endsWith("package.json"),
+    );
+    const pkg = JSON.parse(new TextDecoder().decode(manifest!.content));
+
+    expect(pkg.author).toBe("Cribl SOC Toolkit");
+  });
+
   it("REPORTS every table that shipped placeholder destination values", () => {
     // The silent half of the 2026-08-11 bug. Falling back to placeholders is a
     // legitimate outcome - a table with no deployed DCR has nothing else to

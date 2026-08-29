@@ -1,5 +1,6 @@
 export {
   buildDceDcrRequest,
+  describeColumnDiagnostics,
   buildDirectDcrRequest,
   parseDcrDeployment,
   DcrRequestError,

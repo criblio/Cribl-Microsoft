@@ -32,6 +32,35 @@ export interface PackageJson {
   minLogStreamVersion: string;
 }
 
+/**
+ * The pack's author, and since GEN-3 the ONE place a built pack says what built
+ * it.
+ *
+ * WHY `author` AND NOT A NEW FIELD. The manifest carries exactly the eight Cribl
+ * pack fields and this module's contract is byte-stability with the legacy
+ * emitter, so a ninth key is a change to what a `.crbl` contains - risk for a
+ * provenance stamp. `author` was already a constant nobody parses (one test),
+ * and "the tool that produced this, and its version" is what an author field
+ * means for a generated artifact.
+ *
+ * The pack's own `version` cannot carry it: that is highest-installed-plus-one,
+ * so it counts REBUILDS. On 2026-08-27 the cost was paid for real - asked
+ * whether a pack in the workspace was the one just built, the artifact could not
+ * answer, and it took a git-log check plus a sample count to settle.
+ */
+export const PACK_AUTHOR = "Cribl SOC Toolkit";
+
+/**
+ * `author` for a plan: the toolkit name, plus its version when the shell
+ * supplied one. Omitted stays the bare legacy string - a pack that does not
+ * know what built it says nothing rather than guessing.
+ */
+export function packAuthor(toolkitVersion?: string): string {
+  return toolkitVersion === undefined || toolkitVersion.trim() === ""
+    ? PACK_AUTHOR
+    : `${PACK_AUTHOR} ${toolkitVersion.trim()}`;
+}
+
 /** The minimum Log Stream version a Direct-DCR pack requires. */
 export const MIN_LOG_STREAM_VERSION = "4.14.0";
 
@@ -43,7 +72,7 @@ export function buildPackageJson(plan: PipelinePlan): PackageJson {
   return {
     name: plan.packName,
     version: plan.version,
-    author: "Cribl SOC Toolkit",
+    author: packAuthor(plan.toolkitVersion),
     description: `Transforms ${vendorWords} logs for ingestion into ${uniqueTables.join(", ")} via DCR`,
     displayName: `${vendorWords} Sentinel`,
     tags: { streamtags },

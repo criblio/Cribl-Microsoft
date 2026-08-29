@@ -1706,6 +1706,11 @@ function App() {
       <PortsProvider ports={cloudPorts} config={activeConfig}>
         <IntegrateScreen
           key={`integrate-${store.activeProfileId ?? 'none'}`}
+          // GEN-3: every pack this screen builds records what built it. The
+          // runtime value wins in dev (the define is frozen at build time and
+          // the live preview would otherwise stamp a stale version), matching
+          // what the footer already does.
+          toolkitVersion={window.__APP_VERSION_RUNTIME__ ?? __APP_VERSION__}
           scopeCommitted={journeyFacts.scopeCommitted}
           capabilities={capabilityAudit.capabilities}
           capabilityContext={capabilityAudit.context}
