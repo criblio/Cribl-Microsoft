@@ -13,6 +13,10 @@ import type {
   StoredPack,
 } from "../../ports-context";
 import {
+  inventoryPlaceholder,
+  PACK_INVENTORY_EMPTY_REASON,
+  PACK_INVENTORY_LOADING_REASON,
+  PACK_INVENTORY_UNAVAILABLE_REASON,
   deriveDeployedBadge,
   deriveInventoryRows,
   deriveStorageSummary,
@@ -220,5 +224,46 @@ describe("tablesSummary", () => {
     expect(tablesSummary([])).toBe("no destination tables");
     expect(tablesSummary(["CommonSecurityLog"])).toBe("1 table: CommonSecurityLog");
     expect(tablesSummary(["A", "B"])).toBe("2 tables: A, B");
+  });
+});
+
+describe("inventoryPlaceholder - absent is not zero (PK-3)", () => {
+  const base = { hasStore: true, packs: [] as unknown[], rowCount: 0, error: "" };
+
+  it("says it is still READING when the store is bound but packs is null", () => {
+    // The bug. `null` and `[]` both rendered as nothing, so a store still being
+    // read was indistinguishable from an app that had never built a pack -
+    // while the build log one screen earlier said the pack was here.
+    expect(inventoryPlaceholder({ ...base, packs: null })).toBe(
+      PACK_INVENTORY_LOADING_REASON,
+    );
+  });
+
+  it("says NOTHING BUILT only once the read has finished", () => {
+    expect(inventoryPlaceholder(base)).toBe(PACK_INVENTORY_EMPTY_REASON);
+  });
+
+  it("keeps the two messages DIFFERENT - the whole point of the fix", () => {
+    // If these ever collapse to one string the distinction is gone again and
+    // every other pin here would still pass.
+    expect(PACK_INVENTORY_LOADING_REASON).not.toBe(PACK_INVENTORY_EMPTY_REASON);
+  });
+
+  it("reports the surface as unavailable when no store is bound", () => {
+    // Checked BEFORE the read state: with no store there is nothing to read,
+    // so "still reading" would be a lie that never resolves.
+    expect(inventoryPlaceholder({ ...base, hasStore: false, packs: null })).toBe(
+      PACK_INVENTORY_UNAVAILABLE_REASON,
+    );
+  });
+
+  it("adds nothing under an error, which explains itself", () => {
+    // Stacking "still reading" beneath a failure would describe a read that
+    // has stopped as one still in progress.
+    expect(inventoryPlaceholder({ ...base, packs: null, error: "boom" })).toBeNull();
+  });
+
+  it("shows no placeholder at all once there are rows", () => {
+    expect(inventoryPlaceholder({ ...base, rowCount: 3 })).toBeNull();
   });
 });

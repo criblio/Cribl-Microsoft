@@ -536,6 +536,7 @@ export { PackInventoryScreen } from "./screens/packs/pack-inventory-screen";
 export type { PackInventoryScreenProps } from "./screens/packs/pack-inventory-screen";
 export {
   PACK_INVENTORY_EMPTY_REASON,
+  PACK_INVENTORY_LOADING_REASON,
   PACK_INVENTORY_UNAVAILABLE_REASON,
   PACK_RETENTION_NOTE,
   deriveDeployedBadge,

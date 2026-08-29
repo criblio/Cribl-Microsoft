@@ -810,10 +810,15 @@ function SampleChipColumnOrder({
   vendor: string;
   sample: TaggedSample;
 }) {
+  // VND-3: the field count comes from the sample this chip is already about, so
+  // the sentence can MEASURE the shortfall instead of asking the operator to
+  // eyeball it. The chip prints "35 fields" two lines up; the order prints "120
+  // columns". Both numbers were already on screen and neither was compared.
   const { resolved, notice, loading } = useVendorColumnOrder(
     cache,
     vendor,
     sample.logType,
+    sample.parsed.fields.length,
   );
   if (
     loading ||

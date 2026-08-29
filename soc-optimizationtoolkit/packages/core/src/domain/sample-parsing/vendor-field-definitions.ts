@@ -438,17 +438,90 @@ export function resolveColumnOrder(
 }
 
 /**
+ * How far a bundled column order OVERSHOOTS the event it is naming (VND-3).
+ *
+ * Positional naming maps field[i] to name[i], so a feed that omits any middle
+ * column mis-names every column after it - silently. The size of the gap is the
+ * best cheap proxy for how likely that is, and the app already holds both
+ * numbers: measured live on 2026-08-28, PAN THREAT arrived with 35 fields
+ * against a bundled 120-column order, and TRAFFIC 41 against 115.
+ *
+ * Returns null when there is nothing to say - no field count supplied, or the
+ * event has at least as many fields as the order has names.
+ */
+export interface ColumnOrderShortfall {
+  readonly columnCount: number;
+  readonly fieldCount: number;
+  /** Names with no field to sit on. */
+  readonly missing: number;
+  /** `missing / columnCount`, in [0, 1). */
+  readonly ratio: number;
+  /** True once the gap is large enough to warn about. */
+  readonly warn: boolean;
+}
+
+/**
+ * WARN above a quarter (user decision 2026-08-28, backlog.md#13c).
+ *
+ * A stated product judgement, not a derived one, and deliberately so: there is
+ * no measurement that says where "probably fine" becomes "probably mis-named".
+ * Both live cases sit far past it - 35-of-120 and 41-of-115 are each over 60%
+ * short - while an order matching its feed closely does not trip.
+ */
+export const COLUMN_ORDER_SHORTFALL_THRESHOLD = 0.25;
+
+export function columnOrderShortfall(
+  columnCount: number,
+  fieldCount: number | undefined,
+): ColumnOrderShortfall | null {
+  if (fieldCount === undefined || !Number.isFinite(fieldCount)) return null;
+  if (columnCount <= 0 || fieldCount < 0) return null;
+  const missing = columnCount - fieldCount;
+  if (missing <= 0) return null;
+  const ratio = missing / columnCount;
+  return {
+    columnCount,
+    fieldCount,
+    missing,
+    ratio,
+    warn: ratio > COLUMN_ORDER_SHORTFALL_THRESHOLD,
+  };
+}
+
+/**
  * The operator-facing sentence for a resolved order - the surface decision 3's
  * "AND THEY ARE TOLD" is actually told through. Plain text, no markup, so any
  * caller (dialog status line, sample chip) can render it.
  */
-export function describeColumnOrder(resolved: ResolvedColumnOrder): string {
+export function describeColumnOrder(
+  resolved: ResolvedColumnOrder,
+  fieldCount?: number,
+): string {
   const scope = `${resolved.vendor} ${resolved.logType}`.trim();
   const count = `${resolved.columns.length} column${
     resolved.columns.length === 1 ? "" : "s"
   }`;
   if (resolved.source === "bundled") {
-    return `Bundled ${scope} column order (${count}) - check the values beside each name before applying.`;
+    // VND-3. The hedge "check the values beside each name" was the app asking
+    // the operator to eyeball a number it already held: measured live on
+    // 2026-08-28, a PAN THREAT event arrived with 35 fields against this
+    // bundled 120-column order, and both numbers were printed one line apart.
+    // A hedge is not a measurement.
+    const shortfall = columnOrderShortfall(resolved.columns.length, fieldCount);
+    if (shortfall === null) {
+      // No field count to compare against - checking the values really is the
+      // best available advice, so the original sentence stands.
+      return `Bundled ${scope} column order (${count}) - check the values beside each name before applying.`;
+    }
+    const measured =
+      `Bundled ${scope} column order (${count}), naming ${shortfall.fieldCount} field` +
+      `${shortfall.fieldCount === 1 ? "" : "s"}.`;
+    if (!shortfall.warn) return measured;
+    return (
+      `${measured} ${shortfall.missing} of the ${resolved.columns.length} names have no ` +
+      "field to sit on, so any column this feed omits mis-names every column after it. " +
+      "Check the values beside each name, or edit the order, before applying."
+    );
   }
   if (resolved.override === undefined) {
     return `Your saved ${scope} column order (${count}).`;

@@ -33,7 +33,7 @@ import { usePorts } from "../../ports-context";
 import type { DeployedGroupPacks, StoredPack } from "../../ports-context";
 import { SearchableMultiSelect } from "../../components/searchable-select";
 import {
-  PACK_INVENTORY_EMPTY_REASON,
+  inventoryPlaceholder,
   PACK_INVENTORY_UNAVAILABLE_REASON,
   PACK_RETENTION_NOTE,
   deriveDeployedBadge,
@@ -139,6 +139,12 @@ export function PackInventoryScreen({ refreshToken = 0 }: PackInventoryScreenPro
     () => (packs === null ? [] : deriveInventoryRows(packs, snapshot)),
     [packs, snapshot],
   );
+  const placeholder = inventoryPlaceholder({
+    hasStore: packStore !== undefined,
+    packs,
+    rowCount: rows.length,
+    error,
+  });
   const storage = useMemo(
     () => (packs === null ? null : deriveStorageSummary(packs, KEEP_PER_PACK)),
     [packs],
@@ -400,9 +406,14 @@ export function PackInventoryScreen({ refreshToken = 0 }: PackInventoryScreenPro
         </div>
       )}
 
-      {packs !== null && rows.length === 0 && (
-        <p className="panel-desc">{PACK_INVENTORY_EMPTY_REASON}</p>
-      )}
+      {/*
+        PK-3: `null` means NOT READ YET and `[]` means read-and-empty. Both used
+        to render as nothing, so a store still being read looked exactly like an
+        app that had never built a pack - while the build log one screen earlier
+        said the pack was here. The choice is `inventoryPlaceholder`, pure and
+        pinned, rather than conditionals spread through this JSX.
+      */}
+      {placeholder !== null && <p className="panel-desc">{placeholder}</p>}
 
       {rows.map((row) => {
         const badge = deriveDeployedBadge(row);
