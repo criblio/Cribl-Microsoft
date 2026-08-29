@@ -11,7 +11,7 @@ two cannot disagree.
 alternatives. This board holds only what is a unit of work, what state it is
 in, and what it waits on.
 
-**59 in the backlog, 0 in progress, 27 done.**
+**57 in the backlog, 0 in progress, 29 done.**
 
 ## By menu item
 
@@ -23,14 +23,14 @@ operator sees on any screen. Two menus are PLANNED and have no route yet.
 |---|---|---|---|
 | Dataflow | 3 | 0 | 0 |
 | Setup | 1 | 0 | 0 |
-| Sentinel Integration | 17 | 6 | 2 |
+| Sentinel Integration | 15 | 8 | 0 |
 | Pack Maintenance | 4 | 1 | 0 |
 | Permission Verification | 8 | 0 | 0 |
 | Azure Native Source Onboarding (planned) | 13 | 4 | 0 |
 | Windows Event analysis (planned) | 5 | 0 | 0 |
 | Cross-cutting | 8 | 16 | 1 |
 
-Open work totals 59.
+Open work totals 57.
 
 ## Epics and features
 
@@ -91,13 +91,13 @@ Maintaining a pack after it is built, including a silent data-loss defect
 |---|---|---|---|
 | `PK-F1` Pack maintenance parity | Pack Maintenance | 1/4 | PK-1, PK-2, PK-3, D-6 |
 
-### `VND` Vendor field definitions - 50% (2/4)
+### `VND` Vendor field definitions - 100% (4/4)
 
 Positional CSV naming, reaching past ~18 vendors
 
 | Feature | Menu | Done | Stories |
 |---|---|---|---|
-| `VND-F1` Vendor column-order naming | Sentinel Integration | 2/4 | HON-5, VND-3, VND-1, D-7 |
+| `VND-F1` Vendor column-order naming | Sentinel Integration | 4/4 | HON-5, VND-3, VND-1, D-7 |
 
 ### `CAP` Capability taxonomy extension _(enabler)_ - 0% (0/6)
 
@@ -138,7 +138,7 @@ _Nothing here._
 
 ---
 
-## Backlog - now (3)
+## Backlog - now (1)
 
 Next to pick up. Nothing blocks these.
 
@@ -147,22 +147,6 @@ Next to pick up. Nothing blocks these.
   `~/.soc-toolkit-local-app-retired/config/local-config.json` holds a live
   secret. Flagged for rotation by `adr/0002-drop-local-target.md:57-62` and
   still outstanding. *chore, SETTLED. Security. Size: minutes.*
-
-- **HON-5** Warn a CSV vendor's operator before the preview that the pack can never route automatically
-  `VND-F1` `story` `settled`
-  Both route discriminators return early for CSV by construction, so every CSV
-  log type placeholders even when its values name their log types perfectly.
-  The format-aware hint shipped in 1.11.11; the earlier warning did not.
-  `backlog.md#13c`.
-
-- **VND-1** Let the operator name the vendor
-  `VND-F1` `story` `settled`
-  Today the vendor comes from `detectVendorIdentity(solutionName)`, so
-  anything outside `KNOWN_VENDOR_IDENTITIES` stores nothing - honest, but it
-  caps the feature at about eighteen vendors. Needs a UI seam that was
-  deliberately not built. `vendor-field-definition-plan.md:209-214`. ### DBT -
-  Debt, spec grounding, verification Small and mostly independent. Good filler
-  between larger stories.
 
 ---
 
@@ -722,7 +706,7 @@ Settled, gated on something above.
 
 ---
 
-## Done (27)
+## Done (29)
 
 Kept briefly so a reader can see what just landed; prune when the list grows.
 
@@ -813,6 +797,39 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   has no caller anywhere in packages/ui or apps/cribl-app - a whole usecase
   with no consumer - so surfacing diagnostics there would have put them where
   nobody looks. Not fixed here; worth its own card.
+
+- **HON-5** Warn a CSV vendor's operator before the preview that the pack can never route automatically
+  `VND-F1` `story` `settled` `verified: pins`
+  Both route discriminators return early for CSV by construction, so every CSV
+  log type placeholders even when its values name their log types perfectly.
+  The format-aware hint shipped in 1.11.11; the earlier warning did not.
+  `backlog.md#13c`. BUILT 2026-08-29. `csvRoutingWarning(format,
+  siblingCount)` in `route-placeholder`, rendered on the SAMPLE CHIP - which
+  is what "before the preview" means: the operator learns it when they tag the
+  CSV sample, not three sections later. WHY CSV GETS ITS OWN MESSAGE rather
+  than the generic placeholder notice: the two causes are different and only
+  one is actionable. "No discriminator found" invites an operator to collect
+  more samples; for CSV that cannot possibly help, because
+  `deriveRouteDiscriminator` and `deriveValueDiscriminator` BOTH early-return
+  on "csv" by construction - a CSV row carries no field names and route-time
+  events are unparsed. The wording says so explicitly ("more samples will not
+  change that") and says what does work (write the filter). THE SIBLING COUNT
+  IS LOAD-BEARING and is why this is not a bare format check. `plan.ts` only
+  runs the discriminator ladder `if (tables.length > 1)`, so a single-log-type
+  CSV pack keeps a working match-all; warning there would be crying wolf about
+  a pack that routes correctly - the DBT-19 failure this repo has already had
+  twice. A pin holds that silence. The wording also avoids a second wrong
+  reading: the route and pipeline DO ship, only the filter is unfinished, so
+  it says "its route ships with a placeholder filter" rather than anything
+  that sounds like a missing route. 7 pins. One is a CONSISTENCY pin rather
+  than a behaviour pin, and it is the one that matters most:
+  `formatCanDiscriminate` is a claim ABOUT two other modules, so the test
+  calls both discriminators on "csv" and asserts they really return null, with
+  a non-CSV control proving the nulls are about the format and not about the
+  inputs. If either discriminator ever learns CSV, the warning becomes a lie
+  and nothing else here would notice. Mutation-checked twice: removing the
+  sibling guard fails the silence pin, and adding a second format to the
+  cannot-discriminate list fails two.
 
 - **AZR-S2** Decide whether the app creates Cribl sources over the API
   `AZR-F9` `spike` `settled` `verified: none`
@@ -1016,6 +1033,38 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
     [ ] `measure-only` Show the number, drop the hedge - Replace "check the values beside each name before applying" with the measured 38-of-120 and stop there. backlog.md#13c says it is a number the app already has and could show.
     [x] `warn` Warn above a shortfall threshold - A large shortfall warns visibly; Apply stays enabled. Matches the capability model's annotate-never-hide-never-disable rule, and a short feed can still be legitimately named once the order is edited.
     [ ] `block` Block Apply above the threshold - Disable Apply until the order is edited or explicitly overridden. Strongest guard against mis-naming every column after the first gap, and Skip already preserves the positional _N names - but it runs against the annotate-never-hide rule the rest of the app pins.
+
+- **VND-1** Let the operator name the vendor
+  `VND-F1` `story` `settled` `verified: pins`
+  Today the vendor comes from `detectVendorIdentity(solutionName)`, so
+  anything outside `KNOWN_VENDOR_IDENTITIES` stores nothing - honest, but it
+  caps the feature at about eighteen vendors. Needs a UI seam that was
+  deliberately not built. `vendor-field-definition-plan.md:209-214`. ### DBT -
+  Debt, spec grounding, verification Small and mostly independent. Good filler
+  between larger stories. BUILT 2026-08-29. `resolveVendorName(detected,
+  operatorSupplied)` plus `operatorVendorKey(solutionName)` in core, and a
+  vendor-name input in the sample section shown ONLY when detection found
+  nothing - the eighteen curated vendors already work and do not need a box to
+  ignore. Persisted per SOLUTION through the same ContentCache the column
+  orders use, because the vendor is a property of the solution and every log
+  type under it shares one. THE PRECEDENCE IS THE DESIGN, and it is the
+  opposite of what "let the operator name the vendor" first suggests:
+  DETECTION STILL WINS wherever it has an answer. The curated list carries the
+  canonical spelling every stored definition is already filed under, so a
+  typed "PAN" outranking "Palo Alto Networks" would file the next order under
+  a SECOND scope for the same vendor - `normalizeDefinitionScope` folds case
+  and punctuation but not abbreviations - and the two would never see each
+  other again. The operator name is a fallback for the eighteen-entry gap, not
+  a rename tool. 6 pins. The precedence one is mutation-checked and the
+  mutation reproduces exactly that split-scope trap ("PAN" returned instead of
+  "Palo Alto Networks"). Another states the behaviour change end to end - same
+  solution, same log type, `vendorFieldDefinitionKey` null before and a real
+  key after - so what actually changed for an operator is pinned rather than
+  described. Empty stays empty: neither source answering yields "", which is
+  exactly what `vendorFieldDefinitionKey` already treats as nothing to store,
+  so the genuinely-unnameable case behaves as it always did. Reasoning
+  recorded in `vendor-field-definition-plan.md` alongside the note that
+  predicted this seam.
 
 - **DBT-13** The Claude hooks travel with the repo
   `DBT-F4` `enabler` `settled` `verified: live`

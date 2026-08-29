@@ -211,7 +211,19 @@ silent, which is the whole difference between this and "operator wins quietly".
   `KNOWN_VENDOR_IDENTITIES` yields no vendor and nothing is stored - honest per
   "absent is absent", but it means the feature reaches about eighteen vendors.
   Letting the operator name the vendor themselves closes it and needs a UI seam
-  that was deliberately not built.
+  that was deliberately not built. **BUILT 2026-08-29 as VND-1.** The seam is a
+  vendor-name input shown ONLY when detection found nothing - the eighteen
+  curated vendors do not need a box to ignore - persisted per SOLUTION under
+  `operatorVendorKey`, since the vendor is a property of the solution and every
+  log type under it shares one.
+
+  DETECTION STILL WINS where it has an answer, and that ordering is the whole
+  design. The curated list carries the canonical spelling every stored
+  definition is already filed under; a typed "PAN" outranking "Palo Alto
+  Networks" would file the next order under a second scope for the same vendor,
+  because `normalizeDefinitionScope` folds case and punctuation but not
+  abbreviations. The operator's name is a fallback for the eighteen-entry gap,
+  not a rename tool - and the pin that holds this is the one worth keeping.
 
 ## Open questions
 

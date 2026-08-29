@@ -274,11 +274,11 @@
       "feature": "VND-F1",
       "title": "Warn a CSV vendor's operator before the preview that the pack can never route automatically",
       "type": "story",
-      "status": "backlog",
-      "priority": "now",
+      "status": "done",
       "settled": "settled",
       "dependsOn": [],
-      "detail": "Both route discriminators return early for CSV by construction, so every CSV log type placeholders even when its values name their log types perfectly. The format-aware hint shipped in 1.11.11; the earlier warning did not. `backlog.md#13c`."
+      "detail": "Both route discriminators return early for CSV by construction, so every CSV log type placeholders even when its values name their log types perfectly. The format-aware hint shipped in 1.11.11; the earlier warning did not. `backlog.md#13c`. BUILT 2026-08-29. `csvRoutingWarning(format, siblingCount)` in `route-placeholder`, rendered on the SAMPLE CHIP - which is what \"before the preview\" means: the operator learns it when they tag the CSV sample, not three sections later. WHY CSV GETS ITS OWN MESSAGE rather than the generic placeholder notice: the two causes are different and only one is actionable. \"No discriminator found\" invites an operator to collect more samples; for CSV that cannot possibly help, because `deriveRouteDiscriminator` and `deriveValueDiscriminator` BOTH early-return on \"csv\" by construction - a CSV row carries no field names and route-time events are unparsed. The wording says so explicitly (\"more samples will not change that\") and says what does work (write the filter). THE SIBLING COUNT IS LOAD-BEARING and is why this is not a bare format check. `plan.ts` only runs the discriminator ladder `if (tables.length > 1)`, so a single-log-type CSV pack keeps a working match-all; warning there would be crying wolf about a pack that routes correctly - the DBT-19 failure this repo has already had twice. A pin holds that silence. The wording also avoids a second wrong reading: the route and pipeline DO ship, only the filter is unfinished, so it says \"its route ships with a placeholder filter\" rather than anything that sounds like a missing route. 7 pins. One is a CONSISTENCY pin rather than a behaviour pin, and it is the one that matters most: `formatCanDiscriminate` is a claim ABOUT two other modules, so the test calls both discriminators on \"csv\" and asserts they really return null, with a non-CSV control proving the nulls are about the format and not about the inputs. If either discriminator ever learns CSV, the warning becomes a lie and nothing else here would notice. Mutation-checked twice: removing the sibling guard fails the silence pin, and adding a second format to the cannot-discriminate list fails two.",
+      "verified": "pins"
     },
     {
       "id": "HON-6",
@@ -698,13 +698,13 @@
       "feature": "VND-F1",
       "title": "Let the operator name the vendor",
       "type": "story",
-      "status": "backlog",
-      "priority": "now",
+      "status": "done",
       "settled": "settled",
       "dependsOn": [
         "D-7"
       ],
-      "detail": "Today the vendor comes from `detectVendorIdentity(solutionName)`, so anything outside `KNOWN_VENDOR_IDENTITIES` stores nothing - honest, but it caps the feature at about eighteen vendors. Needs a UI seam that was deliberately not built. `vendor-field-definition-plan.md:209-214`.  ### DBT - Debt, spec grounding, verification  Small and mostly independent. Good filler between larger stories."
+      "detail": "Today the vendor comes from `detectVendorIdentity(solutionName)`, so anything outside `KNOWN_VENDOR_IDENTITIES` stores nothing - honest, but it caps the feature at about eighteen vendors. Needs a UI seam that was deliberately not built. `vendor-field-definition-plan.md:209-214`.  ### DBT - Debt, spec grounding, verification  Small and mostly independent. Good filler between larger stories. BUILT 2026-08-29. `resolveVendorName(detected, operatorSupplied)` plus `operatorVendorKey(solutionName)` in core, and a vendor-name input in the sample section shown ONLY when detection found nothing - the eighteen curated vendors already work and do not need a box to ignore. Persisted per SOLUTION through the same ContentCache the column orders use, because the vendor is a property of the solution and every log type under it shares one. THE PRECEDENCE IS THE DESIGN, and it is the opposite of what \"let the operator name the vendor\" first suggests: DETECTION STILL WINS wherever it has an answer. The curated list carries the canonical spelling every stored definition is already filed under, so a typed \"PAN\" outranking \"Palo Alto Networks\" would file the next order under a SECOND scope for the same vendor - `normalizeDefinitionScope` folds case and punctuation but not abbreviations - and the two would never see each other again. The operator name is a fallback for the eighteen-entry gap, not a rename tool. 6 pins. The precedence one is mutation-checked and the mutation reproduces exactly that split-scope trap (\"PAN\" returned instead of \"Palo Alto Networks\"). Another states the behaviour change end to end - same solution, same log type, `vendorFieldDefinitionKey` null before and a real key after - so what actually changed for an operator is pinned rather than described. Empty stays empty: neither source answering yields \"\", which is exactly what `vendorFieldDefinitionKey` already treats as nothing to store, so the genuinely-unnameable case behaves as it always did. Reasoning recorded in `vendor-field-definition-plan.md` alongside the note that predicted this seam.",
+      "verified": "pins"
     },
     {
       "id": "DBT-1",
