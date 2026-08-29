@@ -123,6 +123,7 @@ export {
 export type {
   BundledOverride,
   ColumnOrderSource,
+  ColumnOrderShortfall,
   ResolvedColumnOrder,
   VendorFieldDefinition,
 } from "./vendor-field-definitions";
@@ -131,6 +132,8 @@ export {
   VENDOR_FIELD_DEFINITION_VERSION,
   bundledColumnOrder,
   buildVendorFieldDefinition,
+  columnOrderShortfall,
+  COLUMN_ORDER_SHORTFALL_THRESHOLD,
   describeColumnOrder,
   diffBundledOrder,
   normalizeDefinitionScope,

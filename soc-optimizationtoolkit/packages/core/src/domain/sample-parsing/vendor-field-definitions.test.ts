@@ -19,6 +19,8 @@ import {
   VENDOR_FIELD_DEFINITION_NAMESPACE,
   bundledColumnOrder,
   buildVendorFieldDefinition,
+  columnOrderShortfall,
+  COLUMN_ORDER_SHORTFALL_THRESHOLD,
   describeColumnOrder,
   diffBundledOrder,
   normalizeDefinitionScope,
@@ -399,5 +401,92 @@ describe("describeColumnOrder - decision 3's 'and they are told'", () => {
     );
     expect(text).toContain("Your saved Palo Alto Networks AUTH");
     expect(text).not.toContain("REPLACES");
+  });
+});
+
+describe("VND-3 - a hedge is not a measurement", () => {
+  // The two live cases, 2026-08-27 and re-measured 2026-08-28 in the dev app:
+  // THREAT arrived with 35 fields against a bundled 120-column order (the card
+  // reported 38; the parser counts 35 for a standard line), TRAFFIC 41 against
+  // 115. Both are the reason this exists, so both are fixtures.
+  it("measures the shortfall instead of asking the operator to eyeball it", () => {
+    const text = describeColumnOrder(
+      present(resolveColumnOrder(PANOS, "TRAFFIC", null)),
+      41,
+    );
+
+    expect(text).toContain("naming 41 fields");
+    expect(text).not.toContain("check the values beside each name before applying.");
+  });
+
+  it("WARNS above the threshold, and says what mis-naming looks like", () => {
+    const text = describeColumnOrder(
+      present(resolveColumnOrder(PANOS, "TRAFFIC", null)),
+      41,
+    );
+
+    expect(text).toContain("mis-names every column after it");
+    // The count of names with no field under them, stated rather than implied.
+    expect(text).toContain(`${TRAFFIC.length - 41} of the ${TRAFFIC.length}`);
+  });
+
+  it("does NOT warn when the order closely matches the feed", () => {
+    // The rule has to stay quiet on the normal case or it becomes noise - the
+    // DBT-19 failure this repo has already had twice.
+    const text = describeColumnOrder(
+      present(resolveColumnOrder(PANOS, "TRAFFIC", null)),
+      TRAFFIC.length - 1,
+    );
+
+    expect(text).toContain(`naming ${TRAFFIC.length - 1} fields`);
+    expect(text).not.toContain("mis-names every column after it");
+  });
+
+  it("keeps the ORIGINAL wording when no field count is available", () => {
+    // The CSV header dialog resolves an order before anything is parsed. With
+    // no number to compare, checking the values really is the best advice -
+    // inventing a comparison would be worse than the hedge it replaced.
+    const text = describeColumnOrder(present(resolveColumnOrder(PANOS, "TRAFFIC", null)));
+
+    expect(text).toContain("check the values beside each name before applying.");
+    expect(text).not.toContain("naming");
+  });
+
+  it("never disables anything - the sentence is the whole intervention", () => {
+    // Decision 2026-08-28: WARN, Apply stays enabled. The rest of the app is
+    // pinned to annotate-never-hide-never-disable, and this would have been the
+    // only control disabled on a heuristic. describeColumnOrder returns TEXT and
+    // has no other output, so there is nothing here that could gate a button.
+    const text = describeColumnOrder(
+      present(resolveColumnOrder(PANOS, "TRAFFIC", null)),
+      41,
+    );
+
+    expect(typeof text).toBe("string");
+  });
+});
+
+describe("columnOrderShortfall", () => {
+  it("computes the gap and trips above a quarter", () => {
+    const s = columnOrderShortfall(120, 35);
+
+    expect(s?.missing).toBe(85);
+    expect(s?.warn).toBe(true);
+    expect(s?.ratio).toBeGreaterThan(COLUMN_ORDER_SHORTFALL_THRESHOLD);
+  });
+
+  it("stays quiet at or under the threshold", () => {
+    // Exactly a quarter must NOT warn - the decision says "more than a quarter",
+    // and a boundary that drifts by one is how a stated threshold stops meaning
+    // what was agreed.
+    expect(columnOrderShortfall(100, 75)?.warn).toBe(false);
+    expect(columnOrderShortfall(100, 74)?.warn).toBe(true);
+  });
+
+  it("says NOTHING when there is no shortfall or no number", () => {
+    expect(columnOrderShortfall(120, undefined)).toBeNull();
+    expect(columnOrderShortfall(120, 120)).toBeNull();
+    expect(columnOrderShortfall(120, 130)).toBeNull();
+    expect(columnOrderShortfall(0, 5)).toBeNull();
   });
 });

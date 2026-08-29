@@ -274,6 +274,20 @@ export const PACK_INVENTORY_EMPTY_REASON =
   "No packs built yet. Build a pack from the Sentinel Integration page; each build is " +
   "recorded here with its destination tables, size, and deployed status.";
 
+/**
+ * Shown while the build records are being read and `packs` is still null.
+ *
+ * PK-3: without this the screen rendered NOTHING in that state - the empty
+ * reason is guarded on `packs !== null`, so a store that is bound but not yet
+ * read produced a heading, a Refresh button and blank space. That is
+ * indistinguishable from "this app has never built a pack", which is the
+ * absent-versus-zero distinction docs/inventory-standard.md exists to protect.
+ * It reads worse here than elsewhere because the build log one screen earlier
+ * tells the operator this screen has their pack.
+ */
+export const PACK_INVENTORY_LOADING_REASON =
+  "Reading build records...";
+
 /** Explains why the pack surface is unavailable (no store bound). */
 export const PACK_INVENTORY_UNAVAILABLE_REASON =
   "The pack inventory is unavailable in this context - no pack store is " +
@@ -284,3 +298,35 @@ export const PACK_RETENTION_NOTE =
   "Retention keeps the newest builds per pack name; older builds can be " +
   "deleted to reclaim space. Deployed status is read live from the Cribl " +
   "packs API, not from this list.";
+
+/**
+ * WHICH placeholder the inventory should show, or `null` when it should show
+ * the rows instead. PK-3.
+ *
+ * The decision lives here rather than in JSX conditionals because it is the
+ * absent-versus-zero distinction, and that is exactly the kind of rule this
+ * repo keeps getting wrong when it is spread across render branches. Four
+ * inputs, four answers, one place:
+ *
+ *   no store bound      the surface is unavailable - say so
+ *   an error            the error is already rendered; add nothing
+ *   packs === null      READ NOT FINISHED. Not the same as empty.
+ *   packs === []        read finished, genuinely nothing built
+ *
+ * The bug this fixes: `null` and `[]` both rendered as nothing, so a store
+ * still being read was indistinguishable from an app that had never built a
+ * pack - while the build log one screen earlier said the pack was here.
+ */
+export function inventoryPlaceholder(input: {
+  readonly hasStore: boolean;
+  readonly packs: readonly unknown[] | null;
+  readonly rowCount: number;
+  readonly error: string;
+}): string | null {
+  if (!input.hasStore) return PACK_INVENTORY_UNAVAILABLE_REASON;
+  // An error is its own explanation and is rendered separately; stacking a
+  // placeholder under it would say "still reading" about a read that stopped.
+  if (input.error !== "") return null;
+  if (input.packs === null) return PACK_INVENTORY_LOADING_REASON;
+  return input.rowCount === 0 ? PACK_INVENTORY_EMPTY_REASON : null;
+}

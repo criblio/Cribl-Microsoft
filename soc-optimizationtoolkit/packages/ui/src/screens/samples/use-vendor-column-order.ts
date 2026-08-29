@@ -66,6 +66,13 @@ export function useVendorColumnOrder(
   cache: ContentCache | undefined,
   vendor: string,
   logType: string,
+  /**
+   * How many fields the tagged event actually has (VND-3). Optional because
+   * not every caller has a sample in hand - the CSV header dialog resolves an
+   * order before anything is parsed - and `describeColumnOrder` keeps its
+   * unmeasured wording when it is absent rather than inventing a comparison.
+   */
+  fieldCount?: number,
 ): VendorColumnOrderState {
   const key = vendorFieldDefinitionKey(vendor, logType);
   const [stored, setStored] = useState<VendorFieldDefinition | null>(null);
@@ -105,8 +112,8 @@ export function useVendorColumnOrder(
   );
 
   const notice = useMemo(
-    () => (resolved === null ? "" : describeColumnOrder(resolved)),
-    [resolved],
+    () => (resolved === null ? "" : describeColumnOrder(resolved, fieldCount)),
+    [resolved, fieldCount],
   );
 
   const remember = useCallback(
