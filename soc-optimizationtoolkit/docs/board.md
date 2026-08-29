@@ -11,7 +11,7 @@ two cannot disagree.
 alternatives. This board holds only what is a unit of work, what state it is
 in, and what it waits on.
 
-**59 in the backlog, 0 in progress, 26 done.**
+**59 in the backlog, 0 in progress, 27 done.**
 
 ## By menu item
 
@@ -21,14 +21,14 @@ operator sees on any screen. Two menus are PLANNED and have no route yet.
 
 | Menu | Open | Done | Now |
 |---|---|---|---|
-| Dataflow | 2 | 0 | 0 |
+| Dataflow | 3 | 0 | 0 |
 | Setup | 1 | 0 | 0 |
-| Sentinel Integration | 18 | 6 | 4 |
+| Sentinel Integration | 17 | 6 | 2 |
 | Pack Maintenance | 4 | 1 | 0 |
 | Permission Verification | 8 | 0 | 0 |
 | Azure Native Source Onboarding (planned) | 13 | 4 | 0 |
 | Windows Event analysis (planned) | 5 | 0 | 0 |
-| Cross-cutting | 8 | 15 | 1 |
+| Cross-cutting | 8 | 16 | 1 |
 
 Open work totals 59.
 
@@ -115,17 +115,17 @@ ENABLER EPIC: release mechanics. The packaged tarball trails main, and the lab t
 |---|---|---|---|
 | `REL-F1` Release and deployment hygiene | Cross-cutting | 2/5 | REL-2, REL-3, REL-4, REL-5, REL-6 |
 
-### `DBT` Quality and technical debt _(enabler)_ - 43% (13/30)
+### `DBT` Quality and technical debt _(enabler)_ - 45% (14/31)
 
 ENABLER EPIC: verification gaps, copy, diagram fidelity, docs and the board's own tooling
 
 | Feature | Menu | Done | Stories |
 |---|---|---|---|
 | `DBT-F1` Verification gaps | Sentinel Integration | 0/4 | DBT-2, DBT-5*, DBT-6, DBT-7 |
-| `DBT-F2` Copy and UX | Sentinel Integration | 0/7 | DBT-3, DBT-4, DBT-9, DBT-14, DBT-15, DBT-28, D-10* |
-| `DBT-F3` Diagram fidelity | Dataflow | 0/2 | DBT-1, DBT-12 |
+| `DBT-F2` Copy and UX | Sentinel Integration | 0/6 | DBT-3, DBT-9, DBT-14, DBT-15, DBT-28, D-10* |
+| `DBT-F3` Diagram fidelity | Dataflow | 0/3 | DBT-1, DBT-4, DBT-12 |
 | `DBT-F4` Docs and spec grounding | Cross-cutting | 3/6 | DBT-8, DBT-10, DBT-11, DBT-13, DBT-22, DBT-26 |
-| `DBT-F5` Board tooling defects | Cross-cutting | 10/10 | DBT-16, DBT-17, DBT-18, DBT-19, DBT-20, DBT-21, DBT-23, DBT-24, DBT-25, DBT-27 |
+| `DBT-F5` Board tooling defects | Cross-cutting | 11/11 | DBT-16, DBT-17, DBT-18, DBT-19, DBT-20, DBT-21, DBT-23, DBT-24, DBT-25, DBT-27, DBT-29 |
 | `DBT-F6` Effect-identity defect class | Pack Maintenance | 0/1 | FX-4 |
 
 ---
@@ -138,7 +138,7 @@ _Nothing here._
 
 ---
 
-## Backlog - now (5)
+## Backlog - now (3)
 
 Next to pick up. Nothing blocks these.
 
@@ -164,19 +164,9 @@ Next to pick up. Nothing blocks these.
   Debt, spec grounding, verification Small and mostly independent. Good filler
   between larger stories.
 
-- **DBT-4** Name inline breaker rulesets instead of showing "Default selection"
-  `DBT-F2` `story` `settled`
-  The spec's `EventBreakerExistingOrNewExisting` carries `existingRule`.
-  `backlog.md#9`.
-
-- **DBT-6** Exercise the `_raw`-absent branch with a non-Lake sample
-  `DBT-F1` `enabler` `settled`
-  The Lake write path adds `_raw`, so no Lake-sourced bench can reach that
-  branch - it needs a paste or an upload. `zscaler-lake-lab.md:167-179`.
-
 ---
 
-## Backlog - next (23)
+## Backlog - next (25)
 
 Settled and unblocked, sequenced behind now.
 
@@ -299,6 +289,60 @@ Settled and unblocked, sequenced behind now.
   not accept Kind:Direct DCRs, with no snapshot date and no hedge, while the
   plan doc that is its only source still calls it unverified. Either measure
   it or carry the caveat.
+
+- **DBT-4** Name inline breaker rulesets instead of showing "Default selection"
+  `DBT-F3` `story` `settled` `blocked by DBT-1`
+  The spec's `EventBreakerExistingOrNewExisting` carries `existingRule`.
+  `backlog.md#10`. RE-FILED 2026-08-29, before writing any code. The card was
+  under DBT-F2 (Copy and UX, backlog.md#9, menu integrate) and cited #9; the
+  observation is in section 10, Diagram fidelity, so it belongs to DBT-F3 and
+  the menu is architecture, NOT integrate - which means it should never have
+  been in a Sentinel Integration now band. DEPENDENCY DECLARED on DBT-1:
+  backlog.md#10 says the ruleset is named inline by "the REST-collector
+  pattern", and the very next paragraph says InputRest has no schema under
+  that name in the vendored spec and to "pin this down before relying on
+  collector breaker classification". That is DBT-1, and it was not on the
+  dependency list. WHAT I CHECKED before re-filing rather than assuming: every
+  Input* schema declares breakerRulesets as items:{type:"string"}, so the
+  current parser is CORRECT for source config and my first guess - that object
+  entries were being filtered out - was wrong.
+  EventBreakerExistingOrNewExisting is referenced only by
+  FunctionConfSchemaEventBreaker, used by PipelineFunctionEventBreaker: it is
+  a PIPELINE FUNCTION, not source config. Naming a pipeline-stage ruleset on
+  the SOURCE breaker node would attribute the wrong stage, which is worse than
+  "Default selection". LivePipelineFunction also carries only {id, disabled}
+  today, so the conf that holds existingRule is not captured at all. Whoever
+  takes this needs DBT-1 answered first and then has to decide which STAGE the
+  name belongs to.
+
+- **DBT-6** Exercise the `_raw`-absent branch with a non-Lake sample
+  `DBT-F1` `enabler` `undecided`
+  The Lake write path adds `_raw`, so no Lake-sourced bench can reach that
+  branch - it needs a paste or an upload. `zscaler-lake-lab.md:167-179`.
+  SCOPED 2026-08-29, not built - the premise needs a decision first. Traced
+  both branches the phrase could mean and BOTH are already unit-covered. (1)
+  `unwrapCapture` in `parse-sample.ts` guards on `records[0]._raw !==
+  undefined`; `capture.test.ts` covers it with "leaves a non-capture (no _raw)
+  sample untouched". (2) `rowRawText` in `query-lake-samples.ts` falls back to
+  `JSON.stringify(row)` when `_raw` is absent, and
+  `query-lake-samples.test.ts` covers BOTH the absent case (33 bytes) and the
+  empty-string case (26 bytes), the latter reachable because `readString`
+  treats "" as absent. So the card is not asking for unit coverage - it sits
+  in the Verification gaps feature and wants LIVE evidence. That is where it
+  runs into a wall the cited doc itself describes: `rowRawText` only ever sees
+  rows returned by a Lake query, and `zscaler-lake-lab.md` measured that the
+  Lake WRITE PATH adds `_raw` (0 of 20 events carry it at the source, 40 of 40
+  carry it read back). The doc concludes "reaching that branch needs a paste
+  or an upload" - but a paste never reaches `rowRawText` at all; it goes
+  through `parse-sample`. So as written the card asks for live evidence of a
+  branch that live Lake data structurally cannot produce. UNDECIDED, and the
+  question is which of three this is: close it as covered-by-pins and record
+  that the truly-absent case is unreachable for Lake rows; keep it open only
+  for the PASTE-path branch, which a JSON sample with no `_raw` really would
+  exercise live; or treat the unreachability itself as the finding and ask
+  whether the fallback should stay. Also worth fixing when this is picked up:
+  the card cites `zscaler-lake-lab.md:167-179`, a LINE citation, which is the
+  format documenting-work.md rejects because line numbers rot.
 
 - **DBT-7** Confirm the `eventsPerSec` 2x multiplier against worker config
   `DBT-F1` `enabler` `settled`
@@ -678,7 +722,7 @@ Settled, gated on something above.
 
 ---
 
-## Done (26)
+## Done (27)
 
 Kept briefly so a reader can see what just landed; prune when the list grows.
 
@@ -1283,3 +1327,22 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   the report on a real board rather than by reading it. Four pins,
   mutation-checked by reverting the filter: three fail. The rule still fires
   on the real case, a now card blocked by something parked at later.
+
+- **DBT-29** A second card filed under the wrong feature with a matching wrong citation
+  `DBT-F5` `bug` `settled` `verified: none`
+  FOUND 2026-08-29 scoping DBT-4 to build it. DBT-4 sat under DBT-F2 (Copy and
+  UX, anchor 9) and cited `backlog.md#9`, while its observation lives in
+  section 10, Diagram fidelity. Identical to DBT-25 three days earlier, where
+  AZR-2 sat under the 6a feature citing `#6a` with its content in 6b. TWO
+  instances now, which makes it a class rather than a slip. The consequence is
+  worse than a bad pointer: the `menu` tag is INHERITED from the feature, so
+  DBT-4 read as `integrate` when it is `architecture`, and it was promoted
+  into a Sentinel Integration `now` band on that basis. A wrong feature now
+  MIS-SEQUENCES work, not just mis-directs a reader - which is a new cost the
+  menu tag introduced on 2026-08-28 and nobody had priced. WHY NOTHING CATCHES
+  IT: `check-board` verifies a citation RESOLVES, and #9 is a real section.
+  Only the card text knows which section it means, so no validator can close
+  this. The honest mitigation is that both instances were caught the same way
+  - by reading the cited section BEFORE writing code - so that is a habit to
+  keep rather than a check to add. Fixed by moving DBT-4 to DBT-F3 and
+  re-citing to `backlog.md#10`.
