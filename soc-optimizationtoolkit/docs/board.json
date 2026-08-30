@@ -129,7 +129,7 @@
             "detail": "A permanent guard, but bigger than the three fixes were: .oxlintrc.json enables only react/rules-of-hooks and oxlint has no exhaustive-deps equivalent, so this means AUTHORING and maintaining a rule, not switching one on."
           }
         ],
-        "chosen": null
+        "chosen": "one-off-sweep"
       },
       "detail": "THREE confirmed from one reading; nothing says the fourth is not there. `useEffect` keyed on a memo, a callback, or an inline object/array prop, whose body resets state the operator owns. Safe reference: `lake-panel.tsx:198-204` (primitive key). Guard precedents: `integrate-screen.tsx:398-410`, `azure-resources-section.tsx:259-262`. *chore. UNDECIDED whether this is a one-off sweep or a lint rule - oxlint has no exhaustive-deps equivalent, and a custom rule is a bigger commitment than the three fixes were.*  ### CAP - Capability taxonomy extension  Build this ONCE. `backlog.md#12` says so explicitly - it serves three separate backlog items and doing it per-surface means building it three times. Today the taxonomy is 11 capabilities (`capabilities.ts:22-36`). Every addition needs a real probe or the step-2 mapping rule drops it, since that rule records only measurements. No probe ever grants a write."
     },
@@ -422,7 +422,7 @@
             "detail": "Keeps the port pristine and re-opens the LOG-07 drift AZR-2 was asked to resolve. Honest, but it undoes a deliberate decision instead of fixing the plumbing under it."
           }
         ],
-        "chosen": null
+        "chosen": "derive"
       },
       "detail": "FOUND by the architecture audit 2026-08-28 (ninth), one commit after AZR-2 merged, as a DUPLICATED DECISION: two modules define what Entra profiles exist and they disagree. `entra-diagnostics.ENTRA_PROFILES` has three (SecurityOnly, Standard, HighVolume); the `coverage-catalog` entraId subSelection has two. REPRODUCED, not theorised: storing SecurityOnly through `decodeSelection` yields `subSelections.entraId = [\"Standard\"]` with `dropped = [\"entraId.SecurityOnly\"]`. So the one profile an operator cannot keep is precisely the one AZR-2 added by resolving the LOG-07 drift. It is REPORTED in `dropped` rather than lost silently - that mechanism works as built - but nothing reads `dropped` yet and the choice still reverts. Worth recording exactly how the rationale failed: the entra-categories docblock says \"the coverage catalog keeps offering the two it always did, because changing what a stored selection MEANS is a separate act\". The first half is right - Standard and HighVolume keep their meaning. The second half does not follow from it: declining to make a THIRD value storable is not the same act, and nothing checked whether it was. PARKED 2026-08-28: moved back out of in-progress when the focus shifted to the Sentinel Integration content/pack path. The decision on it is still open and still real.",
       "priority": "later"
@@ -949,7 +949,7 @@
             "detail": "Beside the existing secret / target / platform-link chips."
           }
         ],
-        "chosen": null
+        "chosen": "connection-bar"
       },
       "detail": "ink chips? Excluded already: the nav (tried, wrong surface) and the preflight panel (re-measures on arrival, so it would only ever read \"just now\")."
     },
@@ -983,7 +983,7 @@
             "detail": "Batch Deploy already calls ports.artifacts.save; Integrate can hand over the pack build. DCR Automation waits until it has an artifact to give. Smallest step; leaves the capability rule partly unmet."
           }
         ],
-        "chosen": null
+        "chosen": "each-owns"
       },
       "detail": "ck offer, and does each own its `onProduce`? One prop away in any of them."
     },
@@ -1011,7 +1011,7 @@
             "detail": "One seam change. At eight listers this is the duplication that drifts."
           }
         ],
-        "chosen": null
+        "chosen": "ports-context"
       },
       "detail": ", or carry them in `PortsContext` beside `config`? One seam change against updating every `PortsProvider` call site. Cheap now, less so later; at eight listers this is the duplication that drifts. `backlog.md#4`."
     },
@@ -1044,7 +1044,7 @@
             "detail": "The catalog also emits enrichment functions into the generated pipeline. Larger slice, but there is a working precedent: buildCefIdentityOverrideFn (pipeline-conf.ts:132) was added for the same reason - an override that only changed the analysis would leave deployed data carrying the wrong vendor."
           }
         ],
-        "chosen": null
+        "chosen": "produce-in-scope"
       },
       "detail": "nt functions? Reporting first is a legitimate slice, but a catalog that only affects analysis leaves deployed data still missing the fields. `backlog.md#5a`."
     },
@@ -1089,7 +1089,7 @@
             "detail": "Shows what changed since the pack was built; the same fetch the picker already makes. Noted on the card as probably the honest one."
           }
         ],
-        "chosen": null
+        "chosen": "live-schema"
       },
       "detail": "eds the original samples, which the pack carries but which may no longer represent live traffic; a stored verdict is cheap and goes stale silently. A third option - re-analyse against the LIVE table schema and show what changed since the pack was built - is probably the honest one, and is the same fetch the picker already makes. `backlog.md#12`."
     },
@@ -1155,7 +1155,7 @@
             "detail": "Generate a scheduled Resource Graph query collector alongside the Sentinel incidents one. Most work, and it lands on the same unmeasured Resource Graph capability that CAP-1 closes."
           }
         ],
-        "chosen": null
+        "chosen": "scheduled-collector"
       },
       "detail": "only with no streaming path. If offered, it is a second scheduled collector, and it lands on the same Resource Graph gap CAP-1 closes. `backlog.md#6d`. > **D-9 became DBT-14 on 2026-08-27.** It asked what to do about three-level > nested scrolling and had no fix proposed, because nobody had reproduced the > harm. Driving PaloAlto did: the wheel over the solution list moves nothing at > all. That is not a question any more, so it left this column."
     },
@@ -1184,7 +1184,7 @@
             "detail": "Stepper starts showing what the header promises."
           }
         ],
-        "chosen": null
+        "chosen": "promote-substeps"
       },
       "detail": "Either drop the enumeration from the header, or promote the sub-steps. Measured on two live walkthroughs 2026-08-06. `backlog.md#9`."
     },
@@ -1212,7 +1212,7 @@
             "detail": "Per-table content mapping AwsRequestId to AwsRequestId_. ADR-0004 calls this \"a real improvement\" but insists it is a per-table CONTENT decision, not a schema-mapping rule, so it must not become a new RULE 2b clause. The bundled catalog already carries both columns for AWSCloudTrail."
           }
         ],
-        "chosen": null
+        "chosen": "per-table-successor"
       },
       "detail": "Explicitly out of scope for ADR-0004 as a per-table content decision. Matters because CloudTrail's `requestID` is frequently not a UUID, so `toguid()` returns null and drops it silently. `adr/0004:82-86`.  --- Source is docs/adr/0004-cast-guid-columns.md, \"What is NOT decided here\". The card previously tagged AZR-5, which is the diagnostic-settings cleanup and has nothing to do with guid columns."
     },
@@ -1438,11 +1438,12 @@
       "feature": "DBT-F7",
       "title": "The air-gap README tells operators to Portal-deploy files that are not ARM templates",
       "type": "bug",
-      "status": "backlog",
-      "priority": "next",
+      "status": "done",
+      "priority": "now",
       "settled": "settled",
       "dependsOn": [],
-      "detail": "FOUND 2026-08-30 answering \"can users export ARM templates instead of deploying\". `generateAirGapReadme` (air-gap-export.ts:106) instructs \"Use Azure Portal > Deploy a custom template, or `az deployment group create`\". Neither works on what the archive actually contains. The collected bodies are ARM REST REQUEST PAYLOADS, not deployment templates: `CollectedArmRequest` is `{method: \"PUT\", path, apiVersion, body}` and the body is a bare resource (`location` + `properties`). Confirmed by grep - there is no `$schema`, no `parameters`, no `resources[]` anywhere in the collected bodies. Portal's custom-template blade rejects them, and `az deployment group create` needs the envelope they do not have. This is the honesty class the board tracks, at its worst: the operator is air-gapped, so they cannot fall back to the working path, and the instruction reads as authoritative. The correct command is `az rest --method PUT --url \"{path}?api-version={apiVersion}\" --body @file`, which the artifact already carries every field for. TWO HONEST FIXES, and the choice is the card: (a) fix the README to say `az rest`, cheap and true today; (b) wrap each body in a `Microsoft.Resources/deployments` envelope so the README's existing claim becomes true, which is what an operator who asked for \"ARM templates\" probably meant. (b) subsumes DBT-35. Do NOT do both halves of (a) and leave (b) implied."
+      "detail": "FOUND 2026-08-30 answering \"can users export ARM templates instead of deploying\". `generateAirGapReadme` (air-gap-export.ts:106) instructs \"Use Azure Portal > Deploy a custom template, or `az deployment group create`\". Neither works on what the archive actually contains. The collected bodies are ARM REST REQUEST PAYLOADS, not deployment templates: `CollectedArmRequest` is `{method: \"PUT\", path, apiVersion, body}` and the body is a bare resource (`location` + `properties`). Confirmed by grep - there is no `$schema`, no `parameters`, no `resources[]` anywhere in the collected bodies. Portal's custom-template blade rejects them, and `az deployment group create` needs the envelope they do not have. This is the honesty class the board tracks, at its worst: the operator is air-gapped, so they cannot fall back to the working path, and the instruction reads as authoritative. The correct command is `az rest --method PUT --url \"{path}?api-version={apiVersion}\" --body @file`, which the artifact already carries every field for. TWO HONEST FIXES, and the choice is the card: (a) fix the README to say `az rest`, cheap and true today; (b) wrap each body in a `Microsoft.Resources/deployments` envelope so the README's existing claim becomes true, which is what an operator who asked for \"ARM templates\" probably meant. (b) subsumes DBT-35. Do NOT do both halves of (a) and leave (b) implied. DECIDED AND FIXED 2026-08-30 (user chose option (b), real templates). A new pure domain module, `arm-template`, wraps the collected bodies in a resource-group-scoped deployment template, so the README's existing Portal and `az deployment group create` instructions became true rather than being softened to match a weaker artifact. THREE things the loose REST bodies could never carry, and the reason (b) was worth more than (a): the FULL nested type and name (a custom table is `Microsoft.OperationalInsights/workspaces/tables` named `{workspace}/{table}` - the existing `parseResourceId` returns the leaf pair, which is right for a dropdown label and wrong for a template, so `parseArmTypeAndName` was added beside it rather than bending the old one); `dependsOn`, DERIVED from the data by two rules - a resource id appearing anywhere inside another body, and a DCR sharing a table with its custom-table request, which no resource id states - so one deployment brings them up in the right order instead of the operator inferring it from file names; and ONE file rather than N, because N per-resource templates would be a second copy of the same deployment free to disagree with itself. NO PARAMETERS, deliberately. The bodies carry absolute resource ids, so a retargeted deployment would build resources pointing at the wrong workspace WITHOUT failing. Instead the builder REPORTS the single scope, refuses to merge requests from a second resource group (they are excluded and named, never silently relocated), and the README prints the exact command with that subscription and group in it. BOTH surfaces changed, not just the unreachable one: the batch screen's `buildTemplatesArtifact` now emits the same envelope, keeping its metadata under a leading-underscore key ARM ignores. 12 new pins on the builder, 5 on the parser, and the existing air-gap and batch pins were rewritten UP - the batch suite went 33 to 36, air-gap 7 to 10, and each new pin carries a mutation check (drop the reference, the edge goes; retarget the table, the edge goes; an unknown body field must still survive).",
+      "verified": "pins"
     },
     {
       "id": "DBT-34",
@@ -1450,11 +1451,12 @@
       "feature": "DBT-F7",
       "title": "guidedDeploy and the air-gap archive have no shell caller",
       "type": "bug",
-      "status": "backlog",
+      "status": "done",
       "priority": "next",
       "settled": "settled",
       "dependsOn": [],
-      "detail": "FOUND by the architecture audit 2026-08-30 (tenth), check 4. `guidedDeploy` and `buildAirGapArchive`/`generateAirGapReadme` have ZERO non-test references from `packages/ui` or `apps/cribl-app`. Measured, not eyeballed: every guided-deploy export was grepped against both shells - `canWireSource` has 7, `wireSource` 4, `deployModeGating` 3, and these three have 0. So the module is not abandoned, it is HALF-CONSUMED: the Integrate screen imports guided-deploy's pure decisions piecemeal and re-implements the orchestration itself, which is why the orchestrator rotted without anyone noticing. That also explains DBT-33 - nobody has read that README because nothing generates it. SAME CLASS AS [[HON-8]] (buildDeploymentPreview has no caller), and they should be judged together rather than one at a time: two ~500-line usecases with full test suites and no screen is a pattern about how this codebase grows, not two coincidences. The audit exemption for the setup wizard covers code standing still for a recorded reason; this has no such reason recorded. NOT proposing deletion - the air-gap archive is the ONLY thing that assembles pack + templates + destinations into one artifact, and the .crbl builder under it is used. The question is whether the Integrate screen's deploy should call it (which is DBT-35) or whether it should be retired with a reason written down."
+      "detail": "FOUND by the architecture audit 2026-08-30 (tenth), check 4. `guidedDeploy` and `buildAirGapArchive`/`generateAirGapReadme` have ZERO non-test references from `packages/ui` or `apps/cribl-app`. Measured, not eyeballed: every guided-deploy export was grepped against the UI package and the shell - `canWireSource` has 7, `wireSource` 4, `deployModeGating` 3, and these three have 0. So the module is not abandoned, it is HALF-CONSUMED: the Integrate screen imports guided-deploy's pure decisions piecemeal and re-implements the orchestration itself, which is why the orchestrator rotted without anyone noticing. That also explains DBT-33 - nobody has read that README because nothing generates it. SAME CLASS AS [[HON-8]] (buildDeploymentPreview has no caller), and they should be judged together rather than one at a time: two ~500-line usecases with full test suites and no screen is a pattern about how this codebase grows, not two coincidences. The audit exemption for the setup wizard covers code standing still for a recorded reason; this has no such reason recorded. NOT proposing deletion - the air-gap archive is the ONLY thing that assembles pack + templates + destinations into one artifact, and the .crbl builder under it is used. The question is whether the Integrate screen's deploy should call it (which is DBT-35) or whether it should be retired with a reason written down. RESOLVED 2026-08-30 by giving it the caller it lacked, not by deleting it. The Integrate screen's new export path (see [[DBT-35]]) calls `buildAirGapArchive`, so the module went from zero non-test shell references to a real one, and the README defect [[DBT-33]] found in it now ships to actual operators - which is why it was worth fixing rather than filing again. `guidedDeploy` itself is STILL uncalled and that is deliberate: the export needed the archive builder, not the orchestrator, and wiring a second deploy orchestrator in beside the screen's own would have been the duplicated-decision shape rather than a fix. It stays open as a question on [[HON-8]]'s terms - two usecases with full test suites and no screen - and this card no longer holds it hostage.",
+      "verified": "pins"
     },
     {
       "id": "DBT-35",
@@ -1463,13 +1465,14 @@
       "menu": "integrate",
       "title": "Sentinel Integration deploy has no export-instead-of-deploy option",
       "type": "story",
-      "status": "backlog",
-      "priority": "next",
-      "settled": "unconfirmed",
+      "status": "done",
+      "priority": "now",
+      "settled": "settled",
       "dependsOn": [
         "DBT-34"
       ],
-      "detail": "RAISED BY THE USER 2026-08-30: \"do we have a feature that allows the user to export Azure ARM templates instead of deploy directly to Azure?\" The answer today is \"on a different screen, in a weaker form\". DCR Automation > Batch has a `template only` toggle that deploys nothing and downloads ONE JSON file, `arm-templates-{workspace}-{jobId}.json`, holding every collected request in collection order (custom-table, dce, ampls-association, dcr). It is FORCED on in azure-only mode, so it is a real shipped path, not a stub. But INTEGRATE_SECTIONS section 9 (Deploy) has no templateOnly and no export at all - grep finds neither in `screens/integrate/`. That is the gap: Integrate is the nine-section flow the product leads with, it is where the pack, the DCR values and the destinations all come together, and it is the one place with no way to stop short of touching Azure. An operator who cannot deploy - no permissions yet, change window, air-gapped - has to leave the flow they were walked through and rebuild the same intent on another screen with a different scope. DEPENDS ON [[DBT-34]] because the artifact this should produce already exists and is unreachable: `buildAirGapArchive` assembles pack + arm-templates/ + cribl-destinations/ + README into one .tgz, with the secret forced to the `<replace me>` placeholder. Wiring Integrate's deploy to it answers this card and DBT-34 together. UNCONFIRMED on ONE point, which is the decision to put to the user: whether \"export ARM templates\" means the REST bodies we collect today or genuine deployment templates. See [[DBT-33]] - if it means the latter, that card grows and this one inherits it."
+      "detail": "RAISED BY THE USER 2026-08-30: \"do we have a feature that allows the user to export Azure ARM templates instead of deploy directly to Azure?\" The answer today is \"on a different screen, in a weaker form\". DCR Automation > Batch has a `template only` toggle that deploys nothing and downloads ONE JSON file, `arm-templates-{workspace}-{jobId}.json`, holding every collected request in collection order (custom-table, dce, ampls-association, dcr). It is FORCED on in azure-only mode, so it is a real shipped path, not a stub. But INTEGRATE_SECTIONS section 9 (Deploy) has no templateOnly and no export at all - grep finds neither in `screens/integrate/`. That is the gap: Integrate is the nine-section flow the product leads with, it is where the pack, the DCR values and the destinations all come together, and it is the one place with no way to stop short of touching Azure. An operator who cannot deploy - no permissions yet, change window, air-gapped - has to leave the flow they were walked through and rebuild the same intent on another screen with a different scope. DEPENDS ON [[DBT-34]] because the artifact this should produce already exists and is unreachable: `buildAirGapArchive` assembles pack + arm-templates/ + cribl-destinations/ + README into one .tgz, with the secret forced to the `<replace me>` placeholder. Wiring Integrate's deploy to it answers this card and DBT-34 together. UNCONFIRMED on ONE point, which is the decision to put to the user: whether \"export ARM templates\" means the REST bodies we collect today or genuine deployment templates. See [[DBT-33]] - if it means the latter, that card grows and this one inherits it. BUILT 2026-08-30 (user chose \"wire Integrate to the air-gap archive\"). Section 9 now carries \"Export instead of deploy\" beside Deploy. It calls `onboardBatch` with `templateOnly: true` - which COLLECTS the ARM bodies through read-only GETs instead of PUTting them, and makes no Cribl calls at all - then assembles the pack without installing it, and saves one .tgz. NO CHANGE TO `onboardTable` was needed, which is the part worth recording: the export rides the batch usecase's existing collect-only mode rather than teaching the single-table path a second one. `buildAndInstallPack` grew an `install: false` option instead of being duplicated - it skips the overwrite check (an air-gapped run overwrites nothing, so the gate would have no subject) and the install loop, and returns the assembled bytes. A SEPARATE CONTROL, never a mode toggle on Deploy, and gated on READ prerequisites only: a scope to read schemas from and a host that can save files. It does NOT require a worker group or an ingestion client id, because a file needs neither - an operator who cannot write to Azure should not have to arm the deploy button to find that out. A DOM pin asserts exactly that and fails if the reason text ever names a write prerequisite. The pack is OPTIONAL in the archive: when the content path is not armed the native export still ships, rather than withholding the half that works. 3 DOM wiring pins added - the control renders, it names its first unmet prerequisite, and that prerequisite is a read.",
+      "verified": "pins"
     }
   ],
   "features": [

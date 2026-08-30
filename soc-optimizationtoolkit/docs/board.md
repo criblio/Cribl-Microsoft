@@ -11,7 +11,7 @@ two cannot disagree.
 alternatives. This board holds only what is a unit of work, what state it is
 in, and what it waits on.
 
-**59 in the backlog, 0 in progress, 33 done.**
+**56 in the backlog, 0 in progress, 36 done.**
 
 ## By menu item
 
@@ -23,15 +23,15 @@ operator sees on any screen. Two menus are PLANNED and have no route yet.
 |---|---|---|---|
 | Dataflow | 3 | 0 | 0 |
 | Setup | 1 | 0 | 0 |
-| Sentinel Integration | 16 | 8 | 0 |
-| DCR Automation | 2 | 0 | 0 |
+| Sentinel Integration | 15 | 9 | 0 |
+| DCR Automation | 0 | 2 | 0 |
 | Pack Maintenance | 4 | 1 | 0 |
 | Permission Verification | 8 | 0 | 0 |
 | Azure Native Source Onboarding (planned) | 13 | 4 | 0 |
 | Windows Event analysis (planned) | 5 | 0 | 0 |
 | Cross-cutting | 7 | 20 | 0 |
 
-Open work totals 59.
+Open work totals 56.
 
 ## Epics and features
 
@@ -116,7 +116,7 @@ ENABLER EPIC: release mechanics. The packaged tarball trails main, and the lab t
 |---|---|---|---|
 | `REL-F1` Release and deployment hygiene | Cross-cutting | 3/5 | REL-2, REL-3, REL-4, REL-5, REL-6 |
 
-### `DBT` Quality and technical debt _(enabler)_ - 46% (17/37)
+### `DBT` Quality and technical debt _(enabler)_ - 54% (20/37)
 
 ENABLER EPIC: verification gaps, copy, diagram fidelity, docs and the board's own tooling
 
@@ -128,7 +128,7 @@ ENABLER EPIC: verification gaps, copy, diagram fidelity, docs and the board's ow
 | `DBT-F4` Docs and spec grounding | Cross-cutting | 4/7 | DBT-8, DBT-10, DBT-11, DBT-13, DBT-22, DBT-26, DBT-32 |
 | `DBT-F5` Board tooling defects | Cross-cutting | 13/13 | DBT-16, DBT-17, DBT-18, DBT-19, DBT-20, DBT-21, DBT-23, DBT-24, DBT-25, DBT-27, DBT-29, DBT-30, DBT-31 |
 | `DBT-F6` Effect-identity defect class | Pack Maintenance | 0/1 | FX-4 |
-| `DBT-F7` Export instead of deploy - the offline path | DCR Automation | 0/3 | DBT-33, DBT-34, DBT-35* |
+| `DBT-F7` Export instead of deploy - the offline path | DCR Automation | 3/3 | DBT-33, DBT-34, DBT-35* |
 
 ---
 
@@ -148,7 +148,7 @@ _Nothing here._
 
 ---
 
-## Backlog - next (28)
+## Backlog - next (25)
 
 Settled and unblocked, sequenced behind now.
 
@@ -167,9 +167,9 @@ Settled and unblocked, sequenced behind now.
   the taxonomy is 11 capabilities (`capabilities.ts:22-36`). Every addition
   needs a real probe or the step-2 mapping rule drops it, since that rule
   records only measurements. No probe ever grants a write.
-  DECISION (unanswered): Sweep the effect-identity class once by hand, or
-  write a custom lint rule?
-    [ ] `one-off-sweep` One-off sweep of the codebase - Read every useEffect keyed on a memo, callback or inline object whose body resets operator-owned state, and fix what turns up. Cheap, and exactly the reading that found the first three - but nothing stops a fourth being written next week.
+  DECISION: Sweep the effect-identity class once by hand, or write a custom
+  lint rule?
+    [x] `one-off-sweep` One-off sweep of the codebase - Read every useEffect keyed on a memo, callback or inline object whose body resets operator-owned state, and fix what turns up. Cheap, and exactly the reading that found the first three - but nothing stops a fourth being written next week.
     [ ] `lint-rule` Write a custom lint rule - A permanent guard, but bigger than the three fixes were: .oxlintrc.json enables only react/rules-of-hooks and oxlint has no exhaustive-deps equivalent, so this means AUTHORING and maintaining a rule, not switching one on.
 
 - **CAP-1** Add `resourcegraph.read` and its probe
@@ -386,9 +386,9 @@ Settled and unblocked, sequenced behind now.
 - **D-2** `HON-7` surface area: which of Integrate deploy, Batch Deploy and DCR Automation get the fallba
   `HON-F1` `decision` `undecided`
   ck offer, and does each own its `onProduce`? One prop away in any of them.
-  DECISION (unanswered): HON-7: which screens get the fallback offer, and who
-  owns onProduce?
-    [ ] `each-owns` All three, each wiring its own onProduce - Integrate deploy, Batch Deploy and DCR Automation each pass a producer. One prop per screen, uniform mental model - but for pack and ARM kinds it is a button that cannot really produce the artifact on the spot.
+  DECISION: HON-7: which screens get the fallback offer, and who owns
+  onProduce?
+    [x] `each-owns` All three, each wiring its own onProduce - Integrate deploy, Batch Deploy and DCR Automation each pass a producer. One prop per screen, uniform mental model - but for pack and ARM kinds it is a button that cannot really produce the artifact on the spot.
     [ ] `inline-only` All three get the offer; only INLINE kinds get a button - Honours isInlineArtifact, which already splits these: role-assignment and app-registration are generated from data the app holds, while dcr-arm-bodies, table-arm-bodies, arm-template and cribl-pack come from a RUN. Run kinds point at that run instead of pretending. More wiring, no pretending.
     [ ] `where-producible` Only where a producer already exists - Batch Deploy already calls ports.artifacts.save; Integrate can hand over the pack build. DCR Automation waits until it has an artifact to give. Smallest step; leaves the capability rule partly unmet.
 
@@ -397,9 +397,9 @@ Settled and unblocked, sequenced behind now.
   , or carry them in `PortsContext` beside `config`? One seam change against
   updating every `PortsProvider` call site. Cheap now, less so later; at eight
   listers this is the duplication that drifts. `backlog.md#4`.
-  DECISION (unanswered): How do capabilities reach the ~8 listing screens?
+  DECISION: How do capabilities reach the ~8 listing screens?
     [ ] `prop-drill` Keep prop-drilling from the shell - No seam change; every PortsProvider call site updates. Cheap now, less so later.
-    [ ] `ports-context` Carry them in PortsContext beside config - One seam change. At eight listers this is the duplication that drifts.
+    [x] `ports-context` Carry them in PortsContext beside config - One seam change. At eight listers this is the duplication that drifts.
 
 - **D-11** `ADR-0004` per-table successor for deprecated guid columns (`AwsRequestId` to `AwsRequestId_`)
   `HON-F3` `decision` `undecided`
@@ -409,81 +409,10 @@ Settled and unblocked, sequenced behind now.
   is docs/adr/0004-cast-guid-columns.md, "What is NOT decided here". The card
   previously tagged AZR-5, which is the diagnostic-settings cleanup and has
   nothing to do with guid columns.
-  DECISION (unanswered): Route deprecated guid columns to their `_`-suffixed
-  string successor, per table?
+  DECISION: Route deprecated guid columns to their `_`-suffixed string
+  successor, per table?
     [ ] `leave-as-is` Leave it at the ADR-0004 cast - AwsRequestId stays declared string and promoted with toguid(). Correct for well-formed UUIDs, but CloudTrail's requestID frequently is not one, so toguid() returns null and the value drops silently - the same quiet failure the ADR set out to fix.
-    [ ] `per-table-successor` Route deprecated guid columns to the `_` successor - Per-table content mapping AwsRequestId to AwsRequestId_. ADR-0004 calls this "a real improvement" but insists it is a per-table CONTENT decision, not a schema-mapping rule, so it must not become a new RULE 2b clause. The bundled catalog already carries both columns for AWSCloudTrail.
-
-- **DBT-33** The air-gap README tells operators to Portal-deploy files that are not ARM templates
-  `DBT-F7` `bug` `settled`
-  FOUND 2026-08-30 answering "can users export ARM templates instead of
-  deploying". `generateAirGapReadme` (air-gap-export.ts:106) instructs "Use
-  Azure Portal > Deploy a custom template, or `az deployment group create`".
-  Neither works on what the archive actually contains. The collected bodies
-  are ARM REST REQUEST PAYLOADS, not deployment templates:
-  `CollectedArmRequest` is `{method: "PUT", path, apiVersion, body}` and the
-  body is a bare resource (`location` + `properties`). Confirmed by grep -
-  there is no `$schema`, no `parameters`, no `resources[]` anywhere in the
-  collected bodies. Portal's custom-template blade rejects them, and `az
-  deployment group create` needs the envelope they do not have. This is the
-  honesty class the board tracks, at its worst: the operator is air-gapped, so
-  they cannot fall back to the working path, and the instruction reads as
-  authoritative. The correct command is `az rest --method PUT --url
-  "{path}?api-version={apiVersion}" --body @file`, which the artifact already
-  carries every field for. TWO HONEST FIXES, and the choice is the card: (a)
-  fix the README to say `az rest`, cheap and true today; (b) wrap each body in
-  a `Microsoft.Resources/deployments` envelope so the README's existing claim
-  becomes true, which is what an operator who asked for "ARM templates"
-  probably meant. (b) subsumes DBT-35. Do NOT do both halves of (a) and leave
-  (b) implied.
-
-- **DBT-34** guidedDeploy and the air-gap archive have no shell caller
-  `DBT-F7` `bug` `settled`
-  FOUND by the architecture audit 2026-08-30 (tenth), check 4. `guidedDeploy`
-  and `buildAirGapArchive`/`generateAirGapReadme` have ZERO non-test
-  references from `packages/ui` or `apps/cribl-app`. Measured, not eyeballed:
-  every guided-deploy export was grepped against both shells - `canWireSource`
-  has 7, `wireSource` 4, `deployModeGating` 3, and these three have 0. So the
-  module is not abandoned, it is HALF-CONSUMED: the Integrate screen imports
-  guided-deploy's pure decisions piecemeal and re-implements the orchestration
-  itself, which is why the orchestrator rotted without anyone noticing. That
-  also explains DBT-33 - nobody has read that README because nothing generates
-  it. SAME CLASS AS [[HON-8]] (buildDeploymentPreview has no caller), and they
-  should be judged together rather than one at a time: two ~500-line usecases
-  with full test suites and no screen is a pattern about how this codebase
-  grows, not two coincidences. The audit exemption for the setup wizard covers
-  code standing still for a recorded reason; this has no such reason recorded.
-  NOT proposing deletion - the air-gap archive is the ONLY thing that
-  assembles pack + templates + destinations into one artifact, and the .crbl
-  builder under it is used. The question is whether the Integrate screen's
-  deploy should call it (which is DBT-35) or whether it should be retired with
-  a reason written down.
-
-- **DBT-35** Sentinel Integration deploy has no export-instead-of-deploy option
-  `DBT-F7` `story` `unconfirmed` `blocked by DBT-34`
-  RAISED BY THE USER 2026-08-30: "do we have a feature that allows the user to
-  export Azure ARM templates instead of deploy directly to Azure?" The answer
-  today is "on a different screen, in a weaker form". DCR Automation > Batch
-  has a `template only` toggle that deploys nothing and downloads ONE JSON
-  file, `arm-templates-{workspace}-{jobId}.json`, holding every collected
-  request in collection order (custom-table, dce, ampls-association, dcr). It
-  is FORCED on in azure-only mode, so it is a real shipped path, not a stub.
-  But INTEGRATE_SECTIONS section 9 (Deploy) has no templateOnly and no export
-  at all - grep finds neither in `screens/integrate/`. That is the gap:
-  Integrate is the nine-section flow the product leads with, it is where the
-  pack, the DCR values and the destinations all come together, and it is the
-  one place with no way to stop short of touching Azure. An operator who
-  cannot deploy - no permissions yet, change window, air-gapped - has to leave
-  the flow they were walked through and rebuild the same intent on another
-  screen with a different scope. DEPENDS ON [[DBT-34]] because the artifact
-  this should produce already exists and is unreachable: `buildAirGapArchive`
-  assembles pack + arm-templates/ + cribl-destinations/ + README into one
-  .tgz, with the secret forced to the `<replace me>` placeholder. Wiring
-  Integrate's deploy to it answers this card and DBT-34 together. UNCONFIRMED
-  on ONE point, which is the decision to put to the user: whether "export ARM
-  templates" means the REST bodies we collect today or genuine deployment
-  templates. See [[DBT-33]] - if it means the latter, that card grows and this
-  one inherits it.
+    [x] `per-table-successor` Route deprecated guid columns to the `_` successor - Per-table content mapping AwsRequestId to AwsRequestId_. ADR-0004 calls this "a real improvement" but insists it is a per-table CONTENT decision, not a schema-mapping rule, so it must not become a new RULE 2b clause. The bundled catalog already carries both columns for AWSCloudTrail.
 
 ---
 
@@ -526,11 +455,10 @@ Settled, gated on something above.
   act, and nothing checked whether it was. PARKED 2026-08-28: moved back out
   of in-progress when the focus shifted to the Sentinel Integration
   content/pack path. The decision on it is still open and still real.
-  DECISION (unanswered): The coverage catalog is a VERBATIM port of
-  resource-coverage.json, whose `_profileOptions` has only Standard and
-  HighVolume. AZR-2 deliberately added SecurityOnly. Where should the profile
-  list live?
-    [ ] `derive` Catalog derives from entra-diagnostics - ENTRA_PROFILES becomes the single authority and the catalog imports it. The provenance pin changes from "equals the legacy two" to "contains the legacy two, plus SecurityOnly which AZR-2 added deliberately". Removes the duplication for good - but it WEAKENS a verbatim pin written this morning, which is the move check 3 of the audit exists to catch, so it has to be a decision rather than a quiet edit.
+  DECISION: The coverage catalog is a VERBATIM port of resource-coverage.json,
+  whose `_profileOptions` has only Standard and HighVolume. AZR-2 deliberately
+  added SecurityOnly. Where should the profile list live?
+    [x] `derive` Catalog derives from entra-diagnostics - ENTRA_PROFILES becomes the single authority and the catalog imports it. The provenance pin changes from "equals the legacy two" to "contains the legacy two, plus SecurityOnly which AZR-2 added deliberately". Removes the duplication for good - but it WEAKENS a verbatim pin written this morning, which is the move check 3 of the audit exists to catch, so it has to be a decision rather than a quiet edit.
     [ ] `widen-catalog` Hand-add SecurityOnly to the catalog - Smallest diff. Leaves TWO hand-maintained lists that must agree - the duplicated decision that caused this in the first place - so the next profile change breaks it again.
     [ ] `drop-securityonly` Withdraw SecurityOnly - Keeps the port pristine and re-opens the LOG-07 drift AZR-2 was asked to resolve. Honest, but it undoes a deliberate decision instead of fixing the plumbing under it.
 
@@ -702,20 +630,20 @@ Settled, gated on something above.
   ink chips? Excluded already: the nav (tried, wrong surface) and the
   preflight panel (re-measures on arrival, so it would only ever read "just
   now").
-  DECISION (unanswered): Where does the HON-6 freshness indicator go?
+  DECISION: Where does the HON-6 freshness indicator go?
     [ ] `footer` Frame footer - One always-visible surface, away from the connection chips.
-    [ ] `connection-bar` Connection bar - Beside the existing secret / target / platform-link chips.
+    [x] `connection-bar` Connection bar - Beside the existing secret / target / platform-link chips.
 
 - **D-4** `WIN` scope: does the enrichment catalog only report, or does it also produce pipeline enrichme
   `WIN-F2` `decision` `undecided`
   nt functions? Reporting first is a legitimate slice, but a catalog that only
   affects analysis leaves deployed data still missing the fields.
   `backlog.md#5a`.
-  DECISION (unanswered): WIN enrichment catalog: report the gap only, or also
-  emit pipeline functions?
+  DECISION: WIN enrichment catalog: report the gap only, or also emit pipeline
+  functions?
     [ ] `report-only` Report only - Diff schema columns against what the raw event carries, rank by content reference, stop there. backlog.md#5a warns this leaves deployed data still missing the fields - the catalog affects analysis but nothing reconstructs Account in the pipeline.
     [ ] `report-first` Report first, produce as a tracked follow-on - Ship the reporting slice with the producing half recorded as required, not optional. backlog.md#5a calls reporting first "a legitimate slice; just do not let it become the finished state" - this is the source's own phrasing.
-    [ ] `produce-in-scope` Produce inside WIN-2 - The catalog also emits enrichment functions into the generated pipeline. Larger slice, but there is a working precedent: buildCefIdentityOverrideFn (pipeline-conf.ts:132) was added for the same reason - an override that only changed the analysis would leave deployed data carrying the wrong vendor.
+    [x] `produce-in-scope` Produce inside WIN-2 - The catalog also emits enrichment functions into the generated pipeline. Larger slice, but there is a working precedent: buildCefIdentityOverrideFn (pipeline-conf.ts:132) was added for the same reason - an override that only changed the analysis would leave deployed data carrying the wrong vendor.
 
 - **D-5** `WIN-5` JSON or Parquet for the Cribl Lake copy
   `WIN-F3` `decision` `undecided`
@@ -744,11 +672,10 @@ Settled, gated on something above.
   third option - re-analyse against the LIVE table schema and show what
   changed since the pack was built - is probably the honest one, and is the
   same fetch the picker already makes. `backlog.md#12`.
-  DECISION (unanswered): PK-2 source of truth: what does pack maintenance
-  read?
+  DECISION: PK-2 source of truth: what does pack maintenance read?
     [ ] `re-analyse` Re-analyse the pack's samples - Needs the original samples, which the pack carries but which may no longer represent live traffic.
     [ ] `stored` Read a stored analysis - Cheap, and goes stale silently.
-    [ ] `live-schema` Re-analyse against the LIVE table schema - Shows what changed since the pack was built; the same fetch the picker already makes. Noted on the card as probably the honest one.
+    [x] `live-schema` Re-analyse against the LIVE table schema - Shows what changed since the pack was built; the same fetch the picker already makes. Noted on the card as probably the honest one.
 
 - **D-8** `AZR` Resource Graph change tracking - offer it at all? Recorded under `notSupported` as query-
   `AZR-F5` `decision` `undecided`
@@ -758,24 +685,23 @@ Settled, gated on something above.
   nested scrolling and had no fix proposed, because nobody had reproduced the
   > harm. Driving PaloAlto did: the wheel over the solution list moves nothing
   at > all. That is not a question any more, so it left this column.
-  DECISION (unanswered): Offer Resource Graph change tracking, and if so as a
-  row or a real collector?
+  DECISION: Offer Resource Graph change tracking, and if so as a row or a real
+  collector?
     [ ] `omit` Do not offer it - Leave it out of the onboarding menu. Cheapest, and the option backlog.md#6e argues against: an operator who ticks through every section and never sees it concludes the tool missed it.
     [ ] `unavailable-row` Show it as an unavailable row with its reason - Port the resource-coverage.json notSupported entry as a feature: a greyed row reading query-only, no streaming path, alternative "scheduled Azure Resource Graph queries". States the absence with its reason; creates no Cribl config.
-    [ ] `scheduled-collector` Build it as a second scheduled collector - Generate a scheduled Resource Graph query collector alongside the Sentinel incidents one. Most work, and it lands on the same unmeasured Resource Graph capability that CAP-1 closes.
+    [x] `scheduled-collector` Build it as a second scheduled collector - Generate a scheduled Resource Graph query collector alongside the Sentinel incidents one. Most work, and it lands on the same unmeasured Resource Graph capability that CAP-1 closes.
 
 - **D-10** `DBT` Setup wizard header promises three phases while the stepper shows one
   `DBT-F2` `decision` `undecided`
   Either drop the enumeration from the header, or promote the sub-steps.
   Measured on two live walkthroughs 2026-08-06. `backlog.md#9`.
-  DECISION (unanswered): Setup wizard header promises three phases; the
-  stepper shows one.
+  DECISION: Setup wizard header promises three phases; the stepper shows one.
     [ ] `drop-enumeration` Drop the enumeration from the header - Header stops promising what the stepper does not show.
-    [ ] `promote-substeps` Promote the sub-steps into the stepper - Stepper starts showing what the header promises.
+    [x] `promote-substeps` Promote the sub-steps into the stepper - Stepper starts showing what the header promises.
 
 ---
 
-## Done (33)
+## Done (36)
 
 Kept briefly so a reader can see what just landed; prune when the list grows.
 
@@ -1632,3 +1558,134 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   asserting a docblock matches a data array would be a novel kind of check for
   one file. The mechanical verification is recorded here instead, and the next
   architecture audit greps for exactly this class.
+
+- **DBT-33** The air-gap README tells operators to Portal-deploy files that are not ARM templates
+  `DBT-F7` `bug` `settled` `verified: pins`
+  FOUND 2026-08-30 answering "can users export ARM templates instead of
+  deploying". `generateAirGapReadme` (air-gap-export.ts:106) instructs "Use
+  Azure Portal > Deploy a custom template, or `az deployment group create`".
+  Neither works on what the archive actually contains. The collected bodies
+  are ARM REST REQUEST PAYLOADS, not deployment templates:
+  `CollectedArmRequest` is `{method: "PUT", path, apiVersion, body}` and the
+  body is a bare resource (`location` + `properties`). Confirmed by grep -
+  there is no `$schema`, no `parameters`, no `resources[]` anywhere in the
+  collected bodies. Portal's custom-template blade rejects them, and `az
+  deployment group create` needs the envelope they do not have. This is the
+  honesty class the board tracks, at its worst: the operator is air-gapped, so
+  they cannot fall back to the working path, and the instruction reads as
+  authoritative. The correct command is `az rest --method PUT --url
+  "{path}?api-version={apiVersion}" --body @file`, which the artifact already
+  carries every field for. TWO HONEST FIXES, and the choice is the card: (a)
+  fix the README to say `az rest`, cheap and true today; (b) wrap each body in
+  a `Microsoft.Resources/deployments` envelope so the README's existing claim
+  becomes true, which is what an operator who asked for "ARM templates"
+  probably meant. (b) subsumes DBT-35. Do NOT do both halves of (a) and leave
+  (b) implied. DECIDED AND FIXED 2026-08-30 (user chose option (b), real
+  templates). A new pure domain module, `arm-template`, wraps the collected
+  bodies in a resource-group-scoped deployment template, so the README's
+  existing Portal and `az deployment group create` instructions became true
+  rather than being softened to match a weaker artifact. THREE things the
+  loose REST bodies could never carry, and the reason (b) was worth more than
+  (a): the FULL nested type and name (a custom table is
+  `Microsoft.OperationalInsights/workspaces/tables` named
+  `{workspace}/{table}` - the existing `parseResourceId` returns the leaf
+  pair, which is right for a dropdown label and wrong for a template, so
+  `parseArmTypeAndName` was added beside it rather than bending the old one);
+  `dependsOn`, DERIVED from the data by two rules - a resource id appearing
+  anywhere inside another body, and a DCR sharing a table with its
+  custom-table request, which no resource id states - so one deployment brings
+  them up in the right order instead of the operator inferring it from file
+  names; and ONE file rather than N, because N per-resource templates would be
+  a second copy of the same deployment free to disagree with itself. NO
+  PARAMETERS, deliberately. The bodies carry absolute resource ids, so a
+  retargeted deployment would build resources pointing at the wrong workspace
+  WITHOUT failing. Instead the builder REPORTS the single scope, refuses to
+  merge requests from a second resource group (they are excluded and named,
+  never silently relocated), and the README prints the exact command with that
+  subscription and group in it. BOTH surfaces changed, not just the
+  unreachable one: the batch screen's `buildTemplatesArtifact` now emits the
+  same envelope, keeping its metadata under a leading-underscore key ARM
+  ignores. 12 new pins on the builder, 5 on the parser, and the existing
+  air-gap and batch pins were rewritten UP - the batch suite went 33 to 36,
+  air-gap 7 to 10, and each new pin carries a mutation check (drop the
+  reference, the edge goes; retarget the table, the edge goes; an unknown body
+  field must still survive).
+
+- **DBT-34** guidedDeploy and the air-gap archive have no shell caller
+  `DBT-F7` `bug` `settled` `verified: pins`
+  FOUND by the architecture audit 2026-08-30 (tenth), check 4. `guidedDeploy`
+  and `buildAirGapArchive`/`generateAirGapReadme` have ZERO non-test
+  references from `packages/ui` or `apps/cribl-app`. Measured, not eyeballed:
+  every guided-deploy export was grepped against the UI package and the shell
+  - `canWireSource` has 7, `wireSource` 4, `deployModeGating` 3, and these
+  three have 0. So the module is not abandoned, it is HALF-CONSUMED: the
+  Integrate screen imports guided-deploy's pure decisions piecemeal and
+  re-implements the orchestration itself, which is why the orchestrator rotted
+  without anyone noticing. That also explains DBT-33 - nobody has read that
+  README because nothing generates it. SAME CLASS AS [[HON-8]]
+  (buildDeploymentPreview has no caller), and they should be judged together
+  rather than one at a time: two ~500-line usecases with full test suites and
+  no screen is a pattern about how this codebase grows, not two coincidences.
+  The audit exemption for the setup wizard covers code standing still for a
+  recorded reason; this has no such reason recorded. NOT proposing deletion -
+  the air-gap archive is the ONLY thing that assembles pack + templates +
+  destinations into one artifact, and the .crbl builder under it is used. The
+  question is whether the Integrate screen's deploy should call it (which is
+  DBT-35) or whether it should be retired with a reason written down. RESOLVED
+  2026-08-30 by giving it the caller it lacked, not by deleting it. The
+  Integrate screen's new export path (see [[DBT-35]]) calls
+  `buildAirGapArchive`, so the module went from zero non-test shell references
+  to a real one, and the README defect [[DBT-33]] found in it now ships to
+  actual operators - which is why it was worth fixing rather than filing
+  again. `guidedDeploy` itself is STILL uncalled and that is deliberate: the
+  export needed the archive builder, not the orchestrator, and wiring a second
+  deploy orchestrator in beside the screen's own would have been the
+  duplicated-decision shape rather than a fix. It stays open as a question on
+  [[HON-8]]'s terms - two usecases with full test suites and no screen - and
+  this card no longer holds it hostage.
+
+- **DBT-35** Sentinel Integration deploy has no export-instead-of-deploy option
+  `DBT-F7` `story` `settled` `verified: pins`
+  RAISED BY THE USER 2026-08-30: "do we have a feature that allows the user to
+  export Azure ARM templates instead of deploy directly to Azure?" The answer
+  today is "on a different screen, in a weaker form". DCR Automation > Batch
+  has a `template only` toggle that deploys nothing and downloads ONE JSON
+  file, `arm-templates-{workspace}-{jobId}.json`, holding every collected
+  request in collection order (custom-table, dce, ampls-association, dcr). It
+  is FORCED on in azure-only mode, so it is a real shipped path, not a stub.
+  But INTEGRATE_SECTIONS section 9 (Deploy) has no templateOnly and no export
+  at all - grep finds neither in `screens/integrate/`. That is the gap:
+  Integrate is the nine-section flow the product leads with, it is where the
+  pack, the DCR values and the destinations all come together, and it is the
+  one place with no way to stop short of touching Azure. An operator who
+  cannot deploy - no permissions yet, change window, air-gapped - has to leave
+  the flow they were walked through and rebuild the same intent on another
+  screen with a different scope. DEPENDS ON [[DBT-34]] because the artifact
+  this should produce already exists and is unreachable: `buildAirGapArchive`
+  assembles pack + arm-templates/ + cribl-destinations/ + README into one
+  .tgz, with the secret forced to the `<replace me>` placeholder. Wiring
+  Integrate's deploy to it answers this card and DBT-34 together. UNCONFIRMED
+  on ONE point, which is the decision to put to the user: whether "export ARM
+  templates" means the REST bodies we collect today or genuine deployment
+  templates. See [[DBT-33]] - if it means the latter, that card grows and this
+  one inherits it. BUILT 2026-08-30 (user chose "wire Integrate to the air-gap
+  archive"). Section 9 now carries "Export instead of deploy" beside Deploy.
+  It calls `onboardBatch` with `templateOnly: true` - which COLLECTS the ARM
+  bodies through read-only GETs instead of PUTting them, and makes no Cribl
+  calls at all - then assembles the pack without installing it, and saves one
+  .tgz. NO CHANGE TO `onboardTable` was needed, which is the part worth
+  recording: the export rides the batch usecase's existing collect-only mode
+  rather than teaching the single-table path a second one.
+  `buildAndInstallPack` grew an `install: false` option instead of being
+  duplicated - it skips the overwrite check (an air-gapped run overwrites
+  nothing, so the gate would have no subject) and the install loop, and
+  returns the assembled bytes. A SEPARATE CONTROL, never a mode toggle on
+  Deploy, and gated on READ prerequisites only: a scope to read schemas from
+  and a host that can save files. It does NOT require a worker group or an
+  ingestion client id, because a file needs neither - an operator who cannot
+  write to Azure should not have to arm the deploy button to find that out. A
+  DOM pin asserts exactly that and fails if the reason text ever names a write
+  prerequisite. The pack is OPTIONAL in the archive: when the content path is
+  not armed the native export still ships, rather than withholding the half
+  that works. 3 DOM wiring pins added - the control renders, it names its
+  first unmet prerequisite, and that prerequisite is a read.

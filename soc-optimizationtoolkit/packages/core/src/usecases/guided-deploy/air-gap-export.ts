@@ -12,9 +12,16 @@
  *
  * Archive layout (mirrors the legacy export directory):
  *   {packName}.crbl                         the built pack (when provided)
- *   arm-templates/{artifactName}            one file per collected ARM request
+ *   arm-templates/azure-deploy.json         ONE ARM deployment template
  *   cribl-destinations/{id}.json            one file per destination config
  *   README-deployment.md                    generated deploy instructions
+ *
+ * DBT-33: `arm-templates/` used to hold one file per collected request, each
+ * a bare ARM REST body, while the README told operators to feed them to Portal
+ * or `az deployment group create` - neither of which accepts a body with no
+ * `$schema` and no `resources[]`. It now holds ONE real deployment template
+ * (domain/arm-template), so the instruction and the artifact agree. The
+ * template also carries the `dependsOn` edges the loose files never stated.
  *
  * SECRET CONVENTION: destination JSON in the archive ALWAYS carries the
  * `<replace me>` placeholder (SENTINEL_SECRET_PLACEHOLDER), never a real secret
@@ -26,6 +33,7 @@
  * Pure: no IO, no fetch, no React, no Date/crypto/Math.random.
  */
 
+import { buildArmTemplate } from "../../domain/arm-template";
 import {
   buildCrbl,
   buildUstarTar,
@@ -36,6 +44,9 @@ import {
   type SentinelDestinationConfig,
 } from "../../domain/sentinel-destination";
 import type { CollectedArmRequest } from "../onboard-batch";
+
+/** The single ARM deployment template's path inside the archive. */
+export const AIR_GAP_ARM_TEMPLATE_PATH = "arm-templates/azure-deploy.json";
 
 /** Input for {@link buildAirGapArchive}. */
 export interface AirGapExportInput {
@@ -67,14 +78,22 @@ export interface AirGapArchive {
   archive: Uint8Array;
   /** The generated README markdown (also included as a file in the archive). */
   readme: string;
+  /**
+   * The scope the ARM template must be deployed to, and anything the template
+   * could NOT include. `scopeConflicts`/`unparseable` are non-empty only when
+   * the collected requests span more than one resource group or name no
+   * resource; the caller surfaces them rather than shipping a silent partial.
+   */
+  arm: {
+    subscriptionId: string;
+    resourceGroup: string;
+    scopeConflicts: string[];
+    unparseable: string[];
+    resourceCount: number;
+  };
 }
 
 const ENCODER = new TextEncoder();
-
-/** ARM request -> its archive path under arm-templates/. */
-function armTemplatePath(request: CollectedArmRequest): string {
-  return `arm-templates/${request.artifactName}`;
-}
 
 /** Destination config -> its archive path under cribl-destinations/. */
 function destinationPath(config: SentinelDestinationConfig): string {
@@ -85,12 +104,27 @@ function destinationPath(config: SentinelDestinationConfig): string {
  * Generate the deploy README (pack-builder.ts 2707-2735, ported verbatim in
  * structure; ASCII only). Lists the archive contents and the three manual
  * deploy steps: Azure ARM, pack import, route configuration.
+ *
+ * The Azure step names the EXACT subscription and resource group the template
+ * must go to (DBT-33). It is not advice: the bodies carry absolute resource
+ * ids, so a deployment into a different group would build resources that point
+ * at the wrong workspace and endpoint - and would do it without failing.
  */
 export function generateAirGapReadme(
   input: AirGapExportInput,
   fileNames: readonly string[],
+  scope?: { subscriptionId: string; resourceGroup: string },
 ): string {
   const sourceId = input.sourceId ?? "your_source_id";
+  const subscriptionId =
+    scope !== undefined && scope.subscriptionId !== ""
+      ? scope.subscriptionId
+      : "<your-subscription-id>";
+  const resourceGroup =
+    scope !== undefined && scope.resourceGroup !== ""
+      ? scope.resourceGroup
+      : "<your-resource-group>";
+  const hasTemplate = fileNames.includes(AIR_GAP_ARM_TEMPLATE_PATH);
   return [
     `# ${input.solutionName} - Deployment Artifacts`,
     "",
@@ -103,9 +137,30 @@ export function generateAirGapReadme(
     "## Deployment Steps",
     "",
     "### 1. Azure Resources",
-    "- Deploy ARM templates from `arm-templates/` to your Azure resource group",
-    "- Use Azure Portal > Deploy a custom template, or `az deployment group create`",
-    "- Custom table schemas in `*-schema.json` files define the table structure",
+    ...(hasTemplate
+      ? [
+          `- \`${AIR_GAP_ARM_TEMPLATE_PATH}\` is one ARM deployment template holding every`,
+          "  resource this onboard would have created, with the dependencies between",
+          "  them declared, so a single deployment brings them up in the right order.",
+          "- Deploy it to the subscription and resource group below. The template",
+          "  contains absolute resource ids, so deploying it elsewhere produces",
+          "  resources that point at the wrong workspace and endpoint:",
+          "",
+          "```",
+          "az deployment group create \\",
+          `  --subscription ${subscriptionId} \\`,
+          `  --resource-group ${resourceGroup} \\`,
+          `  --template-file ${AIR_GAP_ARM_TEMPLATE_PATH}`,
+          "```",
+          "",
+          "- Or in the Azure Portal: Deploy a custom template > Build your own",
+          "  template in the editor > Load file, then select that same subscription",
+          "  and resource group.",
+        ]
+      : [
+          "- No Azure resources were collected for this export, so there is no",
+          "  template to deploy. Everything below still applies.",
+        ]),
     "",
     "### 2. Cribl Pack",
     `- Import \`${input.packName}.crbl\` into Cribl Stream via Packs > Add Pack > Import from File`,
@@ -139,10 +194,15 @@ export function buildAirGapArchive(input: AirGapExportInput): AirGapArchive {
     add(`${input.packName}.crbl`, input.crbl);
   }
 
-  for (const request of input.armRequests) {
+  // ONE deployment template for every collected request, with the dependency
+  // edges between them (DBT-33). Omitted entirely when nothing was collected -
+  // an empty resources[] would be a template that deploys nothing while the
+  // README pointed at it as the Azure step.
+  const arm = buildArmTemplate(input.armRequests);
+  if (arm.template.resources.length > 0) {
     add(
-      armTemplatePath(request),
-      ENCODER.encode(JSON.stringify(request.body, null, 2)),
+      AIR_GAP_ARM_TEMPLATE_PATH,
+      ENCODER.encode(JSON.stringify(arm.template, null, 2)),
     );
   }
 
@@ -157,7 +217,10 @@ export function buildAirGapArchive(input: AirGapExportInput): AirGapArchive {
   }
 
   // README lists every file added so far; it is itself the last file.
-  const readme = generateAirGapReadme(input, fileNames);
+  const readme = generateAirGapReadme(input, fileNames, {
+    subscriptionId: arm.subscriptionId,
+    resourceGroup: arm.resourceGroup,
+  });
   add("README-deployment.md", ENCODER.encode(readme));
 
   return {
@@ -166,5 +229,12 @@ export function buildAirGapArchive(input: AirGapExportInput): AirGapArchive {
     tar: buildUstarTar(entries, input.mtimeSec),
     archive: buildCrbl(entries, input.mtimeSec),
     readme,
+    arm: {
+      subscriptionId: arm.subscriptionId,
+      resourceGroup: arm.resourceGroup,
+      scopeConflicts: arm.scopeConflicts,
+      unparseable: arm.unparseable,
+      resourceCount: arm.template.resources.length,
+    },
   };
 }

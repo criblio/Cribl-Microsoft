@@ -6,7 +6,7 @@ import {
 } from "../../domain/pack-assembly";
 import { buildSentinelDestination } from "../../domain/sentinel-destination";
 import type { CollectedArmRequest } from "../onboard-batch";
-import { buildAirGapArchive } from "./air-gap-export";
+import { AIR_GAP_ARM_TEMPLATE_PATH, buildAirGapArchive } from "./air-gap-export";
 
 const DECODER = new TextDecoder();
 
@@ -49,10 +49,15 @@ describe("buildAirGapArchive", () => {
   it("assembles the full artifact set (crbl + ARM + destinations + README)", () => {
     expect(archive.fileNames).toEqual([
       "paloalto-sentinel.crbl",
-      "arm-templates/dcr-CommonSecurityLog-eastus.json",
+      AIR_GAP_ARM_TEMPLATE_PATH,
       "cribl-destinations/MS-Sentinel-CommonSecurityLog-dest.json",
       "README-deployment.md",
     ]);
+    // DBT-33: ONE template for the run, not one file per collected request.
+    // Two ARM entries would mean the per-resource layout came back.
+    expect(
+      archive.fileNames.filter((name) => name.startsWith("arm-templates/")),
+    ).toHaveLength(1);
   });
 
   it("round-trips through Unit 19's ustar parser (raw tar)", () => {
@@ -61,18 +66,60 @@ describe("buildAirGapArchive", () => {
     expect(files).toEqual(
       [
         "README-deployment.md",
-        "arm-templates/dcr-CommonSecurityLog-eastus.json",
+        AIR_GAP_ARM_TEMPLATE_PATH,
         "cribl-destinations/MS-Sentinel-CommonSecurityLog-dest.json",
         "paloalto-sentinel.crbl",
       ].sort(),
     );
   });
 
-  it("round-trips through gunzip + Unit 19 parser (the delivered archive)", () => {
+  it("ships a REAL ARM deployment template, not the bare REST body (DBT-33)", () => {
     const entries = parseUstarTar(ungzipStored(archive.archive));
-    const arm = fileByPath(entries, "arm-templates/dcr-CommonSecurityLog-eastus.json");
+    const arm = fileByPath(entries, AIR_GAP_ARM_TEMPLATE_PATH);
     expect(arm).toBeDefined();
-    expect(JSON.parse(DECODER.decode(arm!.content))).toEqual(ARM_REQUEST.body);
+    const template = JSON.parse(DECODER.decode(arm!.content)) as {
+      $schema: string;
+      contentVersion: string;
+      resources: Array<Record<string, unknown>>;
+    };
+
+    // The envelope Portal and `az deployment group create` require. The old
+    // artifact was ARM_REQUEST.body itself, which has none of these - so
+    // asserting they are present is exactly the regression guard.
+    expect(template.$schema).toContain("deploymentTemplate.json#");
+    expect(template.contentVersion).toBe("1.0.0.0");
+    expect(template.resources).toHaveLength(1);
+
+    // The resource carries the collected body plus the type/name/apiVersion
+    // ARM needs, which the body alone never had.
+    expect(template.resources[0]).toEqual({
+      type: "Microsoft.Insights/dataCollectionRules",
+      apiVersion: "2023-03-11",
+      name: "dcr-CommonSecurityLog-eastus",
+      location: "eastus",
+      properties: { dataFlows: [] },
+    });
+  });
+
+  it("reports the one scope the template must be deployed to", () => {
+    expect(archive.arm).toEqual({
+      subscriptionId: "s",
+      resourceGroup: "rg",
+      scopeConflicts: [],
+      unparseable: [],
+      resourceCount: 1,
+    });
+  });
+
+  it("README names that scope in a runnable command, not a generic instruction", () => {
+    expect(archive.readme).toContain("--subscription s");
+    expect(archive.readme).toContain("--resource-group rg");
+    expect(archive.readme).toContain(`--template-file ${AIR_GAP_ARM_TEMPLATE_PATH}`);
+    // The defect DBT-33 filed: the old README pointed Portal and
+    // `az deployment group create` at files that were not templates. The
+    // commands may stay only because the artifact is now a template.
+    expect(archive.readme).toContain("Deploy a custom template");
+    expect(archive.readme).not.toContain("Deploy ARM templates from `arm-templates/`");
   });
 
   it("AIR-GAP secret path: destination JSON always ships `<replace me>`, never a real secret", () => {
@@ -117,5 +164,27 @@ describe("buildAirGapArchive", () => {
       mtimeSec: 1,
     });
     expect(noCrbl.fileNames).toEqual(["README-deployment.md"]);
+    // No collected requests means NO template file - an empty resources[]
+    // would be a template the README told the operator to deploy for nothing.
+    expect(noCrbl.arm.resourceCount).toBe(0);
+    expect(noCrbl.readme).toContain("No Azure resources were collected");
+    expect(noCrbl.readme).not.toContain("az deployment group create");
+  });
+
+  it("surfaces a cross-resource-group request instead of shipping it silently", () => {
+    const elsewhere: CollectedArmRequest = {
+      ...ARM_REQUEST,
+      artifactName: "dcr-Other-westus.json",
+      path: "/subscriptions/s/resourceGroups/other-rg/providers/Microsoft.Insights/dataCollectionRules/dcr-Other-westus",
+    };
+    const split = buildAirGapArchive({
+      solutionName: "V",
+      packName: "v-sentinel",
+      armRequests: [ARM_REQUEST, elsewhere],
+      destinations: [],
+      mtimeSec: 1,
+    });
+    expect(split.arm.scopeConflicts).toEqual([elsewhere.path]);
+    expect(split.arm.resourceCount).toBe(1);
   });
 });

@@ -142,3 +142,71 @@ export function parseResourceId(
 export function deriveResourceGroup(id: string | null | undefined): string {
   return parseResourceId(id).resourceGroup;
 }
+
+/**
+ * The FULL nested type and name of a resource id, as an ARM template declares
+ * them. Distinct from {@link ParsedResourceId}, which keeps only the LAST
+ * `/{type}/{name}` pair because the dropdowns that use it only ever want the
+ * leaf label.
+ *
+ * An ARM template needs both halves whole: a Log Analytics custom table is
+ * `Microsoft.OperationalInsights/workspaces/tables` named `{workspace}/{table}`,
+ * and `parseResourceId` would report type `tables` and name `{table}` - correct
+ * for a label, unusable in a template.
+ */
+export interface ArmTypeAndName {
+  /** Full nested type, e.g. 'Microsoft.OperationalInsights/workspaces/tables'. */
+  type: string;
+  /** Full nested name, e.g. 'my-workspace/MyTable_CL'. */
+  name: string;
+  /** The name split into its segments - the arguments `resourceId()` takes. */
+  nameSegments: string[];
+}
+
+/**
+ * Parse `id` into the full nested type and name an ARM template declares.
+ *
+ * Returns null - never a partial answer - when the id has no `providers`
+ * section, names a namespace with no type, or ends on a type with no name
+ * (an odd number of segments after the namespace). A caller building a
+ * template must be able to tell "not a resource" from "a resource at the
+ * root", and '' cannot carry that difference.
+ *
+ * TOTAL for any string input: accepts null/undefined and never throws.
+ */
+export function parseArmTypeAndName(
+  id: string | null | undefined,
+): ArmTypeAndName | null {
+  if (typeof id !== "string") {
+    return null;
+  }
+
+  const segments = id.split("/").filter((segment) => segment !== "");
+  const providersIndex = segments
+    .map((segment) => segment.toLowerCase())
+    .indexOf("providers");
+  if (providersIndex < 0 || providersIndex + 1 >= segments.length) {
+    return null;
+  }
+
+  const namespace = segments[providersIndex + 1];
+  const tail = segments.slice(providersIndex + 2);
+  // The tail is a run of /{type}/{name} pairs. An odd length means a type with
+  // no name - a collection URL, not a resource.
+  if (tail.length === 0 || tail.length % 2 !== 0) {
+    return null;
+  }
+
+  const typeSegments: string[] = [];
+  const nameSegments: string[] = [];
+  for (let index = 0; index < tail.length; index += 2) {
+    typeSegments.push(tail[index]);
+    nameSegments.push(tail[index + 1]);
+  }
+
+  return {
+    type: `${namespace}/${typeSegments.join("/")}`,
+    name: nameSegments.join("/"),
+    nameSegments,
+  };
+}

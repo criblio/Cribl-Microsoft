@@ -446,7 +446,7 @@ export function BatchDeployScreen({
           {[
             `mode:                ${effective.createDCE ? "DCE-based DCRs (shared batch DCE, 64-char names)" : "Direct DCRs (30-char names, Cribl 4.14+)"}`,
             `skip existing DCRs:  ${effective.skipExistingDCRs ? "on" : "off"}`,
-            `template only:       ${effective.templateOnly ? "on (nothing deploys; ARM bodies download as one artifact)" : "off"}`,
+            `template only:       ${effective.templateOnly ? "on (nothing deploys; downloads one ARM deployment template)" : "off"}`,
             `deployment timeout:  ${persisted.deploymentTimeoutSeconds}s`,
             `custom retention:    ${persisted.customTableRetentionDays} days`,
             `DCE public access:   ${persisted.dcePublicNetworkAccess ? "enabled" : "disabled (AMPLS required)"}`,
