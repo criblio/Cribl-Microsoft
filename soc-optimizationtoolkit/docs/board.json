@@ -1407,6 +1407,69 @@
       "dependsOn": [],
       "detail": "ASKED 2026-08-30: \"we have epics and features on the board that show 100% completion - should we move them to Done?\" Four features (AZR-F1, GEN-F1, VND-F1, DBT-F5) and two epics (GEN, VND) are at 100%. DECIDED: collapse them visually, and do NOT give epics or features a status. Completion is DERIVED from the stories, so it cannot drift; a declared `done` would be the same fact in a second place and would start lying the moment a story was added underneath, with nothing to catch it. This repo has been bitten by that class three times - STATUSES duplicated into the kanban columns (7th audit), PRIORITIES duplicated into the groom script (8th audit), and the CAP epic prose asserting a blocker count the graph contradicted (DBT-24). The second reason is sharper: 100% means \"no open cards\", NOT \"this area is finished\". DBT-F5 is 11/11 today and FIVE of those eleven were filed in the last week (DBT-23, 24, 25, 27, 29) - marking it done would have been wrong within days, and this card makes it twelve. Collapsing says only what is true, and un-collapses by itself when new work lands. A human-declared `closed` flag was offered and declined, which is the right call for now: the only grouping that genuinely looks finished is VND, and one candidate does not justify a second status field with its own validation rules. KANBAN ONLY. board.md keeps its full table: it is the diff-friendly record, and hiding rows from a generated file would make a completed feature invisible to anyone reading the file rather than the wall. BUILT 2026-08-30. isComplete() and a collapsed one-line body in board-html; rule recorded in documenting-work.md. VERIFIED BOTH WAYS: 5 pins, and the design demonstrated itself live - DBT-F5 was one of the six collapsed groupings until this very card was filed into it, at which point it re-expanded on its own. A declared status would have gone on claiming the feature was finished. Mutation-checked at both edges: treating an EMPTY grouping as complete fails the empty pin (zero-of-zero is a grouping with nothing in it, which check-board already flags, and a tick would hide it), and collapsing at a majority rather than all fails the un-collapse pin. One pin is a TRIPWIRE with no behaviour behind it: it asserts epics and features carry no `status` key, so if one ever appears the duplication is caught at the moment it is introduced rather than the first time it disagrees.",
       "verified": "both"
+    },
+    {
+      "id": "DBT-31",
+      "epic": "DBT",
+      "feature": "DBT-F5",
+      "title": "Three places state that CSV cannot be discriminated",
+      "type": "bug",
+      "status": "done",
+      "settled": "settled",
+      "dependsOn": [],
+      "detail": "FOUND by the architecture audit 2026-08-30 (tenth). The rule \"a CSV row is positional, so no route filter can separate it\" is written THREE times: `route-discriminator.ts` early-returns on `format === \"csv\"`, `route-value-discriminator.ts` does the same, and `formatCanDiscriminate` in `route-placeholder.ts` states it a third time for HON-5's operator warning. They can genuinely disagree, which is what makes this reportable rather than mere repetition: if either discriminator ever learns to handle CSV, or another positional format is added to one of them, the operator-facing sentence keeps insisting \"more samples will not change that\" for a format that now works - a confident wrong answer, and the warning is the one place an operator is told to STOP trying. PARTLY MITIGATED ALREADY: HON-5 shipped with a consistency pin that calls both discriminators on \"csv\" and asserts they return null, with a non-CSV control. That catches drift at test time, which is why this is a tidy-up rather than an outage. The clean fix is to make `formatCanDiscriminate` the single authority and have both discriminators ask it. SIDE EFFECT WORTH NOTING: `formatCanDiscriminate` is exported today and its ONLY consumers are its own module and its test - borderline dead code. Making the discriminators use it gives it two real callers and removes that question too. FIXED 2026-08-30. Both discriminators now ASK `formatCanDiscriminate` instead of restating `format === \"csv\"`, so the rule is stated once. The two remaining `sourceFormat === \"csv\"` sites in `pipeline-conf.ts` are deliberately untouched: they decide how to PARSE and emit CSV, which is a different question from whether it can be discriminated, and folding them together would create the coupling this card is about in the other direction. The HON-5 consistency pin still calls both discriminators on \"csv\" and asserts null with a non-CSV control - it is now checking a delegation rather than a coincidence, which is strictly stronger. And `formatCanDiscriminate` went from test-only consumers to two real ones, which closes the borderline-dead-code question the audit raised alongside it. 187 pipeline-generation tests pass unchanged, which is the point: this is a refactor with no behaviour change.",
+      "verified": "pins"
+    },
+    {
+      "id": "DBT-32",
+      "epic": "DBT",
+      "feature": "DBT-F4",
+      "title": "IntegrateScreen says EIGHT sections; INTEGRATE_SECTIONS has nine",
+      "type": "bug",
+      "status": "done",
+      "settled": "settled",
+      "dependsOn": [],
+      "detail": "FOUND by the architecture audit 2026-08-30 (tenth). `integrate-screen.tsx` opens \"The EIGHT sections render in page order from @soc/core INTEGRATE_SECTIONS\" and then lists eight with numbers that do not match the data either - it puts Select Azure Resources at 3 and Run DCR Gap Analysis at 5, where INTEGRATE_SECTIONS has gap-analysis at 3 and azure-resources at 7. The array holds NINE: solution, sample-data, gap-analysis, rule-coverage, workbook-coverage, enable-content, azure-resources, cribl-config, deploy. The docblock is load-bearing here - it is the map a reader uses before touching a 2,200-line screen - so a wrong count and a wrong order send them looking for the wrong thing. OWNED: I saw this on 2026-08-28 while mapping the screen for the menu tagging, said in the handback it was \"worth a card next time I am in that file\", and then did not file it. Two days and several passes through that file later the audit had to find it again. The rule exists precisely because \"I will file it later\" does not survive contact with the next task. FIXED 2026-08-30. The docblock now says NINE, lists them in the array's own order, and gains the missing `Enable Sentinel Content` entry. Verified mechanically rather than by eye: a script re-read `INTEGRATE_SECTIONS`, pulled each `number` and `title`, and asserted the docblock contains that exact numbered line - all nine matched. It also picked up the two additions this week that the map did not mention: section 2 now carries VND-1's vendor-name seam and HON-5's CSV routing warning. NO PIN, and that is honest rather than lazy: this is a comment, and a test asserting a docblock matches a data array would be a novel kind of check for one file. The mechanical verification is recorded here instead, and the next architecture audit greps for exactly this class.",
+      "verified": "pins"
+    },
+    {
+      "id": "DBT-33",
+      "epic": "DBT",
+      "feature": "DBT-F7",
+      "title": "The air-gap README tells operators to Portal-deploy files that are not ARM templates",
+      "type": "bug",
+      "status": "backlog",
+      "priority": "next",
+      "settled": "settled",
+      "dependsOn": [],
+      "detail": "FOUND 2026-08-30 answering \"can users export ARM templates instead of deploying\". `generateAirGapReadme` (air-gap-export.ts:106) instructs \"Use Azure Portal > Deploy a custom template, or `az deployment group create`\". Neither works on what the archive actually contains. The collected bodies are ARM REST REQUEST PAYLOADS, not deployment templates: `CollectedArmRequest` is `{method: \"PUT\", path, apiVersion, body}` and the body is a bare resource (`location` + `properties`). Confirmed by grep - there is no `$schema`, no `parameters`, no `resources[]` anywhere in the collected bodies. Portal's custom-template blade rejects them, and `az deployment group create` needs the envelope they do not have. This is the honesty class the board tracks, at its worst: the operator is air-gapped, so they cannot fall back to the working path, and the instruction reads as authoritative. The correct command is `az rest --method PUT --url \"{path}?api-version={apiVersion}\" --body @file`, which the artifact already carries every field for. TWO HONEST FIXES, and the choice is the card: (a) fix the README to say `az rest`, cheap and true today; (b) wrap each body in a `Microsoft.Resources/deployments` envelope so the README's existing claim becomes true, which is what an operator who asked for \"ARM templates\" probably meant. (b) subsumes DBT-35. Do NOT do both halves of (a) and leave (b) implied."
+    },
+    {
+      "id": "DBT-34",
+      "epic": "DBT",
+      "feature": "DBT-F7",
+      "title": "guidedDeploy and the air-gap archive have no shell caller",
+      "type": "bug",
+      "status": "backlog",
+      "priority": "next",
+      "settled": "settled",
+      "dependsOn": [],
+      "detail": "FOUND by the architecture audit 2026-08-30 (tenth), check 4. `guidedDeploy` and `buildAirGapArchive`/`generateAirGapReadme` have ZERO non-test references from `packages/ui` or `apps/cribl-app`. Measured, not eyeballed: every guided-deploy export was grepped against both shells - `canWireSource` has 7, `wireSource` 4, `deployModeGating` 3, and these three have 0. So the module is not abandoned, it is HALF-CONSUMED: the Integrate screen imports guided-deploy's pure decisions piecemeal and re-implements the orchestration itself, which is why the orchestrator rotted without anyone noticing. That also explains DBT-33 - nobody has read that README because nothing generates it. SAME CLASS AS [[HON-8]] (buildDeploymentPreview has no caller), and they should be judged together rather than one at a time: two ~500-line usecases with full test suites and no screen is a pattern about how this codebase grows, not two coincidences. The audit exemption for the setup wizard covers code standing still for a recorded reason; this has no such reason recorded. NOT proposing deletion - the air-gap archive is the ONLY thing that assembles pack + templates + destinations into one artifact, and the .crbl builder under it is used. The question is whether the Integrate screen's deploy should call it (which is DBT-35) or whether it should be retired with a reason written down."
+    },
+    {
+      "id": "DBT-35",
+      "epic": "DBT",
+      "feature": "DBT-F7",
+      "menu": "integrate",
+      "title": "Sentinel Integration deploy has no export-instead-of-deploy option",
+      "type": "story",
+      "status": "backlog",
+      "priority": "next",
+      "settled": "unconfirmed",
+      "dependsOn": [
+        "DBT-34"
+      ],
+      "detail": "RAISED BY THE USER 2026-08-30: \"do we have a feature that allows the user to export Azure ARM templates instead of deploy directly to Azure?\" The answer today is \"on a different screen, in a weaker form\". DCR Automation > Batch has a `template only` toggle that deploys nothing and downloads ONE JSON file, `arm-templates-{workspace}-{jobId}.json`, holding every collected request in collection order (custom-table, dce, ampls-association, dcr). It is FORCED on in azure-only mode, so it is a real shipped path, not a stub. But INTEGRATE_SECTIONS section 9 (Deploy) has no templateOnly and no export at all - grep finds neither in `screens/integrate/`. That is the gap: Integrate is the nine-section flow the product leads with, it is where the pack, the DCR values and the destinations all come together, and it is the one place with no way to stop short of touching Azure. An operator who cannot deploy - no permissions yet, change window, air-gapped - has to leave the flow they were walked through and rebuild the same intent on another screen with a different scope. DEPENDS ON [[DBT-34]] because the artifact this should produce already exists and is unreachable: `buildAirGapArchive` assembles pack + arm-templates/ + cribl-destinations/ + README into one .tgz, with the secret forced to the `<replace me>` placeholder. Wiring Integrate's deploy to it answers this card and DBT-34 together. UNCONFIRMED on ONE point, which is the decision to put to the user: whether \"export ARM templates\" means the REST bodies we collect today or genuine deployment templates. See [[DBT-33]] - if it means the latter, that card grows and this one inherits it."
     }
   ],
   "features": [
@@ -1587,6 +1650,13 @@
       "menu": "packs",
       "title": "Effect-identity defect class",
       "anchor": "12"
+    },
+    {
+      "id": "DBT-F7",
+      "epic": "DBT",
+      "menu": "dcr-automation",
+      "title": "Export instead of deploy - the offline path",
+      "anchor": "13"
     }
   ]
 }

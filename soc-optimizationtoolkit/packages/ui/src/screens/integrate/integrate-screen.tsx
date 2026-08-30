@@ -6,8 +6,9 @@
  * screen is its successor, composing the ALREADY-SHIPPED screens as sections
  * rather than scattering them across sidebar routes.
  *
- * The EIGHT sections render in page order from @soc/core INTEGRATE_SECTIONS,
- * all BUILT and operable:
+ * The NINE sections render in page order from @soc/core INTEGRATE_SECTIONS,
+ * all BUILT and operable. The numbers below ARE the array order - it is the
+ * map a reader uses before touching this file, so it has to match the data:
  *
  *   1. Select Sentinel Solution - the SolutionBrowser: lazy GitHub solution
  *      index, per-solution on-demand fetch with commit-keyed caching, the
@@ -17,24 +18,28 @@
  *      paste-and-tag, per-sample chips, and the log-type rename that re-keys
  *      the tagged-sample store (Unit 11), fronted by the LogTypeRecommendation
  *      panel that says which log types this solution's detections need
- *      (ADR 0003 replaced the filename-scoring Browse Samples modal).
- *   3. Select Azure Resources - the AzureTargetingScreen cascade, capability
- *      checkboxes, Sentinel-enabled auto-check, and the operable
- *      RoleAssignmentSection (Unit 8). Additive + non-gating.
- *   4. Configure Cribl      - Stream-only worker-group select, pack name,
- *      multi-group fan-out, and the pack overwrite check.
- *   5. Run DCR Gap Analysis - the MappingReviewSection: per-log-type gap
+ *      (ADR 0003 replaced the filename-scoring Browse Samples modal). Also
+ *      carries the VND-1 vendor-name seam and the HON-5 CSV routing warning.
+ *   3. Run DCR Gap Analysis - the MappingReviewSection: per-log-type gap
  *      analysis over Phase-0 vendor packs + learned mappings, the editable
  *      mapping table (with field search), vendor-identity forced inputs,
  *      enrichment editors, and the approval state machine. Gates the content
  *      path only (Unit 18); the native deploy stays independent.
- *   6. Review Analytics Rule Coverage - RuleCoverageSection (rules instance):
+ *   4. Review Analytics Rule Coverage - RuleCoverageSection (rules instance):
  *      three-way coverage with clickable missing-field close-match review and
  *      multi-format custom-rule upload. Informational; lights RULE badges.
- *   7. Review Workbook Coverage - RuleCoverageSection (workbooks instance):
+ *   5. Review Workbook Coverage - RuleCoverageSection (workbooks instance):
  *      the solution's shipped workbooks plus solution-related deployed ones.
  *      Informational.
- *   8. Deploy               - the operable onboard (native + custom _CL
+ *   6. Enable Sentinel Content - ContentInstallSection: loads the selected
+ *      solution's content and installs it. Informational; never gates a
+ *      deploy.
+ *   7. Select Azure Resources - the AzureTargetingScreen cascade, capability
+ *      checkboxes, Sentinel-enabled auto-check, and the operable
+ *      RoleAssignmentSection (Unit 8). Additive + non-gating.
+ *   8. Configure Cribl      - Stream-only worker-group select, pack name,
+ *      multi-group fan-out, and the pack overwrite check.
+ *   9. Deploy               - the operable onboard (native + custom _CL
  *      tables, multi-DCR fan-out) plus "Build and install pack" closing the
  *      content path with real DCR values in outputs.yml, gated by the
  *      vendor-identity check and the overwrite acknowledgment.

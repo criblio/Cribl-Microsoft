@@ -24,6 +24,7 @@
 
 import { fieldPresence } from "./route-value-discriminator";
 import type { LogTypeFieldValues } from "./route-value-discriminator";
+import { formatCanDiscriminate } from "./route-placeholder";
 
 /** A bare name usable as a JS identifier in a Cribl filter expression. */
 const IDENTIFIER = /^[A-Za-z_$][A-Za-z0-9_$]*$/;
@@ -98,10 +99,15 @@ export function deriveRouteDiscriminator(
   format: string,
   ownValues?: LogTypeFieldValues,
 ): string | null {
-  if (format === "csv") {
-    // CSV data rows are positional: the field name never appears in _raw,
-    // and route-time events are unparsed - a presence-only filter would
-    // dead-end every event. No discriminator; the caller keeps "true".
+  // CSV data rows are positional: the field name never appears in _raw, and
+  // route-time events are unparsed - a presence-only filter would dead-end
+  // every event. No discriminator; the caller keeps "true".
+  //
+  // ASKED, not restated (DBT-31). `formatCanDiscriminate` is the single
+  // authority, because HON-5 tells the OPERATOR "more samples will not change
+  // that" on the strength of it. Three copies of this rule could disagree, and
+  // the copy that would end up lying is the one an operator reads.
+  if (!formatCanDiscriminate(format)) {
     return null;
   }
   const unique = [...new Set(ownSources)].filter(
