@@ -136,6 +136,38 @@ function typeCounts(kids) {
     .join('');
 }
 
+/**
+ * Everything under this grouping is done - DBT-30.
+ *
+ * DERIVED, never stored. Epics and features carry no status on purpose: their
+ * completion is computed from the stories, so it cannot drift, where a declared
+ * `done` would be the same fact in a second place and would start lying the
+ * moment a story was added underneath. This repo has been bitten by that class
+ * three times (STATUSES into the columns, PRIORITIES into the groom script, the
+ * CAP epic prose against the graph).
+ *
+ * And it means "no open cards", NOT "this area is finished" - DBT-F5 was 11/11
+ * with five of those eleven filed the same week. So a complete grouping is
+ * COLLAPSED, not retired: it stays on the board, keeps its count, and expands
+ * itself again the moment new work lands.
+ *
+ * An empty grouping is NOT complete. Zero of zero done is a grouping with
+ * nothing in it, which validateBoard already reports as a finding; dimming it
+ * would hide the thing that needs attention.
+ */
+function isComplete(kids) {
+  return kids.length > 0 && kids.every((s) => s.status === 'done');
+}
+
+/** The one-line body a collapsed grouping shows in place of its detail. */
+function completeSummary(done) {
+  return (
+    `<p class="complete-line" title="Every card under this grouping is done. ` +
+    `Collapsed rather than retired - it re-expands if new work is filed here.">` +
+    `100% &middot; ${done}/${done} done</p>`
+  );
+}
+
 /** One card per epic: the largest grouping, with its features rolled up. */
 function epicCard(epic, data) {
   const feats = (data.features ?? []).filter((f) => f.epic === epic.key);
@@ -145,13 +177,19 @@ function epicCard(epic, data) {
     epic.kind === 'enabler'
       ? tag('kind-enabler', 'enabler', 'An ENABLER epic: it exists to unblock other epics rather than to deliver value on its own.')
       : tag('kind-business', 'business', 'A BUSINESS epic: it delivers value directly.');
+  const complete = isComplete(kids);
   return [
-    `<article class="card epic-card" data-epic="${esc(epic.key)}"`,
+    `<article class="card epic-card${complete ? ' complete' : ''}" data-epic="${esc(epic.key)}"`,
+    ` data-complete="${complete ? 'yes' : 'no'}"`,
     ` data-text="${esc(`${epic.key} ${epic.name} ${epic.why}`.toLowerCase())}">`,
     `<header><span class="id">${esc(epic.key)}</span>${info(epic.why)}</header>`,
     `<h3>${esc(epic.name)}</h3>`,
-    `<div class="tags">${kind}<span class="mini">${feats.length} features</span>${typeCounts(kids)}</div>`,
-    bar(done, kids.length),
+    ...(complete
+      ? [completeSummary(done)]
+      : [
+          `<div class="tags">${kind}<span class="mini">${feats.length} features</span>${typeCounts(kids)}</div>`,
+          bar(done, kids.length),
+        ]),
     `</article>`,
   ].join('');
 }
@@ -163,20 +201,26 @@ function featureCard(feature, data) {
   const openDecisions = kids.filter(
     (s) => s.type === 'decision' && (s.decision?.chosen ?? null) === null && s.status !== 'done',
   ).length;
+  const complete = isComplete(kids);
   return [
-    `<article class="card feature-card" data-epic="${esc(feature.epic)}"`,
+    `<article class="card feature-card${complete ? ' complete' : ''}" data-epic="${esc(feature.epic)}"`,
+    ` data-complete="${complete ? 'yes' : 'no'}"`,
     ` data-text="${esc(`${feature.id} ${feature.title} ${feature.epic}`.toLowerCase())}">`,
     `<header><span class="id">${esc(feature.id)}</span>`,
     `<span class="epic">${esc(feature.epic)}</span></header>`,
     `<h3>${esc(feature.title)}</h3>`,
-    `<div class="tags">`,
-    typeCounts(kids),
-    openDecisions > 0
-      ? tag('blocked', `${openDecisions} open decision${openDecisions > 1 ? 's' : ''}`, 'A question on this feature is unanswered, so the work behind it cannot start.')
-      : '',
-    `</div>`,
-    bar(done, kids.length),
-    feature.anchor ? `<p class="note">backlog.md#${esc(feature.anchor)}</p>` : '',
+    ...(complete
+      ? [completeSummary(done)]
+      : [
+          `<div class="tags">`,
+          typeCounts(kids),
+          openDecisions > 0
+            ? tag('blocked', `${openDecisions} open decision${openDecisions > 1 ? 's' : ''}`, 'A question on this feature is unanswered, so the work behind it cannot start.')
+            : '',
+          `</div>`,
+          bar(done, kids.length),
+          feature.anchor ? `<p class="note">backlog.md#${esc(feature.anchor)}</p>` : '',
+        ]),
     `</article>`,
   ].join('');
 }
@@ -359,6 +403,9 @@ h1{font-size:16px;margin:0}
 .controls{margin-left:auto;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 input[type=search],select{background:var(--panel);border:1px solid var(--line);color:var(--ink);border-radius:6px;padding:5px 9px}
 input[type=search]{min-width:200px}
+.card.complete{opacity:.5}
+.card.complete:hover{opacity:1}
+.complete-line{margin:4px 0 0;font-size:12px;color:var(--muted)}
 .menu{font-size:11px;color:var(--muted);border:1px solid var(--line);border-radius:4px;padding:1px 6px;margin-left:6px;white-space:nowrap}
 .menu.planned{border-style:dashed;font-style:italic}
 .menu.own{border-color:var(--accent,#888)}

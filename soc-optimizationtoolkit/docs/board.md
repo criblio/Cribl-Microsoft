@@ -11,7 +11,7 @@ two cannot disagree.
 alternatives. This board holds only what is a unit of work, what state it is
 in, and what it waits on.
 
-**57 in the backlog, 0 in progress, 29 done.**
+**56 in the backlog, 0 in progress, 31 done.**
 
 ## By menu item
 
@@ -28,9 +28,9 @@ operator sees on any screen. Two menus are PLANNED and have no route yet.
 | Permission Verification | 8 | 0 | 0 |
 | Azure Native Source Onboarding (planned) | 13 | 4 | 0 |
 | Windows Event analysis (planned) | 5 | 0 | 0 |
-| Cross-cutting | 8 | 16 | 1 |
+| Cross-cutting | 7 | 18 | 0 |
 
-Open work totals 57.
+Open work totals 56.
 
 ## Epics and features
 
@@ -107,15 +107,15 @@ ENABLER EPIC: exists to unblock other work rather than to deliver on its own. It
 |---|---|---|---|
 | `CAP-F1` Capability taxonomy extension | Permission Verification | 0/6 | CAP-1, CAP-2, CAP-3, CAP-4, CAP-5, CAP-6 |
 
-### `REL` Ship what is built _(enabler)_ - 40% (2/5)
+### `REL` Ship what is built _(enabler)_ - 60% (3/5)
 
 ENABLER EPIC: release mechanics. The packaged tarball trails main, and the lab trails it
 
 | Feature | Menu | Done | Stories |
 |---|---|---|---|
-| `REL-F1` Release and deployment hygiene | Cross-cutting | 2/5 | REL-2, REL-3, REL-4, REL-5, REL-6 |
+| `REL-F1` Release and deployment hygiene | Cross-cutting | 3/5 | REL-2, REL-3, REL-4, REL-5, REL-6 |
 
-### `DBT` Quality and technical debt _(enabler)_ - 45% (14/31)
+### `DBT` Quality and technical debt _(enabler)_ - 47% (15/32)
 
 ENABLER EPIC: verification gaps, copy, diagram fidelity, docs and the board's own tooling
 
@@ -125,7 +125,7 @@ ENABLER EPIC: verification gaps, copy, diagram fidelity, docs and the board's ow
 | `DBT-F2` Copy and UX | Sentinel Integration | 0/6 | DBT-3, DBT-9, DBT-14, DBT-15, DBT-28, D-10* |
 | `DBT-F3` Diagram fidelity | Dataflow | 0/3 | DBT-1, DBT-4, DBT-12 |
 | `DBT-F4` Docs and spec grounding | Cross-cutting | 3/6 | DBT-8, DBT-10, DBT-11, DBT-13, DBT-22, DBT-26 |
-| `DBT-F5` Board tooling defects | Cross-cutting | 11/11 | DBT-16, DBT-17, DBT-18, DBT-19, DBT-20, DBT-21, DBT-23, DBT-24, DBT-25, DBT-27, DBT-29 |
+| `DBT-F5` Board tooling defects | Cross-cutting | 12/12 | DBT-16, DBT-17, DBT-18, DBT-19, DBT-20, DBT-21, DBT-23, DBT-24, DBT-25, DBT-27, DBT-29, DBT-30 |
 | `DBT-F6` Effect-identity defect class | Pack Maintenance | 0/1 | FX-4 |
 
 ---
@@ -138,33 +138,11 @@ _Nothing here._
 
 ---
 
-## Backlog - now (1)
+## Backlog - now (0)
 
 Next to pick up. Nothing blocks these.
 
-- **REL-3** Rotate the Azure client secret from the retired local-app config
-  `REL-F1` `enabler` `settled`
-  `~/.soc-toolkit-local-app-retired/config/local-config.json` holds a live
-  secret. Flagged for rotation by `adr/0002-drop-local-target.md:57-62` and
-  still outstanding. *chore, SETTLED. Security. Size: minutes.* CHECKED
-  2026-08-29, still open. The named file is ABSENT from this machine - neither
-  `~/.soc-toolkit-local-app-retired/config/local-config.json` nor the
-  directory above it exists - and its contents were never read or printed.
-  THAT IS NOT THE SAME AS ROTATED, and the difference is the whole card. A
-  deleted file removes the copy on THIS disk; it does not invalidate the
-  credential, which lives in Entra and stays usable until someone rotates it
-  there. The value may also persist in a backup, on another machine, or in any
-  shell history that ever echoed it. So the exposure is narrower than when the
-  card was filed and is not closed. ROTATION ITSELF IS NOT MINE TO DO: it
-  means minting a new client secret in the tenant and handling the value,
-  which is outward-facing on a live directory and is credential handling
-  either way. Left for the operator, who should rotate in Entra and confirm
-  nothing still authenticates with the old secret rather than relying on the
-  file being gone. One thing worth doing while there: the app stores its own
-  client secret encrypted in the Cribl KV (write-only, reads return a
-  placeholder), so a rotation needs the new value re-entered there - the
-  Connection panel's stored secret - or the next run fails to authenticate
-  with a stale credential rather than an obviously missing one.
+_Nothing here._
 
 ---
 
@@ -724,7 +702,7 @@ Settled, gated on something above.
 
 ---
 
-## Done (29)
+## Done (31)
 
 Kept briefly so a reader can see what just landed; prune when the list grows.
 
@@ -769,6 +747,47 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   version exists - not what it says. `none` is the honest value for prose, and
   is exactly the uncomfortable answer the field exists to force rather than
   let "live" borrow credibility from the thing being written about.
+
+- **REL-3** Rotate the Azure client secret from the retired local-app config
+  `REL-F1` `enabler` `settled` `verified: live`
+  `~/.soc-toolkit-local-app-retired/config/local-config.json` holds a live
+  secret. Flagged for rotation by `adr/0002-drop-local-target.md:57-62` and
+  still outstanding. *chore, SETTLED. Security. Size: minutes.* CHECKED
+  2026-08-29, still open. The named file is ABSENT from this machine - neither
+  `~/.soc-toolkit-local-app-retired/config/local-config.json` nor the
+  directory above it exists - and its contents were never read or printed.
+  THAT IS NOT THE SAME AS ROTATED, and the difference is the whole card. A
+  deleted file removes the copy on THIS disk; it does not invalidate the
+  credential, which lives in Entra and stays usable until someone rotates it
+  there. The value may also persist in a backup, on another machine, or in any
+  shell history that ever echoed it. So the exposure is narrower than when the
+  card was filed and is not closed. ROTATION ITSELF IS NOT MINE TO DO: it
+  means minting a new client secret in the tenant and handling the value,
+  which is outward-facing on a live directory and is credential handling
+  either way. Left for the operator, who should rotate in Entra and confirm
+  nothing still authenticates with the old secret rather than relying on the
+  file being gone. One thing worth doing while there: the app stores its own
+  client secret encrypted in the Cribl KV (write-only, reads return a
+  placeholder), so a rotation needs the new value re-entered there - the
+  Connection panel's stored secret - or the next run fails to authenticate
+  with a stale credential rather than an obviously missing one. DONE
+  2026-08-30, confirmed by the operator, who performed the rotation - it was
+  theirs to do and not mine: minting a client secret in a live tenant is
+  credential handling. verified: live rather than pins because the evidence is
+  an action in Entra, not a test; recorded on their word, since I did not
+  observe the rotation itself. The file this card named had already gone from
+  this machine, so what closed the card was the Entra-side rotation, which is
+  the half that actually invalidates the old credential. CHECKED THE
+  CONSEQUENCE I had warned about: a rotation would leave the app KV-stored
+  connection secret stale. Reloaded the dev app immediately after and the
+  Connection panel still reads secret: live (verified) with platform link: ok,
+  and the target still resolves. So the warning did not bite - most likely the
+  retired local-app config held a DIFFERENT app registration from the one this
+  app authenticates with. HONEST LIMIT: I read a badge, I did not force a
+  fresh Azure write to prove the credential end to end, and journey-state
+  treats liveness as session-only knowledge. If the secret you rotated IS the
+  one this app stores, re-enter it in the Connection panel and confirm with a
+  real operation rather than trusting the badge.
 
 - **REL-4** Cut and package a release
   `REL-F1` `enabler` `settled` `verified: pins`
@@ -1442,3 +1461,39 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   - by reading the cited section BEFORE writing code - so that is a habit to
   keep rather than a check to add. Fixed by moving DBT-4 to DBT-F3 and
   re-citing to `backlog.md#10`.
+
+- **DBT-30** Collapse epics and features at 100% instead of giving them a status
+  `DBT-F5` `enabler` `settled` `verified: both`
+  ASKED 2026-08-30: "we have epics and features on the board that show 100%
+  completion - should we move them to Done?" Four features (AZR-F1, GEN-F1,
+  VND-F1, DBT-F5) and two epics (GEN, VND) are at 100%. DECIDED: collapse them
+  visually, and do NOT give epics or features a status. Completion is DERIVED
+  from the stories, so it cannot drift; a declared `done` would be the same
+  fact in a second place and would start lying the moment a story was added
+  underneath, with nothing to catch it. This repo has been bitten by that
+  class three times - STATUSES duplicated into the kanban columns (7th audit),
+  PRIORITIES duplicated into the groom script (8th audit), and the CAP epic
+  prose asserting a blocker count the graph contradicted (DBT-24). The second
+  reason is sharper: 100% means "no open cards", NOT "this area is finished".
+  DBT-F5 is 11/11 today and FIVE of those eleven were filed in the last week
+  (DBT-23, 24, 25, 27, 29) - marking it done would have been wrong within
+  days, and this card makes it twelve. Collapsing says only what is true, and
+  un-collapses by itself when new work lands. A human-declared `closed` flag
+  was offered and declined, which is the right call for now: the only grouping
+  that genuinely looks finished is VND, and one candidate does not justify a
+  second status field with its own validation rules. KANBAN ONLY. board.md
+  keeps its full table: it is the diff-friendly record, and hiding rows from a
+  generated file would make a completed feature invisible to anyone reading
+  the file rather than the wall. BUILT 2026-08-30. isComplete() and a
+  collapsed one-line body in board-html; rule recorded in documenting-work.md.
+  VERIFIED BOTH WAYS: 5 pins, and the design demonstrated itself live - DBT-F5
+  was one of the six collapsed groupings until this very card was filed into
+  it, at which point it re-expanded on its own. A declared status would have
+  gone on claiming the feature was finished. Mutation-checked at both edges:
+  treating an EMPTY grouping as complete fails the empty pin (zero-of-zero is
+  a grouping with nothing in it, which check-board already flags, and a tick
+  would hide it), and collapsing at a majority rather than all fails the
+  un-collapse pin. One pin is a TRIPWIRE with no behaviour behind it: it
+  asserts epics and features carry no `status` key, so if one ever appears the
+  duplication is caught at the moment it is introduced rather than the first
+  time it disagrees.
