@@ -16,9 +16,17 @@
  * This is NOT `emptyTableListMessage`'s question. That decides what an EMPTY
  * LIST means; this decides what an UNMATCHED ROW means. Folding them would
  * make one sentence answer two questions.
+ *
+ * TBL-8 ADDED A THIRD KIND OF NOTHING to keep apart from those two, because a
+ * real workspace returned 843 tables and the panel grew a name filter. "No row
+ * matched what you typed" is a fact about the FILTER; it borrows neither the
+ * empty-list wording (a claim about the workspace) nor the unmatched-row
+ * wording (a claim about a DCR). All three states live in this file precisely
+ * so the differences are visible in one place.
  */
 
-import type { DcrInventoryEntry, WorkspaceTable } from "@soc/core";
+import { filterListing, listingRows } from "@soc/core";
+import type { DcrInventoryEntry, Listing, WorkspaceTable } from "@soc/core";
 
 /** Whether a DCR already targets a table, and how confidently we know. */
 export type DcrPresence = "has" | "none-in-scope" | "unchecked";
@@ -91,6 +99,138 @@ export function buildWorkspaceTableRows(
       dcrNames,
     };
   });
+}
+
+/**
+ * The same join, over the LISTING rather than its rows (TBL-8).
+ *
+ * The filter below renders a count, and a count is only honest when it came
+ * from the `rows` branch - so the row build must not be the place the listing
+ * gets flattened into an array. `filterListing` is the right carrier even
+ * though nothing is being filtered out here: this derivation is 1:1, so it
+ * PRESERVES the source's kind, and an unverified `empty` stays unverified all
+ * the way to the thing that would otherwise count it.
+ */
+export function buildWorkspaceTableListing(
+  tables: Listing<WorkspaceTable>,
+  dcrEntries: readonly DcrInventoryEntry[] | null,
+): Listing<WorkspaceTableRow> {
+  // The sanctioned use of the escape hatch: rows to map over, saying nothing
+  // about emptiness - the emptiness is being CARRIED, by the line it wraps.
+  return filterListing(
+    tables,
+    buildWorkspaceTableRows(listingRows(tables), dcrEntries),
+  );
+}
+
+/**
+ * The Logs screen's wording for the same control, verbatim (TBL-8).
+ *
+ * Not a coincidence to be tidied later: two substring filters that describe
+ * themselves differently teach an operator that they behave differently.
+ */
+export const TABLE_FILTER_PLACEHOLDER = "substring, case-insensitive";
+
+/** What the filter leaves for the panel to render. */
+export interface WorkspaceTableFilterView {
+  /** The rows that matched - all of them when no filter is set. */
+  rows: readonly WorkspaceTableRow[];
+  /** The count line, or null when there is no measured total to count. */
+  countLabel: string | null;
+  /**
+   * Set ONLY when a filter is active and matched nothing. Null otherwise -
+   * including for an unverified listing, whose emptiness is a different
+   * question with a different owner ({@link WorkspaceTableFilterView} says
+   * nothing about the workspace).
+   */
+  noMatchMessage: string | null;
+}
+
+/**
+ * Narrow the listing to the rows whose NAME contains `filter`.
+ *
+ * Case-insensitive substring, matching the Logs screen's Text filter rather
+ * than inventing a second dialect. Client-side over rows already loaded: it
+ * issues nothing, and it does not touch the DCR join - a filtered row carries
+ * the same `dcr` verdict and the same `dcrNames` it had unfiltered, because
+ * the join happened before this ran.
+ *
+ * TWO HONESTY RULES, and they are why this is a function rather than a
+ * `.filter()` in the JSX:
+ *
+ *   1. THE TOTAL COMES OFF THE `rows` BRANCH. `843` in "showing 12 of 843" is a
+ *      count derived from an ARM listing, and an RBAC-filtered list returns 200
+ *      with nothing (docs/inventory-standard.md) - so a total taken after an
+ *      unwrap could be a zero nobody measured. Narrowing first makes it
+ *      non-empty BY TYPE.
+ *   2. NO MATCHES IS A FACT ABOUT THE FILTER, never about the workspace. The
+ *      panel's `emptyTableListMessage` answers "is this workspace empty, or
+ *      can we not see it?" - a question this function has no business
+ *      answering, and reusing its wording here would tell an operator their
+ *      workspace is empty because they typed four letters. `filterListing`
+ *      keeps the two apart structurally: over a source that HAS rows it mints
+ *      a verified `none` (zero matches, measured), and over an unverified
+ *      `empty` it propagates `empty` and there is nothing to say at all.
+ */
+export function filterWorkspaceTables(
+  listing: Listing<WorkspaceTableRow>,
+  filter: string,
+): WorkspaceTableFilterView {
+  const needle = filter.trim().toLowerCase();
+
+  // No rows: nothing to filter, no total to count, and nothing about the
+  // filter worth saying. The empty-listing message already owns this space,
+  // and a second sentence here would be a second answer to one question.
+  if (listing.kind !== "rows") {
+    return { rows: [], countLabel: null, noMatchMessage: null };
+  }
+  const total = listing.rows.length;
+
+  if (needle === "") {
+    return {
+      rows: listing.rows,
+      countLabel: tableCount(total),
+      noMatchMessage: null,
+    };
+  }
+
+  const matched = listing.rows.filter((row) =>
+    row.name.toLowerCase().includes(needle),
+  );
+  const result = filterListing(listing, matched);
+  if (result.kind === "rows") {
+    return {
+      rows: result.rows,
+      countLabel: `showing ${result.rows.length} of ${tableCount(total)}`,
+      noMatchMessage: null,
+    };
+  }
+  return {
+    rows: [],
+    countLabel: null,
+    noMatchMessage: noFilterMatchMessage(filter.trim(), total),
+  };
+}
+
+/** Both counts here are measured, so only the grammar is left to get right. */
+function tableCount(total: number): string {
+  return `${total} ${total === 1 ? "table" : "tables"}`;
+}
+
+/**
+ * What to say when the filter matched nothing.
+ *
+ * Every clause is about the FILTER. It names what was typed, says the listing
+ * is unchanged, quotes the measured total that is still there, and gives the
+ * way out - so there is no reading of it under which the workspace is the thing
+ * that came back empty.
+ */
+function noFilterMatchMessage(filter: string, total: number): string {
+  return (
+    `No table matches "${filter}". The listing is unchanged - ` +
+    `${tableCount(total)} loaded, hidden by this filter. ` +
+    "Clear it to see them all."
+  );
 }
 
 /**

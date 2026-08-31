@@ -63,6 +63,14 @@ export function emptyTableListMessage(
 // line's "No tables loaded yet." distinction survives as behaviour rather than
 // text: a listing in flight renders nothing at all, which is the same claim
 // (nothing has been verified yet) made by saying less.
+//
+// NEITHER CAME BACK. TBL-8 gave the DCR Automation Tables tab a filter and a
+// count of its own - `filterWorkspaceTables` in workspace-tables-state.ts -
+// after a real workspace returned 843 rows. That listing is ACTIONABLE (a
+// Create DCR button per row), which is the condition the deletion set, and the
+// new one takes the LISTING rather than an array so its total comes off the
+// verified branch. Anyone arriving here by grepping the old names wants that
+// file, not a revival of these.
 
 /**
  * The warning shown once a table is selected while an analysis already exists.

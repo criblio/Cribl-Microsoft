@@ -19,6 +19,7 @@ import type {
   PortHttpResponse,
 } from "@soc/core";
 import { emptyCapabilitySet } from "@soc/core";
+import { emptyTableListMessage } from "../table-picker/table-picker-state";
 import { PortsProvider } from "../../ports-context";
 import type { UiPorts } from "../../ports-context";
 import { FALLBACK_POINTER_LABEL } from "../../capabilities/fallback-notice-state";
@@ -66,7 +67,14 @@ const DCRS = {
 };
 
 /** Records every path requested so a pin can assert the attempt was MADE. */
-function makePorts(opts: { dcrFails?: boolean; tablesFail?: boolean } = {}) {
+function makePorts(
+  opts: {
+    dcrFails?: boolean;
+    tablesFail?: boolean;
+    /** `200 []` - byte-identical to an RBAC-filtered list, hence unverified. */
+    tablesEmpty?: boolean;
+  } = {},
+) {
   const calls: string[] = [];
   const ports = {
     azure: {
@@ -79,6 +87,9 @@ function makePorts(opts: { dcrFails?: boolean; tablesFail?: boolean } = {}) {
           return ok(DCRS);
         }
         if (o.path.endsWith("/tables")) {
+          if (opts.tablesEmpty === true) {
+            return ok({ value: [] });
+          }
           if (opts.tablesFail === true) {
             return {
               ok: false,
@@ -255,10 +266,172 @@ describe("WorkspaceTablesPanel", () => {
     expect(onCreateDcr).toHaveBeenCalledWith("App_CL");
   });
 
-  it("has NO filter box - filterTables was deleted with the old panel", () => {
+  it("has NO filter box until there are rows to filter", async () => {
+    // This pin used to read "has NO filter box - filterTables was deleted with
+    // the old panel", and it was protecting the CONDITION that deletion set:
+    // a filter is defensible once rows are actionable, but must be written
+    // fresh rather than resurrected. TBL-8 met the condition (843 rows, and a
+    // Create DCR button on each), so the assertion moves to the half still
+    // worth protecting - a control that filters nothing is a control that
+    // implies rows were read.
     const { ports } = makePorts();
     const { container } = renderPanel(ports);
     expect(container.querySelectorAll("input")).toHaveLength(0);
+    fireEvent.click(screen.getByRole("button", { name: "Load tables" }));
+    await waitFor(() => {
+      expect(screen.getByText("SecurityEvent")).toBeTruthy();
+    });
+    expect(screen.getByLabelText("Name filter")).toBeTruthy();
+  });
+});
+
+/**
+ * TBL-8: the filter, on the surface.
+ *
+ * The pure pins in workspace-tables-state.test.ts own the matching rules and
+ * the wording. These own the wiring, which is the half that rots silently -
+ * HON-7's lesson was a component whose own pins all passed while its only call
+ * site wired nothing.
+ */
+describe("WorkspaceTablesPanel - the Name filter (TBL-8)", () => {
+  const loadRows = async () => {
+    fireEvent.click(screen.getByRole("button", { name: "Load tables" }));
+    await waitFor(() => {
+      expect(screen.getByText("SecurityEvent")).toBeTruthy();
+    });
+  };
+
+  const typeFilter = (value: string) => {
+    fireEvent.change(screen.getByLabelText("Name filter"), {
+      target: { value },
+    });
+  };
+
+  it("narrows the rendered rows, case-insensitively, on a substring", async () => {
+    const { ports } = makePorts();
+    const { container } = renderPanel(ports);
+    await loadRows();
+    typeFilter("app_c");
+    const names = Array.from(container.querySelectorAll("tbody tr")).map(
+      (tr) => tr.querySelector("td")?.textContent,
+    );
+    expect(names).toEqual(["App_CL"]);
+    expect(screen.queryByText("SecurityEvent")).toBeNull();
+  });
+
+  it("ISSUES NOTHING - it filters rows already loaded", async () => {
+    // The card's constraint, and the reason it can be typed into freely: no
+    // new request, no re-list, no change to loading behaviour.
+    const { ports, calls } = makePorts();
+    renderPanel(ports);
+    await loadRows();
+    const before = calls.length;
+    typeFilter("app");
+    typeFilter("app_cl");
+    typeFilter("");
+    expect(calls.length).toBe(before);
+  });
+
+  it("leaves the DCR column reading exactly what it read unfiltered", async () => {
+    const { ports } = makePorts();
+    renderPanel(ports);
+    await loadRows();
+    expect(screen.getByText("dcr-SecurityEvent-eastus")).toBeTruthy();
+    typeFilter("securityevent");
+    // Same cell, same DCR - the filter narrows which rows are shown and
+    // touches neither the join nor its verdict.
+    expect(screen.getByText("dcr-SecurityEvent-eastus")).toBeTruthy();
+  });
+
+  it("counts shown of total beside the box", async () => {
+    const { ports } = makePorts();
+    renderPanel(ports);
+    await loadRows();
+    expect(screen.getByText("2 tables")).toBeTruthy();
+    typeFilter("app");
+    expect(screen.getByText("showing 1 of 2 tables")).toBeTruthy();
+  });
+
+  it("says the FILTER matched nothing, never that the workspace is empty", async () => {
+    // The two sentences answer different questions and the panel must not
+    // swap them: `emptyTableListMessage` is a claim about the workspace (or
+    // about what we may read), and this is a claim about four letters someone
+    // typed. Asserted against the live wording, not a copy of it.
+    const { ports } = makePorts();
+    const { container } = renderPanel(ports);
+    await loadRows();
+    typeFilter("zzz");
+    expect(container.querySelectorAll("tbody tr")).toHaveLength(0);
+    expect(screen.getByText(/No table matches "zzz"/)).toBeTruthy();
+    const rendered = container.textContent ?? "";
+    for (const wording of [
+      emptyTableListMessage(measured({ "table.read": "granted" }), CONNECTED).text,
+      emptyTableListMessage(measured({ "table.read": "denied" }), CONNECTED).text,
+      emptyTableListMessage(emptyCapabilitySet(), CONNECTED).text,
+    ]) {
+      expect(
+        rendered,
+        `the no-match state borrowed the workspace wording: ${wording}`,
+      ).not.toContain(wording);
+    }
+  });
+
+  it("hides the table entirely rather than leaving bare headings", async () => {
+    const { ports } = makePorts();
+    const { container } = renderPanel(ports);
+    await loadRows();
+    typeFilter("zzz");
+    expect(container.querySelector("table")).toBeNull();
+  });
+
+  it("brings every row back when the filter is cleared", async () => {
+    const { ports } = makePorts();
+    const { container } = renderPanel(ports);
+    await loadRows();
+    typeFilter("zzz");
+    typeFilter("");
+    expect(container.querySelectorAll("tbody tr")).toHaveLength(2);
+  });
+
+  it("offers NO filter and NO count for an unverified empty listing", async () => {
+    // `200 []` from ARM is indistinguishable from a list RBAC filtered away, so
+    // there is nothing here to filter and no total to print. The empty-listing
+    // message owns this space alone - a "0 tables" beside a filter box would be
+    // a count nobody measured, dressed as a fact.
+    const { ports } = makePorts({ tablesEmpty: true });
+    const { container } = renderPanel(ports, {
+      capabilities: emptyCapabilitySet(),
+      capabilityContext: CONNECTED,
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Load tables" }));
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Refresh" })).toBeTruthy();
+    });
+    expect(screen.queryByLabelText("Name filter")).toBeNull();
+    expect(container.textContent ?? "").not.toContain("0 table");
+    expect(
+      screen.getByText(
+        emptyTableListMessage(emptyCapabilitySet(), CONNECTED).text,
+      ),
+    ).toBeTruthy();
+  });
+
+  it("does not call a name FREE off an unverified empty listing", async () => {
+    // Same read, the other consumer. `checkTableName` documents that an unread
+    // listing cannot say a name is free, and an unverified empty listing is
+    // one - the panel used to unwrap it to `[]` first, which silently made
+    // every name look available over an upsert that replaces a live schema.
+    const { ports } = makePorts({ tablesEmpty: true });
+    renderPanel(ports);
+    fireEvent.click(screen.getByRole("button", { name: "Load tables" }));
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Refresh" })).toBeTruthy();
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Create table" }));
+    fireEvent.change(screen.getByLabelText("Table name"), {
+      target: { value: "Brand_New_CL" },
+    });
+    expect(screen.getByText(/Load the table list/)).toBeTruthy();
   });
 });
 

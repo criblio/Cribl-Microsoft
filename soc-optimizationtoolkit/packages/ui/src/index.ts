@@ -157,12 +157,16 @@ export type { DcrInventoryPanelProps } from "./screens/dcr-automation/dcr-invent
 export { WorkspaceTablesPanel } from "./screens/dcr-automation/workspace-tables-panel";
 export type { WorkspaceTablesPanelProps } from "./screens/dcr-automation/workspace-tables-panel";
 export {
+  buildWorkspaceTableListing,
   buildWorkspaceTableRows,
   dcrCellLabel,
   dcrColumnNote,
+  filterWorkspaceTables,
+  TABLE_FILTER_PLACEHOLDER,
 } from "./screens/dcr-automation/workspace-tables-state";
 export type {
   DcrPresence,
+  WorkspaceTableFilterView,
   WorkspaceTableRow,
 } from "./screens/dcr-automation/workspace-tables-state";
 // Integrate arc (legacy-flow-analysis.md single-page decision, ADOPTED
