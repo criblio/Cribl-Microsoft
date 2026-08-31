@@ -35,7 +35,9 @@
 import { useCallback, useState } from "react";
 import {
   createCustomTable,
+  CUSTOM_TABLE_SUFFIX_RULE,
   emptyCapabilitySet,
+  hasCustomTableSuffix,
   listDcrInventory,
   listWorkspaceTables,
 } from "@soc/core";
@@ -71,20 +73,16 @@ export interface WorkspaceTablesPanelProps {
   /** Connection facts for resolving unmeasured capabilities. */
   capabilityContext?: CapabilityContext;
   /**
-   * Notified when the operator opens the create-table form. OPTIONAL and
-   * informational only - the panel owns the form itself, so a host that
-   * passes nothing still gets full creation.
-   */
-  onCreateTable?: () => void;
-  /**
-   * Start a DCR for one table. OPTIONAL for the same reason - a button that
-   * went nowhere would be worse than no button.
+   * Start a DCR for one table. OPTIONAL because it navigates - only a host
+   * that owns the tab selection can honour it, and a button that went
+   * nowhere would be worse than no button. (Creating a TABLE needs no host:
+   * it is Azure-only, so this panel does it itself.)
    */
   onCreateDcr?: (table: string) => void;
 }
 
 export function WorkspaceTablesPanel(props: WorkspaceTablesPanelProps = {}) {
-  const { capabilities, capabilityContext, onCreateTable, onCreateDcr } = props;
+  const { capabilities, capabilityContext, onCreateDcr } = props;
   const { ports, config } = usePorts();
   const logger = ports.logger;
 
@@ -168,8 +166,12 @@ export function WorkspaceTablesPanel(props: WorkspaceTablesPanelProps = {}) {
   const createDisabledReason =
     newTable.trim() === ""
       ? "Name the table first."
-      : !newTable.trim().endsWith("_CL")
-        ? "A custom table name must end with _CL."
+      : // The domain owns this rule, exact casing included - restating it here
+        // would be a second place that can disagree, and reaching for the
+        // case-INSENSITIVE isCustomTableName instead would let `foo_cl`
+        // through to a validator that deliberately rejects it.
+        !hasCustomTableSuffix(newTable.trim())
+        ? `Not a valid custom table name - ${CUSTOM_TABLE_SUFFIX_RULE}.`
         : nameCheck.blocking
           ? nameCheck.message
           : schemaColumns.length === 0
@@ -252,7 +254,6 @@ export function WorkspaceTablesPanel(props: WorkspaceTablesPanelProps = {}) {
           onClick={() => {
             setCreating(!creating);
             setCreateResult("");
-            onCreateTable?.();
           }}
           disabled={busy || createBusy}
           title="Define a new custom table's fields and types"

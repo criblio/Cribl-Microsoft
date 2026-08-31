@@ -18,6 +18,7 @@ import {
   CUSTOM_TABLE_PLAN,
   DEFAULT_CUSTOM_TABLE_RETENTION_DAYS,
   DEFAULT_CUSTOM_TABLE_TOTAL_RETENTION_DAYS,
+  hasCustomTableSuffix,
   isCustomTableName,
   LOG_ANALYTICS_TABLES_API_VERSION,
   parseTableSchemaFile,
@@ -196,6 +197,35 @@ describe("isCustomTableName", () => {
     expect(isCustomTableName("table_cl")).toBe(true);
     expect(isCustomTableName("SecurityEvent")).toBe(false);
     expect(isCustomTableName("CLtable")).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// hasCustomTableSuffix - the CREATION rule, deliberately not the routing one
+// ---------------------------------------------------------------------------
+
+describe("hasCustomTableSuffix", () => {
+  it("is CASE-SENSITIVE where isCustomTableName is not", () => {
+    // The whole reason this predicate exists separately. The legacy
+    // EndsWith("_CL") check meant "table_cl" was silently double-suffixed to
+    // "table_cl_CL"; rejecting it at creation is the conscious fix. A caller
+    // that validated with the routing predicate would let it back through.
+    expect(hasCustomTableSuffix("CloudFlare_CL")).toBe(true);
+    expect(hasCustomTableSuffix("table_cl")).toBe(false);
+    expect(isCustomTableName("table_cl")).toBe(true);
+  });
+
+  it("agrees with validateCustomTableSchema on the same name", () => {
+    // One rule, two surfaces: if these ever disagree, a screen would enable a
+    // Create button for a name the validator rejects.
+    for (const name of ["App_CL", "app_cl", "SecurityEvent", "_CL"]) {
+      const validatorAccepts = !validateCustomTableSchema(name, [
+        { name: "TimeGenerated", type: "datetime" },
+      ]).errors.some((e) => e.includes("_CL"));
+      expect(hasCustomTableSuffix(name), `disagreement on '${name}'`).toBe(
+        validatorAccepts,
+      );
+    }
   });
 });
 

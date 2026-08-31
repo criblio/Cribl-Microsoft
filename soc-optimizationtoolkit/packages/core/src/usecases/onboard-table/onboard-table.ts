@@ -14,17 +14,20 @@
  * step lines from {@link onboardTableStepsFor}, not the raw constant:
  *   1 fetch-workspace          GET the workspace resource (resource id +
  *                              location when the caller did not provide one)
- *   2 create-custom-table      CUSTOM ONLY. GET workspace tables/{table}
- *                              first: exists -> creation is skipped
- *                              (idempotency, the legacy Process-CustomTable
- *                              contract) and its schema is reused; 404 ->
- *                              REQUIRES input.customSchema, validates it
- *                              (validateCustomTableSchema), PUTs the table
- *                              (buildTablePutRequest, retention
- *                              30/90-contract via customTableRetentionDays)
- *                              and GET-polls until the created table reads
- *                              back Succeeded, bounded by
- *                              maxTablePollAttempts
+ *   2 create-custom-table      CUSTOM ONLY, and the contract now lives in
+ *                              usecases/create-custom-table so a screen can
+ *                              create a table with Azure alone - this step
+ *                              CALLS it and only reports. That usecase GETs
+ *                              tables/{table} first (exists -> creation
+ *                              skipped, the legacy Process-CustomTable
+ *                              idempotency contract, and its schema is
+ *                              reused), else 404 -> requires
+ *                              input.customSchema, validates and PUTs it,
+ *                              then GET-polls to a terminal state bounded by
+ *                              maxTablePollAttempts. Its errors carry the
+ *                              messages this step used to throw and are
+ *                              rewrapped as StepFailure, so no
+ *                              operator-visible string changed
  *   3 fetch-table-schema       native: GET workspace tables/{table}; custom:
  *                              reuse the body resolved in step 2 (no second
  *                              GET). Columns are selected via schema-mapping
@@ -106,11 +109,10 @@ export const LOG_ANALYTICS_API_VERSION = LOG_ANALYTICS_TABLES_API_VERSION;
 /** Default bound on DCR provisioning-poll GETs (attempts, not wall-clock). */
 export const DEFAULT_DCR_POLL_ATTEMPTS = 10;
 
-/**
- * Default bound on created-custom-table readback GETs (attempts, not
- * wall-clock; replaces the legacy engine's blind Start-Sleep 10).
- */
-export const DEFAULT_TABLE_POLL_ATTEMPTS = 10;
+// The custom-table readback bound moved with the step that used it: it is
+// DEFAULT_CREATE_TABLE_POLL_ATTEMPTS in usecases/create-custom-table. This
+// export was left behind pointing at nothing (audit finding, 2026-08-31);
+// `maxTablePollAttempts` below still forwards there.
 
 /**
  * Ordered step names of an onboard-table job - the FULL (custom-table) list.
@@ -206,7 +208,7 @@ export interface OnboardTableInput {
   customTableRetentionDays?: CustomTableRetentionDays;
   /**
    * Max readback GETs after creating a custom table; defaults to
-   * {@link DEFAULT_TABLE_POLL_ATTEMPTS}.
+   * {@link DEFAULT_CREATE_TABLE_POLL_ATTEMPTS}.
    */
   maxTablePollAttempts?: number;
   subscriptionId: string;

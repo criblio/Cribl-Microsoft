@@ -239,6 +239,29 @@ export interface CustomTableSchemaValidation {
 }
 
 /**
+ * The CREATION suffix rule: a custom table name must end with `_CL` in exactly
+ * that casing.
+ *
+ * NOT THE SAME QUESTION AS {@link isCustomTableName}, and the difference is
+ * load-bearing. That one is `/_CL$/i` - case-INSENSITIVE - because it ROUTES:
+ * "app_cl" is an attempted custom table and must be treated as one everywhere.
+ * This one VALIDATES, and is case-sensitive on purpose: the legacy
+ * `EndsWith("_CL")` check meant "foo_cl" was silently double-suffixed to
+ * "foo_cl_CL", and rejecting it here is the conscious fix. Using the routing
+ * predicate to validate would let exactly that name through again.
+ *
+ * Extracted so a screen can ASK before building a request, rather than
+ * restating `endsWith("_CL")` with its own wording (audit finding, 2026-08-31).
+ */
+export function hasCustomTableSuffix(tableName: string): boolean {
+  return tableName.endsWith("_CL");
+}
+
+/** The rule {@link hasCustomTableSuffix} enforces, in the operator's words. */
+export const CUSTOM_TABLE_SUFFIX_RULE =
+  "a custom table name must end with '_CL' (exact casing)";
+
+/**
  * The Log Analytics column-name rule: letters, digits and underscores only,
  * never starting with a digit.
  *
@@ -292,7 +315,7 @@ export function validateCustomTableSchema(
 ): CustomTableSchemaValidation {
   const errors: string[] = [];
 
-  if (!tableName.endsWith("_CL")) {
+  if (!hasCustomTableSuffix(tableName)) {
     errors.push(
       `table name '${tableName}' must end with '_CL' (exact casing; ` +
         "Azure custom tables require the suffix)",

@@ -1862,11 +1862,10 @@ function App() {
       }
       tables={
         <PortsProvider ports={cloudPorts} config={activeConfig}>
-          {/* TBL-3. No onCreateTable/onCreateDcr yet: both need a hand-off
-              this shell cannot express today (there is no table prefill on
-              the Single tab, and no core usecase that creates one table),
-              and the panel deliberately renders no button for an action
-              that would go nowhere. */}
+          {/* TBL-3. Creating a TABLE needs no shell involvement - it is
+              Azure-only and the panel calls createCustomTable itself. Only
+              the DCR hand-off comes through here, because it navigates:
+              it seeds the Single tab's name field and switches to it. */}
           <WorkspaceTablesPanel
             capabilities={capabilityAudit.capabilities}
             capabilityContext={capabilityAudit.context}
