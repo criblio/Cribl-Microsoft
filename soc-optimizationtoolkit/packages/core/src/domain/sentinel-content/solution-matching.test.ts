@@ -17,6 +17,19 @@ describe("matchSolutionName (the single reusable boolean matcher)", () => {
   it("rejects unrelated names", () => {
     expect(matchSolutionName("Okta", "CrowdStrike")).toBe(false);
   });
+
+  it("never matches a blank side - an empty needle is not a wildcard (DBT-42)", () => {
+    // Every rule in the matcher is `includes`, and every string contains "".
+    // That made a blank solution name match the FIRST solution in the repo
+    // listing, so an analysis with nothing selected inherited that vendor's
+    // DCR. A blank name is "we do not know yet", never "everything matches".
+    expect(matchSolutionName("CrowdStrike Falcon", "")).toBe(false);
+    expect(matchSolutionName("", "CrowdStrike Falcon")).toBe(false);
+    // Whitespace and punctuation normalize away to the same nothing.
+    expect(matchSolutionName("CrowdStrike Falcon", "   ")).toBe(false);
+    expect(matchSolutionName("CrowdStrike Falcon", "-")).toBe(false);
+    expect(matchSolutionName("", "")).toBe(false);
+  });
 });
 
 describe("packAppliesToSolution (THE one pack-vs-solution matcher)", () => {

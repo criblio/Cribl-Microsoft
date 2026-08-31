@@ -351,6 +351,15 @@ export function coverageCountChips(
  * The section summary line. The alert-rule branches are VERBATIM legacy
  * vocabulary (SentinelIntegration.tsx 2591-2595); the workbook branches are the
  * net-new parallel copy (the old app never analyzed workbooks).
+ *
+ * The empty-workbook branch names the SOLUTION REPO as the only source (DBT-54).
+ * It used to add "and folds in any Sentinel workbooks already deployed in your
+ * subscription", which the 2026-07-12 user direction had already reversed - see
+ * rule-coverage-section.tsx, where deployed subscription workbooks are
+ * deliberately NOT analyzed because a shared subscription carries unrelated
+ * dashboards and local copies drift from the repo templates. The copy was
+ * telling an operator staring at "no workbooks found" to go look for a
+ * subscription read that never happens.
  */
 export function coverageSummaryLine(
   type: ContentItemType,
@@ -361,7 +370,7 @@ export function coverageSummaryLine(
   if (counts.total === 0) {
     return isRule
       ? "No analytics rules found in the Sentinel repository for this solution. You can upload custom rules below to validate field coverage."
-      : "No workbooks found for this solution. Workbook coverage reads the solution's Workbooks directory from the Sentinel repository and folds in any Sentinel workbooks already deployed in your subscription.";
+      : "No workbooks found for this solution. Workbook coverage reads the solution's Workbooks directory from the Sentinel repository only - workbooks already deployed in your subscription are not analyzed.";
   }
   if (counts.fullyCovered === counts.total) {
     return isRule

@@ -22,6 +22,17 @@
  * OFFLINE BRANCH (the shell derives it from the frame's mode): free-text
  * entry of the three scope fields, nothing fetched, same explicit commit.
  *
+ * "NOTHING FETCHED" IS TWO GUARDS, NOT THE EARLY RETURN. This line stated the
+ * intent and nothing enforced it (DBT-45): the `if (offline)` return lives at
+ * the BOTTOM of this component, below every hook, so it decides what renders
+ * and never what an effect calls. The Sentinel auto-check consulted `offline`
+ * nowhere and hit ARM on mount and per keystroke, unseen, because the offline
+ * JSX renders no status for it. Both port-touching effects now check `offline`
+ * themselves - the loader through buildLoaderPlan's empty keys, the Sentinel
+ * auto-check directly - and a render pin in azure-targeting-screen.dom.test.tsx
+ * asserts ZERO ports.azure calls in this branch. Any effect added above the
+ * early return owes the same guard; the branch will not supply it.
+ *
  * Create/enable actions run as attempt-bounded jobs inside @soc/core (the
  * create-workspace provisioning poll is bounded by attempts, never
  * wall-clock) and report honest line-by-line output including the raw error
@@ -86,6 +97,12 @@ export interface AzureTargetingScreenProps {
    * The air-gapped/offline branch: free-text scope entry, nothing fetched.
    * The SHELL derives this from the frame's resolved mode (no live Azure
    * connection = offline targeting).
+   *
+   * EVERY EFFECT THAT REACHES A PORT MUST READ THIS FLAG. It is not enough for
+   * the offline JSX to omit the connected controls: hooks run above that early
+   * return, so an unguarded effect fetches in this branch and the missing UI
+   * only hides the evidence - which is exactly how the Sentinel auto-check
+   * called ARM here undetected (DBT-45).
    */
   offline: boolean;
   /**
@@ -185,11 +202,23 @@ export function AzureTargetingScreen(props: AzureTargetingScreenProps) {
   // Auto-check Sentinel-enabled whenever a full scope is selected (read-only;
   // the checkSentinelEnabled GET never changes anything). The latest selection
   // wins - an in-flight check for a stale workspace is ignored.
+  //
+  // OFFLINE IS CHECKED HERE, NOT LEFT TO THE JSX (DBT-45, found 2026-08-31).
+  // Hooks run ABOVE the `if (offline)` early return further down - every hook
+  // does - so the offline branch does NOT stop an effect from reaching a port,
+  // it only stops the result being rendered. This effect was guarded on the
+  // three scope fields alone, so the air-gapped branch issued one ARM GET on
+  // mount with a committed scope and another on EVERY keystroke in the
+  // workspace field. It failed SILENTLY: the offline JSX renders neither
+  // sentinelStatus nor sentinelError, so nothing on screen ever contradicted
+  // the "nothing fetched" promise. `offline` is in the dependency array as
+  // well - without it, switching back to the connected branch with an already
+  // complete scope would leave the status stuck on "unknown" and never check.
   useEffect(() => {
     const sub = browseSub.trim();
     const rg = browseRg.trim();
     const ws = browseWs.trim();
-    if (sub === "" || rg === "" || ws === "") {
+    if (offline || sub === "" || rg === "" || ws === "") {
       setSentinelStatus("unknown");
       setSentinelError("");
       return;
@@ -215,7 +244,7 @@ export function AzureTargetingScreen(props: AzureTargetingScreenProps) {
     return () => {
       cancelled = true;
     };
-  }, [browseSub, browseRg, browseWs, ports.azure, ports.logger]);
+  }, [offline, browseSub, browseRg, browseWs, ports.azure, ports.logger]);
 
   // THE one loader effect. buildLoaderPlan decides what is stale; the keys
   // in loadedRef prevent refetching data whose inputs did not change (the

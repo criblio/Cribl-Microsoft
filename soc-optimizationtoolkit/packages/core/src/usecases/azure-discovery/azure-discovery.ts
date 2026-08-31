@@ -588,9 +588,17 @@ export interface EnableSentinelInput {
   workspaceName: string;
 }
 
-/** Result of {@link checkSentinelEnabled}. */
+/**
+ * Result of {@link checkSentinelEnabled} - a MEASUREMENT, never a guess. The
+ * unreadable case is deliberately absent from this type; see the function.
+ */
 export interface CheckSentinelResult {
-  /** True when the SecurityInsights solution already exists on the workspace. */
+  /**
+   * True when the SecurityInsights solution exists on the workspace. FALSE
+   * MEANS AZURE ANSWERED 404 AND NOTHING ELSE: a read that was refused or that
+   * failed never reaches this type, it throws (DBT-52). So a caller may render
+   * `false` as "Sentinel is not enabled" without checking anything further.
+   */
   enabled: boolean;
   /** The solution resource name, `SecurityInsights({workspaceName})`. */
   solutionName: string;
@@ -600,9 +608,44 @@ export interface CheckSentinelResult {
  * Check whether Microsoft Sentinel is already enabled on a workspace WITHOUT
  * changing anything - the read-only half of {@link enableSentinel}'s idempotent
  * pre-check. GETs the Microsoft.OperationsManagement/solutions resource
- * `SecurityInsights({workspaceName})`; a 2xx means enabled, any non-2xx (404 or
- * otherwise) means not enabled. Lets the UI show status on workspace selection
- * instead of only discovering it when the operator clicks Enable.
+ * `SecurityInsights({workspaceName})`. Lets the UI show status on workspace
+ * selection instead of only discovering it when the operator clicks Enable.
+ *
+ * THREE OUTCOMES, NOT TWO (DBT-52). Until 2026-08-31 this read `is2xx` and
+ * called every other status "not enabled", so a 403 came back as
+ * `enabled: false` and the targeting screen rendered "Sentinel is not enabled
+ * on this workspace - Enable it above" - inviting the operator to perform a
+ * WRITE off the back of a read that was DENIED. That is the same
+ * empty-versus-denied conflation `docs/inventory-standard.md` (BINDING)
+ * forbids, and that HON-2 fixed one screen over for the workspace listing:
+ *
+ *     2xx        -> enabled: true    measured - the solution is there
+ *     404        -> enabled: false   measured - ARM says it is not there
+ *     any other  -> THROWS           nothing was measured; claim nothing
+ *
+ * THE MISSING THIRD STATE IS WHY A BOOLEAN IS STILL HONEST HERE. With the
+ * unreadable case thrown out of the result type, `enabled: false` has exactly
+ * one meaning left, so no caller can read a denial as an absence - and none
+ * can read an absence as a denial either. Widening the result instead would
+ * have left the existing `result.enabled ? ... : "disabled"` call site
+ * compiling and still wrong.
+ *
+ * This follows the file's own convention rather than inventing a second one:
+ * every other ARM read here THAT REPORTS A RESULT TO A CALLER throws
+ * {@link httpErrorText} on non-2xx. The qualifier is load-bearing - the
+ * idempotent pre-check inside `enableSentinel` below throws on nothing, and
+ * that divergence is deliberate and documented there. Stating the rule
+ * unqualified would make this file contradict itself, and
+ * inventory standard credits exactly that for EXPLICIT denials (the hard case
+ * it exists for is the silent RBAC-filtered `200 []`, which a single-resource
+ * GET cannot produce). 404 is the one status that is an answer rather than a
+ * failure, so it is the one carve-out - not "any 4xx".
+ *
+ * Callers say WHICH by control flow: a returned result is a measurement, a
+ * rejection is "could not look". The targeting screen already tells them apart
+ * - its catch renders "Could not check Sentinel status (...). You can still
+ * Enable", which annotates without blocking (capability-model rule 3) instead
+ * of asserting an absence nobody verified.
  */
 export async function checkSentinelEnabled(
   azure: AzureManagement,
@@ -620,11 +663,26 @@ export async function checkSentinelEnabled(
     apiVersion: SENTINEL_SOLUTION_API_VERSION,
   });
   const enabled = is2xx(res.status);
+  // 404 is the only non-2xx that MEASURES anything: ARM saying "no such
+  // solution" IS Sentinel being off. A 401/403 measures this identity, not the
+  // workspace, and a 429/5xx measures nothing at all.
+  const unreadable = !enabled && res.status !== 404;
+  // Logged for all three outcomes, and as a VERDICT rather than a boolean:
+  // `enabled: false` in a run log would repeat the defect for whoever reads it.
   logger?.debug("check Sentinel enabled", {
     workspaceName: input.workspaceName,
     status: res.status,
-    enabled,
+    verdict: unreadable ? "unreadable" : enabled ? "enabled" : "not-enabled",
   });
+  if (unreadable) {
+    throw new Error(
+      httpErrorText(
+        `check whether Sentinel is enabled on '${input.workspaceName}'`,
+        res.status,
+        res.body,
+      ),
+    );
+  }
   return { enabled, solutionName };
 }
 
@@ -651,6 +709,13 @@ export interface EnableSentinelResult {
  * returns 2xx short-circuits to success with `alreadyEnabled: true` - no PUT
  * is sent. Any non-2xx pre-check (404 or otherwise, mirroring the legacy
  * -ErrorAction SilentlyContinue) proceeds to the PUT.
+ *
+ * THAT DIVERGENCE FROM {@link checkSentinelEnabled} IS DELIBERATE, not an
+ * oversight to harmonise away (DBT-52). This pre-check reports to nobody: it
+ * only decides whether to attempt a PUT the operator has already asked for,
+ * and a PUT refused for the same reason throws with its own status. The check
+ * function reports to an OPERATOR, so it may not turn a denied read into "not
+ * enabled" - that is what invited a write off the back of a denied read.
  *
  * LOCATION FIX (pinned by test): the solution is deployed in the WORKSPACE'S
  * ACTUAL location, read from the workspace resource. The legacy handler

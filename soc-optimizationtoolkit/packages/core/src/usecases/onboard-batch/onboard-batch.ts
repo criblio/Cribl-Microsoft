@@ -384,6 +384,32 @@ class StepFailure extends Error {
   }
 }
 
+/**
+ * Internal signal: the JOB STORE failed, not the work being recorded (DBT-49).
+ * Every parent-record write MADE FROM INSIDE A GUARDED BLOCK goes through a
+ * wrapper that raises this, so the catch blocks below can tell "this
+ * table/step failed" from "the store is down" - the store's outage is NOT
+ * evidence about the table, which may have deployed perfectly.
+ *
+ * THE QUALIFIER IS NOT DECORATION (review finding, 2026-08-31). Three parent
+ * writes deliberately bypass the wrapper and call `jobs.update` raw - the
+ * pre-loop `{status:"running"}`, the prologue result persist, and the finalize
+ * write. None sits inside a catch that inspects this signal, so tagging them
+ * would buy nothing today; but a future broad catch that assumed a TOTAL
+ * invariant here would be wrong on three of the six store paths.
+ * JobStore failures are outside the never-rejects promise
+ * documented on {@link onboardBatch} (the UI already reads a rejection as
+ * exactly that), so they are re-raised rather than written back as an outcome.
+ */
+class JobStoreFailure extends Error {
+  constructor(cause: unknown) {
+    super(
+      `job store update failed: ${cause instanceof Error ? cause.message : String(cause)}`,
+    );
+    this.name = "JobStoreFailure";
+  }
+}
+
 /** Suggested artifact file name for a collected ARM request: last segment. */
 function artifactNameFor(path: string): string {
   const segments = path.split("/");
@@ -590,8 +616,20 @@ async function collectTableTemplates(args: {
 /**
  * Onboard a batch of tables under ONE parent job record. Never rejects for
  * step or table failures - the parent record carries the outcome and is
- * returned either way. (It can still reject when the JobStore itself fails,
- * or synchronously-shaped when the pacing budget input is invalid.)
+ * returned either way. That covers a step's ARM call REJECTING (a dropped
+ * socket, not just a non-2xx answer), which used to escape from
+ * fetch-workspace and strand the record at 'running' forever (DBT-48).
+ * (It can still reject when the JobStore itself fails - a failure raised by
+ * THIS usecase's own store writes is re-raised rather than recorded against
+ * whatever step or table was in flight at the time, DBT-49 - or
+ * synchronously-shaped when the pacing budget input is invalid.)
+ *
+ * THE LIMIT OF THAT, stated because the guarantee reads stronger than it is:
+ * a store failure raised inside the CHILD `onboardTable` does not reach here
+ * as a store failure. The child catches everything, records it on its own job
+ * record and returns status "failed", so the batch sees an ordinary failed
+ * table and attributes it that way. Closing that needs the same tagging inside
+ * onboard-table; it is carded, not fixed here.
  */
 export async function onboardBatch(
   ports: OnboardBatchPorts,
@@ -676,8 +714,21 @@ export async function onboardBatch(
     (name) => ({ name, status: "pending" }),
   );
 
+  // DBT-49: every parent-record write made from inside a guarded block goes
+  // through here, so a store outage reaches those catches WEARING ITS OWN
+  // TYPE and is never recorded as a step or table failure.
+  const updateJob = async (
+    patch: Partial<Omit<JobRecord, "id">>,
+  ): Promise<void> => {
+    try {
+      await jobs.update(job.id, patch);
+    } catch (error) {
+      throw new JobStoreFailure(error);
+    }
+  };
+
   const pushSteps = async (): Promise<void> => {
-    await jobs.update(job.id, { steps: steps.map((step) => ({ ...step })) });
+    await updateJob({ steps: steps.map((step) => ({ ...step })) });
   };
 
   const setStep = async (
@@ -728,7 +779,7 @@ export async function onboardBatch(
   // Persist per-table progress the moment it exists (resumability contract).
   const recordTable = async (result: OnboardBatchTableResult): Promise<void> => {
     tableResults.push(result);
-    await jobs.update(job.id, { result: outcomeSoFar() });
+    await updateJob({ result: outcomeSoFar() });
   };
 
   // RE-RUN NO-OP: when EVERY table is already completed by a prior run, the
@@ -769,39 +820,56 @@ export async function onboardBatch(
     // (templateOnly DCR bodies). Children re-resolve their own.
     await setStep("fetch-workspace", "running");
     const workspacePath = workspacePathFor(input);
-    const workspaceResponse = await azure.request({
-      method: "GET",
-      path: workspacePath,
-      apiVersion: LOG_ANALYTICS_API_VERSION,
-    });
-    if (!is2xx(workspaceResponse.status)) {
-      await failPrologue(
-        "fetch-workspace",
-        httpErrorText(
-          `fetch workspace '${input.workspaceName}'`,
-          workspaceResponse.status,
-          workspaceResponse.body,
-        ),
-      );
-    } else {
-      workspaceResourceId =
-        typeof prop(workspaceResponse.body, "id") === "string"
-          ? (prop(workspaceResponse.body, "id") as string)
-          : workspacePath;
-      const bodyLocation = prop(workspaceResponse.body, "location");
-      location =
-        input.location ??
-        (typeof bodyLocation === "string" && bodyLocation !== ""
-          ? bodyLocation
-          : undefined);
-      if (location === undefined) {
+    // DBT-48: the transport can REJECT (socket reset, DNS, an expired token,
+    // a proxy that throws) as well as answer non-2xx. This call used to be
+    // the only unguarded ARM call in the usecase, so a rejection escaped
+    // onboardBatch entirely - breaking the never-rejects contract above and
+    // leaving the parent record stranded at status 'running' with
+    // fetch-workspace stuck 'running': a batch that never finishes and never
+    // fails. Guarded like ensure-dce below: the step fails, every table skips
+    // with the prerequisite reason, and the record resolves to 'failed'.
+    try {
+      const workspaceResponse = await azure.request({
+        method: "GET",
+        path: workspacePath,
+        apiVersion: LOG_ANALYTICS_API_VERSION,
+      });
+      if (!is2xx(workspaceResponse.status)) {
         await failPrologue(
           "fetch-workspace",
-          `workspace '${input.workspaceName}' reported no location and none was provided`,
+          httpErrorText(
+            `fetch workspace '${input.workspaceName}'`,
+            workspaceResponse.status,
+            workspaceResponse.body,
+          ),
         );
       } else {
-        await setStep("fetch-workspace", "succeeded", `location ${location}`);
+        workspaceResourceId =
+          typeof prop(workspaceResponse.body, "id") === "string"
+            ? (prop(workspaceResponse.body, "id") as string)
+            : workspacePath;
+        const bodyLocation = prop(workspaceResponse.body, "location");
+        location =
+          input.location ??
+          (typeof bodyLocation === "string" && bodyLocation !== ""
+            ? bodyLocation
+            : undefined);
+        if (location === undefined) {
+          await failPrologue(
+            "fetch-workspace",
+            `workspace '${input.workspaceName}' reported no location and none was provided`,
+          );
+        } else {
+          await setStep("fetch-workspace", "succeeded", `location ${location}`);
+        }
       }
+    } catch (error) {
+      // DBT-49: a store outage is not the workspace GET's failure.
+      if (error instanceof JobStoreFailure) {
+        throw error;
+      }
+      const message = error instanceof Error ? error.message : String(error);
+      await failPrologue("fetch-workspace", message);
     }
 
     // ensure-dce: ONCE for the batch.
@@ -970,6 +1038,10 @@ export async function onboardBatch(
             );
           }
         } catch (error) {
+          // DBT-49: a store outage is not the DCE's failure.
+          if (error instanceof JobStoreFailure) {
+            throw error;
+          }
           const message = error instanceof Error ? error.message : String(error);
           await failPrologue("ensure-dce", message);
         }
@@ -1041,6 +1113,10 @@ export async function onboardBatch(
             );
           }
         } catch (error) {
+          // DBT-49: a store outage is not the association's failure.
+          if (error instanceof JobStoreFailure) {
+            throw error;
+          }
           const message = error instanceof Error ? error.message : String(error);
           await failPrologue("associate-ampls", message);
         }
@@ -1196,6 +1272,22 @@ export async function onboardBatch(
         });
       }
     } catch (error) {
+      // DBT-49: a JobStore outage RAISED HERE is NOT this table's failure (one
+      // raised inside the child onboardTable still arrives as an ordinary
+      // failed table - see the usecase docblock). The table may
+      // have deployed perfectly and only the record write failed - the write
+      // most exposed to that is recordTable's own, which runs directly after
+      // a successful deploy, and blaming the table there both lied about it
+      // and left TWO entries for one table (the succeeded push, then the
+      // failed one), counting a single table as one success AND one failure.
+      // Say nothing about a table we have no bad news about: re-raise the
+      // store failure, which the documented contract above already places
+      // outside the never-rejects promise and the UI reports as exactly that.
+      // (Unlike DBT-48 this cannot resolve the record instead - the store is
+      // the thing that is down, so there is nowhere to write the outcome.)
+      if (error instanceof JobStoreFailure) {
+        throw error;
+      }
       // ISOLATION: one table's failure never stops the others (the legacy
       // engine cascaded errors across tables) - record and continue.
       const message = error instanceof Error ? error.message : String(error);

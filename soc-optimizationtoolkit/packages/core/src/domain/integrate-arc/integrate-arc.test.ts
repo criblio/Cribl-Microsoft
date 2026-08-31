@@ -177,6 +177,49 @@ describe("INTEGRATE_SECTIONS metadata", () => {
     expect(integrateSection("deploy").requires).toBe("both");
   });
 
+  // DBT-54. Three sections declared a connection no code reads: gap-analysis
+  // said "both" (Cribl is only the name of a pipeline disposition there, and
+  // the live workspace lookups are optional props), and the two coverage
+  // sections said "azure" though screens/rule-coverage/ references exactly one
+  // port - ports.content, which is GitHub. Nothing renders `requires`, so the
+  // metadata drifted with nothing to catch it. Pinned EXHAUSTIVELY (every id,
+  // not just the three corrected) so the next drift on any section fails here.
+  it("declares the connection each section actually uses, for every section", () => {
+    const expected: Record<IntegrateSectionId, string> = {
+      // GitHub content acquisition and local sample entry - no live connection.
+      solution: "none",
+      "sample-data": "none",
+      // Samples plus the GitHub/bundled schema catalog; the live workspace
+      // table list and column lookup are OPTIONAL enrichment props.
+      "gap-analysis": "none",
+      // Rules and workbooks both come from the solution repo via ports.content.
+      "rule-coverage": "none",
+      "workbook-coverage": "none",
+      // Installs into the workspace - a genuine live Azure connection.
+      "enable-content": "azure",
+      "azure-resources": "azure",
+      "cribl-config": "cribl",
+      deploy: "both",
+    };
+    for (const section of INTEGRATE_SECTIONS) {
+      expect(`${section.id}=${section.requires}`).toBe(
+        `${section.id}=${expected[section.id]}`,
+      );
+    }
+  });
+
+  // DBT-54. The workbook infoTip promised coverage folded in "any deployed in
+  // your subscription". The 2026-07-12 direction had already REVERSED that -
+  // deployed subscription workbooks are deliberately not enumerated, because a
+  // shared subscription carries unrelated dashboards and local copies drift.
+  // The copy was inviting an operator to expect a read that never happens.
+  it("never promises workbook coverage reads deployed subscription workbooks", () => {
+    const tip = integrateSection("workbook-coverage").infoTip;
+    expect(tip).toContain("solution repo only");
+    expect(tip).not.toContain("deployed in your subscription");
+    expect(tip.toLowerCase()).not.toContain("subscription");
+  });
+
   it("gives every section a non-empty title and infoTip with no emojis", () => {
     // A broad emoji sweep across the pictographic + symbol ranges.
     // U+FE0F (variation selector) is matched via alternation, not inside the

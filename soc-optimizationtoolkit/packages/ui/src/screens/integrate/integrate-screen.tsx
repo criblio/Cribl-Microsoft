@@ -1544,8 +1544,11 @@ export function IntegrateScreen({
   // instead of PUTting them, the pack is assembled but not installed, and
   // buildAirGapArchive puts both in one .tgz with a README naming the exact
   // deploy scope. Nothing here touches Azure or Cribl in a way that changes
-  // state - an operator without write permission, or without a network, gets
-  // the whole intended deployment as a file.
+  // state - an operator without WRITE permission gets the whole intended
+  // deployment as a file. It is not, however, an offline path: the read-only
+  // GETs two lines up are live Azure reads, so a network and a working Azure
+  // connection are still required. (This said "or without a network" until
+  // DBT-54 - contradicting its own "read-only GETs" in the same breath.)
   const [exporting, setExporting] = useState(false);
   const [exportLines, setExportLines] = useState<string[]>([]);
 

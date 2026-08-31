@@ -442,9 +442,18 @@ describe("createWorkspace", () => {
 });
 
 // ---------------------------------------------------------------------------
-// enableSentinel: idempotent pre-check + the location FIX (never eastus)
+// Sentinel: the read-only check's THREE outcomes, then enableSentinel's
+// idempotent pre-check + the location FIX (never eastus)
 // ---------------------------------------------------------------------------
 
+/**
+ * DBT-52. This check has THREE outcomes and used to have two: `is2xx` decided
+ * `enabled`, so a 403 came back as `enabled: false` and the targeting screen
+ * rendered "Sentinel is not enabled on this workspace - Enable it above",
+ * inviting a WRITE off the back of a DENIED READ. Every pin below therefore
+ * asserts WHICH outcome happened, not merely that the call came back - a pin
+ * that only reads `result.enabled` passes just as happily on the defect.
+ */
 describe("checkSentinelEnabled", () => {
   const SOLUTION_PATH =
     `/subscriptions/${SUB}/resourceGroups/rg-sec` +
@@ -454,6 +463,42 @@ describe("checkSentinelEnabled", () => {
     resourceGroup: "rg-sec",
     workspaceName: "law-prod",
   };
+
+  /**
+   * The outcome as a TAGGED value, so "measured" and "could not look" are
+   * comparable side by side. Reading `result.enabled` in a try block cannot
+   * express the difference the defect erased.
+   */
+  type Outcome =
+    | { kind: "answer"; result: { enabled: boolean; solutionName: string } }
+    | { kind: "refusal"; message: string };
+
+  async function outcomeFor(status: number, body: unknown): Promise<Outcome> {
+    const azure = new FakeAzureManagement();
+    azure.respondWith({ status, body });
+    try {
+      return { kind: "answer", result: await checkSentinelEnabled(azure, input) };
+    } catch (err) {
+      return { kind: "refusal", message: err instanceof Error ? err.message : String(err) };
+    } finally {
+      // Read-only in EVERY outcome: the point of the card is that nothing is
+      // written, least of all after a refusal.
+      expect(azure.calls.every((c) => c.method === "GET")).toBe(true);
+    }
+  }
+
+  /**
+   * Narrows to the refusal AND fails loudly with the measured answer that came
+   * back instead - which is precisely what the defect returned for a 403.
+   */
+  function refusalOf(outcome: Outcome): string {
+    if (outcome.kind !== "refusal") {
+      throw new Error(
+        `expected a refusal, got a measured answer: ${JSON.stringify(outcome.result)}`,
+      );
+    }
+    return outcome.message;
+  }
 
   it("reports enabled on a 2xx solution GET, sending no PUT", async () => {
     const azure = new FakeAzureManagement();
@@ -471,12 +516,66 @@ describe("checkSentinelEnabled", () => {
     });
   });
 
-  it("reports NOT enabled on a 404 (never mutates)", async () => {
+  it("reports NOT enabled on a 404 - the ONE non-2xx that measures an absence", async () => {
     const azure = new FakeAzureManagement();
     azure.respondWith({ status: 404, body: { error: { code: "ResourceNotFound" } } });
     const result = await checkSentinelEnabled(azure, input);
-    expect(result.enabled).toBe(false);
+    // Whole-object, not just the flag: `enabled: false` is now a claim that
+    // ARM answered "no such solution", and only a 404 may produce it.
+    expect(result).toEqual({
+      enabled: false,
+      solutionName: "SecurityInsights(law-prod)",
+    });
     expect(azure.calls.every((c) => c.method === "GET")).toBe(true);
+  });
+
+  it("REFUSES to answer on a 403 - a denied read is not a measured absence", async () => {
+    const denied = await outcomeFor(403, {
+      error: { code: "AuthorizationFailed", message: "does not have authorization" },
+    });
+    // The load-bearing half. A refusal carries NO result object, so there is
+    // no `enabled: false` for a screen to render as "Sentinel is not enabled".
+    expect(denied).not.toHaveProperty("result");
+    const message = refusalOf(denied);
+    // The status and ARM's own code survive into the text an operator sees,
+    // so "could not look" names why.
+    expect(message).toMatch(
+      /check whether Sentinel is enabled on 'law-prod': HTTP 403 .*AuthorizationFailed/,
+    );
+    // ...and it never phrases the denial as a verdict about the workspace.
+    expect(message).not.toMatch(/not enabled/);
+  });
+
+  it("refuses on 401, 429 and 500 too - the carve-out is 404, not 'any 4xx'", async () => {
+    for (const status of [401, 429, 500]) {
+      const outcome = await outcomeFor(status, { error: { code: "Whatever" } });
+      expect({ status, kind: outcome.kind }).toEqual({ status, kind: "refusal" });
+    }
+  });
+
+  it("keeps all three outcomes distinguishable - denied is neither enabled nor off", async () => {
+    // The three side by side, because the defect was that two of them became
+    // the same value. Collapsing any pair puts an operator in one situation
+    // while reading another.
+    const on = await outcomeFor(200, { name: "SecurityInsights(law-prod)" });
+    const off = await outcomeFor(404, { error: { code: "ResourceNotFound" } });
+    const denied = await outcomeFor(403, { error: { code: "AuthorizationFailed" } });
+
+    expect(on).toEqual({
+      kind: "answer",
+      result: { enabled: true, solutionName: "SecurityInsights(law-prod)" },
+    });
+    expect(off).toEqual({
+      kind: "answer",
+      result: { enabled: false, solutionName: "SecurityInsights(law-prod)" },
+    });
+    expect(refusalOf(denied)).toContain("HTTP 403");
+
+    // Asserted as a set rather than described: three inputs, three outcomes.
+    const rendered = [on, off, denied].map((o) =>
+      o.kind === "answer" ? `answer:${String(o.result.enabled)}` : "refusal",
+    );
+    expect(new Set(rendered).size).toBe(3);
   });
 });
 

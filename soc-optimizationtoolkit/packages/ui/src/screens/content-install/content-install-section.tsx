@@ -47,6 +47,7 @@ import type {
 } from "@soc/core";
 import { usePorts } from "../../ports-context";
 import { InfoTip } from "../../components/info-tip";
+import { hasAzureIdentity } from "../../capabilities/capability-audit-state";
 import {
   partitionOutcomes,
   selectAll,
@@ -58,9 +59,13 @@ import {
 export interface ContentInstallSectionProps {
   /** The selected Sentinel solution (scopes the content lookup); "" when none. */
   solutionName: string;
-  /** Whether a full Azure target scope is committed (needed to install). */
+  /**
+   * Whether a full Azure target scope is committed. NECESSARY but not
+   * SUFFICIENT to install: the scope is three strings an operator can type
+   * offline, so an Azure identity has to be connected too (DBT-47). See
+   * `installBlockedReason`.
+   */
   scopeCommitted: boolean;
-  /** Diagnostics sink (optional). */
 }
 
 /** Reused across renders; the shell's GUID minter is required to install. */
@@ -109,12 +114,34 @@ export function ContentInstallSection({
     [config, location],
   );
 
-  const canInstall =
-    scopeCommitted &&
-    mintId !== undefined &&
-    config.subscriptionId !== "" &&
-    config.resourceGroup !== "" &&
-    config.workspaceName !== "";
+  // DBT-47: why an install cannot succeed, or null when nothing blocks it.
+  //
+  // The bug this replaces computed the same gate WITHOUT azureIdentityPresent,
+  // so three hand-typed scope strings (subscription, resource group, workspace)
+  // armed every install action on a build with no Azure identity to install
+  // WITH - the operator's only feedback was the eventual auth failure.
+  // hasAzureIdentity is the same derivation the capability audit uses, so the
+  // section and the audit can never disagree about whether a connection exists.
+  //
+  // It is a REASON, not a hide: the capability model's rule is that a denied
+  // verdict ANNOTATES and never removes the attempt, so every install control
+  // stays rendered and reachable, disabled with this text on it (the
+  // role-assignment step's always-visible-disabled idiom). The order is
+  // shell-wiring gap, then connection, then scope - fix-me-first.
+  const installBlockedReason =
+    mintId === undefined
+      ? "Installs are unavailable: the hosting shell did not provide an id minter."
+      : !hasAzureIdentity(config)
+        ? "No Azure identity is connected (tenant and client id), so nothing " +
+          "can be installed into this workspace yet - connect Azure in Options."
+        : !scopeCommitted ||
+            config.subscriptionId === "" ||
+            config.resourceGroup === "" ||
+            config.workspaceName === ""
+          ? "Commit an Azure target scope (Select Azure Resources) to check " +
+            "what is installed and to install content."
+          : null;
+  const canInstall = installBlockedReason === null;
 
   // Load the catalog entry, installed state, and available content on demand.
   // keepOutcomes preserves the just-set install outcomes when an install
@@ -467,11 +494,14 @@ export function ContentInstallSection({
 
   return (
     <div className="content-install">
-      {!scopeCommitted && (
+      {/* DBT-47: one notice for whatever blocks an install - a missing minter,
+          a missing Azure identity, or an uncommitted scope. Loading and
+          previewing the solution's content never needed any of them, which is
+          why the button below stays enabled regardless. */}
+      {installBlockedReason !== null && (
         <p className="connection-notice">
-          Commit an Azure target scope (Select Azure Resources) to check what is
-          installed and to install content. You can still preview the solution&apos;s
-          rules and workbooks below.
+          {installBlockedReason} You can still preview the solution&apos;s rules
+          and workbooks below.
         </p>
       )}
 
@@ -483,11 +513,6 @@ export function ContentInstallSection({
         >
           {loading ? "Loading..." : "Load solution content"}
         </button>
-        {mintId === undefined && (
-          <span className="field-hint">
-            Installs are unavailable: the shell did not provide an id minter.
-          </span>
-        )}
       </div>
       {loadError !== "" && <pre className="result">{loadError}</pre>}
       {installed !== null && installed.notOnboarded && (
@@ -503,9 +528,13 @@ export function ContentInstallSection({
               className="run-button"
               onClick={() => void doEnableSentinel()}
               disabled={!canInstall || busy !== ""}
+              title={installBlockedReason ?? undefined}
             >
               {busy === "onboard" ? "Enabling..." : "Enable Microsoft Sentinel"}
             </button>
+            {installBlockedReason !== null && (
+              <span className="field-hint">{installBlockedReason}</span>
+            )}
           </div>
           {busy === "onboard" && progress !== "" && (
             <p className="panel-desc">{progress}</p>
@@ -548,9 +577,13 @@ export function ContentInstallSection({
                 className="run-button"
                 onClick={() => void doInstallSolution()}
                 disabled={!canInstall || busy !== ""}
+                title={installBlockedReason ?? undefined}
               >
                 {busy === "solution" ? "Installing..." : "Install solution"}
               </button>
+              {installBlockedReason !== null && (
+                <span className="field-hint">{installBlockedReason}</span>
+              )}
             </div>
             {renderFeedback("solution")}
           </>
@@ -584,6 +617,7 @@ export function ContentInstallSection({
         onInstall={() => void doInstallRules()}
         installing={busy === "rules"}
         canInstall={canInstall}
+        blockedReason={installBlockedReason}
         uploadRef={ruleFileRef}
         uploadAccept=".yaml,.yml,.json,.kql,.txt"
         onUpload={onUploadRules}
@@ -606,6 +640,7 @@ export function ContentInstallSection({
         onInstall={() => void doInstallWorkbooks()}
         installing={busy === "workbooks"}
         canInstall={canInstall}
+        blockedReason={installBlockedReason}
         uploadRef={wbFileRef}
         uploadAccept=".json"
         onUpload={onUploadWorkbooks}
@@ -636,6 +671,7 @@ function ContentGroup({
   onInstall,
   installing,
   canInstall,
+  blockedReason,
   uploadRef,
   uploadAccept,
   onUpload,
@@ -653,6 +689,12 @@ function ContentGroup({
   onInstall: () => void;
   installing: boolean;
   canInstall: boolean;
+  /**
+   * DBT-47: why this group's install cannot succeed, or null. The button is
+   * NEVER removed for it - it renders disabled, carrying this text as its title
+   * and beside it, so a blocked attempt is annotated rather than hidden.
+   */
+  blockedReason: string | null;
   uploadRef: React.RefObject<HTMLInputElement | null>;
   uploadAccept: string;
   onUpload: (files: FileList | null) => void | Promise<void>;
@@ -705,11 +747,15 @@ function ContentGroup({
               className="run-button"
               onClick={onInstall}
               disabled={!canInstall || installing || selectedCount === 0}
+              title={blockedReason ?? undefined}
             >
               {installing
                 ? "Installing..."
                 : `Install selected (${selectedCount})`}
             </button>
+            {blockedReason !== null && (
+              <span className="field-hint">{blockedReason}</span>
+            )}
             {installable.length > 0 && (
               <>
                 <button className="run-button" onClick={onSelectAll}>

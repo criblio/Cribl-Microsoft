@@ -14,6 +14,8 @@
  *  - destination RESOLUTION: resolveDestinationTables with a typed tier.
  *  - DCR FLOWS: resolveSolutionDcrFlows, returned so the caller can hand
  *    them to analyzeSamples (input.dcrFlows) - ONE fetch pass per analysis.
+ *    EMPTY when no solution is selected (DBT-42): an unselected analysis
+ *    borrows no vendor's DCR.
  *  - EventsToTableMapping routing (Wave B), appended AFTER the DCR flows.
  *  - the per-log-type TABLE assignment, precedence pinned:
  *      caller override > DCR-declared flow > name similarity > first table.
@@ -52,7 +54,11 @@ export const CONNECTOR_TABLE_DECODE_CAP = 5;
 
 /** Input for {@link resolveSampleRouting}. */
 export interface SampleRoutingInput {
-  /** The selected solution; "" resolves the default table for every type. */
+  /**
+   * The selected solution. Blank or "" means NO solution: the default table
+   * for every type, no connector hints, no identity, and no DCR flows - not
+   * "whichever solution happens to match a blank name".
+   */
   solutionName: string;
   /** The tagged log types awaiting a destination each. */
   logTypes: readonly string[];
@@ -67,7 +73,10 @@ export interface SampleRoutingResult {
   resolution: DestinationTableResolution;
   /** Wave C identity (null when the connectors declare no filters). */
   connectorIdentity: VendorIdentity | null;
-  /** Hand to analyzeSamples as input.dcrFlows (skips its re-resolve). */
+  /**
+   * Hand to analyzeSamples as input.dcrFlows (skips its re-resolve). Empty
+   * when no solution is selected.
+   */
   dcrFlows: Map<string, DcrFlow>;
   /** The routed destination per log type (precedence pinned above). */
   tableByLogType: Record<string, string>;
@@ -84,7 +93,14 @@ export async function resolveSampleRouting(
   const connectorTexts: string[] = [];
   let files: Awaited<ReturnType<SentinelContent["listConnectorFiles"]>> = [];
 
-  if (input.solutionName.trim() !== "") {
+  /**
+   * ONE answer to "did the operator pick a solution" (DBT-42). It used to be
+   * asked only for the connector listing below, so the DCR-flow call fell
+   * through unguarded - see the comment there for what that cost.
+   */
+  const hasSolution = input.solutionName.trim() !== "";
+
+  if (hasSolution) {
     try {
       files = await content.listConnectorFiles(input.solutionName);
     } catch {
@@ -123,11 +139,20 @@ export async function resolveSampleRouting(
   );
   const defaultTable = resolution.tables[0] ?? "CommonSecurityLog";
 
-  const dcrFlows = await resolveSolutionDcrFlows(
-    content,
-    input.solutionName,
-    input.profile ?? DEFAULT_GAP_PROFILE,
-  );
+  // DBT-42: NO solution selected means NO solution's DCR. This call used to
+  // run unguarded, and resolveSolutionDcrFlows matches by matchSolutionName -
+  // an `includes` test that an empty needle passes against every name - so an
+  // unselected analysis silently adopted the FIRST solution the repo lists
+  // (listSolutions is sorted by name) and then reported that vendor's renames,
+  // coercions and route condition as this feed's, while the review screen told
+  // the operator connector detection was disabled for the run.
+  const dcrFlows = hasSolution
+    ? await resolveSolutionDcrFlows(
+        content,
+        input.solutionName,
+        input.profile ?? DEFAULT_GAP_PROFILE,
+      )
+    : new Map<string, DcrFlow>();
   const flowRouting: DcrFlowRouting[] = [...dcrFlows.values()];
 
   // Wave B: EventsToTableMapping.json routes AFTER the DCR flows.

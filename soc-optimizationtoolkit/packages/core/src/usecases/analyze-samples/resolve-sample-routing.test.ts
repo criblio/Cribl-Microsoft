@@ -13,6 +13,15 @@ import { resolveSampleRouting } from "./resolve-sample-routing";
 
 const SOLUTION = "CrowdStrike Falcon Endpoint Protection";
 
+/**
+ * An UNRELATED solution that sorts FIRST (the port documents listSolutions as
+ * sorted by name). It is the half of the fixture that makes the DBT-42 pin
+ * below mean something: with no solution selected, the pre-fix code matched
+ * this one - matchSolutionName is `includes`-based and an empty needle is
+ * contained in every name - and adopted ITS DCR as the feed's routing.
+ */
+const OTHER_SOLUTION = "Auth0 Single Sign On";
+
 const CONNECTOR_JSON = JSON.stringify({
   title: "CrowdStrike FDR",
   graphQueries: [
@@ -46,25 +55,65 @@ const DCR_JSON = JSON.stringify({
 
 const EVENTS_MAPPING = JSON.stringify({ DnsRequest: "Network" });
 
-function content(overrides?: Partial<SentinelContent>): SentinelContent {
-  const files: Record<string, string> = {
+/** The other vendor's DCR - the one an unselected analysis used to inherit. */
+const OTHER_DCR_JSON = JSON.stringify({
+  resources: [
+    {
+      type: "Microsoft.Insights/dataCollectionRules",
+      properties: {
+        dataFlows: [
+          {
+            outputStream: "Custom-Auth0_CL",
+            transformKql: "source | where event_simpleName in ('sso')",
+          },
+        ],
+      },
+    },
+  ],
+});
+
+const FILES_BY_SOLUTION: Readonly<Record<string, Record<string, string>>> = {
+  [SOLUTION]: {
     "Solutions/CS/Data Connectors/ui.json": CONNECTOR_JSON,
     "Solutions/CS/Data Connectors/ccp/DCR.json": DCR_JSON,
     "Solutions/CS/Data Connectors/fn/EventsToTableMapping.json": EVENTS_MAPPING,
-  };
-  const refs: SolutionFileRef[] = Object.keys(files).map((p) => ({
+  },
+  [OTHER_SOLUTION]: {
+    "Solutions/Auth0/Data Connectors/Auth0DCR.json": OTHER_DCR_JSON,
+  },
+};
+
+/** readFile is PATH-addressed, so it answers for every solution's files. */
+const ALL_FILES: Record<string, string> = {
+  ...FILES_BY_SOLUTION[SOLUTION],
+  ...FILES_BY_SOLUTION[OTHER_SOLUTION],
+};
+
+function refsFor(solutionName: string): SolutionFileRef[] {
+  const files = FILES_BY_SOLUTION[solutionName] ?? {};
+  return Object.keys(files).map((p) => ({
     name: p.split("/").pop() ?? p,
     path: p,
     size: files[p].length,
   }));
+}
+
+const SOLUTIONS = [
+  { name: OTHER_SOLUTION, path: `Solutions/${OTHER_SOLUTION}`, deprecated: false },
+  { name: SOLUTION, path: `Solutions/${SOLUTION}`, deprecated: false },
+];
+
+function content(overrides?: Partial<SentinelContent>): SentinelContent {
   return {
-    listSolutions: async () => [
-      { name: SOLUTION, path: `Solutions/${SOLUTION}`, deprecated: false },
-    ],
+    listSolutions: async () => [...SOLUTIONS],
     listSolutionFiles: async () => [],
     listRepoFiles: async () => [],
-    listConnectorFiles: async () => refs,
-    readFile: async (p: string) => files[p] ?? null,
+    // Answers PER SOLUTION rather than handing the same files to any name:
+    // a fixture that ignores the argument cannot tell "asked for the right
+    // solution" from "asked for whatever the repo listed first", which is
+    // exactly the DBT-42 defect.
+    listConnectorFiles: async (solutionName: string) => refsFor(solutionName),
+    readFile: async (p: string) => ALL_FILES[p] ?? null,
     rawFetch: async () => null,
     getCommitSha: async () => null,
     ...overrides,
@@ -133,9 +182,7 @@ describe("resolveSampleRouting", () => {
     const counted = content({
       listSolutions: async () => {
         listSolutionsCalls++;
-        return [
-          { name: SOLUTION, path: `Solutions/${SOLUTION}`, deprecated: false },
-        ];
+        return [...SOLUTIONS];
       },
     });
     const routing = await resolveSampleRouting(counted, {
@@ -169,5 +216,57 @@ describe("resolveSampleRouting", () => {
     expect(routing.resolution.tier).toBe("default");
     expect(routing.tableByLogType["anything"]).toBe("CommonSecurityLog");
     expect(routing.connectorIdentity).toBeNull();
+  });
+
+  it("adopts NO solution's DCR flows when no solution is selected (DBT-42)", async () => {
+    // THE DEFECT: the DCR-flow call ran unguarded while the connector listing
+    // beside it was guarded. matchSolutionName is `includes`-based, so the
+    // empty name matched the FIRST solution the repo lists and the analysis
+    // reported that vendor's renames, coercions and route condition as this
+    // feed's - while the UI told the operator connector detection had been
+    // disabled for the run. Blank-but-not-empty must behave the same, because
+    // the sibling guard trims.
+    for (const solutionName of ["", "   "]) {
+      // Counted, not just asserted empty: TWO things now stop a borrowed DCR
+      // (this guard, and matchSolutionName refusing a blank needle), so an
+      // empty map alone no longer says which one held. With nothing selected
+      // the usecase must not GO LOOKING at all - which is also the only
+      // reading that respects the port's per-analysis fetch budget.
+      let listSolutionsCalls = 0;
+      let listConnectorFilesCalls = 0;
+      const counted = content({
+        listSolutions: async () => {
+          listSolutionsCalls++;
+          return [...SOLUTIONS];
+        },
+        listConnectorFiles: async (name: string) => {
+          listConnectorFilesCalls++;
+          return refsFor(name);
+        },
+      });
+      const routing = await resolveSampleRouting(counted, {
+        solutionName,
+        logTypes: ["anything"],
+      });
+      expect([...routing.dcrFlows.keys()]).toEqual([]);
+      expect([listSolutionsCalls, listConnectorFilesCalls]).toEqual([0, 0]);
+    }
+
+    // POSITIVE CONTROL, so the empty maps above cannot pass because the
+    // fixture simply has no DCRs to find: the SAME fixture yields a flow the
+    // moment a solution is named, and the flow it used to leak for "" was the
+    // alphabetically-first Auth0 one, not this.
+    const selected = await resolveSampleRouting(content(), {
+      solutionName: SOLUTION,
+      logTypes: ["anything"],
+    });
+    expect([...selected.dcrFlows.keys()]).toEqual([
+      "crowdstrike_process_events_cl",
+    ]);
+    const other = await resolveSampleRouting(content(), {
+      solutionName: OTHER_SOLUTION,
+      logTypes: [],
+    });
+    expect([...other.dcrFlows.keys()]).toEqual(["auth0_cl"]);
   });
 });
