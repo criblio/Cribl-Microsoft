@@ -11,7 +11,7 @@ two cannot disagree.
 alternatives. This board holds only what is a unit of work, what state it is
 in, and what it waits on.
 
-**66 in the backlog, 0 in progress, 56 done.**
+**58 in the backlog, 7 in progress, 57 done.**
 
 ## By menu item
 
@@ -23,7 +23,7 @@ operator sees on any screen. Two menus are PLANNED and have no route yet.
 |---|---|---|---|
 | Dataflow | 3 | 0 | 0 |
 | Setup | 1 | 0 | 0 |
-| Sentinel Integration | 20 | 22 | 3 |
+| Sentinel Integration | 19 | 23 | 3 |
 | DCR Automation | 3 | 7 | 1 |
 | Pack Maintenance | 4 | 1 | 0 |
 | Permission Verification | 8 | 0 | 0 |
@@ -31,7 +31,7 @@ operator sees on any screen. Two menus are PLANNED and have no route yet.
 | Windows Event analysis (planned) | 5 | 0 | 0 |
 | Cross-cutting | 9 | 22 | 0 |
 
-Open work totals 66.
+Open work totals 65.
 
 ## Epics and features
 
@@ -66,13 +66,13 @@ Sentinel-side and Lake-side halves of Windows event handling
 | `WIN-F2` Microsoft proprietary enrichment catalog | Windows Event analysis (planned) | 0/2 | WIN-2, D-4 |
 | `WIN-F3` Lake copy format - JSON vs Parquet | Windows Event analysis (planned) | 0/1 | D-5 |
 
-### `HON` Inventory and diagnostic honesty - 36% (4/11)
+### `HON` Inventory and diagnostic honesty - 45% (5/11)
 
 Measured gaps where the app reports a confident wrong answer
 
 | Feature | Menu | Done | Stories |
 |---|---|---|---|
-| `HON-F1` Capability model follow-ons | Permission Verification | 0/4 | HON-6, HON-7*, D-1, D-2* |
+| `HON-F1` Capability model follow-ons | Permission Verification | 1/4 | HON-6, HON-7*, D-1, D-2* |
 | `HON-F2` Unverified empty inventories | Sentinel Integration | 2/3 | HON-1, HON-2, D-3 |
 | `HON-F3` Guid-column aftermath, made visible | Sentinel Integration | 2/4 | HON-3, HON-8*, HON-4, D-11 |
 
@@ -142,20 +142,58 @@ RAISED BY THE USER 2026-08-31. DCR Automation can onboard a table you can alread
 
 ---
 
-## In progress (0)
+## In progress (7)
 
 Started. Anything here with an unfinished dependency is called out on its card.
 
-_Nothing here._
+- **DBT-55** A store outage inside onboardTable is still blamed on the table
+  `DBT-F1` `bug` `settled`
+  Not now because: One level down from DBT-49, which is fixed, so the common
+  path already attributes store outages honestly. It needs a JobStore outage
+  to bite, and both docblocks now state the remaining limit rather than
+  asserting the guarantee.
+  FOUND 2026-08-31 while fixing [[DBT-49]], disclosed by the fixer and
+  confirmed by its reviewer - the same defect one level down. DBT-49 stopped
+  the BATCH blaming a table for a kvstore outage, but `onboard-table.ts:1023`
+  catches everything, writes `jobs.update(job.id, {status:"failed", error:
+  message})` and returns status "failed", so a store blip inside a CHILD
+  arrives at `onboard-batch.ts:1247` as an ordinary failed table and is
+  recorded as that table's failure, carrying the store's error text. The
+  operator's next action - retry that table - is the wrong one. Fix is the
+  same shape DBT-49 used: tag the store failure inside onboard-table so the
+  caller can tell it apart. The onboard-batch docblock and its per-table catch
+  now state this limit explicitly rather than asserting the guarantee
+  unconditionally, so the code is honest about it while it is open.
 
----
-
-## Backlog - now (4)
-
-Next to pick up. Nothing blocks these.
+- **DBT-57** The dead honesty mechanisms the inventory standard counts on
+  `DBT-F4` `bug` `settled`
+  Not now because: Dead code and stale docs, not a runtime defect - no
+  operator action reaches any of it. It also needs a per-item wire-or-delete
+  decision, which is thinking rather than typing, and rushing that is how the
+  dead code got there.
+  SPLIT OUT OF [[DBT-54]] 2026-08-31: its reviewer found that the card carried
+  FIVE claims, the fix answered four, and the unanswered one is the one the
+  card itself calls most important - so closing DBT-54 on that fix would have
+  lost it silently. (1) `capabilities.ts:192` `unavailableReason` and the
+  `unreachable` branch of `empty-inventory.ts:106-111` are DEAD at every call
+  site - confirmed by grep: only the declaration, the barrel re-export and
+  their own tests. The second is the sentence `docs/inventory-standard.md`
+  credits as the honest no-Azure degrade, and NO RUNNING CONFIGURATION CAN
+  PRODUCE IT. A documented honesty mechanism that cannot fire is worse than
+  none, because it is being counted on. (2) `coverage-analysis.ts:193-238`
+  `acquireWorkbooks` likewise has zero production callers, while its section
+  header still reads "Workbook acquisition (AzureManagement port - existing
+  ARM surface)" and its docstring still describes enumerating the
+  subscription's workbooks - so the product now tells the operator that read
+  never happens while core still documents and tests it as shipped. (3)
+  `docs/porting-plan.md:322-324` (Unit 23) still specifies that ARM
+  enumeration as the scope, which is why the dead function looks intentional
+  to the next reader. DECIDE PER ITEM whether to wire it or delete it;
+  deleting is right wherever the behaviour was deliberately reversed, and the
+  doc has to move with it either way.
 
 - **DBT-43** The pack build reads an RBAC-filtered empty DCR list as a real zero and ships placeholder ids
-  `DBT-F1` `bug` `unconfirmed`
+  `DBT-F1` `bug` `settled`
   FOUND 2026-08-31 by the offline-capability audit. SAME FAMILY AS [[HON-2]],
   which fixed this shape for the workspace list: ARM answers 200 with an empty
   array when RBAC filters the caller out, so an empty listing is only a zero
@@ -172,7 +210,7 @@ Next to pick up. Nothing blocks these.
   capability gate rather than a probe.
 
 - **DBT-44** Content install reads an RBAC-filtered empty list as 'not installed', and a pin encodes it
-  `DBT-F1` `bug` `unconfirmed`
+  `DBT-F1` `bug` `settled`
   FOUND 2026-08-31 by the offline-capability audit.
   `content-install.ts:294-364` has the same shape as [[DBT-43]] - an empty ARM
   list read as a measured zero - but with an INSTALL BUTTON on the end of it
@@ -205,6 +243,53 @@ Next to pick up. Nothing blocks these.
   the misdiagnosis. So an operator with a working Cribl connection and no
   Azure is told to connect Cribl.
 
+- **DBT-38** The add-column controls render with raw browser chrome
+  `DBT-F2` `bug` `settled`
+  Not now because: Cosmetic: the control works, it just does not match the app
+  around it. No answer it gives is wrong.
+  FOUND 2026-08-31 while mapping the row-editor conventions for [[TBL-1]].
+  `.field input` and `.field select` (styles.css:358-393) are DESCENDANT
+  selectors and there is no bare `input`/`select` base rule anywhere - the
+  only global rule is the `*` reset at line 176. The add-column control in
+  `dcr-inventory-panel.tsx:709-725` puts its `<input>` and `<select>` directly
+  inside `.panel-controls`, NOT inside a `<label className="field">`, so both
+  render with default browser chrome: no `--border`, no `--surface-raised`, no
+  `--border-focus`, and no dark-theme token. Verified by reading the markup
+  and grepping the sheet. The repo already has three separate precedents for
+  the fix - `.enrich-add input` (5059), `.csv-map-input` (2402) and
+  `.theme-select` (916, whose comment says "same tokens as .field select,
+  without the field wrapper") - so this is choosing one, not inventing.
+  Cosmetic only: the control works, it just does not look like the app around
+  it.
+
+- **DBT-39** Four classNames are rendered but defined in no stylesheet
+  `DBT-F2` `bug` `settled`
+  Not now because: The class names are inert, so the layout is already
+  whatever the sibling classes make it. The valuable half is the missing CI
+  check, which is new work rather than a correction.
+  FOUND 2026-08-31, same sweep as [[DBT-38]]. `pack-card` and `pack-card-head`
+  (dcr-inventory-panel.tsx:656-657 and pack-inventory-screen.tsx:421-422),
+  `dcr-progress-line` (dcr-inventory-panel.tsx:696) and
+  `identity-row-editable` (identity-block.tsx:96) appear in JSX and match
+  NOTHING in styles.css - confirmed by grep, count zero for each. They are
+  inert; the layout that actually works comes from the sibling classes
+  (`mapping-review-card`, `panel-desc`). This is the exact class of drift the
+  sheet's own comments record catching by hand twice before -
+  styles.css:5108-5113 and 5244-5249, the latter shipping broken since 1.11.5.
+  THE REAL FIX IS THE CHECK, NOT THE FOUR NAMES: there is no automated
+  verification that a rendered className exists in CSS, so this recurs on a
+  schedule. A cheap script - collect string literals in className positions,
+  diff against selectors in styles.css, allowlist the dynamic ones - would
+  turn a recurring manual sweep into CI. Decide when picked up whether to
+  delete the dead names or define them; deleting is right for any whose
+  sibling already does the work.
+
+---
+
+## Backlog - now (1)
+
+Next to pick up. Nothing blocks these.
+
 - **TBL-4** Offer the ARM template when the write capability is absent
   `TBL-F3` `story` `settled`
   RAISED BY THE USER 2026-08-31: "if the user hasn't granted the app
@@ -231,7 +316,7 @@ Next to pick up. Nothing blocks these.
 
 ---
 
-## Backlog - next (28)
+## Backlog - next (23)
 
 Settled and unblocked, sequenced behind now.
 
@@ -323,7 +408,7 @@ Settled and unblocked, sequenced behind now.
   as a known-unpinned guard.
 
 - **HON-7** Make the fallback offer reachable beside the actions
-  `HON-F1` `story` `settled` `blocked by D-2`
+  `HON-F1` `story` `settled`
   `FallbackNotice` renders without `onProduce` in production, so the
   capability model's "every blocked action falls back to a downloadable
   artifact" rule has no button. Targets: Integrate deploy, Batch Deploy, DCR
@@ -456,15 +541,6 @@ Settled and unblocked, sequenced behind now.
   precedence. Worth noting the reporter could not tell from the outside, which
   is the actual defect either way.
 
-- **D-2** `HON-7` surface area: which of Integrate deploy, Batch Deploy and DCR Automation get the fallba
-  `HON-F1` `decision` `undecided`
-  ck offer, and does each own its `onProduce`? One prop away in any of them.
-  DECISION: HON-7: which screens get the fallback offer, and who owns
-  onProduce?
-    [x] `each-owns` All three, each wiring its own onProduce - Integrate deploy, Batch Deploy and DCR Automation each pass a producer. One prop per screen, uniform mental model - but for pack and ARM kinds it is a button that cannot really produce the artifact on the spot.
-    [ ] `inline-only` All three get the offer; only INLINE kinds get a button - Honours isInlineArtifact, which already splits these: role-assignment and app-registration are generated from data the app holds, while dcr-arm-bodies, table-arm-bodies, arm-template and cribl-pack come from a RUN. Run kinds point at that run instead of pretending. More wiring, no pretending.
-    [ ] `where-producible` Only where a producer already exists - Batch Deploy already calls ports.artifacts.save; Integrate can hand over the pack build. DCR Automation waits until it has an artifact to give. Smallest step; leaves the capability rule partly unmet.
-
 - **D-3** How do capabilities reach the roughly eight listing screens - keep prop-drilling from the shell
   `HON-F2` `decision` `undecided`
   , or carry them in `PortsContext` beside `config`? One seam change against
@@ -550,52 +626,6 @@ Settled and unblocked, sequenced behind now.
   shapes and has no caller, so nothing renders a template on screen and the
   .tgz must be opened to read one.
 
-- **DBT-55** A store outage inside onboardTable is still blamed on the table
-  `DBT-F1` `bug` `settled`
-  Not now because: One level down from DBT-49, which is fixed, so the common
-  path already attributes store outages honestly. It needs a JobStore outage
-  to bite, and both docblocks now state the remaining limit rather than
-  asserting the guarantee.
-  FOUND 2026-08-31 while fixing [[DBT-49]], disclosed by the fixer and
-  confirmed by its reviewer - the same defect one level down. DBT-49 stopped
-  the BATCH blaming a table for a kvstore outage, but `onboard-table.ts:1023`
-  catches everything, writes `jobs.update(job.id, {status:"failed", error:
-  message})` and returns status "failed", so a store blip inside a CHILD
-  arrives at `onboard-batch.ts:1247` as an ordinary failed table and is
-  recorded as that table's failure, carrying the store's error text. The
-  operator's next action - retry that table - is the wrong one. Fix is the
-  same shape DBT-49 used: tag the store failure inside onboard-table so the
-  caller can tell it apart. The onboard-batch docblock and its per-table catch
-  now state this limit explicitly rather than asserting the guarantee
-  unconditionally, so the code is honest about it while it is open.
-
-- **DBT-57** The dead honesty mechanisms the inventory standard counts on
-  `DBT-F4` `bug` `settled`
-  Not now because: Dead code and stale docs, not a runtime defect - no
-  operator action reaches any of it. It also needs a per-item wire-or-delete
-  decision, which is thinking rather than typing, and rushing that is how the
-  dead code got there.
-  SPLIT OUT OF [[DBT-54]] 2026-08-31: its reviewer found that the card carried
-  FIVE claims, the fix answered four, and the unanswered one is the one the
-  card itself calls most important - so closing DBT-54 on that fix would have
-  lost it silently. (1) `capabilities.ts:192` `unavailableReason` and the
-  `unreachable` branch of `empty-inventory.ts:106-111` are DEAD at every call
-  site - confirmed by grep: only the declaration, the barrel re-export and
-  their own tests. The second is the sentence `docs/inventory-standard.md`
-  credits as the honest no-Azure degrade, and NO RUNNING CONFIGURATION CAN
-  PRODUCE IT. A documented honesty mechanism that cannot fire is worse than
-  none, because it is being counted on. (2) `coverage-analysis.ts:193-238`
-  `acquireWorkbooks` likewise has zero production callers, while its section
-  header still reads "Workbook acquisition (AzureManagement port - existing
-  ARM surface)" and its docstring still describes enumerating the
-  subscription's workbooks - so the product now tells the operator that read
-  never happens while core still documents and tests it as shipped. (3)
-  `docs/porting-plan.md:322-324` (Unit 23) still specifies that ARM
-  enumeration as the scope, which is why the dead function looks intentional
-  to the next reader. DECIDE PER ITEM whether to wire it or delete it;
-  deleting is right wherever the behaviour was deliberately reversed, and the
-  doc has to move with it either way.
-
 - **DBT-50** Live table columns are fetched, awaited, stored - and never consulted
   `DBT-F1` `bug` `settled`
   Not now because: Needs a decision, not a fix: if the three documents are
@@ -615,47 +645,6 @@ Settled and unblocked, sequenced behind now.
   three documents need correcting. Note the offline consequence too: the
   wasted read is also the reason the mapping screen touches Azure at all in a
   workflow that is otherwise Azure-free.
-
-- **DBT-38** The add-column controls render with raw browser chrome
-  `DBT-F2` `bug` `settled`
-  Not now because: Cosmetic: the control works, it just does not match the app
-  around it. No answer it gives is wrong.
-  FOUND 2026-08-31 while mapping the row-editor conventions for [[TBL-1]].
-  `.field input` and `.field select` (styles.css:358-393) are DESCENDANT
-  selectors and there is no bare `input`/`select` base rule anywhere - the
-  only global rule is the `*` reset at line 176. The add-column control in
-  `dcr-inventory-panel.tsx:709-725` puts its `<input>` and `<select>` directly
-  inside `.panel-controls`, NOT inside a `<label className="field">`, so both
-  render with default browser chrome: no `--border`, no `--surface-raised`, no
-  `--border-focus`, and no dark-theme token. Verified by reading the markup
-  and grepping the sheet. The repo already has three separate precedents for
-  the fix - `.enrich-add input` (5059), `.csv-map-input` (2402) and
-  `.theme-select` (916, whose comment says "same tokens as .field select,
-  without the field wrapper") - so this is choosing one, not inventing.
-  Cosmetic only: the control works, it just does not look like the app around
-  it.
-
-- **DBT-39** Four classNames are rendered but defined in no stylesheet
-  `DBT-F2` `bug` `settled`
-  Not now because: The class names are inert, so the layout is already
-  whatever the sibling classes make it. The valuable half is the missing CI
-  check, which is new work rather than a correction.
-  FOUND 2026-08-31, same sweep as [[DBT-38]]. `pack-card` and `pack-card-head`
-  (dcr-inventory-panel.tsx:656-657 and pack-inventory-screen.tsx:421-422),
-  `dcr-progress-line` (dcr-inventory-panel.tsx:696) and
-  `identity-row-editable` (identity-block.tsx:96) appear in JSX and match
-  NOTHING in styles.css - confirmed by grep, count zero for each. They are
-  inert; the layout that actually works comes from the sibling classes
-  (`mapping-review-card`, `panel-desc`). This is the exact class of drift the
-  sheet's own comments record catching by hand twice before -
-  styles.css:5108-5113 and 5244-5249, the latter shipping broken since 1.11.5.
-  THE REAL FIX IS THE CHECK, NOT THE FOUR NAMES: there is no automated
-  verification that a rendered className exists in CSS, so this recurs on a
-  schedule. A cheap script - collect string literals in className positions,
-  diff against selectors in styles.css, allowlist the dynamic ones - would
-  turn a recurring manual sweep into CI. Decide when picked up whether to
-  delete the dead names or define them; deleting is right for any whose
-  sibling already does the work.
 
 ---
 
@@ -996,7 +985,7 @@ Settled, gated on something above.
 
 ---
 
-## Done (56)
+## Done (57)
 
 Kept briefly so a reader can see what just landed; prune when the list grows.
 
@@ -1527,6 +1516,24 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   unanchored-pattern class was already fixed once in 1.12.1; this was the
   second instance, which is why the rule is now anchored rather than
   re-tuned.*
+
+- **D-2** `HON-7` surface area: which of Integrate deploy, Batch Deploy and DCR Automation get the fallba
+  `HON-F1` `decision` `settled` `verified: none`
+  ck offer, and does each own its `onProduce`? One prop away in any of them.
+  DECIDED 2026-08-31: all three surfaces, each wiring its own onProduce.
+  Reasoning in backlog.md section 16, which is why this can settle. The
+  runner-up option (inline kinds only) raised a real objection - for pack and
+  ARM kinds a button cannot produce the artifact on the spot - and the answer
+  is that the two were never opposed: `isInlineArtifact`
+  (fallback-notice-state.ts:46) already draws that line and `fallbackHint`
+  already says "Produced by a run that makes no live changes". onProduce means
+  the screen owns WHAT HAPPENS, which for a run kind is starting or pointing
+  at the run, not fabricating bytes. That is what HON-7 must build.
+  DECISION: HON-7: which screens get the fallback offer, and who owns
+  onProduce?
+    [x] `each-owns` All three, each wiring its own onProduce - Integrate deploy, Batch Deploy and DCR Automation each pass a producer. One prop per screen, uniform mental model - but for pack and ARM kinds it is a button that cannot really produce the artifact on the spot.
+    [ ] `inline-only` All three get the offer; only INLINE kinds get a button - Honours isInlineArtifact, which already splits these: role-assignment and app-registration are generated from data the app holds, while dcr-arm-bodies, table-arm-bodies, arm-template and cribl-pack come from a RUN. Run kinds point at that run instead of pretending. More wiring, no pretending.
+    [ ] `where-producible` Only where a producer already exists - Batch Deploy already calls ports.artifacts.save; Integrate can hand over the pack build. DCR Automation waits until it has an artifact to give. Smallest step; leaves the capability rule partly unmet.
 
 - **D-7** `VND-2` Does a persisted column order need a version or a captured-on date, so a firmware chang
   `VND-F1` `decision` `settled` `verified: none`

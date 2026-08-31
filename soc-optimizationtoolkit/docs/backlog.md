@@ -1965,3 +1965,42 @@ empty list is a real zero, rather than a second copy of that rule.
 TBL-1's decision layer is committed (`manual-schema-state.ts`, a fourth `manual`
 source wired into `custom-schema-state`, 21 pins, mutation-checked). The editor
 component, TBL-2's name check and TBL-3's panel are open.
+
+## 16. D-2 answered: all three surfaces own their fallback offer - 2026-08-31
+
+**The question.** HON-7 exists because `FallbackNotice` renders without
+`onProduce` in production, so the capability model's rule - every blocked
+action falls back to a downloadable artifact - has no button. D-2 asked which
+of Integrate deploy, Batch Deploy and DCR Automation get it, and who owns
+`onProduce`.
+
+**Chosen: all three, each wiring its own producer.** The rule is stated for
+every blocked action, so a version that reaches one screen leaves it still only
+partly true - which is the condition HON-7 was filed to end, not to narrow.
+TBL-4 also needs it on the two new Tables-tab surfaces, and a per-screen
+producer is the only shape that extends to them without a fourth convention.
+
+**The objection the runner-up raised, and why it is not fatal.** Option 2
+argued that for the pack and ARM kinds this is "a button that cannot really
+produce the artifact on the spot", because those come from a RUN - a
+template-only batch, a pack build - while the change-request kinds are
+generated inline from data the app already holds.
+
+That is true, and the codebase already answers it. `isInlineArtifact`
+(`fallback-notice-state.ts:46`) draws exactly that line, and `fallbackHint`
+already says "Produced by a run that makes no live changes" for the run kinds.
+So the two options were never really opposed: they disagree only about what
+`onProduce` MEANS. It means the screen owns WHAT HAPPENS when the offer is
+taken - which for an inline kind is generating bytes, and for a run kind is
+starting or pointing at that run. Nothing has to pretend.
+
+**What that binds for HON-7.** Each of the three screens passes `onProduce`.
+The producer consults `isInlineArtifact` to decide whether it generates or
+hands off; it never fabricates a run-kind artifact inline. The existing pin on
+the ABSENCE of alert semantics stays - this is an offer, not an error - and
+the fallback stays visible-but-explained rather than hidden, per the capability
+rule that a denied verdict annotates and never removes the attempt.
+
+**What it does not settle.** Whether the two TBL-4 surfaces produce the same
+ARM artifact as Integrate's export or a narrower one. That is TBL-4's own
+question and is left to it.
