@@ -90,3 +90,9 @@ export type { LogTypeFieldValues } from "./route-value-discriminator";
 
 // Core Cribl-YAML acceptance validator
 export { checkCriblYaml } from "./cribl-yaml-validator";
+
+// HON-5: WHY a log type will need a hand-written filter. CSV is structural -
+// no amount of extra sampling can separate positional rows - so it gets its
+// own message rather than the generic "no discriminator found".
+export { csvRoutingWarning, formatCanDiscriminate } from "./route-placeholder";
+export type { PlaceholderCause } from "./route-placeholder";

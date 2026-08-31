@@ -57,6 +57,8 @@
  * Pure: no IO, no fetch, no React, no Date/crypto/Math.random.
  */
 
+import { formatCanDiscriminate } from "./route-placeholder";
+
 /** A bare name usable as a JS identifier in a Cribl filter expression. */
 const IDENTIFIER = /^[A-Za-z_$][A-Za-z0-9_$]*$/;
 
@@ -237,10 +239,13 @@ export function deriveValueDiscriminator(
   format: string,
 ): string | null {
   const none = null;
-  if (format === "csv") {
-    // CSV data rows are positional: at route time the event is unparsed and
-    // the field name never appears in _raw, so neither test below can run.
-    // Nothing to suggest either - the filter could not be written at all.
+  // CSV data rows are positional: at route time the event is unparsed and the
+  // field name never appears in _raw, so neither test below can run. Nothing to
+  // suggest either - the filter could not be written at all.
+  //
+  // ASKED, not restated (DBT-31) - see route-discriminator for why the single
+  // authority matters: HON-5's operator warning is derived from it.
+  if (!formatCanDiscriminate(format)) {
     return none;
   }
   // THE EVIDENCE THRESHOLD IS GONE (2026-08-17, user decision), and with it the

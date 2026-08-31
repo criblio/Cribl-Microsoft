@@ -364,3 +364,68 @@ describe("IntegrateScreen - an acquired sample reaches the column dialog", () =>
     ).toContain("Headerless CSV detected");
   });
 });
+
+/**
+ * Export instead of deploy (DBT-35). These are WIRING pins in the spirit of
+ * this file: buildAirGapArchive and buildArmTemplate are pinned thoroughly in
+ * @soc/core, but the control that reaches them lives only here, and the whole
+ * point of the feature is that it is reachable from THIS screen. A handler
+ * that is written, typechecked and never rendered is the gap this file exists
+ * for.
+ */
+describe("IntegrateScreen - export instead of deploy", () => {
+  function exportButton(): HTMLButtonElement {
+    const found = screen
+      .getAllByRole("button")
+      .find((b) => /export instead of deploy/i.test(b.textContent ?? ""));
+    if (found === undefined) {
+      throw new Error("the export control is not rendered");
+    }
+    return found as HTMLButtonElement;
+  }
+
+  it("renders the export control in the Deploy section", () => {
+    renderScreen();
+    expect(exportButton()).toBeTruthy();
+  });
+
+  it("names the missing prerequisite instead of failing silently", () => {
+    // CONFIG has no subscription and no table, and the stub host has no
+    // artifacts port. Disabled is correct - saying WHY is the requirement.
+    renderScreen();
+    const button = exportButton();
+    expect(button.disabled).toBe(true);
+    expect(button.getAttribute("title")).toBe("This host cannot save files.");
+  });
+
+  it("asks for the scope once the host CAN save, rather than the deploy fields", () => {
+    // The distinction the feature turns on: an export needs a scope to read
+    // schemas from, NOT a worker group or an ingestion client id. If this pin
+    // ever reports one of those, the export has been re-gated on writing.
+    const withSink = {
+      ...(PORTS as unknown as Record<string, unknown>),
+      artifacts: { save: vi.fn().mockResolvedValue(undefined) },
+    } as unknown as UiPorts;
+    render(
+      <PortsProvider ports={withSink} config={CONFIG}>
+        <IntegrateScreen
+          toolkitVersion="9.9.9-test"
+          scopeCommitted
+          offline={false}
+          onCommitScope={vi.fn().mockResolvedValue({ ok: true } as never)}
+          criblDefaults={DEFAULT_CRIBL_OPTIONS}
+        />
+      </PortsProvider>,
+    );
+    const button = exportButton();
+    // The blank CONFIG has no subscription, so THAT is the honest first
+    // unmet prerequisite - and it is a READ prerequisite.
+    expect(button.getAttribute("title")).toBe(
+      "Select a subscription, resource group and workspace first.",
+    );
+    // The load-bearing half: never a write prerequisite. If this ever names a
+    // worker group or an ingestion client id, the export has been re-gated on
+    // deploying, which is the whole thing the feature exists to avoid.
+    expect(button.getAttribute("title")).not.toMatch(/worker group|client id/i);
+  });
+});

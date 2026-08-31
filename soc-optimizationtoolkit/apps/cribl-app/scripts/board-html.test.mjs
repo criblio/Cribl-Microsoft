@@ -240,3 +240,70 @@ describe('renderBoardHtml', () => {
     expect(html).toMatch(/data-filter-epic="REL">REL <span class="count">1<\/span>/);
   });
 });
+
+describe('DBT-30 - a grouping at 100% collapses, and is never given a status', () => {
+  const feats = [{ id: 'A-F1', epic: 'REL', menu: 'none', title: 'A feature' }];
+  const done = (id) => story({ id, status: 'done', verified: 'pins', priority: undefined });
+
+  it('collapses an epic and a feature whose every card is done', () => {
+    const data = { ...board([done('REL-1'), done('REL-2')]), features: feats };
+    const html = renderBoardHtml(data, '2026-08-30', []);
+
+    // Both groupings - the epic card and the feature card.
+    expect((html.match(/data-complete="yes"/g) ?? []).length).toBe(2);
+    expect(html).toContain('100% &middot; 2/2 done');
+  });
+
+  it('UN-collapses the moment one open card is filed underneath', () => {
+    // The whole reason this is derived rather than stored. Observed for real on
+    // 2026-08-30: DBT-F5 was 11/11 and collapsed until this very card was filed
+    // into it, at which point it re-expanded on its own. A declared `done`
+    // would have kept claiming the feature was finished.
+    const data = {
+      ...board([done('REL-1'), story({ id: 'REL-2' })]),
+      features: feats,
+    };
+    const html = renderBoardHtml(data, '2026-08-30', []);
+
+    expect(html).not.toContain('data-complete="yes"');
+  });
+
+  it('does NOT treat an EMPTY grouping as complete', () => {
+    // Zero of zero done is a grouping with nothing in it, which validateBoard
+    // already reports as a finding. Dimming it would hide the thing that needs
+    // attention behind a tick.
+    const data = {
+      ...board([done('REL-1')], [
+        { key: 'REL', name: 'Ship it', why: '' },
+        { key: 'EMPTY', name: 'Nothing here', why: '' },
+      ]),
+      features: feats,
+    };
+    const html = renderBoardHtml(data, '2026-08-30', []);
+
+    expect(html).toContain('EMPTY');
+    // REL's epic + A-F1's feature are complete; EMPTY is not.
+    expect((html.match(/data-complete="yes"/g) ?? []).length).toBe(2);
+  });
+
+  it('keeps the collapsed card ON the board with its count', () => {
+    // Collapsed, not retired. Hiding it would lose the fact that the grouping
+    // exists and is finished, which is the useful half.
+    const data = { ...board([done('REL-1')]), features: feats };
+    const html = renderBoardHtml(data, '2026-08-30', []);
+
+    expect(html).toContain('Ship it');
+    expect(html).toContain('A feature');
+    expect(html).toContain('100% &middot; 1/1 done');
+  });
+
+  it('gives epics and features NO status field to disagree with the stories', () => {
+    // The decision this card records: completion stays derived. If a `status`
+    // ever appears on an epic or feature, it is a second source of truth for a
+    // fact the stories already answer, and this pin is the tripwire.
+    const data = { ...board([done('REL-1')]), features: feats };
+
+    expect(Object.keys(data.epics[0])).not.toContain('status');
+    expect(Object.keys(data.features[0])).not.toContain('status');
+  });
+});

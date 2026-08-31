@@ -540,3 +540,60 @@ export function describeColumnOrder(
 function quoteName(name: string): string {
   return name === "" ? "(none)" : `"${name}"`;
 }
+
+/**
+ * OPERATOR-NAMED VENDORS (VND-1) - the seam the plan deliberately left out.
+ *
+ * The vendor a column order is filed under comes from
+ * `detectVendorIdentity(solutionName)`, which is a CURATED list of about
+ * eighteen entries. A solution outside it yields no vendor,
+ * {@link vendorFieldDefinitionKey} returns null, and nothing is stored. That is
+ * honest - "absent is absent" - but it caps a general feature at eighteen
+ * vendors for no reason other than that nobody could type the name in.
+ *
+ * The override is stored PER SOLUTION rather than per log type, because the
+ * vendor is a property of the solution and every log type under it shares one.
+ */
+export const OPERATOR_VENDOR_NAMESPACE = "operator-vendor";
+
+/** Bumped when the stored SHAPE changes; old entries then simply miss. */
+export const OPERATOR_VENDOR_VERSION = "v1";
+
+/**
+ * The ContentCache key holding an operator-supplied vendor for one solution,
+ * or null when the solution cannot be named.
+ */
+export function operatorVendorKey(solutionName: string): string | null {
+  const part = normalizeDefinitionScope(solutionName);
+  if (part === "") return null;
+  return [OPERATOR_VENDOR_NAMESPACE, OPERATOR_VENDOR_VERSION, part].join("-");
+}
+
+/**
+ * The vendor a column order should be filed under.
+ *
+ * DETECTION WINS when it has an answer, and that ordering is deliberate. The
+ * curated list carries the vendor's canonical spelling - "Palo Alto Networks",
+ * not "palo alto" or "PAN" - and every stored definition for that vendor is
+ * already filed under it. Letting a typed name outrank detection would file the
+ * next order under a second spelling of the same vendor, and
+ * `normalizeDefinitionScope` folds case and punctuation but not "PAN" into
+ * "Palo Alto Networks". The operator's name is a FALLBACK for the eighteen-entry
+ * gap, not a rename tool.
+ *
+ * Returns "" when neither has an answer, which is exactly what
+ * {@link vendorFieldDefinitionKey} already treats as "nothing to store".
+ */
+export function resolveVendorName(
+  detected: string | null | undefined,
+  operatorSupplied: string | null | undefined,
+): string {
+  const auto = (detected ?? "").trim();
+  if (auto !== "") return auto;
+  return (operatorSupplied ?? "").trim();
+}
+
+/** Whether an operator-typed vendor name is usable as a definition scope. */
+export function isUsableVendorName(value: string): boolean {
+  return normalizeDefinitionScope(value) !== "";
+}

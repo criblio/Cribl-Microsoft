@@ -6,8 +6,9 @@
  * screen is its successor, composing the ALREADY-SHIPPED screens as sections
  * rather than scattering them across sidebar routes.
  *
- * The EIGHT sections render in page order from @soc/core INTEGRATE_SECTIONS,
- * all BUILT and operable:
+ * The NINE sections render in page order from @soc/core INTEGRATE_SECTIONS,
+ * all BUILT and operable. The numbers below ARE the array order - it is the
+ * map a reader uses before touching this file, so it has to match the data:
  *
  *   1. Select Sentinel Solution - the SolutionBrowser: lazy GitHub solution
  *      index, per-solution on-demand fetch with commit-keyed caching, the
@@ -17,27 +18,35 @@
  *      paste-and-tag, per-sample chips, and the log-type rename that re-keys
  *      the tagged-sample store (Unit 11), fronted by the LogTypeRecommendation
  *      panel that says which log types this solution's detections need
- *      (ADR 0003 replaced the filename-scoring Browse Samples modal).
- *   3. Select Azure Resources - the AzureTargetingScreen cascade, capability
- *      checkboxes, Sentinel-enabled auto-check, and the operable
- *      RoleAssignmentSection (Unit 8). Additive + non-gating.
- *   4. Configure Cribl      - Stream-only worker-group select, pack name,
- *      multi-group fan-out, and the pack overwrite check.
- *   5. Run DCR Gap Analysis - the MappingReviewSection: per-log-type gap
+ *      (ADR 0003 replaced the filename-scoring Browse Samples modal). Also
+ *      carries the VND-1 vendor-name seam and the HON-5 CSV routing warning.
+ *   3. Run DCR Gap Analysis - the MappingReviewSection: per-log-type gap
  *      analysis over Phase-0 vendor packs + learned mappings, the editable
  *      mapping table (with field search), vendor-identity forced inputs,
  *      enrichment editors, and the approval state machine. Gates the content
  *      path only (Unit 18); the native deploy stays independent.
- *   6. Review Analytics Rule Coverage - RuleCoverageSection (rules instance):
+ *   4. Review Analytics Rule Coverage - RuleCoverageSection (rules instance):
  *      three-way coverage with clickable missing-field close-match review and
  *      multi-format custom-rule upload. Informational; lights RULE badges.
- *   7. Review Workbook Coverage - RuleCoverageSection (workbooks instance):
+ *   5. Review Workbook Coverage - RuleCoverageSection (workbooks instance):
  *      the solution's shipped workbooks plus solution-related deployed ones.
  *      Informational.
- *   8. Deploy               - the operable onboard (native + custom _CL
+ *   6. Enable Sentinel Content - ContentInstallSection: loads the selected
+ *      solution's content and installs it. Informational; never gates a
+ *      deploy.
+ *   7. Select Azure Resources - the AzureTargetingScreen cascade, capability
+ *      checkboxes, Sentinel-enabled auto-check, and the operable
+ *      RoleAssignmentSection (Unit 8). Additive + non-gating.
+ *   8. Configure Cribl      - Stream-only worker-group select, pack name,
+ *      multi-group fan-out, and the pack overwrite check.
+ *   9. Deploy               - the operable onboard (native + custom _CL
  *      tables, multi-DCR fan-out) plus "Build and install pack" closing the
  *      content path with real DCR values in outputs.yml, gated by the
- *      vendor-identity check and the overwrite acknowledgment.
+ *      vendor-identity check and the overwrite acknowledgment. Alongside it,
+ *      "Export instead of deploy" (DBT-35) runs the same work read-only and
+ *      saves one .tgz - an ARM deployment template, the assembled pack, and a
+ *      README naming the exact deploy scope. It gates on READ prerequisites
+ *      only, so it stays available when the deploy button cannot unlock.
  *
  * The user validated the native-table onboard live end to end; it stays fully
  * operable THROUGH this page. The standalone Onboard / Azure Targeting /
@@ -58,6 +67,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   DEFAULT_OPERATION_OPTIONS,
+  buildAirGapArchive,
+  onboardBatch,
   SENTINEL_SECRET_PLACEHOLDER,
   assemblePack,
   cefIdentityFindings,
@@ -103,6 +114,8 @@ import type {
   JobStep,
   OnboardTableOutcome,
   OperationOptions,
+  InstalledPack,
+  OnboardBatchOutcome,
   PackScaffoldInput,
   PackVendorSample,
   SolutionRef,
@@ -172,6 +185,22 @@ import {
   deriveSectionInputs,
 } from "./integrate-screen-state";
 import { WiringSection } from "./wiring-section";
+
+/**
+ * Export pacing: onboardBatch requires a sleep hook, and a templateOnly run
+ * only ever makes read GETs, so the budget pacer effectively never fires.
+ */
+const EXPORT_SLEEP = (ms: number): Promise<void> =>
+  new Promise((resolve) => setTimeout(resolve, ms));
+
+/** Bare file name for an export archive - deterministic, keyed by the run. */
+export function exportArchiveName(workspaceName: string, jobId: string): string {
+  const part = (value: string): string => {
+    const safe = value.replace(/[^A-Za-z0-9._-]/g, "_");
+    return safe === "" ? "export" : safe;
+  };
+  return `sentinel-export-${part(workspaceName)}-${part(jobId)}.tgz`;
+}
 
 /** Plain-KV key persisting the selected solution name across reloads. */
 const SELECTED_SOLUTION_KEY = "integrate-selected-solution~v1";
@@ -981,16 +1010,31 @@ export function IntegrateScreen({
                   // gets, so it is confirmed immediately before the build.
                   sampleCoverageReason;
 
-  const buildAndInstallPack = useCallback(async () => {
+  /**
+   * Build the pack, and by default install it. `install: false` (the export
+   * path, DBT-35) assembles the SAME bytes and stops before touching Cribl:
+   * the overwrite check, the install loop and the target-group prerequisite
+   * all belong to installing, not to building. It RETURNS the assembled pack
+   * so the exporter can put it in the archive; the install path ignores that.
+   */
+  const buildAndInstallPack = useCallback(
+    async (
+      options?: { install?: boolean },
+    ): Promise<{ crblFileName: string; crbl: Uint8Array } | null> => {
+    const install = options?.install ?? true;
     const packStore = ports.packs;
     const packInstall = ports.packInstall;
     const name = packName.trim();
+    // Installing needs a Cribl to install INTO; exporting does not. Everything
+    // else - a name, approved mappings, vendor identity - is what makes the
+    // pack correct, so it gates both paths identically.
+    const installPrerequisitesUnmet =
+      install && (packInstall === undefined || packTargetGroups.length === 0);
     if (
       packBuilding ||
       packStore === undefined ||
-      packInstall === undefined ||
+      installPrerequisitesUnmet ||
       name === "" ||
-      packTargetGroups.length === 0 ||
       !mappingsApproved ||
       identityGateReason !== null
     ) {
@@ -998,18 +1042,18 @@ export function IntegrateScreen({
       // pack and nothing said why) - name the first unmet prerequisite.
       setPackBuildLines([
         `Pack build skipped: ${
-          packStore === undefined || packInstall === undefined
+          packStore === undefined || (install && packInstall === undefined)
             ? "pack build is not available in this host."
             : name === ""
               ? "no pack name."
-              : packTargetGroups.length === 0
+              : install && packTargetGroups.length === 0
                 ? "no worker group selected."
                 : !mappingsApproved
                   ? "the DCR Gap Analysis mappings are not approved (section 3)."
                   : (identityGateReason ?? "a build is already running.")
         }`,
       ]);
-      return;
+      return null;
     }
     setPackBuilding(true);
     const lines: string[] = [];
@@ -1023,29 +1067,39 @@ export function IntegrateScreen({
     const installs: Array<{ group: string; ok: boolean; detail: string }> = [];
     try {
       // 1. Overwrite guard: always re-check live, then honor the acknowledgment.
-      push(
-        `Checking for an existing pack named "${name}" in ${packTargetGroups.join(", ")}...`,
-      );
-      const deployed = await packInstall.listDeployed(packTargetGroups);
-      const conflicts = deployedGroups(name, deployed);
-      setPackConflicts(conflicts);
-      if (conflicts.length > 0 && !overwriteAcked) {
+      // EXPORT SKIPS THIS ENTIRELY - it overwrites nothing, and asking an
+      // air-gapped operator to acknowledge a conflict in a Cribl this run is
+      // never going to contact would be a gate with no subject.
+      // Empty for an export: no listing was fetched, so there is no installed
+      // copy and the version below starts at the default.
+      let deployed: Array<{ group: string; packs: InstalledPack[] }> = [];
+      if (install && packInstall !== undefined) {
         push(
-          `A pack named "${name}" already exists in ${conflicts.join(", ")}. ` +
-            "Acknowledge the overwrite above, then build again.",
+          `Checking for an existing pack named "${name}" in ${packTargetGroups.join(", ")}...`,
         );
-        return;
+        deployed = await packInstall.listDeployed(packTargetGroups);
+        const conflicts = deployedGroups(name, deployed);
+        setPackConflicts(conflicts);
+        if (conflicts.length > 0 && !overwriteAcked) {
+          push(
+            `A pack named "${name}" already exists in ${conflicts.join(", ")}. ` +
+              "Acknowledge the overwrite above, then build again.",
+          );
+          return null;
+        }
+        push(
+          conflicts.length > 0
+            ? `Overwrite acknowledged for ${conflicts.join(", ")}.`
+            : "The name is free in every target group.",
+        );
       }
-      push(
-        conflicts.length > 0
-          ? `Overwrite acknowledged for ${conflicts.join(", ")}.`
-          : "The name is free in every target group.",
-      );
 
       // A rebuild ships an INCREMENTED version (live 2026-07-13: every
       // rebuild said 1.0.0, indistinguishable in Cribl) - the next patch
       // above the highest installed copy, from the same listing the
-      // overwrite check fetched.
+      // overwrite check fetched. An export never fetched one, so it starts at
+      // the default: it has no installed copy to be newer than, and inventing
+      // a higher number would claim a history the archive does not have.
       const packVersion = nextPackVersion(installedPackVersions(deployed, name));
 
       // 2. Resolve the plan from the SAME object the pipeline preview renders,
@@ -1061,14 +1115,14 @@ export function IntegrateScreen({
       });
       if (!preview.available || preview.plan === null) {
         push(`Cannot build: ${preview.emptyReason ?? "no pipeline plan available"}`);
-        return;
+        return null;
       }
       if (!preview.valid) {
         push(
           `Cannot build: Cribl YAML validation found ${preview.totalYamlIssues} ` +
             "issue(s) - see the pipeline preview in section 3.",
         );
-        return;
+        return null;
       }
       const plan = preview.plan;
       push(
@@ -1230,7 +1284,17 @@ export function IntegrateScreen({
       }
 
       // 5. Install into every target group; per-group failures are reported
-      // and never abort the remaining groups.
+      // and never abort the remaining groups. The export path stops here and
+      // hands the bytes back instead.
+      if (!install || packInstall === undefined) {
+        push(
+          `Built ${assembled.crblFileName} for export - nothing was installed.`,
+        );
+        return {
+          crblFileName: assembled.crblFileName,
+          crbl: assembled.crbl,
+        };
+      }
       for (const group of packTargetGroups) {
         try {
           const installed = await packInstall.install(
@@ -1261,8 +1325,10 @@ export function IntegrateScreen({
       push(
         "Done. Wire a source below (or commit and deploy in Cribl) to activate the pack.",
       );
+      return { crblFileName: assembled.crblFileName, crbl: assembled.crbl };
     } catch (err) {
       push(`Build failed: ${err instanceof Error ? err.message : String(err)}`);
+      return null;
     } finally {
       setPackBuilding(false);
     }
@@ -1471,6 +1537,137 @@ export function IntegrateScreen({
       ports.logger?.info("deploy-everything: pack build finished");
     }
   }, [runDeploy, buildAndInstallPack, contentEngaged, deployTargets, ports.logger]);
+
+  // ---- Export instead of deploy (DBT-35) --------------------------------
+  // The same run, stopping before every write. onboardBatch's templateOnly
+  // mode COLLECTS the ARM bodies (read-only GETs to resolve column sources)
+  // instead of PUTting them, the pack is assembled but not installed, and
+  // buildAirGapArchive puts both in one .tgz with a README naming the exact
+  // deploy scope. Nothing here touches Azure or Cribl in a way that changes
+  // state - an operator without write permission, or without a network, gets
+  // the whole intended deployment as a file.
+  const [exporting, setExporting] = useState(false);
+  const [exportLines, setExportLines] = useState<string[]>([]);
+
+  // Reads only: Azure GETs for schemas, and the pack assembly. Everything the
+  // deploy gate demands for WRITING (an ingestion client id, a worker group)
+  // is irrelevant to a file.
+  const exportDisabledReason =
+    ports.artifacts === undefined
+      ? "This host cannot save files."
+      : deployTargets.length === 0
+        ? "Enter a native table name in the Deploy section."
+        : config.subscriptionId === "" ||
+            config.resourceGroup === "" ||
+            config.workspaceName === ""
+          ? "Select a subscription, resource group and workspace first."
+          : null;
+
+  const runExport = useCallback(async () => {
+    const artifacts = ports.artifacts;
+    if (artifacts === undefined || exporting || deployTargets.length === 0) {
+      return;
+    }
+    setExporting(true);
+    const lines: string[] = [];
+    const push = (line: string) => {
+      lines.push(line);
+      setExportLines([...lines]);
+      ports.logger?.info(`export: ${line}`);
+    };
+    setExportLines([]);
+    try {
+      push(`Collecting ARM resources for ${deployTargets.join(", ")}...`);
+      const record = await onboardBatch(ports, {
+        tables: deployTargets.map((table) => {
+          const report = gapReports.find((r) => r.tableName === table);
+          return report !== undefined && report.destSchema.length > 0
+            ? { table, customSchema: report.destSchema }
+            : { table };
+        }),
+        subscriptionId: config.subscriptionId,
+        resourceGroup: config.resourceGroup,
+        workspaceName: config.workspaceName,
+        // No Cribl is contacted in templateOnly mode, so there is no worker
+        // group to name. The ingestion client id is still carried when the
+        // operator supplied one - it lands in the pack's outputs.yml, not in
+        // any request this run makes.
+        groupId: "",
+        tenantId: config.tenantId,
+        ingestionClientId: ingestionClientId.trim(),
+        options: {
+          ...(operationDefaults ?? DEFAULT_OPERATION_OPTIONS),
+          templateOnly: true,
+        },
+        pacing: { now: () => Date.now(), sleep: EXPORT_SLEEP },
+      });
+      const outcome = record.result as OnboardBatchOutcome | undefined;
+      if (record.status !== "succeeded" || outcome === undefined) {
+        push(
+          `Collection failed: ${record.error ?? "no error text was recorded"}`,
+        );
+        return;
+      }
+      push(`Collected ${outcome.templates.length} ARM resource(s).`);
+
+      // The pack rides along when the content path is armed. It is OPTIONAL
+      // on purpose: the native export is useful on its own, and refusing to
+      // produce one because the mappings are not approved would withhold the
+      // part that already works.
+      let crbl: Uint8Array | undefined;
+      if (contentEngaged) {
+        const built = await buildAndInstallPack({ install: false });
+        if (built !== null) {
+          crbl = built.crbl;
+          push(`Included ${built.crblFileName} (${built.crbl.length.toLocaleString()} bytes).`);
+        } else {
+          push("Pack not included - see the pack build log for the reason.");
+        }
+      } else {
+        push("Pack not included: the content path is not armed.");
+      }
+
+      const archive = buildAirGapArchive({
+        solutionName: solution?.name ?? "Sentinel Integration",
+        packName: packName.trim() === "" ? "sentinel-pack" : packName.trim(),
+        ...(crbl !== undefined ? { crbl } : {}),
+        armRequests: outcome.templates,
+        // Nothing was created in Cribl, so there are no destination configs to
+        // ship. The pack's own outputs.yml carries the destination definition.
+        destinations: [],
+        mtimeSec: Math.floor(Date.now() / 1000),
+      });
+      if (archive.arm.scopeConflicts.length > 0) {
+        push(
+          `EXCLUDED from the template (outside ${archive.arm.resourceGroup}): ` +
+            archive.arm.scopeConflicts.join(", "),
+        );
+      }
+      const name = exportArchiveName(config.workspaceName, record.id);
+      await artifacts.save(name, "application/gzip", archive.archive);
+      push(
+        `Saved ${name} - ${archive.arm.resourceCount} Azure resource(s) for ` +
+          `subscription ${archive.arm.subscriptionId}, resource group ` +
+          `${archive.arm.resourceGroup}. README-deployment.md inside has the command.`,
+      );
+    } catch (err) {
+      push(`Export failed: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setExporting(false);
+    }
+  }, [
+    ports,
+    exporting,
+    deployTargets,
+    gapReports,
+    config,
+    ingestionClientId,
+    operationDefaults,
+    contentEngaged,
+    buildAndInstallPack,
+    solution?.name,
+    packName,
+  ]);
 
   const createDCE = (operationDefaults ?? DEFAULT_OPERATION_OPTIONS).createDCE;
 
@@ -2091,6 +2288,32 @@ export function IntegrateScreen({
           <span className="field-hint">{deployEverythingDisabledReason}</span>
         )}
       </div>
+      {/* Export instead of deploy (DBT-35). A SEPARATE control, never a mode
+          toggle on Deploy: an operator who cannot write to Azure should not
+          have to arm the deploy button to discover that. It also unlocks on
+          its own terms - reads and a file need no worker group and no
+          ingestion client id. */}
+      <div className="panel-controls">
+        <button
+          className="run-button"
+          onClick={() => void runExport()}
+          disabled={exportDisabledReason !== null || exporting || deploying || packBuilding}
+          title={exportDisabledReason ?? undefined}
+        >
+          {exporting ? "Exporting..." : "Export instead of deploy"}
+        </button>
+        <InfoTip
+          text={
+            "Writes nothing. Collects the ARM resources this deploy would create (read-only schema lookups), assembles the content pack without installing it, and saves one .tgz holding an ARM deployment template, the pack, and a README with the exact az deployment group create command for this subscription and resource group."
+          }
+        />
+        {exportDisabledReason !== null && !exporting && (
+          <span className="field-hint">{exportDisabledReason}</span>
+        )}
+      </div>
+      {exportLines.length > 0 && (
+        <pre className="result">{exportLines.join("\n")}</pre>
+      )}
       {steps.length > 0 && (
         <pre className="result">{steps.map(formatStepLine).join("\n")}</pre>
       )}

@@ -307,7 +307,9 @@ describe("formatBatchSummary", () => {
     };
     const text = formatBatchSummary(outcome, true);
     expect(text).toContain("1 templates collected");
-    expect(text).toContain("1 ARM request body(ies) collected");
+    expect(text).toContain(
+      "1 resource(s) collected into one ARM deployment template",
+    );
     expect(text).not.toContain("DCE:");
   });
 });
@@ -355,20 +357,77 @@ describe("buildTemplatesArtifact", () => {
     },
   ];
 
-  it("serializes every collected request with its ARM addressing intact", () => {
-    const parsed = JSON.parse(buildTemplatesArtifact(templates)) as {
-      kind: string;
-      templates: CollectedArmRequest[];
+  /** The artifact's parsed shape - an ARM template plus our metadata key. */
+  interface ParsedArtifact {
+    $schema: string;
+    contentVersion: string;
+    resources: Array<Record<string, unknown>>;
+    _criblToolkit: {
+      subscriptionId: string;
+      resourceGroup: string;
+      scopeConflicts: string[];
+      unparseable: string[];
+      note: string;
     };
-    expect(parsed.kind).toBe("onboard-batch-arm-templates");
-    expect(parsed.templates).toHaveLength(2);
-    expect(parsed.templates[0].path).toBe(templates[0].path);
-    expect(parsed.templates[0].apiVersion).toBe("2022-10-01");
-    expect(parsed.templates[1].body).toEqual({ location: "eastus" });
-    // Collection order is preserved (custom-table PUT before its DCR).
-    expect(parsed.templates.map((t) => t.kind)).toEqual([
-      "custom-table",
-      "dcr",
+  }
+
+  it("emits a real ARM deployment template, not the collected REST bodies (DBT-33)", () => {
+    const parsed = JSON.parse(buildTemplatesArtifact(templates)) as ParsedArtifact;
+
+    // The envelope. Without these three the file is named arm-templates-*.json
+    // and is not one - which is the whole defect.
+    expect(parsed.$schema).toContain("deploymentTemplate.json#");
+    expect(parsed.contentVersion).toBe("1.0.0.0");
+    expect(parsed.resources).toHaveLength(2);
+
+    // The old shape must be GONE, not merely joined by the new one: two ways
+    // to read the same artifact is how they drift apart.
+    expect((parsed as unknown as { kind?: unknown }).kind).toBeUndefined();
+    expect((parsed as unknown as { templates?: unknown }).templates).toBeUndefined();
+  });
+
+  it("gives each resource the full nested type and name ARM addresses it by", () => {
+    const parsed = JSON.parse(buildTemplatesArtifact(templates)) as ParsedArtifact;
+
+    // Collection order is preserved (custom table before its DCR).
+    expect(parsed.resources[0]).toEqual({
+      type: "Microsoft.OperationalInsights/workspaces/tables",
+      apiVersion: "2022-10-01",
+      name: "w/MyApp_CL",
+      properties: { plan: "Analytics" },
+    });
+    expect(parsed.resources[1].type).toBe("Microsoft.Insights/dataCollectionRules");
+    expect(parsed.resources[1].name).toBe("dcr-MyApp-eastus");
+    expect(parsed.resources[1].location).toBe("eastus");
+  });
+
+  it("makes the DCR wait for the table it writes to", () => {
+    const parsed = JSON.parse(buildTemplatesArtifact(templates)) as ParsedArtifact;
+    expect(parsed.resources[1].dependsOn).toEqual([
+      "[resourceId('Microsoft.OperationalInsights/workspaces/tables', 'w', 'MyApp_CL')]",
+    ]);
+    // Mutation check: the edge is the SHARED TABLE, not adjacency. Retarget
+    // the DCR and the dependency must disappear rather than follow it.
+    const unrelated = JSON.parse(
+      buildTemplatesArtifact([templates[0], { ...templates[1], table: "Other_CL" }]),
+    ) as ParsedArtifact;
+    expect(unrelated.resources[1].dependsOn).toBeUndefined();
+  });
+
+  it("keeps the deploy scope and any exclusions in an ARM-ignored key", () => {
+    const parsed = JSON.parse(buildTemplatesArtifact(templates)) as ParsedArtifact;
+    expect(parsed._criblToolkit.subscriptionId).toBe("s");
+    expect(parsed._criblToolkit.resourceGroup).toBe("r");
+    expect(parsed._criblToolkit.scopeConflicts).toEqual([]);
+    expect(parsed._criblToolkit.unparseable).toEqual([]);
+    // The note has to carry the real values, not placeholders, or an operator
+    // pastes a command that deploys into the wrong group.
+    expect(parsed._criblToolkit.note).toContain("--subscription s");
+    expect(parsed._criblToolkit.note).toContain("--resource-group r");
+    // Leading underscore: ARM ignores it, so the file stays deployable as-is.
+    expect(Object.keys(parsed).filter((k) => !k.startsWith("_") && k !== "$schema")).toEqual([
+      "contentVersion",
+      "resources",
     ]);
   });
 

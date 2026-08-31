@@ -20,6 +20,9 @@ import {
   bundledColumnOrder,
   buildVendorFieldDefinition,
   columnOrderShortfall,
+  isUsableVendorName,
+  operatorVendorKey,
+  resolveVendorName,
   COLUMN_ORDER_SHORTFALL_THRESHOLD,
   describeColumnOrder,
   diffBundledOrder,
@@ -488,5 +491,52 @@ describe("columnOrderShortfall", () => {
     expect(columnOrderShortfall(120, 120)).toBeNull();
     expect(columnOrderShortfall(120, 130)).toBeNull();
     expect(columnOrderShortfall(0, 5)).toBeNull();
+  });
+});
+
+describe("VND-1 - operator-named vendors", () => {
+  it("uses DETECTION when it has an answer, even if the operator typed one", () => {
+    // The precedence that matters, and the trap. The curated list carries the
+    // canonical spelling every stored definition is already filed under. If a
+    // typed "PAN" outranked detection, the next order would be stored under a
+    // SECOND scope for the same vendor - normalizeDefinitionScope folds case
+    // and punctuation, but not "PAN" into "Palo Alto Networks" - and the two
+    // would never see each other again.
+    expect(resolveVendorName("Palo Alto Networks", "PAN")).toBe("Palo Alto Networks");
+  });
+
+  it("falls back to the operator's name when detection has none", () => {
+    // The whole point: the curated list is about eighteen entries, and every
+    // other solution stored nothing at all.
+    expect(resolveVendorName("", "Acme Firewall")).toBe("Acme Firewall");
+    expect(resolveVendorName(null, "  Acme Firewall  ")).toBe("Acme Firewall");
+  });
+
+  it("returns empty when neither has an answer", () => {
+    // "" is exactly what vendorFieldDefinitionKey already treats as nothing to
+    // store, so the absent case keeps behaving as it always did.
+    expect(resolveVendorName("", "")).toBe("");
+    expect(resolveVendorName(null, undefined)).toBe("");
+    expect(vendorFieldDefinitionKey(resolveVendorName("", ""), "TRAFFIC")).toBeNull();
+  });
+
+  it("makes a previously unstorable scope storable", () => {
+    // The behaviour change stated end to end: same solution, same log type,
+    // null before and a real key after.
+    expect(vendorFieldDefinitionKey(resolveVendorName("", null), "TRAFFIC")).toBeNull();
+    expect(vendorFieldDefinitionKey(resolveVendorName("", "Acme"), "TRAFFIC")).not.toBeNull();
+  });
+
+  it("keys the override PER SOLUTION, folded the same way as every other scope", () => {
+    // The vendor is a property of the solution, not of one log type.
+    expect(operatorVendorKey("Acme Firewall")).toBe(operatorVendorKey("acme-firewall"));
+    expect(operatorVendorKey("Acme Firewall")).toContain("operator-vendor");
+    expect(operatorVendorKey("   ")).toBeNull();
+  });
+
+  it("rejects a name that folds to nothing, which would key to null anyway", () => {
+    expect(isUsableVendorName("Acme")).toBe(true);
+    expect(isUsableVendorName("   ")).toBe(false);
+    expect(isUsableVendorName("---")).toBe(false);
   });
 });

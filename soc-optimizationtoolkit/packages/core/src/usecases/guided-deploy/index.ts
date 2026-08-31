@@ -95,7 +95,11 @@ export {
 export type { WireSourcePorts, WireSourceResult } from "./wire-source";
 
 // Air-gap export
-export { buildAirGapArchive, generateAirGapReadme } from "./air-gap-export";
+export {
+  AIR_GAP_ARM_TEMPLATE_PATH,
+  buildAirGapArchive,
+  generateAirGapReadme,
+} from "./air-gap-export";
 export type { AirGapExportInput, AirGapArchive } from "./air-gap-export";
 
 // Workflow-state unlock chain + mode gating (integrates with integrate-arc)

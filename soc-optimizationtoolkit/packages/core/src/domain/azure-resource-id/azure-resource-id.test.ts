@@ -6,13 +6,18 @@
  *   - nested child-type ids resolve to the LAST /{type}/{name} pair
  *   - TOLERANT/TOTAL behavior: null/''/garbage/partial ids never throw
  *   - deriveResourceGroup convenience accessor
+ *   - parseArmTypeAndName: the FULL nested type and name, for ARM templates
  *
  * The keys-vs-values distinction is load-bearing: Azure returns the well-known
  * KEYS in varying casing but the VALUES are identifiers that must round-trip
  * exactly, so casing is normalized only when matching keys, never on output.
  */
 import { describe, expect, it } from "vitest";
-import { deriveResourceGroup, parseResourceId } from "./index";
+import {
+  deriveResourceGroup,
+  parseArmTypeAndName,
+  parseResourceId,
+} from "./index";
 
 /** The canonical Log Analytics workspace id used across the wizard. */
 const WORKSPACE_ID =
@@ -212,5 +217,72 @@ describe("deriveResourceGroup", () => {
     expect(deriveResourceGroup(null)).toBe("");
     expect(deriveResourceGroup(undefined)).toBe("");
     expect(deriveResourceGroup("garbage")).toBe("");
+  });
+});
+
+/**
+ * parseArmTypeAndName exists because parseResourceId deliberately keeps only
+ * the LAST /{type}/{name} pair. These pins hold the difference: an ARM template
+ * needs both halves whole, and a leaf-only answer silently produces a template
+ * that deploys the wrong resource type.
+ */
+describe("parseArmTypeAndName", () => {
+  it("joins every nested pair into the type and name ARM declares", () => {
+    const parsed = parseArmTypeAndName(
+      "/subscriptions/S/resourceGroups/R/providers/Microsoft.OperationalInsights" +
+        "/workspaces/ws-soc/tables/Vendor_CL",
+    );
+    expect(parsed).toEqual({
+      type: "Microsoft.OperationalInsights/workspaces/tables",
+      name: "ws-soc/Vendor_CL",
+      nameSegments: ["ws-soc", "Vendor_CL"],
+    });
+    // The distinction from parseResourceId, stated as an assertion so it
+    // cannot quietly collapse into the leaf answer.
+    expect(parseResourceId(
+      "/subscriptions/S/resourceGroups/R/providers/Microsoft.OperationalInsights" +
+        "/workspaces/ws-soc/tables/Vendor_CL",
+    ).resourceType).toBe("tables");
+  });
+
+  it("handles a top-level resource as a one-segment name", () => {
+    expect(
+      parseArmTypeAndName(
+        "/subscriptions/S/resourceGroups/R/providers/Microsoft.Insights" +
+          "/dataCollectionRules/dcr-a",
+      ),
+    ).toEqual({
+      type: "Microsoft.Insights/dataCollectionRules",
+      name: "dcr-a",
+      nameSegments: ["dcr-a"],
+    });
+  });
+
+  it("returns null - not a partial answer - for a collection url", () => {
+    // An odd tail is a type with no name: the resource does not exist yet.
+    // '' would be indistinguishable from a resource named ''.
+    expect(
+      parseArmTypeAndName(
+        "/subscriptions/S/resourceGroups/R/providers/Microsoft.Insights/dataCollectionRules",
+      ),
+    ).toBeNull();
+  });
+
+  it("returns null for ids with no providers section, and never throws", () => {
+    expect(parseArmTypeAndName("/subscriptions/S/resourceGroups/R")).toBeNull();
+    expect(parseArmTypeAndName("garbage")).toBeNull();
+    expect(parseArmTypeAndName("")).toBeNull();
+    expect(parseArmTypeAndName(null)).toBeNull();
+    expect(parseArmTypeAndName(undefined)).toBeNull();
+    expect(parseArmTypeAndName("/subscriptions/S/providers")).toBeNull();
+  });
+
+  it("tolerates doubled and trailing slashes like its sibling parser", () => {
+    expect(
+      parseArmTypeAndName(
+        "//subscriptions/S//resourceGroups/R/providers/Microsoft.Insights" +
+          "/dataCollectionEndpoints/dce-a/",
+      )?.name,
+    ).toBe("dce-a");
   });
 });

@@ -133,6 +133,35 @@ What sequences work instead is what the data can actually support: `priority`
 readiness, and how many cards each one transitively unblocks. If a second
 developer ever works here, contention becomes real and WSJF is worth revisiting.
 
+**Epics and features have NO status, and 100% is not Done (2026-08-30).** Their
+completion is DERIVED from the stories under them, so it cannot drift. A
+declared `done` on a grouping would be the same fact in a second place, and it
+would start lying the moment a story was filed underneath - the duplication this
+repo has already been bitten by three times (STATUSES copied into the kanban
+columns, PRIORITIES copied into the groom script, the CAP epic prose asserting a
+blocker count the dependency graph contradicted).
+
+The second reason is sharper than the first. **100% means "no open cards", not
+"this area is finished."** `DBT-F5` was 11 of 11 on 2026-08-30 with FIVE of
+those eleven filed that same week; marking it Done would have been wrong within
+days, and filing the very card that recorded this decision un-collapsed it on
+the spot.
+
+So a complete grouping is COLLAPSED in the kanban, never retired: dimmed to one
+line carrying its count, still present, and it expands itself again when new
+work lands. An EMPTY grouping is deliberately not treated as complete - zero of
+zero done is a grouping with nothing in it, which `check-board` already reports,
+and dimming it would hide the thing that needs attention behind a tick.
+`board.md` keeps its full table either way: it is the diff-friendly record, and
+hiding rows from a generated file would make a finished feature invisible to
+anyone reading the file rather than the wall.
+
+A human-declared `closed` flag - "this area is finished, new work starts a new
+feature" - is a genuinely different fact and would be worth storing, because
+nothing can derive it. It was offered and declined on 2026-08-30: only one
+grouping looked like a real candidate, and one candidate does not justify a
+second status field with its own validation rules.
+
 **Every feature names a MENU ITEM, since 2026-08-28.** `menu` says which part
 of the product a card is about, using the app's own route ids copied from the
 nav registration in `App.tsx` - so the vocabulary cannot describe a screen the

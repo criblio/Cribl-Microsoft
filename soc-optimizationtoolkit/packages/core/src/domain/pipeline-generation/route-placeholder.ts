@@ -66,3 +66,61 @@ export function placeholderRouteFilter(logType: string): string {
 export function isPlaceholderFilter(routeCondition: string): boolean {
   return routeCondition.includes(UNSET_FIELD);
 }
+
+/**
+ * WHY a log type will need a hand-written route filter - and the reason CSV
+ * gets its own answer (HON-5).
+ *
+ *   evidence  the samples did not separate it from a sibling THIS TIME. More
+ *             or better samples can fix it, and often do.
+ *   format    it can NEVER be separated automatically. CSV data rows are
+ *             positional: at route time the event is unparsed, the field name
+ *             never appears in `_raw`, and both discriminators return null by
+ *             construction - see route-discriminator and
+ *             route-value-discriminator, which each early-return on "csv".
+ *
+ * Collapsing these into one warning is the failure this exists to avoid. Told
+ * "no discriminator found", a CSV operator will go and collect more samples,
+ * which cannot possibly help; told the truth, they write one filter and move
+ * on. The generic placeholder message is right for every other format and
+ * wrong for this one.
+ */
+export type PlaceholderCause = "evidence" | "format";
+
+/**
+ * Whether this format can EVER route automatically.
+ *
+ * Kept as a predicate over the format string rather than a list of formats
+ * elsewhere, because the two discriminators already branch on exactly this and
+ * a third opinion about which formats are positional is how they drift apart.
+ */
+export function formatCanDiscriminate(format: string): boolean {
+  return format.toLowerCase() !== "csv";
+}
+
+/**
+ * The warning for a CSV log type that WILL placeholder, or null when there is
+ * nothing to say.
+ *
+ * `siblingCount` is load-bearing and the reason this is not a one-line format
+ * check. A single-log-type pack keeps its match-all and routes correctly -
+ * plan.ts only runs the discriminator ladder `if (tables.length > 1)` - so
+ * warning there would be crying wolf about a pack that works, which is the
+ * failure mode this repo has already hit twice with over-eager reports.
+ *
+ * @param format       the log type's source format
+ * @param siblingCount how many OTHER log types share the pack
+ */
+export function csvRoutingWarning(
+  format: string,
+  siblingCount: number,
+): string | null {
+  if (formatCanDiscriminate(format)) return null;
+  if (siblingCount < 1) return null;
+  return (
+    "CSV log types cannot be routed automatically. At route time the event is " +
+    "still unparsed and a CSV row carries no field names, so no filter can tell " +
+    "this log type from the others in the pack - more samples will not change " +
+    "that. Its route ships with a placeholder filter for you to complete."
+  );
+}

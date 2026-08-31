@@ -79,7 +79,13 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { detectVendorIdentity } from "@soc/core";
+import {
+  csvRoutingWarning,
+  detectVendorIdentity,
+  isUsableVendorName,
+  operatorVendorKey,
+  resolveVendorName,
+} from "@soc/core";
 import type { ContentCache, TaggedSample, TaggedSampleStore } from "@soc/core";
 import {
   chipFromTagged,
@@ -225,10 +231,37 @@ export function SampleIntakeSection({
   // curated detectVendorIdentity - which is what lets the store key on a
   // canonical name rather than on whatever the solution happened to be called.
   const csvItem = csvQueue === null ? null : currentItem(csvQueue);
-  const vendor = useMemo(
+  const detectedVendor = useMemo(
     () => detectVendorIdentity(solutionName)?.vendor ?? "",
     [solutionName],
   );
+  // VND-1: the curated list is about eighteen entries, and a solution outside
+  // it stored NOTHING - honest, but it capped a general feature for want of a
+  // text box. The operator's name is a FALLBACK, never an override: detection
+  // carries the canonical spelling every existing definition is filed under.
+  const [operatorVendor, setOperatorVendor] = useState("");
+  const [vendorSaved, setVendorSaved] = useState(false);
+  const vendorKey = useMemo(() => operatorVendorKey(solutionName), [solutionName]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setOperatorVendor("");
+    setVendorSaved(false);
+    if (definitionCache === undefined || vendorKey === null || detectedVendor !== "") {
+      return;
+    }
+    void (async () => {
+      const stored = await definitionCache.get(vendorKey);
+      if (cancelled || typeof stored !== "string") return;
+      setOperatorVendor(stored);
+      setVendorSaved(stored !== "");
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [definitionCache, vendorKey, detectedVendor]);
+
+  const vendor = resolveVendorName(detectedVendor, vendorSaved ? operatorVendor : "");
   const columnOrder = useVendorColumnOrder(
     definitionCache,
     vendor,
@@ -577,6 +610,50 @@ export function SampleIntakeSection({
           No samples tagged yet. Upload or paste one above.
         </p>
       )}
+      {/*
+        VND-1. Shown ONLY when detection found nothing: the eighteen curated
+        vendors already work and do not need a box to ignore. Naming the vendor
+        is what makes a column order storable at all - vendorFieldDefinitionKey
+        returns null without one - so this is the difference between the feature
+        existing for a solution and not existing.
+      */}
+      {detectedVendor === "" && vendorKey !== null && samples !== null && samples.length > 0 && (
+        <div className="vendor-name-seam">
+          <label className="field-label" htmlFor="operator-vendor">
+            Vendor name
+          </label>
+          <input
+            id="operator-vendor"
+            type="text"
+            value={operatorVendor}
+            placeholder="e.g. Palo Alto Networks"
+            onChange={(e) => {
+              setOperatorVendor(e.target.value);
+              setVendorSaved(false);
+            }}
+          />
+          <button
+            className="run-button"
+            disabled={!isUsableVendorName(operatorVendor) || definitionCache === undefined}
+            onClick={() => {
+              if (definitionCache === undefined || vendorKey === null) return;
+              const name = operatorVendor.trim();
+              void definitionCache.set(vendorKey, name);
+              setOperatorVendor(name);
+              setVendorSaved(true);
+            }}
+          >
+            {vendorSaved ? "Saved" : "Use this vendor"}
+          </button>
+          <p className="field-hint">
+            This solution is not in the curated vendor list, so column orders
+            cannot be remembered for it until you name the vendor. Naming it
+            files them under that name; it does not rename anything already
+            stored.
+          </p>
+        </div>
+      )}
+
       {samples !== null && samples.length > 0 && (
         <div className="sample-chip-list">
           {samples.map((sample) => {
@@ -702,6 +779,25 @@ export function SampleIntakeSection({
                     sample={sample}
                   />
                 )}
+                {/*
+                  HON-5: say it HERE, when the CSV sample is tagged, not at the
+                  preview. Both route discriminators early-return on "csv" by
+                  construction, so this pack can never route automatically - and
+                  an operator told only "no discriminator found" would go and
+                  collect more samples, which cannot possibly help. The
+                  sibling count is why this is not a bare format check: a
+                  single-log-type pack keeps a working match-all.
+                */}
+                {!isRenaming &&
+                  (() => {
+                    const warning = csvRoutingWarning(
+                      sample.format,
+                      samples.length - 1,
+                    );
+                    return warning === null ? null : (
+                      <p className="field-hint sample-chip-routing">{warning}</p>
+                    );
+                  })()}
                 {isRenaming && renameError !== "" && (
                   <p className="field-hint">{renameError}</p>
                 )}
