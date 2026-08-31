@@ -16,7 +16,6 @@ import {
   rankOf,
   renderGroom,
   unblockCount,
-  groomingFindings,
 } from './board-groom.mjs';
 
 const story = (over) => ({
