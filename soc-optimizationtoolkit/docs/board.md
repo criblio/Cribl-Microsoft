@@ -11,7 +11,7 @@ two cannot disagree.
 alternatives. This board holds only what is a unit of work, what state it is
 in, and what it waits on.
 
-**56 in the backlog, 1 in progress, 41 done.**
+**57 in the backlog, 1 in progress, 41 done.**
 
 ## By menu item
 
@@ -24,14 +24,14 @@ operator sees on any screen. Two menus are PLANNED and have no route yet.
 | Dataflow | 3 | 0 | 0 |
 | Setup | 1 | 0 | 0 |
 | Sentinel Integration | 11 | 13 | 0 |
-| DCR Automation | 5 | 3 | 4 |
+| DCR Automation | 6 | 3 | 4 |
 | Pack Maintenance | 4 | 1 | 0 |
 | Permission Verification | 8 | 0 | 0 |
 | Azure Native Source Onboarding (planned) | 13 | 4 | 0 |
 | Windows Event analysis (planned) | 5 | 0 | 0 |
 | Cross-cutting | 7 | 20 | 0 |
 
-Open work totals 57.
+Open work totals 58.
 
 ## Epics and features
 
@@ -116,7 +116,7 @@ ENABLER EPIC: release mechanics. The packaged tarball trails main, and the lab t
 |---|---|---|---|
 | `REL-F1` Release and deployment hygiene | Cross-cutting | 3/5 | REL-2, REL-3, REL-4, REL-5, REL-6 |
 
-### `DBT` Quality and technical debt _(enabler)_ - 55% (21/38)
+### `DBT` Quality and technical debt _(enabler)_ - 54% (21/39)
 
 ENABLER EPIC: verification gaps, copy, diagram fidelity, docs and the board's own tooling
 
@@ -128,7 +128,7 @@ ENABLER EPIC: verification gaps, copy, diagram fidelity, docs and the board's ow
 | `DBT-F4` Docs and spec grounding | Cross-cutting | 4/7 | DBT-8, DBT-10, DBT-11, DBT-13, DBT-22, DBT-26, DBT-32 |
 | `DBT-F5` Board tooling defects | Cross-cutting | 13/13 | DBT-16, DBT-17, DBT-18, DBT-19, DBT-20, DBT-21, DBT-23, DBT-24, DBT-25, DBT-27, DBT-29, DBT-30, DBT-31 |
 | `DBT-F6` Effect-identity defect class | Pack Maintenance | 0/1 | FX-4 |
-| `DBT-F7` Export instead of deploy - the offline path | DCR Automation | 3/3 | DBT-33, DBT-34, DBT-35* |
+| `DBT-F7` Export instead of deploy - the offline path | DCR Automation | 3/4 | DBT-33, DBT-34, DBT-35*, DBT-37 |
 
 ### `TBL` Custom table authoring and table-first DCR creation - 20% (1/5)
 
@@ -255,7 +255,7 @@ Next to pick up. Nothing blocks these.
 
 ---
 
-## Backlog - next (22)
+## Backlog - next (23)
 
 Settled and unblocked, sequenced behind now.
 
@@ -523,6 +523,44 @@ Settled and unblocked, sequenced behind now.
   would prove nothing about the cast and would be precisely the confident
   wrong answer the suite exists to avoid. Close this only on a guid column
   that could only have arrived through the transform.
+
+- **DBT-37** The ARM export still requires a live Azure connection
+  `DBT-F7` `story` `settled`
+  RAISED BY THE USER 2026-08-31: "does the Sentinel Integration give the user
+  the ability to see and export ARM templates for those that do not want to
+  connect the app to Azure?" EXPORT YES, SEE NO, DISCONNECTED NO - and the
+  third is the real gap. [[DBT-35]] shipped 'Export instead of deploy' beside
+  Deploy in section 9 and it emits a genuine deployment template ([[DBT-33]]),
+  so the offline OUTPUT exists. What does not exist is an offline INPUT:
+  `exportDisabledReason` (integrate-screen.tsx:1555) demands a subscription,
+  resource group and workspace, and `onboardBatch` in templateOnly mode does
+  read-only ARM GETs to resolve column sources (onboard-batch.ts:51-56, 'NO
+  ARM WRITES happen at all - only schema/workspace GETs'). So the feature
+  serves an operator who will not grant WRITE, NOT one who will not connect at
+  all. BLOCKED BY CONSTRUCTION RATHER THAN POLICY, which is what makes this
+  small and worth doing: `collectTableTemplates` (onboard-batch.ts:468) issues
+  the table GET UNCONDITIONALLY and only falls back to `spec.customSchema` on
+  a 404. Disconnected, that call fails with a network or auth error rather
+  than 404, so it throws instead of falling through to a schema the operator
+  already supplied. THE PIECES ARE OTHERWISE PRESENT: azure-targeting already
+  has an offline branch with FREE-TEXT scope entry whose own comment says the
+  values are embedded in generated ARM templates for manual deployment
+  (azure-targeting-screen.tsx:570-578); `customSchema` is already forwarded to
+  the template builder in templateOnly mode; and there are now three
+  Azure-free schema sources - bundled VENDOR_SCHEMAS, a pasted file, and
+  [[TBL-1]]'s hand-authored fields. THE DESIGN TENSION TO SETTLE, and it must
+  be settled rather than coded around: 'the LIVE table when it exists
+  (existing schema always wins)' is the pinned Unit 5 contract, and offline
+  there is no live table to ask. The offline path therefore CANNOT honour that
+  rule - it has to trust the supplied schema - so this needs to be an
+  explicit, stated exception for the disconnected case, not a silent
+  reordering of the precedence that the connected path also inherits. ALSO
+  WORTH FIXING WHILE HERE: the disabled-reason text says 'Enter a native table
+  name in the Deploy section', but `deployTargets` (integrate-screen.tsx:455)
+  accepts any typed table name - the word 'native' is drift. SEE, separately,
+  is [[HON-8]]: `buildDeploymentPreview` already builds the previewable ARM
+  shapes and has no caller, so nothing renders a template on screen and the
+  .tgz must be opened to read one.
 
 ---
 
