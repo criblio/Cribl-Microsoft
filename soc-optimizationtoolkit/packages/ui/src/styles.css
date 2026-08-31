@@ -2467,6 +2467,17 @@ button.journey-step-main:hover .journey-step-label {
   margin-bottom: 0;
 }
 
+/* The create-table form on the Tables tab (screens/dcr-automation/
+   workspace-tables-panel.tsx, TBL-1/TBL-2). A nested panel: it sits inside
+   the Tables panel and is a distinct piece of work, so it gets the subtle
+   border rather than the full panel chrome, which would read as a second
+   page. */
+.create-table-form {
+  margin-top: 12px;
+  border: 1px solid var(--border-subtle);
+  background: var(--surface-raised);
+}
+
 .csv-dialog-status {
   display: flex;
   flex-direction: column;

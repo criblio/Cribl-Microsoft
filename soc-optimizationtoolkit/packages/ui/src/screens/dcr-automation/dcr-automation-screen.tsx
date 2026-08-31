@@ -22,6 +22,15 @@ export interface DcrAutomationScreenProps {
    */
   tables?: ReactNode;
   /**
+   * OPTIONALLY CONTROLLED tab selection (TBL-3). Absent, the screen owns its
+   * own selection exactly as before - the uncontrolled path is unchanged and
+   * is still what every existing caller gets. Supplied, the host owns it,
+   * which is what lets the Tables tab send an operator to Single with a table
+   * already filled in.
+   */
+  activeTab?: DcrTab;
+  onTabChange?: (tab: DcrTab) => void;
+  /**
    * When set, the Single tab is disabled and this reason is shown - Single
    * onboards one table live to Cribl, so it needs a Cribl connection; Batch
    * still works template-only. When undefined, Single is enabled.
@@ -41,14 +50,24 @@ export function DcrAutomationScreen({
   batch,
   inventory,
   tables,
+  activeTab,
+  onTabChange,
   singleDisabledReason,
 }: DcrAutomationScreenProps) {
   const singleDisabled = singleDisabledReason !== undefined;
   // Inventory first (user direction 2026-07-13): the operational view is
   // the landing tab whenever the shell provides it.
-  const [selected, setSelected] = useState<DcrTab>(
+  const [ownSelected, setOwnSelected] = useState<DcrTab>(
     inventory !== undefined ? "inventory" : initialDcrTab(singleDisabled),
   );
+  // Controlled when the host supplies activeTab, else the screen's own state.
+  // The internal state is still UPDATED in the controlled case so that a host
+  // which later stops controlling does not snap back to a stale tab.
+  const selected = activeTab ?? ownSelected;
+  const setSelected = (tab: DcrTab): void => {
+    setOwnSelected(tab);
+    onTabChange?.(tab);
+  };
   const active = resolveActiveDcrTab(selected, singleDisabled);
 
   return (

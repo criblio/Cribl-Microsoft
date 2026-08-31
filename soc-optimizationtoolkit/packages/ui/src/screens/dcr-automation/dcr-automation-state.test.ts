@@ -24,4 +24,11 @@ describe("resolveActiveDcrTab", () => {
   it("keeps Batch selected regardless of Single being disabled", () => {
     expect(resolveActiveDcrTab("batch", true)).toBe("batch");
   });
+
+  it("passes the azure-only tabs through even when Single is disabled", () => {
+    // Inventory and Tables need no Cribl, so a missing Cribl connection must
+    // not bounce an operator out of either one.
+    expect(resolveActiveDcrTab("inventory", true)).toBe("inventory");
+    expect(resolveActiveDcrTab("tables", true)).toBe("tables");
+  });
 });

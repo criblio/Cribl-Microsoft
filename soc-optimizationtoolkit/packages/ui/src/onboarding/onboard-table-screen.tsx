@@ -69,6 +69,14 @@ type RunStatus = "idle" | "running" | "ok" | "failed";
 
 export interface OnboardTableScreenProps {
   /**
+   * The table name to open with, instead of the "SecurityEvent" default
+   * (TBL-3). Seeds the field ONCE, at mount - it is a starting value, not a
+   * controlled prop, so the operator can type over it freely. The Tables tab
+   * remounts this screen to hand a table across, which is why seeding at
+   * mount is enough.
+   */
+  initialTable?: string;
+  /**
    * Persisted Cribl naming/targeting defaults (porting-plan Unit 4). When
    * provided, the destination id is composed from its prefix/suffix and the
    * worker-group dropdown preselects its workerGroup when that group exists
@@ -98,13 +106,20 @@ export interface OnboardTableScreenProps {
  * custom-table schema section; native names keep the walking-skeleton flow.
  */
 export function OnboardTableScreen({
+  initialTable,
   criblDefaults,
   operationDefaults,
   roleGuidance,
 }: OnboardTableScreenProps = {}) {
   const { ports, config } = usePorts();
 
-  const [table, setTable] = useState("SecurityEvent");
+  // Seeded at mount only - see initialTable's doc. A controlled prop here
+  // would fight the operator's own typing.
+  const [table, setTable] = useState(
+    initialTable !== undefined && initialTable !== ""
+      ? initialTable
+      : "SecurityEvent",
+  );
   const [groups, setGroups] = useState<CriblGroupSummary[] | null>(null);
   const [groupsError, setGroupsError] = useState("");
   const [groupId, setGroupId] = useState("");

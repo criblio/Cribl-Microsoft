@@ -11,6 +11,7 @@ import {
   DcrAutomationScreen,
   DcrInventoryPanel,
   WorkspaceTablesPanel,
+  type DcrTab,
   EventHubDiscoveryScreen,
   HomeScreen,
   IntegrateScreen,
@@ -1283,6 +1284,14 @@ function App() {
     }
   };
 
+  // TBL-3: the table the Tables tab handed to Single, and which DCR tab is
+  // showing. Held here because the hand-off crosses from one tab's panel to
+  // another's. MUST live above the gate returns below - these are hooks, and
+  // the gates return early, so declaring them beside their use site further
+  // down made them conditional (React "rendered fewer hooks than expected").
+  const [prefillTable, setPrefillTable] = useState('');
+  const [dcrTab, setDcrTab] = useState<DcrTab>('inventory');
+
   // Gate order is the contract: acceptance before ANYTHING else, then mode
   // selection, then the frame. The loading branch is what keeps the gate
   // from flashing for already-accepted users.
@@ -1762,8 +1771,15 @@ function App() {
             <p className="connection-notice">{secretNotice}</p>
           )}
           <PortsProvider ports={cloudPorts} config={activeConfig}>
+            {/* The key carries prefillTable (TBL-3) so handing a table over
+                from the Tables tab REMOUNTS this screen and re-seeds its
+                name field. initialTable is a mount-time seed, not a
+                controlled prop, so a remount is what makes the hand-off
+                land - and it also discards any half-filled state from the
+                previous table, which is the honest outcome. */}
             <OnboardTableScreen
-              key={`onboard-${store.activeProfileId ?? 'none'}`}
+              key={`onboard-${store.activeProfileId ?? 'none'}-${prefillTable}`}
+              initialTable={prefillTable}
               criblDefaults={appOptions.cribl}
               operationDefaults={appOptions.operation}
               roleGuidance={ROLE_GUIDANCE}
@@ -1854,9 +1870,15 @@ function App() {
           <WorkspaceTablesPanel
             capabilities={capabilityAudit.capabilities}
             capabilityContext={capabilityAudit.context}
+            onCreateDcr={(table) => {
+              setPrefillTable(table);
+              setDcrTab('single');
+            }}
           />
         </PortsProvider>
       }
+      activeTab={dcrTab}
+      onTabChange={setDcrTab}
       singleDisabledReason={
         capabilityAudit.context.criblReachable
           ? undefined

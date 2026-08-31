@@ -1,6 +1,9 @@
 // usecases/: orchestration over the ports - pure against port interfaces,
 // unit-tested with the in-memory fakes in src/testing/.
 export * from "./onboard-table";
+// The creation contract on its own, so a screen can create ONE table with
+// Azure alone (TBL-3) - onboardTable's step 2 calls this too.
+export * from "./create-custom-table";
 export * from "./onboard-batch";
 export * from "./assign-dcr-role";
 export * from "./azure-discovery";

@@ -163,12 +163,54 @@ describe("WorkspaceTablesPanel", () => {
     expect(screen.queryByText(`none in ${RG}`)).toBeNull();
   });
 
-  it("hides both actions when the host wires neither", () => {
-    // A button that went nowhere would be worse than no button.
+  it("offers Create table with no host wiring - the panel owns that flow", () => {
+    // Create table needs only Azure, so the panel creates the table itself
+    // rather than handing off. Create DCR still needs a host, because it
+    // navigates to another tab.
     const { ports } = makePorts();
     renderPanel(ports);
-    expect(screen.queryByRole("button", { name: "Create table" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Create table" })).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Create DCR" })).toBeNull();
+  });
+
+  it("keeps the create form CLOSED until asked", () => {
+    const { ports } = makePorts();
+    const { container } = renderPanel(ports);
+    expect(container.querySelector(".create-table-form")).toBeNull();
+  });
+
+  it("REFUSES a name the loaded listing already holds", async () => {
+    // TBL-2. The tables PUT is an upsert, so creating over a live table
+    // replaces its schema - and the panel already knows the names, so this
+    // costs no extra request.
+    const { ports } = makePorts();
+    renderPanel(ports);
+    fireEvent.click(screen.getByRole("button", { name: "Load tables" }));
+    await waitFor(() => {
+      expect(screen.getByText("App_CL")).toBeTruthy();
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Create table" }));
+    fireEvent.change(screen.getByLabelText("Table name"), {
+      target: { value: "app_cl" },
+    });
+    expect(screen.getByText(/already exists in this workspace/)).toBeTruthy();
+    // And the action is actually blocked, not merely annotated.
+    const create = screen
+      .getAllByRole("button", { name: "Create table" })
+      .find((b) => (b as HTMLButtonElement).disabled);
+    expect(create, "the Create action should be disabled").toBeTruthy();
+  });
+
+  it("does not claim a name is free before the listing is read", async () => {
+    // An unread listing cannot say "free" - it annotates and lets the
+    // operator proceed, because createCustomTable GETs before it writes.
+    const { ports } = makePorts();
+    renderPanel(ports);
+    fireEvent.click(screen.getByRole("button", { name: "Create table" }));
+    fireEvent.change(screen.getByLabelText("Table name"), {
+      target: { value: "Brand_New_CL" },
+    });
+    expect(screen.getByText(/Load the table list/)).toBeTruthy();
   });
 
   it("offers Create DCR per row, and passes THAT row's table", async () => {

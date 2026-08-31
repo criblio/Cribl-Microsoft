@@ -83,12 +83,11 @@ import {
   defaultSentinelDestinationId,
 } from "../../domain/sentinel-destination";
 import {
-  buildTablePutRequest,
   DEFAULT_CUSTOM_TABLE_RETENTION_DAYS,
   isCustomTableName,
   LOG_ANALYTICS_TABLES_API_VERSION,
-  validateCustomTableSchema,
 } from "../../domain/custom-table";
+import { createCustomTable } from "../create-custom-table/create-custom-table";
 import type { CustomSchemaFileColumn } from "../../domain/schema-mapping";
 import type { CustomTableRetentionDays } from "../../domain/option-forms";
 
@@ -528,122 +527,43 @@ export async function onboardTable(
       currentStep = "create-custom-table";
       await setStep(currentStep, "running");
 
-      const existingResponse = await azure.request({
-        method: "GET",
-        path: tablePath,
-        apiVersion: LOG_ANALYTICS_API_VERSION,
-      });
-      if (is2xx(existingResponse.status)) {
-        customTableBody = existingResponse.body;
-        await setStep(
-          currentStep,
-          "succeeded",
-          `table '${input.table}' already exists - creation skipped`,
-        );
-      } else if (existingResponse.status === 404) {
-        if (input.customSchema === undefined || input.customSchema.length === 0) {
-          throw new StepFailure(
-            `custom table '${input.table}' does not exist and no ` +
-              "customSchema was provided; supply a parsed schema " +
-              "(parseTableSchemaFile / VENDOR_SCHEMAS) or create the table first",
-          );
-        }
-        const validation = validateCustomTableSchema(
-          input.table,
-          input.customSchema,
-        );
-        if (!validation.valid) {
-          throw new StepFailure(
-            `custom table schema for '${input.table}' is invalid: ` +
-              validation.errors.join("; "),
-          );
-        }
-
-        const tableRequest = buildTablePutRequest({
+      // The creation contract lives in its own usecase (TBL-3) so the Tables
+      // tab can create a table with Azure alone. Its errors carry the exact
+      // messages this step used to throw, so rewrapping them as StepFailure
+      // keeps every operator-visible string - and every pin on them - intact.
+      let created;
+      try {
+        created = await createCustomTable(azure, {
           subscriptionId: input.subscriptionId,
           resourceGroup: input.resourceGroup,
           workspaceName: input.workspaceName,
           table: input.table,
-          columns: input.customSchema,
+          ...(input.customSchema !== undefined
+            ? { columns: input.customSchema }
+            : {}),
           ...(input.customTableRetentionDays !== undefined
             ? { retentionDays: input.customTableRetentionDays }
             : {}),
+          ...(input.maxTablePollAttempts !== undefined
+            ? { maxPollAttempts: input.maxTablePollAttempts }
+            : {}),
         });
-        const tablePutResponse = await azure.request({
-          method: tableRequest.method,
-          path: tableRequest.path,
-          apiVersion: tableRequest.apiVersion,
-          body: tableRequest.body,
-        });
-        if (!is2xx(tablePutResponse.status)) {
-          throw new StepFailure(
-            httpErrorText(
-              `create custom table '${tableRequest.tableName}'`,
-              tablePutResponse.status,
-              tablePutResponse.body,
-            ),
-          );
-        }
-
-        // Attempt-bounded readback (replaces the legacy blind Start-Sleep
-        // 10): poll until the created table GETs back with a terminal
-        // provisioningState. A 404 counts as "not replicated yet".
-        const maxTableAttempts =
-          input.maxTablePollAttempts ?? DEFAULT_TABLE_POLL_ATTEMPTS;
-        let tableAttempts = 0;
-        for (;;) {
-          if (tableAttempts >= maxTableAttempts) {
-            throw new StepFailure(
-              `custom table '${tableRequest.tableName}' was created but did ` +
-                `not read back successfully within ${maxTableAttempts} poll attempts`,
-            );
-          }
-          tableAttempts++;
-          const pollResponse = await azure.request({
-            method: "GET",
-            path: tablePath,
-            apiVersion: LOG_ANALYTICS_API_VERSION,
-          });
-          if (is2xx(pollResponse.status)) {
-            const state = prop(prop(pollResponse.body, "properties"), "provisioningState");
-            const stateText = typeof state === "string" ? state : null;
-            if (stateText !== null && /^(failed|canceled)$/i.test(stateText)) {
-              throw new StepFailure(
-                `custom table '${tableRequest.tableName}' provisioning ended ` +
-                  `in state '${stateText}'`,
-              );
-            }
-            if (stateText === null || /^succeeded$/i.test(stateText)) {
-              customTableBody = pollResponse.body;
-              break;
-            }
-          } else if (pollResponse.status !== 404) {
-            throw new StepFailure(
-              httpErrorText(
-                `poll custom table '${tableRequest.tableName}'`,
-                pollResponse.status,
-                pollResponse.body,
-              ),
-            );
-          }
-        }
-        await setStep(
-          currentStep,
-          "succeeded",
-          `created '${tableRequest.tableName}' with ` +
-            `${tableRequest.body.properties.schema.columns.length} columns, ` +
-            `retention ${tableRequest.body.properties.retentionInDays}/` +
-            `${tableRequest.body.properties.totalRetentionInDays} days`,
-        );
-      } else {
+      } catch (err) {
         throw new StepFailure(
-          httpErrorText(
-            `check custom table '${input.table}'`,
-            existingResponse.status,
-            existingResponse.body,
-          ),
+          err instanceof Error ? err.message : String(err),
         );
       }
+      customTableBody = created.body;
+      await setStep(
+        currentStep,
+        "succeeded",
+        created.created
+          ? `created '${created.tableName}' with ` +
+              `${created.columnCount} columns, ` +
+              `retention ${created.retentionInDays}/` +
+              `${created.totalRetentionInDays} days`
+          : `table '${input.table}' already exists - creation skipped`,
+      );
     }
 
     // ---- Step 3: fetch-table-schema ----------------------------------

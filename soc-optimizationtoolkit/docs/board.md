@@ -11,7 +11,7 @@ two cannot disagree.
 alternatives. This board holds only what is a unit of work, what state it is
 in, and what it waits on.
 
-**58 in the backlog, 1 in progress, 43 done.**
+**57 in the backlog, 0 in progress, 45 done.**
 
 ## By menu item
 
@@ -24,14 +24,14 @@ operator sees on any screen. Two menus are PLANNED and have no route yet.
 | Dataflow | 3 | 0 | 0 |
 | Setup | 1 | 0 | 0 |
 | Sentinel Integration | 13 | 13 | 0 |
-| DCR Automation | 5 | 5 | 3 |
+| DCR Automation | 3 | 7 | 1 |
 | Pack Maintenance | 4 | 1 | 0 |
 | Permission Verification | 8 | 0 | 0 |
 | Azure Native Source Onboarding (planned) | 13 | 4 | 0 |
 | Windows Event analysis (planned) | 5 | 0 | 0 |
 | Cross-cutting | 7 | 20 | 0 |
 
-Open work totals 59.
+Open work totals 57.
 
 ## Epics and features
 
@@ -130,102 +130,32 @@ ENABLER EPIC: verification gaps, copy, diagram fidelity, docs and the board's ow
 | `DBT-F6` Effect-identity defect class | Pack Maintenance | 0/1 | FX-4 |
 | `DBT-F7` Export instead of deploy - the offline path | DCR Automation | 3/4 | DBT-33, DBT-34, DBT-35*, DBT-37 |
 
-### `TBL` Custom table authoring and table-first DCR creation - 50% (3/6)
+### `TBL` Custom table authoring and table-first DCR creation - 83% (5/6)
 
 RAISED BY THE USER 2026-08-31. DCR Automation can onboard a table you can already NAME, but it cannot help you create one, and it cannot show you what the workspace already has. Every schema today arrives from somewhere else - a bundled vendor entry, a pasted JSON file, or a table that already exists - so an operator with a new log source and no schema file has no path through this screen at all.
 
 | Feature | Menu | Done | Stories |
 |---|---|---|---|
-| `TBL-F1` Author a custom table by hand | DCR Automation | 2/3 | TBL-6, TBL-1, TBL-2 |
-| `TBL-F2` Table inventory as the starting point | DCR Automation | 1/2 | TBL-3, TBL-5 |
+| `TBL-F1` Author a custom table by hand | DCR Automation | 3/3 | TBL-6, TBL-1, TBL-2 |
+| `TBL-F2` Table inventory as the starting point | DCR Automation | 2/2 | TBL-3, TBL-5 |
 | `TBL-F3` The new surfaces work without write permission | DCR Automation | 0/1 | TBL-4 |
 
 ---
 
-## In progress (1)
+## In progress (0)
 
 Started. Anything here with an unfinished dependency is called out on its card.
 
-- **TBL-3** Inventory the workspace's tables and build a DCR from one
-  `TBL-F2` `story` `settled`
-  RAISED BY THE USER 2026-08-31: "inventory existing tables and create DCRs
-  based on the inventoried table". The Inventory tab today lists DATA
-  COLLECTION RULES; there is no table inventory on this screen. The direction
-  of travel is what is missing rather than the capability: Single table makes
-  you KNOW the table name and type it in, so an operator who wants to see what
-  is there and act on it has nowhere to start. `listWorkspaceTables` and
-  `fetchWorkspaceTableSchema` already exist and are already driven by
-  `use-workspace-tables`; note that `screens/table-picker/` is state and a
-  hook with NO screen component, so this is the surface that hook has been
-  waiting for. The action per row is the existing onboard path with the
-  `existing` schema source - the table is there, so its live Azure schema
-  wins, which is the legacy Process-CustomTable contract and needs no new
-  decision. REUSE THE EXISTING DECISIONS rather than writing a second listing:
-  `emptyTableListMessage` (table-picker-state) already decides when an empty
-  table list is a real zero, and the DCR Inventory panel already shows what a
-  good row with a per-row action looks like. NOT AN AUTO-LOAD: the deleted
-  panel's own lesson was that the listing is deliberately not re-attempted
-  automatically, because one 403 becomes a request storm - so this gets a
-  Load/Refresh button like DCR Inventory has. THIS IS NOT A REVIVAL OF
-  `TablePickerSection`, which was DELETED 2026-08-18 (backlog.md, 'The
-  workspace table listing lost its panel'), and the distinction is the whole
-  reason this card is honest: that panel was a PICKER whose job - choose ONE
-  table for the whole analysis - moved onto the per-log-type mapping-review
-  cards, leaving it listing 842 rows nobody selected from. Its own header said
-  'IT LOADS; IT DOES NOT SELECT'. This panel has the job that one lost: it is
-  an operational inventory with an ACTION per row, standing to tables exactly
-  as the DCR Inventory tab stands to DCRs. Reviving the old component would be
-  wrong; building this is not. DECIDED with [[TBL-5]] 2026-08-31: a table that
-  already has a DCR SAYS SO on its row (the user's chosen layout shows a `has
-  DCR` column), because the data is one `listDcrInventory` call away and an
-  operator building a duplicate is the thing this panel should prevent. THE
-  LISTING IS DONE AND VERIFIED LIVE 2026-08-31: the Tables tab lists all 842
-  tables of `law-jpederson-eastus` with kind, retention, plan and the DCR
-  column, and `WindowsEvent` correctly reads
-  `dcr-WindowsEvent-paradigm-replica` while every unmatched row reads `none in
-  rg-jpederson-QuickstartLab`. The DCR verdict is THREE-WAY, not a boolean -
-  `has`, `none-in-scope`, `unchecked` - because `listDcrInventory` reads one
-  resource group, so "nothing matched" and "we did not look" are different
-  facts and a boolean would report the second as the first.
-  `useWorkspaceTables` was NOT reused: it loads on an effect and its
-  `listedFor` guard means a second load never happens, so it cannot serve a
-  Refresh. STILL OPEN, and the reason this card is not done: BOTH ACTIONS are
-  unwired. There is no table prefill on the Single tab
-  (`OnboardTableScreenProps` has three props and `setSelected` is local
-  state), and no core usecase that creates ONE table from a supplied schema -
-  `buildTablePutRequest` is domain-only and its orchestration lives inside
-  `onboardTable` steps. The panel takes `onCreateTable`/`onCreateDcr` as
-  OPTIONAL props and renders neither button when a host supplies neither, so
-  it ships its listing honestly rather than offering a button that goes
-  nowhere.
+_Nothing here._
 
 ---
 
-## Backlog - now (2)
+## Backlog - now (1)
 
 Next to pick up. Nothing blocks these.
 
-- **TBL-2** Refuse a table name the workspace already has
-  `TBL-F1` `story` `settled`
-  RAISED BY THE USER 2026-08-31: "inventory and validate the table name
-  doesn't already exist". `validateCustomTableSchema` validates the NAME'S
-  SHAPE (the _CL suffix) and the columns, but nothing anywhere compares the
-  name against what the workspace actually holds - `avoidNameCollision` in
-  `domain/dcr-naming` is for DCR names, not table names. WHY IT MATTERS MORE
-  THAN IT LOOKS: the tables PUT is an UPSERT, exactly like the DCR PUT that
-  `avoidNameCollision` exists to guard, so authoring a schema over a name that
-  is already taken does not fail - it REDEFINES a live table's schema, and the
-  first symptom is somebody else's data not arriving. `listWorkspaceTables`
-  already lists both kinds and `fetchWorkspaceTableSchema` reads one, so the
-  check is a read the app already knows how to do. STATE THE VERDICT HONESTLY,
-  per docs/inventory-standard.md and the rule [[HON-2]] was filed for: ARM
-  answers 200 with an empty array when RBAC filters the caller out, so "that
-  name is free" must not be claimed off an unverified read. Three verdicts,
-  not two - taken, free, and could-not-check - and the third must not block
-  the operator, only stop the app promising.
-
 - **TBL-4** Offer the ARM template when the write capability is absent
-  `TBL-F3` `story` `settled` `blocked by TBL-3`
+  `TBL-F3` `story` `settled`
   RAISED BY THE USER 2026-08-31: "if the user hasn't granted the app
   permission to create Azure resources like DCRs then they should still get
   the option to see and download an ARM template for the DCR creation". THIS
@@ -880,7 +810,7 @@ Settled, gated on something above.
 
 ---
 
-## Done (43)
+## Done (45)
 
 Kept briefly so a reader can see what just landed; prune when the list grows.
 
@@ -2041,6 +1971,98 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   the `.csv-map-*` row vocabulary because it is the only layout here that
   stacks a per-row message under its own input. See [[TBL-6]] for the rule
   this shipped without.
+
+- **TBL-2** Refuse a table name the workspace already has
+  `TBL-F1` `story` `settled` `verified: both`
+  RAISED BY THE USER 2026-08-31: "inventory and validate the table name
+  doesn't already exist". `validateCustomTableSchema` validates the NAME'S
+  SHAPE (the _CL suffix) and the columns, but nothing anywhere compares the
+  name against what the workspace actually holds - `avoidNameCollision` in
+  `domain/dcr-naming` is for DCR names, not table names. WHY IT MATTERS MORE
+  THAN IT LOOKS: the tables PUT is an UPSERT, exactly like the DCR PUT that
+  `avoidNameCollision` exists to guard, so authoring a schema over a name that
+  is already taken does not fail - it REDEFINES a live table's schema, and the
+  first symptom is somebody else's data not arriving. `listWorkspaceTables`
+  already lists both kinds and `fetchWorkspaceTableSchema` reads one, so the
+  check is a read the app already knows how to do. STATE THE VERDICT HONESTLY,
+  per docs/inventory-standard.md and the rule [[HON-2]] was filed for: ARM
+  answers 200 with an empty array when RBAC filters the caller out, so "that
+  name is free" must not be claimed off an unverified read. Three verdicts,
+  not two - taken, free, and could-not-check - and the third must not block
+  the operator, only stop the app promising. DONE 2026-08-31 as
+  `checkTableName` in workspace-tables-state, and it costs NO extra request:
+  the Tables tab has already listed the workspace, so the check reads the list
+  it is holding. VERIFIED LIVE - typing `cloudflare_cl` into the create form
+  answers "Cloudflare_CL already exists in this workspace. Creating it again
+  would replace its schema", naming the EXISTING casing rather than what was
+  typed so the operator can find what they collided with. The unchecked
+  verdict annotates and does not block, which is safe because
+  `createCustomTable` GETs before it writes - this check exists to warn BEFORE
+  a schema is filled in, not to be the only guard.
+
+- **TBL-3** Inventory the workspace's tables and build a DCR from one
+  `TBL-F2` `story` `settled` `verified: both`
+  RAISED BY THE USER 2026-08-31: "inventory existing tables and create DCRs
+  based on the inventoried table". The Inventory tab today lists DATA
+  COLLECTION RULES; there is no table inventory on this screen. The direction
+  of travel is what is missing rather than the capability: Single table makes
+  you KNOW the table name and type it in, so an operator who wants to see what
+  is there and act on it has nowhere to start. `listWorkspaceTables` and
+  `fetchWorkspaceTableSchema` already exist and are already driven by
+  `use-workspace-tables`; note that `screens/table-picker/` is state and a
+  hook with NO screen component, so this is the surface that hook has been
+  waiting for. The action per row is the existing onboard path with the
+  `existing` schema source - the table is there, so its live Azure schema
+  wins, which is the legacy Process-CustomTable contract and needs no new
+  decision. REUSE THE EXISTING DECISIONS rather than writing a second listing:
+  `emptyTableListMessage` (table-picker-state) already decides when an empty
+  table list is a real zero, and the DCR Inventory panel already shows what a
+  good row with a per-row action looks like. NOT AN AUTO-LOAD: the deleted
+  panel's own lesson was that the listing is deliberately not re-attempted
+  automatically, because one 403 becomes a request storm - so this gets a
+  Load/Refresh button like DCR Inventory has. THIS IS NOT A REVIVAL OF
+  `TablePickerSection`, which was DELETED 2026-08-18 (backlog.md, 'The
+  workspace table listing lost its panel'), and the distinction is the whole
+  reason this card is honest: that panel was a PICKER whose job - choose ONE
+  table for the whole analysis - moved onto the per-log-type mapping-review
+  cards, leaving it listing 842 rows nobody selected from. Its own header said
+  'IT LOADS; IT DOES NOT SELECT'. This panel has the job that one lost: it is
+  an operational inventory with an ACTION per row, standing to tables exactly
+  as the DCR Inventory tab stands to DCRs. Reviving the old component would be
+  wrong; building this is not. DECIDED with [[TBL-5]] 2026-08-31: a table that
+  already has a DCR SAYS SO on its row (the user's chosen layout shows a `has
+  DCR` column), because the data is one `listDcrInventory` call away and an
+  operator building a duplicate is the thing this panel should prevent. THE
+  LISTING IS DONE AND VERIFIED LIVE 2026-08-31: the Tables tab lists all 842
+  tables of `law-jpederson-eastus` with kind, retention, plan and the DCR
+  column, and `WindowsEvent` correctly reads
+  `dcr-WindowsEvent-paradigm-replica` while every unmatched row reads `none in
+  rg-jpederson-QuickstartLab`. The DCR verdict is THREE-WAY, not a boolean -
+  `has`, `none-in-scope`, `unchecked` - because `listDcrInventory` reads one
+  resource group, so "nothing matched" and "we did not look" are different
+  facts and a boolean would report the second as the first.
+  `useWorkspaceTables` was NOT reused: it loads on an effect and its
+  `listedFor` guard means a second load never happens, so it cannot serve a
+  Refresh. STILL OPEN, and the reason this card is not done: BOTH ACTIONS are
+  unwired. There is no table prefill on the Single tab
+  (`OnboardTableScreenProps` has three props and `setSelected` is local
+  state), and no core usecase that creates ONE table from a supplied schema -
+  `buildTablePutRequest` is domain-only and its orchestration lives inside
+  `onboardTable` steps. BOTH ACTIONS WIRED 2026-08-31 and VERIFIED LIVE end to
+  end. Create table: the user chose to EXTRACT the creation contract rather
+  than route to Single, so `createCustomTable` is now its own core usecase (11
+  pins) built out of onboardTable's step 2, and onboardTable calls it - its 27
+  characterization pins pass unchanged, which is what made the extraction
+  safe. The Tables tab therefore creates a table with AZURE ALONE, no worker
+  group and no ingestion client id, which is the point. Create DCR:
+  `OnboardTableScreen` gained a mount-time `initialTable` seed,
+  `DcrAutomationScreen` became OPTIONALLY controlled
+  (`activeTab`/`onTabChange`, uncontrolled path unchanged and pinned), and the
+  shell holds the hand-off. Live: Create DCR on the `AACAudit` row lands on
+  Single table with the name filled in. ONE DEFECT FOUND AND FIXED IN THE
+  WIRING: the shell's new useState calls were placed beside their use site,
+  which is BELOW three gate returns, so React rendered fewer hooks than
+  expected and the whole app went blank - the hooks moved above the gates.
 
 - **TBL-5** Where do the two new panels live on the screen?
   `TBL-F2` `decision` `settled` `verified: none`

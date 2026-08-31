@@ -34,6 +34,7 @@
 
 import { useCallback, useState } from "react";
 import {
+  createCustomTable,
   emptyCapabilitySet,
   listDcrInventory,
   listWorkspaceTables,
@@ -48,9 +49,21 @@ import { usePorts } from "../../ports-context";
 import { emptyTableListMessage } from "../table-picker/table-picker-state";
 import {
   buildWorkspaceTableRows,
+  checkTableName,
   dcrCellLabel,
   dcrColumnNote,
 } from "./workspace-tables-state";
+import { ManualSchemaEditor } from "../../onboarding/manual-schema-editor";
+import {
+  addManualColumn,
+  emptyManualColumns,
+  manualColumnsToSchema,
+  manualRowStatuses,
+  manualSchemaErrors,
+  removeManualColumn,
+  updateManualColumn,
+} from "../../onboarding/manual-schema-state";
+import type { ManualColumnDraft } from "../../onboarding/manual-schema-state";
 
 export interface WorkspaceTablesPanelProps {
   /** What the connected identity was measured to be able to do. */
@@ -58,9 +71,9 @@ export interface WorkspaceTablesPanelProps {
   /** Connection facts for resolving unmeasured capabilities. */
   capabilityContext?: CapabilityContext;
   /**
-   * Open the hand-authored table creation flow. OPTIONAL: the control renders
-   * only when a host supplies it, so the panel ships its listing without
-   * waiting on the creation path to be wired (TBL-1/TBL-3 hand-off).
+   * Notified when the operator opens the create-table form. OPTIONAL and
+   * informational only - the panel owns the form itself, so a host that
+   * passes nothing still gets full creation.
    */
   onCreateTable?: () => void;
   /**
@@ -81,6 +94,17 @@ export function WorkspaceTablesPanel(props: WorkspaceTablesPanelProps = {}) {
   const [dcrs, setDcrs] = useState<DcrInventoryEntry[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+
+  // The create-table flow (TBL-1 + TBL-2). Azure-only: creating a table needs
+  // no Cribl worker group and no ingestion client id, which is the whole
+  // reason it lives here rather than behind the Single tab's Run.
+  const [creating, setCreating] = useState(false);
+  const [newTable, setNewTable] = useState("");
+  const [newColumns, setNewColumns] = useState<ManualColumnDraft[]>(
+    emptyManualColumns,
+  );
+  const [createBusy, setCreateBusy] = useState(false);
+  const [createResult, setCreateResult] = useState("");
 
   const scopeReady =
     config.subscriptionId !== "" &&
@@ -136,6 +160,67 @@ export function WorkspaceTablesPanel(props: WorkspaceTablesPanelProps = {}) {
     config.workspaceName,
   ]);
 
+  const nameCheck = checkTableName(newTable, tables);
+  const schemaErrors = manualSchemaErrors(newColumns);
+  const schemaColumns = manualColumnsToSchema(newColumns);
+  // Every reason Create is not available, first one shown. Ordered from the
+  // operator's own input outward, so the message names what they can fix.
+  const createDisabledReason =
+    newTable.trim() === ""
+      ? "Name the table first."
+      : !newTable.trim().endsWith("_CL")
+        ? "A custom table name must end with _CL."
+        : nameCheck.blocking
+          ? nameCheck.message
+          : schemaColumns.length === 0
+            ? "Add at least one field."
+            : schemaErrors.length > 0
+              ? schemaErrors[0]
+              : null;
+
+  const create = useCallback(async () => {
+    setCreateBusy(true);
+    setCreateResult("");
+    try {
+      const result = await createCustomTable(ports.azure, {
+        subscriptionId: config.subscriptionId,
+        resourceGroup: config.resourceGroup,
+        workspaceName: config.workspaceName,
+        table: newTable.trim(),
+        columns: manualColumnsToSchema(newColumns),
+      });
+      setCreateResult(
+        result.created
+          ? `Created ${result.tableName} with ${result.columnCount} columns ` +
+              `(retention ${result.retentionInDays}/${result.totalRetentionInDays} days).`
+          : `${result.tableName} already existed - nothing was written.`,
+      );
+      logger?.info(
+        `workspace-tables: create ${result.tableName} - ` +
+          (result.created ? "created" : "already existed"),
+      );
+      // Re-list so the new table appears and the name check sees it.
+      await load();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      setCreateResult(message);
+      logger?.error(`workspace-tables: create failed - ${message}`);
+    } finally {
+      setCreateBusy(false);
+    }
+    // `load` is intentionally in the deps: re-listing after a create is part
+    // of this action, not a side effect someone else owns.
+  }, [
+    ports.azure,
+    logger,
+    config.subscriptionId,
+    config.resourceGroup,
+    config.workspaceName,
+    newTable,
+    newColumns,
+    load,
+  ]);
+
   const rows = tables === null ? [] : buildWorkspaceTableRows(tables, dcrs);
   const emptyMessage = emptyTableListMessage(
     capabilities ?? emptyCapabilitySet(),
@@ -162,18 +247,79 @@ export function WorkspaceTablesPanel(props: WorkspaceTablesPanelProps = {}) {
         >
           {busy ? "Loading..." : tables === null ? "Load tables" : "Refresh"}
         </button>
-        {onCreateTable !== undefined && (
-          <button
-            className="run-button"
-            onClick={onCreateTable}
-            disabled={busy}
-            title="Define a new custom table's fields and types"
-          >
-            Create table
-          </button>
-        )}
+        <button
+          className="run-button"
+          onClick={() => {
+            setCreating(!creating);
+            setCreateResult("");
+            onCreateTable?.();
+          }}
+          disabled={busy || createBusy}
+          title="Define a new custom table's fields and types"
+        >
+          {creating ? "Cancel" : "Create table"}
+        </button>
       </div>
       {error !== "" && <pre className="result">{error}</pre>}
+      {creating && (
+        <div className="panel create-table-form">
+          <p className="panel-desc">
+            Creates the Log Analytics table only - no data collection rule and
+            no Cribl destination. Azure-managed columns are removed from the
+            payload and TimeGenerated is added when absent.
+          </p>
+          <label className="field">
+            <span className="field-label">Table name</span>
+            <input
+              type="text"
+              placeholder="MyApp_CL"
+              value={newTable}
+              autoComplete="off"
+              spellCheck={false}
+              disabled={createBusy}
+              onChange={(ev) => setNewTable(ev.target.value)}
+            />
+            {/* The name check ANNOTATES on an unread listing and BLOCKS only
+                on a measured collision - an unread listing cannot say a name
+                is free. */}
+            {nameCheck.message !== null && (
+              <span
+                className={
+                  nameCheck.blocking
+                    ? "field-hint enrich-issue"
+                    : "field-hint"
+                }
+              >
+                {nameCheck.message}
+              </span>
+            )}
+          </label>
+          <ManualSchemaEditor
+            rows={newColumns}
+            statuses={manualRowStatuses(newColumns)}
+            onAdd={() => setNewColumns(addManualColumn(newColumns))}
+            onRemove={(id) => setNewColumns(removeManualColumn(newColumns, id))}
+            onEdit={(id, patch) =>
+              setNewColumns(updateManualColumn(newColumns, id, patch))
+            }
+            busy={createBusy}
+          />
+          <div className="panel-controls">
+            <button
+              className="run-button"
+              onClick={() => void create()}
+              disabled={createBusy || createDisabledReason !== null}
+              title={createDisabledReason ?? undefined}
+            >
+              {createBusy ? "Creating..." : "Create table"}
+            </button>
+            {createDisabledReason !== null && !createBusy && (
+              <span className="field-hint">{createDisabledReason}</span>
+            )}
+          </div>
+          {createResult !== "" && <pre className="result">{createResult}</pre>}
+        </div>
+      )}
       {tables !== null && tables.length === 0 && (
         <p className="field-hint">{emptyMessage.text}</p>
       )}

@@ -109,6 +109,64 @@ export function dcrCellLabel(
 }
 
 /**
+ * Whether a proposed table name is already taken (TBL-2).
+ *
+ * WHY THIS IS NOT COSMETIC: the tables PUT is an UPSERT, exactly like the DCR
+ * PUT that `avoidNameCollision` exists to guard. Authoring a schema over a
+ * name that already exists does not fail - it REDEFINES a live table's
+ * schema, and the first symptom is somebody else's data not arriving.
+ *
+ * THREE VERDICTS, NOT TWO, for the same reason the DCR column has three: a
+ * listing that was never read cannot say a name is free. `tables` is null
+ * before the listing runs, and `unchecked` must not block the operator - it
+ * only stops the app promising. (`createCustomTable` still GETs before it
+ * writes, so an unchecked name is safe to attempt; this check exists to tell
+ * the operator BEFORE they fill in a schema, not to be the only guard.)
+ */
+export type TableNameVerdict = "taken" | "free" | "unchecked";
+
+export interface TableNameCheck {
+  verdict: TableNameVerdict;
+  /** Operator-facing sentence, or null when there is nothing to say. */
+  message: string | null;
+  /** Whether the name should stop a create attempt. */
+  blocking: boolean;
+}
+
+export function checkTableName(
+  name: string,
+  tables: readonly WorkspaceTable[] | null,
+): TableNameCheck {
+  const trimmed = name.trim();
+  if (trimmed === "") {
+    return { verdict: "unchecked", message: null, blocking: false };
+  }
+  if (tables === null) {
+    return {
+      verdict: "unchecked",
+      message:
+        "Load the table list to check whether this name is already taken. " +
+        "Creating over an existing table replaces its schema.",
+      blocking: false,
+    };
+  }
+  const hit = tables.find(
+    (t) => t.name.toLowerCase() === trimmed.toLowerCase(),
+  );
+  if (hit !== undefined) {
+    return {
+      verdict: "taken",
+      message:
+        `${hit.name} already exists in this workspace. Creating it again ` +
+        "would replace its schema - choose another name, or use the " +
+        "existing table.",
+      blocking: true,
+    };
+  }
+  return { verdict: "free", message: null, blocking: false };
+}
+
+/**
  * The header note explaining what the DCR column can and cannot see.
  *
  * Rendered once, above the listing, rather than repeated per row - the caveat

@@ -146,6 +146,9 @@ export type { NextActionView } from "./screens/home/home-state";
 
 export { DcrAutomationScreen } from "./screens/dcr-automation/dcr-automation-screen";
 export type { DcrAutomationScreenProps } from "./screens/dcr-automation/dcr-automation-screen";
+// Exported so a shell can hold the tab selection (TBL-3's Tables -> Single
+// hand-off needs the host to own it).
+export type { DcrTab } from "./screens/dcr-automation/dcr-automation-state";
 export { DcrInventoryPanel } from "./screens/dcr-automation/dcr-inventory-panel";
 export type { DcrInventoryPanelProps } from "./screens/dcr-automation/dcr-inventory-panel";
 

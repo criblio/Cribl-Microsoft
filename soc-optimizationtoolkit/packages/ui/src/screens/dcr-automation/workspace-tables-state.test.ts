@@ -12,6 +12,7 @@ import type { DcrInventoryEntry, WorkspaceTable } from "@soc/core";
 import {
   buildWorkspaceTableRows,
   dcrCellLabel,
+  checkTableName,
   dcrColumnNote,
 } from "./workspace-tables-state";
 
@@ -118,6 +119,52 @@ describe("dcrCellLabel", () => {
       [dcr("dcr-a", ["Syslog"]), dcr("dcr-b", ["Syslog"])],
     );
     expect(dcrCellLabel(row!, "rg-1")).toBe("dcr-a, dcr-b");
+  });
+});
+
+describe("checkTableName (TBL-2)", () => {
+  const listed = [table("App_CL", "custom"), table("SecurityEvent", "native")];
+
+  it("BLOCKS a name the workspace already has", () => {
+    // The tables PUT is an upsert: creating over this name replaces a live
+    // table's schema, and the first symptom is someone else's data missing.
+    const check = checkTableName("App_CL", listed);
+    expect(check.verdict).toBe("taken");
+    expect(check.blocking).toBe(true);
+    expect(check.message).toContain("replace its schema");
+  });
+
+  it("matches case-insensitively, as Log Analytics does", () => {
+    expect(checkTableName("app_cl", listed).verdict).toBe("taken");
+  });
+
+  it("names the EXISTING casing, not what was typed", () => {
+    // So the operator can find the table they collided with.
+    expect(checkTableName("app_cl", listed).message).toContain("App_CL");
+  });
+
+  it("says free for an unused name, with nothing to report", () => {
+    const check = checkTableName("Brand_New_CL", listed);
+    expect(check.verdict).toBe("free");
+    expect(check.message).toBeNull();
+    expect(check.blocking).toBe(false);
+  });
+
+  it("does NOT claim free when the listing was never read", () => {
+    // The defect this guards: an unread listing is not a measured zero.
+    const check = checkTableName("Anything_CL", null);
+    expect(check.verdict).toBe("unchecked");
+    expect(check.message).toContain("Load the table list");
+  });
+
+  it("leaves an unchecked name NON-blocking - it annotates, never forbids", () => {
+    // Capability rule 3 in miniature, and createCustomTable still GETs before
+    // it writes, so attempting is safe.
+    expect(checkTableName("Anything_CL", null).blocking).toBe(false);
+  });
+
+  it("says nothing at all about an empty name", () => {
+    expect(checkTableName("   ", listed).message).toBeNull();
   });
 });
 
