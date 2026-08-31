@@ -25,6 +25,8 @@ import {
   ONBOARD_BATCH_JOB_KIND,
   SENTINEL_SECRET_PLACEHOLDER,
   VENDOR_SCHEMAS,
+  artifactsToOffer,
+  emptyCapabilitySet,
   findVendorSchema,
   isStreamWorkerGroup,
   onboardBatch,
@@ -32,6 +34,10 @@ import {
 } from "@soc/core";
 import type {
   BatchPacing,
+  Capability,
+  CapabilityContext,
+  CapabilityFallback,
+  CapabilitySet,
   CriblGroupSummary,
   CriblOptions,
   JobStep,
@@ -39,6 +45,13 @@ import type {
   OperationOptions,
 } from "@soc/core";
 import { usePorts } from "../../ports-context";
+import { deriveCapabilityContext } from "../../capabilities/capability-audit-state";
+import { FallbackNotice } from "../../capabilities/fallback-notice";
+import {
+  FALLBACK_POINTER_LABEL,
+  fallbackRunPointer,
+  isInlineArtifact,
+} from "../../capabilities/fallback-notice-state";
 import { SearchableSelect } from "../../components/searchable-select";
 import { formatStepLine } from "../step-line";
 import { RecentRuns } from "../recent-runs";
@@ -58,6 +71,22 @@ import type { BatchRunOverride, BatchRunOverrides } from "./batch-state";
 
 /** Terminal display state of the last run (batch jobs can end 'skipped'). */
 type RunState = "idle" | "running" | "succeeded" | "failed" | "skipped";
+
+/**
+ * The WRITES a batch run performs, deciding which fallback artifacts it offers
+ * (HON-7 / D-2, backlog section 16).
+ *
+ * `destination.manage` belongs here even though this screen never builds a
+ * pack: the batch DOES create a Cribl destination per table, so the Cribl write
+ * is genuinely one of this run's writes, and rule 2 says a blocked one gets an
+ * artifact. The pack is that artifact, it is built elsewhere, and the producer
+ * below points there rather than pretending otherwise.
+ */
+const BATCH_WRITE_CAPABILITIES: readonly Capability[] = Object.freeze([
+  "dcr.write",
+  "table.write",
+  "destination.manage",
+]);
 
 const RUN_STATE_CLASS: Record<RunState, string> = {
   idle: "status-idle",
@@ -100,6 +129,22 @@ export interface BatchDeployScreenProps {
    * an ingestion secret (no destination is created, so none is used).
    */
   forcedTemplateOnly?: boolean;
+  /**
+   * What the connected identity was MEASURED to be able to do, used only to
+   * decide which fallback artifacts this run offers (HON-7). Absent = an
+   * unaudited set, in which every write resolves `unknown`, routes live, and
+   * offers nothing - the honest answer when nothing has been measured.
+   */
+  capabilities?: CapabilitySet;
+  /**
+   * Connection facts for resolving unmeasured capabilities. Absent, they are
+   * derived from the two facts this screen already holds: the active config
+   * names an App registration, and `forcedTemplateOnly` IS "no reachable Cribl
+   * connection" (the shell derives it from exactly that - `destination.manage`
+   * unreachable). Deriving beats defaulting to reachable, which would claim a
+   * Cribl connection the mode has already said does not exist.
+   */
+  capabilityContext?: CapabilityContext;
 }
 
 /** The tri-state override select, one per overridable flag. */
@@ -145,6 +190,8 @@ export function BatchDeployScreen({
   criblDefaults,
   onOpenOptions,
   forcedTemplateOnly = false,
+  capabilities,
+  capabilityContext,
 }: BatchDeployScreenProps) {
   const { ports, config } = usePorts();
 
@@ -220,6 +267,11 @@ export function BatchDeployScreen({
   const [recordState, setRecordState] = useState<RunState>("idle");
   const [runError, setRunError] = useState("");
   const [artifactFeedback, setArtifactFeedback] = useState("");
+  // HON-7: what a taken offer said, when the answer was to POINT at another
+  // screen's run rather than start this one. Its own slot, not artifactFeedback:
+  // that line reports what THIS run saved, and merging the two would let a
+  // pointer read as a file that exists.
+  const [offerPointer, setOfferPointer] = useState("");
   const [lastArtifact, setLastArtifact] = useState<{
     name: string;
     json: string;
@@ -237,20 +289,34 @@ export function BatchDeployScreen({
     }
   };
 
-  const run = async () => {
+  /**
+   * `forceTemplateOnly` is how the HON-7 fallback offer STARTS this run: the
+   * offer is taken from a state where the operator's own overrides may leave
+   * templateOnly off, and the artifact only exists if the run collects instead
+   * of deploying. It forces the flag for THIS run without editing the override
+   * select, so the operator's saved choice is not silently rewritten - the same
+   * shape `forcedTemplateOnly` already uses for the mode fact.
+   */
+  const run = async (forceTemplateOnly = false) => {
+    // NOT `effective`: that is memoised from the override state, so a run
+    // started by the offer has to re-derive with the force applied.
+    const options = forceTemplateOnly
+      ? applyRunOverrides(persisted, overrides, true)
+      : effective;
     setRunning(true);
     setRecordState("running");
     setOutcome(null);
     setRunError("");
     setArtifactFeedback("");
+    setOfferPointer("");
     setLastArtifact(null);
-    setOutcomeTemplateOnly(effective.templateOnly);
+    setOutcomeTemplateOnly(options.templateOnly);
     // Seed every parent step as pending so the list renders complete from
     // the first onProgress tick - shared prologue steps (fetch-workspace,
     // ensure-dce, associate-ampls) plus one table:{name} line per table.
     const seeded: JobStep[] = onboardBatchStepsFor(
       selection.specs,
-      effective,
+      options,
     ).map((name) => ({ name, status: "pending" }));
     setSteps(seeded);
     try {
@@ -264,7 +330,7 @@ export function BatchDeployScreen({
         ingestionClientId: ingestionClientId.trim(),
         ingestionClientSecret:
           ingestionClientSecret === "" ? undefined : ingestionClientSecret,
-        options: effective,
+        options,
         pacing,
         onProgress: (step) => {
           setSteps((prev) =>
@@ -289,7 +355,7 @@ export function BatchDeployScreen({
         );
       }
       if (
-        effective.templateOnly &&
+        options.templateOnly &&
         result !== null &&
         result.templates.length > 0
       ) {
@@ -313,6 +379,69 @@ export function BatchDeployScreen({
       setRunning(false);
       setHistoryToken((n) => n + 1);
     }
+  };
+
+  // ---- The fallback offer (HON-7 / D-2) ----------------------------------
+  // Rule 2: every blocked action falls back to a downloadable artifact. This
+  // screen owns its own producer, and the two answers it can honestly give are
+  // both here - it STARTS the template-only run for the ARM kinds it collects,
+  // and POINTS at the run that builds the pack, which is not this one.
+  //
+  // ANNOTATES, NEVER REMOVES (rule 3): Run batch onboarding above is untouched.
+  const context = useMemo(
+    () =>
+      capabilityContext ?? deriveCapabilityContext(config, !forcedTemplateOnly),
+    [capabilityContext, config, forcedTemplateOnly],
+  );
+  const offers = useMemo(
+    () =>
+      artifactsToOffer(
+        BATCH_WRITE_CAPABILITIES,
+        capabilities ?? emptyCapabilitySet(),
+        context,
+      ),
+    [capabilities, context],
+  );
+
+  // Whether the offered artifact is one THIS run collects. templateOnly mode
+  // collects the custom-table PUT bodies and the DCR bodies (and the DCE /
+  // AMPLS bodies in DCE mode) - it never assembles a Cribl pack, which is why
+  // the pack kind is pointed at instead of run here.
+  const producedByThisRun = (fallback: CapabilityFallback): boolean =>
+    fallback.kind === "dcr-arm-bodies" || fallback.kind === "table-arm-bodies";
+
+  // The template-only run's OWN prerequisites, which are fewer than canRun's:
+  // it contacts no Cribl and creates no destination, so no worker group and no
+  // ingestion client id are needed (onboardBatch's templateOnly branch reads
+  // neither). Stating the reason is required - the notice never disables
+  // silently.
+  const offerRunDisabledReason = (): string | undefined => {
+    if (running) {
+      return "A batch run is already in flight.";
+    }
+    if (selection.errors.length > 0) {
+      return "Fix the table list errors above first.";
+    }
+    if (selection.specs.length === 0) {
+      return "List at least one table above - the artifact is per table.";
+    }
+    if (amplsIssue !== null) {
+      return `AMPLS resource ID: ${amplsIssue}`;
+    }
+    return undefined;
+  };
+
+  // Take the offer: start this run for what it collects, point at the run that
+  // makes the rest. Never assemble a run-kind artifact here (D-2) - only kinds
+  // this screen can honestly answer for reach it, which the render below is
+  // what guarantees.
+  const produceFallback = (fallback: CapabilityFallback): void => {
+    if (producedByThisRun(fallback)) {
+      setOfferPointer("");
+      void run(true);
+      return;
+    }
+    setOfferPointer(fallbackRunPointer(fallback.kind) ?? "");
   };
 
   // Forced templateOnly runs make no Cribl calls, so no worker group is
@@ -605,6 +734,50 @@ export function BatchDeployScreen({
       )}
       {artifactFeedback !== "" && (
         <p className="panel-desc">{artifactFeedback}</p>
+      )}
+
+      {/* HON-7 / D-2: the artifacts for the writes this connection was MEASURED
+          to lack. Run batch onboarding above stays exactly as available - the
+          audit informs and offers, Azure's own refusal is the gate. */}
+      {offers.length > 0 && (
+        <div className="discovery-result">
+          <span className="field-label">Take these to someone who can</span>
+          <p className="panel-desc">
+            Running above stays available - this reports access, it does not
+            gate the run. Each artifact below is what someone with the access
+            would apply on your behalf.
+          </p>
+          {offers.map((offer) => (
+            <FallbackNotice
+              key={offer.kind}
+              fallback={offer}
+              // NO producer for an INLINE kind: those are generated on the spot
+              // from data the app holds, this screen holds none of it, and a
+              // button that did nothing would be worse than the notice naming
+              // the artifact and stopping there (which is what absent means).
+              // Unreachable today - nothing in BATCH_WRITE_CAPABILITIES maps to
+              // an inline kind - and written as the rule so it survives one
+              // being added.
+              onProduce={
+                isInlineArtifact(offer.kind)
+                  ? undefined
+                  : () => produceFallback(offer)
+              }
+              disabledReason={
+                producedByThisRun(offer) ? offerRunDisabledReason() : undefined
+              }
+              // The label has to match what the click DOES: this run collects
+              // the ARM bodies, so "Download..." is true for those; the pack is
+              // built elsewhere, so that control says where instead (HON-7).
+              produceLabel={
+                producedByThisRun(offer) ? undefined : FALLBACK_POINTER_LABEL
+              }
+            />
+          ))}
+          {offerPointer !== "" && (
+            <p className="panel-desc">{offerPointer}</p>
+          )}
+        </div>
       )}
 
       <p className="panel-desc">

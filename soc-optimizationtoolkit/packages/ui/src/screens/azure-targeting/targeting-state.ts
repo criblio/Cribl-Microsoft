@@ -12,8 +12,12 @@
  *   - {@link buildLoaderPlan}: the ONE-LOADER contract. The legacy page ran
  *     THREE overlapping load effects (subscriptions, workspaces, resource
  *     groups) that raced each other; here a single effect derives what to
- *     fetch from one pure plan, and the tests pin that offline mode fetches
- *     nothing and that browsing a subscription reloads dependents only.
+ *     fetch from one pure plan, and the tests pin that THIS PLAN emits no keys
+ *     offline and that browsing a subscription reloads dependents only. That
+ *     is a claim about the plan, NOT about the screen: it says nothing about
+ *     an effect that never calls buildLoaderPlan, which is precisely how the
+ *     Sentinel auto-check fetched in the offline branch under a green suite
+ *     (DBT-45). Only the render pin covers the screen.
  *   - {@link commitNoticeText}: the invalidation consequences surfaced when a
  *     browsed scope is COMMITTED (connection-bar notice pattern), mapped from
  *     the @soc/core connection-invalidation result.
@@ -76,7 +80,18 @@ export function validateResourceGroupName(name: string): string | null {
 
 /** Input to {@link buildLoaderPlan}: what the screen currently shows. */
 export interface LoaderPlanInput {
-  /** Air-gapped/offline branch: free-text scope entry, NOTHING is fetched. */
+  /**
+   * Air-gapped/offline branch: THIS PLAN fetches nothing (both keys '').
+   *
+   * SCOPED TO THIS PLAN DELIBERATELY. It used to read "NOTHING is fetched",
+   * which sounded like a promise about the whole screen and was not one: the
+   * screen's Sentinel auto-check effect reached ARM in the offline branch
+   * regardless of this plan, because it never asked this plan anything
+   * (DBT-45). A pure function cannot suppress a fetch it is not consulted
+   * about. Each of the screen's port-touching effects has to honour `offline`
+   * itself, and the render pin in azure-targeting-screen.dom.test.tsx - not
+   * the buildLoaderPlan tests below - is what holds that.
+   */
   offline: boolean;
   /** The subscription currently being browsed ('' = none selected yet). */
   subscriptionId: string;

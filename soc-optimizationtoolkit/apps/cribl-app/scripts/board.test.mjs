@@ -56,6 +56,106 @@ const board = (stories, epics, features) => ({
   stories,
 });
 
+/**
+ * A bug is `now` unless the card says why not.
+ *
+ * The default flips because a defect is already costing someone something
+ * while a feature is only not-yet-earning. "All bugs are now" was considered
+ * and rejected - it flattens silent data loss and a list that swallows the
+ * mouse wheel into one rank, and a NOW column holding everything ranks
+ * nothing. So the exception survives, priced at an argument written down.
+ */
+/**
+ * DBT-59: the reason has to be VISIBLE, not merely mandatory.
+ *
+ * check-board enforcing priorityWhy while nothing renders it buys the ritual
+ * and none of the thinking - a justification nobody can read cannot be argued
+ * with, only satisfied. These pin the three surfaces someone actually looks at.
+ */
+describe('renderBoard - a deprioritised bug shows its argument', () => {
+  const heldBack = story({
+    type: 'bug',
+    priority: 'next',
+    priorityWhy: 'Cosmetic: the control works, it just does not match the app around it.',
+  });
+
+  it('renders the reason, not just the priority', () => {
+    // Collapsed because the renderer wraps at 76 columns, so the sentence is
+    // split across lines in the file - asserting the raw string would pin the
+    // wrap width rather than the behaviour.
+    const md = renderBoard(board([heldBack])).replace(/\s+/g, ' ');
+
+    expect(md).toContain('Not now because');
+    expect(md).toContain('it just does not match the app around it');
+  });
+
+  it('says nothing for a bug at now - there is no exception to explain', () => {
+    const md = renderBoard(board([story({ type: 'bug', priority: 'now' })]));
+
+    expect(md).not.toContain('Not now because');
+  });
+});
+
+describe('validateBoard - a deprioritised bug owes a reason', () => {
+  const bug = (over) => story({ type: 'bug', ...over });
+
+  it('accepts a bug at now with no priorityWhy - that is the default', () => {
+    expect(validateBoard(board([bug({ priority: 'now' })]))).toEqual([]);
+  });
+
+  it('REJECTS a bug pushed to next with no reason', () => {
+    const out = validateBoard(board([bug({ priority: 'next' })]));
+
+    expect(out).toHaveLength(1);
+    expect(out[0]).toContain('with no priorityWhy');
+  });
+
+  it('rejects later just the same - the rule is not about one rank', () => {
+    const out = validateBoard(board([bug({ priority: 'later' })]));
+
+    expect(out.some((f) => f.includes('with no priorityWhy'))).toBe(true);
+  });
+
+  it('REJECTS a placeholder - the field is the argument, not a checkbox', () => {
+    // The failure this guards: satisfying the rule with "cosmetic" and moving
+    // on, which buys the ritual and none of the thinking.
+    const out = validateBoard(board([bug({ priority: 'next', priorityWhy: 'cosmetic' })]));
+
+    expect(out).toHaveLength(1);
+    expect(out[0]).toContain('Name the reason it can wait');
+  });
+
+  it('accepts a real reason', () => {
+    const why =
+      'Cosmetic: the control works, it just does not match the app around it.';
+
+    expect(validateBoard(board([bug({ priority: 'next', priorityWhy: why })]))).toEqual([]);
+  });
+
+  it('leaves a DONE bug alone - priority is a backlog question', () => {
+    expect(
+      validateBoard(board([bug({ priority: 'later', status: 'done', verified: 'pins' })])),
+    ).toEqual([]);
+  });
+
+  it('rejects the field on a non-bug, where it answers nothing', () => {
+    const out = validateBoard(
+      board([story({ type: 'story', priority: 'next', priorityWhy: 'a perfectly good sentence' })]),
+    );
+
+    expect(out).toHaveLength(1);
+    expect(out[0]).toContain('not a deprioritised bug');
+  });
+
+  it('rejects the field on a bug that is already now', () => {
+    const out = validateBoard(
+      board([bug({ priority: 'now', priorityWhy: 'a perfectly good sentence' })]),
+    );
+
+    expect(out[0]).toContain('not a deprioritised bug');
+  });
+});
+
 describe('validateBoard - the shape of a story', () => {
   it('accepts a sound board', () => {
     expect(validateBoard(board([story({})]))).toEqual([]);

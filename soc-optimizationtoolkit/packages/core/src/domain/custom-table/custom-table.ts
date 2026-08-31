@@ -239,6 +239,58 @@ export interface CustomTableSchemaValidation {
 }
 
 /**
+ * The CREATION suffix rule: a custom table name must end with `_CL` in exactly
+ * that casing.
+ *
+ * NOT THE SAME QUESTION AS {@link isCustomTableName}, and the difference is
+ * load-bearing. That one is `/_CL$/i` - case-INSENSITIVE - because it ROUTES:
+ * "app_cl" is an attempted custom table and must be treated as one everywhere.
+ * This one VALIDATES, and is case-sensitive on purpose: the legacy
+ * `EndsWith("_CL")` check meant "foo_cl" was silently double-suffixed to
+ * "foo_cl_CL", and rejecting it here is the conscious fix. Using the routing
+ * predicate to validate would let exactly that name through again.
+ *
+ * Extracted so a screen can ASK before building a request, rather than
+ * restating `endsWith("_CL")` with its own wording (audit finding, 2026-08-31).
+ */
+export function hasCustomTableSuffix(tableName: string): boolean {
+  return tableName.endsWith("_CL");
+}
+
+/** The rule {@link hasCustomTableSuffix} enforces, in the operator's words. */
+export const CUSTOM_TABLE_SUFFIX_RULE =
+  "a custom table name must end with '_CL' (exact casing)";
+
+/**
+ * The Log Analytics column-name rule: letters, digits and underscores only,
+ * never starting with a digit.
+ *
+ * ONE IMPLEMENTATION, extracted for TBL-6. `addTableColumn` enforced this
+ * inline and threw on violation, which meant the hand-authored schema editor
+ * had no way to ask the question before building a request - so it accepted
+ * `Client IP`, previewed it happily, and the operator met the rule as a thrown
+ * error at the far end of a deploy instead.
+ *
+ * DELIBERATELY NOT SHARED WITH `isValidEnrichmentFieldName`
+ * (pipeline-preview-state.ts), which today uses an identical regex for CRIBL
+ * EVAL field names. Two rules that happen to agree are not one rule; folding
+ * them would make a future divergence in either product silently wrong in the
+ * other.
+ *
+ * NOTE FOR CALLERS ON NATIVE TABLES: `addTableColumn` appends `_CF` to a
+ * custom column on a non-`_CL` table BEFORE testing, so the name it validates
+ * is not the name the operator typed. Custom (_CL) creation has no suffix
+ * rule, so the typed name is validated directly.
+ */
+export function isValidColumnName(name: string): boolean {
+  return /^[A-Za-z_][A-Za-z0-9_]*$/.test(name);
+}
+
+/** The rule {@link isValidColumnName} enforces, in the operator's words. */
+export const COLUMN_NAME_RULE =
+  "letters, digits, and underscores only, not starting with a digit";
+
+/**
  * Validate a custom table name + schema columns against the legacy creation
  * rules BEFORE building the tables PUT:
  *
@@ -263,7 +315,7 @@ export function validateCustomTableSchema(
 ): CustomTableSchemaValidation {
   const errors: string[] = [];
 
-  if (!tableName.endsWith("_CL")) {
+  if (!hasCustomTableSuffix(tableName)) {
     errors.push(
       `table name '${tableName}' must end with '_CL' (exact casing; ` +
         "Azure custom tables require the suffix)",

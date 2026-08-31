@@ -18,7 +18,10 @@ Status: Record - the unit-by-unit port, 2026-07. Kept for the unit records; its 
 > completing them; everything else waits until they are validated in a real environment.
 > - MVP-required units: 8, 9, 11, 12, 13, 14, 16, 17, 18, 19, 20, 22, 23 (rule coverage core) + the
 >   single-page Integrate-arc restructure. Built/reused: 1, 2, 3, 4, 5, 6, 6.5, 7, auth manager.
-> - DEFERRED post-MVP: 10, 15, workbook analysis, 21, 24, 25-27. Do not build these until MVP is validated.
+> - DEFERRED post-MVP: 10, 15, 21, 24, 25-27. Do not build these until MVP is validated.
+>   (Workbook analysis was on this list and came OFF it: it shipped as
+>   `acquireSolutionWorkbooks`, repo-sourced, behind the rule-coverage section's `showWorkbooks`
+>   toggle. See the 2026-07-12 reversal on Unit 23.)
 > - The Integrate arc is ONE numbered-section page (adopted); built screens refactor into its sections.
 
 Companion to [roadmap.md](roadmap.md) and [feature-catalog.md](feature-catalog.md). This plan decomposes the legacy Electron Integration Solution (ENG-01..52, GUI-01..32) into ordered port units that slot into the roadmap's existing phases. It does NOT invent a new sequence: units are grouped by roadmap phase (2, 3, 4, with a small tail the roadmap itself schedules in phases 6-7), ordered by dependency edges, then by operational friction (never leave the new app more manual than legacy where users actually touch it).
@@ -329,6 +332,20 @@ Phase 3 exit check (roadmap): solution browsed -> samples -> pipeline -> pack ->
 > the native-onboarding flagship's content-reference analyzer (content-preserving-native-reroute.md section 3)
 > - build it as a shared analyzer over {type, id, queries[]} content items so alertRules and
 > workbooks are two sources into one engine, hunting queries/parsers/playbooks join later.
+
+> **REVERSED IN PART - THE WORKBOOK SOURCE IS THE SOLUTION REPO, NOT ARM
+> (user, 2026-07-12).** Amendment (b) above says "enumerate the WORKSPACE's workbooks via ARM", and
+> that is no longer the scope. Deployed subscription workbooks are deliberately NOT analyzed: a
+> shared subscription carries everyone's dashboards (live report 2026-07-09 - FortiGate and Cisco
+> dashboards polluted a Zscaler review), and deployed copies drift from the repo templates. Coverage
+> describes the SOLUTION, so workbooks are read from the solution's `Workbooks/` directory over the
+> Unit 14 SentinelContent port - the exact parallel to rule acquisition, and one fewer external
+> surface than the amendment planned. What is UNCHANGED: the defensive buried-KQL mining, the
+> unparseable count, and the shared {type, id, queries[]} analyzer over both sources.
+>
+> An ARM acquirer matching the original wording (`acquireWorkbooks`) was built, never called, and
+> DELETED 2026-08-31 (DBT-57) - this paragraph is the reason it survived unreviewed for seven weeks,
+> because the plan still specified it. `acquireSolutionWorkbooks` is the shipped acquirer.
 
 - Covers: ENG-11, GUI-09, plus net-new workbook coverage (first slice of the flagship content-reference analyzer).
 - Legacy sources: `IS/sentinel-repo.ts` 897-1085 (KQL_BUILTINS, extractKqlFields, listAnalyticRules), `IS/pack-builder.ts` 3176-3307, SentinelIntegration.tsx 2580-2793.

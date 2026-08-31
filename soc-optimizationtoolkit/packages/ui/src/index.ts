@@ -36,6 +36,26 @@ export type {
   SchemaPreviewRow,
 } from "./onboarding/custom-schema-state";
 
+// The hand-authored fourth schema source (TBL-1): row editing and per-row
+// verdicts for operators who have a new log source and no schema file.
+export { ManualSchemaEditor } from "./onboarding/manual-schema-editor";
+export type { ManualSchemaEditorProps } from "./onboarding/manual-schema-editor";
+export {
+  DEFAULT_MANUAL_COLUMN_TYPE,
+  addManualColumn,
+  emptyManualColumns,
+  manualColumnsToSchema,
+  manualRowStatuses,
+  manualSchemaErrors,
+  removeManualColumn,
+  updateManualColumn,
+} from "./onboarding/manual-schema-state";
+export type {
+  ManualColumnDraft,
+  ManualColumnIssue,
+  ManualRowStatus,
+} from "./onboarding/manual-schema-state";
+
 // Batch deployment (porting-plan Unit 6): the multi-table screen over the
 // @soc/core onboardBatch usecase, plus its pure decision layer (selection
 // parsing, per-run option overrides, counts/summary derivation, templateOnly
@@ -126,8 +146,25 @@ export type { NextActionView } from "./screens/home/home-state";
 
 export { DcrAutomationScreen } from "./screens/dcr-automation/dcr-automation-screen";
 export type { DcrAutomationScreenProps } from "./screens/dcr-automation/dcr-automation-screen";
+// Exported so a shell can hold the tab selection (TBL-3's Tables -> Single
+// hand-off needs the host to own it).
+export type { DcrTab } from "./screens/dcr-automation/dcr-automation-state";
 export { DcrInventoryPanel } from "./screens/dcr-automation/dcr-inventory-panel";
 export type { DcrInventoryPanelProps } from "./screens/dcr-automation/dcr-inventory-panel";
+
+// The Tables tab (TBL-3): the workspace's Log Analytics tables, with whether
+// a DCR already targets each one.
+export { WorkspaceTablesPanel } from "./screens/dcr-automation/workspace-tables-panel";
+export type { WorkspaceTablesPanelProps } from "./screens/dcr-automation/workspace-tables-panel";
+export {
+  buildWorkspaceTableRows,
+  dcrCellLabel,
+  dcrColumnNote,
+} from "./screens/dcr-automation/workspace-tables-state";
+export type {
+  DcrPresence,
+  WorkspaceTableRow,
+} from "./screens/dcr-automation/workspace-tables-state";
 // Integrate arc (legacy-flow-analysis.md single-page decision, ADOPTED
 // 2026-07-04): the MVP centerpiece - the single-page Integrate flagship
 // composing the built screens (Azure Targeting, the native onboardTable

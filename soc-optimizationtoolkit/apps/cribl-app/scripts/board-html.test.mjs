@@ -49,6 +49,37 @@ describe('columnsFrom', () => {
   });
 });
 
+/**
+ * DBT-59: the kanban is where the argument gets read, so it must show it.
+ * Rendered plainly rather than behind a <details> toggle - a reason hidden
+ * behind a click is as unread as one not rendered at all, and the field only
+ * earns its keep if a groomer meets it without going looking.
+ */
+describe('renderBoardHtml - a deprioritised bug shows its argument', () => {
+  const why = 'Cosmetic: the control works, it just does not match the app.';
+
+  it('renders the reason on the card, not inside a details toggle', () => {
+    const html = renderBoardHtml(
+      board([story({ id: 'REL-1', type: 'bug', priority: 'next', priorityWhy: why })]),
+      '2026-08-31',
+    );
+
+    expect(html).toContain('Not now because');
+    expect(html).toContain('it just does not match the app');
+    // Plain paragraph, not a collapsed section.
+    expect(html).toMatch(/<p class="why">/);
+  });
+
+  it('shows nothing for a bug at now', () => {
+    const html = renderBoardHtml(
+      board([story({ id: 'REL-1', type: 'bug', priority: 'now' })]),
+      '2026-08-31',
+    );
+
+    expect(html).not.toContain('Not now because');
+  });
+});
+
 describe('renderBoardHtml', () => {
   it('renders one column per PROGRESS state, counted', () => {
     const html = renderBoardHtml(

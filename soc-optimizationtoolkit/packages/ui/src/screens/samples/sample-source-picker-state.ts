@@ -9,10 +9,14 @@
  * mostly means being careful about states that look identical if you only count
  * entries:
  *
- *   no connection     -> we have not looked; blame nothing
+ *   no CRIBL connection -> we have not looked; blame nothing
  *   no mode chosen    -> the operator has not asked a question yet
  *   mode chosen, empty-> a real fact about the workspace
  *   mode chosen, failed-> a fact about our SIGHT, not the workspace
+ *
+ * The first of those is a CRIBL fact and nothing else (DBT-53). Every route
+ * behind this picker - worker groups, /system/inputs, Lake datasets - is a
+ * Cribl route, so no Azure fact belongs in that gate.
  *
  * Pure: no IO, no fetch, no React, no Date/crypto.
  */
@@ -184,6 +188,15 @@ export interface PickerViewInput {
   selectedGroupId: string;
   loadingGroups: boolean;
   loadingSources: boolean;
+  /**
+   * Whether there is a CRIBL connection to discover against - every surface
+   * behind this picker is a Cribl route.
+   *
+   * Named for what it means because it was read as something else (DBT-53): the
+   * Integrate screen passed its AZURE scope-committed flag here, so the picker
+   * sat idle - and told the operator to connect Cribl - while Cribl was
+   * connected and the missing thing was a subscription.
+   */
   enabled: boolean;
 }
 
@@ -202,11 +215,18 @@ export function derivePickerView(input: PickerViewInput): PickerView {
   const base = { options: [] as SelectOption[], showGroupPicker: false, modeWarning: null };
 
   if (!enabled) {
+    // DBT-53: this used to read "Connect Cribl to pull samples from a Lake
+    // dataset or a live source", and the screen reached it whenever no AZURE
+    // subscription had been committed - so it named the one system that was
+    // working and asked for an action that does not exist inside a Cribl.Cloud
+    // workspace. `enabled` now means what it says, and this states the fact
+    // rather than issuing an instruction: nothing was listed, and the reason is
+    // on our side of the wire.
     return {
       ...base,
       status: "idle",
       headline:
-        "Connect Cribl to pull samples from a Lake dataset or a live source. Uploading a file works either way.",
+        "Cribl is not reachable from here, so nothing has been listed - that is our connection, not your workspace. Uploading a file works either way.",
     };
   }
   if (loadingGroups && groups === null) {

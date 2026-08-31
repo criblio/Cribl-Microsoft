@@ -14,6 +14,7 @@ import {
   workspaceTablesPath,
 } from "./workspace-tables";
 import { WORKSPACE_API_VERSION } from "../azure-discovery";
+import { listingRows } from "../../domain/inventory-listing";
 import { FakeAzureManagement } from "../../testing/fake-azure-management";
 import type { PortHttpResponse } from "../../ports/http";
 
@@ -89,7 +90,7 @@ describe("listWorkspaceTables", () => {
     // than at each call site.
     const azure = new FakeAzureManagement();
     azure.respondWith(page(table("Syslog"), table("App_CL"), table("Heartbeat")));
-    const tables = await listWorkspaceTables(azure, TARGET);
+    const tables = listingRows(await listWorkspaceTables(azure, TARGET));
     expect(tables.map((t) => t.name)).toEqual(["App_CL", "Heartbeat", "Syslog"]);
   });
 
@@ -97,14 +98,14 @@ describe("listWorkspaceTables", () => {
     // A picker missing one table beats a picker that will not open.
     const azure = new FakeAzureManagement();
     azure.respondWith(page(table("Syslog"), { properties: {} }, table("App_CL")));
-    const tables = await listWorkspaceTables(azure, TARGET);
+    const tables = listingRows(await listWorkspaceTables(azure, TARGET));
     expect(tables.map((t) => t.name)).toEqual(["App_CL", "Syslog"]);
   });
 
   it("separates custom from native", async () => {
     const azure = new FakeAzureManagement();
     azure.respondWith(page(table("App_CL"), table("SecurityEvent")));
-    const tables = await listWorkspaceTables(azure, TARGET);
+    const tables = listingRows(await listWorkspaceTables(azure, TARGET));
     expect(tables.map((t) => t.kind)).toEqual(["custom", "native"]);
   });
 
@@ -117,10 +118,16 @@ describe("listWorkspaceTables", () => {
     await expect(listWorkspaceTables(azure, TARGET)).rejects.toThrow(/law-1/);
   });
 
-  it("returns an empty list for a genuinely empty workspace", async () => {
+  it("returns an EMPTY LISTING, which does not claim the workspace is empty", async () => {
+    // Renamed in DBT-61, and the old name is the reason: it said "for a
+    // genuinely empty workspace", which is precisely what this function cannot
+    // know. ARM answers 200-with-nothing the same way whether the workspace
+    // holds no tables or holds tables this principal may not see, so the value
+    // returned here now carries no count for a caller to misread - deciding
+    // which of the two happened belongs to whoever holds the capability.
     const azure = new FakeAzureManagement();
     azure.respondWith(page());
-    expect(await listWorkspaceTables(azure, TARGET)).toEqual([]);
+    expect(await listWorkspaceTables(azure, TARGET)).toEqual({ kind: "empty" });
   });
 });
 

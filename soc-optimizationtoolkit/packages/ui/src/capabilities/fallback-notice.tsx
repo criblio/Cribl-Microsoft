@@ -15,6 +15,22 @@
  * different places - the change requests inline from data the app holds, the
  * ARM bodies and the pack by a run. Absent, the notice still names the artifact,
  * which is better than silence about a blocked action.
+ *
+ * HON-7: until 2026-08-31 that "absent" branch was the ONLY branch that
+ * shipped. The component supported a control and the pins below exercised one,
+ * but the single production caller (the RBAC preflight panel) passed no
+ * `onProduce` - so rule 2 ("every blocked action falls back to a downloadable
+ * artifact") had no button anywhere in the app. D-2 (backlog
+ * section 16) settled who fixes it: the Integrate deploy, Batch Deploy and DCR
+ * inventory surfaces each wire their OWN producer, because what "produce" means
+ * differs per surface and no shared producer could be honest on all three.
+ *
+ * WHAT A PRODUCER MAY DO is the whole of the D-2 answer, and it is decided by
+ * `isInlineArtifact`: an INLINE kind is generated on the spot from data the app
+ * already holds; a RUN kind is produced by a run, so the producer either STARTS
+ * that run or points at it with `fallbackRunPointer`. A producer must never
+ * assemble a run-kind artifact inline - it would ship a hand-made imitation of a
+ * body the run resolves against live Azure reads.
  */
 
 import type { CapabilityFallback } from "@soc/core";
@@ -38,6 +54,16 @@ export interface FallbackNoticeProps {
   onProduce?: () => void | Promise<void>;
   /** Disable the control (e.g. a run already in flight), with a reason. */
   disabledReason?: string;
+  /**
+   * Override the control's label. Defaults to {@link fallbackActionLabel}, which
+   * is phrased as producing the artifact.
+   *
+   * A surface whose producer can only POINT at the run must override it with
+   * {@link FALLBACK_POINTER_LABEL}: the default promises a download, and a
+   * button that promises one and answers with a sentence is the failure this
+   * component is written against.
+   */
+  produceLabel?: string;
 }
 
 export function FallbackNotice({
@@ -45,6 +71,7 @@ export function FallbackNotice({
   reason,
   onProduce,
   disabledReason,
+  produceLabel,
 }: FallbackNoticeProps) {
   const hint = fallbackHint(fallback.kind);
   return (
@@ -64,7 +91,7 @@ export function FallbackNotice({
             disabled={disabledReason !== undefined}
             title={disabledReason}
           >
-            {fallbackActionLabel(fallback.kind)}
+            {produceLabel ?? fallbackActionLabel(fallback.kind)}
           </button>
           {hint !== null && <span className="field-hint">{hint}</span>}
         </div>

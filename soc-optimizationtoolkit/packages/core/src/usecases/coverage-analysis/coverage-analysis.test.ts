@@ -3,23 +3,28 @@
  * the two acquisition sources against the in-memory port fakes and shows both
  * feeding the ONE shared analyzer end to end:
  *   - alert rules via FakeSentinelContent (the three dir-name variants),
- *   - workbooks via FakeAzureManagement (ARM Microsoft.Insights/workbooks),
+ *   - workbooks via FakeSentinelContent (the solution's Workbooks directory),
  * then analyzeContentCoverage over the union.
+ *
+ * BOTH SOURCES ARE THE REPO. The ARM acquirer these tests also drove was
+ * deleted with its subject (DBT-57, 2026-08-31): it enumerated the
+ * subscription's DEPLOYED workbooks, which the 2026-07-12 direction reversed,
+ * and it had no production caller. The end-to-end case below is deliberately
+ * kept and re-pointed at `acquireSolutionWorkbooks` rather than deleted - the
+ * contract it pins is "two sources, one analyzer", which still ships; it was
+ * only ever pinned through a path that did not.
  */
 
 import { describe, expect, it } from "vitest";
 
 import { FakeSentinelContent } from "../../testing/fake-sentinel-content";
-import { FakeAzureManagement } from "../../testing/fake-azure-management";
 import {
   analyzeContentCoverage,
   unionSchemaColumns,
 } from "../../domain/coverage-analysis/index";
 import {
-  WORKBOOKS_API_VERSION,
   acquireAnalyticRules,
   acquireSolutionWorkbooks,
-  acquireWorkbooks,
 } from "./coverage-analysis";
 
 const RULE_YAML = `id: rule-1
@@ -71,71 +76,6 @@ describe("acquireAnalyticRules over the SentinelContent port", () => {
     });
     const items = await acquireAnalyticRules(content, "AAD");
     expect(items).toHaveLength(1);
-  });
-});
-
-describe("acquireWorkbooks over the AzureManagement port", () => {
-  const serialized = JSON.stringify({
-    items: [
-      {
-        type: 3,
-        content: {
-          query: "SigninLogs | project IPAddress, UserPrincipalName",
-          queryType: 0,
-        },
-      },
-    ],
-  });
-
-  it("enumerates workbooks and mines their buried KQL", async () => {
-    const azure = new FakeAzureManagement();
-    azure.respondWith({
-      status: 200,
-      body: {
-        value: [
-          {
-            id: "/subscriptions/s/providers/Microsoft.Insights/workbooks/wb-1",
-            name: "wb-1",
-            properties: {
-              displayName: "Sign-in Analysis",
-              serializedData: serialized,
-            },
-          },
-        ],
-      },
-    });
-
-    const items = await acquireWorkbooks(azure, { subscriptionId: "s" });
-    expect(items).toHaveLength(1);
-    expect(items[0].type).toBe("workbook");
-    expect(items[0].name).toBe("Sign-in Analysis");
-    expect(items[0].queries[0]).toContain("SigninLogs");
-
-    // The request targeted the ARM workbooks surface with the sentinel category.
-    expect(azure.calls[0].path).toContain(
-      "/providers/Microsoft.Insights/workbooks",
-    );
-    expect(azure.calls[0].apiVersion).toBe(WORKBOOKS_API_VERSION);
-    expect(azure.calls[0].query).toMatchObject({
-      category: "sentinel",
-      canFetchContent: "true",
-    });
-  });
-
-  it("still yields an item (1 unparseable) when serializedData is absent", async () => {
-    const azure = new FakeAzureManagement();
-    azure.respondWith({
-      status: 200,
-      body: {
-        value: [
-          { id: "wb-2", name: "wb-2", properties: { displayName: "No Data" } },
-        ],
-      },
-    });
-    const items = await acquireWorkbooks(azure, { subscriptionId: "s" });
-    expect(items).toHaveLength(1);
-    expect(items[0].queries).toEqual([]);
-    expect(items[0].unparseableQueryCount).toBe(1);
   });
 });
 
@@ -202,38 +142,33 @@ describe("acquireSolutionWorkbooks over the SentinelContent port", () => {
 
 describe("end to end: rules + workbooks into ONE analyzer", () => {
   it("scores both sources against a unioned destination schema", async () => {
+    // ONE port now serves both sources - rules and workbooks come from the same
+    // solution in the same repo, which is the point of the 2026-07-12 decision.
     const content = new FakeSentinelContent({
-      files: { "Solutions/AAD/Analytic Rules/r.yaml": RULE_YAML },
-    });
-    const azure = new FakeAzureManagement();
-    azure.respondWith({
-      status: 200,
-      body: {
-        value: [
-          {
-            id: "wb-1",
-            name: "wb-1",
-            properties: {
-              displayName: "WB",
-              serializedData: JSON.stringify({
-                items: [
-                  {
-                    type: 3,
-                    content: {
-                      query: "SigninLogs | project IPAddress",
-                      queryType: 0,
-                    },
-                  },
-                ],
-              }),
+      files: {
+        "Solutions/AAD/Analytic Rules/r.yaml": RULE_YAML,
+        "Solutions/AAD/Workbooks/WB.json": JSON.stringify({
+          items: [
+            {
+              type: 3,
+              content: {
+                query: "SigninLogs | project IPAddress",
+                queryType: 0,
+              },
             },
-          },
-        ],
+          ],
+        }),
       },
     });
 
     const rules = await acquireAnalyticRules(content, "AAD");
-    const workbooks = await acquireWorkbooks(azure, { subscriptionId: "s" });
+    const workbooks = await acquireSolutionWorkbooks(content, "AAD");
+
+    // The union is genuinely TWO sources, not one source counted twice - the
+    // assertion the old ARM-driven version of this test made structurally.
+    expect(rules).toHaveLength(1);
+    expect(workbooks).toHaveLength(1);
+    expect(workbooks[0].type).toBe("workbook");
 
     const schemaUnion = unionSchemaColumns([
       [{ name: "IPAddress" }, { name: "UserPrincipalName" }],

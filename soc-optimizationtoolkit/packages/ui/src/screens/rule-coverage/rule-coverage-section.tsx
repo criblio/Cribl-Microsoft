@@ -387,8 +387,11 @@ export function RuleCoverageSection({
   // CONTENT-FIRST ORDER (2026-07-12): the RULES instance derives and reports
   // its requirements as soon as the solution is selected - the mapping
   // review's drop policy needs them BEFORE the first gap analysis. The
-  // workbooks instance reports from its analyze() (ARM enumeration needs a
-  // subscription).
+  // workbooks instance reports from its own analyze() instead.
+  // (The reason once given here - "ARM enumeration needs a subscription" - was
+  // dead: the same 2026-07-12 direction dropped deployed-subscription
+  // workbooks entirely, so nothing in this file enumerates ARM. See the
+  // repo-only note in runCoverage below. DBT-54.)
   useEffect(() => {
     if (
       !showRules ||

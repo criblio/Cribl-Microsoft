@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { FakeAzureManagement } from "../../testing/fake-azure-management";
 import { FakeCriblClient } from "../../testing/fake-cribl-client";
+import { listingRows } from "../../domain/inventory-listing";
 import { destroyLab, extendLabTtl, listLabs } from "./manage-labs";
 import { finalizeFlowLogPack } from "./deploy-flowlog-pack";
 
@@ -28,9 +29,43 @@ describe("listLabs", () => {
       },
     });
     const labs = await listLabs(azure, { subscriptionId: SUB, nowIso: NOW });
-    expect(labs).toHaveLength(1);
-    expect(labs[0].name).toBe("rg-lab-SentinelLab");
-    expect(labs[0].remainingHours).toBeCloseTo(48, 5);
+    expect(labs.kind).toBe("rows");
+    const rows = listingRows(labs);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.name).toBe("rg-lab-SentinelLab");
+    expect(rows[0]!.remainingHours).toBeCloseTo(48, 5);
+  });
+
+  it("says NONE - a measured zero - when groups were read but none is a lab", async () => {
+    // The half of [[DBT-64]] that must keep working. Two real resource groups
+    // came back and neither is tagged as a lab, so "No running labs found in
+    // this subscription" is TRUE and the panel should say it plainly. A fix
+    // that hedged here would trade one wrong answer for another.
+    const azure = new FakeAzureManagement();
+    azure.respondWith({
+      status: 200,
+      body: {
+        value: [
+          { name: "rg-unrelated", location: "eastus", tags: {} },
+          { name: "rg-also-unrelated", location: "westus", tags: {} },
+        ],
+      },
+    });
+    expect(await listLabs(azure, { subscriptionId: SUB, nowIso: NOW })).toEqual({
+      kind: "none",
+    });
+  });
+
+  it("says EMPTY - not a zero - when the GROUP LISTING itself came back empty", async () => {
+    // The defect. An RBAC-filtered subscription answers 200 with an empty
+    // value array, indistinguishable from a subscription with no groups. This
+    // used to reach the screen as "No running labs found in this
+    // subscription." stated as fact.
+    const azure = new FakeAzureManagement();
+    azure.respondWith({ status: 200, body: { value: [] } });
+    expect(await listLabs(azure, { subscriptionId: SUB, nowIso: NOW })).toEqual({
+      kind: "empty",
+    });
   });
 
   it("throws on a failed list (inventory unavailable, never silently empty)", async () => {

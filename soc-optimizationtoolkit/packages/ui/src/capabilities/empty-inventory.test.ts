@@ -118,6 +118,55 @@ describe("a verdict is evidence only about the scope it was measured at", () => 
   });
 });
 
+/**
+ * The `unreachable` answer, which NO shipping caller can currently produce
+ * (DBT-57, 2026-08-31 - the note in empty-inventory.ts works out why, and why
+ * the branch is kept rather than deleted).
+ *
+ * That is exactly why these pins assert the WORDING against the other four
+ * answers instead of settling for non-emptiness. Nothing in the running app
+ * would notice if this branch were collapsed into the "run the permission
+ * check" hedge, and that is the specific wrong answer for an operator with no
+ * connection: it sends them to a check they have nothing to run against, and
+ * they will read whatever comes back as confirmation. A degrade the standard
+ * calls binding has to be held up by its tests while no caller holds it up.
+ */
+describe("no connection is its own answer, not a hedge", () => {
+  const unreachable = msg(emptyCapabilitySet(), {
+    azureIdentityPresent: false,
+    criblReachable: true,
+  });
+
+  it("states the missing connection instead of pointing at the check", () => {
+    expect(unreachable.text).toBe("Cannot list workspaces - no Azure connection");
+    expect(unreachable.verified).toBe(false);
+  });
+
+  it("never sends them to a check, and never accuses the identity", () => {
+    // The two ways this collapses into a neighbour. Kept apart from the exact
+    // wording above so a collapse fails HERE too, and says which one it was.
+    expect(unreachable.text).not.toContain("permission check");
+    expect(unreachable.text).not.toContain("does not have permission");
+  });
+
+  it("is a fifth distinct answer, not a synonym of any other", () => {
+    const answers = [
+      msg(audited({ "workspace.read": "granted" })).text,
+      msg(audited({ "workspace.read": "denied" })).text,
+      msg(emptyCapabilitySet()).text,
+      emptyInventoryMessage({
+        noun: "workspaces",
+        capability: "workspace.read",
+        capabilities: audited({ "workspace.read": "granted" }),
+        context: connected,
+        scope: { matchesAudit: false, label: "subscription" },
+      }).text,
+      unreachable.text,
+    ];
+    expect(new Set(answers).size).toBe(5);
+  });
+});
+
 describe("lists no capability covers", () => {
   it("hedges WITHOUT sending the operator to a check that cannot settle it", () => {
     const m = unmeasuredInventoryMessage("resource groups");

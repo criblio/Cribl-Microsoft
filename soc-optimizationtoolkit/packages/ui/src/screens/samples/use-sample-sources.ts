@@ -54,6 +54,12 @@ export interface UseSampleSourcesInput {
    * Whether a Cribl connection exists to discover against. False keeps the hook
    * idle - no address is different from a call that failed, and must not be
    * reported as one.
+   *
+   * A CRIBL FACT, and only that (DBT-53). Every request this hook makes is a
+   * Cribl route, so anything else passed here closes the sample-acquisition
+   * path for a reason that has nothing to do with it - the Integrate screen
+   * passed its Azure scope-committed flag, and neither CapturePanel nor
+   * LakePanel could mount until a subscription was chosen.
    */
   enabled: boolean;
 }

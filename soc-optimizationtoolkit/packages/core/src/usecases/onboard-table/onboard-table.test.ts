@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  isJobStoreFailure,
   onboardTable,
   onboardTableStepsFor,
   ONBOARD_TABLE_JOB_KIND,
@@ -9,7 +10,7 @@ import type { OnboardTableInput, OnboardTableOutcome } from "./onboard-table";
 import { FakeAzureManagement } from "../../testing/fake-azure-management";
 import { FakeCriblClient } from "../../testing/fake-cribl-client";
 import { FakeJobStore } from "../../testing/fake-job-store";
-import type { JobStep } from "../../ports/job-store";
+import type { JobRecord, JobStep, JobStore } from "../../ports/job-store";
 
 const WORKSPACE_ID =
   "/subscriptions/sub-123/resourceGroups/rg-sec/providers/" +
@@ -548,5 +549,146 @@ describe("collision + reuse scans (user direction 2026-07-12)", () => {
     );
     const outcome = job.result as { destinationId: string };
     expect(outcome.destinationId).toBe("MS-Sentinel-SecurityEvent-dest-2");
+  });
+});
+
+/**
+ * A JobStore that fails exactly ONE write - the first one `matches` picks -
+ * and works before and after it. A transient kvstore blip, NOT a total
+ * outage: the case where blaming the TABLE is provably a lie, because the
+ * work the write was reporting had already been done (DBT-55).
+ */
+function storeThatBlipsOnce(
+  inner: FakeJobStore,
+  matches: (patch: Partial<Omit<JobRecord, "id">>) => boolean,
+): JobStore {
+  let fired = false;
+  return {
+    create: (kind, jobInput) => inner.create(kind, jobInput),
+    update: async (id, patch) => {
+      if (!fired && matches(patch)) {
+        fired = true;
+        throw new Error("kvstore PATCH failed: 503 Service Unavailable");
+      }
+      await inner.update(id, patch);
+    },
+    get: (id) => inner.get(id),
+    list: (kind) => inner.list(kind),
+  };
+}
+
+describe("onboardTable JobStore outages are not table failures (DBT-55)", () => {
+  it("re-raises a store blip on the final success write instead of failing the table", async () => {
+    const inner = new FakeJobStore();
+    const azure = new FakeAzureManagement({ dataCollectionRulesList: [] });
+    const cribl = new FakeCriblClient({ outputsList: [] });
+    azure.respondWith(
+      WORKSPACE_RESPONSE,
+      TABLE_SCHEMA_RESPONSE,
+      { status: 201, body: DCR_SUCCEEDED_BODY },
+      { status: 200, body: DCR_SUCCEEDED_BODY }, // verify
+    );
+    cribl.respondWith(
+      { status: 201, body: {} },
+      { status: 200, body: { items: [{ commit: "abc123" }] } },
+      { status: 200, body: { items: [{ id: "default" }] } },
+      { status: 200, body: { items: [{ id: "MS-Sentinel-SecurityEvent-dest" }] } },
+    );
+    const ports = {
+      azure,
+      cribl,
+      // The blip lands on `{status:"succeeded", result}` - the write made
+      // AFTER every step worked, so the table is provably not at fault.
+      jobs: storeThatBlipsOnce(inner, (patch) => patch.status === "succeeded"),
+    };
+
+    // FIRST, because it is the assertion the defect breaks: a store failure
+    // comes out AS ITSELF. The defect resolved instead, handing the caller a
+    // "failed" record for a table that had deployed.
+    const thrown = await onboardTable(ports, baseInput()).then(
+      () => null,
+      (error: unknown) => error,
+    );
+    expect(isJobStoreFailure(thrown)).toBe(true);
+    expect((thrown as Error).message).toContain(
+      "kvstore PATCH failed: 503 Service Unavailable",
+    );
+
+    // The TABLE was fine: the DCR was deployed and the Cribl destination
+    // created and verified before the store blipped on the write reporting it.
+    expect(azure.calls.map((call) => `${call.method} ${call.path}`)).toContain(
+      `PUT ${DCR_PATH}`,
+    );
+    expect(cribl.calls.length).toBe(5);
+
+    // So the record says nothing bad about it either. The defect wrote the
+    // store's error text back as the table's failure, and retrying that table
+    // - the operator's obvious next move - was the wrong action.
+    const record = (await inner.list(ONBOARD_TABLE_JOB_KIND))[0]!;
+    expect(record.status).not.toBe("failed");
+    expect(record.error).toBeUndefined();
+    expect(record.steps.filter((step) => step.status === "failed")).toEqual([]);
+  });
+
+  it("re-raises a store blip MID-RUN rather than blaming the step that had just succeeded", async () => {
+    const inner = new FakeJobStore();
+    const azure = new FakeAzureManagement({ dataCollectionRulesList: [] });
+    const cribl = new FakeCriblClient({ outputsList: [] });
+    azure.respondWith(
+      WORKSPACE_RESPONSE,
+      TABLE_SCHEMA_RESPONSE,
+      { status: 201, body: DCR_SUCCEEDED_BODY },
+    );
+    const ports = {
+      azure,
+      cribl,
+      // The blip lands on the push that records deploy-dcr SUCCEEDED - the
+      // DCR provisioned, only the write about it failed.
+      jobs: storeThatBlipsOnce(
+        inner,
+        (patch) =>
+          patch.steps?.some(
+            (step) => step.name === "deploy-dcr" && step.status === "succeeded",
+          ) === true,
+      ),
+    };
+
+    const thrown = await onboardTable(ports, baseInput()).then(
+      () => null,
+      (error: unknown) => error,
+    );
+    expect(isJobStoreFailure(thrown)).toBe(true);
+
+    // The run stopped there (no Cribl work started), and deploy-dcr - which
+    // had just succeeded - is NOT recorded as the failure.
+    expect(cribl.calls.length).toBe(0);
+    const record = (await inner.list(ONBOARD_TABLE_JOB_KIND))[0]!;
+    expect(stepByName(record.steps, "deploy-dcr").status).not.toBe("failed");
+    expect(record.status).not.toBe("failed");
+    expect(record.error).toBeUndefined();
+  });
+
+  it("tags the store on EVERY store call, create included, so the signal is total", async () => {
+    const ports = {
+      azure: new FakeAzureManagement({ dataCollectionRulesList: [] }),
+      cribl: new FakeCriblClient({ outputsList: [] }),
+      jobs: {
+        create: async (): Promise<JobRecord> => {
+          throw new Error("kvstore POST failed: 503 Service Unavailable");
+        },
+        update: async (): Promise<void> => undefined,
+        get: async (): Promise<JobRecord | null> => null,
+        list: async (): Promise<JobRecord[]> => [],
+      } satisfies JobStore,
+    };
+
+    // Nothing was attempted, so there is nothing to blame the table for: the
+    // rejection wears the store's type like every other store call's does.
+    const thrown = await onboardTable(ports, baseInput()).then(
+      () => null,
+      (error: unknown) => error,
+    );
+    expect(isJobStoreFailure(thrown)).toBe(true);
+    expect(ports.azure.calls.length).toBe(0);
   });
 });

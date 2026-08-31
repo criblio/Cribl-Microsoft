@@ -42,6 +42,12 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
+      # DBT-61. The Listing type is the real guard - it runs in Typecheck
+      # above. This catches only the escape hatch the type cannot close:
+      # counting an unwrapped listing.
+      - name: Check listings
+        run: npm run check-listings --workspace apps/cribl-app
+
       - name: Test
         run: npm test
 

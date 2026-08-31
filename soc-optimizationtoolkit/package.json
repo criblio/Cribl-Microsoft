@@ -20,6 +20,7 @@
     "groom": "npm run groom --workspace apps/cribl-app",
     "board:serve": "npm run board:serve --workspace apps/cribl-app",
     "check-board": "npm run check-board --workspace apps/cribl-app",
+    "check-listings": "npm run check-listings --workspace apps/cribl-app",
     "check-board-freshness": "npm run check-board-freshness --workspace apps/cribl-app"
   }
 }

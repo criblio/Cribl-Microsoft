@@ -29,6 +29,8 @@ import type {
   DcrColumnType,
   TableSchemaFileVariant,
 } from "@soc/core";
+import { manualColumnsToSchema, manualSchemaErrors } from "./manual-schema-state";
+import type { ManualColumnDraft } from "./manual-schema-state";
 
 /**
  * Where the custom table's schema comes from. Exactly ONE source is active
@@ -39,11 +41,15 @@ import type {
  *   - "vendor":   a bundled VENDOR_SCHEMAS entry (air-gap capable).
  *   - "file":     an uploaded or pasted schema JSON file (any of the three
  *                 wild shapes parseTableSchemaFile accepts).
+ *   - "manual":   fields typed by hand in the editor (TBL-1). The only
+ *                 source that does not come from somewhere else, and the
+ *                 reason an operator with a new log source and no schema
+ *                 file can use this screen at all.
  *   - "existing": no schema is sent; the run requires the table to already
  *                 exist in the workspace (its live Azure schema wins - the
  *                 legacy Process-CustomTable contract).
  */
-export type CustomSchemaSource = "vendor" | "file" | "existing";
+export type CustomSchemaSource = "vendor" | "file" | "manual" | "existing";
 
 /** Picker entries for the schema-source control, in render order. */
 export const CUSTOM_SCHEMA_SOURCE_OPTIONS: readonly {
@@ -52,6 +58,7 @@ export const CUSTOM_SCHEMA_SOURCE_OPTIONS: readonly {
 }[] = Object.freeze([
   { value: "vendor", label: "Bundled vendor schema" },
   { value: "file", label: "Upload or paste a schema JSON file" },
+  { value: "manual", label: "Define the fields here" },
   { value: "existing", label: "Use the existing workspace table" },
 ]);
 
@@ -150,6 +157,11 @@ export interface CustomSchemaInputs {
   vendorId: string;
   /** Uploaded/pasted schema JSON text ("" = none yet). File source only. */
   fileText: string;
+  /**
+   * Hand-authored rows. Manual source only; absent is treated as an empty
+   * editor so existing callers that predate TBL-1 need no change.
+   */
+  manualColumns?: readonly ManualColumnDraft[];
 }
 
 function emptyPreview(): CustomSchemaPreview {
@@ -197,6 +209,23 @@ function previewRows(columns: readonly CustomSchemaFileColumn[]): SchemaPreviewR
 }
 
 /**
+ * The unknown-type notice, shared by every source that carries columns.
+ *
+ * ONE IMPLEMENTATION on purpose: the manual source reaches this with rows it
+ * built itself, and a second copy of the sentence would be free to drift
+ * from this one without any test noticing.
+ */
+function unknownTypeWarnings(rows: readonly SchemaPreviewRow[]): string[] {
+  const unknown = rows.filter((row) => row.unknownType);
+  if (unknown.length === 0) return [];
+  return [
+    "Unknown column type(s) default to string: " +
+      unknown.map((row) => `${row.name} ('${row.declaredType}')`).join(", ") +
+      ".",
+  ];
+}
+
+/**
  * Derive the whole custom-schema section state from its raw inputs.
  *
  * Source precedence (pinned by test): only the ACTIVE source's input is
@@ -215,6 +244,36 @@ export function deriveCustomSchemaPreview(
     // wins (and the run fails honestly at create-custom-table when the
     // table does not exist).
     preview.ready = true;
+    return preview;
+  }
+
+  if (inputs.source === "manual") {
+    // NO PARSE STEP: the rows are already structured, so this source joins
+    // the pipeline at the point the others reach after parsing. Everything
+    // below - validateCustomTableSchema, the reserved strip, the
+    // TimeGenerated injection, the unknown-type warning - is shared.
+    const rows = inputs.manualColumns ?? [];
+    preview.columns = manualColumnsToSchema(rows);
+    preview.rows = previewRows(preview.columns);
+    // The schema does not "target" a table the way a file's header does -
+    // the operator is authoring it for the table named on this screen - so
+    // there is nothing to mismatch and no name warning to raise.
+    preview.schemaTableName = null;
+
+    if (preview.columns.length === 0) {
+      preview.notReadyHint = "Add at least one field to define this table.";
+      return preview;
+    }
+
+    // Per-row problems first: they name the row, where the whole-schema
+    // rules can only name the schema.
+    preview.errors.push(...manualSchemaErrors(rows));
+    preview.errors.push(
+      ...validateCustomTableSchema(table, preview.columns).errors,
+    );
+    preview.warnings.push(...unknownTypeWarnings(preview.rows));
+    preview.ready = preview.errors.length === 0;
+    preview.providesSchema = preview.ready;
     return preview;
   }
 
@@ -267,14 +326,7 @@ export function deriveCustomSchemaPreview(
         `creates '${table}'.`,
     );
   }
-  const unknown = preview.rows.filter((row) => row.unknownType);
-  if (unknown.length > 0) {
-    preview.warnings.push(
-      "Unknown column type(s) default to string: " +
-        unknown.map((row) => `${row.name} ('${row.declaredType}')`).join(", ") +
-        ".",
-    );
-  }
+  preview.warnings.push(...unknownTypeWarnings(preview.rows));
 
   preview.ready = preview.errors.length === 0;
   preview.providesSchema = preview.ready;

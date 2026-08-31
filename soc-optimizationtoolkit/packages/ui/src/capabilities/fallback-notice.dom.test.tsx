@@ -13,8 +13,10 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { fallbackFor, IDENTITY_FALLBACK } from "@soc/core";
 import { FallbackNotice } from "./fallback-notice";
 import {
+  FALLBACK_POINTER_LABEL,
   fallbackActionLabel,
   fallbackHint,
+  fallbackRunPointer,
   isInlineArtifact,
 } from "./fallback-notice-state";
 import type { CapabilityFallbackKind } from "@soc/core";
@@ -49,6 +51,24 @@ describe("copy decisions", () => {
 
   it("says a run makes no live changes, so the offer is safe to take", () => {
     expect(fallbackHint("dcr-arm-bodies")).toContain("no live changes");
+  });
+
+  it("names the run for every RUN kind, and none for the kinds made here", () => {
+    // HON-7 / D-2. A surface that cannot start the run must still be able to
+    // say which one makes the artifact, because the alternative it was reaching
+    // for - assembling the body itself - hands over an imitation of something
+    // the run resolves against live Azure reads. An inline kind has no run to
+    // point at, and saying it does would send someone to the wrong screen.
+    for (const kind of ALL_KINDS) {
+      const pointer = fallbackRunPointer(kind);
+      if (isInlineArtifact(kind)) {
+        expect(pointer, kind).toBeNull();
+        continue;
+      }
+      // A named surface is the whole content: "produced by a run somewhere" is
+      // what the hint already said and is not actionable.
+      expect(pointer, kind).toMatch(/Batch tab|Deploy section/);
+    }
   });
 });
 
@@ -99,6 +119,35 @@ describe("the offer is an offer, not an error", () => {
     const button = screen.getByRole("button");
     expect(button.hasAttribute("disabled")).toBe(true);
     expect(button.getAttribute("title")).toContain("already in flight");
+  });
+
+  it("labels the control with what the click DOES, not with a promised file", () => {
+    // HON-7. Three surfaces wire a producer and one of them can only POINT at
+    // the run (the DCR inventory panel builds no ARM bodies of its own). A
+    // control reading "Download the ARM request bodies" that answers with a
+    // sentence about another screen is the same dishonesty as no control at
+    // all, so a pointing surface overrides the label.
+    render(
+      <FallbackNotice
+        fallback={fallbackFor("dcr.write")!}
+        onProduce={() => {}}
+        produceLabel={FALLBACK_POINTER_LABEL}
+      />,
+    );
+    const button = screen.getByRole("button");
+    expect(button.textContent).toBe(FALLBACK_POINTER_LABEL);
+    expect(button.textContent).not.toMatch(/Download/);
+  });
+
+  it("still promises the download when the surface really produces it", () => {
+    // The other half: overriding must stay opt-in, or a producing surface would
+    // stop naming what it hands over.
+    render(
+      <FallbackNotice fallback={fallbackFor("dcr.write")!} onProduce={() => {}} />,
+    );
+    expect(screen.getByRole("button").textContent).toBe(
+      fallbackActionLabel("dcr-arm-bodies"),
+    );
   });
 
   it("carries no error role or alert semantics", () => {

@@ -33,10 +33,19 @@ function solutionWords(name: string): string[] {
  * treated as the same solution under the legacy fuzzy rules: a case-insensitive
  * alnum-equal, a substring either direction, or a shared >= 3-char word (via
  * bidirectional `includes`). Symmetric.
+ *
+ * A side that normalizes to nothing NAMES NO SOLUTION and matches nothing -
+ * the same stance {@link packAppliesToSolution} takes on a blank name, and for
+ * the same reason. It has to be said out loud because the rules below are all
+ * `includes`, and every string contains the empty string: without this line
+ * `matchSolutionName(anySolution, "")` was TRUE, so an unselected gap analysis
+ * matched the first solution the repo listed and inherited its DCR - its
+ * renames, coercions and route condition (DBT-42).
  */
 export function matchSolutionName(a: string, b: string): boolean {
   const na = normalizeSolutionKey(a);
   const nb = normalizeSolutionKey(b);
+  if (na === "" || nb === "") return false;
   if (na === nb) return true;
   if (na.includes(nb) || nb.includes(na)) return true;
   const wa = solutionWords(a);

@@ -67,6 +67,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   DEFAULT_OPERATION_OPTIONS,
+  artifactsToOffer,
   buildAirGapArchive,
   onboardBatch,
   SENTINEL_SECRET_PLACEHOLDER,
@@ -76,6 +77,8 @@ import {
   emptyCapabilitySet,
   fieldValuesFromRecords,
   listDcrInventory,
+  listingCount,
+  listingRows,
   placeholderWarning,
   resolveDestinations,
   canWireSource,
@@ -100,7 +103,12 @@ import {
   readinessPillsForMode,
   mergeContentRequirements,
 } from "@soc/core";
-import type { CapabilityContext, CapabilitySet } from "@soc/core";
+import type {
+  Capability,
+  CapabilityContext,
+  CapabilityFallbackKind,
+  CapabilitySet,
+} from "@soc/core";
 import type {
   ContentItem,
   CriblGroupSummary,
@@ -132,6 +140,11 @@ import type {
 import type { ReactNode } from "react";
 import type { LogTypeVolume } from "@soc/core";
 import { usePorts } from "../../ports-context";
+import {
+  AUDITED_SCOPE,
+  emptyInventoryMessage,
+} from "../../capabilities/empty-inventory";
+import { FallbackNotice } from "../../capabilities/fallback-notice";
 import { NumberedSection } from "../../components/numbered-section";
 import {
   deriveLogTypeRecommendation,
@@ -193,6 +206,27 @@ import { WiringSection } from "./wiring-section";
 const EXPORT_SLEEP = (ms: number): Promise<void> =>
   new Promise((resolve) => setTimeout(resolve, ms));
 
+/**
+ * The WRITES the Deploy section performs, which is what decides the fallback
+ * artifacts it must offer (HON-7 / D-2, backlog section 16).
+ *
+ * READS are deliberately absent: a blocked read has no offline substitute (see
+ * `fallbackFor`), so listing them here would produce nothing and only imply
+ * that it should have. The order is the order the offers render in -
+ * `artifactsToOffer` de-duplicates by artifact kind, so `pack.manage` and
+ * `destination.manage` collapse into the ONE pack this run would build.
+ *
+ * Every kind these map to is a RUN kind, and this screen owns that run: "Export
+ * instead of deploy" is the same work stopping before every write. That is why
+ * the producer below can START the run rather than only pointing at it.
+ */
+const DEPLOY_WRITE_CAPABILITIES: readonly Capability[] = Object.freeze([
+  "dcr.write",
+  "table.write",
+  "destination.manage",
+  "pack.manage",
+]);
+
 /** Bare file name for an export archive - deterministic, keyed by the run. */
 export function exportArchiveName(workspaceName: string, jobId: string): string {
   const part = (value: string): string => {
@@ -200,6 +234,65 @@ export function exportArchiveName(workspaceName: string, jobId: string): string 
     return safe === "" ? "export" : safe;
   };
   return `sentinel-export-${part(workspaceName)}-${part(jobId)}.tgz`;
+}
+
+/**
+ * What the DCR listing behind a pack build MEANS, said in one line (DBT-43).
+ *
+ * The empty branch is the whole point, and it is the same trap
+ * docs/inventory-standard.md (BINDING) is written against: ARM list operations
+ * answer 200 with an empty `value` array when RBAC filters the caller out, so
+ * `listDcrInventory` throwing - which it does, correctly, on non-2xx - covers
+ * only the DENIED-loudly case. An RBAC-filtered zero arrives as a clean success.
+ *
+ * THE COST HERE IS WORSE THAN A WRONG SENTENCE. This listing feeds
+ * resolveDestinations, which answers "no Data Collection Rule in this resource
+ * group routes it" for every table it cannot match; the build then bakes
+ * `dcr-00000000000000000000000000000000` and `UPDATE-DCE-ENDPOINT` into
+ * outputs.yml and ships a pack that installs cleanly and sends nowhere - the
+ * exact 2026-08-11 user report destination-resolution.ts exists to end, one
+ * layer up. "Read 0 deployed DCR(s)" was the log line that made that look like
+ * a fact about Azure.
+ *
+ * IT ANNOTATES AND NEVER BLOCKS, per rule 3 of the capability model and the
+ * standard's own "do not gate the load behind the audit": `unknown` is the
+ * normal state for a healthy connection nobody has audited, and refusing to
+ * build there would be worse than building and saying what the silence means.
+ * The build already continues through a FAILED listing for the same reason.
+ *
+ * Pure and exported so it can be pinned - the build callback it is called from
+ * needs an approved gap analysis to reach, which no mount-level test has.
+ * exportArchiveName above sets the precedent for a pure helper living here.
+ */
+export function dcrInventoryReadNotice(input: {
+  count: number;
+  resourceGroup: string;
+  capabilities: CapabilitySet;
+  context: CapabilityContext;
+}): string {
+  const { count, resourceGroup, capabilities, context } = input;
+  if (count > 0) {
+    // Permission is self-evident from the rows themselves.
+    return `Read ${count} deployed DCR(s) from ${resourceGroup} to resolve destination values.`;
+  }
+  const empty = emptyInventoryMessage({
+    noun: "deployed Data Collection Rules",
+    capability: "dcr.read",
+    capabilities,
+    context,
+    // The build reads the COMMITTED resource group - the same scope
+    // runAzurePreflight measures. Unlike the DCR inventory panel, which browses
+    // other groups by design, there is nothing here to browse with.
+    scope: AUDITED_SCOPE,
+  });
+  const consequence =
+    "Tables not deployed in this session will ship PLACEHOLDER destination values";
+  return empty.verified
+    ? `${empty.text} in ${resourceGroup}. ${consequence} - deploy them from the ` +
+        "Deploy section, or point the app at the resource group that has them."
+    : `${empty.text}. The listing of ${resourceGroup} came back empty, which is ` +
+        `NOT confirmation that it is. ${consequence}, and the rules may already ` +
+        "exist where this identity cannot see them.";
 }
 
 /** Plain-KV key persisting the selected solution name across reloads. */
@@ -888,10 +981,25 @@ export function IntegrateScreen({
     return byLogType;
   }, [contentItems, gapReports, enrichments]);
   // Where the operator could take samples FROM (Phase 3). Discovery is one fact
-  // about the workspace, so it is read once behind a hook with no surface, and
-  // gated on scopeCommitted only because there is no Cribl address before that
-  // - not because the answer is expected to be uninteresting.
-  const sampleSources = useSampleSources({ enabled: scopeCommitted });
+  // about the workspace, so it is read once behind a hook with no surface.
+  //
+  // GATED ON CRIBL, NOT ON AZURE (DBT-53). This was `enabled: scopeCommitted`,
+  // justified in a comment claiming "there is no Cribl address before that" -
+  // which was false: scopeCommitted is three non-empty AZURE strings
+  // (subscription, resource group, workspace), and the discovery behind this
+  // hook is 100% Cribl-side (worker groups, /system/inputs, Lake datasets).
+  // PlatformCriblClient is constructed unconditionally, and the worker-group
+  // listing higher up this same screen runs with no gate at all. So an operator
+  // who had not yet committed an Azure scope saw a picker stuck on "idle" and
+  // neither CapturePanel nor LakePanel ever mounted - the whole sample
+  // acquisition path, closed by an unrelated fact.
+  //
+  // The shell's `criblReachable` is the fact this actually needs. Absent, we
+  // LOOK: an unsupplied fact is unknown, and docs/inventory-standard.md is
+  // explicit that refusing to look is worse than looking and being honest about
+  // what comes back - a failed listing already reports itself as a failure.
+  const criblReachable = capabilityContext?.criblReachable ?? true;
+  const sampleSources = useSampleSources({ enabled: criblReachable });
   const [sampleSourceChoice, setSampleSourceChoice] = useState("");
   // DERIVED FROM THE CHOICE, never stored beside it (2026-08-20 audit). Holding
   // the entry in its own state gave one question two answers, and only one of
@@ -1162,14 +1270,38 @@ export function IntegrateScreen({
         // downgrade every table to placeholders and blame the environment.
         // listDcrInventory throws; the reason is surfaced and the build goes on
         // with placeholders that are now explicitly reported below.
+        //
+        // DBT-43: a THROW is only half of it. An RBAC-filtered listing succeeds
+        // with an empty array, so the success path had the same defect this
+        // catch block was written for - and said "Read 0 deployed DCR(s)" as if
+        // it were a fact. dcrInventoryReadNotice consults `dcr.read` and only
+        // calls it a zero when the read was verified.
         try {
-          inventory = await listDcrInventory(ports.azure, {
+          const listed = await listDcrInventory(ports.azure, {
             subscriptionId: config.subscriptionId,
             resourceGroup: config.resourceGroup,
           });
+          inventory = [...listingRows(listed)];
           push(
-            `Read ${inventory.length} deployed DCR(s) from ${config.resourceGroup} ` +
-              "to resolve destination values.",
+            dcrInventoryReadNotice({
+              // DBT-61: `listingCount(..., 0)` is the sanctioned use - the 0
+              // is the assumption written down, and the function it is handed
+              // to consults `dcr.read` before it will call that 0 a zero. It
+              // is the only reader here allowed to turn an empty listing into
+              // a number, which is why the count is minted at its doorstep.
+              count: listingCount(listed, 0),
+              resourceGroup: config.resourceGroup,
+              capabilities: capabilities ?? emptyCapabilitySet(),
+              // Optimistic default, and deliberately NOT the {false, false} the
+              // workspace-table listing above uses: the request we are
+              // reporting on just SUCCEEDED, so a connection is self-evident
+              // and "no Azure connection" would be its own wrong answer. Only
+              // the permission is still open, which is `unknown` - the hedge.
+              context: capabilityContext ?? {
+                azureIdentityPresent: true,
+                criblReachable: true,
+              },
+            }),
           );
         } catch (err) {
           push(
@@ -1362,6 +1494,10 @@ export function IntegrateScreen({
     samples,
     config,
     ingestionClientId,
+    // DBT-43: the DCR listing's empty result is only a zero once `dcr.read` is
+    // verified, so the verdicts the build reports against are an input to it.
+    capabilities,
+    capabilityContext,
   ]);
 
   // ---- Derived section states, readiness pills, deploy gate -------------
@@ -1544,8 +1680,11 @@ export function IntegrateScreen({
   // instead of PUTting them, the pack is assembled but not installed, and
   // buildAirGapArchive puts both in one .tgz with a README naming the exact
   // deploy scope. Nothing here touches Azure or Cribl in a way that changes
-  // state - an operator without write permission, or without a network, gets
-  // the whole intended deployment as a file.
+  // state - an operator without WRITE permission gets the whole intended
+  // deployment as a file. It is not, however, an offline path: the read-only
+  // GETs two lines up are live Azure reads, so a network and a working Azure
+  // connection are still required. (This said "or without a network" until
+  // DBT-54 - contradicting its own "read-only GETs" in the same breath.)
   const [exporting, setExporting] = useState(false);
   const [exportLines, setExportLines] = useState<string[]>([]);
 
@@ -1669,6 +1808,61 @@ export function IntegrateScreen({
     packName,
   ]);
 
+  // ---- The fallback offer beside the deploy (HON-7) ----------------------
+  // Rule 2 of the capability model: every blocked action falls back to a
+  // downloadable artifact. Until HON-7 no surface in the app wired a producer,
+  // so the rule had no button; D-2 (backlog section 16) put one on all three
+  // deploy surfaces, each owning its own producer.
+  //
+  // ANNOTATES, NEVER REMOVES (rule 3): this renders BESIDE the Deploy and
+  // Export controls, which stay exactly as available as they were. A denied
+  // verdict is evidence, not a gate - Azure's 403 is the gate, and a stale
+  // audit must not talk anyone out of an attempt that would have worked.
+  //
+  // An unmeasured capability routes `live` and offers nothing, so an unaudited
+  // connection (the normal state) renders no offer at all rather than implying
+  // a block nobody has measured.
+  const deployOffers = useMemo(
+    () =>
+      artifactsToOffer(
+        DEPLOY_WRITE_CAPABILITIES,
+        capabilities ?? emptyCapabilitySet(),
+        capabilityContext ?? {
+          azureIdentityPresent: true,
+          criblReachable: true,
+        },
+      ),
+    [capabilities, capabilityContext],
+  );
+
+  // Why an offer's control is unavailable RIGHT NOW, or undefined when it is
+  // usable. Never silent: FallbackNotice disables only with a stated reason.
+  //
+  // The pack branch is the one that would otherwise lie. The export always
+  // collects the ARM half, but it includes the .crbl only once the content path
+  // is armed, so offering "Download the pack" before then would name a file the
+  // run does not produce.
+  const offerDisabledReason = (
+    kind: CapabilityFallbackKind,
+  ): string | undefined => {
+    if (exporting) {
+      return "The export run is already in flight.";
+    }
+    if (deploying || packBuilding) {
+      return "A deploy is in flight - the export run shares its ports.";
+    }
+    if (exportDisabledReason !== null) {
+      return exportDisabledReason;
+    }
+    if (kind === "cribl-pack" && !contentEngaged) {
+      return (
+        "The export includes the pack only once the Gap Analysis mappings " +
+        "are approved; the ARM half is collected either way."
+      );
+    }
+    return undefined;
+  };
+
   const createDCE = (operationDefaults ?? DEFAULT_OPERATION_OPTIONS).createDCE;
 
   // ---- Section bodies (built sections only) -----------------------------
@@ -1706,7 +1900,10 @@ export function IntegrateScreen({
         notes={sampleSources.notes}
         loadingGroups={sampleSources.loadingGroups}
         loadingSources={sampleSources.loadingSources}
-        enabled={scopeCommitted}
+        // The SAME fact the hook is gated on (DBT-53) - a picker rendering
+        // "idle" while the hook was discovering, or the reverse, would describe
+        // a state the screen is not in.
+        enabled={criblReachable}
         value={sampleSourceChoice}
         onSelectMode={(next) => {
           // A different mode reads a different surface, so the previous pick is
@@ -2311,6 +2508,30 @@ export function IntegrateScreen({
           <span className="field-hint">{exportDisabledReason}</span>
         )}
       </div>
+      {/* HON-7 / D-2. The artifacts for the writes this identity was MEASURED
+          to lack, each with the control that produces them. The producer is
+          `runExport` for every offer here because all four capabilities map to
+          RUN kinds and this screen owns that run - it is literally the same
+          deploy stopping before every write, so nothing is fabricated. */}
+      {deployOffers.length > 0 && (
+        <div className="integrate-subsection">
+          <span className="field-label">Take these to someone who can</span>
+          <p className="panel-desc">
+            Deploy above stays available - the audit reports access, it does
+            not gate anything, and Azure's own refusal is the real gate. These
+            are the artifacts for the writes this connection was measured to
+            lack. One export run produces all of them and changes nothing.
+          </p>
+          {deployOffers.map((offer) => (
+            <FallbackNotice
+              key={offer.kind}
+              fallback={offer}
+              onProduce={() => void runExport()}
+              disabledReason={offerDisabledReason(offer.kind)}
+            />
+          ))}
+        </div>
+      )}
       {exportLines.length > 0 && (
         <pre className="result">{exportLines.join("\n")}</pre>
       )}

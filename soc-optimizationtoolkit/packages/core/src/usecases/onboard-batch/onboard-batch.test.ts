@@ -26,6 +26,8 @@ import { FakeAzureManagement } from "../../testing/fake-azure-management";
 import { FakeCriblClient } from "../../testing/fake-cribl-client";
 import { FakeJobStore } from "../../testing/fake-job-store";
 import type { CustomSchemaFileColumn } from "../../domain/schema-mapping";
+import type { AzureManagement } from "../../ports/azure-management";
+import type { JobStore } from "../../ports/job-store";
 
 const WORKSPACE_ID =
   "/subscriptions/sub-123/resourceGroups/rg-sec/providers/" +
@@ -172,6 +174,86 @@ function scriptCriblHappyPath(cribl: FakeCriblClient, times = 1): void {
 
 function callSequence(azure: FakeAzureManagement): string[] {
   return azure.calls.map((call) => `${call.method} ${call.path}`);
+}
+
+/**
+ * An AzureManagement whose transport REJECTS rather than answering: a dropped
+ * socket, DNS failure or throwing proxy - what an unreachable ARM looks like
+ * from inside the usecase (DBT-48).
+ */
+function rejectingAzure(message: string): AzureManagement {
+  return {
+    request: async () => {
+      throw new Error(message);
+    },
+  };
+}
+
+/**
+ * A JobStore that fails exactly ONE parent-record write - the first carrying a
+ * per-table result, i.e. the one right after a table finished deploying - and
+ * works before and after it. A transient kvstore blip, NOT a total outage:
+ * the case where blaming the table is provably a lie, because the deploy the
+ * write was reporting had already succeeded (DBT-49).
+ */
+function storeThatBlipsOnTheFirstTableResult(inner: FakeJobStore): JobStore {
+  let parentId: string | null = null;
+  let fired = false;
+  const store: JobStore = {
+    create: async (kind, input) => {
+      const record = await inner.create(kind, input);
+      if (kind === ONBOARD_BATCH_JOB_KIND && parentId === null) {
+        parentId = record.id;
+      }
+      return record;
+    },
+    update: async (id, patch) => {
+      const result = patch.result as OnboardBatchOutcome | undefined;
+      const carriesTableResult =
+        id === parentId && result !== undefined && result.tables.length > 0;
+      if (!fired && carriesTableResult) {
+        fired = true;
+        throw new Error("kvstore PATCH failed: 503 Service Unavailable");
+      }
+      await inner.update(id, patch);
+    },
+    get: (id) => inner.get(id),
+    list: (kind) => inner.list(kind),
+  };
+  return store;
+}
+
+/**
+ * A JobStore that fails exactly ONE write - the CHILD onboardTable job's final
+ * `{status:"succeeded"}` - and works before and after it. That write runs after
+ * the child's DCR deployed and its Cribl destination was created and verified,
+ * so the table is provably not at fault; and it is raised inside the child, so
+ * it reaches the batch's per-table catch wearing the CHILD module's
+ * JobStoreFailure (DBT-60). Nothing here can raise the batch's OWN signal - the
+ * blip never fires on a parent write - so the pin below cannot pass on the
+ * strength of the DBT-49 wiring.
+ */
+function storeThatBlipsOnTheChildSuccessWrite(inner: FakeJobStore): JobStore {
+  const childIds = new Set<string>();
+  let fired = false;
+  return {
+    create: async (kind, input) => {
+      const record = await inner.create(kind, input);
+      if (kind === ONBOARD_TABLE_JOB_KIND) {
+        childIds.add(record.id);
+      }
+      return record;
+    },
+    update: async (id, patch) => {
+      if (!fired && childIds.has(id) && patch.status === "succeeded") {
+        fired = true;
+        throw new Error("kvstore PATCH failed: 503 Service Unavailable");
+      }
+      await inner.update(id, patch);
+    },
+    get: (id) => inner.get(id),
+    list: (kind) => inner.list(kind),
+  };
 }
 
 describe("onboardBatchStepsFor", () => {
@@ -754,5 +836,145 @@ describe("onboardBatch per-table isolation", () => {
       `PUT ${DCR_BASE}/dcr-Syslog-eastus`,
     );
     expect(ports.cribl.calls.length).toBe(4);
+  });
+});
+
+describe("onboardBatch transport rejections still finish the record (DBT-48)", () => {
+  it("a REJECTING fetch-workspace fails the step instead of escaping the batch", async () => {
+    const ports = {
+      azure: rejectingAzure("connect ECONNRESET 20.150.34.1:443"),
+      cribl: new FakeCriblClient({ outputsList: [] }),
+      jobs: new FakeJobStore(),
+    };
+
+    // Resolves - the never-rejects contract covers a transport that throws,
+    // not only one that answers non-2xx.
+    const job = await onboardBatch(
+      ports,
+      baseInput({ tables: [{ table: "SecurityEvent" }, { table: "Syslog" }] }),
+    );
+
+    expect(job.status).toBe("failed");
+    expect(job.error).toBe(
+      "prerequisite step 'fetch-workspace' failed - 2 table(s) skipped",
+    );
+    expect(job.steps.map((step) => `${step.name}:${step.status}`)).toEqual([
+      "fetch-workspace:failed",
+      "table:SecurityEvent:skipped",
+      "table:Syslog:skipped",
+    ]);
+    // The transport error text reaches the operator, not a generic message.
+    expect(job.steps.find((s) => s.name === "fetch-workspace")!.detail).toContain(
+      "ECONNRESET",
+    );
+
+    // NOTHING is left running: the defect stranded the record at 'running'
+    // with fetch-workspace stuck 'running' - a batch that never finished and
+    // never failed.
+    const stored = await ports.jobs.list(ONBOARD_BATCH_JOB_KIND);
+    expect(stored.map((record) => record.status)).toEqual(["failed"]);
+    expect(stored[0]!.steps.some((step) => step.status === "running")).toBe(false);
+
+    // Every table skipped with the prerequisite reason; no Cribl work.
+    const outcome = job.result as OnboardBatchOutcome;
+    expect(outcome.skipped).toBe(2);
+    expect(outcome.failed).toBe(0);
+    expect(outcome.tables.every((t) => t.reason === "prerequisite-failed")).toBe(
+      true,
+    );
+    expect(ports.cribl.calls.length).toBe(0);
+  });
+});
+
+describe("onboardBatch JobStore outages are not table failures (DBT-49)", () => {
+  it("re-raises a store blip instead of blaming the table that deployed fine", async () => {
+    const inner = new FakeJobStore();
+    const azure = new FakeAzureManagement({ dataCollectionRulesList: [] });
+    const cribl = new FakeCriblClient({ outputsList: [] });
+    azure.respondWith(
+      WORKSPACE_RESPONSE, // prologue fetch-workspace
+      WORKSPACE_RESPONSE, // child
+      NATIVE_SCHEMA_RESPONSE,
+      { status: 200, body: directDcrBody("immutable-1") },
+      { status: 200, body: directDcrBody("immutable-1") },
+    );
+    scriptCriblHappyPath(cribl, 1);
+    const ports = {
+      azure,
+      cribl,
+      jobs: storeThatBlipsOnTheFirstTableResult(inner),
+    };
+
+    // A JobStore failure is outside the never-rejects promise (the UI reads a
+    // rejection as exactly that), so it comes out as itself.
+    await expect(
+      onboardBatch(ports, baseInput({ tables: [{ table: "SecurityEvent" }] })),
+    ).rejects.toThrow(/job store update failed: kvstore PATCH failed/);
+
+    // The TABLE was fine: its DCR was deployed and its Cribl destination
+    // created before the store blipped on the write reporting it.
+    expect(callSequence(azure)).toContain(
+      `PUT ${DCR_BASE}/dcr-SecurityEvent-eastus`,
+    );
+    expect(cribl.calls.length).toBe(4);
+
+    // So the record says nothing bad about it. The defect wrote the store's
+    // error back as the TABLE's failure - and because recordTable had already
+    // pushed the succeeded entry before its write threw, one table ended up
+    // counted once as a success and once as a failure.
+    const parent = (await inner.list(ONBOARD_BATCH_JOB_KIND))[0]!;
+    const entries = (parent.result as OnboardBatchOutcome | undefined)?.tables ?? [];
+    expect(entries.filter((entry) => entry.status === "failed")).toEqual([]);
+    expect(
+      entries.filter((entry) => entry.table === "SecurityEvent").length,
+    ).toBeLessThanOrEqual(1);
+    const tableStep = parent.steps.find((s) => s.name === "table:SecurityEvent")!;
+    expect(tableStep.status).not.toBe("failed");
+  });
+
+  it("re-raises a store blip raised inside the CHILD, instead of recording a failed table (DBT-60)", async () => {
+    const inner = new FakeJobStore();
+    const azure = new FakeAzureManagement({ dataCollectionRulesList: [] });
+    const cribl = new FakeCriblClient({ outputsList: [] });
+    azure.respondWith(
+      WORKSPACE_RESPONSE, // prologue fetch-workspace
+      WORKSPACE_RESPONSE, // child
+      NATIVE_SCHEMA_RESPONSE,
+      { status: 200, body: directDcrBody("immutable-1") },
+      { status: 200, body: directDcrBody("immutable-1") },
+    );
+    scriptCriblHappyPath(cribl, 1);
+    const ports = {
+      azure,
+      cribl,
+      jobs: storeThatBlipsOnTheChildSuccessWrite(inner),
+    };
+
+    // FIRST, because it is the assertion the defect breaks. The child re-raises
+    // the store outage as its own JobStoreFailure (DBT-55); the batch used to
+    // test `instanceof` against its OWN class, which across a module boundary
+    // matches nothing, so the signal was raised and then silently dropped and
+    // the batch RESOLVED with an ordinary failed table.
+    await expect(
+      onboardBatch(ports, baseInput({ tables: [{ table: "SecurityEvent" }] })),
+    ).rejects.toThrow(/job store update failed: kvstore PATCH failed/);
+
+    // The TABLE was fine: its DCR deployed and its Cribl destination was
+    // created and verified before the store blipped on the write reporting it.
+    expect(callSequence(azure)).toContain(
+      `PUT ${DCR_BASE}/dcr-SecurityEvent-eastus`,
+    );
+    expect(cribl.calls.length).toBe(4);
+
+    // So the parent record says nothing bad about it. The defect recorded a
+    // failed table whose error text was the STORE's, carrying a "job store
+    // update failed:" prefix - and retrying that table, the operator's obvious
+    // next move, was the wrong action.
+    const parent = (await inner.list(ONBOARD_BATCH_JOB_KIND))[0]!;
+    const entries = (parent.result as OnboardBatchOutcome | undefined)?.tables ?? [];
+    expect(entries.filter((entry) => entry.status === "failed")).toEqual([]);
+    const tableStep = parent.steps.find((s) => s.name === "table:SecurityEvent")!;
+    expect(tableStep.status).not.toBe("failed");
+    expect(tableStep.detail ?? "").not.toContain("job store update failed");
   });
 });

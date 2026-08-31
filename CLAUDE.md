@@ -37,11 +37,13 @@ the live kanban has a menu filter. Two values (`azure-onboarding`,
 operator sees it (release mechanics, docs, board tooling) and is not a synonym
 for "unsure".
 
-Three rules, all learned the hard way:
+Four rules, all learned the hard way:
 
 1. **Move a card to `in-progress` BEFORE starting**, not after finishing. The
    In progress column read `0` for an entire session because every card went
    straight from backlog to done, so the board only ever described finished work.
+   This holds when SUBAGENTS do the work too: dispatching a fan-out is starting,
+   so the cards move before the agents launch, not when their results land.
 2. **A defect found in COMMITTED code becomes a card before it is fixed**, even
    for a five-minute fix - file it, work it, close it with a `verified` value.
    Something you introduce and fix while drafting is editing and needs no card.
@@ -50,6 +52,13 @@ Three rules, all learned the hard way:
 3. **`verified` on a done card says how it was confirmed** - `pins`, `live`,
    `both` or `none`. `none` is honest for prose. Never let it borrow credibility
    from the thing being described.
+4. **A `bug` card is `priority: now` unless it says why not.** Broken behaviour
+   outranks new behaviour by default: a defect is already costing someone
+   something, while a feature is only not-yet-earning. A lower priority stays
+   available at the price of a `priorityWhy` on the card - `check-board` FAILS
+   on a deprioritised bug without one, and on a placeholder. Write the argument,
+   not "cosmetic". The rule exists in the tooling rather than only here because
+   rule 1 was prose-only and got broken the day it was read.
 
 Open questions can be answered on the card: a `decision` block renders as
 clickable options in the live kanban, and answering records `chosen` WITHOUT

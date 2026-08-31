@@ -90,9 +90,32 @@ describe("stage one: listing groups is ONE request and nothing else", () => {
   });
 
   it("says when there is no Stream group to capture from", async () => {
+    // The EARNED zero (DBT-62): a group came back and it is an Edge group, so
+    // "no Stream worker group is visible" is a measured fact and must stay
+    // plain. Asserted NOT to hedge, because the risk of the three-way listing
+    // is trading a wrong claim for a permanent "cannot tell".
     const groups = await listSampleSourceGroups(clientWith([{ id: "e", product: "edge" }]));
     expect(groups.streamGroupIds).toEqual([]);
     expect(groups.notes.join(" ")).toContain("no live source to capture from");
+    expect(groups.notes.join(" ")).not.toContain("cannot see them");
+    expect(groups.ok).toBe(true);
+  });
+
+  it("does NOT call an empty group listing 'no Stream group' - it cannot know", async () => {
+    // The defect this conversion exists to prevent. `listGroups` succeeded and
+    // returned nothing, which is identical whether the deployment has no
+    // worker groups or this token cannot see them. The old code took the
+    // branch above and stated the deployment had no Stream group.
+    const groups = await listSampleSourceGroups(clientWith([]));
+    expect(groups.streamGroupIds).toEqual([]);
+    const note = groups.notes.join(" ");
+    expect(note).toContain("returned nothing");
+    expect(note).toContain("cannot see them");
+    // The earned sentence must NOT appear - that is the whole distinction.
+    expect(note).not.toContain("No Stream worker group is visible");
+    // Still `ok`: the call SUCCEEDED. This is not the transport-failure path,
+    // and collapsing the two would lose the difference in the other direction.
+    expect(groups.ok).toBe(true);
   });
 });
 

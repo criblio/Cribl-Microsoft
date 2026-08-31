@@ -11,7 +11,7 @@ two cannot disagree.
 alternatives. This board holds only what is a unit of work, what state it is
 in, and what it waits on.
 
-**53 in the backlog, 0 in progress, 40 done.**
+**59 in the backlog, 0 in progress, 71 done.**
 
 ## By menu item
 
@@ -23,15 +23,15 @@ operator sees on any screen. Two menus are PLANNED and have no route yet.
 |---|---|---|---|
 | Dataflow | 3 | 0 | 0 |
 | Setup | 1 | 0 | 0 |
-| Sentinel Integration | 11 | 13 | 0 |
-| DCR Automation | 1 | 2 | 0 |
+| Sentinel Integration | 13 | 35 | 1 |
+| DCR Automation | 4 | 8 | 0 |
 | Pack Maintenance | 4 | 1 | 0 |
 | Permission Verification | 8 | 0 | 0 |
 | Azure Native Source Onboarding (planned) | 13 | 4 | 0 |
 | Windows Event analysis (planned) | 5 | 0 | 0 |
-| Cross-cutting | 7 | 20 | 0 |
+| Cross-cutting | 8 | 23 | 0 |
 
-Open work totals 53.
+Open work totals 59.
 
 ## Epics and features
 
@@ -66,13 +66,13 @@ Sentinel-side and Lake-side halves of Windows event handling
 | `WIN-F2` Microsoft proprietary enrichment catalog | Windows Event analysis (planned) | 0/2 | WIN-2, D-4 |
 | `WIN-F3` Lake copy format - JSON vs Parquet | Windows Event analysis (planned) | 0/1 | D-5 |
 
-### `HON` Inventory and diagnostic honesty - 36% (4/11)
+### `HON` Inventory and diagnostic honesty - 55% (6/11)
 
 Measured gaps where the app reports a confident wrong answer
 
 | Feature | Menu | Done | Stories |
 |---|---|---|---|
-| `HON-F1` Capability model follow-ons | Permission Verification | 0/4 | HON-6, HON-7*, D-1, D-2* |
+| `HON-F1` Capability model follow-ons | Permission Verification | 2/4 | HON-6, HON-7*, D-1, D-2* |
 | `HON-F2` Unverified empty inventories | Sentinel Integration | 2/3 | HON-1, HON-2, D-3 |
 | `HON-F3` Guid-column aftermath, made visible | Sentinel Integration | 2/4 | HON-3, HON-8*, HON-4, D-11 |
 
@@ -116,19 +116,29 @@ ENABLER EPIC: release mechanics. The packaged tarball trails main, and the lab t
 |---|---|---|---|
 | `REL-F1` Release and deployment hygiene | Cross-cutting | 3/5 | REL-2, REL-3, REL-4, REL-5, REL-6 |
 
-### `DBT` Quality and technical debt _(enabler)_ - 55% (21/38)
+### `DBT` Quality and technical debt _(enabler)_ - 66% (44/67)
 
 ENABLER EPIC: verification gaps, copy, diagram fidelity, docs and the board's own tooling
 
 | Feature | Menu | Done | Stories |
 |---|---|---|---|
-| `DBT-F1` Verification gaps | Sentinel Integration | 1/5 | DBT-2, DBT-5*, DBT-6, DBT-7, DBT-36* |
-| `DBT-F2` Copy and UX | Sentinel Integration | 0/6 | DBT-3, DBT-9, DBT-14, DBT-15, DBT-28, D-10* |
+| `DBT-F1` Verification gaps | Sentinel Integration | 18/26 | DBT-2, DBT-5*, DBT-6, DBT-7, DBT-36*, DBT-55, DBT-56, DBT-42, DBT-43, DBT-44, DBT-45, DBT-46, DBT-47, DBT-48, DBT-49, DBT-50, DBT-51, DBT-52, DBT-41, DBT-40, DBT-60, DBT-61, DBT-62, DBT-63, DBT-64, DBT-65 |
+| `DBT-F2` Copy and UX | Sentinel Integration | 3/9 | DBT-3, DBT-9, DBT-14, DBT-15, DBT-28, D-10*, DBT-53, DBT-38, DBT-39 |
 | `DBT-F3` Diagram fidelity | Dataflow | 0/3 | DBT-1, DBT-4, DBT-12 |
-| `DBT-F4` Docs and spec grounding | Cross-cutting | 4/7 | DBT-8, DBT-10, DBT-11, DBT-13, DBT-22, DBT-26, DBT-32 |
-| `DBT-F5` Board tooling defects | Cross-cutting | 13/13 | DBT-16, DBT-17, DBT-18, DBT-19, DBT-20, DBT-21, DBT-23, DBT-24, DBT-25, DBT-27, DBT-29, DBT-30, DBT-31 |
+| `DBT-F4` Docs and spec grounding | Cross-cutting | 6/10 | DBT-8, DBT-10, DBT-11, DBT-13, DBT-22, DBT-26, DBT-32, DBT-57, DBT-58, DBT-54 |
+| `DBT-F5` Board tooling defects | Cross-cutting | 14/14 | DBT-16, DBT-17, DBT-18, DBT-19, DBT-20, DBT-21, DBT-23, DBT-24, DBT-25, DBT-27, DBT-29, DBT-30, DBT-31, DBT-59 |
 | `DBT-F6` Effect-identity defect class | Pack Maintenance | 0/1 | FX-4 |
-| `DBT-F7` Export instead of deploy - the offline path | DCR Automation | 3/3 | DBT-33, DBT-34, DBT-35* |
+| `DBT-F7` Export instead of deploy - the offline path | DCR Automation | 3/4 | DBT-33, DBT-34, DBT-35*, DBT-37 |
+
+### `TBL` Custom table authoring and table-first DCR creation - 75% (6/8)
+
+RAISED BY THE USER 2026-08-31. DCR Automation can onboard a table you can already NAME, but it cannot help you create one, and it cannot show you what the workspace already has. Every schema today arrives from somewhere else - a bundled vendor entry, a pasted JSON file, or a table that already exists - so an operator with a new log source and no schema file has no path through this screen at all.
+
+| Feature | Menu | Done | Stories |
+|---|---|---|---|
+| `TBL-F1` Author a custom table by hand | DCR Automation | 3/4 | TBL-6, TBL-1, TBL-2, TBL-8 |
+| `TBL-F2` Table inventory as the starting point | DCR Automation | 2/2 | TBL-3, TBL-5 |
+| `TBL-F3` The new surfaces work without write permission | DCR Automation | 1/2 | TBL-4, TBL-7 |
 
 ---
 
@@ -140,15 +150,46 @@ _Nothing here._
 
 ---
 
-## Backlog - now (0)
+## Backlog - now (1)
 
 Next to pick up. Nothing blocks these.
 
-_Nothing here._
+- **DBT-65** ADR 0004 never reached the static DCR templates - three still drop guids
+  `DBT-F1` `bug` `settled`
+  ADR 0004 (declare a guid column `string`, promote it with `toguid()` in
+  transformKql) was applied to the GENERATOR and never to the ~100 static ARM
+  templates under Azure/CustomDeploymentTemplates/DCR-Templates/. Three still
+  declare `"type": "guid"` with a bare `"transformKql": "source"`, which is
+  the exact shape that silently drops the column:
+  DataCollectionRules(DCE)/ADAssessmentRecommendation.json (4 columns),
+  DataCollectionRules(DCE)/AWSCloudTrail.json (3), and
+  DataCollectionRules(NoDCE)/ADAssessmentRecommendation.json (4). THIS PATH IS
+  A PUBLIC API, which is why it is `now` and not a cleanup: DCR-Templates is
+  not deprecated, it sits at the repo root, and Cribl's public docs deep-link
+  individual files in it. Anyone deploying one of these three loses those
+  columns with no error. HOW IT WAS FOUND, and this is the uncomfortable part.
+  An OUTSIDE CONTRIBUTOR reported it as PR #26 on 2026-06-11 and fixed
+  NoDCE/AWSCloudTrail.json correctly - both halves, `guid`->`string` AND
+  `source | extend AwsEventId = toguid(AwsEventId), ...` - two and a half
+  months BEFORE we diagnosed the same defect ourselves and shipped it as ADR
+  0004 / PR #123 in 1.12.1. The PR then sat open and untriaged until
+  2026-08-31. We rediscovered, from scratch, a bug that was already sitting in
+  the queue with a correct patch attached. THE FIX is to mirror #26's shape to
+  the three remaining files. DCE/AWSCloudTrail is the DCE variant of the file
+  the contributor already fixed, so its diff is a direct copy; the two
+  ADAssessmentRecommendation files need their own guid columns enumerated. DO
+  NOT sweep all ~100 templates blindly - 99 carry a bare `source` transform
+  and only these three pair it with a guid declaration, so the grep that finds
+  the defect is `"type": "guid"`, not the transform. WORTH A SECOND CARD IF IT
+  RECURS: nothing prevents a new template arriving with a guid declaration,
+  because these files are hand-written data rather than generator output and
+  no check reads them. A check-templates script in the [[DBT-61]] mould would
+  close that, and unlike the empty-as-zero class this one IS a literal grep -
+  the wrong thing is a string somebody typed.
 
 ---
 
-## Backlog - next (22)
+## Backlog - next (24)
 
 Settled and unblocked, sequenced behind now.
 
@@ -203,6 +244,10 @@ Settled and unblocked, sequenced behind now.
 
 - **HON-8** buildDeploymentPreview has no caller - the REVIEW stage is a usecase with no screen
   `HON-F3` `bug` `unconfirmed`
+  Not now because: Unreachable code plus a doc that oversells it - no operator
+  can reach buildDeploymentPreview, so nothing is currently wrong on screen.
+  Overlaps DBT-57, which carries the same dead-mechanism cleanup; doing them
+  together avoids deciding the same question twice.
   FOUND while building HON-3 on 2026-08-28, looking for the right surface for
   the column diagnostics. `buildDeploymentPreview` is a full usecase - roughly
   700 lines with its own test file, DCE handling, existing-resource checks and
@@ -234,14 +279,6 @@ Settled and unblocked, sequenced behind now.
   live. It is called out in > `azure-targeting-screen.dom.test.tsx` so nobody
   deletes it on the strength of > a green suite. FX-4's sweep should treat it
   as a known-unpinned guard.
-
-- **HON-7** Make the fallback offer reachable beside the actions
-  `HON-F1` `story` `settled` `blocked by D-2`
-  `FallbackNotice` renders without `onProduce` in production, so the
-  capability model's "every blocked action falls back to a downloadable
-  artifact" rule has no button. Targets: Integrate deploy, Batch Deploy, DCR
-  Automation. Must stay worded as an offer, not an error - there is a pin on
-  the absence of alert semantics. `backlog.md#1`. ---
 
 - **DBT-3** Reconcile the Entra `Kind:Direct` copy with what has been measured
   `DBT-F2` `story` `settled`
@@ -316,6 +353,8 @@ Settled and unblocked, sequenced behind now.
 
 - **DBT-14** Stop the solution list swallowing the mouse wheel
   `DBT-F2` `bug` `settled`
+  Not now because: An interaction annoyance on one list. Nothing is lost,
+  nothing is misreported, and the list stays usable with the scrollbar.
   Found live 2026-08-27: with the pointer over the list, the wheel moves
   neither the list nor the page - the pointer must leave the list before
   anything scrolls. Five of eight results were reachable. This is the
@@ -331,6 +370,8 @@ Settled and unblocked, sequenced behind now.
 
 - **DBT-15** Give every solution row a delivery-fit badge, or say why not
   `DBT-F2` `bug` `settled`
+  Not now because: A missing affordance rather than a wrong one - the badge is
+  absent, not incorrect, so nothing currently on screen is false.
   "Palo Alto Cortex XDR" renders none while all seven of its siblings do.
   Blank reads as neither "not measured" nor "does not apply" - the
   absent-versus-zero distinction the inventory standard exists to protect.
@@ -345,6 +386,10 @@ Settled and unblocked, sequenced behind now.
 
 - **DBT-28** The solution deep link does not override a stored selection
   `DBT-F2` `bug` `unconfirmed`
+  Not now because: Two candidate causes are recorded and it is unresolved
+  which one bit in the observed session. A live repro is cheaper than fixing
+  the wrong one, and fixing the wrong one would leave the real defect behind a
+  card marked done.
   FOUND 2026-08-28 driving the dev app. The Select Sentinel Solution card
   advertises `Deep link: #/?solution=1Password`. Navigating the live preview
   to `/apps/a/__local__#/?solution=Palo%20Alto%20Networks` left 1Password
@@ -360,15 +405,6 @@ Settled and unblocked, sequenced behind now.
   behaves as designed and the COPY needs to say that a stored selection takes
   precedence. Worth noting the reporter could not tell from the outside, which
   is the actual defect either way.
-
-- **D-2** `HON-7` surface area: which of Integrate deploy, Batch Deploy and DCR Automation get the fallba
-  `HON-F1` `decision` `undecided`
-  ck offer, and does each own its `onProduce`? One prop away in any of them.
-  DECISION: HON-7: which screens get the fallback offer, and who owns
-  onProduce?
-    [x] `each-owns` All three, each wiring its own onProduce - Integrate deploy, Batch Deploy and DCR Automation each pass a producer. One prop per screen, uniform mental model - but for pack and ARM kinds it is a button that cannot really produce the artifact on the spot.
-    [ ] `inline-only` All three get the offer; only INLINE kinds get a button - Honours isInlineArtifact, which already splits these: role-assignment and app-registration are generated from data the app holds, while dcr-arm-bodies, table-arm-bodies, arm-template and cribl-pack come from a RUN. Run kinds point at that run instead of pretending. More wiring, no pretending.
-    [ ] `where-producible` Only where a producer already exists - Batch Deploy already calls ports.artifacts.save; Integrate can hand over the pack build. DCR Automation waits until it has an artifact to give. Smallest step; leaves the capability rule partly unmet.
 
 - **D-3** How do capabilities reach the roughly eight listing screens - keep prop-drilling from the shell
   `HON-F2` `decision` `undecided`
@@ -417,9 +453,111 @@ Settled and unblocked, sequenced behind now.
   wrong answer the suite exists to avoid. Close this only on a guid column
   that could only have arrived through the transform.
 
+- **DBT-37** The ARM export still requires a live Azure connection
+  `DBT-F7` `story` `settled`
+  RAISED BY THE USER 2026-08-31: "does the Sentinel Integration give the user
+  the ability to see and export ARM templates for those that do not want to
+  connect the app to Azure?" EXPORT YES, SEE NO, DISCONNECTED NO - and the
+  third is the real gap. [[DBT-35]] shipped 'Export instead of deploy' beside
+  Deploy in section 9 and it emits a genuine deployment template ([[DBT-33]]),
+  so the offline OUTPUT exists. What does not exist is an offline INPUT:
+  `exportDisabledReason` (integrate-screen.tsx:1555) demands a subscription,
+  resource group and workspace, and `onboardBatch` in templateOnly mode does
+  read-only ARM GETs to resolve column sources (onboard-batch.ts:51-56, 'NO
+  ARM WRITES happen at all - only schema/workspace GETs'). So the feature
+  serves an operator who will not grant WRITE, NOT one who will not connect at
+  all. BLOCKED BY CONSTRUCTION RATHER THAN POLICY, which is what makes this
+  small and worth doing: `collectTableTemplates` (onboard-batch.ts:468) issues
+  the table GET UNCONDITIONALLY and only falls back to `spec.customSchema` on
+  a 404. Disconnected, that call fails with a network or auth error rather
+  than 404, so it throws instead of falling through to a schema the operator
+  already supplied. THE PIECES ARE OTHERWISE PRESENT: azure-targeting already
+  has an offline branch with FREE-TEXT scope entry whose own comment says the
+  values are embedded in generated ARM templates for manual deployment
+  (azure-targeting-screen.tsx:570-578); `customSchema` is already forwarded to
+  the template builder in templateOnly mode; and there are now three
+  Azure-free schema sources - bundled VENDOR_SCHEMAS, a pasted file, and
+  [[TBL-1]]'s hand-authored fields. THE DESIGN TENSION TO SETTLE, and it must
+  be settled rather than coded around: 'the LIVE table when it exists
+  (existing schema always wins)' is the pinned Unit 5 contract, and offline
+  there is no live table to ask. The offline path therefore CANNOT honour that
+  rule - it has to trust the supplied schema - so this needs to be an
+  explicit, stated exception for the disconnected case, not a silent
+  reordering of the precedence that the connected path also inherits. ALSO
+  WORTH FIXING WHILE HERE: the disabled-reason text says 'Enter a native table
+  name in the Deploy section', but `deployTargets` (integrate-screen.tsx:455)
+  accepts any typed table name - the word 'native' is drift. SEE, separately,
+  is [[HON-8]]: `buildDeploymentPreview` already builds the previewable ARM
+  shapes and has no caller, so nothing renders a template on screen and the
+  .tgz must be opened to read one.
+
+- **DBT-50** Live table columns are fetched, awaited, stored - and never consulted
+  `DBT-F1` `bug` `settled`
+  Not now because: Needs a decision, not a fix: if the three documents are
+  right the catalog chain reorders, and if the current order is right the
+  documents change. Both behaviours are defensible, so shipping either without
+  deciding just moves the contradiction.
+  FOUND 2026-08-31 by the offline-capability audit.
+  `mapping-review-section.tsx:352-368` nests the live-ARM catalog BELOW both
+  repo tiers, so for any table the Sentinel repo defines - which is most of
+  them - the ARM read fires, is awaited, is stored in `liveSchemas`, and is
+  then never reached by resolution. Three documents tell operators the
+  opposite: `live-table-schema-catalog.ts:12-17`,
+  `workspace-tables.ts:150-154`, and release-notes 1.11.12 all say the live
+  columns REPLACE the derived schema. NO TEST PINS THE COMPOSED ORDER, which
+  is why it drifted. Decide which is right before touching it - if the docs
+  are right the chain needs reordering, and if the current order is right
+  three documents need correcting. Note the offline consequence too: the
+  wasted read is also the reason the mapping screen touches Azure at all in a
+  workflow that is otherwise Azure-free.
+
+- **TBL-7** The create-table offer could produce its artifact inline instead of pointing
+  `TBL-F3` `story` `undecided`
+  RAISED BY THE TBL-4 AGENT 2026-08-31, which surfaced it rather than acting
+  on it BECAUSE IT CONTRADICTS THE BINDING DESIGN - exactly the right call,
+  and the observation is good enough to reopen the question. [[D-2]] settled
+  that a RUN kind is POINTED AT rather than produced inline, and
+  `isInlineArtifact` returns false for `table-arm-bodies`, so TBL-4 points.
+  BUT FOR THIS SURFACE THE PREMISE MAY NOT HOLD: `createCustomTable`
+  (create-custom-table.ts) and `collectTableTemplates` (onboard-batch.ts) call
+  the SAME `buildTablePutRequest`, and for a HAND-AUTHORED table every input
+  to it already sits in the create form's own state - subscription, resource
+  group, workspace, name, columns. No live Azure read contributes anything. So
+  the panel could assemble the exact body the run would send, with no run and
+  no connection at all - which is a strictly better answer for an operator who
+  cannot write to Azure: the artifact itself, rather than directions to a run
+  they may also be unable to start. THE REAL QUESTION IS WHETHER THAT MAKES
+  `table-arm-bodies` INLINE IN GENERAL, or only when produced from a form that
+  already holds the schema. Probably the latter - the same kind produced from
+  the BATCH path genuinely does need the run, because there the schema comes
+  from a live table read. If so, `isInlineArtifact(kind)` is the wrong SHAPE
+  for the decision: inline-ness would be a property of the CALL SITE and its
+  inputs, not of the artifact kind alone. That is a change to a contract
+  settled hours ago, so decide it before building - backlog.md section 16 is
+  the reasoning it would amend.
+
+- **TBL-8** The Tables tab needs a filter - the real workspace has 843 tables
+  `TBL-F1` `story` `settled`
+  Found by verifying [[DBT-61]] live, and it is EVIDENCE AGAINST AN EARLIER
+  DECISION rather than a defect in what was built. [[TBL-2]] deliberately
+  shipped the Tables tab with no filter box; law-jpederson-eastus then
+  returned 843 tables. The panel's whole purpose is answering 'does this table
+  already have a DCR', and at 843 alphabetical rows that question cannot be
+  answered by looking. The row count was not known when the no-filter call was
+  made, so this reopens it with a number rather than reversing it on taste.
+  Scope: a substring filter over the Name column, client-side over rows
+  already loaded - no new request, no change to the DCR join. Reuse the Logs
+  screen's `Text` filter idiom (substring, case-insensitive) rather than
+  inventing a second one. WATCH THE COUNT WORDING: whatever the filter renders
+  alongside it (`n of 843`) is a count derived from a listing, so it must come
+  from the rows branch - see [[DBT-61]] and docs/inventory-standard.md. A
+  filter that matches nothing must say 'no table matches that filter', which
+  is a fact about the filter, and must NOT reuse the empty-listing wording,
+  which is a claim about the workspace.
+
 ---
 
-## Backlog - later (31)
+## Backlog - later (34)
 
 Settled, gated on something above.
 
@@ -440,6 +578,10 @@ Settled, gated on something above.
 
 - **AZR-13** SecurityOnly is offered but cannot be stored - it reverts to Standard
   `AZR-F3` `bug` `undecided`
+  Not now because: The profile it silently reverts to is the SAFE one, so the
+  failure is a lost preference rather than a wrong deployment. The card is
+  also still undecided on where the profile list should live, and fixing
+  before deciding means fixing twice.
   FOUND by the architecture audit 2026-08-28 (ninth), one commit after AZR-2
   merged, as a DUPLICATED DECISION: two modules define what Entra profiles
   exist and they disagree. `entra-diagnostics.ENTRA_PROFILES` has three
@@ -702,9 +844,57 @@ Settled, gated on something above.
     [ ] `drop-enumeration` Drop the enumeration from the header - Header stops promising what the stepper does not show.
     [x] `promote-substeps` Promote the sub-steps into the stepper - Stepper starts showing what the header promises.
 
+- **DBT-56** The never-rejects contract is enforced call site by call site
+  `DBT-F1` `enabler` `settled`
+  RAISED BY THE REVIEWER OF [[DBT-48]], 2026-08-31, as the reason that fix
+  will not stay fixed. `onboardBatch` promises it never rejects for step or
+  table failures, and that promise is now kept by FOUR SEPARATE try blocks
+  around four ARM calls. DBT-48 existed because one call was added without
+  one. The next call added outside a guard reopens exactly the same defect,
+  and nothing fails when it does - the contract is prose plus a habit.
+  Options: an outer guard around the usecase body that converts any escape
+  into a failed record; or a pin that drives EVERY ARM call site to reject in
+  turn and asserts the record still resolves. The second is more work but
+  catches the omission at the point it is made, which is what the
+  four-try-blocks arrangement cannot do.
+
+- **DBT-58** Two pins encode opposite policies for naming the excluded subscription
+  `DBT-F4` `bug` `undecided`
+  Not now because: Two pins disagreeing about copy. No product behaviour is
+  wrong; the cost is the next person meeting a confusing test failure, and the
+  card already records which of the two over-reached.
+  FOUND 2026-08-31 by the reviewer of [[DBT-54]]. `integrate-arc.test.ts:220`
+  forbids the word "subscription" ANYWHERE in the workbook infoTip, while
+  `rule-coverage-state.test.ts:391-393` REQUIRES the summary line to name the
+  subscription beside its exclusion. Both landed in the same fix, and they
+  encode opposite policies for the same fact - so the next person to make the
+  infoTip say what the summary says will be failing a test that looks
+  deliberate. THE UNDERLYING QUESTION IS REAL: naming an excluded source helps
+  an operator answer "why isn't my deployed workbook here?", which is the
+  argument the summary pin won on; the infoTip pin was written to stop the OLD
+  false promise coming back, and it over-reached by banning the word rather
+  than the promise. Narrow the infoTip pin to forbid the CLAIM (that deployed
+  workbooks are folded in) rather than the noun, then decide once whether both
+  surfaces name the exclusion.
+
+- **DBT-51** A real but empty _CL table is silently re-derived from the sample
+  `DBT-F1` `bug` `settled`
+  Not now because: Needs a custom table that exists with zero materialised
+  columns. That is a real state but a narrow one, and TBL-1 only just made it
+  easy to produce, so it has had no chance to bite yet.
+  FOUND 2026-08-31 by the offline-capability audit. `analyze-samples.ts:228`
+  tests `columns.length === 0`, so a custom table that EXISTS in Azure with
+  zero materialised columns is treated as unresolved and re-derived from the
+  sample - which is exactly the quiet substitution
+  `live-table-schema-catalog.ts:42-46` says that tier exists to prevent. The
+  operator is shown a schema the app invented for a table Azure already has.
+  Distinguish 'no such table' from 'a table with no columns yet'; the second
+  is a real state for a freshly created custom table, which [[TBL-1]] now
+  makes easy to produce.
+
 ---
 
-## Done (40)
+## Done (71)
 
 Kept briefly so a reader can see what just landed; prune when the list grows.
 
@@ -943,6 +1133,28 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   in the pack - more samples will not change that. Its route ships with a
   placeholder filter for you to complete." So the sibling guard was observed
   working, not just pinned.
+
+- **HON-7** Make the fallback offer reachable beside the actions
+  `HON-F1` `story` `settled` `verified: pins`
+  `FallbackNotice` renders without `onProduce` in production, so the
+  capability model's "every blocked action falls back to a downloadable
+  artifact" rule has no button. Targets: Integrate deploy, Batch Deploy, DCR
+  Automation. Must stay worded as an offer, not an error - there is a pin on
+  the absence of alert semantics. `backlog.md#1`. --- [[D-2]] ANSWERED
+  2026-08-31: all three surfaces, each wiring its own onProduce, with
+  isInlineArtifact deciding whether the producer generates bytes or points at
+  the run. Reasoning in backlog.md section 16. DONE 2026-08-31, review SOUND.
+  All three surfaces per [[D-2]]: Integrate STARTS the export run (the same
+  deploy stopping before every write, so the artifact it names is what the
+  click makes), Batch STARTS a force-templateOnly run for the ARM kinds it
+  collects and POINTS at Integrate for the pack it does not build, and DCR
+  inventory POINTS because both kinds it offers are run kinds and the preview
+  on screen holds enough to build a body - which is exactly the temptation D-2
+  forbids. A produceLabel prop keeps pointing honest. THE SHELL WAS THE LAST
+  GAP: App.tsx passed capabilities/capabilityContext to Integrate and the DCR
+  panel but NOT to BatchDeployScreen, so that third surface was wired and
+  unreachable; the agent could not fix it (App.tsx outside its files) and
+  flagged it, and it is fixed in this commit.
 
 - **AZR-S2** Decide whether the app creates Cribl sources over the API
   `AZR-F9` `spike` `settled` `verified: none`
@@ -1235,6 +1447,24 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   unanchored-pattern class was already fixed once in 1.12.1; this was the
   second instance, which is why the rule is now anchored rather than
   re-tuned.*
+
+- **D-2** `HON-7` surface area: which of Integrate deploy, Batch Deploy and DCR Automation get the fallba
+  `HON-F1` `decision` `settled` `verified: none`
+  ck offer, and does each own its `onProduce`? One prop away in any of them.
+  DECIDED 2026-08-31: all three surfaces, each wiring its own onProduce.
+  Reasoning in backlog.md section 16, which is why this can settle. The
+  runner-up option (inline kinds only) raised a real objection - for pack and
+  ARM kinds a button cannot produce the artifact on the spot - and the answer
+  is that the two were never opposed: `isInlineArtifact`
+  (fallback-notice-state.ts:46) already draws that line and `fallbackHint`
+  already says "Produced by a run that makes no live changes". onProduce means
+  the screen owns WHAT HAPPENS, which for a run kind is starting or pointing
+  at the run, not fabricating bytes. That is what HON-7 must build.
+  DECISION: HON-7: which screens get the fallback offer, and who owns
+  onProduce?
+    [x] `each-owns` All three, each wiring its own onProduce - Integrate deploy, Batch Deploy and DCR Automation each pass a producer. One prop per screen, uniform mental model - but for pack and ARM kinds it is a button that cannot really produce the artifact on the spot.
+    [ ] `inline-only` All three get the offer; only INLINE kinds get a button - Honours isInlineArtifact, which already splits these: role-assignment and app-registration are generated from data the app holds, while dcr-arm-bodies, table-arm-bodies, arm-template and cribl-pack come from a RUN. Run kinds point at that run instead of pretending. More wiring, no pretending.
+    [ ] `where-producible` Only where a producer already exists - Batch Deploy already calls ports.artifacts.save; Integrate can hand over the pack build. DCR Automation waits until it has an artifact to give. Smallest step; leaves the capability rule partly unmet.
 
 - **D-7** `VND-2` Does a persisted column order need a version or a captured-on date, so a firmware chang
   `VND-F1` `decision` `settled` `verified: none`
@@ -1797,3 +2027,827 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   wiring, which the three DOM pins cover. Left at verified: pins deliberately;
   upgrading it on the strength of DBT-33 would be exactly the borrowed
   credibility the board forbids.
+
+- **TBL-6** The hand editor accepts column names core rejects
+  `TBL-F1` `bug` `settled` `verified: both`
+  MY OWN DEFECT, shipped in 71bf882 and filed rather than quietly patched.
+  `manual-schema-state.ts` validates blank and duplicate names only, and its
+  docblock justifies the omission with "the domain has no charset or
+  leading-character rule for column names ... inventing one would mean this
+  editor rejecting names Azure would have accepted". THAT IS FALSE. Core
+  enforces `/^[A-Za-z_][A-Za-z0-9_]*$/` in `addTableColumn`
+  (update-dcr.ts:895) and throws `column name '<x>' is invalid - letters,
+  digits, and underscores only, not starting with a digit`. So the editor
+  happily accepts `Client IP` or `2ndTry`, previews them, and the operator
+  learns the truth from a thrown error at the far end of a deploy. The commit
+  message asserts the wrong premise too and should be superseded by this card
+  rather than trusted. FIX BY EXTRACTING, NOT COPYING: the regex already
+  exists TWICE - core's `addTableColumn` and `isValidEnrichmentFieldName`
+  (pipeline-preview-state.ts:349) - so adding a third literal is the
+  duplicated-decision smell the architecture audit exists to catch. Export ONE
+  predicate from core for the Log Analytics column-name rule and have
+  `addTableColumn` and the editor both call it. DO NOT fold
+  `isValidEnrichmentFieldName` into it: that is a Cribl Eval field-name rule
+  which happens to share today's regex, and merging two rules because they
+  currently agree is how a later divergence becomes a silent bug. NOTE THE
+  `_CF` SUBTLETY when wiring: `addTableColumn` applies the regex AFTER
+  appending `_CF` for native tables, so the name the operator types is not the
+  name validated there; custom (_CL) creation has no suffix rule, so the
+  editor validates the typed name directly. FIXED 2026-08-31 by extraction, as
+  the card asked: `isValidColumnName` and `COLUMN_NAME_RULE` now live in
+  `domain/custom-table`, `addTableColumn` calls the predicate instead of
+  holding the literal, and the editor asks it per row.
+  `isValidEnrichmentFieldName` was deliberately LEFT ALONE. VERIFIED LIVE:
+  typing `Client IP` in the editor tints the row and reads "'Client IP' is not
+  a valid column name - letters, digits, and underscores only, not starting
+  with a digit"; before the fix it was accepted and previewed.
+
+- **DBT-55** A store outage inside onboardTable is still blamed on the table
+  `DBT-F1` `bug` `settled` `verified: pins`
+  FOUND 2026-08-31 while fixing [[DBT-49]], disclosed by the fixer and
+  confirmed by its reviewer - the same defect one level down. DBT-49 stopped
+  the BATCH blaming a table for a kvstore outage, but `onboard-table.ts:1023`
+  catches everything, writes `jobs.update(job.id, {status:"failed", error:
+  message})` and returns status "failed", so a store blip inside a CHILD
+  arrives at `onboard-batch.ts:1247` as an ordinary failed table and is
+  recorded as that table's failure, carrying the store's error text. The
+  operator's next action - retry that table - is the wrong one. Fix is the
+  same shape DBT-49 used: tag the store failure inside onboard-table so the
+  caller can tell it apart. The onboard-batch docblock and its per-table catch
+  now state this limit explicitly rather than asserting the guarantee
+  unconditionally, so the code is honest about it while it is open. FIXED
+  2026-08-31 in onboard-table: store failures are re-raised as JobStoreFailure
+  instead of being recorded as the table failing. THE CONSUMER HALF IS STILL
+  OPEN and is [[DBT-60]] - onboard-batch tests instanceof against ITS OWN
+  class, and a cross-module instanceof never matches, so the batch still
+  records an ordinary failed table (now with a job-store-update-failed
+  prefix). Both docblocks say so rather than asserting the guarantee.
+
+- **DBT-57** The dead honesty mechanisms the inventory standard counts on
+  `DBT-F4` `bug` `settled` `verified: pins`
+  SPLIT OUT OF [[DBT-54]] 2026-08-31: its reviewer found that the card carried
+  FIVE claims, the fix answered four, and the unanswered one is the one the
+  card itself calls most important - so closing DBT-54 on that fix would have
+  lost it silently. (1) `capabilities.ts:192` `unavailableReason` and the
+  `unreachable` branch of `empty-inventory.ts:106-111` are DEAD at every call
+  site - confirmed by grep: only the declaration, the barrel re-export and
+  their own tests. The second is the sentence `docs/inventory-standard.md`
+  credits as the honest no-Azure degrade, and NO RUNNING CONFIGURATION CAN
+  PRODUCE IT. A documented honesty mechanism that cannot fire is worse than
+  none, because it is being counted on. (2) `coverage-analysis.ts:193-238`
+  `acquireWorkbooks` likewise has zero production callers, while its section
+  header still reads "Workbook acquisition (AzureManagement port - existing
+  ARM surface)" and its docstring still describes enumerating the
+  subscription's workbooks - so the product now tells the operator that read
+  never happens while core still documents and tests it as shipped. (3)
+  `docs/porting-plan.md:322-324` (Unit 23) still specifies that ARM
+  enumeration as the scope, which is why the dead function looks intentional
+  to the next reader. DECIDE PER ITEM whether to wire it or delete it;
+  deleting is right wherever the behaviour was deliberately reversed, and the
+  doc has to move with it either way.
+
+- **DBT-59** priorityWhy is enforced but rendered nowhere
+  `DBT-F5` `bug` `settled` `verified: pins`
+  FOUND BY THE TWELFTH ARCHITECTURE AUDIT, 2026-08-31, one hour after shipping
+  the rule it breaks - and it defeats that rule's whole purpose. Rule 4 makes
+  a deprioritised bug carry a `priorityWhy`, and `check-board` enforces it.
+  But the field renders in NONE of the three surfaces anyone reads:
+  `docs/board.md` (grep: 0), the live kanban `board-html.mjs` (grep: 0), and
+  `npm run groom` (grep: 0). It exists only inside board.json and inside
+  check-board's failure message. THE POINT OF THE FIELD IS TO BE ARGUED WITH -
+  grooming is where someone should read 'cosmetic: the control works' and say
+  no it is not, that one is costing us. A justification nobody can see cannot
+  be challenged; it can only be satisfied, which is precisely the
+  ritual-without-the-thinking failure the rule's own documentation warns
+  about. Fix: render it under the card in board.md and in the kanban, and give
+  grooming a section that lists deprioritised bugs WITH their reasons so they
+  are re-argued every time the board is groomed rather than aging quietly.
+  FIXED 2026-08-31, all three surfaces: board.md renders 'Not now because:
+  <reason>' under the card, the kanban shows it as a plain paragraph on the
+  card face (NOT behind a details toggle - a reason hidden behind a click is
+  as unread as one not rendered), and grooming gained a BUGS HELD BACK section
+  that prints each one WITH its argument and appends 'still true?' so the
+  question is asked rather than the state merely reported. The kanban's
+  priorityWhy is also folded into the card's search text. 6 pins across the
+  three renderers, mutation-checked: stripping each renderer fails its own pin
+  and only its own.
+
+- **DBT-42** With no solution selected, gap analysis adopts an unrelated solution's DCR flows
+  `DBT-F1` `bug` `settled` `verified: pins`
+  FOUND 2026-08-31 by the offline-capability audit, and CONFIRMED BY AN
+  EXECUTED TEST - the highest-consequence finding of that sweep.
+  `resolve-sample-routing.ts:126` calls `resolveSolutionDcrFlows` UNGUARDED
+  while `:87` guards the sibling listing, and `matchSolutionName`
+  (solution-matching.ts:41) is `na.includes(nb)`, which matches EVERYTHING
+  against an empty needle. So with no solution selected the analysis silently
+  adopts the alphabetically-first Azure-Sentinel solution's DCR files: the log
+  type is routed to that vendor's table, and that vendor's renames, coercions
+  and route condition are reported as this feed's - while the UI
+  simultaneously says connector detection was "disabled for this analysis".
+  The operator is shown a confident mapping belonging to a product they did
+  not choose. THE EXISTING PIN DOES NOT COVER IT:
+  `resolve-sample-routing.test.ts:164-172` never asserts `dcrFlows`, and its
+  own fixture is already leaking a flow, so the wrong behaviour is sitting
+  inside a green suite. One-line fix (guard the call the same way `:87` guards
+  its sibling); the pin needs to assert `dcrFlows` is empty when no solution
+  is selected, and the leaking fixture needs correcting or the new pin passes
+  for the wrong reason.
+
+- **DBT-43** The pack build reads an RBAC-filtered empty DCR list as a real zero and ships placeholder ids
+  `DBT-F1` `bug` `settled` `verified: pins`
+  FOUND 2026-08-31 by the offline-capability audit. SAME FAMILY AS [[HON-2]],
+  which fixed this shape for the workspace list: ARM answers 200 with an empty
+  array when RBAC filters the caller out, so an empty listing is only a zero
+  once the read is verified. `integrate-screen.tsx:1159-1185` consults NO
+  capability before its DCR inventory read, logs "Read 0 deployed DCR(s)", and
+  `destination-resolution.ts:128-135` then asserts as fact that no DCR routes
+  the table - so the BUILT PACK SHIPS PLACEHOLDER DCR IDS. That is not a
+  cosmetic wrong answer: the operator installs a pack whose destinations point
+  at nothing. The comment at `:1161-1164` guards only the throw path, not the
+  empty-list path. UNCONFIRMED on one point, deliberately: the audit leans on
+  the repo's own binding standard (`docs/inventory-standard.md:21-30`) for the
+  200-empty-under-RBAC behaviour and did NOT verify it live against Azure for
+  this particular endpoint. Verify that before deciding the fix is a
+  capability gate rather than a probe.
+
+- **DBT-44** Content install reads an RBAC-filtered empty list as 'not installed', and a pin encodes it
+  `DBT-F1` `bug` `settled` `verified: pins`
+  FOUND 2026-08-31 by the offline-capability audit.
+  `content-install.ts:294-364` has the same shape as [[DBT-43]] - an empty ARM
+  list read as a measured zero - but with an INSTALL BUTTON on the end of it
+  (`content-install-section.tsx:541-554`), so the consequence is an operator
+  invited to install content that may already be there and merely invisible to
+  them. WORSE THAN DBT-43 IN ONE RESPECT: `content-install.test.ts:240-252`
+  PINS THE WRONG BEHAVIOUR, feeding `{status:200, body:{value:[]}}` and
+  asserting "packages: not installed". A fix therefore has to change that pin,
+  which makes this a spec change to be recorded rather than a quiet
+  correction. Same UNCONFIRMED caveat as DBT-43: the 200-empty-under-RBAC
+  behaviour was not verified live for `contentProductPackages` or
+  `alertRules`.
+
+- **DBT-45** The 'offline' Azure targeting branch calls ARM on mount and on every keystroke
+  `DBT-F1` `bug` `settled` `verified: pins`
+  FOUND 2026-08-31 by the offline-capability audit - four independent
+  refuters, two with executed render probes, making it the most-confirmed
+  finding of the sweep. `azure-targeting-screen.tsx:188-218` is a `useEffect`
+  whose ONLY guard is that the three scope fields are non-empty (`:192`);
+  `offline` appears neither in the body nor in the dependency array (`:218`),
+  and hooks run ABOVE the `if (offline)` early return at `:570`. Browse state
+  seeds from config at `:115-117`. So the offline branch calls
+  `checkSentinelEnabled` -> an unconditional `azure.request` GET
+  (`azure-discovery.ts:607-629`): ONE ARM GET ON MOUNT with a previously
+  committed scope and zero interaction, and ONE PER KEYSTROKE while typing the
+  workspace name. The offline JSX (`:570-615`) never renders
+  `sentinelStatus`/`sentinelError`, so it fails SILENTLY. THREE DOCSTRINGS
+  ASSERT THE OPPOSITE - `azure-targeting-screen.tsx:22-24`, `:86-89`,
+  `targeting-state.ts:79` - and the only pin, `targeting-state.test.ts:55`
+  ("fetches NOTHING in the offline branch"), covers `buildLoaderPlan`, a PURE
+  function this effect never calls. The file's own sibling DOM test header
+  already records this exact lesson at
+  `azure-targeting-screen.dom.test.tsx:24-28`, and both DOM tests pass
+  `offline={false}`. FIX: add the `offline` guard at `:188` and `offline` to
+  the deps at `:218`, and pin it with a RENDER test asserting zero
+  `ports.azure` calls - the pure pin provably cannot see this. NOTE FOR THE
+  READER: this card corrects a claim made earlier in the same session that the
+  offline branch was Azure-free; that was read off the comment, not the
+  effect.
+
+- **DBT-46** Role assignment reads Microsoft Graph on mount regardless of whether anything needs it
+  `DBT-F1` `bug` `settled` `verified: pins`
+  FOUND 2026-08-31 by the offline-capability audit.
+  `role-assignment-section.tsx:130-132` calls `loadServicePrincipals` whenever
+  `ports.graph` is bound, regardless of `targets.length`, and the cloud shell
+  always binds it (`adapters.ts:1911`). `numbered-section.tsx:139-147` keeps
+  every section body mounted behind `hidden`, so collapsing the section does
+  not stop it. Unlike [[DBT-45]] this one is VISIBLE: it paints "Could not
+  read the directory (...)" (`:284-290`) onto a page an operator opened with
+  no credentials and did not ask anything of. Gate the read on there being a
+  target to assign a role to.
+
+- **DBT-47** Install buttons enable on a hand-typed scope with no Azure identity
+  `DBT-F1` `bug` `settled` `verified: pins`
+  FOUND 2026-08-31 by the offline-capability audit.
+  `content-install-section.tsx:112-117` computes `canInstall` without ever
+  checking `azureIdentityPresent`, so typing three scope strings into the
+  offline targeting form arms the install actions even though no identity
+  exists to install with. The capability model's rule is that a denied verdict
+  ANNOTATES rather than removes the attempt - this is the opposite failure, an
+  action offered where the app can already tell it cannot succeed. Pairs with
+  [[DBT-45]], which is how a scope gets typed with no identity in the first
+  place.
+
+- **DBT-48** onboardBatch rejects out of its own never-rejects contract and strands the job record
+  `DBT-F1` `bug` `settled` `verified: pins`
+  FOUND 2026-08-31 by the offline-capability audit. `onboard-batch.ts:770-805`
+  is the ONE ARM call in that usecase with no try/catch - the first guarded
+  one is at `:831`. A transport failure there REJECTS OUT OF `onboardBatch`,
+  contradicting its own documented contract at `:591-595` ("Never rejects for
+  step or table failures") and leaving the job record stranded at `status:
+  "running"` in the Cribl kvstore with `fetch-workspace` stuck running
+  forever. An operator sees a batch that never finishes and never fails. This
+  is also the call the offline export path trips over first (see [[DBT-37]]),
+  so fixing the two together is natural: the same prologue both needs a guard
+  and needs to be skippable when `input.location` is supplied.
+
+- **DBT-49** A kvstore outage is recorded as the table's own failure
+  `DBT-F1` `bug` `settled` `verified: pins`
+  FOUND 2026-08-31 by the offline-capability audit.
+  `onboard-batch.ts:1198-1203` catches a kvstore failure inside the per-table
+  loop and writes it back as `recordTable({status:"failed"})` - so a store
+  outage is reported to the operator as that TABLE having failed to onboard.
+  The table may well have deployed fine. Low priority because it needs a
+  kvstore failure to bite, but it is the same class as the rest of this sweep:
+  a confident wrong attribution, and the operator's next action (retry that
+  table) is the wrong one.
+
+- **DBT-52** A denied Sentinel check reads as 'not enabled' and invites a write
+  `DBT-F1` `bug` `settled` `verified: pins`
+  FOUND 2026-08-31 by the offline-capability audit.
+  `azure-discovery.ts:603-604` and `:622` treat ANY non-2xx as "not enabled",
+  so a 403 renders as "Sentinel is not enabled on this workspace - Enable it
+  above" and invites the operator to perform a WRITE off the back of a DENIED
+  READ. This is precisely the empty-versus-denied conflation just fixed for
+  the workspace listing in commit 676212a ([[HON-2]]), in a screen that had
+  not been swept. The fix is the same shape: distinguish a measured 'not
+  enabled' from an unreadable one, and say which.
+
+- **DBT-53** Cribl-side sample discovery is gated on an Azure scope, and the copy blames Cribl
+  `DBT-F2` `bug` `settled` `verified: pins`
+  FOUND 2026-08-31 by the offline-capability audit.
+  `useSampleSources({enabled: scopeCommitted})` (integrate-screen.tsx:894) and
+  `<SampleSourcePicker enabled={scopeCommitted}>` (`:1709`) gate on
+  `scopeCommitted`, which is nothing but three non-empty AZURE config strings
+  (App.tsx:1447-1450). Disabled, the hook returns before any Cribl call
+  (`use-sample-sources.ts:128-131`), so `inventory` stays null,
+  `captureTarget`/`lakeTarget` are null (`:906-921`), and neither CapturePanel
+  (`:1730`) nor LakePanel (`:1752`) ever mounts. THE DISCOVERY IT GATES IS
+  100% CRIBL-SIDE. Three things then compound it: the copy says "Connect Cribl
+  to pull samples..." (sample-source-picker-state.ts:204-211), blaming the
+  wrong system; the call-site comment rationalises the gate as "gated on
+  scopeCommitted only because there is no Cribl address before that"
+  (`:892-893`), which is FALSE - `PlatformCriblClient` is constructed
+  unconditionally with no tenant (adapters.ts:1893-1900); and a pin protects
+  the misdiagnosis. So an operator with a working Cribl connection and no
+  Azure is told to connect Cribl.
+
+- **DBT-54** Six sections declare Azure requirements they do not have, and three promises are stale
+  `DBT-F4` `bug` `settled` `verified: pins`
+  FOUND 2026-08-31 by the offline-capability audit. No behaviour change; the
+  metadata and the copy currently disagree with the code, which is what the
+  audit's docs check exists to catch. (1) `integrate-arc.ts:190` and `:210`
+  declare `requires:"azure"` for sections 4 and 5 - both are `"none"`, there
+  is no `ports.azure` reference anywhere under `screens/rule-coverage/`. (2)
+  `:174` declares `"both"` for section 3, which needs NEITHER Azure nor Cribl.
+  (3) `integrate-arc.ts:205-207` and `rule-coverage-state.ts:364` promise
+  operators that workbook coverage "folds in any Sentinel workbooks already
+  deployed in your subscription" - reversed by a 2026-07-12 decision recorded
+  at `rule-coverage-section.tsx:513-519`, leaving a dead comment at `:389-391`
+  and a caller-less `acquireWorkbooks` at `coverage-analysis.ts:193-238`. (4)
+  `integrate-screen.tsx:1546-1548` says the export runs "without a network",
+  which is false - see [[DBT-37]]. (5) `capabilities.ts:192-209`
+  (`unavailableReason`) and the `unreachable` branch of
+  `empty-inventory.ts:106-111` are DEAD at every call site; the latter is the
+  sentence the inventory standard was crediting as the honest no-Azure
+  degrade, and no running configuration can produce it. That last one matters
+  most: a documented honesty mechanism that cannot fire is worse than none,
+  because it is counted on. DONE 2026-08-31 FOR CLAIMS 1-4 ONLY. Claim 5, and
+  the caller-less `acquireWorkbooks` half of claim 3, are now [[DBT-57]] - the
+  reviewer caught that the fix answered four of five while reporting "all four
+  claims held", which would have closed this card and silently lost the item
+  it calls most important. A pin asymmetry the same fix introduced is
+  [[DBT-58]].
+
+- **DBT-41** A denied table readback is reported as 'still provisioning'
+  `DBT-F1` `bug` `settled` `verified: pins`
+  SPLIT OUT OF [[DBT-40]] so the narrow defect could close while the
+  duplication it was found beside stays open. `ensure-tables`' readback loop
+  did `if (!is2xx(poll.status)) continue`, retrying ANY non-2xx twelve times
+  and then falling through to `ok: true, created: true, detail: 'created (N
+  columns; still provisioning)'`. CORRECTING MY OWN AUDIT WORDING: DBT-40 said
+  this meant "a permissions failure reads as a created table", which
+  OVERSTATED it. The PUT's status is checked at ensure-tables.ts:142, so
+  reaching the poll at all means creation was ACCEPTED and the table really
+  does exist - `ok: true, created: true` was right. The actual defect is
+  narrower and still worth fixing: the outcome claimed a PROVISIONING STATE
+  THAT WAS NEVER READ, and burned twelve requests discovering nothing, because
+  a 403 cannot become a 200 by retrying. FIXED 2026-08-31: only a 404 is
+  retryable (an accepted PUT that has not replicated yet - the same rule
+  `createCustomTable` uses); any other non-2xx stops the loop and the detail
+  says `could not read it back - HTTP N` instead of guessing. `ok`/`created`
+  deliberately UNCHANGED. 5 pins, mutation-checked - restoring the old
+  `continue` fails three of them. ONE PIN WAS WEAK AND WAS STRENGTHENED: with
+  a single 403 queued the fake exhausted and the old code died in the catch,
+  so the pin passed against the bug for the wrong reason; it now queues the
+  full bound of twelve so the buggy fall-through is actually reached.
+
+- **DBT-40** Two implementations of creating a custom table
+  `DBT-F1` `bug` `settled` `verified: pins`
+  FOUND BY THE ELEVENTH ARCHITECTURE AUDIT, 2026-08-31. `ensure-tables.ts` and
+  the extracted [[TBL-3]] `createCustomTable` both GET-first, PUT, and poll
+  `provisioningState` - the same contract, twice. The readback half was split
+  out and fixed as [[DBT-41]]; what remains is the duplication itself. THE
+  DIFFERENCES ARE PARTLY DELIBERATE and must not be flattened: ensure-tables'
+  docblock says it "never throws (every path resolves an outcome)" because it
+  is a best-effort dependency-table path inside content install, where one
+  uncreatable table must not fail the whole install, while `createCustomTable`
+  throws. So merging is a DECISION, not a refactor - it means either teaching
+  `createCustomTable` an outcome-returning caller, or having ensure-tables
+  catch and translate. A second difference is incidental and worth removing
+  whichever way it goes: a missing `provisioningState` is 'done' in
+  createCustomTable and 'keep polling' in ensure-tables. ALSO IN SCOPE: two
+  poll-attempt constants for the same decision,
+  `DEFAULT_CREATE_TABLE_POLL_ATTEMPTS` (10) and ensure-tables' private
+  `DEFAULT_TABLE_POLL_ATTEMPTS` (12), after the audit deleted onboard-table's
+  third, dead copy. DONE 2026-08-31. THE DECISION THE CARD ASKED FOR: neither
+  caller was made to yield, because they want genuinely different things from
+  the same operation - `onboardTable` needs the table's SCHEMA next to build a
+  DCR from, so an unconfirmed readback is fatal to it; `ensureRuleDataTable`
+  only needs the table to EXIST so a rule installs, so the same result is a
+  success. Forcing one contract on both would have made one of them wrong. So
+  `createCustomTable` now REPORTS the readback (`ReadbackOutcome`: confirmed,
+  or unresolved with a reason) instead of throwing, and each caller decides -
+  onboardTable throws its StepFailure, ensure-tables returns ok:true with the
+  reason in its detail. A terminal `failed`/`canceled` still throws, because
+  that is not a reporting nuance and nobody wants to carry on from it.
+  ensure-tables lost its PUT-and-poll entirely; it keeps only what is its own,
+  which is resolving WHICH of two candidate table names to use. THREE REASONS,
+  not one: 'did not read back successfully within N poll attempts' (never
+  appeared), 'was still provisioning after N poll attempts' (seen,
+  non-terminal) and 'could not be read back - HTTP N' - the first two used to
+  be indistinguishable, which would tell an operator to wait for something
+  that was never coming. COSTS ONE EXTRA GET on the create path, because
+  createCustomTable re-checks existence after ensure-tables' own pre-check.
+  That is not waste: it closes the race where another actor creates the table
+  between the check and the upsert, which would otherwise silently overwrite
+  their schema. The poll bound stayed a call-site parameter (12 for content
+  install, the usecase default of 10 elsewhere) rather than becoming a third
+  constant. onboardTable's 27 characterization pins pass unchanged; 2
+  create-custom-table pins were rewritten from `rejects` to result assertions,
+  which is a DELIBERATE spec change recorded here rather than a weakening.
+
+- **DBT-38** The add-column controls render with raw browser chrome
+  `DBT-F2` `bug` `settled` `verified: pins`
+  FOUND 2026-08-31 while mapping the row-editor conventions for [[TBL-1]].
+  `.field input` and `.field select` (styles.css:358-393) are DESCENDANT
+  selectors and there is no bare `input`/`select` base rule anywhere - the
+  only global rule is the `*` reset at line 176. The add-column control in
+  `dcr-inventory-panel.tsx:709-725` puts its `<input>` and `<select>` directly
+  inside `.panel-controls`, NOT inside a `<label className="field">`, so both
+  render with default browser chrome: no `--border`, no `--surface-raised`, no
+  `--border-focus`, and no dark-theme token. Verified by reading the markup
+  and grepping the sheet. The repo already has three separate precedents for
+  the fix - `.enrich-add input` (5059), `.csv-map-input` (2402) and
+  `.theme-select` (916, whose comment says "same tokens as .field select,
+  without the field wrapper") - so this is choosing one, not inventing.
+  Cosmetic only: the control works, it just does not look like the app around
+  it.
+
+- **DBT-39** Four classNames are rendered but defined in no stylesheet
+  `DBT-F2` `bug` `settled` `verified: pins`
+  FOUND 2026-08-31, same sweep as [[DBT-38]]. `pack-card` and `pack-card-head`
+  (dcr-inventory-panel.tsx:656-657 and pack-inventory-screen.tsx:421-422),
+  `dcr-progress-line` (dcr-inventory-panel.tsx:696) and
+  `identity-row-editable` (identity-block.tsx:96) appear in JSX and match
+  NOTHING in styles.css - confirmed by grep, count zero for each. They are
+  inert; the layout that actually works comes from the sibling classes
+  (`mapping-review-card`, `panel-desc`). This is the exact class of drift the
+  sheet's own comments record catching by hand twice before -
+  styles.css:5108-5113 and 5244-5249, the latter shipping broken since 1.11.5.
+  THE REAL FIX IS THE CHECK, NOT THE FOUR NAMES: there is no automated
+  verification that a rendered className exists in CSS, so this recurs on a
+  schedule. A cheap script - collect string literals in className positions,
+  diff against selectors in styles.css, allowlist the dynamic ones - would
+  turn a recurring manual sweep into CI. Decide when picked up whether to
+  delete the dead names or define them; deleting is right for any whose
+  sibling already does the work.
+
+- **TBL-1** Author a custom table's fields and types by hand
+  `TBL-F1` `story` `settled` `verified: both`
+  RAISED BY THE USER 2026-08-31: "give the user an interface to name fields
+  and assign types". TODAY THERE IS NO SUCH PATH. `custom-schema-state.ts`
+  offers exactly three sources and the picker is EXCLUSIVE: `vendor` (a
+  bundled VENDOR_SCHEMAS entry), `file` (upload or paste a schema JSON),
+  `existing` (send no schema and require the table to already be there). An
+  operator with a new log source and no schema file cannot proceed - the
+  screen can only consume a schema someone else authored. This adds a FOURTH
+  source, `manual`, so it reuses the pinned source-precedence rule rather than
+  bolting a second way to reach onboardTable. NOTHING IN THE DOMAIN NEEDS
+  INVENTING: `CUSTOM_COLUMN_TYPES` is the type list the DCR-side editor
+  already uses, `validateCustomTableSchema` already enforces the _CL suffix,
+  the at-least-one-column rule and the TimeGenerated rules, `mapColumnType` is
+  the characterized mapping, and `stripReservedTableCreationColumns` already
+  shapes the creation payload. The work is a pure state module
+  (add/remove/rename a row, pick a type, surface the existing validators'
+  errors per row) plus the editor UI, and it hands `onboardTable` the same
+  `customSchema` shape the file path produces. WATCH THE RESERVED NAMES: 13
+  columns are stripped from the creation payload and TimeGenerated is injected
+  by the schema-file path only - a hand editor that silently drops a field the
+  operator typed would be the same class of quiet loss as [[HON-4]], so a
+  stripped row must SAY it was stripped and why. DONE 2026-08-31, VERIFIED
+  LIVE in the __local__ preview: `MyNewSource_CL` with source `Define the
+  fields here` renders the editor, and a reserved name shows its own row note.
+  Three parts - `manual-schema-state.ts` (row ops + verdicts, 17 pins),
+  `manual-schema-editor.tsx` (8 DOM pins), and the fourth `manual` source
+  wired into `custom-schema-state` so the rows reach
+  validateCustomTableSchema, the reserved strip and the TimeGenerated
+  injection unchanged rather than through a private path. The editor borrows
+  the `.csv-map-*` row vocabulary because it is the only layout here that
+  stacks a per-row message under its own input. See [[TBL-6]] for the rule
+  this shipped without.
+
+- **TBL-2** Refuse a table name the workspace already has
+  `TBL-F1` `story` `settled` `verified: both`
+  RAISED BY THE USER 2026-08-31: "inventory and validate the table name
+  doesn't already exist". `validateCustomTableSchema` validates the NAME'S
+  SHAPE (the _CL suffix) and the columns, but nothing anywhere compares the
+  name against what the workspace actually holds - `avoidNameCollision` in
+  `domain/dcr-naming` is for DCR names, not table names. WHY IT MATTERS MORE
+  THAN IT LOOKS: the tables PUT is an UPSERT, exactly like the DCR PUT that
+  `avoidNameCollision` exists to guard, so authoring a schema over a name that
+  is already taken does not fail - it REDEFINES a live table's schema, and the
+  first symptom is somebody else's data not arriving. `listWorkspaceTables`
+  already lists both kinds and `fetchWorkspaceTableSchema` reads one, so the
+  check is a read the app already knows how to do. STATE THE VERDICT HONESTLY,
+  per docs/inventory-standard.md and the rule [[HON-2]] was filed for: ARM
+  answers 200 with an empty array when RBAC filters the caller out, so "that
+  name is free" must not be claimed off an unverified read. Three verdicts,
+  not two - taken, free, and could-not-check - and the third must not block
+  the operator, only stop the app promising. DONE 2026-08-31 as
+  `checkTableName` in workspace-tables-state, and it costs NO extra request:
+  the Tables tab has already listed the workspace, so the check reads the list
+  it is holding. VERIFIED LIVE - typing `cloudflare_cl` into the create form
+  answers "Cloudflare_CL already exists in this workspace. Creating it again
+  would replace its schema", naming the EXISTING casing rather than what was
+  typed so the operator can find what they collided with. The unchecked
+  verdict annotates and does not block, which is safe because
+  `createCustomTable` GETs before it writes - this check exists to warn BEFORE
+  a schema is filled in, not to be the only guard.
+
+- **TBL-3** Inventory the workspace's tables and build a DCR from one
+  `TBL-F2` `story` `settled` `verified: both`
+  RAISED BY THE USER 2026-08-31: "inventory existing tables and create DCRs
+  based on the inventoried table". The Inventory tab today lists DATA
+  COLLECTION RULES; there is no table inventory on this screen. The direction
+  of travel is what is missing rather than the capability: Single table makes
+  you KNOW the table name and type it in, so an operator who wants to see what
+  is there and act on it has nowhere to start. `listWorkspaceTables` and
+  `fetchWorkspaceTableSchema` already exist and are already driven by
+  `use-workspace-tables`; note that `screens/table-picker/` is state and a
+  hook with NO screen component, so this is the surface that hook has been
+  waiting for. The action per row is the existing onboard path with the
+  `existing` schema source - the table is there, so its live Azure schema
+  wins, which is the legacy Process-CustomTable contract and needs no new
+  decision. REUSE THE EXISTING DECISIONS rather than writing a second listing:
+  `emptyTableListMessage` (table-picker-state) already decides when an empty
+  table list is a real zero, and the DCR Inventory panel already shows what a
+  good row with a per-row action looks like. NOT AN AUTO-LOAD: the deleted
+  panel's own lesson was that the listing is deliberately not re-attempted
+  automatically, because one 403 becomes a request storm - so this gets a
+  Load/Refresh button like DCR Inventory has. THIS IS NOT A REVIVAL OF
+  `TablePickerSection`, which was DELETED 2026-08-18 (backlog.md, 'The
+  workspace table listing lost its panel'), and the distinction is the whole
+  reason this card is honest: that panel was a PICKER whose job - choose ONE
+  table for the whole analysis - moved onto the per-log-type mapping-review
+  cards, leaving it listing 842 rows nobody selected from. Its own header said
+  'IT LOADS; IT DOES NOT SELECT'. This panel has the job that one lost: it is
+  an operational inventory with an ACTION per row, standing to tables exactly
+  as the DCR Inventory tab stands to DCRs. Reviving the old component would be
+  wrong; building this is not. DECIDED with [[TBL-5]] 2026-08-31: a table that
+  already has a DCR SAYS SO on its row (the user's chosen layout shows a `has
+  DCR` column), because the data is one `listDcrInventory` call away and an
+  operator building a duplicate is the thing this panel should prevent. THE
+  LISTING IS DONE AND VERIFIED LIVE 2026-08-31: the Tables tab lists all 842
+  tables of `law-jpederson-eastus` with kind, retention, plan and the DCR
+  column, and `WindowsEvent` correctly reads
+  `dcr-WindowsEvent-paradigm-replica` while every unmatched row reads `none in
+  rg-jpederson-QuickstartLab`. The DCR verdict is THREE-WAY, not a boolean -
+  `has`, `none-in-scope`, `unchecked` - because `listDcrInventory` reads one
+  resource group, so "nothing matched" and "we did not look" are different
+  facts and a boolean would report the second as the first.
+  `useWorkspaceTables` was NOT reused: it loads on an effect and its
+  `listedFor` guard means a second load never happens, so it cannot serve a
+  Refresh. STILL OPEN, and the reason this card is not done: BOTH ACTIONS are
+  unwired. There is no table prefill on the Single tab
+  (`OnboardTableScreenProps` has three props and `setSelected` is local
+  state), and no core usecase that creates ONE table from a supplied schema -
+  `buildTablePutRequest` is domain-only and its orchestration lives inside
+  `onboardTable` steps. BOTH ACTIONS WIRED 2026-08-31 and VERIFIED LIVE end to
+  end. Create table: the user chose to EXTRACT the creation contract rather
+  than route to Single, so `createCustomTable` is now its own core usecase (11
+  pins) built out of onboardTable's step 2, and onboardTable calls it - its 27
+  characterization pins pass unchanged, which is what made the extraction
+  safe. The Tables tab therefore creates a table with AZURE ALONE, no worker
+  group and no ingestion client id, which is the point. Create DCR:
+  `OnboardTableScreen` gained a mount-time `initialTable` seed,
+  `DcrAutomationScreen` became OPTIONALLY controlled
+  (`activeTab`/`onTabChange`, uncontrolled path unchanged and pinned), and the
+  shell holds the hand-off. Live: Create DCR on the `AACAudit` row lands on
+  Single table with the name filled in. ONE DEFECT FOUND AND FIXED IN THE
+  WIRING: the shell's new useState calls were placed beside their use site,
+  which is BELOW three gate returns, so React rendered fewer hooks than
+  expected and the whole app went blank - the hooks moved above the gates.
+
+- **TBL-4** Offer the ARM template when the write capability is absent
+  `TBL-F3` `story` `settled` `verified: pins`
+  RAISED BY THE USER 2026-08-31: "if the user hasn't granted the app
+  permission to create Azure resources like DCRs then they should still get
+  the option to see and download an ARM template for the DCR creation". THIS
+  IS MOSTLY ALREADY SCOPED - filed as a story rather than a new feature so it
+  does not duplicate work already on the board. [[HON-7]] is exactly this rule
+  at the button level ("FallbackNotice renders without onProduce in
+  production, so the capability model's 'every blocked action falls back to a
+  downloadable artifact' rule has no button") and ALREADY NAMES DCR Automation
+  as a target. [[HON-8]] is the engine: `buildDeploymentPreview` builds
+  `TableResourcePreview`, `DcrResourcePreview` and `PreviewArmRequest` -
+  roughly 700 lines with its own tests - and has NO caller anywhere in
+  packages/ui or apps/cribl-app. And Batch already ships the behaviour under
+  `templateOnly` ("nothing deploys; downloads one ARM deployment template"),
+  FORCED on in azure-only mode, so this is not a new mechanism, it is an
+  unreached one. WHAT THIS CARD ADDS on top of those: the two NEW surfaces
+  above must carry the offer too, and the gate must be the MEASURED capability
+  rather than a failed attempt - the operator should see the template option
+  before pressing something that 403s, not after. Do [[HON-7]] first or this
+  card rebuilds it. NOT A MODE TOGGLE, per the shape [[DBT-35]] settled on
+  Integrate: a separate control, gated on READ prerequisites only, worded as
+  an offer - there is an existing pin on the absence of alert semantics.
+  DEPENDENCY CORRECTED 2026-08-31: the card always said "do HON-7 first or
+  this card rebuilds it" but dependsOn listed only TBL-1 and TBL-3, so
+  grooming reported it READY. The prose and the graph were two answers to one
+  question and grooming trusts the graph. DONE 2026-08-31, review SOUND. Both
+  write actions on the Tables tab - Create DCR and the create-table flow - now
+  render a FallbackNotice gated on routeCapability(...).fallback, which is
+  non-null only for a MEASURED denial or an unreachable connection. `unknown`
+  routes live and offers nothing, so an unaudited connection (the normal
+  state) is unchanged. Both artifacts are RUN kinds and this panel owns no
+  run, so per [[D-2]] both producers POINT with FALLBACK_POINTER_LABEL and
+  carry the prerequisite that run has - a pointer omitting it would send the
+  operator to a failure. Neither button is disabled or hidden by the verdict.
+  BUILT ON [[HON-7]]'s REPORT rather than a guess: the ordered wave handed
+  this agent HON-7's API description, and it used it - importing relatively
+  because HON-7 could not edit the barrel, and reusing the pointer convention
+  instead of inventing a second one. One finding it surfaced rather than acted
+  on is [[TBL-7]]: for a hand-authored table the artifact could honestly be
+  produced INLINE, which would amend D-2 rather than follow it.
+
+- **TBL-5** Where do the two new panels live on the screen?
+  `TBL-F2` `decision` `settled` `verified: none`
+  DCR Automation is a three-tab screen today - Single table, Batch, Inventory
+  - and both new surfaces have to land somewhere. The tab strip is already the
+  widest thing on the page and Inventory is the landing tab, so adding two
+  more tabs is not obviously right. THE OPTIONS, and what each costs: (a) TWO
+  NEW TABS, 'Tables' and 'New table' - discoverable, symmetric with Inventory,
+  but five tabs and two of them are about the same noun; (b) ONE 'Tables' TAB
+  holding the inventory, with 'Create table' as an action ON it - keeps the
+  noun together and makes creation the natural next step after finding
+  nothing, at the cost of hiding creation one click deeper; (c) FOLD INTO
+  SINGLE TABLE as a fourth schema source plus a browse control - smallest
+  diff, reuses the screen that already onboards one table, but Single is
+  already the densest panel and this doubles it. RECOMMENDATION IS (b): the
+  user's two asks are the same journey - look at what exists, and if what you
+  need is not there, author it - and (b) is the only option that renders them
+  as one. Answer before [[TBL-1]] reaches the UI; the pure state modules are
+  unaffected either way, so this does not block starting. DECIDED 2026-08-31,
+  the user chose (b). Reasoning recorded in backlog.md section 15, which is
+  why this card can settle. The chosen layout ALSO settles the question
+  [[TBL-3]] left open - a table that already has a DCR says so on its row -
+  and section 15 records the other thing worth not losing: this panel is NOT a
+  revival of the deleted `TablePickerSection`, because that one was a picker
+  whose job moved away, and this one is an operational inventory with an
+  action per row.
+  DECISION: DCR Automation already has three tabs (Single table, Batch,
+  Inventory) and both new surfaces need a home. Where do they go?
+    [x] `tables-tab` One 'Tables' tab, with Create table as an action on it - The inventory IS the tab; authoring is a control on it. Keeps the noun together and makes creation the natural next step after finding what you need is not there. Costs one click to reach creation.
+    [ ] `two-tabs` Two new tabs, 'Tables' and 'New table' - Most discoverable and symmetric with Inventory, but five tabs on an already-wide strip, and two of them are about the same noun when one is really an action on the other.
+    [ ] `fold-into-single` Fold both into the Single table panel - Smallest diff, no new tabs - the editor is a fourth schema source and browsing is a control beside the name field. But Single is already the densest panel on the screen and this roughly doubles it.
+
+- **DBT-60** onboard-batch cannot recognise the child store failure it is handed
+  `DBT-F1` `bug` `settled` `verified: pins`
+  SPLIT OUT OF [[DBT-55]] 2026-08-31 by its reviewer. DBT-55 made onboardTable
+  re-raise a JobStore outage as its own JobStoreFailure rather than recording
+  it as the table failing. onboard-batch.ts:1274 catches it and tests error
+  instanceof JobStoreFailure - naming ITS OWN module-local class. A
+  cross-module instanceof never matches, so the signal is thrown and then
+  dropped, and the batch records an ordinary failed table carrying a
+  job-store-update-failed prefix. Fix: export the child class (or a shared
+  isJobStoreFailure predicate) from the onboard-table package index and have
+  onboard-batch consume THAT. Note onboard-table/index.ts was outside the
+  fixing agent do-not-touch list, so nothing is exported yet. When wired,
+  correct the onboard-batch docblock that currently explains why the limit
+  stands. DONE 2026-08-31, review SOUND. Fixed as a PREDICATE, never a class:
+  isJobStoreFailure (matching on error.name) is now exported from
+  onboard-table/index.ts - the missing export that blocked the DBT-55 agent -
+  and onboard-batch consumes it at ALL FOUR store-failure catches, not only
+  the one that was the defect. The JobStoreFailure class is no longer exported
+  anywhere; both modules keep their own private one and the predicate is the
+  only public surface, so the cross-module instanceof that caused this cannot
+  be written again.
+
+- **DBT-61** Enforce the empty-vs-denied rule instead of remembering it
+  `DBT-F1` `enabler` `settled` `verified: both`
+  HALF OF EVERY BUG FOUND ON 2026-08-31 WAS ONE HABIT: an unknown reported as
+  a measured fact. An RBAC-filtered empty ARM list read as a real zero
+  ([[HON-2]], [[DBT-43]], [[DBT-44]]), a denied readback reported as 'still
+  provisioning' ([[DBT-41]]), a 403 on the Sentinel check rendered as 'not
+  enabled' and INVITING A WRITE ([[DBT-52]]), a kvstore outage recorded as the
+  table's own failure ([[DBT-49]], [[DBT-55]]). That is not twelve defects; it
+  is one habit with twelve instances. `docs/inventory-standard.md` ALREADY
+  BINDS THIS and was violated in three new places anyway, because it is prose.
+  The precedent is board rule 1: prose-only, broken by the person who had just
+  read it, and it stopped recurring the day `check-board` enforced it. WHY NOW
+  IS THE MOMENT: every known instance is fixed, so a checker calibrated
+  against the current tree starts GREEN and catches regressions. That is the
+  opposite of [[DBT-39]]'s className checker, which reports 36 pre-existing
+  findings and therefore cannot be wired into CI until they are triaged. A
+  gate that starts red never becomes a gate. SHAPE: a check script beside the
+  other apps/cribl-app/scripts/check-*.mjs ones. A file that reaches an ARM
+  listing AND contains a zero-claiming phrase must also consult a capability -
+  `emptyInventoryMessage`, `emptyTableListMessage`, `routeCapability` or
+  `verdictFor`. Coarse on purpose: file-level, no AST. Precision comes from
+  calibrating against a tree that is currently clean, plus a named allowlist
+  for justified exceptions rather than a silent skip. INVESTIGATED 2026-08-31,
+  AND THE PROPOSED SHAPE DOES NOT WORK - recorded because the negative result
+  is the useful part and the next person will otherwise try the same thing. A
+  file-level grep checker was built and calibrated: 19 files reach an ARM
+  lister and it reports 0 findings on the current tree, so it starts green as
+  hoped. It was then run against the ACTUAL PRE-FIX CODE pulled from git, and
+  it MISSED ALL THREE real defects. WHY, and this kills text matching for this
+  class outright: THE ZERO-CLAIM IS COMPUTED, NEVER LITERAL. [[DBT-43]]
+  shipped `Read ${inventory.length} deployed DCR(s)` - the wrong sentence
+  'Read 0 deployed DCR(s)' exists only at runtime, and the source contains a
+  perfectly innocent template. [[DBT-44]] had no string at all: an empty
+  listing set a boolean that later MEANT 'not installed'. A grep can only find
+  a wrong sentence somebody typed, and nobody typed one. A SECOND FLAW,
+  independent of the first: file-level granularity is too coarse.
+  integrate-screen.tsx is 2400 lines and references `capabilities` elsewhere,
+  so the file passed the capability test while the defect sat in one callback.
+  Per-function analysis would need an AST, and oxlint has no custom-rule
+  surface here (see [[FX-4]], which rejected authoring one for the same
+  reason). WHAT WOULD ACTUALLY ENFORCE IT: make the compiler the checker. If a
+  lister returned a discriminated union - measured rows versus an unverified
+  listing - TypeScript would FORCE every caller to narrow before touching the
+  rows, and the empty-as-zero mistake becomes unrepresentable rather than
+  merely discouraged. Blast radius measured and it is small: 9 call sites
+  across listDcrInventory, listWorkspaceTables, listResourceGroups and
+  listSubscriptions, plus 13 internal listAllPages callers. But it is a change
+  to shipped core contracts, so it is a decision rather than a cleanup. DONE
+  2026-08-31, the type route, and the negative result above is why.
+  `Listing<T>` in packages/core/src/domain/inventory-listing/ is either
+  `{kind:'rows', rows:[T,...T[]]}` - non-empty BY TYPE, so a count taken from
+  it can never be 0 - or `{kind:'empty'}`, which carries no count at all. All
+  four ARM listers return it: listDcrInventory, listWorkspaceTables,
+  listSubscriptions, listResourceGroups. VALIDATED THE WAY THE CARD SAID:
+  [[DBT-43]] was reintroduced verbatim - `inventory = await
+  listDcrInventory(...)` then `Read ${inventory.length} deployed DCR(s)` - and
+  tsc rejected it with ONE error, TS2322 at integrate-screen.tsx:1278. The
+  other spelling was caught in passing during the conversion: an inferred
+  const reading `.length` fails as TS2339 'Property length does not exist on
+  type Listing<DcrInventoryEntry>'. Both ways to write the bug are now compile
+  errors, which is the difference between this and docs/inventory-standard.md,
+  a binding rule that was violated three times because prose cannot fail a
+  build. WHAT THE CONVERSION FOUND, and it is the honest yield of the exercise
+  - two live over-claims nobody had filed. The workspace Tables panel turned
+  an empty DCR listing into 'none in scope' on EVERY row, when its own state
+  module already said the rule in words ('`unchecked`, never
+  `none-in-scope`'); it now reads 'not checked'. And three log lines printed
+  bare counts off unverified listings, which is the same wrong answer
+  somewhere nobody reviews; they now carry `listing: rows|empty` beside the
+  number. THE ESCAPE HATCH IS DELIBERATE AND GUARDED: `listingRows()` returns
+  a plain array for the honest cases - a dropdown, a set to union, rows whose
+  emptiness is already owned by emptyInventoryMessage - and each of the six
+  call sites says in a comment which of those it is. `listingRows(x).length`
+  is the one remaining spelling of the bug, and unlike the original it is a
+  single greppable name, so check-listings.mjs finds it. That checker is
+  narrow ON PURPOSE: the earlier general one failed because the zero-claim is
+  computed, and this one only works because the hatch has a name. 9 pins for
+  the type, 9 for the checker, and the checker was mutation-tested against the
+  real tree, not just synthetic strings. LIVE 2026-08-31 in the Live Preview
+  against law-jpederson-eastus / rg-jpederson-QuickstartLab. All three
+  converted listers reached by an operator took the rows branch and rendered:
+  listResourceGroups populated the Inventory RG dropdown, listDcrInventory
+  returned five real DCRs (CommonSecurityLog, WindowsEvent, SecurityEvent,
+  Cloudflare_CL, GigamonV2_CL) into the Inventory table, and
+  listWorkspaceTables returned 843 tables into the Tables tab. The rewritten
+  log lines confirm the branch taken rather than just the outcome - the Logs
+  screen shows "dcr-inventory: found 5 DCR(s)" and "workspace-tables: 843
+  table(s)", both of which are the kind===rows arm; the empty arm prints
+  different wording entirely. The Tables tab DCR column read "none in
+  rg-jpederson-QuickstartLab" on the visible rows, which is the EARNED
+  none-in-scope: the DCR listing had just returned five rows, so the group was
+  demonstrably read. WHAT LIVE DID NOT COVER, and the reason verified is both
+  rather than a clean live: the EMPTY arm of every lister is still pins-only.
+  Producing it needs an RBAC-filtered or genuinely empty listing, which this
+  tenant cannot show without removing a permission on purpose. The has-a-DCR
+  cell was also not seen - the Tables tab has no filter box and
+  CommonSecurityLog sits hundreds of alphabetical rows down a list of 843, and
+  iframe scrolling could not be driven from automation. CORRECTION 2026-08-31:
+  this card says 'all four ARM listers'. There were FIVE - `listLabs` was
+  missed, and it was carrying a live defect ([[DBT-64]]). The sweep looked at
+  the inventory screens and Labs did not read as one. Left in place rather
+  than edited above, because the claim being wrong is the useful record: the
+  type removed the mistake everywhere it was applied, and the hand-built list
+  of where to apply it was the weak step.
+
+- **DBT-62** Route the remaining Cribl listings through Listing<T>
+  `DBT-F1` `enabler` `settled` `verified: pins`
+  [[DBT-61]] converted the four ARM listers, which is where the whole defect
+  class actually landed. The Cribl-side listings - packs, destinations,
+  sources - have the same ambiguity in principle: a token scoped to one worker
+  group lists what it can see, not what exists. NOT URGENT and deliberately
+  not bundled: no defect has been filed against them, the blast radius is a
+  second set of call sites, and doing it speculatively would be the reflex
+  this repo keeps writing cards about. Do it when a Cribl listing actually
+  reads as a zero somewhere, or when touching those call sites for another
+  reason. DECIDED 2026-08-31 by the user: convert-now, against the
+  recommendation recorded above. The recommendation was wrong on its own terms
+  and the evidence arrived within the hour: scoping the conversion immediately
+  found [[DBT-64]], a live 'No running labs found in this subscription.'
+  stated from an unverified ARM listing, in a FIFTH ARM lister that [[DBT-61]]
+  missed while claiming to have covered them all. 'Wait until one actually
+  misreads' assumed someone would notice the misread; nobody had, and it had
+  been shipping. SCOPE, measured rather than assumed. Convert: `listLabs`
+  (ARM, and the one that produced DBT-64), `acquireServicePrincipals` (Graph -
+  a directory read without Application.Read.All returns a filtered set, not an
+  error), `listSampleSourceGroups` and `listDeployedPacks` (Cribl - a token
+  scoped to one worker group lists what it can see). DO NOT convert, and the
+  reason is the same rule read the other way: `acquireAnalyticRules` and
+  `acquireSolutionWorkbooks` read files out of the repo, and
+  `listDeprecatedContentHubSolutions` returns a Set used as a lookup, not an
+  inventory. None of the three has an ambiguous empty, and wrapping them would
+  teach the codebase that `Listing` means 'any list', which is how a type
+  stops carrying information. DONE 2026-08-31. THE TYPE GREW A THIRD VARIANT,
+  forced by listLabs and right on its own merits: that usecase FILTERS a read,
+  so zero labs out of forty groups read is a measured zero the operator should
+  be told plainly, while zero labs from an empty group read means nothing. A
+  two-way listing collapses those and trades a confident wrong answer for a
+  permanent hedge, which is its own wrong answer. Listing<T> is now rows |
+  none | empty, minted by toListing (raw reads, empty is always unverified)
+  and filterListing (derived rows, and the ONLY way to mint a verified none -
+  it demands the source listing, so provenance is structural rather than
+  promised in a comment). CONVERTED: listLabs (ARM, carried [[DBT-64]]),
+  acquireServicePrincipals (Graph answers a caller without
+  Application.Read.All with what it may see, not an error) and
+  listSampleSourceGroups (a Cribl token scoped to one worker group lists what
+  it can reach). SCOPE CORRECTION, measured rather than assumed:
+  listDeployedPacks was named on this card and is NOT converted. It pushes
+  exactly one entry per requested group and THROWS on any non-ok parse, so its
+  emptiness is never ambiguous - wrapping it would teach the codebase that
+  Listing means any list, and a type that marks everything marks nothing. Same
+  reasoning already excluded acquireAnalyticRules, acquireSolutionWorkbooks
+  and listDeprecatedContentHubSolutions.
+  DECISION: Extend Listing<T> to the Cribl-side listings, or leave them?
+    [ ] `wait-for-a-defect` Leave them until one actually misreads - No defect has been filed against a Cribl listing. Every empty-as-zero bug so far came from ARM, where RBAC filtering makes 200-with-nothing routine. Converting on suspicion is the reflex this repo keeps filing cards about - and the type is now there to reach for the moment one does misread.
+    [x] `convert-now` Convert them now for symmetry - A token scoped to one worker group lists what it can see, so the ambiguity is real in principle. Doing it while the pattern is fresh is cheaper than rediscovering it later - at the cost of a second sweep of call sites for a bug nobody has hit.
+
+- **DBT-63** inventory-standard.md still says the tables screen is pending
+  `DBT-F1` `bug` `settled` `verified: none`
+  Found by the thirteenth architecture audit, check 4. One bullet in the Known
+  instances list of docs/inventory-standard.md - 'Workspace tables. PINNED,
+  screen pending.' - is wrong on THREE counts, and the document is BINDING.
+  (1) The screen is not pending: use-workspace-tables.ts:149 and
+  workspace-tables-panel.tsx:294 both call emptyTableListMessage, which is
+  exactly what the bullet says the picker 'must' do. (2) It says an
+  RBAC-filtered `200 []` 'would still read as an empty workspace' - false
+  since [[DBT-61]] landed, because listWorkspaceTables now returns
+  `{kind:'empty'}` and there is no count to misread. (3) It directs the reader
+  away from `tableCountLabel`, which was DELETED 2026-08-18 with the panel it
+  belonged to; the only two references left in the tree are its own tombstone
+  comment. WHY THIS IS NOT COSMETIC, and why it is a bug rather than a chore.
+  [[DBT-61]] exists because this document was violated three times while being
+  BINDING - the conclusion was that prose cannot fail a build. A binding
+  document carrying a stale instruction is that same failure one level up: it
+  is the thing people are told to trust. Worse, DBT-61 added a section to this
+  very file saying the compiler now prevents exactly what this bullet says
+  still happens, so the file currently contradicts itself within twenty lines.
+  Filed before fixing per board rule 2 even though the fix is one paragraph.
+  FIXED 2026-08-31 in the same audit. The bullet now says DONE, names both
+  calling surfaces, and states that the 200-[] hazard is closed by the type.
+  verified:none is honest - this is prose, and it has no pin. What it can
+  borrow is that the three claims were each checked against the tree before
+  rewriting: the two emptyTableListMessage call sites, the Listing return, and
+  tableCountLabel having only a tombstone left.
+
+- **DBT-64** The labs panel states 'No running labs' from an unverified listing
+  `DBT-F1` `bug` `settled` `verified: pins`
+  lab-inventory-panel.tsx:137 renders 'No running labs found in this
+  subscription.' whenever `listLabs` returns an empty array. `listLabs`
+  (manage-labs.ts:38) reads resource groups through `listAllPages`, so an
+  RBAC-filtered subscription answers 200 with an empty value array and this
+  sentence is stated as a fact about the subscription when it is really a fact
+  about what the identity can see. This is the exact defect of [[HON-2]] ('No
+  workspaces found') and [[DBT-43]] ('Read 0 deployed DCR(s)'), and
+  docs/inventory-standard.md has forbidden it since 2026-08-10. HOW IT
+  SURVIVED [[DBT-61]], which is the part worth recording: that card says 'all
+  four ARM listers' and named listDcrInventory, listWorkspaceTables,
+  listSubscriptions and listResourceGroups. There is a FIFTH. `listLabs` was
+  missed because the sweep looked for listers on the inventory screens and
+  this one sits under Labs, which reads as provisioning rather than inventory.
+  The type made the mistake unrepresentable only where the type was applied,
+  and a hand-built list of call sites is exactly the fallible step it was
+  meant to remove. Found while scoping [[DBT-62]] - the decision to convert
+  the remaining listings turned it up in the first ten minutes. FIXED
+  2026-08-31. listLabs returns Listing<LabInventoryEntry> built with
+  filterListing, which DEMANDS the source resource-group read - so the
+  distinction cannot be lost by forgetting it. The panel now says "No running
+  labs found in this subscription." only for a measured none (groups were
+  read, none is a lab) and hedges with what would settle it for the unverified
+  empty. Both branches pinned, and the unverified pin was mutation-checked.

@@ -18,16 +18,14 @@
 import type { AzureManagement } from "../../ports/azure-management";
 import type { SentinelContent } from "../../ports/sentinel-content";
 import type { Logger } from "../../ports/logger";
-import {
-  buildTablePutRequest,
-  LOG_ANALYTICS_TABLES_API_VERSION,
-} from "../../domain/custom-table/index";
+import { LOG_ANALYTICS_TABLES_API_VERSION } from "../../domain/custom-table/index";
+import { createCustomTable } from "../create-custom-table/create-custom-table";
 import {
   KQL_VALIDATION_TABLES_DIR,
   parseKqlValidationTable,
 } from "../../domain/field-matcher/index";
 import type { WorkspaceScope } from "./content-install";
-import { is2xx, prop } from "../arm-http";
+import { is2xx } from "../arm-http";
 
 /** The result of ensuring one dependency table. */
 export interface EnsureTableOutcome {
@@ -39,8 +37,14 @@ export interface EnsureTableOutcome {
   created: boolean;
 }
 
-/** Attempt-bounded poll for the created table to read back terminal. */
-const DEFAULT_TABLE_POLL_ATTEMPTS = 12;
+/**
+ * Attempt-bounded poll for the created table to read back terminal. Passed to
+ * createCustomTable rather than reimplemented beside it, so this is the ONE
+ * place content install's bound is stated (it is deliberately higher than that
+ * usecase's own default of 10 - a dependency table blocks a rule install, so
+ * waiting a little longer is worth it here).
+ */
+const TABLE_POLL_ATTEMPTS = 12;
 
 function workspacePath(ws: WorkspaceScope): string {
   return (
@@ -126,72 +130,63 @@ export async function ensureRuleDataTable(
           "ingestion creates - set up ingestion first)",
       };
     }
-    const req = buildTablePutRequest({
+    // ONE IMPLEMENTATION OF THE CREATION CONTRACT (DBT-40). The PUT, the
+    // readback poll and the terminal-state rules live in createCustomTable;
+    // this function keeps only what is ITS OWN - resolving which of two
+    // candidate table names to use, and translating the result into the
+    // never-throws outcome content install expects.
+    //
+    // It re-checks existence, which the pre-checks above already did. That is
+    // one extra GET on the create path only, and it BUYS something: a table
+    // created by someone else between our check and our PUT comes back as
+    // `created: false` rather than being silently overwritten by an upsert.
+    const created = await createCustomTable(azure, {
       subscriptionId: ws.subscriptionId,
       resourceGroup: ws.resourceGroup,
       workspaceName: ws.workspaceName,
       table: suffixed,
       columns: columns.map((c) => ({ name: c.name, type: c.type })),
+      maxPollAttempts: TABLE_POLL_ATTEMPTS,
     });
-    const res = await azure.request({
-      method: "PUT",
-      path: req.path,
-      apiVersion: req.apiVersion,
-      body: req.body,
-    });
-    if (!is2xx(res.status)) {
-      let body: string;
-      try {
-        body = typeof res.body === "string" ? res.body : JSON.stringify(res.body);
-      } catch {
-        body = String(res.body);
-      }
+
+    if (!created.created) {
+      // Lost the race, which is a fine outcome - the table is there.
       return {
-        table: req.tableName,
-        ok: false,
+        table: created.tableName,
+        ok: true,
         created: false,
-        detail: `create failed: HTTP ${res.status}${body && body !== "null" ? ` ${body}` : ""}`,
+        detail: "already exists",
       };
     }
+
     logger?.info("content-install: created dependency table", {
-      table: req.tableName,
+      table: created.tableName,
       columns: columns.length,
     });
-    // Attempt-bounded readback until the table provisions (no timers - the
-    // adapter enforces per-request timeouts; table creation is fast).
-    for (let attempt = 0; attempt < DEFAULT_TABLE_POLL_ATTEMPTS; attempt++) {
-      const poll = await azure.request({
-        method: "GET",
-        path: `${workspacePath(ws)}/tables/${req.tableName}`,
-        apiVersion: LOG_ANALYTICS_TABLES_API_VERSION,
+
+    // AN UNRESOLVED READBACK IS STILL A SUCCESS HERE, and this is the opposite
+    // call from the one onboardTable makes on the same result. The PUT was
+    // accepted, so the table exists and the rule install a moment later will
+    // find it; this path never needed the schema. The detail says which of the
+    // three reasons it was rather than claiming a state nobody read (DBT-41).
+    if (created.readback.state === "unresolved") {
+      logger?.info("content-install: dependency table readback unresolved", {
+        table: created.tableName,
+        reason: created.readback.reason,
       });
-      if (!is2xx(poll.status)) continue;
-      const state = prop(prop(poll.body, "properties"), "provisioningState");
-      const stateText = typeof state === "string" ? state : "";
-      if (/^succeeded$/i.test(stateText)) {
-        return {
-          table: req.tableName,
-          ok: true,
-          created: true,
-          detail: `created (${columns.length} columns)`,
-        };
-      }
-      if (/^(failed|canceled)$/i.test(stateText)) {
-        return {
-          table: req.tableName,
-          ok: false,
-          created: false,
-          detail: `create ${stateText.toLowerCase()}`,
-        };
-      }
+      return {
+        table: created.tableName,
+        ok: true,
+        created: true,
+        detail: `created (${columns.length} columns; ${created.readback.reason})`,
+      };
     }
-    // Accepted but still provisioning after the bound - treat as created; the
-    // rule install a moment later will find it (or report the table cleanly).
+
     return {
-      table: req.tableName,
+      table: created.tableName,
       ok: true,
       created: true,
-      detail: `created (${columns.length} columns; still provisioning)`,
+      detail: `created (${columns.length} columns)`,
     };
   } catch (err) {
     return {

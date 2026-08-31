@@ -12,9 +12,11 @@ import { useCallback, useEffect, useState } from "react";
 import {
   CUSTOM_COLUMN_TYPES,
   DCR_WRITE_ACTION,
+  TABLE_WRITE_ACTION,
   addDcrField,
   addTableColumn,
   checkDcrUpdatePermissions,
+  fallbackFor,
   listDcrInventory,
   listResourceGroups,
   previewDcrUpdate,
@@ -22,14 +24,20 @@ import {
   guidLossWarning,
   updateDcrInPlace,
 } from "@soc/core";
-import { emptyCapabilitySet } from "@soc/core";
+import { emptyCapabilitySet, listingRows } from "@soc/core";
 import type {
   CapabilityContext,
+  CapabilityFallback,
   CapabilitySet,
   DcrInventoryEntry,
   DcrUpdatePreview,
 } from "@soc/core";
 import { emptyInventoryMessage } from "../../capabilities/empty-inventory";
+import { FallbackNotice } from "../../capabilities/fallback-notice";
+import {
+  FALLBACK_POINTER_LABEL,
+  fallbackRunPointer,
+} from "../../capabilities/fallback-notice-state";
 import { usePorts } from "../../ports-context";
 import { SearchableSelect } from "../../components/searchable-select";
 import { mergePreviewColumns, summarizePreview } from "./dcr-inventory-state";
@@ -96,11 +104,60 @@ export function DcrInventoryPanel(props: DcrInventoryPanelProps = {}) {
   // 2026-07-13: matches ARE the highlight); the toggle hides them when the
   // 150+ chips get in the way of the changes.
   const [showUnchanged, setShowUnchanged] = useState(true);
+  // HON-7: which run makes the offered artifact, shown once the operator takes
+  // the offer. Its own slot rather than `notice`, which reports what an action
+  // on THIS panel did - a pointer is not a thing that happened.
+  const [offerPointer, setOfferPointer] = useState("");
 
   // HON-4 / ADR 0004: null unless the DEPLOYED declaration is losing guid
   // columns the fixed generator would declare. Computed once - the render reads
   // it twice, and the check walks the whole table schema.
   const guidWarning = preview === null ? null : guidLossWarning(preview);
+
+  // HON-7 / D-2: the fallback artifacts for the write actions the PRE-UPDATE
+  // CHECK found missing.
+  //
+  // Sourced from that check rather than from the `capabilities` audit above,
+  // and deliberately: `missingActions` was measured at the DCR's OWN resource
+  // group and the committed workspace - exactly the two scopes the buttons in
+  // this card write to - while the audit measured the committed group only,
+  // which is the same mismatch the empty-inventory hedge exists for. Where both
+  // exist, the measurement taken at the right scope wins.
+  //
+  // Empty until a preview is open, which is when the check runs and the only
+  // point where a write is offered at all.
+  const updateOffers: CapabilityFallback[] = [
+    ...(missingActions.some((m) => m.action === DCR_WRITE_ACTION)
+      ? [fallbackFor("dcr.write")]
+      : []),
+    ...(missingActions.some((m) => m.action === TABLE_WRITE_ACTION)
+      ? [fallbackFor("table.write")]
+      : []),
+  ].filter((entry): entry is CapabilityFallback => entry !== null);
+
+  /**
+   * Take the offer. Both kinds here are RUN kinds, so this panel POINTS at the
+   * run that makes them and never assembles a body itself (D-2) - the preview
+   * on screen holds enough to build one, and that is exactly the temptation the
+   * rule exists against.
+   *
+   * The caveat is not cosmetic. `updateDcrInPlace` PUTs over THIS DCR's name and
+   * keeps its live transform; the run collects a FRESH-DEPLOY body named by the
+   * batch's own naming rules, so applied as-is it creates a SECOND DCR beside
+   * the one this card is updating. The operator is the one who would find that
+   * out, so the pointer says it.
+   */
+  const produceUpdateFallback = (fallback: CapabilityFallback): void => {
+    const pointer = fallbackRunPointer(fallback.kind);
+    setOfferPointer(
+      pointer === null
+        ? ""
+        : `${pointer} It collects the body a FRESH deploy of ` +
+            `${preview?.table ?? "the table"} would PUT, under that run's own ` +
+            `DCR name - not an in-place update of '${preview?.dcrName ?? ""}', ` +
+            "so whoever applies it should reconcile the name first.",
+    );
+  };
 
   const scopeReady =
     config.subscriptionId !== "" && config.resourceGroup !== "";
@@ -139,7 +196,11 @@ export function DcrInventoryPanel(props: DcrInventoryPanelProps = {}) {
       try {
         const groups = await listResourceGroups(ports.azure, config.subscriptionId);
         if (cancelled) return;
-        const names = groups.map((g) => g.name);
+        // Sanctioned unwrap (DBT-61): these names only POPULATE a datalist and
+        // the committed group is unshifted below regardless, so an empty
+        // listing costs suggestions, never a claim - the operator can still
+        // type any group name.
+        const names = listingRows(groups).map((g) => g.name);
         if (!names.includes(config.resourceGroup) && config.resourceGroup !== "") {
           names.unshift(config.resourceGroup);
         }
@@ -182,6 +243,9 @@ export function DcrInventoryPanel(props: DcrInventoryPanelProps = {}) {
       setBusy(true);
       setError("");
       setNotice("");
+      // A pointer belongs to the preview that raised it - carrying it into the
+      // next DCR would name the wrong table (HON-7).
+      setOfferPointer("");
       logInfo(`previewing update of '${entry.name}' from table ${table}`);
       try {
         const next = await previewDcrUpdate(ports.azure, {
@@ -519,8 +583,17 @@ export function DcrInventoryPanel(props: DcrInventoryPanelProps = {}) {
         subscriptionId: config.subscriptionId,
         resourceGroup: inventoryRg,
       });
-      setEntries(listed);
-      logInfo(`found ${listed.length} DCR(s) in '${inventoryRg}'`);
+      // DBT-61: the rows are safe to render - this panel already routes the
+      // EMPTY case through emptyInventoryMessage (`emptyDcrs` above), so it
+      // never says "none" off an unverified read. The log line counts only the
+      // rows variant and says "at least" for empty, because a log claiming
+      // "found 0" is the same confident wrong answer in a quieter place.
+      setEntries([...listingRows(listed)]);
+      logInfo(
+        listed.kind === "rows"
+          ? `found ${listed.rows.length} DCR(s) in '${inventoryRg}'`
+          : `listing of '${inventoryRg}' came back empty - see the panel for whether that is a real zero`,
+      );
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       logError(`listing DCRs in '${inventoryRg}' failed: ${message}`);
@@ -652,9 +725,13 @@ export function DcrInventoryPanel(props: DcrInventoryPanelProps = {}) {
               ))}
             </tbody>
           </table>
+          {/* DBT-39: the card below also carried `pack-card` and
+              `pack-card-head`, which matched nothing in styles.css. The card
+              and its head are entirely the .mapping-review-card pair, which is
+              why nobody noticed the other two names were inert. */}
           {preview !== null && (
-            <div className="pack-card mapping-review-card">
-              <div className="pack-card-head mapping-review-card-head">
+            <div className="mapping-review-card">
+              <div className="mapping-review-card-head">
                 <span className="field-label">
                   {preview.dcrName} - update preview ({preview.table})
                 </span>
@@ -692,8 +769,28 @@ export function DcrInventoryPanel(props: DcrInventoryPanelProps = {}) {
                   ].join("\n")}
                 </pre>
               )}
+              {/* HON-7 / D-2: a missing write is not the end of the road. The
+                  offer names the artifact whoever HAS the access would apply,
+                  and the control says where it comes from - this panel points
+                  at that run, it never builds the body itself. */}
+              {updateOffers.length > 0 && (
+                <div className="discovery-result">
+                  <span className="field-label">Take these to someone who can</span>
+                  {updateOffers.map((offer) => (
+                    <FallbackNotice
+                      key={offer.kind}
+                      fallback={offer}
+                      onProduce={() => produceUpdateFallback(offer)}
+                      produceLabel={FALLBACK_POINTER_LABEL}
+                    />
+                  ))}
+                  {offerPointer !== "" && (
+                    <p className="panel-desc">{offerPointer}</p>
+                  )}
+                </div>
+              )}
               {busy && progress !== "" && (
-                <p className="panel-desc dcr-progress-line">{progress}</p>
+                <p className="panel-desc">{progress}</p>
               )}
               {error !== "" && <pre className="result">{error}</pre>}
               {notice !== "" && <p className="panel-desc">{notice}</p>}
@@ -705,7 +802,12 @@ export function DcrInventoryPanel(props: DcrInventoryPanelProps = {}) {
                 const nativeTable = !preview.table.endsWith("_CL");
                 return (
                   <>
-                    <div className="panel-controls">
+                    {/* DBT-38: the input and select below are NOT wrapped in a
+                        <label className="field">, and `.field input` /
+                        `.field select` are descendant selectors, so without a
+                        container of their own they render as raw browser
+                        chrome - a white box on the dark card. */}
+                    <div className="panel-controls dcr-add-column">
                       <input
                         aria-label="New column name"
                         placeholder="New field name"

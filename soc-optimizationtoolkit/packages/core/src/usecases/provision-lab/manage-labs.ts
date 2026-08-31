@@ -29,27 +29,43 @@ import {
   type LabInventoryEntry,
 } from "../../domain/labs/lab-inventory";
 import { listAllPages } from "../azure-discovery";
+import { filterListing, listingCount, toListing } from "../../domain/inventory-listing";
+import type { Listing } from "../../domain/inventory-listing";
 import { httpErrorText, is2xx, mergedTags } from "../arm-http";
 
 /**
  * List the lab resource groups in a subscription, soonest expiry first.
  * Throws on a failed list (rendered as "inventory unavailable", not empty).
+ *
+ * DBT-64: this is a FILTER, and that is why it returns a three-way listing
+ * rather than an array. Zero labs out of forty groups read is a real zero and
+ * the panel should say so; zero labs because the GROUP READ came back empty is
+ * an RBAC-filtered `200 []` and says nothing at all. `filterListing` keeps the
+ * two apart by demanding the source read, so the distinction cannot be lost by
+ * forgetting it here. Before this, both rendered as "No running labs found in
+ * this subscription."
  */
 export async function listLabs(
   azure: AzureManagement,
   input: { subscriptionId: string; nowIso: string },
   logger?: Logger,
-): Promise<LabInventoryEntry[]> {
+): Promise<Listing<LabInventoryEntry>> {
   const items = await listAllPages(
     azure,
     buildResourceGroupsListRequest(input.subscriptionId),
     `list resource groups in subscription '${input.subscriptionId}'`,
   );
-  const labs = parseLabInventory(items, input.nowIso);
+  const groups = toListing(items);
+  const labs = filterListing(groups, parseLabInventory(items, input.nowIso));
   logger?.info("manage-labs: listed", {
     subscriptionId: input.subscriptionId,
-    groups: items.length,
-    labs: labs.length,
+    // Both kinds ride along: `groups: empty` is the case where the lab count
+    // below means nothing, and a log that showed only the numbers would read
+    // as "0 labs" either way.
+    groups: listingCount(groups, 0),
+    groupListing: groups.kind,
+    labs: listingCount(labs, 0),
+    labListing: labs.kind,
   });
   return labs;
 }

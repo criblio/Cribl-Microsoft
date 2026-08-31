@@ -15,6 +15,8 @@
  */
 
 import type { GraphDirectory, ServicePrincipalRef } from "../../ports/graph-directory";
+import { toListing } from "../../domain/inventory-listing";
+import type { Listing } from "../../domain/inventory-listing";
 
 /** True when a display name mentions "cribl" (case-insensitive). */
 function isCriblNamed(sp: ServicePrincipalRef): boolean {
@@ -84,11 +86,20 @@ export function defaultServicePrincipalId(
  * Acquire the tenant's service principals through the port and return them in
  * picker order. The only async step is the injected port read; the caller
  * handles a rejection (permission/transport) by falling back to manual entry.
+ *
+ * DBT-62: returns a listing because a DIRECTORY READ HAS THE SAME AMBIGUITY AS
+ * AN ARM ONE. Graph does not refuse a caller without `Application.Read.All` -
+ * it answers with what that caller may see, which for many app registrations
+ * is nothing at all. So an empty result is not "this tenant has no service
+ * principals"; it is "this token saw none", and only a permission check
+ * separates them. The sort is a reordering rather than a filter, so `toListing`
+ * is correct here and `filterListing` would be wrong - there is no verified
+ * source read that could promote an empty to a measured zero.
  */
 export async function acquireServicePrincipals(
   graph: GraphDirectory,
   ownAppId?: string,
-): Promise<ServicePrincipalRef[]> {
+): Promise<Listing<ServicePrincipalRef>> {
   const list = await graph.listServicePrincipals();
-  return sortServicePrincipalsForPicker(list, ownAppId);
+  return toListing(sortServicePrincipalsForPicker(list, ownAppId));
 }

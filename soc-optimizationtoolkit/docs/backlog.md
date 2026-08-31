@@ -1892,3 +1892,152 @@ else needed removing - `ms-sentinel-cloudflare` v1.0.0 in `default`, and
 damage; that was inference from their version numbers, and opening them
 disproved it. The fix stops NEW leftovers; it does not clean up existing ones,
 because the replace only happens on the next rebuild of each pack.
+
+## 15. Custom table authoring on DCR Automation - TBL-5 DECIDED 2026-08-31
+
+**The user's ask, three parts:** create Log Analytics custom tables (validating
+the name is not already taken, then naming fields and assigning types);
+inventory existing tables and create DCRs from one; and if the app has not been
+granted permission to create Azure resources, still offer a downloadable ARM
+template for the DCR.
+
+**One of the three was already on the board, and saying so was the useful part
+of picking this up.** HON-7 is the rule that every blocked action falls back to
+a downloadable artifact, and it already names DCR Automation as a target;
+HON-8 is the engine, `buildDeploymentPreview` - roughly 700 lines with its own
+tests and no caller anywhere in `packages/ui` or `apps/cribl-app`; and Batch
+already ships the behaviour under `templateOnly`, forced on in azure-only mode.
+The mechanism is not missing, it is unreached. TBL-4 therefore adds only what is
+genuinely new - the two NEW surfaces carrying the offer, gated on the MEASURED
+capability so the option appears before something 403s rather than after - and
+says to do HON-7 first or it will be rebuilt.
+
+**What was genuinely missing.** Every existing schema source CONSUMES a schema
+somebody else authored: a bundled `VENDOR_SCHEMAS` entry, a pasted JSON file, or
+a table that already exists. An operator with a new log source and no schema
+file has no path through the screen at all. That is TBL-1. And nothing anywhere
+compares a proposed table name against what the workspace holds -
+`validateCustomTableSchema` checks the name's SHAPE (the `_CL` suffix) and
+`avoidNameCollision` is for DCR names - which matters because the tables PUT is
+an UPSERT, exactly like the DCR PUT that `avoidNameCollision` exists to guard.
+Authoring over a taken name does not fail; it redefines a live table's schema,
+and the first symptom is somebody else's data not arriving. That is TBL-2.
+
+### The decision: one "Tables" tab, not two tabs and not a fold-in
+
+DCR Automation already carries three tabs and Inventory is the landing one. The
+three options were two new tabs (`Tables` and `New table`), one `Tables` tab
+with creation as an action on it, or folding both into the Single table panel.
+
+**Chosen: one `Tables` tab.** The two asks are one journey - look at what
+exists, and if what you need is not there, author it - and this is the only
+option that renders them as one. Two tabs would make `Tables` and `New table`
+read as siblings when one is really an action on the other. Folding into Single
+was the smallest diff but Single is already the densest panel on the screen.
+
+The chosen layout also settles a question TBL-3 had left open: a table that
+already has a DCR SAYS SO on its row. The data is one `listDcrInventory` call
+away, and an operator building a duplicate is the thing this panel should
+prevent.
+
+### This is NOT a revival of `TablePickerSection`
+
+Worth stating plainly, because the next audit will otherwise read TBL-3 as
+re-adding something deliberately deleted. `TablePickerSection` was removed on
+2026-08-18 (see "The workspace table listing lost its panel" above) and the
+reasoning was sound: it was built as a PICKER - list the workspace's tables,
+choose ONE for the whole analysis - and when the choice became per log type the
+picking moved onto the mapping-review cards, leaving a filter box and an
+~842-row list nobody selected from. Its own header said "IT LOADS; IT DOES NOT
+SELECT".
+
+The new panel has the job that one lost. It is an operational inventory with an
+ACTION on every row, standing to tables exactly as the Inventory tab stands to
+DCRs. Reviving the old component would be wrong; building this is not.
+
+Two of that deletion's lessons carry straight over. The listing does NOT
+auto-load - it loads on a button, because one 403 would otherwise become a
+request storm - and `emptyTableListMessage` remains the decision for when an
+empty list is a real zero, rather than a second copy of that rule.
+
+### Status
+
+TBL-1's decision layer is committed (`manual-schema-state.ts`, a fourth `manual`
+source wired into `custom-schema-state`, 21 pins, mutation-checked). The editor
+component, TBL-2's name check and TBL-3's panel are open.
+
+## 16. D-2 answered: all three surfaces own their fallback offer - 2026-08-31
+
+**The question.** HON-7 exists because `FallbackNotice` renders without
+`onProduce` in production, so the capability model's rule - every blocked
+action falls back to a downloadable artifact - has no button. D-2 asked which
+of Integrate deploy, Batch Deploy and DCR Automation get it, and who owns
+`onProduce`.
+
+**Chosen: all three, each wiring its own producer.** The rule is stated for
+every blocked action, so a version that reaches one screen leaves it still only
+partly true - which is the condition HON-7 was filed to end, not to narrow.
+TBL-4 also needs it on the two new Tables-tab surfaces, and a per-screen
+producer is the only shape that extends to them without a fourth convention.
+
+**The objection the runner-up raised, and why it is not fatal.** Option 2
+argued that for the pack and ARM kinds this is "a button that cannot really
+produce the artifact on the spot", because those come from a RUN - a
+template-only batch, a pack build - while the change-request kinds are
+generated inline from data the app already holds.
+
+That is true, and the codebase already answers it. `isInlineArtifact`
+(`fallback-notice-state.ts:46`) draws exactly that line, and `fallbackHint`
+already says "Produced by a run that makes no live changes" for the run kinds.
+So the two options were never really opposed: they disagree only about what
+`onProduce` MEANS. It means the screen owns WHAT HAPPENS when the offer is
+taken - which for an inline kind is generating bytes, and for a run kind is
+starting or pointing at that run. Nothing has to pretend.
+
+**What that binds for HON-7.** Each of the three screens passes `onProduce`.
+The producer consults `isInlineArtifact` to decide whether it generates or
+hands off; it never fabricates a run-kind artifact inline. The existing pin on
+the ABSENCE of alert semantics stays - this is an offer, not an error - and
+the fallback stays visible-but-explained rather than hidden, per the capability
+rule that a denied verdict annotates and never removes the attempt.
+
+**What it does not settle.** Whether the two TBL-4 surfaces produce the same
+ARM artifact as Integrate's export or a narrower one. That is TBL-4's own
+question and is left to it.
+
+## 17. DBT-62 answered: convert the remaining listings now - 2026-08-31
+
+**The question.** DBT-61 made the empty-as-zero bug a compile error for the
+four ARM listers by returning `Listing<T>` instead of an array. DBT-62 asked
+whether to extend that to the listings it did not cover - Cribl packs and
+worker groups, the Graph directory read, the lab inventory.
+
+**Chosen: convert now.** The recommendation on the card was the opposite -
+"wait until one actually misreads" - and it was wrong. Scoping the conversion
+turned up `lab-inventory-panel.tsx:137` rendering **"No running labs found in
+this subscription."** off an empty `listLabs`, which reads resource groups
+through `listAllPages` and therefore answers `200 []` for an RBAC-filtered
+subscription. That is DBT-64, and it had been shipping.
+
+**Why the recommendation failed, and it is not that the odds were misjudged.**
+"Wait for a defect" quietly assumes a defect will announce itself. This class
+does not. The whole reason `docs/inventory-standard.md` exists is that an
+unverified empty renders as a confident, plausible sentence - "No running labs
+found in this subscription." looks exactly like the truth, and the operator has
+no way to tell. HON-2, DBT-43 and DBT-44 were all found by someone going
+looking, never by the misread surfacing on its own. A waiting strategy is only
+sound where the failure is loud.
+
+**The sharper finding: DBT-61 claimed four ARM listers and there were five.**
+`listLabs` was missed because the sweep followed the inventory screens and Labs
+reads as provisioning. This is worth more than the bug it hid. The type removed
+the mistake everywhere it was applied; choosing where to apply it stayed a
+hand-built list, and that is the step that failed. Converting the remainder is
+not tidiness - it is removing the last place where coverage depends on someone
+having remembered a call site.
+
+**What is NOT converted, by the same rule read the other way.**
+`acquireAnalyticRules` and `acquireSolutionWorkbooks` read files out of the
+repo; `listDeprecatedContentHubSolutions` returns a `Set` used as a lookup.
+None has an ambiguous empty. Wrapping them would teach the codebase that
+`Listing` means "any list", and a type that marks everything marks nothing.

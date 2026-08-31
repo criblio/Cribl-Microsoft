@@ -9,6 +9,7 @@ import { describe, expect, it } from "vitest";
 import { FakeAzureManagement } from "../../testing/index";
 import type { ParsedAnalyticRule } from "../../domain/coverage-analysis/index";
 import {
+  absenceIsMeasured,
   installAnalyticRule,
   installParser,
   installWorkbook,
@@ -240,12 +241,18 @@ describe("installedContentState", () => {
   it("degrades a failed listing to a note, not an error", async () => {
     const azure = new FakeAzureManagement();
     azure.respondWith(
-      { status: 200, body: { value: [] } }, // packages: not installed
+      // SPEC CORRECTION 2026-08-31 (DBT-44): this line used to read "packages:
+      // not installed" and the assertions below treated the empty page as a
+      // measured absence. It is not one - ARM answers 200 with an empty array
+      // when RBAC filters the caller out - so the same response now means
+      // "nothing was proved", pinned on the line after solutionInstalled.
+      { status: 200, body: { value: [] } }, // packages: EMPTY, which settles nothing
       { status: 403, body: "denied" }, // alertRules fails
-      { status: 200, body: { value: [] } }, // workbooks: none
+      { status: 200, body: { value: [] } }, // workbooks: EMPTY, likewise
     );
     const state = await installedContentState(azure, WS, "cf-id");
     expect(state.solutionInstalled).toBe(false);
+    expect(absenceIsMeasured(state, "solutions")).toBe(false);
     expect(state.installedRuleNames.size).toBe(0);
     expect(state.notes.some((n) => n.includes("analytics rules"))).toBe(true);
     expect(state.notOnboarded).toBe(false);
@@ -277,6 +284,106 @@ describe("installedContentState", () => {
     expect(state.notOnboarded).toBe(true);
     // The raw ARM error is NOT pushed as a note - the UI shows an Enable action.
     expect(state.notes.some((n) => n.includes("not onboarded"))).toBe(false);
+  });
+});
+
+/**
+ * DBT-44 - docs/inventory-standard.md, BINDING.
+ *
+ * The defect these pin: an RBAC-filtered ARM list arrives as a 200 with an
+ * empty `value` array, byte-identical to a genuinely empty workspace, and it
+ * was reported as a measured "not installed" with an Install button on the end
+ * of it. So the operator was invited to install content that may already be
+ * there and merely invisible to them.
+ *
+ * Each case asserts the flag for ALL THREE listings, not just the one under
+ * test. Three probes hit three providers and are refused independently, so a
+ * single global "we saw something" flag - the obvious wrong fix - would carry
+ * one listing's evidence onto another, and only the off-listing assertions
+ * catch it.
+ */
+describe("installedContentState: an empty listing is an unknown, not a zero", () => {
+  it("does not call an empty contentPackages page a measured 'not installed'", async () => {
+    const azure = new FakeAzureManagement();
+    azure.respondWith(
+      { status: 200, body: { value: [] } }, // packages: EMPTY - could be RBAC
+      { status: 200, body: { value: [{ properties: { displayName: "Some rule" } }] } },
+      { status: 200, body: { value: [{ properties: { displayName: "Some wb" } }] } },
+    );
+    const state = await installedContentState(azure, WS, "cf-id");
+    // The claim under test, asserted BEFORE the surrounding facts so a change
+    // to those can never hide it behind an earlier failure.
+    expect(absenceIsMeasured(state, "solutions")).toBe(false);
+    // The other two listings DID see content, so their emptiness questions are
+    // settled - evidence is per listing and must not leak across.
+    expect(absenceIsMeasured(state, "rules")).toBe(true);
+    expect(absenceIsMeasured(state, "workbooks")).toBe(true);
+    // The field itself is unchanged: no match was found. What is new is that
+    // the caller can tell "no match in a page we could read" from this.
+    expect(state.solutionInstalled).toBe(false);
+  });
+
+  it("treats a MISS inside a non-empty page as a real 'not installed'", async () => {
+    const azure = new FakeAzureManagement();
+    azure.respondWith(
+      // Someone else's package - the read is proved, and our contentId is
+      // genuinely absent. This is the case that must NOT be hedged, or the
+      // hedge becomes noise on every workspace and stops being read.
+      { status: 200, body: { value: [{ properties: { contentId: "other-id" } }] } },
+      { status: 200, body: { value: [] } }, // rules: EMPTY
+      { status: 200, body: { value: [] } }, // workbooks: EMPTY
+    );
+    const state = await installedContentState(azure, WS, "cf-id");
+    expect(absenceIsMeasured(state, "solutions")).toBe(true);
+    expect(state.solutionInstalled).toBe(false);
+    // ...and the two empty ones are still unproved, in the same call.
+    expect(absenceIsMeasured(state, "rules")).toBe(false);
+    expect(absenceIsMeasured(state, "workbooks")).toBe(false);
+  });
+
+  it("never counts a FAILED listing as a measured zero", async () => {
+    const azure = new FakeAzureManagement();
+    azure.respondWith(
+      { status: 403, body: "denied" },
+      { status: 403, body: "denied" },
+      { status: 403, body: "denied" },
+    );
+    const state = await installedContentState(azure, WS, "cf-id");
+    expect(absenceIsMeasured(state, "solutions")).toBe(false);
+    expect(absenceIsMeasured(state, "rules")).toBe(false);
+    expect(absenceIsMeasured(state, "workbooks")).toBe(false);
+    // The notes explain WHY; the flags say what that means for the claim.
+    expect(state.notes.length).toBe(3);
+  });
+
+  it("does not claim a measured zero for a solution probe that never ran", async () => {
+    const azure = new FakeAzureManagement();
+    azure.respondWith(
+      { status: 200, body: { value: [{ properties: { displayName: "Some rule" } }] } },
+      { status: 200, body: { value: [{ properties: { displayName: "Some wb" } }] } },
+    );
+    // No contentId (the catalog lookup found nothing), so the packages listing
+    // is SKIPPED - and a skipped probe proves even less than an empty one.
+    const state = await installedContentState(azure, WS, undefined);
+    expect(absenceIsMeasured(state, "solutions")).toBe(false);
+    expect(state.solutionInstalled).toBe(false);
+    expect(azure.calls).toHaveLength(2);
+  });
+
+  it("reads a hand-built state as unverified rather than as a zero", async () => {
+    // The default has to fall on the honest side: a state assembled without the
+    // evidence field (a fixture, an older caller) must not read as a measured
+    // zero just because nobody recorded anything.
+    const azure = new FakeAzureManagement();
+    azure.respondWith(
+      { status: 200, body: { value: [{ properties: { contentId: "cf-id" } }] } },
+      { status: 200, body: { value: [] } },
+      { status: 200, body: { value: [] } },
+    );
+    const measured = await installedContentState(azure, WS, "cf-id");
+    const { observed: _dropped, ...withoutEvidence } = measured;
+    expect(absenceIsMeasured(measured, "solutions")).toBe(true);
+    expect(absenceIsMeasured(withoutEvidence, "solutions")).toBe(false);
   });
 });
 

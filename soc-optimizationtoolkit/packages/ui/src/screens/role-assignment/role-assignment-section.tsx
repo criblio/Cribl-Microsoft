@@ -25,6 +25,7 @@ import { InfoTip } from "../../components/info-tip";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   acquireServicePrincipals,
+  listingRows,
   assignDcrRoles,
   defaultServicePrincipalId,
 } from "@soc/core";
@@ -99,6 +100,9 @@ export function RoleAssignmentSection({
   // object id is chosen from a name-sorted dropdown (own app first, cribl-named
   // next) instead of typed. Everything degrades to the plain text field when the
   // port is absent or the directory read is denied - never worse than before.
+  // The directory is read only once there is a DCR to grant the role on, or
+  // when the operator asks for it (Reload / Pick from directory) - see the
+  // effect below.
   const [servicePrincipals, setServicePrincipals] = useState<
     ServicePrincipalRef[] | null
   >(null);
@@ -112,8 +116,14 @@ export function RoleAssignmentSection({
     setSpLoading(true);
     setSpError("");
     try {
-      const list = await acquireServicePrincipals(graph, clientId);
-      setServicePrincipals(list);
+      const listed = await acquireServicePrincipals(graph, clientId);
+      // Sanctioned unwrap (DBT-62): these rows only POPULATE a picker and the
+      // operator can always type an object id by hand, which is the documented
+      // fallback when the directory read is unavailable. Nothing here counts
+      // them or says the tenant has none, so an empty listing costs
+      // suggestions rather than producing a claim.
+      const list = listingRows(listed);
+      setServicePrincipals([...list]);
       // Preselect the app's own SP when the field is still empty; never
       // overwrite an id the operator already entered.
       setObjectId((cur) =>
@@ -127,9 +137,20 @@ export function RoleAssignmentSection({
     }
   }, [ports.graph, clientId]);
 
+  // DBT-46: gated on there actually being a target to assign a role to. The
+  // cloud shell ALWAYS binds ports.graph, and numbered-section keeps every
+  // section body mounted behind `hidden`, so an effect keyed only on the port
+  // fired a Graph read on every Integrate render - and painted "Could not read
+  // the directory (...)" below onto a page an operator opened with no
+  // credentials and asked nothing of. With no DCR deployed there is nothing to
+  // pick a principal FOR, so the read has no reason to happen yet; the two
+  // operator-driven entry points (Reload, Pick from directory) still load it on
+  // demand, so nothing that was reachable before has been removed.
   useEffect(() => {
-    if (ports.graph !== undefined) void loadServicePrincipals();
-  }, [ports.graph, loadServicePrincipals]);
+    if (ports.graph !== undefined && targets.length > 0) {
+      void loadServicePrincipals();
+    }
+  }, [ports.graph, targets.length, loadServicePrincipals]);
 
   // The dropdown drives the field only when the port is bound, the directory
   // read succeeded, and the operator has not switched to manual entry.
@@ -230,7 +251,12 @@ export function RoleAssignmentSection({
               placeholder={
                 spLoading
                   ? "Loading service principals..."
-                  : "Select a service principal..."
+                  : servicePrincipals === null
+                    ? // DBT-46: the directory is not read until there is a DCR
+                      // to grant on, so an unread list must not invite a
+                      // selection from options that were never fetched.
+                      "Directory not read yet - select Reload to read it now..."
+                    : "Select a service principal..."
               }
               ariaLabel="Filter service principals"
             />
@@ -274,7 +300,16 @@ export function RoleAssignmentSection({
                   className="gap-reset-button"
                   onClick={() => {
                     setManualEntry(false);
-                    if (spError !== "") void loadServicePrincipals();
+                    // Read when we do not HAVE the directory, not only when a
+                    // previous read failed. Before DBT-46 the automatic read had
+                    // always run by the time anyone reached this button, so
+                    // `spError === ""` implied "already loaded"; with the
+                    // automatic read now gated on a target, that implication is
+                    // gone and the old condition returned the operator to an
+                    // empty dropdown having fetched nothing.
+                    if (servicePrincipals === null || spError !== "") {
+                      void loadServicePrincipals();
+                    }
                   }}
                 >
                   Pick from directory

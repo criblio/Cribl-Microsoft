@@ -365,6 +365,33 @@ describe("coverageSummaryLine", () => {
       coverageSummaryLine("workbook", { total: 2, fullyCovered: 1, partiallyCovered: 0, noCoverage: 1 }, 3),
     ).toContain("referenced by workbooks");
   });
+
+  // DBT-54. The empty-workbook line told the operator coverage "folds in any
+  // Sentinel workbooks already deployed in your subscription" - a read the
+  // 2026-07-12 direction had already removed (deployed copies are deliberately
+  // not analyzed: a shared subscription carries unrelated dashboards and local
+  // copies drift from the repo templates). This is the ONE line an operator
+  // reads when the panel is empty, so it was the worst place to promise a
+  // source that is never consulted. The old assertion above only checked "No
+  // workbooks found" was present, which the false clause sailed straight past.
+  it("does not promise the empty-workbook case reads deployed subscription workbooks", () => {
+    const line = coverageSummaryLine(
+      "workbook",
+      { total: 0, fullyCovered: 0, partiallyCovered: 0, noCoverage: 0 },
+      0,
+    );
+    expect(line).toContain("Sentinel repository only");
+    // The exact promise that was false, verbatim.
+    expect(line).not.toContain(
+      "folds in any Sentinel workbooks already deployed in your subscription",
+    );
+    expect(line).not.toContain("folds in");
+    // Naming the excluded source is fine - promising it as an input is not -
+    // so the subscription may only ever appear next to its exclusion.
+    expect(line).toContain(
+      "workbooks already deployed in your subscription are not analyzed",
+    );
+  });
 });
 
 // ---------------------------------------------------------------------------

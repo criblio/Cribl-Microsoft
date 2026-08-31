@@ -14,17 +14,20 @@
  * step lines from {@link onboardTableStepsFor}, not the raw constant:
  *   1 fetch-workspace          GET the workspace resource (resource id +
  *                              location when the caller did not provide one)
- *   2 create-custom-table      CUSTOM ONLY. GET workspace tables/{table}
- *                              first: exists -> creation is skipped
- *                              (idempotency, the legacy Process-CustomTable
- *                              contract) and its schema is reused; 404 ->
- *                              REQUIRES input.customSchema, validates it
- *                              (validateCustomTableSchema), PUTs the table
- *                              (buildTablePutRequest, retention
- *                              30/90-contract via customTableRetentionDays)
- *                              and GET-polls until the created table reads
- *                              back Succeeded, bounded by
- *                              maxTablePollAttempts
+ *   2 create-custom-table      CUSTOM ONLY, and the contract now lives in
+ *                              usecases/create-custom-table so a screen can
+ *                              create a table with Azure alone - this step
+ *                              CALLS it and only reports. That usecase GETs
+ *                              tables/{table} first (exists -> creation
+ *                              skipped, the legacy Process-CustomTable
+ *                              idempotency contract, and its schema is
+ *                              reused), else 404 -> requires
+ *                              input.customSchema, validates and PUTs it,
+ *                              then GET-polls to a terminal state bounded by
+ *                              maxTablePollAttempts. Its errors carry the
+ *                              messages this step used to throw and are
+ *                              rewrapped as StepFailure, so no
+ *                              operator-visible string changed
  *   3 fetch-table-schema       native: GET workspace tables/{table}; custom:
  *                              reuse the body resolved in step 2 (no second
  *                              GET). Columns are selected via schema-mapping
@@ -53,7 +56,9 @@
  *   8 verify                   GET the DCR and GET the created output
  *
  * Any other failure marks the current step AND the job failed with the raw
- * error text and stops.
+ * error text and stops - EXCEPT a JobStore failure, which is no evidence at
+ * all about the table and leaves as {@link JobStoreFailure} instead of being
+ * recorded as this table's failure (DBT-55).
  *
  * SECRET HANDLING: ingestionClientSecret is TRANSIENT input (the platform's
  * encrypted KV is write-only, so a stored secret can never be read back).
@@ -83,12 +88,11 @@ import {
   defaultSentinelDestinationId,
 } from "../../domain/sentinel-destination";
 import {
-  buildTablePutRequest,
   DEFAULT_CUSTOM_TABLE_RETENTION_DAYS,
   isCustomTableName,
   LOG_ANALYTICS_TABLES_API_VERSION,
-  validateCustomTableSchema,
 } from "../../domain/custom-table";
+import { createCustomTable } from "../create-custom-table/create-custom-table";
 import type { CustomSchemaFileColumn } from "../../domain/schema-mapping";
 import type { CustomTableRetentionDays } from "../../domain/option-forms";
 
@@ -107,11 +111,10 @@ export const LOG_ANALYTICS_API_VERSION = LOG_ANALYTICS_TABLES_API_VERSION;
 /** Default bound on DCR provisioning-poll GETs (attempts, not wall-clock). */
 export const DEFAULT_DCR_POLL_ATTEMPTS = 10;
 
-/**
- * Default bound on created-custom-table readback GETs (attempts, not
- * wall-clock; replaces the legacy engine's blind Start-Sleep 10).
- */
-export const DEFAULT_TABLE_POLL_ATTEMPTS = 10;
+// The custom-table readback bound moved with the step that used it: it is
+// DEFAULT_CREATE_TABLE_POLL_ATTEMPTS in usecases/create-custom-table. This
+// export was left behind pointing at nothing (audit finding, 2026-08-31);
+// `maxTablePollAttempts` below still forwards there.
 
 /**
  * Ordered step names of an onboard-table job - the FULL (custom-table) list.
@@ -207,7 +210,7 @@ export interface OnboardTableInput {
   customTableRetentionDays?: CustomTableRetentionDays;
   /**
    * Max readback GETs after creating a custom table; defaults to
-   * {@link DEFAULT_TABLE_POLL_ATTEMPTS}.
+   * {@link DEFAULT_CREATE_TABLE_POLL_ATTEMPTS}.
    */
   maxTablePollAttempts?: number;
   subscriptionId: string;
@@ -287,7 +290,6 @@ export interface OnboardTableOutcome {
   commitVersion: string | null;
 }
 
-/** Internal signal: a step failed; message already carries the raw text. */
 /** Parse a Cribl outputs listing into id + url pairs. */
 function listExistingOutputs(body: unknown): Array<{ id: string; url: string }> {
   const items =
@@ -360,6 +362,7 @@ function dcrTargetsTable(dcrBody: unknown, table: string): boolean {
   return false;
 }
 
+/** Internal signal: a step failed; message already carries the raw text. */
 class StepFailure extends Error {
   constructor(message: string) {
     super(message);
@@ -368,12 +371,80 @@ class StepFailure extends Error {
 }
 
 /**
+ * Signal: the JOB STORE failed, not the work it was recording (DBT-55 - DBT-49
+ * one level down). Every JobStore call this usecase makes goes through a
+ * wrapper that raises this, so a store outage LEAVES WEARING ITS OWN TYPE
+ * instead of being written back as `{status:"failed", error:"kvstore ..."}`.
+ * That write blamed the TABLE for the store's outage and carried the store's
+ * error text as the table's, so the operator's obvious next action - retry
+ * that table - was the wrong one. The write most exposed to the lie is the
+ * final success write: it runs after the DCR deployed and the Cribl
+ * destination was created, so blaming the table there is provably false.
+ *
+ * The wrapping here is TOTAL, unlike onboardBatch's (three of its parent
+ * writes deliberately bypass its wrapper): create, update and get are all
+ * wrapped, so any rejection satisfying {@link isJobStoreFailure} really is the
+ * store failing.
+ *
+ * WHAT THAT DOES NOT LICENSE, and an earlier draft of this docblock said it
+ * did (review, 2026-08-31): it is NOT "says nothing about the table". A table
+ * can fail a step for its own reasons AND the store be down when that failure
+ * is recorded - the catch's own recovery write is wrapped too, so the
+ * JobStoreFailure escapes and the real failure is lost with it. A caller that
+ * read this as "the table is not implicated" would decline to retry a table
+ * that genuinely failed, which is DBT-55's mirror image: rarer, and the same
+ * class of confident wrong answer. Read it as "the store failed, and what
+ * happened to the table is UNKNOWN".
+ *
+ * Store failures were already outside the never-rejects promise
+ * documented on {@link onboardTable} - re-raising is what makes that sentence
+ * true for the store's whole surface rather than only the writes that happen
+ * to sit outside the try.
+ *
+ * The class is INTERNAL and deliberately not exported (DBT-60). It used to be,
+ * so that a caller could tell the signal apart - but onboardBatch mints its own
+ * identically-named class for its own writes, and the export invited exactly
+ * the cross-module `instanceof` that never matches: the batch caught this
+ * rejection and recorded an ordinary failed table anyway, so the signal was
+ * raised and silently dropped. Callers use {@link isJobStoreFailure} instead,
+ * which onboardBatch's per-table catch now does.
+ */
+class JobStoreFailure extends Error {
+  constructor(cause: unknown) {
+    super(
+      `job store update failed: ${cause instanceof Error ? cause.message : String(cause)}`,
+    );
+    this.name = "JobStoreFailure";
+  }
+}
+
+/**
+ * Whether `error` is a {@link JobStoreFailure}: the store failed, so the error
+ * is not evidence about the work. Matches on the NAME rather than the class so
+ * it also recognises the identically-named signal onboardBatch raises for its
+ * own parent-record writes (DBT-49) - two classes, one meaning, and a caller
+ * guarding a call that can raise either should not have to care which module
+ * minted it.
+ *
+ * This is the ONLY thing about the signal that leaves the package index, and
+ * that is the point (DBT-60): an exported class gets tested with `instanceof`,
+ * which across a module boundary quietly matches nothing and turns "the store
+ * is down" into "this table failed". A predicate cannot fail that way.
+ */
+export function isJobStoreFailure(error: unknown): boolean {
+  return error instanceof Error && error.name === "JobStoreFailure";
+}
+
+/**
  * Onboard a table: for custom (_CL) tables ensure the Log Analytics table
  * exists (create it from the supplied schema when it does not), then deploy
  * a Kind:Direct DCR and create the matching Cribl Sentinel destination - ONE
  * pipelined job. Never rejects for step failures - the job record carries
  * the outcome; the final record is returned either way. (It can still reject
- * if the JobStore itself fails.)
+ * if the JobStore itself fails: that rejection is a {@link JobStoreFailure},
+ * recognisable with {@link isJobStoreFailure}, and it is the ONE rejection
+ * shape that is not the table's failure - what happened to the table is
+ * UNKNOWN, not "fine", per the class docblock - DBT-55.)
  */
 export async function onboardTable(
   ports: OnboardTablePorts,
@@ -384,10 +455,22 @@ export async function onboardTable(
   const secretProvided =
     input.ingestionClientSecret != null && input.ingestionClientSecret !== "";
 
+  // DBT-55: EVERY JobStore call in this usecase goes through here, so a store
+  // outage leaves this function as a JobStoreFailure and is never attributed
+  // to the table (see the class docblock). Keeping the invariant total is what
+  // lets a caller treat "isJobStoreFailure" as "the table is not implicated".
+  const storeCall = async <T>(call: () => Promise<T>): Promise<T> => {
+    try {
+      return await call();
+    } catch (error) {
+      throw new JobStoreFailure(error);
+    }
+  };
+
   // Persisted job input: everything serializable, NEVER the secret value.
   // The custom-path fields are recorded ONLY on custom jobs so native job
   // records stay byte-identical to the walking-skeleton contract.
-  const job = await jobs.create(ONBOARD_TABLE_JOB_KIND, {
+  const jobInput = {
     table: input.table,
     subscriptionId: input.subscriptionId,
     resourceGroup: input.resourceGroup,
@@ -412,7 +495,10 @@ export async function onboardTable(
             DEFAULT_CUSTOM_TABLE_RETENTION_DAYS,
         }
       : {}),
-  });
+  };
+  const job = await storeCall(() =>
+    jobs.create(ONBOARD_TABLE_JOB_KIND, jobInput),
+  );
 
   logger?.info(
     "onboard-table: job started",
@@ -439,8 +525,14 @@ export async function onboardTable(
     status: "pending",
   }));
 
+  const updateJob = async (
+    patch: Partial<Omit<JobRecord, "id">>,
+  ): Promise<void> => {
+    await storeCall(() => jobs.update(job.id, patch));
+  };
+
   const pushSteps = async (): Promise<void> => {
-    await jobs.update(job.id, { steps: steps.map((step) => ({ ...step })) });
+    await updateJob({ steps: steps.map((step) => ({ ...step })) });
   };
 
   const setStep = async (
@@ -473,7 +565,7 @@ export async function onboardTable(
     }
   };
 
-  await jobs.update(job.id, { status: "running" });
+  await updateJob({ status: "running" });
   await pushSteps();
 
   let currentStep: OnboardTableStepName = ONBOARD_TABLE_STEPS[0];
@@ -528,122 +620,53 @@ export async function onboardTable(
       currentStep = "create-custom-table";
       await setStep(currentStep, "running");
 
-      const existingResponse = await azure.request({
-        method: "GET",
-        path: tablePath,
-        apiVersion: LOG_ANALYTICS_API_VERSION,
-      });
-      if (is2xx(existingResponse.status)) {
-        customTableBody = existingResponse.body;
-        await setStep(
-          currentStep,
-          "succeeded",
-          `table '${input.table}' already exists - creation skipped`,
-        );
-      } else if (existingResponse.status === 404) {
-        if (input.customSchema === undefined || input.customSchema.length === 0) {
-          throw new StepFailure(
-            `custom table '${input.table}' does not exist and no ` +
-              "customSchema was provided; supply a parsed schema " +
-              "(parseTableSchemaFile / VENDOR_SCHEMAS) or create the table first",
-          );
-        }
-        const validation = validateCustomTableSchema(
-          input.table,
-          input.customSchema,
-        );
-        if (!validation.valid) {
-          throw new StepFailure(
-            `custom table schema for '${input.table}' is invalid: ` +
-              validation.errors.join("; "),
-          );
-        }
-
-        const tableRequest = buildTablePutRequest({
+      // The creation contract lives in its own usecase (TBL-3) so the Tables
+      // tab can create a table with Azure alone. Its errors carry the exact
+      // messages this step used to throw, so rewrapping them as StepFailure
+      // keeps every operator-visible string - and every pin on them - intact.
+      let created;
+      try {
+        created = await createCustomTable(azure, {
           subscriptionId: input.subscriptionId,
           resourceGroup: input.resourceGroup,
           workspaceName: input.workspaceName,
           table: input.table,
-          columns: input.customSchema,
+          ...(input.customSchema !== undefined
+            ? { columns: input.customSchema }
+            : {}),
           ...(input.customTableRetentionDays !== undefined
             ? { retentionDays: input.customTableRetentionDays }
             : {}),
+          ...(input.maxTablePollAttempts !== undefined
+            ? { maxPollAttempts: input.maxTablePollAttempts }
+            : {}),
         });
-        const tablePutResponse = await azure.request({
-          method: tableRequest.method,
-          path: tableRequest.path,
-          apiVersion: tableRequest.apiVersion,
-          body: tableRequest.body,
-        });
-        if (!is2xx(tablePutResponse.status)) {
-          throw new StepFailure(
-            httpErrorText(
-              `create custom table '${tableRequest.tableName}'`,
-              tablePutResponse.status,
-              tablePutResponse.body,
-            ),
-          );
-        }
-
-        // Attempt-bounded readback (replaces the legacy blind Start-Sleep
-        // 10): poll until the created table GETs back with a terminal
-        // provisioningState. A 404 counts as "not replicated yet".
-        const maxTableAttempts =
-          input.maxTablePollAttempts ?? DEFAULT_TABLE_POLL_ATTEMPTS;
-        let tableAttempts = 0;
-        for (;;) {
-          if (tableAttempts >= maxTableAttempts) {
-            throw new StepFailure(
-              `custom table '${tableRequest.tableName}' was created but did ` +
-                `not read back successfully within ${maxTableAttempts} poll attempts`,
-            );
-          }
-          tableAttempts++;
-          const pollResponse = await azure.request({
-            method: "GET",
-            path: tablePath,
-            apiVersion: LOG_ANALYTICS_API_VERSION,
-          });
-          if (is2xx(pollResponse.status)) {
-            const state = prop(prop(pollResponse.body, "properties"), "provisioningState");
-            const stateText = typeof state === "string" ? state : null;
-            if (stateText !== null && /^(failed|canceled)$/i.test(stateText)) {
-              throw new StepFailure(
-                `custom table '${tableRequest.tableName}' provisioning ended ` +
-                  `in state '${stateText}'`,
-              );
-            }
-            if (stateText === null || /^succeeded$/i.test(stateText)) {
-              customTableBody = pollResponse.body;
-              break;
-            }
-          } else if (pollResponse.status !== 404) {
-            throw new StepFailure(
-              httpErrorText(
-                `poll custom table '${tableRequest.tableName}'`,
-                pollResponse.status,
-                pollResponse.body,
-              ),
-            );
-          }
-        }
-        await setStep(
-          currentStep,
-          "succeeded",
-          `created '${tableRequest.tableName}' with ` +
-            `${tableRequest.body.properties.schema.columns.length} columns, ` +
-            `retention ${tableRequest.body.properties.retentionInDays}/` +
-            `${tableRequest.body.properties.totalRetentionInDays} days`,
-        );
-      } else {
+      } catch (err) {
         throw new StepFailure(
-          httpErrorText(
-            `check custom table '${input.table}'`,
-            existingResponse.status,
-            existingResponse.body,
-          ),
+          err instanceof Error ? err.message : String(err),
         );
       }
+      // THIS caller needs the table's SCHEMA next, to build the DCR from it,
+      // so an unresolved readback is fatal here even though the PUT was
+      // accepted. ensureRuleDataTable makes the opposite call on the same
+      // result, which is why createCustomTable reports rather than decides.
+      if (created.readback.state === "unresolved") {
+        throw new StepFailure(
+          `custom table '${created.tableName}' was created but ` +
+            created.readback.reason,
+        );
+      }
+      customTableBody = created.body;
+      await setStep(
+        currentStep,
+        "succeeded",
+        created.created
+          ? `created '${created.tableName}' with ` +
+              `${created.columnCount} columns, ` +
+              `retention ${created.retentionInDays}/` +
+              `${created.totalRetentionInDays} days`
+          : `table '${input.table}' already exists - creation skipped`,
+      );
     }
 
     // ---- Step 3: fetch-table-schema ----------------------------------
@@ -1082,16 +1105,32 @@ export async function onboardTable(
       groupId: input.groupId,
       commitVersion,
     };
-    await jobs.update(job.id, { status: "succeeded", result: outcome });
+    await updateJob({ status: "succeeded", result: outcome });
     logger?.info(
       "onboard-table: job succeeded",
       { table: input.table, dcrName, destinationId, groupId: input.groupId },
       job.id,
     );
   } catch (error) {
+    // DBT-55: a JobStore outage is NOT this table's failure. Writing it back
+    // as `{status:"failed", error:"kvstore ..."}` recorded the store's error
+    // text as the TABLE's - the operator's next action, retry that table, was
+    // then the wrong one, and on the final success write the table had
+    // already deployed. Say nothing about a table we have no bad news about:
+    // re-raise wearing its own type, which the contract above already places
+    // outside the never-rejects promise. (Unlike a step failure this cannot
+    // be written to the record instead - the store is the thing that is down.)
+    if (error instanceof JobStoreFailure) {
+      logger?.error(
+        "onboard-table: job store failed",
+        { table: input.table, step: currentStep, error: error.message },
+        job.id,
+      );
+      throw error;
+    }
     const message = error instanceof Error ? error.message : String(error);
     await setStep(currentStep, "failed", message);
-    await jobs.update(job.id, { status: "failed", error: message });
+    await updateJob({ status: "failed", error: message });
     logger?.error(
       "onboard-table: job failed",
       { table: input.table, step: currentStep, error: message },
@@ -1099,7 +1138,7 @@ export async function onboardTable(
     );
   }
 
-  const finalRecord = await jobs.get(job.id);
+  const finalRecord = await storeCall(() => jobs.get(job.id));
   // Unreachable in practice: the record was created at the top of this run.
   if (finalRecord === null) {
     throw new Error(`job '${job.id}' vanished from the JobStore`);

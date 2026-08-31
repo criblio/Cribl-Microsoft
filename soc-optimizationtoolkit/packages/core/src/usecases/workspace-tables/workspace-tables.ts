@@ -28,6 +28,8 @@
 import type { AzureManagement } from "../../ports/azure-management";
 import type { Logger } from "../../ports/logger";
 import { isCustomTableName } from "../../domain/custom-table";
+import { listingCount, toListing } from "../../domain/inventory-listing";
+import type { Listing } from "../../domain/inventory-listing";
 import type { DestField } from "../../domain/field-matcher";
 import { selectSchemaColumns } from "../../domain/schema-mapping";
 import type { LogAnalyticsColumn } from "../../domain/schema-mapping";
@@ -112,7 +114,7 @@ export async function listWorkspaceTables(
   azure: AzureManagement,
   target: WorkspaceTablesTarget,
   logger?: Logger,
-): Promise<WorkspaceTable[]> {
+): Promise<Listing<WorkspaceTable>> {
   const items = await listAllPages(
     azure,
     {
@@ -132,12 +134,18 @@ export async function listWorkspaceTables(
   }
   tables.sort((a, b) => a.name.localeCompare(b.name));
 
+  // DBT-61: `listing` sits beside `total` so the log itself cannot be read as
+  // a measured zero. An RBAC-filtered workspace lists 200-with-nothing exactly
+  // as an empty workspace does, and a bare `total: 0` in a log is the same
+  // confident wrong answer as one on screen, just somewhere quieter.
+  const listing = toListing(tables);
   logger?.info("workspace-tables: listed", {
     workspace: target.workspaceName,
-    total: tables.length,
+    listing: listing.kind,
+    total: listingCount(listing, 0),
     custom: tables.filter((table) => table.kind === "custom").length,
   });
-  return tables;
+  return listing;
 }
 
 // ---------------------------------------------------------------------------

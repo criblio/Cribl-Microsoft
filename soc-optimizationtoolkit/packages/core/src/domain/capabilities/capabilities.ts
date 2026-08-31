@@ -182,28 +182,26 @@ export function isSetForConnection(
   return set.connectionId !== null && set.connectionId === connectionId;
 }
 
-/**
- * The reason an item is not presented as available, or null when it is.
- *
- * Copy lives here so every surface says the same thing, and so the
- * identity-derived wording stays distinct from the permission-derived wording -
- * conflating them is exactly what the plan set out to avoid.
- */
-export function unavailableReason(
-  capability: Capability,
-  set: CapabilitySet,
-  context: CapabilityContext,
-): string | null {
-  switch (verdictFor(capability, set, context)) {
-    case "granted":
-      return null;
-    case "denied":
-      return "The connected identity cannot do this. You can still try it, or take the downloadable version to someone who can.";
-    case "unknown":
-      return "Not checked yet - run the permission check to find out.";
-    case "unreachable":
-      return isAzureCapability(capability)
-        ? "Connect Azure to enable this."
-        : "Connect Cribl to enable this.";
-  }
-}
+// `unavailableReason` was DELETED 2026-08-31 (DBT-57). It claimed in its own
+// docstring that "copy lives here so every surface says the same thing", and by
+// the end nothing called it.
+//
+// IT DID HAVE A CALLER ONCE, and that is the more useful fact - an earlier
+// draft of this note said it never had one (review, 2026-08-31).
+// `git log -S "unavailableReason("` shows table-picker-state.ts adopting it in
+// d08c434 and losing it in 922f5df, "Stop listing tables nobody picks from".
+// So it did not rot from neglect; it was orphaned when its one consumer was
+// deliberately deleted, and the docstring's claim about every surface outlived
+// the only surface there was.
+//
+// It is not merely unused, it is SUPERSEDED, and wiring it in would have been a
+// regression rather than a fix. nav-annotation's `reasonFor`/`unreachableReason`
+// does this job over the SET of capabilities an item needs, which is the shape
+// the question actually has: it can say "Connect Azure and Cribl to use this."
+// when both sides are unreachable, and it names the concrete fallback artifact
+// in the denied wording. A per-capability function cannot express either, so a
+// future reader who believed the docstring and adopted this would have
+// downgraded the nav copy to something strictly less true.
+//
+// The rule it encoded - identity-derived wording stays distinct from
+// permission-derived wording - is unchanged and lives in `reasonFor`.

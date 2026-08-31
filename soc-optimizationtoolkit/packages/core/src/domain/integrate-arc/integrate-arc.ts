@@ -171,7 +171,17 @@ export const INTEGRATE_SECTIONS: readonly IntegrateSection[] = [
       "Approval is required before the pack is built; Auto-Approve " +
       "All is the one-click escape hatch. Approvals reset when you re-analyze, " +
       "but your edits survive; the native-table deploy never waits on approval.",
-    requires: "both",
+    // NEITHER connection (DBT-54; was "both", true of no version of this
+    // screen). Cribl appears in this section only as DOMAIN VOCABULARY - the
+    // "Cribl handles" tile names what the GENERATED pipeline will do with a
+    // field; nothing here calls a leader, and mapping-review-section references
+    // no Cribl port. Azure is OPTIONAL ENRICHMENT, not a requirement: the live
+    // workspace table list and per-table column lookup reach the review as
+    // optional props (workspaceTables / fetchTableSchema), and their absence is
+    // a documented supported path - "the behaviour before the workspace listing
+    // existed". The analysis itself runs off the tagged samples plus the
+    // GitHub/bundled schema catalog, so it does its real work offline.
+    requires: "none",
     // BUILT NOW (Unit 18): the mapping review screen renders real content. Its
     // completion (mappingsApproved) is ADDITIVE and NON-GATING for the native
     // deploy - exactly like samples/solution - so it never regresses the MVP
@@ -187,7 +197,12 @@ export const INTEGRATE_SECTIONS: readonly IntegrateSection[] = [
       "per-rule severity and coverage %, and missing fields by frequency. " +
       "Upload custom YAML rules to extend coverage. Informational - it lights " +
       "the mapping table's RULE badges but never blocks a deploy.",
-    requires: "azure",
+    // NO live connection (DBT-54; was "azure", which nothing backed). Rule
+    // coverage reads the solution's analytics rules through the SentinelContent
+    // port - GitHub, not ARM - and scores them against the gap reports already
+    // in hand. rule-coverage-section touches exactly one port, ports.content;
+    // there is no ports.azure reference anywhere under screens/rule-coverage/.
+    requires: "none",
     // BUILT NOW (Unit 23): the rule coverage panel renders real content.
     // INFORMATIONAL - it resolves to 'informational', so it never becomes
     // 'current'/'blocked' and never participates in canDeploy or
@@ -203,11 +218,19 @@ export const INTEGRATE_SECTIONS: readonly IntegrateSection[] = [
     title: "Review Workbook Coverage",
     infoTip:
       "Workbook coverage: the solution's Sentinel workbooks (read from the " +
-      "repo, plus any deployed in your subscription) scored against your " +
-      "sample fields - fully, partially, and uncovered counts, per-workbook " +
-      "coverage %, and missing fields by frequency. Informational - missing " +
+      "solution repo only) scored against your sample fields - fully, " +
+      "partially, and uncovered counts, per-workbook coverage %, and missing " +
+      "fields by frequency. Informational - missing " +
       "fields may leave workbook tiles empty, but it never blocks a deploy.",
-    requires: "azure",
+    // NO live connection (DBT-54; was "azure"). The infoTip above used to
+    // promise workbooks "deployed in your subscription" were folded in, which
+    // is what the "azure" requirement was standing on - but the 2026-07-12 user
+    // direction REVERSED that (rule-coverage-section.tsx: a shared subscription
+    // carries everyone's dashboards, and local copies drift from the repo
+    // templates, so coverage should describe the SOLUTION). Deployed workbooks
+    // are deliberately not enumerated, so the repo read through ports.content
+    // is the only IO and no Azure connection is involved.
+    requires: "none",
     // BUILT: workbook coverage is its own panel, INFORMATIONAL exactly like
     // rule-coverage (absent from SectionInputs, never gates a deploy).
     built: true,

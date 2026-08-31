@@ -33,6 +33,8 @@ export * from "./domain/coverage-model";
 export * from "./domain/entra-diagnostics";
 export * from "./domain/sentinel-destination";
 export * from "./domain/custom-table";
+// DBT-61: the listing type whose empty case cannot be read as a measured zero.
+export * from "./domain/inventory-listing";
 export * from "./domain/journey-state";
 export * from "./domain/capabilities";
 export * from "./domain/first-run-wizard";

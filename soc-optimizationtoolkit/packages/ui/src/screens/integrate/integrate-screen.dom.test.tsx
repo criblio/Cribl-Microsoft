@@ -29,6 +29,15 @@
  * A capture from there POSTs to /m/{oldGroup}/system/capture filtered on an
  * __inputId that group need not contain: empty, and reported as an idle source.
  * Those pins mount the whole screen because a stale MOUNT is the defect.
+ *
+ * TWO MORE EXCEPTIONS, added 2026-08-31, and both for the same reason - the
+ * decision lives in this component and nowhere a pure module can reach:
+ *
+ *   DBT-53  WHAT the sample-source picker is gated on. Also a mount, because
+ *           the defect is a panel that never mounts at all.
+ *   DBT-43  what an EMPTY DCR listing means for a pack build. Pinned against
+ *           the exported pure helper rather than a mount: reaching the build
+ *           callback needs an approved gap analysis, which no test here has.
  */
 
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -40,11 +49,16 @@ import {
   screen,
   waitFor,
 } from "@testing-library/react";
-import { DEFAULT_CRIBL_OPTIONS } from "@soc/core";
-import type { AzureConfig } from "@soc/core";
+import { DEFAULT_CRIBL_OPTIONS, emptyCapabilitySet } from "@soc/core";
+import type {
+  AzureConfig,
+  CapabilityContext,
+  CapabilitySet,
+  CapabilityVerdict,
+} from "@soc/core";
 import { PortsProvider } from "../../ports-context";
 import type { UiPorts } from "../../ports-context";
-import { IntegrateScreen } from "./integrate-screen";
+import { IntegrateScreen, dcrInventoryReadNotice } from "./integrate-screen";
 
 afterEach(cleanup);
 
@@ -124,14 +138,15 @@ describe("IntegrateScreen - renders", () => {
     expect(panel?.getAttribute("data-status")).toBe("unknown");
   });
 
-  it("renders the sample-source picker, idle before the scope is committed", () => {
-    // Wiring pin, same reason as the one above. `idle` is the honest state with
-    // no Cribl address yet - it must not read as "nothing found", which would
-    // blame the workspace for our own missing connection.
+  it("renders the sample-source picker", () => {
+    // Wiring pin, same reason as the one above: the picker must actually be on
+    // screen. WHICH state it is in is a Cribl fact, pinned in its own describe
+    // below - this stub has no listGroups, so the listing fails and "empty"
+    // ("Nothing could be listed from Cribl") is the honest answer here.
     const { container } = renderScreen({ scopeCommitted: false });
     const picker = container.querySelector(".sample-source-picker");
     expect(picker).toBeTruthy();
-    expect(picker?.getAttribute("data-status")).toBe("idle");
+    expect(picker?.getAttribute("data-status")).not.toBe("idle");
   });
 
   it("prefills the pack name before any solution is chosen", () => {
@@ -141,6 +156,94 @@ describe("IntegrateScreen - renders", () => {
     renderScreen();
     const field = screen.getByDisplayValue("MS-Sentinel");
     expect(field).toBeTruthy();
+  });
+});
+
+/**
+ * DBT-43: AN EMPTY DCR LISTING IS NOT A ZERO.
+ *
+ * docs/inventory-standard.md is BINDING here, and this is the instance where
+ * being wrong costs more than a sentence. ARM answers 200 with an empty array
+ * when RBAC filters the caller out; the build then hands that empty list to
+ * resolveDestinations, which reports "no Data Collection Rule in this resource
+ * group routes it" for every table, and assemblePack bakes
+ * dcr-00000000000000000000000000000000 into outputs.yml. The pack installs
+ * cleanly and sends nowhere - the 2026-08-11 user report, re-entered through
+ * the one door destination-resolution.ts could not close. "Read 0 deployed
+ * DCR(s)" was the line that made it look like a fact about Azure.
+ *
+ * Pinned against the pure helper rather than a mounted build, because the build
+ * callback needs an approved gap analysis and a resolved content plan to reach
+ * and no mount-level test has one. Hardcoding the old sentence kills four of
+ * the five pins below.
+ */
+const AUDITED_RG = "rg-soc-prod";
+
+function auditedAs(verdict: CapabilityVerdict): CapabilitySet {
+  return {
+    verdicts: { "dcr.read": verdict },
+    auditedAt: "2026-08-31T00:00:00.000Z",
+    connectionId: "conn-1",
+  };
+}
+
+/** Connected to Azure - so an unmeasured capability reads `unknown`, not `unreachable`. */
+const CONNECTED: CapabilityContext = {
+  azureIdentityPresent: true,
+  criblReachable: true,
+};
+
+describe("dcrInventoryReadNotice - the pack build's DCR listing", () => {
+  const notice = (capabilities: CapabilitySet, count = 0): string =>
+    dcrInventoryReadNotice({
+      count,
+      resourceGroup: AUDITED_RG,
+      capabilities,
+      context: CONNECTED,
+    });
+
+  it("reports the count when there are rows - permission is self-evident", () => {
+    expect(notice(emptyCapabilitySet(), 3)).toContain(
+      `Read 3 deployed DCR(s) from ${AUDITED_RG}`,
+    );
+  });
+
+  it("calls an empty listing a zero ONLY when dcr.read was VERIFIED", () => {
+    const text = notice(auditedAs("granted"));
+    expect(text).toContain(
+      `No deployed Data Collection Rules found in ${AUDITED_RG}`,
+    );
+    // A measured grant has earned the right to say none, so it must NOT hedge -
+    // otherwise the honest cases below stop being distinguishable from it.
+    expect(text).not.toMatch(/NOT confirmation/);
+    expect(text).toContain("PLACEHOLDER destination values");
+  });
+
+  it("does NOT claim a zero when dcr.read was DENIED", () => {
+    const text = notice(auditedAs("denied"));
+    expect(text).toContain("does not have permission to read them");
+    expect(text).toContain("NOT confirmation that it is");
+    // Both shapes of the confident wrong answer, in the order they shipped.
+    expect(text).not.toMatch(/Read 0 deployed DCR\(s\)/);
+    expect(text).not.toMatch(/No deployed Data Collection Rules found/);
+  });
+
+  it("does NOT claim a zero when NOTHING has measured dcr.read", () => {
+    // The common state, not an edge case: the audit runs on connection change,
+    // so a healthy unaudited connection is normal. `unknown` is its own answer
+    // and must collapse into neither of the other two.
+    const text = notice(emptyCapabilitySet());
+    expect(text).toContain("run the permission check to find out");
+    expect(text).not.toMatch(/Read 0 deployed DCR\(s\)/);
+    expect(text).not.toMatch(/No deployed Data Collection Rules found/);
+  });
+
+  it("names the consequence: the rules may exist where we cannot see them", () => {
+    // The half the operator acts on. Without it the hedge is a permissions
+    // aside; with it, it says why the pack about to be built points nowhere.
+    const text = notice(emptyCapabilitySet());
+    expect(text).toContain("PLACEHOLDER destination values");
+    expect(text).toContain("may already exist where this identity cannot see them");
   });
 });
 
@@ -267,6 +370,82 @@ async function selectSourceInDefaultGroup() {
   expect(panel?.querySelector(".capture-filter")?.textContent).toContain("in_syslog");
   return view;
 }
+
+/**
+ * DBT-53: WHAT THE SAMPLE-SOURCE DISCOVERY IS GATED ON.
+ *
+ * Every route behind that picker is Cribl (worker groups, /system/inputs, Lake
+ * datasets), but the screen passed `scopeCommitted` - three non-empty AZURE
+ * strings - into both the hook and the panel. An operator who had not yet
+ * committed a subscription got a picker frozen on "idle", telling them to
+ * connect the one system that was connected, and neither CapturePanel nor
+ * LakePanel could ever mount. The gate lives only in this component, so this is
+ * the only file that can pin it.
+ *
+ * Two pins, because one alone is passable by cheating: the first fails if the
+ * gate goes back to an Azure fact, the second fails if the gate is simply
+ * removed.
+ */
+describe("IntegrateScreen - sample-source discovery is gated on CRIBL", () => {
+  function renderGated(opts: { scopeCommitted: boolean; criblReachable: boolean }) {
+    const ports = discoveryPorts();
+    const { container } = render(
+      <PortsProvider ports={ports} config={CONFIG}>
+        <IntegrateScreen
+          toolkitVersion="9.9.9-test"
+          scopeCommitted={opts.scopeCommitted}
+          offline={false}
+          onCommitScope={vi.fn().mockResolvedValue({ ok: true } as never)}
+          criblDefaults={DEFAULT_CRIBL_OPTIONS}
+          capabilityContext={{
+            azureIdentityPresent: opts.scopeCommitted,
+            criblReachable: opts.criblReachable,
+          }}
+        />
+      </PortsProvider>,
+    );
+    return {
+      ports,
+      status: () =>
+        container
+          .querySelector(".sample-source-picker")
+          ?.getAttribute("data-status"),
+    };
+  }
+
+  it("discovers with NO Azure scope committed - nothing here is an Azure read", async () => {
+    const view = renderGated({ scopeCommitted: false, criblReachable: true });
+
+    // `awaiting-mode` is only reachable through the hook's own group listing
+    // (derivePickerView needs groups !== null && groups.ok), so this is the
+    // listing having gone out - which the old gate stopped outright.
+    await waitFor(() => {
+      expect(view.status()).toBe("awaiting-mode");
+    });
+    // And the acquisition path is actually open: the mode chooser is what the
+    // frozen "idle" picker never rendered, so neither panel below it could
+    // ever mount.
+    expect(screen.getByText("Capture from a live source")).toBeTruthy();
+  });
+
+  it("stays idle when the shell reports Cribl unreachable, whatever Azure says", async () => {
+    // The other half. Azure is fully committed here, so a gate that returned to
+    // `scopeCommitted` - or was deleted for a bare `enabled={true}` - would
+    // discover, and this pin fails.
+    const view = renderGated({ scopeCommitted: true, criblReachable: false });
+
+    expect(view.status()).toBe("idle");
+    // Settle on the screen's OWN worker-group dropdown, which has no gate at
+    // all: the Cribl port is live and being used, and the picker still declines
+    // to look. That is what makes this "idle" a decision rather than a frame
+    // before a listing.
+    await waitFor(() => {
+      expect(view.ports.cribl.listGroups).toHaveBeenCalled();
+    });
+    expect(view.status()).toBe("idle");
+    expect(screen.queryByText("Capture from a live source")).toBeNull();
+  });
+});
 
 describe("IntegrateScreen - the acquisition panel follows the picker", () => {
   it("takes the capture panel down when the WORKER GROUP changes", async () => {
@@ -427,5 +606,107 @@ describe("IntegrateScreen - export instead of deploy", () => {
     // worker group or an ingestion client id, the export has been re-gated on
     // deploying, which is the whole thing the feature exists to avoid.
     expect(button.getAttribute("title")).not.toMatch(/worker group|client id/i);
+  });
+});
+
+/**
+ * HON-7: THE FALLBACK OFFER HAS A BUTTON.
+ *
+ * Rule 2 of the capability model says every blocked action falls back to a
+ * downloadable artifact. FallbackNotice has supported a control since the model
+ * shipped and its own pins have always exercised one - but the single
+ * production caller (the RBAC preflight panel) passed no `onProduce`, so the
+ * rule had no button anywhere in the app. The component was not the defect; the
+ * call sites were, which is why the pin has to mount a SCREEN.
+ *
+ * D-2 (backlog section 16) put the offer on all three deploy surfaces, each
+ * wiring its own producer. Here the producer is the export run - the same
+ * deploy stopping before every write - so the artifact the offer names is
+ * genuinely what the click produces.
+ */
+const DENIED_DCR_WRITE: CapabilitySet = {
+  verdicts: { "dcr.write": "denied" },
+  auditedAt: "2026-08-31T00:00:00.000Z",
+  connectionId: "conn-1",
+};
+
+/** A committed scope, so the export's READ prerequisites are all met. */
+const SCOPED_CONFIG: AzureConfig = {
+  clientId: "client-1",
+  tenantId: "tenant-1",
+  subscriptionId: "sub-1",
+  resourceGroup: "rg-soc-prod",
+  workspaceName: "law-soc",
+  setupPath: "existing",
+};
+
+describe("IntegrateScreen - the blocked deploy offers an artifact (HON-7)", () => {
+  function renderAudited(capabilities: CapabilitySet) {
+    const ports = {
+      ...(PORTS as unknown as Record<string, unknown>),
+      artifacts: { save: vi.fn().mockResolvedValue(undefined) },
+    } as unknown as UiPorts;
+    return render(
+      <PortsProvider ports={ports} config={SCOPED_CONFIG}>
+        <IntegrateScreen
+          toolkitVersion="9.9.9-test"
+          scopeCommitted
+          offline={false}
+          onCommitScope={vi.fn().mockResolvedValue({ ok: true } as never)}
+          criblDefaults={DEFAULT_CRIBL_OPTIONS}
+          capabilities={capabilities}
+          capabilityContext={CONNECTED}
+        />
+      </PortsProvider>,
+    );
+  }
+
+  /** The offer's control, by the label the artifact catalog gives its kind. */
+  function offerButton(): HTMLButtonElement | undefined {
+    return screen
+      .getAllByRole("button")
+      .find((b) =>
+        /download the arm request bodies/i.test(b.textContent ?? ""),
+      ) as HTMLButtonElement | undefined;
+  }
+
+  it("renders a CONTROL on the offer, not just the artifact's name", () => {
+    // The defect, stated: a measured denial produced a notice with no way to
+    // act on it. Enabled matters as much as present - a permanently disabled
+    // control is the same dead end wearing a button.
+    renderAudited(DENIED_DCR_WRITE);
+    const button = offerButton();
+    expect(button).toBeTruthy();
+    expect(button?.disabled).toBe(false);
+  });
+
+  it("starts the export run when the offer is taken", () => {
+    // What makes the button worth having. The producer is the export run, and
+    // its first line names the tables it is collecting - so this fails if
+    // onProduce is dropped again, and equally if it is wired to something that
+    // does not produce the artifact the offer named.
+    renderAudited(DENIED_DCR_WRITE);
+    fireEvent.click(offerButton()!);
+    expect(screen.getByText(/Collecting ARM resources for SecurityEvent/)).toBeTruthy();
+  });
+
+  it("leaves the live deploy exactly as available - it annotates, never removes", () => {
+    // Rule 3. A denied verdict is evidence, not a gate: Azure's own 403 is the
+    // gate, and a stale audit must not talk anyone out of an attempt that would
+    // have worked. If this ever fails, the offer has started hiding the action.
+    renderAudited(DENIED_DCR_WRITE);
+    const deploy = screen
+      .getAllByRole("button")
+      .find((b) => b.textContent === "Deploy");
+    expect(deploy).toBeTruthy();
+  });
+
+  it("offers NOTHING when no write has been measured", () => {
+    // The other half, and the one that keeps the offer meaningful: `unknown` is
+    // the normal state of a healthy unaudited connection. Offering there would
+    // assert a block nobody measured - the exact collapse of "not measured"
+    // into "denied" the capability model is built to prevent.
+    renderAudited(emptyCapabilitySet());
+    expect(offerButton()).toBeUndefined();
   });
 });
