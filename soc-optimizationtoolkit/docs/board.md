@@ -11,7 +11,7 @@ two cannot disagree.
 alternatives. This board holds only what is a unit of work, what state it is
 in, and what it waits on.
 
-**57 in the backlog, 1 in progress, 66 done.**
+**57 in the backlog, 0 in progress, 67 done.**
 
 ## By menu item
 
@@ -24,14 +24,14 @@ operator sees on any screen. Two menus are PLANNED and have no route yet.
 | Dataflow | 3 | 0 | 0 |
 | Setup | 1 | 0 | 0 |
 | Sentinel Integration | 12 | 31 | 0 |
-| DCR Automation | 4 | 7 | 1 |
+| DCR Automation | 3 | 8 | 0 |
 | Pack Maintenance | 4 | 1 | 0 |
 | Permission Verification | 8 | 0 | 0 |
 | Azure Native Source Onboarding (planned) | 13 | 4 | 0 |
 | Windows Event analysis (planned) | 5 | 0 | 0 |
 | Cross-cutting | 8 | 23 | 0 |
 
-Open work totals 58.
+Open work totals 57.
 
 ## Epics and features
 
@@ -130,7 +130,7 @@ ENABLER EPIC: verification gaps, copy, diagram fidelity, docs and the board's ow
 | `DBT-F6` Effect-identity defect class | Pack Maintenance | 0/1 | FX-4 |
 | `DBT-F7` Export instead of deploy - the offline path | DCR Automation | 3/4 | DBT-33, DBT-34, DBT-35*, DBT-37 |
 
-### `TBL` Custom table authoring and table-first DCR creation - 71% (5/7)
+### `TBL` Custom table authoring and table-first DCR creation - 86% (6/7)
 
 RAISED BY THE USER 2026-08-31. DCR Automation can onboard a table you can already NAME, but it cannot help you create one, and it cannot show you what the workspace already has. Every schema today arrives from somewhere else - a bundled vendor entry, a pasted JSON file, or a table that already exists - so an operator with a new log source and no schema file has no path through this screen at all.
 
@@ -138,41 +138,15 @@ RAISED BY THE USER 2026-08-31. DCR Automation can onboard a table you can alread
 |---|---|---|---|
 | `TBL-F1` Author a custom table by hand | DCR Automation | 3/3 | TBL-6, TBL-1, TBL-2 |
 | `TBL-F2` Table inventory as the starting point | DCR Automation | 2/2 | TBL-3, TBL-5 |
-| `TBL-F3` The new surfaces work without write permission | DCR Automation | 0/2 | TBL-4, TBL-7 |
+| `TBL-F3` The new surfaces work without write permission | DCR Automation | 1/2 | TBL-4, TBL-7 |
 
 ---
 
-## In progress (1)
+## In progress (0)
 
 Started. Anything here with an unfinished dependency is called out on its card.
 
-- **TBL-4** Offer the ARM template when the write capability is absent
-  `TBL-F3` `story` `settled`
-  RAISED BY THE USER 2026-08-31: "if the user hasn't granted the app
-  permission to create Azure resources like DCRs then they should still get
-  the option to see and download an ARM template for the DCR creation". THIS
-  IS MOSTLY ALREADY SCOPED - filed as a story rather than a new feature so it
-  does not duplicate work already on the board. [[HON-7]] is exactly this rule
-  at the button level ("FallbackNotice renders without onProduce in
-  production, so the capability model's 'every blocked action falls back to a
-  downloadable artifact' rule has no button") and ALREADY NAMES DCR Automation
-  as a target. [[HON-8]] is the engine: `buildDeploymentPreview` builds
-  `TableResourcePreview`, `DcrResourcePreview` and `PreviewArmRequest` -
-  roughly 700 lines with its own tests - and has NO caller anywhere in
-  packages/ui or apps/cribl-app. And Batch already ships the behaviour under
-  `templateOnly` ("nothing deploys; downloads one ARM deployment template"),
-  FORCED on in azure-only mode, so this is not a new mechanism, it is an
-  unreached one. WHAT THIS CARD ADDS on top of those: the two NEW surfaces
-  above must carry the offer too, and the gate must be the MEASURED capability
-  rather than a failed attempt - the operator should see the template option
-  before pressing something that 403s, not after. Do [[HON-7]] first or this
-  card rebuilds it. NOT A MODE TOGGLE, per the shape [[DBT-35]] settled on
-  Integrate: a separate control, gated on READ prerequisites only, worded as
-  an offer - there is an existing pin on the absence of alert semantics.
-  DEPENDENCY CORRECTED 2026-08-31: the card always said "do HON-7 first or
-  this card rebuilds it" but dependsOn listed only TBL-1 and TBL-3, so
-  grooming reported it READY. The prose and the graph were two answers to one
-  question and grooming trusts the graph.
+_Nothing here._
 
 ---
 
@@ -507,7 +481,7 @@ Settled and unblocked, sequenced behind now.
   workflow that is otherwise Azure-free.
 
 - **TBL-7** The create-table offer could produce its artifact inline instead of pointing
-  `TBL-F3` `story` `undecided` `blocked by TBL-4`
+  `TBL-F3` `story` `undecided`
   RAISED BY THE TBL-4 AGENT 2026-08-31, which surfaced it rather than acting
   on it BECAUSE IT CONTRADICTS THE BINDING DESIGN - exactly the right call,
   and the observation is good enough to reopen the question. [[D-2]] settled
@@ -870,7 +844,7 @@ Settled, gated on something above.
 
 ---
 
-## Done (66)
+## Done (67)
 
 Kept briefly so a reader can see what just landed; prune when the list grows.
 
@@ -2522,6 +2496,48 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   WIRING: the shell's new useState calls were placed beside their use site,
   which is BELOW three gate returns, so React rendered fewer hooks than
   expected and the whole app went blank - the hooks moved above the gates.
+
+- **TBL-4** Offer the ARM template when the write capability is absent
+  `TBL-F3` `story` `settled` `verified: pins`
+  RAISED BY THE USER 2026-08-31: "if the user hasn't granted the app
+  permission to create Azure resources like DCRs then they should still get
+  the option to see and download an ARM template for the DCR creation". THIS
+  IS MOSTLY ALREADY SCOPED - filed as a story rather than a new feature so it
+  does not duplicate work already on the board. [[HON-7]] is exactly this rule
+  at the button level ("FallbackNotice renders without onProduce in
+  production, so the capability model's 'every blocked action falls back to a
+  downloadable artifact' rule has no button") and ALREADY NAMES DCR Automation
+  as a target. [[HON-8]] is the engine: `buildDeploymentPreview` builds
+  `TableResourcePreview`, `DcrResourcePreview` and `PreviewArmRequest` -
+  roughly 700 lines with its own tests - and has NO caller anywhere in
+  packages/ui or apps/cribl-app. And Batch already ships the behaviour under
+  `templateOnly` ("nothing deploys; downloads one ARM deployment template"),
+  FORCED on in azure-only mode, so this is not a new mechanism, it is an
+  unreached one. WHAT THIS CARD ADDS on top of those: the two NEW surfaces
+  above must carry the offer too, and the gate must be the MEASURED capability
+  rather than a failed attempt - the operator should see the template option
+  before pressing something that 403s, not after. Do [[HON-7]] first or this
+  card rebuilds it. NOT A MODE TOGGLE, per the shape [[DBT-35]] settled on
+  Integrate: a separate control, gated on READ prerequisites only, worded as
+  an offer - there is an existing pin on the absence of alert semantics.
+  DEPENDENCY CORRECTED 2026-08-31: the card always said "do HON-7 first or
+  this card rebuilds it" but dependsOn listed only TBL-1 and TBL-3, so
+  grooming reported it READY. The prose and the graph were two answers to one
+  question and grooming trusts the graph. DONE 2026-08-31, review SOUND. Both
+  write actions on the Tables tab - Create DCR and the create-table flow - now
+  render a FallbackNotice gated on routeCapability(...).fallback, which is
+  non-null only for a MEASURED denial or an unreachable connection. `unknown`
+  routes live and offers nothing, so an unaudited connection (the normal
+  state) is unchanged. Both artifacts are RUN kinds and this panel owns no
+  run, so per [[D-2]] both producers POINT with FALLBACK_POINTER_LABEL and
+  carry the prerequisite that run has - a pointer omitting it would send the
+  operator to a failure. Neither button is disabled or hidden by the verdict.
+  BUILT ON [[HON-7]]'s REPORT rather than a guess: the ordered wave handed
+  this agent HON-7's API description, and it used it - importing relatively
+  because HON-7 could not edit the barrel, and reusing the pointer convention
+  instead of inventing a second one. One finding it surfaced rather than acted
+  on is [[TBL-7]]: for a hand-authored table the artifact could honestly be
+  produced INLINE, which would amend D-2 rather than follow it.
 
 - **TBL-5** Where do the two new panels live on the screen?
   `TBL-F2` `decision` `settled` `verified: none`
