@@ -11,7 +11,7 @@ two cannot disagree.
 alternatives. This board holds only what is a unit of work, what state it is
 in, and what it waits on.
 
-**52 in the backlog, 0 in progress, 40 done.**
+**53 in the backlog, 0 in progress, 40 done.**
 
 ## By menu item
 
@@ -24,14 +24,14 @@ operator sees on any screen. Two menus are PLANNED and have no route yet.
 | Dataflow | 3 | 0 | 0 |
 | Setup | 1 | 0 | 0 |
 | Sentinel Integration | 11 | 13 | 0 |
-| DCR Automation | 0 | 2 | 0 |
+| DCR Automation | 1 | 2 | 0 |
 | Pack Maintenance | 4 | 1 | 0 |
 | Permission Verification | 8 | 0 | 0 |
 | Azure Native Source Onboarding (planned) | 13 | 4 | 0 |
 | Windows Event analysis (planned) | 5 | 0 | 0 |
 | Cross-cutting | 7 | 20 | 0 |
 
-Open work totals 52.
+Open work totals 53.
 
 ## Epics and features
 
@@ -116,13 +116,13 @@ ENABLER EPIC: release mechanics. The packaged tarball trails main, and the lab t
 |---|---|---|---|
 | `REL-F1` Release and deployment hygiene | Cross-cutting | 3/5 | REL-2, REL-3, REL-4, REL-5, REL-6 |
 
-### `DBT` Quality and technical debt _(enabler)_ - 57% (21/37)
+### `DBT` Quality and technical debt _(enabler)_ - 55% (21/38)
 
 ENABLER EPIC: verification gaps, copy, diagram fidelity, docs and the board's own tooling
 
 | Feature | Menu | Done | Stories |
 |---|---|---|---|
-| `DBT-F1` Verification gaps | Sentinel Integration | 1/4 | DBT-2, DBT-5*, DBT-6, DBT-7 |
+| `DBT-F1` Verification gaps | Sentinel Integration | 1/5 | DBT-2, DBT-5*, DBT-6, DBT-7, DBT-36* |
 | `DBT-F2` Copy and UX | Sentinel Integration | 0/6 | DBT-3, DBT-9, DBT-14, DBT-15, DBT-28, D-10* |
 | `DBT-F3` Diagram fidelity | Dataflow | 0/3 | DBT-1, DBT-4, DBT-12 |
 | `DBT-F4` Docs and spec grounding | Cross-cutting | 4/7 | DBT-8, DBT-10, DBT-11, DBT-13, DBT-22, DBT-26, DBT-32 |
@@ -148,7 +148,7 @@ _Nothing here._
 
 ---
 
-## Backlog - next (21)
+## Backlog - next (22)
 
 Settled and unblocked, sequenced behind now.
 
@@ -391,6 +391,31 @@ Settled and unblocked, sequenced behind now.
   successor, per table?
     [ ] `leave-as-is` Leave it at the ADR-0004 cast - AwsRequestId stays declared string and promoted with toguid(). Correct for well-formed UUIDs, but CloudTrail's requestID frequently is not one, so toguid() returns null and the value drops silently - the same quiet failure the ADR set out to fix.
     [x] `per-table-successor` Route deprecated guid columns to the `_` successor - Per-table content mapping AwsRequestId to AwsRequestId_. ADR-0004 calls this "a real improvement" but insists it is a per-table CONTENT decision, not a schema-mapping rule, so it must not become a new RULE 2b clause. The bundled catalog already carries both columns for AWSCloudTrail.
+
+- **DBT-36** Observe the guid cast actually delivering a value
+  `DBT-F1` `enabler` `settled`
+  [[DBT-2]] built live-verification row 9 and ran it against the lab workspace
+  on 2026-08-31, but the BELIEF it exists to test is still unobserved: that
+  declaring a guid column `string` and promoting it with `toguid()` DELIVERS
+  the value. The row's type assertion passed (`SecurityEvent.InterfaceUuid`
+  reads `guid` from ARM) and its value assertion correctly refused with NO
+  DATA - every table in `law-jpederson-eastus` is EMPTY over 30 days
+  (SecurityEvent, CommonSecurityLog, Cloudflare_CL, GigamonV2_CL all return
+  zero rows), so nothing could be read back. That refusal is the row working
+  as designed, not a gap in it: an empty table cannot tell a working cast from
+  a broken one, and ADR 0004's whole point is that `toguid()` returns null
+  SILENTLY on malformed input, so a wrong cast fails exactly as quietly as the
+  drop it replaced. WHAT THIS NEEDS, and it is setup rather than code: (1) a
+  DCR whose declaration actually carries a guid column -
+  `dcr-SecurityEvent-eastus` is PRE-FIX and is losing four (see [[HON-4]]), so
+  it must be updated first, which the Inventory panel's Update button does;
+  (2) data sent through Cribl into that table carrying those fields; (3)
+  re-run row 9. NOT A CUSTOM TABLE'S `TenantId`, which is the trap here -
+  Cloudflare_CL and GigamonV2_CL have exactly one guid column each and it is
+  TenantId, which AZURE populates on ingestion, so a non-null value there
+  would prove nothing about the cast and would be precisely the confident
+  wrong answer the suite exists to avoid. Close this only on a guid column
+  that could only have arrived through the transform.
 
 ---
 
