@@ -11,7 +11,7 @@ two cannot disagree.
 alternatives. This board holds only what is a unit of work, what state it is
 in, and what it waits on.
 
-**59 in the backlog, 0 in progress, 72 done.**
+**54 in the backlog, 5 in progress, 72 done.**
 
 ## By menu item
 
@@ -142,17 +142,71 @@ RAISED BY THE USER 2026-08-31. DCR Automation can onboard a table you can alread
 
 ---
 
-## In progress (0)
+## In progress (5)
 
 Started. Anything here with an unfinished dependency is called out on its card.
 
-_Nothing here._
+- **DBT-3** Reconcile the Entra `Kind:Direct` copy with what has been measured
+  `DBT-F2` `story` `settled`
+  `architecture-patterns.ts:422,426` states flatly that native Entra tables do
+  not accept Kind:Direct DCRs, with no snapshot date and no hedge, while the
+  plan doc that is its only source still calls it unverified. Either measure
+  it or carry the caveat.
 
----
+- **DBT-15** Give every solution row a delivery-fit badge, or say why not
+  `DBT-F2` `bug` `settled`
+  Not now because: A missing affordance rather than a wrong one - the badge is
+  absent, not incorrect, so nothing currently on screen is false.
+  "Palo Alto Cortex XDR" renders none while all seven of its siblings do.
+  Blank reads as neither "not measured" nor "does not apply" - the
+  absent-versus-zero distinction the inventory standard exists to protect.
+  *bug, SETTLED. `backlog.md` item 13e.* CONFIRMED LIVE 2026-08-28 in the dev
+  app (/apps/a/__local__), unfiltered solution list: AbuseIPDB and Acronis
+  Cyber Protect Cloud carry NO fit badge while 1Password and Agari show
+  Supported, 42Crunch API Protection and AbnormalSecurity show Recommended,
+  and Agent 365 shows Legacy. So the blank is not a rendering failure of one
+  row - the badge column works, and these rows genuinely have nothing to show.
+  Was reported from the eight Palo results; reproduces on the default list,
+  which makes it easier to test.
 
-## Backlog - now (1)
+- **DBT-50** Live table columns are fetched, awaited, stored - and never consulted
+  `DBT-F1` `bug` `settled`
+  Not now because: Needs a decision, not a fix: if the three documents are
+  right the catalog chain reorders, and if the current order is right the
+  documents change. Both behaviours are defensible, so shipping either without
+  deciding just moves the contradiction.
+  FOUND 2026-08-31 by the offline-capability audit.
+  `mapping-review-section.tsx:352-368` nests the live-ARM catalog BELOW both
+  repo tiers, so for any table the Sentinel repo defines - which is most of
+  them - the ARM read fires, is awaited, is stored in `liveSchemas`, and is
+  then never reached by resolution. Three documents tell operators the
+  opposite: `live-table-schema-catalog.ts:12-17`,
+  `workspace-tables.ts:150-154`, and release-notes 1.11.12 all say the live
+  columns REPLACE the derived schema. NO TEST PINS THE COMPOSED ORDER, which
+  is why it drifted. Decide which is right before touching it - if the docs
+  are right the chain needs reordering, and if the current order is right
+  three documents need correcting. Note the offline consequence too: the
+  wasted read is also the reason the mapping screen touches Azure at all in a
+  workflow that is otherwise Azure-free.
 
-Next to pick up. Nothing blocks these.
+- **TBL-8** The Tables tab needs a filter - the real workspace has 843 tables
+  `TBL-F1` `story` `settled`
+  Found by verifying [[DBT-61]] live, and it is EVIDENCE AGAINST AN EARLIER
+  DECISION rather than a defect in what was built. [[TBL-2]] deliberately
+  shipped the Tables tab with no filter box; law-jpederson-eastus then
+  returned 843 tables. The panel's whole purpose is answering 'does this table
+  already have a DCR', and at 843 alphabetical rows that question cannot be
+  answered by looking. The row count was not known when the no-filter call was
+  made, so this reopens it with a number rather than reversing it on taste.
+  Scope: a substring filter over the Name column, client-side over rows
+  already loaded - no new request, no change to the DCR join. Reuse the Logs
+  screen's `Text` filter idiom (substring, case-insensitive) rather than
+  inventing a second one. WATCH THE COUNT WORDING: whatever the filter renders
+  alongside it (`n of 843`) is a count derived from a listing, so it must come
+  from the rows branch - see [[DBT-61]] and docs/inventory-standard.md. A
+  filter that matches nothing must say 'no table matches that filter', which
+  is a fact about the filter, and must NOT reuse the empty-listing wording,
+  which is a claim about the workspace.
 
 - **DBT-65** ADR 0004 never reached the static DCR templates - three still drop guids
   `DBT-F1` `bug` `settled`
@@ -189,7 +243,15 @@ Next to pick up. Nothing blocks these.
 
 ---
 
-## Backlog - next (24)
+## Backlog - now (0)
+
+Next to pick up. Nothing blocks these.
+
+_Nothing here._
+
+---
+
+## Backlog - next (20)
 
 Settled and unblocked, sequenced behind now.
 
@@ -290,13 +352,6 @@ Settled and unblocked, sequenced behind now.
   deletes it on the strength of > a green suite. FX-4's sweep should treat it
   as a known-unpinned guard.
 
-- **DBT-3** Reconcile the Entra `Kind:Direct` copy with what has been measured
-  `DBT-F2` `story` `settled`
-  `architecture-patterns.ts:422,426` states flatly that native Entra tables do
-  not accept Kind:Direct DCRs, with no snapshot date and no hedge, while the
-  plan doc that is its only source still calls it unverified. Either measure
-  it or carry the caveat.
-
 - **DBT-4** Name inline breaker rulesets instead of showing "Default selection"
   `DBT-F3` `story` `settled` `blocked by DBT-1`
   The spec's `EventBreakerExistingOrNewExisting` carries `existingRule`.
@@ -377,22 +432,6 @@ Settled and unblocked, sequenced behind now.
   "the wheel never arrived", and an automated run would either report a false
   confirmation or a false all-clear. This card stays on the HUMAN reproduction
   that filed it. Whoever fixes it should verify by hand for the same reason.
-
-- **DBT-15** Give every solution row a delivery-fit badge, or say why not
-  `DBT-F2` `bug` `settled`
-  Not now because: A missing affordance rather than a wrong one - the badge is
-  absent, not incorrect, so nothing currently on screen is false.
-  "Palo Alto Cortex XDR" renders none while all seven of its siblings do.
-  Blank reads as neither "not measured" nor "does not apply" - the
-  absent-versus-zero distinction the inventory standard exists to protect.
-  *bug, SETTLED. `backlog.md` item 13e.* CONFIRMED LIVE 2026-08-28 in the dev
-  app (/apps/a/__local__), unfiltered solution list: AbuseIPDB and Acronis
-  Cyber Protect Cloud carry NO fit badge while 1Password and Agari show
-  Supported, 42Crunch API Protection and AbnormalSecurity show Recommended,
-  and Agent 365 shows Legacy. So the blank is not a rendering failure of one
-  row - the badge column works, and these rows genuinely have nothing to show.
-  Was reported from the eight Palo results; reproduces on the default list,
-  which makes it easier to test.
 
 - **DBT-28** The solution deep link does not override a stored selection
   `DBT-F2` `bug` `unconfirmed`
@@ -510,26 +549,6 @@ Settled and unblocked, sequenced behind now.
   shapes and has no caller, so nothing renders a template on screen and the
   .tgz must be opened to read one.
 
-- **DBT-50** Live table columns are fetched, awaited, stored - and never consulted
-  `DBT-F1` `bug` `settled`
-  Not now because: Needs a decision, not a fix: if the three documents are
-  right the catalog chain reorders, and if the current order is right the
-  documents change. Both behaviours are defensible, so shipping either without
-  deciding just moves the contradiction.
-  FOUND 2026-08-31 by the offline-capability audit.
-  `mapping-review-section.tsx:352-368` nests the live-ARM catalog BELOW both
-  repo tiers, so for any table the Sentinel repo defines - which is most of
-  them - the ARM read fires, is awaited, is stored in `liveSchemas`, and is
-  then never reached by resolution. Three documents tell operators the
-  opposite: `live-table-schema-catalog.ts:12-17`,
-  `workspace-tables.ts:150-154`, and release-notes 1.11.12 all say the live
-  columns REPLACE the derived schema. NO TEST PINS THE COMPOSED ORDER, which
-  is why it drifted. Decide which is right before touching it - if the docs
-  are right the chain needs reordering, and if the current order is right
-  three documents need correcting. Note the offline consequence too: the
-  wasted read is also the reason the mapping screen touches Azure at all in a
-  workflow that is otherwise Azure-free.
-
 - **TBL-7** The create-table offer could produce its artifact inline instead of pointing
   `TBL-F3` `story` `undecided`
   RAISED BY THE TBL-4 AGENT 2026-08-31, which surfaced it rather than acting
@@ -554,25 +573,6 @@ Settled and unblocked, sequenced behind now.
   inputs, not of the artifact kind alone. That is a change to a contract
   settled hours ago, so decide it before building - backlog.md section 16 is
   the reasoning it would amend.
-
-- **TBL-8** The Tables tab needs a filter - the real workspace has 843 tables
-  `TBL-F1` `story` `settled`
-  Found by verifying [[DBT-61]] live, and it is EVIDENCE AGAINST AN EARLIER
-  DECISION rather than a defect in what was built. [[TBL-2]] deliberately
-  shipped the Tables tab with no filter box; law-jpederson-eastus then
-  returned 843 tables. The panel's whole purpose is answering 'does this table
-  already have a DCR', and at 843 alphabetical rows that question cannot be
-  answered by looking. The row count was not known when the no-filter call was
-  made, so this reopens it with a number rather than reversing it on taste.
-  Scope: a substring filter over the Name column, client-side over rows
-  already loaded - no new request, no change to the DCR join. Reuse the Logs
-  screen's `Text` filter idiom (substring, case-insensitive) rather than
-  inventing a second one. WATCH THE COUNT WORDING: whatever the filter renders
-  alongside it (`n of 843`) is a count derived from a listing, so it must come
-  from the rows branch - see [[DBT-61]] and docs/inventory-standard.md. A
-  filter that matches nothing must say 'no table matches that filter', which
-  is a fact about the filter, and must NOT reuse the empty-listing wording,
-  which is a claim about the workspace.
 
 ---
 
