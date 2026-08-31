@@ -11,7 +11,7 @@ two cannot disagree.
 alternatives. This board holds only what is a unit of work, what state it is
 in, and what it waits on.
 
-**58 in the backlog, 0 in progress, 71 done.**
+**59 in the backlog, 0 in progress, 71 done.**
 
 ## By menu item
 
@@ -23,7 +23,7 @@ operator sees on any screen. Two menus are PLANNED and have no route yet.
 |---|---|---|---|
 | Dataflow | 3 | 0 | 0 |
 | Setup | 1 | 0 | 0 |
-| Sentinel Integration | 12 | 35 | 0 |
+| Sentinel Integration | 13 | 35 | 1 |
 | DCR Automation | 4 | 8 | 0 |
 | Pack Maintenance | 4 | 1 | 0 |
 | Permission Verification | 8 | 0 | 0 |
@@ -31,7 +31,7 @@ operator sees on any screen. Two menus are PLANNED and have no route yet.
 | Windows Event analysis (planned) | 5 | 0 | 0 |
 | Cross-cutting | 8 | 23 | 0 |
 
-Open work totals 58.
+Open work totals 59.
 
 ## Epics and features
 
@@ -116,13 +116,13 @@ ENABLER EPIC: release mechanics. The packaged tarball trails main, and the lab t
 |---|---|---|---|
 | `REL-F1` Release and deployment hygiene | Cross-cutting | 3/5 | REL-2, REL-3, REL-4, REL-5, REL-6 |
 
-### `DBT` Quality and technical debt _(enabler)_ - 67% (44/66)
+### `DBT` Quality and technical debt _(enabler)_ - 66% (44/67)
 
 ENABLER EPIC: verification gaps, copy, diagram fidelity, docs and the board's own tooling
 
 | Feature | Menu | Done | Stories |
 |---|---|---|---|
-| `DBT-F1` Verification gaps | Sentinel Integration | 18/25 | DBT-2, DBT-5*, DBT-6, DBT-7, DBT-36*, DBT-55, DBT-56, DBT-42, DBT-43, DBT-44, DBT-45, DBT-46, DBT-47, DBT-48, DBT-49, DBT-50, DBT-51, DBT-52, DBT-41, DBT-40, DBT-60, DBT-61, DBT-62, DBT-63, DBT-64 |
+| `DBT-F1` Verification gaps | Sentinel Integration | 18/26 | DBT-2, DBT-5*, DBT-6, DBT-7, DBT-36*, DBT-55, DBT-56, DBT-42, DBT-43, DBT-44, DBT-45, DBT-46, DBT-47, DBT-48, DBT-49, DBT-50, DBT-51, DBT-52, DBT-41, DBT-40, DBT-60, DBT-61, DBT-62, DBT-63, DBT-64, DBT-65 |
 | `DBT-F2` Copy and UX | Sentinel Integration | 3/9 | DBT-3, DBT-9, DBT-14, DBT-15, DBT-28, D-10*, DBT-53, DBT-38, DBT-39 |
 | `DBT-F3` Diagram fidelity | Dataflow | 0/3 | DBT-1, DBT-4, DBT-12 |
 | `DBT-F4` Docs and spec grounding | Cross-cutting | 6/10 | DBT-8, DBT-10, DBT-11, DBT-13, DBT-22, DBT-26, DBT-32, DBT-57, DBT-58, DBT-54 |
@@ -150,11 +150,42 @@ _Nothing here._
 
 ---
 
-## Backlog - now (0)
+## Backlog - now (1)
 
 Next to pick up. Nothing blocks these.
 
-_Nothing here._
+- **DBT-65** ADR 0004 never reached the static DCR templates - three still drop guids
+  `DBT-F1` `bug` `settled`
+  ADR 0004 (declare a guid column `string`, promote it with `toguid()` in
+  transformKql) was applied to the GENERATOR and never to the ~100 static ARM
+  templates under Azure/CustomDeploymentTemplates/DCR-Templates/. Three still
+  declare `"type": "guid"` with a bare `"transformKql": "source"`, which is
+  the exact shape that silently drops the column:
+  DataCollectionRules(DCE)/ADAssessmentRecommendation.json (4 columns),
+  DataCollectionRules(DCE)/AWSCloudTrail.json (3), and
+  DataCollectionRules(NoDCE)/ADAssessmentRecommendation.json (4). THIS PATH IS
+  A PUBLIC API, which is why it is `now` and not a cleanup: DCR-Templates is
+  not deprecated, it sits at the repo root, and Cribl's public docs deep-link
+  individual files in it. Anyone deploying one of these three loses those
+  columns with no error. HOW IT WAS FOUND, and this is the uncomfortable part.
+  An OUTSIDE CONTRIBUTOR reported it as PR #26 on 2026-06-11 and fixed
+  NoDCE/AWSCloudTrail.json correctly - both halves, `guid`->`string` AND
+  `source | extend AwsEventId = toguid(AwsEventId), ...` - two and a half
+  months BEFORE we diagnosed the same defect ourselves and shipped it as ADR
+  0004 / PR #123 in 1.12.1. The PR then sat open and untriaged until
+  2026-08-31. We rediscovered, from scratch, a bug that was already sitting in
+  the queue with a correct patch attached. THE FIX is to mirror #26's shape to
+  the three remaining files. DCE/AWSCloudTrail is the DCE variant of the file
+  the contributor already fixed, so its diff is a direct copy; the two
+  ADAssessmentRecommendation files need their own guid columns enumerated. DO
+  NOT sweep all ~100 templates blindly - 99 carry a bare `source` transform
+  and only these three pair it with a guid declaration, so the grep that finds
+  the defect is `"type": "guid"`, not the transform. WORTH A SECOND CARD IF IT
+  RECURS: nothing prevents a new template arriving with a guid declaration,
+  because these files are hand-written data rather than generator output and
+  no check reads them. A check-templates script in the [[DBT-61]] mould would
+  close that, and unlike the empty-as-zero class this one IS a literal grep -
+  the wrong thing is a string somebody typed.
 
 ---
 
