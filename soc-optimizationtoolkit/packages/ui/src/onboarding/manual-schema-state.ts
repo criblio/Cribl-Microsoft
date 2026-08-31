@@ -13,17 +13,25 @@
  * downstream - validateCustomTableSchema, the reserved-name strip, the
  * TimeGenerated injection, the creation payload - is reached unchanged.
  *
- * WHAT IT DOES NOT VALIDATE, and why that is deliberate: there is no column
- * NAME rule here beyond blank and duplicate. The domain has no charset or
- * leading-character rule for column names - `validateCustomTableSchema`
- * checks only that a name and type are present - so inventing one would mean
- * this editor rejecting names Azure would have accepted, on a rule nobody
- * measured. Blank and duplicate are different: both are provably wrong
- * before the request is sent, and a duplicate in particular would otherwise
- * reach the tables PUT as two columns with one name.
+ * WHAT IT VALIDATES, and where each rule comes from. An earlier version of
+ * this file claimed the domain had no column-name rule and skipped one on
+ * purpose. That was WRONG (TBL-6): `addTableColumn` has always enforced
+ * `isValidColumnName` and THROWN on violation, so the editor accepted
+ * `Client IP`, previewed it happily, and left the operator to meet the rule
+ * as an error at the far end of a deploy. The rule is asked here now, from
+ * the same domain predicate core throws on, rather than restated as a third
+ * copy of the regex.
+ *
+ * Blank and duplicate remain this module's own: both are provably wrong
+ * before a request is built, and a duplicate would otherwise reach the tables
+ * PUT as two columns sharing one name.
  */
 
-import { CUSTOM_COLUMN_TYPES } from "@soc/core";
+import {
+  COLUMN_NAME_RULE,
+  CUSTOM_COLUMN_TYPES,
+  isValidColumnName,
+} from "@soc/core";
 import type { CustomSchemaFileColumn } from "@soc/core";
 
 /**
@@ -43,7 +51,11 @@ export interface ManualColumnDraft {
 export const DEFAULT_MANUAL_COLUMN_TYPE = "string";
 
 /** What is wrong with one row, if anything. */
-export type ManualColumnIssue = "blank-name" | "duplicate-name" | "unknown-type";
+export type ManualColumnIssue =
+  | "blank-name"
+  | "duplicate-name"
+  | "invalid-name"
+  | "unknown-type";
 
 /** Per-row verdict for the editor to render beside the inputs. */
 export interface ManualRowStatus {
@@ -155,8 +167,14 @@ export function manualRowStatuses(
     // non-blocking note. manualColumnsToSchema skips it either way.
     if (name === "") {
       issues.push("blank-name");
-    } else if ((counts.get(name.toLowerCase()) ?? 0) > 1) {
-      issues.push("duplicate-name");
+    } else {
+      if ((counts.get(name.toLowerCase()) ?? 0) > 1) {
+        issues.push("duplicate-name");
+      }
+      // TBL-6: the rule core throws on, asked before a request is built.
+      if (!isValidColumnName(name)) {
+        issues.push("invalid-name");
+      }
     }
 
     if (!(CUSTOM_COLUMN_TYPES as readonly string[]).includes(row.type)) {
@@ -164,11 +182,15 @@ export function manualRowStatuses(
     }
 
     const blocking =
-      issues.includes("duplicate-name") || issues.includes("unknown-type");
+      issues.includes("duplicate-name") ||
+      issues.includes("invalid-name") ||
+      issues.includes("unknown-type");
 
     let message: string | null = null;
     if (issues.includes("duplicate-name")) {
       message = `Another column is also named '${name}'. Names must be unique.`;
+    } else if (issues.includes("invalid-name")) {
+      message = `'${name}' is not a valid column name - ${COLUMN_NAME_RULE}.`;
     } else if (issues.includes("unknown-type")) {
       message =
         `'${row.type}' is not a type the tables API accepts. Choose one of: ` +

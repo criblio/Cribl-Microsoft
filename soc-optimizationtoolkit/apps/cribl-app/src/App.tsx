@@ -10,6 +10,7 @@ import {
   BatchDeployScreen,
   DcrAutomationScreen,
   DcrInventoryPanel,
+  WorkspaceTablesPanel,
   EventHubDiscoveryScreen,
   HomeScreen,
   IntegrateScreen,
@@ -1838,6 +1839,19 @@ function App() {
       inventory={
         <PortsProvider ports={cloudPorts} config={activeConfig}>
           <DcrInventoryPanel
+            capabilities={capabilityAudit.capabilities}
+            capabilityContext={capabilityAudit.context}
+          />
+        </PortsProvider>
+      }
+      tables={
+        <PortsProvider ports={cloudPorts} config={activeConfig}>
+          {/* TBL-3. No onCreateTable/onCreateDcr yet: both need a hand-off
+              this shell cannot express today (there is no table prefill on
+              the Single tab, and no core usecase that creates one table),
+              and the panel deliberately renders no button for an action
+              that would go nowhere. */}
+          <WorkspaceTablesPanel
             capabilities={capabilityAudit.capabilities}
             capabilityContext={capabilityAudit.context}
           />

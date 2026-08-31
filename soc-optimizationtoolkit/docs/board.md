@@ -11,7 +11,7 @@ two cannot disagree.
 alternatives. This board holds only what is a unit of work, what state it is
 in, and what it waits on.
 
-**57 in the backlog, 1 in progress, 41 done.**
+**58 in the backlog, 1 in progress, 43 done.**
 
 ## By menu item
 
@@ -23,15 +23,15 @@ operator sees on any screen. Two menus are PLANNED and have no route yet.
 |---|---|---|---|
 | Dataflow | 3 | 0 | 0 |
 | Setup | 1 | 0 | 0 |
-| Sentinel Integration | 11 | 13 | 0 |
-| DCR Automation | 6 | 3 | 4 |
+| Sentinel Integration | 13 | 13 | 0 |
+| DCR Automation | 5 | 5 | 3 |
 | Pack Maintenance | 4 | 1 | 0 |
 | Permission Verification | 8 | 0 | 0 |
 | Azure Native Source Onboarding (planned) | 13 | 4 | 0 |
 | Windows Event analysis (planned) | 5 | 0 | 0 |
 | Cross-cutting | 7 | 20 | 0 |
 
-Open work totals 58.
+Open work totals 59.
 
 ## Epics and features
 
@@ -116,27 +116,27 @@ ENABLER EPIC: release mechanics. The packaged tarball trails main, and the lab t
 |---|---|---|---|
 | `REL-F1` Release and deployment hygiene | Cross-cutting | 3/5 | REL-2, REL-3, REL-4, REL-5, REL-6 |
 
-### `DBT` Quality and technical debt _(enabler)_ - 54% (21/39)
+### `DBT` Quality and technical debt _(enabler)_ - 51% (21/41)
 
 ENABLER EPIC: verification gaps, copy, diagram fidelity, docs and the board's own tooling
 
 | Feature | Menu | Done | Stories |
 |---|---|---|---|
 | `DBT-F1` Verification gaps | Sentinel Integration | 1/5 | DBT-2, DBT-5*, DBT-6, DBT-7, DBT-36* |
-| `DBT-F2` Copy and UX | Sentinel Integration | 0/6 | DBT-3, DBT-9, DBT-14, DBT-15, DBT-28, D-10* |
+| `DBT-F2` Copy and UX | Sentinel Integration | 0/8 | DBT-3, DBT-9, DBT-14, DBT-15, DBT-28, D-10*, DBT-38, DBT-39 |
 | `DBT-F3` Diagram fidelity | Dataflow | 0/3 | DBT-1, DBT-4, DBT-12 |
 | `DBT-F4` Docs and spec grounding | Cross-cutting | 4/7 | DBT-8, DBT-10, DBT-11, DBT-13, DBT-22, DBT-26, DBT-32 |
 | `DBT-F5` Board tooling defects | Cross-cutting | 13/13 | DBT-16, DBT-17, DBT-18, DBT-19, DBT-20, DBT-21, DBT-23, DBT-24, DBT-25, DBT-27, DBT-29, DBT-30, DBT-31 |
 | `DBT-F6` Effect-identity defect class | Pack Maintenance | 0/1 | FX-4 |
 | `DBT-F7` Export instead of deploy - the offline path | DCR Automation | 3/4 | DBT-33, DBT-34, DBT-35*, DBT-37 |
 
-### `TBL` Custom table authoring and table-first DCR creation - 20% (1/5)
+### `TBL` Custom table authoring and table-first DCR creation - 50% (3/6)
 
 RAISED BY THE USER 2026-08-31. DCR Automation can onboard a table you can already NAME, but it cannot help you create one, and it cannot show you what the workspace already has. Every schema today arrives from somewhere else - a bundled vendor entry, a pasted JSON file, or a table that already exists - so an operator with a new log source and no schema file has no path through this screen at all.
 
 | Feature | Menu | Done | Stories |
 |---|---|---|---|
-| `TBL-F1` Author a custom table by hand | DCR Automation | 0/2 | TBL-1, TBL-2 |
+| `TBL-F1` Author a custom table by hand | DCR Automation | 2/3 | TBL-6, TBL-1, TBL-2 |
 | `TBL-F2` Table inventory as the starting point | DCR Automation | 1/2 | TBL-3, TBL-5 |
 | `TBL-F3` The new surfaces work without write permission | DCR Automation | 0/1 | TBL-4 |
 
@@ -145,55 +145,6 @@ RAISED BY THE USER 2026-08-31. DCR Automation can onboard a table you can alread
 ## In progress (1)
 
 Started. Anything here with an unfinished dependency is called out on its card.
-
-- **TBL-1** Author a custom table's fields and types by hand
-  `TBL-F1` `story` `settled`
-  RAISED BY THE USER 2026-08-31: "give the user an interface to name fields
-  and assign types". TODAY THERE IS NO SUCH PATH. `custom-schema-state.ts`
-  offers exactly three sources and the picker is EXCLUSIVE: `vendor` (a
-  bundled VENDOR_SCHEMAS entry), `file` (upload or paste a schema JSON),
-  `existing` (send no schema and require the table to already be there). An
-  operator with a new log source and no schema file cannot proceed - the
-  screen can only consume a schema someone else authored. This adds a FOURTH
-  source, `manual`, so it reuses the pinned source-precedence rule rather than
-  bolting a second way to reach onboardTable. NOTHING IN THE DOMAIN NEEDS
-  INVENTING: `CUSTOM_COLUMN_TYPES` is the type list the DCR-side editor
-  already uses, `validateCustomTableSchema` already enforces the _CL suffix,
-  the at-least-one-column rule and the TimeGenerated rules, `mapColumnType` is
-  the characterized mapping, and `stripReservedTableCreationColumns` already
-  shapes the creation payload. The work is a pure state module
-  (add/remove/rename a row, pick a type, surface the existing validators'
-  errors per row) plus the editor UI, and it hands `onboardTable` the same
-  `customSchema` shape the file path produces. WATCH THE RESERVED NAMES: 13
-  columns are stripped from the creation payload and TimeGenerated is injected
-  by the schema-file path only - a hand editor that silently drops a field the
-  operator typed would be the same class of quiet loss as [[HON-4]], so a
-  stripped row must SAY it was stripped and why.
-
----
-
-## Backlog - now (3)
-
-Next to pick up. Nothing blocks these.
-
-- **TBL-2** Refuse a table name the workspace already has
-  `TBL-F1` `story` `settled` `blocked by TBL-1`
-  RAISED BY THE USER 2026-08-31: "inventory and validate the table name
-  doesn't already exist". `validateCustomTableSchema` validates the NAME'S
-  SHAPE (the _CL suffix) and the columns, but nothing anywhere compares the
-  name against what the workspace actually holds - `avoidNameCollision` in
-  `domain/dcr-naming` is for DCR names, not table names. WHY IT MATTERS MORE
-  THAN IT LOOKS: the tables PUT is an UPSERT, exactly like the DCR PUT that
-  `avoidNameCollision` exists to guard, so authoring a schema over a name that
-  is already taken does not fail - it REDEFINES a live table's schema, and the
-  first symptom is somebody else's data not arriving. `listWorkspaceTables`
-  already lists both kinds and `fetchWorkspaceTableSchema` reads one, so the
-  check is a read the app already knows how to do. STATE THE VERDICT HONESTLY,
-  per docs/inventory-standard.md and the rule [[HON-2]] was filed for: ARM
-  answers 200 with an empty array when RBAC filters the caller out, so "that
-  name is free" must not be claimed off an unverified read. Three verdicts,
-  not two - taken, free, and could-not-check - and the third must not block
-  the operator, only stop the app promising.
 
 - **TBL-3** Inventory the workspace's tables and build a DCR from one
   `TBL-F2` `story` `settled`
@@ -227,10 +178,54 @@ Next to pick up. Nothing blocks these.
   wrong; building this is not. DECIDED with [[TBL-5]] 2026-08-31: a table that
   already has a DCR SAYS SO on its row (the user's chosen layout shows a `has
   DCR` column), because the data is one `listDcrInventory` call away and an
-  operator building a duplicate is the thing this panel should prevent.
+  operator building a duplicate is the thing this panel should prevent. THE
+  LISTING IS DONE AND VERIFIED LIVE 2026-08-31: the Tables tab lists all 842
+  tables of `law-jpederson-eastus` with kind, retention, plan and the DCR
+  column, and `WindowsEvent` correctly reads
+  `dcr-WindowsEvent-paradigm-replica` while every unmatched row reads `none in
+  rg-jpederson-QuickstartLab`. The DCR verdict is THREE-WAY, not a boolean -
+  `has`, `none-in-scope`, `unchecked` - because `listDcrInventory` reads one
+  resource group, so "nothing matched" and "we did not look" are different
+  facts and a boolean would report the second as the first.
+  `useWorkspaceTables` was NOT reused: it loads on an effect and its
+  `listedFor` guard means a second load never happens, so it cannot serve a
+  Refresh. STILL OPEN, and the reason this card is not done: BOTH ACTIONS are
+  unwired. There is no table prefill on the Single tab
+  (`OnboardTableScreenProps` has three props and `setSelected` is local
+  state), and no core usecase that creates ONE table from a supplied schema -
+  `buildTablePutRequest` is domain-only and its orchestration lives inside
+  `onboardTable` steps. The panel takes `onCreateTable`/`onCreateDcr` as
+  OPTIONAL props and renders neither button when a host supplies neither, so
+  it ships its listing honestly rather than offering a button that goes
+  nowhere.
+
+---
+
+## Backlog - now (2)
+
+Next to pick up. Nothing blocks these.
+
+- **TBL-2** Refuse a table name the workspace already has
+  `TBL-F1` `story` `settled`
+  RAISED BY THE USER 2026-08-31: "inventory and validate the table name
+  doesn't already exist". `validateCustomTableSchema` validates the NAME'S
+  SHAPE (the _CL suffix) and the columns, but nothing anywhere compares the
+  name against what the workspace actually holds - `avoidNameCollision` in
+  `domain/dcr-naming` is for DCR names, not table names. WHY IT MATTERS MORE
+  THAN IT LOOKS: the tables PUT is an UPSERT, exactly like the DCR PUT that
+  `avoidNameCollision` exists to guard, so authoring a schema over a name that
+  is already taken does not fail - it REDEFINES a live table's schema, and the
+  first symptom is somebody else's data not arriving. `listWorkspaceTables`
+  already lists both kinds and `fetchWorkspaceTableSchema` reads one, so the
+  check is a read the app already knows how to do. STATE THE VERDICT HONESTLY,
+  per docs/inventory-standard.md and the rule [[HON-2]] was filed for: ARM
+  answers 200 with an empty array when RBAC filters the caller out, so "that
+  name is free" must not be claimed off an unverified read. Three verdicts,
+  not two - taken, free, and could-not-check - and the third must not block
+  the operator, only stop the app promising.
 
 - **TBL-4** Offer the ARM template when the write capability is absent
-  `TBL-F3` `story` `settled` `blocked by TBL-1, TBL-3`
+  `TBL-F3` `story` `settled` `blocked by TBL-3`
   RAISED BY THE USER 2026-08-31: "if the user hasn't granted the app
   permission to create Azure resources like DCRs then they should still get
   the option to see and download an ARM template for the DCR creation". THIS
@@ -255,7 +250,7 @@ Next to pick up. Nothing blocks these.
 
 ---
 
-## Backlog - next (23)
+## Backlog - next (25)
 
 Settled and unblocked, sequenced behind now.
 
@@ -562,6 +557,42 @@ Settled and unblocked, sequenced behind now.
   shapes and has no caller, so nothing renders a template on screen and the
   .tgz must be opened to read one.
 
+- **DBT-38** The add-column controls render with raw browser chrome
+  `DBT-F2` `bug` `settled`
+  FOUND 2026-08-31 while mapping the row-editor conventions for [[TBL-1]].
+  `.field input` and `.field select` (styles.css:358-393) are DESCENDANT
+  selectors and there is no bare `input`/`select` base rule anywhere - the
+  only global rule is the `*` reset at line 176. The add-column control in
+  `dcr-inventory-panel.tsx:709-725` puts its `<input>` and `<select>` directly
+  inside `.panel-controls`, NOT inside a `<label className="field">`, so both
+  render with default browser chrome: no `--border`, no `--surface-raised`, no
+  `--border-focus`, and no dark-theme token. Verified by reading the markup
+  and grepping the sheet. The repo already has three separate precedents for
+  the fix - `.enrich-add input` (5059), `.csv-map-input` (2402) and
+  `.theme-select` (916, whose comment says "same tokens as .field select,
+  without the field wrapper") - so this is choosing one, not inventing.
+  Cosmetic only: the control works, it just does not look like the app around
+  it.
+
+- **DBT-39** Four classNames are rendered but defined in no stylesheet
+  `DBT-F2` `bug` `settled`
+  FOUND 2026-08-31, same sweep as [[DBT-38]]. `pack-card` and `pack-card-head`
+  (dcr-inventory-panel.tsx:656-657 and pack-inventory-screen.tsx:421-422),
+  `dcr-progress-line` (dcr-inventory-panel.tsx:696) and
+  `identity-row-editable` (identity-block.tsx:96) appear in JSX and match
+  NOTHING in styles.css - confirmed by grep, count zero for each. They are
+  inert; the layout that actually works comes from the sibling classes
+  (`mapping-review-card`, `panel-desc`). This is the exact class of drift the
+  sheet's own comments record catching by hand twice before -
+  styles.css:5108-5113 and 5244-5249, the latter shipping broken since 1.11.5.
+  THE REAL FIX IS THE CHECK, NOT THE FOUR NAMES: there is no automated
+  verification that a rendered className exists in CSS, so this recurs on a
+  schedule. A cheap script - collect string literals in className positions,
+  diff against selectors in styles.css, allowlist the dynamic ones - would
+  turn a recurring manual sweep into CI. Decide when picked up whether to
+  delete the dead names or define them; deleting is right for any whose
+  sibling already does the work.
+
 ---
 
 ## Backlog - later (31)
@@ -849,7 +880,7 @@ Settled, gated on something above.
 
 ---
 
-## Done (41)
+## Done (43)
 
 Kept briefly so a reader can see what just landed; prune when the list grows.
 
@@ -1942,6 +1973,74 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   wiring, which the three DOM pins cover. Left at verified: pins deliberately;
   upgrading it on the strength of DBT-33 would be exactly the borrowed
   credibility the board forbids.
+
+- **TBL-6** The hand editor accepts column names core rejects
+  `TBL-F1` `bug` `settled` `verified: both`
+  MY OWN DEFECT, shipped in 71bf882 and filed rather than quietly patched.
+  `manual-schema-state.ts` validates blank and duplicate names only, and its
+  docblock justifies the omission with "the domain has no charset or
+  leading-character rule for column names ... inventing one would mean this
+  editor rejecting names Azure would have accepted". THAT IS FALSE. Core
+  enforces `/^[A-Za-z_][A-Za-z0-9_]*$/` in `addTableColumn`
+  (update-dcr.ts:895) and throws `column name '<x>' is invalid - letters,
+  digits, and underscores only, not starting with a digit`. So the editor
+  happily accepts `Client IP` or `2ndTry`, previews them, and the operator
+  learns the truth from a thrown error at the far end of a deploy. The commit
+  message asserts the wrong premise too and should be superseded by this card
+  rather than trusted. FIX BY EXTRACTING, NOT COPYING: the regex already
+  exists TWICE - core's `addTableColumn` and `isValidEnrichmentFieldName`
+  (pipeline-preview-state.ts:349) - so adding a third literal is the
+  duplicated-decision smell the architecture audit exists to catch. Export ONE
+  predicate from core for the Log Analytics column-name rule and have
+  `addTableColumn` and the editor both call it. DO NOT fold
+  `isValidEnrichmentFieldName` into it: that is a Cribl Eval field-name rule
+  which happens to share today's regex, and merging two rules because they
+  currently agree is how a later divergence becomes a silent bug. NOTE THE
+  `_CF` SUBTLETY when wiring: `addTableColumn` applies the regex AFTER
+  appending `_CF` for native tables, so the name the operator types is not the
+  name validated there; custom (_CL) creation has no suffix rule, so the
+  editor validates the typed name directly. FIXED 2026-08-31 by extraction, as
+  the card asked: `isValidColumnName` and `COLUMN_NAME_RULE` now live in
+  `domain/custom-table`, `addTableColumn` calls the predicate instead of
+  holding the literal, and the editor asks it per row.
+  `isValidEnrichmentFieldName` was deliberately LEFT ALONE. VERIFIED LIVE:
+  typing `Client IP` in the editor tints the row and reads "'Client IP' is not
+  a valid column name - letters, digits, and underscores only, not starting
+  with a digit"; before the fix it was accepted and previewed.
+
+- **TBL-1** Author a custom table's fields and types by hand
+  `TBL-F1` `story` `settled` `verified: both`
+  RAISED BY THE USER 2026-08-31: "give the user an interface to name fields
+  and assign types". TODAY THERE IS NO SUCH PATH. `custom-schema-state.ts`
+  offers exactly three sources and the picker is EXCLUSIVE: `vendor` (a
+  bundled VENDOR_SCHEMAS entry), `file` (upload or paste a schema JSON),
+  `existing` (send no schema and require the table to already be there). An
+  operator with a new log source and no schema file cannot proceed - the
+  screen can only consume a schema someone else authored. This adds a FOURTH
+  source, `manual`, so it reuses the pinned source-precedence rule rather than
+  bolting a second way to reach onboardTable. NOTHING IN THE DOMAIN NEEDS
+  INVENTING: `CUSTOM_COLUMN_TYPES` is the type list the DCR-side editor
+  already uses, `validateCustomTableSchema` already enforces the _CL suffix,
+  the at-least-one-column rule and the TimeGenerated rules, `mapColumnType` is
+  the characterized mapping, and `stripReservedTableCreationColumns` already
+  shapes the creation payload. The work is a pure state module
+  (add/remove/rename a row, pick a type, surface the existing validators'
+  errors per row) plus the editor UI, and it hands `onboardTable` the same
+  `customSchema` shape the file path produces. WATCH THE RESERVED NAMES: 13
+  columns are stripped from the creation payload and TimeGenerated is injected
+  by the schema-file path only - a hand editor that silently drops a field the
+  operator typed would be the same class of quiet loss as [[HON-4]], so a
+  stripped row must SAY it was stripped and why. DONE 2026-08-31, VERIFIED
+  LIVE in the __local__ preview: `MyNewSource_CL` with source `Define the
+  fields here` renders the editor, and a reserved name shows its own row note.
+  Three parts - `manual-schema-state.ts` (row ops + verdicts, 17 pins),
+  `manual-schema-editor.tsx` (8 DOM pins), and the fourth `manual` source
+  wired into `custom-schema-state` so the rows reach
+  validateCustomTableSchema, the reserved strip and the TimeGenerated
+  injection unchanged rather than through a private path. The editor borrows
+  the `.csv-map-*` row vocabulary because it is the only layout here that
+  stacks a per-row message under its own input. See [[TBL-6]] for the rule
+  this shipped without.
 
 - **TBL-5** Where do the two new panels live on the screen?
   `TBL-F2` `decision` `settled` `verified: none`

@@ -124,6 +124,35 @@ describe("per-row verdicts", () => {
     expect(statuses.flatMap((s) => s.issues)).toEqual([]);
   });
 
+  it("BLOCKS a name core would throw on, rather than deferring it to deploy", () => {
+    // TBL-6, the defect this file shipped with. addTableColumn enforces
+    // isValidColumnName and THROWS; the editor used to accept these, preview
+    // them, and let the operator meet the rule at the far end of a deploy.
+    for (const bad of ["Client IP", "2ndTry", "user-agent", "col.name"]) {
+      const [status] = manualRowStatuses(rows(["1", bad, "string"]));
+      expect(status?.issues, `${bad} should be rejected`).toContain(
+        "invalid-name",
+      );
+      expect(status?.blocking).toBe(true);
+    }
+  });
+
+  it("accepts the names core accepts, including a leading underscore", () => {
+    for (const good of ["ClientIP", "_internal", "col_2", "A1"]) {
+      const [status] = manualRowStatuses(rows(["1", good, "string"]));
+      expect(status?.issues, `${good} should be accepted`).toEqual([]);
+    }
+  });
+
+  it("reports a duplicate AND an invalid name on the same row", () => {
+    // Two independent facts about one row; collapsing them would hide
+    // whichever the else-branch happened to lose.
+    const statuses = manualRowStatuses(
+      rows(["1", "bad name", "string"], ["2", "bad name", "string"]),
+    );
+    expect(statuses[0]?.issues).toEqual(["duplicate-name", "invalid-name"]);
+  });
+
   it("notes a blank name WITHOUT blocking - it is the resting trailing row", () => {
     const [status] = manualRowStatuses(emptyManualColumns());
     expect(status?.issues).toEqual(["blank-name"]);

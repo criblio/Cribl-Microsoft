@@ -13,7 +13,10 @@
 
 // "inventory" (2026-07-13): list the resource group's existing DCRs;
 // azure-only, so it is never disabled by a missing Cribl connection.
-export type DcrTab = "single" | "batch" | "inventory";
+// "tables" (TBL-3/TBL-5, 2026-08-31): list the workspace's Log Analytics
+// tables and author new ones; azure-only for the same reason - reading a
+// table listing and defining a schema need no Cribl at all.
+export type DcrTab = "single" | "batch" | "inventory" | "tables";
 
 /**
  * The tab to show on first render: Batch when the Single tab is disabled

@@ -16,6 +16,12 @@ export interface DcrAutomationScreenProps {
    */
   inventory?: ReactNode;
   /**
+   * The workspace tables view (TBL-3). Azure-only for the same reason as
+   * inventory - listing tables and authoring a schema need no Cribl. Absent =
+   * the tab is not rendered.
+   */
+  tables?: ReactNode;
+  /**
    * When set, the Single tab is disabled and this reason is shown - Single
    * onboards one table live to Cribl, so it needs a Cribl connection; Batch
    * still works template-only. When undefined, Single is enabled.
@@ -34,6 +40,7 @@ export function DcrAutomationScreen({
   single,
   batch,
   inventory,
+  tables,
   singleDisabledReason,
 }: DcrAutomationScreenProps) {
   const singleDisabled = singleDisabledReason !== undefined;
@@ -78,11 +85,28 @@ export function DcrAutomationScreen({
             Inventory
           </button>
         )}
+        {tables !== undefined && (
+          <button
+            type="button"
+            role="tab"
+            aria-selected={active === "tables"}
+            className={`dcr-mode-tab${active === "tables" ? " dcr-mode-tab-active" : ""}`}
+            onClick={() => setSelected("tables")}
+          >
+            Tables
+          </button>
+        )}
       </div>
       {singleDisabled && (
         <p className="field-hint dcr-mode-note">{singleDisabledReason}</p>
       )}
-      {active === "single" ? single : active === "inventory" ? inventory : batch}
+      {active === "single"
+        ? single
+        : active === "inventory"
+          ? inventory
+          : active === "tables"
+            ? tables
+            : batch}
     </>
   );
 }

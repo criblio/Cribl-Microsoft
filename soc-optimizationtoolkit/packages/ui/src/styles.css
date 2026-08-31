@@ -2420,6 +2420,53 @@ button.journey-step-main:hover .journey-step-label {
   color: var(--warn);
 }
 
+/* Hand-authored table schema editor (onboarding/manual-schema-editor.tsx,
+   TBL-1). Reuses the .csv-map-* row vocabulary above - it is the only layout
+   here that stacks a per-row message under its own input - and overrides only
+   what differs: three columns of its own (name / type / remove) instead of the
+   mapper's 56px position column, and no max-height, because a schema being
+   authored should grow with what you type rather than scroll inside a 300px
+   box while you are still adding to it.
+
+   .manual-schema-select needs its own rule because `.field select` (line 358)
+   is a DESCENDANT selector and there is no bare select base rule - a select
+   outside a .field wrapper renders with raw browser chrome and no dark-theme
+   token. Same tokens as .theme-select, which exists for the same reason. */
+.manual-schema-grid {
+  max-height: none;
+}
+
+.manual-schema-row {
+  grid-template-columns: minmax(0, 1fr) 140px auto;
+}
+
+.manual-schema-select {
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 18px;
+  padding: 4px 6px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+}
+
+.manual-schema-select:focus {
+  outline: none;
+  border-color: var(--border-focus);
+}
+
+/* A reserved name is a NOTE, not an error: the field is legal, Azure simply
+   manages that column and the creation payload drops it. Muted rather than
+   --warn so it does not compete with a blocking row. */
+.manual-schema-reserved {
+  color: var(--text-muted);
+}
+
+.manual-schema-add {
+  margin-top: 8px;
+  margin-bottom: 0;
+}
+
 .csv-dialog-status {
   display: flex;
   flex-direction: column;

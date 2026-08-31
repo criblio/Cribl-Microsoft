@@ -239,6 +239,35 @@ export interface CustomTableSchemaValidation {
 }
 
 /**
+ * The Log Analytics column-name rule: letters, digits and underscores only,
+ * never starting with a digit.
+ *
+ * ONE IMPLEMENTATION, extracted for TBL-6. `addTableColumn` enforced this
+ * inline and threw on violation, which meant the hand-authored schema editor
+ * had no way to ask the question before building a request - so it accepted
+ * `Client IP`, previewed it happily, and the operator met the rule as a thrown
+ * error at the far end of a deploy instead.
+ *
+ * DELIBERATELY NOT SHARED WITH `isValidEnrichmentFieldName`
+ * (pipeline-preview-state.ts), which today uses an identical regex for CRIBL
+ * EVAL field names. Two rules that happen to agree are not one rule; folding
+ * them would make a future divergence in either product silently wrong in the
+ * other.
+ *
+ * NOTE FOR CALLERS ON NATIVE TABLES: `addTableColumn` appends `_CF` to a
+ * custom column on a non-`_CL` table BEFORE testing, so the name it validates
+ * is not the name the operator typed. Custom (_CL) creation has no suffix
+ * rule, so the typed name is validated directly.
+ */
+export function isValidColumnName(name: string): boolean {
+  return /^[A-Za-z_][A-Za-z0-9_]*$/.test(name);
+}
+
+/** The rule {@link isValidColumnName} enforces, in the operator's words. */
+export const COLUMN_NAME_RULE =
+  "letters, digits, and underscores only, not starting with a digit";
+
+/**
  * Validate a custom table name + schema columns against the legacy creation
  * rules BEFORE building the tables PUT:
  *

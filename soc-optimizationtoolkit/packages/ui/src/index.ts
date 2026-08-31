@@ -38,6 +38,8 @@ export type {
 
 // The hand-authored fourth schema source (TBL-1): row editing and per-row
 // verdicts for operators who have a new log source and no schema file.
+export { ManualSchemaEditor } from "./onboarding/manual-schema-editor";
+export type { ManualSchemaEditorProps } from "./onboarding/manual-schema-editor";
 export {
   DEFAULT_MANUAL_COLUMN_TYPE,
   addManualColumn,
@@ -146,6 +148,20 @@ export { DcrAutomationScreen } from "./screens/dcr-automation/dcr-automation-scr
 export type { DcrAutomationScreenProps } from "./screens/dcr-automation/dcr-automation-screen";
 export { DcrInventoryPanel } from "./screens/dcr-automation/dcr-inventory-panel";
 export type { DcrInventoryPanelProps } from "./screens/dcr-automation/dcr-inventory-panel";
+
+// The Tables tab (TBL-3): the workspace's Log Analytics tables, with whether
+// a DCR already targets each one.
+export { WorkspaceTablesPanel } from "./screens/dcr-automation/workspace-tables-panel";
+export type { WorkspaceTablesPanelProps } from "./screens/dcr-automation/workspace-tables-panel";
+export {
+  buildWorkspaceTableRows,
+  dcrCellLabel,
+  dcrColumnNote,
+} from "./screens/dcr-automation/workspace-tables-state";
+export type {
+  DcrPresence,
+  WorkspaceTableRow,
+} from "./screens/dcr-automation/workspace-tables-state";
 // Integrate arc (legacy-flow-analysis.md single-page decision, ADOPTED
 // 2026-07-04): the MVP centerpiece - the single-page Integrate flagship
 // composing the built screens (Azure Targeting, the native onboardTable

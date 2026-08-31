@@ -26,6 +26,7 @@ import { RBAC_PERMISSIONS_API_VERSION } from "../permission-preflight";
 import { GUID_LIKE_TYPES, selectSchemaColumns } from "../../domain/schema-mapping";
 import type { LogAnalyticsColumn } from "../../domain/schema-mapping";
 import { LOG_ANALYTICS_API_VERSION } from "../onboard-table";
+import { COLUMN_NAME_RULE, isValidColumnName } from "../../domain/custom-table";
 
 export interface UpdateDcrInput {
   subscriptionId: string;
@@ -892,9 +893,13 @@ export async function addTableColumn(
   if (!isCustomTable && !name.endsWith("_CF")) {
     name = `${name}_CF`;
   }
-  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) {
+  // TBL-6: the rule lives in the domain now, so the hand-authored schema
+  // editor can ASK it instead of discovering it as a throw at deploy time.
+  // The test is deliberately still after the _CF append - the name Azure sees
+  // is the name that must be legal.
+  if (!isValidColumnName(name)) {
     throw new Error(
-      `column name '${name}' is invalid - letters, digits, and underscores only, not starting with a digit`,
+      `column name '${name}' is invalid - ${COLUMN_NAME_RULE}`,
     );
   }
   if (!(CUSTOM_COLUMN_TYPES as readonly string[]).includes(input.column.type)) {

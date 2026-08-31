@@ -55,6 +55,15 @@ import {
   RETENTION_CHOICES,
 } from "./custom-schema-state";
 import type { CustomSchemaSource } from "./custom-schema-state";
+import { ManualSchemaEditor } from "./manual-schema-editor";
+import {
+  addManualColumn,
+  emptyManualColumns,
+  manualRowStatuses,
+  removeManualColumn,
+  updateManualColumn,
+} from "./manual-schema-state";
+import type { ManualColumnDraft } from "./manual-schema-state";
 
 type RunStatus = "idle" | "running" | "ok" | "failed";
 
@@ -128,6 +137,11 @@ export function OnboardTableScreen({
   const [vendorId, setVendorId] = useState("");
   const [schemaFileText, setSchemaFileText] = useState("");
   const [schemaFileName, setSchemaFileName] = useState("");
+  // TBL-1: the hand-authored source's rows. The screen holds the array and
+  // applies the pure operations; every rule lives in manual-schema-state.
+  const [manualColumns, setManualColumns] = useState<ManualColumnDraft[]>(
+    emptyManualColumns,
+  );
   // "" = no per-run override: the persisted Unit 4 default applies (and an
   // options blob that loads after mount still takes effect).
   const [retentionOverride, setRetentionOverride] = useState("");
@@ -148,8 +162,9 @@ export function OnboardTableScreen({
         source: schemaSource,
         vendorId: effectiveVendorId,
         fileText: schemaFileText,
+        manualColumns,
       }),
-    [table, schemaSource, effectiveVendorId, schemaFileText],
+    [table, schemaSource, effectiveVendorId, schemaFileText, manualColumns],
   );
 
   // Populate the worker-group dropdown from the CriblClient port. On failure
@@ -436,6 +451,27 @@ export function OnboardTableScreen({
                   {schemaFileName !== "" && ` Loaded from ${schemaFileName}.`}
                 </span>
               </label>
+            )}
+            {/* TBL-1: the only source that does not come from somewhere else.
+                The reserved names come from the preview's own rows, which are
+                decided by the REAL strip function - so a field creation will
+                drop says so on the row rather than only in the block below. */}
+            {schemaSource === "manual" && (
+              <ManualSchemaEditor
+                rows={manualColumns}
+                statuses={manualRowStatuses(manualColumns)}
+                reservedNames={schemaPreview.rows
+                  .filter((r) => r.reserved)
+                  .map((r) => r.name)}
+                onAdd={() => setManualColumns(addManualColumn(manualColumns))}
+                onRemove={(id) =>
+                  setManualColumns(removeManualColumn(manualColumns, id))
+                }
+                onEdit={(id, patch) =>
+                  setManualColumns(updateManualColumn(manualColumns, id, patch))
+                }
+                busy={running}
+              />
             )}
             <label className="field">
               <span className="field-label">Interactive retention</span>
