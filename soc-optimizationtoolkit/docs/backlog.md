@@ -1138,6 +1138,32 @@ not edit it by hand.
 
 ## 11. Explicitly not doing
 
+### Two refactor branches deleted unmerged - 2026-08-31
+
+`refactor/channel-manifest` and `refactor/pack-builder-decomp` were deleted
+without merging. Both targeted the Electron GUI - which lives at
+`deprecated/Cribl-Microsoft_IntegrationSolution/` since the 2026-07-13
+deprecation, and which these June branches still address at its old top-level
+location - and both sat 778 commits behind main. Merging either would have
+resurrected files at a path that no longer exists.
+
+Recorded here because they held REAL WORK that is not represented anywhere else,
+and a deleted branch stops being findable:
+
+- `refactor/channel-manifest` @ `0ef40db73cc531897b27654ef7374a583db37e12`
+  (2 commits, 2026-06-17) - drove both transports from a single handler
+  registry, with a channel-parity guard test.
+- `refactor/pack-builder-decomp` @ `d9dd53ce6fe8fff3f4d1a4e40290ddc94e55dddc`
+  (8 commits, 2026-06-20) - extracted `FieldMappingEngine` from `field-matcher`
+  and `yaml-builder` from `pack-builder`, added injectable seams and a scaffold
+  golden test.
+
+The decompositions are the part worth remembering, not the code: the current
+toolkit has its own pack assembly, and if it ever grows the same tangle, someone
+already tried a shape for it. `git show <sha>` still resolves these while GitHub
+retains unreferenced objects; after that they are gone.
+
+
 **Live capture.** `POST /system/capture` supports `level` 0-3 (before
 pre-processing pipeline / before Routes / before post-processing pipeline /
 before Destination), which would map onto diagram nodes for a before/after view.
