@@ -6,10 +6,18 @@
  * (verified live: Cloudflare_CL.json = 104 columns of the legacy suffixed
  * schema, plus CloudflareV2_CL.json and the Cloudflare.json parser-output
  * shape). When a table is DEFINED THERE, it is the schema the solution's
- * rules and workbooks were written against - so this tier resolves FIRST,
- * ahead of the solution's connector-ARM tables and the bundled snapshot,
- * and ahead of sample-derived schemas (which stay the last-resort fallback
- * for tables the repo does not define).
+ * rules and workbooks were written against - so this tier resolves ahead of
+ * the solution's connector-ARM tables and the bundled snapshot, and ahead of
+ * sample-derived schemas (which stay the last-resort fallback for tables the
+ * repo does not define).
+ *
+ * ONE TIER OUTRANKS IT (DBT-50, 2026-08-31): the LIVE workspace columns of a
+ * table the operator explicitly picked. This header used to say "resolves
+ * FIRST", written on 2026-07-14 when the three tiers it enumerates were the
+ * only ones there were; the live tier arrived on 2026-08-10 with its own user
+ * direction - once a real table is named, ARM is the better authority - and
+ * the two were never reconciled. `schema-ladder.ts` owns the composed order
+ * and the argument; nothing here decides where this tier sits.
  *
  * Resolution strategy per table (cached per catalog instance, misses too):
  *   1. DIRECT read of `<dir>/<tableName>.json` through the SentinelContent

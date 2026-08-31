@@ -207,6 +207,34 @@ returns the selected table's live columns as `DestField[]`.
    use. The stale notice renders over the previous results and clears when a run
    completes.
 
+**The tier was composed in the wrong place, and it took three weeks to notice
+(DBT-50, fixed 2026-08-31).** The mapping review nested the live tier UNDER both
+repo tiers - the KQL-validation schemas and the solution's connector-ARM tables
+- so for any table the Sentinel repo defines the ARM read fired, was awaited,
+was stored, and was never reached by resolution. The decision above was
+implemented correctly in the tier and lost in the composition, which nothing
+pinned because the order lived inline in a React callback.
+
+Two fixes were defensible and they are not equivalent: promote the live tier, or
+keep the order and correct the documents that promise live wins. Promotion is
+right. The decision recorded above already named the loser side of the
+comparison - a blend would mix "columns as the solution declares them" with
+columns "as the workspace actually has them", which is a claim about
+live-versus-solution-declared, not just live-versus-sample-derived. The
+apparently contradictory claim, `kql-validation-schema-catalog.ts` saying it
+"resolves FIRST", enumerates the three tiers it beats and does not mention the
+live tier because on 2026-07-14 it did not exist; there was never a decision
+that the repo outranks live, only an order nobody composed. And the two tiers
+answer different questions: the repo says what a solution's rules were written
+against, while the live tier only ever holds a table an operator PICKED from
+their own workspace, which is what will actually accept the data.
+
+The order now lives in `domain/field-matcher/schema-ladder.ts` with pins on each
+step, because an order that only exists as an expression is one nothing can
+protect. The offline note on the card does not survive contact: the ARM read is
+triggered by an explicit table pick, not by opening the screen, and the workspace
+table LISTING already contacts Azure on scope commit either way.
+
 Superseded planning notes follow.
 
 **What remained: the UI.** Two pieces:

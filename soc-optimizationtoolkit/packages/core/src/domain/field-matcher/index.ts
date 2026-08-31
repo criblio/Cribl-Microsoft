@@ -120,3 +120,9 @@ export { deriveCustomTableSchema } from "./derive-schema-from-sample";
 // Live workspace table tier (backlog item 2): a picked table's ARM columns
 // REPLACE the derived schema for that one table.
 export { createLiveTableSchemaCatalog } from "./live-table-schema-catalog";
+
+// The composed ladder. DBT-50: the ORDER the tiers stack in is a decision of
+// its own, so it lives in one named, pinned place rather than inline in the
+// screen that happens to build it.
+export type { SchemaLadderOptions } from "./schema-ladder";
+export { createSchemaLadder } from "./schema-ladder";

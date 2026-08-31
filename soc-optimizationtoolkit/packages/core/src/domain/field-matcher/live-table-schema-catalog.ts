@@ -23,7 +23,11 @@
  *
  * Layered like {@link createSolutionSchemaCatalog}: wrap a fallback, override
  * what this tier knows, delegate the rest. Same shape, so the tiers compose in
- * any order the caller needs.
+ * any order the caller needs - and the order they are actually composed in is
+ * `schema-ladder.ts`, which puts this tier OUTERMOST. It has to be: composed
+ * anywhere else, the repo tiers answer first for every table they define and
+ * the columns this tier holds are fetched, awaited, stored and dropped
+ * (DBT-50, fixed 2026-08-31).
  *
  * Pure: no IO, no fetch, no React, no Date/crypto. The FETCHING lives in
  * usecases/workspace-tables (fetchWorkspaceTableSchema); this only decides what
