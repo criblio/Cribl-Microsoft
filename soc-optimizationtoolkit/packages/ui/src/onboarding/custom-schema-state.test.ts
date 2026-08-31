@@ -352,11 +352,104 @@ describe("formatSchemaPreview", () => {
 });
 
 describe("CUSTOM_SCHEMA_SOURCE_OPTIONS", () => {
-  it("offers the three sources with vendor first", () => {
+  it("offers the four sources with vendor first", () => {
     expect(CUSTOM_SCHEMA_SOURCE_OPTIONS.map((o) => o.value)).toEqual([
       "vendor",
       "file",
+      "manual",
       "existing",
     ]);
+  });
+});
+
+/**
+ * TBL-1. The point of these pins is NOT that the manual rows survive the
+ * trip - it is that they land in the SAME pipeline the file source uses.
+ * A manual path that skipped validateCustomTableSchema, the reserved-name
+ * strip or the TimeGenerated injection would look correct in the editor and
+ * produce a different table from the one the preview promised.
+ */
+describe("the manual source joins the shared pipeline", () => {
+  const manual = (
+    ...specs: [string, string][]
+  ): CustomSchemaInputs =>
+    inputs({
+      source: "manual",
+      manualColumns: specs.map(([name, type], i) => ({
+        id: String(i + 1),
+        name,
+        type,
+      })),
+    });
+
+  it("derives rows and provides the schema when the fields are sound", () => {
+    const preview = deriveCustomSchemaPreview(
+      manual(["ClientIP", "string"], ["Bytes", "long"]),
+    );
+    expect(preview.errors).toEqual([]);
+    expect(preview.ready).toBe(true);
+    expect(preview.providesSchema).toBe(true);
+    expect(preview.columns).toEqual([
+      { name: "ClientIP", type: "string" },
+      { name: "Bytes", type: "long" },
+    ]);
+  });
+
+  it("INJECTS TimeGenerated, exactly as the file source does", () => {
+    // Not decoration: creation injects it, so a preview that omitted it
+    // would be describing a different table from the one that gets made.
+    const preview = deriveCustomSchemaPreview(manual(["ClientIP", "string"]));
+    const injected = preview.rows.filter((r) => r.injected);
+    expect(injected.map((r) => r.name)).toEqual(["TimeGenerated"]);
+  });
+
+  it("marks a reserved name as stripped rather than silently dropping it", () => {
+    // The same class of quiet loss as HON-4: the operator typed a column,
+    // creation will discard it, and the screen has to say so.
+    const preview = deriveCustomSchemaPreview(
+      manual(["ClientIP", "string"], ["Computer", "string"]),
+    );
+    const reserved = preview.rows.filter((r) => r.reserved);
+    expect(reserved.map((r) => r.name)).toEqual(["Computer"]);
+  });
+
+  it("reaches validateCustomTableSchema - a non-_CL name still fails", () => {
+    // The load-bearing pin. If the manual branch returned early with its own
+    // verdict, this table name would sail through.
+    const preview = deriveCustomSchemaPreview({
+      ...manual(["ClientIP", "string"]),
+      table: "NotCustom",
+    });
+    expect(preview.ready).toBe(false);
+    expect(preview.errors.join(" ")).toContain("_CL");
+  });
+
+  it("blocks on a duplicate field name", () => {
+    const preview = deriveCustomSchemaPreview(
+      manual(["ClientIP", "string"], ["ClientIP", "int"]),
+    );
+    expect(preview.ready).toBe(false);
+    expect(preview.providesSchema).toBe(false);
+    expect(preview.errors.join(" ")).toContain("unique");
+  });
+
+  it("asks for a field instead of erroring on a freshly opened editor", () => {
+    // Nothing is WRONG yet - the operator has simply not typed. An error
+    // here would greet every user of this source with a red message.
+    const preview = deriveCustomSchemaPreview(manual());
+    expect(preview.errors).toEqual([]);
+    expect(preview.ready).toBe(false);
+    expect(preview.notReadyHint).toContain("Add at least one field");
+  });
+
+  it("IGNORES the file textarea, honouring source precedence", () => {
+    // The pinned rule the other sources already obey: junk in an inactive
+    // source's input cannot affect the active one.
+    const preview = deriveCustomSchemaPreview({
+      ...manual(["ClientIP", "string"]),
+      fileText: "{ not json at all",
+    });
+    expect(preview.errors).toEqual([]);
+    expect(preview.columns).toEqual([{ name: "ClientIP", type: "string" }]);
   });
 });

@@ -36,6 +36,24 @@ export type {
   SchemaPreviewRow,
 } from "./onboarding/custom-schema-state";
 
+// The hand-authored fourth schema source (TBL-1): row editing and per-row
+// verdicts for operators who have a new log source and no schema file.
+export {
+  DEFAULT_MANUAL_COLUMN_TYPE,
+  addManualColumn,
+  emptyManualColumns,
+  manualColumnsToSchema,
+  manualRowStatuses,
+  manualSchemaErrors,
+  removeManualColumn,
+  updateManualColumn,
+} from "./onboarding/manual-schema-state";
+export type {
+  ManualColumnDraft,
+  ManualColumnIssue,
+  ManualRowStatus,
+} from "./onboarding/manual-schema-state";
+
 // Batch deployment (porting-plan Unit 6): the multi-table screen over the
 // @soc/core onboardBatch usecase, plus its pure decision layer (selection
 // parsing, per-run option overrides, counts/summary derivation, templateOnly
