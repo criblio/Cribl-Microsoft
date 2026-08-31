@@ -2609,7 +2609,7 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   be written again.
 
 - **DBT-61** Enforce the empty-vs-denied rule instead of remembering it
-  `DBT-F1` `enabler` `settled` `verified: pins`
+  `DBT-F1` `enabler` `settled` `verified: both`
   HALF OF EVERY BUG FOUND ON 2026-08-31 WAS ONE HABIT: an unknown reported as
   a measured fact. An RBAC-filtered empty ARM list read as a real zero
   ([[HON-2]], [[DBT-43]], [[DBT-44]]), a denied readback reported as 'still
@@ -2686,7 +2686,26 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   narrow ON PURPOSE: the earlier general one failed because the zero-claim is
   computed, and this one only works because the hatch has a name. 9 pins for
   the type, 9 for the checker, and the checker was mutation-tested against the
-  real tree, not just synthetic strings.
+  real tree, not just synthetic strings. LIVE 2026-08-31 in the Live Preview
+  against law-jpederson-eastus / rg-jpederson-QuickstartLab. All three
+  converted listers reached by an operator took the rows branch and rendered:
+  listResourceGroups populated the Inventory RG dropdown, listDcrInventory
+  returned five real DCRs (CommonSecurityLog, WindowsEvent, SecurityEvent,
+  Cloudflare_CL, GigamonV2_CL) into the Inventory table, and
+  listWorkspaceTables returned 843 tables into the Tables tab. The rewritten
+  log lines confirm the branch taken rather than just the outcome - the Logs
+  screen shows "dcr-inventory: found 5 DCR(s)" and "workspace-tables: 843
+  table(s)", both of which are the kind===rows arm; the empty arm prints
+  different wording entirely. The Tables tab DCR column read "none in
+  rg-jpederson-QuickstartLab" on the visible rows, which is the EARNED
+  none-in-scope: the DCR listing had just returned five rows, so the group was
+  demonstrably read. WHAT LIVE DID NOT COVER, and the reason verified is both
+  rather than a clean live: the EMPTY arm of every lister is still pins-only.
+  Producing it needs an RBAC-filtered or genuinely empty listing, which this
+  tenant cannot show without removing a permission on purpose. The has-a-DCR
+  cell was also not seen - the Tables tab has no filter box and
+  CommonSecurityLog sits hundreds of alphabetical rows down a list of 843, and
+  iframe scrolling could not be driven from automation.
 
 - **DBT-63** inventory-standard.md still says the tables screen is pending
   `DBT-F1` `bug` `settled` `verified: none`
