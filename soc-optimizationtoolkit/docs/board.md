@@ -11,7 +11,7 @@ two cannot disagree.
 alternatives. This board holds only what is a unit of work, what state it is
 in, and what it waits on.
 
-**57 in the backlog, 0 in progress, 47 done.**
+**70 in the backlog, 0 in progress, 47 done.**
 
 ## By menu item
 
@@ -23,15 +23,15 @@ operator sees on any screen. Two menus are PLANNED and have no route yet.
 |---|---|---|---|
 | Dataflow | 3 | 0 | 0 |
 | Setup | 1 | 0 | 0 |
-| Sentinel Integration | 13 | 15 | 0 |
+| Sentinel Integration | 25 | 15 | 6 |
 | DCR Automation | 3 | 7 | 1 |
 | Pack Maintenance | 4 | 1 | 0 |
 | Permission Verification | 8 | 0 | 0 |
 | Azure Native Source Onboarding (planned) | 13 | 4 | 0 |
 | Windows Event analysis (planned) | 5 | 0 | 0 |
-| Cross-cutting | 7 | 20 | 0 |
+| Cross-cutting | 8 | 20 | 0 |
 
-Open work totals 57.
+Open work totals 70.
 
 ## Epics and features
 
@@ -116,16 +116,16 @@ ENABLER EPIC: release mechanics. The packaged tarball trails main, and the lab t
 |---|---|---|---|
 | `REL-F1` Release and deployment hygiene | Cross-cutting | 3/5 | REL-2, REL-3, REL-4, REL-5, REL-6 |
 
-### `DBT` Quality and technical debt _(enabler)_ - 53% (23/43)
+### `DBT` Quality and technical debt _(enabler)_ - 41% (23/56)
 
 ENABLER EPIC: verification gaps, copy, diagram fidelity, docs and the board's own tooling
 
 | Feature | Menu | Done | Stories |
 |---|---|---|---|
-| `DBT-F1` Verification gaps | Sentinel Integration | 3/7 | DBT-2, DBT-5*, DBT-6, DBT-7, DBT-36*, DBT-41, DBT-40 |
-| `DBT-F2` Copy and UX | Sentinel Integration | 0/8 | DBT-3, DBT-9, DBT-14, DBT-15, DBT-28, D-10*, DBT-38, DBT-39 |
+| `DBT-F1` Verification gaps | Sentinel Integration | 3/18 | DBT-2, DBT-5*, DBT-6, DBT-7, DBT-36*, DBT-42, DBT-43, DBT-44, DBT-45, DBT-46, DBT-47, DBT-48, DBT-49, DBT-50, DBT-51, DBT-52, DBT-41, DBT-40 |
+| `DBT-F2` Copy and UX | Sentinel Integration | 0/9 | DBT-3, DBT-9, DBT-14, DBT-15, DBT-28, D-10*, DBT-53, DBT-38, DBT-39 |
 | `DBT-F3` Diagram fidelity | Dataflow | 0/3 | DBT-1, DBT-4, DBT-12 |
-| `DBT-F4` Docs and spec grounding | Cross-cutting | 4/7 | DBT-8, DBT-10, DBT-11, DBT-13, DBT-22, DBT-26, DBT-32 |
+| `DBT-F4` Docs and spec grounding | Cross-cutting | 4/8 | DBT-8, DBT-10, DBT-11, DBT-13, DBT-22, DBT-26, DBT-32, DBT-54 |
 | `DBT-F5` Board tooling defects | Cross-cutting | 13/13 | DBT-16, DBT-17, DBT-18, DBT-19, DBT-20, DBT-21, DBT-23, DBT-24, DBT-25, DBT-27, DBT-29, DBT-30, DBT-31 |
 | `DBT-F6` Effect-identity defect class | Pack Maintenance | 0/1 | FX-4 |
 | `DBT-F7` Export instead of deploy - the offline path | DCR Automation | 3/4 | DBT-33, DBT-34, DBT-35*, DBT-37 |
@@ -150,9 +150,113 @@ _Nothing here._
 
 ---
 
-## Backlog - now (1)
+## Backlog - now (7)
 
 Next to pick up. Nothing blocks these.
+
+- **DBT-42** With no solution selected, gap analysis adopts an unrelated solution's DCR flows
+  `DBT-F1` `bug` `settled`
+  FOUND 2026-08-31 by the offline-capability audit, and CONFIRMED BY AN
+  EXECUTED TEST - the highest-consequence finding of that sweep.
+  `resolve-sample-routing.ts:126` calls `resolveSolutionDcrFlows` UNGUARDED
+  while `:87` guards the sibling listing, and `matchSolutionName`
+  (solution-matching.ts:41) is `na.includes(nb)`, which matches EVERYTHING
+  against an empty needle. So with no solution selected the analysis silently
+  adopts the alphabetically-first Azure-Sentinel solution's DCR files: the log
+  type is routed to that vendor's table, and that vendor's renames, coercions
+  and route condition are reported as this feed's - while the UI
+  simultaneously says connector detection was "disabled for this analysis".
+  The operator is shown a confident mapping belonging to a product they did
+  not choose. THE EXISTING PIN DOES NOT COVER IT:
+  `resolve-sample-routing.test.ts:164-172` never asserts `dcrFlows`, and its
+  own fixture is already leaking a flow, so the wrong behaviour is sitting
+  inside a green suite. One-line fix (guard the call the same way `:87` guards
+  its sibling); the pin needs to assert `dcrFlows` is empty when no solution
+  is selected, and the leaking fixture needs correcting or the new pin passes
+  for the wrong reason.
+
+- **DBT-43** The pack build reads an RBAC-filtered empty DCR list as a real zero and ships placeholder ids
+  `DBT-F1` `bug` `unconfirmed`
+  FOUND 2026-08-31 by the offline-capability audit. SAME FAMILY AS [[HON-2]],
+  which fixed this shape for the workspace list: ARM answers 200 with an empty
+  array when RBAC filters the caller out, so an empty listing is only a zero
+  once the read is verified. `integrate-screen.tsx:1159-1185` consults NO
+  capability before its DCR inventory read, logs "Read 0 deployed DCR(s)", and
+  `destination-resolution.ts:128-135` then asserts as fact that no DCR routes
+  the table - so the BUILT PACK SHIPS PLACEHOLDER DCR IDS. That is not a
+  cosmetic wrong answer: the operator installs a pack whose destinations point
+  at nothing. The comment at `:1161-1164` guards only the throw path, not the
+  empty-list path. UNCONFIRMED on one point, deliberately: the audit leans on
+  the repo's own binding standard (`docs/inventory-standard.md:21-30`) for the
+  200-empty-under-RBAC behaviour and did NOT verify it live against Azure for
+  this particular endpoint. Verify that before deciding the fix is a
+  capability gate rather than a probe.
+
+- **DBT-44** Content install reads an RBAC-filtered empty list as 'not installed', and a pin encodes it
+  `DBT-F1` `bug` `unconfirmed`
+  FOUND 2026-08-31 by the offline-capability audit.
+  `content-install.ts:294-364` has the same shape as [[DBT-43]] - an empty ARM
+  list read as a measured zero - but with an INSTALL BUTTON on the end of it
+  (`content-install-section.tsx:541-554`), so the consequence is an operator
+  invited to install content that may already be there and merely invisible to
+  them. WORSE THAN DBT-43 IN ONE RESPECT: `content-install.test.ts:240-252`
+  PINS THE WRONG BEHAVIOUR, feeding `{status:200, body:{value:[]}}` and
+  asserting "packages: not installed". A fix therefore has to change that pin,
+  which makes this a spec change to be recorded rather than a quiet
+  correction. Same UNCONFIRMED caveat as DBT-43: the 200-empty-under-RBAC
+  behaviour was not verified live for `contentProductPackages` or
+  `alertRules`.
+
+- **DBT-45** The 'offline' Azure targeting branch calls ARM on mount and on every keystroke
+  `DBT-F1` `bug` `settled`
+  FOUND 2026-08-31 by the offline-capability audit - four independent
+  refuters, two with executed render probes, making it the most-confirmed
+  finding of the sweep. `azure-targeting-screen.tsx:188-218` is a `useEffect`
+  whose ONLY guard is that the three scope fields are non-empty (`:192`);
+  `offline` appears neither in the body nor in the dependency array (`:218`),
+  and hooks run ABOVE the `if (offline)` early return at `:570`. Browse state
+  seeds from config at `:115-117`. So the offline branch calls
+  `checkSentinelEnabled` -> an unconditional `azure.request` GET
+  (`azure-discovery.ts:607-629`): ONE ARM GET ON MOUNT with a previously
+  committed scope and zero interaction, and ONE PER KEYSTROKE while typing the
+  workspace name. The offline JSX (`:570-615`) never renders
+  `sentinelStatus`/`sentinelError`, so it fails SILENTLY. THREE DOCSTRINGS
+  ASSERT THE OPPOSITE - `azure-targeting-screen.tsx:22-24`, `:86-89`,
+  `targeting-state.ts:79` - and the only pin, `targeting-state.test.ts:55`
+  ("fetches NOTHING in the offline branch"), covers `buildLoaderPlan`, a PURE
+  function this effect never calls. The file's own sibling DOM test header
+  already records this exact lesson at
+  `azure-targeting-screen.dom.test.tsx:24-28`, and both DOM tests pass
+  `offline={false}`. FIX: add the `offline` guard at `:188` and `offline` to
+  the deps at `:218`, and pin it with a RENDER test asserting zero
+  `ports.azure` calls - the pure pin provably cannot see this. NOTE FOR THE
+  READER: this card corrects a claim made earlier in the same session that the
+  offline branch was Azure-free; that was read off the comment, not the
+  effect.
+
+- **DBT-48** onboardBatch rejects out of its own never-rejects contract and strands the job record
+  `DBT-F1` `bug` `settled`
+  FOUND 2026-08-31 by the offline-capability audit. `onboard-batch.ts:770-805`
+  is the ONE ARM call in that usecase with no try/catch - the first guarded
+  one is at `:831`. A transport failure there REJECTS OUT OF `onboardBatch`,
+  contradicting its own documented contract at `:591-595` ("Never rejects for
+  step or table failures") and leaving the job record stranded at `status:
+  "running"` in the Cribl kvstore with `fetch-workspace` stuck running
+  forever. An operator sees a batch that never finishes and never fails. This
+  is also the call the offline export path trips over first (see [[DBT-37]]),
+  so fixing the two together is natural: the same prologue both needs a guard
+  and needs to be skippable when `input.location` is supplied.
+
+- **DBT-52** A denied Sentinel check reads as 'not enabled' and invites a write
+  `DBT-F1` `bug` `settled`
+  FOUND 2026-08-31 by the offline-capability audit.
+  `azure-discovery.ts:603-604` and `:622` treat ANY non-2xx as "not enabled",
+  so a 403 renders as "Sentinel is not enabled on this workspace - Enable it
+  above" and invites the operator to perform a WRITE off the back of a DENIED
+  READ. This is precisely the empty-versus-denied conflation just fixed for
+  the workspace listing in commit 676212a ([[HON-2]]), in a screen that had
+  not been swept. The fix is the same shape: distinguish a measured 'not
+  enabled' from an unreadable one, and say which.
 
 - **TBL-4** Offer the ARM template when the write capability is absent
   `TBL-F3` `story` `settled`
@@ -180,7 +284,7 @@ Next to pick up. Nothing blocks these.
 
 ---
 
-## Backlog - next (25)
+## Backlog - next (30)
 
 Settled and unblocked, sequenced behind now.
 
@@ -487,6 +591,87 @@ Settled and unblocked, sequenced behind now.
   shapes and has no caller, so nothing renders a template on screen and the
   .tgz must be opened to read one.
 
+- **DBT-46** Role assignment reads Microsoft Graph on mount regardless of whether anything needs it
+  `DBT-F1` `bug` `settled`
+  FOUND 2026-08-31 by the offline-capability audit.
+  `role-assignment-section.tsx:130-132` calls `loadServicePrincipals` whenever
+  `ports.graph` is bound, regardless of `targets.length`, and the cloud shell
+  always binds it (`adapters.ts:1911`). `numbered-section.tsx:139-147` keeps
+  every section body mounted behind `hidden`, so collapsing the section does
+  not stop it. Unlike [[DBT-45]] this one is VISIBLE: it paints "Could not
+  read the directory (...)" (`:284-290`) onto a page an operator opened with
+  no credentials and did not ask anything of. Gate the read on there being a
+  target to assign a role to.
+
+- **DBT-47** Install buttons enable on a hand-typed scope with no Azure identity
+  `DBT-F1` `bug` `settled`
+  FOUND 2026-08-31 by the offline-capability audit.
+  `content-install-section.tsx:112-117` computes `canInstall` without ever
+  checking `azureIdentityPresent`, so typing three scope strings into the
+  offline targeting form arms the install actions even though no identity
+  exists to install with. The capability model's rule is that a denied verdict
+  ANNOTATES rather than removes the attempt - this is the opposite failure, an
+  action offered where the app can already tell it cannot succeed. Pairs with
+  [[DBT-45]], which is how a scope gets typed with no identity in the first
+  place.
+
+- **DBT-50** Live table columns are fetched, awaited, stored - and never consulted
+  `DBT-F1` `bug` `settled`
+  FOUND 2026-08-31 by the offline-capability audit.
+  `mapping-review-section.tsx:352-368` nests the live-ARM catalog BELOW both
+  repo tiers, so for any table the Sentinel repo defines - which is most of
+  them - the ARM read fires, is awaited, is stored in `liveSchemas`, and is
+  then never reached by resolution. Three documents tell operators the
+  opposite: `live-table-schema-catalog.ts:12-17`,
+  `workspace-tables.ts:150-154`, and release-notes 1.11.12 all say the live
+  columns REPLACE the derived schema. NO TEST PINS THE COMPOSED ORDER, which
+  is why it drifted. Decide which is right before touching it - if the docs
+  are right the chain needs reordering, and if the current order is right
+  three documents need correcting. Note the offline consequence too: the
+  wasted read is also the reason the mapping screen touches Azure at all in a
+  workflow that is otherwise Azure-free.
+
+- **DBT-53** Cribl-side sample discovery is gated on an Azure scope, and the copy blames Cribl
+  `DBT-F2` `bug` `settled`
+  FOUND 2026-08-31 by the offline-capability audit.
+  `useSampleSources({enabled: scopeCommitted})` (integrate-screen.tsx:894) and
+  `<SampleSourcePicker enabled={scopeCommitted}>` (`:1709`) gate on
+  `scopeCommitted`, which is nothing but three non-empty AZURE config strings
+  (App.tsx:1447-1450). Disabled, the hook returns before any Cribl call
+  (`use-sample-sources.ts:128-131`), so `inventory` stays null,
+  `captureTarget`/`lakeTarget` are null (`:906-921`), and neither CapturePanel
+  (`:1730`) nor LakePanel (`:1752`) ever mounts. THE DISCOVERY IT GATES IS
+  100% CRIBL-SIDE. Three things then compound it: the copy says "Connect Cribl
+  to pull samples..." (sample-source-picker-state.ts:204-211), blaming the
+  wrong system; the call-site comment rationalises the gate as "gated on
+  scopeCommitted only because there is no Cribl address before that"
+  (`:892-893`), which is FALSE - `PlatformCriblClient` is constructed
+  unconditionally with no tenant (adapters.ts:1893-1900); and a pin protects
+  the misdiagnosis. So an operator with a working Cribl connection and no
+  Azure is told to connect Cribl.
+
+- **DBT-54** Six sections declare Azure requirements they do not have, and three promises are stale
+  `DBT-F4` `bug` `settled`
+  FOUND 2026-08-31 by the offline-capability audit. No behaviour change; the
+  metadata and the copy currently disagree with the code, which is what the
+  audit's docs check exists to catch. (1) `integrate-arc.ts:190` and `:210`
+  declare `requires:"azure"` for sections 4 and 5 - both are `"none"`, there
+  is no `ports.azure` reference anywhere under `screens/rule-coverage/`. (2)
+  `:174` declares `"both"` for section 3, which needs NEITHER Azure nor Cribl.
+  (3) `integrate-arc.ts:205-207` and `rule-coverage-state.ts:364` promise
+  operators that workbook coverage "folds in any Sentinel workbooks already
+  deployed in your subscription" - reversed by a 2026-07-12 decision recorded
+  at `rule-coverage-section.tsx:513-519`, leaving a dead comment at `:389-391`
+  and a caller-less `acquireWorkbooks` at `coverage-analysis.ts:193-238`. (4)
+  `integrate-screen.tsx:1546-1548` says the export runs "without a network",
+  which is false - see [[DBT-37]]. (5) `capabilities.ts:192-209`
+  (`unavailableReason`) and the `unreachable` branch of
+  `empty-inventory.ts:106-111` are DEAD at every call site; the latter is the
+  sentence the inventory standard was crediting as the honest no-Azure
+  degrade, and no running configuration can produce it. That last one matters
+  most: a documented honesty mechanism that cannot fire is worse than none,
+  because it is counted on.
+
 - **DBT-38** The add-column controls render with raw browser chrome
   `DBT-F2` `bug` `settled`
   FOUND 2026-08-31 while mapping the row-editor conventions for [[TBL-1]].
@@ -525,7 +710,7 @@ Settled and unblocked, sequenced behind now.
 
 ---
 
-## Backlog - later (31)
+## Backlog - later (33)
 
 Settled, gated on something above.
 
@@ -807,6 +992,29 @@ Settled, gated on something above.
   DECISION: Setup wizard header promises three phases; the stepper shows one.
     [ ] `drop-enumeration` Drop the enumeration from the header - Header stops promising what the stepper does not show.
     [x] `promote-substeps` Promote the sub-steps into the stepper - Stepper starts showing what the header promises.
+
+- **DBT-49** A kvstore outage is recorded as the table's own failure
+  `DBT-F1` `bug` `settled`
+  FOUND 2026-08-31 by the offline-capability audit.
+  `onboard-batch.ts:1198-1203` catches a kvstore failure inside the per-table
+  loop and writes it back as `recordTable({status:"failed"})` - so a store
+  outage is reported to the operator as that TABLE having failed to onboard.
+  The table may well have deployed fine. Low priority because it needs a
+  kvstore failure to bite, but it is the same class as the rest of this sweep:
+  a confident wrong attribution, and the operator's next action (retry that
+  table) is the wrong one.
+
+- **DBT-51** A real but empty _CL table is silently re-derived from the sample
+  `DBT-F1` `bug` `settled`
+  FOUND 2026-08-31 by the offline-capability audit. `analyze-samples.ts:228`
+  tests `columns.length === 0`, so a custom table that EXISTS in Azure with
+  zero materialised columns is treated as unresolved and re-derived from the
+  sample - which is exactly the quiet substitution
+  `live-table-schema-catalog.ts:42-46` says that tier exists to prevent. The
+  operator is shown a schema the app invented for a table Azure already has.
+  Distinguish 'no such table' from 'a table with no columns yet'; the second
+  is a real state for a freshly created custom table, which [[TBL-1]] now
+  makes easy to produce.
 
 ---
 
