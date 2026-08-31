@@ -26,6 +26,10 @@ import type {
   RequiredAction,
 } from "@soc/core";
 import type { SelectOption } from "../../components/searchable-select-filter";
+import {
+  unauditedScopeInventoryMessage,
+  unmeasuredInventoryMessage,
+} from "../../capabilities/empty-inventory";
 
 // ARM api-versions - the exact versions the live-tested Diagnostics panels
 // used. The RBAC permissions api-version comes from @soc/core
@@ -178,6 +182,46 @@ export function armFailureMessage(
     );
   }
   return `${label}: HTTP ${status}\n${bodyText(body)}`;
+}
+
+/**
+ * The dependent-listing status line, for BOTH outcomes (HON-2).
+ *
+ * The empty branch is the one that matters. ARM list operations return 200 with
+ * an empty array when RBAC filters the caller out, so "No workspaces found in
+ * this subscription. Create one" - what this said until 2026-08-31 - is a
+ * confident wrong answer of the harmful kind: it invites the operator to build
+ * a workspace that already exists and that they simply cannot see.
+ * docs/inventory-standard.md is BINDING on this.
+ *
+ * SCOPE IS UNMEASURED BY CONSTRUCTION here, which is why no capability set is
+ * consulted. This section runs BEFORE any audit and exists to browse
+ * subscriptions and pick one, so there is no verdict about the subscription
+ * being listed and there cannot be one yet. That is a different fact from the
+ * targeting screen's "we measured a different subscription", and
+ * {@link unauditedScopeInventoryMessage} says so in different words on purpose.
+ *
+ * The create hint SURVIVES, moved behind the hedge and conditioned on the
+ * operator's own knowledge. Rule 3 of the capability model: annotate, never
+ * remove the action. Someone setting up a genuinely empty subscription still
+ * needs to be told to create a workspace.
+ */
+export function dependentListingStatus(
+  kind: "workspaces" | "resource-groups",
+  count: number,
+): string {
+  if (kind === "workspaces") {
+    return count === 0
+      ? `${unauditedScopeInventoryMessage("Log Analytics workspaces", "subscription").text}. ` +
+          "Choose a different subscription, or create a workspace if you are sure there is none."
+      : `Found ${count} workspace(s). Selecting one sets the workspace and its resource group.`;
+  }
+  // Resource groups have NO capability in the settled taxonomy, so nothing
+  // could verify this zero and borrowing a neighbouring capability would
+  // misreport what was checked - the same call the targeting screen makes.
+  return count === 0
+    ? unmeasuredInventoryMessage("resource groups").text
+    : `Found ${count} resource group(s). Selecting one sets the resource group.`;
 }
 
 /** Everything the connect action needs from the form. */

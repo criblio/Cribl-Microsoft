@@ -19,6 +19,7 @@ import {
   listResourceGroups,
   previewDcrUpdate,
   removeTableColumn,
+  guidLossWarning,
   updateDcrInPlace,
 } from "@soc/core";
 import { emptyCapabilitySet } from "@soc/core";
@@ -95,6 +96,11 @@ export function DcrInventoryPanel(props: DcrInventoryPanelProps = {}) {
   // 2026-07-13: matches ARE the highlight); the toggle hides them when the
   // 150+ chips get in the way of the changes.
   const [showUnchanged, setShowUnchanged] = useState(true);
+
+  // HON-4 / ADR 0004: null unless the DEPLOYED declaration is losing guid
+  // columns the fixed generator would declare. Computed once - the render reads
+  // it twice, and the check walks the whole table schema.
+  const guidWarning = preview === null ? null : guidLossWarning(preview);
 
   const scopeReady =
     config.subscriptionId !== "" && config.resourceGroup !== "";
@@ -662,6 +668,18 @@ export function DcrInventoryPanel(props: DcrInventoryPanelProps = {}) {
               </div>
               {permStatus !== "" && (
                 <p className="field-hint">{permStatus}</p>
+              )}
+              {/* HON-4 / ADR 0004. A DCR deployed before 2026-08-23 dropped its
+                  guid columns from the stream declaration, so those fields are
+                  discarded at the DCR boundary and the destination column stays
+                  null - while every deployment reported success. Nothing sweeps
+                  for them, so the warning goes where the operator is already
+                  looking at all three sides, and names Update, which is the fix
+                  already on this card. */}
+              {guidWarning !== null && (
+                <p className="connection-notice" data-testid="guid-loss-warning">
+                  {guidWarning}
+                </p>
               )}
               {missingActions.length > 0 && (
                 <pre className="result">

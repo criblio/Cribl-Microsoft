@@ -33,6 +33,7 @@
 import { describe, expect, it } from "vitest";
 
 import { buildCaptureFilter } from "../domain/capture-filter/capture-filter";
+import { GUID_LIKE_TYPES } from "../domain/schema-mapping";
 import { extractCapturedEvents } from "../usecases/capture-samples/capture-samples";
 import { criblEnvelopeItems } from "../domain/cribl-api/envelope";
 import {
@@ -80,6 +81,35 @@ const liveSleep = (ms: number): Promise<void> =>
 
 /** Pin the Lake dataset. Optional - without it the suite walks the listing. */
 const DATASET = process.env.CRIBL_LIVE_DATASET ?? "";
+
+// --- Azure gating, for the guid row (DBT-2) -------------------------------
+// SEPARATE from the Cribl gate on purpose: the guid belief is about Azure and
+// nothing else here needs ARM, so a workspace with no Azure credentials still
+// runs every Cribl row rather than being turned away at the door.
+//
+// ONE TOKEN AUDIENCE, and it is `https://management.azure.com` - the same one
+// the app's own Azure port uses. MEASURED 2026-08-31, because the obvious
+// alternative silently does not work: a management token POSTed to
+// `api.loganalytics.io/v1/workspaces/{guid}/query` answers 403, while the SAME
+// token against the ARM passthrough below answers 200. Asking for an
+// `api.loganalytics.io` token instead would mean this one row needed a second
+// audience nobody else here needs, and `az account get-access-token` with no
+// --resource hands you the management one.
+const ARM_TOKEN = process.env.AZURE_LIVE_TOKEN ?? "";
+/**
+ * Full ARM id of the workspace whose table is read back. Addresses BOTH calls -
+ * the query passthrough and the tables read - so the workspace GUID is not
+ * needed at all.
+ */
+const ARM_WORKSPACE = process.env.AZURE_LIVE_WORKSPACE_ID ?? "";
+/** Table and column the operator has already onboarded THROUGH this app. */
+const GUID_TABLE = process.env.AZURE_LIVE_GUID_TABLE ?? "";
+const GUID_COLUMN = process.env.AZURE_LIVE_GUID_COLUMN ?? "";
+const GUID_LIVE =
+  ARM_TOKEN !== "" &&
+  ARM_WORKSPACE !== "" &&
+  GUID_TABLE !== "" &&
+  GUID_COLUMN !== "";
 
 /**
  * Narrow the Lake query window. Optional; the usecase's own default is -24h.
@@ -728,4 +758,179 @@ describe.skipIf(!LIVE)("live verification against a real workspace", () => {
     // Lake route failed" when it in fact means "we stopped waiting". Raise this
     // in step with JOB_POLL_INTERVAL_MS.
   }, 120_000);
+});
+
+/**
+ * ROW 9 - the guid cast (ADR 0004, DBT-2).
+ *
+ * THE BELIEF, shipped in 1.12.1 and never observed: declaring a guid column
+ * `string` and promoting it with `toguid()` in transformKql delivers the value,
+ * where the legacy drop left the destination column null forever while the
+ * deployment reported success.
+ *
+ * WHY THIS ROW READS AN INGESTED VALUE RATHER THAN VALIDATING A TEMPLATE.
+ * Two cheaper checks were tried against live Azure on 2026-08-31 and BOTH were
+ * measured to have no teeth - recorded here so the next person does not spend
+ * the same afternoon rediscovering it:
+ *
+ *   1. `az deployment group validate` on a DCR whose transform called
+ *      `tuguid()` - a function that does not exist - returned
+ *      provisioningState "Succeeded". ARM template validation does NOT parse
+ *      transformKql, so a deploy-time check cannot fail and would be a pin
+ *      that only looks like one.
+ *   2. A real PUT does reject, but it rejects on the DESTINATION TABLE first
+ *      (`InvalidOutputTable`) and never reaches the transform unless the table
+ *      already exists. So even the PUT-based version needs a fully onboarded
+ *      table, at which point reading the value back is both stronger and no
+ *      more setup.
+ *
+ * And `toguid()` returns NULL SILENTLY on malformed input rather than erroring,
+ * which is the whole reason a deploy-time answer would not settle anything: a
+ * wrong cast fails exactly as quietly as the drop it replaced. Only the value
+ * in the table is evidence. OBSERVED 2026-08-31 rather than taken from the
+ * ADR - `toguid("not-a-guid")` came back null with no error, alongside
+ * `toguid("")`, in one datatable() probe against a live workspace.
+ *
+ * THE OPERATOR IS `isnotempty`, and it was checked rather than assumed: on a
+ * guid-typed column the same probe returned true for a real guid and false for
+ * both null cases. `count()` alone would have counted the nulls and reported a
+ * broken cast as working, which is the failure mode of the row itself.
+ *
+ * THE QUERY SHAPE WAS RUN LIVE 2026-08-31 through the ARM passthrough, so the
+ * response parsing here is measured too: `tables[0].rows[0]` is
+ * `[total, populated]` for the summarize.
+ *
+ * WHY THE TYPE CHECK READS ARM AND NOT `getschema`. Measured 2026-08-31: the
+ * QUERY API does not report the guid family at all. `SecurityEvent | getschema`
+ * on a workspace whose ARM schema declares SEVEN guid columns came back 220
+ * string, 12 int, 2 datetime and ZERO guid. So a `getschema`-based type
+ * assertion cannot pass on a correctly-typed table, and the earlier draft
+ * quietly asserted only that the column EXISTS while its title promised a type.
+ * The ARM tables API does report `"type": "guid"`, so that is what is read.
+ *
+ * READ-ONLY, like every other row: two GETs and one query against a table the
+ * operator has ALREADY onboarded through this app and already sent data to. It
+ * deploys nothing, creates no table, and ingests nothing.
+ *
+ * Run (the token is the DEFAULT audience of `az account get-access-token`):
+ *   AZURE_LIVE_TOKEN=$(az account get-access-token --query accessToken -o tsv) \
+ *   AZURE_LIVE_WORKSPACE_ID=/subscriptions/.../workspaces/<name> \
+ *   AZURE_LIVE_GUID_TABLE=<Table_CL> AZURE_LIVE_GUID_COLUMN=<GuidColumn> \
+ *   npx vitest run --root packages/core src/testing/live-verify.test.ts
+ *
+ * NOT IN GIT BASH ON WINDOWS, which is this repo's usual shell. MSYS rewrites
+ * an env value that looks like an absolute POSIX path, so the workspace id
+ * arrives as `C:/Program Files/Git/subscriptions/...` and the request goes to
+ * the host `management.azure.comc` (ENOTFOUND). Hit 2026-08-31. Use PowerShell
+ * (`$env:AZURE_LIVE_WORKSPACE_ID = "/subscriptions/..."`) or export
+ * `MSYS2_ENV_CONV_EXCL=*`.
+ */
+describe.skipIf(!GUID_LIVE)("row 9 - the guid cast delivers a value (ADR 0004)", () => {
+  /** One authenticated ARM GET/POST, returning the parsed body and status. */
+  async function arm(
+    url: string,
+    body?: unknown,
+  ): Promise<{ status: number; body: Record<string, unknown> }> {
+    const res = await fetch(url, {
+      method: body === undefined ? "GET" : "POST",
+      headers: {
+        Authorization: `Bearer ${ARM_TOKEN}`,
+        ...(body === undefined ? {} : { "Content-Type": "application/json" }),
+      },
+      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+    });
+    return { status: res.status, body: (await res.json()) as Record<string, unknown> };
+  }
+
+  /**
+   * One Log Analytics query, through the ARM PASSTHROUGH so the management
+   * token works (see the audience note at the top of this file - the direct
+   * `api.loganalytics.io` endpoint answers 403 for it).
+   */
+  async function laQuery(query: string): Promise<Record<string, unknown>> {
+    const res = await arm(
+      `https://management.azure.com${ARM_WORKSPACE}/query?api-version=2017-10-01`,
+      { query },
+    );
+    if (res.status !== 200) {
+      report("row 9", "CANNOT RUN", `query -> HTTP ${res.status}: ${JSON.stringify(res.body)}`);
+      throw new Error(`Log Analytics query answered HTTP ${res.status}`);
+    }
+    return res.body;
+  }
+
+  it("declares the column guid in the TABLE, not string", async () => {
+    // The DESTINATION column keeps its real type; only the STREAM declaration
+    // says string. If this reads `string` the schema was created wrong and the
+    // cast below would be promoting into a column that cannot hold a guid.
+    //
+    // Read from ARM, which is the only source that reports the guid family at
+    // all - see the docblock. This asserts the TYPE, which is what the name
+    // above promises; existence alone would pass on the broken case.
+    const res = await arm(
+      `https://management.azure.com${ARM_WORKSPACE}/tables/${GUID_TABLE}` +
+        "?api-version=2022-10-01",
+    );
+    if (res.status !== 200) {
+      report("row 9 schema", "CANNOT RUN", `tables GET -> HTTP ${res.status}`);
+      throw new Error(`fetch schema for '${GUID_TABLE}': HTTP ${res.status}`);
+    }
+    const schema = (res.body.properties as { schema?: Record<string, unknown> } | undefined)
+      ?.schema;
+    const columns = [
+      ...(((schema?.standardColumns as Array<{ name: string; type: string }>) ?? [])),
+      ...(((schema?.columns as Array<{ name: string; type: string }>) ?? [])),
+    ];
+    const column = columns.find(
+      (c) => c.name.toLowerCase() === GUID_COLUMN.toLowerCase(),
+    );
+    report(
+      "row 9 schema",
+      column === undefined ? "NO SUCH COLUMN" : `type ${column.type}`,
+      `${GUID_TABLE}.${GUID_COLUMN}`,
+    );
+    expect(
+      column,
+      `${GUID_TABLE} has no column named ${GUID_COLUMN}`,
+    ).toBeDefined();
+    expect(
+      GUID_LIKE_TYPES.includes(String(column?.type).toLowerCase()),
+      `${GUID_TABLE}.${GUID_COLUMN} is '${column?.type}', not a guid type - the cast ` +
+        "would be promoting into a column that cannot hold a guid",
+    ).toBe(true);
+  }, 60_000);
+
+  it("DELIVERS the value - the column is not null for every row", async () => {
+    // THE DECISIVE OBSERVATION, and it is a fact rather than an inference: a
+    // populated column can only have come through the cast, because an
+    // undeclared field is discarded at the DCR boundary. An all-null column is
+    // precisely the failure ADR 0004 describes, and it is what the legacy drop
+    // produced while reporting success.
+    const body = await laQuery(
+      `${GUID_TABLE} | where TimeGenerated > ago(24h) ` +
+        `| summarize total = count(), populated = countif(isnotempty(${GUID_COLUMN}))`,
+    );
+    const row = ((body.tables as Array<{ rows: unknown[][] }>)[0]?.rows ?? [])[0] ?? [];
+    const total = Number(row[0] ?? 0);
+    const populated = Number(row[1] ?? 0);
+    report(
+      "row 9 values",
+      populated > 0 ? "CAST WORKS" : total > 0 ? "ALL NULL - CAST FAILED" : "NO DATA",
+      `${populated}/${total} rows carry ${GUID_COLUMN} in the last 24h`,
+    );
+
+    // NO DATA is not a pass. An empty table cannot distinguish a working cast
+    // from a broken one, and reporting it as green is exactly the confident
+    // wrong answer this suite exists to avoid.
+    expect(
+      total,
+      `${GUID_TABLE} has no rows in the last 24h - send data through the DCR first; ` +
+        "an empty table proves nothing either way",
+    ).toBeGreaterThan(0);
+    expect(
+      populated,
+      `every one of ${total} rows has a null ${GUID_COLUMN}: the guid cast is NOT working ` +
+        "(toguid() returns null silently on malformed input - ADR 0004)",
+    ).toBeGreaterThan(0);
+  }, 60_000);
 });

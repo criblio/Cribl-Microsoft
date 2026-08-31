@@ -11,7 +11,7 @@ two cannot disagree.
 alternatives. This board holds only what is a unit of work, what state it is
 in, and what it waits on.
 
-**56 in the backlog, 0 in progress, 36 done.**
+**53 in the backlog, 0 in progress, 40 done.**
 
 ## By menu item
 
@@ -23,15 +23,15 @@ operator sees on any screen. Two menus are PLANNED and have no route yet.
 |---|---|---|---|
 | Dataflow | 3 | 0 | 0 |
 | Setup | 1 | 0 | 0 |
-| Sentinel Integration | 15 | 9 | 0 |
-| DCR Automation | 0 | 2 | 0 |
+| Sentinel Integration | 11 | 13 | 0 |
+| DCR Automation | 1 | 2 | 0 |
 | Pack Maintenance | 4 | 1 | 0 |
 | Permission Verification | 8 | 0 | 0 |
 | Azure Native Source Onboarding (planned) | 13 | 4 | 0 |
 | Windows Event analysis (planned) | 5 | 0 | 0 |
 | Cross-cutting | 7 | 20 | 0 |
 
-Open work totals 56.
+Open work totals 53.
 
 ## Epics and features
 
@@ -66,15 +66,15 @@ Sentinel-side and Lake-side halves of Windows event handling
 | `WIN-F2` Microsoft proprietary enrichment catalog | Windows Event analysis (planned) | 0/2 | WIN-2, D-4 |
 | `WIN-F3` Lake copy format - JSON vs Parquet | Windows Event analysis (planned) | 0/1 | D-5 |
 
-### `HON` Inventory and diagnostic honesty - 9% (1/11)
+### `HON` Inventory and diagnostic honesty - 36% (4/11)
 
 Measured gaps where the app reports a confident wrong answer
 
 | Feature | Menu | Done | Stories |
 |---|---|---|---|
 | `HON-F1` Capability model follow-ons | Permission Verification | 0/4 | HON-6, HON-7*, D-1, D-2* |
-| `HON-F2` Unverified empty inventories | Sentinel Integration | 0/3 | HON-1, HON-2, D-3 |
-| `HON-F3` Guid-column aftermath, made visible | Sentinel Integration | 1/4 | HON-3, HON-8*, HON-4, D-11 |
+| `HON-F2` Unverified empty inventories | Sentinel Integration | 2/3 | HON-1, HON-2, D-3 |
+| `HON-F3` Guid-column aftermath, made visible | Sentinel Integration | 2/4 | HON-3, HON-8*, HON-4, D-11 |
 
 ### `GEN` Pipeline and pack generation - 100% (3/3)
 
@@ -116,13 +116,13 @@ ENABLER EPIC: release mechanics. The packaged tarball trails main, and the lab t
 |---|---|---|---|
 | `REL-F1` Release and deployment hygiene | Cross-cutting | 3/5 | REL-2, REL-3, REL-4, REL-5, REL-6 |
 
-### `DBT` Quality and technical debt _(enabler)_ - 54% (20/37)
+### `DBT` Quality and technical debt _(enabler)_ - 55% (21/38)
 
 ENABLER EPIC: verification gaps, copy, diagram fidelity, docs and the board's own tooling
 
 | Feature | Menu | Done | Stories |
 |---|---|---|---|
-| `DBT-F1` Verification gaps | Sentinel Integration | 0/4 | DBT-2, DBT-5*, DBT-6, DBT-7 |
+| `DBT-F1` Verification gaps | Sentinel Integration | 1/5 | DBT-2, DBT-5*, DBT-6, DBT-7, DBT-36* |
 | `DBT-F2` Copy and UX | Sentinel Integration | 0/6 | DBT-3, DBT-9, DBT-14, DBT-15, DBT-28, D-10* |
 | `DBT-F3` Diagram fidelity | Dataflow | 0/3 | DBT-1, DBT-4, DBT-12 |
 | `DBT-F4` Docs and spec grounding | Cross-cutting | 4/7 | DBT-8, DBT-10, DBT-11, DBT-13, DBT-22, DBT-26, DBT-32 |
@@ -148,7 +148,7 @@ _Nothing here._
 
 ---
 
-## Backlog - next (25)
+## Backlog - next (22)
 
 Settled and unblocked, sequenced behind now.
 
@@ -201,16 +201,6 @@ Settled and unblocked, sequenced behind now.
   measured, do not re-add: Event Hub namespace creation is `arm.deploy`; every
   Cribl-side write is `source.manage`. ---
 
-- **HON-1** Wire `emptyTableListMessage` into the picker screen
-  `HON-F2` `story` `settled`
-  The last of the three pure decisions still owed its wiring. `backlog.md#4`.
-
-- **HON-2** Honour the scope rule at the remaining lister call sites
-  `HON-F2` `story` `settled`
-  A verdict is evidence only about the scope it was measured at, and that
-  includes off-scope denials. `emptyInventoryMessage` now requires a scope
-  argument, so the compiler prompts each new call site. `backlog.md#4`.
-
 - **HON-8** buildDeploymentPreview has no caller - the REVIEW stage is a usecase with no screen
   `HON-F3` `bug` `unconfirmed`
   FOUND while building HON-3 on 2026-08-28, looking for the right surface for
@@ -226,11 +216,6 @@ Settled and unblocked, sequenced behind now.
   REVIEW renders today, and the two possibilities need different fixes.
   Compare with the AZR modules, which also have no consumer but are honestly
   ahead of their screens; this one has a stage claiming to BE the consumer.
-
-- **HON-4** Tell operators that DCRs deployed before the guid fix still lose fields
-  `HON-F3` `story` `settled`
-  `update-dcr` regenerates the declaration so an update fixes it, but nothing
-  sweeps and nothing warns. Pairs with HON-3. `adr/0004:107-112`.
 
 - **HON-6** Give the audit's AGE a home and add a manual re-check
   `HON-F1` `story` `settled` `blocked by D-1`
@@ -257,13 +242,6 @@ Settled and unblocked, sequenced behind now.
   artifact" rule has no button. Targets: Integrate deploy, Batch Deploy, DCR
   Automation. Must stay worded as an offer, not an error - there is a pin on
   the absence of alert semantics. `backlog.md#1`. ---
-
-- **DBT-2** Add the guid cast to the live-verification suite
-  `DBT-F1` `enabler` `settled`
-  The fix shipped in 1.12.1 without ever being observed against live Azure,
-  and `toguid()` returns null silently on malformed input - so a wrong cast
-  fails the same quiet way the drop did. The suite ran live on 2026-08-25 and
-  carries no guid row. `adr/0004:118-124`.
 
 - **DBT-3** Reconcile the Entra `Kind:Direct` copy with what has been measured
   `DBT-F2` `story` `settled`
@@ -413,6 +391,31 @@ Settled and unblocked, sequenced behind now.
   successor, per table?
     [ ] `leave-as-is` Leave it at the ADR-0004 cast - AwsRequestId stays declared string and promoted with toguid(). Correct for well-formed UUIDs, but CloudTrail's requestID frequently is not one, so toguid() returns null and the value drops silently - the same quiet failure the ADR set out to fix.
     [x] `per-table-successor` Route deprecated guid columns to the `_` successor - Per-table content mapping AwsRequestId to AwsRequestId_. ADR-0004 calls this "a real improvement" but insists it is a per-table CONTENT decision, not a schema-mapping rule, so it must not become a new RULE 2b clause. The bundled catalog already carries both columns for AWSCloudTrail.
+
+- **DBT-36** Observe the guid cast actually delivering a value
+  `DBT-F1` `enabler` `settled`
+  [[DBT-2]] built live-verification row 9 and ran it against the lab workspace
+  on 2026-08-31, but the BELIEF it exists to test is still unobserved: that
+  declaring a guid column `string` and promoting it with `toguid()` DELIVERS
+  the value. The row's type assertion passed (`SecurityEvent.InterfaceUuid`
+  reads `guid` from ARM) and its value assertion correctly refused with NO
+  DATA - every table in `law-jpederson-eastus` is EMPTY over 30 days
+  (SecurityEvent, CommonSecurityLog, Cloudflare_CL, GigamonV2_CL all return
+  zero rows), so nothing could be read back. That refusal is the row working
+  as designed, not a gap in it: an empty table cannot tell a working cast from
+  a broken one, and ADR 0004's whole point is that `toguid()` returns null
+  SILENTLY on malformed input, so a wrong cast fails exactly as quietly as the
+  drop it replaced. WHAT THIS NEEDS, and it is setup rather than code: (1) a
+  DCR whose declaration actually carries a guid column -
+  `dcr-SecurityEvent-eastus` is PRE-FIX and is losing four (see [[HON-4]]), so
+  it must be updated first, which the Inventory panel's Update button does;
+  (2) data sent through Cribl into that table carrying those fields; (3)
+  re-run row 9. NOT A CUSTOM TABLE'S `TenantId`, which is the trap here -
+  Cloudflare_CL and GigamonV2_CL have exactly one guid column each and it is
+  TenantId, which AZURE populates on ingestion, so a non-null value there
+  would prove nothing about the cast and would be precisely the confident
+  wrong answer the suite exists to avoid. Close this only on a guid column
+  that could only have arrived through the transform.
 
 ---
 
@@ -701,7 +704,7 @@ Settled, gated on something above.
 
 ---
 
-## Done (36)
+## Done (40)
 
 Kept briefly so a reader can see what just landed; prune when the list grows.
 
@@ -807,6 +810,56 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   (`shouldReloadEdits`, `autoDropPlan`) - which is what made the third one's
   asymmetry visible at a glance.
 
+- **HON-1** Wire `emptyTableListMessage` into the picker screen
+  `HON-F2` `story` `settled` `verified: pins`
+  The last of the three pure decisions still owed its wiring. `backlog.md#4`.
+  CLOSED 2026-08-31, and the wiring turned out to be ALREADY DONE - which is
+  the finding. The chain is complete and was traced rather than assumed:
+  emptyTableListMessage -> use-workspace-tables.ts:145 ->
+  integrate-screen.tsx:1872 -> mapping-review-section.tsx:879-885, which
+  renders the text and a Retry. The card said "the picker screen owes the
+  wiring" and the picker PANEL was deleted on 2026-08-18; the wiring landed in
+  the hook that outlived it, and nobody updated the card. WHAT WAS ACTUALLY
+  MISSING was the pin. The DOM test titled "distinguishes a VERIFIED empty
+  workspace from an unverified one" rendered ONE case and asserted a note
+  EXISTS - and the defect it guards against is a note whose text confidently
+  says "No tables found", which a note-exists check passes on. Replaced with
+  three pins, one per verdict, each asserting the wording and each asserting
+  the confident wrong answer is ABSENT. MUTATION CHECKED: hardcoding the note
+  to "No tables found" kills 2 of the 3; the old pin survived that mutation,
+  which is why it was worth the work.
+
+- **HON-2** Honour the scope rule at the remaining lister call sites
+  `HON-F2` `story` `settled` `verified: pins`
+  A verdict is evidence only about the scope it was measured at, and that
+  includes off-scope denials. `emptyInventoryMessage` now requires a scope
+  argument, so the compiler prompts each new call site. `backlog.md#4`. CLOSED
+  2026-08-31. The remaining call sites were the SETUP WIZARD's two listers,
+  and the workspace one still carried the exact sentence the original bug
+  report named as harmful: "No Log Analytics workspaces found in this
+  subscription. Create one" - inviting an operator to build a workspace that
+  already exists and is merely invisible to them. Resource groups said "No
+  resource groups found in this subscription." Both are fixed; the four
+  previously-applied sites (targeting workspaces, sub/rg pickers, DCR
+  inventory, table listing) were re-read and all honour the rule already. A
+  THIRD HEDGE WAS NEEDED, and refusing to reuse the second is the substance of
+  this card. The wizard runs BEFORE any audit and exists to browse
+  subscriptions, so the targeting screen's "the permission check measured a
+  different subscription" would describe a check the operator has not run.
+  `unauditedScopeInventoryMessage` says "no permission check has measured it"
+  instead. Three hedges now state three different facts - measured elsewhere,
+  never measured, no capability covers it - and a pin asserts no two of them
+  produce the same string, because collapsing them would put an operator in
+  one situation while reading another. The create hint SURVIVES, moved behind
+  the hedge and conditioned on the operator's own knowledge - rule 3 says
+  annotate, never remove the action, and someone setting up a genuinely empty
+  subscription still needs telling. The wording moved into `azure-setup-state`
+  as `dependentListingStatus`, where the section's own docblock says pure
+  decisions belong and where it is testable at all - it was inline in a
+  callback with no test covering it. 9 new pins (5 on the three hedges, 4 on
+  the extracted decision). MUTATION CHECKED: restoring the original copy kills
+  2.
+
 - **HON-3** Surface `droppedColumns` and `unknownTypeColumns` in the UI
   `HON-F3` `story` `settled` `verified: pins`
   The diagnostics already exist and reach nobody - repo-wide the only
@@ -836,6 +889,19 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   2026-08-30 live audit: its output is a deploy-dcr STEP DETAIL, so seeing it
   needs another deploy run, and the audit stopped short of writing to the lab
   again. Still `verified: pins` on purpose.
+
+- **HON-4** Tell operators that DCRs deployed before the guid fix still lose fields
+  `HON-F3` `story` `settled` `verified: both`
+  `update-dcr` regenerates the declaration so an update fixes it, but nothing
+  sweeps and nothing warns. Pairs with HON-3. `adr/0004:107-112`. DONE:
+  `guidLossWarning` on the update preview, intersected with
+  `rebuiltDcrColumns` so RULE 2a's system-column drop is honoured rather than
+  restated. VERIFIED LIVE 2026-08-31 on `dcr-SecurityEvent-eastus`: named 4
+  genuinely lost columns (InterfaceUuid, LogonGuid, SubcategoryGuid,
+  TargetLogonGuid), matching the preview's own "4 added" diff. The table's ARM
+  schema carries SEVEN guid columns - TenantId, SourceComputerId and MG are
+  system columns dropped by design, and a naive table-vs-declaration check
+  names all seven.
 
 - **HON-5** Warn a CSV vendor's operator before the preview that the pack can never route automatically
   `VND-F1` `story` `settled` `verified: both`
@@ -1130,6 +1196,23 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   curated) surfaced the vendor seam with its explanation, and typing
   "1Password" then clicking through flipped the button to "Saved", so the
   ContentCache persistence path works against the real KV.
+
+- **DBT-2** Add the guid cast to the live-verification suite
+  `DBT-F1` `enabler` `settled` `verified: live`
+  The fix shipped in 1.12.1 without ever being observed against live Azure,
+  and `toguid()` returns null silently on malformed input - so a wrong cast
+  fails the same quiet way the drop did. The suite ran live on 2026-08-25 and
+  carries no guid row. `adr/0004:118-124`. DONE: row 9 added and EXECUTED live
+  2026-08-31 - the type assertion passed (`SecurityEvent.InterfaceUuid` reads
+  `guid` from ARM) and the value assertion correctly refused with NO DATA. THE
+  BELIEF ITSELF IS STILL UNOBSERVED: every table in the lab workspace is empty
+  over 30 days, so no working cast has been seen deliver a value. Reopen as a
+  new card when data flows. Two draft defects were caught by running it: a
+  management token answers 403 at `api.loganalytics.io` (the ARM passthrough
+  takes it, and drops the workspace-GUID input), and the query API's
+  `getschema` does not report the guid family at all - SecurityEvent came back
+  220 string / 12 int / 2 datetime with zero guid while ARM declares seven, so
+  the type assertion reads ARM.
 
 - **DBT-13** The Claude hooks travel with the repo
   `DBT-F4` `enabler` `settled` `verified: live`
