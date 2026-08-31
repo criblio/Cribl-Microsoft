@@ -23,7 +23,7 @@ operator sees on any screen. Two menus are PLANNED and have no route yet.
 |---|---|---|---|
 | Dataflow | 3 | 0 | 0 |
 | Setup | 1 | 0 | 0 |
-| Sentinel Integration | 20 | 22 | 2 |
+| Sentinel Integration | 20 | 22 | 3 |
 | DCR Automation | 3 | 7 | 1 |
 | Pack Maintenance | 4 | 1 | 0 |
 | Permission Verification | 8 | 0 | 0 |
@@ -150,7 +150,7 @@ _Nothing here._
 
 ---
 
-## Backlog - now (3)
+## Backlog - now (4)
 
 Next to pick up. Nothing blocks these.
 
@@ -186,6 +186,25 @@ Next to pick up. Nothing blocks these.
   behaviour was not verified live for `contentProductPackages` or
   `alertRules`.
 
+- **DBT-53** Cribl-side sample discovery is gated on an Azure scope, and the copy blames Cribl
+  `DBT-F2` `bug` `settled`
+  FOUND 2026-08-31 by the offline-capability audit.
+  `useSampleSources({enabled: scopeCommitted})` (integrate-screen.tsx:894) and
+  `<SampleSourcePicker enabled={scopeCommitted}>` (`:1709`) gate on
+  `scopeCommitted`, which is nothing but three non-empty AZURE config strings
+  (App.tsx:1447-1450). Disabled, the hook returns before any Cribl call
+  (`use-sample-sources.ts:128-131`), so `inventory` stays null,
+  `captureTarget`/`lakeTarget` are null (`:906-921`), and neither CapturePanel
+  (`:1730`) nor LakePanel (`:1752`) ever mounts. THE DISCOVERY IT GATES IS
+  100% CRIBL-SIDE. Three things then compound it: the copy says "Connect Cribl
+  to pull samples..." (sample-source-picker-state.ts:204-211), blaming the
+  wrong system; the call-site comment rationalises the gate as "gated on
+  scopeCommitted only because there is no Cribl address before that"
+  (`:892-893`), which is FALSE - `PlatformCriblClient` is constructed
+  unconditionally with no tenant (adapters.ts:1893-1900); and a pin protects
+  the misdiagnosis. So an operator with a working Cribl connection and no
+  Azure is told to connect Cribl.
+
 - **TBL-4** Offer the ARM template when the write capability is absent
   `TBL-F3` `story` `settled`
   RAISED BY THE USER 2026-08-31: "if the user hasn't granted the app
@@ -212,7 +231,7 @@ Next to pick up. Nothing blocks these.
 
 ---
 
-## Backlog - next (29)
+## Backlog - next (28)
 
 Settled and unblocked, sequenced behind now.
 
@@ -572,25 +591,6 @@ Settled and unblocked, sequenced behind now.
   three documents need correcting. Note the offline consequence too: the
   wasted read is also the reason the mapping screen touches Azure at all in a
   workflow that is otherwise Azure-free.
-
-- **DBT-53** Cribl-side sample discovery is gated on an Azure scope, and the copy blames Cribl
-  `DBT-F2` `bug` `settled`
-  FOUND 2026-08-31 by the offline-capability audit.
-  `useSampleSources({enabled: scopeCommitted})` (integrate-screen.tsx:894) and
-  `<SampleSourcePicker enabled={scopeCommitted}>` (`:1709`) gate on
-  `scopeCommitted`, which is nothing but three non-empty AZURE config strings
-  (App.tsx:1447-1450). Disabled, the hook returns before any Cribl call
-  (`use-sample-sources.ts:128-131`), so `inventory` stays null,
-  `captureTarget`/`lakeTarget` are null (`:906-921`), and neither CapturePanel
-  (`:1730`) nor LakePanel (`:1752`) ever mounts. THE DISCOVERY IT GATES IS
-  100% CRIBL-SIDE. Three things then compound it: the copy says "Connect Cribl
-  to pull samples..." (sample-source-picker-state.ts:204-211), blaming the
-  wrong system; the call-site comment rationalises the gate as "gated on
-  scopeCommitted only because there is no Cribl address before that"
-  (`:892-893`), which is FALSE - `PlatformCriblClient` is constructed
-  unconditionally with no tenant (adapters.ts:1893-1900); and a pin protects
-  the misdiagnosis. So an operator with a working Cribl connection and no
-  Azure is told to connect Cribl.
 
 - **DBT-38** The add-column controls render with raw browser chrome
   `DBT-F2` `bug` `settled`

@@ -260,6 +260,7 @@
       "type": "bug",
       "status": "backlog",
       "priority": "next",
+      "priorityWhy": "Unreachable code plus a doc that oversells it - no operator can reach buildDeploymentPreview, so nothing is currently wrong on screen. Overlaps DBT-57, which carries the same dead-mechanism cleanup; doing them together avoids deciding the same question twice.",
       "settled": "unconfirmed",
       "dependsOn": [],
       "detail": "FOUND while building HON-3 on 2026-08-28, looking for the right surface for the column diagnostics. `buildDeploymentPreview` is a full usecase - roughly 700 lines with its own test file, DCE handling, existing-resource checks and a JSON-serializable result - and repo-wide the ONLY references are inside its own file and its own test. Nothing in `packages/ui` or `apps/cribl-app` calls it. journey-state describes REVIEW as a shipped stage (\"the Unit 7 deployment-preview screen - the ux-flow-plan 5.2 REVIEW stage\"), which is what makes this worth a card rather than a shrug: either the screen exists and does not use this, or the stage is not shipped and a live document says it is. UNCONFIRMED deliberately - I have not driven the app to see what REVIEW renders today, and the two possibilities need different fixes. Compare with the AZR modules, which also have no consumer but are honestly ahead of their screens; this one has a stage claiming to BE the consumer."
@@ -434,7 +435,8 @@
         "chosen": "derive"
       },
       "detail": "FOUND by the architecture audit 2026-08-28 (ninth), one commit after AZR-2 merged, as a DUPLICATED DECISION: two modules define what Entra profiles exist and they disagree. `entra-diagnostics.ENTRA_PROFILES` has three (SecurityOnly, Standard, HighVolume); the `coverage-catalog` entraId subSelection has two. REPRODUCED, not theorised: storing SecurityOnly through `decodeSelection` yields `subSelections.entraId = [\"Standard\"]` with `dropped = [\"entraId.SecurityOnly\"]`. So the one profile an operator cannot keep is precisely the one AZR-2 added by resolving the LOG-07 drift. It is REPORTED in `dropped` rather than lost silently - that mechanism works as built - but nothing reads `dropped` yet and the choice still reverts. Worth recording exactly how the rationale failed: the entra-categories docblock says \"the coverage catalog keeps offering the two it always did, because changing what a stored selection MEANS is a separate act\". The first half is right - Standard and HighVolume keep their meaning. The second half does not follow from it: declining to make a THIRD value storable is not the same act, and nothing checked whether it was. PARKED 2026-08-28: moved back out of in-progress when the focus shifted to the Sentinel Integration content/pack path. The decision on it is still open and still real.",
-      "priority": "later"
+      "priority": "later",
+      "priorityWhy": "The profile it silently reverts to is the SAFE one, so the failure is a lost preference rather than a wrong deployment. The card is also still undecided on where the profile list should live, and fixing before deciding means fixing twice."
     },
     {
       "id": "AZR-3",
@@ -871,6 +873,7 @@
       "type": "bug",
       "status": "backlog",
       "priority": "next",
+      "priorityWhy": "An interaction annoyance on one list. Nothing is lost, nothing is misreported, and the list stays usable with the scrollbar.",
       "settled": "settled",
       "dependsOn": [],
       "detail": "Found live 2026-08-27: with the pointer over the list, the wheel moves neither the list nor the page - the pointer must leave the list before anything scrolls. Five of eight results were reachable. This is the reproduction the old nested-scrolling question never had, which is what turns it from an annoyance into a bug. *bug, SETTLED. `backlog.md` item 13d.* NOT RE-TESTABLE BY BROWSER AUTOMATION (tried 2026-08-28): wheel events do not reach the app at all through the Cribl shell iframe - scrolling over the list, over the page heading, and over the outer margin all moved nothing. So automation cannot distinguish \"the list swallows the wheel\" from \"the wheel never arrived\", and an automated run would either report a false confirmation or a false all-clear. This card stays on the HUMAN reproduction that filed it. Whoever fixes it should verify by hand for the same reason."
@@ -883,6 +886,7 @@
       "type": "bug",
       "status": "backlog",
       "priority": "next",
+      "priorityWhy": "A missing affordance rather than a wrong one - the badge is absent, not incorrect, so nothing currently on screen is false.",
       "settled": "settled",
       "dependsOn": [],
       "detail": "\"Palo Alto Cortex XDR\" renders none while all seven of its siblings do. Blank reads as neither \"not measured\" nor \"does not apply\" - the absent-versus-zero distinction the inventory standard exists to protect. *bug, SETTLED. `backlog.md` item 13e.* CONFIRMED LIVE 2026-08-28 in the dev app (/apps/a/__local__), unfiltered solution list: AbuseIPDB and Acronis Cyber Protect Cloud carry NO fit badge while 1Password and Agari show Supported, 42Crunch API Protection and AbnormalSecurity show Recommended, and Agent 365 shows Legacy. So the blank is not a rendering failure of one row - the badge column works, and these rows genuinely have nothing to show. Was reported from the eight Palo results; reproduces on the default list, which makes it easier to test."
@@ -895,6 +899,7 @@
       "type": "bug",
       "status": "backlog",
       "priority": "next",
+      "priorityWhy": "Two candidate causes are recorded and it is unresolved which one bit in the observed session. A live repro is cheaper than fixing the wrong one, and fixing the wrong one would leave the real defect behind a card marked done.",
       "settled": "unconfirmed",
       "dependsOn": [],
       "detail": "FOUND 2026-08-28 driving the dev app. The Select Sentinel Solution card advertises `Deep link: #/?solution=1Password`. Navigating the live preview to `/apps/a/__local__#/?solution=Palo%20Alto%20Networks` left 1Password selected - the stored selection won and the URL had no effect. TWO CANDIDATE CAUSES and I have not separated them, which is why this is unconfirmed rather than a fix: (1) on the Cribl shell the app runs in an IFRAME and the hash lands on the OUTER frame, so the app may never see it at all - in which case the advertised link is only usable in a standalone shell and the copy is overstating; (2) integrate-screen.tsx says the link is \"consumed once so Clear works\", so a persisted selection may be designed to win. Settle which before changing anything: if (1), the deep link is broken on the only shipped shell and the card that advertises it is misleading; if (2), it behaves as designed and the COPY needs to say that a stored selection takes precedence. Worth noting the reporter could not tell from the outside, which is the actual defect either way."
@@ -1534,6 +1539,7 @@
       "type": "bug",
       "status": "backlog",
       "priority": "next",
+      "priorityWhy": "One level down from DBT-49, which is fixed, so the common path already attributes store outages honestly. It needs a JobStore outage to bite, and both docblocks now state the remaining limit rather than asserting the guarantee.",
       "settled": "settled",
       "dependsOn": [],
       "detail": "FOUND 2026-08-31 while fixing [[DBT-49]], disclosed by the fixer and confirmed by its reviewer - the same defect one level down. DBT-49 stopped the BATCH blaming a table for a kvstore outage, but `onboard-table.ts:1023` catches everything, writes `jobs.update(job.id, {status:\"failed\", error: message})` and returns status \"failed\", so a store blip inside a CHILD arrives at `onboard-batch.ts:1247` as an ordinary failed table and is recorded as that table's failure, carrying the store's error text. The operator's next action - retry that table - is the wrong one. Fix is the same shape DBT-49 used: tag the store failure inside onboard-table so the caller can tell it apart. The onboard-batch docblock and its per-table catch now state this limit explicitly rather than asserting the guarantee unconditionally, so the code is honest about it while it is open."
@@ -1558,6 +1564,7 @@
       "type": "bug",
       "status": "backlog",
       "priority": "next",
+      "priorityWhy": "Dead code and stale docs, not a runtime defect - no operator action reaches any of it. It also needs a per-item wire-or-delete decision, which is thinking rather than typing, and rushing that is how the dead code got there.",
       "settled": "settled",
       "dependsOn": [],
       "detail": "SPLIT OUT OF [[DBT-54]] 2026-08-31: its reviewer found that the card carried FIVE claims, the fix answered four, and the unanswered one is the one the card itself calls most important - so closing DBT-54 on that fix would have lost it silently. (1) `capabilities.ts:192` `unavailableReason` and the `unreachable` branch of `empty-inventory.ts:106-111` are DEAD at every call site - confirmed by grep: only the declaration, the barrel re-export and their own tests. The second is the sentence `docs/inventory-standard.md` credits as the honest no-Azure degrade, and NO RUNNING CONFIGURATION CAN PRODUCE IT. A documented honesty mechanism that cannot fire is worse than none, because it is being counted on. (2) `coverage-analysis.ts:193-238` `acquireWorkbooks` likewise has zero production callers, while its section header still reads \"Workbook acquisition (AzureManagement port - existing ARM surface)\" and its docstring still describes enumerating the subscription's workbooks - so the product now tells the operator that read never happens while core still documents and tests it as shipped. (3) `docs/porting-plan.md:322-324` (Unit 23) still specifies that ARM enumeration as the scope, which is why the dead function looks intentional to the next reader. DECIDE PER ITEM whether to wire it or delete it; deleting is right wherever the behaviour was deliberately reversed, and the doc has to move with it either way."
@@ -1570,6 +1577,7 @@
       "type": "bug",
       "status": "backlog",
       "priority": "later",
+      "priorityWhy": "Two pins disagreeing about copy. No product behaviour is wrong; the cost is the next person meeting a confusing test failure, and the card already records which of the two over-reached.",
       "settled": "undecided",
       "dependsOn": [],
       "detail": "FOUND 2026-08-31 by the reviewer of [[DBT-54]]. `integrate-arc.test.ts:220` forbids the word \"subscription\" ANYWHERE in the workbook infoTip, while `rule-coverage-state.test.ts:391-393` REQUIRES the summary line to name the subscription beside its exclusion. Both landed in the same fix, and they encode opposite policies for the same fact - so the next person to make the infoTip say what the summary says will be failing a test that looks deliberate. THE UNDERLYING QUESTION IS REAL: naming an excluded source helps an operator answer \"why isn't my deployed workbook here?\", which is the argument the summary pin won on; the infoTip pin was written to stop the OLD false promise coming back, and it over-reached by banning the word rather than the promise. Narrow the infoTip pin to forbid the CLAIM (that deployed workbooks are folded in) rather than the noun, then decide once whether both surfaces name the exclusion."
@@ -1684,6 +1692,7 @@
       "type": "bug",
       "status": "backlog",
       "priority": "next",
+      "priorityWhy": "Needs a decision, not a fix: if the three documents are right the catalog chain reorders, and if the current order is right the documents change. Both behaviours are defensible, so shipping either without deciding just moves the contradiction.",
       "settled": "settled",
       "dependsOn": [],
       "detail": "FOUND 2026-08-31 by the offline-capability audit. `mapping-review-section.tsx:352-368` nests the live-ARM catalog BELOW both repo tiers, so for any table the Sentinel repo defines - which is most of them - the ARM read fires, is awaited, is stored in `liveSchemas`, and is then never reached by resolution. Three documents tell operators the opposite: `live-table-schema-catalog.ts:12-17`, `workspace-tables.ts:150-154`, and release-notes 1.11.12 all say the live columns REPLACE the derived schema. NO TEST PINS THE COMPOSED ORDER, which is why it drifted. Decide which is right before touching it - if the docs are right the chain needs reordering, and if the current order is right three documents need correcting. Note the offline consequence too: the wasted read is also the reason the mapping screen touches Azure at all in a workflow that is otherwise Azure-free."
@@ -1696,6 +1705,7 @@
       "type": "bug",
       "status": "backlog",
       "priority": "later",
+      "priorityWhy": "Needs a custom table that exists with zero materialised columns. That is a real state but a narrow one, and TBL-1 only just made it easy to produce, so it has had no chance to bite yet.",
       "settled": "settled",
       "dependsOn": [],
       "detail": "FOUND 2026-08-31 by the offline-capability audit. `analyze-samples.ts:228` tests `columns.length === 0`, so a custom table that EXISTS in Azure with zero materialised columns is treated as unresolved and re-derived from the sample - which is exactly the quiet substitution `live-table-schema-catalog.ts:42-46` says that tier exists to prevent. The operator is shown a schema the app invented for a table Azure already has. Distinguish 'no such table' from 'a table with no columns yet'; the second is a real state for a freshly created custom table, which [[TBL-1]] now makes easy to produce."
@@ -1720,7 +1730,7 @@
       "title": "Cribl-side sample discovery is gated on an Azure scope, and the copy blames Cribl",
       "type": "bug",
       "status": "backlog",
-      "priority": "next",
+      "priority": "now",
       "settled": "settled",
       "dependsOn": [],
       "detail": "FOUND 2026-08-31 by the offline-capability audit. `useSampleSources({enabled: scopeCommitted})` (integrate-screen.tsx:894) and `<SampleSourcePicker enabled={scopeCommitted}>` (`:1709`) gate on `scopeCommitted`, which is nothing but three non-empty AZURE config strings (App.tsx:1447-1450). Disabled, the hook returns before any Cribl call (`use-sample-sources.ts:128-131`), so `inventory` stays null, `captureTarget`/`lakeTarget` are null (`:906-921`), and neither CapturePanel (`:1730`) nor LakePanel (`:1752`) ever mounts. THE DISCOVERY IT GATES IS 100% CRIBL-SIDE. Three things then compound it: the copy says \"Connect Cribl to pull samples...\" (sample-source-picker-state.ts:204-211), blaming the wrong system; the call-site comment rationalises the gate as \"gated on scopeCommitted only because there is no Cribl address before that\" (`:892-893`), which is FALSE - `PlatformCriblClient` is constructed unconditionally with no tenant (adapters.ts:1893-1900); and a pin protects the misdiagnosis. So an operator with a working Cribl connection and no Azure is told to connect Cribl."
@@ -1774,6 +1784,7 @@
       "type": "bug",
       "status": "backlog",
       "priority": "next",
+      "priorityWhy": "Cosmetic: the control works, it just does not match the app around it. No answer it gives is wrong.",
       "settled": "settled",
       "dependsOn": [],
       "detail": "FOUND 2026-08-31 while mapping the row-editor conventions for [[TBL-1]]. `.field input` and `.field select` (styles.css:358-393) are DESCENDANT selectors and there is no bare `input`/`select` base rule anywhere - the only global rule is the `*` reset at line 176. The add-column control in `dcr-inventory-panel.tsx:709-725` puts its `<input>` and `<select>` directly inside `.panel-controls`, NOT inside a `<label className=\"field\">`, so both render with default browser chrome: no `--border`, no `--surface-raised`, no `--border-focus`, and no dark-theme token. Verified by reading the markup and grepping the sheet. The repo already has three separate precedents for the fix - `.enrich-add input` (5059), `.csv-map-input` (2402) and `.theme-select` (916, whose comment says \"same tokens as .field select, without the field wrapper\") - so this is choosing one, not inventing. Cosmetic only: the control works, it just does not look like the app around it."
@@ -1786,6 +1797,7 @@
       "type": "bug",
       "status": "backlog",
       "priority": "next",
+      "priorityWhy": "The class names are inert, so the layout is already whatever the sibling classes make it. The valuable half is the missing CI check, which is new work rather than a correction.",
       "settled": "settled",
       "dependsOn": [],
       "detail": "FOUND 2026-08-31, same sweep as [[DBT-38]]. `pack-card` and `pack-card-head` (dcr-inventory-panel.tsx:656-657 and pack-inventory-screen.tsx:421-422), `dcr-progress-line` (dcr-inventory-panel.tsx:696) and `identity-row-editable` (identity-block.tsx:96) appear in JSX and match NOTHING in styles.css - confirmed by grep, count zero for each. They are inert; the layout that actually works comes from the sibling classes (`mapping-review-card`, `panel-desc`). This is the exact class of drift the sheet's own comments record catching by hand twice before - styles.css:5108-5113 and 5244-5249, the latter shipping broken since 1.11.5. THE REAL FIX IS THE CHECK, NOT THE FOUR NAMES: there is no automated verification that a rendered className exists in CSS, so this recurs on a schedule. A cheap script - collect string literals in className positions, diff against selectors in styles.css, allowlist the dynamic ones - would turn a recurring manual sweep into CI. Decide when picked up whether to delete the dead names or define them; deleting is right for any whose sibling already does the work."

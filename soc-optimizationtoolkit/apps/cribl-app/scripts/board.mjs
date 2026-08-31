@@ -400,6 +400,35 @@ function hierarchyFindings(data, sections) {
         );
       }
     }
+    // A BUG IS `now` UNLESS THE CARD SAYS WHY NOT. Broken behaviour outranks
+    // new behaviour by default, because a defect is already costing someone
+    // something while a feature is only not-yet-earning. But "all bugs are
+    // now" would flatten the judgement that separates silent data loss from a
+    // list that swallows the mouse wheel, and a NOW column holding everything
+    // ranks nothing. So the default flips, and a lower priority stays
+    // available at the price of writing down the argument - which is the part
+    // that was previously left in someone's head.
+    if (s.type === 'bug' && s.status !== 'done' && s.priority !== 'now') {
+      const why = (s.priorityWhy ?? '').trim();
+      if (why === '') {
+        out.push(
+          `${s.id} is a bug at priority "${s.priority}" with no priorityWhy. ` +
+            `A bug is "now" unless the card says why not.`,
+        );
+      } else if (why.length < 20) {
+        out.push(
+          `${s.id} has a priorityWhy of ${why.length} characters. ` +
+            `Name the reason it can wait, not a placeholder.`,
+        );
+      }
+    }
+    // The field only means something on a deprioritised bug; anywhere else it
+    // is an answer to a question nobody asked, and it will go stale unread.
+    if (s.priorityWhy !== undefined && !(s.type === 'bug' && s.priority !== 'now')) {
+      out.push(
+        `${s.id} carries priorityWhy but is not a deprioritised bug. Drop the field.`,
+      );
+    }
     const f = featureById.get(s.feature);
     if (f === undefined) {
       out.push(`${s.id} belongs to feature "${s.feature}", which is not declared.`);

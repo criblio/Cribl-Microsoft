@@ -191,7 +191,8 @@ report a goal as ready when it is not.
 Each story carries an `id`, `epic`, `feature`, `title`, `type`, `status`
 (backlog / in-progress / done), a `priority` while it is in the backlog
 (now / next / later), `settled` (settled / undecided / unconfirmed),
-`verified` (pins / live / both / none), a `dependsOn` list, and `detail`.
+`verified` (pins / live / both / none), a `dependsOn` list, `detail`, and -
+on a deprioritised `bug` only - a `priorityWhy` (see below).
 `npm run check-board` validates all of it, and the dependency rules are the
 ones prose could not enforce: no cycles, no dependency on a story that does not
 exist, nothing in progress whose blocker is still in the backlog, and nothing
@@ -202,6 +203,49 @@ when the fix takes five minutes, and even when you are going to do it right now.
 File it, move it to `in-progress`, fix it, move it to `done` with a `verified`
 value. A card opened and closed inside one session is not churn; it is the only
 way the work is visible to anyone who was not watching.
+
+### A bug is `now` unless the card says why not
+
+A `bug` card defaults to `priority: now`. Broken behaviour outranks new
+behaviour because the two are not symmetrical: a defect is already costing
+someone something - a wrong answer acted on, a workflow blocked, time spent
+chasing a symptom - while a feature is only not-yet-earning. Ranking them by
+appetite rather than by cost is how a board fills with new work while the
+defects that produced this quarter's support load sit at `later`.
+
+**But "all bugs are now" is the wrong rule**, and it was considered and
+rejected. It flattens the distinction between silent data loss and a list that
+swallows the mouse wheel, and a NOW column holding every bug ranks nothing at
+all - the signal that makes NOW useful is that it is short. Fifteen open bugs
+went into that decision; two of them were genuinely urgent.
+
+So the default flips and the exception costs an argument. A bug at `next` or
+`later` carries a **`priorityWhy`** saying what makes it able to wait, and
+`npm run check-board` FAILS without one - and fails again on a placeholder too
+short to be a reason. The field is only meaningful there, so check-board also
+rejects it on anything else; an explanation attached to a card nobody is
+questioning is one more thing to go stale unread.
+
+What a real `priorityWhy` says is why the COST is low, not why the fix is
+awkward:
+
+- "Cosmetic: the control works, it just does not match the app around it. No
+  answer it gives is wrong."
+- "Needs a decision, not a fix - both current behaviours are defensible, so
+  shipping either without deciding just moves the contradiction."
+- "One level down from a defect already fixed, so the common path is honest,
+  and the code now states the remaining limit rather than asserting the
+  guarantee."
+
+"We are busy" is not one. Neither is "hard to reproduce" on its own - if it is
+hard to reproduce AND costly when it happens, that is an argument for a spike,
+not for `later`.
+
+This rule lives in `check-board` rather than only in prose on purpose. Rule 1
+of the board section in CLAUDE.md - move a card before starting - was prose-only,
+and was broken by the person who had just read it, in the same session, while
+dispatching subagents. A convention that only exists as a sentence is a
+convention that holds until someone is busy.
 
 The line is *committed*. A defect you introduce and fix while drafting, before
 committing, is editing and needs no card - otherwise ordinary work becomes board
