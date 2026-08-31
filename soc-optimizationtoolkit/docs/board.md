@@ -11,7 +11,7 @@ two cannot disagree.
 alternatives. This board holds only what is a unit of work, what state it is
 in, and what it waits on.
 
-**58 in the backlog, 0 in progress, 40 done.**
+**56 in the backlog, 1 in progress, 41 done.**
 
 ## By menu item
 
@@ -24,14 +24,14 @@ operator sees on any screen. Two menus are PLANNED and have no route yet.
 | Dataflow | 3 | 0 | 0 |
 | Setup | 1 | 0 | 0 |
 | Sentinel Integration | 11 | 13 | 0 |
-| DCR Automation | 6 | 2 | 5 |
+| DCR Automation | 5 | 3 | 4 |
 | Pack Maintenance | 4 | 1 | 0 |
 | Permission Verification | 8 | 0 | 0 |
 | Azure Native Source Onboarding (planned) | 13 | 4 | 0 |
 | Windows Event analysis (planned) | 5 | 0 | 0 |
 | Cross-cutting | 7 | 20 | 0 |
 
-Open work totals 58.
+Open work totals 57.
 
 ## Epics and features
 
@@ -130,29 +130,21 @@ ENABLER EPIC: verification gaps, copy, diagram fidelity, docs and the board's ow
 | `DBT-F6` Effect-identity defect class | Pack Maintenance | 0/1 | FX-4 |
 | `DBT-F7` Export instead of deploy - the offline path | DCR Automation | 3/3 | DBT-33, DBT-34, DBT-35* |
 
-### `TBL` Custom table authoring and table-first DCR creation - 0% (0/5)
+### `TBL` Custom table authoring and table-first DCR creation - 20% (1/5)
 
 RAISED BY THE USER 2026-08-31. DCR Automation can onboard a table you can already NAME, but it cannot help you create one, and it cannot show you what the workspace already has. Every schema today arrives from somewhere else - a bundled vendor entry, a pasted JSON file, or a table that already exists - so an operator with a new log source and no schema file has no path through this screen at all.
 
 | Feature | Menu | Done | Stories |
 |---|---|---|---|
 | `TBL-F1` Author a custom table by hand | DCR Automation | 0/2 | TBL-1, TBL-2 |
-| `TBL-F2` Table inventory as the starting point | DCR Automation | 0/2 | TBL-3, TBL-5 |
+| `TBL-F2` Table inventory as the starting point | DCR Automation | 1/2 | TBL-3, TBL-5 |
 | `TBL-F3` The new surfaces work without write permission | DCR Automation | 0/1 | TBL-4 |
 
 ---
 
-## In progress (0)
+## In progress (1)
 
 Started. Anything here with an unfinished dependency is called out on its card.
-
-_Nothing here._
-
----
-
-## Backlog - now (5)
-
-Next to pick up. Nothing blocks these.
 
 - **TBL-1** Author a custom table's fields and types by hand
   `TBL-F1` `story` `settled`
@@ -177,6 +169,12 @@ Next to pick up. Nothing blocks these.
   by the schema-file path only - a hand editor that silently drops a field the
   operator typed would be the same class of quiet loss as [[HON-4]], so a
   stripped row must SAY it was stripped and why.
+
+---
+
+## Backlog - now (3)
+
+Next to pick up. Nothing blocks these.
 
 - **TBL-2** Refuse a table name the workspace already has
   `TBL-F1` `story` `settled` `blocked by TBL-1`
@@ -211,13 +209,25 @@ Next to pick up. Nothing blocks these.
   waiting for. The action per row is the existing onboard path with the
   `existing` schema source - the table is there, so its live Azure schema
   wins, which is the legacy Process-CustomTable contract and needs no new
-  decision. REUSE THE DCR INVENTORY'S OWN LESSONS rather than writing a second
-  listing: the empty state must go through `emptyInventoryMessage` (an empty
-  ARM list is only a real zero once the read is verified), and the panel
-  already shows what a good row looks like. WORTH DECIDING WHEN PICKED UP:
-  whether a table that ALREADY has a DCR says so on its row - the data is one
-  `listDcrInventory` call away and an operator building a duplicate is the
-  thing this screen should prevent.
+  decision. REUSE THE EXISTING DECISIONS rather than writing a second listing:
+  `emptyTableListMessage` (table-picker-state) already decides when an empty
+  table list is a real zero, and the DCR Inventory panel already shows what a
+  good row with a per-row action looks like. NOT AN AUTO-LOAD: the deleted
+  panel's own lesson was that the listing is deliberately not re-attempted
+  automatically, because one 403 becomes a request storm - so this gets a
+  Load/Refresh button like DCR Inventory has. THIS IS NOT A REVIVAL OF
+  `TablePickerSection`, which was DELETED 2026-08-18 (backlog.md, 'The
+  workspace table listing lost its panel'), and the distinction is the whole
+  reason this card is honest: that panel was a PICKER whose job - choose ONE
+  table for the whole analysis - moved onto the per-log-type mapping-review
+  cards, leaving it listing 842 rows nobody selected from. Its own header said
+  'IT LOADS; IT DOES NOT SELECT'. This panel has the job that one lost: it is
+  an operational inventory with an ACTION per row, standing to tables exactly
+  as the DCR Inventory tab stands to DCRs. Reviving the old component would be
+  wrong; building this is not. DECIDED with [[TBL-5]] 2026-08-31: a table that
+  already has a DCR SAYS SO on its row (the user's chosen layout shows a `has
+  DCR` column), because the data is one `listDcrInventory` call away and an
+  operator building a duplicate is the thing this panel should prevent.
 
 - **TBL-4** Offer the ARM template when the write capability is absent
   `TBL-F3` `story` `settled` `blocked by TBL-1, TBL-3`
@@ -242,25 +252,6 @@ Next to pick up. Nothing blocks these.
   card rebuilds it. NOT A MODE TOGGLE, per the shape [[DBT-35]] settled on
   Integrate: a separate control, gated on READ prerequisites only, worded as
   an offer - there is an existing pin on the absence of alert semantics.
-
-- **TBL-5** Where do the two new panels live on the screen?
-  `TBL-F2` `decision` `undecided`
-  DCR Automation is a three-tab screen today - Single table, Batch, Inventory
-  - and both new surfaces have to land somewhere. The tab strip is already the
-  widest thing on the page and Inventory is the landing tab, so adding two
-  more tabs is not obviously right. THE OPTIONS, and what each costs: (a) TWO
-  NEW TABS, 'Tables' and 'New table' - discoverable, symmetric with Inventory,
-  but five tabs and two of them are about the same noun; (b) ONE 'Tables' TAB
-  holding the inventory, with 'Create table' as an action ON it - keeps the
-  noun together and makes creation the natural next step after finding
-  nothing, at the cost of hiding creation one click deeper; (c) FOLD INTO
-  SINGLE TABLE as a fourth schema source plus a browse control - smallest
-  diff, reuses the screen that already onboards one table, but Single is
-  already the densest panel and this doubles it. RECOMMENDATION IS (b): the
-  user's two asks are the same journey - look at what exists, and if what you
-  need is not there, author it - and (b) is the only option that renders them
-  as one. Answer before [[TBL-1]] reaches the UI; the pure state modules are
-  unaffected either way, so this does not block starting.
 
 ---
 
@@ -820,7 +811,7 @@ Settled, gated on something above.
 
 ---
 
-## Done (40)
+## Done (41)
 
 Kept briefly so a reader can see what just landed; prune when the list grows.
 
@@ -1913,3 +1904,34 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   wiring, which the three DOM pins cover. Left at verified: pins deliberately;
   upgrading it on the strength of DBT-33 would be exactly the borrowed
   credibility the board forbids.
+
+- **TBL-5** Where do the two new panels live on the screen?
+  `TBL-F2` `decision` `settled` `verified: none`
+  DCR Automation is a three-tab screen today - Single table, Batch, Inventory
+  - and both new surfaces have to land somewhere. The tab strip is already the
+  widest thing on the page and Inventory is the landing tab, so adding two
+  more tabs is not obviously right. THE OPTIONS, and what each costs: (a) TWO
+  NEW TABS, 'Tables' and 'New table' - discoverable, symmetric with Inventory,
+  but five tabs and two of them are about the same noun; (b) ONE 'Tables' TAB
+  holding the inventory, with 'Create table' as an action ON it - keeps the
+  noun together and makes creation the natural next step after finding
+  nothing, at the cost of hiding creation one click deeper; (c) FOLD INTO
+  SINGLE TABLE as a fourth schema source plus a browse control - smallest
+  diff, reuses the screen that already onboards one table, but Single is
+  already the densest panel and this doubles it. RECOMMENDATION IS (b): the
+  user's two asks are the same journey - look at what exists, and if what you
+  need is not there, author it - and (b) is the only option that renders them
+  as one. Answer before [[TBL-1]] reaches the UI; the pure state modules are
+  unaffected either way, so this does not block starting. DECIDED 2026-08-31,
+  the user chose (b). Reasoning recorded in backlog.md section 15, which is
+  why this card can settle. The chosen layout ALSO settles the question
+  [[TBL-3]] left open - a table that already has a DCR says so on its row -
+  and section 15 records the other thing worth not losing: this panel is NOT a
+  revival of the deleted `TablePickerSection`, because that one was a picker
+  whose job moved away, and this one is an operational inventory with an
+  action per row.
+  DECISION: DCR Automation already has three tabs (Single table, Batch,
+  Inventory) and both new surfaces need a home. Where do they go?
+    [x] `tables-tab` One 'Tables' tab, with Create table as an action on it - The inventory IS the tab; authoring is a control on it. Keeps the noun together and makes creation the natural next step after finding what you need is not there. Costs one click to reach creation.
+    [ ] `two-tabs` Two new tabs, 'Tables' and 'New table' - Most discoverable and symmetric with Inventory, but five tabs on an already-wide strip, and two of them are about the same noun when one is really an action on the other.
+    [ ] `fold-into-single` Fold both into the Single table panel - Smallest diff, no new tabs - the editor is a fourth schema source and browsing is a control beside the name field. But Single is already the densest panel on the screen and this roughly doubles it.

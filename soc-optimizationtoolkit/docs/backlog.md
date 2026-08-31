@@ -1892,3 +1892,76 @@ else needed removing - `ms-sentinel-cloudflare` v1.0.0 in `default`, and
 damage; that was inference from their version numbers, and opening them
 disproved it. The fix stops NEW leftovers; it does not clean up existing ones,
 because the replace only happens on the next rebuild of each pack.
+
+## 15. Custom table authoring on DCR Automation - TBL-5 DECIDED 2026-08-31
+
+**The user's ask, three parts:** create Log Analytics custom tables (validating
+the name is not already taken, then naming fields and assigning types);
+inventory existing tables and create DCRs from one; and if the app has not been
+granted permission to create Azure resources, still offer a downloadable ARM
+template for the DCR.
+
+**One of the three was already on the board, and saying so was the useful part
+of picking this up.** HON-7 is the rule that every blocked action falls back to
+a downloadable artifact, and it already names DCR Automation as a target;
+HON-8 is the engine, `buildDeploymentPreview` - roughly 700 lines with its own
+tests and no caller anywhere in `packages/ui` or `apps/cribl-app`; and Batch
+already ships the behaviour under `templateOnly`, forced on in azure-only mode.
+The mechanism is not missing, it is unreached. TBL-4 therefore adds only what is
+genuinely new - the two NEW surfaces carrying the offer, gated on the MEASURED
+capability so the option appears before something 403s rather than after - and
+says to do HON-7 first or it will be rebuilt.
+
+**What was genuinely missing.** Every existing schema source CONSUMES a schema
+somebody else authored: a bundled `VENDOR_SCHEMAS` entry, a pasted JSON file, or
+a table that already exists. An operator with a new log source and no schema
+file has no path through the screen at all. That is TBL-1. And nothing anywhere
+compares a proposed table name against what the workspace holds -
+`validateCustomTableSchema` checks the name's SHAPE (the `_CL` suffix) and
+`avoidNameCollision` is for DCR names - which matters because the tables PUT is
+an UPSERT, exactly like the DCR PUT that `avoidNameCollision` exists to guard.
+Authoring over a taken name does not fail; it redefines a live table's schema,
+and the first symptom is somebody else's data not arriving. That is TBL-2.
+
+### The decision: one "Tables" tab, not two tabs and not a fold-in
+
+DCR Automation already carries three tabs and Inventory is the landing one. The
+three options were two new tabs (`Tables` and `New table`), one `Tables` tab
+with creation as an action on it, or folding both into the Single table panel.
+
+**Chosen: one `Tables` tab.** The two asks are one journey - look at what
+exists, and if what you need is not there, author it - and this is the only
+option that renders them as one. Two tabs would make `Tables` and `New table`
+read as siblings when one is really an action on the other. Folding into Single
+was the smallest diff but Single is already the densest panel on the screen.
+
+The chosen layout also settles a question TBL-3 had left open: a table that
+already has a DCR SAYS SO on its row. The data is one `listDcrInventory` call
+away, and an operator building a duplicate is the thing this panel should
+prevent.
+
+### This is NOT a revival of `TablePickerSection`
+
+Worth stating plainly, because the next audit will otherwise read TBL-3 as
+re-adding something deliberately deleted. `TablePickerSection` was removed on
+2026-08-18 (see "The workspace table listing lost its panel" above) and the
+reasoning was sound: it was built as a PICKER - list the workspace's tables,
+choose ONE for the whole analysis - and when the choice became per log type the
+picking moved onto the mapping-review cards, leaving a filter box and an
+~842-row list nobody selected from. Its own header said "IT LOADS; IT DOES NOT
+SELECT".
+
+The new panel has the job that one lost. It is an operational inventory with an
+ACTION on every row, standing to tables exactly as the Inventory tab stands to
+DCRs. Reviving the old component would be wrong; building this is not.
+
+Two of that deletion's lessons carry straight over. The listing does NOT
+auto-load - it loads on a button, because one 403 would otherwise become a
+request storm - and `emptyTableListMessage` remains the decision for when an
+empty list is a real zero, rather than a second copy of that rule.
+
+### Status
+
+TBL-1's decision layer is committed (`manual-schema-state.ts`, a fourth `manual`
+source wired into `custom-schema-state`, 21 pins, mutation-checked). The editor
+component, TBL-2's name check and TBL-3's panel are open.

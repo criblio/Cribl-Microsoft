@@ -1535,7 +1535,7 @@
       "priority": "now",
       "settled": "settled",
       "dependsOn": [],
-      "detail": "RAISED BY THE USER 2026-08-31: \"inventory existing tables and create DCRs based on the inventoried table\". The Inventory tab today lists DATA COLLECTION RULES; there is no table inventory on this screen. The direction of travel is what is missing rather than the capability: Single table makes you KNOW the table name and type it in, so an operator who wants to see what is there and act on it has nowhere to start. `listWorkspaceTables` and `fetchWorkspaceTableSchema` already exist and are already driven by `use-workspace-tables`; note that `screens/table-picker/` is state and a hook with NO screen component, so this is the surface that hook has been waiting for. The action per row is the existing onboard path with the `existing` schema source - the table is there, so its live Azure schema wins, which is the legacy Process-CustomTable contract and needs no new decision. REUSE THE DCR INVENTORY'S OWN LESSONS rather than writing a second listing: the empty state must go through `emptyInventoryMessage` (an empty ARM list is only a real zero once the read is verified), and the panel already shows what a good row looks like. WORTH DECIDING WHEN PICKED UP: whether a table that ALREADY has a DCR says so on its row - the data is one `listDcrInventory` call away and an operator building a duplicate is the thing this screen should prevent."
+      "detail": "RAISED BY THE USER 2026-08-31: \"inventory existing tables and create DCRs based on the inventoried table\". The Inventory tab today lists DATA COLLECTION RULES; there is no table inventory on this screen. The direction of travel is what is missing rather than the capability: Single table makes you KNOW the table name and type it in, so an operator who wants to see what is there and act on it has nowhere to start. `listWorkspaceTables` and `fetchWorkspaceTableSchema` already exist and are already driven by `use-workspace-tables`; note that `screens/table-picker/` is state and a hook with NO screen component, so this is the surface that hook has been waiting for. The action per row is the existing onboard path with the `existing` schema source - the table is there, so its live Azure schema wins, which is the legacy Process-CustomTable contract and needs no new decision. REUSE THE EXISTING DECISIONS rather than writing a second listing: `emptyTableListMessage` (table-picker-state) already decides when an empty table list is a real zero, and the DCR Inventory panel already shows what a good row with a per-row action looks like. NOT AN AUTO-LOAD: the deleted panel's own lesson was that the listing is deliberately not re-attempted automatically, because one 403 becomes a request storm - so this gets a Load/Refresh button like DCR Inventory has. THIS IS NOT A REVIVAL OF `TablePickerSection`, which was DELETED 2026-08-18 (backlog.md, 'The workspace table listing lost its panel'), and the distinction is the whole reason this card is honest: that panel was a PICKER whose job - choose ONE table for the whole analysis - moved onto the per-log-type mapping-review cards, leaving it listing 842 rows nobody selected from. Its own header said 'IT LOADS; IT DOES NOT SELECT'. This panel has the job that one lost: it is an operational inventory with an ACTION per row, standing to tables exactly as the DCR Inventory tab stands to DCRs. Reviving the old component would be wrong; building this is not. DECIDED with [[TBL-5]] 2026-08-31: a table that already has a DCR SAYS SO on its row (the user's chosen layout shows a `has DCR` column), because the data is one `listDcrInventory` call away and an operator building a duplicate is the thing this panel should prevent."
     },
     {
       "id": "TBL-4",
@@ -1558,11 +1558,33 @@
       "feature": "TBL-F2",
       "title": "Where do the two new panels live on the screen?",
       "type": "decision",
-      "status": "backlog",
+      "status": "done",
+      "verified": "none",
       "priority": "now",
-      "settled": "undecided",
+      "settled": "settled",
       "dependsOn": [],
-      "detail": "DCR Automation is a three-tab screen today - Single table, Batch, Inventory - and both new surfaces have to land somewhere. The tab strip is already the widest thing on the page and Inventory is the landing tab, so adding two more tabs is not obviously right. THE OPTIONS, and what each costs: (a) TWO NEW TABS, 'Tables' and 'New table' - discoverable, symmetric with Inventory, but five tabs and two of them are about the same noun; (b) ONE 'Tables' TAB holding the inventory, with 'Create table' as an action ON it - keeps the noun together and makes creation the natural next step after finding nothing, at the cost of hiding creation one click deeper; (c) FOLD INTO SINGLE TABLE as a fourth schema source plus a browse control - smallest diff, reuses the screen that already onboards one table, but Single is already the densest panel and this doubles it. RECOMMENDATION IS (b): the user's two asks are the same journey - look at what exists, and if what you need is not there, author it - and (b) is the only option that renders them as one. Answer before [[TBL-1]] reaches the UI; the pure state modules are unaffected either way, so this does not block starting."
+      "decision": {
+        "question": "DCR Automation already has three tabs (Single table, Batch, Inventory) and both new surfaces need a home. Where do they go?",
+        "options": [
+          {
+            "key": "tables-tab",
+            "label": "One 'Tables' tab, with Create table as an action on it",
+            "detail": "The inventory IS the tab; authoring is a control on it. Keeps the noun together and makes creation the natural next step after finding what you need is not there. Costs one click to reach creation."
+          },
+          {
+            "key": "two-tabs",
+            "label": "Two new tabs, 'Tables' and 'New table'",
+            "detail": "Most discoverable and symmetric with Inventory, but five tabs on an already-wide strip, and two of them are about the same noun when one is really an action on the other."
+          },
+          {
+            "key": "fold-into-single",
+            "label": "Fold both into the Single table panel",
+            "detail": "Smallest diff, no new tabs - the editor is a fourth schema source and browsing is a control beside the name field. But Single is already the densest panel on the screen and this roughly doubles it."
+          }
+        ],
+        "chosen": "tables-tab"
+      },
+      "detail": "DCR Automation is a three-tab screen today - Single table, Batch, Inventory - and both new surfaces have to land somewhere. The tab strip is already the widest thing on the page and Inventory is the landing tab, so adding two more tabs is not obviously right. THE OPTIONS, and what each costs: (a) TWO NEW TABS, 'Tables' and 'New table' - discoverable, symmetric with Inventory, but five tabs and two of them are about the same noun; (b) ONE 'Tables' TAB holding the inventory, with 'Create table' as an action ON it - keeps the noun together and makes creation the natural next step after finding nothing, at the cost of hiding creation one click deeper; (c) FOLD INTO SINGLE TABLE as a fourth schema source plus a browse control - smallest diff, reuses the screen that already onboards one table, but Single is already the densest panel and this doubles it. RECOMMENDATION IS (b): the user's two asks are the same journey - look at what exists, and if what you need is not there, author it - and (b) is the only option that renders them as one. Answer before [[TBL-1]] reaches the UI; the pure state modules are unaffected either way, so this does not block starting. DECIDED 2026-08-31, the user chose (b). Reasoning recorded in backlog.md section 15, which is why this card can settle. The chosen layout ALSO settles the question [[TBL-3]] left open - a table that already has a DCR says so on its row - and section 15 records the other thing worth not losing: this panel is NOT a revival of the deleted `TablePickerSection`, because that one was a picker whose job moved away, and this one is an operational inventory with an action per row."
     }
   ],
   "features": [
