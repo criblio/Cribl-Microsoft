@@ -208,6 +208,23 @@ export function groomingFindings(data) {
     });
   }
 
+  // 3b. Deprioritised bugs, WITH the argument, so it gets re-argued.
+  //
+  // Rule 4 makes a bug `now` unless the card says why not, and check-board
+  // enforces that the reason exists. This is where the reason has to face
+  // someone (DBT-59): a justification written once and never read again ages
+  // into a fact, and the whole value of the field is that a groomer can read
+  // "cosmetic: the control works" and answer "it is now, that one bit us
+  // twice this month". Listed every run rather than gated on a count -
+  // there are rarely many, and the point is the re-reading.
+  for (const s of open) {
+    if (s.type !== 'bug' || s.priority === 'now') continue;
+    out.push({
+      kind: 'deprioritised-bug',
+      message: `${s.id} is a bug held at ${String(s.priority).toUpperCase()}: ${s.priorityWhy ?? '(no reason - check-board should have caught this)'} -- still true?`,
+    });
+  }
+
   // 4. Hygiene.
   const done = stories.filter((s) => s.status === 'done');
   if (done.length >= 8) {
@@ -306,6 +323,7 @@ export function renderGroom(data, today, menu) {
     ['DECISIONS IN THE WAY', 'decision'],
     ['PRIORITY DISAGREES WITH READINESS', 'contradiction'],
     ['LEVERAGE', 'leverage'],
+    ['BUGS HELD BACK', 'deprioritised-bug'],
     ['HYGIENE', 'hygiene'],
   ];
   for (const [heading, kind] of sections) {

@@ -16,6 +16,7 @@ import {
   rankOf,
   renderGroom,
   unblockCount,
+  groomingFindings,
 } from './board-groom.mjs';
 
 const story = (over) => ({
@@ -39,6 +40,41 @@ const board = (stories, epics, features) => ({
 });
 
 const idx = (stories) => new Map(stories.map((s) => [s.id, s]));
+
+/**
+ * DBT-59: grooming is where a held-back bug faces someone. Listing the card
+ * without its reason would ask "is this still right?" while withholding the
+ * thing being judged.
+ */
+describe('groomingFindings - bugs held back are re-argued, with the reason', () => {
+  it('lists a deprioritised bug AND the argument for it', () => {
+    const out = groomingFindings(
+      board([
+        story({
+          id: 'REL-9',
+          type: 'bug',
+          priority: 'next',
+          priorityWhy: 'Cosmetic: no answer it gives is wrong.',
+        }),
+      ]),
+    );
+    const found = out.filter((f) => f.kind === 'deprioritised-bug');
+
+    expect(found).toHaveLength(1);
+    expect(found[0].message).toContain('REL-9');
+    expect(found[0].message).toContain('no answer it gives is wrong');
+    // Asks the question rather than just reporting the state.
+    expect(found[0].message).toContain('still true?');
+  });
+
+  it('does not nag about a bug that is already now', () => {
+    const out = groomingFindings(
+      board([story({ id: 'REL-9', type: 'bug', priority: 'now' })]),
+    );
+
+    expect(out.filter((f) => f.kind === 'deprioritised-bug')).toEqual([]);
+  });
+});
 
 describe('prerequisiteChain', () => {
   it('lists prerequisites DEEPEST FIRST so the list can be worked top to bottom', () => {

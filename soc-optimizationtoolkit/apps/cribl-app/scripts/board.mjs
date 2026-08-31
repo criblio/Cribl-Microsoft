@@ -715,6 +715,13 @@ export function renderBoard(data, today) {
       ];
       L.push(`- **${s.id}** ${s.title}`);
       L.push(`  \`${tags.join('\` \`')}\``);
+      // A deprioritised bug's argument, rendered where it can be ARGUED WITH
+      // (DBT-59). Enforcing that the reason is written and then showing it
+      // nowhere buys the ritual and none of the thinking - the field exists so
+      // a groomer can read "cosmetic" and say no, that one is costing us.
+      if ((s.priorityWhy ?? '').trim() !== '') {
+        L.push(wrap(`Not now because: ${s.priorityWhy}`));
+      }
       if ((s.detail ?? '').trim() !== '') L.push(wrap(s.detail));
       if (s.decision !== undefined) {
         // Rendered so the markdown board shows the answer too - the kanban is

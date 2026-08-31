@@ -65,6 +65,37 @@ const board = (stories, epics, features) => ({
  * mouse wheel into one rank, and a NOW column holding everything ranks
  * nothing. So the exception survives, priced at an argument written down.
  */
+/**
+ * DBT-59: the reason has to be VISIBLE, not merely mandatory.
+ *
+ * check-board enforcing priorityWhy while nothing renders it buys the ritual
+ * and none of the thinking - a justification nobody can read cannot be argued
+ * with, only satisfied. These pin the three surfaces someone actually looks at.
+ */
+describe('renderBoard - a deprioritised bug shows its argument', () => {
+  const heldBack = story({
+    type: 'bug',
+    priority: 'next',
+    priorityWhy: 'Cosmetic: the control works, it just does not match the app around it.',
+  });
+
+  it('renders the reason, not just the priority', () => {
+    // Collapsed because the renderer wraps at 76 columns, so the sentence is
+    // split across lines in the file - asserting the raw string would pin the
+    // wrap width rather than the behaviour.
+    const md = renderBoard(board([heldBack])).replace(/\s+/g, ' ');
+
+    expect(md).toContain('Not now because');
+    expect(md).toContain('it just does not match the app around it');
+  });
+
+  it('says nothing for a bug at now - there is no exception to explain', () => {
+    const md = renderBoard(board([story({ type: 'bug', priority: 'now' })]));
+
+    expect(md).not.toContain('Not now because');
+  });
+});
+
 describe('validateBoard - a deprioritised bug owes a reason', () => {
   const bug = (over) => story({ type: 'bug', ...over });
 

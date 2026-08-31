@@ -289,18 +289,28 @@ function card(story, byId, menu) {
           }</p>`,
           `</div>`,
         ].join('');
+  // DBT-59: a deprioritised bug's argument, shown WITHOUT a details toggle.
+  // Rule 4 makes the reason mandatory; hiding it behind a click would leave it
+  // as unread as not rendering it at all, and the whole point of the field is
+  // that a groomer reads "cosmetic" and gets to disagree.
+  const why = (story.priorityWhy ?? '').trim();
+  const whyBlock =
+    why === ''
+      ? ''
+      : `<p class="why"><span class="why-label">Not now because</span> ${richText(why)}</p>`;
   return [
     `<article class="card${blocked.length ? ' is-blocked' : ''}" id="card-${esc(story.id)}"`,
     ` data-epic="${esc(story.epic)}" data-type="${esc(story.type)}"`,
     ` data-settled="${esc(story.settled)}" data-blocked="${blocked.length ? 'yes' : 'no'}"`,
     ` data-menu="${esc(menu ?? 'none')}"`,
-    ` data-text="${esc(`${story.id} ${story.title} ${story.epic} ${detail}`.toLowerCase())}">`,
+    ` data-text="${esc(`${story.id} ${story.title} ${story.epic} ${detail} ${story.priorityWhy ?? ''}`.toLowerCase())}">`,
     `<header><span class="id">${esc(story.id)}</span>`,
     story.feature ? `<span class="feat" title="Feature this story sits under">${esc(story.feature)}</span>` : '',
     menuChip(menu, story.menu !== undefined),
     `<span class="epic">${esc(story.epic)}</span></header>`,
     `<h3>${esc(story.title)}</h3>`,
     `<div class="tags">${tags.join('')}</div>`,
+    whyBlock,
     decisionBlock,
     detail === ''
       ? ''
@@ -431,6 +441,8 @@ input[type=search]{min-width:200px}
 .tag.type-feature{background:#16303a;color:#7fd4f0}
 .tag.type-decision{background:#2c2440;color:#c0a6ff}
 .tag.type-spike{background:#2b2a17;color:#e0d27a}
+.why{margin:6px 0 0;font-size:12px;line-height:1.5;color:#d8b878}
+.why-label{font-weight:700;text-transform:uppercase;letter-spacing:.04em;font-size:10px;color:#b08d4f}
 .tag.verified-both{background:#14301f;color:#7ee0a8}
 .tag.verified-live{background:#14301f;color:#7ee0a8}
 .tag.verified-pins{background:#16303a;color:#7fd4f0}

@@ -11,7 +11,7 @@ two cannot disagree.
 alternatives. This board holds only what is a unit of work, what state it is
 in, and what it waits on.
 
-**66 in the backlog, 0 in progress, 55 done.**
+**66 in the backlog, 0 in progress, 56 done.**
 
 ## By menu item
 
@@ -29,7 +29,7 @@ operator sees on any screen. Two menus are PLANNED and have no route yet.
 | Permission Verification | 8 | 0 | 0 |
 | Azure Native Source Onboarding (planned) | 13 | 4 | 0 |
 | Windows Event analysis (planned) | 5 | 0 | 0 |
-| Cross-cutting | 9 | 21 | 0 |
+| Cross-cutting | 9 | 22 | 0 |
 
 Open work totals 66.
 
@@ -116,7 +116,7 @@ ENABLER EPIC: release mechanics. The packaged tarball trails main, and the lab t
 |---|---|---|---|
 | `REL-F1` Release and deployment hygiene | Cross-cutting | 3/5 | REL-2, REL-3, REL-4, REL-5, REL-6 |
 
-### `DBT` Quality and technical debt _(enabler)_ - 52% (31/60)
+### `DBT` Quality and technical debt _(enabler)_ - 52% (32/61)
 
 ENABLER EPIC: verification gaps, copy, diagram fidelity, docs and the board's own tooling
 
@@ -126,7 +126,7 @@ ENABLER EPIC: verification gaps, copy, diagram fidelity, docs and the board's ow
 | `DBT-F2` Copy and UX | Sentinel Integration | 0/9 | DBT-3, DBT-9, DBT-14, DBT-15, DBT-28, D-10*, DBT-53, DBT-38, DBT-39 |
 | `DBT-F3` Diagram fidelity | Dataflow | 0/3 | DBT-1, DBT-4, DBT-12 |
 | `DBT-F4` Docs and spec grounding | Cross-cutting | 5/10 | DBT-8, DBT-10, DBT-11, DBT-13, DBT-22, DBT-26, DBT-32, DBT-57, DBT-58, DBT-54 |
-| `DBT-F5` Board tooling defects | Cross-cutting | 13/13 | DBT-16, DBT-17, DBT-18, DBT-19, DBT-20, DBT-21, DBT-23, DBT-24, DBT-25, DBT-27, DBT-29, DBT-30, DBT-31 |
+| `DBT-F5` Board tooling defects | Cross-cutting | 14/14 | DBT-16, DBT-17, DBT-18, DBT-19, DBT-20, DBT-21, DBT-23, DBT-24, DBT-25, DBT-27, DBT-29, DBT-30, DBT-31, DBT-59 |
 | `DBT-F6` Effect-identity defect class | Pack Maintenance | 0/1 | FX-4 |
 | `DBT-F7` Export instead of deploy - the offline path | DCR Automation | 3/4 | DBT-33, DBT-34, DBT-35*, DBT-37 |
 
@@ -286,6 +286,10 @@ Settled and unblocked, sequenced behind now.
 
 - **HON-8** buildDeploymentPreview has no caller - the REVIEW stage is a usecase with no screen
   `HON-F3` `bug` `unconfirmed`
+  Not now because: Unreachable code plus a doc that oversells it - no operator
+  can reach buildDeploymentPreview, so nothing is currently wrong on screen.
+  Overlaps DBT-57, which carries the same dead-mechanism cleanup; doing them
+  together avoids deciding the same question twice.
   FOUND while building HON-3 on 2026-08-28, looking for the right surface for
   the column diagnostics. `buildDeploymentPreview` is a full usecase - roughly
   700 lines with its own test file, DCE handling, existing-resource checks and
@@ -399,6 +403,8 @@ Settled and unblocked, sequenced behind now.
 
 - **DBT-14** Stop the solution list swallowing the mouse wheel
   `DBT-F2` `bug` `settled`
+  Not now because: An interaction annoyance on one list. Nothing is lost,
+  nothing is misreported, and the list stays usable with the scrollbar.
   Found live 2026-08-27: with the pointer over the list, the wheel moves
   neither the list nor the page - the pointer must leave the list before
   anything scrolls. Five of eight results were reachable. This is the
@@ -414,6 +420,8 @@ Settled and unblocked, sequenced behind now.
 
 - **DBT-15** Give every solution row a delivery-fit badge, or say why not
   `DBT-F2` `bug` `settled`
+  Not now because: A missing affordance rather than a wrong one - the badge is
+  absent, not incorrect, so nothing currently on screen is false.
   "Palo Alto Cortex XDR" renders none while all seven of its siblings do.
   Blank reads as neither "not measured" nor "does not apply" - the
   absent-versus-zero distinction the inventory standard exists to protect.
@@ -428,6 +436,10 @@ Settled and unblocked, sequenced behind now.
 
 - **DBT-28** The solution deep link does not override a stored selection
   `DBT-F2` `bug` `unconfirmed`
+  Not now because: Two candidate causes are recorded and it is unresolved
+  which one bit in the observed session. A live repro is cheaper than fixing
+  the wrong one, and fixing the wrong one would leave the real defect behind a
+  card marked done.
   FOUND 2026-08-28 driving the dev app. The Select Sentinel Solution card
   advertises `Deep link: #/?solution=1Password`. Navigating the live preview
   to `/apps/a/__local__#/?solution=Palo%20Alto%20Networks` left 1Password
@@ -540,6 +552,10 @@ Settled and unblocked, sequenced behind now.
 
 - **DBT-55** A store outage inside onboardTable is still blamed on the table
   `DBT-F1` `bug` `settled`
+  Not now because: One level down from DBT-49, which is fixed, so the common
+  path already attributes store outages honestly. It needs a JobStore outage
+  to bite, and both docblocks now state the remaining limit rather than
+  asserting the guarantee.
   FOUND 2026-08-31 while fixing [[DBT-49]], disclosed by the fixer and
   confirmed by its reviewer - the same defect one level down. DBT-49 stopped
   the BATCH blaming a table for a kvstore outage, but `onboard-table.ts:1023`
@@ -555,6 +571,10 @@ Settled and unblocked, sequenced behind now.
 
 - **DBT-57** The dead honesty mechanisms the inventory standard counts on
   `DBT-F4` `bug` `settled`
+  Not now because: Dead code and stale docs, not a runtime defect - no
+  operator action reaches any of it. It also needs a per-item wire-or-delete
+  decision, which is thinking rather than typing, and rushing that is how the
+  dead code got there.
   SPLIT OUT OF [[DBT-54]] 2026-08-31: its reviewer found that the card carried
   FIVE claims, the fix answered four, and the unanswered one is the one the
   card itself calls most important - so closing DBT-54 on that fix would have
@@ -578,6 +598,10 @@ Settled and unblocked, sequenced behind now.
 
 - **DBT-50** Live table columns are fetched, awaited, stored - and never consulted
   `DBT-F1` `bug` `settled`
+  Not now because: Needs a decision, not a fix: if the three documents are
+  right the catalog chain reorders, and if the current order is right the
+  documents change. Both behaviours are defensible, so shipping either without
+  deciding just moves the contradiction.
   FOUND 2026-08-31 by the offline-capability audit.
   `mapping-review-section.tsx:352-368` nests the live-ARM catalog BELOW both
   repo tiers, so for any table the Sentinel repo defines - which is most of
@@ -594,6 +618,8 @@ Settled and unblocked, sequenced behind now.
 
 - **DBT-38** The add-column controls render with raw browser chrome
   `DBT-F2` `bug` `settled`
+  Not now because: Cosmetic: the control works, it just does not match the app
+  around it. No answer it gives is wrong.
   FOUND 2026-08-31 while mapping the row-editor conventions for [[TBL-1]].
   `.field input` and `.field select` (styles.css:358-393) are DESCENDANT
   selectors and there is no bare `input`/`select` base rule anywhere - the
@@ -611,6 +637,9 @@ Settled and unblocked, sequenced behind now.
 
 - **DBT-39** Four classNames are rendered but defined in no stylesheet
   `DBT-F2` `bug` `settled`
+  Not now because: The class names are inert, so the layout is already
+  whatever the sibling classes make it. The valuable half is the missing CI
+  check, which is new work rather than a correction.
   FOUND 2026-08-31, same sweep as [[DBT-38]]. `pack-card` and `pack-card-head`
   (dcr-inventory-panel.tsx:656-657 and pack-inventory-screen.tsx:421-422),
   `dcr-progress-line` (dcr-inventory-panel.tsx:696) and
@@ -651,6 +680,10 @@ Settled, gated on something above.
 
 - **AZR-13** SecurityOnly is offered but cannot be stored - it reverts to Standard
   `AZR-F3` `bug` `undecided`
+  Not now because: The profile it silently reverts to is the SAFE one, so the
+  failure is a lost preference rather than a wrong deployment. The card is
+  also still undecided on where the profile list should live, and fixing
+  before deciding means fixing twice.
   FOUND by the architecture audit 2026-08-28 (ninth), one commit after AZR-2
   merged, as a DUPLICATED DECISION: two modules define what Entra profiles
   exist and they disagree. `entra-diagnostics.ENTRA_PROFILES` has three
@@ -929,6 +962,9 @@ Settled, gated on something above.
 
 - **DBT-58** Two pins encode opposite policies for naming the excluded subscription
   `DBT-F4` `bug` `undecided`
+  Not now because: Two pins disagreeing about copy. No product behaviour is
+  wrong; the cost is the next person meeting a confusing test failure, and the
+  card already records which of the two over-reached.
   FOUND 2026-08-31 by the reviewer of [[DBT-54]]. `integrate-arc.test.ts:220`
   forbids the word "subscription" ANYWHERE in the workbook infoTip, while
   `rule-coverage-state.test.ts:391-393` REQUIRES the summary line to name the
@@ -945,6 +981,9 @@ Settled, gated on something above.
 
 - **DBT-51** A real but empty _CL table is silently re-derived from the sample
   `DBT-F1` `bug` `settled`
+  Not now because: Needs a custom table that exists with zero materialised
+  columns. That is a real state but a narrow one, and TBL-1 only just made it
+  easy to produce, so it has had no chance to bite yet.
   FOUND 2026-08-31 by the offline-capability audit. `analyze-samples.ts:228`
   tests `columns.length === 0`, so a custom table that EXISTS in Azure with
   zero materialised columns is treated as unresolved and re-derived from the
@@ -957,7 +996,7 @@ Settled, gated on something above.
 
 ---
 
-## Done (55)
+## Done (56)
 
 Kept briefly so a reader can see what just landed; prune when the list grows.
 
@@ -2084,6 +2123,32 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   typing `Client IP` in the editor tints the row and reads "'Client IP' is not
   a valid column name - letters, digits, and underscores only, not starting
   with a digit"; before the fix it was accepted and previewed.
+
+- **DBT-59** priorityWhy is enforced but rendered nowhere
+  `DBT-F5` `bug` `settled` `verified: pins`
+  FOUND BY THE TWELFTH ARCHITECTURE AUDIT, 2026-08-31, one hour after shipping
+  the rule it breaks - and it defeats that rule's whole purpose. Rule 4 makes
+  a deprioritised bug carry a `priorityWhy`, and `check-board` enforces it.
+  But the field renders in NONE of the three surfaces anyone reads:
+  `docs/board.md` (grep: 0), the live kanban `board-html.mjs` (grep: 0), and
+  `npm run groom` (grep: 0). It exists only inside board.json and inside
+  check-board's failure message. THE POINT OF THE FIELD IS TO BE ARGUED WITH -
+  grooming is where someone should read 'cosmetic: the control works' and say
+  no it is not, that one is costing us. A justification nobody can see cannot
+  be challenged; it can only be satisfied, which is precisely the
+  ritual-without-the-thinking failure the rule's own documentation warns
+  about. Fix: render it under the card in board.md and in the kanban, and give
+  grooming a section that lists deprioritised bugs WITH their reasons so they
+  are re-argued every time the board is groomed rather than aging quietly.
+  FIXED 2026-08-31, all three surfaces: board.md renders 'Not now because:
+  <reason>' under the card, the kanban shows it as a plain paragraph on the
+  card face (NOT behind a details toggle - a reason hidden behind a click is
+  as unread as one not rendered), and grooming gained a BUGS HELD BACK section
+  that prints each one WITH its argument and appends 'still true?' so the
+  question is asked rather than the state merely reported. The kanban's
+  priorityWhy is also folded into the card's search text. 6 pins across the
+  three renderers, mutation-checked: stripping each renderer fails its own pin
+  and only its own.
 
 - **DBT-42** With no solution selected, gap analysis adopts an unrelated solution's DCR flows
   `DBT-F1` `bug` `settled` `verified: pins`

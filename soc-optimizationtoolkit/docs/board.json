@@ -1583,6 +1583,19 @@
       "detail": "FOUND 2026-08-31 by the reviewer of [[DBT-54]]. `integrate-arc.test.ts:220` forbids the word \"subscription\" ANYWHERE in the workbook infoTip, while `rule-coverage-state.test.ts:391-393` REQUIRES the summary line to name the subscription beside its exclusion. Both landed in the same fix, and they encode opposite policies for the same fact - so the next person to make the infoTip say what the summary says will be failing a test that looks deliberate. THE UNDERLYING QUESTION IS REAL: naming an excluded source helps an operator answer \"why isn't my deployed workbook here?\", which is the argument the summary pin won on; the infoTip pin was written to stop the OLD false promise coming back, and it over-reached by banning the word rather than the promise. Narrow the infoTip pin to forbid the CLAIM (that deployed workbooks are folded in) rather than the noun, then decide once whether both surfaces name the exclusion."
     },
     {
+      "id": "DBT-59",
+      "epic": "DBT",
+      "feature": "DBT-F5",
+      "title": "priorityWhy is enforced but rendered nowhere",
+      "type": "bug",
+      "status": "done",
+      "priority": "now",
+      "settled": "settled",
+      "dependsOn": [],
+      "detail": "FOUND BY THE TWELFTH ARCHITECTURE AUDIT, 2026-08-31, one hour after shipping the rule it breaks - and it defeats that rule's whole purpose. Rule 4 makes a deprioritised bug carry a `priorityWhy`, and `check-board` enforces it. But the field renders in NONE of the three surfaces anyone reads: `docs/board.md` (grep: 0), the live kanban `board-html.mjs` (grep: 0), and `npm run groom` (grep: 0). It exists only inside board.json and inside check-board's failure message. THE POINT OF THE FIELD IS TO BE ARGUED WITH - grooming is where someone should read 'cosmetic: the control works' and say no it is not, that one is costing us. A justification nobody can see cannot be challenged; it can only be satisfied, which is precisely the ritual-without-the-thinking failure the rule's own documentation warns about. Fix: render it under the card in board.md and in the kanban, and give grooming a section that lists deprioritised bugs WITH their reasons so they are re-argued every time the board is groomed rather than aging quietly. FIXED 2026-08-31, all three surfaces: board.md renders 'Not now because: <reason>' under the card, the kanban shows it as a plain paragraph on the card face (NOT behind a details toggle - a reason hidden behind a click is as unread as one not rendered), and grooming gained a BUGS HELD BACK section that prints each one WITH its argument and appends 'still true?' so the question is asked rather than the state merely reported. The kanban's priorityWhy is also folded into the card's search text. 6 pins across the three renderers, mutation-checked: stripping each renderer fails its own pin and only its own.",
+      "verified": "pins"
+    },
+    {
       "id": "DBT-42",
       "epic": "DBT",
       "feature": "DBT-F1",
