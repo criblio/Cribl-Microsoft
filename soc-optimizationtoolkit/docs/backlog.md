@@ -2004,3 +2004,40 @@ rule that a denied verdict annotates and never removes the attempt.
 **What it does not settle.** Whether the two TBL-4 surfaces produce the same
 ARM artifact as Integrate's export or a narrower one. That is TBL-4's own
 question and is left to it.
+
+## 17. DBT-62 answered: convert the remaining listings now - 2026-08-31
+
+**The question.** DBT-61 made the empty-as-zero bug a compile error for the
+four ARM listers by returning `Listing<T>` instead of an array. DBT-62 asked
+whether to extend that to the listings it did not cover - Cribl packs and
+worker groups, the Graph directory read, the lab inventory.
+
+**Chosen: convert now.** The recommendation on the card was the opposite -
+"wait until one actually misreads" - and it was wrong. Scoping the conversion
+turned up `lab-inventory-panel.tsx:137` rendering **"No running labs found in
+this subscription."** off an empty `listLabs`, which reads resource groups
+through `listAllPages` and therefore answers `200 []` for an RBAC-filtered
+subscription. That is DBT-64, and it had been shipping.
+
+**Why the recommendation failed, and it is not that the odds were misjudged.**
+"Wait for a defect" quietly assumes a defect will announce itself. This class
+does not. The whole reason `docs/inventory-standard.md` exists is that an
+unverified empty renders as a confident, plausible sentence - "No running labs
+found in this subscription." looks exactly like the truth, and the operator has
+no way to tell. HON-2, DBT-43 and DBT-44 were all found by someone going
+looking, never by the misread surfacing on its own. A waiting strategy is only
+sound where the failure is loud.
+
+**The sharper finding: DBT-61 claimed four ARM listers and there were five.**
+`listLabs` was missed because the sweep followed the inventory screens and Labs
+reads as provisioning. This is worth more than the bug it hid. The type removed
+the mistake everywhere it was applied; choosing where to apply it stayed a
+hand-built list, and that is the step that failed. Converting the remainder is
+not tidiness - it is removing the last place where coverage depends on someone
+having remembered a call site.
+
+**What is NOT converted, by the same rule read the other way.**
+`acquireAnalyticRules` and `acquireSolutionWorkbooks` read files out of the
+repo; `listDeprecatedContentHubSolutions` returns a `Set` used as a lookup.
+None has an ambiguous empty. Wrapping them would teach the codebase that
+`Listing` means "any list", and a type that marks everything marks nothing.

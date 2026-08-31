@@ -28,20 +28,60 @@
  */
 
 /**
- * Either rows (at least one, so permission is self-evident) or empty (which
- * means nothing on its own and must be interpreted).
+ * Rows, a VERIFIED zero, or an unverified nothing.
+ *
+ * The three-way split was forced by `listLabs` (DBT-62/DBT-64) and it is the
+ * right model, not a concession. That usecase FILTERS: it reads the
+ * subscription's resource groups and keeps the ones tagged as labs. So an
+ * empty answer has two genuinely different causes - we read forty groups and
+ * none was a lab (a real zero, and the operator should be told so plainly), or
+ * the group read itself came back empty (nothing can be concluded). A two-way
+ * type collapses those, and collapsing them trades a confident wrong answer
+ * for a permanent hedge, which is its own wrong answer.
+ *
+ * The codebase had already discovered this shape and named it well: the DCR
+ * column's `DcrPresence` is `has | none-in-scope | unchecked`. Same three
+ * states, arrived at independently, which is the strongest argument that they
+ * are real.
+ *
+ * `rows` stays NON-EMPTY BY TYPE - that is what makes a count taken from it
+ * safe. `none` carries no rows because there are none to carry.
  */
 export type Listing<T> =
   | { readonly kind: "rows"; readonly rows: readonly [T, ...T[]] }
+  | { readonly kind: "none" }
   | { readonly kind: "empty" };
 
 /**
- * Wrap a raw listing result. The ONLY way a `Listing` is minted, so a lister
- * cannot half-adopt this by constructing the union inline.
+ * Wrap a RAW listing result - the whole response, unfiltered.
+ *
+ * Empty means unverified here and never `none`, because for a raw ARM or Cribl
+ * listing those two cases are byte-identical on the wire. Only a caller holding
+ * a capability verdict can promote it, which is what `empty-inventory.ts` does.
  */
 export function toListing<T>(rows: readonly T[]): Listing<T> {
   return rows.length === 0
     ? { kind: "empty" }
+    : { kind: "rows", rows: rows as readonly [T, ...T[]] };
+}
+
+/**
+ * Wrap rows DERIVED by filtering an already-read listing.
+ *
+ * This is the only way to mint a verified `none`, and it demands the source
+ * listing to do it - so the provenance is structural rather than promised in a
+ * comment. If the underlying read told us nothing (`empty`), no filter over it
+ * can tell us anything either, and that propagates automatically. If the read
+ * did produce rows, then zero matches is a measured zero and is SAFE to state
+ * plainly.
+ */
+export function filterListing<S, T>(
+  source: Listing<S>,
+  rows: readonly T[],
+): Listing<T> {
+  if (source.kind === "empty") return { kind: "empty" };
+  return rows.length === 0
+    ? { kind: "none" }
     : { kind: "rows", rows: rows as readonly [T, ...T[]] };
 }
 
@@ -64,6 +104,19 @@ export function listingRows<T>(listing: Listing<T>): readonly T[] {
 }
 
 /**
+ * True when the read behind this listing actually happened - rows, or a
+ * measured zero. False only for the unverified `empty`.
+ *
+ * For callers that need the question "may I say none?" rather than the rows,
+ * so they do not have to know that `none` and `rows` are the two verified
+ * kinds. That is the fact most likely to be got wrong by writing
+ * `kind !== "empty"` from memory.
+ */
+export function listingWasRead<T>(listing: Listing<T>): boolean {
+  return listing.kind !== "empty";
+}
+
+/**
  * How many rows, when the caller has ALREADY established what empty means.
  *
  * Takes the count of the empty case as an argument rather than assuming zero,
@@ -72,5 +125,10 @@ export function listingRows<T>(listing: Listing<T>): readonly T[] {
  * say "none" passes 0; one that has not should not be counting at all.
  */
 export function listingCount<T>(listing: Listing<T>, whenEmpty: number): number {
-  return listing.kind === "rows" ? listing.rows.length : whenEmpty;
+  if (listing.kind === "rows") return listing.rows.length;
+  // A verified `none` IS zero and ignores whenEmpty - the argument exists to
+  // make the caller state an assumption, and here there is no assumption left
+  // to state. Only the unverified `empty` still needs one.
+  if (listing.kind === "none") return 0;
+  return whenEmpty;
 }

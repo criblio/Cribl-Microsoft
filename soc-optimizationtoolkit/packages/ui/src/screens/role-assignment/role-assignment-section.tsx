@@ -25,6 +25,7 @@ import { InfoTip } from "../../components/info-tip";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   acquireServicePrincipals,
+  listingRows,
   assignDcrRoles,
   defaultServicePrincipalId,
 } from "@soc/core";
@@ -115,8 +116,14 @@ export function RoleAssignmentSection({
     setSpLoading(true);
     setSpError("");
     try {
-      const list = await acquireServicePrincipals(graph, clientId);
-      setServicePrincipals(list);
+      const listed = await acquireServicePrincipals(graph, clientId);
+      // Sanctioned unwrap (DBT-62): these rows only POPULATE a picker and the
+      // operator can always type an object id by hand, which is the documented
+      // fallback when the directory read is unavailable. Nothing here counts
+      // them or says the tenant has none, so an empty listing costs
+      // suggestions rather than producing a claim.
+      const list = listingRows(listed);
+      setServicePrincipals([...list]);
       // Preselect the app's own SP when the field is still empty; never
       // overwrite an id the operator already entered.
       setObjectId((cur) =>

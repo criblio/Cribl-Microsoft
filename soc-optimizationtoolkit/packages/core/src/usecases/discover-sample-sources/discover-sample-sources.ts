@@ -32,6 +32,12 @@
  */
 
 import type { CriblClient, CriblGroupSummary } from "../../ports/cribl-client";
+import {
+  filterListing,
+  listingCount,
+  listingRows,
+  toListing,
+} from "../../domain/inventory-listing";
 import { isSearchGroup, isStreamWorkerGroup } from "../../ports/cribl-client";
 import type { Logger } from "../../ports/logger";
 import { buildSampleSourceInventory } from "../../domain/sample-sources/inventory";
@@ -106,16 +112,39 @@ export async function listSampleSourceGroups(
     };
   }
 
-  const streamGroupIds = groups.filter(isStreamWorkerGroup).map((g) => g.id);
+  // DBT-62: the Cribl group listing carries the same ambiguity as an ARM one -
+  // a token scoped to one worker group lists what it can reach, not what
+  // exists - so the two ways of ending up with no Stream group get different
+  // sentences. `filterListing` demands the source read to tell them apart.
+  const listed = toListing(groups);
+  const streamGroups = filterListing(
+    listed,
+    groups.filter(isStreamWorkerGroup),
+  );
+  const streamGroupIds = listingRows(streamGroups).map((g) => g.id);
   const searchGroupId = groups.find(isSearchGroup)?.id;
   const notes: string[] = [];
-  if (streamGroupIds.length === 0) {
+  if (streamGroups.kind === "none") {
+    // EARNED: groups came back and none of them is a Stream group. The
+    // original wording already said "visible" rather than "exists", which was
+    // careful - it is kept, because it is still the honest word.
     notes.push(
       "No Stream worker group is visible, so there is no live source to capture from.",
     );
+  } else if (streamGroups.kind === "empty") {
+    // NOT EARNED: the worker-group listing itself returned nothing, which
+    // looks identical whether the deployment has no groups or this token
+    // cannot see them. Saying "no Stream worker group" here would be a claim
+    // about the deployment made from a fact about the token.
+    notes.push(
+      "The worker-group listing returned nothing, so no Stream source could be " +
+        "identified. That looks the same whether this deployment has no worker " +
+        "groups or this token cannot see them. Uploading samples still works.",
+    );
   }
   logger?.info("discover-sample-sources: groups listed", {
-    streamGroups: streamGroupIds.length,
+    streamGroups: listingCount(streamGroups, 0),
+    streamListing: streamGroups.kind,
     searchGroup: searchGroupId ?? "(none)",
   });
   return {

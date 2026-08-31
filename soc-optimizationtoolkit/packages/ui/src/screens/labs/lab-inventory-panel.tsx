@@ -10,7 +10,9 @@ import {
   destroyLab,
   extendLabTtl,
   listLabs,
+  listingRows,
   type LabInventoryEntry,
+  type Listing,
 } from "@soc/core";
 import { usePorts } from "../../ports-context";
 import { formatLabInventoryRow, parseExtendHours } from "./labs-state";
@@ -22,7 +24,11 @@ export interface LabInventoryPanelProps {
 
 export function LabInventoryPanel({ subscriptionId }: LabInventoryPanelProps) {
   const { ports } = usePorts();
-  const [labs, setLabs] = useState<LabInventoryEntry[] | null>(null);
+  // DBT-64: the LISTING is held, not an array. `null` still means "not loaded
+  // or the read threw"; the listing's own `none` vs `empty` is what separates
+  // "there are no labs" from "we cannot tell", and flattening it here would
+  // put the bug straight back.
+  const [labs, setLabs] = useState<Listing<LabInventoryEntry> | null>(null);
   const [loadingLabs, setLoadingLabs] = useState(false);
   const [labsError, setLabsError] = useState("");
   const [extendHours, setExtendHours] = useState("72");
@@ -133,11 +139,26 @@ export function LabInventoryPanel({ subscriptionId }: LabInventoryPanelProps) {
         </label>
       </div>
       {labsError !== "" && <pre className="result">{labsError}</pre>}
-      {labs !== null && labs.length === 0 && (
+      {/*
+        DBT-64. This said "No running labs found in this subscription." for
+        BOTH nothing-kinds, which stated an RBAC-filtered `200 []` as a fact
+        about the subscription. `none` is still said plainly - it is earned,
+        because resource groups were read and none of them was a lab - and only
+        the unverified case hedges and names what would settle it.
+      */}
+      {labs?.kind === "none" && (
         <p className="field-hint">No running labs found in this subscription.</p>
       )}
+      {labs?.kind === "empty" && (
+        <p className="field-hint">
+          Cannot confirm whether this subscription has labs - listing its
+          resource groups returned nothing, which looks the same whether there
+          are none or this identity cannot see them. Reader on the subscription
+          settles it.
+        </p>
+      )}
       {labs !== null &&
-        labs.map((lab) => (
+        listingRows(labs).map((lab) => (
           <div className="discovery-result" key={lab.name}>
             <span className={lab.expired ? "field-hint eh-warning" : "field-hint"}>
               {formatLabInventoryRow(lab)}

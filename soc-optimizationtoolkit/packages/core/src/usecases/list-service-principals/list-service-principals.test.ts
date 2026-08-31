@@ -7,6 +7,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { GraphDirectory, ServicePrincipalRef } from "../../ports/graph-directory";
+import { listingRows } from "../../domain/inventory-listing";
 import {
   acquireServicePrincipals,
   defaultServicePrincipalId,
@@ -97,7 +98,7 @@ describe("acquireServicePrincipals", () => {
         sp("obj-a", "app-a", "Alpha"),
       ],
     };
-    const sorted = await acquireServicePrincipals(graph, "app-own");
+    const sorted = listingRows(await acquireServicePrincipals(graph, "app-own"));
     expect(sorted.map((s) => s.id)).toEqual(["obj-own", "obj-a", "obj-b"]);
   });
 

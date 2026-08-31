@@ -11,7 +11,7 @@ two cannot disagree.
 alternatives. This board holds only what is a unit of work, what state it is
 in, and what it waits on.
 
-**58 in the backlog, 0 in progress, 69 done.**
+**58 in the backlog, 0 in progress, 71 done.**
 
 ## By menu item
 
@@ -23,8 +23,8 @@ operator sees on any screen. Two menus are PLANNED and have no route yet.
 |---|---|---|---|
 | Dataflow | 3 | 0 | 0 |
 | Setup | 1 | 0 | 0 |
-| Sentinel Integration | 13 | 33 | 0 |
-| DCR Automation | 3 | 8 | 0 |
+| Sentinel Integration | 12 | 35 | 0 |
+| DCR Automation | 4 | 8 | 0 |
 | Pack Maintenance | 4 | 1 | 0 |
 | Permission Verification | 8 | 0 | 0 |
 | Azure Native Source Onboarding (planned) | 13 | 4 | 0 |
@@ -116,13 +116,13 @@ ENABLER EPIC: release mechanics. The packaged tarball trails main, and the lab t
 |---|---|---|---|
 | `REL-F1` Release and deployment hygiene | Cross-cutting | 3/5 | REL-2, REL-3, REL-4, REL-5, REL-6 |
 
-### `DBT` Quality and technical debt _(enabler)_ - 65% (42/65)
+### `DBT` Quality and technical debt _(enabler)_ - 67% (44/66)
 
 ENABLER EPIC: verification gaps, copy, diagram fidelity, docs and the board's own tooling
 
 | Feature | Menu | Done | Stories |
 |---|---|---|---|
-| `DBT-F1` Verification gaps | Sentinel Integration | 16/24 | DBT-2, DBT-5*, DBT-6, DBT-7, DBT-36*, DBT-55, DBT-56, DBT-42, DBT-43, DBT-44, DBT-45, DBT-46, DBT-47, DBT-48, DBT-49, DBT-50, DBT-51, DBT-52, DBT-41, DBT-40, DBT-60, DBT-61, DBT-62, DBT-63 |
+| `DBT-F1` Verification gaps | Sentinel Integration | 18/25 | DBT-2, DBT-5*, DBT-6, DBT-7, DBT-36*, DBT-55, DBT-56, DBT-42, DBT-43, DBT-44, DBT-45, DBT-46, DBT-47, DBT-48, DBT-49, DBT-50, DBT-51, DBT-52, DBT-41, DBT-40, DBT-60, DBT-61, DBT-62, DBT-63, DBT-64 |
 | `DBT-F2` Copy and UX | Sentinel Integration | 3/9 | DBT-3, DBT-9, DBT-14, DBT-15, DBT-28, D-10*, DBT-53, DBT-38, DBT-39 |
 | `DBT-F3` Diagram fidelity | Dataflow | 0/3 | DBT-1, DBT-4, DBT-12 |
 | `DBT-F4` Docs and spec grounding | Cross-cutting | 6/10 | DBT-8, DBT-10, DBT-11, DBT-13, DBT-22, DBT-26, DBT-32, DBT-57, DBT-58, DBT-54 |
@@ -130,13 +130,13 @@ ENABLER EPIC: verification gaps, copy, diagram fidelity, docs and the board's ow
 | `DBT-F6` Effect-identity defect class | Pack Maintenance | 0/1 | FX-4 |
 | `DBT-F7` Export instead of deploy - the offline path | DCR Automation | 3/4 | DBT-33, DBT-34, DBT-35*, DBT-37 |
 
-### `TBL` Custom table authoring and table-first DCR creation - 86% (6/7)
+### `TBL` Custom table authoring and table-first DCR creation - 75% (6/8)
 
 RAISED BY THE USER 2026-08-31. DCR Automation can onboard a table you can already NAME, but it cannot help you create one, and it cannot show you what the workspace already has. Every schema today arrives from somewhere else - a bundled vendor entry, a pasted JSON file, or a table that already exists - so an operator with a new log source and no schema file has no path through this screen at all.
 
 | Feature | Menu | Done | Stories |
 |---|---|---|---|
-| `TBL-F1` Author a custom table by hand | DCR Automation | 3/3 | TBL-6, TBL-1, TBL-2 |
+| `TBL-F1` Author a custom table by hand | DCR Automation | 3/4 | TBL-6, TBL-1, TBL-2, TBL-8 |
 | `TBL-F2` Table inventory as the starting point | DCR Automation | 2/2 | TBL-3, TBL-5 |
 | `TBL-F3` The new surfaces work without write permission | DCR Automation | 1/2 | TBL-4, TBL-7 |
 
@@ -505,21 +505,24 @@ Settled and unblocked, sequenced behind now.
   settled hours ago, so decide it before building - backlog.md section 16 is
   the reasoning it would amend.
 
-- **DBT-62** Route the remaining Cribl listings through Listing<T>
-  `DBT-F1` `enabler` `undecided`
-  [[DBT-61]] converted the four ARM listers, which is where the whole defect
-  class actually landed. The Cribl-side listings - packs, destinations,
-  sources - have the same ambiguity in principle: a token scoped to one worker
-  group lists what it can see, not what exists. NOT URGENT and deliberately
-  not bundled: no defect has been filed against them, the blast radius is a
-  second set of call sites, and doing it speculatively would be the reflex
-  this repo keeps writing cards about. Do it when a Cribl listing actually
-  reads as a zero somewhere, or when touching those call sites for another
-  reason.
-  DECISION (unanswered): Extend Listing<T> to the Cribl-side listings, or
-  leave them?
-    [ ] `wait-for-a-defect` Leave them until one actually misreads - No defect has been filed against a Cribl listing. Every empty-as-zero bug so far came from ARM, where RBAC filtering makes 200-with-nothing routine. Converting on suspicion is the reflex this repo keeps filing cards about - and the type is now there to reach for the moment one does misread.
-    [ ] `convert-now` Convert them now for symmetry - A token scoped to one worker group lists what it can see, so the ambiguity is real in principle. Doing it while the pattern is fresh is cheaper than rediscovering it later - at the cost of a second sweep of call sites for a bug nobody has hit.
+- **TBL-8** The Tables tab needs a filter - the real workspace has 843 tables
+  `TBL-F1` `story` `settled`
+  Found by verifying [[DBT-61]] live, and it is EVIDENCE AGAINST AN EARLIER
+  DECISION rather than a defect in what was built. [[TBL-2]] deliberately
+  shipped the Tables tab with no filter box; law-jpederson-eastus then
+  returned 843 tables. The panel's whole purpose is answering 'does this table
+  already have a DCR', and at 843 alphabetical rows that question cannot be
+  answered by looking. The row count was not known when the no-filter call was
+  made, so this reopens it with a number rather than reversing it on taste.
+  Scope: a substring filter over the Name column, client-side over rows
+  already loaded - no new request, no change to the DCR join. Reuse the Logs
+  screen's `Text` filter idiom (substring, case-insensitive) rather than
+  inventing a second one. WATCH THE COUNT WORDING: whatever the filter renders
+  alongside it (`n of 843`) is a count derived from a listing, so it must come
+  from the rows branch - see [[DBT-61]] and docs/inventory-standard.md. A
+  filter that matches nothing must say 'no table matches that filter', which
+  is a fact about the filter, and must NOT reuse the empty-listing wording,
+  which is a claim about the workspace.
 
 ---
 
@@ -860,7 +863,7 @@ Settled, gated on something above.
 
 ---
 
-## Done (69)
+## Done (71)
 
 Kept briefly so a reader can see what just landed; prune when the list grows.
 
@@ -2705,7 +2708,64 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   tenant cannot show without removing a permission on purpose. The has-a-DCR
   cell was also not seen - the Tables tab has no filter box and
   CommonSecurityLog sits hundreds of alphabetical rows down a list of 843, and
-  iframe scrolling could not be driven from automation.
+  iframe scrolling could not be driven from automation. CORRECTION 2026-08-31:
+  this card says 'all four ARM listers'. There were FIVE - `listLabs` was
+  missed, and it was carrying a live defect ([[DBT-64]]). The sweep looked at
+  the inventory screens and Labs did not read as one. Left in place rather
+  than edited above, because the claim being wrong is the useful record: the
+  type removed the mistake everywhere it was applied, and the hand-built list
+  of where to apply it was the weak step.
+
+- **DBT-62** Route the remaining Cribl listings through Listing<T>
+  `DBT-F1` `enabler` `settled` `verified: pins`
+  [[DBT-61]] converted the four ARM listers, which is where the whole defect
+  class actually landed. The Cribl-side listings - packs, destinations,
+  sources - have the same ambiguity in principle: a token scoped to one worker
+  group lists what it can see, not what exists. NOT URGENT and deliberately
+  not bundled: no defect has been filed against them, the blast radius is a
+  second set of call sites, and doing it speculatively would be the reflex
+  this repo keeps writing cards about. Do it when a Cribl listing actually
+  reads as a zero somewhere, or when touching those call sites for another
+  reason. DECIDED 2026-08-31 by the user: convert-now, against the
+  recommendation recorded above. The recommendation was wrong on its own terms
+  and the evidence arrived within the hour: scoping the conversion immediately
+  found [[DBT-64]], a live 'No running labs found in this subscription.'
+  stated from an unverified ARM listing, in a FIFTH ARM lister that [[DBT-61]]
+  missed while claiming to have covered them all. 'Wait until one actually
+  misreads' assumed someone would notice the misread; nobody had, and it had
+  been shipping. SCOPE, measured rather than assumed. Convert: `listLabs`
+  (ARM, and the one that produced DBT-64), `acquireServicePrincipals` (Graph -
+  a directory read without Application.Read.All returns a filtered set, not an
+  error), `listSampleSourceGroups` and `listDeployedPacks` (Cribl - a token
+  scoped to one worker group lists what it can see). DO NOT convert, and the
+  reason is the same rule read the other way: `acquireAnalyticRules` and
+  `acquireSolutionWorkbooks` read files out of the repo, and
+  `listDeprecatedContentHubSolutions` returns a Set used as a lookup, not an
+  inventory. None of the three has an ambiguous empty, and wrapping them would
+  teach the codebase that `Listing` means 'any list', which is how a type
+  stops carrying information. DONE 2026-08-31. THE TYPE GREW A THIRD VARIANT,
+  forced by listLabs and right on its own merits: that usecase FILTERS a read,
+  so zero labs out of forty groups read is a measured zero the operator should
+  be told plainly, while zero labs from an empty group read means nothing. A
+  two-way listing collapses those and trades a confident wrong answer for a
+  permanent hedge, which is its own wrong answer. Listing<T> is now rows |
+  none | empty, minted by toListing (raw reads, empty is always unverified)
+  and filterListing (derived rows, and the ONLY way to mint a verified none -
+  it demands the source listing, so provenance is structural rather than
+  promised in a comment). CONVERTED: listLabs (ARM, carried [[DBT-64]]),
+  acquireServicePrincipals (Graph answers a caller without
+  Application.Read.All with what it may see, not an error) and
+  listSampleSourceGroups (a Cribl token scoped to one worker group lists what
+  it can reach). SCOPE CORRECTION, measured rather than assumed:
+  listDeployedPacks was named on this card and is NOT converted. It pushes
+  exactly one entry per requested group and THROWS on any non-ok parse, so its
+  emptiness is never ambiguous - wrapping it would teach the codebase that
+  Listing means any list, and a type that marks everything marks nothing. Same
+  reasoning already excluded acquireAnalyticRules, acquireSolutionWorkbooks
+  and listDeprecatedContentHubSolutions.
+  DECISION: Extend Listing<T> to the Cribl-side listings, or leave them?
+    [ ] `wait-for-a-defect` Leave them until one actually misreads - No defect has been filed against a Cribl listing. Every empty-as-zero bug so far came from ARM, where RBAC filtering makes 200-with-nothing routine. Converting on suspicion is the reflex this repo keeps filing cards about - and the type is now there to reach for the moment one does misread.
+    [x] `convert-now` Convert them now for symmetry - A token scoped to one worker group lists what it can see, so the ambiguity is real in principle. Doing it while the pattern is fresh is cheaper than rediscovering it later - at the cost of a second sweep of call sites for a bug nobody has hit.
 
 - **DBT-63** inventory-standard.md still says the tables screen is pending
   `DBT-F1` `bug` `settled` `verified: none`
@@ -2734,3 +2794,29 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   borrow is that the three claims were each checked against the tree before
   rewriting: the two emptyTableListMessage call sites, the Listing return, and
   tableCountLabel having only a tombstone left.
+
+- **DBT-64** The labs panel states 'No running labs' from an unverified listing
+  `DBT-F1` `bug` `settled` `verified: pins`
+  lab-inventory-panel.tsx:137 renders 'No running labs found in this
+  subscription.' whenever `listLabs` returns an empty array. `listLabs`
+  (manage-labs.ts:38) reads resource groups through `listAllPages`, so an
+  RBAC-filtered subscription answers 200 with an empty value array and this
+  sentence is stated as a fact about the subscription when it is really a fact
+  about what the identity can see. This is the exact defect of [[HON-2]] ('No
+  workspaces found') and [[DBT-43]] ('Read 0 deployed DCR(s)'), and
+  docs/inventory-standard.md has forbidden it since 2026-08-10. HOW IT
+  SURVIVED [[DBT-61]], which is the part worth recording: that card says 'all
+  four ARM listers' and named listDcrInventory, listWorkspaceTables,
+  listSubscriptions and listResourceGroups. There is a FIFTH. `listLabs` was
+  missed because the sweep looked for listers on the inventory screens and
+  this one sits under Labs, which reads as provisioning rather than inventory.
+  The type made the mistake unrepresentable only where the type was applied,
+  and a hand-built list of call sites is exactly the fallible step it was
+  meant to remove. Found while scoping [[DBT-62]] - the decision to convert
+  the remaining listings turned it up in the first ten minutes. FIXED
+  2026-08-31. listLabs returns Listing<LabInventoryEntry> built with
+  filterListing, which DEMANDS the source resource-group read - so the
+  distinction cannot be lost by forgetting it. The panel now says "No running
+  labs found in this subscription." only for a measured none (groups were
+  read, none is a lab) and hedges with what would settle it for the unverified
+  empty. Both branches pinned, and the unverified pin was mutation-checked.
