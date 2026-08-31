@@ -401,12 +401,15 @@ class StepFailure extends Error {
  * true for the store's whole surface rather than only the writes that happen
  * to sit outside the try.
  *
- * Exported because the entire point is that a CALLER can tell it apart.
- * NOT YET CONSUMED: onboardBatch catches this rejection and still records an
- * ordinary failed table (its `instanceof` test names its own class, and a
- * cross-module `instanceof` never matches). See its docblock's stated limit.
+ * The class is INTERNAL and deliberately not exported (DBT-60). It used to be,
+ * so that a caller could tell the signal apart - but onboardBatch mints its own
+ * identically-named class for its own writes, and the export invited exactly
+ * the cross-module `instanceof` that never matches: the batch caught this
+ * rejection and recorded an ordinary failed table anyway, so the signal was
+ * raised and silently dropped. Callers use {@link isJobStoreFailure} instead,
+ * which onboardBatch's per-table catch now does.
  */
-export class JobStoreFailure extends Error {
+class JobStoreFailure extends Error {
   constructor(cause: unknown) {
     super(
       `job store update failed: ${cause instanceof Error ? cause.message : String(cause)}`,
@@ -422,6 +425,11 @@ export class JobStoreFailure extends Error {
  * own parent-record writes (DBT-49) - two classes, one meaning, and a caller
  * guarding a call that can raise either should not have to care which module
  * minted it.
+ *
+ * This is the ONLY thing about the signal that leaves the package index, and
+ * that is the point (DBT-60): an exported class gets tested with `instanceof`,
+ * which across a module boundary quietly matches nothing and turns "the store
+ * is down" into "this table failed". A predicate cannot fail that way.
  */
 export function isJobStoreFailure(error: unknown): boolean {
   return error instanceof Error && error.name === "JobStoreFailure";
@@ -435,7 +443,8 @@ export function isJobStoreFailure(error: unknown): boolean {
  * the outcome; the final record is returned either way. (It can still reject
  * if the JobStore itself fails: that rejection is a {@link JobStoreFailure},
  * recognisable with {@link isJobStoreFailure}, and it is the ONE rejection
- * shape that says nothing about the table - DBT-55.)
+ * shape that is not the table's failure - what happened to the table is
+ * UNKNOWN, not "fine", per the class docblock - DBT-55.)
  */
 export async function onboardTable(
   ports: OnboardTablePorts,

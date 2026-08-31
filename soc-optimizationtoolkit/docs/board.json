@@ -311,13 +311,14 @@
       "menu": "integrate",
       "title": "Make the fallback offer reachable beside the actions",
       "type": "story",
-      "status": "backlog",
+      "status": "done",
       "priority": "next",
       "settled": "settled",
       "dependsOn": [
         "D-2"
       ],
-      "detail": "`FallbackNotice` renders without `onProduce` in production, so the capability model's \"every blocked action falls back to a downloadable artifact\" rule has no button. Targets: Integrate deploy, Batch Deploy, DCR Automation. Must stay worded as an offer, not an error - there is a pin on the absence of alert semantics. `backlog.md#1`.  ---"
+      "detail": "`FallbackNotice` renders without `onProduce` in production, so the capability model's \"every blocked action falls back to a downloadable artifact\" rule has no button. Targets: Integrate deploy, Batch Deploy, DCR Automation. Must stay worded as an offer, not an error - there is a pin on the absence of alert semantics. `backlog.md#1`.  --- [[D-2]] ANSWERED 2026-08-31: all three surfaces, each wiring its own onProduce, with isInlineArtifact deciding whether the producer generates bytes or points at the run. Reasoning in backlog.md section 16. DONE 2026-08-31, review SOUND. All three surfaces per [[D-2]]: Integrate STARTS the export run (the same deploy stopping before every write, so the artifact it names is what the click makes), Batch STARTS a force-templateOnly run for the ARM kinds it collects and POINTS at Integrate for the pack it does not build, and DCR inventory POINTS because both kinds it offers are run kinds and the preview on screen holds enough to build a body - which is exactly the temptation D-2 forbids. A produceLabel prop keeps pointing honest. THE SHELL WAS THE LAST GAP: App.tsx passed capabilities/capabilityContext to Integrate and the DCR panel but NOT to BatchDeployScreen, so that third surface was wired and unreachable; the agent could not fix it (App.tsx outside its files) and flagged it, and it is fixed in this commit.",
+      "verified": "pins"
     },
     {
       "id": "AZR-S1",
@@ -1866,14 +1867,15 @@
       "feature": "TBL-F3",
       "title": "Offer the ARM template when the write capability is absent",
       "type": "story",
-      "status": "backlog",
+      "status": "in-progress",
       "priority": "now",
       "settled": "settled",
       "dependsOn": [
         "TBL-1",
-        "TBL-3"
+        "TBL-3",
+        "HON-7"
       ],
-      "detail": "RAISED BY THE USER 2026-08-31: \"if the user hasn't granted the app permission to create Azure resources like DCRs then they should still get the option to see and download an ARM template for the DCR creation\". THIS IS MOSTLY ALREADY SCOPED - filed as a story rather than a new feature so it does not duplicate work already on the board. [[HON-7]] is exactly this rule at the button level (\"FallbackNotice renders without onProduce in production, so the capability model's 'every blocked action falls back to a downloadable artifact' rule has no button\") and ALREADY NAMES DCR Automation as a target. [[HON-8]] is the engine: `buildDeploymentPreview` builds `TableResourcePreview`, `DcrResourcePreview` and `PreviewArmRequest` - roughly 700 lines with its own tests - and has NO caller anywhere in packages/ui or apps/cribl-app. And Batch already ships the behaviour under `templateOnly` (\"nothing deploys; downloads one ARM deployment template\"), FORCED on in azure-only mode, so this is not a new mechanism, it is an unreached one. WHAT THIS CARD ADDS on top of those: the two NEW surfaces above must carry the offer too, and the gate must be the MEASURED capability rather than a failed attempt - the operator should see the template option before pressing something that 403s, not after. Do [[HON-7]] first or this card rebuilds it. NOT A MODE TOGGLE, per the shape [[DBT-35]] settled on Integrate: a separate control, gated on READ prerequisites only, worded as an offer - there is an existing pin on the absence of alert semantics."
+      "detail": "RAISED BY THE USER 2026-08-31: \"if the user hasn't granted the app permission to create Azure resources like DCRs then they should still get the option to see and download an ARM template for the DCR creation\". THIS IS MOSTLY ALREADY SCOPED - filed as a story rather than a new feature so it does not duplicate work already on the board. [[HON-7]] is exactly this rule at the button level (\"FallbackNotice renders without onProduce in production, so the capability model's 'every blocked action falls back to a downloadable artifact' rule has no button\") and ALREADY NAMES DCR Automation as a target. [[HON-8]] is the engine: `buildDeploymentPreview` builds `TableResourcePreview`, `DcrResourcePreview` and `PreviewArmRequest` - roughly 700 lines with its own tests - and has NO caller anywhere in packages/ui or apps/cribl-app. And Batch already ships the behaviour under `templateOnly` (\"nothing deploys; downloads one ARM deployment template\"), FORCED on in azure-only mode, so this is not a new mechanism, it is an unreached one. WHAT THIS CARD ADDS on top of those: the two NEW surfaces above must carry the offer too, and the gate must be the MEASURED capability rather than a failed attempt - the operator should see the template option before pressing something that 403s, not after. Do [[HON-7]] first or this card rebuilds it. NOT A MODE TOGGLE, per the shape [[DBT-35]] settled on Integrate: a separate control, gated on READ prerequisites only, worded as an offer - there is an existing pin on the absence of alert semantics. DEPENDENCY CORRECTED 2026-08-31: the card always said \"do HON-7 first or this card rebuilds it\" but dependsOn listed only TBL-1 and TBL-3, so grooming reported it READY. The prose and the graph were two answers to one question and grooming trusts the graph."
     },
     {
       "id": "TBL-5",
@@ -1915,12 +1917,26 @@
       "feature": "DBT-F1",
       "title": "onboard-batch cannot recognise the child store failure it is handed",
       "type": "bug",
-      "status": "backlog",
-      "priority": "next",
-      "priorityWhy": "Net operator-visible behaviour is unchanged from before DBT-55 - the batch attributes it to the table either way - so this restores no regression, it completes an improvement. Both docblocks state the gap explicitly while it is open.",
+      "status": "done",
+      "priority": "now",
       "settled": "settled",
       "dependsOn": [],
-      "detail": "SPLIT OUT OF [[DBT-55]] 2026-08-31 by its reviewer. DBT-55 made onboardTable re-raise a JobStore outage as its own JobStoreFailure rather than recording it as the table failing. onboard-batch.ts:1274 catches it and tests error instanceof JobStoreFailure - naming ITS OWN module-local class. A cross-module instanceof never matches, so the signal is thrown and then dropped, and the batch records an ordinary failed table carrying a job-store-update-failed prefix. Fix: export the child class (or a shared isJobStoreFailure predicate) from the onboard-table package index and have onboard-batch consume THAT. Note onboard-table/index.ts was outside the fixing agent do-not-touch list, so nothing is exported yet. When wired, correct the onboard-batch docblock that currently explains why the limit stands."
+      "detail": "SPLIT OUT OF [[DBT-55]] 2026-08-31 by its reviewer. DBT-55 made onboardTable re-raise a JobStore outage as its own JobStoreFailure rather than recording it as the table failing. onboard-batch.ts:1274 catches it and tests error instanceof JobStoreFailure - naming ITS OWN module-local class. A cross-module instanceof never matches, so the signal is thrown and then dropped, and the batch records an ordinary failed table carrying a job-store-update-failed prefix. Fix: export the child class (or a shared isJobStoreFailure predicate) from the onboard-table package index and have onboard-batch consume THAT. Note onboard-table/index.ts was outside the fixing agent do-not-touch list, so nothing is exported yet. When wired, correct the onboard-batch docblock that currently explains why the limit stands. DONE 2026-08-31, review SOUND. Fixed as a PREDICATE, never a class: isJobStoreFailure (matching on error.name) is now exported from onboard-table/index.ts - the missing export that blocked the DBT-55 agent - and onboard-batch consumes it at ALL FOUR store-failure catches, not only the one that was the defect. The JobStoreFailure class is no longer exported anywhere; both modules keep their own private one and the predicate is the only public surface, so the cross-module instanceof that caused this cannot be written again.",
+      "verified": "pins"
+    },
+    {
+      "id": "TBL-7",
+      "epic": "TBL",
+      "feature": "TBL-F3",
+      "title": "The create-table offer could produce its artifact inline instead of pointing",
+      "type": "story",
+      "status": "backlog",
+      "priority": "next",
+      "settled": "undecided",
+      "dependsOn": [
+        "TBL-4"
+      ],
+      "detail": "RAISED BY THE TBL-4 AGENT 2026-08-31, which surfaced it rather than acting on it BECAUSE IT CONTRADICTS THE BINDING DESIGN - exactly the right call, and the observation is good enough to reopen the question. [[D-2]] settled that a RUN kind is POINTED AT rather than produced inline, and `isInlineArtifact` returns false for `table-arm-bodies`, so TBL-4 points. BUT FOR THIS SURFACE THE PREMISE MAY NOT HOLD: `createCustomTable` (create-custom-table.ts) and `collectTableTemplates` (onboard-batch.ts) call the SAME `buildTablePutRequest`, and for a HAND-AUTHORED table every input to it already sits in the create form's own state - subscription, resource group, workspace, name, columns. No live Azure read contributes anything. So the panel could assemble the exact body the run would send, with no run and no connection at all - which is a strictly better answer for an operator who cannot write to Azure: the artifact itself, rather than directions to a run they may also be unable to start. THE REAL QUESTION IS WHETHER THAT MAKES `table-arm-bodies` INLINE IN GENERAL, or only when produced from a form that already holds the schema. Probably the latter - the same kind produced from the BATCH path genuinely does need the run, because there the schema comes from a live table read. If so, `isInlineArtifact(kind)` is the wrong SHAPE for the decision: inline-ness would be a property of the CALL SITE and its inputs, not of the artifact kind alone. That is a change to a contract settled hours ago, so decide it before building - backlog.md section 16 is the reasoning it would amend."
     }
   ],
   "features": [

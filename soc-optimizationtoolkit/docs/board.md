@@ -11,7 +11,7 @@ two cannot disagree.
 alternatives. This board holds only what is a unit of work, what state it is
 in, and what it waits on.
 
-**59 in the backlog, 0 in progress, 64 done.**
+**57 in the backlog, 1 in progress, 66 done.**
 
 ## By menu item
 
@@ -23,15 +23,15 @@ operator sees on any screen. Two menus are PLANNED and have no route yet.
 |---|---|---|---|
 | Dataflow | 3 | 0 | 0 |
 | Setup | 1 | 0 | 0 |
-| Sentinel Integration | 14 | 29 | 0 |
-| DCR Automation | 3 | 7 | 1 |
+| Sentinel Integration | 12 | 31 | 0 |
+| DCR Automation | 4 | 7 | 1 |
 | Pack Maintenance | 4 | 1 | 0 |
 | Permission Verification | 8 | 0 | 0 |
 | Azure Native Source Onboarding (planned) | 13 | 4 | 0 |
 | Windows Event analysis (planned) | 5 | 0 | 0 |
 | Cross-cutting | 8 | 23 | 0 |
 
-Open work totals 59.
+Open work totals 58.
 
 ## Epics and features
 
@@ -66,13 +66,13 @@ Sentinel-side and Lake-side halves of Windows event handling
 | `WIN-F2` Microsoft proprietary enrichment catalog | Windows Event analysis (planned) | 0/2 | WIN-2, D-4 |
 | `WIN-F3` Lake copy format - JSON vs Parquet | Windows Event analysis (planned) | 0/1 | D-5 |
 
-### `HON` Inventory and diagnostic honesty - 45% (5/11)
+### `HON` Inventory and diagnostic honesty - 55% (6/11)
 
 Measured gaps where the app reports a confident wrong answer
 
 | Feature | Menu | Done | Stories |
 |---|---|---|---|
-| `HON-F1` Capability model follow-ons | Permission Verification | 1/4 | HON-6, HON-7*, D-1, D-2* |
+| `HON-F1` Capability model follow-ons | Permission Verification | 2/4 | HON-6, HON-7*, D-1, D-2* |
 | `HON-F2` Unverified empty inventories | Sentinel Integration | 2/3 | HON-1, HON-2, D-3 |
 | `HON-F3` Guid-column aftermath, made visible | Sentinel Integration | 2/4 | HON-3, HON-8*, HON-4, D-11 |
 
@@ -116,13 +116,13 @@ ENABLER EPIC: release mechanics. The packaged tarball trails main, and the lab t
 |---|---|---|---|
 | `REL-F1` Release and deployment hygiene | Cross-cutting | 3/5 | REL-2, REL-3, REL-4, REL-5, REL-6 |
 
-### `DBT` Quality and technical debt _(enabler)_ - 63% (39/62)
+### `DBT` Quality and technical debt _(enabler)_ - 65% (40/62)
 
 ENABLER EPIC: verification gaps, copy, diagram fidelity, docs and the board's own tooling
 
 | Feature | Menu | Done | Stories |
 |---|---|---|---|
-| `DBT-F1` Verification gaps | Sentinel Integration | 13/21 | DBT-2, DBT-5*, DBT-6, DBT-7, DBT-36*, DBT-55, DBT-56, DBT-42, DBT-43, DBT-44, DBT-45, DBT-46, DBT-47, DBT-48, DBT-49, DBT-50, DBT-51, DBT-52, DBT-41, DBT-40, DBT-60 |
+| `DBT-F1` Verification gaps | Sentinel Integration | 14/21 | DBT-2, DBT-5*, DBT-6, DBT-7, DBT-36*, DBT-55, DBT-56, DBT-42, DBT-43, DBT-44, DBT-45, DBT-46, DBT-47, DBT-48, DBT-49, DBT-50, DBT-51, DBT-52, DBT-41, DBT-40, DBT-60 |
 | `DBT-F2` Copy and UX | Sentinel Integration | 3/9 | DBT-3, DBT-9, DBT-14, DBT-15, DBT-28, D-10*, DBT-53, DBT-38, DBT-39 |
 | `DBT-F3` Diagram fidelity | Dataflow | 0/3 | DBT-1, DBT-4, DBT-12 |
 | `DBT-F4` Docs and spec grounding | Cross-cutting | 6/10 | DBT-8, DBT-10, DBT-11, DBT-13, DBT-22, DBT-26, DBT-32, DBT-57, DBT-58, DBT-54 |
@@ -130,7 +130,7 @@ ENABLER EPIC: verification gaps, copy, diagram fidelity, docs and the board's ow
 | `DBT-F6` Effect-identity defect class | Pack Maintenance | 0/1 | FX-4 |
 | `DBT-F7` Export instead of deploy - the offline path | DCR Automation | 3/4 | DBT-33, DBT-34, DBT-35*, DBT-37 |
 
-### `TBL` Custom table authoring and table-first DCR creation - 83% (5/6)
+### `TBL` Custom table authoring and table-first DCR creation - 71% (5/7)
 
 RAISED BY THE USER 2026-08-31. DCR Automation can onboard a table you can already NAME, but it cannot help you create one, and it cannot show you what the workspace already has. Every schema today arrives from somewhere else - a bundled vendor entry, a pasted JSON file, or a table that already exists - so an operator with a new log source and no schema file has no path through this screen at all.
 
@@ -138,21 +138,13 @@ RAISED BY THE USER 2026-08-31. DCR Automation can onboard a table you can alread
 |---|---|---|---|
 | `TBL-F1` Author a custom table by hand | DCR Automation | 3/3 | TBL-6, TBL-1, TBL-2 |
 | `TBL-F2` Table inventory as the starting point | DCR Automation | 2/2 | TBL-3, TBL-5 |
-| `TBL-F3` The new surfaces work without write permission | DCR Automation | 0/1 | TBL-4 |
+| `TBL-F3` The new surfaces work without write permission | DCR Automation | 0/2 | TBL-4, TBL-7 |
 
 ---
 
-## In progress (0)
+## In progress (1)
 
 Started. Anything here with an unfinished dependency is called out on its card.
-
-_Nothing here._
-
----
-
-## Backlog - now (1)
-
-Next to pick up. Nothing blocks these.
 
 - **TBL-4** Offer the ARM template when the write capability is absent
   `TBL-F3` `story` `settled`
@@ -177,10 +169,22 @@ Next to pick up. Nothing blocks these.
   card rebuilds it. NOT A MODE TOGGLE, per the shape [[DBT-35]] settled on
   Integrate: a separate control, gated on READ prerequisites only, worded as
   an offer - there is an existing pin on the absence of alert semantics.
+  DEPENDENCY CORRECTED 2026-08-31: the card always said "do HON-7 first or
+  this card rebuilds it" but dependsOn listed only TBL-1 and TBL-3, so
+  grooming reported it READY. The prose and the graph were two answers to one
+  question and grooming trusts the graph.
 
 ---
 
-## Backlog - next (24)
+## Backlog - now (0)
+
+Next to pick up. Nothing blocks these.
+
+_Nothing here._
+
+---
+
+## Backlog - next (23)
 
 Settled and unblocked, sequenced behind now.
 
@@ -270,14 +274,6 @@ Settled and unblocked, sequenced behind now.
   live. It is called out in > `azure-targeting-screen.dom.test.tsx` so nobody
   deletes it on the strength of > a green suite. FX-4's sweep should treat it
   as a known-unpinned guard.
-
-- **HON-7** Make the fallback offer reachable beside the actions
-  `HON-F1` `story` `settled`
-  `FallbackNotice` renders without `onProduce` in production, so the
-  capability model's "every blocked action falls back to a downloadable
-  artifact" rule has no button. Targets: Integrate deploy, Batch Deploy, DCR
-  Automation. Must stay worded as an offer, not an error - there is a pin on
-  the absence of alert semantics. `backlog.md#1`. ---
 
 - **DBT-3** Reconcile the Entra `Kind:Direct` copy with what has been measured
   `DBT-F2` `story` `settled`
@@ -510,24 +506,30 @@ Settled and unblocked, sequenced behind now.
   wasted read is also the reason the mapping screen touches Azure at all in a
   workflow that is otherwise Azure-free.
 
-- **DBT-60** onboard-batch cannot recognise the child store failure it is handed
-  `DBT-F1` `bug` `settled`
-  Not now because: Net operator-visible behaviour is unchanged from before
-  DBT-55 - the batch attributes it to the table either way - so this restores
-  no regression, it completes an improvement. Both docblocks state the gap
-  explicitly while it is open.
-  SPLIT OUT OF [[DBT-55]] 2026-08-31 by its reviewer. DBT-55 made onboardTable
-  re-raise a JobStore outage as its own JobStoreFailure rather than recording
-  it as the table failing. onboard-batch.ts:1274 catches it and tests error
-  instanceof JobStoreFailure - naming ITS OWN module-local class. A
-  cross-module instanceof never matches, so the signal is thrown and then
-  dropped, and the batch records an ordinary failed table carrying a
-  job-store-update-failed prefix. Fix: export the child class (or a shared
-  isJobStoreFailure predicate) from the onboard-table package index and have
-  onboard-batch consume THAT. Note onboard-table/index.ts was outside the
-  fixing agent do-not-touch list, so nothing is exported yet. When wired,
-  correct the onboard-batch docblock that currently explains why the limit
-  stands.
+- **TBL-7** The create-table offer could produce its artifact inline instead of pointing
+  `TBL-F3` `story` `undecided` `blocked by TBL-4`
+  RAISED BY THE TBL-4 AGENT 2026-08-31, which surfaced it rather than acting
+  on it BECAUSE IT CONTRADICTS THE BINDING DESIGN - exactly the right call,
+  and the observation is good enough to reopen the question. [[D-2]] settled
+  that a RUN kind is POINTED AT rather than produced inline, and
+  `isInlineArtifact` returns false for `table-arm-bodies`, so TBL-4 points.
+  BUT FOR THIS SURFACE THE PREMISE MAY NOT HOLD: `createCustomTable`
+  (create-custom-table.ts) and `collectTableTemplates` (onboard-batch.ts) call
+  the SAME `buildTablePutRequest`, and for a HAND-AUTHORED table every input
+  to it already sits in the create form's own state - subscription, resource
+  group, workspace, name, columns. No live Azure read contributes anything. So
+  the panel could assemble the exact body the run would send, with no run and
+  no connection at all - which is a strictly better answer for an operator who
+  cannot write to Azure: the artifact itself, rather than directions to a run
+  they may also be unable to start. THE REAL QUESTION IS WHETHER THAT MAKES
+  `table-arm-bodies` INLINE IN GENERAL, or only when produced from a form that
+  already holds the schema. Probably the latter - the same kind produced from
+  the BATCH path genuinely does need the run, because there the schema comes
+  from a live table read. If so, `isInlineArtifact(kind)` is the wrong SHAPE
+  for the decision: inline-ness would be a property of the CALL SITE and its
+  inputs, not of the artifact kind alone. That is a change to a contract
+  settled hours ago, so decide it before building - backlog.md section 16 is
+  the reasoning it would amend.
 
 ---
 
@@ -868,7 +870,7 @@ Settled, gated on something above.
 
 ---
 
-## Done (64)
+## Done (66)
 
 Kept briefly so a reader can see what just landed; prune when the list grows.
 
@@ -1107,6 +1109,28 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   in the pack - more samples will not change that. Its route ships with a
   placeholder filter for you to complete." So the sibling guard was observed
   working, not just pinned.
+
+- **HON-7** Make the fallback offer reachable beside the actions
+  `HON-F1` `story` `settled` `verified: pins`
+  `FallbackNotice` renders without `onProduce` in production, so the
+  capability model's "every blocked action falls back to a downloadable
+  artifact" rule has no button. Targets: Integrate deploy, Batch Deploy, DCR
+  Automation. Must stay worded as an offer, not an error - there is a pin on
+  the absence of alert semantics. `backlog.md#1`. --- [[D-2]] ANSWERED
+  2026-08-31: all three surfaces, each wiring its own onProduce, with
+  isInlineArtifact deciding whether the producer generates bytes or points at
+  the run. Reasoning in backlog.md section 16. DONE 2026-08-31, review SOUND.
+  All three surfaces per [[D-2]]: Integrate STARTS the export run (the same
+  deploy stopping before every write, so the artifact it names is what the
+  click makes), Batch STARTS a force-templateOnly run for the ARM kinds it
+  collects and POINTS at Integrate for the pack it does not build, and DCR
+  inventory POINTS because both kinds it offers are run kinds and the preview
+  on screen holds enough to build a body - which is exactly the temptation D-2
+  forbids. A produceLabel prop keeps pointing honest. THE SHELL WAS THE LAST
+  GAP: App.tsx passed capabilities/capabilityContext to Integrate and the DCR
+  panel but NOT to BatchDeployScreen, so that third surface was wired and
+  unreachable; the agent could not fix it (App.tsx outside its files) and
+  flagged it, and it is fixed in this commit.
 
 - **AZR-S2** Decide whether the app creates Cribl sources over the API
   `AZR-F9` `spike` `settled` `verified: none`
@@ -2529,3 +2553,25 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
     [x] `tables-tab` One 'Tables' tab, with Create table as an action on it - The inventory IS the tab; authoring is a control on it. Keeps the noun together and makes creation the natural next step after finding what you need is not there. Costs one click to reach creation.
     [ ] `two-tabs` Two new tabs, 'Tables' and 'New table' - Most discoverable and symmetric with Inventory, but five tabs on an already-wide strip, and two of them are about the same noun when one is really an action on the other.
     [ ] `fold-into-single` Fold both into the Single table panel - Smallest diff, no new tabs - the editor is a fourth schema source and browsing is a control beside the name field. But Single is already the densest panel on the screen and this roughly doubles it.
+
+- **DBT-60** onboard-batch cannot recognise the child store failure it is handed
+  `DBT-F1` `bug` `settled` `verified: pins`
+  SPLIT OUT OF [[DBT-55]] 2026-08-31 by its reviewer. DBT-55 made onboardTable
+  re-raise a JobStore outage as its own JobStoreFailure rather than recording
+  it as the table failing. onboard-batch.ts:1274 catches it and tests error
+  instanceof JobStoreFailure - naming ITS OWN module-local class. A
+  cross-module instanceof never matches, so the signal is thrown and then
+  dropped, and the batch records an ordinary failed table carrying a
+  job-store-update-failed prefix. Fix: export the child class (or a shared
+  isJobStoreFailure predicate) from the onboard-table package index and have
+  onboard-batch consume THAT. Note onboard-table/index.ts was outside the
+  fixing agent do-not-touch list, so nothing is exported yet. When wired,
+  correct the onboard-batch docblock that currently explains why the limit
+  stands. DONE 2026-08-31, review SOUND. Fixed as a PREDICATE, never a class:
+  isJobStoreFailure (matching on error.name) is now exported from
+  onboard-table/index.ts - the missing export that blocked the DBT-55 agent -
+  and onboard-batch consumes it at ALL FOUR store-failure catches, not only
+  the one that was the defect. The JobStoreFailure class is no longer exported
+  anywhere; both modules keep their own private one and the predicate is the
+  only public surface, so the cross-module instanceof that caused this cannot
+  be written again.

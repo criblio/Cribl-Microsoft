@@ -30,6 +30,18 @@
  * used to hold here by construction, because there was no button. Adding one
  * puts the rule back in play, so `disabled` may reference only in-flight state
  * and a blank scope. Azure's own 403 is the gate, and it is reported verbatim.
+ *
+ * TBL-4: THE TWO WRITE ACTIONS HERE CARRY THE FALLBACK OFFER. Rule 2 - every
+ * blocked action falls back to "download the thing you'd need someone else to
+ * run" - applies to Create DCR and to the create-table flow, and the offer is
+ * gated on the MEASURED capability so it appears beside the button rather than
+ * after a 403. Neither button is disabled or hidden by that verdict; the offer
+ * sits next to a control that stays exactly as attemptable as it was.
+ *
+ * BOTH ARTIFACTS ARE RUN KINDS, so per D-2 (backlog section 16) this panel
+ * POINTS at the run that makes them and never assembles a body itself - it owns
+ * no run of its own. The two pointers each carry the prerequisite that run has,
+ * because a pointer that omits it sends the operator to a failure.
  */
 
 import { useCallback, useState } from "react";
@@ -40,14 +52,25 @@ import {
   hasCustomTableSuffix,
   listDcrInventory,
   listWorkspaceTables,
+  routeCapability,
 } from "@soc/core";
 import type {
   CapabilityContext,
+  CapabilityFallback,
   CapabilitySet,
   DcrInventoryEntry,
   WorkspaceTable,
 } from "@soc/core";
 import { usePorts } from "../../ports-context";
+// Imported from the modules directly. `FALLBACK_POINTER_LABEL` and
+// `fallbackRunPointer` are not re-exported from capabilities/index.ts yet
+// (HON-7 added them but did not own that barrel), which is also how the DCR
+// inventory panel and the Batch screen reach them.
+import { FallbackNotice } from "../../capabilities/fallback-notice";
+import {
+  FALLBACK_POINTER_LABEL,
+  fallbackRunPointer,
+} from "../../capabilities/fallback-notice-state";
 import { emptyTableListMessage } from "../table-picker/table-picker-state";
 import {
   buildWorkspaceTableRows,
@@ -103,6 +126,15 @@ export function WorkspaceTablesPanel(props: WorkspaceTablesPanelProps = {}) {
   );
   const [createBusy, setCreateBusy] = useState(false);
   const [createResult, setCreateResult] = useState("");
+
+  // TBL-4: which run makes an offered artifact, shown once the operator takes
+  // that offer. Two slots rather than one because the offers live in different
+  // regions of this panel - a pointer about the create form must not surface
+  // under the listing - and neither is merged into `error` or `createResult`,
+  // which report what an action HERE did. A pointer is not a thing that
+  // happened.
+  const [dcrOfferPointer, setDcrOfferPointer] = useState("");
+  const [tableOfferPointer, setTableOfferPointer] = useState("");
 
   const scopeReady =
     config.subscriptionId !== "" &&
@@ -224,10 +256,72 @@ export function WorkspaceTablesPanel(props: WorkspaceTablesPanelProps = {}) {
   ]);
 
   const rows = tables === null ? [] : buildWorkspaceTableRows(tables, dcrs);
-  const emptyMessage = emptyTableListMessage(
-    capabilities ?? emptyCapabilitySet(),
-    capabilityContext ?? { azureIdentityPresent: true, criblReachable: true },
-  );
+
+  // Resolved once: the empty-listing message and both write offers below have
+  // to read the same audit, or the panel could say two different things about
+  // one connection.
+  const caps = capabilities ?? emptyCapabilitySet();
+  const ctx = capabilityContext ?? {
+    azureIdentityPresent: true,
+    criblReachable: true,
+  };
+  const emptyMessage = emptyTableListMessage(caps, ctx);
+
+  // TBL-4. The artifact for each blocked write on this panel, or null when the
+  // capability routes LIVE.
+  //
+  // `routeCapability` yields a fallback only for a MEASURED denial or an
+  // unreachable connection - `unknown` routes live and offers nothing. That is
+  // the whole point of gating on the measurement: an unaudited connection (the
+  // normal state) renders no offer at all rather than implying a block nobody
+  // has established.
+  const dcrOffer = routeCapability("dcr.write", caps, ctx).fallback;
+  const tableOffer = routeCapability("table.write", caps, ctx).fallback;
+
+  /**
+   * Take the Create DCR offer.
+   *
+   * "dcr-arm-bodies" is a RUN kind, so this POINTS (D-2). It is not merely a
+   * rule being obeyed: the row on screen holds a name, a kind, a retention and
+   * a plan, which is nowhere near a DCR body - the run resolves the table's
+   * live column list, and every table listed here exists, so that read is
+   * available to it and not to this row.
+   */
+  const showDcrPointer = (fallback: CapabilityFallback): void => {
+    const pointer = fallbackRunPointer(fallback.kind);
+    setDcrOfferPointer(
+      pointer === null
+        ? ""
+        : `${pointer} Every table listed here already exists, so that run ` +
+            "reads its live schema for the column declaration - which is why " +
+            "this points at the run instead of building a body from the row.",
+    );
+  };
+
+  /**
+   * Take the create-table offer.
+   *
+   * ALSO A RUN KIND, and this pointer carries the prerequisite that run has,
+   * which is load-bearing rather than decorative: `collectTableTemplates`
+   * collects a table PUT only for a custom table that does NOT exist and DOES
+   * have a supplied schema, and the Batch tab's only schema source is its
+   * bundled vendor list (a typed _CL name carries no schema, which is what its
+   * own hint means by "requires the custom table to already exist"). Pointing
+   * without saying so would send an operator to a run that fails with "does not
+   * exist and no customSchema was provided".
+   */
+  const showTablePointer = (fallback: CapabilityFallback): void => {
+    const pointer = fallbackRunPointer(fallback.kind);
+    setTableOfferPointer(
+      pointer === null
+        ? ""
+        : `${pointer} It resolves the schema itself and does not carry the ` +
+            "fields typed here: on that tab a _CL name that does not exist " +
+            "yet collects a creation body only when it was added from the " +
+            "bundled vendor list, which a table authored on this form is " +
+            "not in.",
+    );
+  };
 
   return (
     <div className="panel">
@@ -254,6 +348,10 @@ export function WorkspaceTablesPanel(props: WorkspaceTablesPanelProps = {}) {
           onClick={() => {
             setCreating(!creating);
             setCreateResult("");
+            // A pointer belongs to the form that raised it - reopening the
+            // form to author a different table must not reopen it with an
+            // answer about the last one (TBL-4).
+            setTableOfferPointer("");
           }}
           disabled={busy || createBusy}
           title="Define a new custom table's fields and types"
@@ -318,6 +416,27 @@ export function WorkspaceTablesPanel(props: WorkspaceTablesPanelProps = {}) {
               <span className="field-hint">{createDisabledReason}</span>
             )}
           </div>
+          {/* TBL-4 / rule 2. The artifact for the write this identity was
+              MEASURED to lack, beside a Create table button that is disabled by
+              the draft alone - never by the verdict. */}
+          {tableOffer !== null && (
+            <div className="discovery-result">
+              <span className="field-label">Take this to someone who can</span>
+              <p className="panel-desc">
+                Create table above stays available. The audit reports access,
+                it does not gate anything, and Azure&apos;s own refusal is the
+                real gate.
+              </p>
+              <FallbackNotice
+                fallback={tableOffer}
+                onProduce={() => showTablePointer(tableOffer)}
+                produceLabel={FALLBACK_POINTER_LABEL}
+              />
+              {tableOfferPointer !== "" && (
+                <p className="panel-desc">{tableOfferPointer}</p>
+              )}
+            </div>
+          )}
           {createResult !== "" && <pre className="result">{createResult}</pre>}
         </div>
       )}
@@ -370,6 +489,33 @@ export function WorkspaceTablesPanel(props: WorkspaceTablesPanelProps = {}) {
               ))}
             </tbody>
           </table>
+          {/* TBL-4 / rule 2. One offer for the column, not one per row: a
+              notice on every row of a listing this long would bury it, and the
+              artifact is the same whichever row is clicked.
+
+              GATED ON `onCreateDcr` AS WELL AS THE VERDICT. Without a host
+              there is no Create DCR button at all (see the Action column
+              above), so there is no blocked action on this surface to offer an
+              artifact for - and an offer for an action the operator cannot
+              even attempt here would answer a question nobody asked. */}
+          {dcrOffer !== null && onCreateDcr !== undefined && (
+            <div className="discovery-result">
+              <span className="field-label">Take this to someone who can</span>
+              <p className="panel-desc">
+                Create DCR stays available on every row. The audit reports
+                access, it does not gate anything, and Azure&apos;s own refusal
+                is the real gate.
+              </p>
+              <FallbackNotice
+                fallback={dcrOffer}
+                onProduce={() => showDcrPointer(dcrOffer)}
+                produceLabel={FALLBACK_POINTER_LABEL}
+              />
+              {dcrOfferPointer !== "" && (
+                <p className="panel-desc">{dcrOfferPointer}</p>
+              )}
+            </div>
+          )}
         </>
       )}
     </div>

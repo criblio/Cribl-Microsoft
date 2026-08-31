@@ -1836,6 +1836,14 @@ function App() {
               operationDefaults={appOptions.operation}
               criblDefaults={appOptions.cribl}
               forcedTemplateOnly={forcedTemplateOnly}
+              // HON-7: without these the Batch screen's dcr.write/table.write
+              // fallback offers cannot reach production. The screen accepts
+              // both props and routes on them, but this shell was the only one
+              // of the three call sites not passing them, so its half of the
+              // rule was wired and unreachable. Integrate and the DCR
+              // inventory panel already passed them.
+              capabilities={capabilityAudit.capabilities}
+              capabilityContext={capabilityAudit.context}
             />
           </PortsProvider>
         </>

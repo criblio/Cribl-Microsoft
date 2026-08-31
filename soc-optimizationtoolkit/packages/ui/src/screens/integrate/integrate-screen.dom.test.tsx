@@ -608,3 +608,105 @@ describe("IntegrateScreen - export instead of deploy", () => {
     expect(button.getAttribute("title")).not.toMatch(/worker group|client id/i);
   });
 });
+
+/**
+ * HON-7: THE FALLBACK OFFER HAS A BUTTON.
+ *
+ * Rule 2 of the capability model says every blocked action falls back to a
+ * downloadable artifact. FallbackNotice has supported a control since the model
+ * shipped and its own pins have always exercised one - but the single
+ * production caller (the RBAC preflight panel) passed no `onProduce`, so the
+ * rule had no button anywhere in the app. The component was not the defect; the
+ * call sites were, which is why the pin has to mount a SCREEN.
+ *
+ * D-2 (backlog section 16) put the offer on all three deploy surfaces, each
+ * wiring its own producer. Here the producer is the export run - the same
+ * deploy stopping before every write - so the artifact the offer names is
+ * genuinely what the click produces.
+ */
+const DENIED_DCR_WRITE: CapabilitySet = {
+  verdicts: { "dcr.write": "denied" },
+  auditedAt: "2026-08-31T00:00:00.000Z",
+  connectionId: "conn-1",
+};
+
+/** A committed scope, so the export's READ prerequisites are all met. */
+const SCOPED_CONFIG: AzureConfig = {
+  clientId: "client-1",
+  tenantId: "tenant-1",
+  subscriptionId: "sub-1",
+  resourceGroup: "rg-soc-prod",
+  workspaceName: "law-soc",
+  setupPath: "existing",
+};
+
+describe("IntegrateScreen - the blocked deploy offers an artifact (HON-7)", () => {
+  function renderAudited(capabilities: CapabilitySet) {
+    const ports = {
+      ...(PORTS as unknown as Record<string, unknown>),
+      artifacts: { save: vi.fn().mockResolvedValue(undefined) },
+    } as unknown as UiPorts;
+    return render(
+      <PortsProvider ports={ports} config={SCOPED_CONFIG}>
+        <IntegrateScreen
+          toolkitVersion="9.9.9-test"
+          scopeCommitted
+          offline={false}
+          onCommitScope={vi.fn().mockResolvedValue({ ok: true } as never)}
+          criblDefaults={DEFAULT_CRIBL_OPTIONS}
+          capabilities={capabilities}
+          capabilityContext={CONNECTED}
+        />
+      </PortsProvider>,
+    );
+  }
+
+  /** The offer's control, by the label the artifact catalog gives its kind. */
+  function offerButton(): HTMLButtonElement | undefined {
+    return screen
+      .getAllByRole("button")
+      .find((b) =>
+        /download the arm request bodies/i.test(b.textContent ?? ""),
+      ) as HTMLButtonElement | undefined;
+  }
+
+  it("renders a CONTROL on the offer, not just the artifact's name", () => {
+    // The defect, stated: a measured denial produced a notice with no way to
+    // act on it. Enabled matters as much as present - a permanently disabled
+    // control is the same dead end wearing a button.
+    renderAudited(DENIED_DCR_WRITE);
+    const button = offerButton();
+    expect(button).toBeTruthy();
+    expect(button?.disabled).toBe(false);
+  });
+
+  it("starts the export run when the offer is taken", () => {
+    // What makes the button worth having. The producer is the export run, and
+    // its first line names the tables it is collecting - so this fails if
+    // onProduce is dropped again, and equally if it is wired to something that
+    // does not produce the artifact the offer named.
+    renderAudited(DENIED_DCR_WRITE);
+    fireEvent.click(offerButton()!);
+    expect(screen.getByText(/Collecting ARM resources for SecurityEvent/)).toBeTruthy();
+  });
+
+  it("leaves the live deploy exactly as available - it annotates, never removes", () => {
+    // Rule 3. A denied verdict is evidence, not a gate: Azure's own 403 is the
+    // gate, and a stale audit must not talk anyone out of an attempt that would
+    // have worked. If this ever fails, the offer has started hiding the action.
+    renderAudited(DENIED_DCR_WRITE);
+    const deploy = screen
+      .getAllByRole("button")
+      .find((b) => b.textContent === "Deploy");
+    expect(deploy).toBeTruthy();
+  });
+
+  it("offers NOTHING when no write has been measured", () => {
+    // The other half, and the one that keeps the offer meaningful: `unknown` is
+    // the normal state of a healthy unaudited connection. Offering there would
+    // assert a block nobody measured - the exact collapse of "not measured"
+    // into "denied" the capability model is built to prevent.
+    renderAudited(emptyCapabilitySet());
+    expect(offerButton()).toBeUndefined();
+  });
+});

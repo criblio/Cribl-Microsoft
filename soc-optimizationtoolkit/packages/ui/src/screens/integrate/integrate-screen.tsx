@@ -67,6 +67,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   DEFAULT_OPERATION_OPTIONS,
+  artifactsToOffer,
   buildAirGapArchive,
   onboardBatch,
   SENTINEL_SECRET_PLACEHOLDER,
@@ -100,7 +101,12 @@ import {
   readinessPillsForMode,
   mergeContentRequirements,
 } from "@soc/core";
-import type { CapabilityContext, CapabilitySet } from "@soc/core";
+import type {
+  Capability,
+  CapabilityContext,
+  CapabilityFallbackKind,
+  CapabilitySet,
+} from "@soc/core";
 import type {
   ContentItem,
   CriblGroupSummary,
@@ -136,6 +142,7 @@ import {
   AUDITED_SCOPE,
   emptyInventoryMessage,
 } from "../../capabilities/empty-inventory";
+import { FallbackNotice } from "../../capabilities/fallback-notice";
 import { NumberedSection } from "../../components/numbered-section";
 import {
   deriveLogTypeRecommendation,
@@ -196,6 +203,27 @@ import { WiringSection } from "./wiring-section";
  */
 const EXPORT_SLEEP = (ms: number): Promise<void> =>
   new Promise((resolve) => setTimeout(resolve, ms));
+
+/**
+ * The WRITES the Deploy section performs, which is what decides the fallback
+ * artifacts it must offer (HON-7 / D-2, backlog section 16).
+ *
+ * READS are deliberately absent: a blocked read has no offline substitute (see
+ * `fallbackFor`), so listing them here would produce nothing and only imply
+ * that it should have. The order is the order the offers render in -
+ * `artifactsToOffer` de-duplicates by artifact kind, so `pack.manage` and
+ * `destination.manage` collapse into the ONE pack this run would build.
+ *
+ * Every kind these map to is a RUN kind, and this screen owns that run: "Export
+ * instead of deploy" is the same work stopping before every write. That is why
+ * the producer below can START the run rather than only pointing at it.
+ */
+const DEPLOY_WRITE_CAPABILITIES: readonly Capability[] = Object.freeze([
+  "dcr.write",
+  "table.write",
+  "destination.manage",
+  "pack.manage",
+]);
 
 /** Bare file name for an export archive - deterministic, keyed by the run. */
 export function exportArchiveName(workspaceName: string, jobId: string): string {
@@ -1772,6 +1800,61 @@ export function IntegrateScreen({
     packName,
   ]);
 
+  // ---- The fallback offer beside the deploy (HON-7) ----------------------
+  // Rule 2 of the capability model: every blocked action falls back to a
+  // downloadable artifact. Until HON-7 no surface in the app wired a producer,
+  // so the rule had no button; D-2 (backlog section 16) put one on all three
+  // deploy surfaces, each owning its own producer.
+  //
+  // ANNOTATES, NEVER REMOVES (rule 3): this renders BESIDE the Deploy and
+  // Export controls, which stay exactly as available as they were. A denied
+  // verdict is evidence, not a gate - Azure's 403 is the gate, and a stale
+  // audit must not talk anyone out of an attempt that would have worked.
+  //
+  // An unmeasured capability routes `live` and offers nothing, so an unaudited
+  // connection (the normal state) renders no offer at all rather than implying
+  // a block nobody has measured.
+  const deployOffers = useMemo(
+    () =>
+      artifactsToOffer(
+        DEPLOY_WRITE_CAPABILITIES,
+        capabilities ?? emptyCapabilitySet(),
+        capabilityContext ?? {
+          azureIdentityPresent: true,
+          criblReachable: true,
+        },
+      ),
+    [capabilities, capabilityContext],
+  );
+
+  // Why an offer's control is unavailable RIGHT NOW, or undefined when it is
+  // usable. Never silent: FallbackNotice disables only with a stated reason.
+  //
+  // The pack branch is the one that would otherwise lie. The export always
+  // collects the ARM half, but it includes the .crbl only once the content path
+  // is armed, so offering "Download the pack" before then would name a file the
+  // run does not produce.
+  const offerDisabledReason = (
+    kind: CapabilityFallbackKind,
+  ): string | undefined => {
+    if (exporting) {
+      return "The export run is already in flight.";
+    }
+    if (deploying || packBuilding) {
+      return "A deploy is in flight - the export run shares its ports.";
+    }
+    if (exportDisabledReason !== null) {
+      return exportDisabledReason;
+    }
+    if (kind === "cribl-pack" && !contentEngaged) {
+      return (
+        "The export includes the pack only once the Gap Analysis mappings " +
+        "are approved; the ARM half is collected either way."
+      );
+    }
+    return undefined;
+  };
+
   const createDCE = (operationDefaults ?? DEFAULT_OPERATION_OPTIONS).createDCE;
 
   // ---- Section bodies (built sections only) -----------------------------
@@ -2417,6 +2500,30 @@ export function IntegrateScreen({
           <span className="field-hint">{exportDisabledReason}</span>
         )}
       </div>
+      {/* HON-7 / D-2. The artifacts for the writes this identity was MEASURED
+          to lack, each with the control that produces them. The producer is
+          `runExport` for every offer here because all four capabilities map to
+          RUN kinds and this screen owns that run - it is literally the same
+          deploy stopping before every write, so nothing is fabricated. */}
+      {deployOffers.length > 0 && (
+        <div className="integrate-subsection">
+          <span className="field-label">Take these to someone who can</span>
+          <p className="panel-desc">
+            Deploy above stays available - the audit reports access, it does
+            not gate anything, and Azure's own refusal is the real gate. These
+            are the artifacts for the writes this connection was measured to
+            lack. One export run produces all of them and changes nothing.
+          </p>
+          {deployOffers.map((offer) => (
+            <FallbackNotice
+              key={offer.kind}
+              fallback={offer}
+              onProduce={() => void runExport()}
+              disabledReason={offerDisabledReason(offer.kind)}
+            />
+          ))}
+        </div>
+      )}
       {exportLines.length > 0 && (
         <pre className="result">{exportLines.join("\n")}</pre>
       )}

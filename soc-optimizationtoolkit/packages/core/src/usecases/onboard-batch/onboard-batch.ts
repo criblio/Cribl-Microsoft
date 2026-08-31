@@ -113,7 +113,11 @@ import {
   remainingBudget,
 } from "../../domain/poll-scheduler";
 import type { PollBudget } from "../../domain/poll-scheduler";
-import { onboardTable, LOG_ANALYTICS_API_VERSION } from "../onboard-table";
+import {
+  isJobStoreFailure,
+  onboardTable,
+  LOG_ANALYTICS_API_VERSION,
+} from "../onboard-table";
 import type {
   OnboardTableInput,
   OnboardTableOutcome,
@@ -400,6 +404,12 @@ class StepFailure extends Error {
  * JobStore failures are outside the never-rejects promise
  * documented on {@link onboardBatch} (the UI already reads a rejection as
  * exactly that), so they are re-raised rather than written back as an outcome.
+ *
+ * MINTED here, but never READ by `instanceof` (DBT-60). The catches below use
+ * {@link isJobStoreFailure}, which matches on the error NAME, because the
+ * per-table catch must also recognise the identically-named signal the child
+ * onboardTable raises - and an `instanceof` against this class never matches
+ * that one, which is how the child's signal was raised and silently dropped.
  */
 class JobStoreFailure extends Error {
   constructor(cause: unknown) {
@@ -619,24 +629,24 @@ async function collectTableTemplates(args: {
  * returned either way. That covers a step's ARM call REJECTING (a dropped
  * socket, not just a non-2xx answer), which used to escape from
  * fetch-workspace and strand the record at 'running' forever (DBT-48).
- * (It can still reject when the JobStore itself fails - a failure raised by
- * THIS usecase's own store writes is re-raised rather than recorded against
- * whatever step or table was in flight at the time, DBT-49 - or
- * synchronously-shaped when the pacing budget input is invalid.)
+ * (It can still reject when the JobStore itself fails - a store failure is
+ * re-raised rather than recorded against whatever step or table was in flight
+ * at the time, whether it was raised by THIS usecase's own store writes
+ * (DBT-49) or inside the child `onboardTable` (DBT-55, wired here by DBT-60) -
+ * or synchronously-shaped when the pacing budget input is invalid.)
  *
- * THE LIMIT OF THAT, stated because the guarantee reads stronger than it is:
- * a store failure raised inside the CHILD `onboardTable` does not reach here
- * as a store failure - it is recorded as an ordinary failed table.
+ * A CHILD store failure is therefore a batch store failure: the store is the
+ * thing that is down, the table may have deployed perfectly, and there is
+ * nowhere to write an outcome. Until DBT-60 the batch recorded it as an
+ * ordinary failed table carrying a "job store update failed:" prefix, because
+ * the per-table catch tested `error instanceof JobStoreFailure` against THIS
+ * module's class and a cross-module `instanceof` never matches. It now tests
+ * {@link isJobStoreFailure}, exported by the onboard-table index for exactly
+ * this - see the per-table catch below.
  *
- * The MECHANISM changed with DBT-55 and this paragraph used to describe the
- * old one (review, 2026-08-31). The child no longer swallows store failures:
- * it re-raises them as its own `JobStoreFailure`. But the per-table catch
- * below tests `error instanceof JobStoreFailure` against THIS module's class,
- * and a cross-module `instanceof` never matches, so the outcome is unchanged -
- * the batch still attributes it to the table, now carrying a "job store update
- * failed:" prefix. Consuming the child's signal properly is the open half of
- * DBT-55; until it is wired, this limit stands for a different reason than the
- * one originally written here.
+ * WHAT IT STILL DOES NOT MEAN: a rejection is not a verdict that every table
+ * was fine. Tables the loop had already recorded keep their recorded outcome,
+ * the in-flight table's fate is UNKNOWN, and the tables after it never ran.
  */
 export async function onboardBatch(
   ports: OnboardBatchPorts,
@@ -872,7 +882,7 @@ export async function onboardBatch(
       }
     } catch (error) {
       // DBT-49: a store outage is not the workspace GET's failure.
-      if (error instanceof JobStoreFailure) {
+      if (isJobStoreFailure(error)) {
         throw error;
       }
       const message = error instanceof Error ? error.message : String(error);
@@ -1046,7 +1056,7 @@ export async function onboardBatch(
           }
         } catch (error) {
           // DBT-49: a store outage is not the DCE's failure.
-          if (error instanceof JobStoreFailure) {
+          if (isJobStoreFailure(error)) {
             throw error;
           }
           const message = error instanceof Error ? error.message : String(error);
@@ -1121,7 +1131,7 @@ export async function onboardBatch(
           }
         } catch (error) {
           // DBT-49: a store outage is not the association's failure.
-          if (error instanceof JobStoreFailure) {
+          if (isJobStoreFailure(error)) {
             throw error;
           }
           const message = error instanceof Error ? error.message : String(error);
@@ -1279,9 +1289,13 @@ export async function onboardBatch(
         });
       }
     } catch (error) {
-      // DBT-49: a JobStore outage RAISED HERE is NOT this table's failure (one
-      // raised inside the child onboardTable still arrives as an ordinary
-      // failed table - see the usecase docblock). The table may
+      // DBT-49: a JobStore outage is NOT this table's failure - and DBT-60:
+      // that now includes one raised inside the child onboardTable, which
+      // arrives wearing the child module's own JobStoreFailure. The test below
+      // is the shared predicate, NOT `instanceof`, because TWO store signals
+      // can arrive here - this module's own writes and the child's - and an
+      // `instanceof` against this module's class matched only the first,
+      // silently recording the child's as a failed table. The table may
       // have deployed perfectly and only the record write failed - the write
       // most exposed to that is recordTable's own, which runs directly after
       // a successful deploy, and blaming the table there both lied about it
@@ -1292,7 +1306,7 @@ export async function onboardBatch(
       // outside the never-rejects promise and the UI reports as exactly that.
       // (Unlike DBT-48 this cannot resolve the record instead - the store is
       // the thing that is down, so there is nowhere to write the outcome.)
-      if (error instanceof JobStoreFailure) {
+      if (isJobStoreFailure(error)) {
         throw error;
       }
       // ISOLATION: one table's failure never stops the others (the legacy
