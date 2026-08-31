@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 /**
  * Guard the ONE remaining way to spell the empty-as-zero bug (DBT-61).
  *

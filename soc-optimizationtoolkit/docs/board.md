@@ -11,7 +11,7 @@ two cannot disagree.
 alternatives. This board holds only what is a unit of work, what state it is
 in, and what it waits on.
 
-**59 in the backlog, 0 in progress, 71 done.**
+**59 in the backlog, 0 in progress, 72 done.**
 
 ## By menu item
 
@@ -23,7 +23,7 @@ operator sees on any screen. Two menus are PLANNED and have no route yet.
 |---|---|---|---|
 | Dataflow | 3 | 0 | 0 |
 | Setup | 1 | 0 | 0 |
-| Sentinel Integration | 13 | 35 | 1 |
+| Sentinel Integration | 13 | 36 | 1 |
 | DCR Automation | 4 | 8 | 0 |
 | Pack Maintenance | 4 | 1 | 0 |
 | Permission Verification | 8 | 0 | 0 |
@@ -116,13 +116,13 @@ ENABLER EPIC: release mechanics. The packaged tarball trails main, and the lab t
 |---|---|---|---|
 | `REL-F1` Release and deployment hygiene | Cross-cutting | 3/5 | REL-2, REL-3, REL-4, REL-5, REL-6 |
 
-### `DBT` Quality and technical debt _(enabler)_ - 66% (44/67)
+### `DBT` Quality and technical debt _(enabler)_ - 66% (45/68)
 
 ENABLER EPIC: verification gaps, copy, diagram fidelity, docs and the board's own tooling
 
 | Feature | Menu | Done | Stories |
 |---|---|---|---|
-| `DBT-F1` Verification gaps | Sentinel Integration | 18/26 | DBT-2, DBT-5*, DBT-6, DBT-7, DBT-36*, DBT-55, DBT-56, DBT-42, DBT-43, DBT-44, DBT-45, DBT-46, DBT-47, DBT-48, DBT-49, DBT-50, DBT-51, DBT-52, DBT-41, DBT-40, DBT-60, DBT-61, DBT-62, DBT-63, DBT-64, DBT-65 |
+| `DBT-F1` Verification gaps | Sentinel Integration | 19/27 | DBT-2, DBT-5*, DBT-6, DBT-7, DBT-36*, DBT-55, DBT-56, DBT-42, DBT-43, DBT-44, DBT-45, DBT-46, DBT-47, DBT-48, DBT-49, DBT-50, DBT-51, DBT-52, DBT-41, DBT-40, DBT-60, DBT-61, DBT-62, DBT-63, DBT-64, DBT-65, DBT-66 |
 | `DBT-F2` Copy and UX | Sentinel Integration | 3/9 | DBT-3, DBT-9, DBT-14, DBT-15, DBT-28, D-10*, DBT-53, DBT-38, DBT-39 |
 | `DBT-F3` Diagram fidelity | Dataflow | 0/3 | DBT-1, DBT-4, DBT-12 |
 | `DBT-F4` Docs and spec grounding | Cross-cutting | 6/10 | DBT-8, DBT-10, DBT-11, DBT-13, DBT-22, DBT-26, DBT-32, DBT-57, DBT-58, DBT-54 |
@@ -194,7 +194,7 @@ Next to pick up. Nothing blocks these.
 Settled and unblocked, sequenced behind now.
 
 - **FX-4** Sweep for the class rather than the instances
-  `DBT-F6` `enabler` `undecided`
+  `DBT-F6` `enabler` `settled`
   THREE confirmed from one reading; nothing says the fourth is not there.
   `useEffect` keyed on a memo, a callback, or an inline object/array prop,
   whose body resets state the operator owns. Safe reference:
@@ -207,7 +207,12 @@ Settled and unblocked, sequenced behind now.
   backlog items and doing it per-surface means building it three times. Today
   the taxonomy is 11 capabilities (`capabilities.ts:22-36`). Every addition
   needs a real probe or the step-2 mapping rule drops it, since that rule
-  records only measurements. No probe ever grants a write.
+  records only measurements. No probe ever grants a write. DECIDED: one-off
+  sweep, not a custom lint rule. oxlint has no exhaustive-deps equivalent, so
+  a rule means authoring and maintaining one, and three fixes do not justify
+  that. Reasoning in backlog.md section 18h, which also records what would
+  reopen it - a fourth instance, and whether the class has become
+  representable the way [[DBT-61]]'s was.
   DECISION: Sweep the effect-identity class once by hand, or write a custom
   lint rule?
     [x] `one-off-sweep` One-off sweep of the codebase - Read every useEffect keyed on a memo, callback or inline object whose body resets operator-owned state, and fix what turns up. Cheap, and exactly the reading that found the first three - but nothing stops a fourth being written next week.
@@ -412,22 +417,31 @@ Settled and unblocked, sequenced behind now.
   is the actual defect either way.
 
 - **D-3** How do capabilities reach the roughly eight listing screens - keep prop-drilling from the shell
-  `HON-F2` `decision` `undecided`
+  `HON-F2` `decision` `settled`
   , or carry them in `PortsContext` beside `config`? One seam change against
   updating every `PortsProvider` call site. Cheap now, less so later; at eight
-  listers this is the duplication that drifts. `backlog.md#4`.
+  listers this is the duplication that drifts. `backlog.md#4`. DECIDED: carry
+  capabilities in PortsContext. One seam change against eight call sites that
+  must be kept in step - the duplication that drifts, and the same shape the
+  capability model already had to correct once. Reasoning in backlog.md
+  section 18b, which is why this can settle.
   DECISION: How do capabilities reach the ~8 listing screens?
     [ ] `prop-drill` Keep prop-drilling from the shell - No seam change; every PortsProvider call site updates. Cheap now, less so later.
     [x] `ports-context` Carry them in PortsContext beside config - One seam change. At eight listers this is the duplication that drifts.
 
 - **D-11** `ADR-0004` per-table successor for deprecated guid columns (`AwsRequestId` to `AwsRequestId_`)
-  `HON-F3` `decision` `undecided`
+  `HON-F3` `decision` `settled`
   Explicitly out of scope for ADR-0004 as a per-table content decision.
   Matters because CloudTrail's `requestID` is frequently not a UUID, so
   `toguid()` returns null and drops it silently. `adr/0004:82-86`. --- Source
   is docs/adr/0004-cast-guid-columns.md, "What is NOT decided here". The card
   previously tagged AZR-5, which is the diagnostic-settings cleanup and has
-  nothing to do with guid columns.
+  nothing to do with guid columns. DECIDED: route deprecated guid columns to
+  their `_` successor, per table. CONSTRAINT recorded with the decision and as
+  load-bearing as the choice: this is a per-table CONTENT mapping and must NOT
+  become a new RULE 2b clause, because a general rule would rewrite column
+  names in tables where the successor does not exist. Reasoning in backlog.md
+  section 18g, which is why this can settle.
   DECISION: Route deprecated guid columns to their `_`-suffixed string
   successor, per table?
     [ ] `leave-as-is` Leave it at the ADR-0004 cast - AwsRequestId stays declared string and promoted with toguid(). Correct for well-formed UUIDs, but CloudTrail's requestID frequently is not one, so toguid() returns null and the value drops silently - the same quiet failure the ADR set out to fix.
@@ -582,7 +596,7 @@ Settled, gated on something above.
   which is the point.
 
 - **AZR-13** SecurityOnly is offered but cannot be stored - it reverts to Standard
-  `AZR-F3` `bug` `undecided`
+  `AZR-F3` `bug` `settled`
   Not now because: The profile it silently reverts to is the SAFE one, so the
   failure is a lost preference rather than a wrong deployment. The card is
   also still undecided on where the profile list should live, and fixing
@@ -604,7 +618,13 @@ Settled, gated on something above.
   follow from it: declining to make a THIRD value storable is not the same
   act, and nothing checked whether it was. PARKED 2026-08-28: moved back out
   of in-progress when the focus shifted to the Sentinel Integration
-  content/pack path. The decision on it is still open and still real.
+  content/pack path. The decision on it is still open and still real. DECIDED:
+  the catalog derives its profile list from entra-diagnostics; ENTRA_PROFILES
+  becomes the single authority. Accepts a WEAKENED provenance pin on purpose -
+  from "equals the legacy two" to "contains the legacy two, plus SecurityOnly"
+  - because the old pin asserted a fact AZR-2 had already made false
+  deliberately. Reasoning in backlog.md section 18i, which is why this can
+  settle.
   DECISION: The coverage catalog is a VERBATIM port of resource-coverage.json,
   whose `_profileOptions` has only Standard and HighVolume. AZR-2 deliberately
   added SecurityOnly. Where should the profile list live?
@@ -791,19 +811,25 @@ Settled, gated on something above.
   as one of its own two pending items. ---
 
 - **D-1** `HON-6` placement: frame footer, or connection bar beside the existing secret/target/platform-l
-  `HON-F1` `decision` `undecided`
+  `HON-F1` `decision` `settled`
   ink chips? Excluded already: the nav (tried, wrong surface) and the
   preflight panel (re-measures on arrival, so it would only ever read "just
-  now").
+  now"). DECIDED: the connection bar, beside the existing secret / target /
+  platform-link chips. What HON-6 reports is the AGE of a measurement, and age
+  is only meaningful next to the thing measured. Reasoning in backlog.md
+  section 18a, which is why this can settle.
   DECISION: Where does the HON-6 freshness indicator go?
     [ ] `footer` Frame footer - One always-visible surface, away from the connection chips.
     [x] `connection-bar` Connection bar - Beside the existing secret / target / platform-link chips.
 
 - **D-4** `WIN` scope: does the enrichment catalog only report, or does it also produce pipeline enrichme
-  `WIN-F2` `decision` `undecided`
+  `WIN-F2` `decision` `settled`
   nt functions? Reporting first is a legitimate slice, but a catalog that only
   affects analysis leaves deployed data still missing the fields.
-  `backlog.md#5a`.
+  `backlog.md#5a`. DECIDED: produce inside WIN-2, not report-only. Reporting
+  alone leaves deployed data still missing the fields, and
+  buildCefIdentityOverrideFn is the working precedent for the same failure.
+  Reasoning in backlog.md section 18c, which is why this can settle.
   DECISION: WIN enrichment catalog: report the gap only, or also emit pipeline
   functions?
     [ ] `report-only` Report only - Diff schema columns against what the raw event carries, rank by content reference, stop there. backlog.md#5a warns this leaves deployed data still missing the fields - the catalog affects analysis but nothing reconstructs Account in the pipeline.
@@ -831,25 +857,33 @@ Settled, gated on something above.
   chosen silently".
 
 - **D-6** `PK-2` source of truth: does maintenance re-analyse, or read a stored analysis? Re-analysing ne
-  `PK-F1` `decision` `undecided`
+  `PK-F1` `decision` `settled`
   eds the original samples, which the pack carries but which may no longer
   represent live traffic; a stored verdict is cheap and goes stale silently. A
   third option - re-analyse against the LIVE table schema and show what
   changed since the pack was built - is probably the honest one, and is the
-  same fetch the picker already makes. `backlog.md#12`.
+  same fetch the picker already makes. `backlog.md#12`. DECIDED: re-analyse
+  against the LIVE table schema. A stored analysis goes stale silently, which
+  disqualifies it for a screen whose purpose is detecting drift. Reasoning in
+  backlog.md section 18d, which is why this can settle.
   DECISION: PK-2 source of truth: what does pack maintenance read?
     [ ] `re-analyse` Re-analyse the pack's samples - Needs the original samples, which the pack carries but which may no longer represent live traffic.
     [ ] `stored` Read a stored analysis - Cheap, and goes stale silently.
     [x] `live-schema` Re-analyse against the LIVE table schema - Shows what changed since the pack was built; the same fetch the picker already makes. Noted on the card as probably the honest one.
 
 - **D-8** `AZR` Resource Graph change tracking - offer it at all? Recorded under `notSupported` as query-
-  `AZR-F5` `decision` `undecided`
+  `AZR-F5` `decision` `settled`
   only with no streaming path. If offered, it is a second scheduled collector,
   and it lands on the same Resource Graph gap CAP-1 closes. `backlog.md#6d`. >
   **D-9 became DBT-14 on 2026-08-27.** It asked what to do about three-level >
   nested scrolling and had no fix proposed, because nobody had reproduced the
   > harm. Driving PaloAlto did: the wheel over the solution list moves nothing
-  at > all. That is not a question any more, so it left this column.
+  at > all. That is not a question any more, so it left this column. DECIDED:
+  build it as a scheduled Resource Graph collector. SEQUENCING CONSTRAINT
+  recorded with the decision - it lands on the unmeasured Resource Graph
+  capability that [[CAP-1]] closes, so CAP-1 comes first or this ships against
+  a permission nothing has measured. Reasoning in backlog.md section 18e,
+  which is why this can settle.
   DECISION: Offer Resource Graph change tracking, and if so as a row or a real
   collector?
     [ ] `omit` Do not offer it - Leave it out of the onboarding menu. Cheapest, and the option backlog.md#6e argues against: an operator who ticks through every section and never sees it concludes the tool missed it.
@@ -857,9 +891,12 @@ Settled, gated on something above.
     [x] `scheduled-collector` Build it as a second scheduled collector - Generate a scheduled Resource Graph query collector alongside the Sentinel incidents one. Most work, and it lands on the same unmeasured Resource Graph capability that CAP-1 closes.
 
 - **D-10** `DBT` Setup wizard header promises three phases while the stepper shows one
-  `DBT-F2` `decision` `undecided`
+  `DBT-F2` `decision` `settled`
   Either drop the enumeration from the header, or promote the sub-steps.
-  Measured on two live walkthroughs 2026-08-06. `backlog.md#9`.
+  Measured on two live walkthroughs 2026-08-06. `backlog.md#9`. DECIDED:
+  promote the sub-steps into the stepper. Dropping the header enumeration
+  would make the screen consistent by making it less informative. Reasoning in
+  backlog.md section 18f, which is why this can settle.
   DECISION: Setup wizard header promises three phases; the stepper shows one.
     [ ] `drop-enumeration` Drop the enumeration from the header - Header stops promising what the stepper does not show.
     [x] `promote-substeps` Promote the sub-steps into the stepper - Stepper starts showing what the header promises.
@@ -918,7 +955,7 @@ Settled, gated on something above.
 
 ---
 
-## Done (71)
+## Done (72)
 
 Kept briefly so a reader can see what just landed; prune when the list grows.
 
@@ -2817,7 +2854,9 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   emptiness is never ambiguous - wrapping it would teach the codebase that
   Listing means any list, and a type that marks everything marks nothing. Same
   reasoning already excluded acquireAnalyticRules, acquireSolutionWorkbooks
-  and listDeprecatedContentHubSolutions.
+  and listDeprecatedContentHubSolutions. Reasoning in backlog.md section 17,
+  which is why this can settle - including why the recommendation on this card
+  was wrong.
   DECISION: Extend Listing<T> to the Cribl-side listings, or leave them?
     [ ] `wait-for-a-defect` Leave them until one actually misreads - No defect has been filed against a Cribl listing. Every empty-as-zero bug so far came from ARM, where RBAC filtering makes 200-with-nothing routine. Converting on suspicion is the reflex this repo keeps filing cards about - and the type is now there to reach for the moment one does misread.
     [x] `convert-now` Convert them now for symmetry - A token scoped to one worker group lists what it can see, so the ambiguity is real in principle. Doing it while the pattern is fresh is cheaper than rediscovering it later - at the cost of a second sweep of call sites for a bug nobody has hit.
@@ -2875,3 +2914,29 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   labs found in this subscription." only for a measured none (groups were
   read, none is a lab) and hedges with what would settle it for the unverified
   empty. Both branches pinned, and the unverified pin was mutation-checked.
+
+- **DBT-66** check-listings.mjs breaks the test run on any Windows checkout
+  `DBT-F1` `bug` `settled` `verified: pins`
+  The file I added for [[DBT-61]] starts with a shebang (#!/usr/bin/env node).
+  It is the ONLY script in apps/cribl-app/scripts with one - board.mjs,
+  board-groom.mjs and the rest have none, because they are all invoked as
+  `node scripts/<name>.mjs` from an npm script and never executed directly.
+  With core.autocrlf=true and no .gitattributes, git checks the file out with
+  CRLF, and vitest then fails to import it: `SyntaxError: Invalid or
+  unexpected token` at the import line. That collapses the WHOLE suite to 'no
+  tests' rather than reporting one failure, so the damage is larger than the
+  file. WHY CI DID NOT CATCH IT, and this is the part worth keeping: the
+  GitHub runner is Linux and checks out LF, so the file is well-formed there.
+  PR #155 went green on every gate and the defect shipped anyway. It appears
+  only on a Windows working tree - which is the primary development
+  environment for this repo - and it surfaced here only after switching
+  branches made git rewrite the endings. A green CI is evidence about the CI
+  checkout, not about the repository. FIX: drop the shebang, matching every
+  sibling script. NOT THIS CARD, but worth asking once: whether the repo
+  should carry a .gitattributes pinning *.mjs to LF so line endings stop
+  depending on each clone's config. No other script is affected today, and a
+  repo-wide line-ending change has its own blast radius, so it does not ride
+  along with a one-line fix. FIXED 2026-08-31: shebang removed, the 9
+  check-listings pins pass again, and npm test is green on this Windows tree.
+  verified:pins because the evidence is the suite importing the module at all
+  - which is exactly what was broken.

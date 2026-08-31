@@ -119,7 +119,7 @@
       "type": "enabler",
       "status": "backlog",
       "priority": "next",
-      "settled": "undecided",
+      "settled": "settled",
       "dependsOn": [],
       "decision": {
         "question": "Sweep the effect-identity class once by hand, or write a custom lint rule?",
@@ -137,7 +137,7 @@
         ],
         "chosen": "one-off-sweep"
       },
-      "detail": "THREE confirmed from one reading; nothing says the fourth is not there. `useEffect` keyed on a memo, a callback, or an inline object/array prop, whose body resets state the operator owns. Safe reference: `lake-panel.tsx:198-204` (primitive key). Guard precedents: `integrate-screen.tsx:398-410`, `azure-resources-section.tsx:259-262`. *chore. UNDECIDED whether this is a one-off sweep or a lint rule - oxlint has no exhaustive-deps equivalent, and a custom rule is a bigger commitment than the three fixes were.*  ### CAP - Capability taxonomy extension  Build this ONCE. `backlog.md#12` says so explicitly - it serves three separate backlog items and doing it per-surface means building it three times. Today the taxonomy is 11 capabilities (`capabilities.ts:22-36`). Every addition needs a real probe or the step-2 mapping rule drops it, since that rule records only measurements. No probe ever grants a write."
+      "detail": "THREE confirmed from one reading; nothing says the fourth is not there. `useEffect` keyed on a memo, a callback, or an inline object/array prop, whose body resets state the operator owns. Safe reference: `lake-panel.tsx:198-204` (primitive key). Guard precedents: `integrate-screen.tsx:398-410`, `azure-resources-section.tsx:259-262`. *chore. UNDECIDED whether this is a one-off sweep or a lint rule - oxlint has no exhaustive-deps equivalent, and a custom rule is a bigger commitment than the three fixes were.*  ### CAP - Capability taxonomy extension  Build this ONCE. `backlog.md#12` says so explicitly - it serves three separate backlog items and doing it per-surface means building it three times. Today the taxonomy is 11 capabilities (`capabilities.ts:22-36`). Every addition needs a real probe or the step-2 mapping rule drops it, since that rule records only measurements. No probe ever grants a write. DECIDED: one-off sweep, not a custom lint rule. oxlint has no exhaustive-deps equivalent, so a rule means authoring and maintaining one, and three fixes do not justify that. Reasoning in backlog.md section 18h, which also records what would reopen it - a fourth instance, and whether the class has become representable the way [[DBT-61]]'s was."
     },
     {
       "id": "CAP-1",
@@ -412,7 +412,7 @@
       "title": "SecurityOnly is offered but cannot be stored - it reverts to Standard",
       "type": "bug",
       "status": "backlog",
-      "settled": "undecided",
+      "settled": "settled",
       "dependsOn": [],
       "decision": {
         "question": "The coverage catalog is a VERBATIM port of resource-coverage.json, whose `_profileOptions` has only Standard and HighVolume. AZR-2 deliberately added SecurityOnly. Where should the profile list live?",
@@ -435,7 +435,7 @@
         ],
         "chosen": "derive"
       },
-      "detail": "FOUND by the architecture audit 2026-08-28 (ninth), one commit after AZR-2 merged, as a DUPLICATED DECISION: two modules define what Entra profiles exist and they disagree. `entra-diagnostics.ENTRA_PROFILES` has three (SecurityOnly, Standard, HighVolume); the `coverage-catalog` entraId subSelection has two. REPRODUCED, not theorised: storing SecurityOnly through `decodeSelection` yields `subSelections.entraId = [\"Standard\"]` with `dropped = [\"entraId.SecurityOnly\"]`. So the one profile an operator cannot keep is precisely the one AZR-2 added by resolving the LOG-07 drift. It is REPORTED in `dropped` rather than lost silently - that mechanism works as built - but nothing reads `dropped` yet and the choice still reverts. Worth recording exactly how the rationale failed: the entra-categories docblock says \"the coverage catalog keeps offering the two it always did, because changing what a stored selection MEANS is a separate act\". The first half is right - Standard and HighVolume keep their meaning. The second half does not follow from it: declining to make a THIRD value storable is not the same act, and nothing checked whether it was. PARKED 2026-08-28: moved back out of in-progress when the focus shifted to the Sentinel Integration content/pack path. The decision on it is still open and still real.",
+      "detail": "FOUND by the architecture audit 2026-08-28 (ninth), one commit after AZR-2 merged, as a DUPLICATED DECISION: two modules define what Entra profiles exist and they disagree. `entra-diagnostics.ENTRA_PROFILES` has three (SecurityOnly, Standard, HighVolume); the `coverage-catalog` entraId subSelection has two. REPRODUCED, not theorised: storing SecurityOnly through `decodeSelection` yields `subSelections.entraId = [\"Standard\"]` with `dropped = [\"entraId.SecurityOnly\"]`. So the one profile an operator cannot keep is precisely the one AZR-2 added by resolving the LOG-07 drift. It is REPORTED in `dropped` rather than lost silently - that mechanism works as built - but nothing reads `dropped` yet and the choice still reverts. Worth recording exactly how the rationale failed: the entra-categories docblock says \"the coverage catalog keeps offering the two it always did, because changing what a stored selection MEANS is a separate act\". The first half is right - Standard and HighVolume keep their meaning. The second half does not follow from it: declining to make a THIRD value storable is not the same act, and nothing checked whether it was. PARKED 2026-08-28: moved back out of in-progress when the focus shifted to the Sentinel Integration content/pack path. The decision on it is still open and still real. DECIDED: the catalog derives its profile list from entra-diagnostics; ENTRA_PROFILES becomes the single authority. Accepts a WEAKENED provenance pin on purpose - from \"equals the legacy two\" to \"contains the legacy two, plus SecurityOnly\" - because the old pin asserted a fact AZR-2 had already made false deliberately. Reasoning in backlog.md section 18i, which is why this can settle.",
       "priority": "later",
       "priorityWhy": "The profile it silently reverts to is the SAFE one, so the failure is a lost preference rather than a wrong deployment. The card is also still undecided on where the profile list should live, and fixing before deciding means fixing twice."
     },
@@ -949,7 +949,7 @@
       "type": "decision",
       "status": "backlog",
       "priority": "later",
-      "settled": "undecided",
+      "settled": "settled",
       "dependsOn": [],
       "decision": {
         "question": "Where does the HON-6 freshness indicator go?",
@@ -967,7 +967,7 @@
         ],
         "chosen": "connection-bar"
       },
-      "detail": "ink chips? Excluded already: the nav (tried, wrong surface) and the preflight panel (re-measures on arrival, so it would only ever read \"just now\")."
+      "detail": "ink chips? Excluded already: the nav (tried, wrong surface) and the preflight panel (re-measures on arrival, so it would only ever read \"just now\"). DECIDED: the connection bar, beside the existing secret / target / platform-link chips. What HON-6 reports is the AGE of a measurement, and age is only meaningful next to the thing measured. Reasoning in backlog.md section 18a, which is why this can settle."
     },
     {
       "id": "D-2",
@@ -1012,7 +1012,7 @@
       "type": "decision",
       "status": "backlog",
       "priority": "next",
-      "settled": "undecided",
+      "settled": "settled",
       "dependsOn": [],
       "decision": {
         "question": "How do capabilities reach the ~8 listing screens?",
@@ -1030,7 +1030,7 @@
         ],
         "chosen": "ports-context"
       },
-      "detail": ", or carry them in `PortsContext` beside `config`? One seam change against updating every `PortsProvider` call site. Cheap now, less so later; at eight listers this is the duplication that drifts. `backlog.md#4`."
+      "detail": ", or carry them in `PortsContext` beside `config`? One seam change against updating every `PortsProvider` call site. Cheap now, less so later; at eight listers this is the duplication that drifts. `backlog.md#4`. DECIDED: carry capabilities in PortsContext. One seam change against eight call sites that must be kept in step - the duplication that drifts, and the same shape the capability model already had to correct once. Reasoning in backlog.md section 18b, which is why this can settle."
     },
     {
       "id": "D-4",
@@ -1040,7 +1040,7 @@
       "type": "decision",
       "status": "backlog",
       "priority": "later",
-      "settled": "undecided",
+      "settled": "settled",
       "dependsOn": [],
       "decision": {
         "question": "WIN enrichment catalog: report the gap only, or also emit pipeline functions?",
@@ -1063,7 +1063,7 @@
         ],
         "chosen": "produce-in-scope"
       },
-      "detail": "nt functions? Reporting first is a legitimate slice, but a catalog that only affects analysis leaves deployed data still missing the fields. `backlog.md#5a`."
+      "detail": "nt functions? Reporting first is a legitimate slice, but a catalog that only affects analysis leaves deployed data still missing the fields. `backlog.md#5a`. DECIDED: produce inside WIN-2, not report-only. Reporting alone leaves deployed data still missing the fields, and buildCefIdentityOverrideFn is the working precedent for the same failure. Reasoning in backlog.md section 18c, which is why this can settle."
     },
     {
       "id": "D-5",
@@ -1085,7 +1085,7 @@
       "type": "decision",
       "status": "backlog",
       "priority": "later",
-      "settled": "undecided",
+      "settled": "settled",
       "dependsOn": [],
       "decision": {
         "question": "PK-2 source of truth: what does pack maintenance read?",
@@ -1108,7 +1108,7 @@
         ],
         "chosen": "live-schema"
       },
-      "detail": "eds the original samples, which the pack carries but which may no longer represent live traffic; a stored verdict is cheap and goes stale silently. A third option - re-analyse against the LIVE table schema and show what changed since the pack was built - is probably the honest one, and is the same fetch the picker already makes. `backlog.md#12`."
+      "detail": "eds the original samples, which the pack carries but which may no longer represent live traffic; a stored verdict is cheap and goes stale silently. A third option - re-analyse against the LIVE table schema and show what changed since the pack was built - is probably the honest one, and is the same fetch the picker already makes. `backlog.md#12`. DECIDED: re-analyse against the LIVE table schema. A stored analysis goes stale silently, which disqualifies it for a screen whose purpose is detecting drift. Reasoning in backlog.md section 18d, which is why this can settle."
     },
     {
       "id": "D-7",
@@ -1151,7 +1151,7 @@
       "type": "decision",
       "status": "backlog",
       "priority": "later",
-      "settled": "undecided",
+      "settled": "settled",
       "dependsOn": [],
       "decision": {
         "question": "Offer Resource Graph change tracking, and if so as a row or a real collector?",
@@ -1174,7 +1174,7 @@
         ],
         "chosen": "scheduled-collector"
       },
-      "detail": "only with no streaming path. If offered, it is a second scheduled collector, and it lands on the same Resource Graph gap CAP-1 closes. `backlog.md#6d`. > **D-9 became DBT-14 on 2026-08-27.** It asked what to do about three-level > nested scrolling and had no fix proposed, because nobody had reproduced the > harm. Driving PaloAlto did: the wheel over the solution list moves nothing at > all. That is not a question any more, so it left this column."
+      "detail": "only with no streaming path. If offered, it is a second scheduled collector, and it lands on the same Resource Graph gap CAP-1 closes. `backlog.md#6d`. > **D-9 became DBT-14 on 2026-08-27.** It asked what to do about three-level > nested scrolling and had no fix proposed, because nobody had reproduced the > harm. Driving PaloAlto did: the wheel over the solution list moves nothing at > all. That is not a question any more, so it left this column. DECIDED: build it as a scheduled Resource Graph collector. SEQUENCING CONSTRAINT recorded with the decision - it lands on the unmeasured Resource Graph capability that [[CAP-1]] closes, so CAP-1 comes first or this ships against a permission nothing has measured. Reasoning in backlog.md section 18e, which is why this can settle."
     },
     {
       "id": "D-10",
@@ -1185,7 +1185,7 @@
       "type": "decision",
       "status": "backlog",
       "priority": "later",
-      "settled": "undecided",
+      "settled": "settled",
       "dependsOn": [],
       "decision": {
         "question": "Setup wizard header promises three phases; the stepper shows one.",
@@ -1203,7 +1203,7 @@
         ],
         "chosen": "promote-substeps"
       },
-      "detail": "Either drop the enumeration from the header, or promote the sub-steps. Measured on two live walkthroughs 2026-08-06. `backlog.md#9`."
+      "detail": "Either drop the enumeration from the header, or promote the sub-steps. Measured on two live walkthroughs 2026-08-06. `backlog.md#9`. DECIDED: promote the sub-steps into the stepper. Dropping the header enumeration would make the screen consistent by making it less informative. Reasoning in backlog.md section 18f, which is why this can settle."
     },
     {
       "id": "D-11",
@@ -1213,7 +1213,7 @@
       "type": "decision",
       "status": "backlog",
       "priority": "next",
-      "settled": "undecided",
+      "settled": "settled",
       "dependsOn": [],
       "decision": {
         "question": "Route deprecated guid columns to their `_`-suffixed string successor, per table?",
@@ -1231,7 +1231,7 @@
         ],
         "chosen": "per-table-successor"
       },
-      "detail": "Explicitly out of scope for ADR-0004 as a per-table content decision. Matters because CloudTrail's `requestID` is frequently not a UUID, so `toguid()` returns null and drops it silently. `adr/0004:82-86`.  --- Source is docs/adr/0004-cast-guid-columns.md, \"What is NOT decided here\". The card previously tagged AZR-5, which is the diagnostic-settings cleanup and has nothing to do with guid columns."
+      "detail": "Explicitly out of scope for ADR-0004 as a per-table content decision. Matters because CloudTrail's `requestID` is frequently not a UUID, so `toguid()` returns null and drops it silently. `adr/0004:82-86`.  --- Source is docs/adr/0004-cast-guid-columns.md, \"What is NOT decided here\". The card previously tagged AZR-5, which is the diagnostic-settings cleanup and has nothing to do with guid columns. DECIDED: route deprecated guid columns to their `_` successor, per table. CONSTRAINT recorded with the decision and as load-bearing as the choice: this is a per-table CONTENT mapping and must NOT become a new RULE 2b clause, because a general rule would rewrite column names in tables where the successor does not exist. Reasoning in backlog.md section 18g, which is why this can settle."
     },
     {
       "id": "GEN-2",
@@ -1964,7 +1964,7 @@
       "dependsOn": [
         "DBT-61"
       ],
-      "detail": "[[DBT-61]] converted the four ARM listers, which is where the whole defect class actually landed. The Cribl-side listings - packs, destinations, sources - have the same ambiguity in principle: a token scoped to one worker group lists what it can see, not what exists. NOT URGENT and deliberately not bundled: no defect has been filed against them, the blast radius is a second set of call sites, and doing it speculatively would be the reflex this repo keeps writing cards about. Do it when a Cribl listing actually reads as a zero somewhere, or when touching those call sites for another reason. DECIDED 2026-08-31 by the user: convert-now, against the recommendation recorded above. The recommendation was wrong on its own terms and the evidence arrived within the hour: scoping the conversion immediately found [[DBT-64]], a live 'No running labs found in this subscription.' stated from an unverified ARM listing, in a FIFTH ARM lister that [[DBT-61]] missed while claiming to have covered them all. 'Wait until one actually misreads' assumed someone would notice the misread; nobody had, and it had been shipping. SCOPE, measured rather than assumed. Convert: `listLabs` (ARM, and the one that produced DBT-64), `acquireServicePrincipals` (Graph - a directory read without Application.Read.All returns a filtered set, not an error), `listSampleSourceGroups` and `listDeployedPacks` (Cribl - a token scoped to one worker group lists what it can see). DO NOT convert, and the reason is the same rule read the other way: `acquireAnalyticRules` and `acquireSolutionWorkbooks` read files out of the repo, and `listDeprecatedContentHubSolutions` returns a Set used as a lookup, not an inventory. None of the three has an ambiguous empty, and wrapping them would teach the codebase that `Listing` means 'any list', which is how a type stops carrying information. DONE 2026-08-31. THE TYPE GREW A THIRD VARIANT, forced by listLabs and right on its own merits: that usecase FILTERS a read, so zero labs out of forty groups read is a measured zero the operator should be told plainly, while zero labs from an empty group read means nothing. A two-way listing collapses those and trades a confident wrong answer for a permanent hedge, which is its own wrong answer. Listing<T> is now rows | none | empty, minted by toListing (raw reads, empty is always unverified) and filterListing (derived rows, and the ONLY way to mint a verified none - it demands the source listing, so provenance is structural rather than promised in a comment). CONVERTED: listLabs (ARM, carried [[DBT-64]]), acquireServicePrincipals (Graph answers a caller without Application.Read.All with what it may see, not an error) and listSampleSourceGroups (a Cribl token scoped to one worker group lists what it can reach). SCOPE CORRECTION, measured rather than assumed: listDeployedPacks was named on this card and is NOT converted. It pushes exactly one entry per requested group and THROWS on any non-ok parse, so its emptiness is never ambiguous - wrapping it would teach the codebase that Listing means any list, and a type that marks everything marks nothing. Same reasoning already excluded acquireAnalyticRules, acquireSolutionWorkbooks and listDeprecatedContentHubSolutions.",
+      "detail": "[[DBT-61]] converted the four ARM listers, which is where the whole defect class actually landed. The Cribl-side listings - packs, destinations, sources - have the same ambiguity in principle: a token scoped to one worker group lists what it can see, not what exists. NOT URGENT and deliberately not bundled: no defect has been filed against them, the blast radius is a second set of call sites, and doing it speculatively would be the reflex this repo keeps writing cards about. Do it when a Cribl listing actually reads as a zero somewhere, or when touching those call sites for another reason. DECIDED 2026-08-31 by the user: convert-now, against the recommendation recorded above. The recommendation was wrong on its own terms and the evidence arrived within the hour: scoping the conversion immediately found [[DBT-64]], a live 'No running labs found in this subscription.' stated from an unverified ARM listing, in a FIFTH ARM lister that [[DBT-61]] missed while claiming to have covered them all. 'Wait until one actually misreads' assumed someone would notice the misread; nobody had, and it had been shipping. SCOPE, measured rather than assumed. Convert: `listLabs` (ARM, and the one that produced DBT-64), `acquireServicePrincipals` (Graph - a directory read without Application.Read.All returns a filtered set, not an error), `listSampleSourceGroups` and `listDeployedPacks` (Cribl - a token scoped to one worker group lists what it can see). DO NOT convert, and the reason is the same rule read the other way: `acquireAnalyticRules` and `acquireSolutionWorkbooks` read files out of the repo, and `listDeprecatedContentHubSolutions` returns a Set used as a lookup, not an inventory. None of the three has an ambiguous empty, and wrapping them would teach the codebase that `Listing` means 'any list', which is how a type stops carrying information. DONE 2026-08-31. THE TYPE GREW A THIRD VARIANT, forced by listLabs and right on its own merits: that usecase FILTERS a read, so zero labs out of forty groups read is a measured zero the operator should be told plainly, while zero labs from an empty group read means nothing. A two-way listing collapses those and trades a confident wrong answer for a permanent hedge, which is its own wrong answer. Listing<T> is now rows | none | empty, minted by toListing (raw reads, empty is always unverified) and filterListing (derived rows, and the ONLY way to mint a verified none - it demands the source listing, so provenance is structural rather than promised in a comment). CONVERTED: listLabs (ARM, carried [[DBT-64]]), acquireServicePrincipals (Graph answers a caller without Application.Read.All with what it may see, not an error) and listSampleSourceGroups (a Cribl token scoped to one worker group lists what it can reach). SCOPE CORRECTION, measured rather than assumed: listDeployedPacks was named on this card and is NOT converted. It pushes exactly one entry per requested group and THROWS on any non-ok parse, so its emptiness is never ambiguous - wrapping it would teach the codebase that Listing means any list, and a type that marks everything marks nothing. Same reasoning already excluded acquireAnalyticRules, acquireSolutionWorkbooks and listDeprecatedContentHubSolutions. Reasoning in backlog.md section 17, which is why this can settle - including why the recommendation on this card was wrong.",
       "decision": {
         "question": "Extend Listing<T> to the Cribl-side listings, or leave them?",
         "options": [
@@ -2032,6 +2032,19 @@
       "settled": "settled",
       "dependsOn": [],
       "detail": "ADR 0004 (declare a guid column `string`, promote it with `toguid()` in transformKql) was applied to the GENERATOR and never to the ~100 static ARM templates under Azure/CustomDeploymentTemplates/DCR-Templates/. Three still declare `\"type\": \"guid\"` with a bare `\"transformKql\": \"source\"`, which is the exact shape that silently drops the column: DataCollectionRules(DCE)/ADAssessmentRecommendation.json (4 columns), DataCollectionRules(DCE)/AWSCloudTrail.json (3), and DataCollectionRules(NoDCE)/ADAssessmentRecommendation.json (4). THIS PATH IS A PUBLIC API, which is why it is `now` and not a cleanup: DCR-Templates is not deprecated, it sits at the repo root, and Cribl's public docs deep-link individual files in it. Anyone deploying one of these three loses those columns with no error. HOW IT WAS FOUND, and this is the uncomfortable part. An OUTSIDE CONTRIBUTOR reported it as PR #26 on 2026-06-11 and fixed NoDCE/AWSCloudTrail.json correctly - both halves, `guid`->`string` AND `source | extend AwsEventId = toguid(AwsEventId), ...` - two and a half months BEFORE we diagnosed the same defect ourselves and shipped it as ADR 0004 / PR #123 in 1.12.1. The PR then sat open and untriaged until 2026-08-31. We rediscovered, from scratch, a bug that was already sitting in the queue with a correct patch attached. THE FIX is to mirror #26's shape to the three remaining files. DCE/AWSCloudTrail is the DCE variant of the file the contributor already fixed, so its diff is a direct copy; the two ADAssessmentRecommendation files need their own guid columns enumerated. DO NOT sweep all ~100 templates blindly - 99 carry a bare `source` transform and only these three pair it with a guid declaration, so the grep that finds the defect is `\"type\": \"guid\"`, not the transform. WORTH A SECOND CARD IF IT RECURS: nothing prevents a new template arriving with a guid declaration, because these files are hand-written data rather than generator output and no check reads them. A check-templates script in the [[DBT-61]] mould would close that, and unlike the empty-as-zero class this one IS a literal grep - the wrong thing is a string somebody typed."
+    },
+    {
+      "id": "DBT-66",
+      "epic": "DBT",
+      "feature": "DBT-F1",
+      "title": "check-listings.mjs breaks the test run on any Windows checkout",
+      "type": "bug",
+      "status": "done",
+      "priority": "now",
+      "settled": "settled",
+      "dependsOn": [],
+      "detail": "The file I added for [[DBT-61]] starts with a shebang (#!/usr/bin/env node). It is the ONLY script in apps/cribl-app/scripts with one - board.mjs, board-groom.mjs and the rest have none, because they are all invoked as `node scripts/<name>.mjs` from an npm script and never executed directly. With core.autocrlf=true and no .gitattributes, git checks the file out with CRLF, and vitest then fails to import it: `SyntaxError: Invalid or unexpected token` at the import line. That collapses the WHOLE suite to 'no tests' rather than reporting one failure, so the damage is larger than the file. WHY CI DID NOT CATCH IT, and this is the part worth keeping: the GitHub runner is Linux and checks out LF, so the file is well-formed there. PR #155 went green on every gate and the defect shipped anyway. It appears only on a Windows working tree - which is the primary development environment for this repo - and it surfaced here only after switching branches made git rewrite the endings. A green CI is evidence about the CI checkout, not about the repository. FIX: drop the shebang, matching every sibling script. NOT THIS CARD, but worth asking once: whether the repo should carry a .gitattributes pinning *.mjs to LF so line endings stop depending on each clone's config. No other script is affected today, and a repo-wide line-ending change has its own blast radius, so it does not ride along with a one-line fix. FIXED 2026-08-31: shebang removed, the 9 check-listings pins pass again, and npm test is green on this Windows tree. verified:pins because the evidence is the suite importing the module at all - which is exactly what was broken.",
+      "verified": "pins"
     }
   ],
   "features": [

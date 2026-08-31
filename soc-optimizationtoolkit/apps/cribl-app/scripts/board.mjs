@@ -429,6 +429,45 @@ function hierarchyFindings(data, sections) {
         `${s.id} carries priorityWhy but is not a deprioritised bug. Drop the field.`,
       );
     }
+    // AN ANSWER IS NOT A DECISION. Picking an option records `chosen` and
+    // touches nothing else, on purpose - the reasoning still has to reach
+    // backlog.md, because a decision without its rejected alternatives is the
+    // thing this repo keeps having to reconstruct.
+    //
+    // That contract had no enforcement, and NINE cards accumulated a ticked
+    // box with no argument behind it, three of them still reading on the board
+    // as questions blocking work that had in fact been answered weeks earlier.
+    // The rule was prose, and prose cannot fail a build - the same lesson
+    // DBT-61 learned about the inventory standard, one level up.
+    //
+    // The check is deliberately shallow: it asks for a backlog.md CITATION,
+    // not for good reasoning, because a validator cannot judge an argument and
+    // pretending otherwise would just teach people to pad the field. Naming
+    // the section is enough to make the write-up exist and be findable.
+    if (s.decision !== undefined && (s.decision.chosen ?? '') !== '') {
+      // BOTH established spellings count. The repo's older convention is an
+      // anchor (`backlog.md#6h`), which the citation checks above already
+      // validate against the real sections; the newer decision write-ups say
+      // "backlog.md section 18a". Accepting only one would have invented a
+      // second convention for the same fact - and the first draft of this rule
+      // did exactly that, flagging three cards that were correctly cited.
+      const cites =
+        /backlog\.md\s*#\s*\S+/i.test(s.detail ?? '') ||
+        /backlog\.md\s+section\s+\S+/i.test(s.detail ?? '');
+      if (s.settled === 'settled' && !cites) {
+        out.push(
+          `${s.id} is settled with an answered decision but cites no reasoning. ` +
+            `Say "Reasoning in backlog.md section <n>" in the detail - a pick ` +
+            `without its rejected alternatives is not a decision.`,
+        );
+      }
+      if (s.settled !== 'settled' && cites) {
+        out.push(
+          `${s.id} cites backlog.md reasoning but is still "${s.settled}". ` +
+            `The write-up exists, so settle the card.`,
+        );
+      }
+    }
     const f = featureById.get(s.feature);
     if (f === undefined) {
       out.push(`${s.id} belongs to feature "${s.feature}", which is not declared.`);
