@@ -41,7 +41,7 @@
                         },
                         {
                             "name": "AwsEventId",
-                            "type": "guid"
+                            "type": "string"
                         },
                         {
                             "name": "AWSRegion",
@@ -49,7 +49,7 @@
                         },
                         {
                             "name": "AwsRequestId",
-                            "type": "guid"
+                            "type": "string"
                         },
                         {
                             "name": "AwsRequestId_",
@@ -169,7 +169,7 @@
                         },
                         {
                             "name": "SharedEventId",
-                            "type": "guid"
+                            "type": "string"
                         },
                         {
                             "name": "SourceIpAddress",
@@ -216,7 +216,15 @@
                             "type": "string"
                         },
                         {
+                            "name": "UserIdentityStoreArn",
+                            "type": "string"
+                        },
+                        {
                             "name": "UserIdentityType",
+                            "type": "string"
+                        },
+                        {
+                            "name": "UserIdentityUserId",
                             "type": "string"
                         },
                         {
@@ -243,7 +251,7 @@
                     "destinations": [
                         "logAnalyticsWorkspace"
                     ],
-                    "transformKql": "source",
+                    "transformKql": "source | extend AwsEventId = toguid(AwsEventId), AwsRequestId = toguid(AwsRequestId), SharedEventId = toguid(SharedEventId)",
                     "outputStream": "Microsoft-AWSCloudTrail"
                 }
             ]
