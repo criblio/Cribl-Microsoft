@@ -11,7 +11,7 @@ two cannot disagree.
 alternatives. This board holds only what is a unit of work, what state it is
 in, and what it waits on.
 
-**56 in the backlog, 0 in progress, 36 done.**
+**54 in the backlog, 0 in progress, 38 done.**
 
 ## By menu item
 
@@ -23,7 +23,7 @@ operator sees on any screen. Two menus are PLANNED and have no route yet.
 |---|---|---|---|
 | Dataflow | 3 | 0 | 0 |
 | Setup | 1 | 0 | 0 |
-| Sentinel Integration | 15 | 9 | 0 |
+| Sentinel Integration | 13 | 11 | 2 |
 | DCR Automation | 0 | 2 | 0 |
 | Pack Maintenance | 4 | 1 | 0 |
 | Permission Verification | 8 | 0 | 0 |
@@ -31,7 +31,7 @@ operator sees on any screen. Two menus are PLANNED and have no route yet.
 | Windows Event analysis (planned) | 5 | 0 | 0 |
 | Cross-cutting | 7 | 20 | 0 |
 
-Open work totals 56.
+Open work totals 54.
 
 ## Epics and features
 
@@ -66,14 +66,14 @@ Sentinel-side and Lake-side halves of Windows event handling
 | `WIN-F2` Microsoft proprietary enrichment catalog | Windows Event analysis (planned) | 0/2 | WIN-2, D-4 |
 | `WIN-F3` Lake copy format - JSON vs Parquet | Windows Event analysis (planned) | 0/1 | D-5 |
 
-### `HON` Inventory and diagnostic honesty - 9% (1/11)
+### `HON` Inventory and diagnostic honesty - 27% (3/11)
 
 Measured gaps where the app reports a confident wrong answer
 
 | Feature | Menu | Done | Stories |
 |---|---|---|---|
 | `HON-F1` Capability model follow-ons | Permission Verification | 0/4 | HON-6, HON-7*, D-1, D-2* |
-| `HON-F2` Unverified empty inventories | Sentinel Integration | 0/3 | HON-1, HON-2, D-3 |
+| `HON-F2` Unverified empty inventories | Sentinel Integration | 2/3 | HON-1, HON-2, D-3 |
 | `HON-F3` Guid-column aftermath, made visible | Sentinel Integration | 1/4 | HON-3, HON-8*, HON-4, D-11 |
 
 ### `GEN` Pipeline and pack generation - 100% (3/3)
@@ -140,15 +140,25 @@ _Nothing here._
 
 ---
 
-## Backlog - now (0)
+## Backlog - now (2)
 
 Next to pick up. Nothing blocks these.
 
-_Nothing here._
+- **HON-4** Tell operators that DCRs deployed before the guid fix still lose fields
+  `HON-F3` `story` `settled`
+  `update-dcr` regenerates the declaration so an update fixes it, but nothing
+  sweeps and nothing warns. Pairs with HON-3. `adr/0004:107-112`.
+
+- **DBT-2** Add the guid cast to the live-verification suite
+  `DBT-F1` `enabler` `settled`
+  The fix shipped in 1.12.1 without ever being observed against live Azure,
+  and `toguid()` returns null silently on malformed input - so a wrong cast
+  fails the same quiet way the drop did. The suite ran live on 2026-08-25 and
+  carries no guid row. `adr/0004:118-124`.
 
 ---
 
-## Backlog - next (25)
+## Backlog - next (21)
 
 Settled and unblocked, sequenced behind now.
 
@@ -201,16 +211,6 @@ Settled and unblocked, sequenced behind now.
   measured, do not re-add: Event Hub namespace creation is `arm.deploy`; every
   Cribl-side write is `source.manage`. ---
 
-- **HON-1** Wire `emptyTableListMessage` into the picker screen
-  `HON-F2` `story` `settled`
-  The last of the three pure decisions still owed its wiring. `backlog.md#4`.
-
-- **HON-2** Honour the scope rule at the remaining lister call sites
-  `HON-F2` `story` `settled`
-  A verdict is evidence only about the scope it was measured at, and that
-  includes off-scope denials. `emptyInventoryMessage` now requires a scope
-  argument, so the compiler prompts each new call site. `backlog.md#4`.
-
 - **HON-8** buildDeploymentPreview has no caller - the REVIEW stage is a usecase with no screen
   `HON-F3` `bug` `unconfirmed`
   FOUND while building HON-3 on 2026-08-28, looking for the right surface for
@@ -226,11 +226,6 @@ Settled and unblocked, sequenced behind now.
   REVIEW renders today, and the two possibilities need different fixes.
   Compare with the AZR modules, which also have no consumer but are honestly
   ahead of their screens; this one has a stage claiming to BE the consumer.
-
-- **HON-4** Tell operators that DCRs deployed before the guid fix still lose fields
-  `HON-F3` `story` `settled`
-  `update-dcr` regenerates the declaration so an update fixes it, but nothing
-  sweeps and nothing warns. Pairs with HON-3. `adr/0004:107-112`.
 
 - **HON-6** Give the audit's AGE a home and add a manual re-check
   `HON-F1` `story` `settled` `blocked by D-1`
@@ -257,13 +252,6 @@ Settled and unblocked, sequenced behind now.
   artifact" rule has no button. Targets: Integrate deploy, Batch Deploy, DCR
   Automation. Must stay worded as an offer, not an error - there is a pin on
   the absence of alert semantics. `backlog.md#1`. ---
-
-- **DBT-2** Add the guid cast to the live-verification suite
-  `DBT-F1` `enabler` `settled`
-  The fix shipped in 1.12.1 without ever being observed against live Azure,
-  and `toguid()` returns null silently on malformed input - so a wrong cast
-  fails the same quiet way the drop did. The suite ran live on 2026-08-25 and
-  carries no guid row. `adr/0004:118-124`.
 
 - **DBT-3** Reconcile the Entra `Kind:Direct` copy with what has been measured
   `DBT-F2` `story` `settled`
@@ -701,7 +689,7 @@ Settled, gated on something above.
 
 ---
 
-## Done (36)
+## Done (38)
 
 Kept briefly so a reader can see what just landed; prune when the list grows.
 
@@ -806,6 +794,56 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   Two of the three fixes also extracted the decision to a pure function
   (`shouldReloadEdits`, `autoDropPlan`) - which is what made the third one's
   asymmetry visible at a glance.
+
+- **HON-1** Wire `emptyTableListMessage` into the picker screen
+  `HON-F2` `story` `settled` `verified: pins`
+  The last of the three pure decisions still owed its wiring. `backlog.md#4`.
+  CLOSED 2026-08-31, and the wiring turned out to be ALREADY DONE - which is
+  the finding. The chain is complete and was traced rather than assumed:
+  emptyTableListMessage -> use-workspace-tables.ts:145 ->
+  integrate-screen.tsx:1872 -> mapping-review-section.tsx:879-885, which
+  renders the text and a Retry. The card said "the picker screen owes the
+  wiring" and the picker PANEL was deleted on 2026-08-18; the wiring landed in
+  the hook that outlived it, and nobody updated the card. WHAT WAS ACTUALLY
+  MISSING was the pin. The DOM test titled "distinguishes a VERIFIED empty
+  workspace from an unverified one" rendered ONE case and asserted a note
+  EXISTS - and the defect it guards against is a note whose text confidently
+  says "No tables found", which a note-exists check passes on. Replaced with
+  three pins, one per verdict, each asserting the wording and each asserting
+  the confident wrong answer is ABSENT. MUTATION CHECKED: hardcoding the note
+  to "No tables found" kills 2 of the 3; the old pin survived that mutation,
+  which is why it was worth the work.
+
+- **HON-2** Honour the scope rule at the remaining lister call sites
+  `HON-F2` `story` `settled` `verified: pins`
+  A verdict is evidence only about the scope it was measured at, and that
+  includes off-scope denials. `emptyInventoryMessage` now requires a scope
+  argument, so the compiler prompts each new call site. `backlog.md#4`. CLOSED
+  2026-08-31. The remaining call sites were the SETUP WIZARD's two listers,
+  and the workspace one still carried the exact sentence the original bug
+  report named as harmful: "No Log Analytics workspaces found in this
+  subscription. Create one" - inviting an operator to build a workspace that
+  already exists and is merely invisible to them. Resource groups said "No
+  resource groups found in this subscription." Both are fixed; the four
+  previously-applied sites (targeting workspaces, sub/rg pickers, DCR
+  inventory, table listing) were re-read and all honour the rule already. A
+  THIRD HEDGE WAS NEEDED, and refusing to reuse the second is the substance of
+  this card. The wizard runs BEFORE any audit and exists to browse
+  subscriptions, so the targeting screen's "the permission check measured a
+  different subscription" would describe a check the operator has not run.
+  `unauditedScopeInventoryMessage` says "no permission check has measured it"
+  instead. Three hedges now state three different facts - measured elsewhere,
+  never measured, no capability covers it - and a pin asserts no two of them
+  produce the same string, because collapsing them would put an operator in
+  one situation while reading another. The create hint SURVIVES, moved behind
+  the hedge and conditioned on the operator's own knowledge - rule 3 says
+  annotate, never remove the action, and someone setting up a genuinely empty
+  subscription still needs telling. The wording moved into `azure-setup-state`
+  as `dependentListingStatus`, where the section's own docblock says pure
+  decisions belong and where it is testable at all - it was inline in a
+  callback with no test covering it. 9 new pins (5 on the three hedges, 4 on
+  the extracted decision). MUTATION CHECKED: restoring the original copy kills
+  2.
 
 - **HON-3** Surface `droppedColumns` and `unknownTypeColumns` in the UI
   `HON-F3` `story` `settled` `verified: pins`

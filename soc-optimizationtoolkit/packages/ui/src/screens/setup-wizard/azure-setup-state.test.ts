@@ -23,6 +23,7 @@ import {
   subscriptionSelectOptions,
   workspaceSelectOptions,
   wrapRoleScript,
+  dependentListingStatus,
 } from "./azure-setup-state";
 
 describe("parseSubscriptionOptions", () => {
@@ -280,5 +281,57 @@ describe("role script helpers", () => {
     expect(wrapRoleScript("az foo")).toBe(
       "#!/usr/bin/env bash\nset -euo pipefail\n\naz foo\n",
     );
+  });
+});
+
+/**
+ * HON-2. This section is a LISTER, and until 2026-08-31 it made exactly the
+ * claim docs/inventory-standard.md (BINDING) forbids: "No Log Analytics
+ * workspaces found in this subscription. Create one". ARM answers 200 with an
+ * empty array when RBAC filters the caller out, so that sentence tells an
+ * operator to build something that may already exist and merely be invisible.
+ */
+describe("dependentListingStatus - an empty list is not a zero", () => {
+  it("REFUSES to say none, and refuses to invite creation unconditionally", () => {
+    const text = dependentListingStatus("workspaces", 0);
+    expect(text).not.toContain("No Log Analytics workspaces found");
+    expect(text).toContain("Cannot confirm there are no Log Analytics workspaces");
+    // The create hint survives - rule 3 says annotate, never remove the action -
+    // but only behind the operator's own knowledge.
+    expect(text).toContain("if you are sure there is none");
+  });
+
+  it("says no check has measured HERE, not that one measured elsewhere", () => {
+    // This section runs BEFORE any audit exists, so the targeting screen's
+    // "measured a different subscription" would describe a check the operator
+    // has not run. Different fact, different words.
+    const text = dependentListingStatus("workspaces", 0);
+    expect(text).toContain("no permission check has measured it");
+    // The confusable CLAIM, not the phrase: "Choose a different subscription"
+    // is advice and is fine, "measured a different subscription" asserts a
+    // check that never ran.
+    expect(text).not.toContain("measured a different subscription");
+  });
+
+  it("hedges resource groups on the absence of a CAPABILITY, not of an audit", () => {
+    const text = dependentListingStatus("resource-groups", 0);
+    expect(text).toBe(
+      "Cannot confirm there are no resource groups - no permission check covers this list",
+    );
+    // Never send an operator to a check that cannot settle the question.
+    expect(text).not.toMatch(/run the permission check/);
+  });
+
+  it("still reports a real count plainly when there IS one", () => {
+    // The hedge must not leak into the populated case - an operator who can
+    // see three workspaces should be told three, with no caveat.
+    const ws = dependentListingStatus("workspaces", 3);
+    expect(ws).toBe(
+      "Found 3 workspace(s). Selecting one sets the workspace and its resource group.",
+    );
+    expect(ws).not.toContain("Cannot confirm");
+    const rg = dependentListingStatus("resource-groups", 2);
+    expect(rg).toBe("Found 2 resource group(s). Selecting one sets the resource group.");
+    expect(rg).not.toContain("Cannot confirm");
   });
 });

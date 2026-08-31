@@ -37,6 +37,7 @@ import { usePorts } from "../../ports-context";
 import { ChangeRequestBlock } from "./change-request-block";
 import {
   RESOURCE_GROUPS_API_VERSION,
+  dependentListingStatus,
   ROLE_SCRIPT_FILENAME,
   SUBSCRIPTIONS_API_VERSION,
   VALIDATION_SKIPPED_LINES,
@@ -153,11 +154,11 @@ export function AzureResourcesSection({
           }
           const list = parseWorkspaceOptions(res.body);
           setWorkspaces(list);
-          setDependentStatus(
-            list.length === 0
-              ? "No Log Analytics workspaces found in this subscription. Create one, or choose a different subscription."
-              : `Found ${list.length} workspace(s). Selecting one sets the workspace and its resource group.`,
-          );
+          // HON-2: the wording is a pure decision and lives in
+          // azure-setup-state, where it is pinned. It used to be inline here
+          // and said "No workspaces found... Create one", which is the exact
+          // confident wrong answer docs/inventory-standard.md forbids.
+          setDependentStatus(dependentListingStatus("workspaces", list.length));
         } catch (err) {
           setDependentStatus(`Workspace discovery error: ${String(err)}`);
         }
@@ -177,11 +178,7 @@ export function AzureResourcesSection({
         }
         const list = parseResourceGroupOptions(res.body);
         setResourceGroups(list);
-        setDependentStatus(
-          list.length === 0
-            ? "No resource groups found in this subscription."
-            : `Found ${list.length} resource group(s). Selecting one sets the resource group.`,
-        );
+        setDependentStatus(dependentListingStatus("resource-groups", list.length));
       } catch (err) {
         setDependentStatus(`Resource group discovery error: ${String(err)}`);
       }

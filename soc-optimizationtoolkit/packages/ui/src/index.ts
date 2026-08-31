@@ -795,6 +795,7 @@ export type {
 export {
   AUDITED_SCOPE,
   emptyInventoryMessage,
+  unauditedScopeInventoryMessage,
   unmeasuredInventoryMessage,
 } from "./capabilities";
 export type {

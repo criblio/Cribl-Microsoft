@@ -24,6 +24,7 @@ export {
 export {
   AUDITED_SCOPE,
   emptyInventoryMessage,
+  unauditedScopeInventoryMessage,
   unmeasuredInventoryMessage,
 } from "./empty-inventory";
 export type {

@@ -250,12 +250,54 @@ describe("useWorkspaceTables - the note is the whole surface", () => {
     });
   });
 
-  it("distinguishes a VERIFIED empty workspace from an unverified one", async () => {
-    // Rule 3. An RBAC-filtered 200 [] is byte-identical to a genuinely empty
-    // workspace; only a measured table.read may call it a zero.
-    renderProbe({ request: vi.fn().mockResolvedValue(tablesResponse([])) });
+  /** A capability set that HAS been audited, with the given verdicts. */
+  const audited = (verdicts: CapabilitySet["verdicts"]): CapabilitySet => ({
+    verdicts,
+    auditedAt: "2026-08-10T00:00:00Z",
+    connectionId: "c1",
+  });
+
+  // STRENGTHENED 2026-08-31 (HON-1). This pin used to render ONE case and assert
+  // a note existed. That is the assertion this defect class defeats: the bug
+  // being guarded against is a note whose TEXT confidently says "No tables
+  // found", and a note-exists check passes on exactly that. All three verdicts
+  // now render, and each is asserted on its wording.
+  it("claims a zero ONLY on a measured table.read", async () => {
+    renderProbe({
+      capabilities: audited({ "table.read": "granted" }),
+      request: vi.fn().mockResolvedValue(tablesResponse([])),
+    });
     await waitFor(() => {
-      expect(screen.getByTestId("note")).toBeTruthy();
+      expect(screen.getByTestId("note").textContent).toBe("No tables found");
+    });
+  });
+
+  it("says we cannot SEE them when table.read was denied, never that there are none", async () => {
+    renderProbe({
+      capabilities: audited({ "table.read": "denied" }),
+      request: vi.fn().mockResolvedValue(tablesResponse([])),
+    });
+    await waitFor(() => {
+      const text = screen.getByTestId("note").textContent ?? "";
+      expect(text).toContain("does not have permission to read them");
+      // The load-bearing half: the confident wrong answer must be ABSENT.
+      expect(text).not.toContain("No tables found");
+    });
+  });
+
+  it("hedges rather than accuses when nothing was measured", async () => {
+    // Unaudited-but-healthy is the common state (the audit runs on connection
+    // change), so this must read as "we do not know" - not as a denial, and
+    // not as a zero.
+    renderProbe({
+      capabilities: emptyCapabilitySet(),
+      request: vi.fn().mockResolvedValue(tablesResponse([])),
+    });
+    await waitFor(() => {
+      const text = screen.getByTestId("note").textContent ?? "";
+      expect(text).toContain("Cannot confirm there are no tables");
+      expect(text).not.toContain("No tables found");
+      expect(text).not.toContain("does not have permission");
     });
   });
 });

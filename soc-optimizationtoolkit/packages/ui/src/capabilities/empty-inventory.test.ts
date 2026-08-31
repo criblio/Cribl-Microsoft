@@ -10,6 +10,7 @@ import { describe, expect, it } from "vitest";
 import {
   AUDITED_SCOPE,
   emptyInventoryMessage,
+  unauditedScopeInventoryMessage,
   unmeasuredInventoryMessage,
 } from "./empty-inventory";
 import { emptyCapabilitySet } from "@soc/core";
@@ -143,5 +144,62 @@ describe("wording", () => {
         }).text,
       ).toContain("data collection rules");
     }
+  });
+});
+
+/**
+ * The three hedges are NOT synonyms (HON-2). Each states a different fact, and
+ * an operator reading one while in the situation of another is the bug this
+ * module exists to prevent - so the pins hold them APART, not merely non-empty.
+ */
+describe("the three hedges say different things", () => {
+  const offScope = emptyInventoryMessage({
+    noun: "workspaces",
+    capability: "workspace.read",
+    capabilities: audited({ "workspace.read": "granted" }),
+    context: connected,
+    scope: { matchesAudit: false, label: "subscription" },
+  });
+  const unaudited = unauditedScopeInventoryMessage("workspaces", "subscription");
+  const uncovered = unmeasuredInventoryMessage("resource groups");
+
+  it("off-scope says a check ran SOMEWHERE ELSE", () => {
+    expect(offScope.text).toBe(
+      "Cannot confirm there are no workspaces in this subscription - " +
+        "the permission check measured a different subscription",
+    );
+  });
+
+  it("unaudited says NO check has run here - not that one ran elsewhere", () => {
+    expect(unaudited.text).toBe(
+      "Cannot confirm there are no workspaces in this subscription - " +
+        "no permission check has measured it",
+    );
+    // The distinction, asserted rather than described: the setup wizard runs
+    // before any audit, so claiming a different subscription was measured
+    // describes a check the operator has not run.
+    expect(unaudited.text).not.toContain("a different subscription");
+  });
+
+  it("uncovered says no capability exists, and never points at the check", () => {
+    expect(uncovered.text).toBe(
+      "Cannot confirm there are no resource groups - no permission check covers this list",
+    );
+    // Sending an operator to a check that cannot settle the question is worse
+    // than the hedge: they will read its result as confirmation.
+    expect(uncovered.text).not.toMatch(/run the permission check/);
+  });
+
+  it("all three refuse the zero and refuse the accusation", () => {
+    for (const m of [offScope, unaudited, uncovered]) {
+      expect(m.verified).toBe(false);
+      expect(m.text).not.toMatch(/^No /);
+      expect(m.text).not.toContain("does not have permission");
+    }
+  });
+
+  it("no two of them are the same string", () => {
+    const texts = [offScope.text, unaudited.text, uncovered.text];
+    expect(new Set(texts).size).toBe(3);
   });
 });

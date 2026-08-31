@@ -142,6 +142,39 @@ export function emptyInventoryMessage(input: EmptyInventoryInput): EmptyInventor
 }
 
 /**
+ * The honest line for an empty inventory in a scope NOTHING has measured yet.
+ *
+ * DELIBERATELY DIFFERENT WORDING from {@link emptyInventoryMessage}'s off-scope
+ * branch, and the difference is the point. That branch knows an audit exists
+ * and says "the permission check measured a different subscription" - true when
+ * the operator has committed a target and is browsing elsewhere. The setup
+ * wizard is the other case: it runs BEFORE any audit, and its whole job is
+ * browsing subscriptions to choose one. Telling that operator we measured a
+ * different subscription would describe a check they have not run.
+ *
+ * So this is not a synonym to be folded into the other one. They state two
+ * different facts, and the module's contract is that the text says WHICH -
+ * collapsing them would put an operator in one situation while reading the
+ * other.
+ *
+ * No capability set is taken, because there is nothing to consult: the caller
+ * knows structurally that the scope is unmeasured. Passing an empty set to
+ * reach a particular branch would be plumbing that works by accident of
+ * ordering rather than by saying what is true.
+ */
+export function unauditedScopeInventoryMessage(
+  noun: string,
+  scopeLabel: string,
+): EmptyInventoryMessage {
+  return {
+    text:
+      `Cannot confirm there are no ${noun} in this ${scopeLabel} - ` +
+      "no permission check has measured it",
+    verified: false,
+  };
+}
+
+/**
  * The honest line for an empty inventory NO CAPABILITY COVERS.
  *
  * The settled taxonomy has no capability for listing subscriptions, resource

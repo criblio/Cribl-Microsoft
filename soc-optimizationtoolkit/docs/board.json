@@ -213,11 +213,12 @@
       "feature": "HON-F2",
       "title": "Wire `emptyTableListMessage` into the picker screen",
       "type": "story",
-      "status": "backlog",
-      "priority": "next",
+      "status": "done",
+      "priority": "now",
       "settled": "settled",
       "dependsOn": [],
-      "detail": "The last of the three pure decisions still owed its wiring. `backlog.md#4`."
+      "detail": "The last of the three pure decisions still owed its wiring. `backlog.md#4`. CLOSED 2026-08-31, and the wiring turned out to be ALREADY DONE - which is the finding. The chain is complete and was traced rather than assumed: emptyTableListMessage -> use-workspace-tables.ts:145 -> integrate-screen.tsx:1872 -> mapping-review-section.tsx:879-885, which renders the text and a Retry. The card said \"the picker screen owes the wiring\" and the picker PANEL was deleted on 2026-08-18; the wiring landed in the hook that outlived it, and nobody updated the card. WHAT WAS ACTUALLY MISSING was the pin. The DOM test titled \"distinguishes a VERIFIED empty workspace from an unverified one\" rendered ONE case and asserted a note EXISTS - and the defect it guards against is a note whose text confidently says \"No tables found\", which a note-exists check passes on. Replaced with three pins, one per verdict, each asserting the wording and each asserting the confident wrong answer is ABSENT. MUTATION CHECKED: hardcoding the note to \"No tables found\" kills 2 of the 3; the old pin survived that mutation, which is why it was worth the work.",
+      "verified": "pins"
     },
     {
       "id": "HON-2",
@@ -225,11 +226,12 @@
       "feature": "HON-F2",
       "title": "Honour the scope rule at the remaining lister call sites",
       "type": "story",
-      "status": "backlog",
-      "priority": "next",
+      "status": "done",
+      "priority": "now",
       "settled": "settled",
       "dependsOn": [],
-      "detail": "A verdict is evidence only about the scope it was measured at, and that includes off-scope denials. `emptyInventoryMessage` now requires a scope argument, so the compiler prompts each new call site. `backlog.md#4`."
+      "detail": "A verdict is evidence only about the scope it was measured at, and that includes off-scope denials. `emptyInventoryMessage` now requires a scope argument, so the compiler prompts each new call site. `backlog.md#4`. CLOSED 2026-08-31. The remaining call sites were the SETUP WIZARD's two listers, and the workspace one still carried the exact sentence the original bug report named as harmful: \"No Log Analytics workspaces found in this subscription. Create one\" - inviting an operator to build a workspace that already exists and is merely invisible to them. Resource groups said \"No resource groups found in this subscription.\" Both are fixed; the four previously-applied sites (targeting workspaces, sub/rg pickers, DCR inventory, table listing) were re-read and all honour the rule already. A THIRD HEDGE WAS NEEDED, and refusing to reuse the second is the substance of this card. The wizard runs BEFORE any audit and exists to browse subscriptions, so the targeting screen's \"the permission check measured a different subscription\" would describe a check the operator has not run. `unauditedScopeInventoryMessage` says \"no permission check has measured it\" instead. Three hedges now state three different facts - measured elsewhere, never measured, no capability covers it - and a pin asserts no two of them produce the same string, because collapsing them would put an operator in one situation while reading another. The create hint SURVIVES, moved behind the hedge and conditioned on the operator's own knowledge - rule 3 says annotate, never remove the action, and someone setting up a genuinely empty subscription still needs telling. The wording moved into `azure-setup-state` as `dependentListingStatus`, where the section's own docblock says pure decisions belong and where it is testable at all - it was inline in a callback with no test covering it. 9 new pins (5 on the three hedges, 4 on the extracted decision). MUTATION CHECKED: restoring the original copy kills 2.",
+      "verified": "pins"
     },
     {
       "id": "HON-3",
@@ -263,7 +265,7 @@
       "title": "Tell operators that DCRs deployed before the guid fix still lose fields",
       "type": "story",
       "status": "backlog",
-      "priority": "next",
+      "priority": "now",
       "settled": "settled",
       "dependsOn": [],
       "detail": "`update-dcr` regenerates the declaration so an update fixes it, but nothing sweeps and nothing warns. Pairs with HON-3. `adr/0004:107-112`."
@@ -725,7 +727,7 @@
       "title": "Add the guid cast to the live-verification suite",
       "type": "enabler",
       "status": "backlog",
-      "priority": "next",
+      "priority": "now",
       "settled": "settled",
       "dependsOn": [],
       "detail": "The fix shipped in 1.12.1 without ever being observed against live Azure, and `toguid()` returns null silently on malformed input - so a wrong cast fails the same quiet way the drop did. The suite ran live on 2026-08-25 and carries no guid row. `adr/0004:118-124`."
