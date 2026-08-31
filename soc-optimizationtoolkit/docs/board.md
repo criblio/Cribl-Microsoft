@@ -11,7 +11,7 @@ two cannot disagree.
 alternatives. This board holds only what is a unit of work, what state it is
 in, and what it waits on.
 
-**54 in the backlog, 0 in progress, 38 done.**
+**52 in the backlog, 0 in progress, 40 done.**
 
 ## By menu item
 
@@ -23,7 +23,7 @@ operator sees on any screen. Two menus are PLANNED and have no route yet.
 |---|---|---|---|
 | Dataflow | 3 | 0 | 0 |
 | Setup | 1 | 0 | 0 |
-| Sentinel Integration | 13 | 11 | 2 |
+| Sentinel Integration | 11 | 13 | 0 |
 | DCR Automation | 0 | 2 | 0 |
 | Pack Maintenance | 4 | 1 | 0 |
 | Permission Verification | 8 | 0 | 0 |
@@ -31,7 +31,7 @@ operator sees on any screen. Two menus are PLANNED and have no route yet.
 | Windows Event analysis (planned) | 5 | 0 | 0 |
 | Cross-cutting | 7 | 20 | 0 |
 
-Open work totals 54.
+Open work totals 52.
 
 ## Epics and features
 
@@ -66,7 +66,7 @@ Sentinel-side and Lake-side halves of Windows event handling
 | `WIN-F2` Microsoft proprietary enrichment catalog | Windows Event analysis (planned) | 0/2 | WIN-2, D-4 |
 | `WIN-F3` Lake copy format - JSON vs Parquet | Windows Event analysis (planned) | 0/1 | D-5 |
 
-### `HON` Inventory and diagnostic honesty - 27% (3/11)
+### `HON` Inventory and diagnostic honesty - 36% (4/11)
 
 Measured gaps where the app reports a confident wrong answer
 
@@ -74,7 +74,7 @@ Measured gaps where the app reports a confident wrong answer
 |---|---|---|---|
 | `HON-F1` Capability model follow-ons | Permission Verification | 0/4 | HON-6, HON-7*, D-1, D-2* |
 | `HON-F2` Unverified empty inventories | Sentinel Integration | 2/3 | HON-1, HON-2, D-3 |
-| `HON-F3` Guid-column aftermath, made visible | Sentinel Integration | 1/4 | HON-3, HON-8*, HON-4, D-11 |
+| `HON-F3` Guid-column aftermath, made visible | Sentinel Integration | 2/4 | HON-3, HON-8*, HON-4, D-11 |
 
 ### `GEN` Pipeline and pack generation - 100% (3/3)
 
@@ -116,13 +116,13 @@ ENABLER EPIC: release mechanics. The packaged tarball trails main, and the lab t
 |---|---|---|---|
 | `REL-F1` Release and deployment hygiene | Cross-cutting | 3/5 | REL-2, REL-3, REL-4, REL-5, REL-6 |
 
-### `DBT` Quality and technical debt _(enabler)_ - 54% (20/37)
+### `DBT` Quality and technical debt _(enabler)_ - 57% (21/37)
 
 ENABLER EPIC: verification gaps, copy, diagram fidelity, docs and the board's own tooling
 
 | Feature | Menu | Done | Stories |
 |---|---|---|---|
-| `DBT-F1` Verification gaps | Sentinel Integration | 0/4 | DBT-2, DBT-5*, DBT-6, DBT-7 |
+| `DBT-F1` Verification gaps | Sentinel Integration | 1/4 | DBT-2, DBT-5*, DBT-6, DBT-7 |
 | `DBT-F2` Copy and UX | Sentinel Integration | 0/6 | DBT-3, DBT-9, DBT-14, DBT-15, DBT-28, D-10* |
 | `DBT-F3` Diagram fidelity | Dataflow | 0/3 | DBT-1, DBT-4, DBT-12 |
 | `DBT-F4` Docs and spec grounding | Cross-cutting | 4/7 | DBT-8, DBT-10, DBT-11, DBT-13, DBT-22, DBT-26, DBT-32 |
@@ -140,21 +140,11 @@ _Nothing here._
 
 ---
 
-## Backlog - now (2)
+## Backlog - now (0)
 
 Next to pick up. Nothing blocks these.
 
-- **HON-4** Tell operators that DCRs deployed before the guid fix still lose fields
-  `HON-F3` `story` `settled`
-  `update-dcr` regenerates the declaration so an update fixes it, but nothing
-  sweeps and nothing warns. Pairs with HON-3. `adr/0004:107-112`.
-
-- **DBT-2** Add the guid cast to the live-verification suite
-  `DBT-F1` `enabler` `settled`
-  The fix shipped in 1.12.1 without ever being observed against live Azure,
-  and `toguid()` returns null silently on malformed input - so a wrong cast
-  fails the same quiet way the drop did. The suite ran live on 2026-08-25 and
-  carries no guid row. `adr/0004:118-124`.
+_Nothing here._
 
 ---
 
@@ -689,7 +679,7 @@ Settled, gated on something above.
 
 ---
 
-## Done (38)
+## Done (40)
 
 Kept briefly so a reader can see what just landed; prune when the list grows.
 
@@ -874,6 +864,19 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   2026-08-30 live audit: its output is a deploy-dcr STEP DETAIL, so seeing it
   needs another deploy run, and the audit stopped short of writing to the lab
   again. Still `verified: pins` on purpose.
+
+- **HON-4** Tell operators that DCRs deployed before the guid fix still lose fields
+  `HON-F3` `story` `settled` `verified: both`
+  `update-dcr` regenerates the declaration so an update fixes it, but nothing
+  sweeps and nothing warns. Pairs with HON-3. `adr/0004:107-112`. DONE:
+  `guidLossWarning` on the update preview, intersected with
+  `rebuiltDcrColumns` so RULE 2a's system-column drop is honoured rather than
+  restated. VERIFIED LIVE 2026-08-31 on `dcr-SecurityEvent-eastus`: named 4
+  genuinely lost columns (InterfaceUuid, LogonGuid, SubcategoryGuid,
+  TargetLogonGuid), matching the preview's own "4 added" diff. The table's ARM
+  schema carries SEVEN guid columns - TenantId, SourceComputerId and MG are
+  system columns dropped by design, and a naive table-vs-declaration check
+  names all seven.
 
 - **HON-5** Warn a CSV vendor's operator before the preview that the pack can never route automatically
   `VND-F1` `story` `settled` `verified: both`
@@ -1168,6 +1171,23 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   curated) surfaced the vendor seam with its explanation, and typing
   "1Password" then clicking through flipped the button to "Saved", so the
   ContentCache persistence path works against the real KV.
+
+- **DBT-2** Add the guid cast to the live-verification suite
+  `DBT-F1` `enabler` `settled` `verified: live`
+  The fix shipped in 1.12.1 without ever being observed against live Azure,
+  and `toguid()` returns null silently on malformed input - so a wrong cast
+  fails the same quiet way the drop did. The suite ran live on 2026-08-25 and
+  carries no guid row. `adr/0004:118-124`. DONE: row 9 added and EXECUTED live
+  2026-08-31 - the type assertion passed (`SecurityEvent.InterfaceUuid` reads
+  `guid` from ARM) and the value assertion correctly refused with NO DATA. THE
+  BELIEF ITSELF IS STILL UNOBSERVED: every table in the lab workspace is empty
+  over 30 days, so no working cast has been seen deliver a value. Reopen as a
+  new card when data flows. Two draft defects were caught by running it: a
+  management token answers 403 at `api.loganalytics.io` (the ARM passthrough
+  takes it, and drops the workspace-GUID input), and the query API's
+  `getschema` does not report the guid family at all - SecurityEvent came back
+  220 string / 12 int / 2 datetime with zero guid while ARM declares seven, so
+  the type assertion reads ARM.
 
 - **DBT-13** The Claude hooks travel with the repo
   `DBT-F4` `enabler` `settled` `verified: live`

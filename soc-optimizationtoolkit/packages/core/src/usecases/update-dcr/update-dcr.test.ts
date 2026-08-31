@@ -13,6 +13,8 @@ import {
   previewDcrUpdate,
   removeTableColumn,
   updateDcrInPlace,
+  guidColumnsLostByDeployedDcr,
+  guidLossWarning,
 } from "./update-dcr";
 
 const TABLE_SCHEMA = {
@@ -618,5 +620,150 @@ describe("the ONE schema-write call (live-confirmed 2026-07-13)", () => {
       isHidden: false,
       isDefaultDisplay: false,
     });
+  });
+});
+
+/**
+ * HON-4 (ADR 0004). A DCR deployed before 2026-08-23 dropped guid columns from
+ * its stream declaration; the field is then discarded at the DCR boundary and
+ * the destination column stays null forever, with every deployment reporting
+ * success. Nothing sweeps for those DCRs, so the preview has to say so.
+ */
+describe("guidColumnsLostByDeployedDcr / guidLossWarning", () => {
+  // A NATIVE table's schema, which is where the trap is: TenantId is guid on
+  // essentially every native Sentinel table.
+  const table = [
+    { name: "TimeGenerated", type: "datetime" },
+    { name: "CorrelationId", type: "guid" },
+    { name: "TenantId", type: "uniqueidentifier" },
+    { name: "Message", type: "string" },
+  ];
+
+  // What the FIXED generator declares for that table: TenantId dropped by
+  // RULE 2a (system column), CorrelationId cast to string by RULE 2b. Taken
+  // from buildDcrColumnSet's ordering, not invented here.
+  const rebuilt = [
+    { name: "TimeGenerated", type: "datetime" },
+    { name: "CorrelationId", type: "string" },
+    { name: "Message", type: "string" },
+  ];
+
+  it("names the guid columns a PRE-FIX declaration is dropping", () => {
+    // The pre-fix generator omitted them entirely.
+    const lost = guidColumnsLostByDeployedDcr({
+      tableColumns: table,
+      currentDcrColumns: [
+        { name: "TimeGenerated", type: "datetime" },
+        { name: "Message", type: "string" },
+      ],
+      rebuiltDcrColumns: rebuilt,
+    });
+    expect(lost).toEqual(["CorrelationId"]);
+  });
+
+  it("does NOT report a guid SYSTEM column the generator drops on purpose", () => {
+    // The defect this pin exists for. RULE 2a runs before the guid cast, so a
+    // correctly-built native DCR has no TenantId in its declaration - and
+    // TenantId is guid on essentially every native Sentinel table. Comparing
+    // the raw table schema against the declaration, without honouring that
+    // drop, fires this warning on nearly every HEALTHY native table.
+    const lost = guidColumnsLostByDeployedDcr({
+      tableColumns: table,
+      currentDcrColumns: [
+        { name: "TimeGenerated", type: "datetime" },
+        { name: "Message", type: "string" },
+      ],
+      rebuiltDcrColumns: rebuilt,
+    });
+    expect(lost).not.toContain("TenantId");
+  });
+
+  it("stays SILENT on a healthy native DCR whose only guid column is TenantId", () => {
+    // The same defect at the operator-facing level: this is the shape of an
+    // ordinary Sentinel table, fully up to date, and it must produce no banner.
+    expect(
+      guidLossWarning({
+        tableColumns: [
+          { name: "TimeGenerated", type: "datetime" },
+          { name: "TenantId", type: "guid" },
+          { name: "Message", type: "string" },
+        ],
+        currentDcrColumns: [
+          { name: "TimeGenerated", type: "datetime" },
+          { name: "Message", type: "string" },
+        ],
+        rebuiltDcrColumns: [
+          { name: "TimeGenerated", type: "datetime" },
+          { name: "Message", type: "string" },
+        ],
+      }),
+    ).toBeNull();
+  });
+
+  it("reports NOTHING lost for a POST-FIX DCR, which declares them as string", () => {
+    // The load-bearing case. ADR 0004 declares guid columns `string` and
+    // promotes them with toguid(), so the TYPES differ on purpose - comparing
+    // types instead of names would report every correctly-fixed DCR as broken,
+    // which is the opposite of this warning's job.
+    expect(
+      guidColumnsLostByDeployedDcr({
+        tableColumns: table,
+        currentDcrColumns: rebuilt,
+        rebuiltDcrColumns: rebuilt,
+      }),
+    ).toEqual([]);
+  });
+
+  it("reports nothing when the table simply has no guid columns", () => {
+    // A guid column absent from a declaration is indistinguishable from a table
+    // that never had one - which is why all three sides are required.
+    expect(
+      guidColumnsLostByDeployedDcr({
+        tableColumns: [{ name: "Message", type: "string" }],
+        currentDcrColumns: [],
+        rebuiltDcrColumns: [{ name: "Message", type: "string" }],
+      }),
+    ).toEqual([]);
+  });
+
+  it("matches names case-insensitively, as Log Analytics does", () => {
+    expect(
+      guidColumnsLostByDeployedDcr({
+        tableColumns: [{ name: "CorrelationId", type: "GUID" }],
+        currentDcrColumns: [{ name: "correlationid", type: "string" }],
+        rebuiltDcrColumns: [{ name: "CORRELATIONID", type: "string" }],
+      }),
+    ).toEqual([]);
+  });
+
+  it("warns with the consequence AND the remedy, not just a count", () => {
+    const warning = guidLossWarning({
+      tableColumns: table,
+      currentDcrColumns: [{ name: "Message", type: "string" }],
+      rebuiltDcrColumns: rebuilt,
+    });
+    expect(warning).not.toBeNull();
+    // The consequence, in the operator's terms rather than the payload's.
+    expect(warning).toContain("stays null");
+    expect(warning).toContain("CorrelationId");
+    // ...and NOT the system column, which is not lost.
+    expect(warning).not.toContain("TenantId");
+    // The remedy is the button already on this card.
+    expect(warning).toContain("Update rebuilds the declaration");
+    // And the limit of that remedy, said plainly - an update fixes the future,
+    // not the rows already written.
+    expect(warning).toContain("already-lost data cannot be recovered");
+  });
+
+  it("is SILENT when nothing is lost - no reassurance banner", () => {
+    // A warning that also fires on the healthy case trains operators to ignore
+    // it, which costs more than it gives.
+    expect(
+      guidLossWarning({
+        tableColumns: [{ name: "Message", type: "string" }],
+        currentDcrColumns: [{ name: "Message", type: "string" }],
+        rebuiltDcrColumns: [{ name: "Message", type: "string" }],
+      }),
+    ).toBeNull();
   });
 });

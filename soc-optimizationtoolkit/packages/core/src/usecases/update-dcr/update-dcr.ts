@@ -23,7 +23,7 @@ import {
 import { hasEffectiveAction } from "../../domain/azure-permissions";
 import type { PermissionsResponse } from "../../domain/azure-permissions";
 import { RBAC_PERMISSIONS_API_VERSION } from "../permission-preflight";
-import { selectSchemaColumns } from "../../domain/schema-mapping";
+import { GUID_LIKE_TYPES, selectSchemaColumns } from "../../domain/schema-mapping";
 import type { LogAnalyticsColumn } from "../../domain/schema-mapping";
 import { LOG_ANALYTICS_API_VERSION } from "../onboard-table";
 
@@ -640,6 +640,81 @@ export interface DcrUpdatePreview {
   rebuiltDcrColumns: LogAnalyticsColumn[];
   /** rebuilt vs current - what the update would change in the DCR. */
   diff: ColumnDiff;
+}
+
+/**
+ * The guid-family columns a DEPLOYED DCR is silently dropping (HON-4, ADR 0004).
+ *
+ * Before 2026-08-23 the generator dropped guid-typed columns from the stream
+ * declaration entirely. The stream declaration is the INPUT CONTRACT of a
+ * Kind:Direct DCR, so an undeclared field is discarded at the DCR boundary and
+ * the destination column stays null forever - while every deployment reports
+ * success. ADR 0004 fixed the generator; it did not, and cannot, migrate DCRs
+ * that were already deployed. `updateDcrInPlace` regenerates the declaration,
+ * so an update fixes it, but nothing sweeps and until now nothing WARNED.
+ *
+ * WHY ALL THREE SIDES ARE REQUIRED, and why this could not be a check on the
+ * DCR alone: a guid column absent from the declaration is indistinguishable
+ * from a table that has no such column, and ALSO from a column the generator
+ * drops on purpose. Only the table's schema and the rebuilt declaration
+ * together say which, which is why this lives on the preview - the one place
+ * that already holds all three, at no extra cost.
+ *
+ * `rebuiltDcrColumns` IS THE FIXED GENERATOR'S OWN ANSWER to "what should this
+ * DCR declare", so intersecting with it is how the system-column drop is
+ * honoured without restating it. RULE 2a runs BEFORE the guid cast
+ * (`schema-mapping.ts` `buildDcrColumnSet`), so a guid-typed SYSTEM column -
+ * `TenantId`, which is guid on essentially every native Sentinel table - is
+ * dropped by design and is not lost. Re-deriving that rule here instead would
+ * fire this warning on nearly every healthy native table.
+ *
+ * Returns the column NAMES, in table order. Empty means nothing is being lost:
+ * the table has no guid columns, the generator does not declare them anyway, or
+ * the DCR already declares them (a post-fix DCR declares them as `string`, so a
+ * name match is the test - the TYPES deliberately differ and comparing them
+ * would report every fixed DCR as broken).
+ */
+export function guidColumnsLostByDeployedDcr(preview: {
+  tableColumns: readonly LogAnalyticsColumn[];
+  currentDcrColumns: readonly LogAnalyticsColumn[];
+  rebuiltDcrColumns: readonly LogAnalyticsColumn[];
+}): string[] {
+  const declared = new Set(
+    preview.currentDcrColumns.map((c) => c.name.toLowerCase()),
+  );
+  const wanted = new Set(
+    preview.rebuiltDcrColumns.map((c) => c.name.toLowerCase()),
+  );
+  return preview.tableColumns
+    .filter((c) => GUID_LIKE_TYPES.includes(c.type.toLowerCase()))
+    .filter((c) => wanted.has(c.name.toLowerCase()))
+    .filter((c) => !declared.has(c.name.toLowerCase()))
+    .map((c) => c.name);
+}
+
+/**
+ * The operator-facing warning for {@link guidColumnsLostByDeployedDcr}, or null
+ * when nothing is lost.
+ *
+ * SAYS THE CONSEQUENCE AND THE REMEDY, in that order. "N columns are missing"
+ * is a fact about a payload; "these fields are not arriving and the column is
+ * null" is what it means to the person reading it, and Update is the fix that
+ * is already on this screen.
+ */
+export function guidLossWarning(preview: {
+  tableColumns: readonly LogAnalyticsColumn[];
+  currentDcrColumns: readonly LogAnalyticsColumn[];
+  rebuiltDcrColumns: readonly LogAnalyticsColumn[];
+}): string | null {
+  const lost = guidColumnsLostByDeployedDcr(preview);
+  if (lost.length === 0) return null;
+  return (
+    `This DCR was deployed before the guid fix: ${lost.length} guid column(s) ` +
+    `are NOT declared, so their values are discarded at the DCR and the ` +
+    `destination column stays null - ${lost.join(", ")}. ` +
+    "Update rebuilds the declaration and starts delivering them; already-lost " +
+    "data cannot be recovered."
+  );
 }
 
 function declarationColumns(dcrBody: unknown): LogAnalyticsColumn[] {

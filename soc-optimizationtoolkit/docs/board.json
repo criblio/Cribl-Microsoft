@@ -264,11 +264,12 @@
       "feature": "HON-F3",
       "title": "Tell operators that DCRs deployed before the guid fix still lose fields",
       "type": "story",
-      "status": "backlog",
+      "status": "done",
+      "verified": "both",
       "priority": "now",
       "settled": "settled",
       "dependsOn": [],
-      "detail": "`update-dcr` regenerates the declaration so an update fixes it, but nothing sweeps and nothing warns. Pairs with HON-3. `adr/0004:107-112`."
+      "detail": "`update-dcr` regenerates the declaration so an update fixes it, but nothing sweeps and nothing warns. Pairs with HON-3. `adr/0004:107-112`. DONE: `guidLossWarning` on the update preview, intersected with `rebuiltDcrColumns` so RULE 2a's system-column drop is honoured rather than restated. VERIFIED LIVE 2026-08-31 on `dcr-SecurityEvent-eastus`: named 4 genuinely lost columns (InterfaceUuid, LogonGuid, SubcategoryGuid, TargetLogonGuid), matching the preview's own \"4 added\" diff. The table's ARM schema carries SEVEN guid columns - TenantId, SourceComputerId and MG are system columns dropped by design, and a naive table-vs-declaration check names all seven."
     },
     {
       "id": "HON-5",
@@ -726,11 +727,12 @@
       "feature": "DBT-F1",
       "title": "Add the guid cast to the live-verification suite",
       "type": "enabler",
-      "status": "backlog",
+      "status": "done",
+      "verified": "live",
       "priority": "now",
       "settled": "settled",
       "dependsOn": [],
-      "detail": "The fix shipped in 1.12.1 without ever being observed against live Azure, and `toguid()` returns null silently on malformed input - so a wrong cast fails the same quiet way the drop did. The suite ran live on 2026-08-25 and carries no guid row. `adr/0004:118-124`."
+      "detail": "The fix shipped in 1.12.1 without ever being observed against live Azure, and `toguid()` returns null silently on malformed input - so a wrong cast fails the same quiet way the drop did. The suite ran live on 2026-08-25 and carries no guid row. `adr/0004:118-124`. DONE: row 9 added and EXECUTED live 2026-08-31 - the type assertion passed (`SecurityEvent.InterfaceUuid` reads `guid` from ARM) and the value assertion correctly refused with NO DATA. THE BELIEF ITSELF IS STILL UNOBSERVED: every table in the lab workspace is empty over 30 days, so no working cast has been seen deliver a value. Reopen as a new card when data flows. Two draft defects were caught by running it: a management token answers 403 at `api.loganalytics.io` (the ARM passthrough takes it, and drops the workspace-GUID input), and the query API's `getschema` does not report the guid family at all - SecurityEvent came back 220 string / 12 int / 2 datetime with zero guid while ARM declares seven, so the type assertion reads ARM."
     },
     {
       "id": "DBT-3",
