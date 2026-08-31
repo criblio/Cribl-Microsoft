@@ -244,10 +244,15 @@ Settled and unblocked, sequenced behind now.
 
 - **HON-8** buildDeploymentPreview has no caller - the REVIEW stage is a usecase with no screen
   `HON-F3` `bug` `unconfirmed`
-  Not now because: Unreachable code plus a doc that oversells it - no operator
-  can reach buildDeploymentPreview, so nothing is currently wrong on screen.
-  Overlaps DBT-57, which carries the same dead-mechanism cleanup; doing them
-  together avoids deciding the same question twice.
+  Not now because: EXPIRED REASON, re-raised 2026-08-31. This was held at next
+  because it overlapped DBT-57 and doing them together avoided deciding the
+  same question twice. DBT-57 IS NOW DONE - it deleted `unavailableReason` and
+  its pins - so the bundling opportunity this was waiting for is gone and the
+  argument no longer holds. What is still true is the impact:
+  `buildDeploymentPreview` is unreachable, so nothing on screen is currently
+  wrong. Whether unreachable code plus a doc that oversells it earns `now` on
+  its own is a call nobody has made; this note records that the OLD reason is
+  void rather than pretending it still applies.
   FOUND while building HON-3 on 2026-08-28, looking for the right surface for
   the column diagnostics. `buildDeploymentPreview` is a full usecase - roughly
   700 lines with its own test file, DCE handling, existing-resource checks and
@@ -717,7 +722,22 @@ Settled, gated on something above.
 - **DBT-1** Pin how the REST collector is modelled in the vendored spec
   `DBT-F3` `enabler` `settled`
   `InputRest` has no schema under that name; it is likely `InputCollection`
-  with a collector conf. Blocks AZR-7 and WIN-5. `backlog.md#10`.
+  with a collector conf. Blocks AZR-7 and WIN-5. `backlog.md#10`. ANSWERED
+  2026-08-31 by grooming, straight out of
+  packages/core/assets/cribl-openapi.json - the card's own hypothesis is
+  confirmed. `InputRest` DOES NOT EXIST as a schema name. The REST collector
+  is `RestCollectorConf` (with `CollectorRest`), carried as an
+  `InputCollection` alongside `ConnectionConfInputCollection` and
+  `MetadataConfInputCollection`, and scheduled through
+  `RunnableJobCollection`. The surrounding shapes a caller needs are all
+  named: `RestCollectMethodGet|Post|PostWithBody|Other`, the
+  `RestAuthentication*` family (none/basic/login/oauth/hmac, each with a
+  Secret variant), `RestPaginationType*` and `RestRetryRulesType*`. WHAT
+  REMAINS is the PIN, not the answer: this card says 'pin how it is modelled',
+  and a finding recorded only in prose is exactly what re-vendoring the spec
+  would silently invalidate - see [[DBT-12]], which exists for that failure
+  mode. The work left is an assertion that `InputCollection` and
+  `RestCollectorConf` are still the right names after a re-vendor.
 
 - **DBT-5** Produce live evidence for the `no access` and `not connected` nav states
   `DBT-F1` `enabler` `settled`
@@ -879,9 +899,13 @@ Settled, gated on something above.
 
 - **DBT-51** A real but empty _CL table is silently re-derived from the sample
   `DBT-F1` `bug` `settled`
-  Not now because: Needs a custom table that exists with zero materialised
-  columns. That is a real state but a narrow one, and TBL-1 only just made it
-  easy to produce, so it has had no chance to bite yet.
+  Not now because: REASON TURNED OVER, re-raised 2026-08-31. This was held at
+  later because the state it needs - a real _CL table with zero materialised
+  columns - was hard to produce, TBL-1 having only just made it easy. TBL-1
+  HAS NOW SHIPPED, so operators can produce that state, which makes the
+  original argument cut the other way: the reason it had not bitten yet was
+  that nobody could reach it, and now they can. Held at later only until
+  someone confirms an authored-then-emptied table actually reproduces it.
   FOUND 2026-08-31 by the offline-capability audit. `analyze-samples.ts:228`
   tests `columns.length === 0`, so a custom table that EXISTS in Azure with
   zero materialised columns is treated as unresolved and re-derived from the
