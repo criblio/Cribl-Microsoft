@@ -555,6 +555,16 @@ export async function onboardTable(
           err instanceof Error ? err.message : String(err),
         );
       }
+      // THIS caller needs the table's SCHEMA next, to build the DCR from it,
+      // so an unresolved readback is fatal here even though the PUT was
+      // accepted. ensureRuleDataTable makes the opposite call on the same
+      // result, which is why createCustomTable reports rather than decides.
+      if (created.readback.state === "unresolved") {
+        throw new StepFailure(
+          `custom table '${created.tableName}' was created but ` +
+            created.readback.reason,
+        );
+      }
       customTableBody = created.body;
       await setStep(
         currentStep,

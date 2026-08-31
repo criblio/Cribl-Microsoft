@@ -58,13 +58,42 @@ export interface CreateCustomTableInput {
   maxPollAttempts?: number;
 }
 
+/**
+ * What the post-create readback established, if anything.
+ *
+ * THE READBACK IS REPORTED, NOT DECIDED (DBT-40). Its two callers want
+ * genuinely different things from the same operation, which is why this is a
+ * result rather than a throw:
+ *
+ *   - `onboardTable` needs the table's SCHEMA next, to build a DCR from it. An
+ *     unresolved readback means it has no schema, so it must fail.
+ *   - `ensureRuleDataTable` only needs the table to EXIST so a rule installs.
+ *     The PUT was accepted, so it succeeds and says the readback was
+ *     unresolved.
+ *
+ * Deciding here would force one of those two to be wrong. `reason` is phrased
+ * to complete the sentence "the table was created but ...".
+ */
+export type ReadbackOutcome =
+  | { state: "confirmed" }
+  | { state: "unresolved"; reason: string };
+
 export interface CreateCustomTableResult {
   /** The name as the request built it (the `_CL` suffix rule applied). */
   tableName: string;
   /** False when the table already existed and creation was skipped. */
   created: boolean;
-  /** The table resource body, existing or created. */
+  /**
+   * The table resource body - the live one when it already existed, the read
+   * back one when creation confirmed. NULL when `readback` is unresolved: a
+   * caller that needs the schema must check `readback` before using this.
+   */
   body: unknown;
+  /**
+   * Whether the created table was observed. Always `confirmed` when the table
+   * already existed - the GET that found it IS the observation.
+   */
+  readback: ReadbackOutcome;
   /**
    * Shape of what was CREATED, for the caller's report. All null when the
    * table already existed - there is nothing this call decided about it.
@@ -95,6 +124,7 @@ export async function createCustomTable(
       tableName: input.table,
       created: false,
       body: existingResponse.body,
+      readback: { state: "confirmed" },
       columnCount: null,
       retentionInDays: null,
       totalRetentionInDays: null,
@@ -157,13 +187,22 @@ export async function createCustomTable(
   const maxAttempts =
     input.maxPollAttempts ?? DEFAULT_CREATE_TABLE_POLL_ATTEMPTS;
   let attempts = 0;
-  let body: unknown;
+  let body: unknown = null;
+  let readback: ReadbackOutcome;
+  // Whether any poll actually SAW the table. It separates "provisioned slowly"
+  // from "never appeared", which read identically from the attempt count alone
+  // and mean different things to a person.
+  let seen = false;
+
   for (;;) {
     if (attempts >= maxAttempts) {
-      throw new Error(
-        `custom table '${tableRequest.tableName}' was created but did ` +
-          `not read back successfully within ${maxAttempts} poll attempts`,
-      );
+      readback = {
+        state: "unresolved",
+        reason: seen
+          ? `was still provisioning after ${maxAttempts} poll attempts`
+          : `did not read back successfully within ${maxAttempts} poll attempts`,
+      };
+      break;
     }
     attempts++;
     const pollResponse = await azure.request({
@@ -171,9 +210,13 @@ export async function createCustomTable(
       path: tablePath,
       apiVersion: LOG_ANALYTICS_TABLES_API_VERSION,
     });
+
     if (is2xx(pollResponse.status)) {
+      seen = true;
       const state = prop(prop(pollResponse.body, "properties"), "provisioningState");
       const stateText = typeof state === "string" ? state : null;
+      // A terminal FAILURE still throws: the table did not get made, which is
+      // not a reporting nuance, and no caller wants to carry on from it.
       if (stateText !== null && /^(failed|canceled)$/i.test(stateText)) {
         throw new Error(
           `custom table '${tableRequest.tableName}' provisioning ended ` +
@@ -182,16 +225,21 @@ export async function createCustomTable(
       }
       if (stateText === null || /^succeeded$/i.test(stateText)) {
         body = pollResponse.body;
+        readback = { state: "confirmed" };
         break;
       }
-    } else if (pollResponse.status !== 404) {
-      throw new Error(
-        httpErrorText(
-          `poll custom table '${tableRequest.tableName}'`,
-          pollResponse.status,
-          pollResponse.body,
-        ),
-      );
+      continue;
+    }
+
+    // ONLY A 404 IS RETRYABLE - the accepted PUT has not replicated yet.
+    // Anything else is a failure to OBSERVE, and retrying it to the bound
+    // would burn requests to learn nothing (DBT-41).
+    if (pollResponse.status !== 404) {
+      readback = {
+        state: "unresolved",
+        reason: `could not be read back - HTTP ${pollResponse.status}`,
+      };
+      break;
     }
   }
 
@@ -199,6 +247,7 @@ export async function createCustomTable(
     tableName: tableRequest.tableName,
     created: true,
     body,
+    readback,
     columnCount: tableRequest.body.properties.schema.columns.length,
     retentionInDays: tableRequest.body.properties.retentionInDays,
     totalRetentionInDays: tableRequest.body.properties.totalRetentionInDays,

@@ -51,6 +51,8 @@ describe("an existing table wins", () => {
     ]);
     const result = await createCustomTable(azure, { ...INPUT, columns: COLUMNS });
     expect(result.created).toBe(false);
+    // An existing table IS observed - the GET that found it is the reading.
+    expect(result.readback).toEqual({ state: "confirmed" });
     expect(result.body).toEqual({ properties: { schema: { columns: [] } } });
     // Nothing was decided about an existing table, so nothing is reported.
     expect(result.columnCount).toBeNull();
@@ -76,6 +78,7 @@ describe("creating a missing table", () => {
     ]);
     const result = await createCustomTable(azure, { ...INPUT, columns: COLUMNS });
     expect(result.created).toBe(true);
+    expect(result.readback).toEqual({ state: "confirmed" });
     expect(result.tableName).toBe("App_CL");
     expect(result.columnCount).toBe(COLUMNS.length);
     expect(result.retentionInDays).toBeTypeOf("number");
@@ -140,28 +143,69 @@ describe("the readback poll", () => {
     expect(calls).toHaveLength(3);
   });
 
-  it("gives up after the attempt bound, naming it", async () => {
+  it("REPORTS an exhausted bound instead of throwing (DBT-40)", async () => {
+    // Contract change, made deliberately: onboardTable needs the schema next
+    // so it treats this as fatal, while ensureRuleDataTable only needs the
+    // table to exist so it treats it as success. Throwing here would force
+    // one of them to be wrong, so the readback is reported and each caller
+    // decides. onboardTable's own pins still assert the failure message.
     const { azure, calls } = fakeAzure([
       { status: 404 },
       { status: 200 },
       ...Array.from({ length: 5 }, () => ({ status: 404 })),
     ]);
-    await expect(
-      createCustomTable(azure, { ...INPUT, columns: COLUMNS, maxPollAttempts: 3 }),
-    ).rejects.toThrow(/within 3 poll attempts/);
+    const result = await createCustomTable(azure, {
+      ...INPUT,
+      columns: COLUMNS,
+      maxPollAttempts: 3,
+    });
+    expect(result.created).toBe(true);
+    expect(result.readback).toEqual({
+      state: "unresolved",
+      reason: "did not read back successfully within 3 poll attempts",
+    });
+    // No schema to hand on, and the type says so.
+    expect(result.body).toBeNull();
     // GET + PUT + exactly 3 polls, not a poll forever.
     expect(calls).toHaveLength(5);
   });
 
-  it("surfaces a non-404 poll failure rather than retrying it", async () => {
+  it("separates 'never appeared' from 'still provisioning'", async () => {
+    // Both exhaust the bound; only one of them saw the table. Reporting them
+    // identically would tell an operator to wait when nothing is coming.
     const { azure } = fakeAzure([
+      { status: 404 },
+      { status: 200 },
+      ...Array.from({ length: 3 }, () => ({
+        status: 200,
+        body: { properties: { provisioningState: "Creating" } },
+      })),
+    ]);
+    const result = await createCustomTable(azure, {
+      ...INPUT,
+      columns: COLUMNS,
+      maxPollAttempts: 3,
+    });
+    expect(result.readback).toEqual({
+      state: "unresolved",
+      reason: "was still provisioning after 3 poll attempts",
+    });
+  });
+
+  it("STOPS on a non-404 poll rather than retrying it to the bound", async () => {
+    // DBT-41: a 403 does not become a 200 by asking again.
+    const { azure, calls } = fakeAzure([
       { status: 404 },
       { status: 200 },
       { status: 500, body: { error: { message: "boom" } } },
     ]);
-    await expect(
-      createCustomTable(azure, { ...INPUT, columns: COLUMNS }),
-    ).rejects.toThrow(/poll custom table/);
+    const result = await createCustomTable(azure, { ...INPUT, columns: COLUMNS });
+    expect(result.readback).toEqual({
+      state: "unresolved",
+      reason: "could not be read back - HTTP 500",
+    });
+    // GET + PUT + ONE poll. Ten would be the bug.
+    expect(calls).toHaveLength(3);
   });
 });
 

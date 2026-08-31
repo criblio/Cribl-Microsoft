@@ -11,7 +11,7 @@ two cannot disagree.
 alternatives. This board holds only what is a unit of work, what state it is
 in, and what it waits on.
 
-**58 in the backlog, 0 in progress, 46 done.**
+**57 in the backlog, 0 in progress, 47 done.**
 
 ## By menu item
 
@@ -23,7 +23,7 @@ operator sees on any screen. Two menus are PLANNED and have no route yet.
 |---|---|---|---|
 | Dataflow | 3 | 0 | 0 |
 | Setup | 1 | 0 | 0 |
-| Sentinel Integration | 14 | 14 | 0 |
+| Sentinel Integration | 13 | 15 | 0 |
 | DCR Automation | 3 | 7 | 1 |
 | Pack Maintenance | 4 | 1 | 0 |
 | Permission Verification | 8 | 0 | 0 |
@@ -31,7 +31,7 @@ operator sees on any screen. Two menus are PLANNED and have no route yet.
 | Windows Event analysis (planned) | 5 | 0 | 0 |
 | Cross-cutting | 7 | 20 | 0 |
 
-Open work totals 58.
+Open work totals 57.
 
 ## Epics and features
 
@@ -116,13 +116,13 @@ ENABLER EPIC: release mechanics. The packaged tarball trails main, and the lab t
 |---|---|---|---|
 | `REL-F1` Release and deployment hygiene | Cross-cutting | 3/5 | REL-2, REL-3, REL-4, REL-5, REL-6 |
 
-### `DBT` Quality and technical debt _(enabler)_ - 51% (22/43)
+### `DBT` Quality and technical debt _(enabler)_ - 53% (23/43)
 
 ENABLER EPIC: verification gaps, copy, diagram fidelity, docs and the board's own tooling
 
 | Feature | Menu | Done | Stories |
 |---|---|---|---|
-| `DBT-F1` Verification gaps | Sentinel Integration | 2/7 | DBT-2, DBT-5*, DBT-6, DBT-7, DBT-36*, DBT-41, DBT-40 |
+| `DBT-F1` Verification gaps | Sentinel Integration | 3/7 | DBT-2, DBT-5*, DBT-6, DBT-7, DBT-36*, DBT-41, DBT-40 |
 | `DBT-F2` Copy and UX | Sentinel Integration | 0/8 | DBT-3, DBT-9, DBT-14, DBT-15, DBT-28, D-10*, DBT-38, DBT-39 |
 | `DBT-F3` Diagram fidelity | Dataflow | 0/3 | DBT-1, DBT-4, DBT-12 |
 | `DBT-F4` Docs and spec grounding | Cross-cutting | 4/7 | DBT-8, DBT-10, DBT-11, DBT-13, DBT-22, DBT-26, DBT-32 |
@@ -180,7 +180,7 @@ Next to pick up. Nothing blocks these.
 
 ---
 
-## Backlog - next (26)
+## Backlog - next (25)
 
 Settled and unblocked, sequenced behind now.
 
@@ -486,26 +486,6 @@ Settled and unblocked, sequenced behind now.
   is [[HON-8]]: `buildDeploymentPreview` already builds the previewable ARM
   shapes and has no caller, so nothing renders a template on screen and the
   .tgz must be opened to read one.
-
-- **DBT-40** Two implementations of creating a custom table
-  `DBT-F1` `bug` `settled`
-  FOUND BY THE ELEVENTH ARCHITECTURE AUDIT, 2026-08-31. `ensure-tables.ts` and
-  the extracted [[TBL-3]] `createCustomTable` both GET-first, PUT, and poll
-  `provisioningState` - the same contract, twice. The readback half was split
-  out and fixed as [[DBT-41]]; what remains is the duplication itself. THE
-  DIFFERENCES ARE PARTLY DELIBERATE and must not be flattened: ensure-tables'
-  docblock says it "never throws (every path resolves an outcome)" because it
-  is a best-effort dependency-table path inside content install, where one
-  uncreatable table must not fail the whole install, while `createCustomTable`
-  throws. So merging is a DECISION, not a refactor - it means either teaching
-  `createCustomTable` an outcome-returning caller, or having ensure-tables
-  catch and translate. A second difference is incidental and worth removing
-  whichever way it goes: a missing `provisioningState` is 'done' in
-  createCustomTable and 'keep polling' in ensure-tables. ALSO IN SCOPE: two
-  poll-attempt constants for the same decision,
-  `DEFAULT_CREATE_TABLE_POLL_ATTEMPTS` (10) and ensure-tables' private
-  `DEFAULT_TABLE_POLL_ATTEMPTS` (12), after the audit deleted onboard-table's
-  third, dead copy.
 
 - **DBT-38** The add-column controls render with raw browser chrome
   `DBT-F2` `bug` `settled`
@@ -830,7 +810,7 @@ Settled, gated on something above.
 
 ---
 
-## Done (46)
+## Done (47)
 
 Kept briefly so a reader can see what just landed; prune when the list grows.
 
@@ -1980,6 +1960,51 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   a single 403 queued the fake exhausted and the old code died in the catch,
   so the pin passed against the bug for the wrong reason; it now queues the
   full bound of twelve so the buggy fall-through is actually reached.
+
+- **DBT-40** Two implementations of creating a custom table
+  `DBT-F1` `bug` `settled` `verified: pins`
+  FOUND BY THE ELEVENTH ARCHITECTURE AUDIT, 2026-08-31. `ensure-tables.ts` and
+  the extracted [[TBL-3]] `createCustomTable` both GET-first, PUT, and poll
+  `provisioningState` - the same contract, twice. The readback half was split
+  out and fixed as [[DBT-41]]; what remains is the duplication itself. THE
+  DIFFERENCES ARE PARTLY DELIBERATE and must not be flattened: ensure-tables'
+  docblock says it "never throws (every path resolves an outcome)" because it
+  is a best-effort dependency-table path inside content install, where one
+  uncreatable table must not fail the whole install, while `createCustomTable`
+  throws. So merging is a DECISION, not a refactor - it means either teaching
+  `createCustomTable` an outcome-returning caller, or having ensure-tables
+  catch and translate. A second difference is incidental and worth removing
+  whichever way it goes: a missing `provisioningState` is 'done' in
+  createCustomTable and 'keep polling' in ensure-tables. ALSO IN SCOPE: two
+  poll-attempt constants for the same decision,
+  `DEFAULT_CREATE_TABLE_POLL_ATTEMPTS` (10) and ensure-tables' private
+  `DEFAULT_TABLE_POLL_ATTEMPTS` (12), after the audit deleted onboard-table's
+  third, dead copy. DONE 2026-08-31. THE DECISION THE CARD ASKED FOR: neither
+  caller was made to yield, because they want genuinely different things from
+  the same operation - `onboardTable` needs the table's SCHEMA next to build a
+  DCR from, so an unconfirmed readback is fatal to it; `ensureRuleDataTable`
+  only needs the table to EXIST so a rule installs, so the same result is a
+  success. Forcing one contract on both would have made one of them wrong. So
+  `createCustomTable` now REPORTS the readback (`ReadbackOutcome`: confirmed,
+  or unresolved with a reason) instead of throwing, and each caller decides -
+  onboardTable throws its StepFailure, ensure-tables returns ok:true with the
+  reason in its detail. A terminal `failed`/`canceled` still throws, because
+  that is not a reporting nuance and nobody wants to carry on from it.
+  ensure-tables lost its PUT-and-poll entirely; it keeps only what is its own,
+  which is resolving WHICH of two candidate table names to use. THREE REASONS,
+  not one: 'did not read back successfully within N poll attempts' (never
+  appeared), 'was still provisioning after N poll attempts' (seen,
+  non-terminal) and 'could not be read back - HTTP N' - the first two used to
+  be indistinguishable, which would tell an operator to wait for something
+  that was never coming. COSTS ONE EXTRA GET on the create path, because
+  createCustomTable re-checks existence after ensure-tables' own pre-check.
+  That is not waste: it closes the race where another actor creates the table
+  between the check and the upsert, which would otherwise silently overwrite
+  their schema. The poll bound stayed a call-site parameter (12 for content
+  install, the usecase default of 10 elsewhere) rather than becoming a third
+  constant. onboardTable's 27 characterization pins pass unchanged; 2
+  create-custom-table pins were rewritten from `rejects` to result assertions,
+  which is a DELIBERATE spec change recorded here rather than a weakening.
 
 - **TBL-1** Author a custom table's fields and types by hand
   `TBL-F1` `story` `settled` `verified: both`
