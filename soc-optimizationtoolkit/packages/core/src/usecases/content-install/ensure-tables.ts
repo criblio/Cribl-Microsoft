@@ -159,13 +159,27 @@ export async function ensureRuleDataTable(
     });
     // Attempt-bounded readback until the table provisions (no timers - the
     // adapter enforces per-request timeouts; table creation is fast).
+    //
+    // ONLY A 404 IS RETRYABLE (DBT-41). It means "the PUT was accepted but the
+    // table has not replicated yet", which is exactly what polling is for.
+    // Every other status is a failure to OBSERVE the table, not a slow one:
+    // retrying a 403 twelve times cannot turn it into a 200, and reporting the
+    // exhausted bound as "still provisioning" would state a provisioning
+    // state that was never read. The PUT above already succeeded, so the
+    // table does exist - what is unknown is its state, and the outcome says
+    // that rather than guessing.
+    let unreadable = "";
     for (let attempt = 0; attempt < DEFAULT_TABLE_POLL_ATTEMPTS; attempt++) {
       const poll = await azure.request({
         method: "GET",
         path: `${workspacePath(ws)}/tables/${req.tableName}`,
         apiVersion: LOG_ANALYTICS_TABLES_API_VERSION,
       });
-      if (!is2xx(poll.status)) continue;
+      if (poll.status === 404) continue;
+      if (!is2xx(poll.status)) {
+        unreadable = `HTTP ${poll.status}`;
+        break;
+      }
       const state = prop(prop(poll.body, "properties"), "provisioningState");
       const stateText = typeof state === "string" ? state : "";
       if (/^succeeded$/i.test(stateText)) {
@@ -185,13 +199,21 @@ export async function ensureRuleDataTable(
         };
       }
     }
-    // Accepted but still provisioning after the bound - treat as created; the
-    // rule install a moment later will find it (or report the table cleanly).
+    // STILL ok AND created: the PUT was accepted, so the table was made and
+    // the rule install a moment later will find it. Only the readback is
+    // unresolved, and the detail names which of the two reasons it was.
+    logger?.info("content-install: dependency table readback unresolved", {
+      table: req.tableName,
+      reason: unreadable === "" ? "still provisioning" : unreadable,
+    });
     return {
       table: req.tableName,
       ok: true,
       created: true,
-      detail: `created (${columns.length} columns; still provisioning)`,
+      detail:
+        unreadable === ""
+          ? `created (${columns.length} columns; still provisioning)`
+          : `created (${columns.length} columns; could not read it back - ${unreadable})`,
     };
   } catch (err) {
     return {

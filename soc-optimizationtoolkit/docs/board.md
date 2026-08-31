@@ -11,7 +11,7 @@ two cannot disagree.
 alternatives. This board holds only what is a unit of work, what state it is
 in, and what it waits on.
 
-**58 in the backlog, 0 in progress, 45 done.**
+**58 in the backlog, 0 in progress, 46 done.**
 
 ## By menu item
 
@@ -23,7 +23,7 @@ operator sees on any screen. Two menus are PLANNED and have no route yet.
 |---|---|---|---|
 | Dataflow | 3 | 0 | 0 |
 | Setup | 1 | 0 | 0 |
-| Sentinel Integration | 14 | 13 | 0 |
+| Sentinel Integration | 14 | 14 | 0 |
 | DCR Automation | 3 | 7 | 1 |
 | Pack Maintenance | 4 | 1 | 0 |
 | Permission Verification | 8 | 0 | 0 |
@@ -116,13 +116,13 @@ ENABLER EPIC: release mechanics. The packaged tarball trails main, and the lab t
 |---|---|---|---|
 | `REL-F1` Release and deployment hygiene | Cross-cutting | 3/5 | REL-2, REL-3, REL-4, REL-5, REL-6 |
 
-### `DBT` Quality and technical debt _(enabler)_ - 50% (21/42)
+### `DBT` Quality and technical debt _(enabler)_ - 51% (22/43)
 
 ENABLER EPIC: verification gaps, copy, diagram fidelity, docs and the board's own tooling
 
 | Feature | Menu | Done | Stories |
 |---|---|---|---|
-| `DBT-F1` Verification gaps | Sentinel Integration | 1/6 | DBT-2, DBT-5*, DBT-6, DBT-7, DBT-36*, DBT-40 |
+| `DBT-F1` Verification gaps | Sentinel Integration | 2/7 | DBT-2, DBT-5*, DBT-6, DBT-7, DBT-36*, DBT-41, DBT-40 |
 | `DBT-F2` Copy and UX | Sentinel Integration | 0/8 | DBT-3, DBT-9, DBT-14, DBT-15, DBT-28, D-10*, DBT-38, DBT-39 |
 | `DBT-F3` Diagram fidelity | Dataflow | 0/3 | DBT-1, DBT-4, DBT-12 |
 | `DBT-F4` Docs and spec grounding | Cross-cutting | 4/7 | DBT-8, DBT-10, DBT-11, DBT-13, DBT-22, DBT-26, DBT-32 |
@@ -487,34 +487,25 @@ Settled and unblocked, sequenced behind now.
   shapes and has no caller, so nothing renders a template on screen and the
   .tgz must be opened to read one.
 
-- **DBT-40** Two implementations of creating a custom table, and one reads a 403 as success
-  `DBT-F1` `bug` `unconfirmed`
-  FOUND BY THE ELEVENTH ARCHITECTURE AUDIT, 2026-08-31.
-  `ensure-tables.ts:80-190` and the newly extracted [[TBL-3]]
-  `createCustomTable` both GET-first, PUT, and poll `provisioningState` - the
-  same contract, twice, and they DO disagree. THE NARROW DEFECT, and it is the
-  reason this is a bug rather than a cleanup: `ensure-tables.ts:168` does `if
-  (!is2xx(poll.status)) continue`, which retries ANY failure - a 403, a 500 -
-  and then, if the attempt bound is exhausted, falls through to a return of
-  `ok: true, created: true` with the comment "the rule install a moment later
-  will find it". So a PERMISSIONS FAILURE reads as a successfully created
-  table. `createCustomTable` throws on a non-404 poll and on an exhausted
-  bound. THE OTHER DIFFERENCES ARE PARTLY DELIBERATE and must not be
-  flattened: ensure-tables' docblock says it "never throws (every path
-  resolves an outcome)" because it is a best-effort dependency-table path
-  inside content install, where one uncreatable table must not fail the whole
-  install. So merging is a DECISION, not a refactor - it means teaching
+- **DBT-40** Two implementations of creating a custom table
+  `DBT-F1` `bug` `settled`
+  FOUND BY THE ELEVENTH ARCHITECTURE AUDIT, 2026-08-31. `ensure-tables.ts` and
+  the extracted [[TBL-3]] `createCustomTable` both GET-first, PUT, and poll
+  `provisioningState` - the same contract, twice. The readback half was split
+  out and fixed as [[DBT-41]]; what remains is the duplication itself. THE
+  DIFFERENCES ARE PARTLY DELIBERATE and must not be flattened: ensure-tables'
+  docblock says it "never throws (every path resolves an outcome)" because it
+  is a best-effort dependency-table path inside content install, where one
+  uncreatable table must not fail the whole install, while `createCustomTable`
+  throws. So merging is a DECISION, not a refactor - it means either teaching
   `createCustomTable` an outcome-returning caller, or having ensure-tables
-  catch and translate. A third difference is incidental: a missing
-  provisioningState is 'done' in createCustomTable and 'keep polling' in
-  ensure-tables. ALSO IN SCOPE: three poll-attempt constants now exist for the
-  same decision - `DEFAULT_CREATE_TABLE_POLL_ATTEMPTS` (10) and ensure-tables'
-  own private `DEFAULT_TABLE_POLL_ATTEMPTS` (12), after the audit deleted
-  onboard-table's third, dead copy. UNCONFIRMED deliberately on ONE point:
-  whether the 403-as-success path is reachable in practice depends on whether
-  content install runs with an identity that can read tables but not write
-  them, which was not measured. Fix the 403 regardless - it costs nothing and
-  the current code cannot tell a denied write from a slow one.
+  catch and translate. A second difference is incidental and worth removing
+  whichever way it goes: a missing `provisioningState` is 'done' in
+  createCustomTable and 'keep polling' in ensure-tables. ALSO IN SCOPE: two
+  poll-attempt constants for the same decision,
+  `DEFAULT_CREATE_TABLE_POLL_ATTEMPTS` (10) and ensure-tables' private
+  `DEFAULT_TABLE_POLL_ATTEMPTS` (12), after the audit deleted onboard-table's
+  third, dead copy.
 
 - **DBT-38** The add-column controls render with raw browser chrome
   `DBT-F2` `bug` `settled`
@@ -839,7 +830,7 @@ Settled, gated on something above.
 
 ---
 
-## Done (45)
+## Done (46)
 
 Kept briefly so a reader can see what just landed; prune when the list grows.
 
@@ -1966,6 +1957,29 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   typing `Client IP` in the editor tints the row and reads "'Client IP' is not
   a valid column name - letters, digits, and underscores only, not starting
   with a digit"; before the fix it was accepted and previewed.
+
+- **DBT-41** A denied table readback is reported as 'still provisioning'
+  `DBT-F1` `bug` `settled` `verified: pins`
+  SPLIT OUT OF [[DBT-40]] so the narrow defect could close while the
+  duplication it was found beside stays open. `ensure-tables`' readback loop
+  did `if (!is2xx(poll.status)) continue`, retrying ANY non-2xx twelve times
+  and then falling through to `ok: true, created: true, detail: 'created (N
+  columns; still provisioning)'`. CORRECTING MY OWN AUDIT WORDING: DBT-40 said
+  this meant "a permissions failure reads as a created table", which
+  OVERSTATED it. The PUT's status is checked at ensure-tables.ts:142, so
+  reaching the poll at all means creation was ACCEPTED and the table really
+  does exist - `ok: true, created: true` was right. The actual defect is
+  narrower and still worth fixing: the outcome claimed a PROVISIONING STATE
+  THAT WAS NEVER READ, and burned twelve requests discovering nothing, because
+  a 403 cannot become a 200 by retrying. FIXED 2026-08-31: only a 404 is
+  retryable (an accepted PUT that has not replicated yet - the same rule
+  `createCustomTable` uses); any other non-2xx stops the loop and the detail
+  says `could not read it back - HTTP N` instead of guessing. `ok`/`created`
+  deliberately UNCHANGED. 5 pins, mutation-checked - restoring the old
+  `continue` fails three of them. ONE PIN WAS WEAK AND WAS STRENGTHENED: with
+  a single 403 queued the fake exhausted and the old code died in the catch,
+  so the pin passed against the bug for the wrong reason; it now queues the
+  full bound of twelve so the buggy fall-through is actually reached.
 
 - **TBL-1** Author a custom table's fields and types by hand
   `TBL-F1` `story` `settled` `verified: both`
