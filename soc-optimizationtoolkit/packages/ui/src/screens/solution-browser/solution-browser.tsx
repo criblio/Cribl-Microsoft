@@ -21,13 +21,13 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  DELIVERY_FIT_UNMEASURED_LABEL,
   classifyConnectorIngestion,
   classifySolutionIngestion,
   connectorsCacheKey,
   decodeConnector,
+  deliveryFitBadge,
   deprecatedSolutionKey,
-  ingestionTierLabel,
-  ingestionTierReason,
   listDeprecatedContentHubSolutions,
   lookupSolutionIngestion,
   solutionIndexCacheKey,
@@ -410,20 +410,23 @@ export function SolutionBrowser({
             {(() => {
               // Shipped tier is authoritative for known solutions; the live
               // tier (decoded connectors) covers a solution missing from the
-              // shipped map.
-              const ing =
+              // shipped map. Neither available is the fourth state, "Not
+              // measured" - DBT-15: the selected card rendered blank in exactly
+              // the same way the list rows did.
+              const badge = deliveryFitBadge(
                 lookupSolutionIngestion(selected.name) ??
-                (detail.phase === "loaded"
-                  ? detail.detail.ingestion ?? null
-                  : null);
-              return ing !== null ? (
+                  (detail.phase === "loaded"
+                    ? detail.detail.ingestion ?? null
+                    : null),
+              );
+              return (
                 <span
-                  className={`ingestion-badge ingestion-badge-${ing.tier}`}
-                  title={ingestionTierReason(ing.tier, ing.kind)}
+                  className={`ingestion-badge ingestion-badge-${badge.state}`}
+                  title={badge.reason}
                 >
-                  {ingestionTierLabel(ing.tier)}
+                  {badge.label}
                 </span>
-              ) : null;
+              );
             })()}
             {(() => {
               const badge = deprecationBadge(selected);
@@ -526,7 +529,13 @@ export function SolutionBrowser({
             </span>{" "}
             CCF pull / custom-table DCR{" "}
             <span className="ingestion-badge ingestion-badge-legacy">Legacy</span>{" "}
-            agent / Functions
+            agent / Functions{" "}
+            {/* The fourth state is about the EVIDENCE, not the solution, so the
+                legend says what is missing rather than implying a worse fit. */}
+            <span className="ingestion-badge ingestion-badge-unmeasured">
+              {DELIVERY_FIT_UNMEASURED_LABEL}
+            </span>{" "}
+            no connector JSON was read for it
           </p>
           <ul className="solution-browser-list">
             {visible.map((solution) => {
@@ -535,8 +544,11 @@ export function SolutionBrowser({
               // selected state of their own.
               const badge = deprecationBadge(solution);
               // Logs-Ingestion fit from the shipped map (instant, no fetch).
-              const ingestion = lookupSolutionIngestion(solution.name);
-              const recommended = ingestion?.tier === "recommended";
+              // The map does not cover every solution in the index, so this is
+              // routed through deliveryFitBadge: a miss becomes "Not measured"
+              // rather than the blank cell DBT-15 reported.
+              const fit = deliveryFitBadge(lookupSolutionIngestion(solution.name));
+              const recommended = fit.state === "recommended";
               return (
                 <li
                   key={solution.path}
@@ -552,14 +564,12 @@ export function SolutionBrowser({
                     <span className="solution-browser-item-name">
                       {solution.name}
                     </span>
-                    {ingestion !== null && (
-                      <span
-                        className={`ingestion-badge ingestion-badge-${ingestion.tier}`}
-                        title={ingestionTierReason(ingestion.tier, ingestion.kind)}
-                      >
-                        {ingestionTierLabel(ingestion.tier)}
-                      </span>
-                    )}
+                    <span
+                      className={`ingestion-badge ingestion-badge-${fit.state}`}
+                      title={fit.reason}
+                    >
+                      {fit.label}
+                    </span>
                     {badge !== null && (
                       <span
                         className="solution-browser-badge"

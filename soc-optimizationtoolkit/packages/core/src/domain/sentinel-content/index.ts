@@ -57,6 +57,20 @@ export {
   ingestionTierReason,
 } from "./ingestion-classification";
 
+// The badge a solution ROW renders, absent classification included (DBT-15):
+// a solution missing from the shipped map is "not measured", never blank and
+// never silently demoted to a tier.
+export type {
+  DeliveryFitState,
+  DeliveryFitBadge,
+  TieredIngestion,
+} from "./delivery-fit-badge";
+export {
+  DELIVERY_FIT_UNMEASURED_LABEL,
+  DELIVERY_FIT_UNMEASURED_REASON,
+  deliveryFitBadge,
+} from "./delivery-fit-badge";
+
 // File-selection persistence filter (verbatim extension/dir sets), plus the
 // analytic-rule location rules shared by rule-coverage and siem-migration
 // (audit finding 1, 2026-08-17: they were duplicated, and only one was pinned).
