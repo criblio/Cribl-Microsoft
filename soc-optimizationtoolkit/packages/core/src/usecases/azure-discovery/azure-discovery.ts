@@ -37,6 +37,8 @@ import type {
 import { asString, httpErrorText, is2xx, prop } from "../arm-http";
 import type { LogContext, Logger } from "../../ports/logger";
 import { deriveResourceGroup } from "../../domain/azure-resource-id";
+import { listingCount, toListing } from "../../domain/inventory-listing";
+import type { Listing } from "../../domain/inventory-listing";
 import { updateActiveConfig, getActiveProfile } from "../../domain/azure-profiles";
 import type { ProfileStore } from "../../domain/azure-profiles";
 import type { AzureConfig } from "../../domain/azure-config";
@@ -203,7 +205,7 @@ export interface AzureSubscription {
 export async function listSubscriptions(
   azure: AzureManagement,
   logger?: Logger,
-): Promise<AzureSubscription[]> {
+): Promise<Listing<AzureSubscription>> {
   return logged(
     logger,
     "list subscriptions",
@@ -231,9 +233,12 @@ export async function listSubscriptions(
           displayName: asString(prop(item, "displayName")),
         });
       }
-      return subscriptions;
+      return toListing(subscriptions);
     },
-    (subscriptions) => ({ count: subscriptions.length }),
+    (subscriptions) => ({
+      listing: subscriptions.kind,
+      count: listingCount(subscriptions, 0),
+    }),
   );
 }
 
@@ -324,7 +329,7 @@ export async function listResourceGroups(
   azure: AzureManagement,
   subscriptionId: string,
   logger?: Logger,
-): Promise<AzureResourceGroup[]> {
+): Promise<Listing<AzureResourceGroup>> {
   return logged(
     logger,
     "list resource groups",
@@ -348,9 +353,11 @@ export async function listResourceGroups(
         }
         groups.push({ name, location: asString(prop(item, "location")) });
       }
-      return groups;
+      return toListing(groups);
     },
-    (groups) => ({ count: groups.length }),
+    // DBT-61: `listing` first, so a reader of the log sees WHICH kind of
+    // nothing before they see the number.
+    (groups) => ({ listing: groups.kind, count: listingCount(groups, 0) }),
   );
 }
 
@@ -383,7 +390,7 @@ export async function listResourceGroupChoices(
   workspaces: Array<{ resourceGroup: string; location: string }>,
   logger?: Logger,
 ): Promise<ResourceGroupChoices> {
-  let listed: AzureResourceGroup[] | null = null;
+  let listed: Listing<AzureResourceGroup> | null = null;
   let listError: string | null = null;
   try {
     listed = await listResourceGroups(azure, subscriptionId, logger);
@@ -391,8 +398,13 @@ export async function listResourceGroupChoices(
     listError = errorText(error);
   }
 
-  if (listed !== null && listed.length > 0) {
-    return { groups: listed, source: "list", listError: null };
+  // DBT-61: `kind === "rows"` says in the type what `length > 0` said by
+  // convention - and this function was ALREADY right, which is why it reads as
+  // a rename rather than a fix. It is the shape the rest of the codebase was
+  // supposed to copy: an empty listing falls through to the fallback instead
+  // of being returned as an answer.
+  if (listed !== null && listed.kind === "rows") {
+    return { groups: [...listed.rows], source: "list", listError: null };
   }
 
   const derived = deriveResourceGroupsFromWorkspaces(workspaces);
@@ -404,9 +416,16 @@ export async function listResourceGroupChoices(
     return { groups: derived, source: "workspaces", listError };
   }
 
-  // Nothing derivable either: report the (possibly empty) list result
-  // honestly, keeping the error text when the list call failed.
-  return { groups: listed ?? [], source: "list", listError };
+  // Nothing derivable either: report the empty list result honestly, keeping
+  // the error text when the list call failed.
+  //
+  // DBT-61: `[]` is not an assumption here, it is PROVEN. The rows branch
+  // returned above, so by this line the compiler has narrowed `listed` to
+  // `{kind:"empty"} | null` - an attempt to unwrap it does not even typecheck,
+  // because there is no element type left to infer. `listError` still rides
+  // along, which is what keeps a denied list distinguishable from an empty one
+  // for the caller.
+  return { groups: [], source: "list", listError };
 }
 
 // ---------------------------------------------------------------------------

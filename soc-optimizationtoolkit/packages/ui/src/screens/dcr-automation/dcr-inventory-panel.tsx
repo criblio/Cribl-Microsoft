@@ -24,7 +24,7 @@ import {
   guidLossWarning,
   updateDcrInPlace,
 } from "@soc/core";
-import { emptyCapabilitySet } from "@soc/core";
+import { emptyCapabilitySet, listingRows } from "@soc/core";
 import type {
   CapabilityContext,
   CapabilityFallback,
@@ -196,7 +196,11 @@ export function DcrInventoryPanel(props: DcrInventoryPanelProps = {}) {
       try {
         const groups = await listResourceGroups(ports.azure, config.subscriptionId);
         if (cancelled) return;
-        const names = groups.map((g) => g.name);
+        // Sanctioned unwrap (DBT-61): these names only POPULATE a datalist and
+        // the committed group is unshifted below regardless, so an empty
+        // listing costs suggestions, never a claim - the operator can still
+        // type any group name.
+        const names = listingRows(groups).map((g) => g.name);
         if (!names.includes(config.resourceGroup) && config.resourceGroup !== "") {
           names.unshift(config.resourceGroup);
         }
@@ -579,8 +583,17 @@ export function DcrInventoryPanel(props: DcrInventoryPanelProps = {}) {
         subscriptionId: config.subscriptionId,
         resourceGroup: inventoryRg,
       });
-      setEntries(listed);
-      logInfo(`found ${listed.length} DCR(s) in '${inventoryRg}'`);
+      // DBT-61: the rows are safe to render - this panel already routes the
+      // EMPTY case through emptyInventoryMessage (`emptyDcrs` above), so it
+      // never says "none" off an unverified read. The log line counts only the
+      // rows variant and says "at least" for empty, because a log claiming
+      // "found 0" is the same confident wrong answer in a quieter place.
+      setEntries([...listingRows(listed)]);
+      logInfo(
+        listed.kind === "rows"
+          ? `found ${listed.rows.length} DCR(s) in '${inventoryRg}'`
+          : `listing of '${inventoryRg}' came back empty - see the panel for whether that is a real zero`,
+      );
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       logError(`listing DCRs in '${inventoryRg}' failed: ${message}`);

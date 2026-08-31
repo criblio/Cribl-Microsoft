@@ -4,6 +4,7 @@
  */
 
 import { describe, expect, it } from "vitest";
+import { listingRows } from "../../domain/inventory-listing";
 import { FakeAzureManagement } from "../../testing/fake-azure-management";
 import { listDcrInventory, parseDcrInventoryEntry } from "./dcr-inventory";
 
@@ -71,11 +72,32 @@ describe("parseDcrInventoryEntry", () => {
 describe("listDcrInventory", () => {
   it("lists the resource group's DCRs via the ARM listing", async () => {
     const azure = new FakeAzureManagement({ dataCollectionRulesList: [DCR] });
-    const entries = await listDcrInventory(azure, {
+    const listed = await listDcrInventory(azure, {
       subscriptionId: "sub",
       resourceGroup: "rg",
     });
-    expect(entries.map((e) => e.name)).toEqual(["dcr-CommonSecurityLog"]);
+    // DBT-61: a populated listing is the `rows` variant, and narrowing to it
+    // is the only way to reach the rows - which is the enforcement, not a
+    // ceremony. Asserted on `kind` first so a regression to `empty` fails
+    // here rather than as a confusing undefined further down.
+    expect(listed.kind).toBe("rows");
+    expect(listingRows(listed).map((e) => e.name)).toEqual([
+      "dcr-CommonSecurityLog",
+    ]);
+  });
+
+  it("reports an EMPTY listing as empty, with no count to misread", async () => {
+    // The whole reason this usecase changed shape. An RBAC-filtered listing
+    // succeeds with an empty array, and the old signature handed that back as
+    // `[]` - indistinguishable from a measured zero, which is how [[DBT-43]]
+    // came to print "Read 0 deployed DCR(s)" as a fact. There is now no
+    // `.length` on this value to print.
+    const azure = new FakeAzureManagement({ dataCollectionRulesList: [] });
+    const listed = await listDcrInventory(azure, {
+      subscriptionId: "sub",
+      resourceGroup: "rg",
+    });
+    expect(listed).toEqual({ kind: "empty" });
   });
 
   it("THROWS on a failed listing instead of reading as empty", async () => {

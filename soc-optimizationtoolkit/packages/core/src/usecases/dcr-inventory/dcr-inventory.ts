@@ -10,6 +10,8 @@
  */
 
 import type { AzureManagement } from "../../ports";
+import { toListing } from "../../domain/inventory-listing";
+import type { Listing } from "../../domain/inventory-listing";
 
 /** ARM api-version for Microsoft.Insights dataCollectionRules. */
 const DCR_API_VERSION = "2023-03-11";
@@ -90,11 +92,19 @@ export function parseDcrInventoryEntry(item: unknown): DcrInventoryEntry | null 
 /**
  * List the resource group's DCRs. Throws on a failed listing (an inventory
  * must never silently read as empty - the pack pre-check taught us that).
+ *
+ * RETURNS A {@link Listing}, NOT AN ARRAY (DBT-61). An ARM list answers 200
+ * with an empty array when RBAC filters the caller out, so an empty result
+ * here means either "there are none" or "you cannot see them" and the two are
+ * byte-identical. The union has no `.length`, so the caller cannot report a
+ * count without first saying which it believes - which is exactly the step
+ * DBT-43 skipped when it shipped `Read ${inventory.length} deployed DCR(s)`
+ * and built packs full of placeholder ids off the back of it.
  */
 export async function listDcrInventory(
   azure: AzureManagement,
   scope: { subscriptionId: string; resourceGroup: string },
-): Promise<DcrInventoryEntry[]> {
+): Promise<Listing<DcrInventoryEntry>> {
   const response = await azure.request({
     method: "GET",
     path:
@@ -109,11 +119,11 @@ export async function listDcrInventory(
     );
   }
   const value = rec(response.body)?.["value"];
-  if (!Array.isArray(value)) return [];
+  if (!Array.isArray(value)) return toListing([]);
   const entries: DcrInventoryEntry[] = [];
   for (const item of value) {
     const entry = parseDcrInventoryEntry(item);
     if (entry !== null) entries.push(entry);
   }
-  return entries;
+  return toListing(entries);
 }

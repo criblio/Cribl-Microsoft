@@ -1938,6 +1938,48 @@
         "TBL-4"
       ],
       "detail": "RAISED BY THE TBL-4 AGENT 2026-08-31, which surfaced it rather than acting on it BECAUSE IT CONTRADICTS THE BINDING DESIGN - exactly the right call, and the observation is good enough to reopen the question. [[D-2]] settled that a RUN kind is POINTED AT rather than produced inline, and `isInlineArtifact` returns false for `table-arm-bodies`, so TBL-4 points. BUT FOR THIS SURFACE THE PREMISE MAY NOT HOLD: `createCustomTable` (create-custom-table.ts) and `collectTableTemplates` (onboard-batch.ts) call the SAME `buildTablePutRequest`, and for a HAND-AUTHORED table every input to it already sits in the create form's own state - subscription, resource group, workspace, name, columns. No live Azure read contributes anything. So the panel could assemble the exact body the run would send, with no run and no connection at all - which is a strictly better answer for an operator who cannot write to Azure: the artifact itself, rather than directions to a run they may also be unable to start. THE REAL QUESTION IS WHETHER THAT MAKES `table-arm-bodies` INLINE IN GENERAL, or only when produced from a form that already holds the schema. Probably the latter - the same kind produced from the BATCH path genuinely does need the run, because there the schema comes from a live table read. If so, `isInlineArtifact(kind)` is the wrong SHAPE for the decision: inline-ness would be a property of the CALL SITE and its inputs, not of the artifact kind alone. That is a change to a contract settled hours ago, so decide it before building - backlog.md section 16 is the reasoning it would amend."
+    },
+    {
+      "id": "DBT-61",
+      "epic": "DBT",
+      "feature": "DBT-F1",
+      "title": "Enforce the empty-vs-denied rule instead of remembering it",
+      "type": "enabler",
+      "status": "done",
+      "priority": "now",
+      "settled": "settled",
+      "dependsOn": [],
+      "detail": "HALF OF EVERY BUG FOUND ON 2026-08-31 WAS ONE HABIT: an unknown reported as a measured fact. An RBAC-filtered empty ARM list read as a real zero ([[HON-2]], [[DBT-43]], [[DBT-44]]), a denied readback reported as 'still provisioning' ([[DBT-41]]), a 403 on the Sentinel check rendered as 'not enabled' and INVITING A WRITE ([[DBT-52]]), a kvstore outage recorded as the table's own failure ([[DBT-49]], [[DBT-55]]). That is not twelve defects; it is one habit with twelve instances. `docs/inventory-standard.md` ALREADY BINDS THIS and was violated in three new places anyway, because it is prose. The precedent is board rule 1: prose-only, broken by the person who had just read it, and it stopped recurring the day `check-board` enforced it. WHY NOW IS THE MOMENT: every known instance is fixed, so a checker calibrated against the current tree starts GREEN and catches regressions. That is the opposite of [[DBT-39]]'s className checker, which reports 36 pre-existing findings and therefore cannot be wired into CI until they are triaged. A gate that starts red never becomes a gate. SHAPE: a check script beside the other apps/cribl-app/scripts/check-*.mjs ones. A file that reaches an ARM listing AND contains a zero-claiming phrase must also consult a capability - `emptyInventoryMessage`, `emptyTableListMessage`, `routeCapability` or `verdictFor`. Coarse on purpose: file-level, no AST. Precision comes from calibrating against a tree that is currently clean, plus a named allowlist for justified exceptions rather than a silent skip. INVESTIGATED 2026-08-31, AND THE PROPOSED SHAPE DOES NOT WORK - recorded because the negative result is the useful part and the next person will otherwise try the same thing. A file-level grep checker was built and calibrated: 19 files reach an ARM lister and it reports 0 findings on the current tree, so it starts green as hoped. It was then run against the ACTUAL PRE-FIX CODE pulled from git, and it MISSED ALL THREE real defects. WHY, and this kills text matching for this class outright: THE ZERO-CLAIM IS COMPUTED, NEVER LITERAL. [[DBT-43]] shipped `Read ${inventory.length} deployed DCR(s)` - the wrong sentence 'Read 0 deployed DCR(s)' exists only at runtime, and the source contains a perfectly innocent template. [[DBT-44]] had no string at all: an empty listing set a boolean that later MEANT 'not installed'. A grep can only find a wrong sentence somebody typed, and nobody typed one. A SECOND FLAW, independent of the first: file-level granularity is too coarse. integrate-screen.tsx is 2400 lines and references `capabilities` elsewhere, so the file passed the capability test while the defect sat in one callback. Per-function analysis would need an AST, and oxlint has no custom-rule surface here (see [[FX-4]], which rejected authoring one for the same reason). WHAT WOULD ACTUALLY ENFORCE IT: make the compiler the checker. If a lister returned a discriminated union - measured rows versus an unverified listing - TypeScript would FORCE every caller to narrow before touching the rows, and the empty-as-zero mistake becomes unrepresentable rather than merely discouraged. Blast radius measured and it is small: 9 call sites across listDcrInventory, listWorkspaceTables, listResourceGroups and listSubscriptions, plus 13 internal listAllPages callers. But it is a change to shipped core contracts, so it is a decision rather than a cleanup. DONE 2026-08-31, the type route, and the negative result above is why. `Listing<T>` in packages/core/src/domain/inventory-listing/ is either `{kind:'rows', rows:[T,...T[]]}` - non-empty BY TYPE, so a count taken from it can never be 0 - or `{kind:'empty'}`, which carries no count at all. All four ARM listers return it: listDcrInventory, listWorkspaceTables, listSubscriptions, listResourceGroups. VALIDATED THE WAY THE CARD SAID: [[DBT-43]] was reintroduced verbatim - `inventory = await listDcrInventory(...)` then `Read ${inventory.length} deployed DCR(s)` - and tsc rejected it with ONE error, TS2322 at integrate-screen.tsx:1278. The other spelling was caught in passing during the conversion: an inferred const reading `.length` fails as TS2339 'Property length does not exist on type Listing<DcrInventoryEntry>'. Both ways to write the bug are now compile errors, which is the difference between this and docs/inventory-standard.md, a binding rule that was violated three times because prose cannot fail a build. WHAT THE CONVERSION FOUND, and it is the honest yield of the exercise - two live over-claims nobody had filed. The workspace Tables panel turned an empty DCR listing into 'none in scope' on EVERY row, when its own state module already said the rule in words ('`unchecked`, never `none-in-scope`'); it now reads 'not checked'. And three log lines printed bare counts off unverified listings, which is the same wrong answer somewhere nobody reviews; they now carry `listing: rows|empty` beside the number. THE ESCAPE HATCH IS DELIBERATE AND GUARDED: `listingRows()` returns a plain array for the honest cases - a dropdown, a set to union, rows whose emptiness is already owned by emptyInventoryMessage - and each of the six call sites says in a comment which of those it is. `listingRows(x).length` is the one remaining spelling of the bug, and unlike the original it is a single greppable name, so check-listings.mjs finds it. That checker is narrow ON PURPOSE: the earlier general one failed because the zero-claim is computed, and this one only works because the hatch has a name. 9 pins for the type, 9 for the checker, and the checker was mutation-tested against the real tree, not just synthetic strings.",
+      "verified": "pins"
+    },
+    {
+      "id": "DBT-62",
+      "epic": "DBT",
+      "feature": "DBT-F1",
+      "title": "Route the remaining Cribl listings through Listing<T>",
+      "type": "enabler",
+      "status": "backlog",
+      "priority": "next",
+      "settled": "undecided",
+      "dependsOn": [
+        "DBT-61"
+      ],
+      "detail": "[[DBT-61]] converted the four ARM listers, which is where the whole defect class actually landed. The Cribl-side listings - packs, destinations, sources - have the same ambiguity in principle: a token scoped to one worker group lists what it can see, not what exists. NOT URGENT and deliberately not bundled: no defect has been filed against them, the blast radius is a second set of call sites, and doing it speculatively would be the reflex this repo keeps writing cards about. Do it when a Cribl listing actually reads as a zero somewhere, or when touching those call sites for another reason.",
+      "decision": {
+        "question": "Extend Listing<T> to the Cribl-side listings, or leave them?",
+        "options": [
+          {
+            "key": "wait-for-a-defect",
+            "label": "Leave them until one actually misreads",
+            "detail": "No defect has been filed against a Cribl listing. Every empty-as-zero bug so far came from ARM, where RBAC filtering makes 200-with-nothing routine. Converting on suspicion is the reflex this repo keeps filing cards about - and the type is now there to reach for the moment one does misread."
+          },
+          {
+            "key": "convert-now",
+            "label": "Convert them now for symmetry",
+            "detail": "A token scoped to one worker group lists what it can see, so the ambiguity is real in principle. Doing it while the pattern is fresh is cheaper than rediscovering it later - at the cost of a second sweep of call sites for a bug nobody has hit."
+          }
+        ]
+      }
     }
   ],
   "features": [

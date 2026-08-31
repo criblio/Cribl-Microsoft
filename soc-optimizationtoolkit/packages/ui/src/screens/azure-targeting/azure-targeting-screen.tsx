@@ -58,7 +58,7 @@ import type {
   ResourceGroupChoices,
   TargetScope,
 } from "@soc/core";
-import { emptyCapabilitySet } from "@soc/core";
+import { emptyCapabilitySet, listingRows } from "@soc/core";
 import type { CapabilityContext, CapabilitySet } from "@soc/core";
 import {
   emptyInventoryMessage,
@@ -268,7 +268,11 @@ export function AzureTargetingScreen(props: AzureTargetingScreenProps) {
           const list = await listSubscriptions(ports.azure, ports.logger);
           if (!cancelled) {
             claimedSubs = false;
-            setSubsLoad({ status: "loaded", list });
+            // Sanctioned unwrap (DBT-61): SubsLoad already distinguishes
+            // loading / loaded / error, and the loaded-but-empty case is
+            // rendered by the picker's own hedge rather than as "no
+            // subscriptions".
+            setSubsLoad({ status: "loaded", list: [...listingRows(list)] });
           }
         } catch (err) {
           if (!cancelled) {

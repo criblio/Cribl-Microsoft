@@ -39,7 +39,11 @@ describe("azure-discovery logging", () => {
         timestamp: "2026-07-03T10:00:00.000Z",
         level: "info",
         message: "azure-discovery: list subscriptions succeeded",
-        context: { count: 1 },
+        // DBT-61: `listing` rides beside `count` so a reader of the LOG can
+        // tell a measured 1 from an unverified nothing. A log line is where
+        // the empty-as-zero claim went unnoticed longest, because nobody
+        // reviews a log the way they review a screen.
+        context: { listing: "rows", count: 1 },
       },
     ]);
     expect(JSON.stringify(logger.entries)).not.toContain("Prod");
@@ -144,6 +148,9 @@ describe("azure-discovery logging", () => {
 
     const subscriptions = await listSubscriptions(azure);
 
-    expect(subscriptions).toEqual([{ subscriptionId: SUB, displayName: "Prod" }]);
+    expect(subscriptions).toEqual({
+      kind: "rows",
+      rows: [{ subscriptionId: SUB, displayName: "Prod" }],
+    });
   });
 });

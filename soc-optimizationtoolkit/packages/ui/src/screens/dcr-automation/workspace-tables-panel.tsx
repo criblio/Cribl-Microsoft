@@ -71,6 +71,7 @@ import {
   FALLBACK_POINTER_LABEL,
   fallbackRunPointer,
 } from "../../capabilities/fallback-notice-state";
+import { listingRows } from "@soc/core";
 import { emptyTableListMessage } from "../table-picker/table-picker-state";
 import {
   buildWorkspaceTableRows,
@@ -153,19 +154,44 @@ export function WorkspaceTablesPanel(props: WorkspaceTablesPanelProps = {}) {
         resourceGroup: config.resourceGroup,
         workspaceName: config.workspaceName,
       });
-      setTables(listed);
-      logger?.info(`workspace-tables: ${listed.length} table(s)`);
+      // Safe to unwrap: the empty case is rendered by emptyTableListMessage
+      // (see `emptyMessage` below), which consults the capability before it
+      // will say "no tables". The LOG has no such reader, so it says which
+      // kind of nothing it saw rather than printing a bare 0 (DBT-61).
+      setTables([...listingRows(listed)]);
+      logger?.info(
+        listed.kind === "rows"
+          ? `workspace-tables: ${listed.rows.length} table(s)`
+          : "workspace-tables: the listing came back empty - see the panel for " +
+              "whether that is an empty workspace or a read we do not have",
+      );
 
       // The DCR side is a SEPARATE, non-fatal read: the tables listing is the
       // panel's job and a DCR listing failure must degrade the one column
       // rather than lose the whole page. Left as null on failure, which the
       // row builder renders as "not checked".
       try {
-        const entries = await listDcrInventory(ports.azure, {
+        const listed = await listDcrInventory(ports.azure, {
           subscriptionId: config.subscriptionId,
           resourceGroup: config.resourceGroup,
         });
-        setDcrs(entries);
+        // DBT-61: an EMPTY listing is treated exactly like a failed one -
+        // null, so every row reads "not checked" rather than "none in scope".
+        // The read succeeded, but an RBAC-filtered ARM list returns 200 with
+        // an empty array (docs/inventory-standard.md), and nothing here
+        // verifies which of the two happened. workspace-tables-state already
+        // says this in its own words: "`unchecked`, never `none-in-scope`".
+        // Under-claiming on a genuinely empty group costs one word in one
+        // column; over-claiming tells the operator a DCR is missing when they
+        // simply cannot see it.
+        setDcrs(listed.kind === "rows" ? [...listed.rows] : null);
+        if (listed.kind === "empty") {
+          logger?.info(
+            "workspace-tables: the DCR listing came back empty, which under " +
+              "RBAC filtering is indistinguishable from having no read on " +
+              "them - the DCR column reads 'not checked'",
+          );
+        }
       } catch (err) {
         setDcrs(null);
         logger?.info(

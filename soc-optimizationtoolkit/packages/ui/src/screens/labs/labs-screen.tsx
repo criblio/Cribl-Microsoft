@@ -19,6 +19,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   listSubscriptions,
+  listingRows,
   type AzureSubscription,
   type ProvisionLabResult,
 } from "@soc/core";
@@ -65,7 +66,10 @@ export function LabsScreen() {
       try {
         const subs = await listSubscriptions(ports.azure, ports.logger);
         if (!cancelled) {
-          setSubscriptions(subs);
+          // Sanctioned unwrap (DBT-61): the selector falls back to the
+          // connection's own target when the list is unavailable, and an empty
+          // listing takes that same path - nothing here reports a count.
+          setSubscriptions([...listingRows(subs)]);
         }
       } catch (err) {
         if (!cancelled) {

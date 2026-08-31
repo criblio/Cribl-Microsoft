@@ -52,6 +52,61 @@ The shared helper is `packages/ui/src/capabilities/empty-inventory.ts`. Use it
 rather than phrasing this per screen: the failure is a confident wrong answer,
 and those are exactly what drifts when eight screens each word it themselves.
 
+## The compiler enforces this now, and prose no longer has to
+
+**Added 2026-08-31 (DBT-61).** Everything above was already BINDING when
+DBT-43, DBT-44 and HON-2 were written - three violations of a rule that was
+sitting right here in writing. The conclusion was not that people needed
+reminding. It was that a document cannot fail a build.
+
+So the ARM listers no longer return arrays. They return `Listing<T>` from
+`packages/core/src/domain/inventory-listing/`:
+
+```ts
+type Listing<T> =
+  | { kind: "rows"; rows: readonly [T, ...T[]] }   // non-empty BY TYPE
+  | { kind: "empty" }                              // carries no count at all
+```
+
+Three consequences, all of them mechanical:
+
+- `${listing.length}` **does not compile**. The count that was the whole defect
+  is not reachable without narrowing first.
+- A count taken from the `rows` branch **can never be 0**, because the tuple
+  type says there is at least one. So a number that reaches a sentence is
+  always a measured one.
+- The empty case is a **branch someone has to write on purpose** - which is the
+  moment where the thinking this document asks for actually happens.
+
+What was proven rather than assumed: DBT-43 was reintroduced verbatim and the
+build rejected it (`TS2322`, one error). The other spelling - reading `.length`
+off an inferred const - fails as `TS2339`.
+
+### The escape hatch, and when it is honest
+
+`listingRows(listing)` returns a plain array. It exists because plenty of
+callers legitimately do not speak about emptiness: a dropdown to populate, a
+set to union, rows whose empty case is already owned by `emptyInventoryMessage`.
+Those are fine, and each call site says in a comment which one it is.
+
+**Never use it to produce a count or a claim.** `listingRows(x).length` in a
+message is this document's defect spelled the long way. `npm run check-listings`
+fails the build on it - a deliberately narrow checker that works only because
+the hatch has a single greppable name. (A general text checker was tried first
+and is recorded on DBT-61 as a negative result: the zero-claim is COMPUTED, not
+literal, so there is no wrong sentence to match.)
+
+When you have earned the right to say "none" - you consulted the capability
+above - `listingCount(listing, 0)` writes that assumption down at the call site
+instead of leaving the type to imply it.
+
+### This is the floor, not the ceiling
+
+The type stops a count being minted from nothing. It does not know whether your
+SENTENCE is honest, and it never will. Everything above this section still
+applies: consult the capability, distinguish denied from unknown, and use
+`empty-inventory.ts` to phrase it.
+
 ## A verdict is evidence ONLY about the scope it was measured at
 
 Learned applying this to the second and third listers, and it is the rule most
@@ -128,11 +183,23 @@ for Resource Graph.
   would still read as an empty workspace. `emptyTableListMessage` in
   `table-picker-state` decides it; the picker screen (backlog item 2) must use
   it rather than `tableCountLabel`, which only reports a PRE-LOAD state.
+- **Workspace Tables panel: every row said "none in scope". DONE 2026-08-31,
+  found by DBT-61's conversion, not by review.** An empty DCR listing was
+  handed to the row builder, which turned it into a per-row claim that no DCR
+  targets that table. The panel's own state module had the rule written down -
+  "`unchecked`, never `none-in-scope`" - and the code next to it did the other
+  thing. It now reads "not checked", which under-claims on a genuinely empty
+  group by one word and over-claims never.
+- **Three log lines printed bare counts off unverified listings. DONE
+  2026-08-31.** Same defect, somewhere nobody reviews: `total: 0` in a log is
+  the same confident wrong answer as on a screen. They now carry
+  `listing: rows|empty` beside the number.
 - Audit the remaining listers against this rule when touching them: Event Hub
   discovery (the Resource Graph taxonomy gap), worker groups, pack inventory.
   The `unreachable` wording already names the right connection for a Cribl
   capability, so the Cribl-side listers can adopt the helper as they are
-  touched.
+  touched. Whether to convert them to `Listing<T>` up front is DBT-62, left
+  open on purpose - no Cribl listing has actually misread yet.
 
 ## Promote this
 

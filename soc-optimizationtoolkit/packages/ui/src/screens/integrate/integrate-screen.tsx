@@ -77,6 +77,8 @@ import {
   emptyCapabilitySet,
   fieldValuesFromRecords,
   listDcrInventory,
+  listingCount,
+  listingRows,
   placeholderWarning,
   resolveDestinations,
   canWireSource,
@@ -1275,13 +1277,19 @@ export function IntegrateScreen({
         // it were a fact. dcrInventoryReadNotice consults `dcr.read` and only
         // calls it a zero when the read was verified.
         try {
-          inventory = await listDcrInventory(ports.azure, {
+          const listed = await listDcrInventory(ports.azure, {
             subscriptionId: config.subscriptionId,
             resourceGroup: config.resourceGroup,
           });
+          inventory = [...listingRows(listed)];
           push(
             dcrInventoryReadNotice({
-              count: inventory.length,
+              // DBT-61: `listingCount(..., 0)` is the sanctioned use - the 0
+              // is the assumption written down, and the function it is handed
+              // to consults `dcr.read` before it will call that 0 a zero. It
+              // is the only reader here allowed to turn an empty listing into
+              // a number, which is why the count is minted at its doorstep.
+              count: listingCount(listed, 0),
               resourceGroup: config.resourceGroup,
               capabilities: capabilities ?? emptyCapabilitySet(),
               // Optimistic default, and deliberately NOT the {false, false} the

@@ -18,6 +18,7 @@
     "groom": "node scripts/board-groom.mjs",
     "board:serve": "node scripts/board-serve.mjs",
     "check-board": "node scripts/board.mjs --check",
+    "check-listings": "node scripts/check-listings.mjs",
     "check-board-freshness": "node scripts/board-freshness.mjs"
   },
   "dependencies": {

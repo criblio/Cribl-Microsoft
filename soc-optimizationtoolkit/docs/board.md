@@ -11,7 +11,7 @@ two cannot disagree.
 alternatives. This board holds only what is a unit of work, what state it is
 in, and what it waits on.
 
-**57 in the backlog, 0 in progress, 67 done.**
+**58 in the backlog, 0 in progress, 68 done.**
 
 ## By menu item
 
@@ -23,7 +23,7 @@ operator sees on any screen. Two menus are PLANNED and have no route yet.
 |---|---|---|---|
 | Dataflow | 3 | 0 | 0 |
 | Setup | 1 | 0 | 0 |
-| Sentinel Integration | 12 | 31 | 0 |
+| Sentinel Integration | 13 | 32 | 0 |
 | DCR Automation | 3 | 8 | 0 |
 | Pack Maintenance | 4 | 1 | 0 |
 | Permission Verification | 8 | 0 | 0 |
@@ -31,7 +31,7 @@ operator sees on any screen. Two menus are PLANNED and have no route yet.
 | Windows Event analysis (planned) | 5 | 0 | 0 |
 | Cross-cutting | 8 | 23 | 0 |
 
-Open work totals 57.
+Open work totals 58.
 
 ## Epics and features
 
@@ -116,13 +116,13 @@ ENABLER EPIC: release mechanics. The packaged tarball trails main, and the lab t
 |---|---|---|---|
 | `REL-F1` Release and deployment hygiene | Cross-cutting | 3/5 | REL-2, REL-3, REL-4, REL-5, REL-6 |
 
-### `DBT` Quality and technical debt _(enabler)_ - 65% (40/62)
+### `DBT` Quality and technical debt _(enabler)_ - 64% (41/64)
 
 ENABLER EPIC: verification gaps, copy, diagram fidelity, docs and the board's own tooling
 
 | Feature | Menu | Done | Stories |
 |---|---|---|---|
-| `DBT-F1` Verification gaps | Sentinel Integration | 14/21 | DBT-2, DBT-5*, DBT-6, DBT-7, DBT-36*, DBT-55, DBT-56, DBT-42, DBT-43, DBT-44, DBT-45, DBT-46, DBT-47, DBT-48, DBT-49, DBT-50, DBT-51, DBT-52, DBT-41, DBT-40, DBT-60 |
+| `DBT-F1` Verification gaps | Sentinel Integration | 15/23 | DBT-2, DBT-5*, DBT-6, DBT-7, DBT-36*, DBT-55, DBT-56, DBT-42, DBT-43, DBT-44, DBT-45, DBT-46, DBT-47, DBT-48, DBT-49, DBT-50, DBT-51, DBT-52, DBT-41, DBT-40, DBT-60, DBT-61, DBT-62 |
 | `DBT-F2` Copy and UX | Sentinel Integration | 3/9 | DBT-3, DBT-9, DBT-14, DBT-15, DBT-28, D-10*, DBT-53, DBT-38, DBT-39 |
 | `DBT-F3` Diagram fidelity | Dataflow | 0/3 | DBT-1, DBT-4, DBT-12 |
 | `DBT-F4` Docs and spec grounding | Cross-cutting | 6/10 | DBT-8, DBT-10, DBT-11, DBT-13, DBT-22, DBT-26, DBT-32, DBT-57, DBT-58, DBT-54 |
@@ -158,7 +158,7 @@ _Nothing here._
 
 ---
 
-## Backlog - next (23)
+## Backlog - next (24)
 
 Settled and unblocked, sequenced behind now.
 
@@ -505,6 +505,22 @@ Settled and unblocked, sequenced behind now.
   settled hours ago, so decide it before building - backlog.md section 16 is
   the reasoning it would amend.
 
+- **DBT-62** Route the remaining Cribl listings through Listing<T>
+  `DBT-F1` `enabler` `undecided`
+  [[DBT-61]] converted the four ARM listers, which is where the whole defect
+  class actually landed. The Cribl-side listings - packs, destinations,
+  sources - have the same ambiguity in principle: a token scoped to one worker
+  group lists what it can see, not what exists. NOT URGENT and deliberately
+  not bundled: no defect has been filed against them, the blast radius is a
+  second set of call sites, and doing it speculatively would be the reflex
+  this repo keeps writing cards about. Do it when a Cribl listing actually
+  reads as a zero somewhere, or when touching those call sites for another
+  reason.
+  DECISION (unanswered): Extend Listing<T> to the Cribl-side listings, or
+  leave them?
+    [ ] `wait-for-a-defect` Leave them until one actually misreads - No defect has been filed against a Cribl listing. Every empty-as-zero bug so far came from ARM, where RBAC filtering makes 200-with-nothing routine. Converting on suspicion is the reflex this repo keeps filing cards about - and the type is now there to reach for the moment one does misread.
+    [ ] `convert-now` Convert them now for symmetry - A token scoped to one worker group lists what it can see, so the ambiguity is real in principle. Doing it while the pattern is fresh is cheaper than rediscovering it later - at the cost of a second sweep of call sites for a bug nobody has hit.
+
 ---
 
 ## Backlog - later (34)
@@ -844,7 +860,7 @@ Settled, gated on something above.
 
 ---
 
-## Done (67)
+## Done (68)
 
 Kept briefly so a reader can see what just landed; prune when the list grows.
 
@@ -2591,3 +2607,83 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   anywhere; both modules keep their own private one and the predicate is the
   only public surface, so the cross-module instanceof that caused this cannot
   be written again.
+
+- **DBT-61** Enforce the empty-vs-denied rule instead of remembering it
+  `DBT-F1` `enabler` `settled` `verified: pins`
+  HALF OF EVERY BUG FOUND ON 2026-08-31 WAS ONE HABIT: an unknown reported as
+  a measured fact. An RBAC-filtered empty ARM list read as a real zero
+  ([[HON-2]], [[DBT-43]], [[DBT-44]]), a denied readback reported as 'still
+  provisioning' ([[DBT-41]]), a 403 on the Sentinel check rendered as 'not
+  enabled' and INVITING A WRITE ([[DBT-52]]), a kvstore outage recorded as the
+  table's own failure ([[DBT-49]], [[DBT-55]]). That is not twelve defects; it
+  is one habit with twelve instances. `docs/inventory-standard.md` ALREADY
+  BINDS THIS and was violated in three new places anyway, because it is prose.
+  The precedent is board rule 1: prose-only, broken by the person who had just
+  read it, and it stopped recurring the day `check-board` enforced it. WHY NOW
+  IS THE MOMENT: every known instance is fixed, so a checker calibrated
+  against the current tree starts GREEN and catches regressions. That is the
+  opposite of [[DBT-39]]'s className checker, which reports 36 pre-existing
+  findings and therefore cannot be wired into CI until they are triaged. A
+  gate that starts red never becomes a gate. SHAPE: a check script beside the
+  other apps/cribl-app/scripts/check-*.mjs ones. A file that reaches an ARM
+  listing AND contains a zero-claiming phrase must also consult a capability -
+  `emptyInventoryMessage`, `emptyTableListMessage`, `routeCapability` or
+  `verdictFor`. Coarse on purpose: file-level, no AST. Precision comes from
+  calibrating against a tree that is currently clean, plus a named allowlist
+  for justified exceptions rather than a silent skip. INVESTIGATED 2026-08-31,
+  AND THE PROPOSED SHAPE DOES NOT WORK - recorded because the negative result
+  is the useful part and the next person will otherwise try the same thing. A
+  file-level grep checker was built and calibrated: 19 files reach an ARM
+  lister and it reports 0 findings on the current tree, so it starts green as
+  hoped. It was then run against the ACTUAL PRE-FIX CODE pulled from git, and
+  it MISSED ALL THREE real defects. WHY, and this kills text matching for this
+  class outright: THE ZERO-CLAIM IS COMPUTED, NEVER LITERAL. [[DBT-43]]
+  shipped `Read ${inventory.length} deployed DCR(s)` - the wrong sentence
+  'Read 0 deployed DCR(s)' exists only at runtime, and the source contains a
+  perfectly innocent template. [[DBT-44]] had no string at all: an empty
+  listing set a boolean that later MEANT 'not installed'. A grep can only find
+  a wrong sentence somebody typed, and nobody typed one. A SECOND FLAW,
+  independent of the first: file-level granularity is too coarse.
+  integrate-screen.tsx is 2400 lines and references `capabilities` elsewhere,
+  so the file passed the capability test while the defect sat in one callback.
+  Per-function analysis would need an AST, and oxlint has no custom-rule
+  surface here (see [[FX-4]], which rejected authoring one for the same
+  reason). WHAT WOULD ACTUALLY ENFORCE IT: make the compiler the checker. If a
+  lister returned a discriminated union - measured rows versus an unverified
+  listing - TypeScript would FORCE every caller to narrow before touching the
+  rows, and the empty-as-zero mistake becomes unrepresentable rather than
+  merely discouraged. Blast radius measured and it is small: 9 call sites
+  across listDcrInventory, listWorkspaceTables, listResourceGroups and
+  listSubscriptions, plus 13 internal listAllPages callers. But it is a change
+  to shipped core contracts, so it is a decision rather than a cleanup. DONE
+  2026-08-31, the type route, and the negative result above is why.
+  `Listing<T>` in packages/core/src/domain/inventory-listing/ is either
+  `{kind:'rows', rows:[T,...T[]]}` - non-empty BY TYPE, so a count taken from
+  it can never be 0 - or `{kind:'empty'}`, which carries no count at all. All
+  four ARM listers return it: listDcrInventory, listWorkspaceTables,
+  listSubscriptions, listResourceGroups. VALIDATED THE WAY THE CARD SAID:
+  [[DBT-43]] was reintroduced verbatim - `inventory = await
+  listDcrInventory(...)` then `Read ${inventory.length} deployed DCR(s)` - and
+  tsc rejected it with ONE error, TS2322 at integrate-screen.tsx:1278. The
+  other spelling was caught in passing during the conversion: an inferred
+  const reading `.length` fails as TS2339 'Property length does not exist on
+  type Listing<DcrInventoryEntry>'. Both ways to write the bug are now compile
+  errors, which is the difference between this and docs/inventory-standard.md,
+  a binding rule that was violated three times because prose cannot fail a
+  build. WHAT THE CONVERSION FOUND, and it is the honest yield of the exercise
+  - two live over-claims nobody had filed. The workspace Tables panel turned
+  an empty DCR listing into 'none in scope' on EVERY row, when its own state
+  module already said the rule in words ('`unchecked`, never
+  `none-in-scope`'); it now reads 'not checked'. And three log lines printed
+  bare counts off unverified listings, which is the same wrong answer
+  somewhere nobody reviews; they now carry `listing: rows|empty` beside the
+  number. THE ESCAPE HATCH IS DELIBERATE AND GUARDED: `listingRows()` returns
+  a plain array for the honest cases - a dropdown, a set to union, rows whose
+  emptiness is already owned by emptyInventoryMessage - and each of the six
+  call sites says in a comment which of those it is. `listingRows(x).length`
+  is the one remaining spelling of the bug, and unlike the original it is a
+  single greppable name, so check-listings.mjs finds it. That checker is
+  narrow ON PURPOSE: the earlier general one failed because the zero-claim is
+  computed, and this one only works because the hatch has a name. 9 pins for
+  the type, 9 for the checker, and the checker was mutation-tested against the
+  real tree, not just synthetic strings.

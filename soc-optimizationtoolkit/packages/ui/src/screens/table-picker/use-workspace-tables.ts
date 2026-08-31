@@ -44,6 +44,7 @@ import type {
   WorkspaceTablesTarget,
 } from "@soc/core";
 import { usePorts } from "../../ports-context";
+import { listingRows } from "@soc/core";
 import { emptyTableListMessage } from "./table-picker-state";
 
 /** An honest note about a listing that degraded, with the way to re-attempt. */
@@ -103,7 +104,10 @@ export function useWorkspaceTables({
     setError(null);
     try {
       const found = await listWorkspaceTables(ports.azure, target, ports.logger);
-      setTables(found);
+      // Unwrapping is sanctioned here: this hook says nothing about emptiness
+      // itself - `emptyTableListMessage` below owns that sentence and consults
+      // the capability first (DBT-61, and the module header above).
+      setTables(listingRows(found));
       setLoaded(true);
     } catch (err) {
       // Surfaced verbatim rather than folded into the empty state: a 403 here is

@@ -52,7 +52,13 @@ describe("listSubscriptions", () => {
 
     const subscriptions = await listSubscriptions(azure);
 
-    expect(subscriptions).toEqual([{ subscriptionId: SUB, displayName: "Prod" }]);
+    // DBT-61: asserted as the whole listing, not just its rows - the `kind` is
+    // half the answer now, and a pin that only checked the rows would pass just
+    // as happily against a lister that had quietly stopped distinguishing them.
+    expect(subscriptions).toEqual({
+      kind: "rows",
+      rows: [{ subscriptionId: SUB, displayName: "Prod" }],
+    });
     expect(azure.calls[0]).toMatchObject({
       method: "GET",
       path: "/subscriptions",
@@ -75,7 +81,10 @@ describe("listSubscriptions", () => {
 
     const subscriptions = await listSubscriptions(azure);
 
-    expect(subscriptions).toEqual([{ subscriptionId: "from-id-only", displayName: "" }]);
+    expect(subscriptions).toEqual({
+      kind: "rows",
+      rows: [{ subscriptionId: "from-id-only", displayName: "" }],
+    });
   });
 
   it("throws raw greppable error text on a non-2xx list response", async () => {
@@ -170,7 +179,10 @@ describe("listResourceGroups / listResourceGroupChoices", () => {
 
     const groups = await listResourceGroups(azure, SUB);
 
-    expect(groups).toEqual([{ name: "rg-a", location: "eastus" }]);
+    expect(groups).toEqual({
+      kind: "rows",
+      rows: [{ name: "rg-a", location: "eastus" }],
+    });
     expect(azure.calls[0]).toMatchObject({
       method: "GET",
       path: `/subscriptions/${SUB}/resourcegroups`,
@@ -256,10 +268,13 @@ describe("listAllPages", () => {
 
     const groups = await listResourceGroups(azure, SUB);
 
-    expect(groups).toEqual([
-      { name: "rg-1", location: "eastus" },
-      { name: "rg-2", location: "westus" },
-    ]);
+    expect(groups).toEqual({
+      kind: "rows",
+      rows: [
+        { name: "rg-1", location: "eastus" },
+        { name: "rg-2", location: "westus" },
+      ],
+    });
     expect(azure.calls).toHaveLength(1); // first page via path request
     expect(azure.urlCalls).toEqual([{ method: "GET", url: NEXT }]); // second page via the FULL nextLink URL
   });
@@ -273,7 +288,10 @@ describe("listAllPages", () => {
 
     const groups = await listResourceGroups(withoutRequestUrl(fake), SUB);
 
-    expect(groups).toEqual([{ name: "rg-1", location: "eastus" }]);
+    expect(groups).toEqual({
+      kind: "rows",
+      rows: [{ name: "rg-1", location: "eastus" }],
+    });
     expect(fake.urlCalls).toHaveLength(0);
   });
 
