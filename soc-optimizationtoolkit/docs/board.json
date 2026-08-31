@@ -1980,6 +1980,19 @@
           }
         ]
       }
+    },
+    {
+      "id": "DBT-63",
+      "epic": "DBT",
+      "feature": "DBT-F1",
+      "title": "inventory-standard.md still says the tables screen is pending",
+      "type": "bug",
+      "status": "done",
+      "priority": "now",
+      "settled": "settled",
+      "dependsOn": [],
+      "detail": "Found by the thirteenth architecture audit, check 4. One bullet in the Known instances list of docs/inventory-standard.md - 'Workspace tables. PINNED, screen pending.' - is wrong on THREE counts, and the document is BINDING. (1) The screen is not pending: use-workspace-tables.ts:149 and workspace-tables-panel.tsx:294 both call emptyTableListMessage, which is exactly what the bullet says the picker 'must' do. (2) It says an RBAC-filtered `200 []` 'would still read as an empty workspace' - false since [[DBT-61]] landed, because listWorkspaceTables now returns `{kind:'empty'}` and there is no count to misread. (3) It directs the reader away from `tableCountLabel`, which was DELETED 2026-08-18 with the panel it belonged to; the only two references left in the tree are its own tombstone comment. WHY THIS IS NOT COSMETIC, and why it is a bug rather than a chore. [[DBT-61]] exists because this document was violated three times while being BINDING - the conclusion was that prose cannot fail a build. A binding document carrying a stale instruction is that same failure one level up: it is the thing people are told to trust. Worse, DBT-61 added a section to this very file saying the compiler now prevents exactly what this bullet says still happens, so the file currently contradicts itself within twenty lines. Filed before fixing per board rule 2 even though the fix is one paragraph. FIXED 2026-08-31 in the same audit. The bullet now says DONE, names both calling surfaces, and states that the 200-[] hazard is closed by the type. verified:none is honest - this is prose, and it has no pin. What it can borrow is that the three claims were each checked against the tree before rewriting: the two emptyTableListMessage call sites, the Listing return, and tableCountLabel having only a tombstone left.",
+      "verified": "none"
     }
   ],
   "features": [

@@ -11,7 +11,7 @@ two cannot disagree.
 alternatives. This board holds only what is a unit of work, what state it is
 in, and what it waits on.
 
-**58 in the backlog, 0 in progress, 68 done.**
+**58 in the backlog, 0 in progress, 69 done.**
 
 ## By menu item
 
@@ -23,7 +23,7 @@ operator sees on any screen. Two menus are PLANNED and have no route yet.
 |---|---|---|---|
 | Dataflow | 3 | 0 | 0 |
 | Setup | 1 | 0 | 0 |
-| Sentinel Integration | 13 | 32 | 0 |
+| Sentinel Integration | 13 | 33 | 0 |
 | DCR Automation | 3 | 8 | 0 |
 | Pack Maintenance | 4 | 1 | 0 |
 | Permission Verification | 8 | 0 | 0 |
@@ -116,13 +116,13 @@ ENABLER EPIC: release mechanics. The packaged tarball trails main, and the lab t
 |---|---|---|---|
 | `REL-F1` Release and deployment hygiene | Cross-cutting | 3/5 | REL-2, REL-3, REL-4, REL-5, REL-6 |
 
-### `DBT` Quality and technical debt _(enabler)_ - 64% (41/64)
+### `DBT` Quality and technical debt _(enabler)_ - 65% (42/65)
 
 ENABLER EPIC: verification gaps, copy, diagram fidelity, docs and the board's own tooling
 
 | Feature | Menu | Done | Stories |
 |---|---|---|---|
-| `DBT-F1` Verification gaps | Sentinel Integration | 15/23 | DBT-2, DBT-5*, DBT-6, DBT-7, DBT-36*, DBT-55, DBT-56, DBT-42, DBT-43, DBT-44, DBT-45, DBT-46, DBT-47, DBT-48, DBT-49, DBT-50, DBT-51, DBT-52, DBT-41, DBT-40, DBT-60, DBT-61, DBT-62 |
+| `DBT-F1` Verification gaps | Sentinel Integration | 16/24 | DBT-2, DBT-5*, DBT-6, DBT-7, DBT-36*, DBT-55, DBT-56, DBT-42, DBT-43, DBT-44, DBT-45, DBT-46, DBT-47, DBT-48, DBT-49, DBT-50, DBT-51, DBT-52, DBT-41, DBT-40, DBT-60, DBT-61, DBT-62, DBT-63 |
 | `DBT-F2` Copy and UX | Sentinel Integration | 3/9 | DBT-3, DBT-9, DBT-14, DBT-15, DBT-28, D-10*, DBT-53, DBT-38, DBT-39 |
 | `DBT-F3` Diagram fidelity | Dataflow | 0/3 | DBT-1, DBT-4, DBT-12 |
 | `DBT-F4` Docs and spec grounding | Cross-cutting | 6/10 | DBT-8, DBT-10, DBT-11, DBT-13, DBT-22, DBT-26, DBT-32, DBT-57, DBT-58, DBT-54 |
@@ -860,7 +860,7 @@ Settled, gated on something above.
 
 ---
 
-## Done (68)
+## Done (69)
 
 Kept briefly so a reader can see what just landed; prune when the list grows.
 
@@ -2687,3 +2687,31 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   computed, and this one only works because the hatch has a name. 9 pins for
   the type, 9 for the checker, and the checker was mutation-tested against the
   real tree, not just synthetic strings.
+
+- **DBT-63** inventory-standard.md still says the tables screen is pending
+  `DBT-F1` `bug` `settled` `verified: none`
+  Found by the thirteenth architecture audit, check 4. One bullet in the Known
+  instances list of docs/inventory-standard.md - 'Workspace tables. PINNED,
+  screen pending.' - is wrong on THREE counts, and the document is BINDING.
+  (1) The screen is not pending: use-workspace-tables.ts:149 and
+  workspace-tables-panel.tsx:294 both call emptyTableListMessage, which is
+  exactly what the bullet says the picker 'must' do. (2) It says an
+  RBAC-filtered `200 []` 'would still read as an empty workspace' - false
+  since [[DBT-61]] landed, because listWorkspaceTables now returns
+  `{kind:'empty'}` and there is no count to misread. (3) It directs the reader
+  away from `tableCountLabel`, which was DELETED 2026-08-18 with the panel it
+  belonged to; the only two references left in the tree are its own tombstone
+  comment. WHY THIS IS NOT COSMETIC, and why it is a bug rather than a chore.
+  [[DBT-61]] exists because this document was violated three times while being
+  BINDING - the conclusion was that prose cannot fail a build. A binding
+  document carrying a stale instruction is that same failure one level up: it
+  is the thing people are told to trust. Worse, DBT-61 added a section to this
+  very file saying the compiler now prevents exactly what this bullet says
+  still happens, so the file currently contradicts itself within twenty lines.
+  Filed before fixing per board rule 2 even though the fix is one paragraph.
+  FIXED 2026-08-31 in the same audit. The bullet now says DONE, names both
+  calling surfaces, and states that the 200-[] hazard is closed by the type.
+  verified:none is honest - this is prose, and it has no pin. What it can
+  borrow is that the three claims were each checked against the tree before
+  rewriting: the two emptyTableListMessage call sites, the Listing return, and
+  tableCountLabel having only a tombstone left.

@@ -178,11 +178,17 @@ for Resource Graph.
 - **DCR inventory. DONE 2026-08-10.** "No Data Collection Rules in this resource
   group." stated an unverified emptiness as fact. Now `dcr.read`, and scoped -
   the panel browses resource groups other than the audited one by design.
-- **Workspace tables. PINNED, screen pending.** `listWorkspaceTables` throws on
-  non-2xx, which covers the explicit-denial case, but an RBAC-filtered `200 []`
-  would still read as an empty workspace. `emptyTableListMessage` in
-  `table-picker-state` decides it; the picker screen (backlog item 2) must use
-  it rather than `tableCountLabel`, which only reports a PRE-LOAD state.
+- **Workspace tables. DONE.** `listWorkspaceTables` throws on non-2xx, which
+  covers the explicit denial, and since DBT-61 it returns an EMPTY LISTING for
+  `200 []` - so there is no count for a caller to read as an empty workspace.
+  `emptyTableListMessage` in `table-picker-state` phrases it, and both surfaces
+  now call it: `use-workspace-tables.ts` for the picker and
+  `workspace-tables-panel.tsx` for the DCR Automation Tables tab.
+  (This bullet read "PINNED, screen pending" until 2026-08-31 and was wrong on
+  three counts - the screen had shipped, the `200 []` hazard had been closed by
+  the section above, and it steered readers toward `tableCountLabel`, deleted
+  2026-08-18. Recorded because a BINDING document carrying a stale instruction
+  is the same failure DBT-61 was written about, one level up.)
 - **Workspace Tables panel: every row said "none in scope". DONE 2026-08-31,
   found by DBT-61's conversion, not by review.** An empty DCR listing was
   handed to the row builder, which turned it into a per-row claim that no DCR
