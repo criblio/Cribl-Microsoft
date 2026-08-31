@@ -20,7 +20,6 @@ export {
   isAttemptable,
   isAzureCapability,
   isSetForConnection,
-  unavailableReason,
   verdictFor,
 } from "./capabilities";
 export type {

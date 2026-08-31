@@ -131,9 +131,20 @@ describe("options are the CHOSEN mode's surface only", () => {
 });
 
 describe("derivePickerView - the states", () => {
-  it("IDLE when not enabled - we have not looked, so we blame nothing", () => {
+  it("IDLE when not enabled - and names CRIBL as the missing connection", () => {
+    // DBT-53. The old copy read "Connect Cribl to pull samples from a Lake
+    // dataset or a live source", and the Integrate screen reached it whenever no
+    // AZURE subscription had been committed - so it blamed the one system that
+    // was working, and asked for an action that does not exist inside a
+    // Cribl.Cloud workspace. Restoring that sentence kills this pin.
     const view = at({ groups: null, enabled: false });
     expect(view.status).toBe("idle");
+    expect(view.headline).toContain("Cribl is not reachable");
+    expect(view.headline).not.toMatch(/Connect Cribl/i);
+    // It must not read as a fact about their workspace either - we did not look.
+    expect(view.headline).toContain("that is our connection, not your workspace");
+    // Every dead end still ends with the path that needs no Cribl access - the
+    // wording sample-source-picker.dom.test.tsx pins across all of them.
     expect(view.headline).toContain("Uploading a file works either way");
   });
 

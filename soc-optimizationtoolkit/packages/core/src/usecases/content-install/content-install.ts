@@ -231,6 +231,35 @@ function ruleFailureDetail(res: PortHttpResponse): string {
 // Installed-state detection
 // ---------------------------------------------------------------------------
 
+/**
+ * Which of the three installed-state listings PROVED the connected identity can
+ * see that kind of content, by returning at least one item.
+ *
+ * docs/inventory-standard.md is BINDING here, and this is precisely the trap it
+ * names: an Azure ARM list returns 200 with an EMPTY `value` array when RBAC
+ * filters the caller out. RBAC scopes what a list RETURNS rather than denying
+ * the call, so an identity with no access and one looking at a genuinely empty
+ * workspace receive byte-identical responses - nothing throws, there is no
+ * non-2xx, and there is nothing to catch. An empty page is therefore an
+ * UNKNOWN, not a zero, and "this content is not installed" cannot be derived
+ * from it.
+ *
+ * A NON-empty page needs no permission check to interpret: seeing one item
+ * proves the read, so a MISS within that page is a real absence. That is the
+ * whole reason this is per-listing rather than one flag - the three probes hit
+ * three different providers (SecurityInsights contentPackages,
+ * SecurityInsights alertRules, Microsoft.Insights workbooks) and are refused
+ * independently.
+ */
+export interface ObservedContentListings {
+  /** contentPackages - decides whether "the solution is not installed" is a fact. */
+  solutions: boolean;
+  /** alertRules - likewise for "this rule is not in the workspace yet". */
+  rules: boolean;
+  /** Microsoft.Insights/workbooks - likewise for workbooks. */
+  workbooks: boolean;
+}
+
 /** What the workspace already has (drives the installable partition). */
 export interface InstalledContentState {
   /** True when this solution's Content Hub package reports an installedVersion. */
@@ -249,6 +278,33 @@ export interface InstalledContentState {
    * an actionable Enable action instead of a raw ARM error.
    */
   notOnboarded: boolean;
+  /**
+   * Which listings actually observed content ({@link ObservedContentListings}).
+   *
+   * OPTIONAL, and its ABSENCE means "nothing was proved". A state assembled by
+   * hand - a fixture, an older caller - therefore resolves to unverified,
+   * which is the only safe default: the failure this guards against is a
+   * CONFIDENT ZERO, so the un-recorded case must never read as one. Read it
+   * through {@link absenceIsMeasured} rather than directly, so that rule lives
+   * in one place.
+   */
+  observed?: ObservedContentListings;
+}
+
+/**
+ * Whether "none of this is installed" may be stated as a FACT for one listing.
+ *
+ * The single home of the "not recorded means not verified" rule, so no caller
+ * can arrive at the confident zero by forgetting to check. Callers that get
+ * `false` owe the operator a hedge, NOT a hidden control: the capability
+ * model's rule 3 holds - a denied or unmeasured verdict annotates the attempt
+ * and never removes it.
+ */
+export function absenceIsMeasured(
+  state: InstalledContentState,
+  listing: keyof ObservedContentListings,
+): boolean {
+  return state.observed?.[listing] === true;
 }
 
 /**
@@ -278,6 +334,15 @@ export function isNotOnboardedError(body: unknown): boolean {
  * failure degrades that dimension to empty + a note (so the UI offers
  * install rather than hiding everything). `solutionContentId` is the Content
  * Hub package contentId (from the catalog); omit to skip the solution probe.
+ *
+ * EMPTY IS NOT A ZERO. Every probe also records whether it SAW anything, in
+ * {@link ObservedContentListings} - because an RBAC-filtered list arrives as a
+ * 200 with an empty array and is indistinguishable from a genuinely empty
+ * workspace (docs/inventory-standard.md, BINDING). Until 2026-08-31 the empty
+ * case was reported as a measured "not installed" and the UI put an Install
+ * button on the end of it, inviting an operator to install content that may
+ * already be there and merely invisible to them. The listings are unchanged;
+ * what changed is that the caller can now tell the two apart.
  */
 export async function installedContentState(
   azure: AzureManagement,
@@ -288,6 +353,14 @@ export async function installedContentState(
   const scope = workspaceInsightsScope(ws);
   const notes: string[] = [];
   let notOnboarded = false;
+  // Every one of these starts FALSE, which is the honest default: a probe that
+  // is skipped, throws, or returns an empty page has proved nothing. Only
+  // seeing an item flips it.
+  const observed: ObservedContentListings = {
+    solutions: false,
+    rules: false,
+    workbooks: false,
+  };
 
   let solutionInstalled = false;
   let installedSolutionVersion: string | null = null;
@@ -302,6 +375,9 @@ export async function installedContentState(
         },
         "list installed content packages",
       );
+      // One package - ANY package - proves the read. A miss inside a page we
+      // could see is a real absence; a miss inside an empty page is not.
+      observed.solutions = packages.length > 0;
       const match = packages.find(
         (p) => prop(prop(p, "properties"), "contentId") === solutionContentId,
       );
@@ -327,6 +403,7 @@ export async function installedContentState(
       },
       "list alert rules",
     );
+    observed.rules = rules.length > 0;
     for (const r of rules) {
       const name = prop(prop(r, "properties"), "displayName");
       if (typeof name === "string") installedRuleNames.add(name.toLowerCase());
@@ -353,6 +430,7 @@ export async function installedContentState(
       },
       "list workbooks",
     );
+    observed.workbooks = workbooks.length > 0;
     for (const w of workbooks) {
       const name = prop(prop(w, "properties"), "displayName");
       if (typeof name === "string") installedWorkbookNames.add(name.toLowerCase());
@@ -368,6 +446,13 @@ export async function installedContentState(
     rules: installedRuleNames.size,
     workbooks: installedWorkbookNames.size,
     notOnboarded,
+    // Logged alongside the counts because a zero count means two different
+    // things depending on these, and a log line that shows only the count
+    // cannot be read back later to tell which one happened. Flattened to
+    // primitives: LogContextValue admits no objects, by design.
+    observedSolutions: observed.solutions,
+    observedRules: observed.rules,
+    observedWorkbooks: observed.workbooks,
   });
 
   return {
@@ -377,6 +462,7 @@ export async function installedContentState(
     installedWorkbookNames,
     notes,
     notOnboarded,
+    observed,
   };
 }
 

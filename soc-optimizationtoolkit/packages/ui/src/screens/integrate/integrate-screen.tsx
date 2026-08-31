@@ -132,6 +132,10 @@ import type {
 import type { ReactNode } from "react";
 import type { LogTypeVolume } from "@soc/core";
 import { usePorts } from "../../ports-context";
+import {
+  AUDITED_SCOPE,
+  emptyInventoryMessage,
+} from "../../capabilities/empty-inventory";
 import { NumberedSection } from "../../components/numbered-section";
 import {
   deriveLogTypeRecommendation,
@@ -200,6 +204,65 @@ export function exportArchiveName(workspaceName: string, jobId: string): string 
     return safe === "" ? "export" : safe;
   };
   return `sentinel-export-${part(workspaceName)}-${part(jobId)}.tgz`;
+}
+
+/**
+ * What the DCR listing behind a pack build MEANS, said in one line (DBT-43).
+ *
+ * The empty branch is the whole point, and it is the same trap
+ * docs/inventory-standard.md (BINDING) is written against: ARM list operations
+ * answer 200 with an empty `value` array when RBAC filters the caller out, so
+ * `listDcrInventory` throwing - which it does, correctly, on non-2xx - covers
+ * only the DENIED-loudly case. An RBAC-filtered zero arrives as a clean success.
+ *
+ * THE COST HERE IS WORSE THAN A WRONG SENTENCE. This listing feeds
+ * resolveDestinations, which answers "no Data Collection Rule in this resource
+ * group routes it" for every table it cannot match; the build then bakes
+ * `dcr-00000000000000000000000000000000` and `UPDATE-DCE-ENDPOINT` into
+ * outputs.yml and ships a pack that installs cleanly and sends nowhere - the
+ * exact 2026-08-11 user report destination-resolution.ts exists to end, one
+ * layer up. "Read 0 deployed DCR(s)" was the log line that made that look like
+ * a fact about Azure.
+ *
+ * IT ANNOTATES AND NEVER BLOCKS, per rule 3 of the capability model and the
+ * standard's own "do not gate the load behind the audit": `unknown` is the
+ * normal state for a healthy connection nobody has audited, and refusing to
+ * build there would be worse than building and saying what the silence means.
+ * The build already continues through a FAILED listing for the same reason.
+ *
+ * Pure and exported so it can be pinned - the build callback it is called from
+ * needs an approved gap analysis to reach, which no mount-level test has.
+ * exportArchiveName above sets the precedent for a pure helper living here.
+ */
+export function dcrInventoryReadNotice(input: {
+  count: number;
+  resourceGroup: string;
+  capabilities: CapabilitySet;
+  context: CapabilityContext;
+}): string {
+  const { count, resourceGroup, capabilities, context } = input;
+  if (count > 0) {
+    // Permission is self-evident from the rows themselves.
+    return `Read ${count} deployed DCR(s) from ${resourceGroup} to resolve destination values.`;
+  }
+  const empty = emptyInventoryMessage({
+    noun: "deployed Data Collection Rules",
+    capability: "dcr.read",
+    capabilities,
+    context,
+    // The build reads the COMMITTED resource group - the same scope
+    // runAzurePreflight measures. Unlike the DCR inventory panel, which browses
+    // other groups by design, there is nothing here to browse with.
+    scope: AUDITED_SCOPE,
+  });
+  const consequence =
+    "Tables not deployed in this session will ship PLACEHOLDER destination values";
+  return empty.verified
+    ? `${empty.text} in ${resourceGroup}. ${consequence} - deploy them from the ` +
+        "Deploy section, or point the app at the resource group that has them."
+    : `${empty.text}. The listing of ${resourceGroup} came back empty, which is ` +
+        `NOT confirmation that it is. ${consequence}, and the rules may already ` +
+        "exist where this identity cannot see them.";
 }
 
 /** Plain-KV key persisting the selected solution name across reloads. */
@@ -888,10 +951,25 @@ export function IntegrateScreen({
     return byLogType;
   }, [contentItems, gapReports, enrichments]);
   // Where the operator could take samples FROM (Phase 3). Discovery is one fact
-  // about the workspace, so it is read once behind a hook with no surface, and
-  // gated on scopeCommitted only because there is no Cribl address before that
-  // - not because the answer is expected to be uninteresting.
-  const sampleSources = useSampleSources({ enabled: scopeCommitted });
+  // about the workspace, so it is read once behind a hook with no surface.
+  //
+  // GATED ON CRIBL, NOT ON AZURE (DBT-53). This was `enabled: scopeCommitted`,
+  // justified in a comment claiming "there is no Cribl address before that" -
+  // which was false: scopeCommitted is three non-empty AZURE strings
+  // (subscription, resource group, workspace), and the discovery behind this
+  // hook is 100% Cribl-side (worker groups, /system/inputs, Lake datasets).
+  // PlatformCriblClient is constructed unconditionally, and the worker-group
+  // listing higher up this same screen runs with no gate at all. So an operator
+  // who had not yet committed an Azure scope saw a picker stuck on "idle" and
+  // neither CapturePanel nor LakePanel ever mounted - the whole sample
+  // acquisition path, closed by an unrelated fact.
+  //
+  // The shell's `criblReachable` is the fact this actually needs. Absent, we
+  // LOOK: an unsupplied fact is unknown, and docs/inventory-standard.md is
+  // explicit that refusing to look is worse than looking and being honest about
+  // what comes back - a failed listing already reports itself as a failure.
+  const criblReachable = capabilityContext?.criblReachable ?? true;
+  const sampleSources = useSampleSources({ enabled: criblReachable });
   const [sampleSourceChoice, setSampleSourceChoice] = useState("");
   // DERIVED FROM THE CHOICE, never stored beside it (2026-08-20 audit). Holding
   // the entry in its own state gave one question two answers, and only one of
@@ -1162,14 +1240,32 @@ export function IntegrateScreen({
         // downgrade every table to placeholders and blame the environment.
         // listDcrInventory throws; the reason is surfaced and the build goes on
         // with placeholders that are now explicitly reported below.
+        //
+        // DBT-43: a THROW is only half of it. An RBAC-filtered listing succeeds
+        // with an empty array, so the success path had the same defect this
+        // catch block was written for - and said "Read 0 deployed DCR(s)" as if
+        // it were a fact. dcrInventoryReadNotice consults `dcr.read` and only
+        // calls it a zero when the read was verified.
         try {
           inventory = await listDcrInventory(ports.azure, {
             subscriptionId: config.subscriptionId,
             resourceGroup: config.resourceGroup,
           });
           push(
-            `Read ${inventory.length} deployed DCR(s) from ${config.resourceGroup} ` +
-              "to resolve destination values.",
+            dcrInventoryReadNotice({
+              count: inventory.length,
+              resourceGroup: config.resourceGroup,
+              capabilities: capabilities ?? emptyCapabilitySet(),
+              // Optimistic default, and deliberately NOT the {false, false} the
+              // workspace-table listing above uses: the request we are
+              // reporting on just SUCCEEDED, so a connection is self-evident
+              // and "no Azure connection" would be its own wrong answer. Only
+              // the permission is still open, which is `unknown` - the hedge.
+              context: capabilityContext ?? {
+                azureIdentityPresent: true,
+                criblReachable: true,
+              },
+            }),
           );
         } catch (err) {
           push(
@@ -1362,6 +1458,10 @@ export function IntegrateScreen({
     samples,
     config,
     ingestionClientId,
+    // DBT-43: the DCR listing's empty result is only a zero once `dcr.read` is
+    // verified, so the verdicts the build reports against are an input to it.
+    capabilities,
+    capabilityContext,
   ]);
 
   // ---- Derived section states, readiness pills, deploy gate -------------
@@ -1709,7 +1809,10 @@ export function IntegrateScreen({
         notes={sampleSources.notes}
         loadingGroups={sampleSources.loadingGroups}
         loadingSources={sampleSources.loadingSources}
-        enabled={scopeCommitted}
+        // The SAME fact the hook is gated on (DBT-53) - a picker rendering
+        // "idle" while the hook was discovering, or the reverse, would describe
+        // a state the screen is not in.
+        enabled={criblReachable}
         value={sampleSourceChoice}
         onSelectMode={(next) => {
           // A different mode reads a different surface, so the previous pick is

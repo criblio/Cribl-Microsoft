@@ -5274,7 +5274,17 @@ details[open] > summary::before {
   font-size: 11px;
   color: var(--text-faint);
 }
-.identity-required {
+/* The two states of ONE identity row (identity-block.tsx). Both stack a row,
+   a hint and the candidate chips in a column; only the framing differs, which
+   is why they share a rule rather than one of them being deleted - a satisfied
+   field is not "required", and naming it so is how the next reader misreads it.
+
+   .identity-row-editable was DEFINED here for DBT-39: it had been rendered
+   since the always-editable change (2026-08-12) and matched nothing, so the
+   satisfied state - the common one - was the only one losing its column
+   layout, while the missing state looked right. */
+.identity-required,
+.identity-row-editable {
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -5457,6 +5467,43 @@ details[open] > summary::before {
 .dcr-col-unchanged {
   border-color: #2e9e5b;
   background: rgba(46, 158, 91, 0.14);
+}
+
+/* The add-a-column control in the DCR update preview (DBT-38). `.field input`
+   and `.field select` (line 358) are DESCENDANT selectors, and the only global
+   rule over a control is the `*` reset - so an input or select that is NOT
+   wrapped in a <label className="field"> gets no --border, no --surface-raised,
+   no --border-focus and no dark-theme token at all. It renders as raw USER
+   AGENT chrome in the middle of a styled card: the browser's own background,
+   border, corner radius, form font and focus ring instead of the app's.
+
+   NOT "a white box on the dark surface" - an earlier draft of this comment
+   said that, and it is wrong (review, 2026-08-31). Line 129 sets
+   `color-scheme: dark` on [data-theme='dark'], which inherits to native
+   controls, so the unstyled control is DARK too. That is what made this
+   survive: it looks close enough to belong, and only the wrong radius, font
+   and focus ring give it away.
+
+   Scoped to its own container rather than to `.panel-controls`, which is the
+   generic controls row and also holds a file input and several .field-wrapped
+   controls that already have these tokens. Same shape as `.enrich-add input`,
+   which exists for this reason and solves it this way. */
+.dcr-add-column input,
+.dcr-add-column select {
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 20px;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: var(--surface-raised);
+  color: var(--text);
+}
+
+.dcr-add-column input:focus,
+.dcr-add-column select:focus {
+  outline: none;
+  border-color: var(--border-focus);
 }
 
 /* Diagram node info popovers (user feature 2026-07-28): the "i" button and

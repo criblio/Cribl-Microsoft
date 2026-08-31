@@ -652,9 +652,13 @@ export function DcrInventoryPanel(props: DcrInventoryPanelProps = {}) {
               ))}
             </tbody>
           </table>
+          {/* DBT-39: the card below also carried `pack-card` and
+              `pack-card-head`, which matched nothing in styles.css. The card
+              and its head are entirely the .mapping-review-card pair, which is
+              why nobody noticed the other two names were inert. */}
           {preview !== null && (
-            <div className="pack-card mapping-review-card">
-              <div className="pack-card-head mapping-review-card-head">
+            <div className="mapping-review-card">
+              <div className="mapping-review-card-head">
                 <span className="field-label">
                   {preview.dcrName} - update preview ({preview.table})
                 </span>
@@ -693,7 +697,7 @@ export function DcrInventoryPanel(props: DcrInventoryPanelProps = {}) {
                 </pre>
               )}
               {busy && progress !== "" && (
-                <p className="panel-desc dcr-progress-line">{progress}</p>
+                <p className="panel-desc">{progress}</p>
               )}
               {error !== "" && <pre className="result">{error}</pre>}
               {notice !== "" && <p className="panel-desc">{notice}</p>}
@@ -705,7 +709,12 @@ export function DcrInventoryPanel(props: DcrInventoryPanelProps = {}) {
                 const nativeTable = !preview.table.endsWith("_CL");
                 return (
                   <>
-                    <div className="panel-controls">
+                    {/* DBT-38: the input and select below are NOT wrapped in a
+                        <label className="field">, and `.field input` /
+                        `.field select` are descendant selectors, so without a
+                        container of their own they render as raw browser
+                        chrome - a white box on the dark card. */}
+                    <div className="panel-controls dcr-add-column">
                       <input
                         aria-label="New column name"
                         placeholder="New field name"

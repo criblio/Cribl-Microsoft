@@ -8,9 +8,18 @@
  *     Analytic-Rules directory (the three dir-name variants, ANALYTIC_RULE_DIR_
  *     NAMES), read each YAML, parse it with the PINNED regex extraction, project
  *     to ContentItem. Replaces the legacy fs-mirror listAnalyticRules.
- *   - WORKBOOKS via the EXISTING AzureManagement port (NO new external surface):
- *     enumerate Microsoft.Insights/workbooks in the workspace's subscription,
- *     defensively mine the buried serializedData KQL, project to ContentItem.
+ *   - WORKBOOKS via the SAME SentinelContent port: list the solution's Workbooks
+ *     directory, read each .json template (whose body IS the workbook document),
+ *     defensively mine the buried KQL, project to ContentItem.
+ *
+ * BOTH SOURCES ARE THE SOLUTION REPO, and that is a decision rather than an
+ * accident (user direction 2026-07-12). An ARM acquirer that enumerated the
+ * SUBSCRIPTION's deployed workbooks was built here and DELETED 2026-08-31
+ * (DBT-57) without ever having been called: a shared subscription carries
+ * everyone's dashboards - a live report 2026-07-09 had FortiGate and Cisco
+ * dashboards polluting a Zscaler review - and deployed copies drift from the
+ * repo templates. Coverage describes the SOLUTION, so the repo is the source of
+ * record for workbooks exactly as it already was for rules.
  *
  * Both yield the SAME ContentItem shape, so a caller can analyze rules alone,
  * workbooks alone, or both together through analyzeContentCoverage. This usecase
@@ -21,9 +30,7 @@
  */
 
 import type { SentinelContent } from "../../ports/sentinel-content";
-import type { AzureManagement } from "../../ports/azure-management";
 import type { Logger } from "../../ports/logger";
-import { asString } from "../arm-http";
 import { ANALYTIC_RULE_DIR_NAMES } from "../../domain/sentinel-content/discovery";
 import {
   analyticRuleToContentItem,
@@ -32,7 +39,6 @@ import {
   workbookToContentItem,
 } from "../../domain/coverage-analysis/index";
 import type { ContentItem } from "../../domain/coverage-analysis/index";
-import { listAllPages } from "../azure-discovery/index";
 
 // ---------------------------------------------------------------------------
 // Alert-rule acquisition (SentinelContent port)
@@ -163,76 +169,23 @@ export async function acquireSolutionWorkbooks(
   return [];
 }
 
-// ---------------------------------------------------------------------------
-// Workbook acquisition (AzureManagement port - existing ARM surface)
-// ---------------------------------------------------------------------------
-
-/** ARM api-version for Microsoft.Insights/workbooks list + get. */
-export const WORKBOOKS_API_VERSION = "2023-06-01";
-
-/** Inputs for {@link acquireWorkbooks}. */
-export interface AcquireWorkbooksInput {
-  /** Subscription id whose Sentinel-category workbooks to enumerate. */
-  subscriptionId: string;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-/**
- * Enumerate the subscription's Sentinel workbooks via ARM
- * (Microsoft.Insights/workbooks, `category=sentinel`, `canFetchContent=true` so
- * the buried serializedData is included in the list) and project each to a
- * {@link ContentItem} whose KQL was defensively mined. A workbook whose
- * serializedData is missing or unreadable still yields an item (with 1
- * unparseable step counted), so nothing is silently dropped.
- *
- * Pagination follows ARM `nextLink` through the shared {@link listAllPages}.
- */
-export async function acquireWorkbooks(
-  azure: AzureManagement,
-  input: AcquireWorkbooksInput,
-  logger?: Logger,
-): Promise<ContentItem[]> {
-  const raw = await listAllPages(
-    azure,
-    {
-      method: "GET",
-      path: `/subscriptions/${input.subscriptionId}/providers/Microsoft.Insights/workbooks`,
-      apiVersion: WORKBOOKS_API_VERSION,
-      query: { category: "sentinel", canFetchContent: "true" },
-    },
-    "list workbooks",
-  );
-
-  const items: ContentItem[] = [];
-  for (const entry of raw) {
-    if (!isRecord(entry)) continue;
-    const id = asString(entry["id"]) || asString(entry["name"]);
-    const properties = isRecord(entry["properties"])
-      ? entry["properties"]
-      : undefined;
-    const displayName = properties
-      ? asString(properties["displayName"])
-      : "";
-    const name = displayName || asString(entry["name"]) || id;
-    const serialized = properties ? properties["serializedData"] : undefined;
-
-    // Defensive: a workbook without a serializedData string still becomes an
-    // item, counting the whole document as one unparseable unit (surface, not
-    // drop) - the same contract extractWorkbookQueries applies to bad JSON.
-    const extraction =
-      typeof serialized === "string"
-        ? extractWorkbookQueries(serialized)
-        : { queries: [], unparseableCount: 1 };
-
-    items.push(workbookToContentItem(id, name, extraction));
-  }
-
-  logger?.info("coverage-analysis: acquired workbooks", {
-    subscription: input.subscriptionId,
-    count: items.length,
-  });
-  return items;
-}
+// The ARM workbook acquirer (`acquireWorkbooks`, `AcquireWorkbooksInput`,
+// `WORKBOOKS_API_VERSION`) stood here until 2026-08-31 and was DELETED by
+// DBT-57. It enumerated Microsoft.Insights/workbooks across the subscription -
+// the behaviour the 2026-07-12 direction recorded above reversed - and it had
+// never had a caller: rule-coverage-section has always used
+// `acquireSolutionWorkbooks`. Its section header and docstring nonetheless
+// described subscription enumeration as a shipped capability, which is why the
+// dead code read as intentional rather than as a leftover.
+//
+// Nothing else in THIS FILE touches AzureManagement, so the port,
+// `listAllPages` and `asString` imports went with it - coverage acquisition is
+// now a SentinelContent-only usecase, which is the honest shape of a
+// repo-sourced analysis.
+//
+// NOT the toolkit's last use of the ARM workbooks surface, and an earlier
+// draft of this comment said it was (review, 2026-08-31). `content-install.ts`
+// both LISTS `/providers/Microsoft.Insights/workbooks` and PUTs to it, and did
+// so before any of this work. That claim mattered because it invites the next
+// reader to tidy away "the now-unused ARM workbooks adapter" and break content
+// install; `grep -rn "Microsoft.Insights/workbooks"` settles it in one call.

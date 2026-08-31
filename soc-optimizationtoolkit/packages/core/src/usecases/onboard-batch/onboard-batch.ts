@@ -626,10 +626,17 @@ async function collectTableTemplates(args: {
  *
  * THE LIMIT OF THAT, stated because the guarantee reads stronger than it is:
  * a store failure raised inside the CHILD `onboardTable` does not reach here
- * as a store failure. The child catches everything, records it on its own job
- * record and returns status "failed", so the batch sees an ordinary failed
- * table and attributes it that way. Closing that needs the same tagging inside
- * onboard-table; it is carded, not fixed here.
+ * as a store failure - it is recorded as an ordinary failed table.
+ *
+ * The MECHANISM changed with DBT-55 and this paragraph used to describe the
+ * old one (review, 2026-08-31). The child no longer swallows store failures:
+ * it re-raises them as its own `JobStoreFailure`. But the per-table catch
+ * below tests `error instanceof JobStoreFailure` against THIS module's class,
+ * and a cross-module `instanceof` never matches, so the outcome is unchanged -
+ * the batch still attributes it to the table, now carrying a "job store update
+ * failed:" prefix. Consuming the child's signal properly is the open half of
+ * DBT-55; until it is wired, this limit stands for a different reason than the
+ * one originally written here.
  */
 export async function onboardBatch(
   ports: OnboardBatchPorts,

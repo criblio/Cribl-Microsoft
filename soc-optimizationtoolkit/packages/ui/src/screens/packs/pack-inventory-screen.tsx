@@ -368,8 +368,16 @@ export function PackInventoryScreen({ refreshToken = 0 }: PackInventoryScreenPro
     );
   }
 
+  // DBT-39. Every `pack-*` wrapper class in this screen matched NOTHING in
+  // styles.css - pack-inventory, pack-storage, pack-card, pack-card-head,
+  // pack-name, pack-badge and pack-maintenance, seven of them, all inert since
+  // the screen was written. They are gone rather than defined: each one either
+  // sits beside a sibling that does the whole job (discovery-result,
+  // mapping-review-card, field-label, gap-badge) or wraps children that carry
+  // their own styling, so defining them would be inventing layout to justify a
+  // name.
   return (
-    <div className="pack-inventory discovery-result">
+    <div className="discovery-result">
       <div className="panel-controls">
         <button className="run-button" onClick={() => void load()} disabled={busy}>
           Refresh
@@ -392,7 +400,7 @@ export function PackInventoryScreen({ refreshToken = 0 }: PackInventoryScreenPro
       {notice !== "" && <p className="panel-desc">{notice}</p>}
 
       {storage !== null && storage.totalPacks > 0 && (
-        <div className="pack-storage">
+        <div>
           <p className="panel-desc">
             {storage.totalPacks} build{storage.totalPacks === 1 ? "" : "s"} across{" "}
             {storage.distinctNames} pack{storage.distinctNames === 1 ? "" : "s"},{" "}
@@ -418,12 +426,12 @@ export function PackInventoryScreen({ refreshToken = 0 }: PackInventoryScreenPro
       {rows.map((row) => {
         const badge = deriveDeployedBadge(row);
         return (
-          <div className="pack-card mapping-review-card" key={row.id}>
-            <div className="pack-card-head mapping-review-card-head">
-              <span className="pack-name field-label">
+          <div className="mapping-review-card" key={row.id}>
+            <div className="mapping-review-card-head">
+              <span className="field-label">
                 {row.displayName} v{row.version}
               </span>
-              <span className={`pack-badge gap-badge gap-badge-${badge.tone}`}>
+              <span className={`gap-badge gap-badge-${badge.tone}`}>
                 {badge.label}
               </span>
             </div>
@@ -435,7 +443,7 @@ export function PackInventoryScreen({ refreshToken = 0 }: PackInventoryScreenPro
                 : "regenerated on download"}
             </p>
             {action?.id === row.id && (
-              <p className="panel-desc dcr-progress-line">{action.line}</p>
+              <p className="panel-desc">{action.line}</p>
             )}
             <div className="panel-controls">
               <button
@@ -478,7 +486,7 @@ export function PackInventoryScreen({ refreshToken = 0 }: PackInventoryScreenPro
                 if (pack === undefined) return null;
                 const mrows = maintenanceRows(pack.definition);
                 return (
-                  <div className="pack-maintenance">
+                  <div>
                     <p className="field-hint">
                       Reconstructed from the stored build definition. Edit a
                       row's action or destination, then rebuild - the next

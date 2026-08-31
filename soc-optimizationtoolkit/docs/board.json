@@ -1538,12 +1538,12 @@
       "feature": "DBT-F1",
       "title": "A store outage inside onboardTable is still blamed on the table",
       "type": "bug",
-      "status": "in-progress",
+      "status": "done",
       "priority": "next",
-      "priorityWhy": "One level down from DBT-49, which is fixed, so the common path already attributes store outages honestly. It needs a JobStore outage to bite, and both docblocks now state the remaining limit rather than asserting the guarantee.",
       "settled": "settled",
       "dependsOn": [],
-      "detail": "FOUND 2026-08-31 while fixing [[DBT-49]], disclosed by the fixer and confirmed by its reviewer - the same defect one level down. DBT-49 stopped the BATCH blaming a table for a kvstore outage, but `onboard-table.ts:1023` catches everything, writes `jobs.update(job.id, {status:\"failed\", error: message})` and returns status \"failed\", so a store blip inside a CHILD arrives at `onboard-batch.ts:1247` as an ordinary failed table and is recorded as that table's failure, carrying the store's error text. The operator's next action - retry that table - is the wrong one. Fix is the same shape DBT-49 used: tag the store failure inside onboard-table so the caller can tell it apart. The onboard-batch docblock and its per-table catch now state this limit explicitly rather than asserting the guarantee unconditionally, so the code is honest about it while it is open."
+      "detail": "FOUND 2026-08-31 while fixing [[DBT-49]], disclosed by the fixer and confirmed by its reviewer - the same defect one level down. DBT-49 stopped the BATCH blaming a table for a kvstore outage, but `onboard-table.ts:1023` catches everything, writes `jobs.update(job.id, {status:\"failed\", error: message})` and returns status \"failed\", so a store blip inside a CHILD arrives at `onboard-batch.ts:1247` as an ordinary failed table and is recorded as that table's failure, carrying the store's error text. The operator's next action - retry that table - is the wrong one. Fix is the same shape DBT-49 used: tag the store failure inside onboard-table so the caller can tell it apart. The onboard-batch docblock and its per-table catch now state this limit explicitly rather than asserting the guarantee unconditionally, so the code is honest about it while it is open. FIXED 2026-08-31 in onboard-table: store failures are re-raised as JobStoreFailure instead of being recorded as the table failing. THE CONSUMER HALF IS STILL OPEN and is [[DBT-60]] - onboard-batch tests instanceof against ITS OWN class, and a cross-module instanceof never matches, so the batch still records an ordinary failed table (now with a job-store-update-failed prefix). Both docblocks say so rather than asserting the guarantee.",
+      "verified": "pins"
     },
     {
       "id": "DBT-56",
@@ -1563,12 +1563,12 @@
       "feature": "DBT-F4",
       "title": "The dead honesty mechanisms the inventory standard counts on",
       "type": "bug",
-      "status": "in-progress",
+      "status": "done",
       "priority": "next",
-      "priorityWhy": "Dead code and stale docs, not a runtime defect - no operator action reaches any of it. It also needs a per-item wire-or-delete decision, which is thinking rather than typing, and rushing that is how the dead code got there.",
       "settled": "settled",
       "dependsOn": [],
-      "detail": "SPLIT OUT OF [[DBT-54]] 2026-08-31: its reviewer found that the card carried FIVE claims, the fix answered four, and the unanswered one is the one the card itself calls most important - so closing DBT-54 on that fix would have lost it silently. (1) `capabilities.ts:192` `unavailableReason` and the `unreachable` branch of `empty-inventory.ts:106-111` are DEAD at every call site - confirmed by grep: only the declaration, the barrel re-export and their own tests. The second is the sentence `docs/inventory-standard.md` credits as the honest no-Azure degrade, and NO RUNNING CONFIGURATION CAN PRODUCE IT. A documented honesty mechanism that cannot fire is worse than none, because it is being counted on. (2) `coverage-analysis.ts:193-238` `acquireWorkbooks` likewise has zero production callers, while its section header still reads \"Workbook acquisition (AzureManagement port - existing ARM surface)\" and its docstring still describes enumerating the subscription's workbooks - so the product now tells the operator that read never happens while core still documents and tests it as shipped. (3) `docs/porting-plan.md:322-324` (Unit 23) still specifies that ARM enumeration as the scope, which is why the dead function looks intentional to the next reader. DECIDE PER ITEM whether to wire it or delete it; deleting is right wherever the behaviour was deliberately reversed, and the doc has to move with it either way."
+      "detail": "SPLIT OUT OF [[DBT-54]] 2026-08-31: its reviewer found that the card carried FIVE claims, the fix answered four, and the unanswered one is the one the card itself calls most important - so closing DBT-54 on that fix would have lost it silently. (1) `capabilities.ts:192` `unavailableReason` and the `unreachable` branch of `empty-inventory.ts:106-111` are DEAD at every call site - confirmed by grep: only the declaration, the barrel re-export and their own tests. The second is the sentence `docs/inventory-standard.md` credits as the honest no-Azure degrade, and NO RUNNING CONFIGURATION CAN PRODUCE IT. A documented honesty mechanism that cannot fire is worse than none, because it is being counted on. (2) `coverage-analysis.ts:193-238` `acquireWorkbooks` likewise has zero production callers, while its section header still reads \"Workbook acquisition (AzureManagement port - existing ARM surface)\" and its docstring still describes enumerating the subscription's workbooks - so the product now tells the operator that read never happens while core still documents and tests it as shipped. (3) `docs/porting-plan.md:322-324` (Unit 23) still specifies that ARM enumeration as the scope, which is why the dead function looks intentional to the next reader. DECIDE PER ITEM whether to wire it or delete it; deleting is right wherever the behaviour was deliberately reversed, and the doc has to move with it either way.",
+      "verified": "pins"
     },
     {
       "id": "DBT-58",
@@ -1615,11 +1615,12 @@
       "feature": "DBT-F1",
       "title": "The pack build reads an RBAC-filtered empty DCR list as a real zero and ships placeholder ids",
       "type": "bug",
-      "status": "in-progress",
+      "status": "done",
       "priority": "now",
       "settled": "settled",
       "dependsOn": [],
-      "detail": "FOUND 2026-08-31 by the offline-capability audit. SAME FAMILY AS [[HON-2]], which fixed this shape for the workspace list: ARM answers 200 with an empty array when RBAC filters the caller out, so an empty listing is only a zero once the read is verified. `integrate-screen.tsx:1159-1185` consults NO capability before its DCR inventory read, logs \"Read 0 deployed DCR(s)\", and `destination-resolution.ts:128-135` then asserts as fact that no DCR routes the table - so the BUILT PACK SHIPS PLACEHOLDER DCR IDS. That is not a cosmetic wrong answer: the operator installs a pack whose destinations point at nothing. The comment at `:1161-1164` guards only the throw path, not the empty-list path. UNCONFIRMED on one point, deliberately: the audit leans on the repo's own binding standard (`docs/inventory-standard.md:21-30`) for the 200-empty-under-RBAC behaviour and did NOT verify it live against Azure for this particular endpoint. Verify that before deciding the fix is a capability gate rather than a probe."
+      "detail": "FOUND 2026-08-31 by the offline-capability audit. SAME FAMILY AS [[HON-2]], which fixed this shape for the workspace list: ARM answers 200 with an empty array when RBAC filters the caller out, so an empty listing is only a zero once the read is verified. `integrate-screen.tsx:1159-1185` consults NO capability before its DCR inventory read, logs \"Read 0 deployed DCR(s)\", and `destination-resolution.ts:128-135` then asserts as fact that no DCR routes the table - so the BUILT PACK SHIPS PLACEHOLDER DCR IDS. That is not a cosmetic wrong answer: the operator installs a pack whose destinations point at nothing. The comment at `:1161-1164` guards only the throw path, not the empty-list path. UNCONFIRMED on one point, deliberately: the audit leans on the repo's own binding standard (`docs/inventory-standard.md:21-30`) for the 200-empty-under-RBAC behaviour and did NOT verify it live against Azure for this particular endpoint. Verify that before deciding the fix is a capability gate rather than a probe.",
+      "verified": "pins"
     },
     {
       "id": "DBT-44",
@@ -1627,11 +1628,12 @@
       "feature": "DBT-F1",
       "title": "Content install reads an RBAC-filtered empty list as 'not installed', and a pin encodes it",
       "type": "bug",
-      "status": "in-progress",
+      "status": "done",
       "priority": "now",
       "settled": "settled",
       "dependsOn": [],
-      "detail": "FOUND 2026-08-31 by the offline-capability audit. `content-install.ts:294-364` has the same shape as [[DBT-43]] - an empty ARM list read as a measured zero - but with an INSTALL BUTTON on the end of it (`content-install-section.tsx:541-554`), so the consequence is an operator invited to install content that may already be there and merely invisible to them. WORSE THAN DBT-43 IN ONE RESPECT: `content-install.test.ts:240-252` PINS THE WRONG BEHAVIOUR, feeding `{status:200, body:{value:[]}}` and asserting \"packages: not installed\". A fix therefore has to change that pin, which makes this a spec change to be recorded rather than a quiet correction. Same UNCONFIRMED caveat as DBT-43: the 200-empty-under-RBAC behaviour was not verified live for `contentProductPackages` or `alertRules`."
+      "detail": "FOUND 2026-08-31 by the offline-capability audit. `content-install.ts:294-364` has the same shape as [[DBT-43]] - an empty ARM list read as a measured zero - but with an INSTALL BUTTON on the end of it (`content-install-section.tsx:541-554`), so the consequence is an operator invited to install content that may already be there and merely invisible to them. WORSE THAN DBT-43 IN ONE RESPECT: `content-install.test.ts:240-252` PINS THE WRONG BEHAVIOUR, feeding `{status:200, body:{value:[]}}` and asserting \"packages: not installed\". A fix therefore has to change that pin, which makes this a spec change to be recorded rather than a quiet correction. Same UNCONFIRMED caveat as DBT-43: the 200-empty-under-RBAC behaviour was not verified live for `contentProductPackages` or `alertRules`.",
+      "verified": "pins"
     },
     {
       "id": "DBT-45",
@@ -1743,11 +1745,12 @@
       "feature": "DBT-F2",
       "title": "Cribl-side sample discovery is gated on an Azure scope, and the copy blames Cribl",
       "type": "bug",
-      "status": "in-progress",
+      "status": "done",
       "priority": "now",
       "settled": "settled",
       "dependsOn": [],
-      "detail": "FOUND 2026-08-31 by the offline-capability audit. `useSampleSources({enabled: scopeCommitted})` (integrate-screen.tsx:894) and `<SampleSourcePicker enabled={scopeCommitted}>` (`:1709`) gate on `scopeCommitted`, which is nothing but three non-empty AZURE config strings (App.tsx:1447-1450). Disabled, the hook returns before any Cribl call (`use-sample-sources.ts:128-131`), so `inventory` stays null, `captureTarget`/`lakeTarget` are null (`:906-921`), and neither CapturePanel (`:1730`) nor LakePanel (`:1752`) ever mounts. THE DISCOVERY IT GATES IS 100% CRIBL-SIDE. Three things then compound it: the copy says \"Connect Cribl to pull samples...\" (sample-source-picker-state.ts:204-211), blaming the wrong system; the call-site comment rationalises the gate as \"gated on scopeCommitted only because there is no Cribl address before that\" (`:892-893`), which is FALSE - `PlatformCriblClient` is constructed unconditionally with no tenant (adapters.ts:1893-1900); and a pin protects the misdiagnosis. So an operator with a working Cribl connection and no Azure is told to connect Cribl."
+      "detail": "FOUND 2026-08-31 by the offline-capability audit. `useSampleSources({enabled: scopeCommitted})` (integrate-screen.tsx:894) and `<SampleSourcePicker enabled={scopeCommitted}>` (`:1709`) gate on `scopeCommitted`, which is nothing but three non-empty AZURE config strings (App.tsx:1447-1450). Disabled, the hook returns before any Cribl call (`use-sample-sources.ts:128-131`), so `inventory` stays null, `captureTarget`/`lakeTarget` are null (`:906-921`), and neither CapturePanel (`:1730`) nor LakePanel (`:1752`) ever mounts. THE DISCOVERY IT GATES IS 100% CRIBL-SIDE. Three things then compound it: the copy says \"Connect Cribl to pull samples...\" (sample-source-picker-state.ts:204-211), blaming the wrong system; the call-site comment rationalises the gate as \"gated on scopeCommitted only because there is no Cribl address before that\" (`:892-893`), which is FALSE - `PlatformCriblClient` is constructed unconditionally with no tenant (adapters.ts:1893-1900); and a pin protects the misdiagnosis. So an operator with a working Cribl connection and no Azure is told to connect Cribl.",
+      "verified": "pins"
     },
     {
       "id": "DBT-54",
@@ -1796,12 +1799,12 @@
       "feature": "DBT-F2",
       "title": "The add-column controls render with raw browser chrome",
       "type": "bug",
-      "status": "in-progress",
+      "status": "done",
       "priority": "next",
-      "priorityWhy": "Cosmetic: the control works, it just does not match the app around it. No answer it gives is wrong.",
       "settled": "settled",
       "dependsOn": [],
-      "detail": "FOUND 2026-08-31 while mapping the row-editor conventions for [[TBL-1]]. `.field input` and `.field select` (styles.css:358-393) are DESCENDANT selectors and there is no bare `input`/`select` base rule anywhere - the only global rule is the `*` reset at line 176. The add-column control in `dcr-inventory-panel.tsx:709-725` puts its `<input>` and `<select>` directly inside `.panel-controls`, NOT inside a `<label className=\"field\">`, so both render with default browser chrome: no `--border`, no `--surface-raised`, no `--border-focus`, and no dark-theme token. Verified by reading the markup and grepping the sheet. The repo already has three separate precedents for the fix - `.enrich-add input` (5059), `.csv-map-input` (2402) and `.theme-select` (916, whose comment says \"same tokens as .field select, without the field wrapper\") - so this is choosing one, not inventing. Cosmetic only: the control works, it just does not look like the app around it."
+      "detail": "FOUND 2026-08-31 while mapping the row-editor conventions for [[TBL-1]]. `.field input` and `.field select` (styles.css:358-393) are DESCENDANT selectors and there is no bare `input`/`select` base rule anywhere - the only global rule is the `*` reset at line 176. The add-column control in `dcr-inventory-panel.tsx:709-725` puts its `<input>` and `<select>` directly inside `.panel-controls`, NOT inside a `<label className=\"field\">`, so both render with default browser chrome: no `--border`, no `--surface-raised`, no `--border-focus`, and no dark-theme token. Verified by reading the markup and grepping the sheet. The repo already has three separate precedents for the fix - `.enrich-add input` (5059), `.csv-map-input` (2402) and `.theme-select` (916, whose comment says \"same tokens as .field select, without the field wrapper\") - so this is choosing one, not inventing. Cosmetic only: the control works, it just does not look like the app around it.",
+      "verified": "pins"
     },
     {
       "id": "DBT-39",
@@ -1809,12 +1812,12 @@
       "feature": "DBT-F2",
       "title": "Four classNames are rendered but defined in no stylesheet",
       "type": "bug",
-      "status": "in-progress",
+      "status": "done",
       "priority": "next",
-      "priorityWhy": "The class names are inert, so the layout is already whatever the sibling classes make it. The valuable half is the missing CI check, which is new work rather than a correction.",
       "settled": "settled",
       "dependsOn": [],
-      "detail": "FOUND 2026-08-31, same sweep as [[DBT-38]]. `pack-card` and `pack-card-head` (dcr-inventory-panel.tsx:656-657 and pack-inventory-screen.tsx:421-422), `dcr-progress-line` (dcr-inventory-panel.tsx:696) and `identity-row-editable` (identity-block.tsx:96) appear in JSX and match NOTHING in styles.css - confirmed by grep, count zero for each. They are inert; the layout that actually works comes from the sibling classes (`mapping-review-card`, `panel-desc`). This is the exact class of drift the sheet's own comments record catching by hand twice before - styles.css:5108-5113 and 5244-5249, the latter shipping broken since 1.11.5. THE REAL FIX IS THE CHECK, NOT THE FOUR NAMES: there is no automated verification that a rendered className exists in CSS, so this recurs on a schedule. A cheap script - collect string literals in className positions, diff against selectors in styles.css, allowlist the dynamic ones - would turn a recurring manual sweep into CI. Decide when picked up whether to delete the dead names or define them; deleting is right for any whose sibling already does the work."
+      "detail": "FOUND 2026-08-31, same sweep as [[DBT-38]]. `pack-card` and `pack-card-head` (dcr-inventory-panel.tsx:656-657 and pack-inventory-screen.tsx:421-422), `dcr-progress-line` (dcr-inventory-panel.tsx:696) and `identity-row-editable` (identity-block.tsx:96) appear in JSX and match NOTHING in styles.css - confirmed by grep, count zero for each. They are inert; the layout that actually works comes from the sibling classes (`mapping-review-card`, `panel-desc`). This is the exact class of drift the sheet's own comments record catching by hand twice before - styles.css:5108-5113 and 5244-5249, the latter shipping broken since 1.11.5. THE REAL FIX IS THE CHECK, NOT THE FOUR NAMES: there is no automated verification that a rendered className exists in CSS, so this recurs on a schedule. A cheap script - collect string literals in className positions, diff against selectors in styles.css, allowlist the dynamic ones - would turn a recurring manual sweep into CI. Decide when picked up whether to delete the dead names or define them; deleting is right for any whose sibling already does the work.",
+      "verified": "pins"
     },
     {
       "id": "TBL-1",
@@ -1905,6 +1908,19 @@
         "chosen": "tables-tab"
       },
       "detail": "DCR Automation is a three-tab screen today - Single table, Batch, Inventory - and both new surfaces have to land somewhere. The tab strip is already the widest thing on the page and Inventory is the landing tab, so adding two more tabs is not obviously right. THE OPTIONS, and what each costs: (a) TWO NEW TABS, 'Tables' and 'New table' - discoverable, symmetric with Inventory, but five tabs and two of them are about the same noun; (b) ONE 'Tables' TAB holding the inventory, with 'Create table' as an action ON it - keeps the noun together and makes creation the natural next step after finding nothing, at the cost of hiding creation one click deeper; (c) FOLD INTO SINGLE TABLE as a fourth schema source plus a browse control - smallest diff, reuses the screen that already onboards one table, but Single is already the densest panel and this doubles it. RECOMMENDATION IS (b): the user's two asks are the same journey - look at what exists, and if what you need is not there, author it - and (b) is the only option that renders them as one. Answer before [[TBL-1]] reaches the UI; the pure state modules are unaffected either way, so this does not block starting. DECIDED 2026-08-31, the user chose (b). Reasoning recorded in backlog.md section 15, which is why this card can settle. The chosen layout ALSO settles the question [[TBL-3]] left open - a table that already has a DCR says so on its row - and section 15 records the other thing worth not losing: this panel is NOT a revival of the deleted `TablePickerSection`, because that one was a picker whose job moved away, and this one is an operational inventory with an action per row."
+    },
+    {
+      "id": "DBT-60",
+      "epic": "DBT",
+      "feature": "DBT-F1",
+      "title": "onboard-batch cannot recognise the child store failure it is handed",
+      "type": "bug",
+      "status": "backlog",
+      "priority": "next",
+      "priorityWhy": "Net operator-visible behaviour is unchanged from before DBT-55 - the batch attributes it to the table either way - so this restores no regression, it completes an improvement. Both docblocks state the gap explicitly while it is open.",
+      "settled": "settled",
+      "dependsOn": [],
+      "detail": "SPLIT OUT OF [[DBT-55]] 2026-08-31 by its reviewer. DBT-55 made onboardTable re-raise a JobStore outage as its own JobStoreFailure rather than recording it as the table failing. onboard-batch.ts:1274 catches it and tests error instanceof JobStoreFailure - naming ITS OWN module-local class. A cross-module instanceof never matches, so the signal is thrown and then dropped, and the batch records an ordinary failed table carrying a job-store-update-failed prefix. Fix: export the child class (or a shared isJobStoreFailure predicate) from the onboard-table package index and have onboard-batch consume THAT. Note onboard-table/index.ts was outside the fixing agent do-not-touch list, so nothing is exported yet. When wired, correct the onboard-batch docblock that currently explains why the limit stands."
     }
   ],
   "features": [

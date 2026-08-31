@@ -16,7 +16,6 @@ import {
   isAttemptable,
   isAzureCapability,
   isSetForConnection,
-  unavailableReason,
   verdictFor,
   type CapabilityContext,
   type CapabilitySet,
@@ -133,32 +132,9 @@ describe("isSetForConnection", () => {
   });
 });
 
-describe("unavailableReason", () => {
-  it("says nothing when granted", () => {
-    expect(unavailableReason("dcr.write", audited({ "dcr.write": "granted" }), connected)).toBeNull();
-  });
-
-  it("keeps connection wording distinct from permission wording", () => {
-    // Conflating these is what the plan set out to avoid.
-    const noConn = unavailableReason("dcr.write", emptyCapabilitySet(), disconnected);
-    const denied = unavailableReason("dcr.write", audited({ "dcr.write": "denied" }), connected);
-    expect(noConn).toContain("Connect Azure");
-    expect(denied).toContain("cannot do this");
-    expect(denied).not.toContain("Connect Azure");
-  });
-
-  it("offers the fallback in the denied wording", () => {
-    const denied = unavailableReason("dcr.write", audited({ "dcr.write": "denied" }), connected);
-    expect(denied).toContain("someone who can");
-  });
-
-  it("names the right side for a Cribl capability", () => {
-    expect(unavailableReason("pack.manage", emptyCapabilitySet(), disconnected)).toContain("Connect Cribl");
-  });
-
-  it("says unknown is unchecked, never refused", () => {
-    const unknown = unavailableReason("dcr.write", emptyCapabilitySet(), connected) ?? "";
-    expect(unknown).toContain("Not checked yet");
-    expect(unknown).not.toContain("cannot");
-  });
-});
+// The `unavailableReason` block was DELETED 2026-08-31 with the function
+// (DBT-57). Every rule it pinned is pinned against the function that actually
+// renders this copy, nav-annotation's `reasonFor`, and pinned harder: see
+// nav-annotation.test.ts "the worst verdict governs" (connection wording beats
+// permission wording, and "Connect Azure and Cribl" when both sides are out)
+// and "no identity at all" (the fallback offer rides along with the denial).

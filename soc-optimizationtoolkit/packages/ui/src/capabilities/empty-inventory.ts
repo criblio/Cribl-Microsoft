@@ -103,6 +103,35 @@ export function emptyInventoryMessage(input: EmptyInventoryInput): EmptyInventor
   // Checked before the scope rule: with no connection at all there is nowhere
   // to send the request, which is true of every scope at once and is a more
   // useful thing to say than "we measured somewhere else".
+  //
+  // NOT REACHABLE FROM ANY SHIPPING CALLER as of 2026-08-31 (DBT-57), and KEPT
+  // DELIBERATELY - see the note below. All three call sites exclude it, for two
+  // different reasons, neither of which is a simple missing wire:
+  //
+  //   1. Azure targeting (azure-targeting-screen.tsx) - `unreachable` and the
+  //      screen's `offline` branch are THE SAME BOOLEAN. App.tsx passes
+  //      `offline={!capabilityAudit.context.azureIdentityPresent}` alongside the
+  //      context itself, and the screen early-returns its offline panel long
+  //      before the JSX that renders this text. Exactly when the verdict would
+  //      be `unreachable`, the message is not on screen to say so.
+  //   2. DCR inventory and the workspace-table listing - the message is only
+  //      COMPUTED once a list call has SUCCEEDED (`entries !== null`,
+  //      `loaded === true`); a failed or unauthenticated call renders the error
+  //      instead. A 200 from ARM is itself proof the connection was reachable,
+  //      so arriving here already refutes the verdict. (Both also default a
+  //      missing context to `azureIdentityPresent: true`, which would suppress
+  //      it independently.)
+  //
+  // Reason 2 is the interesting one: it says this branch answers a question
+  // that is settled EARLIER than the one this function exists for. The function
+  // asks "the list came back empty - may I call that a zero?"; `unreachable`
+  // answers "could I even ask?", which is decided before there is an empty list
+  // to describe. So the branch is misplaced rather than merely unwired, and the
+  // honest fix is a product decision rather than a plumbing one - it fires only
+  // for a lister that DECLINES to call and returns empty (or a screen that
+  // renders the inventory area while disconnected instead of an offline panel).
+  // Deleting it instead would quietly retire a degrade docs/inventory-standard.md
+  // credits as binding, so it stays until someone decides which.
   if (verdict === "unreachable") {
     return {
       text: `Cannot list ${noun} - no ${isAzureCapability(capability) ? "Azure" : "Cribl"} connection`,

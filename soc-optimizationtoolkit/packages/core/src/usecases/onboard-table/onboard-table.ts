@@ -56,7 +56,9 @@
  *   8 verify                   GET the DCR and GET the created output
  *
  * Any other failure marks the current step AND the job failed with the raw
- * error text and stops.
+ * error text and stops - EXCEPT a JobStore failure, which is no evidence at
+ * all about the table and leaves as {@link JobStoreFailure} instead of being
+ * recorded as this table's failure (DBT-55).
  *
  * SECRET HANDLING: ingestionClientSecret is TRANSIENT input (the platform's
  * encrypted KV is write-only, so a stored secret can never be read back).
@@ -288,7 +290,6 @@ export interface OnboardTableOutcome {
   commitVersion: string | null;
 }
 
-/** Internal signal: a step failed; message already carries the raw text. */
 /** Parse a Cribl outputs listing into id + url pairs. */
 function listExistingOutputs(body: unknown): Array<{ id: string; url: string }> {
   const items =
@@ -361,6 +362,7 @@ function dcrTargetsTable(dcrBody: unknown, table: string): boolean {
   return false;
 }
 
+/** Internal signal: a step failed; message already carries the raw text. */
 class StepFailure extends Error {
   constructor(message: string) {
     super(message);
@@ -369,12 +371,71 @@ class StepFailure extends Error {
 }
 
 /**
+ * Signal: the JOB STORE failed, not the work it was recording (DBT-55 - DBT-49
+ * one level down). Every JobStore call this usecase makes goes through a
+ * wrapper that raises this, so a store outage LEAVES WEARING ITS OWN TYPE
+ * instead of being written back as `{status:"failed", error:"kvstore ..."}`.
+ * That write blamed the TABLE for the store's outage and carried the store's
+ * error text as the table's, so the operator's obvious next action - retry
+ * that table - was the wrong one. The write most exposed to the lie is the
+ * final success write: it runs after the DCR deployed and the Cribl
+ * destination was created, so blaming the table there is provably false.
+ *
+ * The wrapping here is TOTAL, unlike onboardBatch's (three of its parent
+ * writes deliberately bypass its wrapper): create, update and get are all
+ * wrapped, so any rejection satisfying {@link isJobStoreFailure} really is the
+ * store failing.
+ *
+ * WHAT THAT DOES NOT LICENSE, and an earlier draft of this docblock said it
+ * did (review, 2026-08-31): it is NOT "says nothing about the table". A table
+ * can fail a step for its own reasons AND the store be down when that failure
+ * is recorded - the catch's own recovery write is wrapped too, so the
+ * JobStoreFailure escapes and the real failure is lost with it. A caller that
+ * read this as "the table is not implicated" would decline to retry a table
+ * that genuinely failed, which is DBT-55's mirror image: rarer, and the same
+ * class of confident wrong answer. Read it as "the store failed, and what
+ * happened to the table is UNKNOWN".
+ *
+ * Store failures were already outside the never-rejects promise
+ * documented on {@link onboardTable} - re-raising is what makes that sentence
+ * true for the store's whole surface rather than only the writes that happen
+ * to sit outside the try.
+ *
+ * Exported because the entire point is that a CALLER can tell it apart.
+ * NOT YET CONSUMED: onboardBatch catches this rejection and still records an
+ * ordinary failed table (its `instanceof` test names its own class, and a
+ * cross-module `instanceof` never matches). See its docblock's stated limit.
+ */
+export class JobStoreFailure extends Error {
+  constructor(cause: unknown) {
+    super(
+      `job store update failed: ${cause instanceof Error ? cause.message : String(cause)}`,
+    );
+    this.name = "JobStoreFailure";
+  }
+}
+
+/**
+ * Whether `error` is a {@link JobStoreFailure}: the store failed, so the error
+ * is not evidence about the work. Matches on the NAME rather than the class so
+ * it also recognises the identically-named signal onboardBatch raises for its
+ * own parent-record writes (DBT-49) - two classes, one meaning, and a caller
+ * guarding a call that can raise either should not have to care which module
+ * minted it.
+ */
+export function isJobStoreFailure(error: unknown): boolean {
+  return error instanceof Error && error.name === "JobStoreFailure";
+}
+
+/**
  * Onboard a table: for custom (_CL) tables ensure the Log Analytics table
  * exists (create it from the supplied schema when it does not), then deploy
  * a Kind:Direct DCR and create the matching Cribl Sentinel destination - ONE
  * pipelined job. Never rejects for step failures - the job record carries
  * the outcome; the final record is returned either way. (It can still reject
- * if the JobStore itself fails.)
+ * if the JobStore itself fails: that rejection is a {@link JobStoreFailure},
+ * recognisable with {@link isJobStoreFailure}, and it is the ONE rejection
+ * shape that says nothing about the table - DBT-55.)
  */
 export async function onboardTable(
   ports: OnboardTablePorts,
@@ -385,10 +446,22 @@ export async function onboardTable(
   const secretProvided =
     input.ingestionClientSecret != null && input.ingestionClientSecret !== "";
 
+  // DBT-55: EVERY JobStore call in this usecase goes through here, so a store
+  // outage leaves this function as a JobStoreFailure and is never attributed
+  // to the table (see the class docblock). Keeping the invariant total is what
+  // lets a caller treat "isJobStoreFailure" as "the table is not implicated".
+  const storeCall = async <T>(call: () => Promise<T>): Promise<T> => {
+    try {
+      return await call();
+    } catch (error) {
+      throw new JobStoreFailure(error);
+    }
+  };
+
   // Persisted job input: everything serializable, NEVER the secret value.
   // The custom-path fields are recorded ONLY on custom jobs so native job
   // records stay byte-identical to the walking-skeleton contract.
-  const job = await jobs.create(ONBOARD_TABLE_JOB_KIND, {
+  const jobInput = {
     table: input.table,
     subscriptionId: input.subscriptionId,
     resourceGroup: input.resourceGroup,
@@ -413,7 +486,10 @@ export async function onboardTable(
             DEFAULT_CUSTOM_TABLE_RETENTION_DAYS,
         }
       : {}),
-  });
+  };
+  const job = await storeCall(() =>
+    jobs.create(ONBOARD_TABLE_JOB_KIND, jobInput),
+  );
 
   logger?.info(
     "onboard-table: job started",
@@ -440,8 +516,14 @@ export async function onboardTable(
     status: "pending",
   }));
 
+  const updateJob = async (
+    patch: Partial<Omit<JobRecord, "id">>,
+  ): Promise<void> => {
+    await storeCall(() => jobs.update(job.id, patch));
+  };
+
   const pushSteps = async (): Promise<void> => {
-    await jobs.update(job.id, { steps: steps.map((step) => ({ ...step })) });
+    await updateJob({ steps: steps.map((step) => ({ ...step })) });
   };
 
   const setStep = async (
@@ -474,7 +556,7 @@ export async function onboardTable(
     }
   };
 
-  await jobs.update(job.id, { status: "running" });
+  await updateJob({ status: "running" });
   await pushSteps();
 
   let currentStep: OnboardTableStepName = ONBOARD_TABLE_STEPS[0];
@@ -1014,16 +1096,32 @@ export async function onboardTable(
       groupId: input.groupId,
       commitVersion,
     };
-    await jobs.update(job.id, { status: "succeeded", result: outcome });
+    await updateJob({ status: "succeeded", result: outcome });
     logger?.info(
       "onboard-table: job succeeded",
       { table: input.table, dcrName, destinationId, groupId: input.groupId },
       job.id,
     );
   } catch (error) {
+    // DBT-55: a JobStore outage is NOT this table's failure. Writing it back
+    // as `{status:"failed", error:"kvstore ..."}` recorded the store's error
+    // text as the TABLE's - the operator's next action, retry that table, was
+    // then the wrong one, and on the final success write the table had
+    // already deployed. Say nothing about a table we have no bad news about:
+    // re-raise wearing its own type, which the contract above already places
+    // outside the never-rejects promise. (Unlike a step failure this cannot
+    // be written to the record instead - the store is the thing that is down.)
+    if (error instanceof JobStoreFailure) {
+      logger?.error(
+        "onboard-table: job store failed",
+        { table: input.table, step: currentStep, error: error.message },
+        job.id,
+      );
+      throw error;
+    }
     const message = error instanceof Error ? error.message : String(error);
     await setStep(currentStep, "failed", message);
-    await jobs.update(job.id, { status: "failed", error: message });
+    await updateJob({ status: "failed", error: message });
     logger?.error(
       "onboard-table: job failed",
       { table: input.table, step: currentStep, error: message },
@@ -1031,7 +1129,7 @@ export async function onboardTable(
     );
   }
 
-  const finalRecord = await jobs.get(job.id);
+  const finalRecord = await storeCall(() => jobs.get(job.id));
   // Unreachable in practice: the record was created at the top of this run.
   if (finalRecord === null) {
     throw new Error(`job '${job.id}' vanished from the JobStore`);

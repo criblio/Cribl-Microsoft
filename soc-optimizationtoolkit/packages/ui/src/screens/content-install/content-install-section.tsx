@@ -18,6 +18,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  absenceIsMeasured,
   availableAnalyticRules,
   availableParsers,
   availableWorkbooks,
@@ -48,6 +49,7 @@ import type {
 import { usePorts } from "../../ports-context";
 import { InfoTip } from "../../components/info-tip";
 import { hasAzureIdentity } from "../../capabilities/capability-audit-state";
+import { unmeasuredInventoryMessage } from "../../capabilities/empty-inventory";
 import {
   partitionOutcomes,
   selectAll,
@@ -55,6 +57,37 @@ import {
   splitWorkbooks,
   toggleName,
 } from "./content-install-state";
+
+/**
+ * The honest line for an installed-content listing that came back EMPTY without
+ * proving it could see anything (DBT-44; docs/inventory-standard.md, BINDING).
+ *
+ * An ARM list returns 200 with an empty `value` when RBAC filters the caller
+ * out, so the section used to state "not installed" - and put an Install button
+ * beside it - on evidence that cannot support the claim. That is the harmful
+ * shape the standard names: it invites installing content that is already
+ * there and merely invisible.
+ *
+ * The hedge comes from the shared helper rather than being worded here, because
+ * the failure it guards against is a CONFIDENT WRONG ANSWER and those drift
+ * when every screen phrases them itself. The UNMEASURED hedge is the right one
+ * of the three: nothing in the settled 11-capability taxonomy covers a
+ * SecurityInsights content read. `workspace.read` is a NEIGHBOUR and not a
+ * cover - it measures Microsoft.OperationalInsights/workspaces/read - so
+ * borrowing it would misreport what was checked, and sending the operator to
+ * run a permission check that cannot settle this question would hand them a
+ * result they would read as confirmation.
+ *
+ * The consequence sentence is per-list because the operator's next move
+ * differs; the closing sentence is shared because rule 3 is: the attempt is
+ * ANNOTATED, never removed, and Azure's own answer is the real gate.
+ */
+function unverifiedListingHint(noun: string, consequence: string): string {
+  return (
+    `${unmeasuredInventoryMessage(noun).text}. ${consequence} ` +
+    "Installing is still offered - Azure's own answer is the real gate."
+  );
+}
 
 export interface ContentInstallSectionProps {
   /** The selected Sentinel solution (scopes the content lookup); "" when none. */
@@ -454,6 +487,17 @@ export function ContentInstallSection({
     catalog !== null &&
     (installed?.solutionInstalled === true || catalog.installedVersion !== null);
 
+  // DBT-44: whether the "not installed" / "not yet in the workspace" reading of
+  // each listing is a MEASURED fact or an unexplained silence. `installed` is
+  // null before a load and when no scope is committed - nothing was listed, so
+  // there is no claim to hedge yet.
+  const solutionAbsenceUnverified =
+    installed !== null && !solutionIsInstalled && !absenceIsMeasured(installed, "solutions");
+  const ruleAbsenceUnverified =
+    installed !== null && !absenceIsMeasured(installed, "rules");
+  const workbookAbsenceUnverified =
+    installed !== null && !absenceIsMeasured(installed, "workbooks");
+
   // Progress + per-item outcomes for one install control, rendered directly
   // beneath the button that triggered it (never in a distant block).
   const renderFeedback = (source: "solution" | "rules" | "workbooks") => (
@@ -570,8 +614,14 @@ export function ContentInstallSection({
         ) : (
           <>
             <div className="panel-controls">
+              {/* DBT-44: "not installed" is only said when the contentPackages
+                  listing PROVED it could see packages. An empty page is an
+                  unknown, and saying "not installed" over it - with the button
+                  below on the end of the sentence - is the confident wrong
+                  answer docs/inventory-standard.md forbids. */}
               <span className="panel-desc">
-                {catalog.displayName} {catalog.version} - not installed.
+                {catalog.displayName} {catalog.version} -{" "}
+                {solutionAbsenceUnverified ? "install state unconfirmed." : "not installed."}
               </span>
               <button
                 className="run-button"
@@ -585,6 +635,14 @@ export function ContentInstallSection({
                 <span className="field-hint">{installBlockedReason}</span>
               )}
             </div>
+            {solutionAbsenceUnverified && (
+              <p className="field-hint">
+                {unverifiedListingHint(
+                  "installed solutions",
+                  "This solution may already be installed and merely invisible to this identity.",
+                )}
+              </p>
+            )}
             {renderFeedback("solution")}
           </>
         )}
@@ -602,6 +660,19 @@ export function ContentInstallSection({
           disabled: !alertRuleResourceFromParsed(r).supported,
         }))}
         installedNames={ruleSplit.installed.map((r) => r.name)}
+        // DBT-44: an unverified-empty alertRules listing makes EVERY rule look
+        // installable, so the split itself is the claim here - there is no
+        // "none found" sentence to correct. Only shown when something is
+        // actually being offered: that is where the harm is, and a hedge on an
+        // empty group would be noise that trains the operator to skip it.
+        caveat={
+          ruleAbsenceUnverified && ruleSplit.installable.length > 0
+            ? unverifiedListingHint(
+                "installed analytics rules",
+                "Rules offered below may already be in the workspace.",
+              )
+            : undefined
+        }
         selection={ruleSel}
         onToggle={(name) => setRuleSel((s) => toggleName(s, name))}
         onSelectAll={() =>
@@ -631,6 +702,14 @@ export function ContentInstallSection({
         tip="Install the solution's workbooks, linked to your workspace. Upload custom workbooks (gallery-template JSON or a portal ARM export) to install alongside."
         installable={wbSplit.installable.map((w) => ({ name: w.displayName, detail: "" }))}
         installedNames={wbSplit.installed.map((w) => w.displayName)}
+        caveat={
+          workbookAbsenceUnverified && wbSplit.installable.length > 0
+            ? unverifiedListingHint(
+                "installed workbooks",
+                "Workbooks offered below may already be in the workspace.",
+              )
+            : undefined
+        }
         selection={wbSel}
         onToggle={(name) => setWbSel((s) => toggleName(s, name))}
         onSelectAll={() =>
@@ -664,6 +743,7 @@ function ContentGroup({
   tip,
   installable,
   installedNames,
+  caveat,
   selection,
   onToggle,
   onSelectAll,
@@ -682,6 +762,12 @@ function ContentGroup({
   tip: string;
   installable: Array<{ name: string; detail: string; disabled?: boolean }>;
   installedNames: string[];
+  /**
+   * DBT-44: what an EMPTY installed-content listing does and does not license
+   * this group to imply, or undefined when the listing was measured. It is a
+   * caveat ON the offer, not a replacement for it - the install stays.
+   */
+  caveat?: string;
   selection: ReadonlySet<string>;
   onToggle: (name: string) => void;
   onSelectAll: () => void;
@@ -710,6 +796,7 @@ function ContentGroup({
       <h3 className="content-install-title">
         {title} <InfoTip text={tip} />
       </h3>
+      {caveat !== undefined && <p className="field-hint">{caveat}</p>}
       {installable.length === 0 && installedNames.length === 0 ? (
         <p className="panel-desc">None found for this solution.</p>
       ) : (
