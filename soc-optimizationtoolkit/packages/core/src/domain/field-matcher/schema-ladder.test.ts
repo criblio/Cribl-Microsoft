@@ -212,8 +212,15 @@ describe("createSchemaLadder - the promotion stays scoped", () => {
  * jumped over. These pin that it does. The live tier is fed raw ARM, which
  * reports a native table's Azure-managed columns in `standardColumns`, and it
  * did not strip them - so the first fix for DBT-50 was a live correctness
- * REGRESSION: every DCR generated for a picked table gained up to 18 columns
- * Azure populates itself, and the three tiers below guarantee absent.
+ * REGRESSION: the ladder answered with up to 18 columns Azure populates itself,
+ * which the three tiers below guarantee absent.
+ *
+ * NOT, as this header first claimed, "every generated DCR gained 18 columns".
+ * buildDcrColumnSet re-strips them, so that path does not exist; the harm is
+ * that the managed names reach GapReport.destSchema and the dest-column
+ * dropdown, where an operator can map a source field onto a column Azure owns
+ * and the DCR then drops it silently. The corrected reasoning is in
+ * backlog.md under DBT-50.
  *
  * The pin is on the composed ladder rather than only on the tier, because that
  * is where the promotion made the omission reachable: nested innermost, the

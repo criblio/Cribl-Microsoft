@@ -243,11 +243,31 @@ TenantId, Type, `_ResourceId` and the rest - because Azure populates them
 itself. The live tier is fed raw ARM, which reports exactly those names in a
 native table's `standardColumns`, and it stripped nothing. That was harmless
 only while the tier was composed innermost and never answered; promoting it to
-the top made it reachable, and the first fix would have added up to 18 spurious
-columns to every DCR generated for a picked table. Measured on the pin: 21
-columns in, 3 out, 18 dropped - and for a table whose columns are ALL managed,
-18 in and 0 out, which reduces to the tier's existing empty-override state
-rather than falling through to a repo tier.
+the top made it reachable. Measured on the pin: 21 columns in, 3 out, 18
+dropped - and for a table whose columns are ALL managed, 18 in and 0 out, which
+reduces to the tier's existing empty-override state rather than falling through
+to a repo tier.
+
+**A CORRECTION, recorded rather than quietly dropped, because the wrong version
+is the one that made the fix sound impressive.** The fix round said in six
+places - three module headers, a test header, this section and a commit message
+- that the unstripped tier would have added up to 18 spurious columns *to every
+generated DCR*. That is FALSE, and re-review measured it: `buildDcrColumnSet`
+re-strips the managed names for a native table, so they could never reach a DCR
+that way; and the only route by which a catalog schema reaches a DCR at all is
+`customSchema`, which `onboard-batch` and `onboard-table` both ignore for a
+table that already exists - and a table in the live tier's map is by
+construction one the operator picked from the workspace listing, so it exists.
+
+The claim was borrowing credibility from the genuinely measured 21-to-3 pin
+sitting next to it, which is precisely the failure rule 3 names.
+
+**The real harm is subtler and is why the fix still stands.** The managed names
+enter `GapReport.destSchema`, `destFieldCount`, the mapping table's dest-column
+dropdown, overflow triage and the rule-coverage union. So an operator can map a
+source field onto a column Azure owns - `Type`, `SourceSystem`, `RowKey` - the
+pack emits it, and the DCR then drops it SILENTLY. The data loss is real; it
+happens one step further on than the first telling said.
 
 Reordering tiers is only safe because they answer the same question, so the
 strip is now ONE mechanism rather than a fourth copy of the predicate. The list

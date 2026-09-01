@@ -16,8 +16,14 @@
  *
  * So this drives the REAL component through the real interaction - pick a table
  * from the destination dropdown - and asserts on the report the screen emits.
- * It fails if the fetched schema stops reaching the analysis, whichever half of
- * the wiring breaks: the state, the callback argument, or the ladder call.
+ * It fails if the fetched schema stops reaching the analysis, whichever part of
+ * the wiring breaks: the STATE WRITE, the callback argument, or the ladder call.
+ *
+ * The state-write half was NOT covered when this header first claimed it was -
+ * re-review deleted `setLiveSchemas(live)` and all 73 tests passed while DBT-50
+ * came back on an operator-reachable path. The last pin below closes it, and
+ * the gap is recorded rather than tidied away because a header asserting
+ * coverage it lacks is worse than no header: it stops the next person looking.
  *
  * It also pins the COLUMN CONTRACT at the same seam (DBT-50's second defect):
  * the live ARM response carries Azure-managed columns, and a DCR generated from
@@ -96,10 +102,18 @@ interface Harness {
   reports: () => GapReport[];
   container: HTMLElement;
   fetchTableSchema: ReturnType<typeof vi.fn>;
+  /**
+   * How many times the screen has EMITTED, which is not the same as how many
+   * reports it emitted - one sample yields one report every time. The
+   * re-analyse pin needs this: without it, asserting after a second Analyze
+   * click passes trivially because the stale report is still in hand.
+   */
+  emissions: () => number;
 }
 
 function renderSection(): Harness {
   let latest: GapReport[] = [];
+  let emissions = 0;
   const fetchTableSchema = vi.fn(async (table: string) =>
     table === PICKED_TABLE ? LIVE_ARM_SCHEMA : null,
   );
@@ -111,11 +125,12 @@ function renderSection(): Harness {
       workspaceTables={[PICKED_TABLE]}
       fetchTableSchema={fetchTableSchema}
       onReportsChange={(next) => {
+        emissions += 1;
         latest = next;
       }}
     />,
   );
-  return { reports: () => latest, container, fetchTableSchema };
+  return { reports: () => latest, container, fetchTableSchema, emissions: () => emissions };
 }
 
 /** Click Analyze and wait for the first report to land. */
@@ -193,6 +208,42 @@ describe("mapping review - the picked table's live schema reaches the analysis",
     expect([...names].sort()).toEqual(
       [LIVE_ONLY_COLUMN, "SrcUserName", "TimeGenerated"].sort(),
     );
+  });
+
+  it("KEEPS the live schema on a RE-ANALYSE, which is what the state write feeds", async () => {
+    // THE GAP re-review found. The three pins above all read the report emitted
+    // by the table-pick itself, which is handed `live` as a local - so deleting
+    // `setLiveSchemas(live)` left every one of them green while the stored map
+    // stayed permanently empty.
+    //
+    // Every OTHER analysis reads `activeCatalog`, built from that state. So an
+    // operator who picks a table and then clicks Analyze again - which they do
+    // after any edit - silently gets the DERIVED schema back while the screen
+    // still shows the table they picked. That is DBT-50 exactly, on a path a
+    // person actually walks.
+    //
+    // Asserting on a re-click needs the report COUNT to advance first: the
+    // stale report is still in hand, so a naive assertion passes trivially.
+    const h = renderSection();
+    await analyze(h);
+    await pickTable(h, PICKED_TABLE);
+    const afterPick = h.emissions();
+
+    const button = [...h.container.querySelectorAll("button")].find((b) =>
+      /analyze/i.test(b.textContent ?? ""),
+    );
+    if (button === undefined) throw new Error("Analyze button not rendered");
+    fireEvent.click(button);
+    await waitFor(() => {
+      expect(h.emissions()).toBeGreaterThan(afterPick);
+    });
+
+    const report = h.reports()[0];
+    if (report === undefined) throw new Error("no report after re-analyse");
+    // Still the LIVE columns - not FromDerivedCatalog, which is what comes back
+    // when the stored map is empty.
+    expect(destColumnNames(report)).not.toContain(DERIVED_ONLY_COLUMN);
+    expect(destColumnNames(report)).toContain(LIVE_ONLY_COLUMN);
   });
 
   it("reports the live column COUNT, not the raw ARM count", async () => {

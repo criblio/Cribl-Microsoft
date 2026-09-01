@@ -51,8 +51,24 @@ import { stripDcrSystemColumns } from "./system-columns";
  * answers a different question from its siblings: "what columns does this table
  * have" instead of "what columns may a DCR declare". The omission was
  * unreachable while this tier was composed innermost; promoting it to the top
- * of the ladder made it reachable, and it would have added up to 18 spurious
- * columns to every DCR generated for a picked table.
+ * of the ladder made it reachable.
+ *
+ * The consequence is NOT that those columns reach a generated DCR - that was
+ * claimed during the fix and is FALSE, corrected here rather than quietly
+ * dropped because the wrong version is what makes the fix sound impressive.
+ * `buildDcrColumnSet` re-strips the managed names for a native table, and the
+ * only route by which a catalog schema reaches a DCR is `customSchema`, which
+ * onboard-batch and onboard-table both ignore for a table that already exists -
+ * and a table in this tier's map is by construction one the operator picked
+ * from the workspace listing, so it exists.
+ *
+ * THE REAL HARM, which is subtler and worth stating precisely: the managed
+ * names enter `GapReport.destSchema`, `destFieldCount`, the mapping table's
+ * dest-column dropdown, overflow triage and the rule-coverage union. So an
+ * operator can map a source field onto a column Azure owns - Type,
+ * SourceSystem, RowKey - the pack emits it, and the DCR then drops it
+ * SILENTLY. The data loss is real; it just happens one step further on than
+ * the first telling said.
  *
  * An EMPTY column array is still an override, deliberately. A table that exists
  * but exposes no columns yet is a real state (provisioned, never materialized),

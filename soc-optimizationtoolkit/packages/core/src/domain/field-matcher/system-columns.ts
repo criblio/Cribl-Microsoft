@@ -17,8 +17,24 @@
  * innermost, because the repo tiers answered first for nearly every table and
  * its columns were never returned. Promoting it to the top of the ladder made
  * the omission reachable: ARM reports a native table's managed columns in
- * `standardColumns`, so the promoted tier would have injected up to 18 spurious
- * columns into every DCR generated for a picked table.
+ * `standardColumns`, so the promoted tier returns them where its siblings do not.
+ *
+ * The consequence is NOT that those columns reach a generated DCR - that was
+ * claimed during the fix and is FALSE, corrected here rather than quietly
+ * dropped because the wrong version is what makes the fix sound impressive.
+ * `buildDcrColumnSet` re-strips the managed names for a native table, and the
+ * only route by which a catalog schema reaches a DCR is `customSchema`, which
+ * onboard-batch and onboard-table both ignore for a table that already exists -
+ * and a table in this tier's map is by construction one the operator picked
+ * from the workspace listing, so it exists.
+ *
+ * THE REAL HARM, which is subtler and worth stating precisely: the managed
+ * names enter `GapReport.destSchema`, `destFieldCount`, the mapping table's
+ * dest-column dropdown, overflow triage and the rule-coverage union. So an
+ * operator can map a source field onto a column Azure owns - Type,
+ * SourceSystem, RowKey - the pack emits it, and the DCR then drops it
+ * SILENTLY. The data loss is real; it just happens one step further on than
+ * the first telling said.
  *
  * The fix is one mechanism, not a fourth copy of the predicate. A duplicated
  * column list that can drift is the failure this codebase keeps filing cards

@@ -29,8 +29,24 @@
  * Reordering tiers is only safe because of that: a tier that answered the other
  * question would change the RESULT when promoted, not just its source. The live
  * tier was exactly that tier - it is fed raw ARM, which reports managed columns
- * in `standardColumns` - and promoting it without the strip would have added up
- * to 18 spurious columns to every DCR generated for a picked table.
+ * in `standardColumns` - so promoting it without the strip changes the answer.
+ *
+ * The consequence is NOT that those columns reach a generated DCR - that was
+ * claimed during the fix and is FALSE, corrected here rather than quietly
+ * dropped because the wrong version is what makes the fix sound impressive.
+ * `buildDcrColumnSet` re-strips the managed names for a native table, and the
+ * only route by which a catalog schema reaches a DCR is `customSchema`, which
+ * onboard-batch and onboard-table both ignore for a table that already exists -
+ * and a table in this tier's map is by construction one the operator picked
+ * from the workspace listing, so it exists.
+ *
+ * THE REAL HARM, which is subtler and worth stating precisely: the managed
+ * names enter `GapReport.destSchema`, `destFieldCount`, the mapping table's
+ * dest-column dropdown, overflow triage and the rule-coverage union. So an
+ * operator can map a source field onto a column Azure owns - Type,
+ * SourceSystem, RowKey - the pack emits it, and the DCR then drops it
+ * SILENTLY. The data loss is real; it just happens one step further on than
+ * the first telling said.
  *
  * WHY LIVE SITS ON TOP, and not tier 3 as it did (the DBT-50 judgement,
  * 2026-08-31). Two orders were defensible and they are not equivalent - either
