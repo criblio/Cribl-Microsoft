@@ -154,7 +154,16 @@ Each template contains:
 - **Stream Declarations**: Column definitions with names and types
 - **Destinations**: Target Log Analytics workspace
 - **Data Flows**: Routing from input stream to output table
-- **Transform KQL**: Set to "source" (no transformation)
+- **Transform KQL**: `"source"` (no transformation) for most templates. FOUR
+  ARE NOT, and the exception is load-bearing rather than cosmetic: where a
+  destination column is typed `guid`, the stream must declare it `string` and
+  the transform must promote it with `toguid()`, as
+  `"source | extend Col = toguid(Col), ..."`. Declaring a column `guid`
+  directly makes the ingestion drop it SILENTLY - no error, no warning, and the
+  data is simply absent. See ADR 0004 in `soc-optimizationtoolkit/docs/adr/`.
+  The templates carrying this today are AWSCloudTrail and
+  ADAssessmentRecommendation, in both the DCE and NoDCE directories. If you add
+  a template for a table with a guid column, follow that shape.
 
 Example stream naming:
 - Input: `Custom-{TableName}` (e.g., "Custom-SecurityEvent")
