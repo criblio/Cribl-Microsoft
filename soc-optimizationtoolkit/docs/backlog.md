@@ -2067,3 +2067,155 @@ having remembered a call site.
 repo; `listDeprecatedContentHubSolutions` returns a `Set` used as a lookup.
 None has an ambiguous empty. Wrapping them would teach the codebase that
 `Listing` means "any list", and a type that marks everything marks nothing.
+
+## 18. Nine decisions settled - the answers were recorded, the reasoning was not
+
+**What this section is.** Nine cards carried a `chosen` value and stayed
+`undecided`, some of them for weeks. Answering records the pick and nothing
+else - the reasoning has to land here before a card settles, because a decision
+without its rejected alternatives is the thing this repo keeps having to
+reconstruct. Nobody wrote them up, so the picks sat as ticked boxes with no
+argument behind them, and three of them read on the board as questions still
+blocking work that had in fact been answered.
+
+Nothing below is new judgement. Each pick was already made, and each card
+already stated its alternatives; this is the argument transcribed out of the
+card and into the place that settles it. Where the card's own text is the best
+statement of the reason, it is used.
+
+### 18a. D-1 - the freshness indicator goes in the connection bar
+
+**Chosen: `connection-bar`,** beside the existing secret / target /
+platform-link chips, over a frame footer.
+
+The card had already eliminated the two other candidates for reasons that also
+argue for this one: the nav was tried and is the wrong surface, and the
+preflight panel re-measures on arrival so its answer would only ever read "just
+now". What HON-6 reports is the AGE of a measurement, and age is only meaningful
+next to the thing measured. The connection bar already carries the other facts
+about the live connection, so freshness joins its own family rather than
+starting a second status surface in the footer.
+
+### 18b. D-3 - capabilities travel in PortsContext
+
+**Chosen: `ports-context`,** over continuing to prop-drill from the shell.
+
+One seam change against eight call sites that must each be kept in step. The
+card's own framing is the argument: at eight listers this is the duplication
+that drifts. It is also the shape this codebase has repeatedly had to correct -
+the capability model exists because app modes were a second, drifting proxy for
+permissions, and `ROUTE_CAPABILITIES` is shared for exactly this reason.
+Prop-drilling is cheap now and less so later, and "later" here is already
+visible.
+
+### 18c. D-4 - the WIN enrichment catalog produces, it does not only report
+
+**Chosen: `produce-in-scope`,** over report-only and over report-first-with-a-
+follow-on.
+
+`backlog.md#5a` states the objection to reporting alone: it leaves deployed data
+still missing the fields, so the catalog improves analysis while nothing
+reconstructs `Account` in the pipeline. The runner-up - ship reporting, record
+producing as required - is the same destination with a gap in the middle, and
+the source's own phrasing ("a legitimate slice; just do not let it become the
+finished state") is a warning about exactly how that gap persists.
+
+The deciding fact is precedent rather than preference:
+`buildCefIdentityOverrideFn` (`pipeline-conf.ts:132`) was added because an
+override that only changed the analysis would leave deployed data carrying the
+wrong vendor. That is the same failure, already met and already answered once.
+
+### 18d. D-6 - pack maintenance re-analyses against the LIVE table schema
+
+**Chosen: `live-schema`,** over re-analysing the pack's stored samples and over
+reading a stored analysis.
+
+A stored analysis is cheap and goes stale silently, which is the disqualifying
+half - a maintenance screen whose whole purpose is detecting drift cannot be
+built on a source that drifts without saying so. Re-analysing the pack's own
+samples is honest but answers the wrong question: those samples may no longer
+represent live traffic, so it reports what the pack was built from rather than
+what changed since. The live schema shows what actually changed, and it costs
+nothing extra because it is the same fetch the picker already makes.
+
+### 18e. D-8 - Resource Graph change tracking ships as a scheduled collector
+
+**Chosen: `scheduled-collector`,** over omitting it and over showing it as an
+unavailable row.
+
+Omission is what `backlog.md#6e` argues against directly: an operator who ticks
+through every section and never sees it concludes the tool missed it. The
+unavailable row is honest and cheap, but it states an absence for a capability
+that is not actually absent - Resource Graph is query-only, which is a reason to
+*schedule* queries rather than a reason there is no path. The card names the
+alternative in its own `notSupported` text, "scheduled Azure Resource Graph
+queries", so building that is following the record rather than departing from
+it.
+
+This is the most work of the three and it lands on the unmeasured Resource Graph
+capability that CAP-1 closes, which is the real sequencing constraint: CAP-1
+first, or this ships against a permission nothing has measured.
+
+### 18f. D-10 - the setup wizard stepper grows to match its header
+
+**Chosen: `promote-substeps`,** over dropping the enumeration from the header.
+
+Both options remove the contradiction; they differ in which side they believe.
+The header promises three phases and the stepper shows one, and the header is
+the one describing what setup actually involves - dropping the enumeration would
+make the screen consistent by making it less informative, hiding structure the
+operator has to traverse either way.
+
+### 18g. D-11 - deprecated guid columns route to their `_` successor, per table
+
+**Chosen: `per-table-successor`,** over leaving it at the ADR-0004 cast.
+
+The cast alone is correct for well-formed UUIDs and CloudTrail's `requestID`
+frequently is not one, so `toguid()` returns null and the value drops silently -
+which is the same quiet failure ADR-0004 was written to end, reappearing one
+layer down. Mapping `AwsRequestId` to `AwsRequestId_` keeps the value.
+
+**The constraint is as load-bearing as the choice.** ADR-0004 calls this "a real
+improvement" but insists it is a per-table CONTENT decision, not a
+schema-mapping rule. It must NOT become a new RULE 2b clause - a general rule
+would rewrite column names in tables where the successor does not exist. The
+bundled catalog already carries both columns for AWSCloudTrail, so the content
+this needs is present.
+
+### 18h. FX-4 - sweep the effect-identity class by hand, once
+
+**Chosen: `one-off-sweep`,** over authoring a custom lint rule.
+
+The rule would be a permanent guard, and the sweep explicitly is not - nothing
+stops a fourth instance being written next week. It still wins on cost of
+ownership: `.oxlintrc.json` enables only `react/rules-of-hooks` and oxlint has
+no `exhaustive-deps` equivalent, so this means AUTHORING and maintaining a rule
+rather than switching one on. Three fixes do not justify becoming the
+maintainer of a lint rule.
+
+Worth reading beside [[DBT-61]], which went the other way on a similar question
+and shows where the line is. There, a text checker was built, measured against
+the real pre-fix code, and MISSED all three defects - so enforcement moved into
+the type system instead. The difference is that the empty-as-zero bug had a
+representable shape and this one does not; when a fourth effect-identity bug
+appears, the thing to reconsider is whether it has become representable, not
+whether the sweep was thorough.
+
+### 18i. AZR-13 - the catalog derives its profile list from entra-diagnostics
+
+**Chosen: `derive`,** over hand-adding SecurityOnly to the catalog and over
+withdrawing SecurityOnly.
+
+`ENTRA_PROFILES` becomes the single authority and the catalog imports it.
+Hand-adding is the smallest diff and leaves TWO hand-maintained lists that must
+agree - the duplicated decision that caused this in the first place, so the next
+profile change breaks it again. Withdrawing SecurityOnly is honest but undoes a
+deliberate AZR-2 decision and re-opens the LOG-07 drift AZR-2 was asked to
+resolve.
+
+**The cost is real and worth stating,** because it is the reason this looked
+close: deriving WEAKENS a verbatim provenance pin. That pin changes from "equals
+the legacy two" to "contains the legacy two, plus SecurityOnly which AZR-2 added
+deliberately". That is a weaker claim, and it is the right one - the pin was
+asserting a fact that AZR-2 had already made false on purpose, so it was
+pinning the port's history rather than its correctness.

@@ -449,8 +449,21 @@ describe('validateBoard - decisions', () => {
   });
 
   it('is happy with a settled story whose decision was answered', () => {
+    // The fixture gained a backlog.md citation when the citation rule landed
+    // (see "an answered decision owes a citation" below). The pin still tests
+    // what it always tested - that ANSWERING resolves the settled/unanswered
+    // contradiction above - it just now has to satisfy both requirements of a
+    // settled decision rather than one. Kept rather than relaxed: dropping it
+    // would leave the contradiction check with no positive case.
     expect(
-      validateBoard(board([withDecision({ settled: 'settled' }, { chosen: 'footer' })])),
+      validateBoard(
+        board([
+          withDecision(
+            { settled: 'settled', detail: 'Reasoning in backlog.md section 18a.' },
+            { chosen: 'footer' },
+          ),
+        ]),
+      ),
     ).toEqual([]);
   });
 });
@@ -633,5 +646,72 @@ describe('renderBoard', () => {
     const rows = md.split('\n').filter((l) => /^\| `[A-Z]+-F\d/.test(l));
     expect(rows).toHaveLength(1);
     for (const r of rows) expect(r.split('|').length - 2).toBe(4);
+  });
+});
+
+/**
+ * An answer is not a decision.
+ *
+ * Picking an option records `chosen` and touches nothing else, deliberately -
+ * the reasoning still has to reach backlog.md. That contract had no
+ * enforcement and NINE cards accumulated a ticked box with no argument behind
+ * it, three of them still reading as questions blocking answered work.
+ */
+describe('validateBoard - an answered decision owes a citation', () => {
+  const decided = (over) =>
+    story({
+      decision: {
+        question: 'Which way?',
+        options: [
+          { key: 'a', label: 'A', detail: 'one way' },
+          { key: 'b', label: 'B', detail: 'the other' },
+        ],
+        chosen: 'a',
+      },
+      ...over,
+    });
+
+  it('accepts a settled decision citing a SECTION', () => {
+    const out = validateBoard(
+      board([decided({ detail: 'Reasoning in backlog.md section 18a.' })]),
+    );
+    expect(out).toEqual([]);
+  });
+
+  it('accepts the older ANCHOR spelling too - one fact, not two conventions', () => {
+    // Load-bearing. The first draft of this rule accepted only "section" and
+    // flagged AZR-S2, VND-3 and D-7, all of which were correctly cited as
+    // `backlog.md#6h` style. A checker that invents a second convention for a
+    // fact the repo already records is worse than no checker.
+    expect(validateBoard(board([decided({ detail: 'See backlog.md#6h.' })]))).toEqual([]);
+  });
+
+  it('REJECTS a settled decision that cites nothing', () => {
+    const out = validateBoard(board([decided({ detail: 'DECIDED: option A.' })]));
+
+    expect(out).toHaveLength(1);
+    expect(out[0]).toContain('cites no reasoning');
+  });
+
+  it('REJECTS a card whose write-up exists but never settled - the nine', () => {
+    // The exact shape that accumulated: reasoning written, `settled` left
+    // behind. Without this half the rule only catches one direction.
+    const out = validateBoard(
+      board([decided({ settled: 'undecided', detail: 'Reasoning in backlog.md section 18a.' })]),
+    );
+
+    expect(out).toHaveLength(1);
+    expect(out[0]).toContain('settle the card');
+  });
+
+  it('leaves an UNANSWERED decision alone - it owes nothing yet', () => {
+    // The open question is the one state that is legitimately incomplete.
+    const d = decided({ settled: 'undecided', detail: 'no citation here' });
+    d.decision.chosen = null;
+    expect(validateBoard(board([d]))).toEqual([]);
+  });
+
+  it('ignores stories with no decision block at all', () => {
+    expect(validateBoard(board([story({ detail: 'no decision, no citation' })]))).toEqual([]);
   });
 });
