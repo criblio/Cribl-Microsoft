@@ -3030,6 +3030,30 @@ button.journey-step-main:hover .journey-step-label {
   background: var(--surface-raised);
   border: 1px solid var(--border-subtle);
 }
+/*
+ * DBT-15: the states that are NOT tiers. `unmeasured` and `measuring` are the
+ * absence of a measurement, so they borrow none of the tier colors and take a
+ * DASHED border with no fill: the visual vocabulary for "nothing was filled in
+ * here", readable at a glance as different in kind rather than in degree.
+ */
+.ingestion-badge-unmeasured,
+.ingestion-badge-measuring {
+  color: var(--text-muted);
+  background: transparent;
+  border: 1px dashed var(--border);
+  font-weight: 600;
+}
+/*
+ * `no-connector` is the odd one out and is styled as such: it is a MEASURED
+ * result (the listing completed and found none), so it takes a solid border
+ * like the tiers rather than the dashed "no answer" treatment - but it is not a
+ * tier, so it takes none of the tier colors either.
+ */
+.ingestion-badge-no-connector {
+  color: var(--text-muted);
+  background: transparent;
+  border: 1px solid var(--border);
+}
 /* Make the Recommended solutions stand out in the list (the ones to use). */
 .solution-browser-item-recommended {
   background: var(--ok-bg);

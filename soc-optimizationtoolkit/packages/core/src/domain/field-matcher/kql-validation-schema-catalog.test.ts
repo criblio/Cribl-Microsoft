@@ -1,8 +1,15 @@
 /**
  * Pins for the KQL-validation schema tier (user direction 2026-07-14): the
  * Azure-Sentinel repo's CI-validated table schemas
- * (.script/tests/KqlvalidationsTests/CustomTables) resolve FIRST when a
- * table is defined there. Fixture shape mirrors the live Cloudflare_CL.json
+ * (.script/tests/KqlvalidationsTests/CustomTables) OUTRANK the solution's
+ * connector-ARM tables and the bundled snapshot when a table is defined there.
+ *
+ * This said "resolve FIRST" until DBT-50, and that is no longer true at the top
+ * end: the LIVE ARM tier now sits above this one. The order lives in
+ * schema-ladder.ts and nowhere else - read it there rather than trusting a
+ * header, which is the lesson this line is.
+ *
+ * Fixture shape mirrors the live Cloudflare_CL.json
  * (verified 2026-07-14: {Name, Properties[{Name,Type}]}, Pascal-ish types
  * with casing drift - Datetime AND DateTime in one file).
  */

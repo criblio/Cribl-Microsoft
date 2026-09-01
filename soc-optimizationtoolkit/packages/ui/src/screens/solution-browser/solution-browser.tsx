@@ -21,19 +21,25 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  DELIVERY_FIT_NOT_FETCHED,
+  DELIVERY_FIT_UNMEASURED_LABEL,
   classifyConnectorIngestion,
   classifySolutionIngestion,
   connectorsCacheKey,
   decodeConnector,
+  deliveryFitBadge,
   deprecatedSolutionKey,
-  ingestionTierLabel,
-  ingestionTierReason,
   listDeprecatedContentHubSolutions,
   lookupSolutionIngestion,
   solutionIndexCacheKey,
   toVendorLogTypes,
 } from "@soc/core";
-import type { IngestionClass, SolutionRef, WorkspaceScope } from "@soc/core";
+import type {
+  DeliveryFitEvidence,
+  IngestionClass,
+  SolutionRef,
+  WorkspaceScope,
+} from "@soc/core";
 import { usePorts } from "../../ports-context";
 import {
   buildSolutionDeepLink,
@@ -99,6 +105,47 @@ type DetailState =
   | { phase: "loading" }
   | { phase: "loaded"; detail: SolutionDetail }
   | { phase: "error"; message: string };
+
+/**
+ * Translate the screen's fetch phase into the evidence the badge derivation
+ * reasons over (DBT-15). Structural on purpose - every judgement about what the
+ * evidence MEANS lives in deliveryFitBadge, where it is pinned without a DOM.
+ * The one thing said here is that `loaded` carries a real connector count, so a
+ * completed listing of zero reaches the derivation as a zero rather than as a
+ * missing classification.
+ */
+/**
+ * `selected` is passed because `idle` means two different things and only the
+ * caller can tell them apart (review, DBT-15).
+ *
+ * With no solution selected, idle is honestly "nobody has looked". With one
+ * SELECTED, idle lasts exactly one commit - React paints `selectedName` before
+ * the detail effect sets `loading` - and in that frame the card would say "Not
+ * measured ... classified live when the solution is selected" on a solution
+ * that IS selected. Sub-perceptual and self-correcting, but it is the one place
+ * the promised-as-future clause can still reach the card, and the card is where
+ * the operator reads it. A selected idle is therefore reported as `fetching`:
+ * a look IS about to happen, which is what "Measuring..." already says.
+ */
+function fitEvidence(
+  detail: DetailState,
+  selected: boolean,
+): DeliveryFitEvidence {
+  switch (detail.phase) {
+    case "loaded":
+      return {
+        phase: "fetched",
+        connectorCount: detail.detail.connectorCount,
+        ingestion: detail.detail.ingestion,
+      };
+    case "loading":
+      return { phase: "fetching" };
+    case "error":
+      return { phase: "fetch-failed" };
+    case "idle":
+      return selected ? { phase: "fetching" } : DELIVERY_FIT_NOT_FETCHED;
+  }
+}
 
 export function SolutionBrowser({
   onSelect,
@@ -408,22 +455,24 @@ export function SolutionBrowser({
               {selected.name}
             </span>
             {(() => {
-              // Shipped tier is authoritative for known solutions; the live
-              // tier (decoded connectors) covers a solution missing from the
-              // shipped map.
-              const ing =
-                lookupSolutionIngestion(selected.name) ??
-                (detail.phase === "loaded"
-                  ? detail.detail.ingestion ?? null
-                  : null);
-              return ing !== null ? (
+              // The SAME derivation the list rows use - the difference is only
+              // what is known here (DBT-15). A row never fetches, so it passes
+              // no evidence; this card passes the live fetch's real phase, and
+              // deliveryFitBadge decides which source wins. Handing the card a
+              // row's badge is what made it say "Not measured" about a fetch it
+              // had already completed (review finding 2).
+              const badge = deliveryFitBadge(
+                lookupSolutionIngestion(selected.name),
+                fitEvidence(detail, true),
+              );
+              return (
                 <span
-                  className={`ingestion-badge ingestion-badge-${ing.tier}`}
-                  title={ingestionTierReason(ing.tier, ing.kind)}
+                  className={`ingestion-badge ingestion-badge-${badge.state}`}
+                  title={badge.reason}
                 >
-                  {ingestionTierLabel(ing.tier)}
+                  {badge.label}
                 </span>
-              ) : null;
+              );
             })()}
             {(() => {
               const badge = deprecationBadge(selected);
@@ -526,7 +575,17 @@ export function SolutionBrowser({
             </span>{" "}
             CCF pull / custom-table DCR{" "}
             <span className="ingestion-badge ingestion-badge-legacy">Legacy</span>{" "}
-            agent / Functions
+            agent / Functions{" "}
+            {/* This state is about the EVIDENCE, not the solution, so the
+                legend says what is missing rather than implying a worse fit.
+                The legend stops here on purpose: "Measuring..." and "No
+                connector" need a live fetch, which only a SELECTED solution
+                has, so listing them as browse-list vocabulary would advertise
+                two badges no row here can ever show. */}
+            <span className="ingestion-badge ingestion-badge-unmeasured">
+              {DELIVERY_FIT_UNMEASURED_LABEL}
+            </span>{" "}
+            no connector JSON was read for it
           </p>
           <ul className="solution-browser-list">
             {visible.map((solution) => {
@@ -535,8 +594,17 @@ export function SolutionBrowser({
               // selected state of their own.
               const badge = deprecationBadge(solution);
               // Logs-Ingestion fit from the shipped map (instant, no fetch).
-              const ingestion = lookupSolutionIngestion(solution.name);
-              const recommended = ingestion?.tier === "recommended";
+              // The map does not cover every solution in the index, so this is
+              // routed through deliveryFitBadge: a miss becomes "Not measured"
+              // rather than the blank cell DBT-15 reported. The evidence is
+              // passed EXPLICITLY rather than defaulted - a browse row really
+              // has not looked at this solution's connectors, and that is what
+              // earns it the tooltip promising the look happens on selection.
+              const fit = deliveryFitBadge(
+                lookupSolutionIngestion(solution.name),
+                DELIVERY_FIT_NOT_FETCHED,
+              );
+              const recommended = fit.state === "recommended";
               return (
                 <li
                   key={solution.path}
@@ -552,14 +620,12 @@ export function SolutionBrowser({
                     <span className="solution-browser-item-name">
                       {solution.name}
                     </span>
-                    {ingestion !== null && (
-                      <span
-                        className={`ingestion-badge ingestion-badge-${ingestion.tier}`}
-                        title={ingestionTierReason(ingestion.tier, ingestion.kind)}
-                      >
-                        {ingestionTierLabel(ingestion.tier)}
-                      </span>
-                    )}
+                    <span
+                      className={`ingestion-badge ingestion-badge-${fit.state}`}
+                      title={fit.reason}
+                    >
+                      {fit.label}
+                    </span>
                     {badge !== null && (
                       <span
                         className="solution-browser-badge"

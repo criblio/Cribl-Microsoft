@@ -17,9 +17,14 @@
  *     on every mount. This is also why `useWorkspaceTables` is NOT reused: it
  *     loads on an effect and its `listedFor` guard means a second load for the
  *     same workspace never happens, so it cannot serve a Refresh at all.
- *   - NO FILTER BOX. `filterTables` went with the panel. A filter is
- *     defensible once rows are actionable, but it must be written fresh with
- *     its own pins rather than resurrected under the old name.
+ *   - NO FILTER BOX - REOPENED BY TBL-8, on the condition this rule set. The
+ *     rule was that a filter is defensible once rows are actionable, but must
+ *     be written fresh with its own pins rather than resurrected under the old
+ *     name. Both halves came true: the rows became actionable (Create DCR per
+ *     row), and law-jpederson-eastus then returned 843 of them, which is a
+ *     number rather than a taste. `filterTables` stayed deleted;
+ *     `filterWorkspaceTables` is a different function with its own pins, its
+ *     own count wording and its own no-match wording.
  *   - NO PRE-LOAD "this may fail" ANNOTATION. `deriveTablePickerAccess`
  *     predicted what the load would do; the real answer arrives in the same
  *     second, and a prediction that disagreed with the outcome would be two
@@ -59,6 +64,7 @@ import type {
   CapabilityFallback,
   CapabilitySet,
   DcrInventoryEntry,
+  Listing,
   WorkspaceTable,
 } from "@soc/core";
 import { usePorts } from "../../ports-context";
@@ -71,13 +77,14 @@ import {
   FALLBACK_POINTER_LABEL,
   fallbackRunPointer,
 } from "../../capabilities/fallback-notice-state";
-import { listingRows } from "@soc/core";
 import { emptyTableListMessage } from "../table-picker/table-picker-state";
 import {
-  buildWorkspaceTableRows,
+  buildWorkspaceTableListing,
   checkTableName,
   dcrCellLabel,
   dcrColumnNote,
+  filterWorkspaceTables,
+  TABLE_FILTER_PLACEHOLDER,
 } from "./workspace-tables-state";
 import { ManualSchemaEditor } from "../../onboarding/manual-schema-editor";
 import {
@@ -110,12 +117,25 @@ export function WorkspaceTablesPanel(props: WorkspaceTablesPanelProps = {}) {
   const { ports, config } = usePorts();
   const logger = ports.logger;
 
-  const [tables, setTables] = useState<WorkspaceTable[] | null>(null);
+  // THE LISTING, NOT ITS ROWS (TBL-8). This used to hold the unwrapped array,
+  // which was fine while nothing here counted; the filter now renders "showing
+  // 12 of 843", and 843 is a count derived from an ARM listing. An
+  // RBAC-filtered list returns 200 with nothing
+  // (docs/inventory-standard.md), so a total taken after the unwrap is a number
+  // that may never have been measured. Keeping the listing whole is what lets
+  // `filterWorkspaceTables` narrow to the `rows` branch and take a total that
+  // cannot be 0.
+  const [listing, setListing] = useState<Listing<WorkspaceTable> | null>(null);
   // null = the DCR listing was not read. Never [] for that case: an empty
   // array is a measured zero and null is an absence of measurement.
   const [dcrs, setDcrs] = useState<DcrInventoryEntry[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  // Substring over the Name column, client-side over rows already loaded.
+  // DELIBERATELY SURVIVES A REFRESH: re-listing to see whether a DCR appeared
+  // is the reason an operator is here, and clearing their filter would throw
+  // away the row they were watching.
+  const [filter, setFilter] = useState("");
 
   // The create-table flow (TBL-1 + TBL-2). Azure-only: creating a table needs
   // no Cribl worker group and no ingestion client id, which is the whole
@@ -154,11 +174,12 @@ export function WorkspaceTablesPanel(props: WorkspaceTablesPanelProps = {}) {
         resourceGroup: config.resourceGroup,
         workspaceName: config.workspaceName,
       });
-      // Safe to unwrap: the empty case is rendered by emptyTableListMessage
-      // (see `emptyMessage` below), which consults the capability before it
-      // will say "no tables". The LOG has no such reader, so it says which
-      // kind of nothing it saw rather than printing a bare 0 (DBT-61).
-      setTables([...listingRows(listed)]);
+      // Stored WHOLE - see the state declaration. The empty case is rendered
+      // by emptyTableListMessage (see `emptyMessage` below), which consults the
+      // capability before it will say "no tables". The LOG has no such reader,
+      // so it says which kind of nothing it saw rather than printing a bare 0
+      // (DBT-61).
+      setListing(listed);
       logger?.info(
         listed.kind === "rows"
           ? `workspace-tables: ${listed.rows.length} table(s)`
@@ -201,7 +222,7 @@ export function WorkspaceTablesPanel(props: WorkspaceTablesPanelProps = {}) {
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      setTables(null);
+      setListing(null);
       setDcrs(null);
       setError(message);
       logger?.error(`workspace-tables: listing failed - ${message}`);
@@ -216,7 +237,16 @@ export function WorkspaceTablesPanel(props: WorkspaceTablesPanelProps = {}) {
     config.workspaceName,
   ]);
 
-  const nameCheck = checkTableName(newTable, tables);
+  // The names the collision check is allowed to consult, and NULL for every
+  // case where they were not established. `checkTableName` states this contract
+  // itself - "a listing that was never read cannot say a name is free" - and an
+  // unverified EMPTY listing is such a listing. The previous unwrap handed it
+  // `[]` instead, so a name typed against an RBAC-filtered `200 []` came back
+  // silently free; keeping the listing whole is what makes the honest spelling
+  // the natural one.
+  const knownNames =
+    listing !== null && listing.kind === "rows" ? listing.rows : null;
+  const nameCheck = checkTableName(newTable, knownNames);
   const schemaErrors = manualSchemaErrors(newColumns);
   const schemaColumns = manualColumnsToSchema(newColumns);
   // Every reason Create is not available, first one shown. Ordered from the
@@ -281,7 +311,16 @@ export function WorkspaceTablesPanel(props: WorkspaceTablesPanelProps = {}) {
     load,
   ]);
 
-  const rows = tables === null ? [] : buildWorkspaceTableRows(tables, dcrs);
+  const rowListing =
+    listing === null ? null : buildWorkspaceTableListing(listing, dcrs);
+  // Null until there is a VERIFIED row set to filter. The filter box, the count
+  // and the no-match line are all statements about rows that were actually
+  // read, so none of them may exist before that - and the empty-listing message
+  // below owns the other case on its own.
+  const view =
+    rowListing !== null && rowListing.kind === "rows"
+      ? filterWorkspaceTables(rowListing, filter)
+      : null;
 
   // Resolved once: the empty-listing message and both write offers below have
   // to read the same audit, or the panel could say two different things about
@@ -367,7 +406,7 @@ export function WorkspaceTablesPanel(props: WorkspaceTablesPanelProps = {}) {
               : "Select a subscription, resource group and workspace first."
           }
         >
-          {busy ? "Loading..." : tables === null ? "Load tables" : "Refresh"}
+          {busy ? "Loading..." : listing === null ? "Load tables" : "Refresh"}
         </button>
         <button
           className="run-button"
@@ -466,55 +505,101 @@ export function WorkspaceTablesPanel(props: WorkspaceTablesPanelProps = {}) {
           {createResult !== "" && <pre className="result">{createResult}</pre>}
         </div>
       )}
-      {tables !== null && tables.length === 0 && (
+      {listing !== null && listing.kind !== "rows" && (
         <p className="field-hint">{emptyMessage.text}</p>
       )}
-      {rows.length > 0 && (
+      {view !== null && (
         <>
           <p className="field-hint">{dcrColumnNote(config.resourceGroup)}</p>
+          {/* TBL-8. The Logs screen's Text filter, in this panel's vocabulary:
+              a `field` label in the `panel-controls` row the Load button
+              already lives in.
+
+              LABELLED "Name filter", NOT "Text". The wording that has to match
+              the Logs screen is the PLACEHOLDER, because that is the one
+              describing the behaviour; the label describes the reach, and this
+              one reaches the Name column alone while Logs greps the whole
+              formatted line. Two controls that behave alike should say so, and
+              two that see different amounts should not pretend otherwise. */}
+          <div className="panel-controls">
+            <label className="field">
+              <span className="field-label">Name filter</span>
+              <input
+                type="text"
+                value={filter}
+                onChange={(ev) => setFilter(ev.target.value)}
+                autoComplete="off"
+                spellCheck={false}
+                placeholder={TABLE_FILTER_PLACEHOLDER}
+              />
+            </label>
+            {/* Every number in here came off the listing's `rows` branch,
+                which is non-empty by type - see filterWorkspaceTables. */}
+            {view.countLabel !== null && (
+              <span className="field-hint">{view.countLabel}</span>
+            )}
+          </div>
+          {/* A FACT ABOUT THE FILTER. It must never borrow `emptyMessage`,
+              which answers whether the WORKSPACE is empty or unreadable -
+              telling an operator their workspace might be empty because they
+              typed four letters is the conflation this panel keeps being
+              filed against. */}
+          {view.noMatchMessage !== null && (
+            <p className="field-hint">{view.noMatchMessage}</p>
+          )}
           {/* `match-field-table mapping-review-grid` is the styled table pair
               this app actually uses (dcr-inventory-panel.tsx:588). There is no
               `.inventory-table` in the sheet - see DBT-39 for the four class
-              names already shipping that render as bare markup. */}
-          <table className="match-field-table mapping-review-grid">
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Kind</th>
-                <th>Retention</th>
-                <th>Plan</th>
-                <th>Data collection rule</th>
-                {onCreateDcr !== undefined && <th>Action</th>}
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row) => (
-                <tr key={row.name}>
-                  <td>{row.name}</td>
-                  <td>{row.kind}</td>
-                  <td>{row.retentionLabel}</td>
-                  <td>{row.planLabel}</td>
-                  <td>{dcrCellLabel(row, config.resourceGroup)}</td>
-                  {onCreateDcr !== undefined && (
-                    <td>
-                      <button
-                        className="gap-reset-button"
-                        onClick={() => onCreateDcr(row.name)}
-                        disabled={busy}
-                        title={
-                          row.dcr === "has"
-                            ? `Already targeted by ${row.dcrNames.join(", ")} - creating another is usually not what you want`
-                            : `Create a data collection rule for ${row.name}`
-                        }
-                      >
-                        Create DCR
-                      </button>
-                    </td>
-                  )}
+              names already shipping that render as bare markup.
+
+              Hidden entirely when the filter matches nothing, rather than left
+              as a header row over an empty body: headings over no rows are one
+              more thing to interpret, and the no-match line above has already
+              said what happened. */}
+          {view.rows.length > 0 && (
+            <table className="match-field-table mapping-review-grid">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Kind</th>
+                  <th>Retention</th>
+                  <th>Plan</th>
+                  <th>Data collection rule</th>
+                  {onCreateDcr !== undefined && <th>Action</th>}
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {view.rows.map((row) => (
+                  <tr key={row.name}>
+                    <td>{row.name}</td>
+                    <td>{row.kind}</td>
+                    <td>{row.retentionLabel}</td>
+                    <td>{row.planLabel}</td>
+                    {/* The filter narrows WHICH rows are shown and nothing
+                        else - the DCR join ran before it and this cell reads
+                        the same verdict it would unfiltered. */}
+                    <td>{dcrCellLabel(row, config.resourceGroup)}</td>
+                    {onCreateDcr !== undefined && (
+                      <td>
+                        <button
+                          className="gap-reset-button"
+                          onClick={() => onCreateDcr(row.name)}
+                          disabled={busy}
+                          title={
+                            row.dcr === "has"
+                              ? `Already targeted by ${row.dcrNames.join(", ")} - creating another is usually not what you want`
+                              : `Create a data collection rule for ${row.name}`
+                          }
+                        >
+                          Create DCR
+                        </button>
+                      </td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
           {/* TBL-4 / rule 2. One offer for the column, not one per row: a
               notice on every row of a listing this long would bury it, and the
               artifact is the same whichever row is clicked.

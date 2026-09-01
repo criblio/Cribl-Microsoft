@@ -207,6 +207,84 @@ returns the selected table's live columns as `DestField[]`.
    use. The stale notice renders over the previous results and clears when a run
    completes.
 
+**The tier was composed in the wrong place, and it took three weeks to notice
+(DBT-50, fixed 2026-08-31).** The mapping review nested the live tier UNDER both
+repo tiers - the KQL-validation schemas and the solution's connector-ARM tables
+- so for any table the Sentinel repo defines the ARM read fired, was awaited,
+was stored, and was never reached by resolution. The decision above was
+implemented correctly in the tier and lost in the composition, which nothing
+pinned because the order lived inline in a React callback.
+
+Two fixes were defensible and they are not equivalent: promote the live tier, or
+keep the order and correct the documents that promise live wins. Promotion is
+right. The decision recorded above already named the loser side of the
+comparison - a blend would mix "columns as the solution declares them" with
+columns "as the workspace actually has them", which is a claim about
+live-versus-solution-declared, not just live-versus-sample-derived. The
+apparently contradictory claim, `kql-validation-schema-catalog.ts` saying it
+"resolves FIRST", enumerates the three tiers it beats and does not mention the
+live tier because on 2026-07-14 it did not exist; there was never a decision
+that the repo outranks live, only an order nobody composed. And the two tiers
+answer different questions: the repo says what a solution's rules were written
+against, while the live tier only ever holds a table an operator PICKED from
+their own workspace, which is what will actually accept the data.
+
+The order now lives in `domain/field-matcher/schema-ladder.ts` with pins on each
+step, because an order that only exists as an expression is one nothing can
+protect. The offline note on the card does not survive contact: the ARM read is
+triggered by an explicit table pick, not by opening the screen, and the workspace
+table LISTING already contacts Azure on scope commit either way.
+
+**Promoting the tier exposed a second defect: it did not honour the column
+contract its siblings honour.** A `SchemaCatalog` does not answer "what columns
+does this table have"; it answers "what columns may a DCR DECLARE for this
+table". The three repo/bundled tiers all strip the 18 Azure-managed names -
+TenantId, Type, `_ResourceId` and the rest - because Azure populates them
+itself. The live tier is fed raw ARM, which reports exactly those names in a
+native table's `standardColumns`, and it stripped nothing. That was harmless
+only while the tier was composed innermost and never answered; promoting it to
+the top made it reachable. Measured on the pin: 21 columns in, 3 out, 18
+dropped - and for a table whose columns are ALL managed, 18 in and 0 out, which
+reduces to the tier's existing empty-override state rather than falling through
+to a repo tier.
+
+**A CORRECTION, recorded rather than quietly dropped, because the wrong version
+is the one that made the fix sound impressive.** The fix round said in six
+places - three module headers, a test header, this section and a commit message
+- that the unstripped tier would have added up to 18 spurious columns *to every
+generated DCR*. That is FALSE, and re-review measured it: `buildDcrColumnSet`
+re-strips the managed names for a native table, so they could never reach a DCR
+that way; and the only route by which a catalog schema reaches a DCR at all is
+`customSchema`, which `onboard-batch` and `onboard-table` both ignore for a
+table that already exists - and a table in the live tier's map is by
+construction one the operator picked from the workspace listing, so it exists.
+
+The claim was borrowing credibility from the genuinely measured 21-to-3 pin
+sitting next to it, which is precisely the failure rule 3 names.
+
+**The real harm is subtler and is why the fix still stands.** The managed names
+enter `GapReport.destSchema`, `destFieldCount`, the mapping table's dest-column
+dropdown, overflow triage and the rule-coverage union. So an operator can map a
+source field onto a column Azure owns - `Type`, `SourceSystem`, `RowKey` - the
+pack emits it, and the DCR then drops it SILENTLY. The data loss is real; it
+happens one step further on than the first telling said.
+
+Reordering tiers is only safe because they answer the same question, so the
+strip is now ONE mechanism rather than a fourth copy of the predicate. The list
+was already shared; the FILTER was not - three tiers each built their own
+`new Set(DCR_SCHEMA_SYSTEM_COLUMNS)` and wrote their own test for it, which is
+how a fourth tier came to have neither. `domain/field-matcher/system-columns.ts`
+now owns the list and the two predicate shapes, and all four tiers read it.
+
+**The composition pin was not enough, and the review proved it.** Severing the
+wiring that feeds the ladder (`live,` -> `live: {},` in the mapping review's
+`createSchemaLadder` call) reinstated DBT-50 in full while all 1299 UI tests
+passed - a composition that is never handed its input still composes perfectly,
+so a pin on the ladder cannot see it. `mapping-review-live-schema.dom.test.tsx`
+now pins the SEAM instead: it drives a real table pick through the rendered
+screen and reads the report that comes out. Mutation check - that exact severing
+fails all three of its pins.
+
 Superseded planning notes follow.
 
 **What remained: the UI.** Two pieces:
@@ -1656,12 +1734,88 @@ nor the page. The pointer has to be moved outside the list before the page will
 scroll at all. Eight results were visible and five were reachable. This is the
 concrete reproduction the old open question about nested scrolling never had.
 
-### 13e. One solution renders no delivery-fit badge (DBT-15)
+### 13e. One solution renders no delivery-fit badge (DBT-15) - FIXED 2026-08-31, REWORKED after review 2026-09-01
 
 In the eight `Palo` results, "Palo Alto Cortex XDR" carries no fit badge while
 all seven siblings carry one (Legacy, Supported, or Recommended). Blank is
 ambiguous between "not measured" and "does not apply", which is the same
 absent-versus-zero distinction the inventory standard exists to protect.
+
+**The cause was the datum, not the rendering.** The badge column works: the row
+was blank because `lookupSolutionIngestion("Palo Alto Cortex XDR")` returns
+null, and the JSX rendered the badge behind `ingestion !== null &&`. The shipped
+map is generated by `scripts/generate-ingestion-classification.mjs`, which
+`continue`s past any solution whose folder yields no Data Connector JSON
+(`files.length === 0`) or none that parse (`classes.length === 0`) - so the
+asset holds 436 entries and the index holds more, and every solution in the
+difference rendered nothing. `Palo Alto Cortex XDR CCP` and `Palo Alto Cortex
+Xpanse CCF` ARE in the map, which is what made one row in a family of eight look
+like a rendering failure. The card's later note that AbuseIPDB and Acronis Cyber
+Protect Cloud do the same on the unfiltered list is the same absence, and was
+the clue that this was data rather than DOM.
+
+**Why the fix is a state of its own rather than a default tier.** The obvious repair
+is to fall back to `classifySolutionIngestion([])`, which answers `legacy` for
+an empty connector list, and every row would then carry a badge. That trades a
+blank for a lie: it states a measured verdict - "not a native Logs Ingestion
+target" - about connectors nobody read. A missing entry conflates three
+different facts (the solution ships no connector, its JSON did not parse, or it
+was added upstream after the asset was generated) and the map cannot tell them
+apart. So `deliveryFitBadge` in
+`packages/core/src/domain/sentinel-content/delivery-fit-badge.ts` maps the
+absent case to `unmeasured` / "Not measured", with a tooltip that says what is
+missing and explicitly that it is not a claim of poor fit. Same discipline as
+`emptyInventoryMessage`: "not measured" is its own answer and does not collapse
+into either of the others.
+
+**The first attempt half-fixed it, and the review caught both halves
+(2026-09-01).** It is worth recording what a same-day adversarial read found,
+because both findings are failure modes this project keeps producing.
+
+*Finding 1 - the pinned half was not the whole fix.* The list row was pinned in
+a DOM test; the SELECTED-SOLUTION CARD was not, because no test in the ui suite
+ever selected a solution. The reviewer reverted just the card's branch to the
+defect shape (`badge.measured ? <span/> : null`) and the entire ui suite stayed
+green. The attempt's own commit message reported a mutation-check that covered
+only the row while reading as though it covered the fix. The lesson is not
+"write more pins" - it is that a mutation-check is evidence only about the line
+it mutated, and a fix with two call sites needs two of them.
+
+*Finding 2 - the tooltip stated something the same screen disproved.* The
+attempt gave the card a ROW's badge, and a row's tooltip ends "its connectors
+are classified live when the solution is selected". On the card the solution IS
+selected and the classification HAS run, so with the fetch complete and no
+connector files found, the app reported "Not measured" about a measurement it
+had just taken and promised as future work something already in the past. That
+is the absent-versus-zero confusion inverted: the original defect reported
+nothing for an unknown; this reported an unknown for a measured zero.
+
+**So the derivation now takes EVIDENCE, and the paragraph this replaces was
+wrong.** The attempt argued that "an empty listing is an unknown, not a zero"
+and refused to read anything from a zero-length connector listing. That is the
+right rule for an ARM list - RBAC returns `200 OK` with an empty `value`, so an
+unverified empty really is unknown - and the wrong rule here. The GitHub
+contents adapter REJECTS on 401/403 and resolves `[]` only for a directory it
+successfully read, so a completed listing of no connector files is a zero
+somebody looked at. Refusing to say so is the second finding.
+
+`deliveryFitBadge(shipped, evidence)` is now one derivation consumed by both
+call sites, over the phases that actually exist: `not-fetched` (every browse
+row - "Not measured", and the only state that may promise a look on selection),
+`fetching` ("Measuring..."), `fetch-failed` ("Not measured", naming the failure
+and offering a retry rather than a loop), and `fetched` - which splits into a
+live tier, "Not measured" when files were found but none could be parsed, and
+`no-connector` when the listing completed with none. `no-connector` carries
+`measured: true` and a tooltip that opens "Measured:".
+
+Two ordering rules, both with reasons rather than preferences. A shipped tier
+beats a live one, because the generator reads every connector file while the
+live decode caps at the first few and can under-report the best tier. But a
+completed EMPTY listing beats the shipped tier, because a shipped entry exists
+only where the generator read at least one connector file - so an empty listing
+does not merely disagree with it, it falsifies its premise, and letting the
+shipped tier win would also print "Recommended" directly above the card's own
+"0 connector files".
 
 ## 14. Overflow serialize missing from the generated pipeline - REPORTED 2026-08-27
 
