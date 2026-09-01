@@ -1,0 +1,37 @@
+# Line endings are a property of the REPOSITORY, not of whoever cloned it.
+#
+# WHY THIS EXISTS (DBT-71). Without it, how a file is stored and checked out
+# depends on each clone's `core.autocrlf`, and two defects shipped from that in
+# a single day - both of them green through CI:
+#
+#   DBT-66  check-listings.mjs carried a shebang. Under CRLF vitest could not
+#           import it, collapsing that whole suite to "no tests" - not one
+#           failing test, the entire file silently not running.
+#   DBT-70  check-schema-asset compared raw bytes. It failed on every Windows
+#           run while reporting ZERO differing tables, which is the giveaway
+#           that the difference was never in the data.
+#
+# NEITHER WAS VISIBLE TO CI, and that is the whole argument. The GitHub runner
+# is Linux and checks out LF, so both were well-formed there while broken on
+# the machine the work actually happens on. A green CI is evidence about the CI
+# checkout, not about the repository.
+
+# Normalise every text file to LF, in the repo and in the working tree. `auto`
+# still lets git detect and leave binaries alone; the explicit rules below are
+# belt-and-braces for the ones we cannot afford it to get wrong.
+* text=auto eol=lf
+
+# WINDOWS BATCH FILES MUST KEEP CRLF. cmd.exe parses them line by line and a
+# lone LF can split a command mid-token. These are launchers under deprecated/
+# and nothing runs them in CI, which is exactly why nobody would notice them
+# breaking.
+*.bat text eol=crlf
+
+# ARCHIVES AND IMAGES - never inspected, never normalised. .crbl is a Cribl
+# pack and .tgz is the packaged app; both are gzip (verified: they begin 1f 8b).
+# If `text=auto` ever mis-detected one as text, normalising it would corrupt
+# the archive silently, which is the one failure here that would not announce
+# itself.
+*.crbl binary
+*.tgz  binary
+*.png  binary
