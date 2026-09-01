@@ -11,7 +11,7 @@ two cannot disagree.
 alternatives. This board holds only what is a unit of work, what state it is
 in, and what it waits on.
 
-**56 in the backlog, 0 in progress, 81 done.**
+**53 in the backlog, 0 in progress, 84 done.**
 
 ## By menu item
 
@@ -23,15 +23,15 @@ operator sees on any screen. Two menus are PLANNED and have no route yet.
 |---|---|---|---|
 | Dataflow | 3 | 0 | 0 |
 | Setup | 1 | 0 | 0 |
-| Sentinel Integration | 11 | 43 | 2 |
+| Sentinel Integration | 9 | 45 | 2 |
 | DCR Automation | 3 | 10 | 0 |
 | Pack Maintenance | 4 | 1 | 0 |
 | Permission Verification | 8 | 0 | 0 |
 | Azure Native Source Onboarding (planned) | 13 | 4 | 0 |
 | Windows Event analysis (planned) | 5 | 0 | 0 |
-| Cross-cutting | 8 | 23 | 0 |
+| Cross-cutting | 7 | 24 | 0 |
 
-Open work totals 56.
+Open work totals 53.
 
 ## Epics and features
 
@@ -66,7 +66,7 @@ Sentinel-side and Lake-side halves of Windows event handling
 | `WIN-F2` Microsoft proprietary enrichment catalog | Windows Event analysis (planned) | 0/2 | WIN-2, D-4 |
 | `WIN-F3` Lake copy format - JSON vs Parquet | Windows Event analysis (planned) | 0/1 | D-5 |
 
-### `HON` Inventory and diagnostic honesty - 55% (6/11)
+### `HON` Inventory and diagnostic honesty - 64% (7/11)
 
 Measured gaps where the app reports a confident wrong answer
 
@@ -74,7 +74,7 @@ Measured gaps where the app reports a confident wrong answer
 |---|---|---|---|
 | `HON-F1` Capability model follow-ons | Permission Verification | 2/4 | HON-6, HON-7*, D-1, D-2* |
 | `HON-F2` Unverified empty inventories | Sentinel Integration | 2/3 | HON-1, HON-2, D-3 |
-| `HON-F3` Guid-column aftermath, made visible | Sentinel Integration | 2/4 | HON-3, HON-8*, HON-4, D-11 |
+| `HON-F3` Guid-column aftermath, made visible | Sentinel Integration | 3/4 | HON-3, HON-8*, HON-4, D-11 |
 
 ### `GEN` Pipeline and pack generation - 100% (3/3)
 
@@ -116,13 +116,13 @@ ENABLER EPIC: release mechanics. The packaged tarball trails main, and the lab t
 |---|---|---|---|
 | `REL-F1` Release and deployment hygiene | Cross-cutting | 3/5 | REL-2, REL-3, REL-4, REL-5, REL-6 |
 
-### `DBT` Quality and technical debt _(enabler)_ - 71% (52/73)
+### `DBT` Quality and technical debt _(enabler)_ - 74% (54/73)
 
 ENABLER EPIC: verification gaps, copy, diagram fidelity, docs and the board's own tooling
 
 | Feature | Menu | Done | Stories |
 |---|---|---|---|
-| `DBT-F1` Verification gaps | Sentinel Integration | 25/32 | DBT-2, DBT-5*, DBT-6, DBT-7, DBT-36*, DBT-55, DBT-56, DBT-42, DBT-43, DBT-44, DBT-45, DBT-46, DBT-47, DBT-48, DBT-49, DBT-50, DBT-51, DBT-52, DBT-41, DBT-40, DBT-60, DBT-61, DBT-62, DBT-63, DBT-64, DBT-65, DBT-66, DBT-67, DBT-68, DBT-69, DBT-70, DBT-71 |
+| `DBT-F1` Verification gaps | Sentinel Integration | 27/32 | DBT-2, DBT-5*, DBT-6, DBT-7, DBT-36*, DBT-55, DBT-56, DBT-42, DBT-43, DBT-44, DBT-45, DBT-46, DBT-47, DBT-48, DBT-49, DBT-50, DBT-51, DBT-52, DBT-41, DBT-40, DBT-60, DBT-61, DBT-62, DBT-63, DBT-64, DBT-65, DBT-66, DBT-67, DBT-68, DBT-69, DBT-70, DBT-71 |
 | `DBT-F2` Copy and UX | Sentinel Integration | 4/9 | DBT-3, DBT-9, DBT-14, DBT-15, DBT-28, D-10*, DBT-53, DBT-38, DBT-39 |
 | `DBT-F3` Diagram fidelity | Dataflow | 0/3 | DBT-1, DBT-4, DBT-12 |
 | `DBT-F4` Docs and spec grounding | Cross-cutting | 6/10 | DBT-8, DBT-10, DBT-11, DBT-13, DBT-22, DBT-26, DBT-32, DBT-57, DBT-58, DBT-54 |
@@ -199,7 +199,7 @@ Next to pick up. Nothing blocks these.
 
 ---
 
-## Backlog - next (22)
+## Backlog - next (20)
 
 Settled and unblocked, sequenced behind now.
 
@@ -256,34 +256,6 @@ Settled and unblocked, sequenced behind now.
   `backlog.md#4` calls "honest, but inert". Depends on CAP-1. Already
   measured, do not re-add: Event Hub namespace creation is `arm.deploy`; every
   Cribl-side write is `source.manage`. ---
-
-- **HON-8** buildDeploymentPreview has no caller - the REVIEW stage is a usecase with no screen
-  `HON-F3` `bug` `unconfirmed`
-  Not now because: Held at next 2026-09-01 pending a delete-or-wire decision,
-  and the investigation found the cause the card guessed at twice is a THIRD
-  thing: the consumer was not missing, it was DELETED. review-screen.tsx:196
-  called buildDeploymentPreview, and the whole screens/review/ directory
-  (1,232 LOC, 27 pins) was removed on 2026-08-24 in commit 1c50cdb - the same
-  architecture-audit commit that broke the extractor in [[DBT-67]]. Nothing on
-  screen is wrong today: the stepper already tells the truth about the
-  retirement (stepper-state.ts:74-78, pinned). What is open is whether to
-  delete 708 lines or wire them into Integrate's Deploy section, and the app
-  ALREADY has a second path to the same ARM bodies via onboardBatch
-  templateOnly - so the module's unique value is narrower than the card
-  implies.
-  FOUND while building HON-3 on 2026-08-28, looking for the right surface for
-  the column diagnostics. `buildDeploymentPreview` is a full usecase - roughly
-  700 lines with its own test file, DCE handling, existing-resource checks and
-  a JSON-serializable result - and repo-wide the ONLY references are inside
-  its own file and its own test. Nothing in `packages/ui` or `apps/cribl-app`
-  calls it. journey-state describes REVIEW as a shipped stage ("the Unit 7
-  deployment-preview screen - the ux-flow-plan 5.2 REVIEW stage"), which is
-  what makes this worth a card rather than a shrug: either the screen exists
-  and does not use this, or the stage is not shipped and a live document says
-  it is. UNCONFIRMED deliberately - I have not driven the app to see what
-  REVIEW renders today, and the two possibilities need different fixes.
-  Compare with the AZR modules, which also have no consumer but are honestly
-  ahead of their screens; this one has a stage claiming to BE the consumer.
 
 - **HON-6** Give the audit's AGE a home and add a manual re-check
   `HON-F1` `story` `settled` `blocked by D-1`
@@ -373,35 +345,6 @@ Settled and unblocked, sequenced behind now.
   Azure-requiring items flag 'not connected' with 'Connect Azure to use this',
   screenshot, Delete - with the only real cost being re-entering the client
   secret afterwards. Nothing about that half is blocked.
-
-- **DBT-6** Exercise the `_raw`-absent branch with a non-Lake sample
-  `DBT-F1` `enabler` `undecided`
-  The Lake write path adds `_raw`, so no Lake-sourced bench can reach that
-  branch - it needs a paste or an upload. `zscaler-lake-lab.md:167-179`.
-  SCOPED 2026-08-29, not built - the premise needs a decision first. Traced
-  both branches the phrase could mean and BOTH are already unit-covered. (1)
-  `unwrapCapture` in `parse-sample.ts` guards on `records[0]._raw !==
-  undefined`; `capture.test.ts` covers it with "leaves a non-capture (no _raw)
-  sample untouched". (2) `rowRawText` in `query-lake-samples.ts` falls back to
-  `JSON.stringify(row)` when `_raw` is absent, and
-  `query-lake-samples.test.ts` covers BOTH the absent case (33 bytes) and the
-  empty-string case (26 bytes), the latter reachable because `readString`
-  treats "" as absent. So the card is not asking for unit coverage - it sits
-  in the Verification gaps feature and wants LIVE evidence. That is where it
-  runs into a wall the cited doc itself describes: `rowRawText` only ever sees
-  rows returned by a Lake query, and `zscaler-lake-lab.md` measured that the
-  Lake WRITE PATH adds `_raw` (0 of 20 events carry it at the source, 40 of 40
-  carry it read back). The doc concludes "reaching that branch needs a paste
-  or an upload" - but a paste never reaches `rowRawText` at all; it goes
-  through `parse-sample`. So as written the card asks for live evidence of a
-  branch that live Lake data structurally cannot produce. UNDECIDED, and the
-  question is which of three this is: close it as covered-by-pins and record
-  that the truly-absent case is unreachable for Lake rows; keep it open only
-  for the PASTE-path branch, which a JSON sample with no `_raw` really would
-  exercise live; or treat the unreachability itself as the finding and ask
-  whether the fallback should stay. Also worth fixing when this is picked up:
-  the card cites `zscaler-lake-lab.md:167-179`, a LINE citation, which is the
-  format documenting-work.md rejects because line numbers rot.
 
 - **DBT-7** Confirm the `eventsPerSec` 2x multiplier against worker config
   `DBT-F1` `enabler` `settled`
@@ -603,7 +546,7 @@ Settled and unblocked, sequenced behind now.
 
 ---
 
-## Backlog - later (32)
+## Backlog - later (31)
 
 Settled, gated on something above.
 
@@ -975,28 +918,9 @@ Settled, gated on something above.
   workbooks are folded in) rather than the noun, then decide once whether both
   surfaces name the exclusion.
 
-- **DBT-51** A real but empty _CL table is silently re-derived from the sample
-  `DBT-F1` `bug` `settled`
-  Not now because: REASON TURNED OVER, re-raised 2026-08-31. This was held at
-  later because the state it needs - a real _CL table with zero materialised
-  columns - was hard to produce, TBL-1 having only just made it easy. TBL-1
-  HAS NOW SHIPPED, so operators can produce that state, which makes the
-  original argument cut the other way: the reason it had not bitten yet was
-  that nobody could reach it, and now they can. Held at later only until
-  someone confirms an authored-then-emptied table actually reproduces it.
-  FOUND 2026-08-31 by the offline-capability audit. `analyze-samples.ts:228`
-  tests `columns.length === 0`, so a custom table that EXISTS in Azure with
-  zero materialised columns is treated as unresolved and re-derived from the
-  sample - which is exactly the quiet substitution
-  `live-table-schema-catalog.ts:42-46` says that tier exists to prevent. The
-  operator is shown a schema the app invented for a table Azure already has.
-  Distinguish 'no such table' from 'a table with no columns yet'; the second
-  is a real state for a freshly created custom table, which [[TBL-1]] now
-  makes easy to produce.
-
 ---
 
-## Done (81)
+## Done (84)
 
 Kept briefly so a reader can see what just landed; prune when the list grows.
 
@@ -1181,6 +1105,46 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   2026-08-30 live audit: its output is a deploy-dcr STEP DETAIL, so seeing it
   needs another deploy run, and the audit stopped short of writing to the lab
   again. Still `verified: pins` on purpose.
+
+- **HON-8** buildDeploymentPreview has no caller - the REVIEW stage is a usecase with no screen
+  `HON-F3` `bug` `unconfirmed` `verified: pins`
+  FOUND while building HON-3 on 2026-08-28, looking for the right surface for
+  the column diagnostics. `buildDeploymentPreview` is a full usecase - roughly
+  700 lines with its own test file, DCE handling, existing-resource checks and
+  a JSON-serializable result - and repo-wide the ONLY references are inside
+  its own file and its own test. Nothing in `packages/ui` or `apps/cribl-app`
+  calls it. journey-state describes REVIEW as a shipped stage ("the Unit 7
+  deployment-preview screen - the ux-flow-plan 5.2 REVIEW stage"), which is
+  what makes this worth a card rather than a shrug: either the screen exists
+  and does not use this, or the stage is not shipped and a live document says
+  it is. UNCONFIRMED deliberately - I have not driven the app to see what
+  REVIEW renders today, and the two possibilities need different fixes.
+  Compare with the AZR modules, which also have no consumer but are honestly
+  ahead of their screens; this one has a stage claiming to BE the consumer.
+  DECIDED AND CLOSED 2026-09-01: the honesty half is done here, and the
+  delete-or-wire question folds into [[DBT-37]] rather than living on as a
+  standalone bug. DBT-37 is the card with a real user ask behind it - can the
+  operator see and export ARM templates - it names this engine as the missing
+  SEE half, and it owns the same surface. Two cards asking one question is how
+  a decision gets made twice and differently. WHAT WAS FIXED: three source
+  comments that named a deleted screen as shipped, and two test NAMES that
+  repeated the claim while their assertions stayed correct.
+  journey-state.ts:19-22 listed review among the shipped surfaces; :136 said
+  'Unit 7 shipped review'; integrate-screen.tsx:52-54 said the standalone
+  Onboard / Azure Targeting / Batch / Review routes 'remain registered... they
+  stay reachable' when all four are absent from the route table. Three of
+  those four survive COMPOSED - Onboard and Batch as DCR Automation tabs,
+  AzureTargeting inside Integrate section 7 - and Review not at all. THE CAUSE
+  WAS NEITHER OF THE TWO THIS CARD GUESSED. The consumer was not missing and
+  was not never-built: it was DELETED. review-screen.tsx:196 called
+  buildDeploymentPreview, and commit 1c50cdb removed the whole screens/review/
+  directory - 1,232 LOC and 27 pins - on 2026-08-24. That is the SAME
+  architecture-audit commit that broke the schema extractor in [[DBT-67]]: one
+  audit, two latent defects, both from changing one side of a pair. The test
+  names were renamed rather than the assertions touched -
+  UNSHIPPED_INTEGRATE_STAGES really is [validate, monitor] and review really
+  is available-not-placeholder, because it is RETIRED. The old names erased
+  that distinction and no assertion ever checked it.
 
 - **HON-4** Tell operators that DCRs deployed before the guid fix still lose fields
   `HON-F3` `story` `settled` `verified: both`
@@ -1527,6 +1491,47 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   `getschema` does not report the guid family at all - SecurityEvent came back
   220 string / 12 int / 2 datetime with zero guid while ARM declares seven, so
   the type assertion reads ARM.
+
+- **DBT-6** Exercise the `_raw`-absent branch with a non-Lake sample
+  `DBT-F1` `enabler` `undecided` `verified: pins`
+  The Lake write path adds `_raw`, so no Lake-sourced bench can reach that
+  branch - it needs a paste or an upload. `zscaler-lake-lab.md:167-179`.
+  SCOPED 2026-08-29, not built - the premise needs a decision first. Traced
+  both branches the phrase could mean and BOTH are already unit-covered. (1)
+  `unwrapCapture` in `parse-sample.ts` guards on `records[0]._raw !==
+  undefined`; `capture.test.ts` covers it with "leaves a non-capture (no _raw)
+  sample untouched". (2) `rowRawText` in `query-lake-samples.ts` falls back to
+  `JSON.stringify(row)` when `_raw` is absent, and
+  `query-lake-samples.test.ts` covers BOTH the absent case (33 bytes) and the
+  empty-string case (26 bytes), the latter reachable because `readString`
+  treats "" as absent. So the card is not asking for unit coverage - it sits
+  in the Verification gaps feature and wants LIVE evidence. That is where it
+  runs into a wall the cited doc itself describes: `rowRawText` only ever sees
+  rows returned by a Lake query, and `zscaler-lake-lab.md` measured that the
+  Lake WRITE PATH adds `_raw` (0 of 20 events carry it at the source, 40 of 40
+  carry it read back). The doc concludes "reaching that branch needs a paste
+  or an upload" - but a paste never reaches `rowRawText` at all; it goes
+  through `parse-sample`. So as written the card asks for live evidence of a
+  branch that live Lake data structurally cannot produce. UNDECIDED, and the
+  question is which of three this is: close it as covered-by-pins and record
+  that the truly-absent case is unreachable for Lake rows; keep it open only
+  for the PASTE-path branch, which a JSON sample with no `_raw` really would
+  exercise live; or treat the unreachability itself as the finding and ask
+  whether the fallback should stay. Also worth fixing when this is picked up:
+  the card cites `zscaler-lake-lab.md:167-179`, a LINE citation, which is the
+  format documenting-work.md rejects because line numbers rot. CLOSED AS
+  COVERED-BY-PINS 2026-09-01, by decision, with the finding recorded so nobody
+  reopens it. Every coverage claim on the card checks out and there is one
+  MORE pin than it credited: unwrapCapture's non-wrapper branch is pinned
+  directly at capture.test.ts:171-177, and rowRawText's absent-_raw fallback
+  is pinned for BOTH its callers, not just the byte-estimate one the card
+  names - query-lake-samples.test.ts:948-964, :966-984 and :1414-1420. AND THE
+  SCENARIO IS STRUCTURALLY UNREACHABLE, which is the part worth keeping: a
+  truly _raw-less LAKE row cannot occur, because the Lake write path adds
+  `_raw` - measured in the lab doc as 0 of 20 carrying it at source and 40 of
+  40 reading it back. So the card was asking for live evidence of a state the
+  system cannot produce. Three unit pins already cover the code path that
+  would handle it if it ever did.
 
 - **DBT-15** Give every solution row a delivery-fit badge, or say why not
   `DBT-F2` `bug` `settled` `verified: pins`
@@ -2440,6 +2445,34 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   triage and the rule-coverage union, so an operator can map a source field
   onto a column Azure owns, the pack emits it, and the DCR drops it silently.
   Real data loss, one step further on than first told.
+
+- **DBT-51** A real but empty _CL table is silently re-derived from the sample
+  `DBT-F1` `bug` `settled` `verified: pins`
+  FOUND 2026-08-31 by the offline-capability audit. `analyze-samples.ts:228`
+  tests `columns.length === 0`, so a custom table that EXISTS in Azure with
+  zero materialised columns is treated as unresolved and re-derived from the
+  sample - which is exactly the quiet substitution
+  `live-table-schema-catalog.ts:42-46` says that tier exists to prevent. The
+  operator is shown a schema the app invented for a table Azure already has.
+  Distinguish 'no such table' from 'a table with no columns yet'; the second
+  is a real state for a freshly created custom table, which [[TBL-1]] now
+  makes easy to produce. FIXED 2026-09-01 by decision, and the honest framing
+  is that this is cheap insurance rather than a repair. analyze-samples.ts now
+  derives only when `columns === null`, not when a tier ANSWERED with `[]`.
+  The two mean different things: null is 'no tier knew this table', where
+  deriving from the sample is the whole point; [] is a tier answering with an
+  override for a table that exists and has no materialised columns yet. This
+  side of the contract had NO PIN, which is why it could disagree with the
+  live tier - that tier states the rule in prose and pins it twice
+  (live-table-schema-catalog.test.ts:93-101, schema-ladder.test.ts:190-205)
+  while analyze-samples quietly collapsed the two. A pin is added and
+  mutation-checked: restoring the old `null || length === 0` condition fails
+  it. REACH IS STATED PLAINLY because the card's re-raise reason was
+  disproved: the null-versus-empty distinction is destroyed UPSTREAM before it
+  reaches here, so no path exercises the changed branch today. It is kept
+  because it makes the live tier's existing pins true end to end and costs two
+  lines - not because a defect was observed. Whether to chase the upstream
+  destruction is NOT taken on here and remains unfiled; nobody has hit it.
 
 - **DBT-52** A denied Sentinel check reads as 'not enabled' and invites a write
   `DBT-F1` `bug` `settled` `verified: pins`

@@ -137,6 +137,40 @@ describe("analyzeSamples (chunked DCR gap analysis)", () => {
     expect(report.dcrRenames).toEqual([]);
   });
 
+  it("does NOT derive when a catalog tier ANSWERS with an empty column set", async () => {
+    // DBT-51. `null` and `[]` are different answers and this side of the
+    // contract had no pin - the live tier states it in prose and pins it twice,
+    // while analyze-samples treated them the same. `null` means no tier knew
+    // the table, so deriving from the sample is the point. `[]` means a tier
+    // ANSWERED: the table exists and has no materialised columns yet. Deriving
+    // over that would analyse against the sample while the UI says the live
+    // table is in use.
+    //
+    // The catalog here answers [] for the table, which is exactly the override
+    // the live tier produces for a provisioned-but-never-written custom table.
+    const emptyAnswering = {
+      content: new FakeSentinelContent({
+        files: { [DCR_PATH]: JSON.stringify(CROWDSTRIKE_CUSTOM_DCR) },
+      }),
+      catalog: { resolveSchema: async () => [] },
+    } as unknown as AnalyzeSamplesPorts;
+
+    const [report] = await collectGapReports(emptyAnswering, {
+      solutionName: SOLUTION,
+      samples: [
+        { logType: "mystery", tableName: "Provisioned_CL", content: '{"foo":"bar"}' },
+      ],
+    });
+
+    // No derivation happened - the tier's empty answer stands.
+    expect(report.schemaDerivation).toBeUndefined();
+    expect(report.destSchema).toEqual([]);
+    // And the sample field is NOT silently mapped onto a column nobody declared.
+    expect(report.fieldMappings.find((m) => m.source === "foo")?.dest ?? null).toBe(
+      null,
+    );
+  });
+
   it("does NOT derive for an unknown NATIVE table (all-unmatched stays honest)", async () => {
     const [report] = await collectGapReports(makePorts(), {
       solutionName: SOLUTION,

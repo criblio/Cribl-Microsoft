@@ -49,9 +49,13 @@
  *      only, so it stays available when the deploy button cannot unlock.
  *
  * The user validated the native-table onboard live end to end; it stays fully
- * operable THROUGH this page. The standalone Onboard / Azure Targeting /
- * Batch / Review routes remain registered (parked in the Development nav
- * section; they stay reachable).
+ * operable THROUGH this page. NONE of the standalone Onboard / Azure
+ * Targeting / Batch / Review routes is registered any more - this comment
+ * said they were "parked in the Development nav section; they stay
+ * reachable", and all four are absent from the route table. Three survive
+ * COMPOSED rather than routed: Onboard and Batch as tabs of DCR Automation,
+ * and AzureTargetingScreen inside section 7 of this page. Review is not
+ * reachable at all - its screen was deleted 2026-08-24 ([[HON-8]]).
  *
  * Read-ahead contract: every section is visible; gating lives only at the
  * commit actions inside the composed screens (Use this target, Run deploy).
