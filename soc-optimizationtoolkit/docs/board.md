@@ -530,7 +530,7 @@ Settled and unblocked, sequenced behind now.
   tree, which is why only this one is carded.
 
 - **DBT-71** Line endings are per-clone config, and have now shipped two Windows-only breaks
-  `DBT-F1` `enabler` `undecided`
+  `DBT-F1` `enabler` `settled`
   The repo has NO .gitattributes, so how a file is stored and checked out
   depends on each clone's `core.autocrlf`. Two defects shipped from that in a
   single day, and both went green through CI: [[DBT-66]] - check-listings.mjs
@@ -552,10 +552,16 @@ Settled and unblocked, sequenced behind now.
   every comparison normalise. That is what DBT-70's fix did and it was right
   there, but it does not cover DBT-66 - that was a TOOL choking on CRLF in a
   file we did not compare at all. The two failures share a cause and not a
-  remedy.
-  DECISION (unanswered): Pin line endings repo-wide, narrowly, or not at all?
+  remedy. DECIDED 2026-09-01: repo-wide. The narrow option was 20x cheaper and
+  still loses - it fixes the two known instances a third time and leaves
+  1,440-odd files on per-clone config, which is the detection gap the card
+  exists about. Reasoning in backlog.md section 19, which is why this can
+  settle. SEQUENCING IS PART OF THE DECISION: land everything in flight first
+  and renormalise on a clean main, because a 1,473-file commit against open
+  branches turns a mechanical change into a merge fight.
+  DECISION: Pin line endings repo-wide, narrowly, or not at all?
     [ ] `narrow` Pin only the files that get read as bytes - A .gitattributes covering *.mjs (29 files) and the generated asset packages/core/src/assets/dcr-template-schemas.json. These are the files that scripts execute or byte-compare, which is where both defects landed. Roughly a 30-file renormalisation instead of 1,473, so blame and open branches survive. Leaves the other 1,440-odd files on per-clone config, so a third instance elsewhere is still possible.
-    [ ] `repo-wide` Pin everything to LF - `* text=auto eol=lf`. Closes the class properly and matches what CI already sees, so Windows and Linux stop disagreeing. Costs a 1,473-file renormalisation commit that breaks git blame across the repo and conflicts with every open branch. Best done when nothing is in flight, which is a scheduling constraint rather than a technical one.
+    [x] `repo-wide` Pin everything to LF - `* text=auto eol=lf`. Closes the class properly and matches what CI already sees, so Windows and Linux stop disagreeing. Costs a 1,473-file renormalisation commit that breaks git blame across the repo and conflicts with every open branch. Best done when nothing is in flight, which is a scheduling constraint rather than a technical one.
     [ ] `leave-it` Leave it, keep fixing instances - Both known instances are fixed and pinned. The argument for waiting is that a 1,473-file diff is a real cost against a hazard that has surfaced twice in one unusually busy day. The argument against is that both instances reached main and CI could not see either, so the detection story is 'somebody happens to run the suite on Windows'.
 
 ---
