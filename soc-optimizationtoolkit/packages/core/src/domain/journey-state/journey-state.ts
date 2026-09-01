@@ -18,8 +18,12 @@
  *   INTEGRATE arc  (choose-content -> configure -> review -> deploy ->
  *     validate -> monitor): the repeatable job. The shipped surfaces are
  *     choose-content, configure, and deploy (the existing Onboard / Batch
- *     Onboard / Options screens) plus review (the Unit 7 deployment-preview
- *     screen - the ux-flow-plan 5.2 REVIEW stage); validate and monitor
+ *     Onboard / Options screens). REVIEW IS NOT AMONG THEM: the Unit 7
+ *     deployment-preview SCREEN was deleted on 2026-08-24 (commit 1c50cdb)
+ *     and the standalone Review nav item was retired by user directive on
+ *     2026-07-14, so the stage is bound without a route and says so
+ *     (stepper-state.ts). Its usecase survives with no caller - see
+ *     [[HON-8]] and [[DBT-37]]. validate and monitor
  *     render as HONEST 'not-yet-available' placeholders until their units
  *     land (10/20/21, 27) - see UNSHIPPED_INTEGRATE_STAGES.
  *
@@ -133,8 +137,15 @@ export const INTEGRATE_ARC: readonly IntegrateStageId[] = [
 /**
  * Integrate stages whose product surface has NOT shipped yet. They render
  * 'not-yet-available' - an honest placeholder, never a teaser. Later units
- * shrink this list (Unit 7 shipped review; 10/20/21 ship validate; 27 ships
- * monitor) by editing it HERE, in the one journey module.
+ * shrink this list (10/20/21 ship validate; 27 ships monitor) by editing it
+ * HERE, in the one journey module.
+ *
+ * REVIEW IS ABSENT FROM THIS LIST AND THAT IS STILL CORRECT, but not for the
+ * reason previously written here. This said "Unit 7 shipped review". Unit 7
+ * shipped the ENGINE; the screen that called it was deleted on 2026-08-24 and
+ * the nav item was retired before that. Review is not unshipped-and-pending,
+ * it is retired - which is why it renders unlinked rather than as a
+ * placeholder.
  */
 export const UNSHIPPED_INTEGRATE_STAGES: readonly IntegrateStageId[] = [
   "validate",

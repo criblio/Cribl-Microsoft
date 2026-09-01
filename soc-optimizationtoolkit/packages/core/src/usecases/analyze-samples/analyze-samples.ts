@@ -224,10 +224,23 @@ export async function* analyzeSamples(
     // as a resolved schema (the Integrate deploy passes destSchema as
     // onboardTable's customSchema, so deploying CREATES this table).
     let schemaDerivation;
-    if (
-      (columns === null || columns.length === 0) &&
-      isCustomTableName(sample.tableName)
-    ) {
+    // DBT-51: `null` and `[]` mean DIFFERENT things and only `null` may derive.
+    // `null` is "no catalog tier knew this table" - deriving from the sample is
+    // the whole point. `[]` is a tier ANSWERING with an override: a table that
+    // exists and has no materialised columns yet (provisioned, never written
+    // to). Deriving over that silently analyses against the sample while the UI
+    // says the live table is in use, which is the same shape as reporting an
+    // unverified empty as a measured zero.
+    //
+    // The live tier already states this contract in prose and pins it twice
+    // (live-table-schema-catalog.ts:73-79, and schema-ladder.test.ts), so this
+    // line was the one place that disagreed with it.
+    //
+    // HONEST ABOUT REACH: investigation found the distinction is destroyed
+    // UPSTREAM before it arrives here, so no path reaches the changed branch
+    // today. This is kept because it makes the live tier's existing pins true
+    // end to end and costs two lines - not because a defect was observed.
+    if (columns === null && isCustomTableName(sample.tableName)) {
       const derived = deriveCustomTableSchema(
         parsed,
         input.contentColumnNames ?? [],

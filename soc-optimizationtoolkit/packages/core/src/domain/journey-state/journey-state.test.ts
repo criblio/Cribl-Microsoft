@@ -426,11 +426,16 @@ describe("unshipped integrate placeholders", () => {
     }
   });
 
-  it("lists exactly the stages still unshipped after Unit 7 shipped review", () => {
+  it("lists exactly the stages still unshipped - review is RETIRED, not pending", () => {
+    // Renamed 2026-09-01 (HON-8). This said "after Unit 7 shipped review",
+    // which is false twice over: Unit 7 shipped the ENGINE, and the screen
+    // that called it was deleted on 2026-08-24. Review is absent from this
+    // list because it is retired, not because it shipped - a distinction the
+    // old name erased, and the assertion never checked.
     expect(UNSHIPPED_INTEGRATE_STAGES).toEqual(["validate", "monitor"]);
   });
 
-  it("ships review: available on a green Azure journey, never a placeholder", () => {
+  it("leaves review AVAILABLE rather than a placeholder, because it is retired", () => {
     const journey = deriveJourney(
       facts({ criblReachable: true }),
     );
