@@ -11,7 +11,7 @@ two cannot disagree.
 alternatives. This board holds only what is a unit of work, what state it is
 in, and what it waits on.
 
-**56 in the backlog, 0 in progress, 80 done.**
+**57 in the backlog, 0 in progress, 80 done.**
 
 ## By menu item
 
@@ -23,7 +23,7 @@ operator sees on any screen. Two menus are PLANNED and have no route yet.
 |---|---|---|---|
 | Dataflow | 3 | 0 | 0 |
 | Setup | 1 | 0 | 0 |
-| Sentinel Integration | 11 | 42 | 0 |
+| Sentinel Integration | 12 | 42 | 0 |
 | DCR Automation | 3 | 10 | 0 |
 | Pack Maintenance | 4 | 1 | 0 |
 | Permission Verification | 8 | 0 | 0 |
@@ -31,7 +31,7 @@ operator sees on any screen. Two menus are PLANNED and have no route yet.
 | Windows Event analysis (planned) | 5 | 0 | 0 |
 | Cross-cutting | 8 | 23 | 0 |
 
-Open work totals 56.
+Open work totals 57.
 
 ## Epics and features
 
@@ -116,13 +116,13 @@ ENABLER EPIC: release mechanics. The packaged tarball trails main, and the lab t
 |---|---|---|---|
 | `REL-F1` Release and deployment hygiene | Cross-cutting | 3/5 | REL-2, REL-3, REL-4, REL-5, REL-6 |
 
-### `DBT` Quality and technical debt _(enabler)_ - 71% (51/72)
+### `DBT` Quality and technical debt _(enabler)_ - 70% (51/73)
 
 ENABLER EPIC: verification gaps, copy, diagram fidelity, docs and the board's own tooling
 
 | Feature | Menu | Done | Stories |
 |---|---|---|---|
-| `DBT-F1` Verification gaps | Sentinel Integration | 24/31 | DBT-2, DBT-5*, DBT-6, DBT-7, DBT-36*, DBT-55, DBT-56, DBT-42, DBT-43, DBT-44, DBT-45, DBT-46, DBT-47, DBT-48, DBT-49, DBT-50, DBT-51, DBT-52, DBT-41, DBT-40, DBT-60, DBT-61, DBT-62, DBT-63, DBT-64, DBT-65, DBT-66, DBT-67, DBT-68, DBT-69, DBT-70 |
+| `DBT-F1` Verification gaps | Sentinel Integration | 24/32 | DBT-2, DBT-5*, DBT-6, DBT-7, DBT-36*, DBT-55, DBT-56, DBT-42, DBT-43, DBT-44, DBT-45, DBT-46, DBT-47, DBT-48, DBT-49, DBT-50, DBT-51, DBT-52, DBT-41, DBT-40, DBT-60, DBT-61, DBT-62, DBT-63, DBT-64, DBT-65, DBT-66, DBT-67, DBT-68, DBT-69, DBT-70, DBT-71 |
 | `DBT-F2` Copy and UX | Sentinel Integration | 4/9 | DBT-3, DBT-9, DBT-14, DBT-15, DBT-28, D-10*, DBT-53, DBT-38, DBT-39 |
 | `DBT-F3` Diagram fidelity | Dataflow | 0/3 | DBT-1, DBT-4, DBT-12 |
 | `DBT-F4` Docs and spec grounding | Cross-cutting | 6/10 | DBT-8, DBT-10, DBT-11, DBT-13, DBT-22, DBT-26, DBT-32, DBT-57, DBT-58, DBT-54 |
@@ -158,7 +158,7 @@ _Nothing here._
 
 ---
 
-## Backlog - next (22)
+## Backlog - next (23)
 
 Settled and unblocked, sequenced behind now.
 
@@ -528,6 +528,35 @@ Settled and unblocked, sequenced behind now.
   board-serve.mjs, package.mjs and pkgutil.mjs also lack tests, so this is not
   a lone offender - but those do not stand between a committed asset and the
   tree, which is why only this one is carded.
+
+- **DBT-71** Line endings are per-clone config, and have now shipped two Windows-only breaks
+  `DBT-F1` `enabler` `undecided`
+  The repo has NO .gitattributes, so how a file is stored and checked out
+  depends on each clone's `core.autocrlf`. Two defects shipped from that in a
+  single day, and both went green through CI: [[DBT-66]] - check-listings.mjs
+  carried a shebang, and under CRLF vitest could not import it, collapsing
+  that whole suite to 'no tests'. [[DBT-70]] - check-schema-asset compared RAW
+  BYTES, so it failed on every Windows run while reporting zero differing
+  tables. NEITHER WAS VISIBLE TO CI, and that is the point rather than a
+  detail: the GitHub runner is Linux and checks out LF, so both were
+  well-formed there. The repo's primary development environment is Windows. A
+  green CI is evidence about the CI checkout, not about the repository - twice
+  in one session is a pattern, not luck. MEASURED, not assumed, because the
+  obvious fix is far more expensive than it looks. The blobs in this repo are
+  stored as CRLF - checked directly, not sampled: `git cat-file -p
+  HEAD:packages/core/src/index.ts` contains CR. So `* text=auto eol=lf` would
+  RENORMALISE 1,473 TRACKED TEXT FILES (710 .ts, 466 .json, 119 .tsx, 96 .md,
+  43 .ps1, 29 .mjs and the rest). That is a diff that rewrites almost every
+  line of history's surface: it breaks `git blame` on everything, and it
+  conflicts with every branch open at the time. WHAT IS NOT THE ANSWER: making
+  every comparison normalise. That is what DBT-70's fix did and it was right
+  there, but it does not cover DBT-66 - that was a TOOL choking on CRLF in a
+  file we did not compare at all. The two failures share a cause and not a
+  remedy.
+  DECISION (unanswered): Pin line endings repo-wide, narrowly, or not at all?
+    [ ] `narrow` Pin only the files that get read as bytes - A .gitattributes covering *.mjs (29 files) and the generated asset packages/core/src/assets/dcr-template-schemas.json. These are the files that scripts execute or byte-compare, which is where both defects landed. Roughly a 30-file renormalisation instead of 1,473, so blame and open branches survive. Leaves the other 1,440-odd files on per-clone config, so a third instance elsewhere is still possible.
+    [ ] `repo-wide` Pin everything to LF - `* text=auto eol=lf`. Closes the class properly and matches what CI already sees, so Windows and Linux stop disagreeing. Costs a 1,473-file renormalisation commit that breaks git blame across the repo and conflicts with every open branch. Best done when nothing is in flight, which is a scheduling constraint rather than a technical one.
+    [ ] `leave-it` Leave it, keep fixing instances - Both known instances are fixed and pinned. The argument for waiting is that a 1,473-file diff is a real cost against a hazard that has surfaced twice in one unusually busy day. The argument against is that both instances reached main and CI could not see either, so the detection story is 'somebody happens to run the suite on Windows'.
 
 ---
 
