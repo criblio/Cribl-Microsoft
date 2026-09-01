@@ -11,7 +11,7 @@ two cannot disagree.
 alternatives. This board holds only what is a unit of work, what state it is
 in, and what it waits on.
 
-**55 in the backlog, 0 in progress, 78 done.**
+**57 in the backlog, 0 in progress, 78 done.**
 
 ## By menu item
 
@@ -23,7 +23,7 @@ operator sees on any screen. Two menus are PLANNED and have no route yet.
 |---|---|---|---|
 | Dataflow | 3 | 0 | 0 |
 | Setup | 1 | 0 | 0 |
-| Sentinel Integration | 10 | 40 | 0 |
+| Sentinel Integration | 12 | 40 | 1 |
 | DCR Automation | 3 | 10 | 0 |
 | Pack Maintenance | 4 | 1 | 0 |
 | Permission Verification | 8 | 0 | 0 |
@@ -31,7 +31,7 @@ operator sees on any screen. Two menus are PLANNED and have no route yet.
 | Windows Event analysis (planned) | 5 | 0 | 0 |
 | Cross-cutting | 8 | 23 | 0 |
 
-Open work totals 55.
+Open work totals 57.
 
 ## Epics and features
 
@@ -116,13 +116,13 @@ ENABLER EPIC: release mechanics. The packaged tarball trails main, and the lab t
 |---|---|---|---|
 | `REL-F1` Release and deployment hygiene | Cross-cutting | 3/5 | REL-2, REL-3, REL-4, REL-5, REL-6 |
 
-### `DBT` Quality and technical debt _(enabler)_ - 71% (49/69)
+### `DBT` Quality and technical debt _(enabler)_ - 69% (49/71)
 
 ENABLER EPIC: verification gaps, copy, diagram fidelity, docs and the board's own tooling
 
 | Feature | Menu | Done | Stories |
 |---|---|---|---|
-| `DBT-F1` Verification gaps | Sentinel Integration | 22/28 | DBT-2, DBT-5*, DBT-6, DBT-7, DBT-36*, DBT-55, DBT-56, DBT-42, DBT-43, DBT-44, DBT-45, DBT-46, DBT-47, DBT-48, DBT-49, DBT-50, DBT-51, DBT-52, DBT-41, DBT-40, DBT-60, DBT-61, DBT-62, DBT-63, DBT-64, DBT-65, DBT-66, DBT-67 |
+| `DBT-F1` Verification gaps | Sentinel Integration | 22/30 | DBT-2, DBT-5*, DBT-6, DBT-7, DBT-36*, DBT-55, DBT-56, DBT-42, DBT-43, DBT-44, DBT-45, DBT-46, DBT-47, DBT-48, DBT-49, DBT-50, DBT-51, DBT-52, DBT-41, DBT-40, DBT-60, DBT-61, DBT-62, DBT-63, DBT-64, DBT-65, DBT-66, DBT-67, DBT-68, DBT-69 |
 | `DBT-F2` Copy and UX | Sentinel Integration | 4/9 | DBT-3, DBT-9, DBT-14, DBT-15, DBT-28, D-10*, DBT-53, DBT-38, DBT-39 |
 | `DBT-F3` Diagram fidelity | Dataflow | 0/3 | DBT-1, DBT-4, DBT-12 |
 | `DBT-F4` Docs and spec grounding | Cross-cutting | 6/10 | DBT-8, DBT-10, DBT-11, DBT-13, DBT-22, DBT-26, DBT-32, DBT-57, DBT-58, DBT-54 |
@@ -150,15 +150,45 @@ _Nothing here._
 
 ---
 
-## Backlog - now (0)
+## Backlog - now (1)
 
 Next to pick up. Nothing blocks these.
 
-_Nothing here._
+- **DBT-68** The Azure system-column list is maintained twice, in the two places that both strip it
+  `DBT-F1` `bug` `settled`
+  Found by the fourteenth architecture audit, check 2, and CONFIRMED by
+  comparison rather than suspected: `DCR_SCHEMA_SYSTEM_COLUMNS` in
+  domain/field-matcher/system-columns.ts and `NATIVE_SYSTEM_COLUMNS` in
+  domain/schema-mapping/schema-mapping.ts are 18 names each and the sets are
+  IDENTICAL today - zero on either side of the difference. They are separate
+  `Object.freeze([...])` literals in separate modules with no link between
+  them. WHY THIS IS THE DANGEROUS SHAPE and not tidy-up: the two lists govern
+  the two ENDS of the same pipeline. The field-matcher list decides which
+  columns a schema catalog tier will OFFER; the schema-mapping list decides
+  which columns `buildDcrColumnSet` will STRIP when it builds the DCR.
+  [[DBT-50]] was exactly a disagreement between an offering tier and the
+  contract its siblings honoured, and its fix ended with the words 'one
+  mechanism, not a fourth copy of the predicate'. That dedup was PARTIAL - it
+  unified the four field-matcher tiers with each other and left schema-mapping
+  holding its own copy. The failure mode if they drift: a name added to one
+  and not the other is either offered to the operator and then silently
+  dropped by the DCR builder, or stripped from the catalog while the builder
+  still declares it. Both are the quiet data-shape mismatch this codebase
+  keeps carding. WHAT MAKES IT MORE THAN A RENAME, and why it is filed rather
+  than fixed in the audit: `CUSTOM_SYSTEM_COLUMNS` is a genuine 6-name
+  variant, so the right shape is one owner exposing both the native and custom
+  sets, not a blind merge. Layering also has to be decided - schema-mapping
+  and field-matcher are sibling domain modules, so the shared list needs a
+  home that neither owns, or one must openly depend on the other. AND A
+  CAUTION FROM TODAY: [[DBT-67]] happened because a uniform fix was applied to
+  two paths that looked alike and were not. Two lists that are equal today may
+  still be answering different questions - confirm the native set and the
+  DCR-schema set are the SAME QUESTION before merging them, rather than
+  inferring it from the fact that they match.
 
 ---
 
-## Backlog - next (21)
+## Backlog - next (22)
 
 Settled and unblocked, sequenced behind now.
 
@@ -510,6 +540,24 @@ Settled and unblocked, sequenced behind now.
   inputs, not of the artifact kind alone. That is a change to a contract
   settled hours ago, so decide it before building - backlog.md section 16 is
   the reasoning it would amend.
+
+- **DBT-69** check-schema-asset has no test, which is the gap it was built to close
+  `DBT-F1` `enabler` `settled`
+  apps/cribl-app/scripts/check-schema-asset.mjs ships with no test file,
+  unlike board.mjs, check-listings.mjs, check-docs-drift.mjs and the other
+  gate scripts, which all have one. The irony is the point, not a joke:
+  [[DBT-67]] existed because a generator crashed for seven weeks and NO TEST
+  RAN IT, so the breakage was silent. The checker added to close that is
+  itself untested, so if it silently stops detecting drift - an exception
+  swallowed, a comparison inverted, the restore in the finally block masking a
+  real failure - nothing reports it, and the gate reads green while guarding
+  nothing. Its behaviour WAS verified by hand at the time: both mutations were
+  run and both were caught (stale asset names the 2 drifting tables; a broken
+  generator path reports FAILED TO RUN with the original ENOENT). But a
+  verification nobody recorded is a verification that expires. Sibling scripts
+  board-serve.mjs, package.mjs and pkgutil.mjs also lack tests, so this is not
+  a lone offender - but those do not stand between a committed asset and the
+  tree, which is why only this one is carded.
 
 ---
 
