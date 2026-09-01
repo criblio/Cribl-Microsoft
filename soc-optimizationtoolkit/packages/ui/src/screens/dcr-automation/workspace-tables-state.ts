@@ -124,10 +124,18 @@ export function buildWorkspaceTableListing(
 }
 
 /**
- * The Logs screen's wording for the same control, verbatim (TBL-8).
+ * The wording BOTH substring filters use - this panel and the Logs screen
+ * (TBL-8).
  *
  * Not a coincidence to be tidied later: two substring filters that describe
  * themselves differently teach an operator that they behave differently.
+ *
+ * SHARED RATHER THAN COPIED, and the difference is load-bearing. The first
+ * version of this pinned the literal in a test and called it "the Logs screen's
+ * wording, verbatim" - which was a claim about a file the pin never read, so
+ * editing logs-screen.tsx left the pin green and the two screens diverged
+ * silently. logs-screen.tsx now imports this constant, so parity is enforced by
+ * the compiler instead of asserted by a comment.
  */
 export const TABLE_FILTER_PLACEHOLDER = "substring, case-insensitive";
 
@@ -282,11 +290,17 @@ export function checkTableName(
     return { verdict: "unchecked", message: null, blocking: false };
   }
   if (tables === null) {
+    // `null` now means two different things - never loaded, and loaded but the
+    // listing came back unverifiably empty - and this function cannot tell
+    // them apart. So the wording must be true of BOTH. The first version named
+    // an action ("Load the table list"), which is wrong in the second case
+    // because by then the button reads "Refresh"; review caught it pointing at
+    // a control that no longer exists under that name.
     return {
       verdict: "unchecked",
       message:
-        "Load the table list to check whether this name is already taken. " +
-        "Creating over an existing table replaces its schema.",
+        "The table list has not been read, so this name cannot be checked " +
+        "against it. Creating over an existing table replaces its schema.",
       blocking: false,
     };
   }

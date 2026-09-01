@@ -14,6 +14,7 @@
  */
 
 import { useCallback, useEffect, useState } from "react";
+import { TABLE_FILTER_PLACEHOLDER } from "../dcr-automation/workspace-tables-state";
 import { buildSupportBundle, filterLogEntries, formatLogLine } from "@soc/core";
 import type { LogContextValue, LogEntry } from "@soc/core";
 import { usePorts } from "../../ports-context";
@@ -141,7 +142,7 @@ export function LogsScreen({ getRecentLogs, platformInfo }: LogsScreenProps) {
             onChange={(e) => setText(e.target.value)}
             autoComplete="off"
             spellCheck={false}
-            placeholder="substring, case-insensitive"
+            placeholder={TABLE_FILTER_PLACEHOLDER}
           />
         </label>
       </div>

@@ -53,6 +53,26 @@ const TABLES = {
   ],
 };
 
+/**
+ * A table whose DCR is named nothing like it, used ONLY by the DCR-column
+ * pin and kept out of the shared fixture on purpose - adding a third row there
+ * broke five count-based pins, which is its own small lesson about fixtures
+ * that several tests share.
+ *
+ * It exists because every needle matching "SecurityEvent" is also inside
+ * "dcr-SecurityEvent-eastus", so the default fixture CANNOT tell a filter that
+ * narrows rows from one that also narrows DCR names.
+ */
+const UNRELATED_TABLE = { name: "Syslog", properties: { plan: "Analytics" } };
+const UNRELATED_DCR = {
+  name: "dcr-legacy-collector",
+  location: "eastus",
+  properties: {
+    dataFlows: [{ outputStream: "Microsoft-Syslog" }],
+    streamDeclarations: {},
+  },
+};
+
 const DCRS = {
   value: [
     {
@@ -73,6 +93,8 @@ function makePorts(
     tablesFail?: boolean;
     /** `200 []` - byte-identical to an RBAC-filtered list, hence unverified. */
     tablesEmpty?: boolean;
+    /** Adds Syslog + dcr-legacy-collector. Only the DCR-column pin needs it. */
+    unrelatedDcr?: boolean;
   } = {},
 ) {
   const calls: string[] = [];
@@ -84,7 +106,11 @@ function makePorts(
           if (opts.dcrFails === true) {
             return { ok: false, status: 403, body: {} } as unknown as PortHttpResponse;
           }
-          return ok(DCRS);
+          return ok(
+            opts.unrelatedDcr === true
+              ? { value: [...DCRS.value, UNRELATED_DCR] }
+              : DCRS,
+          );
         }
         if (o.path.endsWith("/tables")) {
           if (opts.tablesEmpty === true) {
@@ -97,7 +123,11 @@ function makePorts(
               body: { error: { message: "denied by RBAC" } },
             } as unknown as PortHttpResponse;
           }
-          return ok(TABLES);
+          return ok(
+            opts.unrelatedDcr === true
+              ? { value: [...TABLES.value, UNRELATED_TABLE] }
+              : TABLES,
+          );
         }
         return ok({ value: [] });
       },
@@ -245,7 +275,7 @@ describe("WorkspaceTablesPanel", () => {
     fireEvent.change(screen.getByLabelText("Table name"), {
       target: { value: "Brand_New_CL" },
     });
-    expect(screen.getByText(/Load the table list/)).toBeTruthy();
+    expect(screen.getByText(/has not been read/)).toBeTruthy();
   });
 
   it("offers Create DCR per row, and passes THAT row's table", async () => {
@@ -333,14 +363,28 @@ describe("WorkspaceTablesPanel - the Name filter (TBL-8)", () => {
   });
 
   it("leaves the DCR column reading exactly what it read unfiltered", async () => {
-    const { ports } = makePorts();
+    const { ports } = makePorts({ unrelatedDcr: true });
     renderPanel(ports);
     await loadRows();
     expect(screen.getByText("dcr-SecurityEvent-eastus")).toBeTruthy();
-    typeFilter("securityevent");
-    // Same cell, same DCR - the filter narrows which rows are shown and
-    // touches neither the join nor its verdict.
-    expect(screen.getByText("dcr-SecurityEvent-eastus")).toBeTruthy();
+    // THE FIXTURE TRAP THIS AVOIDS, found by review: the obvious filter here
+    // is "securityevent", and the fixture DCR is named dcr-SecurityEvent-eastus
+    // - so a buggy filter that ALSO narrowed the DCR names by the needle would
+    // keep this exact cell on screen and the pin would pass while the property
+    // it is named for was broken. The pure pin in workspace-tables-state.test
+    // caught that mutation; this one did not.
+    //
+    // Filtering on a table whose DCR name does NOT contain the needle closes
+    // it: "cloudflare" matches the Cloudflare_CL row, whose DCR is
+    // dcr-Cloudflare-eastus, and the SecurityEvent DCR must disappear because
+    // its ROW was filtered out - not because its name failed a second match.
+    // "syslog" matches the Syslog ROW, and appears nowhere in its DCR name.
+    // Correct behaviour keeps the DCR cell reading dcr-legacy-collector; a
+    // filter that also narrowed DCR names by the needle would blank it, which
+    // is the mutation the old assertion sailed through.
+    typeFilter("syslog");
+    expect(screen.queryByText("dcr-SecurityEvent-eastus")).toBeNull();
+    expect(screen.getByText("dcr-legacy-collector")).toBeTruthy();
   });
 
   it("counts shown of total beside the box", async () => {
@@ -431,7 +475,7 @@ describe("WorkspaceTablesPanel - the Name filter (TBL-8)", () => {
     fireEvent.change(screen.getByLabelText("Table name"), {
       target: { value: "Brand_New_CL" },
     });
-    expect(screen.getByText(/Load the table list/)).toBeTruthy();
+    expect(screen.getByText(/has not been read/)).toBeTruthy();
   });
 });
 

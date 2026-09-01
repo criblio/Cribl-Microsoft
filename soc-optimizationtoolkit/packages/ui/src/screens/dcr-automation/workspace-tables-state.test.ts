@@ -178,7 +178,7 @@ describe("checkTableName (TBL-2)", () => {
     // The defect this guards: an unread listing is not a measured zero.
     const check = checkTableName("Anything_CL", null);
     expect(check.verdict).toBe("unchecked");
-    expect(check.message).toContain("Load the table list");
+    expect(check.message).toContain("has not been read");
   });
 
   it("leaves an unchecked name NON-blocking - it annotates, never forbids", () => {
