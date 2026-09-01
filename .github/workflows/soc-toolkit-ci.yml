@@ -48,6 +48,12 @@ jobs:
       - name: Check listings
         run: npm run check-listings --workspace apps/cribl-app
 
+      # DBT-67. The extractor that generates a committed core asset crashed for
+      # seven weeks and nothing reported it, because no test ran it and no gate
+      # called it. This runs it.
+      - name: Check schema asset
+        run: npm run check-schema-asset --workspace apps/cribl-app
+
       - name: Test
         run: npm test
 
