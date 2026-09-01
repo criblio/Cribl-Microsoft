@@ -9,11 +9,12 @@
 
 import { describe, expect, it } from "vitest";
 
-import { NATIVE_SYSTEM_COLUMNS } from "../schema-mapping/index";
+import { CUSTOM_SYSTEM_COLUMNS, NATIVE_SYSTEM_COLUMNS } from "../schema-mapping/index";
 import type { ParsedSample } from "../sample-parsing/models";
 import {
   DCR_SCHEMA_SYSTEM_COLUMNS,
   bundledCatalogTableNames,
+  isDcrSystemColumn,
   createBundledSchemaCatalog,
   normalizeTableNames,
   resolveSchemaFromCatalog,
@@ -69,6 +70,44 @@ describe("system-column filter (verbatim from pack-builder, deduplicated)", () =
     expect(a.size).toBe(b.size);
     for (const name of b) expect(a.has(name)).toBe(true);
     for (const name of a) expect(b.has(name)).toBe(true);
+  });
+
+  it("MATCHES CASE-SENSITIVELY, where schema-mapping matches case-insensitively", () => {
+    // DBT-68. The two modules hold the same 18 names and apply them with
+    // DIFFERENT matching rules, and until now that divergence was stated on one
+    // side only - so it read as an accident rather than a decision.
+    //
+    // It is a decision. This side preserves the legacy `Set.has(c.name)`
+    // exactly; schema-mapping's side preserves the legacy PowerShell `-notin`,
+    // which folded case. Aligning them is NOT free in either direction:
+    // loosening this one to case-insensitive would start stripping a custom
+    // table's own column named `type` or `tenantid`, which are legal names an
+    // operator may genuinely have.
+    //
+    // Pinned so the asymmetry survives as a recorded choice. If someone later
+    // decides the two should agree, this pin is what makes them say so out
+    // loud rather than discover it.
+    expect(isDcrSystemColumn("TenantId")).toBe(true);
+    expect(isDcrSystemColumn("tenantid")).toBe(false);
+    expect(isDcrSystemColumn("TENANTID")).toBe(false);
+  });
+
+  it("applies the NATIVE list to every table, custom ones included", () => {
+    // DBT-68, the second asymmetry, also previously unstated. schema-mapping
+    // switches lists by table mode - 18 names for native, a deliberate 6 for
+    // custom, which KEEPS TenantId and SourceSystem because custom-table DCR
+    // declarations carry them. The catalog does not switch: it strips all 18
+    // whatever the table is.
+    //
+    // So for a custom table the catalog is STRICTER than the builder. That
+    // direction is safe - it under-offers rather than offering a column the
+    // DCR would drop - which is why it is pinned as-is rather than "fixed".
+    // The unsafe direction would be the catalog offering what the builder
+    // strips, and that is what [[DBT-50]] was.
+    expect(DCR_SCHEMA_SYSTEM_COLUMNS).toContain("TenantId");
+    expect(DCR_SCHEMA_SYSTEM_COLUMNS).toContain("SourceSystem");
+    expect(CUSTOM_SYSTEM_COLUMNS).not.toContain("TenantId");
+    expect(CUSTOM_SYSTEM_COLUMNS).not.toContain("SourceSystem");
   });
 
   it("strips SourceSystem (and any system column) from CommonSecurityLog", () => {

@@ -19,6 +19,17 @@
  * second copy of the parsing logic would drift from the first, which is the
  * failure this repo keeps filing cards about. The generator is the single
  * source; this only asks whether its output is what is checked in.
+ *
+ * LINE ENDINGS ARE NORMALISED BEFORE COMPARING, and that is not a nicety
+ * (DBT-70). The first version compared raw bytes. The generator writes "
+";
+ * with core.autocrlf=true git checks the committed asset out as "
+". So on
+ * Windows every run reported a mismatch while listing ZERO differing tables -
+ * the giveaway that the difference was not in the data. CI never saw it,
+ * because the Linux runner checks out LF and both sides matched. That is
+ * [[DBT-66]] exactly: a Windows-only break a green CI cannot see, shipped by
+ * the very gate added to stop things going unnoticed.
  */
 
 import { execFileSync } from "node:child_process";
@@ -30,6 +41,9 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(HERE, "../../..");
 const SCRIPT = join(ROOT, "packages", "core", "scripts", "extract-dcr-template-schemas.mjs");
 const ASSET = join(ROOT, "packages", "core", "src", "assets", "dcr-template-schemas.json");
+
+const LF = String.fromCharCode(10);
+const CR = String.fromCharCode(13);
 
 function main() {
   const committed = readFileSync(ASSET, "utf-8");
@@ -56,7 +70,9 @@ function main() {
     writeFileSync(ASSET, committed, "utf-8");
   }
 
-  if (regenerated === committed) {
+  // Compare CONTENT, not bytes - see the line-endings note in the header.
+  const normalise = (text) => text.split(CR + LF).join(LF);
+  if (normalise(regenerated) === normalise(committed)) {
     console.log("check-schema-asset: the committed asset matches a fresh extraction");
     return;
   }
