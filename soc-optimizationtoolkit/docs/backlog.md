@@ -2392,16 +2392,33 @@ runner is Linux and checks out LF, so both were well-formed there while broken
 on the machine the work happens on. A narrow pin leaves that detection gap
 exactly where it is for every file it does not cover.
 
-**The cost is real and is a scheduling problem, not a technical one.** The
-blobs here are stored CRLF - verified directly, not sampled - so this
-renormalises **1,473 tracked text files**: 710 `.ts`, 466 `.json`, 119 `.tsx`,
-96 `.md`, 43 `.ps1`, 29 `.mjs`. It rewrites the surface of nearly all history,
-so `git blame` takes a one-commit hop across the whole repo, and it conflicts
-with every branch open at the time.
+**THE COST I PREDICTED DOES NOT EXIST, and the correction matters more than
+the estimate did.** This section first said the change renormalises 1,473
+tracked text files, breaks `git blame` repo-wide and conflicts with every open
+branch. All of that was wrong, and it was wrong because of how I measured:
+`git cat-file -p HEAD:<file> | od -c` showed CR bytes, and I read that as the
+blob being CRLF. It was not. `git ls-files --eol` is the tool that actually
+answers this, and it reports `i/lf` for 1,502 files - **the index was already
+LF and always had been.**
 
-That last point dictates the order: **land everything in flight first, then
-renormalise on a clean main with nothing outstanding.** Doing it while a PR is
-open converts a mechanical commit into a merge fight.
+So the renormalisation moved **nothing**: `git add --renormalize .` staged one
+file, `.gitattributes` itself. There is no history churn, no blame damage and
+no branch conflict, and the scheduling constraint I derived from those was
+imaginary.
+
+**What the change actually does is fix the WORKING TREE.** The index was LF and
+the checkout was CRLF, which is precisely the gap DBT-66 and DBT-70 fell into -
+the bytes on disk were not the bytes in the repo. `eol=lf` makes the checkout
+match, and makes it match regardless of each clone's `core.autocrlf`. After
+refreshing the tree: 1,500 files `w/lf`, and exactly 2 still `w/crlf` - the two
+`.bat` launchers, pinned deliberately because `cmd.exe` needs CRLF.
+
+**The lesson is the measurement, not the outcome.** The decision was right on
+reasoning that included a fabricated cost, and it survived only because the
+cheaper option lost on principle rather than on price. Had the 1,473 figure
+been the deciding factor, a bad measurement would have produced a bad decision
+- and this is the third time in two days that a claim of mine borrowed
+authority from a number nobody checked.
 
 **What this does NOT replace.** Making comparisons normalise, which was
 DBT-70's fix, stays correct and stays in. It defends code we control against a
