@@ -379,6 +379,74 @@ export function paceAzureManagement(
   return paced;
 }
 
+/**
+ * The outcome of ONE ARM call made through {@link SafeAzureManagement}:
+ * either the response the transport produced, or the text of the reason it
+ * produced none.
+ *
+ * A non-2xx ANSWER is `ok: true` - ARM said something, and the caller branches
+ * on `status` exactly as before. `ok: false` means there is no answer at all
+ * (dropped socket, DNS, an expired token, a proxy that throws). Blurring the
+ * two would be worse than the convention this replaces: "ARM refused" and "ARM
+ * was never reached" are different operator actions.
+ */
+export type ArmAttempt =
+  | { ok: true; response: PortHttpResponse }
+  | { ok: false; error: string };
+
+/**
+ * DBT-56: an ARM view that CANNOT reject, so the never-rejects contract
+ * documented on {@link onboardBatch} stops being a convention retyped at every
+ * call site.
+ *
+ * It was prose plus a habit: FOUR try blocks around the batch's ARM calls, and
+ * DBT-48 existed because one call had been added without one. The measurement
+ * that motivated this (2026-09-01): with the ensure-dce, associate-ampls and
+ * per-table guards made transparent to a rejection - exactly what a call site
+ * added without a guard looks like - the whole core suite still passed, 3511
+ * tests. Only the fetch-workspace call was pinned, and only because it is the
+ * FIRST call, so a transport that rejects on everything can never reach the
+ * six behind it.
+ *
+ * As a TYPE the omission is a compile error: an {@link ArmAttempt} has no
+ * `.status`, so nothing reaches a response without naming what happens when
+ * there is none.
+ *
+ * WHAT IT DOES NOT DO: it does not make throwing impossible here.
+ * {@link StepFailure} is still raised deliberately and still needs its
+ * enclosing guard, and the child `onboardTable` call is not an ARM call and
+ * carries its own rejection shape. It removes ONE class of escape - the
+ * transport's - which is the class that produced DBT-48.
+ *
+ * Deliberately NOT a superset of {@link AzureManagement}: no `requestUrl`,
+ * because the batch makes no paginated ARM calls and a view offering a method
+ * nobody needs is an invitation to reach for the unsafe one.
+ */
+export interface SafeAzureManagement {
+  /** Execute one ARM request. Never rejects; see {@link ArmAttempt}. */
+  request(opts: AzureManagementRequest): Promise<ArmAttempt>;
+}
+
+/**
+ * Compose the never-rejecting view over an {@link AzureManagement} (in
+ * onboardBatch: over the PACED port, so the safe view inherits the budget).
+ */
+export function safeAzureManagement(
+  azure: AzureManagement,
+): SafeAzureManagement {
+  return {
+    request: async (opts: AzureManagementRequest): Promise<ArmAttempt> => {
+      try {
+        return { ok: true, response: await azure.request(opts) };
+      } catch (error) {
+        return {
+          ok: false,
+          error: error instanceof Error ? error.message : String(error),
+        };
+      }
+    },
+  };
+}
 
 /** Internal signal: a step failed; message already carries the raw text. */
 class StepFailure extends Error {
@@ -386,6 +454,22 @@ class StepFailure extends Error {
     super(message);
     this.name = "StepFailure";
   }
+}
+
+/**
+ * Unwrap an {@link ArmAttempt} INSIDE a guarded block: a transport failure
+ * becomes this step's StepFailure carrying the transport's own text, so the
+ * operator still reads "ECONNRESET ..." rather than a generic message.
+ *
+ * Only legal where a StepFailure is already caught. Outside a guard,
+ * discriminate on `ok` by hand - fetch-workspace does, which is why it no
+ * longer needs a try block of its own.
+ */
+function responseOrFail(attempt: ArmAttempt): PortHttpResponse {
+  if (!attempt.ok) {
+    throw new StepFailure(attempt.error);
+  }
+  return attempt.response;
 }
 
 /**
@@ -482,7 +566,7 @@ function dcrPathFor(input: OnboardBatchInput, dcrName: string): string {
  * deploy run would fail on.
  */
 async function collectTableTemplates(args: {
-  azure: AzureManagement;
+  azure: SafeAzureManagement;
   input: OnboardBatchInput;
   spec: OnboardBatchTableSpec;
   location: string;
@@ -501,11 +585,13 @@ async function collectTableTemplates(args: {
   // creation PUT is then collected too.
   let columns: readonly LogAnalyticsColumn[];
   let createsTable = false;
-  const tableResponse = await azure.request({
-    method: "GET",
-    path: tablePath,
-    apiVersion: LOG_ANALYTICS_API_VERSION,
-  });
+  const tableResponse = responseOrFail(
+    await azure.request({
+      method: "GET",
+      path: tablePath,
+      apiVersion: LOG_ANALYTICS_API_VERSION,
+    }),
+  );
   if (is2xx(tableResponse.status)) {
     const schema = prop(prop(tableResponse.body, "properties"), "schema");
     const selected = selectSchemaColumns(
@@ -629,6 +715,11 @@ async function collectTableTemplates(args: {
  * returned either way. That covers a step's ARM call REJECTING (a dropped
  * socket, not just a non-2xx answer), which used to escape from
  * fetch-workspace and strand the record at 'running' forever (DBT-48).
+ * Since DBT-56 the ARM half of that promise is a TYPE, not a habit: the
+ * batch's own calls go through {@link SafeAzureManagement}, so a call site
+ * added without handling the transport does not compile. The remaining
+ * hand-written guards protect the deliberate {@link StepFailure} throws and
+ * the child `onboardTable` call, which is not an ARM call.
  * (It can still reject when the JobStore itself fails - a store failure is
  * re-raised rather than recorded against whatever step or table was in flight
  * at the time, whether it was raised by THIS usecase's own store writes
@@ -656,7 +747,15 @@ export async function onboardBatch(
   const options = input.options;
   // Validates maxRequestsPerMinute (throws RangeError on junk) and paces
   // EVERY ARM call from here on, the children's included.
-  const azure = paceAzureManagement(ports.azure, input.pacing);
+  const pacedAzure = paceAzureManagement(ports.azure, input.pacing);
+  // DBT-56: the batch's OWN ARM calls go through the never-rejecting view, so
+  // the contract documented below is carried by the TYPE instead of by a try
+  // block remembered at each call site. The CHILD keeps the paced port itself:
+  // onboardTable guards its whole body with one try (DBT-55), so the defect
+  // this view exists for - a call site added outside a guard - cannot arise
+  // there, and changing its port shape would be a rewrite of a usecase that
+  // does not have the problem.
+  const azure = safeAzureManagement(pacedAzure);
   const pollAttempts = pollAttemptsForTimeout(options.deploymentTimeoutSeconds);
   const secretProvided =
     input.ingestionClientSecret != null && input.ingestionClientSecret !== "";
@@ -843,50 +942,47 @@ export async function onboardBatch(
     // onboardBatch entirely - breaking the never-rejects contract above and
     // leaving the parent record stranded at status 'running' with
     // fetch-workspace stuck 'running': a batch that never finishes and never
-    // fails. Guarded like ensure-dce below: the step fails, every table skips
-    // with the prerequisite reason, and the record resolves to 'failed'.
-    try {
-      const workspaceResponse = await azure.request({
-        method: "GET",
-        path: workspacePath,
-        apiVersion: LOG_ANALYTICS_API_VERSION,
-      });
-      if (!is2xx(workspaceResponse.status)) {
+    // fails. DBT-56: the try block that fixed it is GONE, and nothing was
+    // given up - `azure` is the never-rejecting view, so the rejection arrives
+    // as `ok:false` and the compiler refuses to hand over a response until
+    // that branch is written. The step fails, every table skips with the
+    // prerequisite reason, the record resolves to 'failed' - as before.
+    const workspaceAttempt = await azure.request({
+      method: "GET",
+      path: workspacePath,
+      apiVersion: LOG_ANALYTICS_API_VERSION,
+    });
+    if (!workspaceAttempt.ok) {
+      await failPrologue("fetch-workspace", workspaceAttempt.error);
+    } else if (!is2xx(workspaceAttempt.response.status)) {
+      await failPrologue(
+        "fetch-workspace",
+        httpErrorText(
+          `fetch workspace '${input.workspaceName}'`,
+          workspaceAttempt.response.status,
+          workspaceAttempt.response.body,
+        ),
+      );
+    } else {
+      const workspaceBody = workspaceAttempt.response.body;
+      workspaceResourceId =
+        typeof prop(workspaceBody, "id") === "string"
+          ? (prop(workspaceBody, "id") as string)
+          : workspacePath;
+      const bodyLocation = prop(workspaceBody, "location");
+      location =
+        input.location ??
+        (typeof bodyLocation === "string" && bodyLocation !== ""
+          ? bodyLocation
+          : undefined);
+      if (location === undefined) {
         await failPrologue(
           "fetch-workspace",
-          httpErrorText(
-            `fetch workspace '${input.workspaceName}'`,
-            workspaceResponse.status,
-            workspaceResponse.body,
-          ),
+          `workspace '${input.workspaceName}' reported no location and none was provided`,
         );
       } else {
-        workspaceResourceId =
-          typeof prop(workspaceResponse.body, "id") === "string"
-            ? (prop(workspaceResponse.body, "id") as string)
-            : workspacePath;
-        const bodyLocation = prop(workspaceResponse.body, "location");
-        location =
-          input.location ??
-          (typeof bodyLocation === "string" && bodyLocation !== ""
-            ? bodyLocation
-            : undefined);
-        if (location === undefined) {
-          await failPrologue(
-            "fetch-workspace",
-            `workspace '${input.workspaceName}' reported no location and none was provided`,
-          );
-        } else {
-          await setStep("fetch-workspace", "succeeded", `location ${location}`);
-        }
+        await setStep("fetch-workspace", "succeeded", `location ${location}`);
       }
-    } catch (error) {
-      // DBT-49: a store outage is not the workspace GET's failure.
-      if (isJobStoreFailure(error)) {
-        throw error;
-      }
-      const message = error instanceof Error ? error.message : String(error);
-      await failPrologue("fetch-workspace", message);
     }
 
     // ensure-dce: ONCE for the batch.
@@ -954,23 +1050,27 @@ export async function onboardBatch(
             );
           } else {
             // Create or REUSE by name: GET first.
-            const existing = await azure.request({
-              method: "GET",
-              path: dceRequest.path,
-              apiVersion: DCE_API_VERSION,
-            });
+            const existing = responseOrFail(
+              await azure.request({
+                method: "GET",
+                path: dceRequest.path,
+                apiVersion: DCE_API_VERSION,
+              }),
+            );
             let info;
             let reused: boolean;
             if (is2xx(existing.status)) {
               info = parseDceDeployment(existing.body);
               reused = true;
             } else if (existing.status === 404) {
-              const putResponse = await azure.request({
-                method: dceRequest.method,
-                path: dceRequest.path,
-                apiVersion: dceRequest.apiVersion,
-                body: dceRequest.body,
-              });
+              const putResponse = responseOrFail(
+                await azure.request({
+                  method: dceRequest.method,
+                  path: dceRequest.path,
+                  apiVersion: dceRequest.apiVersion,
+                  body: dceRequest.body,
+                }),
+              );
               if (!is2xx(putResponse.status)) {
                 throw new StepFailure(
                   httpErrorText(
@@ -1002,11 +1102,13 @@ export async function onboardBatch(
                   );
                 }
                 attempts++;
-                const pollResponse = await azure.request({
-                  method: "GET",
-                  path: dceRequest.path,
-                  apiVersion: DCE_API_VERSION,
-                });
+                const pollResponse = responseOrFail(
+                  await azure.request({
+                    method: "GET",
+                    path: dceRequest.path,
+                    apiVersion: DCE_API_VERSION,
+                  }),
+                );
                 if (!is2xx(pollResponse.status)) {
                   throw new StepFailure(
                     httpErrorText(
@@ -1055,7 +1157,10 @@ export async function onboardBatch(
             );
           }
         } catch (error) {
-          // DBT-49: a store outage is not the DCE's failure.
+          // DBT-49: a store outage is not the DCE's failure. DBT-56 narrowed
+          // what else can arrive: the ARM calls above hand back an ArmAttempt
+          // rather than throwing, so this now catches only the StepFailures
+          // this block raises on purpose.
           if (isJobStoreFailure(error)) {
             throw error;
           }
@@ -1105,12 +1210,14 @@ export async function onboardBatch(
               "template collected for the AMPLS association (templateOnly - not deployed)",
             );
           } else {
-            const response = await azure.request({
-              method: association.method,
-              path: association.path,
-              apiVersion: association.apiVersion,
-              body: association.body,
-            });
+            const response = responseOrFail(
+              await azure.request({
+                method: association.method,
+                path: association.path,
+                apiVersion: association.apiVersion,
+                body: association.body,
+              }),
+            );
             if (!is2xx(response.status)) {
               throw new StepFailure(
                 httpErrorText(
@@ -1130,7 +1237,8 @@ export async function onboardBatch(
             );
           }
         } catch (error) {
-          // DBT-49: a store outage is not the association's failure.
+          // DBT-49: a store outage is not the association's failure. As with
+          // ensure-dce, DBT-56 leaves only this block's own StepFailure here.
           if (isJobStoreFailure(error)) {
             throw error;
           }
@@ -1213,11 +1321,13 @@ export async function onboardBatch(
       // skip-existing: GET the DCR first; a hit means ZERO deploy calls for
       // this table (user decision: first-class 'skipped', pinned).
       if (options.skipExistingDCRs) {
-        const existing = await azure.request({
-          method: "GET",
-          path: dcrPathFor(input, dcrName),
-          apiVersion: DIRECT_DCR_API_VERSION,
-        });
+        const existing = responseOrFail(
+          await azure.request({
+            method: "GET",
+            path: dcrPathFor(input, dcrName),
+            apiVersion: DIRECT_DCR_API_VERSION,
+          }),
+        );
         if (is2xx(existing.status)) {
           const detail = `DCR '${dcrName}' already exists - skipped (skipExistingDCRs)`;
           await setStep(stepName, "skipped", detail);
@@ -1264,7 +1374,12 @@ export async function onboardBatch(
         dcrNameSuffix: input.dcrNameSuffix,
         dce: dceForTables,
       };
-      const child = await onboardTable({ azure, cribl, jobs, logger }, childInput);
+      // The PACED port, not the safe view (DBT-56): onboardTable takes the
+      // AzureManagement port and owns its own total guard.
+      const child = await onboardTable(
+        { azure: pacedAzure, cribl, jobs, logger },
+        childInput,
+      );
       if (child.status === "succeeded") {
         const outcome = child.result as OnboardTableOutcome;
         const detail = `DCR '${outcome.dcrName}' deployed (job '${child.id}')`;
