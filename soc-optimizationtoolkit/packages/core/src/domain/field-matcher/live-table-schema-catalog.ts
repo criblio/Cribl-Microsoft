@@ -35,6 +35,7 @@
  */
 
 import type { DcrSchemaColumn, SchemaCatalog } from "../../ports/schema-catalog";
+import { stripDcrSystemColumns } from "./system-columns";
 
 /**
  * Wrap `fallback` so every table in `byTable` resolves to its live columns.
@@ -43,11 +44,23 @@ import type { DcrSchemaColumn, SchemaCatalog } from "../../ports/schema-catalog"
  * ARM reports `SecurityEvent` while a solution may say `securityevent`, and the
  * operator picked one table either way.
  *
+ * AZURE-MANAGED COLUMNS ARE STRIPPED, exactly as the three tiers below do it
+ * and through the same predicate (DBT-50). This tier is fed raw ARM, which
+ * reports a native table's managed columns in `standardColumns` -
+ * TenantId, Type, _ResourceId and the rest - so without the strip the tier
+ * answers a different question from its siblings: "what columns does this table
+ * have" instead of "what columns may a DCR declare". The omission was
+ * unreachable while this tier was composed innermost; promoting it to the top
+ * of the ladder made it reachable, and it would have added up to 18 spurious
+ * columns to every DCR generated for a picked table.
+ *
  * An EMPTY column array is still an override, deliberately. A table that exists
  * but exposes no columns yet is a real state (provisioned, never materialized),
  * and falling back there would silently analyse against the derived schema
  * while the UI says the live table is in use - the kind of quiet substitution
- * this tier exists to prevent.
+ * this tier exists to prevent. A table whose columns are ALL Azure-managed
+ * reduces to that same empty override, which is the honest answer: there is
+ * nothing in it a DCR may declare.
  */
 export function createLiveTableSchemaCatalog(
   byTable: Readonly<Record<string, readonly DcrSchemaColumn[]>>,
@@ -58,7 +71,7 @@ export function createLiveTableSchemaCatalog(
     const key = name.trim().toLowerCase();
     // A blank name would match a trimmed lookup and override the world.
     if (key !== "") {
-      frozen.set(key, [...columns]);
+      frozen.set(key, stripDcrSystemColumns(columns));
     }
   }
   return {

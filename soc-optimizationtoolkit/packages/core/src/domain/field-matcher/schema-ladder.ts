@@ -23,6 +23,15 @@
  * Sample-DERIVED schemas are not a tier here: they remain the analyzeSamples
  * fallback for tables none of the four define.
  *
+ * EVERY TIER ANSWERS THE SAME QUESTION - "what columns may a DCR DECLARE for
+ * this table", not "what columns does this table have". So all four strip the
+ * Azure-managed names through the single predicate in `system-columns.ts`.
+ * Reordering tiers is only safe because of that: a tier that answered the other
+ * question would change the RESULT when promoted, not just its source. The live
+ * tier was exactly that tier - it is fed raw ARM, which reports managed columns
+ * in `standardColumns` - and promoting it without the strip would have added up
+ * to 18 spurious columns to every DCR generated for a picked table.
+ *
  * WHY LIVE SITS ON TOP, and not tier 3 as it did (the DBT-50 judgement,
  * 2026-08-31). Two orders were defensible and they are not equivalent - either
  * the code was wrong or four documents were - so the argument is recorded here

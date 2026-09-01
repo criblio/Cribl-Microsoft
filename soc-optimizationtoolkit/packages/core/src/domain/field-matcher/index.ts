@@ -74,12 +74,20 @@ export {
 } from "./vendor-mapping-packs";
 
 export {
-  DCR_SCHEMA_SYSTEM_COLUMNS,
   normalizeTableNames,
   resolveSchemaFromCatalog,
   bundledCatalogTableNames,
   createBundledSchemaCatalog,
 } from "./bundled-schema-catalog";
+
+// The destination-column contract: the Azure-managed names no DCR may declare,
+// and the ONE predicate every ladder tier filters through (DBT-50 - the list
+// was shared, the filter was not, and the live tier had neither).
+export {
+  DCR_SCHEMA_SYSTEM_COLUMNS,
+  isDcrSystemColumn,
+  stripDcrSystemColumns,
+} from "./system-columns";
 
 // Solution-aware schema tier (Wave E): the solution's own table ARM
 // resources resolve ahead of the bundled snapshot.
@@ -90,7 +98,11 @@ export {
 } from "./solution-schema-catalog";
 
 // KQL-validation schema tier (2026-07-14): the Azure-Sentinel repo's own
-// CI-validated table schemas resolve FIRST when a table is defined there.
+// CI-validated table schemas outrank the solution's connector-ARM tables and
+// the bundled snapshot when a table is defined there. This said "resolve FIRST"
+// until DBT-50 (2026-08-31), which is no longer true at either end: the LIVE
+// workspace columns of a table the operator picked outrank it, and
+// `schema-ladder.ts` is the one place that decides any of it.
 export {
   KQL_VALIDATION_TABLES_DIR,
   createKqlValidationSchemaCatalog,

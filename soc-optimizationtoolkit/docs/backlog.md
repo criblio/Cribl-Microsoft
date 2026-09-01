@@ -235,6 +235,36 @@ protect. The offline note on the card does not survive contact: the ARM read is
 triggered by an explicit table pick, not by opening the screen, and the workspace
 table LISTING already contacts Azure on scope commit either way.
 
+**Promoting the tier exposed a second defect: it did not honour the column
+contract its siblings honour.** A `SchemaCatalog` does not answer "what columns
+does this table have"; it answers "what columns may a DCR DECLARE for this
+table". The three repo/bundled tiers all strip the 18 Azure-managed names -
+TenantId, Type, `_ResourceId` and the rest - because Azure populates them
+itself. The live tier is fed raw ARM, which reports exactly those names in a
+native table's `standardColumns`, and it stripped nothing. That was harmless
+only while the tier was composed innermost and never answered; promoting it to
+the top made it reachable, and the first fix would have added up to 18 spurious
+columns to every DCR generated for a picked table. Measured on the pin: 21
+columns in, 3 out, 18 dropped - and for a table whose columns are ALL managed,
+18 in and 0 out, which reduces to the tier's existing empty-override state
+rather than falling through to a repo tier.
+
+Reordering tiers is only safe because they answer the same question, so the
+strip is now ONE mechanism rather than a fourth copy of the predicate. The list
+was already shared; the FILTER was not - three tiers each built their own
+`new Set(DCR_SCHEMA_SYSTEM_COLUMNS)` and wrote their own test for it, which is
+how a fourth tier came to have neither. `domain/field-matcher/system-columns.ts`
+now owns the list and the two predicate shapes, and all four tiers read it.
+
+**The composition pin was not enough, and the review proved it.** Severing the
+wiring that feeds the ladder (`live,` -> `live: {},` in the mapping review's
+`createSchemaLadder` call) reinstated DBT-50 in full while all 1299 UI tests
+passed - a composition that is never handed its input still composes perfectly,
+so a pin on the ladder cannot see it. `mapping-review-live-schema.dom.test.tsx`
+now pins the SEAM instead: it drives a real table pick through the rendered
+screen and reads the report that comes out. Mutation check - that exact severing
+fails all three of its pins.
+
 Superseded planning notes follow.
 
 **What remained: the UI.** Two pieces:

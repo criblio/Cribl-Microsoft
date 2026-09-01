@@ -33,22 +33,20 @@
  * Type vocabulary: the files use Pascal-cased KQL-ish types with observed
  * casing drift (Datetime AND DateTime in one file). Mapped case-insensitively
  * to the 7-value DCR vocabulary; unknown types default to string (RULE 3
- * convention). System columns are filtered like the Wave E solution tier -
- * TimeGenerated is a REAL column and stays.
+ * convention). System columns are filtered through `system-columns.ts`, the one
+ * predicate every tier of the ladder shares - TimeGenerated is a REAL column
+ * and stays.
  *
  * Pure decisions + port orchestration; the IO lives behind SentinelContent.
  */
 
 import type { SentinelContent } from "../../ports/sentinel-content";
 import type { DcrSchemaColumn, SchemaCatalog } from "../../ports/schema-catalog";
-import { DCR_SCHEMA_SYSTEM_COLUMNS } from "./bundled-schema-catalog";
+import { isDcrSystemColumn } from "./system-columns";
 
 /** The validation-schema directory in the Azure-Sentinel repo. */
 export const KQL_VALIDATION_TABLES_DIR =
   ".script/tests/KqlvalidationsTests/CustomTables";
-
-// Exact-case system-column filter, same contract as the bundled tier.
-const SYSTEM_COLUMNS: ReadonlySet<string> = new Set(DCR_SCHEMA_SYSTEM_COLUMNS);
 
 /** Pascal-ish validation type -> DCR vocabulary (case-insensitive keys). */
 const VALIDATION_TYPE_MAP = new Map<string, string>([
@@ -98,7 +96,7 @@ export function parseKqlValidationTable(text: string): DcrSchemaColumn[] | null 
     const name = (entry as { Name?: unknown }).Name;
     const type = (entry as { Type?: unknown }).Type;
     if (typeof name !== "string" || name === "") continue;
-    if (SYSTEM_COLUMNS.has(name)) continue;
+    if (isDcrSystemColumn(name)) continue;
     columns.push({
       name,
       type: typeof type === "string" ? mapValidationColumnType(type) : "string",

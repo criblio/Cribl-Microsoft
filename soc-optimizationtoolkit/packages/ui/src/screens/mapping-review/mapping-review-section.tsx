@@ -346,6 +346,14 @@ export function MappingReviewSection({
   // until 2026-08-31, which is how the live tier ended up nested UNDER both
   // repo tiers with nothing able to pin the order. All that belongs here is
   // which base catalog to hand it and when to rebuild it.
+  //
+  // `live` IS THE SEAM, and it is pinned by behaviour, not by shape:
+  // mapping-review-live-schema.dom.test.tsx drives a real table pick and reads
+  // the resulting report. Passing `{}` here - or otherwise dropping what the
+  // ARM fetch returned - reinstates DBT-50 in full, and the ladder's own pins
+  // cannot see it, because a composition that is never handed its input still
+  // composes perfectly. That severing is the mutation those pins were checked
+  // against; keep them that way.
   const catalogWith = useCallback(
     (live: Readonly<Record<string, DestField[]>>) =>
       createSchemaLadder({

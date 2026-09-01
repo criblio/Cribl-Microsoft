@@ -12,12 +12,11 @@
  * directions (strip and add), verbatim from legacy loadDcrTemplateSchema
  * (pack-builder.ts lines 70-79).
  *
- * SYSTEM_COLUMNS filter: extracted VERBATIM from legacy pack-builder.ts, which
- * defined the SAME 18-name list TWICE - once inline in loadDcrTemplateSchemaPublic
- * (lines 201-207) and once as the module-level SYSTEM_COLUMNS (lines 212-218).
- * The two are byte-identical; reconciled here into ONE set. As a set it equals
- * schema-mapping's NATIVE_SYSTEM_COLUMNS (different order, same 18 Azure-managed
- * names); a test pins that set-equality so the two contracts cannot drift apart.
+ * SYSTEM_COLUMNS filter: this module used to own the 18-name list, its set and
+ * its predicate. All three now live in `system-columns.ts`, which every tier of
+ * the ladder reads - this one, the two repo tiers, and the live-ARM tier that
+ * honoured none of the contract until DBT-50. The barrel re-exports the list
+ * from there, so `DCR_SCHEMA_SYSTEM_COLUMNS` still resolves for callers.
  *
  * GitHub CustomTables fallback (post-Unit-14) is a SEAM: a future adapter can
  * wrap this one and consult the content port for _CL tables defined only in
@@ -28,38 +27,10 @@
 
 import type { DcrSchemaColumn, SchemaCatalog } from "../../ports/schema-catalog";
 import dcrTemplateSchemas from "../../assets/dcr-template-schemas.json";
+import { stripDcrSystemColumns } from "./system-columns";
 
 const CATALOG: Readonly<Record<string, DcrSchemaColumn[]>> =
   dcrTemplateSchemas as Record<string, DcrSchemaColumn[]>;
-
-/**
- * The 18 Azure-managed system column names filtered out of every resolved
- * schema (verbatim from pack-builder.ts loadDcrTemplateSchemaPublic /
- * SYSTEM_COLUMNS). Matching is CASE-SENSITIVE and exact, as the legacy
- * `Set.has(c.name)` filter was.
- */
-export const DCR_SCHEMA_SYSTEM_COLUMNS: readonly string[] = Object.freeze([
-  "TenantId",
-  "SourceSystem",
-  "MG",
-  "ManagementGroupName",
-  "_ResourceId",
-  "_SubscriptionId",
-  "_ItemId",
-  "_IsBillable",
-  "_BilledSize",
-  "Type",
-  "PartitionKey",
-  "RowKey",
-  "StorageAccount",
-  "AzureDeploymentID",
-  "AzureTableName",
-  "TimeCollected",
-  "SourceComputerId",
-  "EventOriginId",
-]);
-
-const systemColumnSet: ReadonlySet<string> = new Set(DCR_SCHEMA_SYSTEM_COLUMNS);
 
 /**
  * Candidate table-name variants tried in order, mirroring legacy
@@ -87,9 +58,7 @@ export function resolveSchemaFromCatalog(
   for (const name of normalizeTableNames(tableName)) {
     const columns = CATALOG[name];
     if (columns && columns.length > 0) {
-      return columns
-        .filter((column) => !systemColumnSet.has(column.name))
-        .map((column) => ({ name: column.name, type: column.type }));
+      return stripDcrSystemColumns(columns);
     }
   }
   return null;
