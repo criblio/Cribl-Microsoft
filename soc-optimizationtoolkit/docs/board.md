@@ -23,7 +23,7 @@ operator sees on any screen. Two menus are PLANNED and have no route yet.
 |---|---|---|---|
 | Dataflow | 3 | 0 | 0 |
 | Setup | 1 | 0 | 0 |
-| Sentinel Integration | 11 | 43 | 0 |
+| Sentinel Integration | 11 | 43 | 2 |
 | DCR Automation | 3 | 10 | 0 |
 | Pack Maintenance | 4 | 1 | 0 |
 | Permission Verification | 8 | 0 | 0 |
@@ -150,11 +150,52 @@ _Nothing here._
 
 ---
 
-## Backlog - now (0)
+## Backlog - now (2)
 
 Next to pick up. Nothing blocks these.
 
-_Nothing here._
+- **DBT-9** Say "are deleted" instead of "reset" in the Sample Data helper text
+  `DBT-F2` `story` `settled`
+  The deletion is correct and intended; the wording is what misleads. One
+  string. `backlog.md#9`. VERIFIED READY 2026-09-01: the string still reads
+  'reset' at solution-browser.tsx:532-536, it is unique in the repo, and NO
+  test pins it - so the change is one line with no pin to update. The deletion
+  it describes is confirmed real at integrate-screen.tsx:663-667
+  (ports.samples.list() then Promise.all of removals), so 'are deleted' is the
+  accurate word.
+
+- **DBT-28** The solution deep link does not override a stored selection
+  `DBT-F2` `bug` `unconfirmed`
+  FOUND 2026-08-28 driving the dev app. The Select Sentinel Solution card
+  advertises `Deep link: #/?solution=1Password`. Navigating the live preview
+  to `/apps/a/__local__#/?solution=Palo%20Alto%20Networks` left 1Password
+  selected - the stored selection won and the URL had no effect. TWO CANDIDATE
+  CAUSES and I have not separated them, which is why this is unconfirmed
+  rather than a fix: (1) on the Cribl shell the app runs in an IFRAME and the
+  hash lands on the OUTER frame, so the app may never see it at all - in which
+  case the advertised link is only usable in a standalone shell and the copy
+  is overstating; (2) integrate-screen.tsx says the link is "consumed once so
+  Clear works", so a persisted selection may be designed to win. Settle which
+  before changing anything: if (1), the deep link is broken on the only
+  shipped shell and the card that advertises it is misleading; if (2), it
+  behaves as designed and the COPY needs to say that a stored selection takes
+  precedence. Worth noting the reporter could not tell from the outside, which
+  is the actual defect either way. PROMOTED TO NOW 2026-09-01, and the
+  priorityWhy that held it is retracted rather than merely lifted. It said two
+  candidate causes were recorded and it was unresolved which one bit, so a
+  live repro was cheaper than fixing the wrong one. Investigation measured a
+  THIRD cause the card never considered, and found BOTH recorded candidates
+  wrong - so waiting for a repro to choose between two wrong answers had no
+  value left. THREE SEPARATE DEFECTS SIT HERE. (1) resolveSelectedSolution
+  (browser-state.ts:163-176) matches exact then case-insensitive-exact only,
+  and NOT the punctuation-collapsing match the search box uses
+  (solutionMatchesQuery, :48-63) - so a deep link naming a solution that
+  exists under different punctuation resolves to nothing and is consumed
+  SILENTLY (solution-browser.tsx:390-394). (2) The hash is read on MOUNT only
+  (:174-178) behind keep-alive routes (app-frame.tsx:153-162), which breaks
+  the app's own SIEM-migration pivot the second time it is used. (3) The
+  deep-link chip advertises a URL unreachable on the shipped shell (:519-524
+  vs App.tsx:2011-2017).
 
 ---
 
@@ -218,15 +259,18 @@ Settled and unblocked, sequenced behind now.
 
 - **HON-8** buildDeploymentPreview has no caller - the REVIEW stage is a usecase with no screen
   `HON-F3` `bug` `unconfirmed`
-  Not now because: EXPIRED REASON, re-raised 2026-08-31. This was held at next
-  because it overlapped DBT-57 and doing them together avoided deciding the
-  same question twice. DBT-57 IS NOW DONE - it deleted `unavailableReason` and
-  its pins - so the bundling opportunity this was waiting for is gone and the
-  argument no longer holds. What is still true is the impact:
-  `buildDeploymentPreview` is unreachable, so nothing on screen is currently
-  wrong. Whether unreachable code plus a doc that oversells it earns `now` on
-  its own is a call nobody has made; this note records that the OLD reason is
-  void rather than pretending it still applies.
+  Not now because: Held at next 2026-09-01 pending a delete-or-wire decision,
+  and the investigation found the cause the card guessed at twice is a THIRD
+  thing: the consumer was not missing, it was DELETED. review-screen.tsx:196
+  called buildDeploymentPreview, and the whole screens/review/ directory
+  (1,232 LOC, 27 pins) was removed on 2026-08-24 in commit 1c50cdb - the same
+  architecture-audit commit that broke the extractor in [[DBT-67]]. Nothing on
+  screen is wrong today: the stepper already tells the truth about the
+  retirement (stepper-state.ts:74-78, pinned). What is open is whether to
+  delete 708 lines or wire them into Integrate's Deploy section, and the app
+  ALREADY has a second path to the same ARM bodies via onboardBatch
+  templateOnly - so the module's unique value is narrower than the card
+  implies.
   FOUND while building HON-3 on 2026-08-28, looking for the right surface for
   the column diagnostics. `buildDeploymentPreview` is a full usecase - roughly
   700 lines with its own test file, DCE handling, existing-resource checks and
@@ -287,7 +331,13 @@ Settled and unblocked, sequenced behind now.
   unverified section - rather than a list of forbidden phrasings. If that
   property cannot be pinned, say so and leave the copy honest without a pin.
   Prose with no pin is an acceptable outcome here, and a pin that passes under
-  the defect is WORSE than none, because it reads as protection.
+  the defect is WORSE than none, because it reads as protection. FULLY SCOPED
+  2026-09-01, which is what the reverted attempt lacked. The work is exactly:
+  hedge three strings (architecture-patterns.ts:422 twice, and :427), DATE one
+  (:426, using the 2026-06-03 snapshot from the source doc's line 35), and
+  leave :428 alone. And the card's own escape clause is confirmed as the right
+  outcome - the property CANNOT be pinned against this copy, so prose with no
+  pin is the honest result, exactly as the card said it would be.
 
 - **DBT-4** Name inline breaker rulesets instead of showing "Default selection"
   `DBT-F3` `story` `settled` `blocked by DBT-1`
@@ -313,6 +363,16 @@ Settled and unblocked, sequenced behind now.
   today, so the conf that holds existingRule is not captured at all. Whoever
   takes this needs DBT-1 answered first and then has to decide which STAGE the
   name belongs to.
+
+- **DBT-5** Produce live evidence for the `no access` and `not connected` nav states
+  `DBT-F1` `enabler` `settled`
+  Both are still test-only. ADR-0002 removed the cheapest way to produce them,
+  so each now costs a throwaway KV profile. `backlog.md#7`. PROMOTED from
+  later 2026-09-01: it was mispriced for half its scope. The 'not connected'
+  evidence costs ONE CLICK in the Live Preview - New connection, the nav's
+  Azure-requiring items flag 'not connected' with 'Connect Azure to use this',
+  screenshot, Delete - with the only real cost being re-entering the client
+  secret afterwards. Nothing about that half is blocked.
 
 - **DBT-6** Exercise the `_raw`-absent branch with a non-Lake sample
   `DBT-F1` `enabler` `undecided`
@@ -346,17 +406,27 @@ Settled and unblocked, sequenced behind now.
 - **DBT-7** Confirm the `eventsPerSec` 2x multiplier against worker config
   `DBT-F1` `enabler` `settled`
   Inferred as the worker-process count from a hard changepoint, not confirmed.
-  `zscaler-lake-lab.md:225-238`.
-
-- **DBT-9** Say "are deleted" instead of "reset" in the Sample Data helper text
-  `DBT-F2` `story` `settled`
-  The deletion is correct and intended; the wording is what misleads. One
-  string. `backlog.md#9`.
+  `zscaler-lake-lab.md:225-238`. HALF OF THIS IS DOABLE NOW AND NEEDS NO
+  WORKER 2026-09-01: the vendored spec settles the UNIT and contradicts the
+  doc. cribl-openapi.json:27074 titles datagen samples[].eventsPerSec 'Events
+  Per Second Per Worker Node' - so zscaler-lake-lab.md:216's heading,
+  'eventsPerSec is per worker process', is wrong in its own repo's spec.
+  Correcting the unit with that citation, and stopping the inference at :233
+  from guessing at process count, is a doc edit rather than a live experiment.
+  The multiplier's CAUSE stays unconfirmed - that half does need a worker.
 
 - **DBT-14** Stop the solution list swallowing the mouse wheel
   `DBT-F2` `bug` `settled`
-  Not now because: An interaction annoyance on one list. Nothing is lost,
-  nothing is misreported, and the list stays usable with the scrollbar.
+  Not now because: Held at next 2026-09-01 because the fix is a TRADE-OFF, not
+  a correction, and picking the wrong side reintroduces a bug this repo
+  already fixed. `overscroll-behavior: contain` (styles.css:2954-2958) is
+  load-bearing for the case it was added for on 2026-08-03, so deleting it
+  trades this defect for that one. The two real options are (a) apply
+  `contain` only while the list is actually scrollable, which needs a measured
+  class toggle rather than pure CSS, or (b) drop the 420px cap and let the
+  page own the scroll. Nothing is lost or misreported while it waits - the
+  list stays usable with the scrollbar - and choosing between (a) and (b) is
+  worth more than shipping either quickly.
   Found live 2026-08-27: with the pointer over the list, the wheel moves
   neither the list nor the page - the pointer must leave the list before
   anything scrolls. Five of eight results were reachable. This is the
@@ -370,28 +440,6 @@ Settled and unblocked, sequenced behind now.
   confirmation or a false all-clear. This card stays on the HUMAN reproduction
   that filed it. Whoever fixes it should verify by hand for the same reason.
 
-- **DBT-28** The solution deep link does not override a stored selection
-  `DBT-F2` `bug` `unconfirmed`
-  Not now because: Two candidate causes are recorded and it is unresolved
-  which one bit in the observed session. A live repro is cheaper than fixing
-  the wrong one, and fixing the wrong one would leave the real defect behind a
-  card marked done.
-  FOUND 2026-08-28 driving the dev app. The Select Sentinel Solution card
-  advertises `Deep link: #/?solution=1Password`. Navigating the live preview
-  to `/apps/a/__local__#/?solution=Palo%20Alto%20Networks` left 1Password
-  selected - the stored selection won and the URL had no effect. TWO CANDIDATE
-  CAUSES and I have not separated them, which is why this is unconfirmed
-  rather than a fix: (1) on the Cribl shell the app runs in an IFRAME and the
-  hash lands on the OUTER frame, so the app may never see it at all - in which
-  case the advertised link is only usable in a standalone shell and the copy
-  is overstating; (2) integrate-screen.tsx says the link is "consumed once so
-  Clear works", so a persisted selection may be designed to win. Settle which
-  before changing anything: if (1), the deep link is broken on the only
-  shipped shell and the card that advertises it is misleading; if (2), it
-  behaves as designed and the COPY needs to say that a stored selection takes
-  precedence. Worth noting the reporter could not tell from the outside, which
-  is the actual defect either way.
-
 - **D-3** How do capabilities reach the roughly eight listing screens - keep prop-drilling from the shell
   `HON-F2` `decision` `settled`
   , or carry them in `PortsContext` beside `config`? One seam change against
@@ -400,10 +448,31 @@ Settled and unblocked, sequenced behind now.
   capabilities in PortsContext. One seam change against eight call sites that
   must be kept in step - the duplication that drifts, and the same shape the
   capability model already had to correct once. Reasoning in backlog.md
-  section 18b, which is why this can settle.
+  section 18b, which is why this can settle. SCOPED 2026-09-01, and SMALLER
+  than this card prices it - the same correction backlog.md#4 already made
+  once when ADR-0002 left one shell instead of two. Real work: two fields on
+  PortsContextValue and PortsProviderProps, memoize deriveCapabilityContext at
+  the shell, update 14 App.tsx providers, convert 5 screens to read from
+  context.
   DECISION: How do capabilities reach the ~8 listing screens?
     [ ] `prop-drill` Keep prop-drilling from the shell - No seam change; every PortsProvider call site updates. Cheap now, less so later.
     [x] `ports-context` Carry them in PortsContext beside config - One seam change. At eight listers this is the duplication that drifts.
+
+- **D-10** `DBT` Setup wizard header promises three phases while the stepper shows one
+  `DBT-F2` `decision` `settled`
+  Either drop the enumeration from the header, or promote the sub-steps.
+  Measured on two live walkthroughs 2026-08-06. `backlog.md#9`. DECIDED:
+  promote the sub-steps into the stepper. Dropping the header enumeration
+  would make the screen consistent by making it less informative. Reasoning in
+  backlog.md section 18f, which is why this can settle. READY 2026-09-01:
+  everything the promotion needs already exists as data. wizardViews(shape)
+  returns ordered {id,label,phase,skippable} with the exact labels the header
+  enumerates (EXTRA_VIEW_LABELS at setup-wizard-state.ts:89-92, STEP_LABELS at
+  first-run-wizard.ts:446-451). The build is one pure derivation beside
+  wizardViewProgress.
+  DECISION: Setup wizard header promises three phases; the stepper shows one.
+    [ ] `drop-enumeration` Drop the enumeration from the header - Header stops promising what the stepper does not show.
+    [x] `promote-substeps` Promote the sub-steps into the stepper - Stepper starts showing what the header promises.
 
 - **D-11** `ADR-0004` per-table successor for deprecated guid columns (`AwsRequestId` to `AwsRequestId_`)
   `HON-F3` `decision` `settled`
@@ -417,36 +486,17 @@ Settled and unblocked, sequenced behind now.
   load-bearing as the choice: this is a per-table CONTENT mapping and must NOT
   become a new RULE 2b clause, because a general rule would rewrite column
   names in tables where the successor does not exist. Reasoning in backlog.md
-  section 18g, which is why this can settle.
+  section 18g, which is why this can settle. READY 2026-09-01, and the
+  CONSTRAINT this card insists on is ALREADY ENFORCED IN CODE rather than by
+  discipline: analyze-samples.ts:264-278 drops any Phase-0 entry whose
+  destination column is absent from the resolved schema (:273) or already
+  claimed (:274). That is exactly 'must not rewrite column names in tables
+  where the successor does not exist', so the per-table content mapping can be
+  added without touching schema-mapping at all.
   DECISION: Route deprecated guid columns to their `_`-suffixed string
   successor, per table?
     [ ] `leave-as-is` Leave it at the ADR-0004 cast - AwsRequestId stays declared string and promoted with toguid(). Correct for well-formed UUIDs, but CloudTrail's requestID frequently is not one, so toguid() returns null and the value drops silently - the same quiet failure the ADR set out to fix.
     [x] `per-table-successor` Route deprecated guid columns to the `_` successor - Per-table content mapping AwsRequestId to AwsRequestId_. ADR-0004 calls this "a real improvement" but insists it is a per-table CONTENT decision, not a schema-mapping rule, so it must not become a new RULE 2b clause. The bundled catalog already carries both columns for AWSCloudTrail.
-
-- **DBT-36** Observe the guid cast actually delivering a value
-  `DBT-F1` `enabler` `settled`
-  [[DBT-2]] built live-verification row 9 and ran it against the lab workspace
-  on 2026-08-31, but the BELIEF it exists to test is still unobserved: that
-  declaring a guid column `string` and promoting it with `toguid()` DELIVERS
-  the value. The row's type assertion passed (`SecurityEvent.InterfaceUuid`
-  reads `guid` from ARM) and its value assertion correctly refused with NO
-  DATA - every table in `law-jpederson-eastus` is EMPTY over 30 days
-  (SecurityEvent, CommonSecurityLog, Cloudflare_CL, GigamonV2_CL all return
-  zero rows), so nothing could be read back. That refusal is the row working
-  as designed, not a gap in it: an empty table cannot tell a working cast from
-  a broken one, and ADR 0004's whole point is that `toguid()` returns null
-  SILENTLY on malformed input, so a wrong cast fails exactly as quietly as the
-  drop it replaced. WHAT THIS NEEDS, and it is setup rather than code: (1) a
-  DCR whose declaration actually carries a guid column -
-  `dcr-SecurityEvent-eastus` is PRE-FIX and is losing four (see [[HON-4]]), so
-  it must be updated first, which the Inventory panel's Update button does;
-  (2) data sent through Cribl into that table carrying those fields; (3)
-  re-run row 9. NOT A CUSTOM TABLE'S `TenantId`, which is the trap here -
-  Cloudflare_CL and GigamonV2_CL have exactly one guid column each and it is
-  TenantId, which AZURE populates on ingestion, so a non-null value there
-  would prove nothing about the cast and would be precisely the confident
-  wrong answer the suite exists to avoid. Close this only on a guid column
-  that could only have arrived through the transform.
 
 - **DBT-37** The ARM export still requires a live Azure connection
   `DBT-F7` `story` `settled`
@@ -485,6 +535,24 @@ Settled and unblocked, sequenced behind now.
   is [[HON-8]]: `buildDeploymentPreview` already builds the previewable ARM
   shapes and has no caller, so nothing renders a template on screen and the
   .tgz must be opened to read one.
+
+- **DBT-56** The never-rejects contract is enforced call site by call site
+  `DBT-F1` `enabler` `settled`
+  RAISED BY THE REVIEWER OF [[DBT-48]], 2026-08-31, as the reason that fix
+  will not stay fixed. `onboardBatch` promises it never rejects for step or
+  table failures, and that promise is now kept by FOUR SEPARATE try blocks
+  around four ARM calls. DBT-48 existed because one call was added without
+  one. The next call added outside a guard reopens exactly the same defect,
+  and nothing fails when it does - the contract is prose plus a habit.
+  Options: an outer guard around the usecase body that converts any escape
+  into a failed record; or a pin that drives EVERY ARM call site to reject in
+  turn and asserts the record still resolves. The second is more work but
+  catches the omission at the point it is made, which is what the
+  four-try-blocks arrangement cannot do. SHAPE IDENTIFIED 2026-09-01: a
+  never-rejecting ARM view composed where paceAzureManagement already sits
+  (onboard-batch.ts:659) - a SafeAzureManagement whose request returns
+  {ok:true,response} | {ok:false,error}, so the contract becomes a type rather
+  than a convention repeated per call site.
 
 - **TBL-7** The create-table offer could produce its artifact inline instead of pointing
   `TBL-F3` `story` `undecided`
@@ -527,11 +595,15 @@ Settled and unblocked, sequenced behind now.
   verification nobody recorded is a verification that expires. Sibling scripts
   board-serve.mjs, package.mjs and pkgutil.mjs also lack tests, so this is not
   a lone offender - but those do not stand between a committed asset and the
-  tree, which is why only this one is carded.
+  tree, which is why only this one is carded. READY 2026-09-01: premise
+  verified intact - no test file, no exports, unguarded main(). Work is one
+  guard, one extracted pure function, and a test file copying the shape three
+  sibling scripts already establish. Two of the pins (line-ending tolerance,
+  failure names the tables) are pure and cover [[DBT-70]] exactly.
 
 ---
 
-## Backlog - later (34)
+## Backlog - later (32)
 
 Settled, gated on something above.
 
@@ -714,11 +786,6 @@ Settled, gated on something above.
   mode. The work left is an assertion that `InputCollection` and
   `RestCollectorConf` are still the right names after a re-vendor.
 
-- **DBT-5** Produce live evidence for the `no access` and `not connected` nav states
-  `DBT-F1` `enabler` `settled`
-  Both are still test-only. ADR-0002 removed the cheapest way to produce them,
-  so each now costs a throwaway KV profile. `backlog.md#7`.
-
 - **DBT-8** Correct the external datagen research note
   `DBT-F4` `enabler` `settled`
   The recorded "verified create call" returns HTTP 200 and produces no sample
@@ -845,30 +912,49 @@ Settled, gated on something above.
     [ ] `unavailable-row` Show it as an unavailable row with its reason - Port the resource-coverage.json notSupported entry as a feature: a greyed row reading query-only, no streaming path, alternative "scheduled Azure Resource Graph queries". States the absence with its reason; creates no Cribl config.
     [x] `scheduled-collector` Build it as a second scheduled collector - Generate a scheduled Resource Graph query collector alongside the Sentinel incidents one. Most work, and it lands on the same unmeasured Resource Graph capability that CAP-1 closes.
 
-- **D-10** `DBT` Setup wizard header promises three phases while the stepper shows one
-  `DBT-F2` `decision` `settled`
-  Either drop the enumeration from the header, or promote the sub-steps.
-  Measured on two live walkthroughs 2026-08-06. `backlog.md#9`. DECIDED:
-  promote the sub-steps into the stepper. Dropping the header enumeration
-  would make the screen consistent by making it less informative. Reasoning in
-  backlog.md section 18f, which is why this can settle.
-  DECISION: Setup wizard header promises three phases; the stepper shows one.
-    [ ] `drop-enumeration` Drop the enumeration from the header - Header stops promising what the stepper does not show.
-    [x] `promote-substeps` Promote the sub-steps into the stepper - Stepper starts showing what the header promises.
-
-- **DBT-56** The never-rejects contract is enforced call site by call site
+- **DBT-36** Observe the guid cast actually delivering a value
   `DBT-F1` `enabler` `settled`
-  RAISED BY THE REVIEWER OF [[DBT-48]], 2026-08-31, as the reason that fix
-  will not stay fixed. `onboardBatch` promises it never rejects for step or
-  table failures, and that promise is now kept by FOUR SEPARATE try blocks
-  around four ARM calls. DBT-48 existed because one call was added without
-  one. The next call added outside a guard reopens exactly the same defect,
-  and nothing fails when it does - the contract is prose plus a habit.
-  Options: an outer guard around the usecase body that converts any escape
-  into a failed record; or a pin that drives EVERY ARM call site to reject in
-  turn and asserts the record still resolves. The second is more work but
-  catches the omission at the point it is made, which is what the
-  four-try-blocks arrangement cannot do.
+  [[DBT-2]] built live-verification row 9 and ran it against the lab workspace
+  on 2026-08-31, but the BELIEF it exists to test is still unobserved: that
+  declaring a guid column `string` and promoting it with `toguid()` DELIVERS
+  the value. The row's type assertion passed (`SecurityEvent.InterfaceUuid`
+  reads `guid` from ARM) and its value assertion correctly refused with NO
+  DATA - every table in `law-jpederson-eastus` is EMPTY over 30 days
+  (SecurityEvent, CommonSecurityLog, Cloudflare_CL, GigamonV2_CL all return
+  zero rows), so nothing could be read back. That refusal is the row working
+  as designed, not a gap in it: an empty table cannot tell a working cast from
+  a broken one, and ADR 0004's whole point is that `toguid()` returns null
+  SILENTLY on malformed input, so a wrong cast fails exactly as quietly as the
+  drop it replaced. WHAT THIS NEEDS, and it is setup rather than code: (1) a
+  DCR whose declaration actually carries a guid column -
+  `dcr-SecurityEvent-eastus` is PRE-FIX and is losing four (see [[HON-4]]), so
+  it must be updated first, which the Inventory panel's Update button does;
+  (2) data sent through Cribl into that table carrying those fields; (3)
+  re-run row 9. NOT A CUSTOM TABLE'S `TenantId`, which is the trap here -
+  Cloudflare_CL and GigamonV2_CL have exactly one guid column each and it is
+  TenantId, which AZURE populates on ingestion, so a non-null value there
+  would prove nothing about the cast and would be precisely the confident
+  wrong answer the suite exists to avoid. Close this only on a guid column
+  that could only have arrived through the transform. PREMISE FALSIFIED
+  2026-09-01 by live measurement, and this correction is the urgent part of
+  the card. It says every table in law-jpederson-eastus is EMPTY over 30 days.
+  IT IS NOT. Measured with the az CLI against subscription
+  fe6f9921-9c88-4a6d-a144-8e1935c05bf2: WindowsEvent holds 537,695 rows and
+  Heartbeat 127,735 over 30 days, arriving continuously at roughly 17,000/day
+  since 2026-08-02 - so data was flowing ON 2026-08-31, the day [[DBT-2]]
+  concluded the workspace was empty. Azure read access is NOT the blocker and
+  never was. WHY THE STALE PREMISE IS ACTIVELY HARMFUL rather than merely out
+  of date: anyone re-running live-verify row 9 against the now-flowing
+  WindowsEvent with AZURE_LIVE_GUID_COLUMN=TenantId would read 'CAST WORKS' -
+  which is precisely the confident wrong answer this card exists to prevent,
+  produced BY the card's own instructions. TenantId is populated by Azure on
+  ingestion, so a non-null value there proves nothing about the transform.
+  WHAT IS ACTUALLY BLOCKING, restated honestly: not access and not data, but a
+  DEPLOYED DCR THAT CARRIES THE CAST plus a path that sends data through it.
+  No DCR in the subscription is in a position to answer the question today.
+  That is why this stays `later` - it is genuinely gated on setup, not on
+  effort - but the card can no longer be read as 'wait for data to arrive',
+  because the data arrived a month ago.
 
 - **DBT-58** Two pins encode opposite policies for naming the excluded subscription
   `DBT-F4` `bug` `undecided`
