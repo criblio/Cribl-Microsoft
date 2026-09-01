@@ -11,7 +11,7 @@ two cannot disagree.
 alternatives. This board holds only what is a unit of work, what state it is
 in, and what it waits on.
 
-**53 in the backlog, 0 in progress, 84 done.**
+**47 in the backlog, 6 in progress, 84 done.**
 
 ## By menu item
 
@@ -142,17 +142,57 @@ RAISED BY THE USER 2026-08-31. DCR Automation can onboard a table you can alread
 
 ---
 
-## In progress (0)
+## In progress (6)
 
 Started. Anything here with an unfinished dependency is called out on its card.
 
-_Nothing here._
+- **DBT-3** Reconcile the Entra `Kind:Direct` copy with what has been measured
+  `DBT-F2` `story` `settled`
+  `architecture-patterns.ts:422,426` states flatly that native Entra tables do
+  not accept Kind:Direct DCRs, with no snapshot date and no hedge, while the
+  plan doc that is its only source still calls it unverified. Either measure
+  it or carry the caveat. ATTEMPTED AND REVERTED 2026-09-01, and the failure
+  is worth more than the attempt would have been. An agent rewrote the copy to
+  carry a caveat, and adversarial review showed the rewrite COMMITTED THE SAME
+  OFFENCE THE CARD WAS FILED AGAINST, one level up: the new text told
+  operators 'Nobody has tested that against a live workspace', which is a
+  universal claim about the state of the world that nobody established. The
+  source document says only that ONE specific thing is unverified. Trading an
+  unhedged claim for a differently-unhedged claim is not a fix. Two further
+  findings, both confirmed by reproduction rather than argued. The rewritten
+  `why` still ended with an unhedged assertion drawn from the SAME section 8
+  of the SAME source - that function aliases keep existing analytics content
+  working - while section 8's third risk says the alias trick may be rejected
+  outright. And the pin titled 'never asserts the UNMEASURED half' did not
+  enforce that property: it blocked four literal spellings, so the reviewer
+  reintroduced the card's exact defect in different words and the file passed
+  52 of 52 with the UNVERIFIED bullet still on screen. WHAT THE NEXT ATTEMPT
+  MUST DO DIFFERENTLY: state precisely what the source says is unverified and
+  no more; do not characterise the state of the world's testing; hedge EVERY
+  claim traceable to the unverified section rather than only the one this card
+  names; and pin the PROPERTY - no unhedged assertion sourced from an
+  unverified section - rather than a list of forbidden phrasings. If that
+  property cannot be pinned, say so and leave the copy honest without a pin.
+  Prose with no pin is an acceptable outcome here, and a pin that passes under
+  the defect is WORSE than none, because it reads as protection. FULLY SCOPED
+  2026-09-01, which is what the reverted attempt lacked. The work is exactly:
+  hedge three strings (architecture-patterns.ts:422 twice, and :427), DATE one
+  (:426, using the 2026-06-03 snapshot from the source doc's line 35), and
+  leave :428 alone. And the card's own escape clause is confirmed as the right
+  outcome - the property CANNOT be pinned against this copy, so prose with no
+  pin is the honest result, exactly as the card said it would be.
 
----
-
-## Backlog - now (2)
-
-Next to pick up. Nothing blocks these.
+- **DBT-7** Confirm the `eventsPerSec` 2x multiplier against worker config
+  `DBT-F1` `enabler` `settled`
+  Inferred as the worker-process count from a hard changepoint, not confirmed.
+  `zscaler-lake-lab.md:225-238`. HALF OF THIS IS DOABLE NOW AND NEEDS NO
+  WORKER 2026-09-01: the vendored spec settles the UNIT and contradicts the
+  doc. cribl-openapi.json:27074 titles datagen samples[].eventsPerSec 'Events
+  Per Second Per Worker Node' - so zscaler-lake-lab.md:216's heading,
+  'eventsPerSec is per worker process', is wrong in its own repo's spec.
+  Correcting the unit with that citation, and stopping the inference at :233
+  from guessing at process count, is a doc edit rather than a live experiment.
+  The multiplier's CAUSE stays unconfirmed - that half does need a worker.
 
 - **DBT-9** Say "are deleted" instead of "reset" in the Sample Data helper text
   `DBT-F2` `story` `settled`
@@ -163,6 +203,76 @@ Next to pick up. Nothing blocks these.
   it describes is confirmed real at integrate-screen.tsx:663-667
   (ports.samples.list() then Promise.all of removals), so 'are deleted' is the
   accurate word.
+
+- **D-11** `ADR-0004` per-table successor for deprecated guid columns (`AwsRequestId` to `AwsRequestId_`)
+  `HON-F3` `decision` `settled`
+  Explicitly out of scope for ADR-0004 as a per-table content decision.
+  Matters because CloudTrail's `requestID` is frequently not a UUID, so
+  `toguid()` returns null and drops it silently. `adr/0004:82-86`. --- Source
+  is docs/adr/0004-cast-guid-columns.md, "What is NOT decided here". The card
+  previously tagged AZR-5, which is the diagnostic-settings cleanup and has
+  nothing to do with guid columns. DECIDED: route deprecated guid columns to
+  their `_` successor, per table. CONSTRAINT recorded with the decision and as
+  load-bearing as the choice: this is a per-table CONTENT mapping and must NOT
+  become a new RULE 2b clause, because a general rule would rewrite column
+  names in tables where the successor does not exist. Reasoning in backlog.md
+  section 18g, which is why this can settle. READY 2026-09-01, and the
+  CONSTRAINT this card insists on is ALREADY ENFORCED IN CODE rather than by
+  discipline: analyze-samples.ts:264-278 drops any Phase-0 entry whose
+  destination column is absent from the resolved schema (:273) or already
+  claimed (:274). That is exactly 'must not rewrite column names in tables
+  where the successor does not exist', so the per-table content mapping can be
+  added without touching schema-mapping at all.
+  DECISION: Route deprecated guid columns to their `_`-suffixed string
+  successor, per table?
+    [ ] `leave-as-is` Leave it at the ADR-0004 cast - AwsRequestId stays declared string and promoted with toguid(). Correct for well-formed UUIDs, but CloudTrail's requestID frequently is not one, so toguid() returns null and the value drops silently - the same quiet failure the ADR set out to fix.
+    [x] `per-table-successor` Route deprecated guid columns to the `_` successor - Per-table content mapping AwsRequestId to AwsRequestId_. ADR-0004 calls this "a real improvement" but insists it is a per-table CONTENT decision, not a schema-mapping rule, so it must not become a new RULE 2b clause. The bundled catalog already carries both columns for AWSCloudTrail.
+
+- **DBT-56** The never-rejects contract is enforced call site by call site
+  `DBT-F1` `enabler` `settled`
+  RAISED BY THE REVIEWER OF [[DBT-48]], 2026-08-31, as the reason that fix
+  will not stay fixed. `onboardBatch` promises it never rejects for step or
+  table failures, and that promise is now kept by FOUR SEPARATE try blocks
+  around four ARM calls. DBT-48 existed because one call was added without
+  one. The next call added outside a guard reopens exactly the same defect,
+  and nothing fails when it does - the contract is prose plus a habit.
+  Options: an outer guard around the usecase body that converts any escape
+  into a failed record; or a pin that drives EVERY ARM call site to reject in
+  turn and asserts the record still resolves. The second is more work but
+  catches the omission at the point it is made, which is what the
+  four-try-blocks arrangement cannot do. SHAPE IDENTIFIED 2026-09-01: a
+  never-rejecting ARM view composed where paceAzureManagement already sits
+  (onboard-batch.ts:659) - a SafeAzureManagement whose request returns
+  {ok:true,response} | {ok:false,error}, so the contract becomes a type rather
+  than a convention repeated per call site.
+
+- **DBT-69** check-schema-asset has no test, which is the gap it was built to close
+  `DBT-F1` `enabler` `settled`
+  apps/cribl-app/scripts/check-schema-asset.mjs ships with no test file,
+  unlike board.mjs, check-listings.mjs, check-docs-drift.mjs and the other
+  gate scripts, which all have one. The irony is the point, not a joke:
+  [[DBT-67]] existed because a generator crashed for seven weeks and NO TEST
+  RAN IT, so the breakage was silent. The checker added to close that is
+  itself untested, so if it silently stops detecting drift - an exception
+  swallowed, a comparison inverted, the restore in the finally block masking a
+  real failure - nothing reports it, and the gate reads green while guarding
+  nothing. Its behaviour WAS verified by hand at the time: both mutations were
+  run and both were caught (stale asset names the 2 drifting tables; a broken
+  generator path reports FAILED TO RUN with the original ENOENT). But a
+  verification nobody recorded is a verification that expires. Sibling scripts
+  board-serve.mjs, package.mjs and pkgutil.mjs also lack tests, so this is not
+  a lone offender - but those do not stand between a committed asset and the
+  tree, which is why only this one is carded. READY 2026-09-01: premise
+  verified intact - no test file, no exports, unguarded main(). Work is one
+  guard, one extracted pure function, and a test file copying the shape three
+  sibling scripts already establish. Two of the pins (line-ending tolerance,
+  failure names the tables) are pure and cover [[DBT-70]] exactly.
+
+---
+
+## Backlog - now (1)
+
+Next to pick up. Nothing blocks these.
 
 - **DBT-28** The solution deep link does not override a stored selection
   `DBT-F2` `bug` `unconfirmed`
@@ -199,7 +309,7 @@ Next to pick up. Nothing blocks these.
 
 ---
 
-## Backlog - next (20)
+## Backlog - next (15)
 
 Settled and unblocked, sequenced behind now.
 
@@ -275,42 +385,6 @@ Settled and unblocked, sequenced behind now.
   deletes it on the strength of > a green suite. FX-4's sweep should treat it
   as a known-unpinned guard.
 
-- **DBT-3** Reconcile the Entra `Kind:Direct` copy with what has been measured
-  `DBT-F2` `story` `settled`
-  `architecture-patterns.ts:422,426` states flatly that native Entra tables do
-  not accept Kind:Direct DCRs, with no snapshot date and no hedge, while the
-  plan doc that is its only source still calls it unverified. Either measure
-  it or carry the caveat. ATTEMPTED AND REVERTED 2026-09-01, and the failure
-  is worth more than the attempt would have been. An agent rewrote the copy to
-  carry a caveat, and adversarial review showed the rewrite COMMITTED THE SAME
-  OFFENCE THE CARD WAS FILED AGAINST, one level up: the new text told
-  operators 'Nobody has tested that against a live workspace', which is a
-  universal claim about the state of the world that nobody established. The
-  source document says only that ONE specific thing is unverified. Trading an
-  unhedged claim for a differently-unhedged claim is not a fix. Two further
-  findings, both confirmed by reproduction rather than argued. The rewritten
-  `why` still ended with an unhedged assertion drawn from the SAME section 8
-  of the SAME source - that function aliases keep existing analytics content
-  working - while section 8's third risk says the alias trick may be rejected
-  outright. And the pin titled 'never asserts the UNMEASURED half' did not
-  enforce that property: it blocked four literal spellings, so the reviewer
-  reintroduced the card's exact defect in different words and the file passed
-  52 of 52 with the UNVERIFIED bullet still on screen. WHAT THE NEXT ATTEMPT
-  MUST DO DIFFERENTLY: state precisely what the source says is unverified and
-  no more; do not characterise the state of the world's testing; hedge EVERY
-  claim traceable to the unverified section rather than only the one this card
-  names; and pin the PROPERTY - no unhedged assertion sourced from an
-  unverified section - rather than a list of forbidden phrasings. If that
-  property cannot be pinned, say so and leave the copy honest without a pin.
-  Prose with no pin is an acceptable outcome here, and a pin that passes under
-  the defect is WORSE than none, because it reads as protection. FULLY SCOPED
-  2026-09-01, which is what the reverted attempt lacked. The work is exactly:
-  hedge three strings (architecture-patterns.ts:422 twice, and :427), DATE one
-  (:426, using the 2026-06-03 snapshot from the source doc's line 35), and
-  leave :428 alone. And the card's own escape clause is confirmed as the right
-  outcome - the property CANNOT be pinned against this copy, so prose with no
-  pin is the honest result, exactly as the card said it would be.
-
 - **DBT-4** Name inline breaker rulesets instead of showing "Default selection"
   `DBT-F3` `story` `settled` `blocked by DBT-1`
   The spec's `EventBreakerExistingOrNewExisting` carries `existingRule`.
@@ -345,18 +419,6 @@ Settled and unblocked, sequenced behind now.
   Azure-requiring items flag 'not connected' with 'Connect Azure to use this',
   screenshot, Delete - with the only real cost being re-entering the client
   secret afterwards. Nothing about that half is blocked.
-
-- **DBT-7** Confirm the `eventsPerSec` 2x multiplier against worker config
-  `DBT-F1` `enabler` `settled`
-  Inferred as the worker-process count from a hard changepoint, not confirmed.
-  `zscaler-lake-lab.md:225-238`. HALF OF THIS IS DOABLE NOW AND NEEDS NO
-  WORKER 2026-09-01: the vendored spec settles the UNIT and contradicts the
-  doc. cribl-openapi.json:27074 titles datagen samples[].eventsPerSec 'Events
-  Per Second Per Worker Node' - so zscaler-lake-lab.md:216's heading,
-  'eventsPerSec is per worker process', is wrong in its own repo's spec.
-  Correcting the unit with that citation, and stopping the inference at :233
-  from guessing at process count, is a doc edit rather than a live experiment.
-  The multiplier's CAUSE stays unconfirmed - that half does need a worker.
 
 - **DBT-14** Stop the solution list swallowing the mouse wheel
   `DBT-F2` `bug` `settled`
@@ -417,30 +479,6 @@ Settled and unblocked, sequenced behind now.
     [ ] `drop-enumeration` Drop the enumeration from the header - Header stops promising what the stepper does not show.
     [x] `promote-substeps` Promote the sub-steps into the stepper - Stepper starts showing what the header promises.
 
-- **D-11** `ADR-0004` per-table successor for deprecated guid columns (`AwsRequestId` to `AwsRequestId_`)
-  `HON-F3` `decision` `settled`
-  Explicitly out of scope for ADR-0004 as a per-table content decision.
-  Matters because CloudTrail's `requestID` is frequently not a UUID, so
-  `toguid()` returns null and drops it silently. `adr/0004:82-86`. --- Source
-  is docs/adr/0004-cast-guid-columns.md, "What is NOT decided here". The card
-  previously tagged AZR-5, which is the diagnostic-settings cleanup and has
-  nothing to do with guid columns. DECIDED: route deprecated guid columns to
-  their `_` successor, per table. CONSTRAINT recorded with the decision and as
-  load-bearing as the choice: this is a per-table CONTENT mapping and must NOT
-  become a new RULE 2b clause, because a general rule would rewrite column
-  names in tables where the successor does not exist. Reasoning in backlog.md
-  section 18g, which is why this can settle. READY 2026-09-01, and the
-  CONSTRAINT this card insists on is ALREADY ENFORCED IN CODE rather than by
-  discipline: analyze-samples.ts:264-278 drops any Phase-0 entry whose
-  destination column is absent from the resolved schema (:273) or already
-  claimed (:274). That is exactly 'must not rewrite column names in tables
-  where the successor does not exist', so the per-table content mapping can be
-  added without touching schema-mapping at all.
-  DECISION: Route deprecated guid columns to their `_`-suffixed string
-  successor, per table?
-    [ ] `leave-as-is` Leave it at the ADR-0004 cast - AwsRequestId stays declared string and promoted with toguid(). Correct for well-formed UUIDs, but CloudTrail's requestID frequently is not one, so toguid() returns null and the value drops silently - the same quiet failure the ADR set out to fix.
-    [x] `per-table-successor` Route deprecated guid columns to the `_` successor - Per-table content mapping AwsRequestId to AwsRequestId_. ADR-0004 calls this "a real improvement" but insists it is a per-table CONTENT decision, not a schema-mapping rule, so it must not become a new RULE 2b clause. The bundled catalog already carries both columns for AWSCloudTrail.
-
 - **DBT-37** The ARM export still requires a live Azure connection
   `DBT-F7` `story` `settled`
   RAISED BY THE USER 2026-08-31: "does the Sentinel Integration give the user
@@ -479,24 +517,6 @@ Settled and unblocked, sequenced behind now.
   shapes and has no caller, so nothing renders a template on screen and the
   .tgz must be opened to read one.
 
-- **DBT-56** The never-rejects contract is enforced call site by call site
-  `DBT-F1` `enabler` `settled`
-  RAISED BY THE REVIEWER OF [[DBT-48]], 2026-08-31, as the reason that fix
-  will not stay fixed. `onboardBatch` promises it never rejects for step or
-  table failures, and that promise is now kept by FOUR SEPARATE try blocks
-  around four ARM calls. DBT-48 existed because one call was added without
-  one. The next call added outside a guard reopens exactly the same defect,
-  and nothing fails when it does - the contract is prose plus a habit.
-  Options: an outer guard around the usecase body that converts any escape
-  into a failed record; or a pin that drives EVERY ARM call site to reject in
-  turn and asserts the record still resolves. The second is more work but
-  catches the omission at the point it is made, which is what the
-  four-try-blocks arrangement cannot do. SHAPE IDENTIFIED 2026-09-01: a
-  never-rejecting ARM view composed where paceAzureManagement already sits
-  (onboard-batch.ts:659) - a SafeAzureManagement whose request returns
-  {ok:true,response} | {ok:false,error}, so the contract becomes a type rather
-  than a convention repeated per call site.
-
 - **TBL-7** The create-table offer could produce its artifact inline instead of pointing
   `TBL-F3` `story` `undecided`
   RAISED BY THE TBL-4 AGENT 2026-08-31, which surfaced it rather than acting
@@ -521,28 +541,6 @@ Settled and unblocked, sequenced behind now.
   inputs, not of the artifact kind alone. That is a change to a contract
   settled hours ago, so decide it before building - backlog.md section 16 is
   the reasoning it would amend.
-
-- **DBT-69** check-schema-asset has no test, which is the gap it was built to close
-  `DBT-F1` `enabler` `settled`
-  apps/cribl-app/scripts/check-schema-asset.mjs ships with no test file,
-  unlike board.mjs, check-listings.mjs, check-docs-drift.mjs and the other
-  gate scripts, which all have one. The irony is the point, not a joke:
-  [[DBT-67]] existed because a generator crashed for seven weeks and NO TEST
-  RAN IT, so the breakage was silent. The checker added to close that is
-  itself untested, so if it silently stops detecting drift - an exception
-  swallowed, a comparison inverted, the restore in the finally block masking a
-  real failure - nothing reports it, and the gate reads green while guarding
-  nothing. Its behaviour WAS verified by hand at the time: both mutations were
-  run and both were caught (stale asset names the 2 drifting tables; a broken
-  generator path reports FAILED TO RUN with the original ENOENT). But a
-  verification nobody recorded is a verification that expires. Sibling scripts
-  board-serve.mjs, package.mjs and pkgutil.mjs also lack tests, so this is not
-  a lone offender - but those do not stand between a committed asset and the
-  tree, which is why only this one is carded. READY 2026-09-01: premise
-  verified intact - no test file, no exports, unguarded main(). Work is one
-  guard, one extracted pure function, and a test file copying the shape three
-  sibling scripts already establish. Two of the pins (line-ending tolerance,
-  failure names the tables) are pure and cover [[DBT-70]] exactly.
 
 ---
 
