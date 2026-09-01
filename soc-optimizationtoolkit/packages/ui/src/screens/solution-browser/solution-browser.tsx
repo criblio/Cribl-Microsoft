@@ -21,6 +21,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  DELIVERY_FIT_NOT_FETCHED,
   DELIVERY_FIT_UNMEASURED_LABEL,
   classifyConnectorIngestion,
   classifySolutionIngestion,
@@ -33,7 +34,12 @@ import {
   solutionIndexCacheKey,
   toVendorLogTypes,
 } from "@soc/core";
-import type { IngestionClass, SolutionRef, WorkspaceScope } from "@soc/core";
+import type {
+  DeliveryFitEvidence,
+  IngestionClass,
+  SolutionRef,
+  WorkspaceScope,
+} from "@soc/core";
 import { usePorts } from "../../ports-context";
 import {
   buildSolutionDeepLink,
@@ -99,6 +105,31 @@ type DetailState =
   | { phase: "loading" }
   | { phase: "loaded"; detail: SolutionDetail }
   | { phase: "error"; message: string };
+
+/**
+ * Translate the screen's fetch phase into the evidence the badge derivation
+ * reasons over (DBT-15). Structural on purpose - every judgement about what the
+ * evidence MEANS lives in deliveryFitBadge, where it is pinned without a DOM.
+ * The one thing said here is that `loaded` carries a real connector count, so a
+ * completed listing of zero reaches the derivation as a zero rather than as a
+ * missing classification.
+ */
+function fitEvidence(detail: DetailState): DeliveryFitEvidence {
+  switch (detail.phase) {
+    case "loaded":
+      return {
+        phase: "fetched",
+        connectorCount: detail.detail.connectorCount,
+        ingestion: detail.detail.ingestion,
+      };
+    case "loading":
+      return { phase: "fetching" };
+    case "error":
+      return { phase: "fetch-failed" };
+    case "idle":
+      return DELIVERY_FIT_NOT_FETCHED;
+  }
+}
 
 export function SolutionBrowser({
   onSelect,
@@ -408,16 +439,15 @@ export function SolutionBrowser({
               {selected.name}
             </span>
             {(() => {
-              // Shipped tier is authoritative for known solutions; the live
-              // tier (decoded connectors) covers a solution missing from the
-              // shipped map. Neither available is the fourth state, "Not
-              // measured" - DBT-15: the selected card rendered blank in exactly
-              // the same way the list rows did.
+              // The SAME derivation the list rows use - the difference is only
+              // what is known here (DBT-15). A row never fetches, so it passes
+              // no evidence; this card passes the live fetch's real phase, and
+              // deliveryFitBadge decides which source wins. Handing the card a
+              // row's badge is what made it say "Not measured" about a fetch it
+              // had already completed (review finding 2).
               const badge = deliveryFitBadge(
-                lookupSolutionIngestion(selected.name) ??
-                  (detail.phase === "loaded"
-                    ? detail.detail.ingestion ?? null
-                    : null),
+                lookupSolutionIngestion(selected.name),
+                fitEvidence(detail),
               );
               return (
                 <span
@@ -530,8 +560,12 @@ export function SolutionBrowser({
             CCF pull / custom-table DCR{" "}
             <span className="ingestion-badge ingestion-badge-legacy">Legacy</span>{" "}
             agent / Functions{" "}
-            {/* The fourth state is about the EVIDENCE, not the solution, so the
-                legend says what is missing rather than implying a worse fit. */}
+            {/* This state is about the EVIDENCE, not the solution, so the
+                legend says what is missing rather than implying a worse fit.
+                The legend stops here on purpose: "Measuring..." and "No
+                connector" need a live fetch, which only a SELECTED solution
+                has, so listing them as browse-list vocabulary would advertise
+                two badges no row here can ever show. */}
             <span className="ingestion-badge ingestion-badge-unmeasured">
               {DELIVERY_FIT_UNMEASURED_LABEL}
             </span>{" "}
@@ -546,8 +580,14 @@ export function SolutionBrowser({
               // Logs-Ingestion fit from the shipped map (instant, no fetch).
               // The map does not cover every solution in the index, so this is
               // routed through deliveryFitBadge: a miss becomes "Not measured"
-              // rather than the blank cell DBT-15 reported.
-              const fit = deliveryFitBadge(lookupSolutionIngestion(solution.name));
+              // rather than the blank cell DBT-15 reported. The evidence is
+              // passed EXPLICITLY rather than defaulted - a browse row really
+              // has not looked at this solution's connectors, and that is what
+              // earns it the tooltip promising the look happens on selection.
+              const fit = deliveryFitBadge(
+                lookupSolutionIngestion(solution.name),
+                DELIVERY_FIT_NOT_FETCHED,
+              );
               const recommended = fit.state === "recommended";
               return (
                 <li

@@ -1656,7 +1656,7 @@ nor the page. The pointer has to be moved outside the list before the page will
 scroll at all. Eight results were visible and five were reachable. This is the
 concrete reproduction the old open question about nested scrolling never had.
 
-### 13e. One solution renders no delivery-fit badge (DBT-15) - FIXED 2026-08-31
+### 13e. One solution renders no delivery-fit badge (DBT-15) - FIXED 2026-08-31, REWORKED after review 2026-09-01
 
 In the eight `Palo` results, "Palo Alto Cortex XDR" carries no fit badge while
 all seven siblings carry one (Legacy, Supported, or Recommended). Blank is
@@ -1676,7 +1676,7 @@ like a rendering failure. The card's later note that AbuseIPDB and Acronis Cyber
 Protect Cloud do the same on the unfiltered list is the same absence, and was
 the clue that this was data rather than DOM.
 
-**Why the fix is a fourth state rather than a default tier.** The obvious repair
+**Why the fix is a state of its own rather than a default tier.** The obvious repair
 is to fall back to `classifySolutionIngestion([])`, which answers `legacy` for
 an empty connector list, and every row would then carry a badge. That trades a
 blank for a lie: it states a measured verdict - "not a native Logs Ingestion
@@ -1690,12 +1690,54 @@ missing and explicitly that it is not a claim of poor fit. Same discipline as
 `emptyInventoryMessage`: "not measured" is its own answer and does not collapse
 into either of the others.
 
-The same blank existed on the selected-solution card, where the shipped lookup
-and the live per-solution classification can both miss; it now takes the same
-badge. What was NOT done, deliberately: inferring "no connector, so nothing to
-deliver" from a zero-length connector listing on the live fetch. An empty
-listing is an unknown, not a zero - claiming a measured "does not apply" from it
-would be this same defect with the sign flipped.
+**The first attempt half-fixed it, and the review caught both halves
+(2026-09-01).** It is worth recording what a same-day adversarial read found,
+because both findings are failure modes this project keeps producing.
+
+*Finding 1 - the pinned half was not the whole fix.* The list row was pinned in
+a DOM test; the SELECTED-SOLUTION CARD was not, because no test in the ui suite
+ever selected a solution. The reviewer reverted just the card's branch to the
+defect shape (`badge.measured ? <span/> : null`) and the entire ui suite stayed
+green. The attempt's own commit message reported a mutation-check that covered
+only the row while reading as though it covered the fix. The lesson is not
+"write more pins" - it is that a mutation-check is evidence only about the line
+it mutated, and a fix with two call sites needs two of them.
+
+*Finding 2 - the tooltip stated something the same screen disproved.* The
+attempt gave the card a ROW's badge, and a row's tooltip ends "its connectors
+are classified live when the solution is selected". On the card the solution IS
+selected and the classification HAS run, so with the fetch complete and no
+connector files found, the app reported "Not measured" about a measurement it
+had just taken and promised as future work something already in the past. That
+is the absent-versus-zero confusion inverted: the original defect reported
+nothing for an unknown; this reported an unknown for a measured zero.
+
+**So the derivation now takes EVIDENCE, and the paragraph this replaces was
+wrong.** The attempt argued that "an empty listing is an unknown, not a zero"
+and refused to read anything from a zero-length connector listing. That is the
+right rule for an ARM list - RBAC returns `200 OK` with an empty `value`, so an
+unverified empty really is unknown - and the wrong rule here. The GitHub
+contents adapter REJECTS on 401/403 and resolves `[]` only for a directory it
+successfully read, so a completed listing of no connector files is a zero
+somebody looked at. Refusing to say so is the second finding.
+
+`deliveryFitBadge(shipped, evidence)` is now one derivation consumed by both
+call sites, over the phases that actually exist: `not-fetched` (every browse
+row - "Not measured", and the only state that may promise a look on selection),
+`fetching` ("Measuring..."), `fetch-failed` ("Not measured", naming the failure
+and offering a retry rather than a loop), and `fetched` - which splits into a
+live tier, "Not measured" when files were found but none could be parsed, and
+`no-connector` when the listing completed with none. `no-connector` carries
+`measured: true` and a tooltip that opens "Measured:".
+
+Two ordering rules, both with reasons rather than preferences. A shipped tier
+beats a live one, because the generator reads every connector file while the
+live decode caps at the first few and can under-report the best tier. But a
+completed EMPTY listing beats the shipped tier, because a shipped entry exists
+only where the generator read at least one connector file - so an empty listing
+does not merely disagree with it, it falsifies its premise, and letting the
+shipped tier win would also print "Recommended" directly above the card's own
+"0 connector files".
 
 ## 14. Overflow serialize missing from the generated pipeline - REPORTED 2026-08-27
 

@@ -10,9 +10,13 @@
 
 import { describe, expect, it } from "vitest";
 import {
+  DELIVERY_FIT_MEASURING_LABEL,
+  DELIVERY_FIT_NOT_FETCHED,
+  DELIVERY_FIT_NO_CONNECTOR_LABEL,
   DELIVERY_FIT_UNMEASURED_LABEL,
   deliveryFitBadge,
 } from "./delivery-fit-badge";
+import type { DeliveryFitEvidence } from "./delivery-fit-badge";
 import { lookupSolutionIngestion } from "./ingestion-classification";
 import { classifySolutionIngestion, ingestionTierLabel } from "./ingestion-class";
 
@@ -113,19 +117,171 @@ describe("deliveryFitBadge - the absent case (the DBT-15 defect)", () => {
   });
 });
 
+/**
+ * The states the SELECTED-SOLUTION CARD adds (review finding 2, 2026-09-01).
+ * A row never fetches, so "not measured" is the whole story there. The card
+ * fetches, and the first attempt handed it a row's badge - so with the fetch
+ * COMPLETE and zero connector files found it said "Not measured" about a
+ * measurement it had just taken, and offered a tooltip promising the
+ * measurement would happen when the solution was selected. Each phase now has
+ * its own answer, and each one is pinned.
+ */
+describe("deliveryFitBadge - the live fetch's four phases", () => {
+  const fetched = (
+    connectorCount: number,
+    ingestion?: { tier: "recommended" | "supported" | "legacy"; kind: string } | null,
+  ): DeliveryFitEvidence => ({ phase: "fetched", connectorCount, ingestion });
+
+  it("reports a COMPLETED listing of zero connectors as MEASURED, not unknown", () => {
+    // The finding itself. "Fetch complete, none found" is a zero we looked at:
+    // the adapter rejects on 401/403 and returns [] only for a folder it read.
+    // Calling it "Not measured" is the absent-versus-zero confusion inverted.
+    const badge = deliveryFitBadge(null, fetched(0));
+    expect(badge.state).toBe("no-connector");
+    expect(badge.label).toBe(DELIVERY_FIT_NO_CONNECTOR_LABEL);
+    expect(badge.measured).toBe(true);
+    expect(badge.label).not.toBe(DELIVERY_FIT_UNMEASURED_LABEL);
+    expect(badge.reason).toMatch(/^Measured:/);
+    expect(badge.reason).not.toMatch(/not measured/i);
+  });
+
+  it("does not tell the card its connectors get classified on selection", () => {
+    // The exact sentence the review caught: on the card the selection has
+    // already happened, so a tooltip promising it as future work describes the
+    // past. No phase the card can be in may carry that clause.
+    for (const evidence of [
+      fetched(0),
+      fetched(3),
+      fetched(2, { tier: "supported", kind: "RestApiPoller" }),
+      { phase: "fetching" } as const,
+      { phase: "fetch-failed" } as const,
+    ]) {
+      expect(deliveryFitBadge(null, evidence).reason).not.toMatch(
+        /when the solution is selected/i,
+      );
+    }
+    // ...and the browse row, which genuinely has not looked, still promises it.
+    expect(deliveryFitBadge(null, DELIVERY_FIT_NOT_FETCHED).reason).toMatch(
+      /when the solution is selected/i,
+    );
+  });
+
+  it("says a measurement is UNDERWAY while the fetch is in flight", () => {
+    const badge = deliveryFitBadge(null, { phase: "fetching" });
+    expect(badge.state).toBe("measuring");
+    expect(badge.label).toBe(DELIVERY_FIT_MEASURING_LABEL);
+    // In flight is neither a measured verdict nor a settled absence of one.
+    expect(badge.measured).toBe(false);
+    expect(badge.label).not.toBe(DELIVERY_FIT_UNMEASURED_LABEL);
+    expect(badge.label).not.toBe(DELIVERY_FIT_NO_CONNECTOR_LABEL);
+  });
+
+  it("reports a FAILED fetch as unmeasured, and does not send the operator in a loop", () => {
+    const badge = deliveryFitBadge(null, { phase: "fetch-failed" });
+    expect(badge.state).toBe("unmeasured");
+    expect(badge.measured).toBe(false);
+    expect(badge.reason).toMatch(/failed/i);
+    expect(badge.reason).toMatch(/retry/i);
+  });
+
+  it("classifies LIVE when the fetch decoded connectors the shipped map lacks", () => {
+    const badge = deliveryFitBadge(null, fetched(2, { tier: "recommended", kind: "Push" }));
+    expect(badge.state).toBe("recommended");
+    expect(badge.measured).toBe(true);
+    // Says where the verdict came from - the shipped map did not supply it.
+    expect(badge.reason).toMatch(/own connector files/i);
+  });
+
+  it("stays unmeasured when files were found but none could be read", () => {
+    // connectorCount > 0 with no classification is the third fact a missing
+    // map entry conflates: the files exist and are unreadable. Not a zero.
+    const badge = deliveryFitBadge(null, fetched(4, null));
+    expect(badge.state).toBe("unmeasured");
+    expect(badge.measured).toBe(false);
+    expect(badge.reason).toContain("4 data connector files");
+    expect(badge.reason).toMatch(/none of the ones read/i);
+    expect(badge.state).not.toBe("no-connector");
+  });
+
+  it("treats a cache entry with no ingestion field as unread, not as zero", () => {
+    // SolutionDetail.ingestion is optional so entries cached before the field
+    // existed still load; undefined there means "no classification stored",
+    // which is not the same as "no connector".
+    const badge = deliveryFitBadge(null, { phase: "fetched", connectorCount: 1 });
+    expect(badge.state).toBe("unmeasured");
+    expect(badge.reason).toContain("1 data connector file");
+    expect(badge.reason).not.toContain("1 data connector files");
+  });
+});
+
+describe("deliveryFitBadge - which source wins", () => {
+  it("prefers the shipped tier over a live one (the live decode is capped)", () => {
+    const badge = deliveryFitBadge(
+      { tier: "recommended", kind: "Push" },
+      { phase: "fetched", connectorCount: 9, ingestion: { tier: "legacy", kind: "" } },
+    );
+    expect(badge.state).toBe("recommended");
+    expect(badge.reason).not.toMatch(/own connector files/i);
+  });
+
+  it("keeps the shipped tier while the live fetch is still running", () => {
+    // No flicker from a known tier to "Measuring..." and back.
+    expect(
+      deliveryFitBadge({ tier: "supported", kind: "GCP" }, { phase: "fetching" }).state,
+    ).toBe("supported");
+    expect(
+      deliveryFitBadge({ tier: "legacy", kind: "" }, { phase: "fetch-failed" }).state,
+    ).toBe("legacy");
+  });
+
+  it("lets a completed EMPTY listing override the shipped tier", () => {
+    // The shipped entry exists only because the generator read >= 1 connector
+    // file for that name, so a completed listing of none falsifies its premise
+    // - and the card prints "0 connector files" directly under the badge.
+    const badge = deliveryFitBadge(
+      { tier: "recommended", kind: "Push" },
+      { phase: "fetched", connectorCount: 0 },
+    );
+    expect(badge.state).toBe("no-connector");
+    expect(badge.measured).toBe(true);
+  });
+});
+
 describe("deliveryFitBadge - the invariant the browser relies on", () => {
   it("never returns an empty label, for any input including absence", () => {
-    const inputs = [
+    const shippedInputs = [
       null,
       undefined,
       { tier: "recommended" as const, kind: "Push" },
       { tier: "supported" as const, kind: "" },
       { tier: "legacy" as const, kind: "APIPolling" },
     ];
-    for (const input of inputs) {
-      const badge = deliveryFitBadge(input);
-      expect(badge.label).not.toBe("");
-      expect(badge.reason).not.toBe("");
+    const evidenceInputs: DeliveryFitEvidence[] = [
+      DELIVERY_FIT_NOT_FETCHED,
+      { phase: "fetching" },
+      { phase: "fetch-failed" },
+      { phase: "fetched", connectorCount: 0 },
+      { phase: "fetched", connectorCount: 3 },
+      { phase: "fetched", connectorCount: 3, ingestion: null },
+      { phase: "fetched", connectorCount: 3, ingestion: { tier: "legacy", kind: "" } },
+    ];
+    for (const shipped of shippedInputs) {
+      for (const evidence of evidenceInputs) {
+        const badge = deliveryFitBadge(shipped, evidence);
+        expect(badge.label).not.toBe("");
+        expect(badge.reason).not.toBe("");
+        // `measured` and `state` may never disagree: the two unmeasured states
+        // are exactly the two that report no look.
+        expect(badge.measured).toBe(
+          badge.state !== "unmeasured" && badge.state !== "measuring",
+        );
+      }
     }
+  });
+
+  it("defaults to the browse row's evidence when the caller passes none", () => {
+    expect(deliveryFitBadge(null)).toEqual(
+      deliveryFitBadge(null, DELIVERY_FIT_NOT_FETCHED),
+    );
   });
 });
