@@ -7,7 +7,7 @@
 //
 // WHAT IT DOES
 //   1. Parses the 50 native Sentinel DCR ARM templates under
-//      deprecated/Azure/CustomDeploymentTemplates/DCR-Templates/SentinelNativeTables/
+//      Azure/CustomDeploymentTemplates/DCR-Templates/SentinelNativeTables/
 //      DataCollectionRules(NoDCE)/*.json, extracting
 //      resources[].properties.streamDeclarations['Custom-{table}'].columns
 //      (each {name, type}). The DCE and NoDCE column sets are IDENTICAL per table
@@ -27,6 +27,16 @@
 // vocabulary string/int/long/real/boolean/datetime/dynamic/guid). They are NOT run
 // through schema-mapping.mapColumnType here: legacy loadDcrTemplateSchema returned raw
 // types, and mapping would collapse guid->string, diverging from the deployed contract.
+//
+// THE TWO INPUTS SIT ON OPPOSITE SIDES OF THE 2026-07-13 DEPRECATION, which is
+// the whole reason this script broke (DBT-67). DCR-Templates STAYED at the repo
+// root - it is a public API that Cribl's docs deep-link file by file - while
+// DCR-Automation moved under deprecated/. A comment-only audit fix then
+// rewrote BOTH paths in this header to say `deprecated/`, which made the
+// native line wrong and left the custom line right in prose and wrong in code.
+// The script crashed with ENOENT from that day until 2026-09-01 and nothing
+// reported it, because no test runs it and no gate called it. That silence was
+// the real defect; check-schema-asset.mjs now closes it.
 //
 // REGENERATE (from packages/core):
 //   node scripts/extract-dcr-template-schemas.mjs
@@ -50,6 +60,7 @@ const nativeDir = join(
 );
 const customDir = join(
   repoRoot,
+  "deprecated",
   "Azure",
   "CustomDeploymentTemplates",
   "DCR-Automation",

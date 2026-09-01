@@ -21,6 +21,7 @@
     "board:serve": "npm run board:serve --workspace apps/cribl-app",
     "check-board": "npm run check-board --workspace apps/cribl-app",
     "check-listings": "npm run check-listings --workspace apps/cribl-app",
+    "check-schema-asset": "npm run check-schema-asset --workspace apps/cribl-app",
     "check-board-freshness": "npm run check-board-freshness --workspace apps/cribl-app"
   }
 }

@@ -11,7 +11,7 @@ two cannot disagree.
 alternatives. This board holds only what is a unit of work, what state it is
 in, and what it waits on.
 
-**56 in the backlog, 0 in progress, 77 done.**
+**55 in the backlog, 0 in progress, 78 done.**
 
 ## By menu item
 
@@ -23,7 +23,7 @@ operator sees on any screen. Two menus are PLANNED and have no route yet.
 |---|---|---|---|
 | Dataflow | 3 | 0 | 0 |
 | Setup | 1 | 0 | 0 |
-| Sentinel Integration | 11 | 39 | 1 |
+| Sentinel Integration | 10 | 40 | 0 |
 | DCR Automation | 3 | 10 | 0 |
 | Pack Maintenance | 4 | 1 | 0 |
 | Permission Verification | 8 | 0 | 0 |
@@ -31,7 +31,7 @@ operator sees on any screen. Two menus are PLANNED and have no route yet.
 | Windows Event analysis (planned) | 5 | 0 | 0 |
 | Cross-cutting | 8 | 23 | 0 |
 
-Open work totals 56.
+Open work totals 55.
 
 ## Epics and features
 
@@ -116,13 +116,13 @@ ENABLER EPIC: release mechanics. The packaged tarball trails main, and the lab t
 |---|---|---|---|
 | `REL-F1` Release and deployment hygiene | Cross-cutting | 3/5 | REL-2, REL-3, REL-4, REL-5, REL-6 |
 
-### `DBT` Quality and technical debt _(enabler)_ - 70% (48/69)
+### `DBT` Quality and technical debt _(enabler)_ - 71% (49/69)
 
 ENABLER EPIC: verification gaps, copy, diagram fidelity, docs and the board's own tooling
 
 | Feature | Menu | Done | Stories |
 |---|---|---|---|
-| `DBT-F1` Verification gaps | Sentinel Integration | 21/28 | DBT-2, DBT-5*, DBT-6, DBT-7, DBT-36*, DBT-55, DBT-56, DBT-42, DBT-43, DBT-44, DBT-45, DBT-46, DBT-47, DBT-48, DBT-49, DBT-50, DBT-51, DBT-52, DBT-41, DBT-40, DBT-60, DBT-61, DBT-62, DBT-63, DBT-64, DBT-65, DBT-66, DBT-67 |
+| `DBT-F1` Verification gaps | Sentinel Integration | 22/28 | DBT-2, DBT-5*, DBT-6, DBT-7, DBT-36*, DBT-55, DBT-56, DBT-42, DBT-43, DBT-44, DBT-45, DBT-46, DBT-47, DBT-48, DBT-49, DBT-50, DBT-51, DBT-52, DBT-41, DBT-40, DBT-60, DBT-61, DBT-62, DBT-63, DBT-64, DBT-65, DBT-66, DBT-67 |
 | `DBT-F2` Copy and UX | Sentinel Integration | 4/9 | DBT-3, DBT-9, DBT-14, DBT-15, DBT-28, D-10*, DBT-53, DBT-38, DBT-39 |
 | `DBT-F3` Diagram fidelity | Dataflow | 0/3 | DBT-1, DBT-4, DBT-12 |
 | `DBT-F4` Docs and spec grounding | Cross-cutting | 6/10 | DBT-8, DBT-10, DBT-11, DBT-13, DBT-22, DBT-26, DBT-32, DBT-57, DBT-58, DBT-54 |
@@ -150,40 +150,11 @@ _Nothing here._
 
 ---
 
-## Backlog - now (1)
+## Backlog - now (0)
 
 Next to pick up. Nothing blocks these.
 
-- **DBT-67** The DCR template schema extractor has been unrunnable since the deprecation move
-  `DBT-F1` `bug` `settled`
-  packages/core/scripts/extract-dcr-template-schemas.mjs generates the
-  COMMITTED asset src/assets/dcr-template-schemas.json, which
-  bundled-schema-catalog.ts imports and which is one of the field matcher's
-  resolution tiers. Running it today CRASHES: `ENOENT: no such file or
-  directory, scandir
-  'Azure/CustomDeploymentTemplates/DCR-Automation/core/custom-table-schemas'`.
-  That directory moved to deprecated/ on 2026-07-13 and the script's path was
-  never updated, so the generator has been dead for roughly seven weeks and
-  nothing noticed - no test runs it and no gate calls it. THE CONSEQUENCE IS A
-  STALE ASSET NOBODY COULD REFRESH. The committed JSON still declares
-  ADAssessmentRecommendation.ActionAreaId/AssessmentId/FocusAreaId/RecommendationId
-  and AWSCloudTrail.AwsEventId/AwsRequestId/SharedEventId as `guid`, while the
-  templates it is generated FROM now declare them `string`. AWSCloudTrail went
-  stale when PR #26 landed; [[DBT-65]] made ADAssessmentRecommendation stale
-  too. Its last commit is 'Add field matcher and destination schema catalog
-  (Unit 13)'. FOUND by adversarial review of DBT-65, which spotted the drift;
-  running the generator to close it is what exposed that it cannot run at all.
-  NOT FIXED INSIDE DBT-65 ON PURPOSE: repointing the path and regenerating
-  would rewrite a core asset across every table it covers, which is a diff
-  that deserves its own review rather than riding along inside a three-file
-  data-loss fix. WHAT THIS NEEDS: repoint to deprecated/, regenerate, read the
-  FULL diff rather than assuming only the guid rows move, and establish
-  whether a `guid` type in this asset changes any behaviour -
-  buildDcrColumnSet declares string and promotes with toguid() regardless of
-  the source type, so it may be provenance-only, but that has NOT been
-  verified and must not be assumed. Then add a check that fails when the
-  committed asset differs from a fresh run, because the real defect is that
-  seven weeks of drift produced no signal.
+_Nothing here._
 
 ---
 
@@ -921,7 +892,7 @@ Settled, gated on something above.
 
 ---
 
-## Done (77)
+## Done (78)
 
 Kept briefly so a reader can see what just landed; prune when the list grows.
 
@@ -3093,3 +3064,55 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   produced the copy defect review caught: with `null` now meaning both
   never-loaded and loaded-but-unverified, the message naming a 'Load' button
   was wrong once the button said 'Refresh'. Fixed in the same commit.
+
+- **DBT-67** The DCR template schema extractor has been unrunnable since the deprecation move
+  `DBT-F1` `bug` `settled` `verified: pins`
+  packages/core/scripts/extract-dcr-template-schemas.mjs generates the
+  COMMITTED asset src/assets/dcr-template-schemas.json, which
+  bundled-schema-catalog.ts imports and which is one of the field matcher's
+  resolution tiers. Running it today CRASHES: `ENOENT: no such file or
+  directory, scandir
+  'Azure/CustomDeploymentTemplates/DCR-Automation/core/custom-table-schemas'`.
+  That directory moved to deprecated/ on 2026-07-13 and the script's path was
+  never updated, so the generator has been dead for roughly seven weeks and
+  nothing noticed - no test runs it and no gate calls it. THE CONSEQUENCE IS A
+  STALE ASSET NOBODY COULD REFRESH. The committed JSON still declares
+  ADAssessmentRecommendation.ActionAreaId/AssessmentId/FocusAreaId/RecommendationId
+  and AWSCloudTrail.AwsEventId/AwsRequestId/SharedEventId as `guid`, while the
+  templates it is generated FROM now declare them `string`. AWSCloudTrail went
+  stale when PR #26 landed; [[DBT-65]] made ADAssessmentRecommendation stale
+  too. Its last commit is 'Add field matcher and destination schema catalog
+  (Unit 13)'. FOUND by adversarial review of DBT-65, which spotted the drift;
+  running the generator to close it is what exposed that it cannot run at all.
+  NOT FIXED INSIDE DBT-65 ON PURPOSE: repointing the path and regenerating
+  would rewrite a core asset across every table it covers, which is a diff
+  that deserves its own review rather than riding along inside a three-file
+  data-loss fix. WHAT THIS NEEDS: repoint to deprecated/, regenerate, read the
+  FULL diff rather than assuming only the guid rows move, and establish
+  whether a `guid` type in this asset changes any behaviour -
+  buildDcrColumnSet declares string and promotes with toguid() regardless of
+  the source type, so it may be provenance-only, but that has NOT been
+  verified and must not be assumed. Then add a check that fails when the
+  committed asset differs from a fresh run, because the real defect is that
+  seven weeks of drift produced no signal. CORRECTION 2026-09-01, and the card
+  was WRONG about the cause even though it was right that the script crashed.
+  It said the path was never updated. A path WAS updated: commit 1c50cdb, an
+  architecture audit, rewrote this file - and touched ONLY the comments,
+  changing BOTH input paths in the header to say deprecated/. Only ONE of the
+  two had moved. DCR-Templates STAYED at the repo root, deliberately, because
+  it is a public API that Cribl docs deep-link file by file; DCR-Automation
+  went under deprecated/. So the audit made the header wrong about the native
+  path AND left the code wrong about the custom path - a uniform fix applied
+  to two paths where only one had moved. The user challenged the card, which
+  is what surfaced this. ALSO OVER-CAUTIOUS: the card said regenerating
+  rewrites a core asset across every table it covers and deserves its own
+  review. Measured instead of assumed - the real diff is 22 LINES: seven guid
+  to string, plus UserIdentityStoreArn and UserIdentityUserId, which is
+  exactly ADR 0004 and PR #26 finally propagating. Nothing else moved across
+  63 tables. FIXED: one-line path repoint, the header corrected, the asset
+  regenerated, and check-schema-asset.mjs added to the gates and CI. That
+  checker is the real fix - it re-runs the generator rather than
+  re-implementing the extraction, and fails BOTH ways, mutation-checked on
+  each: restoring the stale asset reports the 2 drifting tables, and
+  re-breaking the generator path reports FAILED TO RUN with the original
+  ENOENT. Seven weeks of silence is what it closes.

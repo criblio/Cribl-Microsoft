@@ -6,7 +6,7 @@
     },
     {
       "name": "ActionAreaId",
-      "type": "guid"
+      "type": "string"
     },
     {
       "name": "AffectedObjectName",
@@ -18,7 +18,7 @@
     },
     {
       "name": "AssessmentId",
-      "type": "guid"
+      "type": "string"
     },
     {
       "name": "Computer",
@@ -46,7 +46,7 @@
     },
     {
       "name": "FocusAreaId",
-      "type": "guid"
+      "type": "string"
     },
     {
       "name": "Forest",
@@ -58,7 +58,7 @@
     },
     {
       "name": "RecommendationId",
-      "type": "guid"
+      "type": "string"
     },
     {
       "name": "RecommendationResult",
@@ -5022,7 +5022,7 @@
     },
     {
       "name": "AwsEventId",
-      "type": "guid"
+      "type": "string"
     },
     {
       "name": "AWSRegion",
@@ -5030,7 +5030,7 @@
     },
     {
       "name": "AwsRequestId",
-      "type": "guid"
+      "type": "string"
     },
     {
       "name": "AwsRequestId_",
@@ -5150,7 +5150,7 @@
     },
     {
       "name": "SharedEventId",
-      "type": "guid"
+      "type": "string"
     },
     {
       "name": "SourceIpAddress",
@@ -5197,7 +5197,15 @@
       "type": "string"
     },
     {
+      "name": "UserIdentityStoreArn",
+      "type": "string"
+    },
+    {
       "name": "UserIdentityType",
+      "type": "string"
+    },
+    {
+      "name": "UserIdentityUserId",
       "type": "string"
     },
     {
