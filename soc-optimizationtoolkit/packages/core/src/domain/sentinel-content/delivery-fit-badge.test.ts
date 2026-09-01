@@ -141,7 +141,14 @@ describe("deliveryFitBadge - the live fetch's four phases", () => {
     expect(badge.label).toBe(DELIVERY_FIT_NO_CONNECTOR_LABEL);
     expect(badge.measured).toBe(true);
     expect(badge.label).not.toBe(DELIVERY_FIT_UNMEASURED_LABEL);
-    expect(badge.reason).toMatch(/^Measured:/);
+    // The assertion is that this reads as something we CHECKED rather than
+    // something unknown - "Checked:" replaced "Measured:" when review showed
+    // the adapter also resolves [] for a folder it never opened, so claiming a
+    // measurement of the folder was itself an overclaim. The PROPERTY the pin
+    // exists for is unchanged: a completed listing of zero must not render as
+    // "Not measured", which the second assertion nails down directly.
+    expect(badge.reason).toMatch(/^Checked:/);
+    expect(badge.reason).not.toMatch(/not measured/i);
     expect(badge.reason).not.toMatch(/not measured/i);
   });
 

@@ -114,7 +114,23 @@ type DetailState =
  * completed listing of zero reaches the derivation as a zero rather than as a
  * missing classification.
  */
-function fitEvidence(detail: DetailState): DeliveryFitEvidence {
+/**
+ * `selected` is passed because `idle` means two different things and only the
+ * caller can tell them apart (review, DBT-15).
+ *
+ * With no solution selected, idle is honestly "nobody has looked". With one
+ * SELECTED, idle lasts exactly one commit - React paints `selectedName` before
+ * the detail effect sets `loading` - and in that frame the card would say "Not
+ * measured ... classified live when the solution is selected" on a solution
+ * that IS selected. Sub-perceptual and self-correcting, but it is the one place
+ * the promised-as-future clause can still reach the card, and the card is where
+ * the operator reads it. A selected idle is therefore reported as `fetching`:
+ * a look IS about to happen, which is what "Measuring..." already says.
+ */
+function fitEvidence(
+  detail: DetailState,
+  selected: boolean,
+): DeliveryFitEvidence {
   switch (detail.phase) {
     case "loaded":
       return {
@@ -127,7 +143,7 @@ function fitEvidence(detail: DetailState): DeliveryFitEvidence {
     case "error":
       return { phase: "fetch-failed" };
     case "idle":
-      return DELIVERY_FIT_NOT_FETCHED;
+      return selected ? { phase: "fetching" } : DELIVERY_FIT_NOT_FETCHED;
   }
 }
 
@@ -447,7 +463,7 @@ export function SolutionBrowser({
               // had already completed (review finding 2).
               const badge = deliveryFitBadge(
                 lookupSolutionIngestion(selected.name),
-                fitEvidence(detail),
+                fitEvidence(detail, true),
               );
               return (
                 <span

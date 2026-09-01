@@ -38,12 +38,20 @@
  *   not-fetched  - nobody has looked (every list row; the card before its
  *                  effect fires). "Not measured" is the honest answer.
  *   fetching     - a look is UNDERWAY. Neither measured nor un-lookable-at.
- *   fetched      - the look FINISHED. Its connector count is a real zero, not
- *                  an unknown: the adapter rejects on 401/403 and resolves []
- *                  only for a folder it successfully read (port contract, and
- *                  unlike ARM's RBAC-filtered 200s the GitHub contents API does
- *                  not silently strip entries), so "no connector file here" is
- *                  something we saw rather than something we failed to see.
+ *   fetched      - the look FINISHED. The adapter rejects on 401/403, so a
+ *                  resolved [] is never a hidden permission failure, and unlike
+ *                  ARM's RBAC-filtered 200s the GitHub contents API does not
+ *                  silently strip entries.
+ *
+ *                  BUT NOT ALWAYS A FOLDER THAT WAS READ, which review caught
+ *                  after this header first claimed it: the adapter also
+ *                  resolves [] when the SOLUTION folder itself 404s
+ *                  (adapters.ts:1182) and when a connector directory is found
+ *                  by name but has no `sha` to open (adapters.ts:1197). The
+ *                  port only promises [] "when the solution has no connector
+ *                  directory" - it never promised the folder was read. So the
+ *                  copy below says what is true of ALL of those - no connector
+ *                  file was found - and does not claim we read the folder.
  *   fetch-failed - the look THREW. Not measured, and pointing the operator at
  *                  "select it and we will classify it" would be a loop.
  *
@@ -171,10 +179,9 @@ export const DELIVERY_FIT_MEASURING_REASON =
  * work over whatever table is fed.
  */
 export const DELIVERY_FIT_NO_CONNECTOR_REASON =
-  "Measured: this solution's folder was read and it contains no data " +
-  "connector files, so nothing in it declares a table or DCR stream to " +
-  "deliver into. Its rules, workbooks and parsers still work over a table " +
-  "you feed another way.";
+  "Checked: no data connector file was found for this solution, so nothing " +
+  "in it declares a table or DCR stream to deliver into. Its rules, " +
+  "workbooks and parsers still work over a table you feed another way.";
 
 /** The tooltip when the live fetch threw - looked, learned nothing. */
 export const DELIVERY_FIT_FETCH_FAILED_REASON =

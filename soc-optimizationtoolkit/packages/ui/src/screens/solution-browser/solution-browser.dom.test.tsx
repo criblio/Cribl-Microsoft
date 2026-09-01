@@ -261,7 +261,14 @@ describe("SolutionBrowser selected-solution card (DBT-15)", () => {
     const badge = cardBadges()[0];
     expect(badge.textContent).not.toBe(DELIVERY_FIT_UNMEASURED_LABEL);
     expect(badge.className).toContain("ingestion-badge-no-connector");
-    expect(badge.getAttribute("title")).toMatch(/^Measured:/);
+    // The assertion is that this reads as something we CHECKED rather than
+    // something unknown - "Checked:" replaced "Measured:" when review showed
+    // the adapter also resolves [] for a folder it never opened, so claiming a
+    // measurement of the folder was itself an overclaim. The PROPERTY the pin
+    // exists for is unchanged: a completed listing of zero must not render as
+    // "Not measured", which the second assertion nails down directly.
+    expect(badge.getAttribute("title")).toMatch(/^Checked:/);
+    expect(badge.getAttribute("title")).not.toMatch(/not measured/i);
     expect(badge.getAttribute("title")).not.toMatch(/not measured/i);
   });
 
