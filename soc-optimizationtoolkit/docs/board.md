@@ -11,7 +11,7 @@ two cannot disagree.
 alternatives. This board holds only what is a unit of work, what state it is
 in, and what it waits on.
 
-**55 in the backlog, 3 in progress, 75 done.**
+**55 in the backlog, 2 in progress, 76 done.**
 
 ## By menu item
 
@@ -23,7 +23,7 @@ operator sees on any screen. Two menus are PLANNED and have no route yet.
 |---|---|---|---|
 | Dataflow | 3 | 0 | 0 |
 | Setup | 1 | 0 | 0 |
-| Sentinel Integration | 13 | 37 | 1 |
+| Sentinel Integration | 12 | 38 | 1 |
 | DCR Automation | 3 | 10 | 0 |
 | Pack Maintenance | 4 | 1 | 0 |
 | Permission Verification | 8 | 0 | 0 |
@@ -31,7 +31,7 @@ operator sees on any screen. Two menus are PLANNED and have no route yet.
 | Windows Event analysis (planned) | 5 | 0 | 0 |
 | Cross-cutting | 8 | 23 | 0 |
 
-Open work totals 58.
+Open work totals 57.
 
 ## Epics and features
 
@@ -116,13 +116,13 @@ ENABLER EPIC: release mechanics. The packaged tarball trails main, and the lab t
 |---|---|---|---|
 | `REL-F1` Release and deployment hygiene | Cross-cutting | 3/5 | REL-2, REL-3, REL-4, REL-5, REL-6 |
 
-### `DBT` Quality and technical debt _(enabler)_ - 67% (46/69)
+### `DBT` Quality and technical debt _(enabler)_ - 68% (47/69)
 
 ENABLER EPIC: verification gaps, copy, diagram fidelity, docs and the board's own tooling
 
 | Feature | Menu | Done | Stories |
 |---|---|---|---|
-| `DBT-F1` Verification gaps | Sentinel Integration | 20/28 | DBT-2, DBT-5*, DBT-6, DBT-7, DBT-36*, DBT-55, DBT-56, DBT-42, DBT-43, DBT-44, DBT-45, DBT-46, DBT-47, DBT-48, DBT-49, DBT-50, DBT-51, DBT-52, DBT-41, DBT-40, DBT-60, DBT-61, DBT-62, DBT-63, DBT-64, DBT-65, DBT-66, DBT-67 |
+| `DBT-F1` Verification gaps | Sentinel Integration | 21/28 | DBT-2, DBT-5*, DBT-6, DBT-7, DBT-36*, DBT-55, DBT-56, DBT-42, DBT-43, DBT-44, DBT-45, DBT-46, DBT-47, DBT-48, DBT-49, DBT-50, DBT-51, DBT-52, DBT-41, DBT-40, DBT-60, DBT-61, DBT-62, DBT-63, DBT-64, DBT-65, DBT-66, DBT-67 |
 | `DBT-F2` Copy and UX | Sentinel Integration | 3/9 | DBT-3, DBT-9, DBT-14, DBT-15, DBT-28, D-10*, DBT-53, DBT-38, DBT-39 |
 | `DBT-F3` Diagram fidelity | Dataflow | 0/3 | DBT-1, DBT-4, DBT-12 |
 | `DBT-F4` Docs and spec grounding | Cross-cutting | 6/10 | DBT-8, DBT-10, DBT-11, DBT-13, DBT-22, DBT-26, DBT-32, DBT-57, DBT-58, DBT-54 |
@@ -142,7 +142,7 @@ RAISED BY THE USER 2026-08-31. DCR Automation can onboard a table you can alread
 
 ---
 
-## In progress (3)
+## In progress (2)
 
 Started. Anything here with an unfinished dependency is called out on its card.
 
@@ -168,26 +168,6 @@ Started. Anything here with an unfinished dependency is called out on its card.
   row - the badge column works, and these rows genuinely have nothing to show.
   Was reported from the eight Palo results; reproduces on the default list,
   which makes it easier to test.
-
-- **DBT-50** Live table columns are fetched, awaited, stored - and never consulted
-  `DBT-F1` `bug` `settled`
-  Not now because: Needs a decision, not a fix: if the three documents are
-  right the catalog chain reorders, and if the current order is right the
-  documents change. Both behaviours are defensible, so shipping either without
-  deciding just moves the contradiction.
-  FOUND 2026-08-31 by the offline-capability audit.
-  `mapping-review-section.tsx:352-368` nests the live-ARM catalog BELOW both
-  repo tiers, so for any table the Sentinel repo defines - which is most of
-  them - the ARM read fires, is awaited, is stored in `liveSchemas`, and is
-  then never reached by resolution. Three documents tell operators the
-  opposite: `live-table-schema-catalog.ts:12-17`,
-  `workspace-tables.ts:150-154`, and release-notes 1.11.12 all say the live
-  columns REPLACE the derived schema. NO TEST PINS THE COMPOSED ORDER, which
-  is why it drifted. Decide which is right before touching it - if the docs
-  are right the chain needs reordering, and if the current order is right
-  three documents need correcting. Note the offline consequence too: the
-  wasted read is also the reason the mapping screen touches Azure at all in a
-  workflow that is otherwise Azure-free.
 
 ---
 
@@ -932,7 +912,7 @@ Settled, gated on something above.
 
 ---
 
-## Done (75)
+## Done (76)
 
 Kept briefly so a reader can see what just landed; prune when the list grows.
 
@@ -2297,6 +2277,50 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   kvstore failure to bite, but it is the same class as the rest of this sweep:
   a confident wrong attribution, and the operator's next action (retry that
   table) is the wrong one.
+
+- **DBT-50** Live table columns are fetched, awaited, stored - and never consulted
+  `DBT-F1` `bug` `settled` `verified: pins`
+  Not now because: Needs a decision, not a fix: if the three documents are
+  right the catalog chain reorders, and if the current order is right the
+  documents change. Both behaviours are defensible, so shipping either without
+  deciding just moves the contradiction.
+  FOUND 2026-08-31 by the offline-capability audit.
+  `mapping-review-section.tsx:352-368` nests the live-ARM catalog BELOW both
+  repo tiers, so for any table the Sentinel repo defines - which is most of
+  them - the ARM read fires, is awaited, is stored in `liveSchemas`, and is
+  then never reached by resolution. Three documents tell operators the
+  opposite: `live-table-schema-catalog.ts:12-17`,
+  `workspace-tables.ts:150-154`, and release-notes 1.11.12 all say the live
+  columns REPLACE the derived schema. NO TEST PINS THE COMPOSED ORDER, which
+  is why it drifted. Decide which is right before touching it - if the docs
+  are right the chain needs reordering, and if the current order is right
+  three documents need correcting. Note the offline consequence too: the
+  wasted read is also the reason the mapping screen touches Azure at all in a
+  workflow that is otherwise Azure-free. DONE 2026-09-01 after a fix round and
+  a SECOND review. The live-ARM tier is promoted above the repo tiers, and it
+  now strips the 18 Azure-managed column names through one shared mechanism
+  (domain/field-matcher/system-columns.ts) that all four tiers read - the list
+  was already shared, the FILTER was not, which is how a fourth tier came to
+  have neither. Measured 21 columns in, 3 out. RE-REVIEW THEN CAUGHT TWO MORE,
+  both fixed here. (1) The seam pin claimed to cover the state write and did
+  not: deleting setLiveSchemas(live) passed all 73 tests while restoring the
+  defect on a path an operator walks - pick a table, click Analyze again after
+  any edit, and the DERIVED schema silently returns while the screen still
+  shows the picked table. A fourth pin closes it, and it needed an EMISSION
+  counter to be valid because a naive re-click assertion passes trivially on
+  the stale report. Mutation-checked: the severing now fails exactly that pin.
+  (2) AN OVERCLAIM I REPEATED, corrected in six places: the fix round said the
+  unstripped tier would add up to 18 spurious columns TO EVERY GENERATED DCR.
+  That is false - buildDcrColumnSet re-strips them for native tables, and the
+  only route a catalog schema takes to a DCR is customSchema, which
+  onboard-batch and onboard-table both ignore for an existing table, which a
+  picked table is by construction. The claim was borrowing credibility from
+  the genuinely measured 21-to-3 pin beside it, which is the failure rule 3
+  names. THE REAL HARM, and why the fix still stands: the managed names reach
+  GapReport.destSchema, destFieldCount, the dest-column dropdown, overflow
+  triage and the rule-coverage union, so an operator can map a source field
+  onto a column Azure owns, the pack emits it, and the DCR drops it silently.
+  Real data loss, one step further on than first told.
 
 - **DBT-52** A denied Sentinel check reads as 'not enabled' and invites a write
   `DBT-F1` `bug` `settled` `verified: pins`

@@ -45,9 +45,8 @@ import {
   analyticRuleToContentItem,
   analyzeContentCoverage,
   createBundledSchemaCatalog,
-  createKqlValidationSchemaCatalog,
+  createSchemaLadder,
   deriveContentRequirements,
-  createSolutionSchemaCatalog,
   mergeCustomContentItems,
   parseAnalyticRuleYaml,
   parseParserYaml,
@@ -367,18 +366,21 @@ export function RuleCoverageSection({
 }: RuleCoverageSectionProps) {
   const { ports } = usePorts();
   const activeContent = content ?? ports.content;
-  // Same schema ladder the mapping review resolves with (KQL-validation
-  // tier -> Wave E solution tier -> bundled), so both panels see identical
-  // columns for a solution's custom tables. Without a content port the base
-  // catalog serves alone.
+  // The same @soc/core ladder the mapping review resolves with, so both panels
+  // see identical columns for a solution's custom tables. Without a content
+  // port the base catalog serves alone.
+  //
+  // NO LIVE TIER HERE, and that is the one place the two differ (DBT-50). The
+  // live columns exist only for a table an operator pointed a LOG TYPE at, and
+  // that choice lives on the mapping review's cards; coverage asks a
+  // solution-wide question that no per-log-type pick answers. Stated rather
+  // than left as a silent omission, because "same ladder" used to be written
+  // here as if it were the whole truth.
   const activeCatalog = useMemo(() => {
     const base = catalog ?? createBundledSchemaCatalog();
     return activeContent === undefined
       ? base
-      : createKqlValidationSchemaCatalog(
-          activeContent,
-          createSolutionSchemaCatalog(activeContent, solutionName, base),
-        );
+      : createSchemaLadder({ content: activeContent, solutionName, base });
   }, [activeContent, solutionName, catalog]);
   // What this instance covers. Custom-YAML upload and the RULE-badge report are
   // rules-only concerns; workbooks are a separate diagnostic.

@@ -60,9 +60,7 @@ import {
   DEFAULT_GAP_PROFILE,
   collectGapReports,
   createBundledSchemaCatalog,
-  createKqlValidationSchemaCatalog,
-  createLiveTableSchemaCatalog,
-  createSolutionSchemaCatalog,
+  createSchemaLadder,
   detectVendorIdentity,
   dropSavingsLine,
   estimateDropSavings,
@@ -336,12 +334,6 @@ export function MappingReviewSection({
   logger,
 }: MappingReviewSectionProps) {
   const activeContent = content ?? EMPTY_SENTINEL_CONTENT;
-  // Schema ladder (outermost wins): the Azure-Sentinel repo's CI-VALIDATED
-  // table schemas (KqlvalidationsTests/CustomTables - the schema the
-  // solution's rules were written against; user direction 2026-07-14) ->
-  // Wave E solution connector-ARM tables -> the bundled snapshot (or the
-  // injected catalog). Sample-DERIVED schemas remain the analyzeSamples
-  // fallback for tables none of these define. Degrades tier by tier.
   // Live columns for tables the operator pointed a log type at, keyed by
   // TABLE: two log types on the same table share one schema, exactly as the
   // pack shares one destination for them.
@@ -349,21 +341,27 @@ export function MappingReviewSection({
     Readonly<Record<string, DestField[]>>
   >({});
 
+  // The schema ladder is @soc/core's `createSchemaLadder` - its header owns the
+  // order and the argument for it (DBT-50). This composed the tiers inline
+  // until 2026-08-31, which is how the live tier ended up nested UNDER both
+  // repo tiers with nothing able to pin the order. All that belongs here is
+  // which base catalog to hand it and when to rebuild it.
+  //
+  // `live` IS THE SEAM, and it is pinned by behaviour, not by shape:
+  // mapping-review-live-schema.dom.test.tsx drives a real table pick and reads
+  // the resulting report. Passing `{}` here - or otherwise dropping what the
+  // ARM fetch returned - reinstates DBT-50 in full, and the ladder's own pins
+  // cannot see it, because a composition that is never handed its input still
+  // composes perfectly. That severing is the mutation those pins were checked
+  // against; keep them that way.
   const catalogWith = useCallback(
     (live: Readonly<Record<string, DestField[]>>) =>
-      createKqlValidationSchemaCatalog(
-        activeContent,
-        createSolutionSchemaCatalog(
-          activeContent,
-          solutionName,
-          Object.keys(live).length === 0
-            ? (catalog ?? createBundledSchemaCatalog())
-            : createLiveTableSchemaCatalog(
-                live,
-                catalog ?? createBundledSchemaCatalog(),
-              ),
-        ),
-      ),
+      createSchemaLadder({
+        content: activeContent,
+        solutionName,
+        base: catalog ?? createBundledSchemaCatalog(),
+        live,
+      }),
     [activeContent, solutionName, catalog],
   );
   const activeCatalog = useMemo(

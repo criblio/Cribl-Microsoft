@@ -6,10 +6,18 @@
  * (verified live: Cloudflare_CL.json = 104 columns of the legacy suffixed
  * schema, plus CloudflareV2_CL.json and the Cloudflare.json parser-output
  * shape). When a table is DEFINED THERE, it is the schema the solution's
- * rules and workbooks were written against - so this tier resolves FIRST,
- * ahead of the solution's connector-ARM tables and the bundled snapshot,
- * and ahead of sample-derived schemas (which stay the last-resort fallback
- * for tables the repo does not define).
+ * rules and workbooks were written against - so this tier resolves ahead of
+ * the solution's connector-ARM tables and the bundled snapshot, and ahead of
+ * sample-derived schemas (which stay the last-resort fallback for tables the
+ * repo does not define).
+ *
+ * ONE TIER OUTRANKS IT (DBT-50, 2026-08-31): the LIVE workspace columns of a
+ * table the operator explicitly picked. This header used to say "resolves
+ * FIRST", written on 2026-07-14 when the three tiers it enumerates were the
+ * only ones there were; the live tier arrived on 2026-08-10 with its own user
+ * direction - once a real table is named, ARM is the better authority - and
+ * the two were never reconciled. `schema-ladder.ts` owns the composed order
+ * and the argument; nothing here decides where this tier sits.
  *
  * Resolution strategy per table (cached per catalog instance, misses too):
  *   1. DIRECT read of `<dir>/<tableName>.json` through the SentinelContent
@@ -25,22 +33,20 @@
  * Type vocabulary: the files use Pascal-cased KQL-ish types with observed
  * casing drift (Datetime AND DateTime in one file). Mapped case-insensitively
  * to the 7-value DCR vocabulary; unknown types default to string (RULE 3
- * convention). System columns are filtered like the Wave E solution tier -
- * TimeGenerated is a REAL column and stays.
+ * convention). System columns are filtered through `system-columns.ts`, the one
+ * predicate every tier of the ladder shares - TimeGenerated is a REAL column
+ * and stays.
  *
  * Pure decisions + port orchestration; the IO lives behind SentinelContent.
  */
 
 import type { SentinelContent } from "../../ports/sentinel-content";
 import type { DcrSchemaColumn, SchemaCatalog } from "../../ports/schema-catalog";
-import { DCR_SCHEMA_SYSTEM_COLUMNS } from "./bundled-schema-catalog";
+import { isDcrSystemColumn } from "./system-columns";
 
 /** The validation-schema directory in the Azure-Sentinel repo. */
 export const KQL_VALIDATION_TABLES_DIR =
   ".script/tests/KqlvalidationsTests/CustomTables";
-
-// Exact-case system-column filter, same contract as the bundled tier.
-const SYSTEM_COLUMNS: ReadonlySet<string> = new Set(DCR_SCHEMA_SYSTEM_COLUMNS);
 
 /** Pascal-ish validation type -> DCR vocabulary (case-insensitive keys). */
 const VALIDATION_TYPE_MAP = new Map<string, string>([
@@ -90,7 +96,7 @@ export function parseKqlValidationTable(text: string): DcrSchemaColumn[] | null 
     const name = (entry as { Name?: unknown }).Name;
     const type = (entry as { Type?: unknown }).Type;
     if (typeof name !== "string" || name === "") continue;
-    if (SYSTEM_COLUMNS.has(name)) continue;
+    if (isDcrSystemColumn(name)) continue;
     columns.push({
       name,
       type: typeof type === "string" ? mapValidationColumnType(type) : "string",

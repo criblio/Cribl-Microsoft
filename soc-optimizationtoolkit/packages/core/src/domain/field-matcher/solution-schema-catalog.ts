@@ -21,18 +21,14 @@
 
 import type { DcrSchemaColumn, SchemaCatalog } from "../../ports/schema-catalog";
 import type { SentinelContent } from "../../ports/sentinel-content";
-import {
-  DCR_SCHEMA_SYSTEM_COLUMNS,
-  normalizeTableNames,
-} from "./bundled-schema-catalog";
+import { normalizeTableNames } from "./bundled-schema-catalog";
+import { isDcrSystemColumn } from "./system-columns";
 
 /** One table declared by a solution's ARM resources. */
 export interface SolutionTableSchema {
   name: string;
   columns: DcrSchemaColumn[];
 }
-
-const systemColumnSet: ReadonlySet<string> = new Set(DCR_SCHEMA_SYSTEM_COLUMNS);
 
 /** Bound on table-definition files read per solution (CrowdStrike ships 10). */
 const TABLE_FILE_CAP = 60;
@@ -77,7 +73,7 @@ export function tablesFromArmJson(json: unknown): SolutionTableSchema[] {
           const colName = column["name"];
           const colType = column["type"];
           if (typeof colName !== "string" || colName === "") continue;
-          if (systemColumnSet.has(colName)) continue;
+          if (isDcrSystemColumn(colName)) continue;
           cleaned.push({
             name: colName,
             type: typeof colType === "string" ? colType : "string",

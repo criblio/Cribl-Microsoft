@@ -207,6 +207,84 @@ returns the selected table's live columns as `DestField[]`.
    use. The stale notice renders over the previous results and clears when a run
    completes.
 
+**The tier was composed in the wrong place, and it took three weeks to notice
+(DBT-50, fixed 2026-08-31).** The mapping review nested the live tier UNDER both
+repo tiers - the KQL-validation schemas and the solution's connector-ARM tables
+- so for any table the Sentinel repo defines the ARM read fired, was awaited,
+was stored, and was never reached by resolution. The decision above was
+implemented correctly in the tier and lost in the composition, which nothing
+pinned because the order lived inline in a React callback.
+
+Two fixes were defensible and they are not equivalent: promote the live tier, or
+keep the order and correct the documents that promise live wins. Promotion is
+right. The decision recorded above already named the loser side of the
+comparison - a blend would mix "columns as the solution declares them" with
+columns "as the workspace actually has them", which is a claim about
+live-versus-solution-declared, not just live-versus-sample-derived. The
+apparently contradictory claim, `kql-validation-schema-catalog.ts` saying it
+"resolves FIRST", enumerates the three tiers it beats and does not mention the
+live tier because on 2026-07-14 it did not exist; there was never a decision
+that the repo outranks live, only an order nobody composed. And the two tiers
+answer different questions: the repo says what a solution's rules were written
+against, while the live tier only ever holds a table an operator PICKED from
+their own workspace, which is what will actually accept the data.
+
+The order now lives in `domain/field-matcher/schema-ladder.ts` with pins on each
+step, because an order that only exists as an expression is one nothing can
+protect. The offline note on the card does not survive contact: the ARM read is
+triggered by an explicit table pick, not by opening the screen, and the workspace
+table LISTING already contacts Azure on scope commit either way.
+
+**Promoting the tier exposed a second defect: it did not honour the column
+contract its siblings honour.** A `SchemaCatalog` does not answer "what columns
+does this table have"; it answers "what columns may a DCR DECLARE for this
+table". The three repo/bundled tiers all strip the 18 Azure-managed names -
+TenantId, Type, `_ResourceId` and the rest - because Azure populates them
+itself. The live tier is fed raw ARM, which reports exactly those names in a
+native table's `standardColumns`, and it stripped nothing. That was harmless
+only while the tier was composed innermost and never answered; promoting it to
+the top made it reachable. Measured on the pin: 21 columns in, 3 out, 18
+dropped - and for a table whose columns are ALL managed, 18 in and 0 out, which
+reduces to the tier's existing empty-override state rather than falling through
+to a repo tier.
+
+**A CORRECTION, recorded rather than quietly dropped, because the wrong version
+is the one that made the fix sound impressive.** The fix round said in six
+places - three module headers, a test header, this section and a commit message
+- that the unstripped tier would have added up to 18 spurious columns *to every
+generated DCR*. That is FALSE, and re-review measured it: `buildDcrColumnSet`
+re-strips the managed names for a native table, so they could never reach a DCR
+that way; and the only route by which a catalog schema reaches a DCR at all is
+`customSchema`, which `onboard-batch` and `onboard-table` both ignore for a
+table that already exists - and a table in the live tier's map is by
+construction one the operator picked from the workspace listing, so it exists.
+
+The claim was borrowing credibility from the genuinely measured 21-to-3 pin
+sitting next to it, which is precisely the failure rule 3 names.
+
+**The real harm is subtler and is why the fix still stands.** The managed names
+enter `GapReport.destSchema`, `destFieldCount`, the mapping table's dest-column
+dropdown, overflow triage and the rule-coverage union. So an operator can map a
+source field onto a column Azure owns - `Type`, `SourceSystem`, `RowKey` - the
+pack emits it, and the DCR then drops it SILENTLY. The data loss is real; it
+happens one step further on than the first telling said.
+
+Reordering tiers is only safe because they answer the same question, so the
+strip is now ONE mechanism rather than a fourth copy of the predicate. The list
+was already shared; the FILTER was not - three tiers each built their own
+`new Set(DCR_SCHEMA_SYSTEM_COLUMNS)` and wrote their own test for it, which is
+how a fourth tier came to have neither. `domain/field-matcher/system-columns.ts`
+now owns the list and the two predicate shapes, and all four tiers read it.
+
+**The composition pin was not enough, and the review proved it.** Severing the
+wiring that feeds the ladder (`live,` -> `live: {},` in the mapping review's
+`createSchemaLadder` call) reinstated DBT-50 in full while all 1299 UI tests
+passed - a composition that is never handed its input still composes perfectly,
+so a pin on the ladder cannot see it. `mapping-review-live-schema.dom.test.tsx`
+now pins the SEAM instead: it drives a real table pick through the rendered
+screen and reads the report that comes out. Mutation check - that exact severing
+fails all three of its pins.
+
 Superseded planning notes follow.
 
 **What remained: the UI.** Two pieces:
