@@ -286,3 +286,102 @@ describe("learned mappings outrank packs (per-sample source dedupe)", () => {
     expect(claimants.map((m) => m.dest)).toEqual(["DeviceAddress"]);
   });
 });
+
+describe("D-11: deprecated guid columns route to their per-table successor", () => {
+  // A CloudTrail event whose requestID is NOT a UUID - an S3 request id, which
+  // is what makes the ADR-0004 cast lossy here: toguid() returns null on it and
+  // the value disappears with no diagnostic.
+  const CLOUDTRAIL_SAMPLE = JSON.stringify({
+    eventVersion: "1.08",
+    eventTime: "2026-08-01T12:00:00Z",
+    eventSource: "s3.amazonaws.com",
+    eventName: "GetObject",
+    awsRegion: "us-east-1",
+    sourceIPAddress: "10.1.1.1",
+    requestID: "9C4A1B2D3E4F",
+  });
+  /** The provenance the D-11 content stamps on the row it produces. */
+  const SUCCESSOR_DOC = "AwsRequestId_ is the string successor";
+
+  function portsWithSchema(columns: { name: string; type: string }[]) {
+    return {
+      content: new FakeSentinelContent({ files: {} }),
+      catalog: { resolveSchema: async () => columns },
+    } as unknown as AnalyzeSamplesPorts;
+  }
+
+  it("routes AWSCloudTrail's requestID to AwsRequestId_, not the guid column", async () => {
+    // Against the REAL bundled catalog, which carries both columns.
+    const [report] = await collectGapReports(
+      { content: new FakeSentinelContent({ files: {} }), catalog: createBundledSchemaCatalog() },
+      {
+        solutionName: "Amazon Web Services",
+        samples: [
+          { logType: "cloudtrail", tableName: "AWSCloudTrail", content: CLOUDTRAIL_SAMPLE },
+        ],
+      },
+    );
+    const claimants = report.fieldMappings.filter(
+      (m) => m.source === "requestID" && m.action !== "overflow",
+    );
+    expect(claimants.map((m) => m.dest)).toEqual(["AwsRequestId_"]);
+    // ...and the deprecated guid column is left unclaimed, so nothing is
+    // routed through the toguid() that would null it.
+    expect(report.fieldMappings.some((m) => m.dest === "AwsRequestId")).toBe(false);
+    // The operator is told WHY the successor was chosen, on the row.
+    expect(claimants[0].description).toContain(SUCCESSOR_DOC);
+  });
+
+  it("does NOT route to the successor when the table's schema lacks it", async () => {
+    // THE CONSTRAINT (backlog 18g): this is per-table CONTENT, not a
+    // `<Col> -> <Col>_` rule, because a rule would name a column that does not
+    // exist. A workspace whose AWSCloudTrail predates AwsRequestId_ resolves
+    // exactly this schema, and the content must not invent the column.
+    const [report] = await collectGapReports(
+      portsWithSchema([
+        { name: "AwsRequestId", type: "string" },
+        { name: "EventName", type: "string" },
+        { name: "AdditionalExtensions", type: "string" },
+      ]),
+      {
+        solutionName: "Amazon Web Services",
+        samples: [
+          { logType: "cloudtrail", tableName: "AWSCloudTrail", content: CLOUDTRAIL_SAMPLE },
+        ],
+      },
+    );
+    expect(report.fieldMappings.some((m) => m.dest === "AwsRequestId_")).toBe(false);
+    expect(
+      report.fieldMappings.some((m) => (m.description ?? "").includes(SUCCESSOR_DOC)),
+    ).toBe(false);
+    // Behaviour for this schema is UNCHANGED: the ladder's fuzzy match still
+    // puts the value in the only column that exists.
+    const claimants = report.fieldMappings.filter(
+      (m) => m.source === "requestID" && m.action !== "overflow",
+    );
+    expect(claimants.map((m) => m.dest)).toEqual(["AwsRequestId"]);
+  });
+
+  it("does NOT apply to another table, even one carrying both columns", async () => {
+    // The other half of "content, not rule": the decision is keyed by TABLE.
+    // This schema is synthetic on purpose - it hands a non-AWSCloudTrail table
+    // both column names, so the only thing that can keep the content from
+    // firing is that no successor is declared for this table.
+    const [report] = await collectGapReports(
+      portsWithSchema([
+        { name: "AwsRequestId", type: "string" },
+        { name: "AwsRequestId_", type: "string" },
+        { name: "AdditionalExtensions", type: "string" },
+      ]),
+      {
+        solutionName: "Amazon Web Services",
+        samples: [
+          { logType: "cef", tableName: "CommonSecurityLog", content: CLOUDTRAIL_SAMPLE },
+        ],
+      },
+    );
+    expect(
+      report.fieldMappings.some((m) => (m.description ?? "").includes(SUCCESSOR_DOC)),
+    ).toBe(false);
+  });
+});

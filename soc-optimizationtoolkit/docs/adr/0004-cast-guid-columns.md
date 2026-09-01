@@ -85,6 +85,16 @@ precisely rather than deleted.
   drops the value silently. Routing deprecated guid columns to a `_`-suffixed
   string successor is a real improvement but is a per-table content decision,
   not a schema-mapping rule. Deferred, and recorded in the backlog.
+  **DONE 2026-09-01 as D-11** <!--drift-ok--> and the deferral's own words held:
+  it landed as CONTENT (`usecases/analyze-samples/deprecated-guid-successors.ts`,
+  keyed by table) fed through the analyzeSamples Phase-0 guard, with no clause
+  added to RULE 2b and no change to this file's decision. The guard was already
+  there for the vendor packs and drops any entry naming a column the resolved
+  schema does not have, so the constraint is enforced in code rather than by
+  discipline - pinned both ways in `analyze-samples.test.ts`. Worth recording:
+  sweeping the bundled catalog for a column whose `<name>_` sibling also exists
+  returns exactly ONE hit, this one, which is why a general rule would have been
+  a pattern invented for a single fact.
 - Surfacing `droppedColumns`/`unknownTypeColumns` in the UI is still worth doing
   - system-column drops and unknown-type fallbacks remain invisible. Deferred.
   **DONE 2026-08-28 as HON-3** <!--drift-ok--> via `describeColumnDiagnostics`

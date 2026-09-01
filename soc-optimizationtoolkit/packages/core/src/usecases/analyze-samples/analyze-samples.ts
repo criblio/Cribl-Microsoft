@@ -53,6 +53,7 @@ import type {
 import type { SentinelContent } from "../../ports/sentinel-content";
 import type { DcrSchemaColumn, SchemaCatalog } from "../../ports/schema-catalog";
 import type { Logger } from "../../ports/logger";
+import { guidSuccessorMappings } from "./deprecated-guid-successors";
 
 /** The ports {@link analyzeSamples} orchestrates. */
 export interface AnalyzeSamplesPorts {
@@ -274,7 +275,22 @@ export async function* analyzeSamples(
     );
     const claimedDest = new Set<string>();
     const claimedSource = new Set<string>();
-    const applicableMappings = (input.vendorMappings ?? []).filter((vm) => {
+    // D-11 (backlog 18g): this table's DEPRECATED guid columns route to their
+    // string successor. They ride the SAME Phase-0 channel and therefore the
+    // SAME guard below, which is the whole reason the decision could stay
+    // per-table CONTENT instead of becoming a schema-mapping rule - the guard
+    // already refuses to name a column the resolved schema does not have.
+    //
+    // DECLARED LAST on purpose. The dedupe below is first-wins per source, so
+    // a LEARNED reviewer decision (the caller declares those first) and a
+    // documented vendor-pack entry both still outrank this. An operator who
+    // has explicitly said where `requestID` goes should not be overruled by
+    // bundled content, and no pack maps a source we claim today.
+    const mappingsForSample = [
+      ...(input.vendorMappings ?? []),
+      ...guidSuccessorMappings(sample.tableName),
+    ];
+    const applicableMappings = mappingsForSample.filter((vm) => {
       const sourceKey = vm.sourceName.toLowerCase();
       if (!sampleFieldNames.has(sourceKey)) return false;
       if (claimedSource.has(sourceKey)) return false;
