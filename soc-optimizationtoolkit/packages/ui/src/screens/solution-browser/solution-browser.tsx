@@ -529,10 +529,19 @@ export function SolutionBrowser({
               Clear selection
             </button>
           </div>
+          {/* DBT-9: the three sections do NOT share a verb, so do not flatten
+              them back to one. Changing the solution REMOVES every tagged
+              sample from the store (integrate-screen handleSolutionChange),
+              which is unrecoverable; the mapping and coverage sections only
+              remount empty, and approved mapping decisions outlive the change
+              in the per-solution learned-mappings cache. "reset" covered all
+              three and understated the half that is a deletion. */}
           <span className="field-hint">
             Every section below is scoped to this solution. Clear it to browse
-            and pick another - the sample, mapping, and coverage sections reset
-            when the solution changes.
+            and pick another - changing the solution deletes the samples you
+            acquired, and empties the mapping and coverage sections. Mapping
+            decisions you approved are kept per solution and come back if you
+            pick this one again.
           </span>
         </div>
       ) : (
