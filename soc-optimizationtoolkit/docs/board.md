@@ -11,7 +11,7 @@ two cannot disagree.
 alternatives. This board holds only what is a unit of work, what state it is
 in, and what it waits on.
 
-**55 in the backlog, 1 in progress, 77 done.**
+**56 in the backlog, 0 in progress, 77 done.**
 
 ## By menu item
 
@@ -142,16 +142,11 @@ RAISED BY THE USER 2026-08-31. DCR Automation can onboard a table you can alread
 
 ---
 
-## In progress (1)
+## In progress (0)
 
 Started. Anything here with an unfinished dependency is called out on its card.
 
-- **DBT-3** Reconcile the Entra `Kind:Direct` copy with what has been measured
-  `DBT-F2` `story` `settled`
-  `architecture-patterns.ts:422,426` states flatly that native Entra tables do
-  not accept Kind:Direct DCRs, with no snapshot date and no hedge, while the
-  plan doc that is its only source still calls it unverified. Either measure
-  it or carry the caveat.
+_Nothing here._
 
 ---
 
@@ -192,7 +187,7 @@ Next to pick up. Nothing blocks these.
 
 ---
 
-## Backlog - next (20)
+## Backlog - next (21)
 
 Settled and unblocked, sequenced behind now.
 
@@ -292,6 +287,36 @@ Settled and unblocked, sequenced behind now.
   live. It is called out in > `azure-targeting-screen.dom.test.tsx` so nobody
   deletes it on the strength of > a green suite. FX-4's sweep should treat it
   as a known-unpinned guard.
+
+- **DBT-3** Reconcile the Entra `Kind:Direct` copy with what has been measured
+  `DBT-F2` `story` `settled`
+  `architecture-patterns.ts:422,426` states flatly that native Entra tables do
+  not accept Kind:Direct DCRs, with no snapshot date and no hedge, while the
+  plan doc that is its only source still calls it unverified. Either measure
+  it or carry the caveat. ATTEMPTED AND REVERTED 2026-09-01, and the failure
+  is worth more than the attempt would have been. An agent rewrote the copy to
+  carry a caveat, and adversarial review showed the rewrite COMMITTED THE SAME
+  OFFENCE THE CARD WAS FILED AGAINST, one level up: the new text told
+  operators 'Nobody has tested that against a live workspace', which is a
+  universal claim about the state of the world that nobody established. The
+  source document says only that ONE specific thing is unverified. Trading an
+  unhedged claim for a differently-unhedged claim is not a fix. Two further
+  findings, both confirmed by reproduction rather than argued. The rewritten
+  `why` still ended with an unhedged assertion drawn from the SAME section 8
+  of the SAME source - that function aliases keep existing analytics content
+  working - while section 8's third risk says the alias trick may be rejected
+  outright. And the pin titled 'never asserts the UNMEASURED half' did not
+  enforce that property: it blocked four literal spellings, so the reviewer
+  reintroduced the card's exact defect in different words and the file passed
+  52 of 52 with the UNVERIFIED bullet still on screen. WHAT THE NEXT ATTEMPT
+  MUST DO DIFFERENTLY: state precisely what the source says is unverified and
+  no more; do not characterise the state of the world's testing; hedge EVERY
+  claim traceable to the unverified section rather than only the one this card
+  names; and pin the PROPERTY - no unhedged assertion sourced from an
+  unverified section - rather than a list of forbidden phrasings. If that
+  property cannot be pinned, say so and leave the copy honest without a pin.
+  Prose with no pin is an acceptable outcome here, and a pin that passes under
+  the defect is WORSE than none, because it reads as protection.
 
 - **DBT-4** Name inline breaker rulesets instead of showing "Default selection"
   `DBT-F3` `story` `settled` `blocked by DBT-1`
