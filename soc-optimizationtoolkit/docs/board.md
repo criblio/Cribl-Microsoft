@@ -11,7 +11,7 @@ two cannot disagree.
 alternatives. This board holds only what is a unit of work, what state it is
 in, and what it waits on.
 
-**57 in the backlog, 0 in progress, 78 done.**
+**57 in the backlog, 0 in progress, 80 done.**
 
 ## By menu item
 
@@ -23,7 +23,7 @@ operator sees on any screen. Two menus are PLANNED and have no route yet.
 |---|---|---|---|
 | Dataflow | 3 | 0 | 0 |
 | Setup | 1 | 0 | 0 |
-| Sentinel Integration | 12 | 40 | 1 |
+| Sentinel Integration | 12 | 42 | 0 |
 | DCR Automation | 3 | 10 | 0 |
 | Pack Maintenance | 4 | 1 | 0 |
 | Permission Verification | 8 | 0 | 0 |
@@ -116,13 +116,13 @@ ENABLER EPIC: release mechanics. The packaged tarball trails main, and the lab t
 |---|---|---|---|
 | `REL-F1` Release and deployment hygiene | Cross-cutting | 3/5 | REL-2, REL-3, REL-4, REL-5, REL-6 |
 
-### `DBT` Quality and technical debt _(enabler)_ - 69% (49/71)
+### `DBT` Quality and technical debt _(enabler)_ - 70% (51/73)
 
 ENABLER EPIC: verification gaps, copy, diagram fidelity, docs and the board's own tooling
 
 | Feature | Menu | Done | Stories |
 |---|---|---|---|
-| `DBT-F1` Verification gaps | Sentinel Integration | 22/30 | DBT-2, DBT-5*, DBT-6, DBT-7, DBT-36*, DBT-55, DBT-56, DBT-42, DBT-43, DBT-44, DBT-45, DBT-46, DBT-47, DBT-48, DBT-49, DBT-50, DBT-51, DBT-52, DBT-41, DBT-40, DBT-60, DBT-61, DBT-62, DBT-63, DBT-64, DBT-65, DBT-66, DBT-67, DBT-68, DBT-69 |
+| `DBT-F1` Verification gaps | Sentinel Integration | 24/32 | DBT-2, DBT-5*, DBT-6, DBT-7, DBT-36*, DBT-55, DBT-56, DBT-42, DBT-43, DBT-44, DBT-45, DBT-46, DBT-47, DBT-48, DBT-49, DBT-50, DBT-51, DBT-52, DBT-41, DBT-40, DBT-60, DBT-61, DBT-62, DBT-63, DBT-64, DBT-65, DBT-66, DBT-67, DBT-68, DBT-69, DBT-70, DBT-71 |
 | `DBT-F2` Copy and UX | Sentinel Integration | 4/9 | DBT-3, DBT-9, DBT-14, DBT-15, DBT-28, D-10*, DBT-53, DBT-38, DBT-39 |
 | `DBT-F3` Diagram fidelity | Dataflow | 0/3 | DBT-1, DBT-4, DBT-12 |
 | `DBT-F4` Docs and spec grounding | Cross-cutting | 6/10 | DBT-8, DBT-10, DBT-11, DBT-13, DBT-22, DBT-26, DBT-32, DBT-57, DBT-58, DBT-54 |
@@ -150,45 +150,15 @@ _Nothing here._
 
 ---
 
-## Backlog - now (1)
+## Backlog - now (0)
 
 Next to pick up. Nothing blocks these.
 
-- **DBT-68** The Azure system-column list is maintained twice, in the two places that both strip it
-  `DBT-F1` `bug` `settled`
-  Found by the fourteenth architecture audit, check 2, and CONFIRMED by
-  comparison rather than suspected: `DCR_SCHEMA_SYSTEM_COLUMNS` in
-  domain/field-matcher/system-columns.ts and `NATIVE_SYSTEM_COLUMNS` in
-  domain/schema-mapping/schema-mapping.ts are 18 names each and the sets are
-  IDENTICAL today - zero on either side of the difference. They are separate
-  `Object.freeze([...])` literals in separate modules with no link between
-  them. WHY THIS IS THE DANGEROUS SHAPE and not tidy-up: the two lists govern
-  the two ENDS of the same pipeline. The field-matcher list decides which
-  columns a schema catalog tier will OFFER; the schema-mapping list decides
-  which columns `buildDcrColumnSet` will STRIP when it builds the DCR.
-  [[DBT-50]] was exactly a disagreement between an offering tier and the
-  contract its siblings honoured, and its fix ended with the words 'one
-  mechanism, not a fourth copy of the predicate'. That dedup was PARTIAL - it
-  unified the four field-matcher tiers with each other and left schema-mapping
-  holding its own copy. The failure mode if they drift: a name added to one
-  and not the other is either offered to the operator and then silently
-  dropped by the DCR builder, or stripped from the catalog while the builder
-  still declares it. Both are the quiet data-shape mismatch this codebase
-  keeps carding. WHAT MAKES IT MORE THAN A RENAME, and why it is filed rather
-  than fixed in the audit: `CUSTOM_SYSTEM_COLUMNS` is a genuine 6-name
-  variant, so the right shape is one owner exposing both the native and custom
-  sets, not a blind merge. Layering also has to be decided - schema-mapping
-  and field-matcher are sibling domain modules, so the shared list needs a
-  home that neither owns, or one must openly depend on the other. AND A
-  CAUTION FROM TODAY: [[DBT-67]] happened because a uniform fix was applied to
-  two paths that looked alike and were not. Two lists that are equal today may
-  still be answering different questions - confirm the native set and the
-  DCR-schema set are the SAME QUESTION before merging them, rather than
-  inferring it from the fact that they match.
+_Nothing here._
 
 ---
 
-## Backlog - next (22)
+## Backlog - next (23)
 
 Settled and unblocked, sequenced behind now.
 
@@ -558,6 +528,41 @@ Settled and unblocked, sequenced behind now.
   board-serve.mjs, package.mjs and pkgutil.mjs also lack tests, so this is not
   a lone offender - but those do not stand between a committed asset and the
   tree, which is why only this one is carded.
+
+- **DBT-71** Line endings are per-clone config, and have now shipped two Windows-only breaks
+  `DBT-F1` `enabler` `settled`
+  The repo has NO .gitattributes, so how a file is stored and checked out
+  depends on each clone's `core.autocrlf`. Two defects shipped from that in a
+  single day, and both went green through CI: [[DBT-66]] - check-listings.mjs
+  carried a shebang, and under CRLF vitest could not import it, collapsing
+  that whole suite to 'no tests'. [[DBT-70]] - check-schema-asset compared RAW
+  BYTES, so it failed on every Windows run while reporting zero differing
+  tables. NEITHER WAS VISIBLE TO CI, and that is the point rather than a
+  detail: the GitHub runner is Linux and checks out LF, so both were
+  well-formed there. The repo's primary development environment is Windows. A
+  green CI is evidence about the CI checkout, not about the repository - twice
+  in one session is a pattern, not luck. MEASURED, not assumed, because the
+  obvious fix is far more expensive than it looks. The blobs in this repo are
+  stored as CRLF - checked directly, not sampled: `git cat-file -p
+  HEAD:packages/core/src/index.ts` contains CR. So `* text=auto eol=lf` would
+  RENORMALISE 1,473 TRACKED TEXT FILES (710 .ts, 466 .json, 119 .tsx, 96 .md,
+  43 .ps1, 29 .mjs and the rest). That is a diff that rewrites almost every
+  line of history's surface: it breaks `git blame` on everything, and it
+  conflicts with every branch open at the time. WHAT IS NOT THE ANSWER: making
+  every comparison normalise. That is what DBT-70's fix did and it was right
+  there, but it does not cover DBT-66 - that was a TOOL choking on CRLF in a
+  file we did not compare at all. The two failures share a cause and not a
+  remedy. DECIDED 2026-09-01: repo-wide. The narrow option was 20x cheaper and
+  still loses - it fixes the two known instances a third time and leaves
+  1,440-odd files on per-clone config, which is the detection gap the card
+  exists about. Reasoning in backlog.md section 19, which is why this can
+  settle. SEQUENCING IS PART OF THE DECISION: land everything in flight first
+  and renormalise on a clean main, because a 1,473-file commit against open
+  branches turns a mechanical change into a merge fight.
+  DECISION: Pin line endings repo-wide, narrowly, or not at all?
+    [ ] `narrow` Pin only the files that get read as bytes - A .gitattributes covering *.mjs (29 files) and the generated asset packages/core/src/assets/dcr-template-schemas.json. These are the files that scripts execute or byte-compare, which is where both defects landed. Roughly a 30-file renormalisation instead of 1,473, so blame and open branches survive. Leaves the other 1,440-odd files on per-clone config, so a third instance elsewhere is still possible.
+    [x] `repo-wide` Pin everything to LF - `* text=auto eol=lf`. Closes the class properly and matches what CI already sees, so Windows and Linux stop disagreeing. Costs a 1,473-file renormalisation commit that breaks git blame across the repo and conflicts with every open branch. Best done when nothing is in flight, which is a scheduling constraint rather than a technical one.
+    [ ] `leave-it` Leave it, keep fixing instances - Both known instances are fixed and pinned. The argument for waiting is that a 1,473-file diff is a real cost against a hazard that has surfaced twice in one unusually busy day. The argument against is that both instances reached main and CI could not see either, so the detection story is 'somebody happens to run the suite on Windows'.
 
 ---
 
@@ -940,7 +945,7 @@ Settled, gated on something above.
 
 ---
 
-## Done (78)
+## Done (80)
 
 Kept briefly so a reader can see what just landed; prune when the list grows.
 
@@ -3164,3 +3169,80 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   each: restoring the stale asset reports the 2 drifting tables, and
   re-breaking the generator path reports FAILED TO RUN with the original
   ENOENT. Seven weeks of silence is what it closes.
+
+- **DBT-68** The Azure system-column list is maintained twice, in the two places that both strip it
+  `DBT-F1` `bug` `settled` `verified: pins`
+  Found by the fourteenth architecture audit, check 2, and CONFIRMED by
+  comparison rather than suspected: `DCR_SCHEMA_SYSTEM_COLUMNS` in
+  domain/field-matcher/system-columns.ts and `NATIVE_SYSTEM_COLUMNS` in
+  domain/schema-mapping/schema-mapping.ts are 18 names each and the sets are
+  IDENTICAL today - zero on either side of the difference. They are separate
+  `Object.freeze([...])` literals in separate modules with no link between
+  them. WHY THIS IS THE DANGEROUS SHAPE and not tidy-up: the two lists govern
+  the two ENDS of the same pipeline. The field-matcher list decides which
+  columns a schema catalog tier will OFFER; the schema-mapping list decides
+  which columns `buildDcrColumnSet` will STRIP when it builds the DCR.
+  [[DBT-50]] was exactly a disagreement between an offering tier and the
+  contract its siblings honoured, and its fix ended with the words 'one
+  mechanism, not a fourth copy of the predicate'. That dedup was PARTIAL - it
+  unified the four field-matcher tiers with each other and left schema-mapping
+  holding its own copy. The failure mode if they drift: a name added to one
+  and not the other is either offered to the operator and then silently
+  dropped by the DCR builder, or stripped from the catalog while the builder
+  still declares it. Both are the quiet data-shape mismatch this codebase
+  keeps carding. WHAT MAKES IT MORE THAN A RENAME, and why it is filed rather
+  than fixed in the audit: `CUSTOM_SYSTEM_COLUMNS` is a genuine 6-name
+  variant, so the right shape is one owner exposing both the native and custom
+  sets, not a blind merge. Layering also has to be decided - schema-mapping
+  and field-matcher are sibling domain modules, so the shared list needs a
+  home that neither owns, or one must openly depend on the other. AND A
+  CAUTION FROM TODAY: [[DBT-67]] happened because a uniform fix was applied to
+  two paths that looked alike and were not. Two lists that are equal today may
+  still be answering different questions - confirm the native set and the
+  DCR-schema set are the SAME QUESTION before merging them, rather than
+  inferring it from the fact that they match. CLOSED 2026-09-01, AND THE
+  CARD'S PREMISE WAS WRONG. It said the two lists can drift. THEY CANNOT:
+  field-matcher/schema-catalog.test.ts:66 already pins set-equality between
+  DCR_SCHEMA_SYSTEM_COLUMNS and NATIVE_SYSTEM_COLUMNS, the field-matcher
+  header already documents the relationship, and I mutation-checked the pin
+  rather than trusting it - adding a name to one list only fails it. The audit
+  reported a duplication and did not check whether it was already guarded,
+  which is the same shortcut that produced the wrong cause on [[DBT-67]]. WHAT
+  THE INVESTIGATION DID FIND, both real and both previously unstated on at
+  least one side. (1) The two hold the same 18 names and apply them with
+  DIFFERENT MATCHING: field-matcher is case-SENSITIVE (legacy Set.has),
+  schema-mapping is case-INSENSITIVE (legacy PowerShell -notin). Documented on
+  the field-matcher side only, so on the other it read as an accident. It is
+  not safe to unify: loosening field-matcher to case-insensitive would start
+  stripping a custom table's own column named `type` or `tenantid`, both legal
+  names. (2) The catalog applies the NATIVE list to EVERY table, while
+  schema-mapping switches to a deliberate 6-name custom list that KEEPS
+  TenantId and SourceSystem. So for a custom table the catalog is stricter
+  than the builder - which is the SAFE direction (it under-offers rather than
+  offering a column the DCR would drop; the unsafe direction is what
+  [[DBT-50]] was). Both asymmetries are now pinned as decisions and stated on
+  both sides, so changing either is a deliberate act rather than a discovery.
+  ALSO MEASURED, because it bounds the whole question: the bundled asset
+  contains ZERO system columns in any casing - the templates never declare
+  them - so the filter is a no-op for that tier and the live ARM tier is the
+  only place any of this can bite.
+
+- **DBT-70** check-schema-asset compared bytes, so it failed on every Windows run
+  `DBT-F1` `bug` `settled` `verified: pins`
+  The checker added by [[DBT-67]] compared the committed asset to a fresh
+  extraction as RAW BYTES. The generator writes LF; with core.autocrlf=true
+  git checks the committed file out as CRLF. So on Windows every run reported
+  a mismatch while listing ZERO differing tables - the giveaway that the
+  difference was not in the data at all. IT SHIPPED GREEN. CI passed on the PR
+  that introduced it because the GitHub runner is Linux and checks out LF, so
+  both sides matched there. This is [[DBT-66]] repeating exactly - a
+  Windows-only break a green CI cannot see - in the gate that was added to
+  stop things going unnoticed. Two of these in one session is no longer a
+  coincidence: this repo's primary development environment is Windows and its
+  CI is Linux, so any byte-level comparison is a trap. FIXED by normalising
+  line endings before comparing, with the reasoning in the module header.
+  Mutation-checked afterwards to confirm the fix did not blind it: injecting a
+  fake column still reports '1 table(s) differ: ADAssessmentRecommendation'.
+  Found by running the full gate suite on an unrelated change - which is the
+  argument for running all of them every time rather than the ones that look
+  relevant.

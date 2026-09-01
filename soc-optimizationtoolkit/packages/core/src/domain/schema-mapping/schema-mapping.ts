@@ -165,6 +165,17 @@ export interface DcrColumnSetResult {
 /**
  * RULE 2a, native mode: the 18 system column names removed from native-table
  * DCR declarations. Matching is CASE-INSENSITIVE (PowerShell -notin).
+ *
+ * SAME NAMES AS field-matcher's `DCR_SCHEMA_SYSTEM_COLUMNS`, DIFFERENT MATCHING
+ * (DBT-68). That module holds the identical 18 and matches CASE-SENSITIVELY,
+ * preserving its own legacy `Set.has(c.name)`. Set-equality of the two lists is
+ * pinned in field-matcher/schema-catalog.test.ts so they cannot drift apart;
+ * the matching difference is pinned there too, so it stays a decision rather
+ * than becoming a surprise.
+ *
+ * Do not "unify" them without reading those pins. Loosening the field-matcher
+ * side to case-insensitive would begin stripping a custom table's own column
+ * named `type` or `tenantid`, which are legal names.
  */
 export const NATIVE_SYSTEM_COLUMNS: readonly string[] = Object.freeze([
   "TenantId",

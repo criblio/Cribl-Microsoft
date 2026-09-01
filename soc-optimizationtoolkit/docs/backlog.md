@@ -2373,3 +2373,38 @@ the legacy two" to "contains the legacy two, plus SecurityOnly which AZR-2 added
 deliberately". That is a weaker claim, and it is the right one - the pin was
 asserting a fact that AZR-2 had already made false on purpose, so it was
 pinning the port's history rather than its correctness.
+
+## 19. DBT-71 answered: pin every line ending to LF - 2026-09-01
+
+**The question.** The repo has no `.gitattributes`, so how a file is stored and
+checked out depends on each clone's `core.autocrlf`. Two defects shipped from
+that in one day - [[DBT-66]] and [[DBT-70]] - and both passed CI. Pin
+repo-wide, pin narrowly, or keep fixing instances?
+
+**Chosen: `repo-wide`.** `* text=auto eol=lf`, accepting the renormalisation.
+
+**Why the narrow option loses, despite being twenty times cheaper.** It pins
+the 29 `.mjs` scripts and the generated asset - exactly where the two known
+defects landed - and leaves 1,440-odd files on per-clone config. That is
+fixing the two instances a third time rather than closing the class. The whole
+argument for acting at all is that neither instance was visible to CI: the
+runner is Linux and checks out LF, so both were well-formed there while broken
+on the machine the work happens on. A narrow pin leaves that detection gap
+exactly where it is for every file it does not cover.
+
+**The cost is real and is a scheduling problem, not a technical one.** The
+blobs here are stored CRLF - verified directly, not sampled - so this
+renormalises **1,473 tracked text files**: 710 `.ts`, 466 `.json`, 119 `.tsx`,
+96 `.md`, 43 `.ps1`, 29 `.mjs`. It rewrites the surface of nearly all history,
+so `git blame` takes a one-commit hop across the whole repo, and it conflicts
+with every branch open at the time.
+
+That last point dictates the order: **land everything in flight first, then
+renormalise on a clean main with nothing outstanding.** Doing it while a PR is
+open converts a mechanical commit into a merge fight.
+
+**What this does NOT replace.** Making comparisons normalise, which was
+DBT-70's fix, stays correct and stays in. It defends code we control against a
+tree we may not; the `.gitattributes` defends the tree. DBT-66 is the reason
+both are needed - a tool choked on CRLF in a file nothing compared, so no
+amount of careful comparison would have saved it.
