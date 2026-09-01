@@ -57,6 +57,29 @@ export {
   ingestionTierReason,
 } from "./ingestion-classification";
 
+// The badge a solution ROW and the SELECTED-SOLUTION CARD both render (DBT-15).
+// One derivation over (shipped lookup, live-fetch evidence): a solution nothing
+// has classified is "not measured" rather than blank, and a completed fetch that
+// found no connector is "no connector" - a measured zero, not an unknown.
+export type {
+  DeliveryFitState,
+  DeliveryFitBadge,
+  DeliveryFitEvidence,
+  TieredIngestion,
+} from "./delivery-fit-badge";
+export {
+  DELIVERY_FIT_NOT_FETCHED,
+  DELIVERY_FIT_UNMEASURED_LABEL,
+  DELIVERY_FIT_UNMEASURED_REASON,
+  DELIVERY_FIT_MEASURING_LABEL,
+  DELIVERY_FIT_MEASURING_REASON,
+  DELIVERY_FIT_NO_CONNECTOR_LABEL,
+  DELIVERY_FIT_NO_CONNECTOR_REASON,
+  DELIVERY_FIT_FETCH_FAILED_REASON,
+  deliveryFitBadge,
+  deliveryFitUnreadableReason,
+} from "./delivery-fit-badge";
+
 // File-selection persistence filter (verbatim extension/dir sets), plus the
 // analytic-rule location rules shared by rule-coverage and siem-migration
 // (audit finding 1, 2026-08-17: they were duplicated, and only one was pinned).

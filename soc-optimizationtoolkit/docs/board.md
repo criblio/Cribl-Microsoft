@@ -11,7 +11,7 @@ two cannot disagree.
 alternatives. This board holds only what is a unit of work, what state it is
 in, and what it waits on.
 
-**55 in the backlog, 2 in progress, 76 done.**
+**55 in the backlog, 1 in progress, 77 done.**
 
 ## By menu item
 
@@ -23,7 +23,7 @@ operator sees on any screen. Two menus are PLANNED and have no route yet.
 |---|---|---|---|
 | Dataflow | 3 | 0 | 0 |
 | Setup | 1 | 0 | 0 |
-| Sentinel Integration | 12 | 38 | 1 |
+| Sentinel Integration | 11 | 39 | 1 |
 | DCR Automation | 3 | 10 | 0 |
 | Pack Maintenance | 4 | 1 | 0 |
 | Permission Verification | 8 | 0 | 0 |
@@ -31,7 +31,7 @@ operator sees on any screen. Two menus are PLANNED and have no route yet.
 | Windows Event analysis (planned) | 5 | 0 | 0 |
 | Cross-cutting | 8 | 23 | 0 |
 
-Open work totals 57.
+Open work totals 56.
 
 ## Epics and features
 
@@ -116,14 +116,14 @@ ENABLER EPIC: release mechanics. The packaged tarball trails main, and the lab t
 |---|---|---|---|
 | `REL-F1` Release and deployment hygiene | Cross-cutting | 3/5 | REL-2, REL-3, REL-4, REL-5, REL-6 |
 
-### `DBT` Quality and technical debt _(enabler)_ - 68% (47/69)
+### `DBT` Quality and technical debt _(enabler)_ - 70% (48/69)
 
 ENABLER EPIC: verification gaps, copy, diagram fidelity, docs and the board's own tooling
 
 | Feature | Menu | Done | Stories |
 |---|---|---|---|
 | `DBT-F1` Verification gaps | Sentinel Integration | 21/28 | DBT-2, DBT-5*, DBT-6, DBT-7, DBT-36*, DBT-55, DBT-56, DBT-42, DBT-43, DBT-44, DBT-45, DBT-46, DBT-47, DBT-48, DBT-49, DBT-50, DBT-51, DBT-52, DBT-41, DBT-40, DBT-60, DBT-61, DBT-62, DBT-63, DBT-64, DBT-65, DBT-66, DBT-67 |
-| `DBT-F2` Copy and UX | Sentinel Integration | 3/9 | DBT-3, DBT-9, DBT-14, DBT-15, DBT-28, D-10*, DBT-53, DBT-38, DBT-39 |
+| `DBT-F2` Copy and UX | Sentinel Integration | 4/9 | DBT-3, DBT-9, DBT-14, DBT-15, DBT-28, D-10*, DBT-53, DBT-38, DBT-39 |
 | `DBT-F3` Diagram fidelity | Dataflow | 0/3 | DBT-1, DBT-4, DBT-12 |
 | `DBT-F4` Docs and spec grounding | Cross-cutting | 6/10 | DBT-8, DBT-10, DBT-11, DBT-13, DBT-22, DBT-26, DBT-32, DBT-57, DBT-58, DBT-54 |
 | `DBT-F5` Board tooling defects | Cross-cutting | 14/14 | DBT-16, DBT-17, DBT-18, DBT-19, DBT-20, DBT-21, DBT-23, DBT-24, DBT-25, DBT-27, DBT-29, DBT-30, DBT-31, DBT-59 |
@@ -142,7 +142,7 @@ RAISED BY THE USER 2026-08-31. DCR Automation can onboard a table you can alread
 
 ---
 
-## In progress (2)
+## In progress (1)
 
 Started. Anything here with an unfinished dependency is called out on its card.
 
@@ -152,22 +152,6 @@ Started. Anything here with an unfinished dependency is called out on its card.
   not accept Kind:Direct DCRs, with no snapshot date and no hedge, while the
   plan doc that is its only source still calls it unverified. Either measure
   it or carry the caveat.
-
-- **DBT-15** Give every solution row a delivery-fit badge, or say why not
-  `DBT-F2` `bug` `settled`
-  Not now because: A missing affordance rather than a wrong one - the badge is
-  absent, not incorrect, so nothing currently on screen is false.
-  "Palo Alto Cortex XDR" renders none while all seven of its siblings do.
-  Blank reads as neither "not measured" nor "does not apply" - the
-  absent-versus-zero distinction the inventory standard exists to protect.
-  *bug, SETTLED. `backlog.md` item 13e.* CONFIRMED LIVE 2026-08-28 in the dev
-  app (/apps/a/__local__), unfiltered solution list: AbuseIPDB and Acronis
-  Cyber Protect Cloud carry NO fit badge while 1Password and Agari show
-  Supported, 42Crunch API Protection and AbnormalSecurity show Recommended,
-  and Agent 365 shows Legacy. So the blank is not a rendering failure of one
-  row - the badge column works, and these rows genuinely have nothing to show.
-  Was reported from the eight Palo results; reproduces on the default list,
-  which makes it easier to test.
 
 ---
 
@@ -912,7 +896,7 @@ Settled, gated on something above.
 
 ---
 
-## Done (76)
+## Done (77)
 
 Kept briefly so a reader can see what just landed; prune when the list grows.
 
@@ -1443,6 +1427,41 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   `getschema` does not report the guid family at all - SecurityEvent came back
   220 string / 12 int / 2 datetime with zero guid while ARM declares seven, so
   the type assertion reads ARM.
+
+- **DBT-15** Give every solution row a delivery-fit badge, or say why not
+  `DBT-F2` `bug` `settled` `verified: pins`
+  Not now because: A missing affordance rather than a wrong one - the badge is
+  absent, not incorrect, so nothing currently on screen is false.
+  "Palo Alto Cortex XDR" renders none while all seven of its siblings do.
+  Blank reads as neither "not measured" nor "does not apply" - the
+  absent-versus-zero distinction the inventory standard exists to protect.
+  *bug, SETTLED. `backlog.md` item 13e.* CONFIRMED LIVE 2026-08-28 in the dev
+  app (/apps/a/__local__), unfiltered solution list: AbuseIPDB and Acronis
+  Cyber Protect Cloud carry NO fit badge while 1Password and Agari show
+  Supported, 42Crunch API Protection and AbnormalSecurity show Recommended,
+  and Agent 365 shows Legacy. So the blank is not a rendering failure of one
+  row - the badge column works, and these rows genuinely have nothing to show.
+  Was reported from the eight Palo results; reproduces on the default list,
+  which makes it easier to test. DONE 2026-09-01 after a fix round and a
+  second review. Every solution row and the selected-solution card now derive
+  their badge from one pure function over four honest states - not-fetched,
+  fetching, fetched, fetch-failed - so blank is no longer reachable and a
+  COMPLETED listing of zero connectors is treated as a real zero rather than
+  an unknown. RE-REVIEW CLOSED THREE MORE. (1) The copy claimed a guarantee
+  the port does not make: it said the solution folder WAS READ, but the
+  adapter also resolves [] when the solution folder 404s and when a connector
+  directory has no sha to open, so in those paths an unmeasured state was
+  rendering as a measured zero - the exact inversion this card exists to
+  prevent, in the rare path. The reason now says only what is true of all of
+  them (Checked: no data connector file was found) and the header records what
+  the port actually promises. (2) The card could paint the promised-as-future
+  sentence for ONE FRAME: React commits selectedName before the detail effect
+  sets loading, so idle reached the card while a solution was selected.
+  fitEvidence now takes whether a solution is selected, because idle means two
+  different things and only the caller can tell them apart. (3) The board
+  itself said backlog on twice-reviewed work - fixed, and worth noting that
+  check-board passes on that because a backlog card is structurally valid, so
+  no gate catches a card describing finished work as unstarted.
 
 - **DBT-13** The Claude hooks travel with the repo
   `DBT-F4` `enabler` `settled` `verified: live`
