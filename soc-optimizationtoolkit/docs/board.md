@@ -11,7 +11,7 @@ two cannot disagree.
 alternatives. This board holds only what is a unit of work, what state it is
 in, and what it waits on.
 
-**49 in the backlog, 0 in progress, 90 done.**
+**50 in the backlog, 0 in progress, 90 done.**
 
 ## By menu item
 
@@ -23,7 +23,7 @@ operator sees on any screen. Two menus are PLANNED and have no route yet.
 |---|---|---|---|
 | Dataflow | 3 | 0 | 0 |
 | Setup | 1 | 0 | 0 |
-| Sentinel Integration | 5 | 51 | 2 |
+| Sentinel Integration | 6 | 51 | 2 |
 | DCR Automation | 3 | 10 | 0 |
 | Pack Maintenance | 4 | 1 | 0 |
 | Permission Verification | 8 | 0 | 0 |
@@ -31,7 +31,7 @@ operator sees on any screen. Two menus are PLANNED and have no route yet.
 | Windows Event analysis (planned) | 5 | 0 | 0 |
 | Cross-cutting | 7 | 24 | 0 |
 
-Open work totals 49.
+Open work totals 50.
 
 ## Epics and features
 
@@ -116,13 +116,13 @@ ENABLER EPIC: release mechanics. The packaged tarball trails main, and the lab t
 |---|---|---|---|
 | `REL-F1` Release and deployment hygiene | Cross-cutting | 3/5 | REL-2, REL-3, REL-4, REL-5, REL-6 |
 
-### `DBT` Quality and technical debt _(enabler)_ - 79% (59/75)
+### `DBT` Quality and technical debt _(enabler)_ - 78% (59/76)
 
 ENABLER EPIC: verification gaps, copy, diagram fidelity, docs and the board's own tooling
 
 | Feature | Menu | Done | Stories |
 |---|---|---|---|
-| `DBT-F1` Verification gaps | Sentinel Integration | 30/33 | DBT-2, DBT-5*, DBT-6, DBT-7, DBT-36*, DBT-55, DBT-56, DBT-42, DBT-43, DBT-44, DBT-45, DBT-46, DBT-47, DBT-48, DBT-49, DBT-50, DBT-51, DBT-52, DBT-41, DBT-40, DBT-60, DBT-61, DBT-62, DBT-63, DBT-64, DBT-65, DBT-66, DBT-67, DBT-68, DBT-69, DBT-70, DBT-71, DBT-73 |
+| `DBT-F1` Verification gaps | Sentinel Integration | 30/34 | DBT-2, DBT-5*, DBT-6, DBT-7, DBT-36*, DBT-55, DBT-56, DBT-42, DBT-43, DBT-44, DBT-45, DBT-46, DBT-47, DBT-48, DBT-49, DBT-50, DBT-51, DBT-52, DBT-41, DBT-40, DBT-60, DBT-61, DBT-62, DBT-63, DBT-64, DBT-65, DBT-66, DBT-67, DBT-68, DBT-69, DBT-70, DBT-71, DBT-73, DBT-74 |
 | `DBT-F2` Copy and UX | Sentinel Integration | 6/10 | DBT-3, DBT-9, DBT-14, DBT-15, DBT-28, D-10*, DBT-53, DBT-38, DBT-39, DBT-72 |
 | `DBT-F3` Diagram fidelity | Dataflow | 0/3 | DBT-1, DBT-4, DBT-12 |
 | `DBT-F4` Docs and spec grounding | Cross-cutting | 6/10 | DBT-8, DBT-10, DBT-11, DBT-13, DBT-22, DBT-26, DBT-32, DBT-57, DBT-58, DBT-54 |
@@ -213,7 +213,7 @@ Next to pick up. Nothing blocks these.
 
 ---
 
-## Backlog - next (16)
+## Backlog - next (17)
 
 Settled and unblocked, sequenced behind now.
 
@@ -466,6 +466,34 @@ Settled and unblocked, sequenced behind now.
   equally unheld. Do NOT pin the whole spec - pin the facts documents actually
   lean on, or this becomes a second copy of the spec that drifts from the
   first.
+
+- **DBT-74** content-install still hand-rolls the never-rejects contract DBT-56 made a type
+  `DBT-F1` `enabler` `settled`
+  Found by the fifteenth architecture audit, check 2, and reported as ADJACENT
+  rather than duplicated because the two are not the same question - a
+  distinction worth stating, since the last two audits reported real smells
+  with wrong causes. [[DBT-56]] replaced four hand-written try blocks in
+  onboardBatch with a type: ArmAttempt / SafeAzureManagement, so the
+  never-rejects contract stops being a convention repeated per call site. Its
+  scope was deliberately limited to the batch, and correctly so.
+  content-install.ts STILL DOES IT BY HAND. content-install.ts:100-111 wraps
+  an ARM PUT in try/catch and returns {ok:false, detail} on throw - which is
+  exactly the convention DBT-56 was filed about, in a module DBT-56 did not
+  touch. Neither the card nor the SafeAzureManagement header records
+  content-install as out of scope, so nothing today tells the next person
+  these are the same pattern. THE TRAP, and the reason this needs care rather
+  than a mechanical sweep: the word `ok` MEANS DIFFERENT THINGS in the two
+  places. ArmAttempt.ok means the call did not throw - a 403 is still ok:true,
+  carrying the response. content-install ok means the STEP SUCCEEDED - it
+  checks is2xx, so a 403 is ok:false. Adopting SafeAzureManagement there
+  naively would invert the meaning of every check. Scope: convert
+  content-install to SafeAzureManagement for the transport half and keep its
+  own is2xx step-outcome layer above it, so the two meanings stay separate and
+  named. Do NOT rename either ok without deciding which one keeps the word.
+  Priority next rather than now: the hand-rolled version WORKS and no defect
+  is observed. What is missing is the guard - as with the batch before DBT-56,
+  the next ARM call added outside a try block reopens the failure and nothing
+  fails when it does.
 
 ---
 

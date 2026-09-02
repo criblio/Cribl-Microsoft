@@ -2181,6 +2181,20 @@
       "settled": "settled",
       "dependsOn": [],
       "detail": "FOUND by review of [[DBT-7]], and demonstrated rather than argued: the reviewer flipped the vendored spec's eventsPerSec title from 'Worker Node' to 'Worker Process' - the exact silent invalidation a re-vendor would cause - and EVERY gate stayed green, 5,069 tests across 297 files. check-docs holds only that the file exists, and a re-vendor cannot delete the file, so its coverage of this risk is precisely zero. DBT-7 corrected a doc by citing cribl-openapi.json. That citation is now load-bearing prose with nothing behind it, which is the shape [[DBT-12]] already names and [[DBT-67]] already cost seven weeks. THE PATTERN ALREADY EXISTS IN THIS REPO: entra-diagnostics.test.ts:43-54 is a provenance pin that reads a non-source file and fails with 'Either restore the file, or delete these provenance pins AND the claim together'; five more test files use readFileSync the same way. Scope: a provenance pin asserting InputDatagen.samples.items.properties.eventsPerSec's title against the vendored asset, and a sweep for other doc claims citing that spec which are equally unheld. Do NOT pin the whole spec - pin the facts documents actually lean on, or this becomes a second copy of the spec that drifts from the first."
+    },
+    {
+      "id": "DBT-74",
+      "epic": "DBT",
+      "feature": "DBT-F1",
+      "title": "content-install still hand-rolls the never-rejects contract DBT-56 made a type",
+      "type": "enabler",
+      "status": "backlog",
+      "priority": "next",
+      "settled": "settled",
+      "dependsOn": [
+        "DBT-56"
+      ],
+      "detail": "Found by the fifteenth architecture audit, check 2, and reported as ADJACENT rather than duplicated because the two are not the same question - a distinction worth stating, since the last two audits reported real smells with wrong causes. [[DBT-56]] replaced four hand-written try blocks in onboardBatch with a type: ArmAttempt / SafeAzureManagement, so the never-rejects contract stops being a convention repeated per call site. Its scope was deliberately limited to the batch, and correctly so. content-install.ts STILL DOES IT BY HAND. content-install.ts:100-111 wraps an ARM PUT in try/catch and returns {ok:false, detail} on throw - which is exactly the convention DBT-56 was filed about, in a module DBT-56 did not touch. Neither the card nor the SafeAzureManagement header records content-install as out of scope, so nothing today tells the next person these are the same pattern. THE TRAP, and the reason this needs care rather than a mechanical sweep: the word `ok` MEANS DIFFERENT THINGS in the two places. ArmAttempt.ok means the call did not throw - a 403 is still ok:true, carrying the response. content-install ok means the STEP SUCCEEDED - it checks is2xx, so a 403 is ok:false. Adopting SafeAzureManagement there naively would invert the meaning of every check. Scope: convert content-install to SafeAzureManagement for the transport half and keep its own is2xx step-outcome layer above it, so the two meanings stay separate and named. Do NOT rename either ok without deciding which one keeps the word. Priority next rather than now: the hand-rolled version WORKS and no defect is observed. What is missing is the guard - as with the batch before DBT-56, the next ARM call added outside a try block reopens the failure and nothing fails when it does."
     }
   ],
   "features": [
